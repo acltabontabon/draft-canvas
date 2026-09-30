@@ -5,7 +5,8 @@
  * `docs/reference/architecture.md`) — Mermaid (`mermaid.ts`) and PlantUML (`plantuml.ts`) are both
  * independent, pure consumers of this same result.
  */
-import { categoryOf, type NodeCategory } from '../document/connectorSemantics';
+import { categoryOf, inferRelationship, type NodeCategory } from '../document/connectorSemantics';
+import { passiveApplies, relationshipCaptionLabel } from '../document/edgeSemantics';
 import { flowIsPlayable } from '../document/flow';
 import type { Attachment, DraftDocument, DraftFlow, DraftFlowStep, DraftNode } from '../document/types';
 import { aliasFor } from './alias';
@@ -43,6 +44,7 @@ function participantKindFor(category: NodeCategory): ParticipantKind {
       return 'database';
     case 'queue':
     case 'topic':
+    case 'stream':
     case 'deadLetter':
       return 'queue';
     default:
@@ -227,14 +229,34 @@ function buildFlowGroup(
     if (isStructural(rep)) return;
 
     const { source, target } = resolveChainEndpoints(doc, chain);
-    const from = registry.resolve(source);
-    const to = registry.resolve(target);
+    // A message goes from whoever acts. A connector drawn from a store or a channel to the thing
+    // that reads it ("read by", "consumed by") has its doer at the arrow's far end, and a sequence
+    // diagram saying `Database ->> Worker: read by` had the database making a call it never makes.
+    // The endpoints swap and the caption turns active — the same rule the canvas caption follows,
+    // asked of the same function (`passiveApplies`), so the two never disagree.
+    // Decided on the nodes, before either participant is minted: a lifeline's place is its first
+    // appearance in a message, and the doer's message comes first.
+    const sourceNode = doc.nodes.find((n) => n.id === source.nodeId);
+    const targetNode = doc.nodes.find((n) => n.id === target.nodeId);
+    // A connector with no relationship of its own still reads as the matrix's default on the
+    // canvas, so it is the default that decides here too.
+    const semantic = rep.semantic ?? (sourceNode && targetNode ? inferRelationship(sourceNode, targetNode)?.semantic : undefined);
+    const swapped =
+      semantic !== undefined &&
+      !rep.label?.trim() &&
+      sourceNode !== undefined &&
+      targetNode !== undefined &&
+      passiveApplies(semantic, categoryOf(sourceNode), categoryOf(targetNode));
+    const from = registry.resolve(swapped ? target : source);
+    const to = registry.resolve(swapped ? source : target);
 
     emitNodeAttachmentNotes(from);
     emitNodeAttachmentNotes(to);
 
     const interaction: InteractionKind = interactionKindFor(rep);
-    const label = resolveMessageLabel(rep, from.category, to.category, interaction);
+    const label = swapped
+      ? relationshipCaptionLabel(semantic, { hasResponse: rep.hasResponse, deliveryAttempts: rep.deliveryAttempts })
+      : resolveMessageLabel(rep, from.category, to.category, interaction);
     const sourceEdgeIds = chain.edges.map((e) => e.id);
     const message: SequenceMessage = {
       kind: 'message',

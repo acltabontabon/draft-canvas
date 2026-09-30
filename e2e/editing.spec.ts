@@ -1255,11 +1255,11 @@ test.describe('reconnection', () => {
     await page.mouse.move(queue.x + queue.width / 2, queue.y + queue.height / 2, { steps: 10 });
     await page.mouse.up();
 
-    // Reconnected onto the queue: the relationship is freshly inferred as an
-    // event publish, and there's still exactly one connector (moved, not duplicated).
+    // Reconnected onto the queue: the relationship is freshly inferred as a command
+    // handed off, and there's still exactly one connector (moved, not duplicated).
     await expect(page.locator('.dc-edge')).toHaveCount(1);
     const select = page.getByRole('button', { name: 'Interaction type' });
-    await expect(select).toHaveText('Publishes');
+    await expect(select).toHaveText('Command');
   });
 
   test('dragging an endpoint to a different side of the same node keeps the same connection', async ({
@@ -1323,9 +1323,9 @@ test.describe('reconnection', () => {
       (nodeA.x + nodeA.width + nodeB.x) / 2,
       (nodeA.y + nodeA.height / 2 + nodeB.y + nodeB.height / 2) / 2,
     );
-    // Still the original Service → Database pair, which infers `writes`.
+    // Still the original Service → Database pair, which infers `readsWrites`.
     const select = page.getByRole('button', { name: 'Interaction type' });
-    await expect(select).toHaveText('Writes');
+    await expect(select).toHaveText('Reads / writes');
   });
 
   test('dropping a reconnect on empty canvas leaves the original connection intact', async ({ page }) => {
@@ -1358,9 +1358,9 @@ test.describe('reconnection', () => {
       (nodeA.x + nodeA.width + nodeB.x) / 2,
       (nodeA.y + nodeA.height / 2 + nodeB.y + nodeB.height / 2) / 2,
     );
-    // Still the original Service → Database pair, which infers `writes`.
+    // Still the original Service → Database pair, which infers `readsWrites`.
     const select = page.getByRole('button', { name: 'Interaction type' });
-    await expect(select).toHaveText('Writes');
+    await expect(select).toHaveText('Reads / writes');
   });
 
   test('a reconnect is one undo step and restores the exact prior connection', async ({ page }) => {
@@ -1384,15 +1384,15 @@ test.describe('reconnection', () => {
     await page.mouse.up();
 
     const select = page.getByRole('button', { name: 'Interaction type' });
-    await expect(select).toHaveText('Publishes');
+    await expect(select).toHaveText('Command');
     // Belt-and-braces: the app's own global shortcut guard (deliberately) ignores Meta+Z while
     // an INPUT/TEXTAREA/SELECT is focused, so make sure the select isn't before relying on undo.
     await select.blur();
 
     await page.keyboard.press('Meta+z');
-    // Back to the original Service → Database connection, which infers `writes`.
+    // Back to the original Service → Database connection, which infers `readsWrites`.
     await expect(page.locator('.dc-edge[data-selected="true"]')).toHaveCount(1);
-    await expect(select).toHaveText('Writes');
+    await expect(select).toHaveText('Reads / writes');
   });
 
   test('a plain click on an endpoint never reconnects it — only an actual drag does', async ({ page }) => {

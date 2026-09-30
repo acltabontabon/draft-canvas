@@ -52,6 +52,7 @@ const EDGE_SEMANTIC_LABELS: Record<EdgeSemantic, string> = {
   query: 'Query',
   reads: 'Reads',
   writes: 'Writes',
+  readsWrites: 'Reads / writes',
   publishes: 'Publishes',
   consumes: 'Consumes',
   calls: 'Calls',

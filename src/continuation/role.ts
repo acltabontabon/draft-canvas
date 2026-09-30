@@ -19,7 +19,7 @@ export type AnchorRole = 'consumer' | 'scheduled' | 'request' | 'plain';
 const ROLE_EVIDENCE: readonly (readonly [AnchorRole, readonly NodeCategory[]])[] = [
   // Work arrives on its own schedule. The most specific thing that can point at a service, so it
   // wins: a consumer that also sits behind a gateway is still a consumer.
-  ['consumer', ['queue', 'topic', 'deadLetter']],
+  ['consumer', ['queue', 'topic', 'stream', 'deadLetter']],
   ['scheduled', ['scheduler']],
   // Someone is waiting for an answer.
   ['request', ['gateway', 'actor']],

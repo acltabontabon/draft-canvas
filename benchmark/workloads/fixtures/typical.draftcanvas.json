@@ -1,29 +1,29 @@
 {
   "format": "draft-canvas",
-  "version": 10,
+  "version": 18,
   "metadata": {
-    "id": "d_mtopmxpb0hod",
+    "id": "d_5uvfqowl6tt9",
     "title": "Benchmark — Detailed architecture",
-    "createdAt": 1789163346408,
-    "updatedAt": 1789163346408
+    "createdAt": 1790807252812,
+    "updatedAt": 1790807252812
   },
   "nodes": [
     {
-      "id": "n_9kyvrscrr2rn",
+      "id": "n_ro60wxaa8nh3",
       "type": "actor",
-      "x": 512,
+      "x": 492,
       "y": 0,
       "width": 120,
       "height": 92,
       "z": 0,
       "text": "Client",
       "textOrigin": "explicit",
-      "actorKind": "human"
+      "actorKind": "system"
     },
     {
-      "id": "n_nsdfg3yun6ed",
+      "id": "n_qj7eeqo2sab9",
       "type": "service",
-      "x": 484,
+      "x": 464,
       "y": 196,
       "width": 176,
       "height": 68,
@@ -34,9 +34,9 @@
       "serviceKind": "gateway",
       "attachments": [
         {
-          "id": "a_cczfzbzhsay8",
+          "id": "a_jgdw41a6pflt",
           "type": "note",
-          "text": "Routing, auth, rate limits, TLS. The only public entry point.",
+          "text": "Optional: one entry point for routing, auth and rate limits. Clients may also call services directly — the pattern is the independent services, not the gateway.",
           "noteKind": "note",
           "width": 200,
           "height": 56
@@ -44,151 +44,178 @@
       ]
     },
     {
-      "id": "n_zj6o8d46ar9z",
+      "id": "n_l58tbe16q733",
       "type": "group",
       "x": 0,
-      "y": 408,
-      "width": 248,
-      "height": 304,
-      "z": -1,
-      "text": "",
+      "y": 460,
+      "width": 320,
+      "height": 406,
+      "z": -2,
+      "text": "Capability A",
       "textOrigin": "explicit",
-      "boundaryPreset": "deployment"
+      "boundaryPreset": "boundary"
     },
     {
-      "id": "n_tqjnaxz0wip2",
-      "type": "service",
-      "x": 36,
-      "y": 448,
-      "width": 176,
-      "height": 68,
-      "z": 0,
-      "text": "Accounts",
-      "textOrigin": "explicit",
-      "accent": "teal",
-      "serviceKind": "api",
-      "parentId": "n_zj6o8d46ar9z"
-    },
-    {
-      "id": "n_qgnutrzixsgt",
-      "type": "database",
-      "x": 50,
-      "y": 588,
-      "width": 148,
-      "height": 88,
-      "z": 0,
-      "text": "Accounts DB",
-      "textOrigin": "explicit",
-      "accent": "blue",
-      "databaseKind": "generic",
-      "parentId": "n_zj6o8d46ar9z"
-    },
-    {
-      "id": "n_9casu23eujm2",
+      "id": "n_j4cumc1ldo9f",
       "type": "group",
-      "x": 448,
-      "y": 408,
+      "x": 36,
+      "y": 504,
       "width": 248,
-      "height": 304,
+      "height": 152,
       "z": -1,
       "text": "",
       "textOrigin": "explicit",
-      "boundaryPreset": "deployment"
+      "boundaryPreset": "deployment",
+      "parentId": "n_l58tbe16q733"
     },
     {
-      "id": "n_ldx8i0odgmjx",
+      "id": "n_eqpwfqbhckkd",
       "type": "service",
-      "x": 484,
-      "y": 448,
+      "x": 72,
+      "y": 552,
       "width": 176,
       "height": 68,
       "z": 0,
-      "text": "Orders",
+      "text": "Capability A Service",
       "textOrigin": "explicit",
       "accent": "teal",
       "serviceKind": "api",
-      "parentId": "n_9casu23eujm2"
+      "parentId": "n_j4cumc1ldo9f"
     },
     {
-      "id": "n_kzx1pwbmi3uw",
+      "id": "n_7nh8asjcywwt",
       "type": "database",
-      "x": 498,
-      "y": 588,
-      "width": 148,
-      "height": 88,
+      "x": 74,
+      "y": 728,
+      "width": 172,
+      "height": 102,
       "z": 0,
-      "text": "Orders DB",
+      "text": "Capability A Store",
       "textOrigin": "explicit",
       "accent": "blue",
       "databaseKind": "generic",
       "attachments": [
         {
-          "id": "a_bptxjb6135tv",
+          "id": "a_2x5t1dpuqz2c",
           "type": "note",
-          "text": "Private to Orders. Other services never read it directly.",
+          "text": "Private to Capability A: no other service reads or writes it. Ownership is logical — a separate schema on a shared instance qualifies; a separate server is not required.",
           "noteKind": "note",
           "width": 200,
           "height": 56
         }
       ],
-      "parentId": "n_9casu23eujm2"
+      "parentId": "n_l58tbe16q733"
     },
     {
-      "id": "n_xmpx9peyre8o",
+      "id": "n_mrvx7cod0q5l",
       "type": "group",
-      "x": 896,
-      "y": 408,
+      "x": 392,
+      "y": 460,
+      "width": 320,
+      "height": 406,
+      "z": -2,
+      "text": "Capability B",
+      "textOrigin": "explicit",
+      "boundaryPreset": "boundary"
+    },
+    {
+      "id": "n_slqp8w4gs9uo",
+      "type": "group",
+      "x": 428,
+      "y": 504,
       "width": 248,
-      "height": 304,
+      "height": 152,
       "z": -1,
       "text": "",
       "textOrigin": "explicit",
-      "boundaryPreset": "deployment"
+      "boundaryPreset": "deployment",
+      "parentId": "n_mrvx7cod0q5l"
     },
     {
-      "id": "n_lqh9wee2sh1e",
+      "id": "n_1gf4ilzymmx3",
       "type": "service",
-      "x": 932,
-      "y": 448,
+      "x": 464,
+      "y": 552,
       "width": 176,
       "height": 68,
       "z": 0,
-      "text": "Payments",
+      "text": "Capability B Service",
       "textOrigin": "explicit",
       "accent": "teal",
       "serviceKind": "api",
-      "parentId": "n_xmpx9peyre8o"
+      "parentId": "n_slqp8w4gs9uo"
     },
     {
-      "id": "n_x5vpyjci9b8i",
+      "id": "n_xyq9qizsi76z",
       "type": "database",
-      "x": 946,
-      "y": 588,
-      "width": 148,
-      "height": 88,
+      "x": 466,
+      "y": 728,
+      "width": 172,
+      "height": 102,
       "z": 0,
-      "text": "Payments DB",
+      "text": "Capability B Store",
       "textOrigin": "explicit",
       "accent": "blue",
       "databaseKind": "generic",
-      "parentId": "n_xmpx9peyre8o"
+      "parentId": "n_mrvx7cod0q5l"
     },
     {
-      "id": "n_rr8ou9kwiha4",
-      "type": "queue",
-      "x": 726,
-      "y": 816,
-      "width": 140,
-      "height": 72,
-      "z": 0,
-      "text": "Order Events",
+      "id": "n_ulvr9ku89bal",
+      "type": "group",
+      "x": 784,
+      "y": 460,
+      "width": 320,
+      "height": 406,
+      "z": -2,
+      "text": "Capability C",
       "textOrigin": "explicit",
-      "queueKind": "topic"
+      "boundaryPreset": "boundary"
     },
     {
-      "id": "n_yxfjnyem2mbj",
+      "id": "n_9ol3fmrwqh2t",
+      "type": "group",
+      "x": 820,
+      "y": 504,
+      "width": 248,
+      "height": 152,
+      "z": -1,
+      "text": "",
+      "textOrigin": "explicit",
+      "boundaryPreset": "deployment",
+      "parentId": "n_ulvr9ku89bal"
+    },
+    {
+      "id": "n_g76cxuvdaarm",
       "type": "service",
-      "x": 2056,
+      "x": 856,
+      "y": 552,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Capability C Service",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "api",
+      "parentId": "n_9ol3fmrwqh2t"
+    },
+    {
+      "id": "n_y7s1dflhk9b3",
+      "type": "database",
+      "x": 858,
+      "y": 728,
+      "width": 172,
+      "height": 102,
+      "z": 0,
+      "text": "Capability C Store",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "databaseKind": "generic",
+      "parentId": "n_ulvr9ku89bal"
+    },
+    {
+      "id": "n_eflxa0zfl46q",
+      "type": "service",
+      "x": 1968,
       "y": 0,
       "width": 176,
       "height": 68,
@@ -199,99 +226,84 @@
       "serviceKind": "generic"
     },
     {
-      "id": "n_598xcus7y0nj",
+      "id": "n_klr0llitcm9x",
       "type": "queue",
-      "x": 2074,
+      "x": 1986,
       "y": 172,
       "width": 140,
       "height": 72,
       "z": 0,
       "text": "Domain Events",
       "textOrigin": "explicit",
-      "queueKind": "topic"
+      "queueKind": "topic",
+      "attachments": [
+        {
+          "id": "a_zo8luj691nhd",
+          "type": "note",
+          "text": "Fan-out, not competition: every subscription gets its own copy of every event. Workers sharing one queue would instead compete for each message.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ]
     },
     {
-      "id": "n_iiuxvvir4x0s",
+      "id": "n_t267649l3gln",
       "type": "queue",
-      "x": 1850,
+      "x": 1856,
       "y": 348,
-      "width": 140,
-      "height": 48,
+      "width": 152,
+      "height": 72,
       "z": 0,
-      "text": "",
-      "textOrigin": "auto",
+      "text": "Projection Queue",
+      "textOrigin": "explicit",
       "queueKind": "queue"
     },
     {
-      "id": "n_k9big8rbao0y",
+      "id": "n_zjngb7p3uhte",
+      "type": "queue",
+      "x": 2104,
+      "y": 348,
+      "width": 152,
+      "height": 72,
+      "z": 0,
+      "text": "Integration Queue",
+      "textOrigin": "explicit",
+      "queueKind": "queue"
+    },
+    {
+      "id": "n_tyzoejpnujgz",
       "type": "service",
-      "x": 1832,
-      "y": 468,
+      "x": 1844,
+      "y": 492,
       "width": 176,
       "height": 68,
       "z": 0,
-      "text": "Projection Service",
+      "text": "Projection Worker",
       "textOrigin": "explicit",
       "accent": "teal",
       "serviceKind": "worker"
     },
     {
-      "id": "n_s13be2ir45hh",
-      "type": "queue",
-      "x": 2074,
-      "y": 348,
-      "width": 140,
-      "height": 48,
-      "z": 0,
-      "text": "",
-      "textOrigin": "auto",
-      "queueKind": "queue"
-    },
-    {
-      "id": "n_3k4yvj4igsq7",
+      "id": "n_1s0ujij85l7c",
       "type": "service",
-      "x": 2056,
-      "y": 468,
+      "x": 2092,
+      "y": 492,
       "width": 176,
       "height": 68,
       "z": 0,
-      "text": "Processing Service",
+      "text": "Integration Worker",
       "textOrigin": "explicit",
       "accent": "teal",
       "serviceKind": "worker"
     },
     {
-      "id": "n_5vmzljp30sqd",
-      "type": "queue",
-      "x": 2298,
-      "y": 348,
-      "width": 140,
-      "height": 48,
-      "z": 0,
-      "text": "",
-      "textOrigin": "auto",
-      "queueKind": "queue"
-    },
-    {
-      "id": "n_h62mhz4xmi8r",
-      "type": "service",
-      "x": 2280,
-      "y": 468,
-      "width": 176,
-      "height": 68,
-      "z": 0,
-      "text": "Integration Service",
-      "textOrigin": "explicit",
-      "accent": "teal",
-      "serviceKind": "worker"
-    },
-    {
-      "id": "n_gqkqon9dtsbe",
+      "id": "n_kp4o8z0brf6h",
       "type": "database",
       "x": 1846,
-      "y": 608,
-      "width": 148,
-      "height": 88,
+      "y": 632,
+      "width": 172,
+      "height": 102,
       "z": 0,
       "text": "Read Store",
       "textOrigin": "explicit",
@@ -299,10 +311,10 @@
       "databaseKind": "generic"
     },
     {
-      "id": "n_x0n21tcpixvd",
+      "id": "n_8k4dcdwy0m6e",
       "type": "service",
-      "x": 2280,
-      "y": 608,
+      "x": 2092,
+      "y": 632,
       "width": 176,
       "height": 68,
       "z": 0,
@@ -312,10 +324,10 @@
       "serviceKind": "external"
     },
     {
-      "id": "n_8u7gjsxr95cg",
+      "id": "n_9pryqvc4jka3",
       "type": "queue",
-      "x": 2542,
-      "y": 348,
+      "x": 2432,
+      "y": 352,
       "width": 140,
       "height": 48,
       "z": 0,
@@ -325,46 +337,56 @@
       "deliveryRole": "dead-letter"
     },
     {
-      "id": "n_6ldrg0xe278s",
+      "id": "n_q4h0ufbpmal8",
       "type": "actor",
-      "x": 4012,
+      "x": 4330,
       "y": 0,
       "width": 120,
       "height": 92,
       "z": 0,
       "text": "Client",
       "textOrigin": "explicit",
-      "actorKind": "human"
+      "actorKind": "system"
     },
     {
-      "id": "n_m241ea755o0q",
+      "id": "n_frxjf86kqt5r",
       "type": "group",
-      "x": 3664,
+      "x": 3688,
       "y": 196,
-      "width": 248,
-      "height": 454,
+      "width": 512,
+      "height": 468,
       "z": -1,
-      "text": "Command",
+      "text": "Command side",
       "textOrigin": "explicit",
-      "boundaryPreset": "boundary"
+      "boundaryPreset": "boundary",
+      "attachments": [
+        {
+          "id": "a_kqhnmsjnvkun",
+          "type": "note",
+          "text": "A logical side, not a deployment: the two sides can be one process and one database. CQRS requires neither messaging, event sourcing nor separate services — this starter adds an asynchronous projection as one common variant. Its topic carries facts about what changed and is not an event store: nothing replays it. A direct in-process update or a database change feed would feed the projection just as well.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ]
     },
     {
-      "id": "n_g2zme1z11lmo",
+      "id": "n_m1tpixjw9w4s",
       "type": "text",
-      "x": 3676,
+      "x": 3700,
       "y": 226,
-      "width": 176,
+      "width": 200,
       "height": 24,
       "z": 0,
-      "text": "Expresses intent",
+      "text": "Validates intent, changes state",
       "textOrigin": "explicit",
       "annotation": true,
-      "parentId": "n_m241ea755o0q"
+      "parentId": "n_frxjf86kqt5r"
     },
     {
-      "id": "n_3bfddjs9ehqx",
+      "id": "n_w1lye9v142wc",
       "type": "service",
-      "x": 3700,
+      "x": 3724,
       "y": 258,
       "width": 176,
       "height": 68,
@@ -375,49 +397,63 @@
       "serviceKind": "api",
       "attachments": [
         {
-          "id": "a_6hwsh3ky50yu",
+          "id": "a_1hm5risspcm5",
           "type": "code",
-          "text": "PlaceOrder",
+          "text": "Example command",
           "language": "json",
-          "code": "{\n  \"type\": \"PlaceOrder\",\n  \"customerId\": \"cus_1182\",\n  \"lines\": [{ \"sku\": \"A-100\", \"qty\": 2 }]\n}",
+          "code": "{\n  \"type\": \"ChangeStatus\",\n  \"entityId\": \"ent_4821\",\n  \"status\": \"active\"\n}",
           "width": 380,
           "height": 180
         }
       ],
-      "parentId": "n_m241ea755o0q"
+      "parentId": "n_frxjf86kqt5r"
     },
     {
-      "id": "n_l9ilgjjj1zot",
+      "id": "n_jsx4jj85kovz",
       "type": "component",
-      "x": 3712,
+      "x": 3736,
       "y": 398,
       "width": 152,
       "height": 56,
       "z": 0,
-      "text": "Write Model",
+      "text": "Command Handler",
       "textOrigin": "explicit",
       "componentKind": "generic",
-      "parentId": "n_m241ea755o0q"
+      "parentId": "n_frxjf86kqt5r"
     },
     {
-      "id": "n_977qwokbf7jv",
+      "id": "n_r9cl1u8v4dvr",
       "type": "database",
-      "x": 3714,
+      "x": 3726,
       "y": 526,
-      "width": 148,
-      "height": 88,
+      "width": 172,
+      "height": 102,
       "z": 0,
       "text": "Write Store",
       "textOrigin": "explicit",
       "accent": "blue",
       "databaseKind": "generic",
-      "parentId": "n_m241ea755o0q"
+      "parentId": "n_frxjf86kqt5r"
     },
     {
-      "id": "n_wbhf2c6qo4ia",
+      "id": "n_ye4hqyfw21tu",
+      "type": "service",
+      "x": 3988,
+      "y": 527,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Outbox Relay",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "worker",
+      "parentId": "n_frxjf86kqt5r"
+    },
+    {
+      "id": "n_6flnqx4li8g0",
       "type": "queue",
-      "x": 4002,
-      "y": 409,
+      "x": 4320,
+      "y": 544,
       "width": 140,
       "height": 72,
       "z": 0,
@@ -426,59 +462,56 @@
       "queueKind": "topic"
     },
     {
-      "id": "n_yvat616k8e0w",
-      "type": "service",
-      "x": 3984,
-      "y": 536,
-      "width": 176,
-      "height": 68,
-      "z": 0,
-      "text": "Projection Service",
-      "textOrigin": "explicit",
-      "accent": "teal",
-      "serviceKind": "worker"
-    },
-    {
-      "id": "n_ldl6wu6ts9hm",
+      "id": "n_ziq8vyh05ydk",
       "type": "text",
-      "x": 4010,
-      "y": 622,
-      "width": 124,
+      "x": 4280,
+      "y": 636,
+      "width": 220,
       "height": 24,
       "z": 0,
-      "text": "Eventually consistent",
+      "text": "Eventually consistent read projection",
       "textOrigin": "explicit",
       "annotation": true
     },
     {
-      "id": "n_x2q6buu3h3pr",
+      "id": "n_ysohexb3aq5f",
       "type": "group",
-      "x": 4232,
+      "x": 4580,
       "y": 196,
-      "width": 248,
-      "height": 454,
+      "width": 512,
+      "height": 468,
       "z": -1,
-      "text": "Query",
+      "text": "Query side",
       "textOrigin": "explicit",
-      "boundaryPreset": "boundary"
+      "boundaryPreset": "boundary",
+      "attachments": [
+        {
+          "id": "a_vjqo1md2dt5v",
+          "type": "note",
+          "text": "Reads are answered from a model shaped for the questions asked. Only the projection writes here; the Query API never does.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ]
     },
     {
-      "id": "n_7q0xfx2qif50",
+      "id": "n_5it7d6lxhjob",
       "type": "text",
-      "x": 4244,
+      "x": 4592,
       "y": 226,
-      "width": 176,
+      "width": 200,
       "height": 24,
       "z": 0,
-      "text": "Never mutates state",
+      "text": "Answers questions, changes nothing",
       "textOrigin": "explicit",
       "annotation": true,
-      "parentId": "n_x2q6buu3h3pr"
+      "parentId": "n_ysohexb3aq5f"
     },
     {
-      "id": "n_bjupow8vznq1",
+      "id": "n_aj8rx4r3aef8",
       "type": "service",
-      "x": 4268,
+      "x": 4880,
       "y": 258,
       "width": 176,
       "height": 68,
@@ -487,15 +520,29 @@
       "textOrigin": "explicit",
       "accent": "teal",
       "serviceKind": "api",
-      "parentId": "n_x2q6buu3h3pr"
+      "parentId": "n_ysohexb3aq5f"
     },
     {
-      "id": "n_8abn2t338cpf",
+      "id": "n_h2w1i4nhqb8p",
+      "type": "service",
+      "x": 4616,
+      "y": 527,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Projection Worker",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "worker",
+      "parentId": "n_ysohexb3aq5f"
+    },
+    {
+      "id": "n_5h3x076drfq8",
       "type": "database",
-      "x": 4282,
+      "x": 4882,
       "y": 526,
-      "width": 148,
-      "height": 88,
+      "width": 172,
+      "height": 102,
       "z": 0,
       "text": "Read Store",
       "textOrigin": "explicit",
@@ -503,137 +550,145 @@
       "databaseKind": "generic",
       "attachments": [
         {
-          "id": "a_146jzl7ow8wq",
+          "id": "a_wc1dsnuuyomn",
           "type": "note",
-          "text": "Shaped for the questions asked of it — a projection, not the write model. May share a physical database: CQRS separates models, not necessarily databases.",
+          "text": "Shaped for the questions asked of it — a projection, not the write model. It may be a second schema in the same database: CQRS separates models, not necessarily databases.",
           "noteKind": "note",
           "width": 200,
           "height": 56
         }
       ],
-      "parentId": "n_x2q6buu3h3pr"
+      "parentId": "n_ysohexb3aq5f"
     },
     {
-      "id": "n_7mplmaf3oky8",
-      "type": "service",
+      "id": "n_egmk6qm1krjj",
+      "type": "component",
       "x": 0,
-      "y": 1336,
-      "width": 176,
-      "height": 68,
+      "y": 1320,
+      "width": 172,
+      "height": 56,
       "z": 0,
-      "text": "REST API",
+      "text": "HTTP Adapter",
       "textOrigin": "explicit",
-      "accent": "teal",
-      "serviceKind": "api"
+      "componentKind": "adapter"
     },
     {
-      "id": "n_udf33xqvniq3",
-      "type": "service",
+      "id": "n_9ebyn4cbfqhb",
+      "type": "component",
       "x": 0,
-      "y": 1496,
-      "width": 176,
-      "height": 68,
+      "y": 1480,
+      "width": 172,
+      "height": 56,
       "z": 0,
       "text": "Message Consumer",
       "textOrigin": "explicit",
-      "accent": "teal",
-      "serviceKind": "worker"
+      "componentKind": "adapter"
     },
     {
-      "id": "n_ljqeh0oecm78",
+      "id": "n_d4fg11loh2b3",
       "type": "group",
-      "x": 248,
-      "y": 1304,
+      "x": 244,
+      "y": 1282,
       "width": 660,
       "height": 292,
       "z": -1,
       "text": "Application Core",
       "textOrigin": "explicit",
-      "boundaryPreset": "boundary"
+      "boundaryPreset": "boundary",
+      "attachments": [
+        {
+          "id": "a_jtaeoeh957b9",
+          "type": "note",
+          "text": "Owns its ports, depends on nothing outside itself. Solid arrows are runtime calls; hollow-headed “implements” arrows are source dependencies, and every one of them points in. Fits inside a monolith or a single microservice.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ]
     },
     {
-      "id": "n_imepx8jl50hy",
+      "id": "n_ugv02g49ssq1",
       "type": "text",
-      "x": 260,
-      "y": 1334,
-      "width": 176,
+      "x": 256,
+      "y": 1312,
+      "width": 200,
       "height": 24,
       "z": 0,
       "text": "Dependencies point inward",
       "textOrigin": "explicit",
       "annotation": true,
-      "parentId": "n_ljqeh0oecm78"
+      "parentId": "n_d4fg11loh2b3"
     },
     {
-      "id": "n_03zwlo8q235x",
+      "id": "n_p10xswf804hh",
       "type": "component",
-      "x": 284,
-      "y": 1428,
+      "x": 280,
+      "y": 1406,
       "width": 120,
       "height": 44,
       "z": 0,
       "text": "Inbound",
       "textOrigin": "explicit",
       "componentKind": "port",
-      "parentId": "n_ljqeh0oecm78"
+      "parentId": "n_d4fg11loh2b3"
     },
     {
-      "id": "n_bizzgsx8jhk6",
+      "id": "n_w78lwsiwbonx",
       "type": "component",
-      "x": 492,
-      "y": 1418,
+      "x": 488,
+      "y": 1396,
       "width": 172,
       "height": 64,
       "z": 0,
       "text": "Use Cases",
       "textOrigin": "explicit",
       "componentKind": "generic",
-      "parentId": "n_ljqeh0oecm78"
+      "parentId": "n_d4fg11loh2b3"
     },
     {
-      "id": "n_wpmzxwu1ct6q",
+      "id": "n_trsag52fbw9p",
       "type": "component",
-      "x": 508,
-      "y": 1510,
+      "x": 504,
+      "y": 1488,
       "width": 140,
       "height": 50,
       "z": 0,
       "text": "Domain Model",
       "textOrigin": "explicit",
       "componentKind": "generic",
-      "parentId": "n_ljqeh0oecm78"
+      "parentId": "n_d4fg11loh2b3"
     },
     {
-      "id": "n_7gelmoajcyj2",
+      "id": "n_2pjn1ykfmg86",
       "type": "component",
-      "x": 752,
-      "y": 1348,
+      "x": 748,
+      "y": 1326,
       "width": 120,
       "height": 44,
       "z": 0,
       "text": "Persistence",
       "textOrigin": "explicit",
       "componentKind": "port",
-      "parentId": "n_ljqeh0oecm78"
+      "parentId": "n_d4fg11loh2b3"
     },
     {
-      "id": "n_bvxefhy5e0vo",
+      "id": "n_n55mz2leaugr",
       "type": "component",
-      "x": 752,
-      "y": 1508,
+      "x": 748,
+      "y": 1486,
       "width": 120,
       "height": 44,
       "z": 0,
       "text": "Integration",
       "textOrigin": "explicit",
       "componentKind": "port",
-      "parentId": "n_ljqeh0oecm78"
+      "parentId": "n_d4fg11loh2b3"
     },
     {
-      "id": "n_6vpm5gg6gnj1",
+      "id": "n_xne5hmfpenf9",
       "type": "component",
-      "x": 980,
-      "y": 1342,
+      "x": 992,
+      "y": 1320,
       "width": 172,
       "height": 56,
       "z": 0,
@@ -642,10 +697,10 @@
       "componentKind": "adapter"
     },
     {
-      "id": "n_cuhl44a1kpta",
+      "id": "n_8uuu5c09da2o",
       "type": "component",
-      "x": 980,
-      "y": 1502,
+      "x": 992,
+      "y": 1480,
       "width": 172,
       "height": 56,
       "z": 0,
@@ -654,12 +709,12 @@
       "componentKind": "adapter"
     },
     {
-      "id": "n_7bcvqekt12it",
+      "id": "n_mz421wqzfawp",
       "type": "database",
-      "x": 1224,
-      "y": 1326,
-      "width": 148,
-      "height": 88,
+      "x": 1236,
+      "y": 1313,
+      "width": 172,
+      "height": 102,
       "z": 0,
       "text": "Database",
       "textOrigin": "explicit",
@@ -667,23 +722,23 @@
       "databaseKind": "generic"
     },
     {
-      "id": "n_qshytc8a54ho",
+      "id": "n_ye65zyd0rkyn",
       "type": "service",
-      "x": 1224,
-      "y": 1496,
+      "x": 1236,
+      "y": 1474,
       "width": 176,
       "height": 68,
       "z": 0,
       "text": "External System",
-      "textOrigin": "auto",
+      "textOrigin": "explicit",
       "accent": "teal",
       "serviceKind": "external"
     },
     {
-      "id": "n_7ecza0ixf8a4",
+      "id": "n_5kondbyzav93",
       "type": "service",
-      "x": 1832,
-      "y": 1366,
+      "x": 1844,
+      "y": 1344,
       "width": 176,
       "height": 68,
       "z": 0,
@@ -693,10 +748,10 @@
       "serviceKind": "api"
     },
     {
-      "id": "n_avjxz33zfsst",
+      "id": "n_i7hy139we3f2",
       "type": "group",
-      "x": 2112,
-      "y": 1304,
+      "x": 2124,
+      "y": 1282,
       "width": 248,
       "height": 166,
       "z": -1,
@@ -705,23 +760,23 @@
       "boundaryPreset": "boundary"
     },
     {
-      "id": "n_fa8w4o9q0wq7",
+      "id": "n_z3fgrng1yqbf",
       "type": "text",
-      "x": 2124,
-      "y": 1334,
+      "x": 2136,
+      "y": 1312,
       "width": 224,
       "height": 24,
       "z": 0,
       "text": "Drives the workflow, owns its state",
       "textOrigin": "explicit",
       "annotation": true,
-      "parentId": "n_avjxz33zfsst"
+      "parentId": "n_i7hy139we3f2"
     },
     {
-      "id": "n_p2tzbg4md1od",
+      "id": "n_338wgit7wxxy",
       "type": "service",
-      "x": 2148,
-      "y": 1366,
+      "x": 2160,
+      "y": 1344,
       "width": 176,
       "height": 68,
       "z": 0,
@@ -731,21 +786,21 @@
       "serviceKind": "generic",
       "attachments": [
         {
-          "id": "a_r0bqzwscp6a3",
+          "id": "a_780jmd9faa2z",
           "type": "note",
-          "text": "Owns the saga’s state and the order of steps. Each service commits locally; a compensating action is a new local transaction that undoes an earlier one — never a rollback.",
+          "text": "Owns the saga’s state and the order of steps, and moves only on a reply: \"reserved\" sends the next command, \"failed\" starts the sweep back. Each service commits locally; a compensating action is a new local transaction that undoes an earlier one — never a rollback.",
           "noteKind": "note",
           "width": 200,
           "height": 56
         }
       ],
-      "parentId": "n_avjxz33zfsst"
+      "parentId": "n_i7hy139we3f2"
     },
     {
-      "id": "n_w9cxds82cnq3",
+      "id": "n_d82zqsu9b72i",
       "type": "service",
-      "x": 1876,
-      "y": 1630,
+      "x": 1888,
+      "y": 1608,
       "width": 176,
       "height": 68,
       "z": 0,
@@ -755,12 +810,12 @@
       "serviceKind": "generic"
     },
     {
-      "id": "n_oav5mlnomq4k",
+      "id": "n_nz7qdtwauak2",
       "type": "database",
       "x": 1890,
-      "y": 1770,
-      "width": 148,
-      "height": 88,
+      "y": 1748,
+      "width": 172,
+      "height": 102,
       "z": 0,
       "text": "Payment DB",
       "textOrigin": "explicit",
@@ -768,10 +823,10 @@
       "databaseKind": "generic"
     },
     {
-      "id": "n_dkoue3gx2sfg",
+      "id": "n_6bcxxvs4laa3",
       "type": "service",
-      "x": 2148,
-      "y": 1630,
+      "x": 2160,
+      "y": 1608,
       "width": 176,
       "height": 68,
       "z": 0,
@@ -781,12 +836,12 @@
       "serviceKind": "generic"
     },
     {
-      "id": "n_s9upelfz6k4b",
+      "id": "n_8b1pu2wm4dfj",
       "type": "database",
       "x": 2162,
-      "y": 1770,
-      "width": 148,
-      "height": 88,
+      "y": 1748,
+      "width": 172,
+      "height": 102,
       "z": 0,
       "text": "Inventory DB",
       "textOrigin": "explicit",
@@ -794,10 +849,10 @@
       "databaseKind": "generic"
     },
     {
-      "id": "n_cyepxgs4lvh0",
+      "id": "n_jfpx3lyu6w2p",
       "type": "service",
-      "x": 2420,
-      "y": 1630,
+      "x": 2432,
+      "y": 1608,
       "width": 176,
       "height": 68,
       "z": 0,
@@ -807,12 +862,12 @@
       "serviceKind": "generic"
     },
     {
-      "id": "n_q0nbni52surz",
+      "id": "n_61j4nl9cu4km",
       "type": "database",
       "x": 2434,
-      "y": 1770,
-      "width": 148,
-      "height": 88,
+      "y": 1748,
+      "width": 172,
+      "height": 102,
       "z": 0,
       "text": "Fulfillment DB",
       "textOrigin": "explicit",
@@ -820,22 +875,22 @@
       "databaseKind": "generic"
     },
     {
-      "id": "n_thk5rrazfygu",
+      "id": "n_itmp3g3x6tjs",
       "type": "actor",
-      "x": 4176,
-      "y": 1304,
+      "x": 4180,
+      "y": 1282,
       "width": 120,
       "height": 92,
       "z": 0,
       "text": "Client",
       "textOrigin": "explicit",
-      "actorKind": "human"
+      "actorKind": "system"
     },
     {
-      "id": "n_cbzsc8i7i10u",
+      "id": "n_xayglcdhgoxr",
       "type": "service",
-      "x": 4148,
-      "y": 1500,
+      "x": 4152,
+      "y": 1478,
       "width": 176,
       "height": 68,
       "z": 0,
@@ -845,9 +900,9 @@
       "serviceKind": "gateway",
       "attachments": [
         {
-          "id": "a_8292zmorrrca",
+          "id": "a_m2q11ovspyvo",
           "type": "note",
-          "text": "Routing, auth, rate limits, TLS. The only public entry point.",
+          "text": "Optional: one entry point for routing, auth and rate limits. Clients may also call services directly — the pattern is the independent services, not the gateway.",
           "noteKind": "note",
           "width": 200,
           "height": 56
@@ -855,152 +910,179 @@
       ]
     },
     {
-      "id": "n_al2di2z7o03d",
+      "id": "n_37655v2msde0",
       "type": "group",
-      "x": 3664,
-      "y": 1712,
+      "x": 3688,
+      "y": 1742,
+      "width": 320,
+      "height": 406,
+      "z": -2,
+      "text": "Capability A",
+      "textOrigin": "explicit",
+      "boundaryPreset": "boundary"
+    },
+    {
+      "id": "n_nt9krefacaxc",
+      "type": "group",
+      "x": 3724,
+      "y": 1786,
       "width": 248,
-      "height": 304,
+      "height": 152,
       "z": -1,
       "text": "",
       "textOrigin": "explicit",
-      "boundaryPreset": "deployment"
+      "boundaryPreset": "deployment",
+      "parentId": "n_37655v2msde0"
     },
     {
-      "id": "n_wcra9fc81xay",
+      "id": "n_iomk841a2wyz",
       "type": "service",
-      "x": 3700,
-      "y": 1752,
+      "x": 3760,
+      "y": 1834,
       "width": 176,
       "height": 68,
       "z": 0,
-      "text": "Accounts",
+      "text": "Capability A Service",
       "textOrigin": "explicit",
       "accent": "teal",
       "serviceKind": "api",
-      "parentId": "n_al2di2z7o03d"
+      "parentId": "n_nt9krefacaxc"
     },
     {
-      "id": "n_m8kdm3iia9x8",
+      "id": "n_h15f0ilfph6c",
       "type": "database",
-      "x": 3714,
-      "y": 1892,
-      "width": 148,
-      "height": 88,
+      "x": 3762,
+      "y": 2010,
+      "width": 172,
+      "height": 102,
       "z": 0,
-      "text": "Accounts DB",
-      "textOrigin": "explicit",
-      "accent": "blue",
-      "databaseKind": "generic",
-      "parentId": "n_al2di2z7o03d"
-    },
-    {
-      "id": "n_hvhcg61qwiil",
-      "type": "group",
-      "x": 4112,
-      "y": 1712,
-      "width": 248,
-      "height": 304,
-      "z": -1,
-      "text": "",
-      "textOrigin": "explicit",
-      "boundaryPreset": "deployment"
-    },
-    {
-      "id": "n_hu0pubeum03s",
-      "type": "service",
-      "x": 4148,
-      "y": 1752,
-      "width": 176,
-      "height": 68,
-      "z": 0,
-      "text": "Orders",
-      "textOrigin": "explicit",
-      "accent": "teal",
-      "serviceKind": "api",
-      "parentId": "n_hvhcg61qwiil"
-    },
-    {
-      "id": "n_1n6h26qu0cwi",
-      "type": "database",
-      "x": 4162,
-      "y": 1892,
-      "width": 148,
-      "height": 88,
-      "z": 0,
-      "text": "Orders DB",
+      "text": "Capability A Store",
       "textOrigin": "explicit",
       "accent": "blue",
       "databaseKind": "generic",
       "attachments": [
         {
-          "id": "a_aehnohw8onvq",
+          "id": "a_3iqwxzxweh8w",
           "type": "note",
-          "text": "Private to Orders. Other services never read it directly.",
+          "text": "Private to Capability A: no other service reads or writes it. Ownership is logical — a separate schema on a shared instance qualifies; a separate server is not required.",
           "noteKind": "note",
           "width": 200,
           "height": 56
         }
       ],
-      "parentId": "n_hvhcg61qwiil"
+      "parentId": "n_37655v2msde0"
     },
     {
-      "id": "n_jg6nok7ozuxr",
+      "id": "n_xoiopkn249qw",
       "type": "group",
-      "x": 4560,
-      "y": 1712,
+      "x": 4080,
+      "y": 1742,
+      "width": 320,
+      "height": 406,
+      "z": -2,
+      "text": "Capability B",
+      "textOrigin": "explicit",
+      "boundaryPreset": "boundary"
+    },
+    {
+      "id": "n_pske7sno8u7p",
+      "type": "group",
+      "x": 4116,
+      "y": 1786,
       "width": 248,
-      "height": 304,
+      "height": 152,
       "z": -1,
       "text": "",
       "textOrigin": "explicit",
-      "boundaryPreset": "deployment"
+      "boundaryPreset": "deployment",
+      "parentId": "n_xoiopkn249qw"
     },
     {
-      "id": "n_cv3hy3p00asp",
+      "id": "n_tdh60y6eut8o",
       "type": "service",
-      "x": 4596,
-      "y": 1752,
+      "x": 4152,
+      "y": 1834,
       "width": 176,
       "height": 68,
       "z": 0,
-      "text": "Payments",
+      "text": "Capability B Service",
       "textOrigin": "explicit",
       "accent": "teal",
       "serviceKind": "api",
-      "parentId": "n_jg6nok7ozuxr"
+      "parentId": "n_pske7sno8u7p"
     },
     {
-      "id": "n_arkmvj2puxmm",
+      "id": "n_zeyqhjyj1z6b",
       "type": "database",
-      "x": 4610,
-      "y": 1892,
-      "width": 148,
-      "height": 88,
+      "x": 4154,
+      "y": 2010,
+      "width": 172,
+      "height": 102,
       "z": 0,
-      "text": "Payments DB",
+      "text": "Capability B Store",
       "textOrigin": "explicit",
       "accent": "blue",
       "databaseKind": "generic",
-      "parentId": "n_jg6nok7ozuxr"
+      "parentId": "n_xoiopkn249qw"
     },
     {
-      "id": "n_787y5j4xwioi",
-      "type": "queue",
-      "x": 4390,
-      "y": 2120,
-      "width": 140,
-      "height": 72,
-      "z": 0,
-      "text": "Order Events",
+      "id": "n_j8h961hu1r6n",
+      "type": "group",
+      "x": 4472,
+      "y": 1742,
+      "width": 320,
+      "height": 406,
+      "z": -2,
+      "text": "Capability C",
       "textOrigin": "explicit",
-      "queueKind": "topic"
+      "boundaryPreset": "boundary"
     },
     {
-      "id": "n_df8jsrvgrybl",
+      "id": "n_hddv2gd422om",
+      "type": "group",
+      "x": 4508,
+      "y": 1786,
+      "width": 248,
+      "height": 152,
+      "z": -1,
+      "text": "",
+      "textOrigin": "explicit",
+      "boundaryPreset": "deployment",
+      "parentId": "n_j8h961hu1r6n"
+    },
+    {
+      "id": "n_d692a9ofdm2w",
       "type": "service",
-      "x": 224,
-      "y": 2608,
+      "x": 4544,
+      "y": 1834,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Capability C Service",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "api",
+      "parentId": "n_hddv2gd422om"
+    },
+    {
+      "id": "n_0v4qvajmotlb",
+      "type": "database",
+      "x": 4546,
+      "y": 2010,
+      "width": 172,
+      "height": 102,
+      "z": 0,
+      "text": "Capability C Store",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "databaseKind": "generic",
+      "parentId": "n_j8h961hu1r6n"
+    },
+    {
+      "id": "n_ybmve0qqfmoh",
+      "type": "service",
+      "x": 124,
+      "y": 2564,
       "width": 176,
       "height": 68,
       "z": 0,
@@ -1010,99 +1092,84 @@
       "serviceKind": "generic"
     },
     {
-      "id": "n_jl6tcr74zzu8",
+      "id": "n_zzc0jerpvtwl",
       "type": "queue",
-      "x": 242,
-      "y": 2780,
+      "x": 142,
+      "y": 2736,
       "width": 140,
       "height": 72,
       "z": 0,
       "text": "Domain Events",
       "textOrigin": "explicit",
-      "queueKind": "topic"
+      "queueKind": "topic",
+      "attachments": [
+        {
+          "id": "a_afqtk7p1id85",
+          "type": "note",
+          "text": "Fan-out, not competition: every subscription gets its own copy of every event. Workers sharing one queue would instead compete for each message.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ]
     },
     {
-      "id": "n_ovcpfapldlpe",
+      "id": "n_9f561xf8y7pa",
       "type": "queue",
-      "x": 18,
-      "y": 2956,
-      "width": 140,
-      "height": 48,
+      "x": 12,
+      "y": 2912,
+      "width": 152,
+      "height": 72,
       "z": 0,
-      "text": "",
-      "textOrigin": "auto",
+      "text": "Projection Queue",
+      "textOrigin": "explicit",
       "queueKind": "queue"
     },
     {
-      "id": "n_1r67t0b4tuny",
+      "id": "n_z5cntwlqurub",
+      "type": "queue",
+      "x": 260,
+      "y": 2912,
+      "width": 152,
+      "height": 72,
+      "z": 0,
+      "text": "Integration Queue",
+      "textOrigin": "explicit",
+      "queueKind": "queue"
+    },
+    {
+      "id": "n_tmadymvc2yi3",
       "type": "service",
       "x": 0,
-      "y": 3076,
+      "y": 3056,
       "width": 176,
       "height": 68,
       "z": 0,
-      "text": "Projection Service",
+      "text": "Projection Worker",
       "textOrigin": "explicit",
       "accent": "teal",
       "serviceKind": "worker"
     },
     {
-      "id": "n_s5qb6r4ozcz6",
-      "type": "queue",
-      "x": 242,
-      "y": 2956,
-      "width": 140,
-      "height": 48,
-      "z": 0,
-      "text": "",
-      "textOrigin": "auto",
-      "queueKind": "queue"
-    },
-    {
-      "id": "n_g8es5jecsi4m",
+      "id": "n_ija624waide2",
       "type": "service",
-      "x": 224,
-      "y": 3076,
+      "x": 248,
+      "y": 3056,
       "width": 176,
       "height": 68,
       "z": 0,
-      "text": "Processing Service",
+      "text": "Integration Worker",
       "textOrigin": "explicit",
       "accent": "teal",
       "serviceKind": "worker"
     },
     {
-      "id": "n_gk2uza9i5aj1",
-      "type": "queue",
-      "x": 466,
-      "y": 2956,
-      "width": 140,
-      "height": 48,
-      "z": 0,
-      "text": "",
-      "textOrigin": "auto",
-      "queueKind": "queue"
-    },
-    {
-      "id": "n_o242ak5vevic",
-      "type": "service",
-      "x": 448,
-      "y": 3076,
-      "width": 176,
-      "height": 68,
-      "z": 0,
-      "text": "Integration Service",
-      "textOrigin": "explicit",
-      "accent": "teal",
-      "serviceKind": "worker"
-    },
-    {
-      "id": "n_lwzfyjie6fwq",
+      "id": "n_4a7qrl98k2lg",
       "type": "database",
-      "x": 14,
-      "y": 3216,
-      "width": 148,
-      "height": 88,
+      "x": 2,
+      "y": 3196,
+      "width": 172,
+      "height": 102,
       "z": 0,
       "text": "Read Store",
       "textOrigin": "explicit",
@@ -1110,10 +1177,10 @@
       "databaseKind": "generic"
     },
     {
-      "id": "n_bec8facp6zer",
+      "id": "n_35vuuyhft5t1",
       "type": "service",
-      "x": 448,
-      "y": 3216,
+      "x": 248,
+      "y": 3196,
       "width": 176,
       "height": 68,
       "z": 0,
@@ -1123,10 +1190,10 @@
       "serviceKind": "external"
     },
     {
-      "id": "n_fqa8aotfryqq",
+      "id": "n_hgdg5yyle1i2",
       "type": "queue",
-      "x": 710,
-      "y": 2956,
+      "x": 588,
+      "y": 2916,
       "width": 140,
       "height": 48,
       "z": 0,
@@ -1136,115 +1203,99 @@
       "deliveryRole": "dead-letter"
     },
     {
-      "id": "n_dc5qqgi5mpif",
+      "id": "n_cv5et9xprmzc",
       "type": "service",
-      "x": 1832,
-      "y": 2670,
+      "x": 1968,
+      "y": 2564,
       "width": 176,
       "height": 68,
       "z": 0,
-      "text": "Order Service",
+      "text": "Producer Service",
       "textOrigin": "explicit",
       "accent": "teal",
-      "serviceKind": "api"
+      "serviceKind": "generic"
     },
     {
-      "id": "n_92bhqrbfapfv",
-      "type": "group",
-      "x": 2112,
-      "y": 2608,
-      "width": 248,
-      "height": 166,
-      "z": -1,
-      "text": "Coordinator",
-      "textOrigin": "explicit",
-      "boundaryPreset": "boundary"
-    },
-    {
-      "id": "n_nwdsxla2zv8c",
-      "type": "text",
-      "x": 2124,
-      "y": 2638,
-      "width": 224,
-      "height": 24,
+      "id": "n_yedvi5ojws1x",
+      "type": "queue",
+      "x": 1986,
+      "y": 2736,
+      "width": 140,
+      "height": 72,
       "z": 0,
-      "text": "Drives the workflow, owns its state",
+      "text": "Domain Events",
       "textOrigin": "explicit",
-      "annotation": true,
-      "parentId": "n_92bhqrbfapfv"
-    },
-    {
-      "id": "n_ic1gv03bf1lb",
-      "type": "service",
-      "x": 2148,
-      "y": 2670,
-      "width": 176,
-      "height": 68,
-      "z": 0,
-      "text": "Saga Orchestrator",
-      "textOrigin": "explicit",
-      "accent": "violet",
-      "serviceKind": "generic",
+      "queueKind": "topic",
       "attachments": [
         {
-          "id": "a_1cw0b1xmbpcr",
+          "id": "a_tteclhgpu8hn",
           "type": "note",
-          "text": "Owns the saga’s state and the order of steps. Each service commits locally; a compensating action is a new local transaction that undoes an earlier one — never a rollback.",
+          "text": "Fan-out, not competition: every subscription gets its own copy of every event. Workers sharing one queue would instead compete for each message.",
           "noteKind": "note",
           "width": 200,
           "height": 56
         }
-      ],
-      "parentId": "n_92bhqrbfapfv"
+      ]
     },
     {
-      "id": "n_95q29miax5l0",
+      "id": "n_pwk7ddmvxgt1",
+      "type": "queue",
+      "x": 1856,
+      "y": 2912,
+      "width": 152,
+      "height": 72,
+      "z": 0,
+      "text": "Projection Queue",
+      "textOrigin": "explicit",
+      "queueKind": "queue"
+    },
+    {
+      "id": "n_6el43dwxtcbg",
+      "type": "queue",
+      "x": 2104,
+      "y": 2912,
+      "width": 152,
+      "height": 72,
+      "z": 0,
+      "text": "Integration Queue",
+      "textOrigin": "explicit",
+      "queueKind": "queue"
+    },
+    {
+      "id": "n_3nw7b8xea5qr",
       "type": "service",
-      "x": 1876,
-      "y": 2934,
+      "x": 1844,
+      "y": 3056,
       "width": 176,
       "height": 68,
       "z": 0,
-      "text": "Payment Service",
+      "text": "Projection Worker",
       "textOrigin": "explicit",
       "accent": "teal",
-      "serviceKind": "generic"
+      "serviceKind": "worker"
     },
     {
-      "id": "n_hs0pnnfa8ebd",
-      "type": "database",
-      "x": 1890,
-      "y": 3074,
-      "width": 148,
-      "height": 88,
-      "z": 0,
-      "text": "Payment DB",
-      "textOrigin": "explicit",
-      "accent": "blue",
-      "databaseKind": "generic"
-    },
-    {
-      "id": "n_5nt4pqaxgszs",
+      "id": "n_w88p19fr97qa",
       "type": "service",
-      "x": 2148,
-      "y": 2934,
+      "x": 2092,
+      "y": 3056,
       "width": 176,
       "height": 68,
       "z": 0,
-      "text": "Inventory Service",
+      "text": "Integration Worker",
       "textOrigin": "explicit",
       "accent": "teal",
-      "serviceKind": "generic"
+      "serviceKind": "worker"
     },
     {
-      "id": "n_3pleimcavocj",
+      "id": "n_1c7lnx8c98vk",
       "type": "database",
-      "x": 2162,
-      "y": 3074,
-      "width": 148,
-      "height": 88,
+      "x": 1846,
+      "y": 3196,
+      "width": 172,
+      "height": 102,
       "z": 0,
-      "text": "Inventory DB",
+      "text": "Read Store",
       "textOrigin": "explicit",
       "accent": "blue",
       "databaseKind": "generic"
@@ -1252,9 +1303,9 @@
   ],
   "edges": [
     {
-      "id": "e_xkkvv48g1fa9",
-      "source": "n_9kyvrscrr2rn",
-      "target": "n_nsdfg3yun6ed",
+      "id": "e_oui0w8pelygc",
+      "source": "n_ro60wxaa8nh3",
+      "target": "n_qj7eeqo2sab9",
       "directed": true,
       "routing": "smoothstep",
       "sourceAnchor": {
@@ -1269,12 +1320,11 @@
       "semanticsOrigin": "inferred"
     },
     {
-      "id": "e_amwco6scoj99",
-      "source": "n_nsdfg3yun6ed",
-      "target": "n_tqjnaxz0wip2",
+      "id": "e_omj5swaq68b4",
+      "source": "n_qj7eeqo2sab9",
+      "target": "n_eqpwfqbhckkd",
       "directed": true,
       "routing": "smoothstep",
-      "condition": "/accounts/*",
       "sourceAnchor": {
         "side": "bottom",
         "offset": 0.5
@@ -1287,12 +1337,11 @@
       "semanticsOrigin": "inferred"
     },
     {
-      "id": "e_fp6ggr78d3cr",
-      "source": "n_nsdfg3yun6ed",
-      "target": "n_ldx8i0odgmjx",
+      "id": "e_vtcr0tuwez3f",
+      "source": "n_qj7eeqo2sab9",
+      "target": "n_1gf4ilzymmx3",
       "directed": true,
       "routing": "smoothstep",
-      "condition": "/orders/*",
       "sourceAnchor": {
         "side": "bottom",
         "offset": 0.5
@@ -1305,12 +1354,11 @@
       "semanticsOrigin": "inferred"
     },
     {
-      "id": "e_yw6z0zeat3qw",
-      "source": "n_nsdfg3yun6ed",
-      "target": "n_lqh9wee2sh1e",
+      "id": "e_nxxrxbrr405d",
+      "source": "n_qj7eeqo2sab9",
+      "target": "n_g76cxuvdaarm",
       "directed": true,
       "routing": "smoothstep",
-      "condition": "/payments/*",
       "sourceAnchor": {
         "side": "bottom",
         "offset": 0.5
@@ -1323,9 +1371,9 @@
       "semanticsOrigin": "inferred"
     },
     {
-      "id": "e_iw1eu2rmpzc0",
-      "source": "n_tqjnaxz0wip2",
-      "target": "n_qgnutrzixsgt",
+      "id": "e_8jharfze53yh",
+      "source": "n_eqpwfqbhckkd",
+      "target": "n_7nh8asjcywwt",
       "directed": true,
       "routing": "smoothstep",
       "sourceAnchor": {
@@ -1336,13 +1384,13 @@
         "side": "top",
         "offset": 0.5
       },
-      "semantic": "writes",
+      "semantic": "readsWrites",
       "semanticsOrigin": "inferred"
     },
     {
-      "id": "e_w9kdendg4dbj",
-      "source": "n_ldx8i0odgmjx",
-      "target": "n_kzx1pwbmi3uw",
+      "id": "e_mwsyt08e104r",
+      "source": "n_1gf4ilzymmx3",
+      "target": "n_xyq9qizsi76z",
       "directed": true,
       "routing": "smoothstep",
       "sourceAnchor": {
@@ -1353,13 +1401,13 @@
         "side": "top",
         "offset": 0.5
       },
-      "semantic": "writes",
+      "semantic": "readsWrites",
       "semanticsOrigin": "inferred"
     },
     {
-      "id": "e_jjwdbur10u7i",
-      "source": "n_lqh9wee2sh1e",
-      "target": "n_x5vpyjci9b8i",
+      "id": "e_anuqpv362jxc",
+      "source": "n_g76cxuvdaarm",
+      "target": "n_y7s1dflhk9b3",
       "directed": true,
       "routing": "smoothstep",
       "sourceAnchor": {
@@ -1370,13 +1418,13 @@
         "side": "top",
         "offset": 0.5
       },
-      "semantic": "writes",
+      "semantic": "readsWrites",
       "semanticsOrigin": "inferred"
     },
     {
-      "id": "e_u35mdeb6eqlz",
-      "source": "n_ldx8i0odgmjx",
-      "target": "n_rr8ou9kwiha4",
+      "id": "e_zltilbrwrd5d",
+      "source": "n_1gf4ilzymmx3",
+      "target": "n_g76cxuvdaarm",
       "directed": true,
       "routing": "smoothstep",
       "sourceAnchor": {
@@ -1384,17 +1432,16 @@
         "offset": 0.5
       },
       "targetAnchor": {
-        "side": "top",
-        "offset": 0.15
+        "side": "left",
+        "offset": 0.5
       },
-      "kind": "event",
-      "semantic": "publishes",
+      "semantic": "calls",
       "semanticsOrigin": "inferred",
       "attachments": [
         {
-          "id": "a_aybo5gcab0ei",
+          "id": "a_6dy1v7r3l74b",
           "type": "note",
-          "text": "OrderPlaced — emitted after the Orders DB commit, never before.",
+          "text": "Through Capability C’s API — its contract — never its store. Events are the other way to integrate; see Event-Driven.",
           "noteKind": "note",
           "width": 200,
           "height": 56
@@ -1402,40 +1449,21 @@
       ]
     },
     {
-      "id": "e_f9k3q9s39ast",
-      "source": "n_rr8ou9kwiha4",
-      "target": "n_lqh9wee2sh1e",
+      "id": "e_bt6cozj7rrco",
+      "source": "n_y7s1dflhk9b3",
+      "target": "n_eflxa0zfl46q",
       "directed": true,
       "routing": "smoothstep",
-      "sourceAnchor": {
-        "side": "top",
-        "offset": 0.65
-      },
-      "targetAnchor": {
-        "side": "left",
-        "offset": 0.5
-      },
-      "kind": "event",
-      "semantic": "deliversTo",
+      "semantic": "reads",
       "semanticsOrigin": "inferred"
     },
     {
-      "id": "e_942sqb0rs5hj",
-      "source": "n_rr8ou9kwiha4",
-      "target": "n_yxfjnyem2mbj",
+      "id": "e_9mc2noca695y",
+      "source": "n_eflxa0zfl46q",
+      "target": "n_klr0llitcm9x",
       "directed": true,
       "routing": "smoothstep",
-      "kind": "event",
-      "semantic": "deliversTo",
-      "semanticsOrigin": "inferred"
-    },
-    {
-      "id": "e_44moh82qz7mu",
-      "source": "n_yxfjnyem2mbj",
-      "target": "n_598xcus7y0nj",
-      "directed": true,
-      "routing": "smoothstep",
-      "label": "publishes OrderCreated",
+      "label": "publishes state-change event",
       "sourceAnchor": {
         "side": "bottom",
         "offset": 0.5
@@ -1449,20 +1477,28 @@
       "semanticsOrigin": "inferred",
       "attachments": [
         {
-          "id": "a_16ln76uv5nxt",
+          "id": "a_1v4pbowov128",
           "type": "code",
-          "text": "OrderCreated",
+          "text": "Event envelope",
           "language": "json",
-          "code": "{\n  \"id\": \"evt_8f3a1c2d\",\n  \"type\": \"OrderCreated\",\n  \"time\": \"2026-09-10T08:15Z\",\n  \"data\": {\n    \"orderId\": \"ord_4821\"\n  }\n}",
+          "code": "{\n  \"id\": \"evt_8f3a1c2d\",\n  \"type\": \"StateChanged\",\n  \"time\": \"2026-09-10T08:15Z\",\n  \"data\": {\n    \"entityId\": \"ent_4821\"\n  }\n}",
           "width": 380,
           "height": 180
+        },
+        {
+          "id": "a_2gqc21leky2v",
+          "type": "note",
+          "text": "Typically at-least-once and unordered across partitions: consumers dedupe on the event id and tolerate reordering. Publishing is not atomic with the state change that caused it — see Transactional Outbox.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
         }
       ]
     },
     {
-      "id": "e_mrk85qnc37am",
-      "source": "n_598xcus7y0nj",
-      "target": "n_iiuxvvir4x0s",
+      "id": "e_csun4u0nohei",
+      "source": "n_klr0llitcm9x",
+      "target": "n_t267649l3gln",
       "directed": true,
       "routing": "smoothstep",
       "sourceAnchor": {
@@ -1478,9 +1514,9 @@
       "semanticsOrigin": "inferred"
     },
     {
-      "id": "e_kshnyrf07dz8",
-      "source": "n_598xcus7y0nj",
-      "target": "n_s13be2ir45hh",
+      "id": "e_xtlrr00xce02",
+      "source": "n_klr0llitcm9x",
+      "target": "n_zjngb7p3uhte",
       "directed": true,
       "routing": "smoothstep",
       "sourceAnchor": {
@@ -1496,9 +1532,9 @@
       "semanticsOrigin": "inferred"
     },
     {
-      "id": "e_lfcy9gbiprip",
-      "source": "n_598xcus7y0nj",
-      "target": "n_5vmzljp30sqd",
+      "id": "e_2u0vdcdhho40",
+      "source": "n_t267649l3gln",
+      "target": "n_tyzoejpnujgz",
       "directed": true,
       "routing": "smoothstep",
       "sourceAnchor": {
@@ -1509,32 +1545,15 @@
         "side": "top",
         "offset": 0.5
       },
-      "kind": "event",
-      "semantic": "fansOut",
-      "semanticsOrigin": "inferred"
-    },
-    {
-      "id": "e_xq3vhwlg5u2c",
-      "source": "n_iiuxvvir4x0s",
-      "target": "n_k9big8rbao0y",
-      "directed": true,
-      "routing": "smoothstep",
-      "sourceAnchor": {
-        "side": "bottom",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "top",
-        "offset": 0.5
-      },
-      "kind": "event",
+      "kind": "async",
       "semantic": "consumes",
-      "semanticsOrigin": "inferred"
+      "semanticsOrigin": "inferred",
+      "async": true
     },
     {
-      "id": "e_lpvbh7nchwid",
-      "source": "n_s13be2ir45hh",
-      "target": "n_3k4yvj4igsq7",
+      "id": "e_t1uhrwgey1uz",
+      "source": "n_zjngb7p3uhte",
+      "target": "n_1s0ujij85l7c",
       "directed": true,
       "routing": "smoothstep",
       "sourceAnchor": {
@@ -1545,34 +1564,18 @@
         "side": "top",
         "offset": 0.5
       },
-      "kind": "event",
+      "kind": "async",
       "semantic": "consumes",
-      "semanticsOrigin": "inferred"
+      "semanticsOrigin": "inferred",
+      "async": true
     },
     {
-      "id": "e_ozyxc59ty8su",
-      "source": "n_5vmzljp30sqd",
-      "target": "n_h62mhz4xmi8r",
+      "id": "e_m50bsr706421",
+      "source": "n_tyzoejpnujgz",
+      "target": "n_kp4o8z0brf6h",
       "directed": true,
       "routing": "smoothstep",
-      "sourceAnchor": {
-        "side": "bottom",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "top",
-        "offset": 0.5
-      },
-      "kind": "event",
-      "semantic": "consumes",
-      "semanticsOrigin": "inferred"
-    },
-    {
-      "id": "e_dlorn5fij05h",
-      "source": "n_k9big8rbao0y",
-      "target": "n_gqkqon9dtsbe",
-      "directed": true,
-      "routing": "smoothstep",
+      "label": "updates projection",
       "sourceAnchor": {
         "side": "bottom",
         "offset": 0.5
@@ -1582,12 +1585,12 @@
         "offset": 0.5
       },
       "semantic": "writes",
-      "semanticsOrigin": "inferred"
+      "semanticsOrigin": "explicit"
     },
     {
-      "id": "e_c9a6lar3nal4",
-      "source": "n_h62mhz4xmi8r",
-      "target": "n_x0n21tcpixvd",
+      "id": "e_7hby24okfp3r",
+      "source": "n_1s0ujij85l7c",
+      "target": "n_8k4dcdwy0m6e",
       "directed": true,
       "routing": "smoothstep",
       "sourceAnchor": {
@@ -1602,11 +1605,12 @@
       "semanticsOrigin": "inferred"
     },
     {
-      "id": "e_img92aman7so",
-      "source": "n_5vmzljp30sqd",
-      "target": "n_8u7gjsxr95cg",
+      "id": "e_sk7qvst1ihfc",
+      "source": "n_zjngb7p3uhte",
+      "target": "n_9pryqvc4jka3",
       "directed": true,
       "routing": "smoothstep",
+      "label": "after configured retry limit",
       "sourceAnchor": {
         "side": "right",
         "offset": 0.5
@@ -1619,12 +1623,11 @@
       "semantic": "deadLetters",
       "semanticsOrigin": "inferred",
       "async": true,
-      "deliveryAttempts": 3,
       "attachments": [
         {
-          "id": "a_y2sl59gpuo6l",
+          "id": "a_mp6mv9r14xr7",
           "type": "note",
-          "text": "Poison messages park here for inspection and redrive. Alert on depth.",
+          "text": "An illustrative failure path — any subscription can have one. Poison messages park here for inspection and redrive; alert on depth.",
           "noteKind": "note",
           "width": 200,
           "height": 56
@@ -1632,18 +1635,18 @@
       ]
     },
     {
-      "id": "e_jw6tiq5tluua",
-      "source": "n_gqkqon9dtsbe",
-      "target": "n_3bfddjs9ehqx",
+      "id": "e_x9kxdai74f2k",
+      "source": "n_kp4o8z0brf6h",
+      "target": "n_w1lye9v142wc",
       "directed": true,
       "routing": "smoothstep",
       "semantic": "reads",
       "semanticsOrigin": "inferred"
     },
     {
-      "id": "e_shn90kpajhhc",
-      "source": "n_6ldrg0xe278s",
-      "target": "n_3bfddjs9ehqx",
+      "id": "e_pwgpa74se4ly",
+      "source": "n_q4h0ufbpmal8",
+      "target": "n_w1lye9v142wc",
       "directed": true,
       "routing": "smoothstep",
       "sourceAnchor": {
@@ -1651,16 +1654,16 @@
         "offset": 0.5
       },
       "targetAnchor": {
-        "side": "top",
+        "side": "right",
         "offset": 0.5
       },
       "semantic": "command",
       "semanticsOrigin": "explicit"
     },
     {
-      "id": "e_5wlg1zvqssc3",
-      "source": "n_3bfddjs9ehqx",
-      "target": "n_l9ilgjjj1zot",
+      "id": "e_7ynngacocsr3",
+      "source": "n_w1lye9v142wc",
+      "target": "n_jsx4jj85kovz",
       "directed": true,
       "routing": "smoothstep",
       "label": "executes",
@@ -1676,11 +1679,12 @@
       "semanticsOrigin": "explicit"
     },
     {
-      "id": "e_4s6thn872u7o",
-      "source": "n_l9ilgjjj1zot",
-      "target": "n_977qwokbf7jv",
+      "id": "e_cbasremewvd2",
+      "source": "n_jsx4jj85kovz",
+      "target": "n_r9cl1u8v4dvr",
       "directed": true,
       "routing": "smoothstep",
+      "label": "writes state + outbox record",
       "sourceAnchor": {
         "side": "bottom",
         "offset": 0.5
@@ -1690,12 +1694,30 @@
         "offset": 0.5
       },
       "semantic": "writes",
-      "semanticsOrigin": "inferred"
+      "semanticsOrigin": "explicit"
     },
     {
-      "id": "e_hjbmcvcrbk1o",
-      "source": "n_l9ilgjjj1zot",
-      "target": "n_wbhf2c6qo4ia",
+      "id": "e_bbdz1leb5wp7",
+      "source": "n_ye4hqyfw21tu",
+      "target": "n_r9cl1u8v4dvr",
+      "directed": true,
+      "routing": "smoothstep",
+      "label": "reads outbox",
+      "sourceAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "semantic": "reads",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "e_q9boiydj6km9",
+      "source": "n_ye4hqyfw21tu",
+      "target": "n_6flnqx4li8g0",
       "directed": true,
       "routing": "smoothstep",
       "sourceAnchor": {
@@ -1711,9 +1733,9 @@
       "semanticsOrigin": "inferred",
       "attachments": [
         {
-          "id": "a_7n8dy8oeciea",
+          "id": "a_apus6ygpc1tx",
           "type": "note",
-          "text": "OrderPlaced — a fact, published after the write store commits.",
+          "text": "Published only after the commit: the new state and its outbox record were written in one transaction, or not at all, and nothing left it from inside. Delivery is at-least-once, so the projection dedupes on the record id.",
           "noteKind": "note",
           "width": 200,
           "height": 56
@@ -1721,17 +1743,17 @@
       ]
     },
     {
-      "id": "e_26jjbrwgpswv",
-      "source": "n_wbhf2c6qo4ia",
-      "target": "n_yvat616k8e0w",
+      "id": "e_4a7q1ik81lpp",
+      "source": "n_6flnqx4li8g0",
+      "target": "n_h2w1i4nhqb8p",
       "directed": true,
       "routing": "smoothstep",
       "sourceAnchor": {
-        "side": "bottom",
+        "side": "right",
         "offset": 0.5
       },
       "targetAnchor": {
-        "side": "top",
+        "side": "left",
         "offset": 0.5
       },
       "kind": "event",
@@ -1739,207 +1761,12 @@
       "semanticsOrigin": "inferred"
     },
     {
-      "id": "e_rta1wzmuevfb",
-      "source": "n_yvat616k8e0w",
-      "target": "n_8abn2t338cpf",
+      "id": "e_osugosbstf2c",
+      "source": "n_h2w1i4nhqb8p",
+      "target": "n_5h3x076drfq8",
       "directed": true,
       "routing": "smoothstep",
-      "sourceAnchor": {
-        "side": "right",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "left",
-        "offset": 0.5
-      },
-      "semantic": "projects",
-      "semanticsOrigin": "explicit"
-    },
-    {
-      "id": "e_go5fbvm5t0r4",
-      "source": "n_6ldrg0xe278s",
-      "target": "n_bjupow8vznq1",
-      "directed": true,
-      "routing": "smoothstep",
-      "sourceAnchor": {
-        "side": "bottom",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "top",
-        "offset": 0.5
-      },
-      "semantic": "query",
-      "semanticsOrigin": "explicit"
-    },
-    {
-      "id": "e_6j2b478937yp",
-      "source": "n_bjupow8vznq1",
-      "target": "n_8abn2t338cpf",
-      "directed": true,
-      "routing": "smoothstep",
-      "sourceAnchor": {
-        "side": "bottom",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "top",
-        "offset": 0.5
-      },
-      "semantic": "reads",
-      "semanticsOrigin": "explicit"
-    },
-    {
-      "id": "e_nfaoz8v79ifg",
-      "source": "n_8abn2t338cpf",
-      "target": "n_7mplmaf3oky8",
-      "directed": true,
-      "routing": "smoothstep",
-      "semantic": "reads",
-      "semanticsOrigin": "inferred"
-    },
-    {
-      "id": "e_ht11hd8llcvi",
-      "source": "n_7mplmaf3oky8",
-      "target": "n_03zwlo8q235x",
-      "directed": true,
-      "routing": "smoothstep",
-      "sourceAnchor": {
-        "side": "right",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "left",
-        "offset": 0.5
-      },
-      "semantic": "calls",
-      "semanticsOrigin": "inferred"
-    },
-    {
-      "id": "e_xzuxbuwl3h4d",
-      "source": "n_udf33xqvniq3",
-      "target": "n_03zwlo8q235x",
-      "directed": true,
-      "routing": "smoothstep",
-      "sourceAnchor": {
-        "side": "right",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "left",
-        "offset": 0.5
-      },
-      "semantic": "calls",
-      "semanticsOrigin": "inferred"
-    },
-    {
-      "id": "e_gg4hohd3gg4i",
-      "source": "n_03zwlo8q235x",
-      "target": "n_bizzgsx8jhk6",
-      "directed": true,
-      "routing": "smoothstep",
-      "sourceAnchor": {
-        "side": "right",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "left",
-        "offset": 0.5
-      },
-      "semantic": "implementedBy",
-      "semanticsOrigin": "inferred"
-    },
-    {
-      "id": "e_lnrdp0agzob9",
-      "source": "n_bizzgsx8jhk6",
-      "target": "n_wpmzxwu1ct6q",
-      "directed": true,
-      "routing": "smoothstep",
-      "sourceAnchor": {
-        "side": "bottom",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "top",
-        "offset": 0.5
-      },
-      "semantic": "uses",
-      "semanticsOrigin": "inferred"
-    },
-    {
-      "id": "e_bfabl1sk6zxp",
-      "source": "n_bizzgsx8jhk6",
-      "target": "n_7gelmoajcyj2",
-      "directed": true,
-      "routing": "smoothstep",
-      "sourceAnchor": {
-        "side": "right",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "left",
-        "offset": 0.5
-      },
-      "semantic": "uses",
-      "semanticsOrigin": "inferred"
-    },
-    {
-      "id": "e_pcqnnntk8hs7",
-      "source": "n_bizzgsx8jhk6",
-      "target": "n_bvxefhy5e0vo",
-      "directed": true,
-      "routing": "smoothstep",
-      "sourceAnchor": {
-        "side": "right",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "left",
-        "offset": 0.5
-      },
-      "semantic": "uses",
-      "semanticsOrigin": "inferred"
-    },
-    {
-      "id": "e_ivv7323huo0a",
-      "source": "n_7gelmoajcyj2",
-      "target": "n_6vpm5gg6gnj1",
-      "directed": true,
-      "routing": "smoothstep",
-      "sourceAnchor": {
-        "side": "right",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "left",
-        "offset": 0.5
-      },
-      "semantic": "implementedBy",
-      "semanticsOrigin": "inferred"
-    },
-    {
-      "id": "e_lvs665qmabbl",
-      "source": "n_bvxefhy5e0vo",
-      "target": "n_cuhl44a1kpta",
-      "directed": true,
-      "routing": "smoothstep",
-      "sourceAnchor": {
-        "side": "right",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "left",
-        "offset": 0.5
-      },
-      "semantic": "implementedBy",
-      "semanticsOrigin": "inferred"
-    },
-    {
-      "id": "e_es7go1sc4uh1",
-      "source": "n_6vpm5gg6gnj1",
-      "target": "n_7bcvqekt12it",
-      "directed": true,
-      "routing": "smoothstep",
+      "label": "updates projection",
       "sourceAnchor": {
         "side": "right",
         "offset": 0.5
@@ -1949,12 +1776,157 @@
         "offset": 0.5
       },
       "semantic": "writes",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "e_qz27hwxi6k5j",
+      "source": "n_q4h0ufbpmal8",
+      "target": "n_aj8rx4r3aef8",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semantic": "query",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "e_dytepoh3b9v2",
+      "source": "n_aj8rx4r3aef8",
+      "target": "n_5h3x076drfq8",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semantic": "reads",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "e_08kk1l6ooeho",
+      "source": "n_5h3x076drfq8",
+      "target": "n_egmk6qm1krjj",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "reads",
       "semanticsOrigin": "inferred"
     },
     {
-      "id": "e_m8ln5oq6mbx4",
-      "source": "n_cuhl44a1kpta",
-      "target": "n_qshytc8a54ho",
+      "id": "e_o6hdumkhd5n5",
+      "source": "n_egmk6qm1krjj",
+      "target": "n_p10xswf804hh",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semantic": "calls",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "e_20grpbrub0jn",
+      "source": "n_9ebyn4cbfqhb",
+      "target": "n_p10xswf804hh",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semantic": "calls",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "e_avzozkqogqbk",
+      "source": "n_w78lwsiwbonx",
+      "target": "n_trsag52fbw9p",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semantic": "uses",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_ev56alsysz6k",
+      "source": "n_w78lwsiwbonx",
+      "target": "n_2pjn1ykfmg86",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semantic": "uses",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_feohkeyq381v",
+      "source": "n_w78lwsiwbonx",
+      "target": "n_n55mz2leaugr",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semantic": "uses",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_04ttxcemcix7",
+      "source": "n_xne5hmfpenf9",
+      "target": "n_mz421wqzfawp",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semantic": "readsWrites",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_tmd4ph0sz5at",
+      "source": "n_8uuu5c09da2o",
+      "target": "n_ye65zyd0rkyn",
       "directed": true,
       "routing": "smoothstep",
       "sourceAnchor": {
@@ -1969,18 +1941,69 @@
       "semanticsOrigin": "inferred"
     },
     {
-      "id": "e_xhzj2ryqf6tn",
-      "source": "n_7bcvqekt12it",
-      "target": "n_7ecza0ixf8a4",
+      "id": "e_49gzlhe1eal8",
+      "source": "n_w78lwsiwbonx",
+      "target": "n_p10xswf804hh",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "semantic": "implements",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "e_0fx9jh8mwfq7",
+      "source": "n_xne5hmfpenf9",
+      "target": "n_2pjn1ykfmg86",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "semantic": "implements",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "e_0hwpj0dnn5le",
+      "source": "n_8uuu5c09da2o",
+      "target": "n_n55mz2leaugr",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "semantic": "implements",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "e_y92hdlfvv79w",
+      "source": "n_mz421wqzfawp",
+      "target": "n_5kondbyzav93",
       "directed": true,
       "routing": "smoothstep",
       "semantic": "reads",
       "semanticsOrigin": "inferred"
     },
     {
-      "id": "e_sdp2o17dukba",
-      "source": "n_7ecza0ixf8a4",
-      "target": "n_p2tzbg4md1od",
+      "id": "e_uh0gjhhdl1y4",
+      "source": "n_5kondbyzav93",
+      "target": "n_338wgit7wxxy",
       "directed": true,
       "routing": "smoothstep",
       "label": "Start saga",
@@ -1996,9 +2019,9 @@
       "semanticsOrigin": "explicit"
     },
     {
-      "id": "e_g53an1s8gbyu",
-      "source": "n_p2tzbg4md1od",
-      "target": "n_w9cxds82cnq3",
+      "id": "e_zqnli7t24fz1",
+      "source": "n_338wgit7wxxy",
+      "target": "n_d82zqsu9b72i",
       "directed": true,
       "routing": "smoothstep",
       "label": "Reserve payment",
@@ -2011,12 +2034,14 @@
         "offset": 0.5
       },
       "semantic": "command",
-      "semanticsOrigin": "explicit"
+      "hasResponse": true,
+      "semanticsOrigin": "explicit",
+      "response": "reserved / failed"
     },
     {
-      "id": "e_k6w3xxy7skvd",
-      "source": "n_p2tzbg4md1od",
-      "target": "n_dkoue3gx2sfg",
+      "id": "e_c9sehbymjf5b",
+      "source": "n_338wgit7wxxy",
+      "target": "n_6bcxxvs4laa3",
       "directed": true,
       "routing": "smoothstep",
       "label": "Reserve inventory",
@@ -2029,12 +2054,14 @@
         "offset": 0.5
       },
       "semantic": "command",
-      "semanticsOrigin": "explicit"
+      "hasResponse": true,
+      "semanticsOrigin": "explicit",
+      "response": "reserved / failed"
     },
     {
-      "id": "e_756wkfw9jfer",
-      "source": "n_p2tzbg4md1od",
-      "target": "n_cyepxgs4lvh0",
+      "id": "e_01wwanbzdd03",
+      "source": "n_338wgit7wxxy",
+      "target": "n_jfpx3lyu6w2p",
       "directed": true,
       "routing": "smoothstep",
       "label": "Schedule fulfillment",
@@ -2047,12 +2074,31 @@
         "offset": 0.5
       },
       "semantic": "command",
+      "hasResponse": true,
+      "semanticsOrigin": "explicit",
+      "response": "scheduled / failed"
+    },
+    {
+      "id": "e_l9vjdpar57g3",
+      "source": "n_d82zqsu9b72i",
+      "target": "n_nz7qdtwauak2",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semantic": "writes",
       "semanticsOrigin": "explicit"
     },
     {
-      "id": "e_xp7laj013rgv",
-      "source": "n_w9cxds82cnq3",
-      "target": "n_oav5mlnomq4k",
+      "id": "e_n8sa3jv4jbpc",
+      "source": "n_6bcxxvs4laa3",
+      "target": "n_8b1pu2wm4dfj",
       "directed": true,
       "routing": "smoothstep",
       "sourceAnchor": {
@@ -2064,12 +2110,12 @@
         "offset": 0.5
       },
       "semantic": "writes",
-      "semanticsOrigin": "inferred"
+      "semanticsOrigin": "explicit"
     },
     {
-      "id": "e_569sf9hvipdy",
-      "source": "n_dkoue3gx2sfg",
-      "target": "n_s9upelfz6k4b",
+      "id": "e_14lvkc4b2etl",
+      "source": "n_jfpx3lyu6w2p",
+      "target": "n_61j4nl9cu4km",
       "directed": true,
       "routing": "smoothstep",
       "sourceAnchor": {
@@ -2081,29 +2127,12 @@
         "offset": 0.5
       },
       "semantic": "writes",
-      "semanticsOrigin": "inferred"
+      "semanticsOrigin": "explicit"
     },
     {
-      "id": "e_5p9xp8n1gj0k",
-      "source": "n_cyepxgs4lvh0",
-      "target": "n_q0nbni52surz",
-      "directed": true,
-      "routing": "smoothstep",
-      "sourceAnchor": {
-        "side": "bottom",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "top",
-        "offset": 0.5
-      },
-      "semantic": "writes",
-      "semanticsOrigin": "inferred"
-    },
-    {
-      "id": "e_1h8r7t832v2g",
-      "source": "n_p2tzbg4md1od",
-      "target": "n_dkoue3gx2sfg",
+      "id": "e_ajgcerswsbwk",
+      "source": "n_338wgit7wxxy",
+      "target": "n_6bcxxvs4laa3",
       "directed": true,
       "routing": "smoothstep",
       "label": "Release inventory",
@@ -2120,9 +2149,9 @@
       "semanticsOrigin": "explicit"
     },
     {
-      "id": "e_zx3wcnywii4v",
-      "source": "n_p2tzbg4md1od",
-      "target": "n_w9cxds82cnq3",
+      "id": "e_a832supg38hr",
+      "source": "n_338wgit7wxxy",
+      "target": "n_d82zqsu9b72i",
       "directed": true,
       "routing": "smoothstep",
       "label": "Release payment",
@@ -2139,18 +2168,18 @@
       "semanticsOrigin": "explicit"
     },
     {
-      "id": "e_kuslefd7wj5y",
-      "source": "n_q0nbni52surz",
-      "target": "n_cbzsc8i7i10u",
+      "id": "e_7l46fnwikmco",
+      "source": "n_61j4nl9cu4km",
+      "target": "n_xayglcdhgoxr",
       "directed": true,
       "routing": "smoothstep",
       "semantic": "reads",
       "semanticsOrigin": "inferred"
     },
     {
-      "id": "e_6z0n52aawzsa",
-      "source": "n_thk5rrazfygu",
-      "target": "n_cbzsc8i7i10u",
+      "id": "e_gs1o9keu74o4",
+      "source": "n_itmp3g3x6tjs",
+      "target": "n_xayglcdhgoxr",
       "directed": true,
       "routing": "smoothstep",
       "sourceAnchor": {
@@ -2165,12 +2194,11 @@
       "semanticsOrigin": "inferred"
     },
     {
-      "id": "e_qmauc3vcg4sk",
-      "source": "n_cbzsc8i7i10u",
-      "target": "n_wcra9fc81xay",
+      "id": "e_98u1v1cba8xd",
+      "source": "n_xayglcdhgoxr",
+      "target": "n_iomk841a2wyz",
       "directed": true,
       "routing": "smoothstep",
-      "condition": "/accounts/*",
       "sourceAnchor": {
         "side": "bottom",
         "offset": 0.5
@@ -2183,12 +2211,11 @@
       "semanticsOrigin": "inferred"
     },
     {
-      "id": "e_416avpk3lp1u",
-      "source": "n_cbzsc8i7i10u",
-      "target": "n_hu0pubeum03s",
+      "id": "e_jkyokpj2rrz9",
+      "source": "n_xayglcdhgoxr",
+      "target": "n_tdh60y6eut8o",
       "directed": true,
       "routing": "smoothstep",
-      "condition": "/orders/*",
       "sourceAnchor": {
         "side": "bottom",
         "offset": 0.5
@@ -2201,12 +2228,11 @@
       "semanticsOrigin": "inferred"
     },
     {
-      "id": "e_vawkjh6z1yu6",
-      "source": "n_cbzsc8i7i10u",
-      "target": "n_cv3hy3p00asp",
+      "id": "e_wj0nd7depvid",
+      "source": "n_xayglcdhgoxr",
+      "target": "n_d692a9ofdm2w",
       "directed": true,
       "routing": "smoothstep",
-      "condition": "/payments/*",
       "sourceAnchor": {
         "side": "bottom",
         "offset": 0.5
@@ -2219,9 +2245,9 @@
       "semanticsOrigin": "inferred"
     },
     {
-      "id": "e_v6w3l8nt60xu",
-      "source": "n_wcra9fc81xay",
-      "target": "n_m8kdm3iia9x8",
+      "id": "e_z5668byzb0qr",
+      "source": "n_iomk841a2wyz",
+      "target": "n_h15f0ilfph6c",
       "directed": true,
       "routing": "smoothstep",
       "sourceAnchor": {
@@ -2232,13 +2258,13 @@
         "side": "top",
         "offset": 0.5
       },
-      "semantic": "writes",
+      "semantic": "readsWrites",
       "semanticsOrigin": "inferred"
     },
     {
-      "id": "e_8817azb5on9c",
-      "source": "n_hu0pubeum03s",
-      "target": "n_1n6h26qu0cwi",
+      "id": "e_uw25bj3j3cp6",
+      "source": "n_tdh60y6eut8o",
+      "target": "n_zeyqhjyj1z6b",
       "directed": true,
       "routing": "smoothstep",
       "sourceAnchor": {
@@ -2249,13 +2275,13 @@
         "side": "top",
         "offset": 0.5
       },
-      "semantic": "writes",
+      "semantic": "readsWrites",
       "semanticsOrigin": "inferred"
     },
     {
-      "id": "e_k32ud92udepz",
-      "source": "n_cv3hy3p00asp",
-      "target": "n_arkmvj2puxmm",
+      "id": "e_lzh6cun9tk95",
+      "source": "n_d692a9ofdm2w",
+      "target": "n_0v4qvajmotlb",
       "directed": true,
       "routing": "smoothstep",
       "sourceAnchor": {
@@ -2266,13 +2292,13 @@
         "side": "top",
         "offset": 0.5
       },
-      "semantic": "writes",
+      "semantic": "readsWrites",
       "semanticsOrigin": "inferred"
     },
     {
-      "id": "e_ud7bct6nj434",
-      "source": "n_hu0pubeum03s",
-      "target": "n_787y5j4xwioi",
+      "id": "e_o2adqpwjj9ba",
+      "source": "n_tdh60y6eut8o",
+      "target": "n_d692a9ofdm2w",
       "directed": true,
       "routing": "smoothstep",
       "sourceAnchor": {
@@ -2280,17 +2306,16 @@
         "offset": 0.5
       },
       "targetAnchor": {
-        "side": "top",
-        "offset": 0.15
+        "side": "left",
+        "offset": 0.5
       },
-      "kind": "event",
-      "semantic": "publishes",
+      "semantic": "calls",
       "semanticsOrigin": "inferred",
       "attachments": [
         {
-          "id": "a_vmnk7c1f6zbz",
+          "id": "a_9esixoyeh7r4",
           "type": "note",
-          "text": "OrderPlaced — emitted after the Orders DB commit, never before.",
+          "text": "Through Capability C’s API — its contract — never its store. Events are the other way to integrate; see Event-Driven.",
           "noteKind": "note",
           "width": 200,
           "height": 56
@@ -2298,40 +2323,21 @@
       ]
     },
     {
-      "id": "e_l979a0xi3bu8",
-      "source": "n_787y5j4xwioi",
-      "target": "n_cv3hy3p00asp",
+      "id": "e_upz42b0lk23u",
+      "source": "n_0v4qvajmotlb",
+      "target": "n_ybmve0qqfmoh",
       "directed": true,
       "routing": "smoothstep",
-      "sourceAnchor": {
-        "side": "top",
-        "offset": 0.65
-      },
-      "targetAnchor": {
-        "side": "left",
-        "offset": 0.5
-      },
-      "kind": "event",
-      "semantic": "deliversTo",
+      "semantic": "reads",
       "semanticsOrigin": "inferred"
     },
     {
-      "id": "e_t6805a9rcfqb",
-      "source": "n_787y5j4xwioi",
-      "target": "n_df8jsrvgrybl",
+      "id": "e_obxzvxmsvc6s",
+      "source": "n_ybmve0qqfmoh",
+      "target": "n_zzc0jerpvtwl",
       "directed": true,
       "routing": "smoothstep",
-      "kind": "event",
-      "semantic": "deliversTo",
-      "semanticsOrigin": "inferred"
-    },
-    {
-      "id": "e_zrx25fxjaoh6",
-      "source": "n_df8jsrvgrybl",
-      "target": "n_jl6tcr74zzu8",
-      "directed": true,
-      "routing": "smoothstep",
-      "label": "publishes OrderCreated",
+      "label": "publishes state-change event",
       "sourceAnchor": {
         "side": "bottom",
         "offset": 0.5
@@ -2345,20 +2351,28 @@
       "semanticsOrigin": "inferred",
       "attachments": [
         {
-          "id": "a_w3jav8txnnws",
+          "id": "a_b4x3a7ovagtg",
           "type": "code",
-          "text": "OrderCreated",
+          "text": "Event envelope",
           "language": "json",
-          "code": "{\n  \"id\": \"evt_8f3a1c2d\",\n  \"type\": \"OrderCreated\",\n  \"time\": \"2026-09-10T08:15Z\",\n  \"data\": {\n    \"orderId\": \"ord_4821\"\n  }\n}",
+          "code": "{\n  \"id\": \"evt_8f3a1c2d\",\n  \"type\": \"StateChanged\",\n  \"time\": \"2026-09-10T08:15Z\",\n  \"data\": {\n    \"entityId\": \"ent_4821\"\n  }\n}",
           "width": 380,
           "height": 180
+        },
+        {
+          "id": "a_bb279arcrj33",
+          "type": "note",
+          "text": "Typically at-least-once and unordered across partitions: consumers dedupe on the event id and tolerate reordering. Publishing is not atomic with the state change that caused it — see Transactional Outbox.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
         }
       ]
     },
     {
-      "id": "e_ul4m6vh7nsj3",
-      "source": "n_jl6tcr74zzu8",
-      "target": "n_ovcpfapldlpe",
+      "id": "e_4qg7af2luzuo",
+      "source": "n_zzc0jerpvtwl",
+      "target": "n_9f561xf8y7pa",
       "directed": true,
       "routing": "smoothstep",
       "sourceAnchor": {
@@ -2374,9 +2388,9 @@
       "semanticsOrigin": "inferred"
     },
     {
-      "id": "e_63e4pykq1k9t",
-      "source": "n_jl6tcr74zzu8",
-      "target": "n_s5qb6r4ozcz6",
+      "id": "e_62nqxs3cq8ih",
+      "source": "n_zzc0jerpvtwl",
+      "target": "n_z5cntwlqurub",
       "directed": true,
       "routing": "smoothstep",
       "sourceAnchor": {
@@ -2392,9 +2406,9 @@
       "semanticsOrigin": "inferred"
     },
     {
-      "id": "e_b6x9oqug1bie",
-      "source": "n_jl6tcr74zzu8",
-      "target": "n_gk2uza9i5aj1",
+      "id": "e_5c87t21bvzcw",
+      "source": "n_9f561xf8y7pa",
+      "target": "n_tmadymvc2yi3",
       "directed": true,
       "routing": "smoothstep",
       "sourceAnchor": {
@@ -2405,32 +2419,15 @@
         "side": "top",
         "offset": 0.5
       },
-      "kind": "event",
-      "semantic": "fansOut",
-      "semanticsOrigin": "inferred"
-    },
-    {
-      "id": "e_yh7reotxghfo",
-      "source": "n_ovcpfapldlpe",
-      "target": "n_1r67t0b4tuny",
-      "directed": true,
-      "routing": "smoothstep",
-      "sourceAnchor": {
-        "side": "bottom",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "top",
-        "offset": 0.5
-      },
-      "kind": "event",
+      "kind": "async",
       "semantic": "consumes",
-      "semanticsOrigin": "inferred"
+      "semanticsOrigin": "inferred",
+      "async": true
     },
     {
-      "id": "e_3lmkju3w37pu",
-      "source": "n_s5qb6r4ozcz6",
-      "target": "n_g8es5jecsi4m",
+      "id": "e_xnxjdlph0fj1",
+      "source": "n_z5cntwlqurub",
+      "target": "n_ija624waide2",
       "directed": true,
       "routing": "smoothstep",
       "sourceAnchor": {
@@ -2441,34 +2438,18 @@
         "side": "top",
         "offset": 0.5
       },
-      "kind": "event",
+      "kind": "async",
       "semantic": "consumes",
-      "semanticsOrigin": "inferred"
+      "semanticsOrigin": "inferred",
+      "async": true
     },
     {
-      "id": "e_thma3uzn2b2s",
-      "source": "n_gk2uza9i5aj1",
-      "target": "n_o242ak5vevic",
+      "id": "e_6bwg0yn1up0d",
+      "source": "n_tmadymvc2yi3",
+      "target": "n_4a7qrl98k2lg",
       "directed": true,
       "routing": "smoothstep",
-      "sourceAnchor": {
-        "side": "bottom",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "top",
-        "offset": 0.5
-      },
-      "kind": "event",
-      "semantic": "consumes",
-      "semanticsOrigin": "inferred"
-    },
-    {
-      "id": "e_p5ez91pdfttq",
-      "source": "n_1r67t0b4tuny",
-      "target": "n_lwzfyjie6fwq",
-      "directed": true,
-      "routing": "smoothstep",
+      "label": "updates projection",
       "sourceAnchor": {
         "side": "bottom",
         "offset": 0.5
@@ -2478,12 +2459,12 @@
         "offset": 0.5
       },
       "semantic": "writes",
-      "semanticsOrigin": "inferred"
+      "semanticsOrigin": "explicit"
     },
     {
-      "id": "e_b5fcqmych8ga",
-      "source": "n_o242ak5vevic",
-      "target": "n_bec8facp6zer",
+      "id": "e_w83qe4oauuq9",
+      "source": "n_ija624waide2",
+      "target": "n_35vuuyhft5t1",
       "directed": true,
       "routing": "smoothstep",
       "sourceAnchor": {
@@ -2498,11 +2479,12 @@
       "semanticsOrigin": "inferred"
     },
     {
-      "id": "e_520gw4selhta",
-      "source": "n_gk2uza9i5aj1",
-      "target": "n_fqa8aotfryqq",
+      "id": "e_zxtto58d91i0",
+      "source": "n_z5cntwlqurub",
+      "target": "n_hgdg5yyle1i2",
       "directed": true,
       "routing": "smoothstep",
+      "label": "after configured retry limit",
       "sourceAnchor": {
         "side": "right",
         "offset": 0.5
@@ -2515,12 +2497,11 @@
       "semantic": "deadLetters",
       "semanticsOrigin": "inferred",
       "async": true,
-      "deliveryAttempts": 3,
       "attachments": [
         {
-          "id": "a_8x6r8pyfbqbo",
+          "id": "a_nvig31y6t1o4",
           "type": "note",
-          "text": "Poison messages park here for inspection and redrive. Alert on depth.",
+          "text": "An illustrative failure path — any subscription can have one. Poison messages park here for inspection and redrive; alert on depth.",
           "noteKind": "note",
           "width": 200,
           "height": 56
@@ -2528,39 +2509,21 @@
       ]
     },
     {
-      "id": "e_3z2epbb6pubo",
-      "source": "n_lwzfyjie6fwq",
-      "target": "n_dc5qqgi5mpif",
+      "id": "e_eg7mtm346xhl",
+      "source": "n_4a7qrl98k2lg",
+      "target": "n_cv5et9xprmzc",
       "directed": true,
       "routing": "smoothstep",
       "semantic": "reads",
       "semanticsOrigin": "inferred"
     },
     {
-      "id": "e_pteksgbjp9k2",
-      "source": "n_dc5qqgi5mpif",
-      "target": "n_ic1gv03bf1lb",
+      "id": "e_r910r5s6avw5",
+      "source": "n_cv5et9xprmzc",
+      "target": "n_yedvi5ojws1x",
       "directed": true,
       "routing": "smoothstep",
-      "label": "Start saga",
-      "sourceAnchor": {
-        "side": "right",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "left",
-        "offset": 0.5
-      },
-      "semantic": "command",
-      "semanticsOrigin": "explicit"
-    },
-    {
-      "id": "e_zo6d2ac3wu0o",
-      "source": "n_ic1gv03bf1lb",
-      "target": "n_95q29miax5l0",
-      "directed": true,
-      "routing": "smoothstep",
-      "label": "Reserve payment",
+      "label": "publishes state-change event",
       "sourceAnchor": {
         "side": "bottom",
         "offset": 0.5
@@ -2569,16 +2532,35 @@
         "side": "top",
         "offset": 0.5
       },
-      "semantic": "command",
-      "semanticsOrigin": "explicit"
+      "kind": "event",
+      "semantic": "publishes",
+      "semanticsOrigin": "inferred",
+      "attachments": [
+        {
+          "id": "a_ahm5zenulygo",
+          "type": "code",
+          "text": "Event envelope",
+          "language": "json",
+          "code": "{\n  \"id\": \"evt_8f3a1c2d\",\n  \"type\": \"StateChanged\",\n  \"time\": \"2026-09-10T08:15Z\",\n  \"data\": {\n    \"entityId\": \"ent_4821\"\n  }\n}",
+          "width": 380,
+          "height": 180
+        },
+        {
+          "id": "a_q4utq7o6s74f",
+          "type": "note",
+          "text": "Typically at-least-once and unordered across partitions: consumers dedupe on the event id and tolerate reordering. Publishing is not atomic with the state change that caused it — see Transactional Outbox.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ]
     },
     {
-      "id": "e_1l8wpu40vfp7",
-      "source": "n_ic1gv03bf1lb",
-      "target": "n_5nt4pqaxgszs",
+      "id": "e_39i2dfr2jl30",
+      "source": "n_yedvi5ojws1x",
+      "target": "n_pwk7ddmvxgt1",
       "directed": true,
       "routing": "smoothstep",
-      "label": "Reserve inventory",
       "sourceAnchor": {
         "side": "bottom",
         "offset": 0.5
@@ -2587,15 +2569,73 @@
         "side": "top",
         "offset": 0.5
       },
-      "semantic": "command",
-      "semanticsOrigin": "explicit"
+      "kind": "event",
+      "semantic": "fansOut",
+      "semanticsOrigin": "inferred"
     },
     {
-      "id": "e_99qdvh1fi5do",
-      "source": "n_95q29miax5l0",
-      "target": "n_hs0pnnfa8ebd",
+      "id": "e_sabmwksjwg9o",
+      "source": "n_yedvi5ojws1x",
+      "target": "n_6el43dwxtcbg",
       "directed": true,
       "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "kind": "event",
+      "semantic": "fansOut",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "e_cguib1y9dnwl",
+      "source": "n_pwk7ddmvxgt1",
+      "target": "n_3nw7b8xea5qr",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "kind": "async",
+      "semantic": "consumes",
+      "semanticsOrigin": "inferred",
+      "async": true
+    },
+    {
+      "id": "e_0by3t6jawcth",
+      "source": "n_6el43dwxtcbg",
+      "target": "n_w88p19fr97qa",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "kind": "async",
+      "semantic": "consumes",
+      "semanticsOrigin": "inferred",
+      "async": true
+    },
+    {
+      "id": "e_ta7dhnnu4fj1",
+      "source": "n_3nw7b8xea5qr",
+      "target": "n_1c7lnx8c98vk",
+      "directed": true,
+      "routing": "smoothstep",
+      "label": "updates projection",
       "sourceAnchor": {
         "side": "bottom",
         "offset": 0.5
@@ -2605,61 +2645,6 @@
         "offset": 0.5
       },
       "semantic": "writes",
-      "semanticsOrigin": "inferred"
-    },
-    {
-      "id": "e_r9swsvtoyv11",
-      "source": "n_5nt4pqaxgszs",
-      "target": "n_3pleimcavocj",
-      "directed": true,
-      "routing": "smoothstep",
-      "sourceAnchor": {
-        "side": "bottom",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "top",
-        "offset": 0.5
-      },
-      "semantic": "writes",
-      "semanticsOrigin": "inferred"
-    },
-    {
-      "id": "e_lgjoyw0a0vwv",
-      "source": "n_ic1gv03bf1lb",
-      "target": "n_5nt4pqaxgszs",
-      "directed": true,
-      "routing": "smoothstep",
-      "label": "Release inventory",
-      "accent": "rose",
-      "sourceAnchor": {
-        "side": "right",
-        "offset": 0.75
-      },
-      "targetAnchor": {
-        "side": "right",
-        "offset": 0.25
-      },
-      "semantic": "compensates",
-      "semanticsOrigin": "explicit"
-    },
-    {
-      "id": "e_8wdj1e2lvlzd",
-      "source": "n_ic1gv03bf1lb",
-      "target": "n_95q29miax5l0",
-      "directed": true,
-      "routing": "smoothstep",
-      "label": "Release payment",
-      "accent": "rose",
-      "sourceAnchor": {
-        "side": "left",
-        "offset": 0.75
-      },
-      "targetAnchor": {
-        "side": "right",
-        "offset": 0.25
-      },
-      "semantic": "compensates",
       "semanticsOrigin": "explicit"
     }
   ],
@@ -2680,192 +2665,461 @@
   },
   "flows": [
     {
-      "id": "f_swdo9d42ve5w",
+      "id": "f_bhuqumr72q90",
+      "title": "Handle a request",
+      "steps": [
+        {
+          "id": "fs_xuvzrtlsdgh4",
+          "edgeId": "e_oui0w8pelygc"
+        },
+        {
+          "id": "fs_vj6feff0n5ww",
+          "edgeId": "e_omj5swaq68b4"
+        },
+        {
+          "id": "fs_hztwup6f0e3u",
+          "edgeId": "e_8jharfze53yh",
+          "caption": "Its own store — nobody else’s"
+        }
+      ],
+      "accent": "green"
+    },
+    {
+      "id": "f_cayifkuxjchz",
+      "title": "Call another service",
+      "steps": [
+        {
+          "id": "fs_qreloa2tzvop",
+          "edgeId": "e_oui0w8pelygc"
+        },
+        {
+          "id": "fs_draqr40hp4qc",
+          "edgeId": "e_vtcr0tuwez3f"
+        },
+        {
+          "id": "fs_pynmfcmsgdcp",
+          "edgeId": "e_zltilbrwrd5d",
+          "caption": "A network call to C’s contract, not a query on C’s data"
+        },
+        {
+          "id": "fs_uq5wry7cw0gg",
+          "edgeId": "e_anuqpv362jxc"
+        }
+      ],
+      "accent": "amber"
+    },
+    {
+      "id": "f_b3beoa88zh33",
+      "title": "Update a projection",
+      "steps": [
+        {
+          "id": "fs_3ln9v9zphcil",
+          "edgeId": "e_9mc2noca695y"
+        },
+        {
+          "id": "fs_yiwjnbbhpor3",
+          "edgeId": "e_csun4u0nohei",
+          "caption": "This subscription’s own copy"
+        },
+        {
+          "id": "fs_jplqkyb4o3qi",
+          "edgeId": "e_2u0vdcdhho40"
+        },
+        {
+          "id": "fs_9i9sch8ad4ql",
+          "edgeId": "e_m50bsr706421"
+        }
+      ],
+      "accent": "green"
+    },
+    {
+      "id": "f_4d79ai40wjb0",
+      "title": "Reach an external system",
+      "steps": [
+        {
+          "id": "fs_egwy26djtlah",
+          "edgeId": "e_9mc2noca695y"
+        },
+        {
+          "id": "fs_l6gbsy7wai99",
+          "edgeId": "e_xtlrr00xce02",
+          "caption": "The same event, delivered again — independently"
+        },
+        {
+          "id": "fs_qcpob5j226on",
+          "edgeId": "e_t1uhrwgey1uz"
+        },
+        {
+          "id": "fs_6489n46rtmfi",
+          "edgeId": "e_7hby24okfp3r"
+        }
+      ],
+      "accent": "amber"
+    },
+    {
+      "id": "f_4j7lxu7jwio5",
+      "title": "Handle a failed delivery",
+      "steps": [
+        {
+          "id": "fs_2t88ocg4gskg",
+          "edgeId": "e_xtlrr00xce02"
+        },
+        {
+          "id": "fs_e9imwguybypj",
+          "edgeId": "e_sk7qvst1ihfc",
+          "caption": "Parked after the configured retries, without blocking the lane"
+        }
+      ],
+      "accent": "rose"
+    },
+    {
+      "id": "f_8t5430wm2k8l",
       "title": "Submit command",
       "steps": [
         {
-          "id": "fs_y0qks7jxiyn3",
-          "edgeId": "e_shn90kpajhhc",
+          "id": "fs_22bcbrer9zop",
+          "edgeId": "e_pwgpa74se4ly",
           "caption": "The client states what it wants"
         },
         {
-          "id": "fs_y7y7u27ogvii",
-          "edgeId": "e_5wlg1zvqssc3"
+          "id": "fs_vmr4gs76ouzy",
+          "edgeId": "e_7ynngacocsr3",
+          "caption": "Validated against the rules — it may be rejected"
         },
         {
-          "id": "fs_qg8zct2jhp1v",
-          "edgeId": "e_4s6thn872u7o",
-          "caption": "Current state, in the write model’s shape"
+          "id": "fs_bbyqj9oben16",
+          "edgeId": "e_cbasremewvd2",
+          "caption": "State and outbox record, one transaction"
         },
         {
-          "id": "fs_z1jptcs36g6b",
-          "edgeId": "e_hjbmcvcrbk1o",
+          "id": "fs_td6d2h93zalp",
+          "edgeId": "e_bbdz1leb5wp7",
+          "caption": "After the commit, the relay picks up the record"
+        },
+        {
+          "id": "fs_klsunoj3uftx",
+          "edgeId": "e_q9boiydj6km9",
           "caption": "A fact leaves the command side"
         },
         {
-          "id": "fs_4axlmj3f9khf",
-          "edgeId": "e_26jjbrwgpswv"
+          "id": "fs_rle3jiekqidp",
+          "edgeId": "e_4a7q1ik81lpp"
         },
         {
-          "id": "fs_8sc5axr9bta2",
-          "edgeId": "e_rta1wzmuevfb",
+          "id": "fs_4vnsroajgvf1",
+          "edgeId": "e_osugosbstf2c",
           "caption": "The read model catches up — eventually"
         }
       ],
       "accent": "amber"
     },
     {
-      "id": "f_4lcgeuly7eg1",
+      "id": "f_tbg6a9atvpg4",
       "title": "Read projection",
       "steps": [
         {
-          "id": "fs_ecj0ogb174gc",
-          "edgeId": "e_go5fbvm5t0r4",
+          "id": "fs_c4jcss5ys5y2",
+          "edgeId": "e_qz27hwxi6k5j",
           "caption": "The client asks a question"
         },
         {
-          "id": "fs_lala2f53a42e",
-          "edgeId": "e_6j2b478937yp",
+          "id": "fs_etuvemamiqxy",
+          "edgeId": "e_dytepoh3b9v2",
           "caption": "Answered from the read model — nothing changes"
         }
       ],
       "accent": "green"
     },
     {
-      "id": "f_7j4efnjh6xml",
-      "title": "Happy path",
+      "id": "f_ux819npg45ok",
+      "title": "Handle an HTTP request",
       "steps": [
         {
-          "id": "fs_qny6e36o95gs",
-          "edgeId": "e_sdp2o17dukba"
+          "id": "fs_yxxfuo2mrrf2",
+          "edgeId": "e_o6hdumkhd5n5",
+          "caption": "The adapter translates HTTP into a call on the port"
         },
         {
-          "id": "fs_yirdtubxkcrt",
-          "edgeId": "e_g53an1s8gbyu"
+          "id": "fs_6a6j42mcm4py",
+          "edgeId": "e_avzozkqogqbk",
+          "caption": "The use case behind the port runs the domain model"
         },
         {
-          "id": "fs_qqgkcshnz8bd",
-          "edgeId": "e_xp7laj013rgv",
-          "caption": "Local transaction commits"
+          "id": "fs_gdpzq9l0pyoe",
+          "edgeId": "e_ev56alsysz6k",
+          "caption": "The core asks its own port — not a database"
         },
         {
-          "id": "fs_akuuqvrmt9ya",
-          "edgeId": "e_k6w3xxy7skvd"
-        },
-        {
-          "id": "fs_qfdv77gg2qj4",
-          "edgeId": "e_569sf9hvipdy",
-          "caption": "Local transaction commits"
-        },
-        {
-          "id": "fs_3nte7g7n7o82",
-          "edgeId": "e_756wkfw9jfer"
-        },
-        {
-          "id": "fs_z3wm5yqni3zx",
-          "edgeId": "e_5p9xp8n1gj0k",
-          "caption": "Local transaction commits — saga complete"
+          "id": "fs_kvutehh940px",
+          "edgeId": "e_04ttxcemcix7",
+          "caption": "The adapter behind the port does the technology"
         }
       ],
       "accent": "green"
     },
     {
-      "id": "f_hz079o7f7g4n",
+      "id": "f_qt8lon5uyv1m",
+      "title": "Consume a message",
+      "steps": [
+        {
+          "id": "fs_kzwqk3clid5m",
+          "edgeId": "e_20grpbrub0jn",
+          "caption": "A different technology, the same port"
+        },
+        {
+          "id": "fs_cs6yqxzniffg",
+          "edgeId": "e_avzozkqogqbk"
+        },
+        {
+          "id": "fs_saec788hu5y5",
+          "edgeId": "e_feohkeyq381v"
+        },
+        {
+          "id": "fs_fjk5fp5nkofy",
+          "edgeId": "e_tmd4ph0sz5at"
+        }
+      ],
+      "accent": "amber"
+    },
+    {
+      "id": "f_a9j1gtlqnhkp",
+      "title": "Happy path",
+      "steps": [
+        {
+          "id": "fs_wxfm2yvj6obh",
+          "edgeId": "e_uh0gjhhdl1y4"
+        },
+        {
+          "id": "fs_0zcks4enesbq",
+          "edgeId": "e_zqnli7t24fz1"
+        },
+        {
+          "id": "fs_drpdy04f8wc0",
+          "edgeId": "e_l9vjdpar57g3",
+          "caption": "Local transaction commits — and the reply says \"reserved\""
+        },
+        {
+          "id": "fs_tv9vtgzu0b46",
+          "edgeId": "e_c9sehbymjf5b",
+          "caption": "Only on that reply does the next step go out"
+        },
+        {
+          "id": "fs_nm4zhdo9qaki",
+          "edgeId": "e_n8sa3jv4jbpc",
+          "caption": "Local transaction commits, reply \"reserved\""
+        },
+        {
+          "id": "fs_jlx9s71i50u4",
+          "edgeId": "e_01wwanbzdd03"
+        },
+        {
+          "id": "fs_h2v92szql8uy",
+          "edgeId": "e_14lvkc4b2etl",
+          "caption": "Local transaction commits, reply \"scheduled\" — saga complete"
+        }
+      ],
+      "accent": "green"
+    },
+    {
+      "id": "f_5ivvck421pua",
       "title": "Compensation",
       "steps": [
         {
-          "id": "fs_sn3cu0dn15ba",
-          "edgeId": "e_g53an1s8gbyu",
-          "caption": "Succeeded"
+          "id": "fs_hqswcfa33ucf",
+          "edgeId": "e_zqnli7t24fz1",
+          "caption": "Reply: reserved"
         },
         {
-          "id": "fs_7p43mp8em71t",
-          "edgeId": "e_xp7laj013rgv",
+          "id": "fs_rg4h3bpwtb32",
+          "edgeId": "e_l9vjdpar57g3",
           "caption": "Committed locally — nothing outside can roll it back"
         },
         {
-          "id": "fs_fiy1dxrn29x2",
-          "edgeId": "e_k6w3xxy7skvd",
-          "caption": "Succeeded, and committed locally too"
+          "id": "fs_2qtg83h4m6g9",
+          "edgeId": "e_c9sehbymjf5b",
+          "caption": "Reply: reserved, and committed locally too"
         },
         {
-          "id": "fs_3f06ocjuzope",
-          "edgeId": "e_756wkfw9jfer",
-          "caption": "Fails"
+          "id": "fs_d320ah6ywdky",
+          "edgeId": "e_01wwanbzdd03",
+          "caption": "Reply: failed — the orchestrator now runs the sweep"
         },
         {
-          "id": "fs_peekdktl4q99",
-          "edgeId": "e_1h8r7t832v2g",
+          "id": "fs_xvme7rxlm9jz",
+          "edgeId": "e_ajgcerswsbwk",
           "caption": "Undo the last committed step first — a new local transaction"
         },
         {
-          "id": "fs_gbutmoz7thdx",
-          "edgeId": "e_zx3wcnywii4v",
+          "id": "fs_peix5edgp0ni",
+          "edgeId": "e_a832supg38hr",
           "caption": "Then the one before it"
         }
       ],
       "accent": "rose"
     },
     {
-      "id": "f_4gba3n2c6em7",
-      "title": "Happy path",
+      "id": "f_43xpbgqt6rao",
+      "title": "Handle a request",
       "steps": [
         {
-          "id": "fs_5f214jjucyfh",
-          "edgeId": "e_pteksgbjp9k2"
+          "id": "fs_mzoydrt3a1zn",
+          "edgeId": "e_gs1o9keu74o4"
         },
         {
-          "id": "fs_jzwfxqrcsj64",
-          "edgeId": "e_zo6d2ac3wu0o"
+          "id": "fs_gxmwkysij0xx",
+          "edgeId": "e_98u1v1cba8xd"
         },
         {
-          "id": "fs_c22f3yd5cbjz",
-          "edgeId": "e_99qdvh1fi5do",
-          "caption": "Local transaction commits"
-        },
-        {
-          "id": "fs_z2tfwcfhawia",
-          "edgeId": "e_1l8wpu40vfp7"
-        },
-        {
-          "id": "fs_pzgxoup03drw",
-          "edgeId": "e_r9swsvtoyv11",
-          "caption": "Local transaction commits"
+          "id": "fs_l42vxcmvl7jp",
+          "edgeId": "e_z5668byzb0qr",
+          "caption": "Its own store — nobody else’s"
         }
       ],
       "accent": "green"
     },
     {
-      "id": "f_bl79dj850f9h",
-      "title": "Compensation",
+      "id": "f_bqyf8cin3bdv",
+      "title": "Call another service",
       "steps": [
         {
-          "id": "fs_ugorbeqq7zmg",
-          "edgeId": "e_zo6d2ac3wu0o",
-          "caption": "Succeeded"
+          "id": "fs_q629zu4kaw2e",
+          "edgeId": "e_gs1o9keu74o4"
         },
         {
-          "id": "fs_5ukxsonqows5",
-          "edgeId": "e_99qdvh1fi5do",
-          "caption": "Committed locally — nothing outside can roll it back"
+          "id": "fs_8rlo0630igno",
+          "edgeId": "e_jkyokpj2rrz9"
         },
         {
-          "id": "fs_v0uubv8wysii",
-          "edgeId": "e_1l8wpu40vfp7",
-          "caption": "Succeeded, and committed locally too"
+          "id": "fs_81rcl0udxynx",
+          "edgeId": "e_o2adqpwjj9ba",
+          "caption": "A network call to C’s contract, not a query on C’s data"
         },
         {
-          "id": "fs_d4meryxwja6c",
-          "edgeId": "e_lgjoyw0a0vwv",
-          "caption": "Undo the last committed step first — a new local transaction"
+          "id": "fs_mlb1eikakz1a",
+          "edgeId": "e_lzh6cun9tk95"
+        }
+      ],
+      "accent": "amber"
+    },
+    {
+      "id": "f_7wxs621fr5go",
+      "title": "Update a projection",
+      "steps": [
+        {
+          "id": "fs_tqp1cwft7a9p",
+          "edgeId": "e_obxzvxmsvc6s"
         },
         {
-          "id": "fs_xplrjvdnmanq",
-          "edgeId": "e_8wdj1e2lvlzd",
-          "caption": "Then the one before it"
+          "id": "fs_az8sqx9bde55",
+          "edgeId": "e_4qg7af2luzuo",
+          "caption": "This subscription’s own copy"
+        },
+        {
+          "id": "fs_bdgys7z37ae0",
+          "edgeId": "e_5c87t21bvzcw"
+        },
+        {
+          "id": "fs_h4pt0539bwqh",
+          "edgeId": "e_6bwg0yn1up0d"
+        }
+      ],
+      "accent": "green"
+    },
+    {
+      "id": "f_7inbant7tod6",
+      "title": "Reach an external system",
+      "steps": [
+        {
+          "id": "fs_2hp1jcuu89tc",
+          "edgeId": "e_obxzvxmsvc6s"
+        },
+        {
+          "id": "fs_o1q17cx3njjs",
+          "edgeId": "e_62nqxs3cq8ih",
+          "caption": "The same event, delivered again — independently"
+        },
+        {
+          "id": "fs_v4bi4uz09evg",
+          "edgeId": "e_xnxjdlph0fj1"
+        },
+        {
+          "id": "fs_yb4avl0hgmr5",
+          "edgeId": "e_w83qe4oauuq9"
+        }
+      ],
+      "accent": "amber"
+    },
+    {
+      "id": "f_1l79gadfmws7",
+      "title": "Handle a failed delivery",
+      "steps": [
+        {
+          "id": "fs_vxa3a0y23iyr",
+          "edgeId": "e_62nqxs3cq8ih"
+        },
+        {
+          "id": "fs_gmlx84eg3i1s",
+          "edgeId": "e_zxtto58d91i0",
+          "caption": "Parked after the configured retries, without blocking the lane"
+        }
+      ],
+      "accent": "rose"
+    },
+    {
+      "id": "f_utnw38u3zcsk",
+      "title": "Update a projection",
+      "steps": [
+        {
+          "id": "fs_pg6cns1qa73b",
+          "edgeId": "e_r910r5s6avw5"
+        },
+        {
+          "id": "fs_gp6jiznc72kx",
+          "edgeId": "e_39i2dfr2jl30",
+          "caption": "This subscription’s own copy"
+        },
+        {
+          "id": "fs_9hucao2ic5m2",
+          "edgeId": "e_cguib1y9dnwl"
+        },
+        {
+          "id": "fs_x1dekqv1fger",
+          "edgeId": "e_ta7dhnnu4fj1"
+        }
+      ],
+      "accent": "green"
+    },
+    {
+      "id": "f_acpej8gzrwv3",
+      "title": "Reach an external system",
+      "steps": [
+        {
+          "id": "fs_76r417jrtpc7",
+          "edgeId": "e_r910r5s6avw5"
+        },
+        {
+          "id": "fs_to5tc8xts5t3",
+          "edgeId": "e_sabmwksjwg9o",
+          "caption": "The same event, delivered again — independently"
+        },
+        {
+          "id": "fs_ksa4fcsto1pa",
+          "edgeId": "e_0by3t6jawcth"
+        }
+      ],
+      "accent": "amber"
+    },
+    {
+      "id": "f_viirwmk9bjhm",
+      "title": "Handle a failed delivery",
+      "steps": [
+        {
+          "id": "fs_p3pm4wg3nl02",
+          "edgeId": "e_sabmwksjwg9o"
         }
       ],
       "accent": "rose"
     }
-  ]
+  ],
+  "openPoints": []
 }

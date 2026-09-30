@@ -336,7 +336,7 @@ describe('addDataStore() / addRoutedService() — the Service quick actions', ()
     });
   });
 
-  it('connects a Service to a new Data Store with "writes", inferred, in one undo step', () => {
+  it('connects a Service to a new Data Store with "reads / writes", inferred, in one undo step', () => {
     const service = store.getState().addNode({ type: 'service', serviceKind: 'api', x: 0, y: 0 });
     const before = store.getState().history.past.length;
     store.getState().addDataStore(service.id);
@@ -346,7 +346,9 @@ describe('addDataStore() / addRoutedService() — the Service quick actions', ()
     const edge = doc.edges[0]!;
     expect(edge.source).toBe(service.id);
     expect(edge.target).toBe(database.id);
-    expect(edge.semantic).toBe('writes');
+    // The store a Service owns is read and written — `service>database`'s default, not a bare
+    // "writes to" that would be wrong half the time.
+    expect(edge.semantic).toBe('readsWrites');
     expect(edge.semanticsOrigin).toBe('inferred');
     expect(store.getState().selection).toEqual({ nodes: [database.id], edges: [] });
     expect(store.getState().history.past.length).toBe(before + 1);

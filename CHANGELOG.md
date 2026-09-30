@@ -28,6 +28,24 @@ drawing. Every diagram you already have still opens.
 - **Five starters up front** — Monolith, Microservices, Event-Driven, Hexagonal and CQRS. The rest are
   a name away in the command palette (`⌘K`). The starters were also redrawn to be more accurate.
   <!-- highlight -->
+- **Connectors say what happens.** A service and its data store are now joined by one
+  **reads / writes** relationship (the new Service → Data Store default; *reads* and *writes* are
+  a pick away), a cache is *read from*, and a work queue carries a *command* — dashed, handed off
+  and not waited for — while a topic still *publishes*. Protocols are no longer captions on their
+  own: *calls over HTTP*, *calls over gRPC*, *emits*, *sends command to*, *streams changes to*.
+  Every arrow in the starters starts at whatever does the work, so a worker reads its outbox and a
+  serving layer reads Gold, never the other way round. <!-- highlight -->
+- **Streams are their own kind.** A stream is read by each consumer group in full ("read by",
+  never "consumed by"), and the dead-letter suggestion now goes to the consumer that needs it, not
+  to the stream, which never dead-letters.
+- **Sequence exports send each message from the doer.** A connector that reads passively on the
+  canvas (*Database → Worker: read by*) exports as the worker reading the database.
+- **The sagas finish.** The orchestrator's steps carry their reply (*reserved / failed*) and the
+  compensation hangs off the failed one; the choreographed saga's outcome reaches the Order Service
+  the same way everything else does — over a topic — for the confirmation and the cancellation.
+- Document format **v18**: a *writes* connector labelled "reads / writes" becomes the relationship
+  itself. Diagrams migrate on open; a build older than this one refuses a v18 file by name rather
+  than reading it wrongly.
 - **Browser storage is no longer encrypted.** It protected little, needed HTTPS to save, and one
   lost key lost every diagram. Your diagrams still open and nothing is rewritten on upgrade. For a
   protected copy, export a passphrase-protected `.dcenc`. [Why](SECURITY.md#browser-storage).

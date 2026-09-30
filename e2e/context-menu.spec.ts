@@ -261,7 +261,7 @@ test.describe('context menu — an edge', () => {
       const e = mod.useEditorStore.getState().document.edges[0]!;
       return { source: e.source, semantic: e.semantic };
     });
-    expect(before.semantic).toBe('writes'); // Service → Data Store infers "writes"
+    expect(before.semantic).toBe('readsWrites'); // Service → Data Store infers "reads / writes"
 
     const mid = await edgeMidpoint(page);
     await page.mouse.click(mid.x, mid.y, { button: 'right' });

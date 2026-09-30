@@ -121,11 +121,13 @@ describe('Component — changing kind', () => {
     const a = store.getState().addNode({ type: 'component', x: 0, y: 0 });
     const b = store.getState().addNode({ type: 'database', x: 300, y: 0 });
     const edge = store.getState().connect(a.id, b.id)!;
-    expect(edge.semantic).toBe('writes');
+    // A Component folds to `service` for the matrix, so it gets `service>database`'s default: the
+    // store beside it is "its database", read and written.
+    expect(edge.semantic).toBe('readsWrites');
     store.getState().updateNodeById(a.id, { componentKind: 'adapter' });
     // Component's kinds never change `categoryOf`'s result (see connectorSemantics tests below),
     // so this is a no-op re-inference — asserting it *doesn't* go stale is still the point.
-    expect(store.getState().document.edges[0]!.semantic).toBe('writes');
+    expect(store.getState().document.edges[0]!.semantic).toBe('readsWrites');
   });
 
   it('never resizes a node just because its kind changed — the silhouette departs, the box does not', () => {
@@ -287,7 +289,7 @@ describe('Component — categoryOf and the capability matrix', () => {
     const componentToDatabase = capabilityFor('component', 'database');
     const serviceToDatabase = capabilityFor('service', 'database');
     expect(componentToDatabase).toEqual(serviceToDatabase);
-    expect(componentToDatabase?.defaultRelation).toBe('writes');
+    expect(componentToDatabase?.defaultRelation).toBe('readsWrites');
 
     const databaseToComponent = capabilityFor('database', 'component');
     expect(databaseToComponent?.defaultRelation).toBe('reads');

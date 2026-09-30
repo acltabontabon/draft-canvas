@@ -104,7 +104,7 @@ export const STORE_CATEGORIES: ReadonlySet<NodeCategory> = new Set([
 ]);
 
 /** Categories that carry messages rather than act on them. */
-export const MESSAGING_CATEGORIES: ReadonlySet<NodeCategory> = new Set(['queue', 'topic', 'deadLetter']);
+export const MESSAGING_CATEGORIES: ReadonlySet<NodeCategory> = new Set(['queue', 'topic', 'stream', 'deadLetter']);
 
 /**
  * A caption reads "source *verb* target", so it has to agree with the arrow. A semantic always
@@ -121,6 +121,7 @@ export const MESSAGING_CATEGORIES: ReadonlySet<NodeCategory> = new Set(['queue',
 const PASSIVE: Partial<Record<EdgeSemantic, { label: string; when: 'sourceIsStore' | 'sourceIsMessaging' | 'sourceIsHolder' }>> = {
   reads: { label: 'read by', when: 'sourceIsStore' },
   writes: { label: 'written by', when: 'sourceIsStore' },
+  readsWrites: { label: 'read / written by', when: 'sourceIsStore' },
   query: { label: 'queried by', when: 'sourceIsStore' },
   searches: { label: 'searched by', when: 'sourceIsStore' },
   invalidates: { label: 'invalidated by', when: 'sourceIsStore' },
@@ -135,30 +136,49 @@ export function hasPassiveReading(semantic: EdgeSemantic): boolean {
   return PASSIVE[semantic] !== undefined;
 }
 
+/**
+ * Whether a connector drawn from `source` to `target` reads in the passive: the arrow starts at the
+ * verb's object, and the doer is at the far end. The sequence exporter asks the same question to
+ * draw the message from the doer (`sequence/build.ts`), so the two can't disagree.
+ */
+export function passiveApplies(semantic: EdgeSemantic, source?: NodeCategory, target?: NodeCategory): boolean {
+  const passive = PASSIVE[semantic];
+  if (!passive || source === undefined) return false;
+  const isStore = STORE_CATEGORIES.has(source);
+  const isMessaging = MESSAGING_CATEGORIES.has(source);
+  const applies =
+    passive.when === 'sourceIsStore' ? isStore : passive.when === 'sourceIsMessaging' ? isMessaging : isStore || isMessaging;
+  // A store feeding another store (`reads` on Database → Database) has no subject on either
+  // end to make passive about — keep the active form rather than guess.
+  const targetActs = target === undefined || !(STORE_CATEGORIES.has(target) || MESSAGING_CATEGORIES.has(target));
+  return applies && (targetActs || passive.when === 'sourceIsHolder');
+}
+
 /** The plain caption for a semantic in the arrow's own direction — no response/attempts wording. */
 export function relationLabel(semantic: EdgeSemantic, source?: NodeCategory, target?: NodeCategory): string {
-  const passive = PASSIVE[semantic];
-  if (passive && source !== undefined) {
-    const isStore = STORE_CATEGORIES.has(source);
-    const isMessaging = MESSAGING_CATEGORIES.has(source);
-    const applies =
-      passive.when === 'sourceIsStore' ? isStore : passive.when === 'sourceIsMessaging' ? isMessaging : isStore || isMessaging;
-    // A store feeding another store (`reads` on Database → Database) has no subject on either
-    // end to make passive about — keep the active form rather than guess.
-    const targetActs = target === undefined || !(STORE_CATEGORIES.has(target) || MESSAGING_CATEGORIES.has(target));
-    if (applies && (targetActs || passive.when === 'sourceIsHolder')) return passive.label;
+  if (passiveApplies(semantic, source, target)) {
+    // A stream is read, not drained: every consumer group sees every record, so "consumed by" —
+    // a queue's word, one message to one worker — would say the wrong thing about it.
+    if (semantic === 'consumes' && source === 'stream') return 'read by';
+    return PASSIVE[semantic]!.label;
   }
   return SEMANTIC_DEFAULTS[semantic].label;
 }
 
+/**
+ * Verbs, in the arrow's direction, that finish the sentence "source … target". A protocol is not a
+ * relationship — "HTTP" between two services said what carried the call, never that one called the
+ * other — so those name the call and the protocol both.
+ */
 export const SEMANTIC_DEFAULTS: Record<EdgeSemantic, { label: string }> = {
-  http: { label: 'HTTP' },
-  grpc: { label: 'gRPC' },
-  event: { label: 'event' },
-  command: { label: 'command' },
+  http: { label: 'calls over HTTP' },
+  grpc: { label: 'calls over gRPC' },
+  event: { label: 'emits' },
+  command: { label: 'sends command to' },
   query: { label: 'queries' },
   reads: { label: 'reads from' },
   writes: { label: 'writes to' },
+  readsWrites: { label: 'reads / writes' },
   publishes: { label: 'publishes to' },
   consumes: { label: 'consumes from' },
   calls: { label: 'calls' },
@@ -168,7 +188,7 @@ export const SEMANTIC_DEFAULTS: Record<EdgeSemantic, { label: string }> = {
   deliversTo: { label: 'delivers to' },
   ingests: { label: 'ingests' },
   replicates: { label: 'replicates to' },
-  cdc: { label: 'CDC' },
+  cdc: { label: 'streams changes to' },
   syncs: { label: 'syncs to' },
   deadLetters: { label: 'dead-letters to' },
   invalidates: { label: 'invalidates' },

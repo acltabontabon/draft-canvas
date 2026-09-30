@@ -297,7 +297,7 @@ describe('a connector\'s subtle relationship caption', () => {
   it('a request/response connector with a more specific interaction shows that interaction\'s own label, not "requests"', () => {
     const edge = createEdge({ source: 'a', target: 'b', semantic: 'http', hasResponse: true });
     const texts = describedServiceToService(edge).overlay.filter((s) => s.t === 'text');
-    expect(texts.some((s) => s.layout.lines.map((l) => l.text).join('') === 'HTTP')).toBe(true);
+    expect(texts.some((s) => s.layout.lines.map((l) => l.text).join('') === 'calls over HTTP')).toBe(true);
     expect(texts.some((s) => s.layout.lines.map((l) => l.text).join('').includes('requests'))).toBe(false);
   });
 

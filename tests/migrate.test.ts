@@ -755,6 +755,52 @@ describe('migration chain completeness', () => {
   });
 });
 
+describe('v17 to v18 migration: "reads / writes" becomes the relationship it was standing in for', () => {
+  const edge = (id: string, semantic: string | undefined, label: string | undefined) => ({
+    id,
+    source: 'a',
+    target: 'b',
+    ...(semantic === undefined ? {} : { semantic }),
+    ...(label === undefined ? {} : { label }),
+  });
+  const migrated = parseDocument({
+    format: DRAFT_FORMAT,
+    version: 17,
+    metadata: { id: 'd1', title: 'Stores', createdAt: 1, updatedAt: 2 },
+    nodes: [
+      { id: 'a', type: 'service', x: 0, y: 0, width: 160, height: 60, z: 0 },
+      { id: 'b', type: 'database', x: 300, y: 0, width: 160, height: 60, z: 0 },
+    ],
+    edges: [
+      edge('typed', 'writes', 'reads / writes'),
+      edge('spaced', 'writes', 'Reads/Writes '),
+      edge('other-words', 'writes', 'writes state + outbox record'),
+      edge('other-relation', 'reads', 'reads / writes'),
+      edge('plain', 'writes', undefined),
+    ],
+    flows: [],
+  });
+  const edges = migrated.ok ? migrated.document.edges : [];
+  const byId = (id: string) => edges.find((e) => e.id === id)!;
+
+  it('retypes a writes connector labelled "reads / writes" and drops the label', () => {
+    expect(byId('typed')).toMatchObject({ semantic: 'readsWrites' });
+    expect(byId('typed').label).toBeUndefined();
+  });
+
+  it('reads the label loosely — case and spacing were never part of the meaning', () => {
+    expect(byId('spaced')).toMatchObject({ semantic: 'readsWrites' });
+    expect(byId('spaced').label).toBeUndefined();
+  });
+
+  it("leaves someone's own words, and any other relationship, exactly as they were", () => {
+    expect(byId('other-words')).toMatchObject({ semantic: 'writes', label: 'writes state + outbox record' });
+    expect(byId('other-relation')).toMatchObject({ semantic: 'reads', label: 'reads / writes' });
+    expect(byId('plain')).toMatchObject({ semantic: 'writes' });
+    expect(migrated.ok && migrated.document.version).toBe(CURRENT_VERSION);
+  });
+});
+
 /**
  * The permanent tax `DraftNode.inside` introduced: since v12 a document is a tree of graphs, so a
  * migration that rewrites nodes, edges or flows has to reach every room, not just the top one.
@@ -780,6 +826,8 @@ describe('a migration reaches every room, not just the top one', () => {
           response: 'ok',
           semantic: 'projects',
         },
+        // The v17 shape of "this service's database": `writes` with the words typed on top.
+        { id: `rw-${depth}`, source: `card-${depth}`, target: `bff-${depth}`, semantic: 'writes', label: 'reads / writes' },
       ],
       flows: [],
       ...(depth === 0 ? {} : { viewport: { x: 0, y: 0, zoom: 1 } }),
@@ -815,7 +863,7 @@ describe('a migration reaches every room, not just the top one', () => {
 
   /** The graph at each of the four levels, outermost first. */
   const levels = (() => {
-    const out: { nodes: readonly { serviceKind?: string; type: string }[]; edges: readonly { hasResponse?: boolean; semantic?: string }[]; flows: readonly unknown[] }[] = [];
+    const out: { nodes: readonly { serviceKind?: string; type: string }[]; edges: readonly { hasResponse?: boolean; semantic?: string; label?: string }[]; flows: readonly unknown[] }[] = [];
     let graphAt: { nodes: readonly typeof migrated.nodes[number][]; edges: readonly typeof migrated.edges[number][]; flows: readonly unknown[] } = migrated;
     for (let depth = 0; depth < 4; depth += 1) {
       out.push(graphAt);
@@ -846,6 +894,11 @@ describe('a migration reaches every room, not just the top one', () => {
 
   it.each([0, 1, 2, 3])('turns the projects connector at depth %i into writes', (depth) => {
     expect(levels[depth]!.edges[0]!.semantic).toBe('writes');
+  });
+
+  it.each([0, 1, 2, 3])('turns the "reads / writes"-labelled writes connector at depth %i into readsWrites, label gone', (depth) => {
+    expect(levels[depth]!.edges[1]).toMatchObject({ semantic: 'readsWrites' });
+    expect(levels[depth]!.edges[1]!.label).toBeUndefined();
   });
 
   it.each([0, 1, 2, 3])('turns the numbered walkthrough at depth %i into a flow', (depth) => {

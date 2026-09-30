@@ -258,10 +258,13 @@ describe('a starter after insertion is an ordinary diagram', () => {
   it('re-derives a connector when the node it points at changes kind', () => {
     const created = store.getState().insertStarter(starterById('monolith')!);
     const database = created.find((node) => node.type === 'database')!;
+    const before = store.getState().document.edges.find((e) => e.target === database.id)!;
+    expect(before.semantic).toBe('readsWrites'); // `service>database`'s default
     store.getState().updateNodeById(database.id, { databaseKind: 'cache' });
     const edge = store.getState().document.edges.find((e) => e.target === database.id)!;
-    // Still `writes` for a cache, but it went back through the matrix rather than staying frozen.
-    expect(edge.semantic).toBe('writes');
+    // A cache is read far more than it is filled, so `service>cache` defaults to `reads` — the
+    // connector visibly went back through the matrix rather than staying frozen at its old value.
+    expect(edge.semantic).toBe('reads');
     expect(edge.semanticsOrigin).toBe('inferred');
   });
 

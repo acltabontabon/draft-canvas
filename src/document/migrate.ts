@@ -271,6 +271,25 @@ function migrateProjectsToWrites(doc: Record<string, unknown>): Record<string, u
 }
 
 /**
+ * v18 adds the `readsWrites` relationship — a service and the store it owns, read and written over
+ * one connector. Before it, the starters (and anyone copying them) said the same thing with a
+ * `writes` connector carrying a hand-typed "reads / writes" label. Those become the relationship
+ * itself, label cleared, so the caption is the connector's own and reverses correctly; a label
+ * saying anything else is someone's words and is left alone, as is the relationship under it.
+ */
+function migrateReadsWritesLabel(doc: Record<string, unknown>): Record<string, unknown> {
+  const retype = (raw: unknown): unknown => {
+    if (!raw || typeof raw !== 'object') return raw;
+    const item = raw as Record<string, unknown>;
+    if (item.semantic !== 'writes' || typeof item.label !== 'string' || !/^reads\s*\/\s*writes$/i.test(item.label.trim())) return item;
+    const { label: _label, ...rest } = item;
+    return { ...rest, semantic: 'readsWrites' };
+  };
+  const rawEdges = Array.isArray(doc.edges) ? doc.edges : [];
+  return { ...doc, edges: rawEdges.map(retype) };
+}
+
+/**
  * v12 lets a node own the architecture that runs inside it (`DraftNode.inside`). Structurally a
  * no-op — a v11 node simply has no inside, which is exactly what absent already means — but the
  * version still has to move, and for a reason worth stating: a v11 build's validator rebuilds
@@ -501,6 +520,7 @@ const MIGRATIONS: Record<number, Migration> = {
   14: migrateAddC4Text,
   15: migrateAddOpenPoints,
   16: migrateActionsToNotes,
+  17: everyRoom(migrateReadsWritesLabel),
 };
 
 export class UnsupportedVersionError extends Error {

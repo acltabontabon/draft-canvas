@@ -25,11 +25,19 @@ describe('resolveMessageLabel — priority chain', () => {
     ).toBe('after 3 attempts');
   });
 
+  it('tier 2: a protocol reads as the call it carries, the same words the canvas caption uses', () => {
+    expect(resolveMessageLabel({ semantic: 'http' }, 'service', 'service', 'sync')).toBe('calls over HTTP');
+    expect(resolveMessageLabel({ semantic: 'readsWrites' }, 'service', 'database', 'sync')).toBe('reads / writes');
+  });
+
   it('tier 3: an unset semantic falls back to the capability matrix\'s inferred default relation', () => {
-    // service>database has no explicit semantic here but the matrix defaults to 'writes'.
-    expect(resolveMessageLabel({}, 'service', 'database', 'sync')).toBe('writes to');
+    // service>database has no explicit semantic here but the matrix defaults to 'readsWrites' —
+    // the store drawn beside a service is nearly always its own.
+    expect(resolveMessageLabel({}, 'service', 'database', 'sync')).toBe('reads / writes');
     expect(resolveMessageLabel({}, 'database', 'service', 'sync')).toBe('read by');
-    expect(resolveMessageLabel({}, 'service', 'queue', 'async')).toBe('publishes to');
+    // A work queue is commanded; a topic is published to.
+    expect(resolveMessageLabel({}, 'service', 'queue', 'async')).toBe('sends command to');
+    expect(resolveMessageLabel({}, 'service', 'topic', 'async')).toBe('publishes to');
   });
 
   it('tier 4: an unlisted pairing with no semantic falls back to the generic bucket word', () => {
@@ -67,5 +75,9 @@ describe('interactionKindFor', () => {
     expect(interactionKindFor({ kind: 'async' })).toBe('async');
     expect(interactionKindFor({ async: true })).toBe('async');
     expect(interactionKindFor({ semantic: 'calls', kind: 'async' })).toBe('async');
+    // A command is synchronous between two services; the inferred Service → Queue connector carries
+    // `kind: 'async'` itself, and that is what makes its message asynchronous — not the word.
+    expect(interactionKindFor({ semantic: 'command' })).toBe('sync');
+    expect(interactionKindFor({ semantic: 'command', kind: 'async', async: true })).toBe('async');
   });
 });

@@ -185,7 +185,8 @@ test.describe('Request/response default caption', () => {
     await inspectorSelect(page, 'Protocol').click();
     await page.getByRole('option', { name: 'HTTP', exact: true }).click();
 
-    await expect(page.locator('svg text').filter({ hasText: 'calls' })).toHaveCount(0);
-    await expect(page.locator('svg text').filter({ hasText: 'HTTP' })).toBeVisible();
+    // The protocol is not a caption on its own: the verb stays, and names the protocol with it.
+    await expect(page.locator('svg text').filter({ hasText: 'calls over HTTP' })).toBeVisible();
+    await expect(page.locator('svg text').filter({ hasText: /^calls$/ })).toHaveCount(0);
   });
 });

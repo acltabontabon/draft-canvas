@@ -4,6 +4,7 @@ import { capabilityFor, categoryOf, edgeRelationLabel, type NodeCategory } from 
 import {
   hasPassiveReading,
   MESSAGING_CATEGORIES,
+  passiveApplies,
   relationLabel,
   relationshipCaptionLabel,
   STORE_CATEGORIES,
@@ -83,18 +84,23 @@ describe('drawing a connector: the inferred relationship reads in the arrow\'s d
   const cases: [Kind, Kind, EdgeSemantic, string][] = [
     ['service', 'api', 'calls', 'calls'],
     ['service', 'service', 'calls', 'calls'],
-    ['service', 'queue', 'publishes', 'publishes to'],
+    // A work queue carries a job for one worker — a command, handed off — not an event.
+    ['service', 'queue', 'command', 'sends command to'],
     ['queue', 'worker', 'consumes', 'consumed by'],
-    ['stream', 'worker', 'consumes', 'consumed by'],
+    // A stream is read, not drained: every consumer group sees every record.
+    ['service', 'stream', 'publishes', 'publishes to'],
+    ['stream', 'worker', 'consumes', 'read by'],
     ['service', 'topic', 'publishes', 'publishes to'],
     ['topic', 'queue', 'fansOut', 'fans out to'],
     ['topic', 'worker', 'deliversTo', 'delivers to'],
     ['worker', 'dlq', 'deadLetters', 'dead-letters to'],
     ['scheduler', 'worker', 'triggers', 'triggers'],
     ['gateway', 'api', 'routes', 'routes to'],
-    ['service', 'sql', 'writes', 'writes to'],
+    // The store beside a service is nearly always its own: read and written over one connector.
+    ['service', 'sql', 'readsWrites', 'reads / writes'],
     ['sql', 'service', 'reads', 'read by'],
-    ['service', 'cache', 'writes', 'writes to'],
+    // A cache is read far more than it is filled.
+    ['service', 'cache', 'reads', 'reads from'],
     ['service', 'searchIndex', 'searches', 'searches'],
     ['topic', 'searchIndex', 'indexes', 'indexed by'],
     ['adapter', 'port', 'uses', 'uses'],
@@ -117,12 +123,27 @@ describe('drawing a connector: the inferred relationship reads in the arrow\'s d
     expect(edge.async).toBe(true);
   });
 
-  it('Worker → Queue keeps publishing as the default, with "consumes from" one pick away', () => {
+  it('Service → Queue is a dashed hand-off: the command is sent, not waited for', () => {
+    const { edge } = draw('service', 'queue');
+    expect(edge.kind).toBe('async');
+    expect(edge.async).toBe(true);
+  });
+
+  it('Worker → Queue hands off a command like any service, with "publishes to" and "consumes from" one pick away', () => {
     const { edge } = draw('worker', 'queue');
-    expect(edge.semantic).toBe('publishes');
-    expect(capabilityFor('worker', 'queue')!.relations).toContain('consumes');
+    expect(edge.semantic).toBe('command');
+    expect(capabilityFor('worker', 'queue')!.relations).toEqual(expect.arrayContaining(['publishes', 'consumes']));
+    store.getState().setEdgeSemantic(edge.id, 'publishes');
+    expect(captionOf(edge.id)).toBe('publishes to');
     store.getState().setEdgeSemantic(edge.id, 'consumes');
     expect(captionOf(edge.id)).toBe('consumes from');
+  });
+
+  it('a Topic is emitted into, a Queue is commanded: only the queue row defaults to a command', () => {
+    expect(capabilityFor('service', 'topic')!.defaultRelation).toBe('publishes');
+    expect(capabilityFor('service', 'topic')!.defaultBehavior).toBe('event');
+    expect(capabilityFor('service', 'queue')!.defaultRelation).toBe('command');
+    expect(capabilityFor('service', 'queue')!.defaultBehavior).toBe('async');
   });
 
   it('a topic delivers to its subscribers; it is never offered as "consumed by" the way a queue is', () => {
@@ -152,19 +173,38 @@ describe('unusual and unknown pairings stay drawable', () => {
     const { edge } = draw('sql', 'queue');
     store.getState().setEdgeSemantic(edge.id, 'cdc');
     expect(store.getState().document.edges[0]!.semantic).toBe('cdc');
-    expect(captionOf(edge.id)).toBe('CDC');
+    // An acronym is not a sentence — the caption says what the database does to the queue.
+    expect(captionOf(edge.id)).toBe('streams changes to');
   });
 });
 
 describe('reversing a connector', () => {
   beforeEach(reset);
 
-  it('an inferred Service → Queue "publishes to" becomes Queue → Service "consumed by"', () => {
+  it('an inferred Service → Queue "sends command to" becomes Queue → Service "consumed by"', () => {
     const { edge } = draw('service', 'queue');
     store.getState().reverseEdge(edge.id);
     const stored = store.getState().document.edges[0]!;
     expect(stored.semantic).toBe('consumes');
     expect(captionOf(edge.id)).toBe('consumed by');
+  });
+
+  it('an inferred Service → Database "reads / writes" becomes Database → Service "read by"', () => {
+    const { edge } = draw('service', 'sql');
+    expect(captionOf(edge.id)).toBe('reads / writes');
+    store.getState().reverseEdge(edge.id);
+    const stored = store.getState().document.edges[0]!;
+    // Re-inferred from the new pairing, not carried over: a database→service row defaults to a read.
+    expect(stored.semantic).toBe('reads');
+    expect(captionOf(edge.id)).toBe('read by');
+  });
+
+  it('an explicit "reads / writes" keeps both halves in the passive', () => {
+    const { edge } = draw('service', 'sql');
+    store.getState().setEdgeSemantic(edge.id, 'readsWrites');
+    store.getState().reverseEdge(edge.id);
+    expect(store.getState().document.edges[0]!.semantic).toBe('readsWrites');
+    expect(captionOf(edge.id)).toBe('read / written by');
   });
 
   it('an explicit relationship keeps its meaning, and its caption turns to match the arrow', () => {
@@ -211,7 +251,7 @@ describe('reversing a connector', () => {
     store.getState().undo();
     let stored = store.getState().document.edges[0]!;
     expect(stored.source).toBe(a.id);
-    expect(stored.semantic).toBe('publishes');
+    expect(stored.semantic).toBe('command');
     store.getState().redo();
     stored = store.getState().document.edges[0]!;
     expect(stored.target).toBe(a.id);
@@ -250,12 +290,14 @@ describe('saved diagrams', () => {
 describe('the vocabulary itself', () => {
   const HOLDERS = new Set<NodeCategory>([...STORE_CATEGORIES, ...MESSAGING_CATEGORIES]);
   // What a store or a messaging channel genuinely does itself, so the active form already reads
-  // in the arrow's direction.
+  // in the arrow's direction. `command` is here for the queue's own row: a work queue hands the
+  // job to its worker, so "Queue sends command to Worker" is the queue acting, like `deliversTo`.
   const HOLDER_VERBS = new Set<EdgeSemantic>([
     'deliversTo',
     'fansOut',
     'deadLetters',
     'publishes',
+    'command',
     'cdc',
     'replicates',
     'syncs',
@@ -278,6 +320,7 @@ describe('the vocabulary itself', () => {
     'searchIndex',
     'queue',
     'topic',
+    'stream',
     'deadLetter',
   ];
 
@@ -317,6 +360,32 @@ describe('the vocabulary itself', () => {
 
   it('without categories a caption falls back to the active wording', () => {
     expect(relationLabel('consumes')).toBe('consumes from');
+  });
+
+  it('a stream is "read by" its consumers where a queue is "consumed by" one', () => {
+    expect(relationLabel('consumes', 'queue', 'worker')).toBe('consumed by');
+    expect(relationLabel('consumes', 'stream', 'worker')).toBe('read by');
+    expect(relationLabel('consumes', 'topic', 'worker')).toBe('consumed by');
+  });
+
+  // The exporter asks this same question to decide who initiates a message (`sequence/build.ts`),
+  // so it is pinned here beside the captions it drives.
+  it('passiveApplies is true exactly when the arrow starts at the verb\'s object', () => {
+    expect(passiveApplies('reads', 'database', 'service')).toBe(true);
+    expect(passiveApplies('readsWrites', 'cache', 'worker')).toBe(true);
+    expect(passiveApplies('consumes', 'queue', 'worker')).toBe(true);
+    expect(passiveApplies('consumes', 'stream', 'worker')).toBe(true);
+    expect(passiveApplies('reads', 'service', 'database')).toBe(false);
+    expect(passiveApplies('consumes', 'worker', 'queue')).toBe(false);
+    // No subject on either end, so nothing to be passive about.
+    expect(passiveApplies('reads', 'database', 'database')).toBe(false);
+    // A holder feeding a holder is the one exception: the verb belongs to the far end regardless.
+    expect(passiveApplies('ingests', 'topic', 'database')).toBe(true);
+    // A verb the holder performs itself never reads in the passive, whoever it points at.
+    expect(passiveApplies('deliversTo', 'topic', 'worker')).toBe(false);
+    expect(passiveApplies('command', 'queue', 'worker')).toBe(false);
+    // Without a source there is no arrow to disagree with.
+    expect(passiveApplies('reads')).toBe(false);
   });
 });
 

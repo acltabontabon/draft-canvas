@@ -1,7 +1,7 @@
 # Shapes, connectors and boundaries
 
 Draft Canvas knows what its shapes are. A Queue is not a rectangle with a caption: it is something a
-Service publishes to and a Worker consumes from, and the connectors between them say so without you
+Service hands work to and a Worker consumes from, and the connectors between them say so without you
 typing it. This guide is about using that: picking the right kind of shape, saying what an arrow
 means, showing the reply, and marking the failure path.
 
@@ -20,7 +20,7 @@ from the bar that appears; the silhouette changes so the kind can be read from a
 | Actor (`A`) | Human, System, Device, Group, Third Party |
 | Component (`M`) | Component, Module, Adapter, Port |
 
-The kind decides which relationships the shape can have. A Service writes to a Database and
+The kind decides which relationships the shape can have. A Service *reads / writes* its Database and
 *invalidates* a Cache; a Topic *fans out* to queues and a Queue is *consumed by* a worker. The full
 table is in [Architecture semantics](../reference/semantics.md#the-capability-matrix).
 
@@ -31,7 +31,7 @@ EXTERNAL caption and takes the same connectors a Service does.
 
 Drag from a shape's handle onto another shape to connect them. The connector labels itself with the
 most likely relationship for that pair, reading in the direction of the arrow: `Orders API`
-*publishes to* `orders`, and `orders` is *consumed by* `Fulfilment worker`.
+*sends command to* `orders`, and `orders` is *consumed by* `Fulfilment worker`.
 
 To change it, click the connector. Its popover lists only the relationships that make sense for those
 two shapes, with the current one marked. Nothing stops you drawing something unusual on purpose: a

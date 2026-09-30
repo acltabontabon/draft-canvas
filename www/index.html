@@ -72,7 +72,7 @@
     <meta property="og:image:height" content="630" />
     <meta
       property="og:image:alt"
-      content="Draft Canvas — a checkout API publishing to a payments queue, consumed by a payment service that writes to a database."
+      content="Draft Canvas — a checkout API handing work to a payments queue, consumed by a payment service that reads and writes a database."
     />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Draft Canvas — Draw it so everyone gets it" />
@@ -177,10 +177,9 @@
 
             <g class="wire async" style="--draw: 1">
               <path d="M196 83H292" />
-              <circle class="dot" cx="244" cy="83" r="2.5" />
               <path class="head" d="M284 78.5l8 4.5-8 4.5z" />
             </g>
-            <text class="t-edge" x="244" y="103">publishes to</text>
+            <text class="t-edge" x="244" y="103">sends command to</text>
 
             <g class="wire async" style="--draw: 2">
               <path d="M368 111V286" />
@@ -193,13 +192,13 @@
               <path d="M108 128V304" />
               <path class="head" d="M103.5 296l4.5 8 4.5-8z" />
             </g>
-            <text class="t-edge t-edge-side" x="122" y="220">writes to</text>
+            <text class="t-edge t-edge-side" x="122" y="220">reads / writes</text>
 
             <g class="wire" style="--draw: 4">
               <path d="M458 331H530" />
               <path class="head" d="M522 326.5l8 4.5-8 4.5z" />
             </g>
-            <text class="t-edge" x="494" y="351">writes to</text>
+            <text class="t-edge" x="494" y="351">reads / writes</text>
 
             <path class="pulse" d="M196 83h164a8 8 0 018 8v232a8 8 0 008 8h154" />
 
@@ -247,10 +246,10 @@
             </g>
           </svg>
           <figcaption id="hero-figure-caption">
-            A checkout API publishes to a payments queue; a payment service consumes it and writes to
-            the payments database, inside a boundary marked <em>Payments</em>. The connectors label
-            themselves — <em>publishes to</em>, <em>consumed by</em>, <em>writes to</em> — from what
-            the shapes at each end already are.
+            A checkout API hands work to a payments queue; a payment service consumes it and reads
+            and writes the payments database, inside a boundary marked <em>Payments</em>. The
+            connectors label themselves — <em>sends command to</em>, <em>consumed by</em>,
+            <em>reads / writes</em> — from what the shapes at each end already are.
           </figcaption>
         </figure>
 
@@ -267,10 +266,9 @@
 
             <g class="wire async" style="--draw: 2">
               <path d="M150 236V300" />
-              <circle class="dot" cx="150" cy="268" r="2.5" />
               <path class="head" d="M145.5 292l4.5 8 4.5-8z" />
             </g>
-            <text class="t-edge t-edge-side" x="164" y="272">publishes to</text>
+            <text class="t-edge t-edge-side" x="164" y="272">sends command to</text>
 
             <g class="node service" style="--in: 1">
               <rect class="ghost" x="68" y="16" width="176" height="78" rx="11" />
@@ -304,9 +302,9 @@
             </g>
           </svg>
           <figcaption id="hero-narrow-caption">
-            A checkout API calls a payment service, which publishes to a queue named
+            A checkout API calls a payment service, which hands work to a queue named
             <em>payments</em>. The connectors label themselves — <em>calls</em>,
-            <em>publishes to</em> — from what the shapes at each end already are, and a note is
+            <em>sends command to</em> — from what the shapes at each end already are, and a note is
             pinned to the one that needed explaining.
           </figcaption>
         </figure>
@@ -385,9 +383,9 @@
           <div class="prose reveal">
             <p>
               A service is not a rectangle with a label on it. It is a service — so when you drag a
-              connector from it to a queue, Draft Canvas writes <em>publishes to</em> on the line,
-              because that is the only thing that connection could sensibly mean. Drag the same
-              connector to a database and it says <em>writes to</em> instead.
+              connector from it to a queue, Draft Canvas writes <em>sends command to</em> on the
+              line, because that is the only thing that connection could sensibly mean. Drag the
+              same connector to a database and it says <em>reads / writes</em> instead.
             </p>
             <p>
               That is the whole trick, and it is why the diagram stays readable while you are talking
@@ -450,8 +448,8 @@
               <text class="t-spec-sub" x="330" y="370">module · adapter · port</text>
               <text class="t-spec-sub" x="330" y="386">plus actors, boundaries, notes</text>
 
-              <g class="wire" style="--draw: 1"><path d="M220 80H322" /><path class="head" d="M314 75.5l8 4.5-8 4.5z" /></g>
-              <text class="t-edge" x="271" y="100">publishes to</text>
+              <g class="wire async" style="--draw: 1"><path d="M220 80H322" /><path class="head" d="M314 75.5l8 4.5-8 4.5z" /></g>
+              <text class="t-edge" x="271" y="100">sends command to</text>
             </svg>
             <figcaption id="shapes-caption">
               Four of the ten shapes, drawn as Draft Canvas draws them: a worker service, a topic

@@ -13,9 +13,24 @@ describe('relationshipCaptionLabel', () => {
   });
 
   it('leaves every other interaction label exactly as SEMANTIC_DEFAULTS says, response or not', () => {
-    expect(relationshipCaptionLabel('http', { hasResponse: true })).toBe('HTTP');
+    expect(relationshipCaptionLabel('http', { hasResponse: true })).toBe('calls over HTTP');
     expect(relationshipCaptionLabel('writes', { hasResponse: true })).toBe('writes to');
     expect(relationshipCaptionLabel('publishes', { hasResponse: false })).toBe('publishes to');
+  });
+
+  it('a protocol names the call and the protocol both — "HTTP" alone never said who called whom', () => {
+    expect(relationshipCaptionLabel('http')).toBe('calls over HTTP');
+    expect(relationshipCaptionLabel('grpc')).toBe('calls over gRPC');
+    // Likewise an acronym or a bare noun: every caption finishes "source … target".
+    expect(relationshipCaptionLabel('cdc')).toBe('streams changes to');
+    expect(relationshipCaptionLabel('event')).toBe('emits');
+    expect(relationshipCaptionLabel('command')).toBe('sends command to');
+  });
+
+  it('a service and the store it owns read and write over one connector', () => {
+    expect(relationshipCaptionLabel('readsWrites')).toBe('reads / writes');
+    expect(relationshipCaptionLabel('readsWrites', { source: 'service', target: 'database' })).toBe('reads / writes');
+    expect(relationshipCaptionLabel('readsWrites', { source: 'database', target: 'service' })).toBe('read / written by');
   });
 
   it('a deadLetters edge reads "after N attempts" once a count is set, else the generic label', () => {
@@ -137,7 +152,7 @@ describe('semantic connections', () => {
   });
 
   it('is one undo step', () => {
-    // Plain cards, not service/database — that pair now infers `writes` on
+    // Plain cards, not service/database — that pair infers `readsWrites` on
     // connect (see `connectorSemantics.ts`), which would muddy what this
     // test actually checks: that a manual `setEdgeSemantic` undoes cleanly.
     const a = store.getState().addNode({ type: 'note', x: 0, y: 0 });

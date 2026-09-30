@@ -139,7 +139,6 @@ function back(from: string, to: string): StarterEdgeSpec {
  * with its own store — it reads at least as often as it writes. The relation stays the matrix's
  * own (`writes`, inferred, re-inferable); only the words are the starter's.
  */
-const READS_WRITES = 'reads / writes';
 
 /**
  * The software client at the top of every request-shaped starter: an Actor of kind `system` — a
@@ -197,8 +196,8 @@ function boundarySubtitle(
  *
  * `Application Database` is a generic Data Store outside the boundary, directly beneath it — a
  * separate runtime resource, not part of the deployed artifact; which engine it is stays the
- * team's decision. Its connector says `reads / writes` rather than the matrix's default "writes
- * to", because that is what a data-access layer does with its store. `External System` sits
+ * team's decision. Its connector is the matrix's own Service → Database default, "reads / writes",
+ * because that is what a data-access layer does with its store. `External System` sits
  * outside on the right, level with the layer that calls it — the application logic, which is what
  * decides to call out — so the one line that leaves sideways reads as "this one goes outside".
  *
@@ -310,7 +309,7 @@ const monolith: ArchitectureStarter = {
     { key: 'call', ...down('client', 'api') },
     { key: 'dispatch', ...down('api', 'logic') },
     { key: 'access', ...down('logic', 'data') },
-    { key: 'persist', ...down('data', 'database'), label: READS_WRITES },
+    { key: 'persist', ...down('data', 'database') },
     { key: 'reach', ...across('logic', 'external') },
   ],
   flows: [
@@ -479,7 +478,6 @@ const modularMonolith: ArchitectureStarter = {
     ...CAPABILITIES.map((letter) => ({
       ...down(`module-${letter.toLowerCase()}`, `tables-${letter.toLowerCase()}`),
       key: `persist-${letter.toLowerCase()}`,
-      label: READS_WRITES,
     })),
   ],
   flows: [
@@ -646,7 +644,6 @@ const microservices: ArchitectureStarter = {
     ...CAPABILITIES.map((letter) => ({
       ...down(`service-${letter.toLowerCase()}`, `store-${letter.toLowerCase()}`),
       key: `persist-${letter.toLowerCase()}`,
-      label: READS_WRITES,
     })),
     {
       key: 'collaborate',
@@ -886,7 +883,7 @@ const eventDriven: ArchitectureStarter = {
     { key: 'fan-out-integration', ...down('topic', 'integration-queue') },
     { key: 'consume-projection', ...down('projection-queue', 'projection-worker') },
     { key: 'consume-integration', ...down('integration-queue', 'integration-worker') },
-    { key: 'project', ...down('projection-worker', 'read-store'), label: 'updates projection' },
+    { key: 'project', ...down('projection-worker', 'read-store'), semantic: 'writes', label: 'updates projection' },
     { key: 'call-external', ...down('integration-worker', 'external') },
     {
       key: 'dead-letter',
@@ -1183,7 +1180,7 @@ const hexagonal: ArchitectureStarter = {
     // One fork from Use Cases to both outbound ports — one trunk, one `uses`.
     { key: 'use-persistence-port', ...across('use-cases', 'persistence-port') },
     { key: 'use-integration-port', ...across('use-cases', 'integration-port') },
-    { key: 'write-database', ...across('persistence-adapter', 'database'), label: READS_WRITES },
+    { key: 'write-database', ...across('persistence-adapter', 'database') },
     { key: 'call-external', ...across('integration-adapter', 'external') },
     // Source dependencies, pointing in: from each implementer back to the contract it satisfies.
     { key: 'implement-inbound', ...back('use-cases', 'inbound-port'), semantic: 'implements' },
@@ -1634,7 +1631,7 @@ const cqrs: ArchitectureStarter = {
   edges: [
     { key: 'submit', from: 'client', to: 'command-api', sourceAnchor: BOTTOM, targetAnchor: RIGHT, semantic: 'command' },
     { key: 'handle', ...down('command-api', 'command-handler'), semantic: 'command', label: 'executes' },
-    { key: 'persist', ...down('command-handler', 'write-store'), label: 'writes state + outbox record' },
+    { key: 'persist', ...down('command-handler', 'write-store'), semantic: 'writes', label: 'writes state + outbox record' },
     { key: 'relay-read', ...back('relay', 'write-store'), semantic: 'reads', label: 'reads outbox' },
     {
       // The transaction's story rides the publish, not the handler's write: the write sits in a
@@ -1650,7 +1647,7 @@ const cqrs: ArchitectureStarter = {
       ],
     },
     { key: 'deliver', ...across('events', 'projector') },
-    { key: 'materialize', ...across('projector', 'read-store'), label: 'updates projection' },
+    { key: 'materialize', ...across('projector', 'read-store'), semantic: 'writes', label: 'updates projection' },
     { key: 'query', from: 'client', to: 'query-api', sourceAnchor: BOTTOM, targetAnchor: LEFT, semantic: 'query' },
     { key: 'read', ...down('query-api', 'read-store'), semantic: 'reads' },
   ],
@@ -1937,22 +1934,26 @@ const medallion: ArchitectureStarter = {
       ...SERVICE,
     },
   ],
+  // Every arrow starts at whatever does the work — the one convention the whole catalog keeps.
+  // Ingestion pulls from the sources (a batch reads the database and the files; the stream is read
+  // like any stream), and the serving layer reads Gold: the store never initiates anything, so a
+  // connector leaving it would say the opposite of what happens.
   edges: [
-    { key: 'db-ingest', from: 'db', to: 'ingestion', sourceAnchor: RIGHT, targetAnchor: TOP },
-    { key: 'files-ingest', ...across('files', 'ingestion') },
-    { key: 'stream-ingest', from: 'stream', to: 'ingestion', sourceAnchor: RIGHT, targetAnchor: BOTTOM },
-    { key: 'land', ...across('ingestion', 'bronze'), label: 'lands raw' },
+    { key: 'db-ingest', from: 'ingestion', to: 'db', sourceAnchor: TOP, targetAnchor: RIGHT, semantic: 'reads' },
+    { key: 'files-ingest', ...back('ingestion', 'files'), semantic: 'reads' },
+    { key: 'stream-ingest', from: 'ingestion', to: 'stream', sourceAnchor: BOTTOM, targetAnchor: RIGHT, semantic: 'consumes' },
+    { key: 'land', ...across('ingestion', 'bronze'), semantic: 'writes', label: 'lands raw' },
     { key: 'refine', ...across('bronze', 'silver'), semantic: 'transforms', label: 'validate + conform' },
     { key: 'curate', ...across('silver', 'gold'), semantic: 'transforms', label: 'model + aggregate' },
-    { key: 'to-analytics', ...across('gold', 'analytics') },
-    { key: 'to-api', ...across('gold', 'data-api') },
+    { key: 'to-analytics', ...back('analytics', 'gold'), semantic: 'reads' },
+    { key: 'to-api', ...back('data-api', 'gold'), semantic: 'reads' },
   ],
   flows: [
     {
       title: 'Raw to insight',
       accent: 'teal',
       steps: [
-        { edgeKey: 'db-ingest', caption: 'Source data arrives' },
+        { edgeKey: 'db-ingest', caption: 'Ingestion reads the source' },
         { edgeKey: 'land', caption: 'Landed in Bronze exactly as received' },
         { edgeKey: 'refine', caption: 'Validated, deduplicated, and conformed into Silver' },
         { edgeKey: 'curate', caption: 'Modelled and aggregated into Gold' },
@@ -2177,7 +2178,7 @@ const kappa: ArchitectureStarter = {
     { key: 'app-publish', ...down('application', 'log') },
     { key: 'ext-publish', ...down('external', 'log') },
     { key: 'consume', ...across('log', 'processor'), label: 'live + replay' },
-    { key: 'materialize', ...across('processor', 'view') },
+    { key: 'materialize', ...across('processor', 'view'), semantic: 'writes' },
     { key: 'query', ...down('query-api', 'view'), semantic: 'reads' },
     { key: 'analyze', ...down('analytics', 'view'), semantic: 'reads' },
   ],
@@ -2436,7 +2437,7 @@ const cdc: ArchitectureStarter = {
     { key: 'consume-search', ...across('stream', 'search-indexer') },
     { key: 'consume-warehouse', ...across('stream', 'warehouse-loader') },
     { key: 'index', ...across('search-indexer', 'search-index') },
-    { key: 'project', ...across('warehouse-loader', 'warehouse') },
+    { key: 'project', ...across('warehouse-loader', 'warehouse'), semantic: 'writes' },
   ],
   flows: [
     {
@@ -2488,9 +2489,14 @@ const cdc: ArchitectureStarter = {
  * the middle" and undoing reads as "back around the sides." Each participant pair touches four
  * distinct points, so `laneIndex` never nudges either and the forward step stays in its fan.
  *
- * **Flows.** "Happy path" is the forward sequence with each local commit as its own beat;
- * "Compensation" replays the first two steps succeeding, the third failing, and the two releases
- * in reverse.
+ * **Replies.** Each step carries its reply ("reserved / failed") as the connector's response line —
+ * the one place in the catalog a starter draws one, because the orchestrator moves only on what
+ * comes back. A reply queue or a synchronous call are both faithful transports; the diagram says
+ * neither.
+ *
+ * **Flows.** "Happy path" is the forward sequence with each local commit and its reply as its own
+ * beat; "Compensation" replays the first two steps answering "reserved", the third answering
+ * "failed", and the two releases in reverse.
  */
 /** Wider than the shared `GUTTER`: three step captions sit side by side on the drops. */
 const SAGA_GUTTER = 96;
@@ -2513,6 +2519,8 @@ const SAGA_STORE_Y = SAGA_PARTICIPANT_Y + SERVICE.height + INNER_BAND;
 const SAGA_PARTICIPANTS = ['payment', 'inventory', 'fulfillment'] as const;
 const SAGA_PARTICIPANT_NAMES = ['Payment Service', 'Inventory Service', 'Fulfillment Service'] as const;
 const SAGA_STEP_NAMES = ['Reserve payment', 'Reserve inventory', 'Schedule fulfillment'] as const;
+/** What each participant answers — the orchestrator's next move hangs on it. */
+const SAGA_REPLY_NAMES = ['reserved / failed', 'reserved / failed', 'scheduled / failed'] as const;
 const SAGA_STEP_KEYS = ['reserve-payment', 'reserve-inventory', 'schedule-fulfillment'] as const;
 /** Where a compensation leaves the orchestrator: its lower side points, below the level line the
  *  order service starts the saga with. */
@@ -2605,7 +2613,7 @@ const sagaOrchestration: ArchitectureStarter = {
       attachments: [
         {
           type: 'note',
-          text: 'Owns the saga’s state and the order of steps. Each service commits locally; a compensating action is a new local transaction that undoes an earlier one — never a rollback.',
+          text: 'Owns the saga’s state and the order of steps, and moves only on a reply: "reserved" sends the next command, "failed" starts the sweep back. Each service commits locally; a compensating action is a new local transaction that undoes an earlier one — never a rollback.',
         },
       ],
     },
@@ -2613,15 +2621,20 @@ const sagaOrchestration: ArchitectureStarter = {
   ],
   edges: [
     { key: 'start', ...across('order', 'orchestrator'), semantic: 'command', label: 'Start saga' },
+    // Each step is a command *and its reply*: the orchestrator does nothing on its own account, it
+    // acts on what comes back — the next step on success, the reverse sweep on failure. The reply
+    // is drawn as the connector's response line; whether it travels back over a reply queue or a
+    // synchronous call is the transport, and the pattern is indifferent to it.
     ...SAGA_PARTICIPANTS.map(
       (key, index): StarterEdgeSpec => ({
         key: SAGA_STEP_KEYS[index],
         ...down('orchestrator', key),
         semantic: 'command',
         label: SAGA_STEP_NAMES[index],
+        response: SAGA_REPLY_NAMES[index],
       }),
     ),
-    ...SAGA_PARTICIPANTS.map((key) => ({ key: `commit-${key}`, ...down(key, `${key}-store`) })),
+    ...SAGA_PARTICIPANTS.map((key): StarterEdgeSpec => ({ key: `commit-${key}`, ...down(key, `${key}-store`), semantic: 'writes' })),
     // The reverse sweep: the last committed step is undone first — see this block's doc comment.
     {
       key: 'release-inventory',
@@ -2651,21 +2664,21 @@ const sagaOrchestration: ArchitectureStarter = {
       steps: [
         { edgeKey: 'start' },
         { edgeKey: 'reserve-payment' },
-        { edgeKey: 'commit-payment', caption: 'Local transaction commits' },
-        { edgeKey: 'reserve-inventory' },
-        { edgeKey: 'commit-inventory', caption: 'Local transaction commits' },
+        { edgeKey: 'commit-payment', caption: 'Local transaction commits — and the reply says "reserved"' },
+        { edgeKey: 'reserve-inventory', caption: 'Only on that reply does the next step go out' },
+        { edgeKey: 'commit-inventory', caption: 'Local transaction commits, reply "reserved"' },
         { edgeKey: 'schedule-fulfillment' },
-        { edgeKey: 'commit-fulfillment', caption: 'Local transaction commits — saga complete' },
+        { edgeKey: 'commit-fulfillment', caption: 'Local transaction commits, reply "scheduled" — saga complete' },
       ],
     },
     {
       title: 'Compensation',
       accent: 'rose',
       steps: [
-        { edgeKey: 'reserve-payment', caption: 'Succeeded' },
+        { edgeKey: 'reserve-payment', caption: 'Reply: reserved' },
         { edgeKey: 'commit-payment', caption: 'Committed locally — nothing outside can roll it back' },
-        { edgeKey: 'reserve-inventory', caption: 'Succeeded, and committed locally too' },
-        { edgeKey: 'schedule-fulfillment', caption: 'Fails' },
+        { edgeKey: 'reserve-inventory', caption: 'Reply: reserved, and committed locally too' },
+        { edgeKey: 'schedule-fulfillment', caption: 'Reply: failed — the orchestrator now runs the sweep' },
         { edgeKey: 'release-inventory', caption: 'Undo the last committed step first — a new local transaction' },
         { edgeKey: 'release-payment', caption: 'Then the one before it' },
       ],
@@ -2689,18 +2702,24 @@ const sagaOrchestration: ArchitectureStarter = {
  *   topics rather than one shared bus so each hop reads as "this fact causes that reaction."
  * - There is no orchestrator, no saga log, no step numbers on the canvas. Anything that looked
  *   like a controller would be the other pattern.
+ * - The saga has an *outcome*, and the service that started it hears it the same way it hears
+ *   everything: `Stock Reserved` is a topic Inventory publishes when the last step lands, and
+ *   Order reacts by confirming — its own local transaction. Without it the chain just stopped, and
+ *   nothing ever told Order how its order ended.
  * - Failure is event-driven too: `Stock Rejected` is a topic Inventory publishes when it cannot
  *   reserve, and Payment reacts with `Refund payment` — a compensating action that is itself a new
- *   local transaction, drawn in rose. Its note says the unwinding keeps going the same way (Payment
- *   would publish `Payment Refunded`, Order would react to that) — one hop on the canvas is enough
- *   to teach the mechanism without a second diagram.
+ *   local transaction, drawn in rose. The unwinding keeps going the same way: Payment publishes
+ *   `Payment Refunded`, and Order reacts to that by cancelling. Both halves complete, so the two
+ *   flows each end at Order.
  *
  * **Routing.** Every forward connector is a level line between a service's side and a topic's
- * tube. The compensating topic sits *above* the row between the two services it links, so its two
- * connectors are one clean elbow up and one down, crossing nothing.
+ * tube. The two failure topics sit *above* the row, each between the services it links, so each of
+ * their connectors is one clean elbow up or down; the outcome topic sits one band higher still,
+ * spanning back over the row, so the confirmation path crosses nothing on its way to Order. A
+ * second connector on a service's top leaves or lands a quarter of the way along, beside the first.
  *
- * **Flows.** "Happy path" walks the chain; "Compensation" walks the last hop failing and the
- * reaction that undoes the step before it.
+ * **Flows.** "Happy path" walks the chain to the confirmation; "Compensation" walks the last hop
+ * failing, the refund that undoes the step before it, and the cancellation that ends it.
  */
 const CHOREO_Y = 0;
 const CHOREO_ROW_CENTER = CHOREO_Y + SERVICE.height / 2;
@@ -2716,6 +2735,17 @@ const CHOREO_REJECTED_X = centeredAt(
   (CHOREO_PAYMENT_X + SERVICE.width / 2 + CHOREO_INVENTORY_X + SERVICE.width / 2) / 2,
   NAMED_QUEUE.width,
 );
+/** The outcome that closes the saga sits one band higher, spanning back over the row to the service
+ *  that started it: a second reaction chain, drawn above the first so the two never cross. */
+const CHOREO_RESERVED_Y = CHOREO_REJECTED_Y - GUTTER - NAMED_QUEUE.height;
+const CHOREO_RESERVED_X = centeredAt((CHOREO_ORDER_X + SERVICE.width / 2 + CHOREO_INVENTORY_X + SERVICE.width / 2) / 2, NAMED_QUEUE.width);
+/** The unwinding's own outcome, on the failure band, between the two services it links. */
+const CHOREO_REFUNDED_X = centeredAt((CHOREO_ORDER_X + SERVICE.width / 2 + CHOREO_PAYMENT_X + SERVICE.width / 2) / 2, NAMED_QUEUE.width);
+/** Below the stores, out of the way of the two bands of reactions above the row. */
+const CHOREO_ANNOTATION_Y = CHOREO_STORE_Y + STORE.height + 20;
+/** A second connector leaving or landing on a service's top: beside the first, never on it. */
+const TOP_LEFT_QUARTER: StarterEdgeSpec['sourceAnchor'] = { side: 'top', offset: 0.25 };
+const TOP_RIGHT_QUARTER: StarterEdgeSpec['sourceAnchor'] = { side: 'top', offset: 0.75 };
 const CHOREO_PARTICIPANTS = [
   { key: 'order', name: 'Order Service', x: CHOREO_ORDER_X },
   { key: 'payment', name: 'Payment Service', x: CHOREO_PAYMENT_X },
@@ -2746,7 +2776,7 @@ const sagaChoreography: ArchitectureStarter = {
       text: 'No central coordinator: each service reacts to an event and publishes its own',
       annotation: true,
       x: CHOREO_ORDER_X,
-      y: CHOREO_Y - 44,
+      y: CHOREO_ANNOTATION_Y,
       width: 460,
       height: 24,
     },
@@ -2774,22 +2804,38 @@ const sagaChoreography: ArchitectureStarter = {
     ]),
     choreoTopic('placed', 'Order Placed', CHOREO_PLACED_X),
     choreoTopic('taken', 'Payment Taken', CHOREO_TAKEN_X),
+    // The outcomes, and the service that started it all reacting to them: the saga is only over
+    // when Order has heard how it ended.
+    {
+      ...choreoTopic('reserved', 'Stock Reserved', CHOREO_RESERVED_X, CHOREO_RESERVED_Y),
+      attachments: [
+        {
+          type: 'note',
+          text: 'The last participant publishes the outcome like any other fact, and Order reacts to it — confirming the order is its own local transaction. Nobody reports to anybody.',
+        },
+      ],
+    },
     {
       ...choreoTopic('rejected', 'Stock Rejected', CHOREO_REJECTED_X, CHOREO_REJECTED_Y),
       attachments: [
         {
           type: 'note',
-          text: 'Compensation is event-driven too: Payment refunds and publishes Payment Refunded; Order reacts to that in turn. Every hop of the unwinding is one more reaction.',
+          text: 'Compensation is event-driven too: Payment refunds and publishes Payment Refunded, and Order reacts to that by cancelling. Every hop of the unwinding is one more reaction.',
         },
       ],
     },
+    choreoTopic('refunded', 'Payment Refunded', CHOREO_REFUNDED_X, CHOREO_REJECTED_Y),
   ],
   edges: [
     { key: 'place', ...across('order', 'placed') },
     { key: 'take', ...across('placed', 'payment') },
     { key: 'taken', ...across('payment', 'taken') },
     { key: 'reserve', ...across('taken', 'inventory') },
-    ...CHOREO_PARTICIPANTS.map(({ key }) => ({ key: `commit-${key}`, ...down(key, `${key}-store`) })),
+    ...CHOREO_PARTICIPANTS.map(({ key }): StarterEdgeSpec => ({ key: `commit-${key}`, ...down(key, `${key}-store`), semantic: 'writes' })),
+    // The outcome: up from Inventory's far corner to the top band, back over the row into the
+    // topic, and down into Order — clear of the failure band beneath it.
+    { key: 'reserved', from: 'inventory', to: 'reserved', sourceAnchor: TOP_RIGHT_QUARTER, targetAnchor: RIGHT },
+    { key: 'confirm', from: 'reserved', to: 'order', sourceAnchor: LEFT, targetAnchor: TOP, label: 'Confirm order' },
     // The compensating event: up from Inventory into the topic, down from the topic into Payment.
     { key: 'reject', from: 'inventory', to: 'rejected', sourceAnchor: TOP, targetAnchor: RIGHT, accent: 'rose' },
     {
@@ -2799,6 +2845,17 @@ const sagaChoreography: ArchitectureStarter = {
       sourceAnchor: LEFT,
       targetAnchor: TOP,
       label: 'Refund payment',
+      accent: 'rose',
+    },
+    // And its outcome, the same way: Payment publishes the refund, Order cancels.
+    { key: 'refunded', from: 'payment', to: 'refunded', sourceAnchor: TOP_LEFT_QUARTER, targetAnchor: RIGHT, accent: 'rose' },
+    {
+      key: 'cancel',
+      from: 'refunded',
+      to: 'order',
+      sourceAnchor: LEFT,
+      targetAnchor: TOP_RIGHT_QUARTER,
+      label: 'Cancel order',
       accent: 'rose',
     },
   ],
@@ -2813,7 +2870,9 @@ const sagaChoreography: ArchitectureStarter = {
         { edgeKey: 'commit-payment', caption: 'Its own local transaction' },
         { edgeKey: 'taken' },
         { edgeKey: 'reserve', caption: 'Inventory reacts in turn' },
-        { edgeKey: 'commit-inventory', caption: 'Stock reserved — the saga completed with no one in charge' },
+        { edgeKey: 'commit-inventory', caption: 'Stock reserved' },
+        { edgeKey: 'reserved', caption: 'And that is published like any other fact' },
+        { edgeKey: 'confirm', caption: 'Order reacts: confirmed — the saga completed with no one in charge' },
       ],
     },
     {
@@ -2823,7 +2882,9 @@ const sagaChoreography: ArchitectureStarter = {
         { edgeKey: 'reserve', caption: 'Inventory cannot reserve the stock' },
         { edgeKey: 'reject', caption: 'It publishes the failure as an event' },
         { edgeKey: 'refund', caption: 'Payment reacts: a refund, a new local transaction' },
-        { edgeKey: 'commit-payment', caption: 'Committed locally — and the unwinding continues the same way' },
+        { edgeKey: 'commit-payment', caption: 'Committed locally' },
+        { edgeKey: 'refunded', caption: 'And published — the unwinding continues the same way' },
+        { edgeKey: 'cancel', caption: 'Order reacts: cancelled. Every hop was one more reaction' },
       ],
     },
   ],
@@ -2974,9 +3035,11 @@ const transactionalOutbox: ArchitectureStarter = {
   ],
   edges: [
     // One fan, both branches inside the transaction — see this block's doc comment.
-    { key: 'write-business', ...across('producer', 'business') },
-    { key: 'write-outbox', ...across('producer', 'outbox') },
-    { key: 'relay', ...across('outbox', 'publisher'), label: 'reads unpublished' },
+    { key: 'write-business', ...across('producer', 'business'), semantic: 'writes' },
+    { key: 'write-outbox', ...across('producer', 'outbox'), semantic: 'writes' },
+    // Drawn from the publisher: it does the reading, the table never pushes — the same direction
+    // CQRS's relay and Medallion's serving layer use.
+    { key: 'relay', ...back('publisher', 'outbox'), semantic: 'reads', label: 'reads unpublished' },
     { key: 'publish', ...across('publisher', 'events') },
     { key: 'deliver', ...across('events', 'consumer') },
   ],

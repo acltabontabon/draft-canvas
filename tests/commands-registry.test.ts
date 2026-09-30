@@ -490,12 +490,15 @@ describe('commandsFor — Queue reliability commands (Add Consumer / Add DLQ)', 
     expect(list).not.toContain('remove-dead-letter-queue');
   });
 
-  it('a Stream offers Add Consumer but not Add DLQ — its dead-letter destination is typically a separate topic', () => {
+  it('a Stream offers Add Consumer but not Add DLQ — a stream never dead-letters itself, its consumers do', () => {
+    // A Stream is its own `categoryOf` category now (not folded into `queue`), so the consumer gate
+    // has to name it explicitly — this is the test that catches a gate that only knows `queue`.
     const stream = useEditorStore.getState().addNode({ type: 'queue', queueKind: 'stream', x: 0, y: 0 });
     select(stream.id);
     const list = ids(stubContext());
     expect(list).toContain('add-consumer');
     expect(list).not.toContain('add-dead-letter-queue');
+    expect(list).not.toContain('remove-dead-letter-queue');
   });
 
   it('a generated DLQ node offers Add Consumer but never a DLQ of its own', () => {
@@ -603,7 +606,7 @@ describe('primaryCommandsFor — primary popover quick actions', () => {
     expect(primaryIds(topic)).toEqual(['add-subscriber']);
   });
 
-  it('a Stream offers only Add Consumer', () => {
+  it('a Stream offers only Add Consumer — never a DLQ of its own', () => {
     const stream = useEditorStore.getState().addNode({ type: 'queue', queueKind: 'stream', x: 0, y: 0 });
     expect(primaryIds(stream)).toEqual(['add-consumer']);
   });

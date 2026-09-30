@@ -888,11 +888,12 @@ function continuationCommandFor(ctx: CommandContext, node: DraftNode): Command |
 function queueQuickCommands(ctx: CommandContext, node: DraftNode): Command[] {
   const commands: Command[] = [];
   const category = categoryOf(node);
-  // Consuming from it is universally valid for a plain Queue, a Stream (`categoryOf` already
-  // folds `queueKind: 'stream'` in) or a DLQ (a re-drive worker reads a dead-letter queue like
-  // any other) but not for a Topic: a fan-out subscriber is a different relationship, offered
-  // below instead.
-  if (category === 'queue' || category === 'deadLetter') {
+  // Consuming from it is universally valid for a plain Queue, a Stream (its own category since
+  // `categoryOf` stopped folding `queueKind: 'stream'` into `queue` — a consumer *reads* a stream,
+  // but it is still a consumer) or a DLQ (a re-drive worker reads a dead-letter queue like any
+  // other) but not for a Topic: a fan-out subscriber is a different relationship, offered below
+  // instead.
+  if (category === 'queue' || category === 'stream' || category === 'deadLetter') {
     commands.push({
       id: 'add-consumer',
       title: 'Add Consumer',
@@ -903,10 +904,11 @@ function queueQuickCommands(ctx: CommandContext, node: DraftNode): Command[] {
     });
   }
   // A DLQ belongs only to a plain Queue — deliberately the literal `queueKind === 'queue'`, not
-  // `categoryOf`, since a Stream's own dead-letter destination is typically a separate topic
-  // managed by a consumer/framework, not a queue-shaped DLQ (and a Topic's failure handling
-  // belongs to a subscription/consumer path Draft Canvas doesn't model yet) — and never on a
-  // node that is itself already a generated DLQ.
+  // `categoryOf`, since a Stream never dead-letters itself: it is a retained log, and the consumer
+  // that gives up on a record parks it (the `stream-consumer-dead-letter` continuation rule adds
+  // that queue from the consumer, not from here). A Topic's failure handling likewise belongs to
+  // a subscription/consumer path Draft Canvas doesn't model yet — and never on a node that is
+  // itself already a generated DLQ.
   if (node.queueKind === 'queue' && node.deliveryRole !== 'dead-letter') {
     const hasDlq = ctx.editor.document.edges.some((edge) => edge.source === node.id && edge.semantic === 'deadLetters');
     commands.push(

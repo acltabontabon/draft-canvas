@@ -19,6 +19,10 @@ const MAX_CANDIDATES = 3;
 const CONNECTABLE: Partial<Record<EdgeSemantic, readonly NodeCategory[] | 'any'>> = {
   publishes: 'any',
   writes: 'any',
+  // The Service → Data Store default and the Service → Queue default respectively: "Payment
+  // Service → the Payments DB beside it", "Order Service → the Order Queue beside it".
+  readsWrites: 'any',
+  command: 'any',
   fansOut: 'any',
   deliversTo: 'any',
   consumes: 'any',

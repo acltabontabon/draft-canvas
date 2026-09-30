@@ -22,9 +22,11 @@ describe('categoryOf', () => {
     expect(categoryOf({ type: 'queue' })).toBe('queue');
   });
 
-  it('reads a topic queue as its own category, and a stream queue as plain queue', () => {
+  it('reads a topic queue and a stream queue each as its own category; only a plain queue is "queue"', () => {
     expect(categoryOf({ type: 'queue', queueKind: 'topic' })).toBe('topic');
-    expect(categoryOf({ type: 'queue', queueKind: 'stream' })).toBe('queue');
+    // A stream is a retained log read by every consumer group, not a queue drained by one worker —
+    // its own category so the caption can say "read by" and the matrix can give it its own rows.
+    expect(categoryOf({ type: 'queue', queueKind: 'stream' })).toBe('stream');
     expect(categoryOf({ type: 'queue', queueKind: 'queue' })).toBe('queue');
   });
 
@@ -37,6 +39,8 @@ describe('categoryOf', () => {
   it('reads a dead-letter queue as its own category, ahead of its queue kind', () => {
     expect(categoryOf({ type: 'queue', queueKind: 'queue', deliveryRole: 'dead-letter' })).toBe('deadLetter');
     expect(categoryOf({ type: 'queue', deliveryRole: 'dead-letter' })).toBe('deadLetter');
+    // Checked before `queueKind`, so a dead-letter role wins over a stream kind too.
+    expect(categoryOf({ type: 'queue', queueKind: 'stream', deliveryRole: 'dead-letter' })).toBe('deadLetter');
   });
 
   it('reads a plain service as service, an external one as external, and a worker as its own category', () => {
@@ -78,10 +82,10 @@ describe('categoryOf', () => {
 });
 
 describe('capabilityFor — the capability matrix', () => {
-  it('service → database: defaults to writes, offers writes/reads/query/dependsOn, behaviour is not a meaningful choice', () => {
+  it('service → database: defaults to readsWrites (the store beside a service is "its database"), one-way reads/writes a pick away, behaviour is not a meaningful choice', () => {
     const cap = capabilityFor('service', 'database')!;
-    expect(cap.defaultRelation).toBe('writes');
-    expect(cap.relations).toEqual(['writes', 'reads', 'query', 'dependsOn']);
+    expect(cap.defaultRelation).toBe('readsWrites');
+    expect(cap.relations).toEqual(['readsWrites', 'writes', 'reads', 'query', 'dependsOn']);
     expect(cap.behaviors).toEqual([]);
     expect(cap.defaultBehavior).toBeUndefined();
   });
@@ -102,19 +106,47 @@ describe('capabilityFor — the capability matrix', () => {
     expect(cap.defaultRelation).toBe('reads');
   });
 
-  it('service → queue: defaults to publishes, offers command as a sharper alternative, implies event behaviour with no picker', () => {
+  it('service → queue: defaults to command (a job for one worker), publishes a pick away, implies async behaviour and a dashed line with no picker', () => {
     const cap = capabilityFor('service', 'queue')!;
-    expect(cap.defaultRelation).toBe('publishes');
-    expect(cap.relations).toEqual(['publishes', 'consumes', 'command', 'event', 'dependsOn']);
+    expect(cap.defaultRelation).toBe('command');
+    expect(cap.relations).toEqual(['command', 'publishes', 'consumes', 'event', 'dependsOn']);
     expect(cap.behaviors).toEqual([]);
-    expect(cap.defaultBehavior).toBe('event');
+    // A work queue is "do this, later, once" — handed off, not waited for — so `async`, never a
+    // topic's `event`; and `async` has to dash the line itself, so the row asks for it.
+    expect(cap.defaultBehavior).toBe('async');
+    expect(cap.defaultAsync).toBe(true);
   });
 
-  it('queue → service: defaults to consumes, offers deliversTo as an alternative, implies event behaviour with no picker', () => {
+  it('queue → service: defaults to consumes, offers deliversTo and command as alternatives, implies async behaviour and a dashed line with no picker', () => {
     const cap = capabilityFor('queue', 'service')!;
     expect(cap.defaultRelation).toBe('consumes');
-    expect(cap.relations).toEqual(['consumes', 'deliversTo', 'event']);
-    expect(cap.defaultBehavior).toBe('event');
+    expect(cap.relations).toEqual(['consumes', 'deliversTo', 'command', 'event']);
+    expect(cap.defaultBehavior).toBe('async');
+    expect(cap.defaultAsync).toBe(true);
+  });
+
+  it('service → stream / stream → service: published into like a topic, read from by each consumer group', () => {
+    const into = capabilityFor('service', 'stream')!;
+    expect(into.defaultRelation).toBe('publishes');
+    expect(into.relations).toEqual(['publishes', 'consumes', 'event', 'dependsOn']);
+    expect(into.defaultBehavior).toBe('event');
+    expect(into.defaultAsync).toBeUndefined();
+
+    const outOf = capabilityFor('stream', 'service')!;
+    expect(outOf.defaultRelation).toBe('consumes');
+    expect(outOf.relations).toEqual(['consumes', 'event']);
+    expect(outOf.defaultBehavior).toBe('event');
+    // Not `deliversTo`: the consumer does the reading, at its own pace, and can start over.
+    expect(outOf.relations).not.toContain('deliversTo');
+  });
+
+  it('a stream folds to topic for every pairing without its own row — never to queue', () => {
+    expect(capabilityFor('stream', 'searchIndex')).toEqual(capabilityFor('topic', 'searchIndex'));
+    expect(capabilityFor('stream', 'database')).toEqual(capabilityFor('topic', 'database'));
+    expect(capabilityFor('stream', 'queue')).toEqual(capabilityFor('topic', 'queue'));
+    // A stream never dead-letters itself — it gets the topic's guidance, not `queue>deadLetter`.
+    expect(capabilityFor('stream', 'deadLetter')).toEqual(capabilityFor('topic', 'deadLetter'));
+    expect(capabilityFor('stream', 'deadLetter')?.defaultRelation).toBeUndefined();
   });
 
   it('queue → queue is ambiguous — no capability at all', () => {
@@ -330,10 +362,10 @@ describe('capabilityFor — the capability matrix', () => {
     expect(cap.relations).toEqual(['searches', 'indexes', 'dependsOn']);
   });
 
-  it('service → cache: defaults to writes, no query option (unlike a plain database), gains "invalidates"', () => {
+  it('service → cache: defaults to reads (a cache is read far more than filled), no query option (unlike a plain database), gains "invalidates"', () => {
     const cap = capabilityFor('service', 'cache')!;
-    expect(cap.defaultRelation).toBe('writes');
-    expect(cap.relations).toEqual(['writes', 'reads', 'invalidates', 'dependsOn']);
+    expect(cap.defaultRelation).toBe('reads');
+    expect(cap.relations).toEqual(['reads', 'writes', 'readsWrites', 'invalidates', 'dependsOn']);
     expect(cap.relations).not.toContain('query');
   });
 
@@ -343,10 +375,10 @@ describe('capabilityFor — the capability matrix', () => {
     expect(cap.relations).toEqual(['reads']);
   });
 
-  it('service → file system: reads/writes/watches, no database-specific query', () => {
+  it('service → file system: reads/writes/readsWrites/watches, no database-specific query', () => {
     const cap = capabilityFor('service', 'fileSystem')!;
     expect(cap.defaultRelation).toBe('writes');
-    expect(cap.relations).toEqual(['reads', 'writes', 'watches', 'dependsOn']);
+    expect(cap.relations).toEqual(['reads', 'writes', 'readsWrites', 'watches', 'dependsOn']);
     expect(cap.relations).not.toContain('query');
   });
 
@@ -357,10 +389,10 @@ describe('capabilityFor — the capability matrix', () => {
     expect(cap.relations).not.toContain('calls');
   });
 
-  it('service → object storage: reads/writes, the same vocabulary as the rest of the storage family', () => {
+  it('service → object storage: reads/writes/readsWrites, the same vocabulary as the rest of the storage family', () => {
     const cap = capabilityFor('service', 'objectStorage')!;
     expect(cap.defaultRelation).toBe('writes');
-    expect(cap.relations).toEqual(['reads', 'writes', 'dependsOn']);
+    expect(cap.relations).toEqual(['reads', 'writes', 'readsWrites', 'dependsOn']);
   });
 
   it('object storage → service: reads only', () => {
@@ -545,10 +577,11 @@ describe('defaultsToResponse — which pairings the reply line is offered for', 
 
 describe('inferRelationship — a thin wrapper over capabilityFor\'s default', () => {
   it('mirrors the matrix default for every documented pairing', () => {
-    expect(inferRelationship({ type: 'service' }, { type: 'database' })).toEqual({ semantic: 'writes', kind: undefined });
+    expect(inferRelationship({ type: 'service' }, { type: 'database' })).toEqual({ semantic: 'readsWrites', kind: undefined });
     expect(inferRelationship({ type: 'database' }, { type: 'service' })).toEqual({ semantic: 'reads', kind: undefined });
-    expect(inferRelationship({ type: 'service' }, { type: 'queue' })).toEqual({ semantic: 'publishes', kind: 'event' });
-    expect(inferRelationship({ type: 'queue' }, { type: 'service' })).toEqual({ semantic: 'consumes', kind: 'event' });
+    // A work queue carries commands, handed off asynchronously — dashed, never a topic's `event`.
+    expect(inferRelationship({ type: 'service' }, { type: 'queue' })).toEqual({ semantic: 'command', kind: 'async', async: true });
+    expect(inferRelationship({ type: 'queue' }, { type: 'service' })).toEqual({ semantic: 'consumes', kind: 'async', async: true });
     expect(inferRelationship({ type: 'service' }, { type: 'service' })).toEqual({ semantic: 'calls', kind: undefined });
     expect(inferRelationship({ type: 'actor' }, { type: 'service' })).toEqual({ semantic: 'calls', kind: undefined });
     expect(
@@ -556,7 +589,7 @@ describe('inferRelationship — a thin wrapper over capabilityFor\'s default', (
     ).toEqual({ semantic: 'calls', kind: undefined });
     expect(
       inferRelationship({ type: 'service' }, { type: 'database', databaseKind: 'cache' }),
-    ).toEqual({ semantic: 'writes', kind: undefined });
+    ).toEqual({ semantic: 'reads', kind: undefined });
     expect(
       inferRelationship({ type: 'database', databaseKind: 'cache' }, { type: 'service' }),
     ).toEqual({ semantic: 'reads', kind: undefined });
@@ -576,8 +609,14 @@ describe('inferRelationship — a thin wrapper over capabilityFor\'s default', (
     const dlq = { type: 'queue', deliveryRole: 'dead-letter' } as const;
     expect(inferRelationship({ type: 'queue' }, dlq)).toEqual({ semantic: 'deadLetters', kind: 'failure', async: true });
     expect(inferRelationship({ type: 'queue', queueKind: 'topic' }, dlq)).toBeUndefined();
-    // Everything else the matrix infers is left to its behaviour's own dash — no `async` opinion.
-    expect(inferRelationship({ type: 'queue' }, { type: 'service' })?.async).toBeUndefined();
+    // A stream folds to topic here too: it never dead-letters itself, its consumers do.
+    expect(inferRelationship({ type: 'queue', queueKind: 'stream' }, dlq)).toBeUndefined();
+    // Pairings whose behaviour dots its own line carry no `async` opinion; only the ones whose
+    // behaviour has no dash of its own but is genuinely asynchronous (a work queue's hand-off, a
+    // dead-letter route) ask for one.
+    expect(inferRelationship({ type: 'queue', queueKind: 'topic' }, { type: 'service' })?.async).toBeUndefined();
+    expect(inferRelationship({ type: 'service' }, { type: 'database' })?.async).toBeUndefined();
+    expect(inferRelationship({ type: 'queue' }, { type: 'service' })?.async).toBe(true);
   });
 
   it('stays neutral for undocumented pairs and for queue → queue', () => {
@@ -586,21 +625,29 @@ describe('inferRelationship — a thin wrapper over capabilityFor\'s default', (
     expect(inferRelationship({ type: 'text' }, { type: 'text' })).toBeUndefined();
   });
 
-  it('a stream infers exactly like a plain queue — Draft Canvas doesn\'t differentiate that kind', () => {
+  it('a stream is published into like a topic and consumed like a queue — but as an event, never a command, and never dashed by hand', () => {
     const service = createNode({ type: 'service', x: 0, y: 0 });
     const plainQueue = createNode({ type: 'queue', x: 0, y: 0 });
+    const topic = createNode({ type: 'queue', x: 0, y: 0, queueKind: 'topic' });
     const stream = createNode({ type: 'queue', x: 0, y: 0, queueKind: 'stream' });
-    expect(inferRelationship(service, stream)).toEqual(inferRelationship(service, plainQueue));
-    expect(inferRelationship(stream, service)).toEqual(inferRelationship(plainQueue, service));
+    expect(inferRelationship(service, stream)).toEqual({ semantic: 'publishes', kind: 'event' });
+    expect(inferRelationship(service, stream)).toEqual(inferRelationship(service, topic));
+    expect(inferRelationship(service, stream)).not.toEqual(inferRelationship(service, plainQueue));
+    // Read out of, not delivered from — the consumer does the reading; and it is a record that
+    // happened (`event`), not a job handed off (`async`), so no `async` dash of its own.
+    expect(inferRelationship(stream, service)).toEqual({ semantic: 'consumes', kind: 'event' });
+    expect(inferRelationship(stream, service)).not.toEqual(inferRelationship(plainQueue, service));
+    expect(inferRelationship(stream, service)).not.toEqual(inferRelationship(topic, service));
   });
 
-  it('a topic matches a plain queue publishing into it, but diverges reading out of it — a topic delivers, it isn\'t consumed by one puller', () => {
+  it('a topic and a plain queue diverge both ways — a queue carries a command for one worker, a topic emits an event to every subscriber', () => {
     const service = createNode({ type: 'service', x: 0, y: 0 });
     const topic = createNode({ type: 'queue', x: 0, y: 0, queueKind: 'topic' });
     const plainQueue = createNode({ type: 'queue', x: 0, y: 0 });
-    expect(inferRelationship(service, topic)).toEqual(inferRelationship(service, plainQueue));
+    expect(inferRelationship(service, topic)).toEqual({ semantic: 'publishes', kind: 'event' });
+    expect(inferRelationship(service, plainQueue)).toEqual({ semantic: 'command', kind: 'async', async: true });
     expect(inferRelationship(topic, service)).toEqual({ semantic: 'deliversTo', kind: 'event' });
-    expect(inferRelationship(topic, service)).not.toEqual(inferRelationship(plainQueue, service));
+    expect(inferRelationship(plainQueue, service)).toEqual({ semantic: 'consumes', kind: 'async', async: true });
   });
 
   it('a topic publishing into a queue infers fan-out; a queue into a topic stays neutral (no default)', () => {
@@ -624,10 +671,10 @@ describe('inferRelationship — a thin wrapper over capabilityFor\'s default', (
     expect(inferRelationship(adapter, generic)).toEqual({ semantic: 'uses', kind: undefined });
   });
 
-  it('component → database still infers writes, exactly like service → database — only component → component is the exception', () => {
+  it('component → database still infers readsWrites, exactly like service → database — only component → component is the exception', () => {
     const component = createNode({ type: 'component', x: 0, y: 0 });
     const database = createNode({ type: 'database', x: 0, y: 0 });
-    expect(inferRelationship(component, database)).toEqual({ semantic: 'writes', kind: undefined });
+    expect(inferRelationship(component, database)).toEqual({ semantic: 'readsWrites', kind: undefined });
   });
 });
 
@@ -659,22 +706,24 @@ describe('inferRelationship — Service family redesign test matrix (spec §28)'
     expect(inferRelationship(service('api'), service('api'))).toEqual({ semantic: 'calls', kind: undefined });
   });
 
-  it('API → storage: reads/writes/query per storage subtype, same as any other Service', () => {
-    expect(inferRelationship(service('api'), database('sql'))).toEqual({ semantic: 'writes', kind: undefined });
-    expect(inferRelationship(service('api'), database('cache'))).toEqual({ semantic: 'writes', kind: undefined });
+  it('API → storage: readsWrites for its database, reads for a cache, writes for object storage — same as any other Service', () => {
+    expect(inferRelationship(service('api'), database('sql'))).toEqual({ semantic: 'readsWrites', kind: undefined });
+    expect(inferRelationship(service('api'), database('cache'))).toEqual({ semantic: 'reads', kind: undefined });
     expect(inferRelationship(service('api'), database('object-storage'))).toEqual({ semantic: 'writes', kind: undefined });
   });
 
-  it('Worker ↔ Queue/Topic: consumes/publishes both ways, exactly the plain service defaults', () => {
-    expect(inferRelationship(service('worker'), queue())).toEqual({ semantic: 'publishes', kind: 'event' });
-    expect(inferRelationship(queue(), service('worker'))).toEqual({ semantic: 'consumes', kind: 'event' });
+  it('Worker ↔ Queue/Topic: a command handed off / consumed for a queue, an event published / delivered for a topic — exactly the plain service defaults', () => {
+    expect(inferRelationship(service('worker'), queue())).toEqual({ semantic: 'command', kind: 'async', async: true });
+    expect(inferRelationship(queue(), service('worker'))).toEqual({ semantic: 'consumes', kind: 'async', async: true });
     expect(inferRelationship(service('worker'), queue('topic'))).toEqual({ semantic: 'publishes', kind: 'event' });
     expect(inferRelationship(queue('topic'), service('worker'))).toEqual({ semantic: 'deliversTo', kind: 'event' });
+    expect(inferRelationship(service('worker'), queue('stream'))).toEqual({ semantic: 'publishes', kind: 'event' });
+    expect(inferRelationship(queue('stream'), service('worker'))).toEqual({ semantic: 'consumes', kind: 'event' });
   });
 
-  it('Worker → storage: writes/reads/watches per storage subtype', () => {
-    expect(inferRelationship(service('worker'), database('sql'))).toEqual({ semantic: 'writes', kind: undefined });
-    expect(inferRelationship(service('worker'), database('cache'))).toEqual({ semantic: 'writes', kind: undefined });
+  it('Worker → storage: readsWrites for a database, reads for a cache, writes for a file system and object storage', () => {
+    expect(inferRelationship(service('worker'), database('sql'))).toEqual({ semantic: 'readsWrites', kind: undefined });
+    expect(inferRelationship(service('worker'), database('cache'))).toEqual({ semantic: 'reads', kind: undefined });
     expect(inferRelationship(service('worker'), database('file-system'))).toEqual({ semantic: 'writes', kind: undefined });
     expect(inferRelationship(service('worker'), database('object-storage'))).toEqual({ semantic: 'writes', kind: undefined });
   });
@@ -684,10 +733,10 @@ describe('inferRelationship — Service family redesign test matrix (spec §28)'
     expect(inferRelationship(service('api'), database('search-index'))).toEqual({ semantic: 'searches', kind: undefined });
   });
 
-  it('Scheduler → Worker/API: triggers; Scheduler → Queue/Topic: publishes', () => {
+  it('Scheduler → Worker/API: triggers; Scheduler → Queue: a command; Scheduler → Topic: publishes', () => {
     expect(inferRelationship(service('scheduler'), service('worker'))).toEqual({ semantic: 'triggers', kind: undefined });
     expect(inferRelationship(service('scheduler'), service('api'))).toEqual({ semantic: 'triggers', kind: undefined });
-    expect(inferRelationship(service('scheduler'), queue())).toEqual({ semantic: 'publishes', kind: 'event' });
+    expect(inferRelationship(service('scheduler'), queue())).toEqual({ semantic: 'command', kind: 'async', async: true });
     expect(inferRelationship(service('scheduler'), queue('topic'))).toEqual({ semantic: 'publishes', kind: 'event' });
   });
 
@@ -696,8 +745,8 @@ describe('inferRelationship — Service family redesign test matrix (spec §28)'
     expect(capabilityFor('gateway', 'database')!.status).toBe('unusual');
   });
 
-  it('External → Queue/Topic/Object Storage: may publish/upload, exactly the plain service defaults', () => {
-    expect(inferRelationship(service('external'), queue())).toEqual({ semantic: 'publishes', kind: 'event' });
+  it('External → Queue/Topic/Object Storage: may command/publish/upload, exactly the plain service defaults', () => {
+    expect(inferRelationship(service('external'), queue())).toEqual({ semantic: 'command', kind: 'async', async: true });
     expect(inferRelationship(service('external'), queue('topic'))).toEqual({ semantic: 'publishes', kind: 'event' });
     expect(inferRelationship(service('external'), database('object-storage'))).toEqual({ semantic: 'writes', kind: undefined });
   });
@@ -782,9 +831,9 @@ describe('connect() — inference on a fresh connection, across the real node vo
     return store.getState().connect(a.id, b.id)!;
   }
 
-  it('service → database infers writes', () => {
+  it('service → database infers readsWrites', () => {
     const edge = connect({ type: 'service' }, { type: 'database' });
-    expect(edge.semantic).toBe('writes');
+    expect(edge.semantic).toBe('readsWrites');
     expect(edge.semanticsOrigin).toBe('inferred');
   });
 
@@ -793,16 +842,32 @@ describe('connect() — inference on a fresh connection, across the real node vo
     expect(edge.semantic).toBe('reads');
   });
 
-  it('service → queue infers publishes with event behaviour', () => {
+  it('service → queue infers command with async behaviour, on a dashed line', () => {
     const edge = connect({ type: 'service' }, { type: 'queue' });
-    expect(edge.semantic).toBe('publishes');
-    expect(edge.kind).toBe('event');
+    expect(edge.semantic).toBe('command');
+    expect(edge.kind).toBe('async');
+    // `async` has no dash of its own the way `event` does, so the matrix asks for one and
+    // `connect()` has to carry it onto the edge — otherwise the hand-off draws solid.
+    expect(edge.async).toBe(true);
   });
 
-  it('queue → service infers consumes with event behaviour', () => {
+  it('queue → service infers consumes with async behaviour, on a dashed line', () => {
     const edge = connect({ type: 'queue' }, { type: 'service' });
     expect(edge.semantic).toBe('consumes');
-    expect(edge.kind).toBe('event');
+    expect(edge.kind).toBe('async');
+    expect(edge.async).toBe(true);
+  });
+
+  it('service → stream infers publishes with event behaviour; stream → service infers consumes with event behaviour, no dash of its own', () => {
+    const into = connect({ type: 'service' }, { type: 'queue', queueKind: 'stream' });
+    expect(into.semantic).toBe('publishes');
+    expect(into.kind).toBe('event');
+    expect(into.async).toBeUndefined();
+
+    const outOf = connect({ type: 'queue', queueKind: 'stream' }, { type: 'service' });
+    expect(outOf.semantic).toBe('consumes');
+    expect(outOf.kind).toBe('event');
+    expect(outOf.async).toBeUndefined();
   });
 
   it('service → service infers calls', () => {
@@ -821,9 +886,9 @@ describe('connect() — inference on a fresh connection, across the real node vo
     expect(edge.semantic).toBe('calls');
   });
 
-  it('service → cache infers writes', () => {
+  it('service → cache infers reads', () => {
     const edge = connect({ type: 'service' }, { type: 'database', databaseKind: 'cache' });
-    expect(edge.semantic).toBe('writes');
+    expect(edge.semantic).toBe('reads');
   });
 
   it('cache → service infers reads', () => {
@@ -900,7 +965,7 @@ describe('reconnectEdge() — reclassifying an eligible connector when the topol
     expect(store.getState().revision).toBe(revision);
   });
 
-  it('a Service A → Service B call becomes a Service → Database write when retargeted', () => {
+  it('a Service A → Service B call becomes a Service → Database read/write when retargeted', () => {
     const serviceA = store.getState().addNode({ type: 'service', x: 0, y: 0 });
     const serviceB = store.getState().addNode({ type: 'service', x: 300, y: 0 });
     const database = store.getState().addNode({ type: 'database', x: 600, y: 0 });
@@ -910,17 +975,17 @@ describe('reconnectEdge() — reclassifying an eligible connector when the topol
     store.getState().reconnectEdge(edge.id, 'target', database.id, undefined);
     const stored = store.getState().document.edges[0]!;
     expect(stored.target).toBe(database.id);
-    expect(stored.semantic).toBe('writes');
+    expect(stored.semantic).toBe('readsWrites');
     expect(stored.kind).toBeUndefined();
     expect(stored.semanticsOrigin).toBe('inferred');
   });
 
-  it('a Service → Database "writes" re-infers to "publishes" when the database is re-pointed to a Topic', () => {
+  it('a Service → Database "readsWrites" re-infers to "publishes" when the database is re-pointed to a Topic', () => {
     const service = store.getState().addNode({ type: 'service', x: 0, y: 0 });
     const database = store.getState().addNode({ type: 'database', x: 300, y: 0 });
     const topic = store.getState().addNode({ type: 'queue', queueKind: 'topic', x: 600, y: 0 });
     const edge = store.getState().connect(service.id, database.id)!;
-    expect(edge.semantic).toBe('writes');
+    expect(edge.semantic).toBe('readsWrites');
 
     store.getState().reconnectEdge(edge.id, 'target', topic.id, undefined);
     const stored = store.getState().document.edges[0]!;
@@ -929,18 +994,22 @@ describe('reconnectEdge() — reclassifying an eligible connector when the topol
     expect(stored.semanticsOrigin).toBe('inferred');
   });
 
-  it('re-infers when reconnecting an inferred edge onto a new node type', () => {
+  it('re-infers when reconnecting an inferred edge onto a new node type, dropping the dash the queue pairing asked for', () => {
     const service = store.getState().addNode({ type: 'service', x: 0, y: 0 });
     const queue = store.getState().addNode({ type: 'queue', x: 300, y: 0 });
     const otherService = store.getState().addNode({ type: 'service', x: 600, y: 0 });
     const edge = store.getState().connect(service.id, queue.id)!;
-    expect(edge.semantic).toBe('publishes');
+    expect(edge.semantic).toBe('command');
+    expect(edge.async).toBe(true);
 
     store.getState().reconnectEdge(edge.id, 'target', otherService.id, undefined);
     const stored = store.getState().document.edges[0]!;
     expect(stored.target).toBe(otherService.id);
     expect(stored.semantic).toBe('calls');
     expect(stored.kind).toBeUndefined();
+    // The dash was inference's, not the user's, so re-inference onto a synchronous call takes it
+    // back — a solid call that stayed dashed would read as a hand-off it no longer is.
+    expect(stored.async).toBeUndefined();
     expect(stored.semanticsOrigin).toBe('inferred');
   });
 
@@ -1006,7 +1075,8 @@ describe('reconnectEdge() — reclassifying an eligible connector when the topol
     store.getState().undo();
     const reverted = store.getState().document.edges[0]!;
     expect(reverted.target).toBe(queue.id);
-    expect(reverted.semantic).toBe('publishes');
+    expect(reverted.semantic).toBe('command');
+    expect(reverted.async).toBe(true);
   });
 });
 
@@ -1273,11 +1343,11 @@ describe('reverseEdge() — reclassifying an eligible connector after a directio
     });
   });
 
-  it('a Service → Database "writes" becomes Database → Service "reads" once reversed', () => {
+  it('a Service → Database "readsWrites" becomes Database → Service "reads" once reversed', () => {
     const service = store.getState().addNode({ type: 'service', x: 0, y: 0 });
     const database = store.getState().addNode({ type: 'database', x: 300, y: 0 });
     const edge = store.getState().connect(service.id, database.id)!;
-    expect(edge.semantic).toBe('writes');
+    expect(edge.semantic).toBe('readsWrites');
 
     store.getState().reverseEdge(edge.id);
     const stored = store.getState().document.edges[0]!;
@@ -1341,7 +1411,7 @@ describe('reverseEdge() — reclassifying an eligible connector after a directio
     const database = store.getState().addNode({ type: 'database', x: 600, y: 0 });
     store.getState().connect(service.id, junction.id);
     const edge = store.getState().connect(junction.id, database.id)!;
-    expect(edge.semantic).toBe('writes'); // service resolves transparently through the junction
+    expect(edge.semantic).toBe('readsWrites'); // service resolves transparently through the junction
 
     // Reversing junction→database leaves the junction with two *incoming* edges (from the service,
     // and now from the database too) and none outgoing — genuinely ambiguous as a source, the same
@@ -1367,7 +1437,7 @@ describe('reverseEdge() — reclassifying an eligible connector after a directio
     store.getState().undo();
     const reverted = store.getState().document.edges[0]!;
     expect(reverted.source).toBe(service.id);
-    expect(reverted.semantic).toBe('writes');
+    expect(reverted.semantic).toBe('readsWrites');
   });
 });
 
@@ -1502,7 +1572,7 @@ describe('capabilityFor through a Junction — endpoint compatibility is preserv
     const sourceCategory = resolveTransparentCategory(g, junction.id, 'source');
     const cap = capabilityFor(sourceCategory, categoryOf(queue))!;
 
-    expect(cap.relations).toEqual(['publishes', 'consumes', 'command', 'event', 'dependsOn']);
+    expect(cap.relations).toEqual(['command', 'publishes', 'consumes', 'event', 'dependsOn']);
     expect(cap.relations).not.toContain('query');
     expect(cap.relations).not.toContain('writes');
   });
@@ -1543,8 +1613,9 @@ describe('Junction connections — store integration (connect/reconnect through 
     store.getState().connect(a.id, junction.id);
 
     const outgoing = store.getState().connect(junction.id, queue.id)!;
-    expect(outgoing.semantic).toBe('publishes');
-    expect(outgoing.kind).toBe('event');
+    expect(outgoing.semantic).toBe('command');
+    expect(outgoing.kind).toBe('async');
+    expect(outgoing.async).toBe(true);
   });
 
   it('single incoming semantic inheritance: an unambiguous HTTP leg into the Junction defaults the outgoing leg to HTTP', () => {
@@ -1603,8 +1674,8 @@ describe('Junction connections — store integration (connect/reconnect through 
     const toQueue = store.getState().connect(junction.id, queue.id)!;
 
     expect(toService.semantic).toBe('http');
-    expect(toQueue.semantic).toBe('publishes');
-    expect(toQueue.kind).toBe('event');
+    expect(toQueue.semantic).toBe('command');
+    expect(toQueue.kind).toBe('async');
   });
 
   it('endpoint compatibility filtering: Junction → Queue never inherits a Service-only semantic like "query"', () => {
@@ -1616,7 +1687,7 @@ describe('Junction connections — store integration (connect/reconnect through 
 
     const outgoing = store.getState().connect(junction.id, queue.id)!;
     expect(outgoing.semantic).not.toBe('query');
-    expect(outgoing.semantic).toBe('publishes');
+    expect(outgoing.semantic).toBe('command');
   });
 
   it('editing an existing Junction edge changes its interaction type and blocks further automatic reinference', () => {

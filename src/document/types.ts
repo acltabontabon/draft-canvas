@@ -10,7 +10,7 @@
 export const DRAFT_FORMAT = 'draft-canvas' as const;
 
 /** Bump when the on-disk shape changes, and add a migration in `migrate.ts`. */
-export const CURRENT_VERSION = 17;
+export const CURRENT_VERSION = 18;
 
 export type DraftFormat = typeof DRAFT_FORMAT;
 
@@ -201,6 +201,10 @@ export const EDGE_SEMANTICS = [
   'query',
   'reads',
   'writes',
+  /** Both directions of data access on one connector — a service and the store it owns. One
+   *  relationship rather than two arrows, because the picture is "this service's database", not
+   *  two separate flows; where only one direction is true, `reads` or `writes` says so. */
+  'readsWrites',
   'publishes',
   'consumes',
   'calls',

@@ -204,13 +204,14 @@ describe('Label/Text — distinct from an edge label', () => {
     const a = store.getState().addNode({ type: 'service', x: 0, y: 0 });
     const b = store.getState().addNode({ type: 'database', x: 300, y: 0 });
     const edge = store.getState().connect(a.id, b.id)!;
-    // The edge's own relationship — a real, semantically meaningful caption.
-    expect(edge.semantic).toBe('writes');
+    // The edge's own relationship — a real, semantically meaningful caption (a service and the
+    // store beside it are read and written over one connector).
+    expect(edge.semantic).toBe('readsWrites');
 
     // A Label placed nearby is not part of the graph at all: it has no source/target, isn't in
     // `document.edges`, and connecting *to* it would just make it an ordinary (semantics-free,
     // per the block above) node — the edge and the annotation never merge into one concept.
-    const label = store.getState().addNode({ type: 'text', x: 150, y: -60, text: 'writes' });
+    const label = store.getState().addNode({ type: 'text', x: 150, y: -60, text: 'reads / writes' });
     expect(store.getState().document.edges.map((e) => e.id)).toEqual([edge.id]);
     expect(label.type).toBe('text');
   });

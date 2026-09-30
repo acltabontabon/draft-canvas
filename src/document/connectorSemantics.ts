@@ -52,6 +52,7 @@ export type NodeCategory =
   | 'searchIndex'
   | 'queue'
   | 'topic'
+  | 'stream'
   | 'junction'
   | 'deadLetter'
   | 'generic';
@@ -98,6 +99,11 @@ export function categoryOf(node: CategorizableNode): NodeCategory {
       // for the matrix to see it at all. Checked ahead of `queueKind`: a DLQ is always a plain
       // queue underneath (`addDeadLetterQueue` never generates one for a Topic or a Stream).
       if (node.deliveryRole === 'dead-letter') return 'deadLetter';
+      // A stream is neither: a retained log every consumer group reads in full, at its own pace.
+      // Its own category so a consumer reads "read by" rather than "consumed by", and so "what
+      // next?" can offer a stream's kind of dead-letter path; `resolved()` folds it to `topic` for
+      // every pairing without its own row, because what it *offers* is a topic's fan-out.
+      if (node.queueKind === 'stream') return 'stream';
       return node.queueKind === 'topic' ? 'topic' : 'queue';
     case 'ellipse':
       return 'junction';
@@ -209,13 +215,17 @@ const CALL_BEHAVIORS: ConnectorKind[] = ['sync', 'async', 'callback', 'condition
  * a wrong one" rule `external` doesn't follow (see `resolved` below), applied
  * consistently to every other sub-kind-derived category.
  */
-const MATRIX: Record<string, ConnectionCapability> = {
+export const MATRIX: Record<string, ConnectionCapability> = {
   // Also covers SQL and NoSQL — both fold into the plain `database` category
   // (see `categoryOf`): each gets its own *shape*, but the same read/write/
   // query vocabulary as Generic, deliberately, rather than implementation-
   // specific verbs like "executes"/"scans" for a distinction the product
   // spec itself calls optional.
-  'service>database': capability(['writes', 'reads', 'query', 'dependsOn'], 'writes', []),
+  // 'readsWrites' is the default because a service and the store drawn beside it is nearly always
+  // "its database" — read and written — and a connector that said only "writes to" was wrong half
+  // the time and got a hand-typed "reads / writes" label to fix it. `reads`/`writes` are one pick
+  // away for the store that genuinely is one-way.
+  'service>database': capability(['readsWrites', 'writes', 'reads', 'query', 'dependsOn'], 'readsWrites', []),
   // 'cdc' beside 'reads': a worker that tails the database's own change log (rather than issuing
   // ordinary queries) is the same log-tailing relationship `database>database` already offers —
   // just now also expressible when the tailer is a service, not another database. Default stays
@@ -224,13 +234,15 @@ const MATRIX: Record<string, ConnectionCapability> = {
   // Cache gets one verb a plain database connection structurally can't
   // express — invalidating a cached copy is a different architectural move
   // than writing through to a system of record.
-  'service>cache': capability(['writes', 'reads', 'invalidates', 'dependsOn'], 'writes', []),
+  // A cache is read far more than it is filled, and a cache-aside service reads it before it ever
+  // writes — 'reads' is the honest default, with the write-through and read/write shapes a pick away.
+  'service>cache': capability(['reads', 'writes', 'readsWrites', 'invalidates', 'dependsOn'], 'reads', []),
   'cache>service': capability(['reads'], 'reads', []),
   // Read-oriented only, same restraint `database>service`/`cache>service`
   // already apply — a file system doesn't initiate an ordinary service call.
-  'service>fileSystem': capability(['reads', 'writes', 'watches', 'dependsOn'], 'writes', []),
+  'service>fileSystem': capability(['reads', 'writes', 'readsWrites', 'watches', 'dependsOn'], 'writes', []),
   'fileSystem>service': capability(['reads'], 'reads', []),
-  'service>objectStorage': capability(['reads', 'writes', 'dependsOn'], 'writes', []),
+  'service>objectStorage': capability(['reads', 'writes', 'readsWrites', 'dependsOn'], 'writes', []),
   'objectStorage>service': capability(['reads'], 'reads', []),
   // 'reads' deliberately omitted — 'searches' already covers querying, and a
   // third near-synonym would just be vocabulary bloat.
@@ -243,8 +255,13 @@ const MATRIX: Record<string, ConnectionCapability> = {
   // Storage's own documented exception, not "storage can publish events."
   'objectStorage>queue': capability(['publishes', 'event'], 'publishes', [], 'event'),
   'objectStorage>topic': capability(['publishes', 'event'], 'publishes', [], 'event'),
-  'service>queue': capability(['publishes', 'consumes', 'command', 'event', 'dependsOn'], 'publishes', [], 'event'),
-  'queue>service': capability(['consumes', 'deliversTo', 'event'], 'consumes', [], 'event'),
+  // A work queue carries commands: "do this, later, once" — a job for exactly one worker, which
+  // is what makes it a queue and not a topic. So the relation says `command` and the behaviour is
+  // `async` (a dashed line: handed off, not waited for), never `event`, which is a topic's word
+  // for "this happened, whoever cares". `publishes` stays a pick away for a queue used as a plain
+  // outbound channel.
+  'service>queue': capability(['command', 'publishes', 'consumes', 'event', 'dependsOn'], 'command', [], 'async', { defaultAsync: true }),
+  'queue>service': capability(['consumes', 'deliversTo', 'command', 'event'], 'consumes', [], 'async', { defaultAsync: true }),
   // `compensates` sits beside `command` because it *is* one — the saga's "release payment" is a
   // new local transaction another service runs on request, not something done to it — but it names
   // the one thing a plain command can't: that it exists to undo an earlier step that succeeded.
@@ -300,11 +317,18 @@ const MATRIX: Record<string, ConnectionCapability> = {
   // `queue>service` above which keeps 'consumes'.
   'topic>service': capability(['deliversTo'], 'deliversTo', [], 'event'),
   'topic>queue': capability(['fansOut', 'deliversTo'], 'fansOut', [], 'event'),
+  // A stream is a retained log: written at one end, read from the other by every consumer group
+  // independently, each keeping its own place in it. Published into like a topic; read from
+  // (`consumes`, captioned "read by" — see `relationLabel`) rather than delivered to, because the
+  // consumer does the reading, at its own pace, and can start over from the beginning. Any pairing
+  // not listed here folds to `topic` (see `resolved`), the closest thing to what a stream offers.
+  'service>stream': capability(['publishes', 'consumes', 'event', 'dependsOn'], 'publishes', [], 'event'),
+  'stream>service': capability(['consumes', 'event'], 'consumes', [], 'event'),
   // A Topic feeding a search index directly (a managed sink indexing its events, no consumer drawn)
   // reuses 'indexes' rather than inventing a second word for the same idea `worker>searchIndex`
-  // already names. Topic only: a Stream (`queueKind: 'stream'`) folds into the `queue` category,
-  // and its consumers are drawn as Workers — see the CDC starter — `searchIndex` never falls back to a generic `database`/`queue` row (see the matrix's
-  // own "no opinion beats a wrong one" rule above), so this needs its own explicit entry.
+  // already names. A Stream reaches this row too (it folds to `topic`); `searchIndex` never falls
+  // back to a generic `database`/`queue` row (see the matrix's own "no opinion beats a wrong one"
+  // rule above), so this needs its own explicit entry.
   'topic>searchIndex': capability(['indexes', 'ingests'], 'indexes', []),
   // A warehouse/analytics store ingesting straight off a Topic (a "sink," no separate consumer
   // shown) reuses 'ingests' — the same word and the same default `database>database` already
@@ -422,6 +446,9 @@ const MATRIX: Record<string, ConnectionCapability> = {
  *  above instead, checked first by `capabilityFor` before this fallback is ever reached. */
 function resolved(category: NodeCategory): NodeCategory {
   if (category === 'deadLetter') return 'queue';
+  // A stream fans a record out to every consumer group the way a topic does to every subscriber;
+  // what it feeds without its own row (a search index, a warehouse) it feeds like a topic.
+  if (category === 'stream') return 'topic';
   return category === 'external' ||
     category === 'worker' ||
     category === 'scheduler' ||

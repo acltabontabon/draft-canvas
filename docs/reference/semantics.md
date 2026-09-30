@@ -32,8 +32,9 @@ Connections are reasoned about using `NodeCategory` — coarser than a node's sh
 | `fileSystem` | Database shape, `databaseKind: 'file-system'` |
 | `objectStorage` | Database shape, `databaseKind: 'object-storage'` |
 | `searchIndex` | Database shape, `databaseKind: 'search-index'` |
-| `queue` | Queue shape, `queueKind` of `queue`/`stream` |
-| `topic` | Queue shape, `queueKind: 'topic'` |
+| `queue` | Queue shape, `queueKind: 'queue'` — one message, one consumer |
+| `topic` | Queue shape, `queueKind: 'topic'` — one message, every subscriber |
+| `stream` | Queue shape, `queueKind: 'stream'` — a retained log every consumer group reads in full; folds to `topic` for pairings without its own row |
 | `deadLetter` | Queue shape with `deliveryRole: 'dead-letter'` — the DLQ "Add DLQ" generates |
 | `junction` | the Junction (ellipse) shape — see below |
 | `generic` | text, note, code, and group — no relationship rule applies |
@@ -77,37 +78,51 @@ unrestricted connector.
 
 | Source → Target | Relations offered | Default | Notes |
 | --- | --- | --- | --- |
-| Service → Database | writes, reads, query, dependsOn | writes | |
+| Service → Database | readsWrites, writes, reads, query, dependsOn | readsWrites |  |
 | Database → Service | reads, query, cdc | reads | `cdc` — a worker tailing the database's own change log, not an ordinary query |
-| Service → Cache | writes, reads, invalidates, dependsOn | writes | `invalidates` is cache-only |
-| Cache → Service | reads | reads | |
-| Service → File System | reads, writes, watches, dependsOn | writes | |
-| File System → Service | reads | reads | |
-| Service → Object Storage | reads, writes, dependsOn | writes | |
-| Object Storage → Service | reads | reads | |
-| Object Storage → Queue/Topic | publishes, event | publishes | object storage is the one storage kind that legitimately triggers a downstream event |
-| Object Storage → Database | transforms, ingests | transforms | a landing zone refined into a structured table |
-| Service → Search Index | searches, indexes, dependsOn | searches | |
-| Service → Queue | publishes, consumes, command, event, dependsOn | publishes | `consumes` for a worker drawn pulling from its queue — "consumes from" |
-| Queue → Service | consumes, deliversTo, event | consumes | competing consumers — reads "consumed by" in this direction |
-| Service → Topic | publishes, event, dependsOn | publishes | |
+| Service → Cache | reads, writes, readsWrites, invalidates, dependsOn | reads | `invalidates` is cache-only |
+| Cache → Service | reads | reads |  |
+| Service → File System | reads, writes, readsWrites, watches, dependsOn | writes |  |
+| File System → Service | reads | reads |  |
+| Service → Object Storage | reads, writes, readsWrites, dependsOn | writes |  |
+| Object Storage → Service | reads | reads |  |
+| Service → Search Index | searches, indexes, dependsOn | searches |  |
+| Object Storage → Queue | publishes, event | publishes |  |
+| Object Storage → Topic | publishes, event | publishes |  |
+| Service → Queue | command, publishes, consumes, event, dependsOn | command | `consumes` for a worker drawn pulling from its queue — "consumes from" |
+| Queue → Service | consumes, deliversTo, command, event | consumes | competing consumers — reads "consumed by" in this direction |
+| Service → Service | calls, http, grpc, command, query, event, compensates, dependsOn | calls | the one pairing with a full sync/async/callback/conditional/retry/failure/fallback picker |
+| Component → Component | uses, dependsOn, calls | uses | an in-process dependency, never a network call; checked before the `service` fold |
+| Service → Port | calls, implements, dependsOn | calls | `implements` when the service is what stands behind the port, not what drives it |
+| Component → Port | uses, calls, implements, dependsOn | uses | an adapter may drive a port (`calls`) or implement it (`implements`); only the author knows which, so neither is the default |
+| Port → Component | implementedBy | implementedBy |  |
+| Port → Service | implementedBy | implementedBy |  |
+| Port → Database | dependsOn | *(none)* | **`status: 'unusual'`** — a port is a contract; something implements it and talks to the store |
+| Actor → Service | calls, http, command, query | calls | synchronous by predetermination, no behaviour picker |
+| Service → External | calls, http, grpc, command, event, compensates, dependsOn | calls | `external` is a flavour of `service` for any pairing without its own row |
+| Service → Topic | publishes, event, dependsOn | publishes |  |
 | Topic → Service | deliversTo | deliversTo | a topic pushes to every subscriber; never "consumed by", which is a queue's shape |
-| Topic → Queue | fansOut, deliversTo | fansOut | |
+| Topic → Queue | fansOut, deliversTo | fansOut |  |
+| Service → Stream | publishes, consumes, event, dependsOn | publishes |  |
+| Stream → Service | consumes, event | consumes |  |
 | Topic → Search Index | indexes, ingests | indexes | a topic sinking into a search index with no consumer drawn, the same word `Service → Search Index` uses; a Stream is a `queue` and takes the Worker path |
 | Topic → Database | ingests | ingests | a warehouse sinking a topic directly; the reverse pairing stays unlisted |
 | Queue → Topic | dependsOn, event | *(none)* | **`status: 'unusual'`** — see below |
 | Queue → Dead-letter queue | deadLetters | deadLetters | `failure` behaviour and a dashed (`async`) line — the same edge "Add DLQ" generates; `deliveryAttempts` captions it "after N attempts" |
 | Service → Dead-letter queue | deadLetters, publishes | deadLetters | a consumer parking a message it gave up on itself; the same dashed `failure` path as the broker's own |
 | Topic → Dead-letter queue | dependsOn | *(none)* | **`status: 'unusual'`** — a topic never dead-letters; retries and a DLQ belong to each consumer's own queue |
-| Service → Service | calls, http, grpc, command, query, event, compensates, dependsOn | calls | the one pairing with a full sync/async/callback/conditional/retry/failure/fallback picker |
-| Service → External | same as Service → Service | calls | `external` is a flavour of `service` for any pairing without its own row |
-| Component → Component | uses, dependsOn, calls | uses | an in-process dependency, never a network call; checked before the `service` fold |
-| Service → Port | calls, implements, dependsOn | calls | `implements` when the service is what stands behind the port, not what drives it |
-| Component → Port | uses, calls, implements, dependsOn | uses | an adapter may drive a port (`calls`) or implement it (`implements`); only the author knows which, so neither is the default |
-| Port → Component / Service | implementedBy | implementedBy | the same realization read from the port's end: the thing after the port depends on the port's owner |
-| Port → Database | dependsOn | *(none)* | **`status: 'unusual'`** — a port is a contract; something implements it and talks to the store |
-| Actor → Service | calls, http, command, query | calls | synchronous by predetermination, no behaviour picker |
 | Database → Database | ingests, replicates, cdc, syncs, transforms | ingests | data movement, not a request/response shape; `transforms` when the data's shape genuinely changes |
+| Object Storage → Database | transforms, ingests | transforms | a landing zone refined into a structured table |
+| Worker → Search Index | searches, indexes, dependsOn | indexes |  |
+| Scheduler → Service | triggers, calls, dependsOn | triggers |  |
+| Scheduler → Worker | triggers, calls, dependsOn | triggers |  |
+| Gateway → Service | routes, calls, dependsOn | routes |  |
+| Gateway → Gateway | routes, calls, dependsOn | routes |  |
+| Gateway → Database | dependsOn, writes, reads, query | *(none)* |  |
+| Gateway → Cache | dependsOn, writes, reads, invalidates | *(none)* |  |
+| Gateway → File System | dependsOn, reads, writes, watches | *(none)* |  |
+| Gateway → Object Storage | dependsOn, reads, writes | *(none)* |  |
+| Gateway → Search Index | dependsOn, searches, indexes | *(none)* |  |
 
 A category without its own row borrows one, most specific first: the exact pair, then the source
 folded (a Worker as a Service), then the target folded, then both. That is how Worker → Dead-letter
@@ -143,12 +158,23 @@ and when the arrow starts at the verb's object, the caption turns passive
 | Relationship | Arrow from the doer | Arrow from the other end |
 | --- | --- | --- |
 | reads / writes / queries / searches / invalidates / watches | Service → Database: "reads from" | Database → Service: "read by" |
-| consumes | Worker → Queue: "consumes from" | Queue → Worker: "consumed by" |
+| readsWrites | Service → Database: "reads / writes" | Database → Service: "read / written by" |
+| consumes | Worker → Queue: "consumes from" | Queue → Worker: "consumed by"; Stream → Worker: "read by" — a stream is read, not drained |
 | ingests / indexes | — | Topic → Database: "ingested by", Topic → Search Index: "indexed by" |
 
 Verbs a store or channel performs itself — delivers to, fans out to, dead-letters to, publishes to
-(object storage), replicates to, syncs to, CDC, transforms — have no passive form; they already
-read in the arrow's direction. The wording is display only: `semantic` is never rewritten, so
+(object storage), replicates to, syncs to, streams changes to (CDC), transforms — have no passive
+form; they already read in the arrow's direction. Every caption is a verb phrase that finishes
+"source … target": a protocol on its own never was one, so `http` reads "calls over HTTP", `grpc`
+"calls over gRPC", `event` "emits", `command` "sends command to".
+
+**Arrows start at whatever acts.** A store or a channel never initiates anything, so a connector
+that leaves one is drawn the other way round: the worker that reads the outbox, the serving layer
+that reads Gold, the ingestion job that reads its sources. The starters keep to this everywhere
+(CQRS, Kappa, Medallion and the Outbox all draw their store reads from the reader; a stream's
+consumers are drawn from the stream, the way a channel delivers), and the sequence
+export follows the same rule — a message is sent by the doer, so a connector that reads passively
+on the canvas exports from its far end with the active caption (`Worker ->> Queue: consumes from`). The wording is display only: `semantic` is never rewritten, so
 diagrams saved before this read correctly without being touched, and reversing a connector keeps
 an explicit relationship's meaning while its caption turns around. An inferred one is re-inferred
 for the new direction instead (Service → Queue "publishes to" reversed is Queue → Service
@@ -157,10 +183,14 @@ for the new direction instead (Service → Queue "publishes to" reversed is Queu
 Choosing a relationship never writes its words into the connector's label: the label is only ever
 what someone typed, and it always wins over the caption.
 
-**Queue, Topic and Stream stay distinct where it matters.** A Queue is *consumed by* competing
-consumers; a Topic *delivers to* every subscriber and *fans out to* their queues; a dead-letter
-path is its own dashed failure route. A Stream shares a Queue's words — publish, then consume —
-because the vendor-neutral verbs are the same; nothing here assumes a particular broker.
+**Queue, Topic and Stream stay distinct where it matters.** A Queue carries a *command* to one of
+its competing consumers and is *consumed by* the one that takes it; a Topic *delivers to* every
+subscriber and *fans out to* their queues; a dead-letter path is its own dashed failure route. A
+Stream is a retained log: published into like a topic, and *read by* each consumer group in full,
+at its own pace — never "consumed by", which is a queue's word for a message that is gone once
+taken. A stream never dead-letters either; the consumer that cannot process a record parks it in a
+queue of its own (`stream-consumer-dead-letter`). The verbs stay vendor-neutral; nothing here
+assumes a particular broker.
 
 **Ports and adapters stay neutral.** A fresh Adapter → Port connector infers the neutral "uses" and
 Port → Core or Adapter "implemented by"; "implements" (Adapter → Port, the dependency direction) is
@@ -175,7 +205,8 @@ judgement calls that remain on purpose:
 
 | Row | Why it stays |
 | --- | --- |
-| Service → Database / Cache default "writes to" | Chosen by the user over a neutral default. Reversing the arrow gives "read by". |
+| Service → Database default "reads / writes", Service → Cache "reads from" | A service and the store beside it is nearly always its own store, read and written; a cache is read before it is ever filled. One-way access is a pick away, and reversing the arrow gives "read / written by". |
+| Service → Queue "sends command to", dashed | A work queue carries a job for exactly one worker — a command, handed off and not waited for. A topic keeps "publishes to" and "emits": a fact, for whoever cares. |
 | Service → Service "calls" | No behaviour is assumed: sync, async, retry and the rest stay one pick away. |
 | Scheduler → Service / Worker "triggers" | Says nothing about how, so it doesn't pretend a scheduler makes a synchronous call. |
 | Service → Table "writes to" | A Table folds into Data Store; the caption names data access, not a network hop. |
@@ -254,7 +285,7 @@ appear in that picker, whose standing presets already cover those shapes.
 | `topic-fan-out-worker` | secondary | Worker | Subscribers can also receive directly from the topic. |
 | `queue-consumer` | primary | Worker | This queue has no consumer. |
 | `queue-dead-letter` | secondary | Dead-letter queue | This queue has a consumer but no dead-letter path. |
-| `stream-dead-letter` | secondary | Dead-letter topic | This stream has a consumer but no dead-letter path. |
+| `stream-consumer-dead-letter` | secondary | Dead-letter queue | This consumer reads a stream but has nowhere to park a record it cannot process. |
 | `gateway-route` | primary | Service | This gateway doesn't route to anything yet. |
 | `scheduler-trigger-service` | primary | Service | This scheduler doesn't trigger anything yet. |
 | `scheduler-trigger-worker` | secondary | Worker | A scheduled job is usually a Worker. |
@@ -345,7 +376,7 @@ cycles through is ordered by them (`src/continuation/role.ts`):
 
 | What points at it | Reading | Leads with |
 | --- | --- | --- |
-| A Queue, a Topic or a dead-letter queue | Work arrives here | Data Store, then Topic, then External System |
+| A Queue, a Topic, a Stream or a dead-letter queue | Work arrives here | Data Store, then Topic, then External System |
 | A Scheduler | A job on a timer | Data Store, then External System |
 | A Gateway or a person | Someone is waiting for an answer | Data Store, then Cache, then Service |
 | Nothing, or another Service | Not enough to say | The authored order, unchanged |

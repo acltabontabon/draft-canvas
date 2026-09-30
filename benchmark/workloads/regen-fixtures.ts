@@ -1,6 +1,6 @@
 /**
  * Maintenance script — regenerates the checked-in `.draftcanvas` fixtures under
- * `benchmark/workloads/fixtures/`. Run manually via `npm run benchmark:regen-fixtures`
+ * `benchmark/workloads/fixtures/`. Run manually via `npm run perf:regen-fixtures`
  * whenever `buildWorkloadDocument`, the starter catalog, or the capability matrix changes; never
  * run automatically as part of a benchmark run (fixtures are loaded as stable, pre-generated files
  * so "did the generator change" is never a confound between runs).

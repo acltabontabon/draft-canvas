@@ -172,6 +172,12 @@ export interface StarterEdgeSpec {
    */
   label?: string;
   /**
+   * A reply line, with its caption — `DraftEdge.hasResponse`/`response`, the one thing a starter
+   * connector otherwise never carries (see `build.ts`). For the pattern whose whole point is the
+   * reply: a saga orchestrator issues a command and acts on what comes back, so the answer is drawn.
+   */
+  response?: string;
+  /**
    * A small, bordered secondary annotation — visually subordinate to whatever caption `label`
    * or the inferred relationship shows (see `styles/canvas.css`'s `.dc-edge-condition`: "a small,
    * secondary tag, never competing with the label for attention"). This is the lighter-weight

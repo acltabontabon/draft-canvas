@@ -50,6 +50,7 @@ export function shapeKindOf(node: DraftNode): ShapeKind | null {
     case 'searchIndex':
       return 'database';
     case 'queue':
+    case 'stream':
     case 'deadLetter':
       return 'queue';
     case 'topic':

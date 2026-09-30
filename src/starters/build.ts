@@ -72,9 +72,11 @@ export function starterSize(starter: ArchitectureStarter): { width: number; heig
  * Every edge's `semantic`/`kind` comes from the capability matrix rather than from the catalog, so
  * a starter's relationships are the same ones the user would have got by drawing the connection
  * themselves — and `semanticsOrigin: 'inferred'` keeps them eligible for re-inference if the user
- * later changes a node's kind, exactly like a hand-drawn connector. `hasResponse` is deliberately
- * never set: `connect()` doesn't draw a reply line by default either, and an architecture starter
- * is the last place that wants its arrow count doubled.
+ * later changes a node's kind, exactly like a hand-drawn connector. `hasResponse` is set only where
+ * a spec spells out the reply (`StarterEdgeSpec.response`): `connect()` doesn't draw a reply line by
+ * default either, and an architecture starter is the last place that wants its arrow count doubled —
+ * the saga orchestrator, which acts on what its participants answer, is the one pattern the reply
+ * belongs to.
  */
 export function buildStarter(
   starter: ArchitectureStarter,
@@ -160,6 +162,7 @@ export function buildStarter(
       async: relationship?.async,
       semanticsOrigin: explicit ? 'explicit' : relationship?.semantic ? 'inferred' : undefined,
       ...(spec.label !== undefined ? { label: spec.label } : {}),
+      ...(spec.response !== undefined ? { hasResponse: true } : {}),
       ...(spec.condition !== undefined ? { condition: spec.condition } : {}),
       ...(spec.routeMode !== undefined ? { routeMode: spec.routeMode } : {}),
       ...(spec.routing !== undefined ? { routing: spec.routing } : {}),
@@ -168,6 +171,8 @@ export function buildStarter(
     });
     // Same assignment `convertBundleToJunction` makes — `createEdge` has no attachment input of its own.
     if (spec.attachments?.length) edge.attachments = spec.attachments.map(createAttachment);
+    // Nor a reply-caption input: the reply line is the input, its words are set the way the inspector sets them.
+    if (spec.response !== undefined) edge.response = spec.response;
     if (spec.key !== undefined) edgeIds.set(spec.key, edge.id);
     edges.push(edge);
   }

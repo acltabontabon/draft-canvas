@@ -41,13 +41,13 @@ async function chooseInspectorOption(page: Page, ariaLabel: string, optionLabel:
 }
 
 test.describe('contextual connector toolbar', () => {
-  test('Service → Database infers Writes, with no flow-kind picker or condition needed', async ({ page }) => {
+  test('Service → Database infers Reads / writes, with no flow-kind picker or condition needed', async ({ page }) => {
     await newCanvas(page, 'Service to database toolbar');
     await create(page, 'Service', { x: 300, y: 200 });
     await create(page, 'Data Store', { x: 600, y: 200 });
     await connectAndOpen(page, 0, 1);
 
-    await expect(inspectorSelect(page, 'Interaction type')).toHaveText('Writes');
+    await expect(inspectorSelect(page, 'Interaction type')).toHaveText('Reads / writes');
     await expect(inspectorSelect(page, 'Flow kind')).toHaveCount(0);
     await expect(page.locator('.dc-inspector-badge')).toHaveCount(0);
     await expect(page.getByLabel('Condition')).toHaveCount(0);
@@ -73,9 +73,9 @@ test.describe('contextual connector toolbar', () => {
     await connectAndOpen(page, 0, 1);
 
     const relation = inspectorSelect(page, 'Interaction type');
-    await expect(relation).toHaveText('Writes');
+    await expect(relation).toHaveText('Reads / writes');
     await relation.click();
-    await expect(page.getByRole('option')).toHaveText(['No type', 'Writes', 'Reads', 'Query', 'Depends on']);
+    await expect(page.getByRole('option')).toHaveText(['No type', 'Reads / writes', 'Writes', 'Reads', 'Query', 'Depends on']);
   });
 
   test('the Interaction type select keeps the full vocabulary for an unclassified pairing', async ({ page }) => {
@@ -98,6 +98,7 @@ test.describe('contextual connector toolbar', () => {
       'Query',
       'Reads',
       'Writes',
+      'Reads / writes',
       'Publishes',
       'Consumes',
       'Calls',
@@ -123,22 +124,22 @@ test.describe('contextual connector toolbar', () => {
     ]);
   });
 
-  test('Service → Queue infers Publishes and shows a compact, expandable behaviour badge', async ({ page }) => {
+  test('Service → Queue infers Command, dashed, and shows a compact, expandable behaviour badge', async ({ page }) => {
     await newCanvas(page, 'Service to queue toolbar');
     await create(page, 'Service', { x: 300, y: 200 });
     await create(page, 'Queue', { x: 600, y: 200 });
     await connectAndOpen(page, 0, 1);
 
-    await expect(inspectorSelect(page, 'Interaction type')).toHaveText('Publishes');
+    await expect(inspectorSelect(page, 'Interaction type')).toHaveText('Command');
     await expect(inspectorSelect(page, 'Flow kind')).toHaveCount(0);
-    const badge = page.getByRole('button', { name: 'Event · Async' });
+    const badge = page.getByRole('button', { name: 'Async' });
     await expect(badge).toHaveAttribute('title', /Inferred from what this connects/);
 
     // Clicking it reveals the full picker (and, with it, the condition field).
     await badge.click();
     const kind = inspectorSelect(page, 'Flow kind');
     await expect(kind).toBeVisible();
-    await expect(kind).toHaveText('Event');
+    await expect(kind).toHaveText('Async');
     await expect(page.getByLabel('Condition')).toBeVisible();
   });
 
@@ -226,7 +227,7 @@ test.describe('contextual connector toolbar', () => {
     await expect(page.locator('.dc-edge-async-marker')).toHaveCount(0);
   });
 
-  test('reconnecting a Service → Service call onto a Database re-infers Writes and re-collapses the toolbar', async ({
+  test('reconnecting a Service → Service call onto a Database re-infers Reads / writes and re-collapses the toolbar', async ({
     page,
   }) => {
     await newCanvas(page, 'Reconnect re-inference toolbar');
@@ -256,7 +257,7 @@ test.describe('contextual connector toolbar', () => {
     // and its own behaviour field collapses from a real picker back to none, since a
     // `service>database` write has a predetermined kind.
     await expect(inspectorSelect(page, 'Protocol')).toHaveCount(0);
-    await expect(inspectorSelect(page, 'Interaction type')).toHaveText('Writes');
+    await expect(inspectorSelect(page, 'Interaction type')).toHaveText('Reads / writes');
     await expect(inspectorSelect(page, 'Flow kind')).toHaveCount(0);
     await expect(page.getByLabel('Condition')).toHaveCount(0);
   });
@@ -294,6 +295,7 @@ test.describe('Junction connector', () => {
       'Query',
       'Reads',
       'Writes',
+      'Reads / writes',
       'Publishes',
       'Consumes',
       'Calls',
@@ -382,7 +384,7 @@ test.describe('Junction connector', () => {
 
     // Select the Junction → Database leg specifically.
     await page.locator('.dc-edge').nth(1).click();
-    await expect(inspectorSelect(page, 'Interaction type')).toHaveText('Writes');
+    await expect(inspectorSelect(page, 'Interaction type')).toHaveText('Reads / writes');
     // `service>database`'s capability has no behaviour options of its own, so the picker
     // collapses to a badge instead of an open `InspectorSelect` — same as a direct connection.
     await expect(inspectorSelect(page, 'Flow kind')).toHaveCount(0);

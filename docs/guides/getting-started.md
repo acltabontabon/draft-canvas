@@ -33,7 +33,8 @@ saves itself as you work; see [Saving, backing up and sharing](saving-and-sharin
    ![A faint Worker shape and a dashed connector labelled "consumed by" appear next to the selected queue, with a small pill reading "Worker" and "Tab".](../media/guides/suggestion.png)
 
 The connectors have labelled themselves with what they mean. The line from the API to the queue
-says it *publishes to* it, and reads in the direction the arrow points. To change one, select the
+says it *sends command to* it — a job handed off, drawn dashed because nothing waits for it — and
+reads in the direction the arrow points. To change one, select the
 connector and pick another relationship from its popover; only those that make sense for that pair
 are offered. Nothing stops you drawing something unusual on purpose.
 
@@ -42,7 +43,7 @@ will select; click anywhere along its line, or on its arrowhead. When several co
 along the same line with the same label, the label is shown once on the stretch they share. Click it to
 select one of them, and click again for the next.
 
-![Orders API, a queue called orders and Fulfilment worker in a row. The connectors are labelled "publishes to" and "consumed by".](../media/guides/service-queue-worker.png)
+![Orders API, a queue called orders and Fulfilment worker in a row. The connectors are labelled "sends command to" and "consumed by".](../media/guides/service-queue-worker.png)
 
 Some other ways to draw the same thing:
 
@@ -99,7 +100,7 @@ A flow is a numbered path through connectors. It's how you say "first this happe
    the top. Click it. That starts a new flow with this connector as step 1 and opens the Flows panel
    with the name selected, so type `Place an order` and press `Enter`.
 
-   ![A connector's popover with two tabs at the top: "publishes to" and "Add to flow".](../media/guides/add-to-flow.png)
+   ![A connector's popover with two tabs at the top: "sends command to" and "Add to flow".](../media/guides/add-to-flow.png)
 
 2. Click the next connector, from the queue to the worker, and choose **Add to Place an order** in the
    same place. It becomes step 2.

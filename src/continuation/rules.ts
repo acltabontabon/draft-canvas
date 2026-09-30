@@ -96,10 +96,11 @@ const QUEUE_CONSUMER: ContinuationRule = {
   label: 'Worker',
   reason: 'This queue has no consumer.',
   silentAt: NOT_IN_AN_OVERVIEW,
-  // `categoryOf` folds a Stream into `queue` (consuming from one is the same move) and lifts a
-  // dead-letter queue out of it — a DLQ with no re-drive worker is normal, not unfinished.
+  // A Stream too: reading one is the same move. `categoryOf` lifts a dead-letter queue out of
+  // `queue` — a DLQ with no re-drive worker is normal, not unfinished.
   when: (nb, trigger) =>
-    nb.category === 'queue' && (isExplicit(trigger) || (hasInboundEvidence(nb) && !hasOutboundSemantic(nb, ...DELIVERY_SEMANTICS))),
+    (nb.category === 'queue' || nb.category === 'stream') &&
+    (isExplicit(trigger) || (hasInboundEvidence(nb) && !hasOutboundSemantic(nb, ...DELIVERY_SEMANTICS))),
   fragment: () => ({
     nodes: [{ key: 'worker', type: 'service', serviceKind: 'worker' }],
     edges: [{ from: 'anchor', to: 'worker' }],
@@ -115,7 +116,7 @@ const QUEUE_DEAD_LETTER: ContinuationRule = {
   reason: 'This queue has a consumer but no dead-letter path.',
   silentAt: NOT_IN_AN_OVERVIEW,
   // The literal `queueKind === 'queue'`, not `categoryOf`, for the same reason `addDeadLetterQueue`
-  // uses it: a Stream's dead-letter destination is a separate topic (see `stream-dead-letter`
+  // uses it: a Stream never dead-letters itself — its consumers do (see `stream-consumer-dead-letter`
   // below), not a queue-shaped DLQ.
   when: (nb) =>
     nb.node.type === 'queue' &&
@@ -130,25 +131,25 @@ const QUEUE_DEAD_LETTER: ContinuationRule = {
   }),
 };
 
-const STREAM_DEAD_LETTER: ContinuationRule = {
-  id: 'stream-dead-letter',
+/**
+ * A stream never dead-letters — it keeps every record, and a consumer that cannot process one just
+ * has to decide what to do with it — so the dead-letter path belongs to *each consumer*, the same
+ * rule a topic's subscribers follow. Anchored on the consumer, then: a Worker reading a stream with
+ * nowhere to park a poison record gets its own queue for them (the `service>deadLetter` row — the
+ * consumer parks the record itself, dashed like the broker's own redrive).
+ */
+const STREAM_CONSUMER_DEAD_LETTER: ContinuationRule = {
+  id: 'stream-consumer-dead-letter',
   tier: 'secondary',
-  label: 'Dead-letter topic',
-  reason: 'This stream has a consumer but no dead-letter path.',
+  label: 'Dead-letter queue',
+  reason: 'This consumer reads a stream but has nowhere to park a record it cannot process.',
   silentAt: NOT_IN_AN_OVERVIEW,
-  // The literal `queueKind === 'stream'`, not `categoryOf` (which folds it into `queue`) — a
-  // Stream's dead-letter destination reads as a Topic, unlike a plain Queue's. The fragment below
-  // still resolves to the existing, already-valid `queue>deadLetter` matrix row regardless: giving
-  // the new node `deliveryRole: 'dead-letter'` puts it in `NodeCategory: 'deadLetter'` no matter
-  // what its `queueKind` is (see `categoryOf`'s precedence) — no new matrix row needed, `queueKind`
-  // only changes how it's drawn.
   when: (nb) =>
-    nb.node.type === 'queue' &&
-    nb.node.queueKind === 'stream' &&
-    hasOutboundSemantic(nb, 'consumes') &&
+    nb.node.type === 'service' &&
+    nb.in.some(({ edge, category }) => edge.semantic === 'consumes' && category === 'stream') &&
     !hasOutboundSemantic(nb, 'deadLetters'),
   fragment: () => ({
-    nodes: [{ key: 'dlq', type: 'queue', queueKind: 'topic', deliveryRole: 'dead-letter' }],
+    nodes: [{ key: 'dlq', type: 'queue', queueKind: 'queue', deliveryRole: 'dead-letter' }],
     edges: [{ from: 'anchor', to: 'dlq', deliveryAttempts: 3 }],
   }),
 };
@@ -338,7 +339,8 @@ const WORKER_INDEXES = defineFanOut(
  * data, one draining a queue with where the result lands (`role.ts`) — and `rank.ts` pushes down
  * what the anchor already does (a Service already writing to a Data Store gets another Data Store
  * last, a Cache not). Every row is a plain matrix default:
- * `service>database`/`>cache` writes, `>topic`/`>queue` publishes, `>service`/`>external` calls —
+ * `service>database` reads / writes, `>cache` reads, `>topic` publishes, `>queue` sends a command,
+ * `>service`/`>external` calls —
  * a Worker reaches the same rows through the matrix's service fallback.
  *
  * Four of them go quiet in a view that has said it is a system overview. What a system stores and
@@ -398,7 +400,8 @@ const SERVICE_NEXT = defineFanOut(
  *  System is not that: one is a copy of reads, the other is where bytes sit. */
 function writesToAStore(nb: Neighborhood): boolean {
   return nb.out.some(
-    ({ edge, category }) => edge.semantic === 'writes' && (category === 'database' || category === 'objectStorage'),
+    ({ edge, category }) =>
+      (edge.semantic === 'writes' || edge.semantic === 'readsWrites') && (category === 'database' || category === 'objectStorage'),
   );
 }
 
@@ -527,7 +530,7 @@ export const RULES: readonly ContinuationRule[] = [
   TOPIC_FAN_OUT_WORKER,
   QUEUE_CONSUMER,
   QUEUE_DEAD_LETTER,
-  STREAM_DEAD_LETTER,
+  STREAM_CONSUMER_DEAD_LETTER,
   GATEWAY_ROUTE,
   ...SCHEDULER_TRIGGER,
   ...OBJECT_STORAGE_FAN_OUT,

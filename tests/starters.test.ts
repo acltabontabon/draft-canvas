@@ -105,7 +105,9 @@ describe('the starter catalog', () => {
     const elements = starter.nodes.filter((spec) => spec.type !== 'group' && !(spec.type === 'text' && spec.annotation));
     expect(elements.length).toBeLessThanOrEqual(11);
     expect(starter.nodes.length).toBeLessThanOrEqual(18);
-    expect(starter.edges.length).toBeLessThanOrEqual(10);
+    // The connector ceiling is the choreographed saga's thirteen: two reaction chains that each
+    // have to end where they began, or the pattern is shown half-finished.
+    expect(starter.edges.length).toBeLessThanOrEqual(13);
   });
 
   each('references only keys it declares', (starter) => {
@@ -255,7 +257,10 @@ describe('buildStarter', () => {
       // connector out of Smart Routing's bundling) that changes nothing about the *derived*
       // semantic/kind asserted above.
       expect(edge.async).toBe(capability?.defaultAsync || undefined);
-      expect(edge.hasResponse).toBeUndefined();
+      // A reply line only where the spec spells one out — see `StarterEdgeSpec.response`.
+      const reply = starter.edges[index]!.response;
+      expect(edge.hasResponse).toBe(reply === undefined ? undefined : true);
+      expect(edge.response).toBe(reply);
     });
   });
 
@@ -301,10 +306,11 @@ describe('buildStarter', () => {
       expect(store.parentId).toBe(owners[index]!.id);
       expect(store.databaseKind).toBe('generic');
       expect(overlaps(store, deployment)).toBe(false);
-      // Each store is written by exactly one service — its own — with the shared persistence caption.
+      // Each store is read and written by exactly one service — its own — the matrix's own caption, no label.
       const writers = edges.filter((edge) => edge.target === store.id);
       expect(writers).toHaveLength(1);
-      expect(writers[0]).toMatchObject({ source: service.id, semantic: 'writes', label: 'reads / writes' });
+      expect(writers[0]).toMatchObject({ source: service.id, semantic: 'readsWrites' });
+      expect(writers[0]!.label).toBeUndefined();
     });
     expect(stores[0]!.attachments?.[0]?.text).toMatch(/separate server is not required/);
 
@@ -372,7 +378,8 @@ describe('buildStarter', () => {
       expect(table.x + table.width / 2).toBe(module.x + module.width / 2);
       const writers = edges.filter((edge) => edge.target === table.id);
       expect(writers).toHaveLength(1);
-      expect(writers[0]).toMatchObject({ source: module.id, semantic: 'writes', label: 'reads / writes' });
+      expect(writers[0]).toMatchObject({ source: module.id, semantic: 'readsWrites' });
+      expect(writers[0]!.label).toBeUndefined();
     });
     expect(database.attachments?.[0]?.text).toMatch(/one schema per module/i);
     expect(app.attachments?.[0]?.text).toMatch(/build time/);
@@ -423,7 +430,7 @@ describe('buildStarter', () => {
       ['Client', 'API', 'calls', undefined],
       ['API', 'Application Logic', 'uses', undefined],
       ['Application Logic', 'Data Access', 'uses', undefined],
-      ['Data Access', 'Application Database', 'writes', 'reads / writes'],
+      ['Data Access', 'Application Database', 'readsWrites', undefined],
       ['Application Logic', 'External System', 'calls', undefined],
     ] as const) {
       const edge = edgeBetween(fromText, toText);
@@ -493,7 +500,7 @@ describe('buildStarter', () => {
       expect(worker.serviceKind).toBe('worker');
       const consumes = edgesTo(worker.id);
       expect(consumes).toHaveLength(1);
-      expect(consumes[0]).toMatchObject({ source: queues[index]!.id, semantic: 'consumes', kind: 'event' });
+      expect(consumes[0]).toMatchObject({ source: queues[index]!.id, semantic: 'consumes', kind: 'async', async: true });
       expect(queues[index]!.x + queues[index]!.width / 2).toBe(worker.x + worker.width / 2);
       expect(queues[index]!.y + queues[index]!.height).toBeLessThan(worker.y);
     });
@@ -615,7 +622,7 @@ describe('buildStarter', () => {
       ['Use Cases', 'Integration', 'uses', 'inferred'],
       ['Persistence Adapter', 'Persistence', 'implements', 'explicit'],
       ['Integration Adapter', 'Integration', 'implements', 'explicit'],
-      ['Persistence Adapter', 'Database', 'writes', 'inferred'],
+      ['Persistence Adapter', 'Database', 'readsWrites', 'inferred'],
       ['Integration Adapter', 'External System', 'calls', 'inferred'],
     ];
     for (const [fromText, toText, semantic, origin] of expected) {
@@ -822,7 +829,11 @@ describe('buildStarter', () => {
     for (const edge of fromOrchestrator) {
       expect(edge.routeMode).toBeUndefined();
       expect(edge.routing).toBe('smoothstep');
-      expect(edge.hasResponse).toBeUndefined();
+      // A step carries its reply — the orchestrator moves only on what comes back; a
+      // compensation is fire-and-forget on the way back down.
+      const isStep = steps.includes(edge);
+      expect(edge.hasResponse).toBe(isStep ? true : undefined);
+      expect(edge.response).toBe(isStep ? (edge.label === 'Schedule fulfillment' ? 'scheduled / failed' : 'reserved / failed') : undefined);
     }
     // Each participant owns exactly its own store and commits locally — no cross-service write.
     for (const name of ['Payment', 'Inventory', 'Fulfillment']) {
@@ -896,8 +907,8 @@ describe('buildStarter', () => {
     const byText = (t: string) => nodes.find((n) => n.text === t)!;
     const between = (from: string, to: string) =>
       edges.find((edge) => edge.source === byText(from).id && edge.target === byText(to).id)!;
-    expect(nodes).toHaveLength(10);
-    expect(edges).toHaveLength(9);
+    expect(nodes).toHaveLength(12);
+    expect(edges).toHaveLength(13);
 
     // No coordinator of any kind: no boundary, no orchestrator, no service that commands another.
     expect(nodes.filter((node) => node.type === 'group')).toHaveLength(0);
@@ -931,15 +942,23 @@ describe('buildStarter', () => {
     expect(byText('Stock Rejected').attachments?.[0]?.text).toMatch(/Payment Refunded/);
 
     expect(flows.map((flow) => [flow.title, flow.steps.length])).toEqual([
-      ['Happy path', 7],
-      ['Compensation', 4],
+      ['Happy path', 9],
+      ['Compensation', 6],
     ]);
     expect(flows[1]!.steps.map((step) => step.edgeId)).toEqual([
       between('Payment Taken', 'Inventory Service').id,
       reject.id,
       refund.id,
       between('Payment Service', 'Payment DB').id,
+      between('Payment Service', 'Payment Refunded').id,
+      between('Payment Refunded', 'Order Service').id,
     ]);
+    // Both halves end where they began: the outcome reaches the service that started the saga,
+    // over a topic like every other fact, and Order's reaction is its own local transaction.
+    expect(between('Inventory Service', 'Stock Reserved')).toMatchObject({ semantic: 'publishes', kind: 'event' });
+    expect(between('Stock Reserved', 'Order Service')).toMatchObject({ semantic: 'deliversTo', label: 'Confirm order' });
+    expect(between('Payment Refunded', 'Order Service')).toMatchObject({ semantic: 'deliversTo', label: 'Cancel order', accent: 'rose' });
+    expect(flows[0]!.steps.at(-1)!.edgeId).toBe(between('Stock Reserved', 'Order Service').id);
   });
 
   it('models the outbox as one atomic write of state and event, published later, consumed independently', () => {
@@ -968,15 +987,19 @@ describe('buildStarter', () => {
       expect(nodes.find((node) => node.id === write.target)!.parentId).toBe(transaction.id);
     }
     expect(edges.some((edge) => edge.source === producer.id && edge.target === byText('Domain Events').id)).toBe(false);
-    // Publication is a separate worker reading the outbox; consumption is separate again.
-    const chain = ['Outbox', 'Outbox Publisher', 'Domain Events', 'Consumer Service'];
+    // Publication is a separate worker reading the outbox — drawn from the reader, since a table
+    // never pushes; consumption is separate again.
+    const relay = edges.find((edge) => edge.source === byText('Outbox Publisher').id && edge.target === byText('Outbox').id)!;
+    expect(relay).toMatchObject({ semantic: 'reads', label: 'reads unpublished' });
+    const chain = ['Outbox Publisher', 'Domain Events', 'Consumer Service'];
     const semantics = chain.slice(1).map(
       (to, index) => edges.find((edge) => edge.source === byText(chain[index]!).id && edge.target === byText(to).id)!.semantic,
     );
-    expect(semantics).toEqual(['reads', 'publishes', 'deliversTo']);
+    expect(semantics).toEqual(['publishes', 'deliversTo']);
     expect(byText('Outbox Publisher').serviceKind).toBe('worker');
     expect(byText('Consumer Service').serviceKind).toBe('worker');
-    expect(byText('Business Data').id).not.toBe(edges.find((edge) => edge.target === byText('Outbox Publisher').id)!.source);
+    // The publisher reads the outbox and only the outbox — never the business rows.
+    expect(edges.find((edge) => edge.source === byText('Outbox Publisher').id && edge.target === byText('Business Data').id)).toBeUndefined();
 
     expect(flows.map((flow) => [flow.title, flow.steps.length])).toEqual([
       ['Service transaction', 2],
@@ -1074,3 +1097,57 @@ describe('buildStarter', () => {
     }
   });
 });
+
+/**
+ * The three data starters, checked for what their arrows say. Every arrow starts at whatever does
+ * the work — a job reads its sources and writes its landing table, a serving layer reads the
+ * curated table, a store never initiates anything — and the words on the arrows are the matrix's
+ * own, with a relation authored only where the pairing's default would say the wrong thing.
+ */
+describe('the data starters read the way the data moves', () => {
+  function build(id: Parameters<typeof starterById>[0]) {
+    const { nodes, edges } = buildStarter(starterById(id)!, { x: 0, y: 0 });
+    const byText = (t: string) => nodes.find((n) => n.text === t)!;
+    const between = (from: string, to: string) =>
+      edges.find((edge) => edge.source === byText(from).id && edge.target === byText(to).id);
+    return { nodes, edges, byText, between };
+  }
+
+  it('Medallion: ingestion reads its sources, lands raw, refines through the tiers, and serving reads Gold', () => {
+    const { between, byText, edges } = build('medallion');
+    expect(between('Ingestion', 'Operational Database')).toMatchObject({ semantic: 'reads', semanticsOrigin: 'explicit' });
+    expect(between('Ingestion', 'Files')).toMatchObject({ semantic: 'reads' });
+    expect(between('Ingestion', 'Event Stream')).toMatchObject({ semantic: 'consumes', kind: 'event' });
+    expect(between('Ingestion', 'Bronze')).toMatchObject({ semantic: 'writes', label: 'lands raw' });
+    expect(between('Bronze', 'Silver')).toMatchObject({ semantic: 'transforms' });
+    expect(between('Silver', 'Gold')).toMatchObject({ semantic: 'transforms' });
+    expect(between('Analytics / BI', 'Gold')).toMatchObject({ semantic: 'reads' });
+    expect(between('Data API', 'Gold')).toMatchObject({ semantic: 'reads' });
+    // Nothing leaves a store except the pipeline's own refinement into the next tier.
+    for (const store of ['Operational Database', 'Files', 'Event Stream', 'Gold']) {
+      expect(edges.filter((edge) => edge.source === byText(store).id)).toHaveLength(0);
+    }
+  });
+
+  it('Kappa: producers publish into the log, the processor consumes it and writes the view, and serving reads the view', () => {
+    const { between } = build('kappa');
+    expect(between('Application', 'Event Log')).toMatchObject({ semantic: 'publishes', kind: 'event' });
+    expect(between('External System', 'Event Log')).toMatchObject({ semantic: 'publishes' });
+    expect(between('Event Log', 'Stream Processor')).toMatchObject({ semantic: 'consumes', label: 'live + replay' });
+    expect(between('Stream Processor', 'Materialized View')).toMatchObject({ semantic: 'writes', semanticsOrigin: 'explicit' });
+    expect(between('Query API', 'Materialized View')).toMatchObject({ semantic: 'reads' });
+    expect(between('Analytics', 'Materialized View')).toMatchObject({ semantic: 'reads' });
+  });
+
+  it('CDC: the application owns its database, the connector tails its log into a stream, and each loader writes its own view', () => {
+    const { between } = build('cdc');
+    expect(between('Application', 'Operational Database')).toMatchObject({ semantic: 'readsWrites', semanticsOrigin: 'inferred' });
+    expect(between('Operational Database', 'CDC Connector')).toMatchObject({ semantic: 'cdc', label: 'captures changes' });
+    expect(between('CDC Connector', 'Change Stream')).toMatchObject({ semantic: 'publishes', kind: 'event' });
+    expect(between('Change Stream', 'Search Indexer')).toMatchObject({ semantic: 'consumes' });
+    expect(between('Change Stream', 'Warehouse Loader')).toMatchObject({ semantic: 'consumes' });
+    expect(between('Search Indexer', 'Search Index')).toMatchObject({ semantic: 'indexes' });
+    expect(between('Warehouse Loader', 'Data Warehouse')).toMatchObject({ semantic: 'writes', semanticsOrigin: 'explicit' });
+  });
+});
+

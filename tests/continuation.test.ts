@@ -25,7 +25,7 @@ import { buildStarter } from '../src/starters/build';
 import { addEdges, addNodes, placeNear } from '../src/document/operations';
 import { flattenPath, rectOf, routeBetween, routeEdge } from '../src/edges/routing';
 import type { CreateNodeInput } from '../src/document/factory';
-import type { DraftDocument, DraftNode, ViewLevel } from '../src/document/types';
+import type { DraftDocument, DraftNode, EdgeSemantic, ViewLevel } from '../src/document/types';
 
 /* ------------------------------------------------------------------ */
 /* Fixture vocabulary — real factory + operations, nothing bespoke.    */
@@ -61,6 +61,20 @@ const table = (id: string): Spec => ({ id, type: 'database', databaseKind: 'tabl
 const port = (id: string): Spec => ({ id, type: 'component', componentKind: 'port' });
 const component = (id: string): Spec => ({ id, type: 'component' });
 const actor = (id: string): Spec => ({ id, type: 'actor' });
+
+/**
+ * Re-word one drawn connector, the way the inspector would. `graph` infers every relationship from
+ * the matrix default, and a default is not always the reading a rule looks for: Service → Data
+ * Store infers `readsWrites`, while `service-search-index` is earned by a literal `writes`.
+ */
+function reword(doc: DraftDocument, source: string, target: string, semantic: EdgeSemantic): DraftDocument {
+  return {
+    ...doc,
+    edges: doc.edges.map((edge) =>
+      edge.source === source && edge.target === target ? { ...edge, semantic, semanticsOrigin: 'explicit' as const } : edge,
+    ),
+  };
+}
 
 /**
  * Which connectors a rect lands on. Deliberately derived here rather than from
@@ -184,21 +198,46 @@ const CASES: Case[] = [
     drop: ['queue-consumer'],
   },
   {
-    name: 'Stream with a consumer and no dead-letter path — another Worker and a Dead-letter topic, both on drop',
+    name: 'Stream with a publisher and no consumer — a Worker, unprompted, the same move as a Queue',
+    doc: graph([service('s'), stream('st')], [['s', 'st']]),
+    anchor: 'st',
+    select: ['queue-consumer'],
+    drop: ['queue-consumer'],
+  },
+  {
+    name: 'Stream with a consumer — silent on select; on drop only another Worker: a stream never dead-letters itself',
     doc: graph([service('s'), stream('st'), worker('w')], [['s', 'st'], ['st', 'w']]),
     anchor: 'st',
     select: [],
-    drop: ['stream-dead-letter', 'queue-consumer'],
+    drop: ['queue-consumer'],
   },
   {
-    name: 'Stream with a consumer and a dead-letter topic already — nothing left to add',
-    doc: graph(
-      [service('s'), stream('st'), worker('w'), { id: 'd', type: 'queue', queueKind: 'topic', deliveryRole: 'dead-letter' }],
-      [['s', 'st'], ['st', 'w'], ['st', 'd']],
-    ),
-    anchor: 'st',
+    name: 'Worker reading a stream with nowhere to park a poison record — its own DLQ before an index, both on drop',
+    doc: graph([service('s'), stream('st'), worker('w')], [['s', 'st'], ['st', 'w']]),
+    anchor: 'w',
     select: [],
-    drop: ['queue-consumer'],
+    drop: ['stream-consumer-dead-letter', 'worker-indexes'],
+  },
+  {
+    name: 'A plain Service reading a stream gets the same dead-letter path — the consumer parks the record, whatever it is',
+    doc: graph([service('s'), stream('st'), service('c')], [['s', 'st'], ['st', 'c']]),
+    anchor: 'c',
+    select: [],
+    drop: ['stream-consumer-dead-letter'],
+  },
+  {
+    name: 'Stream consumer already parking its dead letters — the DLQ offer is gone; the asked-for index stays',
+    doc: graph([service('s'), stream('st'), worker('w'), dlq('d')], [['s', 'st'], ['st', 'w'], ['w', 'd']]),
+    anchor: 'w',
+    select: [],
+    drop: ['worker-indexes'],
+  },
+  {
+    name: 'Worker reading a plain Queue — the dead-letter path is the queue\'s own move, never the consumer\'s',
+    doc: graph([service('s'), queue('q'), worker('w')], [['s', 'q'], ['q', 'w']]),
+    anchor: 'w',
+    select: [],
+    drop: ['worker-indexes'],
   },
   {
     name: 'A dead-letter queue itself — a DLQ without a re-drive worker is normal',
@@ -475,13 +514,15 @@ describe('continuationsFor — technical validity is the matrix, never the rule'
       'service-service': graph([service('t')], []),
       'service-cache': graph([service('t')], []),
       'service-external': graph([service('t')], []),
-      'service-search-index': graph([service('t'), database('db')], [['t', 'db']]),
+      'service-search-index': reword(graph([service('t'), database('db')], [['t', 'db']]), 't', 'db', 'writes'),
       'actor-gateway': graph([actor('t')], []),
       'actor-api': graph([actor('t')], []),
       'topic-fan-out-worker': graph([service('p'), topic('t')], [['p', 't']]),
       'queue-consumer': graph([service('p'), queue('t')], [['p', 't']]),
       'queue-dead-letter': graph([service('p'), queue('t'), worker('w')], [['p', 't'], ['t', 'w']]),
-      'stream-dead-letter': graph([service('p'), stream('t'), worker('w')], [['p', 't'], ['t', 'w']]),
+      // Anchored on the consumer, not the stream: a stream keeps every record, so the dead-letter
+      // path belongs to whoever reads it.
+      'stream-consumer-dead-letter': graph([service('p'), stream('s'), worker('t')], [['p', 's'], ['s', 't']]),
       'gateway-route': graph([actor('p'), gateway('t')], [['p', 't']]),
       'scheduler-trigger-service': graph([scheduler('t')], []),
       'scheduler-trigger-worker': graph([scheduler('t')], []),
@@ -1353,23 +1394,27 @@ describe('a Search Index is the one Service row that has to be earned', () => {
     expect(ids(graph([service('s')], []), 's', 'invoke')).not.toContain('service-search-index');
   });
 
-  it('appears once the Service writes to a Data Store', () => {
-    const doc = graph([service('s'), database('db')], [['s', 'db']]);
-    expect(ids(doc, 's', 'invoke')).toContain('service-search-index');
+  it('appears once the Service writes to a Data Store — the default "reads / writes" connector included', () => {
+    // The default Service → Data Store relationship is `readsWrites`: the service writes there,
+    // so there is something to index, as first drawn and once re-worded to a plain `writes`.
+    const drawn = graph([service('s'), database('db')], [['s', 'db']]);
+    expect(drawn.edges[0]!.semantic).toBe('readsWrites');
+    expect(ids(drawn, 's', 'invoke')).toContain('service-search-index');
+    expect(ids(reword(drawn, 's', 'db', 'writes'), 's', 'invoke')).toContain('service-search-index');
   });
 
   it('a Cache is not something you build an index from', () => {
     const doc = graph([service('s'), { id: 'c', type: 'database', databaseKind: 'cache' }], [['s', 'c']]);
-    expect(ids(doc, 's', 'invoke')).not.toContain('service-search-index');
+    expect(ids(reword(doc, 's', 'c', 'writes'), 's', 'invoke')).not.toContain('service-search-index');
   });
 
   it('goes away again once there is one', () => {
     const doc = graph([service('s'), database('db'), searchIndex('si')], [['s', 'db'], ['s', 'si']]);
-    expect(ids(doc, 's', 'invoke')).not.toContain('service-search-index');
+    expect(ids(reword(doc, 's', 'db', 'writes'), 's', 'invoke')).not.toContain('service-search-index');
   });
 
   it('never appears unprompted, and never turns a plain Service into a ghost', () => {
-    const doc = graph([service('s'), database('db')], [['s', 'db']]);
+    const doc = reword(graph([service('s'), database('db')], [['s', 'db']]), 's', 'db', 'writes');
     expect(ids(doc, 's', 'select')).toEqual([]);
     expect(ids(doc, 's', 'drop')).toEqual([]);
   });

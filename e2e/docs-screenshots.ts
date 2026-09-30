@@ -216,8 +216,7 @@ async function main() {
     await page.mouse.up();
     await shot(page, 'quick-connect');
     await page.getByRole('menuitem', { name: /Queue/ }).first().click();
-    // A shape made from the drop menu is selected but not yet being named: Enter starts that.
-    await page.keyboard.press('Enter');
+    // A shape made from the drop menu opens ready to name, like any other new shape.
     await page.keyboard.type('orders');
     await page.keyboard.press('Enter');
     await expect(page.locator('.dc-node')).toHaveCount(2);
@@ -236,7 +235,7 @@ async function main() {
     await page.keyboard.press('Escape');
     await levelWith(page, 1, 2);
     await page.mouse.click(700, 560);
-    await expect(page.locator('.dc-edge text')).toContainText(['publishes to', 'consumed by']);
+    await expect(page.locator('.dc-edge text')).toContainText(['sends command to', 'consumed by']);
     await shot(page, 'service-queue-worker');
 
     // A note, docked on the queue.

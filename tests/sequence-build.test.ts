@@ -106,14 +106,13 @@ describe('buildSequenceModel — basic interaction kinds', () => {
   });
 
   it('service → database read, with no explicit response manufactured', () => {
-    const db = createNode({ type: 'database', x: 0, y: 0, text: 'Orders DB' });
-    const api = createNode({ type: 'service', x: 200, y: 0, text: 'Order API' });
-    const edge = createEdge({ source: db.id, target: api.id, semantic: 'reads' });
-    const model = buildOne([db, api], [edge], linearFlow([edge.id]));
+    const api = createNode({ type: 'service', x: 0, y: 0, text: 'Order API' });
+    const db = createNode({ type: 'database', x: 200, y: 0, text: 'Orders DB' });
+    const edge = createEdge({ source: api.id, target: db.id, semantic: 'reads' });
+    const model = buildOne([api, db], [edge], linearFlow([edge.id]));
 
     expect(messagesOf(model)).toHaveLength(1);
-    // The message runs Database → API, so it reads in that direction.
-    expect(messagesOf(model)[0]!.label).toBe('read by');
+    expect(messagesOf(model)[0]).toMatchObject({ from: 'P1', to: 'P2', interaction: 'sync', label: 'reads from' });
   });
 
   it('service → queue publish is an async message', () => {
@@ -149,6 +148,136 @@ describe('buildSequenceModel — basic interaction kinds', () => {
 
     expect(model.participants.map((p) => p.label)).toEqual(['Order API', 'Order Events', 'Fulfillment Worker']);
     expect(messagesOf(model)).toHaveLength(2);
+  });
+});
+
+/**
+ * A message goes from whoever acts. The canvas lets a connector be drawn from the store or the
+ * channel to the thing that reads it and captions it in the passive ("read by", "consumed by");
+ * a sequence diagram has no passive voice — `Database ->> Worker: read by` is the database making
+ * a call it never makes — so the exporter draws the message from the doer, in the active form.
+ * The decision is `passiveApplies`, the same function the canvas caption uses.
+ */
+describe('buildSequenceModel — a message is sent by whoever acts', () => {
+  const idOf = (model: SequenceModel, label: string) => model.participants.find((p) => p.label === label)!.id;
+
+  it('Database → Service "reads" (captioned "read by") exports as the service reading from the database', () => {
+    const db = createNode({ type: 'database', x: 0, y: 0, text: 'Orders DB' });
+    const api = createNode({ type: 'service', x: 200, y: 0, text: 'Order API' });
+    const edge = createEdge({ source: db.id, target: api.id, semantic: 'reads' });
+    const model = buildOne([db, api], [edge], linearFlow([edge.id]));
+
+    expect(messagesOf(model)).toHaveLength(1);
+    expect(messagesOf(model)[0]).toMatchObject({
+      from: idOf(model, 'Order API'),
+      to: idOf(model, 'Orders DB'),
+      label: 'reads from',
+      interaction: 'sync',
+    });
+    expect(messagesOf(model)[0]!.sourceEdgeIds).toEqual([edge.id]);
+  });
+
+  it('Queue → Worker "consumes" exports as the worker consuming from the queue, still asynchronous', () => {
+    const queue = createNode({ type: 'queue', x: 0, y: 0, text: 'Jobs' });
+    const worker = createNode({ type: 'service', serviceKind: 'worker', x: 200, y: 0, text: 'Job Worker' });
+    const edge = createEdge({ source: queue.id, target: worker.id, semantic: 'consumes' });
+    const model = buildOne([queue, worker], [edge], linearFlow([edge.id]));
+
+    expect(messagesOf(model)[0]).toMatchObject({
+      from: idOf(model, 'Job Worker'),
+      to: idOf(model, 'Jobs'),
+      label: 'consumes from',
+      interaction: 'async',
+    });
+  });
+
+  it('Stream → Worker "consumes" (captioned "read by") exports in the active form too', () => {
+    const stream = createNode({ type: 'queue', queueKind: 'stream', x: 0, y: 0, text: 'Orders Log' });
+    const worker = createNode({ type: 'service', serviceKind: 'worker', x: 200, y: 0, text: 'Projector' });
+    const edge = createEdge({ source: stream.id, target: worker.id, semantic: 'consumes' });
+    const model = buildOne([stream, worker], [edge], linearFlow([edge.id]));
+
+    expect(messagesOf(model)[0]).toMatchObject({
+      from: idOf(model, 'Projector'),
+      to: idOf(model, 'Orders Log'),
+      label: 'consumes from',
+    });
+  });
+
+  it('a hand-typed label keeps the drawn direction — the author said what happens, and in which order', () => {
+    const db = createNode({ type: 'database', x: 0, y: 0, text: 'Orders DB' });
+    const api = createNode({ type: 'service', x: 200, y: 0, text: 'Order API' });
+    const edge = createEdge({ source: db.id, target: api.id, semantic: 'reads', label: 'change feed' });
+    const model = buildOne([db, api], [edge], linearFlow([edge.id]));
+
+    expect(messagesOf(model)[0]).toMatchObject({
+      from: idOf(model, 'Orders DB'),
+      to: idOf(model, 'Order API'),
+      label: 'change feed',
+    });
+  });
+
+  it('a connector already drawn from the doer is left exactly as drawn', () => {
+    const worker = createNode({ type: 'service', serviceKind: 'worker', x: 0, y: 0, text: 'Job Worker' });
+    const queue = createNode({ type: 'queue', x: 200, y: 0, text: 'Jobs' });
+    const edge = createEdge({ source: worker.id, target: queue.id, semantic: 'consumes' });
+    const model = buildOne([worker, queue], [edge], linearFlow([edge.id]));
+
+    expect(messagesOf(model)[0]).toMatchObject({ from: 'P1', to: 'P2', label: 'consumes from' });
+  });
+
+  it('a verb the channel performs itself (a topic delivering) is never swapped', () => {
+    const topic = createNode({ type: 'queue', queueKind: 'topic', x: 0, y: 0, text: 'Order Events' });
+    const worker = createNode({ type: 'service', serviceKind: 'worker', x: 200, y: 0, text: 'Fulfillment' });
+    const edge = createEdge({ source: topic.id, target: worker.id, semantic: 'deliversTo' });
+    const model = buildOne([topic, worker], [edge], linearFlow([edge.id]));
+
+    expect(messagesOf(model)[0]).toMatchObject({ from: 'P1', to: 'P2', label: 'delivers to', interaction: 'async' });
+  });
+
+  it('a store feeding a store has no doer to swap to, so the message stays as drawn', () => {
+    const primary = createNode({ type: 'database', x: 0, y: 0, text: 'Primary' });
+    const replica = createNode({ type: 'database', x: 200, y: 0, text: 'Replica' });
+    const edge = createEdge({ source: primary.id, target: replica.id, semantic: 'reads' });
+    const model = buildOne([primary, replica], [edge], linearFlow([edge.id]));
+
+    expect(messagesOf(model)[0]).toMatchObject({ from: 'P1', to: 'P2', label: 'reads from' });
+  });
+
+  it('a reply on a swapped message comes back to the doer, and the request still reads in the active form', () => {
+    const db = createNode({ type: 'database', x: 0, y: 0, text: 'Orders DB' });
+    const api = createNode({ type: 'service', x: 200, y: 0, text: 'Order API' });
+    const edge = { ...createEdge({ source: db.id, target: api.id, semantic: 'reads', hasResponse: true }), response: 'rows' };
+    const model = buildOne([db, api], [edge], linearFlow([edge.id]));
+
+    const [request, reply] = messagesOf(model);
+    expect(request).toMatchObject({ from: idOf(model, 'Order API'), to: idOf(model, 'Orders DB'), label: 'reads from' });
+    expect(reply).toMatchObject({ from: idOf(model, 'Orders DB'), to: idOf(model, 'Order API'), label: 'rows', isResponse: true });
+  });
+
+  it('a note on a swapped connector anchors to the message as sent, doer first', () => {
+    const db = createNode({ type: 'database', x: 0, y: 0, text: 'Orders DB' });
+    const api = createNode({ type: 'service', x: 200, y: 0, text: 'Order API' });
+    const edge = {
+      ...createEdge({ source: db.id, target: api.id, semantic: 'reads' }),
+      attachments: [createAttachment({ type: 'note', text: 'Read replica' })],
+    };
+    const model = buildOne([db, api], [edge], linearFlow([edge.id]));
+
+    expect(notesOf(model)[0]!.participantIds).toEqual([idOf(model, 'Order API'), idOf(model, 'Orders DB')]);
+  });
+
+  it('the swap sees through a junction: Database → Junction → Service still exports from the service', () => {
+    const db = createNode({ type: 'database', x: 0, y: 0, text: 'Orders DB' });
+    const junction = createNode({ type: 'ellipse', x: 200, y: 0 });
+    const api = createNode({ type: 'service', x: 400, y: 0, text: 'Order API' });
+    const e1 = createEdge({ source: db.id, target: junction.id, semantic: 'reads' });
+    const e2 = createEdge({ source: junction.id, target: api.id, semantic: 'reads' });
+    const model = buildOne([db, junction, api], [e1, e2], linearFlow([e1.id, e2.id]));
+
+    expect(model.participants.map((p) => p.label).sort()).toEqual(['Order API', 'Orders DB']);
+    expect(messagesOf(model)).toHaveLength(1);
+    expect(messagesOf(model)[0]).toMatchObject({ from: idOf(model, 'Order API'), to: idOf(model, 'Orders DB'), label: 'reads from' });
   });
 });
 
