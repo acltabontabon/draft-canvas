@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { newCanvas, create, connect, reopenAfterReload } from './canvas';
 
 /**
  * The journey open points exist for: something is still unsettled mid-meeting, it gets marked on the
@@ -15,20 +16,6 @@ const POPOVER = '.dc-open-point-popover';
 const CHIP = '.dc-status-open-points';
 const PANEL = '.dc-open-points';
 
-async function newCanvas(page: Page, title: string) {
-  await page.goto('/');
-  await page.getByRole('button', { name: 'New canvas' }).click();
-  await expect(page.locator('.dc-editor')).toBeVisible();
-  const field = page.getByLabel('Diagram title');
-  await field.fill(title);
-  await field.blur();
-}
-
-async function create(page: Page, tool: string, at: { x: number; y: number }) {
-  await page.getByRole('button', { name: tool, exact: true }).click();
-  await page.locator(CANVAS).click({ position: at });
-}
-
 async function rename(page: Page, index: number, name: string) {
   await page.locator('.dc-node').nth(index).click();
   await page.keyboard.press('Enter');
@@ -37,17 +24,6 @@ async function rename(page: Page, index: number, name: string) {
   await page.keyboard.type(name);
   await page.locator(CANVAS).click({ position: { x: 60, y: 60 } });
   await expect(page.locator('.dc-node-editor')).toHaveCount(0);
-}
-
-async function connect(page: Page, fromIndex: number, toIndex: number) {
-  const source = page.locator('.dc-node').nth(fromIndex);
-  await source.hover();
-  const handle = (await source.locator('.dc-handle').nth(1).boundingBox())!;
-  const target = (await page.locator('.dc-node').nth(toIndex).boundingBox())!;
-  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 10 });
-  await page.mouse.up();
 }
 
 test.describe('Open points', () => {
@@ -100,8 +76,7 @@ test.describe('Open points', () => {
 
     // A reload brings the same points back — once autosave has written them.
     await expect(page.locator('.dc-save')).toContainText('Saved locally');
-    await page.reload();
-    await page.locator('.dc-library-item', { hasText: 'Payments platform' }).click();
+    await reopenAfterReload(page, 'Payments platform');
     await expect(page.locator('.dc-editor')).toBeVisible();
     await expect(page.locator(MARKER)).toHaveCount(2);
     await expect(page.locator(CHIP)).toHaveAttribute('aria-label', /2 open points/);

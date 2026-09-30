@@ -28,7 +28,7 @@ export function hostKind(): HostKind | null {
 }
 
 /** Leaves the open document for Home. Unsaved work is the desktop shell's to settle first; anywhere else it is just closed. */
-export function returnHome(closeDocument: () => Promise<void>): void {
+export function returnHome(closeDocument: () => Promise<unknown>): void {
   if (desktopHost) desktopHost.returnHome();
   else void closeDocument();
 }

@@ -114,6 +114,17 @@ export class Autosave {
   }
 
   /**
+   * The version a closing page still owes the store: what is queued, or, with nothing queued, the
+   * write in flight — which the unload is about to abort. Nothing while a conflict stands (the user
+   * hasn't chosen this copy), and nothing for a camera move alone. See `reloadStash.ts`.
+   */
+  unsavedForStash(): DraftDocument | null {
+    if (this.conflict) return null;
+    if (this.pending) return this.pendingCameraOnly ? null : this.pending;
+    return this.inFlight ? this.writing : null;
+  }
+
+  /**
    * Records a new version of the document and schedules a write. `cameraOnly` says the only thing
    * that changed since the last version is where the camera is; a single real edit anywhere in what
    * is queued makes the whole write a content write.

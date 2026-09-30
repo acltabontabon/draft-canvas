@@ -124,8 +124,11 @@ const SCREEN_MARGIN = 12;
 export function EdgeInspectorPopover() {
   // The shell subscribes to nothing but "which single connector, if any" — the body below, with
   // its whole-document subscription, is mounted only while there's a popover to show (or fade out).
+  const quietEdgeId = useUiStore((state) => state.quietEdgeId);
   const selectedEdge = useEditorStore((state) => {
     if (state.mode === 'present' || state.selection.nodes.length !== 0 || state.selection.edges.length !== 1) return null;
+    // Just drawn (or selected by an undo): no panel until it is clicked — see `quietEdgeId`.
+    if (state.selection.edges[0] === quietEdgeId) return null;
     return edgeIndex(state.document.edges).get(state.selection.edges[0]!) ?? null;
   });
   const measured = useStore((state) =>

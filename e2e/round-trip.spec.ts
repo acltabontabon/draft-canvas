@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
+import { reopenAfterReload } from './canvas';
 import { CURRENT_VERSION } from '../src/document/types.ts';
 
 /**
@@ -145,8 +146,7 @@ test('a rich diagram survives save, reopen, export and import unchanged', async 
   expect(nodes.filter((n) => (n as { parentId?: string }).parentId === 'box').map((n) => n.id).sort()).toEqual(['a', 'b']);
 
   // Saved, closed, reloaded from disk, reopened from the Library.
-  await page.reload();
-  await page.locator('.dc-library-item', { hasText: 'Round trip' }).click();
+  await reopenAfterReload(page, 'Round trip');
   await expect(page.locator('.dc-node')).toHaveCount(7);
   const reopened = await exportDocument(page);
   expect(content(reopened)).toEqual(content(first));

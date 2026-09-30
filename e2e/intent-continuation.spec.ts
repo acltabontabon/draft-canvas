@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { connectAndOpen, create, newCanvas } from './canvas';
 
 /**
  * Intent Continuation, driven through the real UI: the ghost that appears beside a node with an
@@ -8,20 +9,6 @@ import { expect, test, type Page } from '@playwright/test';
  */
 
 const CANVAS = '.react-flow__pane';
-
-async function newCanvas(page: Page, title: string) {
-  await page.goto('/');
-  await page.getByRole('button', { name: 'New canvas' }).click();
-  await expect(page.locator('.dc-editor')).toBeVisible();
-  const titleField = page.getByLabel('Diagram title');
-  await titleField.fill(title);
-  await titleField.blur();
-}
-
-async function create(page: Page, tool: string, at: { x: number; y: number }) {
-  await page.getByRole('button', { name: tool, exact: true }).click();
-  await page.locator(CANVAS).click({ position: at });
-}
 
 function inspectorSelect(page: Page, ariaLabel: string) {
   return page.getByRole('button', { name: ariaLabel });
@@ -326,7 +313,7 @@ test.describe('Intent Continuation', () => {
 
     // The first step: its connector's own inspector draws the undo beside it — the second arrow
     // between one pair that a drag won't make. Compensates is also on the Interaction menu.
-    await connect(page, 0, 1);
+    await connectAndOpen(page, 0, 1);
     await inspectorSelect(page, 'Protocol').click();
     await expect(page.getByRole('option')).toHaveText(['HTTP', 'Generic Call', 'Compensates']);
     await page.keyboard.press('Escape');

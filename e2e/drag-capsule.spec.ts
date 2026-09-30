@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { newCanvas, create, connect } from './canvas';
 
 /**
  * Dragging a Note/Code card shows its identity rather than its geometry: past a real movement
@@ -10,32 +11,6 @@ import { expect, test, type Page } from '@playwright/test';
  * nearest-connector arithmetic in `tests/edge-nearest.test.ts`; these cover what actually happens
  * on a canvas under a real pointer.
  */
-
-async function newCanvas(page: Page, title: string) {
-  await page.goto('/');
-  await page.getByRole('button', { name: 'New canvas' }).click();
-  await expect(page.locator('.dc-editor')).toBeVisible();
-  const field = page.getByLabel('Diagram title');
-  await field.fill(title);
-  await field.blur();
-}
-
-async function create(page: Page, tool: string, at: { x: number; y: number }) {
-  await page.getByRole('button', { name: tool, exact: true }).click();
-  await page.locator('.react-flow__pane').click({ position: at });
-  if (tool === 'Note') await page.keyboard.press('Escape');
-}
-
-async function connect(page: Page, fromIndex: number, toIndex: number) {
-  const source = page.locator('.dc-node').nth(fromIndex);
-  await source.hover();
-  const handle = (await source.locator('.dc-handle').nth(1).boundingBox())!;
-  const target = (await page.locator('.dc-node').nth(toIndex).boundingBox())!;
-  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 10 });
-  await page.mouse.up();
-}
 
 /** Presses on a node's centre and moves to a point, leaving the pointer down. */
 async function grabAndMoveTo(page: Page, node: ReturnType<Page['locator']>, to: { x: number; y: number }) {

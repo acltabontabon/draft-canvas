@@ -129,12 +129,16 @@ describe('localStorage holds preferences only', () => {
   // than the word, so prose about storage in a comment is not a false alarm.
   const WEB_STORAGE = /\b(?:local|session)Storage\s*[.[]/;
 
-  it('is accessed from exactly one module', () => {
+  it('is accessed from exactly two modules', () => {
     const users = files.filter(
       (file) => WEB_STORAGE.test(readFileSync(file, 'utf8')) && !file.endsWith('preferences.ts'),
     );
-    // Funnelling access through one module is what makes the claim checkable.
-    expect(users.map((file) => relative(ROOT, file))).toEqual([]);
+    // Funnelling access through one module is what makes the claim checkable. The one other user is
+    // the reload stash: the open canvas's unsaved edits, written to sessionStorage by a page as it
+    // unloads and read back once by the page that replaces it — the tab's own work, gone with the
+    // tab (`src/storage/reloadStash.ts`, and `docs/reference/privacy.md` says so). Anything else
+    // here is a new place a document could end up.
+    expect(users.map((file) => relative(ROOT, file))).toEqual(['src/storage/reloadStash.ts']);
   });
 
   it('stores no canvas content, only short named preferences', () => {

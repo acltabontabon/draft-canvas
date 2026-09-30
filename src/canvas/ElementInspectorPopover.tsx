@@ -243,6 +243,21 @@ function ElementInspectorBody({
     return { top: flowToScreenPosition({ x, y }).y, bottom: flowToScreenPosition({ x, y: y + height }).y };
   }, [getInternalNode, flowToScreenPosition, nodeId]);
 
+  // The shapes this one is connected to, where they are right now: the popover avoids sitting on them.
+  // Read at placement time, like the frame, so a pan or a neighbour's drag is never stale.
+  const connectedRects = () => {
+    const { edges } = useEditorStore.getState().document;
+    const out: { x: number; y: number; width: number; height: number }[] = [];
+    for (const edge of edges) {
+      const other = edge.source === nodeId ? edge.target : edge.target === nodeId ? edge.source : null;
+      if (!other) continue;
+      const internal = getInternalNode(other);
+      const box = internal ? rectOfInternal(internal) : null;
+      if (box) out.push(box);
+    }
+    return out;
+  };
+
   // Measured, not guessed: the toolbar wraps to two rows below 720px (see app.css's
   // `@media (max-width: 720px)` block), and a long diagram title can force that wrap even above
   // it — a static constant can't account for either. `TOP_CLEARANCE` stays as the fallback for
@@ -280,7 +295,7 @@ function ElementInspectorBody({
     const clearances = { ...baseClearances, right: rightClearance(flowPanelOpen, LEFT_CLEARANCE) };
     const next = interactionActive
       ? current
-      : resolvePlacement(current, anchors, frame.flowToScreenPosition, frame.size, clearances);
+      : resolvePlacement(current, anchors, frame.flowToScreenPosition, frame.size, clearances, connectedRects());
     return {
       placement: next,
       transform: placementTransform(next, anchors, frame.size, clearances, frame.flowToScreenPosition, frame.screenToOverlay),

@@ -168,3 +168,27 @@ describe('clampCenterX', () => {
     expect(clampCenterX(500, 400, 12, 324)).toBe(412);
   });
 });
+
+describe('the element popover stays off the shapes it is connected to', () => {
+  beforeEach(() => setViewport(1200, 800));
+  const shape = { x: 500, y: 400, width: 176, height: 68 };
+  const size = { width: 300, height: 80 };
+
+  it('moves off a connected shape sitting above, and keeps above when nothing is there', () => {
+    const anchors = anchorsForRect(shape);
+    const parent = { x: 500, y: 250, width: 176, height: 68 };
+    expect(resolvePlacement('above', anchors, identity, size, clearances)).toBe('above');
+    expect(resolvePlacement('above', anchors, identity, size, clearances, [parent])).toBe('below');
+  });
+
+  it('takes a side that covers nothing, and falls back to a covering side only when none is clear', () => {
+    const anchors = anchorsForRect(shape);
+    const around = [
+      { x: 500, y: 250, width: 176, height: 68 },
+      { x: 500, y: 520, width: 176, height: 68 },
+    ];
+    expect(resolvePlacement('above', anchors, identity, size, clearances, around)).toBe('right');
+    const boxedIn = [...around, { x: 700, y: 360, width: 400, height: 150 }, { x: 0, y: 360, width: 490, height: 150 }];
+    expect(resolvePlacement('above', anchors, identity, size, clearances, boxedIn)).toBe('above');
+  });
+});

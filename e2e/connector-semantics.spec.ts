@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { connect, connectAndOpen, create, newCanvas } from './canvas';
 
 /**
  * The contextual connector toolbar — see `document/connectorSemantics.ts`'s
@@ -26,40 +27,6 @@ import { expect, test, type Page } from '@playwright/test';
  * below.
  */
 
-async function newCanvas(page: Page, title: string) {
-  await page.goto('/');
-  await page.getByRole('button', { name: 'New canvas' }).click();
-  await expect(page.locator('.dc-editor')).toBeVisible();
-  const field = page.getByLabel('Diagram title');
-  await field.fill(title);
-  await field.blur();
-}
-
-async function create(page: Page, tool: string, at: { x: number; y: number }) {
-  await page.getByRole('button', { name: tool, exact: true }).click();
-  await page.locator('.react-flow__pane').click({ position: at });
-  // A new Text node opens ready to type into, and an untyped one is deleted the instant it's
-  // deselected (`finishTextEdit`, so it never becomes an invisible ghost) — Escape included, since
-  // Escape never commits for Text. Typing something and committing with Cmd/Ctrl+Enter is the only
-  // way to leave a Text node on the canvas.
-  if (tool === 'Text') {
-    await page.keyboard.type('Text');
-    await page.keyboard.press('ControlOrMeta+Enter');
-  }
-}
-
-/** Drags from a node's right-hand handle onto another node. */
-async function connect(page: Page, fromIndex: number, toIndex: number) {
-  const source = page.locator('.dc-node').nth(fromIndex);
-  await source.hover();
-  const handle = (await source.locator('.dc-handle').nth(1).boundingBox())!;
-  const target = (await page.locator('.dc-node').nth(toIndex).boundingBox())!;
-  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 10 });
-  await page.mouse.up();
-}
-
 /** An `InspectorSelect`'s closed button, identified the same way a native `<select>`'s
  *  accessible name would be — but its visible text is the selected option's *label*, not its
  *  raw value (e.g. "Writes", not "writes"). */
@@ -78,7 +45,7 @@ test.describe('contextual connector toolbar', () => {
     await newCanvas(page, 'Service to database toolbar');
     await create(page, 'Service', { x: 300, y: 200 });
     await create(page, 'Data Store', { x: 600, y: 200 });
-    await connect(page, 0, 1);
+    await connectAndOpen(page, 0, 1);
 
     await expect(inspectorSelect(page, 'Interaction type')).toHaveText('Writes');
     await expect(inspectorSelect(page, 'Flow kind')).toHaveCount(0);
@@ -90,7 +57,7 @@ test.describe('contextual connector toolbar', () => {
     await newCanvas(page, 'Database to service toolbar');
     await create(page, 'Data Store', { x: 300, y: 200 });
     await create(page, 'Service', { x: 600, y: 200 });
-    await connect(page, 0, 1);
+    await connectAndOpen(page, 0, 1);
 
     await expect(inspectorSelect(page, 'Interaction type')).toHaveText('Reads');
   });
@@ -103,7 +70,7 @@ test.describe('contextual connector toolbar', () => {
     await newCanvas(page, 'Filtered relation list');
     await create(page, 'Service', { x: 300, y: 200 });
     await create(page, 'Data Store', { x: 600, y: 200 });
-    await connect(page, 0, 1);
+    await connectAndOpen(page, 0, 1);
 
     const relation = inspectorSelect(page, 'Interaction type');
     await expect(relation).toHaveText('Writes');
@@ -119,7 +86,7 @@ test.describe('contextual connector toolbar', () => {
     await newCanvas(page, 'Unfiltered relation list');
     await create(page, 'Text', { x: 300, y: 200 });
     await create(page, 'Text', { x: 600, y: 200 });
-    await connect(page, 0, 1);
+    await connectAndOpen(page, 0, 1);
 
     await inspectorSelect(page, 'Interaction type').click();
     await expect(page.getByRole('option')).toHaveText([
@@ -160,7 +127,7 @@ test.describe('contextual connector toolbar', () => {
     await newCanvas(page, 'Service to queue toolbar');
     await create(page, 'Service', { x: 300, y: 200 });
     await create(page, 'Queue', { x: 600, y: 200 });
-    await connect(page, 0, 1);
+    await connectAndOpen(page, 0, 1);
 
     await expect(inspectorSelect(page, 'Interaction type')).toHaveText('Publishes');
     await expect(inspectorSelect(page, 'Flow kind')).toHaveCount(0);
@@ -179,7 +146,7 @@ test.describe('contextual connector toolbar', () => {
     await newCanvas(page, 'Service to service toolbar');
     await create(page, 'Service', { x: 300, y: 200 });
     await create(page, 'Service', { x: 600, y: 200 });
-    await connect(page, 0, 1);
+    await connectAndOpen(page, 0, 1);
 
     // Service→Service gets the opinionated editor, not the generic Interaction section — its
     // Protocol/Mode selects replace "Interaction type"/"Flow kind" entirely for this pairing.
@@ -211,7 +178,7 @@ test.describe('contextual connector toolbar', () => {
     await newCanvas(page, 'Service to service HTTP');
     await create(page, 'Service', { x: 300, y: 200 });
     await create(page, 'Service', { x: 600, y: 200 });
-    await connect(page, 0, 1);
+    await connectAndOpen(page, 0, 1);
 
     await chooseInspectorOption(page, 'Protocol', 'HTTP');
 
@@ -235,7 +202,7 @@ test.describe('contextual connector toolbar', () => {
     await newCanvas(page, 'Service to service async');
     await create(page, 'Service', { x: 300, y: 200 });
     await create(page, 'Service', { x: 600, y: 200 });
-    await connect(page, 0, 1);
+    await connectAndOpen(page, 0, 1);
 
     // Offered, and off by default — this test is about Async *removing* the
     // section, so turn it on first to have something to remove.
@@ -266,7 +233,7 @@ test.describe('contextual connector toolbar', () => {
     await create(page, 'Service', { x: 300, y: 200 });
     await create(page, 'Service', { x: 600, y: 200 });
     await create(page, 'Data Store', { x: 600, y: 450 });
-    await connect(page, 0, 1);
+    await connectAndOpen(page, 0, 1);
 
     const nodeA = (await page.locator('.dc-node').nth(0).boundingBox())!;
     const nodeB = (await page.locator('.dc-node').nth(1).boundingBox())!;
@@ -314,7 +281,7 @@ test.describe('Junction connector', () => {
     await newCanvas(page, 'Service to junction');
     await create(page, 'Service', { x: 300, y: 200 });
     await create(page, 'Junction', { x: 600, y: 200 });
-    await connect(page, 0, 1);
+    await connectAndOpen(page, 0, 1);
 
     await expect(inspectorSelect(page, 'Interaction type')).toHaveText('No type');
     await inspectorSelect(page, 'Interaction type').click();
@@ -371,7 +338,7 @@ test.describe('Junction connector', () => {
     await newCanvas(page, 'Junction to service');
     await create(page, 'Junction', { x: 300, y: 200 });
     await create(page, 'Service', { x: 600, y: 200 });
-    await connect(page, 0, 1);
+    await connectAndOpen(page, 0, 1);
 
     await expect(inspectorSelect(page, 'Interaction type')).toHaveText('No type');
     await expect(page.getByLabel('Condition')).toHaveCount(0);
@@ -391,7 +358,7 @@ test.describe('Junction connector', () => {
     await newCanvas(page, 'Junction chain');
     await create(page, 'Junction', { x: 300, y: 200 });
     await create(page, 'Junction', { x: 600, y: 200 });
-    await connect(page, 0, 1);
+    await connectAndOpen(page, 0, 1);
 
     await expect(inspectorSelect(page, 'Protocol')).toHaveCount(0);
     await expect(inspectorSelect(page, 'Interaction type')).toHaveText('No type');
@@ -407,7 +374,7 @@ test.describe('Junction connector', () => {
     await create(page, 'Service', { x: 200, y: 200 });
     await create(page, 'Junction', { x: 500, y: 200 });
     await create(page, 'Data Store', { x: 800, y: 200 });
-    await connect(page, 0, 1);
+    await connectAndOpen(page, 0, 1);
     // The first connection auto-selects its edge, opening a popover that covers the Junction
     // node and would block the next `connect()` call's hover on it.
     await page.keyboard.press('Escape');

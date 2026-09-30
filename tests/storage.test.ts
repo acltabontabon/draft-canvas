@@ -5,6 +5,7 @@ import { addNodes } from '../src/document/operations';
 import { IndexedDbRepository } from '../src/storage/IndexedDbRepository';
 import { MemoryRepository } from '../src/storage/MemoryRepository';
 import { Autosave, flushAllAutosaves } from '../src/storage/autosave';
+import { stashForReload, takeReloadStash } from '../src/storage/reloadStash';
 import { DocumentConflictError, QuotaExceededError } from '../src/storage/DraftRepository';
 import { getOrCreateMasterKey, __resetKeyCacheForTests } from '../src/crypto/keyStore';
 import { isEncryptedBody, isLegacyBody, isPlainBody } from '../src/crypto/bodyShapes';
@@ -753,6 +754,35 @@ describe('autosave', () => {
       return super.save(document, base, options);
     }
   }
+
+  it('hands a closing page what it still owes the store, and the stash gives it back once', async () => {
+    const repository = new GatedRepository();
+    const stored = documentWith('Original');
+    await MemoryRepository.prototype.save.call(repository, stored);
+    const autosave = new Autosave({ repository, onStateChange: () => {}, debounceMs: 0, maxWaitMs: 0 });
+    autosave.track(stored);
+    expect(autosave.unsavedForStash()).toBeNull();
+
+    // A camera move alone is not worth carrying across a refresh.
+    autosave.schedule({ ...stored, viewport: { x: 5, y: 5, zoom: 1 } }, { cameraOnly: true });
+    expect(autosave.unsavedForStash()).toBeNull();
+    const edited = { ...stored, metadata: { ...stored.metadata, title: 'Edited' } };
+    autosave.schedule(edited);
+    expect(autosave.unsavedForStash()).toBe(edited);
+    // Mid-write it is the write in flight — the one an unload is about to abort.
+    await vi.waitFor(() => expect(repository.release).not.toBeNull());
+    expect(autosave.unsavedForStash()).toBe(edited);
+    repository.release!();
+    await vi.waitFor(async () => expect(await autosave.flush()).toBe(true));
+    expect(autosave.unsavedForStash()).toBeNull();
+
+    stashForReload(edited);
+    expect(takeReloadStash(stored.metadata.id)?.metadata.title).toBe('Edited');
+    expect(takeReloadStash(stored.metadata.id)).toBeNull();
+    stashForReload(edited);
+    expect(takeReloadStash('d_someoneelse')).toBeNull();
+    autosave.dispose();
+  });
 
   it('writes an undo made while the edit it undoes is still being written', async () => {
     const repository = new GatedRepository();

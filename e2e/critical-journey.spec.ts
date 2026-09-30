@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { newCanvas, reopenAfterReload } from './canvas';
 import { readFileSync, existsSync } from 'node:fs';
 
 /**
@@ -9,16 +10,6 @@ import { readFileSync, existsSync } from 'node:fs';
  */
 
 const CANVAS = '.react-flow__pane';
-
-async function newCanvas(page: Page, title: string) {
-  await page.goto('/');
-  await page.getByRole('button', { name: 'New canvas' }).click();
-  await expect(page.locator('.dc-editor')).toBeVisible();
-
-  const titleField = page.getByLabel('Diagram title');
-  await titleField.fill(title);
-  await titleField.blur();
-}
 
 /** Creates a node by arming a tool and clicking the canvas. */
 async function createNode(page: Page, tool: string, at: { x: number; y: number }) {
@@ -197,8 +188,7 @@ test.describe('Draft Canvas', () => {
 
     await expect(page.locator('.dc-save')).toContainText('Saved locally');
 
-    await page.reload();
-    await page.locator('.dc-library-item', { hasText: 'Payment Flow' }).click();
+    await reopenAfterReload(page, 'Payment Flow');
     await expect(page.locator('.dc-editor')).toBeVisible();
     expect(await nodeCount(page)).toBe(4);
     await expect(page.locator('.dc-edge-line')).toHaveCount(1);

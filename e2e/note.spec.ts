@@ -1,17 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
+import { newCanvas, reopenAfterReload } from './canvas';
 
 const CANVAS = '.react-flow__pane';
 const NOTE = '.dc-node[data-type="note"]';
 const EDITOR = 'textarea.dc-node-editor';
-
-async function newCanvas(page: Page, title: string) {
-  await page.goto('/');
-  await page.getByRole('button', { name: 'New canvas' }).click();
-  await expect(page.locator('.dc-editor')).toBeVisible();
-  const field = page.getByLabel('Diagram title');
-  await field.fill(title);
-  await field.blur();
-}
 
 /** Presses `N` over the canvas: the note arrives already editing. */
 async function newNote(page: Page, at: { x: number; y: number }) {
@@ -130,8 +122,7 @@ test.describe('Note', () => {
     }
 
     await expect(page.locator('.dc-save')).toContainText('Saved locally');
-    await page.reload();
-    await page.locator('.dc-library-item', { hasText: 'Note persistence' }).click();
+    await reopenAfterReload(page, 'Note persistence');
     await expect(page.locator(NOTE)).toHaveCount(3);
     expect(await page.locator(NOTE).first().locator('text').evaluateAll((els) => els.map((e) => e.textContent))).toEqual(
       RETRY,

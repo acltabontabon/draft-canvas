@@ -1063,6 +1063,11 @@ function noticeTruncation(patch: object): void {
   useUiStore.getState().notify('That was longer than this field holds, so the end was cut off.', 'info');
 }
 
+/** An undo or redo that lands on one connector selects it without opening its panel — see `quietEdgeId`. */
+function quietIfOneConnector(selection: Selection): void {
+  useUiStore.getState().setQuietEdge(selection.nodes.length === 0 && selection.edges.length === 1 ? selection.edges[0]! : null);
+}
+
 function notifyNothingAdded(tooDeep: boolean): void {
   useUiStore
     .getState()
@@ -1411,7 +1416,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     let twinOf: 'step' | 'compensation' | undefined;
     if (between.length > 0) {
       const offersCompensation = capabilityFor(categoryOf(sourceNode), categoryOf(targetNode))?.relations.includes('compensates');
-      if (between.length > 1 || !offersCompensation) return null;
+      if (between.length > 1 || !offersCompensation) {
+        // Refused, but not silently: dropping a second connector used to do nothing at all. The one
+        // already there is selected, so relabelling or re-pointing it is a click away.
+        get().setSelection({ nodes: [], edges: [between[between.length - 1]!.id] });
+        useUiStore.getState().notify(between.length > 1 ? 'These two are already connected both ways a saga step needs.' : 'Already connected — that connector is selected.');
+        return null;
+      }
       twinOf = between[0]!.semantic === 'compensates' ? 'compensation' : 'step';
     }
     if (!roomFor(0, 1)) return null;
@@ -1443,6 +1454,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     state.apply(twinOf === 'step' ? 'Add compensation' : 'Connect', (doc) => addEdges(doc, [edge]), {
       selection: { nodes: [], edges: [edge.id] },
     });
+    // Selected so it can be labelled or deleted at once, without its panel covering the drawing.
+    useUiStore.getState().setQuietEdge(edge.id);
     return edge;
   },
 
@@ -2575,6 +2588,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       // See `FlowSessionSnapshot`.
       flowSession: entry.flowSessionBefore,
     });
+    quietIfOneConnector(entry.selectionBefore);
   },
 
   redo() {
@@ -2589,12 +2603,18 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       selection: entry.selectionAfter,
       flowSession: entry.flowSessionAfter,
     });
+    quietIfOneConnector(entry.selectionAfter);
   },
 
   canUndo: () => canUndo(get().history),
   canRedo: () => canRedo(get().history),
 
   setSelection(selection) {
+    // Anything but the quiet connector on its own is a new selection, and a panel opens as usual.
+    const quiet = useUiStore.getState().quietEdgeId;
+    if (quiet !== null && !(selection.nodes.length === 0 && selection.edges.length === 1 && selection.edges[0] === quiet)) {
+      useUiStore.getState().setQuietEdge(null);
+    }
     set({ selection });
   },
 

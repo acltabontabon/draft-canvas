@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { newCanvas, create } from './canvas';
 
 /**
  * Smart Routing on the live canvas.
@@ -9,20 +10,6 @@ import { expect, test, type Page } from '@playwright/test';
  * and that bundling stayed a *visual* change: five connectors drawn through one
  * trunk are still five independently selectable relationships.
  */
-
-async function newCanvas(page: Page, title: string) {
-  await page.goto('/');
-  await page.getByRole('button', { name: 'New canvas' }).click();
-  await expect(page.locator('.dc-editor')).toBeVisible();
-  const field = page.getByLabel('Diagram title');
-  await field.fill(title);
-  await field.blur();
-}
-
-async function create(page: Page, tool: string, at: { x: number; y: number }) {
-  await page.getByRole('button', { name: tool, exact: true }).click();
-  await page.locator('.react-flow__pane').click({ position: at });
-}
 
 /** `.dc-node` indices ordered left-to-right, then top-to-bottom. React Flow
  *  reorders nodes in the DOM as selection changes, so this is re-read

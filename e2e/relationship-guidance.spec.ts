@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { connectAndOpen, create, newCanvas } from './canvas';
 
 /**
  * The opinionated relationship model beyond what `connector-semantics.spec.ts` already covers:
@@ -11,20 +12,6 @@ import { expect, test, type Page } from '@playwright/test';
  * showing the right thing for a real pointer-driven connection.
  */
 
-async function newCanvas(page: Page, title: string) {
-  await page.goto('/');
-  await page.getByRole('button', { name: 'New canvas' }).click();
-  await expect(page.locator('.dc-editor')).toBeVisible();
-  const field = page.getByLabel('Diagram title');
-  await field.fill(title);
-  await field.blur();
-}
-
-async function create(page: Page, tool: string, at: { x: number; y: number }) {
-  await page.getByRole('button', { name: tool, exact: true }).click();
-  await page.locator('.react-flow__pane').click({ position: at });
-}
-
 /** A Queue node, immediately switched to the Topic sub-kind via `ElementInspectorPopover.tsx`'s
  *  "Queue type" `InspectorSelect` — the only way `queueKind` is set from the UI. */
 async function createTopic(page: Page, at: { x: number; y: number }) {
@@ -32,18 +19,6 @@ async function createTopic(page: Page, at: { x: number; y: number }) {
   await page.getByRole('button', { name: 'Queue type' }).click();
   await page.getByRole('option', { name: 'Topic', exact: true }).click();
   await page.keyboard.press('Escape');
-}
-
-/** Drags from a node's right-hand handle onto another node. */
-async function connect(page: Page, fromIndex: number, toIndex: number) {
-  const source = page.locator('.dc-node').nth(fromIndex);
-  await source.hover();
-  const handle = (await source.locator('.dc-handle').nth(1).boundingBox())!;
-  const target = (await page.locator('.dc-node').nth(toIndex).boundingBox())!;
-  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 10 });
-  await page.mouse.up();
 }
 
 /** An `InspectorSelect`'s closed button — see `connector-semantics.spec.ts`'s identical helper. */
@@ -56,7 +31,7 @@ test.describe('Topic-aware relationships', () => {
     await newCanvas(page, 'Topic to queue');
     await createTopic(page, { x: 300, y: 200 });
     await create(page, 'Queue', { x: 600, y: 200 });
-    await connect(page, 0, 1);
+    await connectAndOpen(page, 0, 1);
 
     const relation = inspectorSelect(page, 'Interaction type');
     await expect(relation).toHaveText('Fans out');
@@ -70,7 +45,7 @@ test.describe('Topic-aware relationships', () => {
     await newCanvas(page, 'Service to topic');
     await create(page, 'Service', { x: 300, y: 200 });
     await createTopic(page, { x: 600, y: 200 });
-    await connect(page, 0, 1);
+    await connectAndOpen(page, 0, 1);
 
     await expect(inspectorSelect(page, 'Interaction type')).toHaveText('Publishes');
   });
@@ -79,7 +54,7 @@ test.describe('Topic-aware relationships', () => {
     await newCanvas(page, 'Topic to service');
     await createTopic(page, { x: 300, y: 200 });
     await create(page, 'Service', { x: 600, y: 200 });
-    await connect(page, 0, 1);
+    await connectAndOpen(page, 0, 1);
 
     await expect(inspectorSelect(page, 'Interaction type')).toHaveText('Delivers to');
   });
@@ -88,7 +63,7 @@ test.describe('Topic-aware relationships', () => {
     await newCanvas(page, 'Queue to topic guidance');
     await create(page, 'Queue', { x: 300, y: 200 });
     await createTopic(page, { x: 600, y: 200 });
-    await connect(page, 0, 1);
+    await connectAndOpen(page, 0, 1);
 
     // No default — nothing should ever auto-infer into this unusual a pairing.
     await expect(inspectorSelect(page, 'Interaction type')).toHaveText('No type');
@@ -104,7 +79,7 @@ test.describe('Topic-aware relationships', () => {
     await newCanvas(page, 'Insert worker quick fix');
     await create(page, 'Queue', { x: 300, y: 200 });
     await createTopic(page, { x: 600, y: 200 });
-    await connect(page, 0, 1);
+    await connectAndOpen(page, 0, 1);
 
     await page.getByRole('button', { name: 'Insert Worker' }).click();
 
@@ -131,7 +106,7 @@ test.describe('Topic-aware relationships', () => {
     await create(page, 'Service', { x: 300, y: 200 });
     await create(page, 'Data Store', { x: 600, y: 200 });
     await createTopic(page, { x: 600, y: 450 });
-    await connect(page, 0, 1);
+    await connectAndOpen(page, 0, 1);
 
     // Explicitly choose Writes (not just accept the inferred default) so the edge's semantic is
     // `explicit` — the one case `isEligibleForReinference` never silently rewrites on reconnect.
@@ -173,7 +148,7 @@ test.describe('Database → Database relationships', () => {
     await newCanvas(page, 'Database to database');
     await create(page, 'Data Store', { x: 300, y: 200 });
     await create(page, 'Data Store', { x: 600, y: 200 });
-    await connect(page, 0, 1);
+    await connectAndOpen(page, 0, 1);
 
     const relation = inspectorSelect(page, 'Interaction type');
     await expect(relation).toHaveText('Ingests');
@@ -199,7 +174,7 @@ test.describe('Request/response default caption', () => {
     await newCanvas(page, 'Calls default caption');
     await create(page, 'Service', { x: 300, y: 200 });
     await create(page, 'Service', { x: 600, y: 200 });
-    await connect(page, 0, 1);
+    await connectAndOpen(page, 0, 1);
 
     // "requests" is what `relationshipCaptionLabel` returns for a call that
     // draws its reply line. A fresh connector no longer turns that on by

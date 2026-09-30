@@ -621,19 +621,13 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
             if (isImeKeyEvent(event)) return;
             if (event.key === 'Escape') {
               event.preventDefault();
-              // A note keeps what was typed — losing a paragraph of meeting notes to a reflexive
-              // Escape is the worse failure. A label reverts, the convention for a rename field.
-              if (isNote) commit(event.currentTarget.value);
-              // Escape never commits for Text, so `finishTextEdit` is checked against the node's
-              // already-committed text, not the discarded textarea value — a never-typed-into
-              // Text node Escaped out of still gets cleaned up; real content Escape reverted away
-              // from never does, since it's still sitting on the node untouched.
-              if (isText) {
-                // Nothing is committed, so the document never catches up with the height typing
-                // grew to — left set, the box and its handles would stay taller than the node.
-                setLiveHeight(null);
-                useEditorStore.getState().finishTextEdit(node.id, node.text ?? '');
-              }
+              // One rule, by what the editor holds. Content — a note, free text, code — keeps what
+              // was typed: losing a paragraph of meeting notes, or a block of pasted code, to a
+              // reflexive Escape is the worse failure (Text and Code used to throw it away while
+              // Note kept it). A shape's name reverts, the convention for a rename field; for a
+              // shape just made, that keeps its placeholder. ⌘Z undoes a kept edit.
+              // `commit` also removes a Text node that ends up empty and was never typed into.
+              if (isNote || isText || isCode) commit(event.currentTarget.value);
               stopEditing();
               return;
             }

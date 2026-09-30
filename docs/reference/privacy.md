@@ -63,7 +63,18 @@ Nothing about a diagram's content is stored here.
 
 All access goes through `src/lib/preferences.ts`, which namespaces keys and rejects any value
 longer than 64 characters. No canvas content is written there, and a test
-(`tests/privacy.test.ts`) fails the build if any other module touches web storage directly.
+(`tests/privacy.test.ts`) fails the build if any other module touches web storage directly — with
+one named exception, below.
+
+### sessionStorage — the reload stash
+
+A page that is closed or refreshed with edits still unsaved writes the open canvas, as it is, to
+`sessionStorage` under `draft-canvas:reload:<document id>` on its way out (`src/storage/reloadStash.ts`).
+The page that replaces it reads the entry back once, writes those edits into IndexedDB and removes
+it. This exists because a browser aborts any IndexedDB write still open as a page unloads, so the
+last moments of work would otherwise be lost on every refresh. `sessionStorage` is private to the
+tab and is cleared when the tab closes; nothing in it outlives the tab, and no other tab or site
+can read it.
 
 ### In memory only
 

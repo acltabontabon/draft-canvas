@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { newCanvas, create, reopenAfterReload } from './canvas';
 
 /**
  * Looking inside a shape, drawing there, and coming back out — through the real UI.
@@ -10,22 +11,6 @@ import { expect, test, type Page } from '@playwright/test';
 
 const CANVAS = '.react-flow__pane';
 
-async function newCanvas(page: Page, title: string) {
-  await page.goto('/');
-  await page.getByRole('button', { name: 'New canvas' }).click();
-  await expect(page.locator('.dc-editor')).toBeVisible();
-  const titleField = page.getByLabel('Diagram title');
-  await titleField.fill(title);
-  await titleField.blur();
-}
-
-async function create(page: Page, tool: string, at: { x: number; y: number }) {
-  await page.getByRole('button', { name: tool, exact: true }).click();
-  await page.locator(CANVAS).click({ position: at });
-  // A new shape opens its own name editor; commit it so the next keystroke is a shortcut again.
-  await page.keyboard.press('Escape');
-}
-
 async function select(page: Page, index: number) {
   await page.locator('.dc-node').nth(index).click();
   await expect(page.locator('.dc-node').nth(index)).toHaveAttribute('data-selected', 'true');
@@ -35,8 +20,7 @@ async function select(page: Page, index: number) {
 async function reloadAndReopen(page: Page, title: string) {
   // Autosave is debounced; reloading before it lands would test the wrong thing.
   await expect(page.getByText('Saved locally')).toBeVisible();
-  await page.reload();
-  await page.locator('.dc-library-item', { hasText: title }).click();
+  await reopenAfterReload(page, title);
   await expect(page.locator('.dc-editor')).toBeVisible();
 }
 

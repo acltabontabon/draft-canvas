@@ -1,36 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
+import { newCanvas, create, connect, reopenAfterReload } from './canvas';
 
 /** Editing mechanics that the critical journey does not exercise. */
-
-async function newCanvas(page: Page, title: string) {
-  await page.goto('/');
-  await page.getByRole('button', { name: 'New canvas' }).click();
-  await expect(page.locator('.dc-editor')).toBeVisible();
-  const field = page.getByLabel('Diagram title');
-  await field.fill(title);
-  await field.blur();
-}
-
-async function create(page: Page, tool: string, at: { x: number; y: number }) {
-  await page.getByRole('button', { name: tool, exact: true }).click();
-  await page.locator('.react-flow__pane').click({ position: at });
-  // A new Note opens ready to type into; Escape commits (empty) and leaves it selected, so the
-  // rest of a test sees the same plain, selected node it would for any other tool.
-  if (tool === 'Note') await page.keyboard.press('Escape');
-}
-
-/** Drags from a node's right-hand handle onto another node. */
-async function connect(page: Page, fromIndex: number, toIndex: number) {
-  const source = page.locator('.dc-node').nth(fromIndex);
-  await source.hover();
-  const handle = (await source.locator('.dc-handle').nth(1).boundingBox())!;
-  const target = (await page.locator('.dc-node').nth(toIndex).boundingBox())!;
-
-  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 10 });
-  await page.mouse.up();
-}
 
 test.describe('editing', () => {
   test('resizes a node and keeps the new size after a reload', async ({ page }) => {
@@ -55,8 +26,7 @@ test.describe('editing', () => {
     expect(after.height).toBeGreaterThan(before.height + 60);
 
     await expect(page.locator('.dc-save')).toContainText('Saved locally');
-    await page.reload();
-    await page.locator('.dc-library-item', { hasText: 'Resizing' }).click();
+    await reopenAfterReload(page, 'Resizing');
 
     const restored = (await page.locator('.dc-node').first().boundingBox())!;
     expect(Math.abs(restored.width - after.width)).toBeLessThan(4);
@@ -85,8 +55,7 @@ test.describe('editing', () => {
     expect(Math.abs(after.y + after.height - (before.y + before.height))).toBeLessThan(4);
 
     await expect(page.locator('.dc-save')).toContainText('Saved locally');
-    await page.reload();
-    await page.locator('.dc-library-item', { hasText: 'Resizing top-left' }).click();
+    await reopenAfterReload(page, 'Resizing top-left');
 
     // Reopening now frames the diagram to fit, so the camera (and the node's screen position with
     // it) is not the same one this was resized under — only its size is comparable across that, the
@@ -309,8 +278,7 @@ test.describe('editing', () => {
     await create(page, 'Service', { x: 700, y: 250 });
 
     await expect(page.locator('.dc-save')).toContainText('Saved locally');
-    await page.reload();
-    await page.locator('.dc-library-item', { hasText: 'No stale guides on load' }).click();
+    await reopenAfterReload(page, 'No stale guides on load');
 
     await expect(page.locator('.dc-node')).toHaveCount(2);
     await expect(page.locator('.dc-guide')).toHaveCount(0);
@@ -561,11 +529,11 @@ test.describe('editing', () => {
 
     await newCanvas(page, 'Clipboard target');
     await expect(page.locator('.dc-save')).toContainText('Saved locally');
-    await page.reload();
-    await page.locator('.dc-library-item', { hasText: 'Clipboard target' }).click();
+    await reopenAfterReload(page, 'Clipboard target');
     // The Async Clipboard API's readText() requires document focus even with
-    // the permission granted — a plain click after navigating in gives it that.
-    await page.locator('.react-flow__pane').click();
+    // the permission granted — a plain click after navigating in gives it that. Off-centre: the
+    // empty canvas shows its starter tiles in the middle, and a click there would place one.
+    await page.locator('.react-flow__pane').click({ position: { x: 40, y: 40 } });
 
     await page.keyboard.press('ControlOrMeta+v');
     await expect(page.locator('.dc-node')).toHaveCount(1);
@@ -1220,11 +1188,13 @@ test.describe('editing', () => {
     await expect(page.locator('.dc-quick-connect')).toBeVisible();
 
     // The menu owns Enter: it takes the highlighted row (the first — a Service, since nothing is
-    // suggested for a plain Service) rather than opening any editor behind it.
+    // suggested for a plain Service) rather than opening an editor on the shape behind it. The
+    // shape it makes opens ready to name, like any other new shape.
     await page.keyboard.press('Enter');
-    await expect(page.locator('.dc-node-editor')).toHaveCount(0);
     await expect(page.locator('.dc-quick-connect')).toBeHidden();
     await expect(page.locator('.dc-node[data-type="service"]')).toHaveCount(2);
+    await expect(page.locator('.dc-node[data-type="service"]').nth(1).locator('.dc-node-editor')).toBeFocused();
+    await expect(page.locator('.dc-node-editor')).toHaveCount(1);
   });
 });
 

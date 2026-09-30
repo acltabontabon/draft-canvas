@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { newCanvas } from './canvas';
 
 /**
  * Focus behavior shared by every dialog built on `Modal` (Keyboard Shortcuts, Export, Canvas
@@ -6,15 +7,6 @@ import { expect, test, type Page } from '@playwright/test';
  * Exercised once here against the Keyboard Shortcuts sheet rather than duplicated per dialog,
  * since all of them share the exact same `Modal` implementation.
  */
-
-async function newCanvas(page: Page, title: string) {
-  await page.goto('/');
-  await page.getByRole('button', { name: 'New canvas' }).click();
-  await expect(page.locator('.dc-editor')).toBeVisible();
-  const field = page.getByLabel('Diagram title');
-  await field.fill(title);
-  await field.blur();
-}
 
 async function openShortcutSheet(page: Page) {
   await page.getByRole('button', { name: /^More/ }).click();
@@ -72,7 +64,7 @@ test.describe('Modal focus behavior', () => {
     // registry via `shortcutLookup.ts`, so they can't go missing again without a failing test.
     await expect(dialog).toContainText('Group into boundary');
     await expect(dialog).toContainText('Ungroup');
-    await expect(dialog).toContainText('Open the selected element');
+    await expect(dialog).toContainText('Rename or edit the selected element');
     await expect(dialog).toContainText('Accept the suggested next element');
     await expect(dialog).toContainText('Select the nearest element in that direction');
 

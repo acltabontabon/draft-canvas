@@ -7,7 +7,7 @@ import { ContextMenu } from '../../canvas/ContextMenu';
 import { EdgeInspectorPopover } from '../../canvas/EdgeInspectorPopover';
 import { ElementInspectorPopover } from '../../canvas/ElementInspectorPopover';
 import { canvasBounds, canvasCenter } from '../../canvas/canvasFrame';
-import type { DraftViewport } from '../../document/types';
+import type { DraftNode, DraftViewport } from '../../document/types';
 import { loadFailureNotice } from '../../lib/staleChunk';
 import { presetForShortcut, type Preset } from '../../canvas/presets';
 import { nearestInDirection, nextRelationshipNeighbor, type Direction } from '../../canvas/spatialNav';
@@ -89,6 +89,11 @@ function focusIsOnCanvas(): boolean {
   // is the canvas's one real Tab stop; `.react-flow` is always a descendant of it, so this still
   // covers anything inside React Flow's own tree too, not just the wrapper itself.
   return active.closest('.dc-canvas, .dc-ghost') !== null;
+}
+
+/** Shapes that open ready to be typed into when they are made — see `createAt`. A Junction has no text. */
+function hasNameToType(type: DraftNode['type']): boolean {
+  return type !== 'ellipse';
 }
 
 /** Focus sits on a control that was reached from the keyboard (`:focus-visible`), not by a click. */
@@ -184,7 +189,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
   const [canvasInstanceKey, setCanvasInstanceKey] = useState(0);
 
   const createAt = useCallback(
-    (preset: Preset, position: { x: number; y: number }, autoEdit = false) => {
+    (preset: Preset, position: { x: number; y: number }, autoEdit = true) => {
       const code = preset.type === 'code' ? (CODE_SAMPLES[preset.language ?? ''] ?? '') : undefined;
       const size =
         preset.type === 'code' && code
@@ -206,15 +211,13 @@ function EditorScreen({ session }: { session: DocumentSession }) {
         code,
       });
       arm(null);
-      // A note exists to be typed into, so it opens ready for that regardless of how it was
-      // created — a mouse-drawn service, by contrast, arrives already named, so `autoEdit` only
-      // opts *in* the keyboard/command-driven creation paths (the double-click type picker and the
-      // armed-tool click stay mouse gestures, never pass it): a keyboard user who just made
-      // something should be able to start typing immediately, the same "create, then name" flow a
-      // note already gets. Text gets the same treatment as Note, for the same reason: it has no
-      // default label (`defaultTextFor('text')` is `''`), so it exists to be typed into too —
-      // unlike Service/Actor/etc., which arrive pre-named and don't need this.
-      if (node.type === 'note' || node.type === 'text' || autoEdit) useUiStore.getState().requestEdit(node.id);
+      // Whatever made it — a key, the palette, the double-click picker, a click with a tool armed —
+      // a new shape opens ready to name, its placeholder selected so typing replaces it. "Service"
+      // is a placeholder, not a name: nobody wants a diagram of boxes called Service, and making
+      // every shape take an extra Enter before it could be named was the slowest step in drawing
+      // one. Escape or a click away keeps the placeholder. A code card (it arrives with sample code
+      // to edit, not a name) and a junction (an `ellipse`, nothing to name) are left as they are.
+      if (autoEdit && hasNameToType(node.type)) useUiStore.getState().requestEdit(node.id);
       return node;
     },
     [arm, theme],
@@ -295,7 +298,9 @@ function EditorScreen({ session }: { session: DocumentSession }) {
       const offer = offerFor(useEditorStore.getState().document, quickConnect, item);
       if (offer) {
         useEditorStore.getState().acceptContinuation(offer);
-        if (offer.nodes[0]?.type === 'note') useUiStore.getState().requestEdit(offer.nodes[0].id);
+        // Picked from the menu, like any other creation — named next (see `createAt`).
+        const made = offer.nodes[0];
+        if (made && hasNameToType(made.type)) useUiStore.getState().requestEdit(made.id);
       }
       setContinuation(null);
       setQuickConnect(null);
@@ -1173,7 +1178,9 @@ export function useKeyboard({
           state.nudgeSelection(dx, dy);
           return;
         }
-        case 'Enter': {
+        case 'Enter':
+        case 'F2': {
+          // F2 too: the rename key in Windows, Linux file managers and most editors.
           // Bare Enter only — and only when it is unambiguous what to edit,
           // and nothing else is already claiming keyboard input (the
           // walkthrough and Focus have their own controls; the Quick Connect
@@ -1190,6 +1197,8 @@ export function useKeyboard({
             uiState.requestEdit(target.id);
           } else if (edges.length === 1 && nodes.length === 0) {
             event.preventDefault();
+            // A connector just drawn keeps its panel closed until asked for; Enter is asking.
+            uiState.setQuietEdge(null);
             uiState.requestEdit(edges[0]!);
           }
           return;

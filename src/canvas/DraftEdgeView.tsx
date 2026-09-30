@@ -1189,15 +1189,22 @@ function EdgeEndpointHandle({
   // A single pass tracking the highest-z match is equivalent to (and cheaper
   // than) copying + sorting the whole array on every pointer-move frame of a
   // reconnect drag — same result, no allocation, no O(n log n) sort.
+  // A shape under the pointer wins; with none, the innermost boundary around it takes the end — a
+  // connector can be drawn to a boundary, and re-pointing one there used to snap back silently.
   const findDropNode = useCallback(
     (point: { x: number; y: number }) => {
       let best: DraftNode | undefined;
+      let boundary: DraftNode | undefined;
       for (const node of nodes) {
-        if (node.type === 'group' || node.id === oppositeNodeId) continue;
+        if (node.id === oppositeNodeId) continue;
         if (!pointInBox(point, node)) continue;
+        if (node.type === 'group') {
+          if (!boundary || node.width * node.height < boundary.width * boundary.height) boundary = node;
+          continue;
+        }
         if (!best || node.z > best.z) best = node;
       }
-      return best;
+      return best ?? boundary;
     },
     [nodes, oppositeNodeId],
   );

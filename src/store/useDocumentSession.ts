@@ -4,6 +4,8 @@ import { createId } from '../document/ids';
 import { LIMITS } from '../document/limits';
 import type { DraftDocument, DraftSummary, Project } from '../document/types';
 import { hostKind } from '../host/hostInfo';
+import { clearDocUrl, docIdFromLocation, pushDocUrl, replaceDocUrl } from '../lib/documentUrl';
+import { stashForReload, takeReloadStash } from '../storage/reloadStash';
 import { logDiagnostic } from '../lib/diagnostics';
 import { loadFailureNotice } from '../lib/staleChunk';
 import type { StarterId } from '../starters';
@@ -88,7 +90,8 @@ export interface DocumentSession {
    *  Architecture Starter, titled after it unless `title` says otherwise. */
   newDocument: (title?: string, starterId?: StarterId) => Promise<void>;
   adoptDocument: (document: DraftDocument, options?: { fresh?: boolean }) => Promise<void>;
-  closeDocument: () => Promise<void>;
+  /** Resolves `true` once the canvas is closed, `false` when unsaved work kept it open. */
+  closeDocument: () => Promise<boolean>;
   /**
    * After another tab deleted or changed the open canvas: `keep` saves this tab's copy over it;
    * `discard` reloads the stored copy, or closes the canvas when it was deleted.
@@ -269,7 +272,14 @@ export function useDocumentSession(): DocumentSession {
     const flush = () => {
       if (document.visibilityState === 'hidden') void autosave.current?.flush();
     };
-    const flushNow = () => void autosave.current?.flush();
+    const flushNow = () => {
+      // The flush is a hope, not a promise: the unload aborts any IndexedDB transaction still open,
+      // queued requests included. The stash is what a refresh actually gets its edits back from
+      // (`reloadStash.ts`); the desktop shell keeps its own recovery snapshot instead.
+      const unsaved = hostKind() ? null : autosave.current?.unsavedForStash();
+      if (unsaved) stashForReload(unsaved);
+      void autosave.current?.flush();
+    };
     window.addEventListener('visibilitychange', flush);
     window.addEventListener('pagehide', flushNow);
     return () => {
@@ -290,6 +300,14 @@ export function useDocumentSession(): DocumentSession {
       let loaded: DraftDocument | null;
       try {
         loaded = await repository.load(id);
+        // Edits the page was leaving with as it last unloaded (`reloadStash.ts`): written to the
+        // store first, so everything after this is the ordinary open — unless another tab has saved
+        // something newer since, in which case the stash is the stale one.
+        const stashed = takeReloadStash(id);
+        if (loaded && stashed && stashed.metadata.updatedAt >= loaded.metadata.updatedAt) {
+          await repository.save(stashed);
+          loaded = stashed;
+        }
       } catch (error) {
         logDiagnostic(error, { operation: 'open-document', documentId: id });
         loaded = null;
@@ -428,7 +446,7 @@ export function useDocumentSession(): DocumentSession {
           : 'Your latest changes could not be saved to this browser. Export the diagram to keep a copy.',
         'error',
       );
-      return;
+      return false;
     }
     // Replaced and removed backgrounds kept their images only so undo could bring them back. Undo
     // history ends here, so everything but the image actually showing goes — the one the *stored*
@@ -450,7 +468,68 @@ export function useDocumentSession(): DocumentSession {
     setOpenId(null);
     // Home is already showing; a list that can't be re-read just stays as it was.
     await refreshLibrary().catch((error: unknown) => logDiagnostic(error, { operation: 'refresh-library' }));
+    return true;
   }, [notify, openId, refreshLibrary, repository]);
+
+  // The open canvas in the address (`lib/documentUrl.ts`), so a refresh, Back/Forward and a bookmark
+  // all come back to it. The web app only: the desktop shell opens files and owns its own navigation.
+  const urlRouting = typeof window !== 'undefined' && !hostKind();
+  // Until the address the page arrived at has been dealt with, "no canvas open" is only the state
+  // before anything loaded — clearing the address then would lose the canvas a refresh came back for.
+  const arrivalSettled = useRef(false);
+  useEffect(() => {
+    if (!urlRouting || !arrivalSettled.current) return;
+    if (openId) pushDocUrl(openId);
+    else clearDocUrl();
+  }, [openId, urlRouting]);
+
+  // Arriving at an address that names a canvas: open it once the Library is readable.
+  const arrived = useRef(false);
+  useEffect(() => {
+    if (!urlRouting || !ready || !repository || arrived.current) return;
+    arrived.current = true;
+    const id = docIdFromLocation();
+    if (!id) {
+      arrivalSettled.current = true;
+      return;
+    }
+    void repository
+      .has(id)
+      .then(async (found) => {
+        if (found) return openDocument(id);
+        replaceDocUrl(null);
+        notify("That diagram isn't in this browser. Diagrams are kept per browser — export one to open it elsewhere.");
+      })
+      .finally(() => {
+        arrivalSettled.current = true;
+        // The canvas the address named opened while the address was still being dealt with: the
+        // effect above skipped that change, so the address follows what is on screen once, here.
+        const open = openIdRef.current;
+        if (open) pushDocUrl(open);
+        else clearDocUrl();
+      });
+  }, [notify, openDocument, ready, repository, urlRouting]);
+
+  // Back and Forward: the address changed under the app, so the screen follows it.
+  useEffect(() => {
+    if (!urlRouting) return;
+    const onPopState = () => {
+      const id = docIdFromLocation();
+      const open = openIdRef.current;
+      if (id === open) return;
+      if (id) {
+        void openDocument(id);
+        return;
+      }
+      if (!open) return;
+      void closeDocument().then((closed) => {
+        // Kept open (unsaved work): the address goes back to naming what is on screen.
+        if (!closed) pushDocUrl(open);
+      });
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [closeDocument, openDocument, urlRouting]);
 
   const resolveConflict = useCallback(
     async (choice: 'keep' | 'discard') => {

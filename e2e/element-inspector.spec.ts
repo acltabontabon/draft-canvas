@@ -1,22 +1,9 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
+import { newCanvas, create } from './canvas';
 
 /** Contextual popover for a single selected element, anchored at the element instead of docked
  *  at the bottom of the screen — mirrors `connector-semantics.spec.ts`'s coverage of the
  *  equivalent connector popover. */
-
-async function newCanvas(page: Page, title: string) {
-  await page.goto('/');
-  await page.getByRole('button', { name: 'New canvas' }).click();
-  await expect(page.locator('.dc-editor')).toBeVisible();
-  const field = page.getByLabel('Diagram title');
-  await field.fill(title);
-  await field.blur();
-}
-
-async function create(page: Page, tool: string, at: { x: number; y: number }) {
-  await page.getByRole('button', { name: tool, exact: true }).click();
-  await page.locator('.react-flow__pane').click({ position: at });
-}
 
 test.describe('element inspector popover', () => {
   test('selecting one element shows its popover near it, not the bottom bar', async ({ page }) => {

@@ -336,6 +336,13 @@ export interface UiStore {
    * editing has actually started.
    */
   editRequestId: string | null;
+  /**
+   * A connector selected by the app rather than picked by the person — the one a drag just drew, or
+   * one an undo/redo selected — whose editing panel stays closed until it is clicked. Opening that
+   * panel after every connection covered the shape just connected to and half the new line, on
+   * the gesture people repeat most.
+   */
+  quietEdgeId: string | null;
   /** True once a newer app build has finished downloading in the background
    *  and is waiting to be activated — see `serviceWorker.ts`
    *  and `AboutDialog.tsx`'s update-ready state. */
@@ -487,6 +494,7 @@ export interface UiStore {
   setProposalPanelOpen: (open: boolean, proposalId?: string | null) => void;
   setInteractionActive: (active: boolean, movingNodeIds?: Iterable<string>) => void;
   requestEdit: (id: string | null) => void;
+  setQuietEdge: (id: string | null) => void;
   notify: (message: string, tone?: Toast['tone'], action?: ToastAction) => void;
   dismiss: (id: number) => void;
   /** Holds every toast's auto-dismiss while the pointer or focus is on them, so there's time to
@@ -594,6 +602,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   interactionActive: false,
   movingNodeIds: NO_MOVING_NODES,
   editRequestId: null,
+  quietEdgeId: null,
   updateReady: false,
   lastSeenProductRelease: readLastSeenRelease(),
   commandPaletteOpen: false,
@@ -695,6 +704,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
       return { interactionActive, movingNodeIds: moving.size === 0 ? NO_MOVING_NODES : moving };
     }),
   requestEdit: (editRequestId) => set({ editRequestId }),
+  setQuietEdge: (quietEdgeId) => set((state) => (state.quietEdgeId === quietEdgeId ? state : { quietEdgeId })),
 
   notify(message, tone = 'info', action) {
     // The same message again (a paste refused twice in a row) restarts the one already showing

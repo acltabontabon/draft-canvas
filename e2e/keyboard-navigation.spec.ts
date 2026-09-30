@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { newCanvas } from './canvas';
 
 /**
  * Alt+Arrow (spatial navigation between nearby elements) and Alt+Shift+Left/Right (relationship
@@ -7,15 +8,6 @@ import { expect, test, type Page } from '@playwright/test';
  * selected something by other means. Bare Arrow (nudge) is unchanged and covered elsewhere
  * (`e2e/editing.spec.ts`); this file is about the new Alt-modified grammar only.
  */
-
-async function newCanvas(page: Page, title: string) {
-  await page.goto('/');
-  await page.getByRole('button', { name: 'New canvas' }).click();
-  await expect(page.locator('.dc-editor')).toBeVisible();
-  const field = page.getByLabel('Diagram title');
-  await field.fill(title);
-  await field.blur();
-}
 
 /**
  * The blank canvas's starter block is the one part of its empty state that takes clicks, so a node

@@ -83,7 +83,7 @@ describe('Text editing — Enter is a newline, Cmd/Ctrl+Enter commits', () => {
     expect(useEditorStore.getState().document.nodes[0]!.text).toBe('Renamed');
   });
 
-  it('Escape on Text puts the box back to its stored height after typing grew it', () => {
+  it('Escape on Text keeps what was typed, and the box ends at the height the document holds', () => {
     const node = createNode({ type: 'text', x: 0, y: 0, text: 'Heading' });
     const { editor, container } = mount(node);
     const box = () => container.querySelector<HTMLElement>('.dc-node')!;
@@ -97,7 +97,9 @@ describe('Text editing — Enter is a newline, Cmd/Ctrl+Enter commits', () => {
     fireEvent.keyDown(editor()!, { key: 'Escape' });
 
     expect(editor()).toBeNull();
-    expect(useEditorStore.getState().document.nodes[0]!.height).toBe(node.height);
-    expect(box().style.height).toBe(`${node.height}px`);
+    const stored = useEditorStore.getState().document.nodes[0]!;
+    expect(stored.text).toBe('Heading\nmore\nand more');
+    // The grown height is committed with the text (React Flow hands it back as the node's size).
+    expect(stored.height).toBe(node.height + 80);
   });
 });

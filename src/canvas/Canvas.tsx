@@ -1712,6 +1712,8 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       const pick = edgeAtEvent(event);
       if (!pick || pick.part === 'control') return;
       event.stopPropagation();
+      // A click is the person asking for this connector: its panel opens, even if it was quiet.
+      useUiStore.getState().setQuietEdge(null);
       const editor = useEditorStore.getState();
       const current = editor.selection;
       if (event.shiftKey || event.metaKey || event.ctrlKey) {

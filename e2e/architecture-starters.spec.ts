@@ -1,18 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
+import { newCanvas, reopenAfterReload } from './canvas';
 
 /**
  * Architecture Starters, driven the way they are meant to be used: ⌘K, a few letters, Enter, and a
  * diagram to talk about. The keyboard path is the product claim, so it is the one asserted first.
  */
-
-async function newCanvas(page: Page, title: string) {
-  await page.goto('/');
-  await page.getByRole('button', { name: 'New canvas' }).click();
-  await expect(page.locator('.dc-editor')).toBeVisible();
-  const field = page.getByLabel('Diagram title');
-  await field.fill(title);
-  await field.blur();
-}
 
 async function insertViaPalette(page: Page, query: string) {
   await page.keyboard.press('ControlOrMeta+k');
@@ -137,8 +129,7 @@ test.describe('architecture starters', () => {
 
     // A reload lands back in the library, the same way `critical-journey.spec.ts` re-opens.
     await expect(page.locator('.dc-save')).toContainText('Saved locally');
-    await page.reload();
-    await page.locator('.dc-library-item', { hasText: 'Starter twice' }).click();
+    await reopenAfterReload(page, 'Starter twice');
     await expect(page.locator('.dc-editor')).toBeVisible();
     await expect(page.locator('.dc-node')).toHaveCount(28);
   });

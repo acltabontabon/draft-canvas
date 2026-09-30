@@ -1,15 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
+import { newCanvas } from './canvas';
 
 /** Phase 8 — the ⌘K command surface, driven start to finish from the keyboard. */
-
-async function newCanvas(page: Page, title: string) {
-  await page.goto('/');
-  await page.getByRole('button', { name: 'New canvas' }).click();
-  await expect(page.locator('.dc-editor')).toBeVisible();
-  const field = page.getByLabel('Diagram title');
-  await field.fill(title);
-  await field.blur();
-}
 
 async function openPalette(page: Page) {
   await page.keyboard.press('ControlOrMeta+k');

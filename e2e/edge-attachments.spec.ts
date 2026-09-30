@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { newCanvas, create, connect } from './canvas';
 
 /**
  * Connection-attached details: dragging an existing Note/Code node onto a connector folds it into
@@ -14,35 +15,6 @@ import { expect, test, type Page } from '@playwright/test';
  * attachments. A pinned card also opens read-only first; a second click on its own pencil glyph
  * ("Edit attached detail") is what reveals the actual textarea.
  */
-
-async function newCanvas(page: Page, title: string) {
-  await page.goto('/');
-  await page.getByRole('button', { name: 'New canvas' }).click();
-  await expect(page.locator('.dc-editor')).toBeVisible();
-  const field = page.getByLabel('Diagram title');
-  await field.fill(title);
-  await field.blur();
-}
-
-async function create(page: Page, tool: string, at: { x: number; y: number }) {
-  await page.getByRole('button', { name: tool, exact: true }).click();
-  await page.locator('.react-flow__pane').click({ position: at });
-  // A new Note opens ready to type into; Escape commits (empty) and leaves it selected, so the
-  // rest of a test sees the same plain, selected node it would for any other tool.
-  if (tool === 'Note') await page.keyboard.press('Escape');
-}
-
-/** Drags from a node's right-hand handle onto another node. */
-async function connect(page: Page, fromIndex: number, toIndex: number) {
-  const source = page.locator('.dc-node').nth(fromIndex);
-  await source.hover();
-  const handle = (await source.locator('.dc-handle').nth(1).boundingBox())!;
-  const target = (await page.locator('.dc-node').nth(toIndex).boundingBox())!;
-  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 10 });
-  await page.mouse.up();
-}
 
 /**
  * The connector's own true midpoint — read from the actual rendered SVG path (via

@@ -18,12 +18,10 @@ interface EmptyStateProps {
 /** How long the layer lingers after the canvas stops being empty, matching `canvas.css`. */
 const EXIT_MS = 170;
 
-/** Pairs, so the starters stay a composition rather than a strip of icons. */
-const ROWS = PRIMARY_STARTERS.reduce<ArchitectureStarter[][]>((rows, starter, i) => {
-  if (i % 2 === 0) rows.push([]);
-  rows[rows.length - 1]!.push(starter);
-  return rows;
-}, []);
+/** Three, then the rest, stepped — a composition rather than a strip of icons. Pairs were drawn for
+ *  four starters, and five of them left the last one alone on a third row. The home screen splits
+ *  the same five 3 + 2. */
+const ROWS: ArchitectureStarter[][] = [PRIMARY_STARTERS.slice(0, 3), PRIMARY_STARTERS.slice(3)].filter((row) => row.length > 0);
 
 /**
  * The zero-element canvas: what to press on the left, the primary starters on the right as the

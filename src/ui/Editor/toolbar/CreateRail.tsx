@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useUiStore } from '../../../store/uiStore';
 import { DEV_PRESETS, PRESETS, SELECT_TOOLTIP, tooltipContentFor, type Preset } from '../../../canvas/presets';
 import { Button } from '../../common/Button';
@@ -23,6 +23,7 @@ export function CreateRail() {
   const armed = useUiStore((state) => state.armed);
   const arm = useUiStore((state) => state.arm);
   const railRef = useRef<HTMLDivElement>(null);
+  const [more, setMore] = useState({ start: false, end: false });
 
   // On a window too narrow for every tool the rail scrolls, with its scrollbar hidden — so each end
   // that has more tools past it fades out, and a plain mouse wheel scrolls it sideways.
@@ -30,9 +31,12 @@ export function CreateRail() {
     const rail = railRef.current;
     if (!rail) return;
     const update = () => {
-      const more = rail.scrollWidth - rail.clientWidth;
-      rail.dataset.moreStart = String(more > 1 && rail.scrollLeft > 1);
-      rail.dataset.moreEnd = String(more > 1 && rail.scrollLeft < more - 1);
+      const hidden = rail.scrollWidth - rail.clientWidth;
+      const start = hidden > 1 && rail.scrollLeft > 1;
+      const end = hidden > 1 && rail.scrollLeft < hidden - 1;
+      rail.dataset.moreStart = String(start);
+      rail.dataset.moreEnd = String(end);
+      setMore((current) => (current.start === start && current.end === end ? current : { start, end }));
     };
     update();
     // Absent in a test DOM; the rail's size then never changes anyway.
@@ -51,7 +55,16 @@ export function CreateRail() {
     rail.scrollLeft += event.deltaY;
   };
 
-  const segments = () => [...(railRef.current?.querySelectorAll<HTMLButtonElement>('button') ?? [])];
+  const segments = () => [...(railRef.current?.querySelectorAll<HTMLButtonElement>('button:not(.dc-create-rail-more)') ?? [])];
+
+  // A fade says there is more, but a mouse without a sideways wheel — or anyone who doesn't think to
+  // scroll a toolbar — had no way to reach "Junction" on a narrow window. A click on the chevron
+  // pages the rail. Out of the tab order: the keyboard moves along the rail with the arrow keys.
+  const page = (direction: 1 | -1) => {
+    const rail = railRef.current;
+    if (!rail) return;
+    rail.scrollBy({ left: direction * rail.clientWidth * 0.8, behavior: 'smooth' });
+  };
 
   // One tab stop for the whole rail, per the ARIA toolbar pattern: eleven separate stops made
   // reaching the canvas by keyboard a chore. The stop lives on the tool you actually have in
@@ -128,6 +141,16 @@ export function CreateRail() {
       </div>
       <div className="dc-create-family">{PRESETS.map(toolButton)}</div>
       <div className="dc-create-family">{DEV_PRESETS.map(toolButton)}</div>
+      {more.start && (
+        <button type="button" className="dc-create-rail-more" data-side="start" tabIndex={-1} aria-label="Show earlier tools" onClick={() => page(-1)}>
+          ‹
+        </button>
+      )}
+      {more.end && (
+        <button type="button" className="dc-create-rail-more" data-side="end" tabIndex={-1} aria-label="Show more tools" onClick={() => page(1)}>
+          ›
+        </button>
+      )}
     </div>
   );
 }

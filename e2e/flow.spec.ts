@@ -1,18 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
+import { newCanvas, connect, reopenAfterReload } from './canvas';
 
 /**
  * Flows: build one from existing connectors, present it, and reuse the same
  * architecture for a second scenario without redrawing anything.
  */
-
-async function newCanvas(page: Page, title: string) {
-  await page.goto('/');
-  await page.getByRole('button', { name: 'New canvas' }).click();
-  await expect(page.locator('.dc-editor')).toBeVisible();
-  const field = page.getByLabel('Diagram title');
-  await field.fill(title);
-  await field.blur();
-}
 
 async function createNode(page: Page, tool: string, at: { x: number; y: number }) {
   await page.getByRole('button', { name: tool, exact: true }).click();
@@ -60,18 +52,6 @@ async function labelNode(page: Page, index: number, text: string) {
   await editor.fill(text);
   await editor.press('Enter');
   await expect(editor).toBeHidden();
-}
-
-async function connect(page: Page, fromIndex: number, toIndex: number) {
-  const source = page.locator('.dc-node').nth(fromIndex);
-  await source.hover();
-  const handle = (await source.locator('.dc-handle').nth(1).boundingBox())!;
-  const target = (await page.locator('.dc-node').nth(toIndex).boundingBox())!;
-
-  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 10 });
-  await page.mouse.up();
 }
 
 /**
@@ -247,8 +227,7 @@ test.describe('Flows', () => {
     // A reload lands back on the library, so re-open the diagram first, and
     // wait for autosave to actually persist before reloading at all.
     await expect(page.locator('.dc-save')).toContainText('Saved locally');
-    await page.reload();
-    await page.locator('.dc-library-item', { hasText: 'Rename persistence' }).click();
+    await reopenAfterReload(page, 'Rename persistence');
     await expect(page.locator('.dc-editor')).toBeVisible();
     await openFlowPanel(page);
     await expect(page.locator('.dc-flow-item .dc-flow-title')).toHaveText('Renamed flow');

@@ -2700,6 +2700,11 @@
   margin-left: 0;
   }
 
+  /* Rows of three and two: centred on each other, as the home screen's grid is. */
+  .dc-empty-rows {
+  align-items: center;
+  }
+
   .dc-empty-pick {
   display: flex;
   flex-direction: column;
@@ -2707,7 +2712,8 @@
   }
 }
 
-/* One pair is still a composition; four crammed into this width is not. */
+/* One row of three is still a composition; five crammed into this width is not — the palette
+   (⌘K) names the rest. */
 @media (max-width: 759px) {
   .dc-empty-crops {
   display: none;

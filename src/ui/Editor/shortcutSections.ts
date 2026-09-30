@@ -77,7 +77,7 @@ export const SECTIONS: Section[] = [
       { keys: [alt, 'Arrow'], label: 'Select the nearest element in that direction' },
       { keys: [alt, 'Shift', '→'], label: 'Follow an outgoing connector' },
       { keys: [alt, 'Shift', '←'], label: 'Follow an incoming connector' },
-      { commandId: 'edit-text', label: 'Open the selected element' },
+      { commandId: 'edit-text', label: 'Rename or edit the selected element (F2 also works)' },
       { commandId: 'look-inside', label: 'Look inside the selected shape' },
       { commandId: 'back-out', label: 'Back out to what contains it' },
       { keys: ['Shift', 'F10'], label: 'Context menu for the selection (or the Menu key)' },
@@ -98,7 +98,9 @@ export const SECTIONS: Section[] = [
   {
     title: 'Diagramming',
     rows: [
-      { gesture: 'Double-click', label: 'Create here, or edit text' },
+      { gesture: 'Double-click', label: 'Create here, or edit text — a new shape opens ready to name' },
+      { keys: ['Enter'], label: 'Finish a name — Esc puts the old one back' },
+      { keys: [mod, 'Enter'], label: 'Finish a note, text or code — Esc keeps what you typed' },
       { keys: [mod, 'K'], label: 'Create and place a shape without the mouse' },
       { gesture: 'Drag from a handle', label: 'Connect — drop on empty canvas to create and wire a node' },
       { keys: ['Tab'], label: 'Accept the suggested next element, when one is showing' },

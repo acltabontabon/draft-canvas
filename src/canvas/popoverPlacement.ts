@@ -86,9 +86,51 @@ export function resolvePlacement(
   flowToScreenPosition: (point: PlacementPoint) => PlacementPoint,
   size: PlacementSize,
   clearances: PlacementClearances,
+  avoid: readonly PlacementRect[] = [],
 ): Placement {
   const fits = (candidate: Placement) => fitsPlacement(candidate, anchors, flowToScreenPosition, size, clearances);
+  if (avoid.length === 0) return fits(current) ? current : (PLACEMENT_ORDER.find(fits) ?? current);
+  // `avoid`: flow-space rects the popover shouldn't sit on — the shapes the element is connected
+  // to. Above is the first choice, and in a top-down diagram above is exactly where the shape
+  // feeding this one sits, so the popover covered the very relationship being looked at. Still
+  // stable: the current side stays while it fits and covers nothing.
+  const screenAvoid = avoid.map((rect) => {
+    const topLeft = flowToScreenPosition({ x: rect.x, y: rect.y });
+    const bottomRight = flowToScreenPosition({ x: rect.x + rect.width, y: rect.y + rect.height });
+    return { left: topLeft.x, top: topLeft.y, right: bottomRight.x, bottom: bottomRight.y };
+  });
+  const covers = (candidate: Placement) => {
+    const box = popoverBox(candidate, anchors, flowToScreenPosition, size, clearances);
+    return screenAvoid.some((rect) => box.left < rect.right && box.right > rect.left && box.top < rect.bottom && box.bottom > rect.top);
+  };
+  if (fits(current) && !covers(current)) return current;
+  const clean = PLACEMENT_ORDER.find((candidate) => fits(candidate) && !covers(candidate));
+  if (clean) return clean;
   return fits(current) ? current : (PLACEMENT_ORDER.find(fits) ?? current);
+}
+
+/** Where the popover would be on screen, on a side — the same geometry `placementTransform` uses. */
+function popoverBox(
+  placement: Placement,
+  anchors: Record<Placement, PlacementPoint>,
+  flowToScreenPosition: (point: PlacementPoint) => PlacementPoint,
+  size: PlacementSize,
+  clearances: PlacementClearances,
+): { left: number; top: number; right: number; bottom: number } {
+  const anchor = flowToScreenPosition(anchors[placement]);
+  const { width, height } = size;
+  switch (placement) {
+    case 'above':
+    case 'below': {
+      const centerX = clampCenterX(anchor.x, width / 2, clearances.left, clearances.right);
+      const top = placement === 'above' ? anchor.y - clearances.gap - height : anchor.y + clearances.gap;
+      return { left: centerX - width / 2, top, right: centerX + width / 2, bottom: top + height };
+    }
+    case 'right':
+      return { left: anchor.x + clearances.gap, top: anchor.y - height / 2, right: anchor.x + clearances.gap + width, bottom: anchor.y + height / 2 };
+    case 'left':
+      return { left: anchor.x - clearances.gap - width, top: anchor.y - height / 2, right: anchor.x - clearances.gap, bottom: anchor.y + height / 2 };
+  }
 }
 
 /**

@@ -1709,7 +1709,8 @@ kbd {
 }
 
 .dc-title-input {
-  min-width: 80px;
+  /* Enough for a two-word title to be read, not "Untitle…" — the rail scrolls before this shrinks. */
+  min-width: 120px;
   max-width: 240px;
   height: 28px;
   padding: 0 8px;
@@ -1773,21 +1774,40 @@ kbd {
   display: none;
 }
 
-/* More tools past an end of a scrolled rail (see `CreateRail`). */
-.dc-create-rail[data-more-end='true'] {
-  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
-  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+/* The chevrons that page a scrolled rail (see `CreateRail`): pinned to its ends as it scrolls. */
+.dc-create-rail-more {
+  position: sticky;
+  z-index: 1;
+  flex: none;
+  order: 99;
+  right: 0;
+  width: 22px;
+  height: 26px;
+  margin-left: -22px;
+  border: 0;
+  border-radius: var(--dc-radius-sm);
+  background: var(--dc-canvas);
+  color: var(--dc-text-muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
 }
 
-.dc-create-rail[data-more-start='true'] {
-  -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 28px), transparent);
-  mask-image: linear-gradient(to left, #000 calc(100% - 28px), transparent);
+.dc-create-rail-more[data-side='start'] {
+  order: -1;
+  left: 0;
+  right: auto;
+  margin-left: 0;
+  margin-right: -22px;
 }
 
-.dc-create-rail[data-more-start='true'][data-more-end='true'] {
-  -webkit-mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent);
-  mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent);
+.dc-create-rail-more:hover {
+  color: var(--dc-text);
 }
+
+/* More tools past an end of a scrolled rail: its chevron says so (`.dc-create-rail-more`). A fade
+   used to, but it faded the chevron too — and alone it told a reader there was more without saying
+   how to get to it. */
 
 /* Interaction | annotation | architecture. The 10px between families against 1px within one is
    the whole grouping mechanism — no dividers. */

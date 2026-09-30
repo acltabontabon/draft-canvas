@@ -1,32 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
+import { newCanvas, create, reopenAfterReload } from './canvas';
 
 /** Node attachments: drag-to-attach arming, the badge opening a connector-style chip row/card
  *  (`AttachmentPresentation.tsx`, shared with `DraftEdgeView.tsx`), detach, delete. */
-
-async function newCanvas(page: Page, title: string) {
-  await page.goto('/');
-  await page.getByRole('button', { name: 'New canvas' }).click();
-  await expect(page.locator('.dc-editor')).toBeVisible();
-  const field = page.getByLabel('Diagram title');
-  await field.fill(title);
-  await field.blur();
-}
-
-async function create(page: Page, tool: string, at: { x: number; y: number }) {
-  await page.getByRole('button', { name: tool, exact: true }).click();
-  await page.locator('.react-flow__pane').click({ position: at });
-  // A new Note opens ready to type into; Escape commits (empty) and leaves it selected, so the
-  // rest of a test sees the same plain, selected node it would for any other tool.
-  if (tool === 'Note') await page.keyboard.press('Escape');
-  // A new Text node opens ready to type into, and an untyped one is deleted the instant it's
-  // deselected (`finishTextEdit`, so it never becomes an invisible ghost) — Escape included, since
-  // Escape never commits for Text. Typing something and committing with Cmd/Ctrl+Enter is the only
-  // way to leave a Text node on the canvas.
-  if (tool === 'Text') {
-    await page.keyboard.type('Text');
-    await page.keyboard.press('ControlOrMeta+Enter');
-  }
-}
 
 /** Drags a node by its center to a new center point, holding partway through. */
 async function dragNodeCenterTo(
@@ -259,8 +235,7 @@ test.describe('attachments', () => {
     await expect(card).toHaveCount(0);
 
     await expect(page.locator('.dc-save')).toContainText('Saved locally');
-    await page.reload();
-    await page.locator('.dc-library-item', { hasText: 'Attachment persistence' }).click();
+    await reopenAfterReload(page, 'Attachment persistence');
 
     await expect(page.locator('.dc-node')).toHaveCount(1);
     await expect(page.locator('.dc-attachment-badge')).toHaveCount(1);

@@ -384,29 +384,39 @@ export class IndexedDbRepository implements DraftRepository {
     if (cameraOnly && !checked) return;
     const conflictIn = (row: DraftSummary | undefined) =>
       !checked ? null : !row ? 'deleted' : row.contentStamp !== known ? 'changed' : null;
+    // A camera move keeps the stamp it found (`checked` guarantees `known` is that stamp), so what
+    // other tabs last read is still true of the content.
+    const stamp = cameraOnly ? known! : createId('s');
+    // One readwrite transaction, and every request in it queued before the first `await`. The flush a
+    // closing tab fires from `pagehide` gets no further than the task it started in: requests already
+    // queued still commit, but a callback never runs — so a write that waited for its own read of the
+    // row never happened, and the last few seconds of edits were gone on every refresh. The read goes
+    // first (requests run in order, so it sees the row as it was), the write right behind it, and the
+    // read's answer then either aborts the write (another tab's content) or lays the merged metadata
+    // over it. A tab that unloads before the answer arrives has written unmerged, unchecked — a
+    // rename made elsewhere is caught by the next save, and a content change made elsewhere within
+    // those milliseconds is the one case this trades for never losing the edits.
+    const tx = this.db.transaction(['documents', 'bodies'], 'readwrite');
+    const documents = tx.objectStore('documents');
+    const bodies = tx.objectStore('bodies');
+    const write = (doc: DraftDocument) => Promise.all([documents.put({ ...summarize(doc), contentStamp: stamp }), bodies.put(plainBody(doc))]);
+    const read = base || checked ? documents.get(id) : Promise.resolve(undefined);
+    const first = write(document);
+    let written = document;
     try {
-      // One readwrite transaction, opened before the first `await`: the flush a closing tab fires from
-      // `pagehide` gets no further than the task it started in, so a save that first awaited a
-      // separate read never created its write at all. Reading, reconciling and writing inside the one
-      // transaction also leaves no gap for another tab's rename to land in — IndexedDB serializes
-      // overlapping readwrite transactions — so the merge never needs redoing.
-      const tx = this.db.transaction(['documents', 'bodies'], 'readwrite');
-      const before = base || checked ? await tx.objectStore('documents').get(id) : undefined;
+      const before = await read;
       const conflict = conflictIn(before);
       if (conflict) {
-        await tx.done;
+        tx.abort();
+        await Promise.allSettled([first, tx.done]);
         if (cameraOnly) return;
         throw new DocumentConflictError(conflict);
       }
-      const written = base && before ? reconcileMetadata(document, base, before) : document;
-      // A camera move keeps the stamp it found (`checked` guarantees `known` is that stamp), so what
-      // other tabs last read is still true of the content.
-      const stamp = cameraOnly ? known! : createId('s');
-      await Promise.all([
-        tx.objectStore('documents').put({ ...summarize(written), contentStamp: stamp }),
-        tx.objectStore('bodies').put(plainBody(written)),
-        tx.done,
-      ]);
+      if (base && before) {
+        written = reconcileMetadata(document, base, before);
+        if (written !== document) await write(written);
+      }
+      await Promise.all([first, tx.done]);
       this.stamps.set(id, stamp);
       requestPersistenceOnce();
       if (written !== document) return sharedMetadataOf(written.metadata);
