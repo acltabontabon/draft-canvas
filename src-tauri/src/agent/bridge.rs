@@ -129,11 +129,15 @@ pub fn listen(agent: Arc<Agent>) -> std::io::Result<Running> {
         let name = endpoint::pipe_name();
         // Made here, before anything is written about it, so no other program can claim the name first.
         // Inside the runtime: a pipe server registers with its reactor as it is made.
+        let owner_only = OwnerOnly::new()?;
         let first = tauri::async_runtime::block_on(async {
-            ServerOptions::new()
-                .first_pipe_instance(true)
-                .reject_remote_clients(true)
-                .create(&name)
+            // SAFETY: the attributes and the descriptor they point at outlive the call.
+            unsafe {
+                ServerOptions::new()
+                    .first_pipe_instance(true)
+                    .reject_remote_clients(true)
+                    .create_with_security_attributes_raw(&name, owner_only.attributes())
+            }
         })?;
         write_info(&agent, name.clone(), &token)?;
         let stop_rx = stop.clone();
@@ -144,10 +148,12 @@ pub fn listen(agent: Arc<Agent>) -> std::io::Result<Running> {
                     continue;
                 }
                 let connected = server;
-                server = match ServerOptions::new()
-                    .reject_remote_clients(true)
-                    .create(&name)
-                {
+                // SAFETY: as above — `owner_only` lives as long as this task.
+                server = match unsafe {
+                    ServerOptions::new()
+                        .reject_remote_clients(true)
+                        .create_with_security_attributes_raw(&name, owner_only.attributes())
+                } {
                     Ok(s) => s,
                     Err(e) => {
                         eprintln!("Draft Canvas: agent pipe unusable ({e})");
@@ -165,6 +171,73 @@ pub fn listen(agent: Arc<Agent>) -> std::io::Result<Running> {
             }
         });
         Ok(Running { stop, task })
+    }
+}
+
+/// A pipe only this account can open. By default a named pipe's DACL lets every local account read it
+/// — and another signed-in user could then connect to it, or hold a listening instance to shut the
+/// sidecar out. The token still guards every request; this keeps the door itself closed. `OW` is the
+/// pipe's owner (the account running Draft Canvas), `SY` the system, and `P` stops inherited entries
+/// from adding anyone back.
+#[cfg(windows)]
+struct OwnerOnly {
+    descriptor: *mut core::ffi::c_void,
+    attributes: windows_sys::Win32::Security::SECURITY_ATTRIBUTES,
+}
+
+// SAFETY: the descriptor is immutable once built and only ever read by the pipe calls.
+#[cfg(windows)]
+unsafe impl Send for OwnerOnly {}
+#[cfg(windows)]
+unsafe impl Sync for OwnerOnly {}
+
+#[cfg(windows)]
+impl OwnerOnly {
+    fn new() -> std::io::Result<Self> {
+        use std::os::windows::ffi::OsStrExt;
+        use windows_sys::Win32::Security::Authorization::{
+            ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1,
+        };
+        use windows_sys::Win32::Security::SECURITY_ATTRIBUTES;
+        let sddl: Vec<u16> = std::ffi::OsStr::new("D:P(A;;GA;;;OW)(A;;GA;;;SY)")
+            .encode_wide()
+            .chain(Some(0))
+            .collect();
+        let mut descriptor: *mut core::ffi::c_void = std::ptr::null_mut();
+        // SAFETY: `sddl` is NUL-terminated; on success Windows allocates `descriptor`, freed in `drop`.
+        let ok = unsafe {
+            ConvertStringSecurityDescriptorToSecurityDescriptorW(
+                sddl.as_ptr(),
+                SDDL_REVISION_1,
+                &mut descriptor,
+                std::ptr::null_mut(),
+            )
+        };
+        if ok == 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        Ok(Self {
+            descriptor,
+            attributes: SECURITY_ATTRIBUTES {
+                nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32,
+                lpSecurityDescriptor: descriptor,
+                bInheritHandle: 0,
+            },
+        })
+    }
+
+    fn attributes(&self) -> *mut core::ffi::c_void {
+        &self.attributes as *const _ as *mut core::ffi::c_void
+    }
+}
+
+#[cfg(windows)]
+impl Drop for OwnerOnly {
+    fn drop(&mut self) {
+        // SAFETY: allocated by `ConvertStringSecurityDescriptorToSecurityDescriptorW`, freed once.
+        unsafe {
+            windows_sys::Win32::Foundation::LocalFree(self.descriptor);
+        }
     }
 }
 

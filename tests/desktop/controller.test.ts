@@ -501,6 +501,29 @@ describe('a file’s recovery copy', () => {
     expect(h.recovery.size).toBe(0);
   });
 
+  it('is kept when more was edited while the save was being written', async () => {
+    vi.useFakeTimers();
+    await openFile();
+    h.edit(edited());
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(h.recovery.size).toBe(1);
+
+    const write = h.api.saveDocument.getMockImplementation()!;
+    let finish!: () => void;
+    h.api.saveDocument.mockImplementationOnce(async (...args) => {
+      await new Promise<void>((resolve) => (finish = resolve));
+      return write(...args);
+    });
+    const saving = h.controller.save();
+    await vi.advanceTimersByTimeAsync(0);
+    h.edit(edited('Payments, later'));
+    finish();
+    await saving;
+
+    expect(doc()).toMatchObject({ dirty: true });
+    expect(h.recovery.size).toBe(1);
+  });
+
   it('is offered back when the file is opened again, and comes back as unsaved changes', async () => {
     // What a crash leaves behind: a snapshot in the data folder, and no session that knows of it.
     const crashed = createHarness();
@@ -512,7 +535,7 @@ describe('a file’s recovery copy', () => {
         title: 'payments',
         updatedAt: Date.now(),
         bytes: 10,
-        origin: { kind: 'file', name: 'payments', displayPath: crashed.files.get(again)!.displayPath, handle: again },
+        origin: { kind: 'file', name: 'payments', displayPath: crashed.files.get(again)!.displayPath, handle: again, baseStamp: 'v1:1' },
       },
     });
     crashed.answer(0);
@@ -525,6 +548,29 @@ describe('a file’s recovery copy', () => {
     expect(crashed.store.getSnapshot().doc).toMatchObject({ name: 'payments', dirty: true });
   });
 
+  it('holds recovered edits to the file as it was, so saving over a file that moved on asks first', async () => {
+    const crashed = createHarness();
+    const handle = crashed.addFile('payments');
+    crashed.files.get(handle)!.version = 2; // pulled, synced or rewritten since the crash
+    crashed.recovery.set('f_44444444-4444-4444-8444-444444444444', {
+      text: edited(),
+      entry: {
+        id: 'f_44444444-4444-4444-8444-444444444444',
+        title: 'payments',
+        updatedAt: Date.now(),
+        bytes: 10,
+        origin: { kind: 'file', name: 'payments', displayPath: crashed.files.get(handle)!.displayPath, handle, baseStamp: 'v1:1' },
+      },
+    });
+    crashed.answer(0);
+
+    await crashed.controller.openHandle(handle);
+    await crashed.settle();
+
+    expect(crashed.asked[0]!.message).toContain('changed on disk since then');
+    expect(crashed.store.getSnapshot().doc).toMatchObject({ dirty: true, outside: 'changed' });
+  });
+
   it('is discarded, and the saved file opened, when the user chooses that', async () => {
     const crashed = createHarness();
     const handle = crashed.addFile('payments');
@@ -535,7 +581,7 @@ describe('a file’s recovery copy', () => {
         title: 'payments',
         updatedAt: Date.now(),
         bytes: 10,
-        origin: { kind: 'file', name: 'payments', displayPath: crashed.files.get(handle)!.displayPath, handle },
+        origin: { kind: 'file', name: 'payments', displayPath: crashed.files.get(handle)!.displayPath, handle, baseStamp: 'v1:1' },
       },
     });
     crashed.answer(1);
@@ -558,7 +604,7 @@ describe('a file’s recovery copy', () => {
         title: 'payments',
         updatedAt: Date.now(),
         bytes: 10,
-        origin: { kind: 'file', name: 'payments', displayPath: crashed.files.get(handle)!.displayPath, handle },
+        origin: { kind: 'file', name: 'payments', displayPath: crashed.files.get(handle)!.displayPath, handle, baseStamp: 'v1:1' },
       },
     });
     crashed.answer(2);

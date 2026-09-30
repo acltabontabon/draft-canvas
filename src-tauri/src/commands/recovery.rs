@@ -44,6 +44,9 @@ pub enum RecoveryOrigin {
         name: String,
         display_path: String,
         handle: Handle,
+        /// The file's stamp when the snapshot's edits began — what "the disk has moved on since" is
+        /// judged against when the copy is recovered.
+        base_stamp: String,
     },
 }
 
@@ -91,8 +94,8 @@ fn recovery_entries(state: &AppState) -> Result<Vec<RecoveryEntry>, AppError> {
         .map(|e| RecoveryEntry {
             origin: match &e.origin {
                 StoredOrigin::Quick => RecoveryOrigin::Quick,
-                StoredOrigin::File { path, .. } => {
-                    file_origin(state, path).unwrap_or(RecoveryOrigin::Quick)
+                StoredOrigin::File { path, base_stamp } => {
+                    file_origin(state, path, base_stamp).unwrap_or(RecoveryOrigin::Quick)
                 }
             },
             id: e.id,
@@ -103,13 +106,14 @@ fn recovery_entries(state: &AppState) -> Result<Vec<RecoveryEntry>, AppError> {
         .collect())
 }
 
-fn file_origin(state: &AppState, path: &str) -> Option<RecoveryOrigin> {
+fn file_origin(state: &AppState, path: &str, base_stamp: &str) -> Option<RecoveryOrigin> {
     let handle = state.grant_file(Path::new(path)).ok()?;
     let grant = state.file(&handle).ok()?;
     Some(RecoveryOrigin::File {
         display_path: display_path(&grant.path),
         name: grant.name,
         handle,
+        base_stamp: base_stamp.to_string(),
     })
 }
 
@@ -234,6 +238,7 @@ mod tests {
             name,
             handle: listed,
             display_path,
+            base_stamp,
         } = &entries[0].origin
         else {
             panic!("expected a file origin, got {:?}", entries[0].origin);
@@ -244,6 +249,10 @@ mod tests {
             "the same file yields the same handle, so the page can match it to the open document"
         );
         assert!(display_path.ends_with("payment-flow.draftcanvas"));
+        assert_eq!(
+            base_stamp, "v1:1:2:aa",
+            "the page compares it with the disk before recovering over the file"
+        );
     }
 
     #[test]
@@ -321,6 +330,7 @@ mod tests {
                 name: "n".into(),
                 display_path: "~/n.draftcanvas".into(),
                 handle: "h_1".into(),
+                base_stamp: "v1:1:1:aa".into(),
             },
             title: "t".into(),
             updated_at: 5,
@@ -328,7 +338,7 @@ mod tests {
         };
         assert_eq!(
             serde_json::to_value(file).unwrap()["origin"],
-            json!({"kind": "file", "name": "n", "displayPath": "~/n.draftcanvas", "handle": "h_1"})
+            json!({"kind": "file", "name": "n", "displayPath": "~/n.draftcanvas", "handle": "h_1", "baseStamp": "v1:1:1:aa"})
         );
         assert_eq!(
             serde_json::to_value(RecoveryText { text: "x".into() }).unwrap(),

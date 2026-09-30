@@ -115,15 +115,30 @@ impl DiagramIndex {
     /// Every diagram in scope, in a stable order (project, then path). Files whose content isn't a
     /// diagram are left out.
     pub fn list(&self, projects: &[Project]) -> Vec<Diagram> {
+        self.listing(projects).diagrams
+    }
+
+    /// `list`, plus the projects whose folders were too large to walk in full — a diagram missing from
+    /// the list may simply be somewhere the walk never reached, and an agent told "not found" should
+    /// hear that rather than "it may have been deleted".
+    ///
+    /// The index lock is taken only around each cache lookup and insert, never across the walk or a file
+    /// read: every agent call starts here, and holding it for a whole walk of a large folder made every
+    /// other call — and the proposal panel — wait on it one at a time.
+    pub fn listing(&self, projects: &[Project]) -> Listing {
         let mut out = Vec::new();
-        let mut known = lock(&self.known);
+        let mut incomplete = Vec::new();
         for project in projects {
             let Ok(found) = scan(&project.root, &Limits::default()) else {
+                incomplete.push(project.name.clone());
                 continue;
             };
+            if !found.truncated_dirs.is_empty() {
+                incomplete.push(project.name.clone());
+            }
             for file in found.files {
                 let absolute = project.root.join(&file.rel_path);
-                let fresh = known
+                let fresh = lock(&self.known)
                     .get(&absolute)
                     .filter(|k| k.mtime_ms == file.mtime_ms && k.size == file.size)
                     .cloned();
@@ -142,7 +157,7 @@ impl DiagramIndex {
                                 .and_then(|d| file_revision_of_stamp(&d.stamp))
                                 .unwrap_or_default(),
                         };
-                        known.insert(absolute.clone(), k.clone());
+                        lock(&self.known).insert(absolute.clone(), k.clone());
                         k
                     }
                 };
@@ -163,19 +178,25 @@ impl DiagramIndex {
             }
         }
         out.sort_by(|a, b| a.project.cmp(&b.project).then_with(|| a.path.cmp(&b.path)));
-        out
+        Listing {
+            diagrams: out,
+            incomplete,
+        }
     }
 
     /// The one diagram with this id in scope. Two files carrying the same id (a copied file) are
     /// ambiguous, and said to be, rather than one chosen silently.
     pub fn find(&self, projects: &[Project], id: &str) -> Result<Diagram, Lookup> {
-        let mut matches: Vec<Diagram> = self
-            .list(projects)
+        let listing = self.listing(projects);
+        let mut matches: Vec<Diagram> = listing
+            .diagrams
             .into_iter()
             .filter(|d| d.diagram_id == id)
             .collect();
         match matches.len() {
-            0 => Err(Lookup::NotFound),
+            0 => Err(Lookup::NotFound {
+                incomplete: listing.incomplete,
+            }),
             1 => Ok(matches.remove(0)),
             _ => Err(Lookup::Ambiguous(
                 matches.into_iter().map(|d| d.path).collect(),
@@ -184,9 +205,19 @@ impl DiagramIndex {
     }
 }
 
+/// What `DiagramIndex::listing` found.
+pub struct Listing {
+    pub diagrams: Vec<Diagram>,
+    /// Names of the projects whose folders weren't walked in full.
+    pub incomplete: Vec<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Lookup {
-    NotFound,
+    /// `incomplete`: projects whose folders weren't walked in full, where it may still be.
+    NotFound {
+        incomplete: Vec<String>,
+    },
     Ambiguous(Vec<String>),
 }
 
@@ -225,7 +256,7 @@ mod tests {
         assert!(index.find(&projects, "d_a").is_ok());
         assert_eq!(
             index.find(&projects, "d_c").unwrap_err(),
-            Lookup::NotFound,
+            Lookup::NotFound { incomplete: vec![] },
             "a diagram outside every enabled folder doesn't exist as far as an agent can tell"
         );
         assert!(in_scope(&projects, &outside.join("c.draftcanvas")).is_none());

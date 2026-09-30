@@ -9,7 +9,7 @@ import { deserializeDocument, serializeDocument } from '../../src/export/project
 import { __resetInteraction, fileOf, useEditorStore } from '../../src/store/editorStore';
 import type { CommandMessage } from '../../src/host/embeddedHost';
 import type { HostEvent } from '../../src/desktop/api';
-import { agentTiming } from '../../src/desktop/agent';
+import { __resetAgentBases, agentTiming } from '../../src/desktop/agent';
 import { __resetAgentWrites } from '../../src/desktop/agentWrites';
 import { agentActivity } from '../../src/desktop/agentActivity';
 import { useUiStore } from '../../src/store/uiStore';
@@ -78,6 +78,7 @@ const addMailer = (expectedRevision: string, extra: Record<string, unknown> = {}
 beforeEach(async () => {
   __resetInteraction();
   __resetAgentWrites();
+  __resetAgentBases();
   agentTiming.busyWaitMs = 8_000;
   agentTiming.busyPollMs = 250;
   h = createHarness();
@@ -157,9 +158,66 @@ describe('agent requests on desktop', () => {
 
   it('says when a save after the change failed, so the change is not sent again', async () => {
     const handle = await openOrders();
-    h.files.get(handle)!.version += 1; // changed on disk behind the app's back
+    h.files.get(handle)!.readOnly = true; // made read-only behind the app's back: the save will fail
     const out = await request('update_diagram', addMailer(currentRevision()), { handle, open: true });
     expect(out.value).toMatchObject({ applied: true, persisted: false, state: 'save-failed' });
+  });
+
+  it('reloads the open diagram when its file changed on disk (a git pull) before an agent reads or changes it', async () => {
+    const handle = await openOrders();
+    const file = h.files.get(handle)!;
+    file.version += 1; // changed on disk while the window was in the background
+    file.text = diagramText().replace('"Orders"', '"Orders v2"');
+
+    const read = await request('read_diagram', {}, { handle, open: true, diagramId: 'd_orders000001' });
+    expect(read.ok).toBe(true);
+    expect(read.value).toMatchObject({ revision: 'f:2' });
+    expect(fileOf(useEditorStore.getState()).metadata.title).toBe('Orders v2');
+
+    // A change built on the revision from before the pull is refused; the fresh one lands and saves.
+    const stale = await request('update_diagram', addMailer('f:1'), { handle, open: true });
+    expect(stale.error?.code).toBe('REVISION_CONFLICT');
+    const fresh = await request('update_diagram', addMailer('f:2'), { handle, open: true });
+    expect(fresh.value).toMatchObject({ applied: true, persisted: true, state: 'saved' });
+  });
+
+  it('rebases a change onto the person\'s edits when asked to and nothing they changed overlaps', async () => {
+    const handle = await openOrders();
+    const read = await request('read_diagram', {}, { handle, open: true, diagramId: 'd_orders000001' });
+    const base = read.value!.revision as string;
+    const rename = (id: string, text: string) => {
+      useEditorStore.getState().apply('Rename', (doc) => ({ ...doc, nodes: doc.nodes.map((n) => (n.id === id ? { ...n, text } : n)) }));
+      h.edit(serializeDocument(fileOf(useEditorStore.getState())));
+    };
+    rename('db', 'Orders store'); // the person keeps editing meanwhile
+
+    const refused = await request('update_diagram', addMailer(base), { handle, open: true });
+    expect(refused.error?.code).toBe('REVISION_CONFLICT');
+    const rebased = await request('update_diagram', addMailer(base, { onConflict: 'rebase' }), { handle, open: true });
+    expect(rebased.value).toMatchObject({ applied: true, rebased: true, added: 2 });
+    const file = fileOf(useEditorStore.getState());
+    expect(file.nodes.find((n) => n.id === 'db')?.text).toBe('Orders store');
+    expect(file.nodes.some((n) => n.id === 'mail')).toBe(true);
+
+    // The same element changed on both sides is a real conflict, and names what overlapped.
+    const again = (await request('read_diagram', {}, { handle, open: true, diagramId: 'd_orders000001' })).value!.revision as string;
+    rename('api', 'Orders gateway');
+    const overlapping = await request(
+      'update_diagram',
+      { requestId: 'r-overlap', diagramId: 'd_orders000001', expectedRevision: again, onConflict: 'rebase', ops: [{ op: 'update', id: 'api', set: { label: 'Checkout API' } }] },
+      { handle, open: true },
+    );
+    expect(overlapping.error?.code).toBe('REVISION_CONFLICT');
+    expect((overlapping.error as { details?: { overlapping?: string[] } }).details?.overlapping).toContain('api');
+  });
+
+  it('refuses to change an open diagram whose file changed on disk under unsaved edits', async () => {
+    const handle = await openOrders();
+    useEditorStore.getState().apply('Rename', (doc) => ({ ...doc, nodes: doc.nodes.map((n) => ({ ...n, text: `${n.text}!` })) }));
+    h.edit(serializeDocument(fileOf(useEditorStore.getState())));
+    h.files.get(handle)!.version += 1;
+    const out = await request('update_diagram', addMailer(currentRevision()), { handle, open: true });
+    expect(out.error?.code).toBe('DOCUMENT_BUSY');
   });
 
   /** What the shell tells the page about a diagram that isn't open. */

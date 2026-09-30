@@ -263,7 +263,10 @@ export function createHarness() {
             title,
             updatedAt: Date.now(),
             bytes: bytes.length,
-            origin: origin.kind === 'file' && file ? { kind: 'file', name: file.name, displayPath: file.displayPath, handle: origin.handle } : { kind: 'quick' },
+            origin:
+              origin.kind === 'file' && file
+                ? { kind: 'file', name: file.name, displayPath: file.displayPath, handle: origin.handle, baseStamp: origin.baseStamp }
+                : { kind: 'quick' },
           },
         });
       },

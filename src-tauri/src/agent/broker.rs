@@ -220,7 +220,13 @@ fn locate(agent: &Agent, projects: &[Project], id: &str) -> Result<Diagram, Tool
         .index
         .find(projects, id)
         .map_err(|lookup| match lookup {
-            Lookup::NotFound => ToolError::new(
+            Lookup::NotFound { incomplete } if !incomplete.is_empty() => ToolError::new(
+                "NOT_FOUND",
+                format!("No diagram with id {id} was found, but the search of {} stopped before it had looked everywhere (the folder is very large).", incomplete.join(", ")),
+            )
+            .hint("It may be deeper in that folder than the search reaches. Ask the person to open it in Draft Canvas, or to switch agent access on for the smaller folder it lives in; don't create a replacement unless they ask for one.")
+            .details(json!({"incompleteProjects": incomplete})),
+            Lookup::NotFound { .. } => ToolError::new(
                 "NOT_FOUND",
                 format!("No diagram with id {id} in the folders agents may use."),
             )
@@ -281,9 +287,9 @@ async fn list(
         .unwrap_or(0);
     let project_filter = args.get("project").and_then(Value::as_str);
     let active = agent.active();
-    let mut all: Vec<Diagram> = agent
-        .index
-        .list(projects)
+    let listing = agent.index.listing(projects);
+    let mut all: Vec<Diagram> = listing
+        .diagrams
         .into_iter()
         .filter(|d| project_filter.is_none_or(|p| d.project == p))
         .filter(|d| {
@@ -336,6 +342,12 @@ async fn list(
     });
     if next < all.len() {
         result["cursor"] = json!(format!("o:{next}"));
+    }
+    if !listing.incomplete.is_empty() {
+        // Not the page's `complete`: this is the walk itself stopping short, in a folder too large to
+        // search in full — a diagram can exist there and still be missing from this list.
+        result["incompleteProjects"] = json!(listing.incomplete);
+        result["note"] = json!("Some folders are too large to search in full, so diagrams deep inside them may be missing from this list.");
     }
     // "The current diagram": what the person has open right now — which may not be the diagram this
     // conversation has been working on, and is never substituted for it.

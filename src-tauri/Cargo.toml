@@ -41,7 +41,7 @@ base64 = "0.23"
 dunce = "1"
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_Storage_FileSystem", "Win32_UI_WindowsAndMessaging", "Win32_Foundation"] }
+windows-sys = { version = "0.61", features = ["Win32_Storage_FileSystem", "Win32_UI_WindowsAndMessaging", "Win32_Foundation", "Win32_Security", "Win32_Security_Authorization"] }
 
 # Same major versions Tauri already resolves, for the "edited" dot and proxy icon on the window, and
 # the tray panel's rounded corners.

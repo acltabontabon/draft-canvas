@@ -305,6 +305,7 @@ export class DesktopController {
     },
     askEditor: (request) => this.askEditor(request),
     flush: () => this.flushApp(),
+    syncWithDisk: () => this.syncWithDisk(),
     openQuietly: (handle) => this.openQuietly(handle),
     saveQuietly: () => this.saveQuietly(),
     notify: (message) => this.ui.notify(message),
@@ -381,8 +382,11 @@ export class DesktopController {
       session.stamp = result.stamp;
       this.savedText = text;
       await this.applyBackground(session.handle);
-      await this.discard(session.recoveryId);
-      this.clearSnapshotTimer();
+      // See `saveNow`: edits made while this ran keep their snapshot.
+      if (this.latestText === text) {
+        await this.discard(session.recoveryId);
+        this.clearSnapshotTimer();
+      }
       this.outside = null;
       this.publish();
       return { saved: true };
@@ -602,19 +606,26 @@ export class DesktopController {
     let text = opened.text;
     let baseline = true;
     let recoveryId = `f_${uuid()}`;
+    // The stamp the recovered edits were made against, when that isn't what's on disk now.
+    let staleBase: string | null = null;
+    const movedSince = (entry: RecoveryEntry) =>
+      entry.origin.kind === 'file' && entry.origin.baseStamp !== opened.stamp ? entry.origin.baseStamp : null;
     if (recovered) {
       text = await this.api.recoveryRead(recovered.id);
       baseline = false;
       recoveryId = recovered.id;
+      staleBase = movedSince(recovered);
     } else {
       const found = (await this.api.recoveryList()).filter(
         (entry) => entry.origin.kind === 'file' && entry.origin.displayPath === opened.displayPath,
       );
       if (found.length > 0) {
         const newest = found.reduce((a, b) => (b.updatedAt > a.updatedAt ? b : a));
+        const moved = movedSince(newest) !== null;
         const choice = await this.api.ask(
           'Recover unsaved changes?',
-          `Draft Canvas kept unsaved changes to ${opened.name}.draftcanvas from ${new Date(newest.updatedAt).toLocaleString()}, and the app closed before they were saved.`,
+          `Draft Canvas kept unsaved changes to ${opened.name}.draftcanvas from ${new Date(newest.updatedAt).toLocaleString()}, and the app closed before they were saved.` +
+            (moved ? ' The file has also changed on disk since then — saving will ask which copy to keep.' : ''),
           ['Recover', 'Discard', 'Cancel'],
         );
         if (choice === 2) return false;
@@ -623,6 +634,7 @@ export class DesktopController {
           text = await this.api.recoveryRead(newest.id);
           baseline = false;
           recoveryId = newest.id;
+          staleBase = movedSince(newest);
         }
       }
     }
@@ -632,12 +644,20 @@ export class DesktopController {
       handle: opened.handle,
       name: opened.name,
       displayPath: opened.displayPath,
-      stamp: opened.stamp,
+      // Recovered edits belong to the file as it was when they were made. Held to that stamp, the next
+      // save meets the conflict prompt if the file moved on meanwhile (a pull, a sync, an agent's
+      // write) instead of quietly writing the recovered copy over it.
+      stamp: staleBase ?? opened.stamp,
       readOnly: opened.readOnly,
       recoveryId,
     };
     this.edited = false;
     await this.loadOpened(opened, text, baseline);
+    // After the load, which starts every document with nothing outside to report.
+    if (staleBase && this.session.kind === 'file' && this.session.handle === opened.handle) {
+      this.outside = 'changed';
+      this.publish();
+    }
     void this.refreshRecents();
     void this.refreshRecovery();
     return true;
@@ -833,8 +853,13 @@ export class DesktopController {
       session.stamp = result.stamp;
       this.savedText = text;
       await this.applyBackground(session.handle);
-      await this.discard(session.recoveryId);
-      this.clearSnapshotTimer();
+      // Only when nothing was edited while the save ran: those edits keep the file dirty, and their
+      // recovery snapshot (already written, or on its timer) is all that stands between them and a
+      // crash before the next keystroke.
+      if (this.latestText === text) {
+        await this.discard(session.recoveryId);
+        this.clearSnapshotTimer();
+      }
       this.outside = null;
       this.publish();
     });
@@ -1174,27 +1199,44 @@ export class DesktopController {
 
   /** Coming back to the window: has the open file changed under us? One `stat`, only now. */
   private async onFocus(): Promise<void> {
-    const session = this.session;
-    if (session.kind === 'none') {
+    if (this.session.kind === 'none') {
       await this.refreshProjects();
       return;
     }
-    if (session.kind !== 'file' || this.saving) return;
     try {
-      const check = await this.api.checkStamp(session.handle, session.stamp);
-      if (check === 'unchanged') return;
-      if (check === 'changed' && !this.dirty) {
-        await this.reload(session);
-        this.ui.notify(`${session.name}.draftcanvas was changed outside Draft Canvas, so it was reloaded.`);
-        return;
-      }
-      if (this.outside === check) return;
-      this.outside = check;
-      this.publish();
-      if (check === 'missing') this.ui.notify(`${session.name}.draftcanvas was moved or deleted. Save As… keeps your work.`);
+      await this.syncWithDisk();
     } catch (error) {
       logDiagnostic(error, { operation: 'desktop-check-stamp' });
     }
+  }
+
+  /**
+   * Has the open file changed on disk since it was read? A clean document is reloaded; one with unsaved
+   * edits is marked as changed outside (the status bar says so, and ⌘S asks). Asked on focus, and by
+   * every agent request that reads or changes the open document — agents usually work while this window
+   * is in the background, so waiting for focus handed them the copy from before a `git pull`, and
+   * their edits then landed on it.
+   */
+  private async syncWithDisk(): Promise<'unchanged' | 'reloaded' | 'changed' | 'missing'> {
+    const session = this.session;
+    if (session.kind !== 'file' || this.saving) return 'unchanged';
+    // What the page has typed but not yet posted counts: judged without it, `dirty` could still read
+    // false and a reload would replace an edit that was on screen.
+    await this.flushApp();
+    if (this.session !== session || this.saving) return 'unchanged';
+    const check = await this.api.checkStamp(session.handle, session.stamp);
+    if (check === 'unchanged') return 'unchanged';
+    if (check === 'changed' && !this.dirty) {
+      await this.reload(session);
+      this.ui.notify(`${session.name}.draftcanvas was changed outside Draft Canvas, so it was reloaded.`);
+      return 'reloaded';
+    }
+    if (this.outside !== check) {
+      this.outside = check;
+      this.publish();
+      if (check === 'missing') this.ui.notify(`${session.name}.draftcanvas was moved or deleted. Save As… keeps your work.`);
+    }
+    return check;
   }
 
   // ─── Projects, recents, settings ────────────────────────────────────────────────────

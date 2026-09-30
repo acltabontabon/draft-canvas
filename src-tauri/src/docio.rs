@@ -150,8 +150,14 @@ pub fn read_document(path: &Path) -> Result<ReadDoc, AppError> {
     }
     // Taken after the read so the stamp's mtime belongs to the bytes just read.
     let meta = file.metadata().map_err(io_err)?;
-    let text = String::from_utf8(bytes).map_err(|_| AppError::not_a_document(path))?;
+    let mut text = String::from_utf8(bytes).map_err(|_| AppError::not_a_document(path))?;
+    // A byte-order mark (what Notepad and Windows PowerShell 5 put at the front of UTF-8 they save) is
+    // not part of the JSON, and `JSON.parse` refuses a document that starts with one. The stamp stays
+    // on the bytes as they are on disk, so a save still compares against the real file.
     let stamp = Stamp::of(&meta, text.as_bytes()).encode();
+    if text.starts_with('\u{feff}') {
+        text.drain(..'\u{feff}'.len_utf8());
+    }
     Ok(ReadDoc { text, stamp })
 }
 
@@ -396,8 +402,24 @@ fn restrict_to_owner(options: &mut OpenOptions, kind: Kind) {
 fn restrict_to_owner(_options: &mut OpenOptions, _kind: Kind) {}
 
 #[cfg(unix)]
-fn install(temp: &Path, target: &Path, _existing: bool, _clobber: bool) -> io::Result<()> {
-    fs::rename(temp, target)
+fn install(temp: &Path, target: &Path, _existing: bool, clobber: bool) -> io::Result<()> {
+    if clobber {
+        return fs::rename(temp, target);
+    }
+    // A new file must never replace one that appeared since it was checked for — two creates, or an
+    // agent's create and a person's Save As, landing on the same name. `rename` would overwrite it;
+    // a hard link to the target name fails with `AlreadyExists` instead, atomically, and dropping the
+    // temp name afterwards leaves exactly the file `rename` would have.
+    match fs::hard_link(temp, target) {
+        Ok(()) => fs::remove_file(temp),
+        Err(e) if e.kind() == io::ErrorKind::AlreadyExists => Err(e),
+        // A filesystem without hard links (some network and FAT volumes): the check-then-rename this
+        // replaced is the best available there.
+        Err(_) if fs::symlink_metadata(target).is_ok() => {
+            Err(io::Error::from(io::ErrorKind::AlreadyExists))
+        }
+        Err(_) => fs::rename(temp, target),
+    }
 }
 
 /// Sync clients and antivirus briefly hold files open; a sharing violation is retried a few times
@@ -858,6 +880,38 @@ mod tests {
         let err = create_new_atomic(&path, b"second").err().unwrap();
         assert_eq!(err.kind, ErrorKind::AlreadyExists);
         assert_eq!(fs::read(&path).unwrap(), b"first");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn installing_a_new_file_never_replaces_one_that_appeared_after_the_check() {
+        let dir = tempdir().unwrap();
+        let target = dir.path().join("Untitled canvas.draftcanvas");
+        let temp = dir.path().join(".temp");
+        fs::write(&temp, b"mine").unwrap();
+        // Another create landed on the name between `create_new_atomic`'s check and its install.
+        fs::write(&target, b"theirs").unwrap();
+        let err = install(&temp, &target, false, false).err().unwrap();
+        assert_eq!(err.kind(), io::ErrorKind::AlreadyExists);
+        assert_eq!(fs::read(&target).unwrap(), b"theirs");
+        fs::remove_file(&target).unwrap();
+        install(&temp, &target, false, false).unwrap();
+        assert_eq!(fs::read(&target).unwrap(), b"mine");
+        assert!(!temp.exists(), "the temp name is gone once installed");
+    }
+
+    #[test]
+    fn a_byte_order_mark_is_not_part_of_the_document() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("windows.draftcanvas");
+        fs::write(&path, "\u{feff}{\"format\":\"draft-canvas\"}").unwrap();
+        let doc = read_document(&path).unwrap();
+        assert_eq!(doc.text, "{\"format\":\"draft-canvas\"}");
+        // The stamp still describes the bytes on disk, so a save compares against the real file.
+        assert_eq!(
+            doc.stamp,
+            Stamp::of(&fs::metadata(&path).unwrap(), &fs::read(&path).unwrap()).encode()
+        );
     }
 
     #[test]

@@ -27,6 +27,8 @@ export interface Progress {
 
 type Reply =
   | { id: number; unsupported: true }
+  /** The worker was stopped under this job — another job ran past the hard limit — not refused by it. */
+  | { id: number; stopped: true }
   | { id: number; ok: true; value: JobResult }
   | { id: number; ok: false; error: AgentErrorJson }
   | { id: number; progress: Progress };
@@ -64,15 +66,23 @@ function startWorker(): Worker | null {
     // A worker that fails to load (a CSP or bundling fault — see `workerSafeEntities` in
     // `vite.config.ts` for one that did) must not strand requests.
     workerUnusable = true;
-    stopWorker();
+    stopWorker('unusable');
   };
   return worker;
 }
 
-function stopWorker() {
+/**
+ * Terminates the worker. Jobs still waiting on it are told why: `unusable` (it can't run here — they go
+ * to the page) or `stopped` (another job ran away and took it down — they go to a fresh worker). The
+ * two used to be one answer, so one timeout sent every later job to the main thread for the rest of the
+ * session, with no hard limit left to stop them freezing the editor.
+ */
+function stopWorker(reason: 'unusable' | 'stopped') {
   worker?.terminate();
   worker = null;
-  for (const waiting of pending.values()) waiting.resolve({ id: 0, unsupported: true });
+  for (const waiting of pending.values()) {
+    waiting.resolve(reason === 'unusable' ? { id: 0, unsupported: true } : { id: 0, stopped: true });
+  }
   pending.clear();
 }
 
@@ -90,7 +100,7 @@ export async function runOffThread(job: Job, progress?: (progress: Progress) => 
     const timer = setTimeout(() => {
       pending.delete(id);
       // The only way to stop a runaway computation: the next request starts a fresh worker.
-      stopWorker();
+      stopWorker('stopped');
       resolve('timeout');
     }, HARD_LIMIT_MS);
     pending.set(id, {
@@ -107,9 +117,10 @@ export async function runOffThread(job: Job, progress?: (progress: Progress) => 
       hint: 'Send fewer elements per request — build the diagram in steps, or split it into views with inside.',
     });
   }
+  if ('stopped' in reply) return runOffThread(job, progress);
   if ('unsupported' in reply) {
     workerUnusable = true;
-    stopWorker();
+    stopWorker('unusable');
     return onPage(job, progress);
   }
   if (!reply.ok) throw new AgentError(reply.error.code, reply.error.message, { hint: reply.error.hint, retryable: reply.error.retryable, details: reply.error.details });
@@ -123,6 +134,6 @@ export function __workerUsable(): boolean {
 
 /** Test seam: forget the worker, so the next job starts afresh. */
 export function __resetOffThread(): void {
-  stopWorker();
+  stopWorker('stopped');
   workerUnusable = false;
 }

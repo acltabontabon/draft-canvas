@@ -11,7 +11,20 @@ use std::time::{Duration, Instant, UNIX_EPOCH};
 
 /// Directories that are never worth walking: dependencies and build output would swamp the list and
 /// spend the scan's budget on files that are not diagrams.
-const SKIPPED_DIRS: [&str; 5] = ["node_modules", "target", "dist", "dist-desktop", "build"];
+/// (Hidden folders — `.git`, `.venv` — are skipped separately, by their leading dot.)
+const SKIPPED_DIRS: [&str; 11] = [
+    "node_modules",
+    "target",
+    "dist",
+    "dist-desktop",
+    "build",
+    "out",
+    "vendor",
+    "Pods",
+    "coverage",
+    "venv",
+    "__pycache__",
+];
 
 pub struct Limits {
     /// Sub-folder levels below the root that are entered.

@@ -98,7 +98,10 @@ export interface RecentItem {
   lastOpenedMs: number;
 }
 
-export type RecoveryOrigin = { kind: 'quick' } | { kind: 'file'; name: string; displayPath: string; handle: Handle };
+export type RecoveryOrigin =
+  | { kind: 'quick' }
+  /** `baseStamp`: the file's stamp when the snapshot's edits began — see `DesktopController.switchTo`. */
+  | { kind: 'file'; name: string; displayPath: string; handle: Handle; baseStamp: string };
 
 export interface RecoveryEntry {
   id: string;

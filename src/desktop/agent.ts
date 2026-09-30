@@ -43,6 +43,7 @@ import type { AgentEditorReply, AgentEditorRequest } from '../host/agentBridge';
 import { agentActivity } from './agentActivity';
 import { forgetPendingWrite, rememberPendingWrite } from './agentWrites';
 import type { AgentContext, DesktopApi, Handle, HostEvent } from './api';
+import { BaseSnapshots, overlapOf } from '../agent/rebase';
 
 /** What the handler needs from the controller — kept narrow so this stays testable on its own. */
 export interface AgentHost {
@@ -55,6 +56,12 @@ export interface AgentHost {
   /** Asks the editor (see `host/agentBridge.ts`). */
   askEditor(request: AgentEditorRequest): Promise<AgentEditorReply>;
   flush(): Promise<void>;
+  /**
+   * Brings the open document up to date with its file: reloads it when it changed on disk and holds no
+   * unsaved edits. `changed` and `missing` mean it couldn't — unsaved edits sit on top of an outside
+   * change, or the file is gone.
+   */
+  syncWithDisk(): Promise<'unchanged' | 'reloaded' | 'changed' | 'missing'>;
   /** Makes `handle` the open document without asking anything — or says why it won't. */
   openQuietly(handle: Handle): Promise<{ opened: true } | { opened: false; reason: string }>;
   /** Saves the open file without any dialog. */
@@ -183,11 +190,12 @@ async function read(host: AgentHost, args: Record<string, unknown>, context: Age
   const diagramId = context.diagramId ?? '';
   if (context.open) {
     const snapshot = await host.inTurn(async () => {
+      await host.syncWithDisk();
       await host.flush();
       return host.askEditor({ kind: 'snapshot' });
     });
     if (snapshot.kind !== 'snapshot') throw new AgentError('INTERNAL', 'The editor did not answer.');
-    return readDiagram(snapshot.file, args, revisionOfOpen(host, snapshot.revision), diagramId);
+    return readDiagram(snapshot.file, args, handOut(host, snapshot), diagramId);
   }
   if (context.text === undefined || context.stamp === undefined) throw new AgentError('NOT_FOUND', 'That diagram could not be read.');
   const parsed = deserializeDocument(context.text);
@@ -200,12 +208,13 @@ async function implementationContext(host: AgentHost, args: Record<string, unkno
   const focus = (args.focus ?? {}) as { flow?: unknown; nodes?: unknown };
   if (context.open) {
     const snapshot = await host.inTurn(async () => {
+      await host.syncWithDisk();
       await host.flush();
       return host.askEditor({ kind: 'snapshot' });
     });
     if (snapshot.kind !== 'snapshot') throw new AgentError('INTERNAL', 'The editor did not answer.');
     const path = viewPathOf(snapshot.file, args.view);
-    return buildImplementationContext(snapshot.file, path, revisionOfOpen(host, snapshot.revision), diagramId, focus);
+    return buildImplementationContext(snapshot.file, path, handOut(host, snapshot), diagramId, focus);
   }
   if (context.text === undefined || context.stamp === undefined) throw new AgentError('NOT_FOUND', 'That diagram could not be read.');
   const parsed = deserializeDocument(context.text);
@@ -219,11 +228,12 @@ async function readSelection(host: AgentHost, context: AgentContext) {
   const diagramId = context.diagramId ?? '';
   if (!context.open) throw new AgentError('NOT_ACTIVE', 'That diagram is not open, so nothing is selected.', { hint: 'Ask the person to open it and select what to change, or read the whole view with read_diagram.' });
   const snapshot = await host.inTurn(async () => {
+    await host.syncWithDisk();
     await host.flush();
     return host.askEditor({ kind: 'snapshot' });
   });
   if (snapshot.kind !== 'snapshot') throw new AgentError('INTERNAL', 'The editor did not answer.');
-  return readSelectionContext(snapshot.file, snapshot.path, snapshot.selection, revisionOfOpen(host, snapshot.revision), diagramId);
+  return readSelectionContext(snapshot.file, snapshot.path, snapshot.selection, handOut(host, snapshot), diagramId);
 }
 
 /**
@@ -235,14 +245,32 @@ function revisionOfOpen(host: AgentHost, editorRevision: string): string {
   return open && host.isClean() ? fileRevision(open.stamp) : editorRevision;
 }
 
+/** What each recently handed-out revision of the open document looked like — see `agent/rebase.ts`. */
+const bases = new BaseSnapshots();
+
+/** `revisionOfOpen`, remembering the document it names so a later `onConflict: "rebase"` can see it. */
+function handOut(host: AgentHost, snapshot: { revision: string; file: DraftDocument }): string {
+  const revision = revisionOfOpen(host, snapshot.revision);
+  bases.remember(revision, snapshot.file);
+  return revision;
+}
+
+/** Test seam. */
+export function __resetAgentBases(): void {
+  bases.clear();
+}
+
 /** "The current diagram": its title, revision and the view the person is in — not its contents. */
 async function activeContext(host: AgentHost) {
-  const snapshot = await host.askEditor({ kind: 'snapshot' });
+  const snapshot = await host.inTurn(async () => {
+    await host.syncWithDisk();
+    return host.askEditor({ kind: 'snapshot' });
+  });
   if (snapshot.kind !== 'snapshot') throw new AgentError('INTERNAL', 'The editor did not answer.');
   const owner = snapshot.path.length ? ownerOf(snapshot.file, snapshot.path) : undefined;
   return {
     title: snapshot.file.metadata.title,
-    revision: revisionOfOpen(host, snapshot.revision),
+    revision: handOut(host, snapshot),
     view: { path: snapshot.path, ...(owner ? { owner } : {}) },
   };
 }
@@ -286,6 +314,26 @@ function layoutConstrained(result: Extract<JobResult, { kind: 'update' }>) {
   });
 }
 
+/**
+ * A change to the open document is made on what its file holds now. Reloaded when it can be; refused
+ * when the person's unsaved edits sit on top of an outside change — applying it there would build on a
+ * copy the file no longer is, and the next save would offer to overwrite what was checked out.
+ */
+async function requireInStepWithDisk(host: AgentHost): Promise<void> {
+  const state = await host.syncWithDisk();
+  if (state === 'changed') {
+    throw new AgentError('DOCUMENT_BUSY', 'The file changed on disk while the person has unsaved changes to it in Draft Canvas. Nothing changed.', {
+      hint: 'Ask the person to save (choosing which copy to keep) or discard their changes, then read the diagram again and retry.',
+      retryable: true,
+    });
+  }
+  if (state === 'missing') {
+    throw new AgentError('NOT_FOUND', 'The open diagram was moved or deleted on disk. Nothing changed.', {
+      hint: 'Ask the person where it went; list_diagrams shows what is on disk now.',
+    });
+  }
+}
+
 const conflict = (currentRevision: string) =>
   new AgentError('REVISION_CONFLICT', 'The diagram changed since that revision. Nothing changed.', {
     hint: 'Read the diagram again (a focused read is enough) and rebuild the change on the current revision. Don\'t create a replacement diagram.',
@@ -306,6 +354,9 @@ async function update(api: DesktopApi, host: AgentHost, event: Request) {
     open = host.openFile();
   }
   if (!open) throw new AgentError('NOT_FOUND', 'That diagram is not open.');
+  await requireInStepWithDisk(host);
+  open = host.openFile();
+  if (!open) throw new AgentError('NOT_FOUND', 'That diagram is not open.');
   if (open.readOnly) throw new AgentError('READ_ONLY', 'That diagram is read-only on disk.');
 
   // 2. Where it stands now — once the person has let go of whatever they were dragging or typing.
@@ -315,20 +366,37 @@ async function update(api: DesktopApi, host: AgentHost, event: Request) {
   if (snapshot.busy) throw new AgentError('BUSY', `${snapshot.busy} Nothing changed; try again in a moment with the same requestId.`, { retryable: true });
   const wasClean = host.isClean();
   const accepted = expected === snapshot.revision || (wasClean && expected === fileRevision(open.stamp));
-  if (!accepted) throw conflict(revisionOfOpen(host, snapshot.revision));
+  const path = viewPathOf(snapshot.file, args.view);
+  let rebased = false;
+  if (!accepted) {
+    const current = handOut(host, snapshot);
+    const base = args.onConflict === 'rebase' ? bases.get(expected) : undefined;
+    if (!base) throw conflict(current);
+    // Worked out against what the agent read, to see what it would change; applied below to what is
+    // there now only if the person changed none of the same things since.
+    const onBase = await runOffThread({ kind: 'update', file: base, path, ops: args.ops, layout: args.layout, scope: args.scope });
+    if (onBase.kind !== 'update') throw new AgentError('INTERNAL', 'The edit could not be worked out.');
+    const shared = overlapOf(base, snapshot.file, onBase.file);
+    if (shared.length > 0) {
+      throw new AgentError('REVISION_CONFLICT', 'The person changed some of the same elements since that revision. Nothing changed.', {
+        hint: 'Read the diagram again and rebuild the change on the current revision. Don\'t create a replacement diagram.',
+        details: { currentRevision: current, overlapping: shared.slice(0, 20) },
+      });
+    }
+    rebased = true;
+  }
 
   // 3. The change, worked out and checked in full (on a worker thread) before anything is touched.
   // The person may keep editing meanwhile; the commit below re-checks the revision, so an edit made
   // in the meantime turns this into a conflict rather than being overwritten.
-  const path = viewPathOf(snapshot.file, args.view);
   agentActivity.begin({ id: event.id, tool: 'update_diagram', title: snapshot.file.metadata.title, target: 'open', path });
   const result = await runOffThread({ kind: 'update', file: snapshot.file, path, ops: args.ops, layout: args.layout, scope: args.scope }, progressOf(api, event.id));
   if (result.kind !== 'update') throw new AgentError('INTERNAL', 'The edit could not be worked out.');
   if (result.problems.length) throw layoutConstrained(result);
   const title = result.file.metadata.title;
-  const base = { diagramId: context.diagramId, title, ...(path.length ? { view: { path } } : {}) };
+  const base = { diagramId: context.diagramId, title, ...(path.length ? { view: { path } } : {}), ...(rebased ? { rebased: true } : {}) };
   if (result.unchanged) {
-    return { ...base, revision: revisionOfOpen(host, snapshot.revision), applied: false, persisted: wasClean, state: 'unchanged', ...receiptCounts(result) };
+    return { ...base, revision: handOut(host, snapshot), applied: false, persisted: wasClean, state: 'unchanged', ...receiptCounts(result) };
   }
 
   // 4. The gate, then the commit (which re-checks the revision in the same step as the change).
@@ -343,12 +411,16 @@ async function update(api: DesktopApi, host: AgentHost, event: Request) {
   // 5. Durability.
   const receipt = { ...base, applied: true, where: 'editor', undo: 'editor', ...receiptCounts(result) };
   if (!wasClean) {
+    bases.remember(committed.revision, result.file);
     return { ...receipt, revision: committed.revision, persisted: false, state: 'applied-unsaved', note: 'Applied in the editor. The person has unsaved changes of their own, so saving is theirs; a recovery copy covers it meanwhile.' };
   }
   try {
     const saved = await host.saveQuietly();
     const now = host.openFile();
-    if (saved.saved && now) return { ...receipt, revision: fileRevision(now.stamp), persisted: true, state: 'saved' };
+    if (saved.saved && now) {
+      bases.remember(fileRevision(now.stamp), result.file);
+      return { ...receipt, revision: fileRevision(now.stamp), persisted: true, state: 'saved' };
+    }
     return { ...receipt, revision: committed.revision, persisted: false, state: 'save-failed', note: `Applied in the editor but not saved: ${saved.saved ? 'the file is gone' : saved.reason} Do not re-send it.` };
   } catch (error) {
     throw new AppliedButFailed(error);
@@ -407,11 +479,12 @@ async function submitProposal(host: AgentHost, event: Request) {
   if (context.open) {
     // Already inside this request's turn (see `submit_proposal` above): taking another would queue
     // behind itself, and every later request and Open would wait on it for good.
+    await host.syncWithDisk();
     await host.flush();
     const snapshot = await host.askEditor({ kind: 'snapshot' });
     if (snapshot.kind !== 'snapshot') throw new AgentError('INTERNAL', 'The editor did not answer.');
     file = snapshot.file;
-    revision = revisionOfOpen(host, snapshot.revision);
+    revision = handOut(host, snapshot);
   } else {
     if (context.text === undefined || context.stamp === undefined) throw new AgentError('NOT_FOUND', 'That diagram could not be read.');
     const parsed = deserializeDocument(context.text);
