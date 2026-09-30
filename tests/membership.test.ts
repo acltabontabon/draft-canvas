@@ -226,3 +226,108 @@ describe('carrying shapes out of a boundary, through the store', () => {
     expect(parentOf(useEditorStore.getState().document, 'a')).toBe('b');
   });
 });
+
+describe('every way a shape moves or a boundary changes size keeps membership honest', () => {
+  const reset = (nodes: DraftNode[]) => {
+    __resetInteraction();
+    useEditorStore.setState({
+      document: build(nodes),
+      path: [],
+      outer: null,
+      liveViewport: null,
+      history: { past: [], future: [] },
+      selection: { nodes: [], edges: [] },
+      revision: 0,
+    });
+  };
+  const doc = () => useEditorStore.getState().document;
+
+  it('arrow-key nudges carry a shape out of its boundary, so deleting the boundary leaves it', () => {
+    reset([boundary('b', 0, 0, 400, 300), shape('a', 20, 40, 'b')]);
+    useEditorStore.getState().setSelection({ nodes: ['a'], edges: [] });
+    for (let i = 0; i < 80; i += 1) useEditorStore.getState().nudgeSelection(10, 0);
+    expect(parentOf(doc(), 'a')).toBeUndefined();
+
+    useEditorStore.getState().setSelection({ nodes: ['b'], edges: [] });
+    useEditorStore.getState().deleteSelection();
+    expect(doc().nodes.map((n) => n.id)).toEqual(['a']);
+  });
+
+  it('align and distribute do the same', () => {
+    reset([boundary('b', 0, 0, 400, 300), shape('a', 20, 40, 'b'), shape('c', 900, 40), shape('d', 1400, 40)]);
+    useEditorStore.getState().setSelection({ nodes: ['a', 'c'], edges: [] });
+    useEditorStore.getState().align('right');
+    expect(parentOf(doc(), 'a')).toBeUndefined();
+
+    reset([boundary('b', 0, 0, 400, 300), shape('a', 20, 40, 'b'), shape('c', 900, 40), shape('d', 2000, 40)]);
+    useEditorStore.getState().setSelection({ nodes: ['a', 'c', 'd'], edges: [] });
+    useEditorStore.getState().distribute('x');
+    // `c` moves to the middle of the span; `a` (leftmost) stays put and stays a member.
+    expect(parentOf(doc(), 'a')).toBe('b');
+  });
+
+  it('pulling a boundary around shapes already on the canvas takes them in, in one undo step', () => {
+    reset([boundary('b', 0, 0, 200, 150), shape('a', 20, 40, 'b'), shape('c', 300, 40), shape('far', 900, 40)]);
+    useEditorStore.getState().resizeNode('b', { width: 500, height: 200 });
+    expect(parentOf(doc(), 'a')).toBe('b');
+    expect(parentOf(doc(), 'c')).toBe('b');
+    expect(parentOf(doc(), 'far')).toBeUndefined();
+    expect(useEditorStore.getState().history.past).toHaveLength(1);
+
+    useEditorStore.getState().undo();
+    expect(parentOf(doc(), 'c')).toBeUndefined();
+    expect(doc().nodes.find((n) => n.id === 'b')).toMatchObject({ width: 200, height: 150 });
+  });
+
+  it('shrinking a boundary lets go of members it no longer covers', () => {
+    reset([boundary('b', 0, 0, 400, 300), shape('a', 20, 40, 'b'), shape('c', 250, 200, 'b')]);
+    useEditorStore.getState().resizeNode('b', { width: 180, height: 140 });
+    expect(parentOf(doc(), 'a')).toBe('b');
+    expect(parentOf(doc(), 'c')).toBeUndefined();
+  });
+
+  it('never swallows another boundary, or what sits in a smaller one inside it', () => {
+    reset([boundary('b', 0, 0, 200, 150), boundary('inner', 300, 0, 200, 150), shape('x', 320, 40, 'inner')]);
+    useEditorStore.getState().resizeNode('b', { width: 700, height: 300 });
+    expect(parentOf(doc(), 'inner')).toBeUndefined();
+    expect(parentOf(doc(), 'x')).toBe('inner');
+  });
+});
+
+describe('grouping shapes that sit in different boundaries', () => {
+  const reset = (nodes: DraftNode[]) => {
+    __resetInteraction();
+    useEditorStore.setState({
+      document: build(nodes),
+      path: [],
+      outer: null,
+      liveViewport: null,
+      history: { past: [], future: [] },
+      selection: { nodes: [], edges: [] },
+      revision: 0,
+    });
+  };
+  const newest = () => useEditorStore.getState().document.nodes.find((n) => n.type === 'group' && !['outer', 'b', 'c'].includes(n.id))!;
+
+  it('groups inside the innermost boundary they share, not at the top level', () => {
+    reset([
+      boundary('outer', -100, -100, 1400, 800),
+      boundary('b', 0, 0, 400, 300, 'outer'),
+      shape('a', 20, 40, 'b'),
+      shape('x', 600, 40, 'outer'),
+    ]);
+    useEditorStore.getState().setSelection({ nodes: ['a', 'x'], edges: [] });
+    useEditorStore.getState().groupSelection();
+    const group = newest();
+    expect(group.parentId).toBe('outer');
+    expect(parentOf(useEditorStore.getState().document, 'a')).toBe(group.id);
+  });
+
+  it('stacks the new boundary above the one a member was taken out of', () => {
+    const b = { ...boundary('b', 0, 0, 400, 300), z: 3 };
+    reset([b, shape('a', 20, 40, 'b'), shape('c2', 600, 40)]);
+    useEditorStore.getState().setSelection({ nodes: ['a', 'c2'], edges: [] });
+    useEditorStore.getState().groupSelection();
+    expect(newest().z).toBeGreaterThan(3);
+  });
+});

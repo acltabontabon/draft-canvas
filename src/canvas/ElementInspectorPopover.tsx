@@ -344,7 +344,9 @@ const C4_TYPES: ReadonlySet<string> = new Set(C4_TEXT_TYPES);
  * An architecture shape's C4 detail: what it is built with, and what it is responsible for. Each field
  * commits when it lets go (blur, or Enter in the one-line technology field) as one coalesced edit, and
  * the shape grows to show what was typed. Keyed by node id by the caller, so switching elements
- * starts from that element's own values.
+ * starts from that element's own values — and each field by its own value, so an undo (or anything
+ * else that changes it underneath) shows through. Without that the field kept the undone text, and
+ * the next blur committed it again, silently reversing the undo.
  */
 function C4DetailsPanel({ node }: { node: DraftNode }) {
   const commit = (patch: { technology?: string; description?: string }) => useEditorStore.getState().setNodeC4Text(node.id, patch);
@@ -354,6 +356,8 @@ function C4DetailsPanel({ node }: { node: DraftNode }) {
       <label className="dc-c4-field">
         <span>Technology</span>
         <input
+          key={node.technology ?? ''}
+          dir="auto"
           className="dc-inspector-control"
           defaultValue={node.technology ?? ''}
           maxLength={LIMITS.maxTechnologyLength}
@@ -371,6 +375,8 @@ function C4DetailsPanel({ node }: { node: DraftNode }) {
       <label className="dc-c4-field">
         <span>Description</span>
         <textarea
+          dir="auto"
+          key={node.description ?? ''}
           className="dc-inspector-control"
           defaultValue={node.description ?? ''}
           maxLength={LIMITS.maxDescriptionLength}

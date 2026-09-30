@@ -1256,6 +1256,26 @@ export function reconcileMembership(doc: DraftDocument, movedIds: Iterable<strin
   return next;
 }
 
+/**
+ * Membership after a resize. The resized shape is re-homed like a moved one. A resized *boundary*
+ * also takes in the shapes it now surrounds and lets go of members it no longer covers: drawing a
+ * boundary and then pulling its edges around services already on the canvas is how people group
+ * them, and it used to leave a boundary that owned nothing — a drag of it left the services behind,
+ * while a shrunk one still deleted members lying well outside it.
+ *
+ * The same rules as `reconcileMembership` decide: a shape belongs to the smallest boundary under its
+ * centre, and a boundary is never nested into another by a gesture (that is what Group is for).
+ */
+export function reconcileAfterResize(doc: DraftDocument, id: string): DraftDocument {
+  const node = doc.nodes.find((n) => n.id === id);
+  if (!node) return doc;
+  if (node.type !== 'group') return reconcileMembership(doc, [id]);
+  const affected = doc.nodes
+    .filter((n) => n.id !== id && (n.parentId === id || (n.type !== 'group' && pointInBox(centerOf(n), node))))
+    .map((n) => n.id);
+  return reconcileMembership(reconcileMembership(doc, [id]), affected);
+}
+
 export function setParent(
   doc: DraftDocument,
   childIds: Iterable<string>,

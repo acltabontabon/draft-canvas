@@ -59,6 +59,7 @@ import {
   removeElements,
   reorderAttachment as reorderAttachmentOp,
   reconcileMembership as reconcileMembershipOp,
+  reconcileAfterResize,
   reorderEdgeAttachment as reorderEdgeAttachmentOp,
   sendBackward,
   sendToBack,
@@ -537,6 +538,8 @@ export interface EditorStore {
    *  what is visibly inside. One write, because every write re-derives the whole diagram's routing
    *  and crossings, and doing that twice per drop was the largest part of its cost. */
   commitMove: (positions: Map<string, { x: number; y: number }>, movedIds: Iterable<string>) => void;
+  /** A resize handle let go: the new box, with membership following (see `reconcileAfterResize`). */
+  resizeNode: (id: string, box: { x?: number; y?: number; width: number; height: number }) => void;
 
   /* Flows */
   /** Returns the new flow's id, or `null` when the document is already at `LIMITS.maxFlows`. */
@@ -769,6 +772,9 @@ let interaction: Interaction | null = null;
  *  applied, so an unchanged clipboard doesn't keep resetting `pasteRepeat`. */
 let lastSystemClipboardText: string | null = null;
 const PASTE_STAGGER_STEP = 16;
+/** Where the last paste was aimed — see `paste`. */
+let lastPasteTarget: { x: number; y: number } | null = null;
+const CONNECTORS_NEED_SHAPES = 'Connectors are copied with the shapes they join — select those too.';
 
 /**
  * The selection with anything the edit removed taken out — a command that deletes elements without
@@ -1994,6 +2000,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     get().apply('Move', (doc) => reconcileMembershipOp(moveNodes(doc, positions), movedIds));
   },
 
+  resizeNode(id, box) {
+    get().apply('Resize', (doc) => reconcileAfterResize(updateNode(doc, id, box), id));
+  },
+
   nudgeSelection(dx, dy) {
     const state = get();
     if (state.selection.nodes.length === 0) return;
@@ -2006,7 +2016,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     );
     // Keyed on *which* nodes: nudging one selection and then another within the coalesce window
     // are two separate moves, and must undo separately.
-    state.apply('Nudge', (doc) => carryDescendants(doc, moveNodes(doc, positions), positions.keys()), {
+    // Membership follows, the way it does for a drag (`commitMove`): nudged out of a boundary, a
+    // shape leaves it — otherwise it stayed a member from across the canvas, carried by the
+    // boundary's next drag and deleted with it.
+    state.apply('Nudge', (doc) => reconcileMembershipOp(carryDescendants(doc, moveNodes(doc, positions), positions.keys()), positions.keys()), {
       coalesceKey: `nudge:${[...positions.keys()].sort().join(',')}`,
     });
   },
@@ -2040,7 +2053,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   copySelection() {
     const state = get();
-    if (state.selection.nodes.length === 0) return null;
+    if (state.selection.nodes.length === 0) {
+      // A connector can't be pasted without the shapes at its ends. Said, rather than leaving an
+      // older copy on the clipboard for the next paste to drop in unexpectedly.
+      if (state.selection.edges.length > 0) useUiStore.getState().notify(CONNECTORS_NEED_SHAPES);
+      return null;
+    }
     const fragment = extractFragment(state.document, state.selection.nodes);
     const text = encodeClipboard(fragment);
     // Remembered so the paste of this very text keeps the in-memory fragment: decoding it back
@@ -2059,6 +2077,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // fragment to put on the clipboard — an edge-only cut, like an
     // edge-only copy, just removes what's selected. See `copySelection`.
     let text: string | null = null;
+    if (selection.nodes.length === 0) useUiStore.getState().notify(`Deleted — ${CONNECTORS_NEED_SHAPES.charAt(0).toLowerCase()}${CONNECTORS_NEED_SHAPES.slice(1)}`);
     if (selection.nodes.length > 0) {
       const fragment = extractFragment(state.document, selection.nodes);
       text = encodeClipboard(fragment);
@@ -2083,7 +2102,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // overlap; a fresh copy/cut resets the count. `exact` (a right-click "Paste" at a captured
     // point) opts out — that gesture means "land exactly here," not "here, plus whatever drift an
     // unrelated earlier paste happened to leave behind."
-    const stagger = options?.exact ? 0 : state.pasteRepeat * PASTE_STAGGER_STEP;
+    // Staggering is for pasting again *in the same place*. Pasted somewhere new, the copy lands on the
+    // pointer — carrying the count over put the sixth paste ~100px from wherever it was aimed.
+    const samePlace = lastPasteTarget !== null && Math.hypot(target.x - lastPasteTarget.x, target.y - lastPasteTarget.y) < PASTE_STAGGER_STEP / 2;
+    const repeat = samePlace ? state.pasteRepeat : 0;
+    lastPasteTarget = target;
+    const stagger = options?.exact ? 0 : repeat * PASTE_STAGGER_STEP;
     const offset = {
       x: target.x - fragmentCenter.x + stagger,
       y: target.y - fragmentCenter.y + stagger,
@@ -2096,7 +2120,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     state.apply('Paste', () => result.doc, {
       selection: { nodes: result.nodeIds, edges: result.edgeIds },
     });
-    set((s) => ({ pasteRepeat: s.pasteRepeat + 1 }));
+    set({ pasteRepeat: repeat + 1 });
     if (result.truncated) {
       useUiStore.getState().notify(result.tooDeep
           ? 'Pasted the first part — the rest holds shapes nested deeper than a canvas goes.'
@@ -2131,12 +2155,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   align(edge) {
     const { selection, apply } = get();
-    apply('Align', (doc) => carryDescendants(doc, alignNodes(doc, selection.nodes, edge), selection.nodes));
+    // See `nudgeSelection` on why membership follows.
+    apply('Align', (doc) => reconcileMembershipOp(carryDescendants(doc, alignNodes(doc, selection.nodes, edge), selection.nodes), selection.nodes));
   },
 
   distribute(axis) {
     const { selection, apply } = get();
-    apply('Distribute', (doc) => carryDescendants(doc, distributeNodes(doc, selection.nodes, axis), selection.nodes));
+    apply('Distribute', (doc) => reconcileMembershipOp(carryDescendants(doc, distributeNodes(doc, selection.nodes, axis), selection.nodes), selection.nodes));
   },
 
   groupSelection() {
@@ -2156,8 +2181,22 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // Past the cap the boundary would be the node a reload drops, leaving its children orphaned.
     if (!roomFor(1, 0)) return;
     // Grouping inside an existing boundary keeps the new one nested there, so dragging or
-    // deleting that outer boundary still carries everything it held.
-    const sharedParent = members.every((n) => n.parentId === members[0]!.parentId) ? members[0]!.parentId : undefined;
+    // deleting that outer boundary still carries everything it held. Members from different
+    // boundaries group inside the innermost boundary they all share — not at the top level, which
+    // pulled every one of them out of the architecture they were drawn in.
+    const ancestry = (node: DraftNode): string[] => {
+      const chain: string[] = [];
+      for (let p = node.parentId ? byId.get(node.parentId) : undefined; p && !chain.includes(p.id); p = p.parentId ? byId.get(p.parentId) : undefined) {
+        chain.push(p.id);
+      }
+      return chain;
+    };
+    const chains = members.map(ancestry);
+    const sharedParent = chains[0]!.find((id) => chains.every((chain) => chain.includes(id)));
+    // A member that sat in a boundary the new one doesn't live in is taken out of it. The new
+    // boundary stacks above that one, so the two never tie on z and leave which draws — and takes
+    // clicks — on top to the order they happen to be stored in.
+    const leftBehind = [...new Set(members.map((n) => n.parentId).filter((id): id is string => id !== undefined && id !== sharedParent))];
 
     const padding = 28;
     const bounds = boundsOf(members)!;
@@ -2175,7 +2214,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       height: maxY - minY,
       // Boundaries stack among themselves by z (see `projection.ts`), so a nested one must sit
       // above the boundary it lives in or it would render — and hit-test — underneath it.
-      z: sharedParent ? Math.max(minZ - 1, (byId.get(sharedParent)?.z ?? 0) + 1) : minZ - 1,
+      z: Math.max(
+        sharedParent ? Math.max(minZ - 1, (byId.get(sharedParent)?.z ?? 0) + 1) : minZ - 1,
+        ...leftBehind.map((id) => (byId.get(id)?.z ?? 0) + 1),
+      ),
       text: 'Boundary',
       ...(sharedParent ? { parentId: sharedParent } : {}),
     });
@@ -2185,6 +2227,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       (doc) => setParent(addNodes(doc, [boundary]), members.map((n) => n.id), boundary.id),
       { selection: { nodes: [boundary.id], edges: [] } },
     );
+    if (leftBehind.length > 0) {
+      const names = leftBehind.map((id) => `“${byId.get(id)?.text || 'Boundary'}”`).join(', ');
+      useUiStore.getState().notify(`Grouped — the selected shapes left ${names}. ⌘Z puts them back.`);
+    }
   },
 
   ungroupSelection() {
@@ -2760,6 +2806,7 @@ export function __resetInteraction(): void {
 /** Test seam: the last-synced system-clipboard text lives outside the store too. */
 export function __resetClipboardSync(): void {
   lastSystemClipboardText = null;
+  lastPasteTarget = null;
 }
 
 /**

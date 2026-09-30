@@ -79,6 +79,29 @@ describe('cross-diagram paste', () => {
   });
 });
 
+describe('repeated pastes', () => {
+  beforeEach(reset);
+
+  const centreOfNewest = () => {
+    const doc = store.getState().document;
+    const node = doc.nodes[doc.nodes.length - 1]!;
+    return { x: node.x + node.width / 2, y: node.y + node.height / 2 };
+  };
+
+  it('step aside when pasted again in the same place, and land on the pointer anywhere new', () => {
+    store.setState({ clipboard: extractFragment(addNodes(createDocument('S'), [createNode({ id: 'n', type: 'service', x: 0, y: 0 })]), ['n']) });
+    store.getState().paste({ x: 100, y: 100 });
+    expect(centreOfNewest()).toEqual({ x: 100, y: 100 });
+    store.getState().paste({ x: 100, y: 100 });
+    store.getState().paste({ x: 100, y: 100 });
+    expect(centreOfNewest()).toEqual({ x: 132, y: 132 });
+
+    // Somewhere else: exactly where it was aimed, however many pastes came before.
+    store.getState().paste({ x: 900, y: 400 });
+    expect(centreOfNewest()).toEqual({ x: 900, y: 400 });
+  });
+});
+
 describe('duplicate preserves attachments but regenerates their ids', () => {
   beforeEach(reset);
 

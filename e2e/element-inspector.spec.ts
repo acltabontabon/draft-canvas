@@ -66,6 +66,24 @@ test.describe('element inspector popover', () => {
     await expect(page.locator('.dc-node')).toHaveCount(0);
   });
 
+  test('the C4 details show an undo, and leaving the field afterwards does not bring the text back', async ({ page }) => {
+    await newCanvas(page, 'Details undo');
+    await create(page, 'Service', { x: 400, y: 300 });
+    await page.locator('.dc-node').first().click();
+    await page.locator('.dc-element-inspector').getByRole('button', { name: 'Details', exact: true }).click();
+    const technology = page.getByLabel('Technology');
+    await technology.fill('Go');
+    await technology.press('Enter');
+    await expect(page.locator('.dc-node').first()).toContainText('Go');
+
+    await page.locator('.dc-canvas').focus();
+    await page.keyboard.press('ControlOrMeta+z');
+    await expect(technology).toHaveValue('');
+    await technology.focus();
+    await technology.blur();
+    await expect(page.locator('.dc-node').first()).not.toContainText('Go');
+  });
+
   test('hides while the element is being dragged, and reappears once the drag ends', async ({ page }) => {
     await newCanvas(page, 'Element popover during drag');
     await create(page, 'Service', { x: 350, y: 250 });

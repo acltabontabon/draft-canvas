@@ -970,15 +970,11 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
             const position =
               (posChange?.type === 'position' ? posChange.position : undefined) ??
               nodeById(change.id)?.position;
-            useEditorStore.getState().updateNodeById(
-              change.id,
-              {
-                ...(position ? { x: position.x, y: position.y } : {}),
-                width: resized.width,
-                height: resized.height,
-              },
-              'Resize',
-            );
+            useEditorStore.getState().resizeNode(change.id, {
+              ...(position ? { x: position.x, y: position.y } : {}),
+              width: resized.width,
+              height: resized.height,
+            });
           }
         }
       }

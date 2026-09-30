@@ -64,6 +64,13 @@ const ExportDialogChunk = retryableLazy(() => import('./ExportDialog').then((mod
 const ProposalPanelChunk = __DESKTOP__ ? retryableLazy(() => import('../../desktop/ui/ProposalPanel').then((module) => ({ default: module.ProposalPanel }))) : null;
 
 /** Whether a modal dialog (`Modal`'s `aria-modal` panel) is up — the editor's shortcuts stand down. */
+/**
+ * What a ⌘C/⌘X keydown just copied, for the browser's copy event that follows it to write — see
+ * `onCopyOrCut`. Cleared as soon as that event reads it; a keystroke whose event never comes (Safari
+ * with nothing selected) leaves it to be overwritten by the next one.
+ */
+let keyedClipboardText: string | null = null;
+
 function modalIsOpen(): boolean {
   return document.querySelector('[aria-modal="true"]') !== null;
 }
@@ -82,6 +89,17 @@ function focusIsOnCanvas(): boolean {
   // is the canvas's one real Tab stop; `.react-flow` is always a descendant of it, so this still
   // covers anything inside React Flow's own tree too, not just the wrapper itself.
   return active.closest('.dc-canvas, .dc-ghost') !== null;
+}
+
+/** Focus sits on a control that was reached from the keyboard (`:focus-visible`), not by a click. */
+function keyboardFocusIsOnControl(): boolean {
+  const active = document.activeElement;
+  if (!active || active === document.body) return false;
+  try {
+    return active.matches(':focus-visible');
+  } catch {
+    return false;
+  }
 }
 
 /** Sample content for a fresh code card, so it is never a blank grey box. */
@@ -594,7 +612,10 @@ function ContinuationAnnouncer() {
  *  `renderHook`) to fire real `keydown` events against the actual dispatch switch below — so a
  *  binding changed here can't silently drift from what `shortcutLookup.ts` tells the palette and
  *  Shortcut Sheet to display. Not part of the app's own render path otherwise; `EditorScreen`
- *  below still calls it exactly as before. */
+ *  below still calls it exactly as before. The export costs this file fast refresh (edits to it
+ *  reload the editor rather than patching it in place), which is a development convenience only;
+ *  moving the hook out would split the dispatch from the helpers it shares with this screen. */
+// oxlint-disable-next-line react/only-export-components -- see above
 export function useKeyboard({
   createAtPointer,
   onPresent,
@@ -737,7 +758,12 @@ export function useKeyboard({
       // sync: same-tab paste must keep working off the in-memory clipboard even when nothing came
       // through here.
       const text = event.clipboardData?.getData('text/plain');
-      if (text) useEditorStore.getState().applyExternalClipboardText(text);
+      // Text that isn't shapes was copied after this tab's last copy, so the shapes still held in
+      // memory are not what the person means to paste — pasting them anyway dropped a stale copy.
+      if (text && !useEditorStore.getState().applyExternalClipboardText(text)) {
+        useUiStore.getState().notify('Nothing to paste — the clipboard holds text, not shapes.');
+        return;
+      }
       const target = pointer.known
         ? { x: pointer.x, y: pointer.y }
         : screenToFlowPosition(canvasCenter());
@@ -747,9 +773,9 @@ export function useKeyboard({
     return () => window.removeEventListener('paste', onPaste);
   }, [screenToFlowPosition]);
 
-  // The same gesture's other half, for a copy/cut that isn't a keystroke: a browser's own Edit menu.
-  // Its event can write `clipboardData` even where `navigator.clipboard` is refused. ⌘C/⌘X are
-  // handled on keydown and never become this event.
+  // The same gesture's other half: the browser's copy/cut event, from its Edit menu or following a
+  // ⌘C/⌘X keydown (which leaves its text in `keyedClipboardText`). Its event can write
+  // `clipboardData` even where `navigator.clipboard` is refused.
   useEffect(() => {
     const onCopyOrCut = (event: ClipboardEvent) => {
       if (isEditableTarget(event.target)) return;
@@ -760,7 +786,11 @@ export function useKeyboard({
       if (ui.commandPaletteOpen || ui.contextMenu || ui.interactionActive || modalIsOpen()) return;
       const state = useEditorStore.getState();
       if (event.type === 'cut' && state.mode === 'present') return;
-      const text = event.type === 'cut' ? state.cutSelection() : state.copySelection();
+      // The ⌘C/⌘X keydown already copied (or cut) and left its text here: write that, don't repeat
+      // the gesture — a second cut would find nothing left to cut.
+      const keyed = keyedClipboardText;
+      keyedClipboardText = null;
+      const text = keyed ?? (event.type === 'cut' ? state.cutSelection() : state.copySelection());
       if (text === null || !event.clipboardData) return;
       event.preventDefault();
       event.clipboardData.setData('text/plain', text);
@@ -856,11 +886,16 @@ export function useKeyboard({
             state.redo();
             return;
           case 'c':
-          case 'x':
-            event.preventDefault();
-            if (key === 'c') state.copySelection();
-            else state.cutSelection();
+          case 'x': {
+            // Not `preventDefault`: the browser's own copy event still follows, and `onCopyOrCut`
+            // writes this text through `clipboardData` — the one path that reaches the system
+            // clipboard where `navigator.clipboard` is refused (the Docker image over plain HTTP,
+            // say). The work itself happens here, because Safari sends no copy event at all when
+            // nothing on the page is selected.
+            const text = key === 'c' ? state.copySelection() : state.cutSelection();
+            keyedClipboardText = text;
             return;
+          }
           case 'v':
             // The native paste event does the work — see `onPaste`.
             return;
@@ -1164,6 +1199,11 @@ export function useKeyboard({
       }
 
       if (event.shiftKey || event.altKey) return;
+      // Not while someone is working a control from the keyboard — Tabbed onto a toolbar, panel or
+      // popover button, a letter is them moving through it, and dropping a shape at the pointer
+      // behind their back is the last thing it means. A button that merely kept focus after a click
+      // doesn't count: click Service, press S, and a shape still arrives.
+      if (!focusIsOnCanvas() && keyboardFocusIsOnControl()) return;
       const preset = presetForShortcut(event.key);
       if (preset) {
         event.preventDefault();
