@@ -34,6 +34,22 @@ async function backOut(page: Page) {
   await page.keyboard.press(`${MOD}+ArrowUp`);
 }
 
+/** Every camera transform the canvas shows over the next `ms`, one entry per change. */
+async function cameraMovesWithin(page: Page, ms: number): Promise<string[]> {
+  return page.evaluate(async (duration) => {
+    const viewport = document.querySelector<HTMLElement>('.react-flow__viewport')!;
+    const start = performance.now();
+    const first = viewport.style.transform;
+    const moves: string[] = [];
+    while (performance.now() - start < duration) {
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      const now = viewport.style.transform;
+      if (now !== first && moves.at(-1) !== now) moves.push(now);
+    }
+    return moves;
+  }, ms);
+}
+
 test('draw inside a shape, come back out, and find it still there', async ({ page }) => {
   await newCanvas(page, 'Lending');
   await create(page, 'Service', { x: 260, y: 260 });
@@ -47,6 +63,10 @@ test('draw inside a shape, come back out, and find it still there', async ({ pag
   await expect(page.getByText(/What runs inside/)).toBeVisible();
 
   await create(page, 'Service', { x: 300, y: 240 });
+  // The first shape stays where it was put. Arriving in the empty room used to ask React Flow for a
+  // fit it could not do yet; it held the request and glided the camera onto this shape as it
+  // appeared, so the Data Store below was clicked into the shape's toolbar instead.
+  expect(await cameraMovesWithin(page, 600)).toEqual([]);
   await create(page, 'Data Store', { x: 600, y: 240 });
   await expect(page.locator('.dc-node')).toHaveCount(2);
 

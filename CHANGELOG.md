@@ -11,7 +11,7 @@ the release notes and the in-app What's New are generated from here. See
 
 ## [Unreleased]
 
-## [1.12.0] - 2026-10-01
+## [1.12.0] - 2026-10-02
 
 A smaller, more focused Draft Canvas that gets diagrams in and out: share links, Mermaid import,
 architecture export to C4, Structurizr and draw.io, connectors that say what actually happens, and a
@@ -127,6 +127,8 @@ long list of fixes to saving, editing and exporting. Every diagram you already h
   PlantUML disarms Creole, HTML and preprocessor markup in labels.
 - **Outlines you can see.** The neutral shape outline (and dark mode's violet) now reach 3:1 contrast
   against the canvas in both themes, and the command palette's hints are readable on the highlighted row.
+- **The canvas holds still while you draw.** Placing the first shape inside an empty shape, or the
+  first shape after fitting an empty canvas, no longer slides the view out from under the pointer.
 - Letter shortcuts no longer fire while a toolbar or panel button has keyboard focus.
 - The C4 fields in the details panel follow undo instead of showing what was there before.
 - A duplicate connector selects the one that exists and says so; dragging a connector's end onto a

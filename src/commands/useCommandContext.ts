@@ -3,7 +3,7 @@ import { useReactFlow, useStore } from '@xyflow/react';
 import type { Preset } from '../canvas/presets';
 import type { DraftNode } from '../document/types';
 import type { FlowPlaybackController } from '../presentation/useFlowPlayback';
-import { flowFitViewNodes, useEditorStore } from '../store/editorStore';
+import { flowFitViewNodes, hasSomethingToFit, useEditorStore } from '../store/editorStore';
 import { useUiStore } from '../store/uiStore';
 import type { CommandContext } from './types';
 import { motionMs } from '../lib/motion';
@@ -36,7 +36,10 @@ export function useCommandContext({ createAt, createAtPointer, playback, onPrese
         ui: useUiStore.getState(),
         camera: {
           // Every command's camera move honours reduced motion here, once, rather than per command.
-          fitView: (options) => fitView({ ...calm(options), nodes: options?.nodes ?? flowFitViewNodes(editor) }),
+          fitView: (options) =>
+            hasSomethingToFit(editor)
+              ? fitView({ ...calm(options), nodes: options?.nodes ?? flowFitViewNodes(editor) })
+              : Promise.resolve(false),
           zoomIn: (options) => zoomIn(calm(options)),
           zoomOut: (options) => zoomOut(calm(options)),
           zoomTo: (zoomLevel, options) => zoomTo(zoomLevel, calm(options)),

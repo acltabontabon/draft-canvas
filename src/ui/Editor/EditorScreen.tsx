@@ -26,7 +26,7 @@ import { naturalCodeSize, describeContext } from '../../nodes/describe';
 import { isActivatableTarget, isEditableTarget, isInOwnKeyboardRegion, isTextChord } from '../../lib/isEditableTarget';
 import { centerOf } from '../../lib/math';
 import { logDiagnostic } from '../../lib/diagnostics';
-import { flowFitViewNodes, roomFor, useEditorStore, viewLevel } from '../../store/editorStore';
+import { flowFitViewNodes, hasSomethingToFit, roomFor, useEditorStore, viewLevel } from '../../store/editorStore';
 import { pointer, useUiStore, type ContextMenuTarget } from '../../store/uiStore';
 import type { DocumentSession } from '../../store/useDocumentSession';
 import { useFlowPlayback } from '../../presentation/useFlowPlayback';
@@ -1092,7 +1092,7 @@ export function useKeyboard({
 
       if (event.shiftKey && event.code === 'Digit1') {
         event.preventDefault();
-        void fitView({ padding: 0.2, duration: motionMs(320), nodes: flowFitViewNodes(state) });
+        if (hasSomethingToFit(state)) void fitView({ padding: 0.2, duration: motionMs(320), nodes: flowFitViewNodes(state) });
         return;
       }
 

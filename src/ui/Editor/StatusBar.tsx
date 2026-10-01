@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useReactFlow, useStore } from '@xyflow/react';
-import { flowFitViewNodes, useEditorStore, viewLevel } from '../../store/editorStore';
+import { flowFitViewNodes, hasSomethingToFit, useEditorStore, viewLevel } from '../../store/editorStore';
 import { count } from '../../lib/plural';
 import { LEVEL_HINTS, LEVEL_LABELS } from '../../depth/level';
 import { Button } from '../common/Button';
@@ -192,9 +192,14 @@ function ZoomControls() {
   const fitRequestId = useUiStore((state) => state.fitRequestId);
   useEffect(() => {
     if (fitRequestId === 0) return;
-    void fitView({ padding: 0.2, duration: motionMs(320), nodes: flowFitViewNodes(useEditorStore.getState()) });
+    const state = useEditorStore.getState();
+    if (hasSomethingToFit(state)) void fitView({ padding: 0.2, duration: motionMs(320), nodes: flowFitViewNodes(state) });
     useUiStore.getState().clearFitRequest(fitRequestId);
   }, [fitRequestId, fitView]);
+  const fitNow = () => {
+    const state = useEditorStore.getState();
+    if (hasSomethingToFit(state)) void fitView({ padding: 0.2, duration: motionMs(300), nodes: flowFitViewNodes(state) });
+  };
   return (
     <>
       <Button variant="quiet" onClick={() => void zoomOut()} aria-label="Zoom out">
@@ -204,7 +209,7 @@ function ZoomControls() {
         type="button"
         className="dc-zoom-value"
         aria-label={`${percent}%, fit to view`}
-        onClick={() => void fitView({ padding: 0.2, duration: motionMs(300), nodes: flowFitViewNodes(useEditorStore.getState()) })}
+        onClick={fitNow}
         title="Fit to view"
       >
         {percent}%

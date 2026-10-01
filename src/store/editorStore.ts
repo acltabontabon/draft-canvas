@@ -1046,6 +1046,16 @@ export function lensFlow(
  * so asking it "is the lens on?" quietly made "Fit" during a presentation frame the whole diagram
  * instead of the story being told — which is the one moment scoping it matters most.
  */
+/**
+ * Whether a fit has anything to frame. React Flow 12 never drops a `fitView` with nothing to
+ * measure: it queues it and fits, animated, on the first node update after — so a fit asked of an
+ * empty room sprang the camera onto the first shape placed there, out from under the pointer that
+ * had just placed it (and the next click landed somewhere else). Every fit checks this first.
+ */
+export function hasSomethingToFit(state: EditorStore): boolean {
+  return state.document.nodes.length > 0;
+}
+
 export function flowFitViewNodes(state: EditorStore): { id: string }[] | undefined {
   const flow =
     lensFlow(state) ??

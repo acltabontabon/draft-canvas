@@ -28,7 +28,7 @@ import { centerOf, clamp, pointInBox } from '../lib/math';
 import { pathKey } from '../depth/tree';
 import { findFlow } from '../document/flow';
 import { accentOf } from '../render/theme/tokens';
-import { lensFlow, useEditorStore } from '../store/editorStore';
+import { hasSomethingToFit, lensFlow, useEditorStore } from '../store/editorStore';
 import { PresentationPointer } from './presentation/PresentationPointer';
 import { edgeIndex, nodeIndex } from '../store/selectors';
 import { pointer, useUiStore } from '../store/uiStore';
@@ -508,7 +508,11 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
     const pane = paneRef.current?.getBoundingClientRect();
     const framed = pane ? frameFor(state.document, pane.width, pane.height) : null;
     if (framed) void setViewport(framed, { duration });
-    else void fitView({ padding: 0.4, duration, maxZoom: 1 });
+    else if (hasSomethingToFit(state)) void fitView({ padding: 0.4, duration, maxZoom: 1 });
+    // An empty room starts where a new canvas does. Never a fit: React Flow holds one with nothing
+    // to measure and springs it on the first shape drawn in here (or, backing out first, on the
+    // room left behind — overriding the camera it had just restored).
+    else void setViewport(state.document.viewport, { duration });
   }, [path, fitView, setViewport]);
 
   // The same `state.width`/`state.height` `useCommandContext.ts`'s `viewWidth`/`viewHeight` read —
