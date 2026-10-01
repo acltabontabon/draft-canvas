@@ -228,6 +228,10 @@ export default defineConfig(({ mode, command }) => {
       css: false,
       include: ['tests/**/*.test.{ts,tsx}'],
       exclude: ['e2e/**', 'node_modules/**'],
+      // Coverage instruments every line, and the agent gallery composes and lays out whole diagrams:
+      // on a two-core CI runner that took those tests past the 5 s default. Only the instrumented
+      // run gets the headroom — a plain `npm test` keeps the tight limit that catches a slow path.
+      ...(process.argv.includes('--coverage') ? { testTimeout: 30_000 } : {}),
       // `npm run test:coverage`. The floor sits just under what the suite reached when it was set
       // (1.12: 71 / 62 / 66 / 74), so coverage can only go up without someone deciding otherwise.
       coverage: {
