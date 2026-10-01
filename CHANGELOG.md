@@ -11,23 +11,6 @@ the release notes and the in-app What's New are generated from here. See
 
 ## [Unreleased]
 
-### Shared
-
-#### Changed
-
-- **The documentation opens on the Draft Canvas website.** Documentation in the More menu, and
-  Help → Documentation in the desktop app, now open readable pages at
-  acltabontabon.com/draft-canvas/docs instead of files on GitHub.
-
-### Desktop
-
-#### Fixed
-
-- **Home's dotted background is quiet again in the dark theme.** A second layer of brightly coloured
-  dots covered the whole window and made the page hard to read.
-- **Documentation in the More menu and the command palette opens your browser.** On Windows it did
-  nothing.
-
 ## [1.12.0] - 2026-10-02
 
 A smaller, more focused Draft Canvas that gets diagrams in and out: share links, Mermaid import,
@@ -115,6 +98,9 @@ long list of fixes to saving, editing and exporting. Every diagram you already h
   wrongly.
 - Presenting lights a shape along its own outline instead of drawing a box around it.
 - A connector from an Adapter or Service to a Port can say **implements**.
+- **The documentation opens on the Draft Canvas website.** Documentation in the More menu, and
+  Help → Documentation in the desktop app, now open readable pages at
+  acltabontabon.com/draft-canvas/docs instead of files on GitHub.
 
 #### Fixed
 
@@ -156,6 +142,8 @@ long list of fixes to saving, editing and exporting. Every diagram you already h
 - iPhones and iPads no longer get a blank PNG past their canvas limit.
 - "Reload app" in the crash screen activates a downloaded update first, so a stale-chunk crash no
   longer reloads into the same crash.
+- **Export's Source formats fit their picker.** Mermaid flowchart, C4-PlantUML, Structurizr DSL and
+  draw.io no longer wrap out of their pills.
 
 #### Removed
 
@@ -207,6 +195,10 @@ long list of fixes to saving, editing and exporting. Every diagram you already h
 - Saving a new file never overwrites one that appeared at the same path; a file starting with a
   byte-order mark opens; folders such as `node_modules`, `vendor` and `target` are skipped when
   looking for diagrams, and an agent is told when a search stopped early.
+- **Home's dotted background is quiet again in the dark theme.** A second layer of brightly coloured
+  dots covered the whole window and made the page hard to read.
+- **Documentation in the More menu and the command palette opens your browser.** On Windows it did
+  nothing.
 
 ## [1.12.0-beta.2] - 2026-09-26
 
