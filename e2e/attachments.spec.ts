@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { create, newCanvas, nextFrames, reopenAfterReload } from './canvas';
+import { afterDropGuard, create, newCanvas, nextFrames, reopenAfterReload } from './canvas';
 
 /** Node attachments: drag-to-attach arming, the badge opening a connector-style chip row/card
  *  (`AttachmentPresentation.tsx`, shared with `DraftEdgeView.tsx`), detach, delete. */
@@ -19,7 +19,10 @@ async function dragNodeCenterTo(
   await page.mouse.down();
   await page.mouse.move(target.x, target.y, { steps: options.steps ?? 15 });
   if (options.dwell) await expect(page.locator('.dc-node[data-attach-target="true"]')).toHaveCount(1);
-  return async () => page.mouse.up();
+  return async () => {
+    await page.mouse.up();
+    await afterDropGuard(page);
+  };
 }
 
 test.describe('attachments', () => {

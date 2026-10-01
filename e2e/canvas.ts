@@ -164,3 +164,14 @@ export async function cameraAtRest(page: Page) {
 export async function nextFrames(page: Page) {
   await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
 }
+
+/**
+ * After dropping a shape, before the next click. React Flow drags shapes with d3-drag, which eats
+ * the click that ends a drag through a window listener it removes on a zero-delay timer — and
+ * Chromium runs input ahead of timers, so a click sent straight after a busy drop (a card folding
+ * into a connector) landed while that guard was still up and selected nothing. A timer queued now
+ * fires after d3's.
+ */
+export async function afterDropGuard(page: Page) {
+  await page.evaluate(() => new Promise<void>((resolve) => setTimeout(resolve, 0)));
+}

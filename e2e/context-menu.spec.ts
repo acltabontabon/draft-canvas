@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { connect, create, newCanvas, nextFrames } from './canvas';
+import { clickEdge, connect, create, newCanvas, nextFrames } from './canvas';
 
 /** The right-click contextual menu — empty canvas, a single node, and multi-selection. */
 
@@ -293,8 +293,10 @@ test.describe('context menu — an edge', () => {
     await create(page, 'Service', { x: 300, y: 250 });
     await create(page, 'Data Store', { x: 600, y: 250 });
     await connect(page, 0, 1);
-    const mid = await edgeMidpoint(page);
-    await page.mouse.click(mid.x, mid.y);
+    // On the line itself, and selected before Enter: a point between the two shapes' centres can sit
+    // a few pixels off a routed connector, and Enter on an empty selection does nothing.
+    await clickEdge(page);
+    await expect(page.locator('.dc-edge[data-selected="true"]')).toHaveCount(1);
     await page.keyboard.press('Enter');
     const input = page.locator('.dc-edge-label-input');
     await expect(input).toBeFocused();

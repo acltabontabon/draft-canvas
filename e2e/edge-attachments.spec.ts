@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { connect, create, newCanvas, nextFrames } from './canvas';
+import { afterDropGuard, connect, create, newCanvas, nextFrames } from './canvas';
 
 /**
  * Connection-attached details: dragging an existing Note/Code node onto a connector folds it into
@@ -73,6 +73,7 @@ async function dragNodeCenterTo(page: Page, node: ReturnType<Page['locator']>, t
     }
     await nextFrames(page);
     await page.mouse.up();
+    await afterDropGuard(page);
     if ((await node.count()) === 0) return; // Folded into the connector's attachment.
   }
 }
@@ -311,6 +312,9 @@ test.describe('connection-attached details', () => {
 
     const target = await edgeMidpoint(page, 0, 1);
     await page.mouse.click(target.x, target.y);
+    // Selected before Backspace: on a loaded machine the key could otherwise beat the click's
+    // selection, and Backspace with nothing selected deletes nothing.
+    await expect(page.locator('.dc-edge[data-selected="true"]')).toHaveCount(1);
     await page.keyboard.press('Backspace');
     await expect(page.locator('.dc-edge')).toHaveCount(0);
 
