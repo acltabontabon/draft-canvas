@@ -23,8 +23,26 @@ export async function newCanvas(page: Page, title: string) {
  * (`finishTextEdit`, so it never becomes an invisible ghost), so it is given a word and committed.
  */
 export async function create(page: Page, tool: string, at: { x: number; y: number }) {
+  const pane = page.locator('.react-flow__pane');
+  const box = (await pane.boundingBox())!;
+  const point = { x: box.x + at.x, y: box.y + at.y };
+  // Only where something actually sits on the point this clicks: the selected shape's options
+  // toolbar can, where an engine's fonts make it wider. Escape clears that selection (a toolbar
+  // means something is selected, so this never steps out of a level). Anywhere else the selection
+  // is left exactly as the test made it.
+  await page.mouse.move(point.x, point.y);
+  const covered = await page.evaluate(
+    ([x, y]) => Boolean(document.elementFromPoint(x, y)?.closest('.dc-element-inspector, .dc-edge-inspector')),
+    [point.x, point.y] as const,
+  );
+  if (covered) {
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.dc-element-inspector, .dc-edge-inspector')).toHaveCount(0);
+  }
   await page.getByRole('button', { name: tool, exact: true }).click();
-  await page.locator('.react-flow__pane').click({ position: at });
+  // Off the button again before clicking, as a hand would be: its tooltip can sit on the point.
+  await page.mouse.move(point.x, point.y);
+  await pane.click({ position: at });
   if (tool === 'Text') {
     await page.keyboard.type('Text');
     await page.keyboard.press('ControlOrMeta+Enter');

@@ -193,6 +193,14 @@ export default defineConfig(({ mode, command }) => {
     worker: {
       plugins: () => [workerSafeEntities()],
     },
+    // Dev only. By default Vite scans index.html's static imports for dependencies to pre-bundle, so a
+    // dependency first reached through a lazily loaded module (the editor, a dialog, the desktop
+    // screens) was discovered mid-session: Vite re-bundled, and the import already in flight failed
+    // ("Importing a module script failed" in WebKit). Scanning every source file finds them all at
+    // start-up instead.
+    optimizeDeps: {
+      entries: ['index.html', 'src/**/*.{ts,tsx}', '!src/**/*.d.ts'],
+    },
     server: {
       // `tauri dev` needs a fixed port (5180 belongs to the web dev server and its e2e suite), and
       // the watcher must skip src-tauri/: cargo's target/ holds more files than it can watch.
