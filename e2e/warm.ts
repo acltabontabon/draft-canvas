@@ -17,6 +17,14 @@ export default async function warm(config: FullConfig): Promise<void> {
   try {
     const page = await browser.newPage();
     await page.goto(baseURL, { waitUntil: 'load', timeout: 120_000 });
+    // About is a lazy chunk too, carrying every release's notes, and the first test to open it on a
+    // cold server (Firefox in CI) waited past its own expectation for the dialog.
+    const about = page.getByRole('button', { name: 'About Draft Canvas' }).first();
+    if (await about.isVisible({ timeout: 10_000 }).catch(() => false)) {
+      await about.click();
+      await page.getByRole('dialog', { name: 'About' }).waitFor({ state: 'visible', timeout: 120_000 }).catch(() => undefined);
+      await page.keyboard.press('Escape');
+    }
     const newCanvas = page.getByRole('button', { name: 'New canvas' }).first();
     if (await newCanvas.isVisible({ timeout: 10_000 }).catch(() => false)) {
       await newCanvas.click();

@@ -13,6 +13,18 @@ test.beforeEach(async ({ page }) => {
   await installMockShell(page);
 });
 
+/**
+ * The reload that lets a test's seed (an init script) reach the faked shell. The app warms the editor
+ * chunk once the page is idle (`App.tsx`), and a reload landing mid-import made WebKit report it as
+ * "Importing a module script failed" (a page error some tests count as a crash) or fail the reload
+ * itself with "WebKit encountered an internal error". Importing the same module here waits for that
+ * graph — a module loads once — so the warm-up has nothing left to fetch, whenever it fires.
+ */
+async function reloadSeeded(page: Page) {
+  await page.evaluate(() => import('/src/ui/Editor/EditorScreen.tsx').then(() => undefined));
+  await page.reload();
+}
+
 /** A `.draftcanvas` file's text, made the way the app makes one. */
 async function documentText(page: Page, title: string, nodes = 0): Promise<string> {
   return page.evaluate(
@@ -107,7 +119,7 @@ test('an empty tab says what would be there, and the tabs hold still', async ({ 
   await page.addInitScript((text) => {
     window.__shell.seed({ recents: [{ name: 'payment-flow', text, ago: 60_000 }] });
   }, text);
-  await page.reload();
+  await reloadSeeded(page);
 
   await expect(page.getByRole('tab', { name: 'Recent' })).toHaveAttribute('aria-selected', 'true');
   await page.getByRole('tab', { name: 'Drafts' }).click();
@@ -122,7 +134,7 @@ test('forgetting the last of a row leaves its tab chosen and saying so; forgetti
   await page.addInitScript((text) => {
     window.__shell.seed({ recents: [{ name: 'payment-flow', text, ago: 60_000 }], drafts: [{ title: 'Auth rework', text, ago: 60_000 }] });
   }, text);
-  await page.reload();
+  await reloadSeeded(page);
 
   await page.getByRole('tab', { name: 'Recent' }).click();
   await page.getByRole('button', { name: 'Remove payment-flow from Recent' }).click();
@@ -142,7 +154,7 @@ test('the row is walked and opened from the keyboard', async ({ page }) => {
   await page.addInitScript((text) => {
     window.__shell.seed({ recents: [1, 2, 3].map((i) => ({ name: `diagram-${i}`, text, ago: i * 60_000 })) });
   }, text);
-  await page.reload();
+  await reloadSeeded(page);
 
   await page.getByRole('button', { name: 'New Quick Draft' }).focus();
   await page.keyboard.press('ArrowDown');
@@ -200,7 +212,7 @@ test('keeps the row to one line, with the rest one click away', async ({ page })
   await page.addInitScript((text) => {
     window.__shell.seed({ recents: Array.from({ length: 8 }, (_, i) => ({ name: `diagram-${i + 1}`, text, ago: (i + 1) * 60_000 })) });
   }, text);
-  await page.reload();
+  await reloadSeeded(page);
 
   await expect(page.getByRole('tab', { name: 'Recent' })).toHaveAttribute('aria-selected', 'true');
   const row = page.locator('.dc-desk-row');
@@ -233,7 +245,7 @@ test('holds many projects: one Projects tab, a row of the newest, and everything
       })),
     });
   }, text);
-  await page.reload();
+  await reloadSeeded(page);
 
   // However many projects: one Projects tab, never a tab each — and it is the one shown, being the
   // only one with anything in it.
@@ -299,7 +311,7 @@ test('browses a project’s folders one level at a time, with breadcrumbs back u
       ],
     });
   }, text);
-  await page.reload();
+  await reloadSeeded(page);
 
   const row = page.locator('.dc-desk-row');
   await row.getByRole('button', { name: 'Show the Shop project' }).click();
@@ -335,9 +347,6 @@ test('opens diagrams from a project’s root and its subfolders, namesakes and n
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto('/');
-  // Home finishes arriving before the reload below replaces it: WebKit reports a lazy chunk the
-  // reload cut off as "Importing a module script failed", which this test would count as a crash.
-  await page.waitForLoadState('networkidle');
   const texts = {
     root: await documentText(page, 'Root canvas', 1),
     sub: await documentText(page, 'Sub canvas', 2),
@@ -360,7 +369,7 @@ test('opens diagrams from a project’s root and its subfolders, namesakes and n
       ],
     });
   }, texts);
-  await page.reload();
+  await reloadSeeded(page);
 
   const steps: { project: string; folders: string[]; path: string; shapes: number }[] = [
     { project: 'Demo Project', folders: [], path: 'Demo Project/Untitled canvas', shapes: 1 },
