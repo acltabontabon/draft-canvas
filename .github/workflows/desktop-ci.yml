@@ -51,7 +51,10 @@ jobs:
   # only place Tauri appears.
   frontend:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # The tests take about five minutes; the rest is headroom for installing two browsers' system
+    # libraries. When the runner's Ubuntu mirror stalls, apt falls back to archive.ubuntu.com one
+    # package at a time — 15 minutes on 2026-10-01, which cut the WebKit run off at the old 20.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
