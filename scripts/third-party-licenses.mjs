@@ -30,7 +30,9 @@ function run(cmd, args, cwd = root) {
 function licenseTextIn(dir) {
   if (!existsSync(dir)) return undefined;
   const file = readdirSync(dir).find((name) => LICENSE_FILES.test(name));
-  return file ? readFileSync(join(dir, file), 'utf8').trim() : undefined;
+  // LF only: a few packages ship CRLF licence files, and git normalises the committed copy, so a
+  // generated CRLF would never match what CI checks out.
+  return file ? readFileSync(join(dir, file), 'utf8').replace(/\r\n?/g, '\n').trim() : undefined;
 }
 
 /** The production npm closure as `{ name, version, license, path }`, sorted, one entry per name@version. */
