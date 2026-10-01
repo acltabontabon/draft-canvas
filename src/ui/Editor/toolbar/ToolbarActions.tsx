@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react';
 import { useEditorStore } from '../../../store/editorStore';
 import { useUiStore } from '../../../store/uiStore';
 import { PRODUCT } from '../../../product';
+import { openLink } from '../../../host/openLink';
 import { applicableReleases, hasUnreadRelease } from '../../../releases/productReleases';
 import { Button } from '../../common/Button';
 import { Tooltip } from '../../common/Tooltip';
@@ -73,7 +74,7 @@ export function ToolbarActions({ onPresent, onExport }: ToolbarActionsProps) {
       label: toolbarLabel('help'),
       onSelect: () => {
         closeMenu();
-        window.open(PRODUCT.links.docs, '_blank', 'noopener');
+        openLink(PRODUCT.links.docs);
       },
     },
     {

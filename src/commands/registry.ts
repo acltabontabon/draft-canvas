@@ -1,4 +1,5 @@
 import { PRODUCT } from '../product';
+import { openLink } from '../host/openLink';
 import { ALL_PRESETS, DEV_PRESETS, type Preset } from '../canvas/presets';
 import { capabilityFor, categoryOf, edgeRelationLabel } from '../document/connectorSemantics';
 import { relationLabel } from '../document/edgeSemantics';
@@ -746,10 +747,7 @@ export function canvasCommands(ctx: CommandContext): Command[] {
       group: 'canvas',
       keywords: ['help', 'docs', 'how', 'guide', 'manual', 'learn'],
       hint: 'Opens in a new tab',
-      // A link, not a fetch: nothing in `src/` makes a network request of its own.
-      run: () => {
-        window.open(PRODUCT.links.docs, '_blank', 'noopener');
-      },
+      run: () => openLink(PRODUCT.links.docs),
     },
     {
       id: 'about',
