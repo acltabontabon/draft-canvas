@@ -49,6 +49,8 @@ const required = [
   ['editor/index.html', 'the editor entry document'],
   ['editor/sw.js', "the editor's own service worker, which scopes offline use to /editor/"],
   ['sw.js', 'the retirement service worker for the old /draft-canvas/ registration'],
+  ['docs/index.html', 'the documentation, which the app\'s Documentation menu opens'],
+  ['docs/getting-started/index.html', 'the first guide, which every other page links to'],
 ];
 for (const [path, what] of required) {
   insist(existsSync(join(out, path)), `dist-web/${path} is missing — ${what}.`);

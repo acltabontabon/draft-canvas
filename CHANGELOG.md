@@ -11,6 +11,23 @@ the release notes and the in-app What's New are generated from here. See
 
 ## [Unreleased]
 
+### Shared
+
+#### Changed
+
+- **The documentation opens on the Draft Canvas website.** Documentation in the More menu, and
+  Help → Documentation in the desktop app, now open readable pages at
+  acltabontabon.com/draft-canvas/docs instead of files on GitHub.
+
+### Desktop
+
+#### Fixed
+
+- **Home's dotted background is quiet again in the dark theme.** A second layer of brightly coloured
+  dots covered the whole window and made the page hard to read.
+- **Documentation in the More menu and the command palette opens your browser.** On Windows it did
+  nothing.
+
 ## [1.12.0] - 2026-10-02
 
 A smaller, more focused Draft Canvas that gets diagrams in and out: share links, Mermaid import,

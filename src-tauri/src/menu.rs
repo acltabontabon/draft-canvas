@@ -12,7 +12,7 @@ use tauri::image::Image;
 use tauri::menu::{IconMenuItem, IsMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{AppHandle, Manager, Runtime};
 
-pub const DOCS_URL: &str = "https://github.com/acltabontabon/draft-canvas/tree/main/docs";
+pub const DOCS_URL: &str = "https://acltabontabon.com/draft-canvas/docs/";
 
 /// A PNG the page drew for a menu item, shared rather than copied each time the menu is rebuilt.
 pub type Icon = Arc<Vec<u8>>;

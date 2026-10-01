@@ -8,6 +8,7 @@ artifact.
 | --- | --- | --- |
 | `/draft-canvas/` | The landing page | `www/` |
 | `/draft-canvas/editor/` | The editor | `dist/`, unchanged |
+| `/draft-canvas/docs/` | The guides, and the reference a user reads | `docs/`, rendered by `www/scripts/docs.mjs` |
 | `/draft-canvas/sw.js` | A service worker that retires the editor's old registration | `www/public/sw.js` |
 
 ## The source
@@ -48,6 +49,31 @@ that is what a Port is. There are no webfonts, for the same reason the app has n
 that what it built is deployable — both entry documents present, the editor's own service worker
 inside `editor/`, nothing of the editor's leaked to the root. `dist/` itself is untouched, which is
 what lets the Docker image, the offline e2e suite and the desktop build go on consuming it.
+
+## The documentation
+
+`docs/` is still the one copy of the documentation anybody edits. It reads on GitHub as it always
+has, and `tests/docs.test.ts` checks its links there. The site build also renders it into pages under
+`/draft-canvas/docs/`, so someone who clicks Docs on the landing page, or Documentation in the app,
+reads it on the site instead of in a code repository.
+
+- **What is published.** `docs/index.md`, every guide in `docs/guides/`, and the reference documents
+  a user lands on from a guide (`PUBLISHED_REFERENCE` in `www/scripts/docs.mjs`: privacy and agent
+  integration). The rest of `docs/reference/` is for people changing the code, so a link to it, or
+  to the README, CONTRIBUTING or a source file, goes to GitHub.
+- **The sidebar** is the guides and reference that `docs/index.md` lists in its tables, in that order
+  and under the names it gives them. A new guide shows up in the sidebar once the index lists it.
+- **Links are checked as they are rewritten.** A link to a page, a `#section` or an image that the
+  build did not publish fails `npm run site:build`. Heading ids follow GitHub's rule, the same one
+  `tests/docs.test.ts` uses, so an anchor that works on GitHub works here too.
+- **No script.** The pages are static HTML that share the landing page's stylesheet, under the same
+  generated CSP. Navigation on a phone is a plain `<details>`.
+- **Which docs ship.** `pages.yml` builds from the release tag, so the docs on the site always
+  describe the editor at `/draft-canvas/editor/`. A fix to a guide goes live with the next release,
+  not on the push.
+
+`npm run site:dev` renders a page on every request, so an edited guide shows on a refresh at
+`http://localhost:5280/docs/`.
 
 ## Media
 

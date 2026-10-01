@@ -156,3 +156,73 @@ test('the editor asks not to be indexed as a second landing page', async ({ page
   await page.goto(SITE);
   await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', /\/draft-canvas\/$/);
 });
+
+test.describe('the documentation', () => {
+  /*
+   * docs/ rendered into pages by www/scripts/docs.mjs. The build already refuses a link to a page,
+   * section or image it did not publish; this checks the other half — that what it published is
+   * where those links say, at the real subpath, which a build cannot see.
+   */
+  const DOCS = `${SITE}docs/`;
+
+  test('every page, and everything it links to on this site, is there', async ({ page }) => {
+    const failures: string[] = [];
+    page.on('response', (response) => {
+      if (response.status() >= 400) failures.push(`${response.status()} ${response.url()}`);
+    });
+
+    const pages = new Set<string>([DOCS]);
+    const visited = new Set<string>();
+    const elsewhere = new Set<string>();
+    while (visited.size < pages.size) {
+      const next = [...pages].find((path) => !visited.has(path))!;
+      visited.add(next);
+      await page.goto(next);
+      await expect(page.locator('h1')).toBeVisible();
+      const targets = await page.evaluate(() =>
+        [...document.querySelectorAll<HTMLAnchorElement | HTMLImageElement>('a[href], img[src]')]
+          .map((node) => ('href' in node ? node.href : node.src))
+          .filter((url) => new URL(url).origin === location.origin),
+      );
+      for (const target of targets) {
+        const { pathname } = new URL(target);
+        if (pathname.startsWith(DOCS) && pathname.endsWith('/')) pages.add(pathname);
+        else elsewhere.add(pathname);
+      }
+    }
+
+    expect(visited.size, 'the index, every guide and the published reference').toBeGreaterThan(10);
+    for (const path of elsewhere) {
+      const response = await page.request.get(path);
+      expect(response.status(), path).toBe(200);
+    }
+    expect(failures, 'no page, stylesheet or screenshot 404s under the subpath').toEqual([]);
+  });
+
+  test('is reached from the landing page, and finds its way around', async ({ page }) => {
+    await page.goto(SITE);
+    await page.locator('footer').getByRole('link', { name: 'Docs', exact: true }).click();
+    await expect(page).toHaveURL(/\/draft-canvas\/docs\/$/);
+
+    const sidebar = page.getByRole('navigation', { name: 'Documentation' }).first();
+    await sidebar.getByRole('link', { name: 'Getting started' }).click();
+    await expect(page).toHaveURL(/\/draft-canvas\/docs\/getting-started\/$/);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Getting started');
+    await expect(sidebar.getByRole('link', { name: 'Getting started' })).toHaveAttribute('aria-current', 'page');
+    // Styled, not merely served: a stylesheet that 404'd leaves the body transparent.
+    await expect(page.locator('body')).toHaveCSS('background-color', /rgb\(/);
+
+    await page.getByRole('link', { name: 'Open editor' }).click();
+    await expect(page).toHaveURL(/\/draft-canvas\/editor\/$/);
+  });
+
+  test('runs no script, under the same policy as the landing page', async ({ page }) => {
+    await page.goto(`${DOCS}getting-started/`);
+    expect(await page.locator('script').count()).toBe(0);
+    await expect(page.locator('meta[http-equiv="Content-Security-Policy"]')).toHaveAttribute(
+      'content',
+      /connect-src 'none'/,
+    );
+    await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', /\/draft-canvas\/docs\/getting-started\/$/);
+  });
+});

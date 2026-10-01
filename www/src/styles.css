@@ -125,8 +125,7 @@ body::before {
 }
 
 code,
-kbd,
-.mono {
+kbd {
   font-family: var(--mono);
 }
 
@@ -224,10 +223,6 @@ code {
   border-radius: 4px;
   color: var(--ink-soft);
 }
-
-.q::before { content: '\201c'; }
-.q::after { content: '\201d'; }
-.q { color: var(--ink); font-style: italic; }
 
 /* ── Buttons ─────────────────────────────────────────────────────────────────────────────── */
 
@@ -341,7 +336,9 @@ code {
   font-size: 0.9rem;
 }
 
-@media (max-width: 900px) {
+/* Three short links fit beside the button down to a large phone; below that the page is one column
+   you scroll anyway, and Docs and Download are both in the footer. */
+@media (max-width: 600px) {
   .masthead-nav { display: none; }
   .masthead-cta { margin-left: auto; }
 }
@@ -701,12 +698,6 @@ main > *:not(.spine) {
   color: var(--ink-soft);
 }
 
-.demo-longform {
-  margin: 22px 0 0;
-  font-size: 0.88rem;
-  color: var(--ink-faint);
-}
-
 /* ── The bezel: a piece of the product, framed and set on the page ───────────────────────── */
 
 .bezel {
@@ -833,11 +824,6 @@ main > *:not(.spine) {
 .prose strong {
   color: var(--ink);
   font-weight: 600;
-}
-
-.prose .aside {
-  font-size: 0.94rem;
-  color: var(--ink-faint);
 }
 
 /* The one paragraph in a chapter that states a limit rather than a feature. */
@@ -1212,7 +1198,7 @@ main > *:not(.spine) {
 
 .rev-flag:hover {
   color: var(--ink);
-  border-color: var(--redline);
+  border-color: var(--accent-line);
 }
 
 .rev-flag-tag {
@@ -1223,8 +1209,8 @@ main > *:not(.spine) {
   font-family: var(--mono);
   font-size: 11px;
   letter-spacing: 0.06em;
-  color: var(--redline);
-  background: var(--redline-soft);
+  color: var(--accent-ink);
+  background: var(--accent-soft);
   border-radius: 999px;
 }
 
@@ -1243,30 +1229,6 @@ main > *:not(.spine) {
 
 .rev-flag:hover .rev-flag-arrow {
   transform: translateX(2px);
-}
-
-.masthead-nav .nav-rev span {
-  margin-left: 2px;
-  font-size: 0.72em;
-  line-height: 0;
-  vertical-align: super;
-  color: var(--redline);
-}
-
-.numeral-delta {
-  font-weight: 200;
-  right: clamp(-30px, -1.5vw, 0px);
-  -webkit-text-stroke: 1px var(--redline);
-  opacity: 0.6;
-}
-
-.spine .junction-rev {
-  stroke: var(--redline);
-}
-
-.spine .junction-rev.passed {
-  fill: var(--redline-soft);
-  stroke: var(--redline);
 }
 
 /* The stage: the conversation on the left, the sheet it produces on the right, and the protocol as
@@ -1681,179 +1643,6 @@ main > *:not(.spine) {
   margin-bottom: 0;
 }
 
-.rev-verbs-title {
-  margin: 30px 0 12px;
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
-}
-
-.rev-verbs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 0 0 20px;
-  padding: 0;
-  list-style: none;
-}
-
-.rev-verbs li {
-  padding: 3px 10px 4px;
-  font-family: var(--mono);
-  font-size: 12px;
-  color: var(--ink-soft);
-  background: var(--paper-2);
-  border: 1px solid var(--rule-strong);
-  border-radius: 999px;
-}
-
-/* The rest of the revision, one card each, each drawn the way the renderer draws it. */
-.rev-extras {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 20px;
-  margin-top: clamp(56px, 8vw, 96px);
-}
-
-.rev-extras-title {
-  grid-column: 1 / -1;
-}
-
-.rev-extra {
-  padding: 22px 22px 20px;
-  background: var(--paper-2);
-  border: 1px solid var(--rule);
-  border-radius: 12px;
-}
-
-.rev-extra svg {
-  display: block;
-  width: 100%;
-  height: auto;
-  margin-bottom: 18px;
-  overflow: visible;
-}
-
-.rev-extra h3 {
-  margin-bottom: 8px;
-  font-size: 1.08rem;
-}
-
-.rev-extra p {
-  margin: 0;
-  font-size: 0.93rem;
-  color: var(--ink-soft);
-}
-
-.rev-extra em {
-  font-style: normal;
-  color: var(--ink);
-}
-
-.rev-extra .x-body {
-  fill: var(--paper);
-  stroke: var(--rule-strong);
-  stroke-width: 1.3;
-}
-
-.rev-extra .x-name,
-.rev-extra .x-tech,
-.rev-extra .x-desc {
-  font-family: var(--sans);
-  text-anchor: middle;
-}
-
-.rev-extra .x-name {
-  fill: var(--ink);
-  font-size: 15px;
-  font-weight: 560;
-}
-
-.rev-extra .x-tech {
-  fill: var(--ink-soft);
-  font-size: 11px;
-  font-weight: 500;
-}
-
-.rev-extra .x-desc {
-  fill: var(--ink-faint);
-  font-size: 11px;
-}
-
-.rev-extra .x-line {
-  fill: none;
-  stroke: var(--ink-faint);
-  stroke-width: 1.25;
-  stroke-linecap: round;
-}
-
-.rev-extra .x-domain { stroke-dasharray: 9 4; }
-.rev-extra .x-network { stroke-dasharray: 10 4 0.01 4; }
-.rev-extra .x-deploy { stroke-width: 1; }
-
-.rev-extra .x-plate {
-  fill: var(--ink-faint);
-  opacity: 0.16;
-}
-
-.rev-extra .x-mark,
-.rev-extra .x-mark path {
-  fill: none;
-  stroke: var(--ink-soft);
-  stroke-width: 1.2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.rev-extra .x-mark circle {
-  fill: var(--ink-soft);
-  stroke: none;
-}
-
-.rev-extra .x-cap {
-  fill: var(--ink-faint);
-  font-family: var(--mono);
-  font-size: 9.5px;
-  letter-spacing: 0.14em;
-}
-
-.rev-extra .x-flow {
-  fill: none;
-  stroke: var(--accent);
-  stroke-width: 2;
-}
-
-.rev-extra .x-flow-head { fill: var(--accent); }
-
-.rev-extra .x-fail {
-  fill: none;
-  stroke: var(--amber);
-  stroke-width: 1.7;
-  stroke-dasharray: 4 3;
-}
-
-.rev-extra .x-fail-head { fill: var(--amber); }
-
-.rev-extra .x-step {
-  fill: var(--paper-2);
-  stroke: var(--accent);
-  stroke-width: 1.3;
-}
-
-.rev-extra .x-step-fail { stroke: var(--amber); }
-
-.rev-extra .x-n {
-  fill: var(--accent);
-  font-family: var(--sans);
-  font-size: 9.5px;
-  font-weight: 700;
-  text-anchor: middle;
-}
-
-.rev-extra .x-n-fail { fill: var(--amber); }
-
 .rev-cta {
   margin-top: clamp(44px, 6vw, 72px);
   text-align: center;
@@ -1863,14 +1652,7 @@ main > *:not(.spine) {
   display: inline-grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
-  margin: 0 0 14px;
-}
-
-.rev-cta-fine {
-  max-width: 62ch;
-  margin-inline: auto;
-  font-size: 0.88rem;
-  color: var(--ink-faint);
+  margin: 0;
 }
 
 @media (max-width: 1080px) {
@@ -1878,22 +1660,9 @@ main > *:not(.spine) {
   .rev-term { margin-top: 0; max-width: 560px; }
   .rev-handoff { display: none; }
   .rev-replay { grid-column: 1; }
-
-  .rev-extras { grid-template-columns: 1fr; }
-  .rev-extra {
-    display: grid;
-    grid-template-columns: 240px 1fr;
-    column-gap: 28px;
-    align-items: center;
-  }
-  .rev-extra svg { grid-row: span 2; margin-bottom: 0; }
-  .rev-extra h3 { align-self: end; }
-  .rev-extra p { align-self: start; }
 }
 
 @media (max-width: 680px) {
-  .rev-extra { display: block; }
-  .rev-extra svg { max-width: 300px; margin-bottom: 18px; }
   .rev-cta-actions { grid-template-columns: 1fr; width: 100%; }
   .rev-table td:nth-child(3),
   .rev-table th:nth-child(3) { display: none; }
@@ -2172,12 +1941,196 @@ main > *:not(.spine) {
   stroke-width: 0;
 }
 
+/* ── Why it exists ─────────────────────────────────────────────────────────────────────────── */
 
-.manifesto-note {
-  margin: 42px 0 0;
-  max-width: 54ch;
-  font-size: 0.95rem;
-  color: var(--ink-faint);
+/*
+ * The scribble and the sheet. Pencil (graphite, grained, a little redline where something was
+ * crossed out) for what a meeting says; the canvas's own silhouettes and captions for what everyone
+ * ends up looking at; and between them the fan-in spine the product routes connectors along, its
+ * strokes turning from graphite to ink on the way. The scribble settles back to a texture once the
+ * sheet has landed: it was always the throwaway part.
+ */
+
+.art-head {
+  max-width: 40rem;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.art-head h2 {
+  margin: 14px 0 14px;
+  font-size: clamp(2.1rem, 5.4vw, 3.6rem);
+}
+
+.art-head .sub {
+  margin: 0;
+  font-size: clamp(1rem, 1.6vw, 1.15rem);
+  color: var(--ink-soft);
+}
+
+.art {
+  margin: clamp(40px, 7vh, 72px) auto clamp(44px, 8vh, 84px);
+}
+
+.art-narrow {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .art-wide { display: none; }
+  .art-narrow { display: block; max-width: 400px; }
+}
+
+.scene-art .scribble {
+  opacity: 0.6;
+}
+
+.scene-art .scribble path {
+  fill: none;
+  stroke: var(--graphite);
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  opacity: 0.85;
+}
+
+.scene-art .scribble .sk-2 {
+  stroke-width: 1.1;
+  opacity: 0.4;
+}
+
+.scene-art .scribble .sk-x {
+  stroke: var(--redline);
+  opacity: 0.8;
+}
+
+.scene-art .sk-t {
+  fill: var(--graphite);
+  font-family: var(--sans);
+  font-size: 15px;
+  font-style: italic;
+  text-anchor: middle;
+}
+
+.scene-art .sk-small {
+  font-size: 12.5px;
+  text-anchor: start;
+}
+
+.scene-art .sk-q {
+  font-size: 46px;
+  font-style: normal;
+  font-weight: 200;
+}
+
+.scene-art .stop-pencil {
+  stop-color: var(--graphite);
+  stop-opacity: 0.55;
+}
+
+.scene-art .stop-ink {
+  stop-color: var(--edge);
+}
+
+.scene-art .route path {
+  fill: none;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+
+.scene-art .trunk path {
+  fill: none;
+  stroke: var(--edge);
+  stroke-width: 1.6;
+}
+
+.scene-art .trunk .head {
+  fill: var(--edge);
+  stroke: none;
+}
+
+.scene-art .junction {
+  fill: var(--accent);
+}
+
+.scene-art .t-edge-end {
+  text-anchor: end;
+}
+
+.scene-art .steps circle {
+  fill: var(--accent);
+}
+
+.scene-art .steps text {
+  fill: var(--on-accent);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  text-anchor: middle;
+}
+
+.scene-art .file-body {
+  fill: var(--accent-soft);
+  stroke: var(--accent-line);
+  stroke-width: 1.2;
+}
+
+.scene-art .file-fold {
+  fill: none;
+  stroke: var(--accent-line);
+  stroke-width: 1.2;
+}
+
+.scene-art .file text {
+  fill: var(--accent-ink);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  text-anchor: middle;
+}
+
+.scene-art .art-mark circle {
+  fill: var(--paper);
+  stroke: var(--ink-ghost);
+  stroke-width: 1.1;
+}
+
+.scene-art .art-mark text,
+.scene-art .art-cap {
+  font-family: var(--mono);
+  font-size: 10.5px;
+}
+
+.scene-art .art-mark text {
+  fill: var(--ink-soft);
+  text-anchor: middle;
+}
+
+.scene-art .art-cap {
+  letter-spacing: 0.18em;
+}
+
+.scene-art .art-cap-pencil {
+  fill: var(--graphite);
+}
+
+.scene-art .art-cap-ink {
+  fill: var(--accent-ink);
+}
+
+/* The mark that ties a trade to its place in the drawing above. */
+.trade-n {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin-right: 16px;
+  vertical-align: 0.38em;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--ink-soft);
+  border: 1px solid var(--ink-ghost);
+  border-radius: 50%;
 }
 
 /*
@@ -2230,19 +2183,18 @@ main > *:not(.spine) {
 }
 
 /*
- * Three columns in one frame, the way it was drawn — the 1px gaps are the dividers, which is why
- * every column stretches to the tallest.
+ * Two columns in one frame, the way it was drawn — the 1px gaps are the dividers, which is why
+ * both columns stretch to the taller. (There were three, until the VS Code extension retired and
+ * left the third standing empty.)
  *
- * That stretch is only kind when the three carry about the same amount. It wasn't: Desktop laid
- * three download tiles and the signing notice out flat, set a height half again as tall as its
- * neighbours, and `margin-top: auto` on the action spent the difference as a void between each
- * short description and its own button. The fix was the content, not the composition — the builds
- * fold into one control and the notice is one footnote under all three — so the columns now come
- * out within a line or two of each other and the actions can align across them on purpose.
+ * That stretch is only kind when the columns carry about the same amount. It wasn't, once: Desktop
+ * laid three download tiles and the signing notice out flat, and `margin-top: auto` on the action
+ * spent the difference as a void between a short description and its own button. The fix was the
+ * content, not the composition — the builds fold into one control and the notice is one footnote
+ * under both — so the columns come out within a line or two of each other and the actions align.
  */
 .dists {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1px;
   background: var(--rule);
   border: 1px solid var(--rule);
@@ -2321,6 +2273,81 @@ main > *:not(.spine) {
 .dist-meta span {
   font-family: var(--mono);
   letter-spacing: 0.02em;
+}
+
+.dist-doors {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+}
+
+/* Room either side of the seam, so the label crossing it never sits on a word. */
+@media (min-width: 681px) {
+  .dist-doors > .dist:first-of-type { padding-right: 72px; }
+  .dist-doors > .dist:last-of-type { padding-left: 72px; }
+}
+
+/* The file crossing the seam: a connector label sitting on the divider, as on the canvas. */
+.dist-seam {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  padding: 5px 11px;
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  background: var(--paper);
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  transform: translate(-50%, -50%);
+}
+
+.dist-seam path {
+  fill: none;
+  stroke: var(--edge);
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* The browser editor on your own server: a row under both doors, not a third one beside them. */
+.dist-host {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 24px;
+  padding: 18px 26px;
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+  background: var(--paper);
+}
+
+.dist-host p {
+  margin: 0;
+}
+
+.dist-host .dist-kicker {
+  flex-basis: 100%;
+}
+
+.dist-cmd {
+  padding: 3px 8px;
+  font-size: 0.8rem;
+  color: var(--ink);
+  user-select: all;
+}
+
+.dist-host a {
+  margin-left: 6px;
+  color: var(--ink-soft);
 }
 
 /* One footnote for the one thing that needed saying twice, said once and at full width. */
@@ -2431,8 +2458,8 @@ main > *:not(.spine) {
 
 .local-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 4px 44px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px 36px;
 }
 
 .local-grid p {
@@ -2509,12 +2536,6 @@ main > *:not(.spine) {
   margin-top: 30px;
 }
 
-.closing-fine {
-  margin-top: 16px;
-  font-size: 0.86rem;
-  color: var(--ink-faint);
-}
-
 /* ── Footer ──────────────────────────────────────────────────────────────────────────────── */
 
 .footer {
@@ -2565,6 +2586,400 @@ main > *:not(.spine) {
   color: var(--ink);
   text-decoration: underline;
   text-decoration-color: var(--accent);
+}
+
+/* ── Documentation ───────────────────────────────────────────────────────────────────────── */
+
+/*
+ * The pages under docs/, rendered from the repository's Markdown by scripts/docs.mjs. They share
+ * this stylesheet rather than carrying one of their own, so the docs and the page that sent you
+ * there cannot drift apart. They run no script, so nothing here depends on one: the masthead is
+ * ruled from the start, and the compact navigation is a plain <details>.
+ */
+
+.docs .masthead {
+  border-bottom-color: var(--rule);
+}
+
+.docs .masthead-nav a[aria-current] {
+  color: var(--ink);
+}
+
+.docs-shell {
+  display: grid;
+  grid-template-columns: 210px minmax(0, 46rem) 190px;
+  justify-content: center;
+  gap: 56px;
+  max-width: 1320px;
+  margin-inline: auto;
+  padding: 40px var(--pad) 72px;
+}
+
+/* The landing page widens and pads every child of <main>; a doc page lays out its own. */
+.docs-shell main > * {
+  max-width: none;
+  margin-inline: 0;
+  padding-inline: 0;
+}
+
+.docs-nav,
+.doc-contents {
+  position: sticky;
+  top: 84px;
+  align-self: start;
+  max-height: calc(100vh - 104px);
+  overflow-y: auto;
+  font-size: 0.9rem;
+}
+
+.docs-nav ul,
+.doc-contents ul {
+  margin: 0 0 22px;
+  padding: 0;
+  list-style: none;
+}
+
+.docs-nav-heading {
+  margin: 0 0 8px;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.docs-nav a,
+.doc-contents a {
+  display: block;
+  padding: 5px 0 5px 12px;
+  border-left: 2px solid var(--rule);
+  color: var(--ink-soft);
+  line-height: 1.35;
+  text-decoration: none;
+}
+
+.docs-nav a:hover,
+.doc-contents a:hover {
+  color: var(--ink);
+  border-left-color: var(--ink-ghost);
+}
+
+.docs-nav a[aria-current='page'] {
+  color: var(--ink);
+  font-weight: 560;
+  border-left-color: var(--accent);
+}
+
+.docs-nav-home {
+  margin-bottom: 22px;
+}
+
+.docs-nav-compact {
+  display: none;
+}
+
+/* ── The page itself ── */
+
+.doc {
+  min-width: 0;
+}
+
+.doc h1 {
+  margin: 0 0 22px;
+  font-size: clamp(2rem, 4vw, 2.6rem);
+}
+
+.doc h2 {
+  margin: 2.4em 0 0.7em;
+  font-size: 1.5rem;
+  line-height: 1.2;
+}
+
+.doc h3 {
+  margin: 1.9em 0 0.6em;
+  font-size: 1.14rem;
+  line-height: 1.3;
+  letter-spacing: -0.015em;
+}
+
+.doc h4 {
+  margin: 1.6em 0 0.5em;
+  font-size: 1rem;
+}
+
+.doc h1 + p {
+  font-size: 1.08rem;
+  color: var(--ink-soft);
+}
+
+.doc-anchor {
+  margin-left: 0.4em;
+  color: var(--ink-ghost);
+  text-decoration: none;
+  opacity: 0;
+  transition: opacity 0.16s var(--ease);
+}
+
+.doc :is(h2, h3, h4):hover .doc-anchor,
+.doc-anchor:focus-visible {
+  opacity: 1;
+}
+
+.doc a:not(.doc-anchor) {
+  color: var(--accent-ink);
+  text-decoration-color: var(--accent-line);
+}
+
+.doc a:not(.doc-anchor):hover {
+  text-decoration-color: var(--accent);
+}
+
+.doc ul,
+.doc ol {
+  margin: 0 0 1.1em;
+  padding-left: 1.4em;
+}
+
+.doc li {
+  margin: 0.3em 0;
+}
+
+.doc li > p {
+  margin-bottom: 0.5em;
+}
+
+.doc li::marker {
+  color: var(--ink-faint);
+}
+
+.doc img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.4em 0;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.doc blockquote {
+  margin: 1.4em 0;
+  padding: 2px 0 2px 18px;
+  border-left: 2px solid var(--accent-line);
+  color: var(--ink-soft);
+}
+
+.doc hr {
+  margin: 2.6em 0;
+  border: 0;
+  border-top: 1px solid var(--rule);
+}
+
+.doc pre {
+  margin: 0 0 1.2em;
+  padding: 14px 16px;
+  overflow-x: auto;
+  font-size: 0.84rem;
+  line-height: 1.55;
+  background: var(--paper-2);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+}
+
+.doc pre code {
+  padding: 0;
+  font-size: inherit;
+  background: none;
+  color: var(--ink);
+}
+
+.doc-table {
+  margin: 0 0 1.4em;
+  overflow-x: auto;
+}
+
+.doc table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.doc th,
+.doc td {
+  padding: 9px 14px 9px 0;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--rule);
+}
+
+.doc th {
+  font-weight: 600;
+  color: var(--ink-soft);
+  border-bottom-color: var(--rule-strong);
+}
+
+.doc td code,
+.doc td kbd {
+  white-space: nowrap;
+}
+
+/* ── Where to go next ── */
+
+.doc-footer {
+  margin-top: 64px;
+  padding-top: 28px;
+  border-top: 1px solid var(--rule);
+}
+
+.doc-pager {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.doc .doc-pager a {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 14px 18px;
+  color: var(--ink);
+  font-weight: 560;
+  text-decoration: none;
+  background: var(--paper-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  transition: border-color 0.16s var(--ease);
+}
+
+.doc .doc-pager a:hover {
+  border-color: var(--accent-line);
+}
+
+.doc-pager small {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  font-weight: 400;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.doc .doc-next {
+  grid-column: 2;
+  align-items: flex-end;
+  text-align: right;
+}
+
+.doc-edit {
+  margin: 22px 0 0;
+  font-size: 0.86rem;
+}
+
+.doc .doc-edit a {
+  color: var(--ink-faint);
+  text-decoration-color: var(--ink-ghost);
+}
+
+@media (max-width: 1180px) {
+  .docs-shell { grid-template-columns: 200px minmax(0, 46rem); gap: 48px; }
+  .doc-contents { display: none; }
+}
+
+@media (max-width: 900px) {
+  .docs-shell {
+    display: block;
+    padding-top: 0;
+  }
+
+  .docs-nav { display: none; }
+
+  /* Below the sidebar's width the navigation folds into one bar above the page. */
+  .docs-nav-compact {
+    display: block;
+    position: sticky;
+    top: 61px;
+    z-index: 40;
+    margin: 0 calc(var(--pad) * -1) 28px;
+    padding: 0 var(--pad);
+    background: color-mix(in srgb, var(--paper) 92%, transparent);
+    backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .docs-nav-compact summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 0;
+    font-size: 0.92rem;
+    font-weight: 560;
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .docs-nav-compact summary::-webkit-details-marker { display: none; }
+
+  .docs-nav-compact .docs-nav-current {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .docs-nav-compact .docs-nav-toggle {
+    flex: none;
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    font-weight: 400;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+
+  .docs-nav-compact .docs-nav-toggle::after {
+    content: ' +';
+  }
+
+  .docs-nav-compact[open] .docs-nav-toggle::after {
+    content: ' −';
+  }
+
+  .docs-nav-compact nav {
+    max-height: 70vh;
+    overflow-y: auto;
+    padding-bottom: 14px;
+    font-size: 0.95rem;
+  }
+
+  .docs-nav-compact ul {
+    margin: 0 0 16px;
+    padding: 0;
+    list-style: none;
+  }
+
+  .docs-nav-compact a {
+    display: block;
+    padding: 7px 0 7px 12px;
+    border-left: 2px solid var(--rule);
+    color: var(--ink-soft);
+    text-decoration: none;
+  }
+
+  .docs-nav-compact a[aria-current='page'] {
+    color: var(--ink);
+    border-left-color: var(--accent);
+  }
+
+  .docs-nav-compact .docs-nav-home {
+    margin-bottom: 16px;
+  }
+}
+
+@media (max-width: 560px) {
+  .doc-pager { grid-template-columns: 1fr; }
+  .doc .doc-next { grid-column: auto; }
 }
 
 /* ── Motion ──────────────────────────────────────────────────────────────────────────────── */
@@ -2632,12 +3047,12 @@ main > *:not(.spine) {
     100% { stroke-dashoffset: -1180; opacity: 0; }
   }
 
-  .reveal .scene:not(.scene-hero):not(.scene-rev) .wire path:not(.head) {
+  .reveal .scene:not(.scene-hero):not(.scene-rev):not(.scene-art) .wire path:not(.head) {
     stroke-dasharray: 600;
     stroke-dashoffset: 600;
   }
 
-  .reveal.shown .scene:not(.scene-hero):not(.scene-rev) .wire path:not(.head) {
+  .reveal.shown .scene:not(.scene-hero):not(.scene-rev):not(.scene-art) .wire path:not(.head) {
     transition: stroke-dashoffset 1.1s var(--ease) 0.35s;
     stroke-dashoffset: 0;
   }
@@ -2670,6 +3085,104 @@ main > *:not(.spine) {
     opacity: 1;
   }
 
+  /* The scribble draws itself, its lines are routed into one, and the sheet assembles at the end
+     of it — then a step walks the flow once, and the scribble settles back. One pass, never a loop. */
+  .art.reveal .scribble {
+    opacity: 1;
+  }
+
+  .art.reveal .scribble path,
+  .art.reveal .route path,
+  .art.reveal .trunk path:not(.head) {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+  }
+
+  .art.reveal .sk-t,
+  .art.reveal .junction,
+  .art.reveal .trunk .head,
+  .art.reveal .boundary,
+  .art.reveal .sheet .node,
+  .art.reveal .sheet .wire,
+  .art.reveal .sheet .t-edge,
+  .art.reveal .steps g,
+  .art.reveal .chip,
+  .art.reveal .file,
+  .art.reveal .art-mark,
+  .art.reveal .art-cap-ink {
+    opacity: 0;
+  }
+
+  .art.reveal.shown .scribble {
+    animation: art-settle 1.6s var(--ease) 4.6s both;
+  }
+
+  .art.reveal.shown .scribble path {
+    animation: art-draw 0.55s var(--ease) calc(0.2s + var(--i) * 0.045s) forwards;
+  }
+
+  .art.reveal.shown .sk-t {
+    animation: fade 0.5s var(--ease) calc(0.2s + var(--i) * 0.045s) forwards;
+  }
+
+  .art.reveal.shown .route path {
+    animation: art-draw 0.9s cubic-bezier(0.6, 0, 0.3, 1) calc(1.9s + var(--i) * 0.12s) forwards;
+  }
+
+  .art.reveal.shown .junction { animation: fade 0.3s var(--ease) 2.75s forwards; }
+  .art.reveal.shown .trunk path:not(.head) { animation: art-draw 0.5s var(--ease) 2.8s forwards; }
+  .art.reveal.shown .trunk .head { animation: fade 0.2s var(--ease) 3.2s forwards; }
+  .art.reveal.shown .boundary,
+  .art.reveal.shown .art-cap-ink { animation: fade 0.6s var(--ease) 3.2s forwards; }
+
+  .art.reveal.shown .sheet .node {
+    transform-box: fill-box;
+    animation: art-land 0.55s var(--ease) calc(3.3s + var(--in) * 0.14s) both;
+  }
+
+  .art.reveal.shown .sheet .wire { animation: fade 0.5s var(--ease) calc(3.9s + var(--draw) * 0.12s) forwards; }
+  .art.reveal.shown .sheet .t-edge { animation: fade 0.5s var(--ease) 4.25s forwards; }
+  .art.reveal.shown .steps g { animation: fade 0.35s var(--ease) calc(4.4s + var(--s) * 0.15s) forwards; }
+  .art.reveal.shown .chip { animation: fade 0.5s var(--ease) 4.8s forwards; }
+
+  .art.reveal.shown .file {
+    transform-box: fill-box;
+    animation: art-tab 0.6s var(--ease) 5s both;
+  }
+
+  .art.reveal.shown .art-mark { animation: fade 0.5s var(--ease) calc(5.3s + var(--m) * 0.15s) forwards; }
+
+  .art.reveal.shown .pulse {
+    stroke-dasharray: 0.07 2;
+    animation: art-pulse 2.6s cubic-bezier(0.45, 0, 0.3, 1) 5.4s 1 both;
+  }
+
+  @keyframes art-draw {
+    to { stroke-dashoffset: 0; }
+  }
+
+  @keyframes art-settle {
+    from { opacity: 1; }
+    to { opacity: 0.6; }
+  }
+
+  @keyframes art-land {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: none; }
+  }
+
+  @keyframes art-tab {
+    from { opacity: 0; transform: translateY(-12px); }
+    to { opacity: 1; transform: none; }
+  }
+
+  @keyframes art-pulse {
+    0% { stroke-dashoffset: 0.07; opacity: 0; }
+    10% { opacity: 0.9; }
+    85% { opacity: 0.9; }
+    100% { stroke-dashoffset: -1; opacity: 0; }
+  }
+
   @keyframes land {
     from { opacity: 0; transform: translateY(10px); }
     to { opacity: 1; transform: none; }
@@ -2687,9 +3200,6 @@ main > *:not(.spine) {
 /* ── Narrower ────────────────────────────────────────────────────────────────────────────── */
 
 @media (max-width: 1080px) {
-  /* Two columns, the lead across the top: three would be too narrow to read. */
-  .dists { grid-template-columns: 1fr 1fr; }
-  .dist-lead { grid-column: 1 / -1; }
   .starters { grid-template-columns: repeat(3, 1fr); }
 }
 
@@ -2722,8 +3232,9 @@ main > *:not(.spine) {
 }
 
 @media (max-width: 680px) {
-  .dists, .starters { grid-template-columns: 1fr; }
-  .dist-lead { grid-column: auto; }
+  .dist-doors, .starters { grid-template-columns: 1fr; }
+  /* Stacked, there is no seam to sit on; the section's own words say nothing syncs. */
+  .dist-seam { display: none; }
 
   /* Stacked, there is no row of buttons to line up with — the action follows its own paragraph. */
   .dist > .dist-act {

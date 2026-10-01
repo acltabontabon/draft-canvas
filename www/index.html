@@ -7,7 +7,7 @@
     <title>Draft Canvas — Draw it so everyone gets it</title>
     <meta
       name="description"
-      content="A canvas for developers to sketch software, explain the moving parts, and keep the conversation going. Architecture-aware shapes, C4-style depth, flows you can present. In your browser with no account, on your desktop, or in VS Code."
+      content="A canvas for developers to sketch software, explain the moving parts, and keep the conversation going. Architecture-aware shapes, C4-style depth, flows you can present. In your browser with no account, or on your desktop."
     />
     <link rel="canonical" href="https://acltabontabon.com/draft-canvas/" />
 
@@ -103,14 +103,10 @@
         </svg>
         <span>Draft Canvas</span>
       </a>
-      <nav class="masthead-nav" aria-label="Sections">
-        <a href="#draw">Draw</a>
-        <a href="#compose">Compose</a>
-        <a href="#present">Present</a>
-        <a href="#depth">Depth</a>
-        <a href="#export">Export</a>
-        <a href="#agents" class="nav-rev">Agents</a>
-        <a href="#get">Get it</a>
+      <nav class="masthead-nav" aria-label="Site">
+        <a href="#draw">Features</a>
+        <a href="./docs/">Docs</a>
+        <a href="#get">Download</a>
       </nav>
       <a class="button button-primary masthead-cta" href="./editor/">Open editor</a>
     </header>
@@ -141,15 +137,14 @@
       <section class="hero" id="top">
         <div class="hero-words">
           <a class="rev-flag reveal" href="#agents">
-            <span class="rev-flag-tag"><svg viewBox="0 0 14 12" width="12" height="11" aria-hidden="true" focusable="false"><path d="M7 1l6 10H1z" /></svg>Desktop</span>
+            <span class="rev-flag-tag">New</span>
             <span class="rev-flag-text">Your coding agent can draw, in the desktop app</span>
             <svg class="rev-flag-arrow" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" focusable="false"><path d="M3 8h9M8.5 4.5L12 8l-3.5 3.5" /></svg>
           </a>
           <p class="overline reveal">Architecture at meeting speed</p>
           <h1 class="reveal">Draw it<br />so everyone<br /><span class="hero-accent">gets it.</span></h1>
           <p class="lead reveal">
-            A canvas for developers to sketch software, explain the moving parts, and keep the
-            conversation going.
+            Sketch software. Explain the moving parts. Get back to the conversation.
           </p>
           <div class="hero-actions reveal">
             <a class="button button-primary button-lg" href="./editor/" id="hero-cta">
@@ -322,7 +317,7 @@
       ================================================================= -->
       <section class="demo" id="demo" aria-labelledby="demo-title">
         <div class="demo-head reveal">
-          <p class="overline">Recorded from the editor, not rebuilt for the camera</p>
+          <p class="overline">Real footage, nothing staged</p>
           <h2 id="demo-title">Watch it happen.</h2>
         </div>
 
@@ -356,47 +351,44 @@
             ></video>
           </div>
           <p class="demo-caption" id="demo-caption">
-            Press a letter and the shape lands under the cursor. Drag out of its edge and Draft Canvas
-            offers what usually comes next; <kbd>Tab</kbd> accepts it. Nothing here is typed into a
-            dialog first.
+            Press a letter, the shape lands. Drag from its edge and it offers what usually comes next;
+            <kbd>Tab</kbd> takes it.
           </p>
         </div>
 
-        <p class="demo-longform">
-          The whole reel — six chapters, two and a half minutes — is
-          <a href="https://github.com/acltabontabon/draft-canvas#readme">on the README</a>.
-        </p>
       </section>
 
       <!-- ================================================================
-           01 — the vocabulary
+           01 — drawing: shapes that know what they are, and the next move
       ================================================================= -->
       <section class="chapter" id="draw" aria-labelledby="draw-title">
         <header class="slate reveal">
           <span class="numeral" aria-hidden="true">01</span>
           <p class="overline">Chapter 01 of 06</p>
-          <h2 id="draw-title">Shapes that already know what they are</h2>
-          <p class="sub">A small vocabulary, not a shape browser</p>
+          <h2 id="draw-title">Shapes that know what they are</h2>
+          <p class="sub">One key per shape. The captions write themselves.</p>
         </header>
 
         <div class="chapter-body">
           <div class="prose reveal">
             <p>
-              A service is not a rectangle with a label on it. It is a service — so when you drag a
-              connector from it to a queue, Draft Canvas writes <em>sends command to</em> on the
-              line, because that is the only thing that connection could sensibly mean. Drag the
-              same connector to a database and it says <em>reads / writes</em> instead.
+              Connect a service to a queue and the line says <em>sends command to</em>. Connect it to
+              a database and it says <em>reads / writes</em>. You talk about the system; Draft Canvas
+              handles the captions.
             </p>
             <p>
-              That is the whole trick, and it is why the diagram stays readable while you are talking
-              over it. You spend your attention on what the system does, not on picking a line style
-              and typing a caption for the fourth time.
+              Press <kbd>]</kbd> and it offers the next move in ghost: a worker on that queue, already
+              wired. <kbd>Tab</kbd> keeps it. Ignore it and it&rsquo;s gone.
             </p>
-            <p class="aside">
-              Ten shape types, each with a handful of kinds. Every one of them drops with a single
-              keystroke — <kbd>S</kbd> for a service, <kbd>D</kbd> for a data store, <kbd>Q</kbd> for
-              a queue — and the whole palette is on <kbd>⌘K</kbd> when you would rather read than
-              remember.
+            <p class="callout">
+              <strong>A lookup table, not a model.</strong> No inference, no network. The same shape
+              offers the same move every time.
+            </p>
+            <p class="keys">
+              <kbd>S</kbd><span>service</span>
+              <kbd>Q</kbd><span>queue</span>
+              <kbd>D</kbd><span>data store</span>
+              <kbd>⌘K</kbd><span>the rest</span>
             </p>
           </div>
 
@@ -452,95 +444,28 @@
               <text class="t-edge" x="271" y="100">sends command to</text>
             </svg>
             <figcaption id="shapes-caption">
-              Four of the ten shapes, drawn as Draft Canvas draws them: a worker service, a topic
-              carrying <em>order.placed</em>, an Orders data store, and a port component. Under each,
-              the kinds it can take. The connector between the service and the queue labelled itself.
-              Point at the worker to see the twelve places a connector can leave it from.
+              Four of the ten shapes, drawn as Draft Canvas draws them, with the kinds each can take.
+              Point at the worker to see the twelve places a connector can leave from.
             </figcaption>
           </figure>
         </div>
       </section>
 
       <!-- ================================================================
-           02 — Intent Continuation
-      ================================================================= -->
-      <section class="chapter chapter-flip" id="next" aria-labelledby="next-title">
-        <header class="slate reveal">
-          <span class="numeral" aria-hidden="true">02</span>
-          <p class="overline">Chapter 02 of 06</p>
-          <h2 id="next-title">It offers the next move. Once.</h2>
-          <p class="sub">Predictable conveniences, not predictions</p>
-        </header>
-
-        <div class="chapter-body">
-          <div class="prose reveal">
-            <p>
-              Draw a queue and press <kbd>]</kbd>. A worker appears in ghost beside it, already
-              connected, already labelled <em>consumed by</em>. <kbd>Tab</kbd> keeps it.
-              <kbd>]</kbd> again shows the next candidate, <kbd>[</kbd> goes back, and ignoring it
-              costs nothing — the ghost never becomes real on its own.
-            </p>
-            <p>
-              Where the answer genuinely is not obvious — a table that could be an outbox or a read
-              model — it declines to guess and opens the picker instead, with the reason written
-              above it. Silence is the default; it only speaks up when it is confident.
-            </p>
-            <p class="callout">
-              This is a lookup table and a capability matrix, written by hand and checked by tests.
-              <strong>No model, no inference, no network.</strong> The same shape offers the same
-              next move today as it did last month, which is the only reason it is safe to press
-              without looking.
-            </p>
-            <p class="keys">
-              <kbd>]</kbd><span>next candidate</span>
-              <kbd>[</kbd><span>previous</span>
-              <kbd>Tab</kbd><span>accept</span>
-              <kbd>Esc</kbd><span>forget it</span>
-            </p>
-          </div>
-
-          <figure class="chapter-figure reveal">
-            <div class="bezel">
-              <img
-                src="./shots/suggestion.png"
-                alt="The Draft Canvas editor: an Orders API connected to an Order Events queue, with a Worker drawn in faint outline beside it as a suggestion, and a hint reading 'it suggests what usually comes next'."
-                width="2400"
-                height="1280"
-                loading="lazy"
-                decoding="async"
-              />
-            </div>
-            <figcaption>
-              The ghost is a preview. Until you press <kbd>Tab</kbd> it is not in the document, not in
-              the undo history, and not in the export.
-            </figcaption>
-          </figure>
-        </div>
-      </section>
-
-      <!-- ================================================================
-           03 — starters
+           02 — starters
       ================================================================= -->
       <section class="chapter chapter-wide" id="compose" aria-labelledby="compose-title">
         <header class="slate reveal">
-          <span class="numeral" aria-hidden="true">03</span>
-          <p class="overline">Chapter 03 of 06</p>
+          <span class="numeral" aria-hidden="true">02</span>
+          <p class="overline">Chapter 02 of 06</p>
           <h2 id="compose-title">Or start composed</h2>
-          <p class="sub">Four letters to a whole architecture</p>
+          <p class="sub">A whole architecture, a name away</p>
         </header>
 
         <div class="prose prose-centred reveal">
           <p>
-            Sometimes the fastest way to explain a system is to put a familiar shape of one on the
-            canvas and start deleting. Type a pattern's name into <kbd>⌘K</kbd> and it arrives
-            composed — laid out, connected, with its flows already built so you can present it
-            immediately.
-          </p>
-          <p>
-            None of it is special. There is no template object, no locked group, no starter marker
-            anywhere in the file. It is ordinary shapes and ordinary connectors, and the empty space
-            around them is deliberate: a starter is the first thirty seconds of a diagram, not a
-            reference architecture, and certainly not advice about how to build yours.
+            Type a pattern into <kbd>⌘K</kbd>. It lands laid out and wired, with flows ready to
+            present. Then it&rsquo;s just shapes &mdash; delete what you don&rsquo;t need.
           </p>
         </div>
 
@@ -602,42 +527,31 @@
           </li>
         </ul>
         <p class="starters-more reveal">
-          Five are offered up front — Monolith, Microservices, Event-Driven, Hexagonal and CQRS. The other
-          eight — Modular Monolith, Backend for Frontend, Medallion, Kappa, Change Data Capture, the two Sagas
-          and Transactional Outbox — are a name away in the command palette.
+          Plus Monolith, Microservices, Modular Monolith, Backend for Frontend, Medallion, Kappa,
+          Change Data Capture and both Sagas.
         </p>
       </section>
 
       <!-- ================================================================
-           04 — flows and presentation
+           03 — flows and presentation
       ================================================================= -->
       <section class="chapter" id="present" aria-labelledby="present-title">
         <header class="slate reveal">
-          <span class="numeral" aria-hidden="true">04</span>
-          <p class="overline">Chapter 04 of 06</p>
+          <span class="numeral" aria-hidden="true">03</span>
+          <p class="overline">Chapter 03 of 06</p>
           <h2 id="present-title">Walk the room through it</h2>
-          <p class="sub">Each step brings its own notes and code</p>
+          <p class="sub">One step at a time</p>
         </header>
 
         <div class="chapter-body">
           <div class="prose reveal">
             <p>
-              A finished diagram is a wall of boxes to everyone who did not draw it. So group the
-              connectors that tell one story into a <em>flow</em> — <span class="q">Submit
-              command</span>, <span class="q">Compensation</span>, <span class="q">Read
-              projection</span> — and present it a step at a time. Everything outside the flow dims
-              rather than disappearing, so the room can still see where they are.
+              Group the connectors that tell one story into a flow, then present it step by step.
+              Everything else dims but stays in view.
             </p>
             <p>
-              The note you pinned to a connector three weeks ago comes back on the step it belongs to.
-              So does the payload you pasted in. That is the point of pinning it there instead of
-              keeping it in your head or in the slide you did not make.
-            </p>
-            <p>
-              Somebody says <span class="q">wait, who retries that?</span> Capture it as an action
-              without leaving the presentation, and copy the whole list out as Markdown when you are
-              done. The decisions and open questions are already there — they are the notes on the
-              canvas, tagged as what they are.
+              Notes and code pinned to a step show up on that step. Anything still undecided becomes
+              an open point you pick up next meeting.
             </p>
           </div>
 
@@ -652,44 +566,31 @@
                 decoding="async"
               />
             </div>
-            <figcaption>
-              Presenting a flow. The active step keeps full contrast; the architecture around it stays
-              visible but quiet.
-            </figcaption>
+            <figcaption>The active step in full contrast; the rest stays visible, but quiet.</figcaption>
           </figure>
         </div>
       </section>
 
       <!-- ================================================================
-           05 — depth
+           04 — depth
       ================================================================= -->
       <section class="chapter chapter-flip" id="depth" aria-labelledby="depth-title">
         <header class="slate reveal">
-          <span class="numeral" aria-hidden="true">05</span>
-          <p class="overline">Chapter 05 of 06</p>
+          <span class="numeral" aria-hidden="true">04</span>
+          <p class="overline">Chapter 04 of 06</p>
           <h2 id="depth-title">Look inside</h2>
-          <p class="sub">C4-aware, in one canvas</p>
+          <p class="sub">C4 depth, on one canvas</p>
         </header>
 
         <div class="chapter-body">
           <div class="prose reveal">
             <p>
-              The overview should stay small enough to hold in your head. So the detail goes
-              <em>inside</em>: select a service, press <kbd>⌘↓</kbd>, and you are on a fresh canvas
-              that belongs to that service. <kbd>⌘↑</kbd> comes back out. A depth map along the top
-              shows what contains what, and where you are in it.
-            </p>
-            <p>
-              A canvas can say which level it is — <em>system context</em>, <em>containers</em>,
-              <em>components</em>, or nothing in particular — and Draft Canvas will quietly stop
-              offering things that make no sense at that level.
+              Keep the overview small. <kbd>⌘↓</kbd> steps into a shape to draw what&rsquo;s inside it;
+              <kbd>⌘↑</kbd> steps back out. The depth map shows where you are.
             </p>
             <p class="callout">
-              <strong>It narrows what it offers. It never refuses what you draw.</strong> There is no
-              validator, no compliance score, no red underline telling you your architecture is
-              wrong. When a diagram looks like a system overview, it asks once — and if you say
-              nothing, nothing is stored. It is a drawing tool that knows about C4, not a modelling
-              tool that grades you.
+              <strong>It knows C4. It never grades you.</strong> No validator, no score, no red
+              underlines.
             </p>
           </div>
 
@@ -697,96 +598,83 @@
             <div class="bezel">
               <img
                 src="./shots/depth-map.png"
-                alt="The editor inside a shape: the depth map in the top left shows 'Shop overview' above 'Shop — you are here', and the canvas below holds a Shop API writing to an Orders DB."
+                alt="The editor inside a shape: the depth map in the top left shows &#39;Shop overview&#39; above &#39;Shop — you are here&#39;, and the canvas below holds a Shop API writing to an Orders DB."
                 width="2400"
                 height="1280"
                 loading="lazy"
                 decoding="async"
               />
             </div>
-            <figcaption>
-              One level down, inside <em>Shop</em>. The map says what you are inside of; the status bar
-              still says where the file lives.
-            </figcaption>
+            <figcaption>One level down, inside <em>Shop</em>.</figcaption>
           </figure>
         </div>
       </section>
 
       <!-- ================================================================
-           06 — export
+           05 — export
       ================================================================= -->
       <section class="chapter chapter-wide" id="export" aria-labelledby="export-title">
         <header class="slate reveal">
-          <span class="numeral" aria-hidden="true">06</span>
-          <p class="overline">Chapter 06 of 06</p>
-          <h2 id="export-title">Throwaway, but exportable without disappointment</h2>
-          <p class="sub">Seven ways out, and a file you can diff</p>
+          <span class="numeral" aria-hidden="true">05</span>
+          <p class="overline">Chapter 05 of 06</p>
+          <h2 id="export-title">Throwaway, but exportable</h2>
+          <p class="sub">Out to wherever the conversation goes</p>
         </header>
 
         <div class="chapter-body chapter-body-split">
           <div class="prose reveal">
             <p>
-              Most of what you draw in a meeting deserves to be thrown away. The rest needs to leave
-              cleanly — into a pull request, a design doc, a chat thread, or a ticket — without
-              becoming somebody's afternoon.
+              Most meeting diagrams deserve the bin. The rest should leave cleanly &mdash; into a pull
+              request, a doc, a ticket.
             </p>
             <p>
-              A <code>.draftcanvas</code> file is plain JSON with a fixed field order, so saving an
-              unchanged diagram twice produces identical bytes. It diffs. It reviews. It belongs in
-              the repository next to the thing it describes.
-            </p>
-            <p class="aside">
-              A <em>flow</em> can also leave as a sequence diagram — Mermaid or PlantUML
-              <strong>source text</strong>, not a picture of one. That is a different job from
-              exporting the diagram itself: one gives you the architecture, the other gives you the
-              walkthrough as code your docs can render.
+              A <code>.draftcanvas</code> file is plain JSON with stable bytes. It diffs. It reviews.
+              It belongs in the repo.
             </p>
           </div>
 
           <ul class="formats reveal">
-            <li><span class="fmt">.draftcanvas</span><span class="fmt-d">Editable JSON. Byte-stable, diffable, what the desktop app saves.</span></li>
-            <li><span class="fmt">.dcenc</span><span class="fmt-d">The same file behind a passphrase you choose. PBKDF2, 600,000 iterations, fresh salt.</span></li>
-            <li><span class="fmt">.png</span><span class="fmt-d">Rendered at 2× by default, in the theme you are working in.</span></li>
-            <li><span class="fmt">.svg</span><span class="fmt-d">Vector, with the text as text.</span></li>
-            <li><span class="fmt">.mmd</span><span class="fmt-d">Mermaid sequence-diagram source, built from a flow.</span></li>
-            <li><span class="fmt">.puml</span><span class="fmt-d">The same, as PlantUML.</span></li>
+            <li><span class="fmt">.draftcanvas</span><span class="fmt-d">The editable file. Diffable JSON.</span></li>
+            <li><span class="fmt">.dcenc</span><span class="fmt-d">The same, behind a passphrase.</span></li>
+            <li><span class="fmt">PNG · SVG</span><span class="fmt-d">The picture. An SVG still opens as the diagram.</span></li>
+            <li><span class="fmt">Source</span><span class="fmt-d">Mermaid, PlantUML, C4, Structurizr, draw.io.</span></li>
+            <li><span class="fmt">Link</span><span class="fmt-d">The whole diagram in the URL. Nothing uploaded.</span></li>
           </ul>
         </div>
 
-        <figure class="chapter-figure chapter-figure-full reveal">
-          <div class="bezel">
-            <img
-              src="./shots/export-document.png"
-              alt="The Draft Canvas export dialog, with modes for Document, Image, Animated and Sequence, a live preview tile of the diagram, and a single Export button."
-              width="1280"
-              height="670"
-              loading="lazy"
-              decoding="async"
-            />
-          </div>
-          <figcaption>One dialog, four modes, one button. The tile is the actual diagram, not a stand-in.</figcaption>
-        </figure>
+          <figure class="chapter-figure chapter-figure-full reveal">
+            <div class="bezel">
+              <img
+                src="./shots/export-document.png"
+                alt="The Draft Canvas export dialog, with Document, Image and Source modes, a live preview tile of the file, Copy share link, and a single Export button."
+                width="1280"
+                height="760"
+                loading="lazy"
+                decoding="async"
+              />
+            </div>
+            <figcaption>One dialog, one button.</figcaption>
+          </figure>
       </section>
 
       <!-- ================================================================
-           Δ — the revision. AI agents over MCP, in the desktop app.
+           06 — AI agents over MCP, in the desktop app.
 
            Told the way a drawing sheet records a change: the agent's proposal arrives in pencil,
-           inside a revision cloud with a delta tag, and is inked only when someone accepts it. That
-           is not a metaphor laid over the product, it is what the product does: an agent's change
-           is drawn faintly over the diagram until it is applied, and a proposal is not applied until
-           you press Accept. The request on the left carries no coordinates, because the real one
-           carries none either — where things go is Draft Canvas's call.
+           inside a revision cloud, and is inked only when someone accepts it. That is what the
+           product does: an agent's change is drawn faintly over the diagram until it is applied,
+           and a proposal is not applied until you press Accept. The request on the left carries no
+           coordinates, because the real one carries none either.
 
            Everything rests in the "in review" state without scripting or under reduced motion; with
            both, main.js adds `.play` once the stage is on screen and the sequence runs once.
       ================================================================= -->
       <section class="chapter chapter-rev" id="agents" aria-labelledby="agents-title">
         <header class="slate reveal">
-          <span class="numeral numeral-delta" aria-hidden="true">&Delta;</span>
-          <p class="overline">Desktop app only</p>
+          <span class="numeral" aria-hidden="true">06</span>
+          <p class="overline">Chapter 06 of 06 &middot; desktop app</p>
           <h2 id="agents-title">Your agent sketches in pencil. You ink&nbsp;it.</h2>
-          <p class="sub">Draft Canvas speaks MCP, so the agent in your editor can draw</p>
+          <p class="sub">Claude Code and Cursor draw over MCP</p>
         </header>
 
         <div class="rev-stage reveal" id="rev-stage">
@@ -1010,122 +898,21 @@
         <div class="chapter-body chapter-body-split rev-words">
           <div class="prose reveal">
             <p>
-              Ask Claude Code or Cursor to draw how orders move through the repository you have open.
-              It reads the code, then hands Draft Canvas a description &mdash; the parts, how they
-              connect, the flows. <strong>Never a coordinate.</strong> Draft Canvas lays it out, routes
-              it and draws it as an ordinary diagram: yours to move, present and export.
+              Ask your agent to draw how orders move through the repo. It describes the parts and how
+              they connect &mdash; <strong>never a coordinate</strong> &mdash; and Draft Canvas lays it
+              out as an ordinary diagram.
             </p>
             <p>
-              Follow-ups change the same diagram &mdash; <span class="q">add a dead-letter queue</span>,
-              <span class="q">rename that service</span>, <span class="q">explain the retry in a
-              note</span>. Each one lands as a single undo step, and what you arranged by hand stays
-              where you put it. While the agent works, its change is drawn faintly over yours: pencil,
-              until it lands.
-            </p>
-            <p>
-              Or tell it not to touch anything. <span class="q">Review this pull request against the
-              diagram</span> comes back as a proposal &mdash; every addition, change and removal, the
-              actual before and after, and the agent&rsquo;s reasoning. Nothing is inked until you
-              press <em>Accept</em>.
+              Follow-ups edit the same diagram, one undo step each. Or ask for a proposal: nothing is
+              inked until you press <em>Accept</em>.
             </p>
           </div>
-
           <div class="prose reveal">
             <p class="callout">
-              <strong>Off until you turn it on, and only in the folders you tick.</strong> Draft Canvas
-              sends your diagrams nowhere; your agent talks to its own AI provider, as it already does
-              with your code. Nothing an agent is still preparing is saved, undoable, or in the file
-              until it lands.
-            </p>
-            <p class="rev-verbs-title">Ten verbs, and not one of them takes a position</p>
-            <ul class="rev-verbs" aria-label="The tools Draft Canvas gives an agent">
-              <li>create_diagram</li><li>update_diagram</li><li>read_diagram</li><li>list_diagrams</li>
-              <li>read_selection</li><li>submit_proposal</li><li>get_proposal</li><li>list_proposals</li>
-              <li>get_implementation_context</li><li>get_capabilities</li>
-            </ul>
-            <p class="aside">
-              <code>get_implementation_context</code> runs the other way: select a flow, and the agent
-              reads its steps in the order they happen as the design for the code it is about to write.
+              <strong>Off until you turn it on.</strong> Only in the folders you pick. Draft Canvas
+              sends your diagrams nowhere.
             </p>
           </div>
-        </div>
-
-        <!-- The rest of the revision. Each drawn as the renderer draws it. -->
-        <div class="rev-extras">
-          <p class="overline rev-extras-title reveal">Also on this revision</p>
-
-          <article class="rev-extra reveal">
-            <svg viewBox="0 0 240 118" aria-hidden="true" focusable="false">
-              <rect class="x-body" x="30" y="10" width="180" height="98" rx="11" />
-              <text class="x-name" x="120" y="44">Orders API</text>
-              <text class="x-tech" x="120" y="65">[Spring Boot]</text>
-              <text class="x-desc" x="120" y="84">Takes orders, once each.</text>
-            </svg>
-            <h3>What it&rsquo;s built with, under its name</h3>
-            <p>
-              Services, data stores, queues, actors and components carry a technology and a one-line
-              description, the way C4 draws them. An agent fills them in from the code; you edit them
-              in <em>Details</em>.
-            </p>
-          </article>
-
-          <article class="rev-extra reveal">
-            <svg viewBox="0 0 240 118" aria-hidden="true" focusable="false">
-              <!-- System: solid, a stamped mark on a tinted plate. -->
-              <g class="x-bound">
-                <path class="x-line" d="M8 56V14a6 6 0 016-6h98" />
-                <rect class="x-plate" x="13" y="13" width="17" height="17" rx="5" />
-                <rect class="x-mark" x="16.5" y="17" width="10" height="9" rx="2" /><path class="x-mark" d="M16.5 20.2h10" />
-                <text class="x-cap" x="37" y="25">SYSTEM</text>
-              </g>
-              <!-- Domain: a longer dash, and the name on a tab cut from the corner. -->
-              <g class="x-bound">
-                <path class="x-line x-domain" d="M126 56V14a6 6 0 016-6h100" />
-                <path class="x-line" d="M126 30h62a6 6 0 006-6V8" />
-                <text class="x-cap" x="134" y="23">DOMAIN</text>
-              </g>
-              <!-- Network: dash and dot, and a mark of three joined nodes. -->
-              <g class="x-bound">
-                <path class="x-line x-network" d="M8 112V70a6 6 0 016-6h98" />
-                <g class="x-mark"><path d="M22 72l-4 7h8z" /><circle cx="22" cy="72" r="1.8" /><circle cx="18" cy="79" r="1.8" /><circle cx="26" cy="79" r="1.8" /></g>
-                <text class="x-cap" x="37" y="81">NETWORK</text>
-              </g>
-              <!-- Deployment: a hairline outline, its header ruled off, and a box mark. -->
-              <g class="x-bound">
-                <path class="x-line x-deploy" d="M126 112V70a6 6 0 016-6h100" />
-                <path class="x-line x-deploy" d="M126 90h106" />
-                <path class="x-mark" d="M140 69.5l5 2.6v5.6l-5 2.7-5-2.7v-5.6zM135 72.1l5 2.6 5-2.6M140 74.7v5.7" />
-                <text class="x-cap" x="152" y="81">DEPLOYMENT</text>
-              </g>
-            </svg>
-            <h3>Boundaries that say what they are</h3>
-            <p>
-              System, Domain, Network, Deployment, Group and plain Boundary each get their own outline
-              and header. A boundary&rsquo;s colour now shows at full strength.
-            </p>
-          </article>
-
-          <article class="rev-extra reveal">
-            <svg viewBox="0 0 240 118" aria-hidden="true" focusable="false">
-              <rect class="x-body" x="8" y="20" width="56" height="30" rx="7" />
-              <rect class="x-body" x="92" y="20" width="56" height="30" rx="7" />
-              <rect class="x-body" x="176" y="20" width="56" height="30" rx="7" />
-              <rect class="x-body" x="92" y="80" width="56" height="30" rx="7" />
-              <path class="x-flow" d="M64 35h24" /><path class="x-flow-head" d="M84 31l6 4-6 4z" />
-              <path class="x-flow" d="M148 35h24" /><path class="x-flow-head" d="M168 31l6 4-6 4z" />
-              <path class="x-fail" d="M120 50v24" /><path class="x-fail-head" d="M116 70l4 6 4-6z" />
-              <circle class="x-step" cx="76" cy="23" r="7" /><text class="x-n" x="76" y="26.5">1</text>
-              <circle class="x-step" cx="160" cy="23" r="7" /><text class="x-n" x="160" y="26.5">2</text>
-              <circle class="x-step x-step-fail" cx="134" cy="62" r="7" /><text class="x-n x-n-fail" x="134" y="65.5">2</text>
-              <text class="x-cap" x="160" y="99">failure path</text>
-            </svg>
-            <h3>The failure path, beside the normal one</h3>
-            <p>
-              An agent can walk through what happens when a step fails, as a flow of its own that
-              knows which flow it breaks. <kbd>Shift</kbd>+<kbd>F</kbd> switches to it without
-              leaving the presentation.
-            </p>
-          </article>
         </div>
 
         <div class="rev-cta reveal">
@@ -1134,25 +921,297 @@
               <span>Get the desktop app</span>
               <small>macOS and Windows</small>
             </a>
-            <a class="button button-lg" href="https://github.com/acltabontabon/draft-canvas/blob/main/docs/guides/connect-an-ai-agent.md">Connect an agent</a>
-          </p>
-          <p class="rev-cta-fine">
-            Optional, and off until you turn it on. The web app opens what an agent draws, but agents can only reach the
-            desktop app. Tested end to end with Claude Code on macOS; Cursor by configuration.
+            <a class="button button-lg" href="./docs/connect-an-ai-agent/">Connect an agent</a>
           </p>
         </div>
       </section>
 
       <!-- ================================================================
-           What it chose to be. Straight out of docs/reference/architecture.md.
+           Why it exists, drawn: a meeting's scribble, routed the way the canvas routes a fan-in,
+           landing as the picture everyone shares. The three numbered marks are the three trades
+           in docs/reference/architecture.md, and the list under the drawing names them.
+
+           The pencil strokes are generated (seeded, so every build draws the same ones). The sheet
+           follows the product's silhouettes and captions, like every other scene on the page. It
+           rests fully drawn without scripting or under reduced motion.
       ================================================================= -->
       <section class="manifesto" aria-labelledby="manifesto-title">
-        <p class="overline reveal">Three trades, made on purpose</p>
-        <h2 id="manifesto-title" class="visually-hidden">What Draft Canvas optimises for</h2>
+        <header class="art-head reveal">
+          <p class="overline">Why it exists</p>
+          <h2 id="manifesto-title">Every meeting starts as a scribble.</h2>
+          <p class="sub">Draft Canvas turns it into the one picture everyone shares.</p>
+        </header>
+
+        <figure class="art art-wide reveal" role="img" aria-labelledby="art-caption">
+          <svg class="scene scene-art" viewBox="0 0 1160 476" aria-hidden="true" focusable="false">
+          <defs>
+            <filter id="art-grain-w" x="-4%" y="-4%" width="108%" height="108%">
+              <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="4" result="grain" />
+              <feDisplacementMap in="SourceGraphic" in2="grain" scale="2.2" xChannelSelector="R" yChannelSelector="G" />
+            </filter>
+            <linearGradient id="art-route-w" gradientUnits="userSpaceOnUse" x1="352" y1="0" x2="560" y2="0">
+              <stop class="stop-pencil" offset="0" />
+              <stop class="stop-ink" offset="1" />
+            </linearGradient>
+          </defs>
+
+          <text class="art-cap art-cap-pencil" x="52" y="40">WHAT THE MEETING SAID</text>
+          <text class="art-cap art-cap-ink" x="702" y="40">WHAT EVERYONE SAW</text>
+
+          <g class="scribble" filter="url(#art-grain-w)">
+          <path class="" d="M45.7 71.5Q114.4 72.4 183 74.9" pathLength="1" style="--i: 0" />
+          <path class="" d="M177.6 73Q178.5 104.6 175.5 136.1" pathLength="1" style="--i: 1" />
+          <path class="" d="M178.4 132.2Q113.3 131.2 48.3 131.8" pathLength="1" style="--i: 2" />
+          <path class="" d="M52.2 136.1Q49.3 101 50.5 65.9" pathLength="1" style="--i: 3" />
+          <path class="sk-2" d="M49 73.7Q112.4 73.9 176 76.4" pathLength="1" style="--i: 4" />
+          <path class="sk-2" d="M172 73.8Q172.6 104.8 173.9 135.7" pathLength="1" style="--i: 5" />
+          <path class="sk-2" d="M176.9 130.7Q112.9 130 48.9 133.7" pathLength="1" style="--i: 6" />
+          <path class="sk-2" d="M54.8 136.9Q54.7 102.3 54.3 67.6" pathLength="1" style="--i: 7" />
+          <path class="" d="M232 57.6Q301.9 60.4 371.8 59" pathLength="1" style="--i: 9" />
+          <path class="" d="M369.3 56Q370.4 88.9 368.6 121.9" pathLength="1" style="--i: 10" />
+          <path class="" d="M372.7 120Q301.4 119.3 230.2 119.5" pathLength="1" style="--i: 11" />
+          <path class="" d="M235.1 121.4Q237.4 88.5 237.7 55.5" pathLength="1" style="--i: 12" />
+          <path class="" d="M76 251Q149.5 250.1 223 249.4" pathLength="1" style="--i: 14" />
+          <path class="" d="M219.3 246.7Q214.6 281.8 216.1 316.7" pathLength="1" style="--i: 15" />
+          <path class="" d="M219.2 314.8Q147.4 313.6 75.7 315.2" pathLength="1" style="--i: 16" />
+          <path class="" d="M79.8 320Q79.4 283.4 78.5 246.8" pathLength="1" style="--i: 17" />
+          <path class="sk-2" d="M75.7 251.6Q148.4 252.6 221.2 254.3" pathLength="1" style="--i: 18" />
+          <path class="sk-2" d="M217.9 251.1Q215.9 284.3 218.2 317.4" pathLength="1" style="--i: 19" />
+          <path class="sk-2" d="M222.3 312.8Q148.8 314.1 75.4 314.1" pathLength="1" style="--i: 20" />
+          <path class="sk-2" d="M79.3 318.3Q79.8 282.3 77.4 246.4" pathLength="1" style="--i: 21" />
+          <path class="sk-x" d="M79.2 254.8Q147.3 288.6 218.5 312.1" pathLength="1" style="--i: 23" />
+          <path class="sk-x" d="M215 252.6Q145.4 280.8 78.2 311.7" pathLength="1" style="--i: 24" />
+          <path class="" d="M297.9 266Q309.7 265.8 315.2 266.9Q320.8 268 326.7 268.5Q332.7 269.1 336.9 271.5Q341.1 274 344.2 276.8Q347.3 279.6 351.3 282.1Q355.4 284.7 356.3 288Q357.2 291.4 357.7 294.8Q358.2 298.1 357.1 301.4Q356 304.8 354.5 308.1Q352.9 311.5 349.4 314.4Q346 317.2 340.2 318.5Q334.5 319.9 329.4 321.3Q324.4 322.8 319.1 323.9Q313.8 325 308.1 325.5Q302.3 326 296.7 325.2Q291 324.4 285.1 323.8Q279.1 323.1 274.3 321Q269.5 318.9 266.3 316Q263 313.1 259.4 310.3Q255.7 307.5 255.7 304Q255.8 300.5 255 297.2Q254.2 293.9 254.1 290.4Q254.1 286.9 257.1 283.9Q260.1 280.8 263.3 278Q266.6 275.1 271.8 273.4Q277 271.7 281.5 269.3Q286 267 291.8 266Q297.7 265 303.7 265Q309.8 265 315.1 266.9Q320.4 268.7 325.7 269.8Q331 270.8 336.5 272.1L342.1 273.4" pathLength="1" style="--i: 26" />
+          <path class="" d="M177.2 97.3Q199.9 71.9 236 88" pathLength="1" style="--i: 28" />
+          <path class="" d="M236 88L229 79.5M236 88L225 87.9" pathLength="1" style="--i: 29" />
+          <path class="" d="M108.7 133.8Q96.7 197.2 130 248" pathLength="1" style="--i: 30" />
+          <path class="" d="M130 248L129.4 237M130 248L121 241.7" pathLength="1" style="--i: 31" />
+          <path class="" d="M300.9 120.6Q327.7 191.5 294 262" pathLength="1" style="--i: 32" />
+          <path class="" d="M294 262L302.3 254.8M294 262L294 251" pathLength="1" style="--i: 33" />
+          <path class="" d="M215.8 268.1Q225.6 287.4 252 290" pathLength="1" style="--i: 34" />
+          <path class="" d="M252 290L242.3 284.8M252 290L241.8 294.2" pathLength="1" style="--i: 35" />
+          <path class="sk-2" d="M230.9 392.8Q225 399.7 211.2 399.1Q197.4 398.4 192.8 391.1Q188.1 383.8 190 384Q191.8 384.2 196.5 383Q201.1 381.8 212.9 391.8Q224.7 401.7 230.1 401.2Q235.5 400.7 231 399.8Q226.6 398.9 218.1 393.7Q209.6 388.6 196.6 388.1Q183.6 387.5 184.7 392.9Q185.7 398.3 191.2 401.6Q196.6 404.8 213.4 399.6Q230.1 394.4 232.8 391.4Q235.4 388.5 232.2 382.5Q228.9 376.5 218.5 383.5Q208.1 390.6 194.7 399.3Q181.3 407.9 185 404.6Q188.6 401.3 198.1 393.1Q207.6 384.9 220.5 379.7Q233.5 374.6 239 379.8Q244.5 385 238.9 391.5Q233.3 398 213.8 402.1Q194.3 406.2 187.5 400.1Q180.8 394 180 386.4Q179.3 378.8 191.8 378.5Q204.4 378.2 224.8 390.4Q245.3 402.5 245.7 408.1Q246 413.7 245 410.6Q244 407.6 225.5 396.4Q206.9 385.1 190.3 380.5Q173.7 375.9 177.4 385.8Q181.1 395.7 185.5 399.9Q189.8 404.1 216.2 403.1Q242.7 402 248.5 395.4Q254.4 388.7 245.6 379.7Q236.7 370.6 216.4 374.4Q196.1 378.1 185.9 384.2Q175.8 390.3 173.5 402.4Q171.2 414.5 194.5 403.5Q217.8 392.4 233.8 383.3Q249.8 374.1 253.9 374.1Q258 374 245.2 386.4Q232.4 398.8 208.1 407.6Q183.8 416.3 171.2 409.9Q158.7 403.6 168.5 390Q178.4 376.5 183.3 373.7Q188.2 370.9 220.7 379.6Q253.2 388.2 258.7 397.6Q264.2 407 252.5 410.9Q240.8 414.7 206.4 396.7Q172.1 378.6 168.3 373.4Q164.5 368.2 165 374.8L165.5 381.3" pathLength="1" style="--i: 36" />
+          <text class="sk-t" x="114" y="109" transform="rotate(-2 114 109)" style="--i: 8">checkout?</text>
+          <text class="sk-t" x="302" y="94" transform="rotate(1.5 302 94)" style="--i: 13">kafka? sqs?</text>
+          <text class="sk-t" x="148" y="287" transform="rotate(-1 148 287)" style="--i: 22">worker</text>
+          <text class="sk-t" x="150" y="342" transform="rotate(-3 150 342)" style="--i: 25">workers ×3 ??</text>
+          <text class="sk-t" x="306" y="301" style="--i: 27">DB</text>
+          <text class="sk-t" x="282" y="404" transform="rotate(-4 282 404)" style="--i: 37">retries?</text>
+          <text class="sk-t sk-q" x="366" y="196" transform="rotate(8 366 196)" style="--i: 38">?</text>
+          <text class="sk-t sk-small" x="36" y="196" transform="rotate(-6 36 196)" style="--i: 39">who owns this</text>
+          </g>
+
+          <g class="route" stroke="url(#art-route-w)">
+          <path d="M380 92H520Q540 92 540 112V235" pathLength="1" style="--i: 0" />
+          <path d="M392 196H520Q540 196 540 216V235" pathLength="1" style="--i: 1" />
+          <path d="M368 296H520Q540 296 540 276V235" pathLength="1" style="--i: 2" />
+          <path d="M352 404H520Q540 404 540 384V235" pathLength="1" style="--i: 3" />
+          </g>
+          <g class="trunk">
+            <circle class="junction" cx="540" cy="235" r="4" />
+            <path d="M540 235H686" />
+            <path class="head" d="M678 230.5l8 4.5-8 4.5z" />
+          </g>
+
+          <g class="sheet">
+            <g class="boundary">
+              <path d="M694 60v18M694 60h18M1140 60v18M1140 60h-18M694 420v-18M694 420h18M1140 420v-18M1140 420h-18" />
+            </g>
+
+            <g class="wire async" style="--draw: 1"><path d="M834 145H950" /><path class="head" d="M942 140.5l8 4.5-8 4.5z" /></g>
+            <text class="t-edge" x="892" y="133">sends command to</text>
+            <g class="wire async" style="--draw: 2"><path d="M1076 171V270" /><path class="head" d="M1071.5 262l4.5 8 4.5-8z" /></g>
+            <text class="t-edge t-edge-end" x="1064" y="238">consumed by</text>
+            <g class="wire" style="--draw: 3"><path d="M950 305H836" /><path class="head" d="M844 300.5l-8 4.5 8 4.5z" /></g>
+            <text class="t-edge" x="893" y="330">writes to</text>
+
+            <path class="pulse" d="M834 145H1076V305H836" pathLength="1" />
+
+            <g class="node service" style="--in: 1">
+              <rect class="ghost" x="710" y="116" width="130" height="70" rx="11" />
+              <rect class="body" x="704" y="110" width="130" height="70" rx="11" />
+              <text class="t-name" x="769" y="150">Orders API</text>
+              <text class="t-kind" x="822" y="171">API</text>
+            </g>
+            <g class="node queue" style="--in: 2">
+              <path class="body" d="M976 119h100a26 26 0 010 52H976a26 26 0 010-52z" />
+              <g class="envelopes">
+                <rect x="990" y="137" width="21" height="16" rx="2" /><path d="M990.5 138.5l10 7.5 10-7.5" />
+                <rect x="1016" y="137" width="21" height="16" rx="2" /><path d="M1016.5 138.5l10 7.5 10-7.5" />
+                <rect x="1042" y="137" width="21" height="16" rx="2" /><path d="M1042.5 138.5l10 7.5 10-7.5" />
+              </g>
+              <text class="t-name t-below" x="1012" y="196">orders</text>
+            </g>
+            <g class="node service" style="--in: 3">
+              <rect class="ghost" x="956" y="276" width="152" height="70" rx="11" />
+              <rect class="body" x="950" y="270" width="152" height="70" rx="11" />
+              <text class="t-name" x="1026" y="310">Fulfilment</text>
+              <text class="t-kind" x="1090" y="331">WORKER</text>
+            </g>
+            <g class="node store" style="--in: 4">
+              <path class="body" d="M744 284a46 14 0 0192 0v34a46 14 0 01-92 0z" />
+              <path class="cap" d="M744 284a46 14 0 0092 0" />
+              <text class="t-name t-below" x="790" y="356">Orders DB</text>
+            </g>
+
+            <g class="steps">
+              <g style="--s: 1"><circle cx="892" cy="145" r="9" /><text x="892" y="149">1</text></g>
+              <g style="--s: 2"><circle cx="1076" cy="214" r="9" /><text x="1076" y="218">2</text></g>
+              <g style="--s: 3"><circle cx="893" cy="305" r="9" /><text x="893" y="309">3</text></g>
+            </g>
+
+            <g class="chip" style="--in: 6">
+              <path class="stem" d="M1088 104v15" />
+              <rect x="1046" y="82" width="84" height="22" rx="11" />
+              <circle cx="1060" cy="93" r="3.5" />
+              <text x="1093" y="97">retries ×5</text>
+            </g>
+
+            <g class="file">
+              <path class="file-body" d="M1012 420h104l10 10v22h-114z" />
+              <path class="file-fold" d="M1116 420v10h10" />
+              <text x="1067" y="446">.draftcanvas</text>
+            </g>
+          </g>
+
+          <g class="marks">
+            <g class="art-mark" style="--m: 1"><circle cx="30" cy="36" r="11" /><text x="30" y="40">1</text></g>
+            <g class="art-mark" style="--m: 2"><circle cx="562" cy="206" r="11" /><text x="562" y="210">2</text></g>
+            <g class="art-mark" style="--m: 3"><circle cx="990" cy="441" r="11" /><text x="990" y="445">3</text></g>
+          </g>
+          </svg>
+        </figure>
+        <figure class="art art-narrow reveal" role="img" aria-labelledby="art-caption">
+          <svg class="scene scene-art" viewBox="0 0 320 760" aria-hidden="true" focusable="false">
+          <defs>
+            <filter id="art-grain-n" x="-4%" y="-4%" width="108%" height="108%">
+              <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="4" result="grain" />
+              <feDisplacementMap in="SourceGraphic" in2="grain" scale="2.2" xChannelSelector="R" yChannelSelector="G" />
+            </filter>
+            <linearGradient id="art-route-n" gradientUnits="userSpaceOnUse" x1="0" y1="196" x2="0" y2="330">
+              <stop class="stop-pencil" offset="0" />
+              <stop class="stop-ink" offset="1" />
+            </linearGradient>
+          </defs>
+
+          <text class="art-cap art-cap-pencil" x="40" y="18">WHAT THE MEETING SAID</text>
+
+          <g class="scribble" filter="url(#art-grain-n)">
+          <path class="" d="M27.7 35.2Q88.3 33.4 148.9 36.9" pathLength="1" style="--i: 0" />
+          <path class="" d="M144.2 35.7Q147.8 62.9 146 90.3" pathLength="1" style="--i: 1" />
+          <path class="" d="M149.3 88Q90.3 88.7 31.4 89.1" pathLength="1" style="--i: 2" />
+          <path class="" d="M35.6 91.1Q36.1 61.5 31.1 32.3" pathLength="1" style="--i: 3" />
+          <path class="sk-2" d="M32.3 37Q89.3 39 146.3 37.5" pathLength="1" style="--i: 4" />
+          <path class="sk-2" d="M141.2 32Q140.5 59.2 143.8 86.6" pathLength="1" style="--i: 5" />
+          <path class="sk-2" d="M147.3 84.8Q90.8 85.6 34.1 87.7" pathLength="1" style="--i: 6" />
+          <path class="sk-2" d="M35.6 90.8Q37.6 62 35.2 33.3" pathLength="1" style="--i: 7" />
+          <path class="" d="M170.5 31.8Q231.4 27.4 292.2 29" pathLength="1" style="--i: 9" />
+          <path class="" d="M286.7 25.7Q285.6 56.5 288.9 87.5" pathLength="1" style="--i: 10" />
+          <path class="" d="M293.8 84Q231.2 81.2 168.7 82.7" pathLength="1" style="--i: 11" />
+          <path class="" d="M173.7 86.4Q178.1 57.4 176.8 28.5" pathLength="1" style="--i: 12" />
+          <path class="" d="M45.7 143.2Q108.5 141.7 171.4 142.7" pathLength="1" style="--i: 14" />
+          <path class="" d="M168 139.6Q166.5 171.5 168 203.3" pathLength="1" style="--i: 15" />
+          <path class="" d="M172.4 199.4Q110.9 201 49.4 198.5" pathLength="1" style="--i: 16" />
+          <path class="" d="M51.2 202.5Q53.9 171.2 50.6 139.9" pathLength="1" style="--i: 17" />
+          <path class="sk-x" d="M51.9 144.3Q108 175.3 164.4 195.4" pathLength="1" style="--i: 19" />
+          <path class="sk-x" d="M166.3 143.1Q110.2 168.4 54 194.7" pathLength="1" style="--i: 20" />
+          <path class="" d="M235.3 145.1Q245.4 145.5 250.6 146.1Q255.8 146.8 259.8 148.7Q263.8 150.7 267.8 152.7Q271.9 154.7 273.2 157.6Q274.6 160.6 275.6 163.4Q276.5 166.2 277.9 169.1Q279.3 172 277.2 174.8Q275.2 177.6 273.2 180.2Q271.3 182.8 268.6 185.3Q265.9 187.8 261.3 189.2Q256.8 190.6 252.5 192Q248.2 193.5 243.4 194Q238.5 194.6 233.5 195.4Q228.5 196.1 223.1 196Q217.7 196 213.5 194.1Q209.3 192.2 204.2 191.1Q199.2 189.9 197.4 187Q195.5 184 191.4 182Q187.3 179.9 187.5 176.8Q187.7 173.7 188 170.9Q188.3 168.1 187.2 165Q186.2 162 189.1 159.5Q192.1 156.9 195.7 154.9Q199.4 152.9 202.9 150.8Q206.4 148.7 210.5 146.9Q214.7 145 219.8 144.1Q224.9 143.2 230.2 143.9Q235.4 144.5 240.6 144.8Q245.7 145 249.9 146.7Q254.2 148.4 258.7 149.7Q263.3 151 265.7 153.5L268.2 156.1" pathLength="1" style="--i: 21" />
+          <path class="" d="M144.8 62Q156.7 51.2 176 58" pathLength="1" style="--i: 23" />
+          <path class="" d="M176 58L168.4 50M176 58L165 58.8" pathLength="1" style="--i: 24" />
+          <path class="" d="M90.4 91.3Q76.4 122.7 104 140" pathLength="1" style="--i: 25" />
+          <path class="" d="M104 140L98.4 130.5M104 140L93.2 138" pathLength="1" style="--i: 26" />
+          <path class="" d="M232.9 85.1Q253.6 111 234 142" pathLength="1" style="--i: 27" />
+          <path class="" d="M234 142L243 135.7M234 142L236 131.2" pathLength="1" style="--i: 28" />
+          <path class="sk-2" d="M161.5 238.4Q160 237.6 154.1 239.1Q148.2 240.7 140 234.1Q131.9 227.5 134.9 226Q137.8 224.6 144.6 228.4Q151.4 232.3 157.6 235.5Q163.9 238.6 168 238.1Q172.1 237.6 168 237.5Q163.9 237.4 157.4 230.3Q151 223.1 141.1 222.6Q131.1 222 128.1 224.2Q125.2 226.3 131.4 232Q137.6 237.6 150.9 238.4Q164.1 239.3 169 230.4Q173.9 221.6 164.5 225Q155 228.4 152.3 227.3Q149.6 226.3 138.9 235.4Q128.2 244.5 124.3 243.1Q120.3 241.6 136.7 236.5Q153.2 231.3 156.6 227.8Q160 224.3 167.3 226.3Q174.5 228.3 174.1 230.9Q173.6 233.5 153.1 236.2Q132.6 238.8 127.5 235.4Q122.5 232 123.6 225.4Q124.8 218.8 140.3 219.9Q155.8 221 165.2 231.5Q174.7 242 179.5 243.9Q184.3 245.8 177.3 244.7Q170.3 243.6 161.9 237.6Q153.5 231.6 138.5 226.1Q123.6 220.5 123.6 222.8Q123.7 225 140.4 236.5Q157.2 247.9 163.5 244.4Q169.8 240.9 174.5 230.9Q179.1 220.9 173.7 221.9Q168.4 222.9 153.3 223.1Q138.2 223.4 128.8 229Q119.5 234.7 120.8 241.4Q122.1 248.1 125.9 246.2Q129.7 244.2 156.3 231.4Q183 218.6 187.6 217.2Q192.2 215.9 177.2 225.7Q162.3 235.4 141.8 239.8Q121.3 244.1 118.3 245.9Q115.3 247.6 116.1 235.8Q116.9 223.9 135.4 219.6Q153.8 215.3 171.6 223.2Q189.3 231.1 192 236Q194.7 241 176.5 243.4Q158.3 245.9 143.6 235Q128.8 224.1 117.9 218.2Q107 212.3 115.4 218L123.8 223.7" pathLength="1" style="--i: 29" />
+          <text class="sk-t" x="89" y="67" transform="rotate(-2 89 67)" style="--i: 8">checkout?</text>
+          <text class="sk-t" x="232" y="62" transform="rotate(1.5 232 62)" style="--i: 13">kafka? sqs?</text>
+          <text class="sk-t" x="110" y="174" transform="rotate(-1 110 174)" style="--i: 18">worker</text>
+          <text class="sk-t" x="232" y="175" style="--i: 22">DB</text>
+          <text class="sk-t" x="250" y="238" transform="rotate(-4 250 238)" style="--i: 30">retries?</text>
+          </g>
+
+          <g class="route" stroke="url(#art-route-n)">
+          <path d="M104 202V292Q104 300 112 300H152Q160 300 160 308V330" pathLength="1" style="--i: 0" />
+          <path d="M128 252V292Q128 300 136 300H152Q160 300 160 308V330" pathLength="1" style="--i: 1" />
+          <path d="M232 200V292Q232 300 224 300H168Q160 300 160 308V330" pathLength="1" style="--i: 2" />
+          <path d="M262 246V292Q262 300 254 300H168Q160 300 160 308V330" pathLength="1" style="--i: 3" />
+          </g>
+          <g class="trunk">
+            <circle class="junction" cx="160" cy="308" r="4" />
+            <path d="M160 330V354" />
+            <path class="head" d="M155.5 346l4.5 8 4.5-8z" />
+          </g>
+
+          <text class="art-cap art-cap-ink" x="34" y="384">WHAT EVERYONE SAW</text>
+
+          <g class="sheet">
+            <g class="boundary">
+              <path d="M24 362v18M24 362h18M296 362v18M296 362h-18M24 720v-18M24 720h18M296 720v-18M296 720h-18" />
+            </g>
+
+            <g class="wire async" style="--draw: 1"><path d="M160 466V516" /><path class="head" d="M155.5 508l4.5 8 4.5-8z" /></g>
+            <text class="t-edge t-edge-side" x="176" y="495">sends command to</text>
+            <g class="wire async" style="--draw: 2"><path d="M160 568V614" /><path class="head" d="M155.5 606l4.5 8 4.5-8z" /></g>
+            <text class="t-edge t-edge-side" x="176" y="595">consumed by</text>
+
+            <path class="pulse" d="M160 466V614" pathLength="1" />
+
+            <g class="node service" style="--in: 1">
+              <rect class="ghost" x="96" y="410" width="128" height="56" rx="11" />
+              <rect class="body" x="90" y="404" width="128" height="56" rx="11" />
+              <text class="t-name" x="154" y="438">Orders API</text>
+            </g>
+            <g class="node queue" style="--in: 2">
+              <path class="body" d="M126 516h68a26 26 0 010 52h-68a26 26 0 010-52z" />
+              <g class="envelopes">
+                <rect x="123" y="534" width="21" height="16" rx="2" /><path d="M123.5 535.5l10 7.5 10-7.5" />
+                <rect x="149" y="534" width="21" height="16" rx="2" /><path d="M149.5 535.5l10 7.5 10-7.5" />
+                <rect x="175" y="534" width="21" height="16" rx="2" /><path d="M175.5 535.5l10 7.5 10-7.5" />
+              </g>
+            </g>
+            <g class="node service" style="--in: 3">
+              <rect class="ghost" x="96" y="620" width="128" height="56" rx="11" />
+              <rect class="body" x="90" y="614" width="128" height="56" rx="11" />
+              <text class="t-name" x="154" y="648">Fulfilment</text>
+            </g>
+
+            <g class="steps">
+              <g style="--s: 1"><circle cx="160" cy="488" r="9" /><text x="160" y="492">1</text></g>
+              <g style="--s: 2"><circle cx="160" cy="590" r="9" /><text x="160" y="594">2</text></g>
+            </g>
+
+            <g class="chip" style="--in: 6">
+              <path class="stem" d="M88 542h12" />
+              <rect x="6" y="531" width="82" height="22" rx="11" />
+              <circle cx="20" cy="542" r="3.5" />
+              <text x="52" y="546">retries ×5</text>
+            </g>
+
+            <g class="file">
+              <path class="file-body" d="M106 720h98l10 10v22H106z" />
+              <path class="file-fold" d="M204 720v10h10" />
+              <text x="158" y="746">.draftcanvas</text>
+            </g>
+          </g>
+
+          <g class="marks">
+            <g class="art-mark" style="--m: 1"><circle cx="20" cy="14" r="11" /><text x="20" y="18">1</text></g>
+            <g class="art-mark" style="--m: 2"><circle cx="186" cy="308" r="11" /><text x="186" y="312">2</text></g>
+            <g class="art-mark" style="--m: 3"><circle cx="84" cy="741" r="11" /><text x="84" y="745">3</text></g>
+          </g>
+          </svg>
+        </figure>
+        <p class="visually-hidden" id="art-caption">
+          On the left, a pencil scribble from a meeting: boxes labelled checkout?, kafka? sqs? and a
+          crossed-out worker, a DB, and retries? Its lines are routed into one connector that arrives
+          at a clean diagram: Orders API sends command to an orders queue, consumed by a Fulfilment
+          worker that writes to Orders DB, with a note saying retries ×5 and a .draftcanvas file
+          tab at the bottom.
+        </p>
 
         <ul class="trades">
           <li class="reveal">
-            <span class="trade-a">speed</span>
+            <span class="trade-a"><span class="trade-n" aria-hidden="true">1</span>speed</span>
             <span class="trade-edge">
               <span class="trade-edge-word">over</span>
               <svg class="trade-wire" viewBox="0 0 180 22" aria-hidden="true" focusable="false">
@@ -1162,7 +1221,7 @@
             <span class="trade-b">completeness</span>
           </li>
           <li class="reveal">
-            <span class="trade-a">opinion</span>
+            <span class="trade-a"><span class="trade-n" aria-hidden="true">2</span>opinion</span>
             <span class="trade-edge">
               <span class="trade-edge-word">over</span>
               <svg class="trade-wire" viewBox="0 0 180 22" aria-hidden="true" focusable="false">
@@ -1172,22 +1231,16 @@
             <span class="trade-b">configurability</span>
           </li>
           <li class="reveal">
-            <span class="trade-a">throwaway</span>
+            <span class="trade-a"><span class="trade-n" aria-hidden="true">3</span>throwaway</span>
             <span class="trade-edge">
               <span class="trade-edge-word">but</span>
               <svg class="trade-wire" viewBox="0 0 180 22" aria-hidden="true" focusable="false">
                 <path class="dash" d="M2 11h170" /><path class="head" d="M168 6.5l9 4.5-9 4.5z" />
               </svg>
             </span>
-            <span class="trade-b">exportable without disappointment</span>
+            <span class="trade-b">exportable</span>
           </li>
         </ul>
-
-        <p class="manifesto-note reveal">
-          Every one of those costs you something. They are written down in the repository, in these
-          words, because a tool that will not say what it is bad at is not telling you what it is
-          good at either.
-        </p>
       </section>
 
       <!-- ================================================================
@@ -1201,100 +1254,99 @@
         </header>
 
         <div class="dists">
-          <article class="dist dist-lead reveal" id="web">
-            <p class="dist-kicker">01 · Browser</p>
-            <h3>Open a tab and draw</h3>
-            <p>
-              No account, no sign-up. Diagrams are saved in this browser's own storage, on this
-              device, and the page keeps working once it has loaded with the network off.
-            </p>
-            <p class="dist-act">
-              <a class="button button-primary" href="./editor/">Open live editor</a>
-            </p>
-            <p class="dist-fine">Clearing site data clears them — export what you want to keep.</p>
-          </article>
+          <div class="dist-doors">
+            <article class="dist dist-lead reveal" id="web">
+              <p class="dist-kicker">01 · Browser</p>
+              <h3>Open a tab and draw</h3>
+              <p>
+                No account, no sign-up. Diagrams are saved in this browser's own storage, on this
+                device, and the page keeps working once it has loaded with the network off.
+              </p>
+              <p class="dist-act">
+                <a class="button button-primary" href="./editor/">Open live editor</a>
+              </p>
+              <p class="dist-fine">Clearing site data clears them — export what you want to keep.</p>
+            </article>
 
-          <article class="dist reveal" id="desktop">
-            <p class="dist-kicker">02 · Desktop</p>
-            <h3>A window of its own</h3>
+            <!-- The seam between the two doors, drawn as what crosses it: the file. Nothing syncs, so
+                 the connector is the export-and-open a person does by hand, in both directions. -->
+            <p class="dist-seam" aria-label="A diagram moves between them as a .draftcanvas file">
+              <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" focusable="false"><path d="M2.5 5.5h10M10 3l2.5 2.5L10 8M13.5 10.5h-10M6 8l-2.5 2.5L6 13" /></svg>
+              <span>.draftcanvas</span>
+            </p>
+
+            <article class="dist reveal" id="desktop">
+              <p class="dist-kicker">02 · Desktop</p>
+              <h3>A window of its own</h3>
+              <p>
+                Your diagrams as ordinary <code>.draftcanvas</code> files on disk, one per diagram and
+                folders as projects, with a Quick Draft from the menu bar or system tray. It updates
+                itself, and opens with no network at all.
+              </p>
+              <div class="dist-act">
+                <details class="downloads" id="downloads">
+                  <summary class="button downloads-summary">
+                    <span class="downloads-label">Download desktop</span>
+                    <svg class="downloads-caret" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                      <path d="M4 6.5l4 4 4-4" />
+                    </svg>
+                  </summary>
+                  <ul class="targets" id="targets">
+                    <li>
+                      <a data-slug="macos-arm64" href="https://github.com/acltabontabon/draft-canvas/releases/download/v__VERSION__/Draft-Canvas___VERSION___macOS_arm64.dmg">
+                        <strong>macOS</strong><span>Apple silicon · .dmg</span>
+                      </a>
+                    </li>
+                    <li>
+                      <a data-slug="macos-x64" href="https://github.com/acltabontabon/draft-canvas/releases/download/v__VERSION__/Draft-Canvas___VERSION___macOS_x64.dmg">
+                        <strong>macOS</strong><span>Intel · .dmg</span>
+                      </a>
+                    </li>
+                    <li>
+                      <a data-slug="windows-x64" href="https://github.com/acltabontabon/draft-canvas/releases/download/v__VERSION__/Draft-Canvas___VERSION___Windows_x64.exe">
+                        <strong>Windows</strong><span>x64 · installer</span>
+                      </a>
+                    </li>
+                  </ul>
+                </details>
+              </div>
+              <p class="dist-fine dist-meta">
+                <span>v__VERSION__ · stable</span>
+                <a href="https://github.com/acltabontabon/draft-canvas/releases">All releases</a>
+              </p>
+            </article>
+          </div>
+
+          <!-- Not a third door: the browser editor, served from somewhere you choose. -->
+          <div class="dist-host reveal">
+            <p class="dist-kicker">Or run the browser editor yourself</p>
             <p>
-              Your diagrams as ordinary <code>.draftcanvas</code> files on disk, one per diagram and
-              folders as projects, with a Quick Draft from the menu bar or system tray. It updates
-              itself, and opens with no network at all.
+              The same editor as a Docker image, for a team that wants it on its own network.
+              <a href="https://hub.docker.com/r/acltabontabon/draft-canvas">Docker Hub</a>
             </p>
-            <div class="dist-act">
-              <details class="downloads" id="downloads">
-                <summary class="button downloads-summary">
-                  <span class="downloads-label">Download desktop</span>
-                  <svg class="downloads-caret" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-                    <path d="M4 6.5l4 4 4-4" />
-                  </svg>
-                </summary>
-                <ul class="targets" id="targets">
-                  <li>
-                    <a data-slug="macos-arm64" href="https://github.com/acltabontabon/draft-canvas/releases/download/v__VERSION__/Draft-Canvas___VERSION___macOS_arm64.dmg">
-                      <strong>macOS</strong><span>Apple silicon · .dmg</span>
-                    </a>
-                  </li>
-                  <li>
-                    <a data-slug="macos-x64" href="https://github.com/acltabontabon/draft-canvas/releases/download/v__VERSION__/Draft-Canvas___VERSION___macOS_x64.dmg">
-                      <strong>macOS</strong><span>Intel · .dmg</span>
-                    </a>
-                  </li>
-                  <li>
-                    <a data-slug="windows-x64" href="https://github.com/acltabontabon/draft-canvas/releases/download/v__VERSION__/Draft-Canvas___VERSION___Windows_x64.exe">
-                      <strong>Windows</strong><span>x64 · installer</span>
-                    </a>
-                  </li>
-                </ul>
-              </details>
-            </div>
-            <p class="dist-fine dist-meta">
-              <span>v__VERSION__ · stable</span>
-              <a href="https://github.com/acltabontabon/draft-canvas/releases">All releases</a>
-            </p>
-          </article>
+            <code class="dist-cmd">docker run -p 8080:8080 acltabontabon/draft-canvas</code>
+          </div>
         </div>
 
         <p class="dist-note">
-          <strong>Desktop installers are not code-signed.</strong> macOS and Windows warn you the first
-          time — <a href="https://github.com/acltabontabon/draft-canvas#desktop">the README says how to get past it</a>.
-        </p>
-
-        <p class="dist-note">
-          <strong>What&rsquo;s next.</strong> Draft Canvas 1.12 made the product smaller on purpose: web and
-          desktop, drawing and explaining, files and open points. The VS Code extension is
-          <a href="https://github.com/acltabontabon/draft-canvas/blob/main/docs/guides/vscode-retired.md">retired</a>;
-          what is being considered after this, and in what order, is written down in
-          <a href="https://github.com/acltabontabon/draft-canvas/blob/main/docs/reference/roadmap.md">the roadmap</a>
-          — as intentions, not promises.
+          <strong>Desktop installers aren&rsquo;t code-signed yet.</strong> macOS and Windows warn you
+          the first time &mdash; <a href="https://github.com/acltabontabon/draft-canvas#desktop">here&rsquo;s how to get past it</a>.
         </p>
 
         <aside class="local reveal">
-          <h3>What &ldquo;local-first&rdquo; means here, exactly</h3>
+          <h3>Local-first, exactly</h3>
           <div class="local-grid">
             <p>
-              <strong>In the browser</strong>, diagrams live in IndexedDB as plain records, readable by
-              anything that can read this browser profile — the way a file in your home folder is. Earlier
-              versions encrypted them with a key kept in the same profile; those still open, and are saved
-              plain when next edited. For a diagram that must be protected at rest, export it as
-              <code>.dcenc</code>, behind a passphrase only you hold.
+              <strong>In the browser,</strong> diagrams live in this browser&rsquo;s storage. Need one
+              protected at rest? Export it as <code>.dcenc</code>.
             </p>
             <p>
-              <strong>On the desktop</strong>, the file on disk <em>is</em> the storage: plain JSON, yours
-              to move, diff and back up. It is not encrypted, because it is a file in your repository, and
-              it should behave like one.
+              <strong>On the desktop,</strong> the file on disk is the storage: plain JSON you can
+              move, diff and back up.
             </p>
             <p>
-              <strong>Nothing syncs between them.</strong> Two separate places, on purpose. Moving a
-              diagram between them means exporting it and opening it, which is a file operation you
-              can see happen.
-            </p>
-            <p>
-              The app makes no network requests of its own — a test in the suite fails on any call in its
-              source, and the shipped page's own security policy forbids reaching another origin. The
-              one exception is the service worker fetching a newer copy of the app itself.
-              <a href="https://github.com/acltabontabon/draft-canvas/blob/main/docs/reference/privacy.md">What is stored, in detail</a>.
+              <strong>No network calls of its own.</strong> A test fails the build on any, and the
+              page&rsquo;s security policy forbids them. <a href="./docs/privacy/">What&rsquo;s stored, in detail</a>.
             </p>
           </div>
         </aside>
@@ -1312,15 +1364,12 @@
           <path class="dash" d="M176 28h30" /><path class="head" d="M199 23.5l8 4.5-8 4.5z" />
           <rect x="206" y="13" width="48" height="30" rx="7" />
         </svg>
-        <h2 id="closing-title">Go on — draw something.</h2>
-        <p>
-          The next meeting is going to need a diagram. It takes about four seconds to be ready for it.
-        </p>
+        <h2 id="closing-title">Go on &mdash; draw something.</h2>
+        <p>The next meeting will need a diagram. Be ready in four seconds.</p>
         <p class="closing-actions">
           <a class="button button-primary button-lg" href="./editor/">Open live editor</a>
           <a class="button button-lg" href="#get">Download desktop</a>
         </p>
-        <p class="closing-fine">No account required.</p>
       </section>
     </main>
 
@@ -1335,7 +1384,7 @@
       </div>
       <nav class="footer-links" aria-label="Elsewhere">
         <a href="https://github.com/acltabontabon/draft-canvas">Source</a>
-        <a href="https://github.com/acltabontabon/draft-canvas/blob/main/docs/index.md">Docs</a>
+        <a href="./docs/">Docs</a>
         <a href="https://github.com/acltabontabon/draft-canvas/blob/main/CHANGELOG.md">Changelog</a>
         <a href="https://github.com/acltabontabon/draft-canvas/releases">Releases</a>
         <a href="https://hub.docker.com/r/acltabontabon/draft-canvas">Docker</a>

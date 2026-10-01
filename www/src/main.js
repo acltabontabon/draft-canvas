@@ -129,11 +129,8 @@ function setUpSpine() {
     drawn.style.strokeDasharray = String(bottom - top);
     svg.append(drawn);
 
-    // The revision chapter's junction is its delta tag, the way a drawing marks where it changed.
-    junctions = stops.map((y, index) => {
-      const dot = slates[index].closest('.chapter-rev')
-        ? svgEl('path', { class: 'junction junction-rev', d: `M35 ${y - 6.5}l6.5 11h-13z`, 'stroke-linejoin': 'round' })
-        : svgEl('circle', { class: 'junction', cx: 35, cy: y, r: 5 });
+    junctions = stops.map((y) => {
+      const dot = svgEl('circle', { class: 'junction', cx: 35, cy: y, r: 5 });
       svg.append(dot);
       return { dot, y };
     });
@@ -188,10 +185,10 @@ function setUpMasthead() {
 /* ── The demo ───────────────────────────────────────────────────────────────────────────── */
 
 const CAPTIONS = {
-  draw: 'Press a letter and the shape lands under the cursor. Drag out of its edge and Draft Canvas offers what usually comes next; <kbd>Tab</kbd> accepts it. Nothing here is typed into a dialog first.',
-  compose: 'Clear the sketch, ask the command palette for a pattern, and a whole CQRS architecture arrives laid out and connected — with its flows already built, ready to present.',
-  present: 'Presenting a flow, one step at a time. Each step brings the notes and the code attached to it, and everything outside the flow dims rather than disappearing.',
-  inside: '<kbd>⌘↓</kbd> opens the inside of a shape: a canvas of its own, for the detail the overview should not be carrying. The depth map along the top says where you are.',
+  draw: 'Press a letter, the shape lands. Drag from its edge and it offers what usually comes next; <kbd>Tab</kbd> takes it.',
+  compose: 'Ask the palette for a pattern. A whole CQRS architecture lands laid out, wired, and ready to present.',
+  present: 'A flow, one step at a time. Each step brings its own notes and code; the rest dims.',
+  inside: '<kbd>⌘↓</kbd> steps inside a shape, for the detail the overview shouldn&rsquo;t carry.',
 };
 
 function setUpDemo() {

@@ -20,7 +20,7 @@ export const PRODUCT = {
   links: {
     github: 'https://github.com/acltabontabon',
     /** The guides and reference, where the in-app handbook used to be. */
-    docs: 'https://github.com/acltabontabon/draft-canvas/blob/main/docs/index.md',
+    docs: 'https://acltabontabon.com/draft-canvas/docs/',
     linkedin: 'https://www.linkedin.com/in/acltabontabon/',
     website: author.url,
     email: author.email,

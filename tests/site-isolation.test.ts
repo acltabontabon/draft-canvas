@@ -51,9 +51,9 @@ describe('the landing page and the app stay apart', () => {
   it('shares no dependency with the app, so neither can drag the other along', () => {
     const site = JSON.parse(readFileSync(join(WWW, 'package.json'), 'utf8'));
     expect(site.dependencies ?? {}).toEqual({});
-    // Vite only, and only to build with. Anything else here would be a runtime dependency the page
-    // does not need and the app did not choose.
-    expect(Object.keys(site.devDependencies ?? {})).toEqual(['vite']);
+    // Build tools only: Vite, and marked to render docs/ into pages (www/scripts/docs.mjs). Anything
+    // else here would be a runtime dependency the page does not need and the app did not choose.
+    expect(Object.keys(site.devDependencies ?? {}).sort()).toEqual(['marked', 'vite']);
   });
 
   it('makes no network request of its own', () => {

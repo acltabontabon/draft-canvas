@@ -11,7 +11,7 @@ import { PRODUCT } from '../product';
  */
 const EDITOR_URL = './';
 const DESKTOP_URL = 'https://github.com/acltabontabon/draft-canvas/releases/latest';
-const GUIDE_URL = 'https://github.com/acltabontabon/draft-canvas/blob/main/docs/guides/vscode-retired.md';
+const GUIDE_URL = 'https://acltabontabon.com/draft-canvas/docs/vscode-retired/';
 
 export function RetiredHostNotice() {
   return (
