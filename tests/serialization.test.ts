@@ -145,6 +145,64 @@ describe('.draftcanvas round trip', () => {
     },
   );
 
+  describe('canonical bytes', () => {
+    /** `value` with every object's keys in reverse order, all the way down — the worst case of
+     *  "however the objects happened to be built". */
+    function reversed<T>(value: T): T {
+      if (Array.isArray(value)) return value.map(reversed) as T;
+      if (value === null || typeof value !== 'object') return value;
+      const out: Record<string, unknown> = {};
+      for (const key of Object.keys(value).reverse()) out[key] = reversed((value as Record<string, unknown>)[key]);
+      return out as T;
+    }
+
+    it.each(ARCHITECTURE_STARTERS.map((starter) => [starter.name, starter] as const))(
+      'is a fixed point through a read for the %s starter',
+      (_label, starter) => {
+        const { nodes, edges, flows } = buildStarter(starter, { x: -120, y: -80 });
+        const document = { ...addEdges(addNodes(createDocument(starter.name), nodes), edges), flows };
+        const text = serializeDocument(document);
+        const result = deserializeDocument(text);
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(serializeDocument(result.document)).toBe(text);
+      },
+    );
+
+    it('writes the same bytes whatever order the objects acquired their keys in', () => {
+      const flow = { ...createFlow({ title: 'Checkout' }), accent: 'teal' as const, steps: [{ id: 'fs_1', edgeId: 'e1', viewport: { x: 1, y: 2, zoom: 1 }, caption: 'Pay' }] };
+      const document = addFlow(
+        {
+          ...richDocument(),
+          openPoints: [{ id: 'op1', kind: 'awaiting', context: 'Who owns retries?', targets: [{ kind: 'node', id: 'n1' }] }],
+          level: 'container',
+        },
+        flow,
+      );
+      document.nodes[0]!.inside = {
+        nodes: [createNode({ type: 'component', x: 0, y: 0, text: 'Inner' })],
+        edges: [],
+        flows: [],
+        viewport: { x: 0, y: 0, zoom: 1 },
+        level: 'component',
+      };
+
+      expect(serializeDocument(reversed(document))).toBe(serializeDocument(document));
+      expect(serializeDocument(document)).toBe(serializeDocument(document));
+    });
+
+    it('writes known keys in their declared order, unknown ones after them sorted, and no undefined', () => {
+      const node = { ...createNode({ type: 'service', x: 0, y: 0, text: 'A' }), zzz: { b: 1, a: 2 }, aaa: true, text: undefined };
+      const document = addNodes(createDocument('Keys'), [node as never]);
+      const written = JSON.parse(serializeDocument(document)) as { nodes: Record<string, unknown>[] };
+      const keys = Object.keys(written.nodes[0]!);
+      expect(keys.slice(0, 7)).toEqual(['id', 'type', 'x', 'y', 'width', 'height', 'z']);
+      expect(keys.slice(-2)).toEqual(['aaa', 'zzz']);
+      expect(keys).not.toContain('text');
+      expect(Object.keys(written.nodes[0]!.zzz as object)).toEqual(['a', 'b']);
+    });
+  });
+
   it('writes the current schema version', () => {
     expect(JSON.parse(serializeDocument(createDocument())).version).toBe(CURRENT_VERSION);
   });

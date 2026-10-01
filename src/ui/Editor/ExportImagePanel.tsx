@@ -1,10 +1,13 @@
 import { SegmentedControl } from '../common/SegmentedControl';
 import type { ThemeName } from '../../render/theme/tokens';
-import type { ImageFormat } from './exportTypes';
+import { PNG_SCALES, type ImageFormat, type PngScale } from './exportTypes';
 
 interface ImagePanelProps {
   format: ImageFormat;
   onFormatChange: (format: ImageFormat) => void;
+  /** PNG only: an SVG has no pixels to multiply, so the control stays off the panel then. */
+  scale: PngScale;
+  onScaleChange: (scale: PngScale) => void;
   paletteName: ThemeName;
   onPaletteChange: (name: ThemeName) => void;
   transparent: boolean;
@@ -19,6 +22,10 @@ interface ImagePanelProps {
   hasOpenPoints: boolean;
   includeOpenPoints: boolean;
   onIncludeOpenPointsChange: (value: boolean) => void;
+  /** Whether a room sits below this canvas — "Every level" is only a question when one does. */
+  hasRooms: boolean;
+  everyLevel: boolean;
+  onEveryLevelChange: (value: boolean) => void;
 }
 
 const DESCRIPTIONS: Record<ImageFormat, string> = {
@@ -29,6 +36,8 @@ const DESCRIPTIONS: Record<ImageFormat, string> = {
 export function ExportImagePanel({
   format,
   onFormatChange,
+  scale,
+  onScaleChange,
   paletteName,
   onPaletteChange,
   transparent,
@@ -42,6 +51,9 @@ export function ExportImagePanel({
   hasOpenPoints,
   includeOpenPoints,
   onIncludeOpenPointsChange,
+  hasRooms,
+  everyLevel,
+  onEveryLevelChange,
 }: ImagePanelProps) {
   return (
     <div className="dc-export-panel">
@@ -56,6 +68,15 @@ export function ExportImagePanel({
             { value: 'svg', label: 'SVG' },
           ]}
         />
+        {format === 'png' && (
+          <SegmentedControl
+            name="png-scale"
+            legend="Scale"
+            value={scale}
+            onChange={onScaleChange}
+            options={PNG_SCALES.map((value) => ({ value, label: `${value}×` }))}
+          />
+        )}
         <label className="dc-export-field">
           <span>Palette</span>
           <select
@@ -115,6 +136,22 @@ export function ExportImagePanel({
             {selectionCount > 0 && <span className="dc-muted"> ({selectionCount})</span>}
           </span>
         </label>
+
+        {hasRooms && (
+          // Only offered when a room exists below this canvas: a flat diagram has one picture, and a
+          // checkbox for a second would be a question about a thing that is not in doubt.
+          <label className="dc-check" title="The canvas and every room inside it, one image each, in a ZIP archive.">
+            <input
+              type="checkbox"
+              checked={everyLevel}
+              onChange={(event) => onEveryLevelChange(event.target.checked)}
+            />
+            <span>
+              Every level
+              <span className="dc-muted"> — one image per room, zipped</span>
+            </span>
+          </label>
+        )}
       </div>
 
       <p className="dc-export-panel-description">{DESCRIPTIONS[format]}</p>

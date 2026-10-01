@@ -49,6 +49,12 @@ export const LIMITS = {
   maxOpenPointTargets: 40,
   maxConditionLength: 120,
   maxResponseLength: 120,
+  /**
+   * The largest background image a `.draftcanvas` file carries inline (`BackgroundSettings.image`),
+   * counted in decoded bytes. Base64 adds a third, and a diagram's own JSON is a few hundred KB at
+   * most, so this keeps a file with a backdrop well inside `maxFileBytes` and a `git diff` bearable.
+   */
+  maxEmbeddedBackgroundBytes: 2 * 1024 * 1024,
 } as const;
 
 export const DEFAULTS = {

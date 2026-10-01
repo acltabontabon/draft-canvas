@@ -185,6 +185,32 @@ describe('ExportDialog — output artifact', () => {
     expect(thumbnail?.getAttribute('src')).toMatch(/^data:image\/svg\+xml/);
     expect(screen.getByText(/^\d+ × \d+ px · 2×$/)).toBeInTheDocument();
   });
+
+  it('offers 1×/2×/3× for PNG only, reports the chosen scale, and remembers it', async () => {
+    const user = userEvent.setup();
+    useEditorStore.setState({ document: withFlow(), selection: { nodes: [], edges: [] }, selectedFlowId: null });
+    const { unmount } = renderDialog();
+
+    const scale = screen.getByRole('radiogroup', { name: 'Scale' });
+    expect(within(scale).getByRole('radio', { name: '2×' })).toBeChecked();
+    const before = screen.getByText(/^\d+ × \d+ px · 2×$/).textContent!.match(/^(\d+) × (\d+)/)!;
+
+    await user.click(within(scale).getByRole('radio', { name: '3×' }));
+    const after = screen.getByText(/^\d+ × \d+ px · 3×$/).textContent!.match(/^(\d+) × (\d+)/)!;
+    expect(Number(after[1])).toBe(Math.round((Number(before[1]) / 2) * 3));
+    expect(Number(after[2])).toBe(Math.round((Number(before[2]) / 2) * 3));
+    expect(prefs.get('export-png-scale')).toBe('3');
+
+    // An SVG has no pixels to multiply.
+    await user.click(screen.getByRole('radio', { name: 'SVG' }));
+    expect(screen.queryByRole('radiogroup', { name: 'Scale' })).not.toBeInTheDocument();
+    expect(screen.getByText(/^\d+ × \d+ · vector$/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('radio', { name: 'PNG' }));
+    unmount();
+    renderDialog();
+    expect(within(screen.getByRole('radiogroup', { name: 'Scale' })).getByRole('radio', { name: '3×' })).toBeChecked();
+  });
 });
 
 describe('ExportDialog — persistence', () => {
@@ -290,5 +316,62 @@ describe('ExportDialog — which canvas', () => {
     renderDialog();
     await switchMode(user, /Document/);
     expect(screen.queryByText('The whole canvas')).toBeNull();
+  });
+});
+
+describe('ExportDialog — every level', () => {
+  function withRoom(): DraftDocument {
+    const inner = createNode({ type: 'component', x: 0, y: 0, text: 'Handler' });
+    const owner = {
+      ...createNode({ type: 'service', x: 0, y: 0, text: 'Orders API' }),
+      inside: { nodes: [inner], edges: [], flows: [], viewport: { x: 0, y: 0, zoom: 1 } },
+    };
+    return { ...createDocument('My Diagram'), nodes: [owner] };
+  }
+
+  it('is not offered on a flat canvas', () => {
+    useEditorStore.setState({ document: withFlow(), selection: { nodes: [], edges: [] }, selectedFlowId: null });
+    renderDialog();
+    expect(screen.queryByRole('checkbox', { name: /Every level/ })).not.toBeInTheDocument();
+  });
+
+  it('turns the image export into a ZIP of every room, and the CTA and file name follow', async () => {
+    const user = userEvent.setup();
+    useEditorStore.setState({ document: withRoom(), selection: { nodes: [], edges: [] }, selectedFlowId: null });
+    renderDialog();
+
+    const every = screen.getByRole('checkbox', { name: /Every level/ });
+    expect(every).not.toBeChecked();
+    expect(screen.getByRole('button', { name: 'Export PNG' })).toBeInTheDocument();
+
+    await user.click(every);
+    expect(screen.getByRole('button', { name: 'Export every level' })).toBeEnabled();
+    expect(screen.getByTitle('my-diagram-levels.zip')).toBeInTheDocument();
+    expect(screen.getByText('2 images · PNG')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('radio', { name: 'SVG' }));
+    expect(screen.getByText('2 images · SVG')).toBeInTheDocument();
+    expect(screen.getByTitle('my-diagram-levels.zip')).toBeInTheDocument();
+
+    await user.click(every);
+    expect(screen.getByRole('button', { name: 'Export SVG' })).toBeInTheDocument();
+    expect(screen.getByTitle('my-diagram.svg')).toBeInTheDocument();
+  });
+
+  it('counts Flows across rooms for the Source export', async () => {
+    const user = userEvent.setup();
+    const doc = withRoom();
+    const inner = doc.nodes[0]!.inside!;
+    const other = createNode({ type: 'component', x: 200, y: 0, text: 'Writer' });
+    const edge = createEdge({ source: inner.nodes[0]!.id, target: other.id, label: 'Persist' });
+    const flow = createFlow({ title: 'Inside' });
+    flow.steps = [{ id: 'fs9', edgeId: edge.id }];
+    const withInnerFlow = { ...doc, nodes: [{ ...doc.nodes[0]!, inside: { ...inner, nodes: [...inner.nodes, other], edges: [edge], flows: [flow] } }] };
+    useEditorStore.setState({ document: withInnerFlow, selection: { nodes: [], edges: [] }, selectedFlowId: null });
+    renderDialog();
+    await switchMode(user, /Source/);
+
+    expect(screen.getByRole('button', { name: 'Export Mermaid' })).toBeEnabled();
+    expect(screen.getByText('1 Flow · plain text')).toBeInTheDocument();
   });
 });

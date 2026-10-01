@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createDocument } from '../document/factory';
+import { adoptEmbeddedBackground } from '../export/background';
 import { deserializeDocument, serializeDocument } from '../export/project';
 import { logDiagnostic } from '../lib/diagnostics';
 import { isEditableTarget } from '../lib/isEditableTarget';
@@ -7,7 +8,7 @@ import { useUiStore } from '../store/uiStore';
 import type { DocumentSession } from '../store/useDocumentSession';
 import type { HostChannel } from './channel';
 import type { BackgroundMessage, CommandMessage, LoadMessage, ToHostMessage } from './embeddedHost';
-import { base64ToBlob, blobToBase64 } from './hostBackground';
+import { base64ToBlob, blobToBase64 } from '../lib/base64';
 
 const EXTERNAL_PROTOCOLS = new Set(['http:', 'https:', 'mailto:']);
 const BACKGROUND_READ_TIMEOUT_MS = 3000;
@@ -162,7 +163,15 @@ export function useHostDocument(session: DocumentSession, channel?: HostChannel 
         setState({ error: parsed.error, invalidWhileOpen: opened });
         return;
       }
-      const document = parsed ? parsed.document : createDocument(title || undefined);
+      const loaded = parsed ? parsed.document : createDocument(title || undefined);
+      // A file that arrived with its background inline (a web export carries one): the image goes
+      // into the app's own store, where the canvas looks for it, and out of the document. The host
+      // is then told to keep it beside the file like any other background, and the next save
+      // writes the file without it.
+      const document = await adoptEmbeddedBackground(loaded, repository);
+      if (document !== loaded && hostKeepsBackground && document.settings.background.enabled) {
+        reportBackground(document.metadata.id, document.settings.background);
+      }
       const { useEditorStore, fileWithLiveViewport } = await import('../store/editorStore');
       if (disposed) return;
       unsubscribe ??= useEditorStore.subscribe((current, previous) => {

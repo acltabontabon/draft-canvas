@@ -644,6 +644,26 @@ export interface BackgroundSettings {
    * stored under the document's own id.
    */
   imageId?: string;
+  /**
+   * The image itself, only ever in a `.draftcanvas` file in transit — see `EmbeddedBackgroundImage`.
+   * Never present on a stored document: the Library strips it on import and puts the bytes in
+   * the image store (`export/background.ts`'s `adoptEmbeddedBackground`).
+   */
+  image?: EmbeddedBackgroundImage;
+}
+
+/**
+ * A background image carried inside a `.draftcanvas` file, so a diagram exported with a backdrop
+ * arrives with it. The one exception to "the bytes live in their own store": a file has no second
+ * store to keep them in. Small images only (`export/background.ts`'s `MAX_EMBEDDED_BACKGROUND_BYTES`);
+ * a larger one is left out of the export, and the dialog says so.
+ */
+export interface EmbeddedBackgroundImage {
+  /** `data:image/...;base64,...` — what an `<img>` or an SVG `<image>` can show as is. */
+  dataUri: string;
+  /** Natural size in pixels, kept beside the bytes so importing needs no decoder to store it. */
+  width: number;
+  height: number;
 }
 
 export interface DraftSettings {

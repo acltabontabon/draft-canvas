@@ -101,7 +101,7 @@ describe('toMermaid', () => {
     expect(out.replace(/-+>>|-+>|-+x|-+\)/g, '')).not.toMatch(/[<>&]/);
   });
 
-  it('guards a literal colon in a message label', () => {
+  it('keeps a literal colon in a message label — Mermaid splits on the first colon only', () => {
     const m = model({
       participants: [
         { id: 'P1', alias: 'A', label: 'A', category: 'service', kind: 'participant', sourceNodeId: 'a' },
@@ -119,7 +119,7 @@ describe('toMermaid', () => {
         },
       ],
     });
-    expect(toMermaid(m)).toContain('HTTP 200- OK');
+    expect(toMermaid(m)).toContain('A->>B: HTTP 200: OK');
   });
 
   it('never emits an empty message label', () => {
@@ -266,8 +266,8 @@ describe('toMermaid', () => {
 
     expect(segments.length).toBeGreaterThan(1);
     for (const segment of segments) expect(segment.length).toBeLessThanOrEqual(60);
-    // Colons are still guarded, so compare against the same substitution the emitter makes.
-    expect(segments.join(' ')).toBe(long.replace(/:/g, '-').replace(/;/g, '#59;'));
+    // A colon is text once the note's own delimiter has passed; only `;` needs its entity.
+    expect(segments.join(' ')).toBe(long.replace(/;/g, '#59;'));
   });
 
   it('collapses a multi-line note (e.g. Code) into one line via <br/>, escaping HTML-sensitive characters', () => {

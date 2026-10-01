@@ -144,6 +144,58 @@ describe('saving', () => {
     expect(h.api.saveDocument).not.toHaveBeenCalled();
   });
 
+  describe('the camera', () => {
+    /** `text` with the camera somewhere else — what the app posts after a pan rode along with an edit. */
+    const panned = (text: string, x = 480): string => {
+      const file = JSON.parse(text) as { viewport: { x: number; y: number; zoom: number } };
+      file.viewport = { x, y: -120, zoom: 0.75 };
+      return `${JSON.stringify(file, null, 2)}\n`;
+    };
+
+    it('is not an edit: a text that differs only by where the camera is leaves the file clean and unsaved', async () => {
+      const handle = await openFile();
+      const before = h.files.get(handle)!.text;
+
+      h.edit(panned(before));
+      expect(doc()).toMatchObject({ dirty: false });
+      await h.controller.save();
+
+      expect(h.api.saveDocument).not.toHaveBeenCalled();
+      expect(h.files.get(handle)!.text).toBe(before);
+      expect(h.recovery.size).toBe(0);
+    });
+
+    it('is not what keeps a file dirty once the edit it rode along with is undone', async () => {
+      const handle = await openFile();
+      const before = h.files.get(handle)!.text;
+
+      h.edit(panned(edited()));
+      expect(doc()).toMatchObject({ dirty: true });
+      h.edit(panned(before));
+      expect(doc()).toMatchObject({ dirty: false });
+      await h.controller.save();
+
+      expect(h.api.saveDocument).not.toHaveBeenCalled();
+      expect(h.files.get(handle)!.text).toBe(before);
+    });
+
+    it('does not stop a real edit from saving, and the file then carries it', async () => {
+      const handle = await openFile();
+      const text = panned(edited());
+
+      h.edit(text);
+      expect(doc()).toMatchObject({ dirty: true });
+      await h.controller.save();
+
+      expect(h.api.saveDocument).toHaveBeenCalledTimes(1);
+      expect(h.files.get(handle)!.text).toBe(text);
+      expect(doc()).toMatchObject({ dirty: false });
+      // Another pan after the save changes nothing again.
+      h.edit(panned(text, 900));
+      expect(doc()).toMatchObject({ dirty: false });
+    });
+  });
+
   it('answers a second request while one is running with the same save, not a second one', async () => {
     await openFile();
     h.edit(edited());

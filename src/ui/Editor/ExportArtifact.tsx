@@ -12,8 +12,10 @@ export type ArtifactVisual =
       options: ExportOptions;
       /** Stable identity for `options.only`, which is a fresh `Set` every render. */
       onlyKey: string;
-      /** PNG exports at 2× — the tile reports the real output size, not the layout size. */
-      scale: number;
+      /**
+       * Given the layout size; the caller applies its own scale, because for a PNG the scale that
+       * fits the browser's canvas limits depends on that size and is what the tile should quote.
+       */
       describe: (width: number, height: number) => string;
     }
   | { type: 'file'; icon: IconName; badge: string; meta: string };
@@ -65,7 +67,7 @@ function Thumbnail({
   fileName: string;
   empty?: boolean;
 }) {
-  const { document, theme, options, onlyKey, scale, describe } = visual;
+  const { document, theme, options, onlyKey, describe } = visual;
   const transparent = options.transparent === true;
 
   // Keyed on primitives, not `options` itself — the parent rebuilds that object (and its `only`
@@ -85,7 +87,7 @@ function Thumbnail({
     [rendered],
   );
 
-  const meta = rendered ? describe(rendered.width * scale, rendered.height * scale) : 'Preview unavailable';
+  const meta = rendered ? describe(rendered.width, rendered.height) : 'Preview unavailable';
 
   return (
     <>

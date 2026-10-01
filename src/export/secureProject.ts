@@ -7,6 +7,7 @@ import {
   SECURE_EXPORT_MIME,
 } from '../crypto/passphraseExport';
 import type { DraftDocument } from '../document/types';
+import { withEmbeddedBackground } from './background';
 import { downloadText } from './download';
 import { fileNameFor, readImportText } from './project';
 
@@ -20,7 +21,9 @@ export { SECURE_EXPORT_FILE_EXTENSION };
 export async function exportSecureProjectFile(document: DraftDocument, passphrase: string): Promise<void> {
   // Like the plain export, without the project it's filed under here: that id means nothing anywhere else.
   const { projectId: _local, ...metadata } = document.metadata;
-  const text = await encryptForExport({ ...document, metadata }, passphrase);
+  // And with the background image inside, the way the plain export carries it — an encrypted copy
+  // that arrives without its backdrop is no more complete for being locked.
+  const text = await encryptForExport({ ...(await withEmbeddedBackground(document)), metadata }, passphrase);
   await downloadText(text, fileNameFor(document.metadata.title, SECURE_EXPORT_FILE_EXTENSION), SECURE_EXPORT_MIME);
 }
 

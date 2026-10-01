@@ -214,7 +214,10 @@ describe('an exported image', () => {
     ];
     const svg = renderDocumentSvg(documentWith(nodes, edges)).svg;
 
-    expect(svg).not.toContain('C');
+    // A bridge is a cubic arc (`C`) in a connector's path data; the filter primitives in the defs
+    // spell their inputs in capitals too, so only the path data is read.
+    const pathData = [...svg.matchAll(/ d="([^"]*)"/g)].map((m) => m[1]).join(' ');
+    expect(pathData).not.toContain('C');
   });
 
   it('leaves the connector path a screen reader and a sequence export see untouched', () => {

@@ -58,6 +58,7 @@ import {
   type EdgeAnchor,
   type EdgeRouting,
   type EdgeSemantic,
+  type EmbeddedBackgroundImage,
   type GridMode,
   type NoteKind,
   type QueueKind,
@@ -141,6 +142,24 @@ function parseAnchor(value: unknown): EdgeAnchor | undefined {
   const side = oneOfOptional(value.side, SIDES);
   if (!side) return undefined;
   return { side, offset: clamp(finite(value.offset, 0.5), 0, 1) };
+}
+
+/**
+ * `settings.background.image`, when a file carries its backdrop inline (see
+ * `EmbeddedBackgroundImage`). Anything but a base64 image data URI of an allowed size, with a
+ * sensible natural size beside it, is dropped — "no image travelled" is the same state the file
+ * would be in had the export left it out, and the canvas shows no background rather than failing.
+ */
+function parseEmbeddedBackground(value: unknown): EmbeddedBackgroundImage | undefined {
+  if (!isRecord(value) || typeof value.dataUri !== 'string') return undefined;
+  const match = /^data:image\/[a-z0-9.+-]+;base64,([A-Za-z0-9+/]*={0,2})$/i.exec(value.dataUri);
+  if (!match) return undefined;
+  // Decoded size, from the payload's length: three bytes for every four characters.
+  if (Math.floor((match[1]!.length * 3) / 4) > LIMITS.maxEmbeddedBackgroundBytes) return undefined;
+  const width = positiveIntOptional(value.width, 1, LIMITS.maxNodeSize);
+  const height = positiveIntOptional(value.height, 1, LIMITS.maxNodeSize);
+  if (width === undefined || height === undefined) return undefined;
+  return { dataUri: value.dataUri, width, height };
 }
 
 function safeId(value: unknown): string | null {
@@ -926,6 +945,10 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
         dim: clamp(finite(backgroundRaw.dim, 0.55), 0, 1),
         blur: clamp(finite(backgroundRaw.blur, 0), 0, 1),
         ...(safeId(backgroundRaw.imageId) ? { imageId: safeId(backgroundRaw.imageId)! } : {}),
+        ...(() => {
+          const image = parseEmbeddedBackground(backgroundRaw.image);
+          return image === undefined ? {} : { image };
+        })(),
       },
     },
     flows,

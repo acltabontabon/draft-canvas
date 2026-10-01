@@ -1,3 +1,4 @@
+import { scopedId } from './ids';
 import { jitter } from '../roughness/seed';
 import { el, type SvgEl } from './element';
 
@@ -36,7 +37,7 @@ export type MarkerVariant = 'closed' | 'open';
 
 function markerId(color: string, variant: MarkerVariant = 'closed'): string {
   const suffix = variant === 'open' ? '-open' : '';
-  return `dc-arrow-${color.replace(/[^a-zA-Z0-9]/g, '')}${suffix}`;
+  return scopedId(`dc-arrow-${color.replace(/[^a-zA-Z0-9]/g, '')}${suffix}`);
 }
 
 export function markerRef(color: string, variant: MarkerVariant = 'closed'): string {

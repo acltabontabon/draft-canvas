@@ -6,3 +6,7 @@
 export type ExportMode = 'document' | 'image' | 'sequence';
 export type DocumentFormat = 'editable' | 'secure';
 export type ImageFormat = 'png' | 'svg';
+/** The PNG multiplier over layout pixels; stored as its own string in preferences. */
+export type PngScale = '1' | '2' | '3';
+export const PNG_SCALES: readonly PngScale[] = ['1', '2', '3'];
+export const DEFAULT_PNG_SCALE: PngScale = '2';

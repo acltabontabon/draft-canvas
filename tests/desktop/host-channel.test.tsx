@@ -67,6 +67,25 @@ describe('the desktop channel', () => {
     expect(messages('draft-canvas:change')).toHaveLength(0);
   });
 
+  it('says nothing for a pan or zoom: the camera is not an edit, and never bumps updatedAt', async () => {
+    mount();
+    const file = createDocument('Payments');
+    host.link.deliver({ type: 'draft-canvas:load', text: serializeDocument(file), seq: 2 });
+    await waitFor(() => expect(sessionOf().openId).toBe(file.metadata.id));
+
+    act(() => useEditorStore.getState().persistViewport({ x: -300, y: -80, zoom: 0.8 }));
+    act(() => useEditorStore.getState().persistViewport({ x: -640, y: -80, zoom: 0.5 }));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(messages('draft-canvas:change')).toHaveLength(0);
+    expect(useEditorStore.getState().document.metadata.updatedAt).toBe(file.metadata.updatedAt);
+
+    // The next real edit carries the camera along, as one change.
+    act(() => useEditorStore.getState().rename('Checkout'));
+    await waitFor(() => expect(messages('draft-canvas:change')).toHaveLength(1));
+    const change = messages('draft-canvas:change')[0] as Extract<ToHostMessage, { type: 'draft-canvas:change' }>;
+    expect(JSON.parse(change.text).viewport).toEqual({ x: -640, y: -80, zoom: 0.5 });
+  });
+
   it('sends every edit across, stamped with the load it was made on', async () => {
     mount();
     const file = createDocument('Payments');

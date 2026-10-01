@@ -2,16 +2,22 @@ import type { DraftDocument } from '../document/types';
 import { rasterizeSvg } from '../render/png/rasterize';
 import { renderDocumentSvg, type ExportOptions } from '../render/svg/document';
 import { themeFor } from '../render/theme/tokens';
-import { resolveExportBackground } from './background';
+import { resolveExportBackground, withEmbeddedBackground } from './background';
 import { downloadBlob, downloadText } from './download';
+import { LEVELS_EXTENSION, zipEveryLevel, type EveryLevelOptions } from './levels';
 import { FILE_MIME, fileNameFor, serializeDocument } from './project';
 
 export * from './project';
 export * from './secureProject';
 export * from './sequence';
+export { collectLevels, LEVELS_EXTENSION, type EveryLevelOptions, type LevelImageFormat } from './levels';
+export { hasRooms } from './rooms';
+export { backgroundTravels } from './background';
 
-export function exportProjectFile(document: DraftDocument): Promise<void> {
-  return downloadText(serializeDocument(document), fileNameFor(document.metadata.title), FILE_MIME);
+/** The document as a `.draftcanvas` file, its background image inside it when one travels (`backgroundTravels`). */
+export async function exportProjectFile(document: DraftDocument): Promise<void> {
+  const file = await withEmbeddedBackground(document);
+  await downloadText(serializeDocument(file), fileNameFor(document.metadata.title), FILE_MIME);
 }
 
 export async function exportSvgFile(document: DraftDocument, options: ExportOptions = {}): Promise<void> {
@@ -33,4 +39,11 @@ export async function exportPngFile(
     background: options.transparent ? undefined : themeFor(options.theme ?? 'dark').canvas,
   });
   await downloadBlob(blob, fileNameFor(document.metadata.title, '.png'));
+}
+
+/** One image per room — the root and every level below it — in a single ZIP. */
+export async function exportEveryLevel(document: DraftDocument, options: EveryLevelOptions): Promise<void> {
+  const background = await resolveExportBackground(document, options.includeBackground !== false);
+  const bytes = await zipEveryLevel(document, { ...options, background });
+  await downloadBlob(new Blob([bytes], { type: 'application/zip' }), fileNameFor(document.metadata.title, LEVELS_EXTENSION));
 }

@@ -9,7 +9,7 @@ vi.mock('../src/export/download', () => ({
   downloadBlob: vi.fn(),
 }));
 
-const { exportSequenceMermaidFile, exportSequencePlantUmlFile, sequenceSourceFor, MERMAID_EXTENSION, PLANTUML_EXTENSION } =
+const { countPlayableFlows, exportSequenceMermaidFile, exportSequencePlantUmlFile, sequenceSourceFor, MERMAID_EXTENSION, PLANTUML_EXTENSION } =
   await import('../src/export/sequence');
 
 function fixture(title: string): DraftDocument {
@@ -74,5 +74,62 @@ describe('exportSequenceMermaidFile / exportSequencePlantUmlFile', () => {
 
     const [, fileName] = downloadText.mock.calls[0]!;
     expect(fileName).toBe('draft-canvas.mmd');
+  });
+});
+
+describe('sequenceSourceFor — every room', () => {
+  function twoRooms(): DraftDocument {
+    const inner1 = createNode({ type: 'component', x: 0, y: 0, text: 'Validator' });
+    const inner2 = createNode({ type: 'component', x: 200, y: 0, text: 'Writer' });
+    const innerEdge = createEdge({ source: inner1.id, target: inner2.id, label: 'Persist' });
+    const innerFlow = createFlow({ title: 'Inside' });
+    innerFlow.steps = [{ id: 'fs2', edgeId: innerEdge.id }];
+    const ordersApi = {
+      ...createNode({ type: 'service', x: 0, y: 0, text: 'Orders API' }),
+      inside: { nodes: [inner1, inner2], edges: [innerEdge], flows: [innerFlow], viewport: { x: 0, y: 0, zoom: 1 } },
+    };
+    const b = createNode({ type: 'service', x: 200, y: 0, text: 'B' });
+    const edge = createEdge({ source: ordersApi.id, target: b.id, label: 'Go' });
+    const flow = createFlow({ title: 'Outside' });
+    flow.steps = [{ id: 'fs1', edgeId: edge.id }];
+    return { ...createDocument('Checkout'), nodes: [ordersApi, b], edges: [edge], flows: [flow] };
+  }
+
+  it('emits one section per room in tree order, each under a comment naming the room', () => {
+    const out = sequenceSourceFor(twoRooms(), 'mermaid');
+    const rootAt = out.indexOf('%% Room: Checkout\n');
+    const innerAt = out.indexOf('%% Room: Checkout / Orders API\n');
+    expect(rootAt).toBe(0);
+    expect(innerAt).toBeGreaterThan(rootAt);
+    expect(out.match(/^sequenceDiagram$/gm)).toHaveLength(2);
+    // Each room's flows read exactly as a flat canvas's would, and the blocks are kept apart.
+    expect(out.indexOf('Go')).toBeLessThan(innerAt);
+    expect(out.indexOf('Persist')).toBeGreaterThan(innerAt);
+    expect(out).toContain('\n\n%% Room: Checkout / Orders API\n');
+  });
+
+  it('uses the PlantUML comment for PlantUML, one diagram per room', () => {
+    const out = sequenceSourceFor(twoRooms(), 'plantuml');
+    expect(out).toContain("' Room: Checkout\n");
+    expect(out).toContain("' Room: Checkout / Orders API\n");
+    expect(out.match(/^@startuml$/gm)).toHaveLength(2);
+    expect(out.match(/^@enduml$/gm)).toHaveLength(2);
+  });
+
+  it('skips a room with nothing to play, and a flat canvas reads exactly as before', () => {
+    const doc = twoRooms();
+    const quietInside = { ...doc, nodes: [{ ...doc.nodes[0]!, inside: { ...doc.nodes[0]!.inside!, flows: [] } }, doc.nodes[1]!] };
+    const out = sequenceSourceFor(quietInside, 'mermaid');
+    expect(out).toContain('%% Room: Checkout\n');
+    expect(out).not.toContain('%% Room: Checkout / Orders API');
+    expect(out.match(/^sequenceDiagram$/gm)).toHaveLength(1);
+
+    expect(sequenceSourceFor(fixture('Flat'), 'mermaid')).not.toContain('Room:');
+  });
+
+  it('counts playable Flows across every room', () => {
+    expect(countPlayableFlows(twoRooms())).toBe(2);
+    expect(countPlayableFlows(fixture('Flat'))).toBe(1);
+    expect(countPlayableFlows(createDocument('Empty'))).toBe(0);
   });
 });

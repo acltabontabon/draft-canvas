@@ -9,6 +9,8 @@ export default defineConfig({
   // one thing this config cannot produce: it serves the app alone, at the root, from `vite dev`.
   // `playwright.web.config.ts` (`npm run e2e:web`).
   testIgnore: ['offline.spec.ts', 'web-deploy.spec.ts', '**/e2e/desktop/**'],
+  // A cold `vite dev` compiles the editor chunk on the first test's clock — see `e2e/warm.ts`.
+  globalSetup: './e2e/warm.ts',
   fullyParallel: false,
   workers: 1,
   retries: process.env.CI ? 1 : 0,

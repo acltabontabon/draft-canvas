@@ -46,6 +46,24 @@ drawing. Every diagram you already have still opens.
 - Document format **v18**: a *writes* connector labelled "reads / writes" becomes the relationship
   itself. Diagrams migrate on open; a build older than this one refuses a v18 file by name rather
   than reading it wrongly.
+- **Exports that survive other tools.** An SVG's ids are scoped to the diagram, so two exports
+  inlined on one page keep their own shadows and arrowheads; the shadow is drawn with SVG 1.1
+  primitives instead of `feDropShadow`, images carry `xlink:href` too, and code keeps its columns
+  in any monospace font. Mermaid exports keep colons in labels (they were dashes), escape `%` so a
+  label can never smuggle in a `%%{init}%%` directive, and avoid aliases Mermaid treats as
+  keywords; PlantUML exports disarm Creole, HTML and preprocessor markup in labels, so
+  `<b>`, `%date()` and `**bold**` come out as the characters typed. Every starter's Mermaid export
+  is now checked against Mermaid's own parser.
+- **PNG at the size you meant.** Choose 1×, 2× or 3× in the Export dialog (remembered); the file
+  carries its resolution, so it pastes into a document at its drawn size instead of twice it; the
+  dialog says when a very large diagram had to be fitted to a smaller scale; and iPhones and iPads
+  no longer get a blank image past their canvas limit.
+- **Every level, one export.** A canvas with rooms inside its shapes can export one image per room,
+  zipped, and the Mermaid/PlantUML source now carries every room's flows, one section per room.
+- **Files that diff.** A `.draftcanvas` file is written with one fixed key order, so saving an
+  unchanged diagram — however it was built or migrated — gives identical bytes, and a background
+  image of up to 2 MB travels inside the file and comes back on import. On the desktop, panning or
+  zooming never marks a file changed or rewrites it; only an edit does.
 - **Browser storage is no longer encrypted.** It protected little, needed HTTPS to save, and one
   lost key lost every diagram. Your diagrams still open and nothing is rewritten on upgrade. For a
   protected copy, export a passphrase-protected `.dcenc`. [Why](SECURITY.md#browser-storage).

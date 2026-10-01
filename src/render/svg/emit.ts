@@ -12,6 +12,7 @@ import { colorForScope } from '../code/theme';
 import { familyOf } from '../text/fonts';
 import { baselineOf } from '../text/layout';
 import { el, n, type SvgEl } from './element';
+import { scopedId } from './ids';
 
 const SHADOW_FILTER_ID = 'dc-shadow';
 
@@ -55,7 +56,7 @@ function emitRect(shape: RectShape): SvgEl {
     ry: shape.r === undefined ? undefined : n(shape.r),
     fill: shape.fill ?? 'none',
     opacity: shape.opacity,
-    filter: shape.shadow ? `url(#${SHADOW_FILTER_ID})` : undefined,
+    filter: shape.shadow ? `url(#${scopedId(SHADOW_FILTER_ID)})` : undefined,
     ...strokeAttrs(shape.stroke),
   });
 }
@@ -68,7 +69,7 @@ function emitEllipse(shape: EllipseShape): SvgEl {
     ry: n(shape.ry),
     fill: shape.fill ?? 'none',
     opacity: shape.opacity,
-    filter: shape.shadow ? `url(#${SHADOW_FILTER_ID})` : undefined,
+    filter: shape.shadow ? `url(#${scopedId(SHADOW_FILTER_ID)})` : undefined,
     ...strokeAttrs(shape.stroke),
   });
 }
@@ -78,7 +79,7 @@ function emitPath(shape: PathShape): SvgEl {
     d: shape.d,
     fill: shape.fill ?? 'none',
     opacity: shape.opacity,
-    filter: shape.shadow ? `url(#${SHADOW_FILTER_ID})` : undefined,
+    filter: shape.shadow ? `url(#${scopedId(SHADOW_FILTER_ID)})` : undefined,
     'marker-end': shape.markerEnd,
     'marker-start': shape.markerStart,
     ...strokeAttrs(shape.stroke),
@@ -150,6 +151,11 @@ function emitCode(shape: CodeShape): SvgEl[] {
             x: n(shape.x + column * shape.charWidth),
             y: n(y),
             fill: colorForScope(shape.theme, token.scope),
+            // A viewer with a different monospace font would otherwise let the tokens of one line
+            // drift apart or overlap; pinning each to its share of the character grid keeps the
+            // columns where the editor had them.
+            textLength: n(token.text.length * shape.charWidth),
+            lengthAdjust: 'spacingAndGlyphs',
           },
           undefined,
           token.text,
@@ -195,7 +201,7 @@ export function emitShape(shape: Shape): SvgEl[] {
       if (!shape.clip) return [el('g', attrs, children)];
 
       clipCounter += 1;
-      const clipId = `dc-${clipScope}-clip-${clipCounter}`;
+      const clipId = scopedId(`dc-${clipScope}-clip-${clipCounter}`);
       const { x, y, w, h, r } = shape.clip;
       return [
         el('clipPath', { id: clipId }, [
@@ -217,19 +223,23 @@ export function emitDisplayList(list: DisplayList): SvgEl[] {
   return list.shapes.flatMap(emitShape);
 }
 
-/** The one shadow in the design system, shared by every surface that has one. */
+/**
+ * The one shadow in the design system, shared by every surface that has one. Spelled out as the
+ * SVG 1.1 primitives (blur the alpha, offset it, colour it, lay the source on top) rather than
+ * `feDropShadow`: that shorthand is Filter Effects 1, and the tools an exported diagram ends up in
+ * — Inkscape, older Illustrator, LibreOffice, ImageMagick, a wiki's sanitiser — draw a shape with
+ * no shadow at all, or nothing, when they meet it. Every browser draws the long form the same way.
+ */
 export function shadowFilter(color: string): SvgEl {
   return el(
     'filter',
-    { id: SHADOW_FILTER_ID, x: '-20%', y: '-20%', width: '140%', height: '140%' },
+    { id: scopedId(SHADOW_FILTER_ID), x: '-20%', y: '-20%', width: '140%', height: '140%' },
     [
-      el('feDropShadow', {
-        dx: 0,
-        dy: 1,
-        stdDeviation: 2,
-        'flood-color': color,
-        'flood-opacity': 1,
-      }),
+      el('feGaussianBlur', { in: 'SourceAlpha', stdDeviation: 2, result: 'blur' }),
+      el('feOffset', { in: 'blur', dx: 0, dy: 1, result: 'offset' }),
+      el('feFlood', { 'flood-color': color, 'flood-opacity': 1, result: 'color' }),
+      el('feComposite', { in: 'color', in2: 'offset', operator: 'in', result: 'shadow' }),
+      el('feMerge', {}, [el('feMergeNode', { in: 'shadow' }), el('feMergeNode', { in: 'SourceGraphic' })]),
     ],
   );
 }

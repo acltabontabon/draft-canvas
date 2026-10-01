@@ -16,6 +16,7 @@ import { themeFor, type Theme, type ThemeName } from '../theme/tokens';
 import { getMeasurer } from '../text/measure';
 import { el, serialize, n, type SvgEl } from './element';
 import { beginClipScope, emitDisplayList, emitShape, shadowFilter } from './emit';
+import { beginIdScope, endIdScope, scopedId } from './ids';
 import { markerDefs } from './markers';
 import { PERSONALITY_PROFILES } from '../roughness/presets';
 import type { PersonalityPreset } from '../../ui/personality/usePersonality';
@@ -42,6 +43,11 @@ export interface ExportOptions {
   transparent?: boolean;
   /** Restrict the export to these node ids (plus the edges between them). */
   only?: ReadonlySet<string>;
+  /**
+   * What this export is of, beyond the document — a room's path, say — when several exports of one
+   * document may end up inlined on the same page. Folded into every id the SVG hands out (`ids.ts`).
+   */
+  idScope?: string;
   /** The flow currently selected for step-badge overlay, if any — "what you see is what you export". */
   selectedFlowId?: string;
   /** Whether to draw a configured background — see `ResolvedBackground`. Defaults to `true`. */
@@ -80,12 +86,13 @@ export function backgroundEls(
   let imageEl: SvgEl;
 
   if (background.fit === 'tile') {
-    const patternId = 'dc-bg-pattern';
+    const patternId = scopedId('dc-bg-pattern');
     const tileW = Math.max(1, background.naturalWidth);
     const tileH = Math.max(1, background.naturalHeight);
     defs.push(
       el('pattern', { id: patternId, x, y, width: tileW, height: tileH, patternUnits: 'userSpaceOnUse' }, [
-        el('image', { x: 0, y: 0, width: tileW, height: tileH, href: background.dataUri, preserveAspectRatio: 'none' }),
+        // `href` for SVG 2 readers, `xlink:href` for the SVG 1.1 tools that still ignore the former.
+        el('image', { x: 0, y: 0, width: tileW, height: tileH, href: background.dataUri, 'xlink:href': background.dataUri, preserveAspectRatio: 'none' }),
       ]),
     );
     imageEl = el('rect', { x, y, width, height, fill: `url(#${patternId})` });
@@ -96,17 +103,18 @@ export function backgroundEls(
       width,
       height,
       href: background.dataUri,
+      'xlink:href': background.dataUri,
       preserveAspectRatio: background.fit === 'contain' ? 'xMidYMid meet' : 'xMidYMid slice',
     });
   }
 
   if (background.blur > 0) {
     defs.push(
-      el('filter', { id: BACKGROUND_BLUR_FILTER_ID, x: '-20%', y: '-20%', width: '140%', height: '140%' }, [
+      el('filter', { id: scopedId(BACKGROUND_BLUR_FILTER_ID), x: '-20%', y: '-20%', width: '140%', height: '140%' }, [
         el('feGaussianBlur', { stdDeviation: n(blurRadiusFor(background.blur)) }),
       ]),
     );
-    imageEl = el('g', { filter: `url(#${BACKGROUND_BLUR_FILTER_ID})` }, [imageEl]);
+    imageEl = el('g', { filter: `url(#${scopedId(BACKGROUND_BLUR_FILTER_ID)})` }, [imageEl]);
   }
 
   const dim = Math.min(1, background.dim + extraDim);
@@ -387,6 +395,9 @@ export function renderDocumentSvg(
   const padding = options.padding ?? DEFAULT_PADDING;
   const measurer = getMeasurer();
   const preset = options.preset ?? 'clean';
+  // Every id in this export carries what it is of (see `ids.ts`): two diagrams on one page keep
+  // their own shadows and arrowheads, and the same export is still the same bytes.
+  beginIdScope(`${options.idScope ?? 'export'}-${document.metadata.id}`);
   const nodeCtx = { theme, measurer, preset };
   const edgeCtx = { theme, measurer, showSequence: document.settings.showSequence, preset };
   const selectedFlow = options.selectedFlowId ? findFlow(document, options.selectedFlowId) : undefined;
@@ -452,6 +463,9 @@ export function renderDocumentSvg(
     'svg',
     {
       xmlns: 'http://www.w3.org/2000/svg',
+      // For the `xlink:href` the background image carries beside `href` — SVG 1.1 tools read only
+      // the former, and a document that uses the prefix has to declare it.
+      'xmlns:xlink': 'http://www.w3.org/1999/xlink',
       // Explicit pixel dimensions matter: without them some browsers rasterize
       // an SVG loaded into an Image at the wrong intrinsic size, or not at all.
       width,
@@ -461,6 +475,7 @@ export function renderDocumentSvg(
     children,
   );
 
+  endIdScope();
   return { svg: serialize(root), width, height };
 }
 

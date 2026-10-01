@@ -104,12 +104,14 @@ describe('toPlantUml', () => {
     const m = model({
       participants: [{ id: 'P1', alias: 'Gateway', label: 'The "Gateway"', category: 'service', kind: 'participant', sourceNodeId: 'a' }],
     });
-    expect(toPlantUml(m)).toContain('participant "The \\"Gateway\\"" as Gateway');
+    // Written as PlantUML's own unicode code, which renders as the character in every version and
+    // can never close the string.
+    expect(toPlantUml(m)).toContain('participant "The <U+0022>Gateway<U+0022>" as Gateway');
   });
 
-  it('escapes a backslash before a quote without letting it swallow the closing quote', () => {
-    // Escaping `"` before `\` would turn a label ending `\"` into `\\"` — read as an escaped
-    // backslash followed by a bare, string-closing quote, which breaks out of the declaration.
+  it('writes a backslash and a quote as unicode codes, so neither can close or escape the declaration', () => {
+    // A backslash is also PlantUML's own escape (`\n` breaks the line), and a `\"` pair is read
+    // differently by different versions — so neither character reaches the parser as itself.
     const raw = 'C:\\Users\\"Bob"';
     const m = model({
       participants: [{ id: 'P1', alias: 'A', label: raw, category: 'service', kind: 'participant', sourceNodeId: 'a' }],
@@ -117,10 +119,10 @@ describe('toPlantUml', () => {
     const line = toPlantUml(m).split('\n').find((l) => l.startsWith('participant "'))!;
     const match = line.match(/^participant "(.*)" as A$/);
     expect(match).not.toBeNull();
-    // Decode the same way a real parser would — unescape `\"` before `\\` — and recover the
-    // original label. A wrong escape order corrupts this round-trip.
-    const decoded = match![1]!.replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+    // Decode the unicode codes the way PlantUML renders them and recover the original label.
+    const decoded = match![1]!.replace(/<U\+([0-9A-F]{4})>/g, (_, hex: string) => String.fromCodePoint(parseInt(hex, 16)));
     expect(decoded).toBe(raw);
+    expect(match![1]).not.toContain('"');
   });
 
   it("wraps a flow's messages in a native group <label> ... end block", () => {
@@ -308,7 +310,8 @@ describe('toPlantUml', () => {
       ],
     });
     const out = toPlantUml(m);
-    expect(out).toContain('if (a < b) {\n');
+    // `<` opens a tag or an image include for PlantUML; it goes out as its unicode code.
+    expect(out).toContain('if (a <U+003C> b) {\n');
     expect(out).toContain('retry();\n');
     expect(out).toContain('}\n');
   });

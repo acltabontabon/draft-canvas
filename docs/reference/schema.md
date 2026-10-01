@@ -103,3 +103,20 @@ shape `parseDocument` validates — export is not treated as pre-sanitized data 
 contract: the former asserts a rich document (attachments, boundaries, flows, connector details)
 survives a full export/import cycle unchanged, the latter exercises every version transition,
 idempotency, and the chain-completeness invariant above.
+
+The bytes are canonical, not just the shape. `src/export/canonical.ts` writes every object in the
+file — nodes, edges, flows and their steps, attachments, settings, open points, and every room under
+a node's `inside`, recursively — with its keys in the order `src/document/types.ts` declares them
+(`id` first), a key the interface doesn't name after those, sorted, and no key at all for an
+`undefined` value. How an object came to be (a factory, a spread in an operation, a migration, a
+validation pass on import) leaves no trace in the file, so the same diagram serializes to the same
+bytes, a `git diff` of a `.draftcanvas` file shows only what changed, and the desktop can tell
+"unchanged" by comparing text. `tests/serialization.test.ts` holds a starter's serialize → parse →
+serialize to identical bytes and a document with its keys shuffled to the same bytes as one without.
+
+One optional field carries binary data: `settings.background.image` (`EmbeddedBackgroundImage`), the
+canvas background as a base64 data URI with its natural size, written only by a `.draftcanvas`
+export and only when the image is at most `LIMITS.maxEmbeddedBackgroundBytes`. It is a property of
+the file in transit: import stores the bytes in the image store and drops the field, so no saved
+document ever holds it, and validation drops anything that isn't a well-formed image data URI of
+that size. Being optional, it needed no version bump.

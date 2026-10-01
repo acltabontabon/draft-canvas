@@ -55,7 +55,7 @@ Short, named UI preferences only, every key prefixed `draft-canvas.`:
 | `personality` | The roughness preset |
 | `continuation` | Whether next-move suggestions are on (`on`/`off`) |
 | `command-recent.<n>`, `command-use.<id>` | The ids of the last few commands run, and a per-command counter for the palette. Command ids name actions ("add-service", "connect-to"), never elements |
-| `export-mode`, `export-document-format`, `export-image-format`, `sequence-export-format` | The last Export dialog choices, so it opens where you left it |
+| `export-mode`, `export-document-format`, `export-image-format`, `export-png-scale`, `sequence-export-format` | The last Export dialog choices (`export-png-scale` is `1`, `2` or `3`), so it opens where you left it |
 | `clipboard-permission` | `granted`/`denied`: whether you already answered "Allow clipboard access?" for the right-click and ⌘K Paste commands, so you aren't asked again. Cmd/Ctrl+V never touches it: it reads the native paste event directly and never prompts |
 | `last-seen-product-release` | The last version whose "What's New" you saw |
 

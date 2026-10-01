@@ -1043,3 +1043,31 @@ describe('export extent', () => {
     expect(withLabels.width).toBeGreaterThan(without.width);
   });
 });
+
+describe('an exported SVG stands on its own, and beside another', () => {
+  it('scopes every id it hands out to the document, so two inlined exports keep their own defs', () => {
+    const doc = exportFixture();
+    const one = renderDocumentSvg(doc).svg;
+    // The same shapes under another document id: the picture is the same, the ids are not.
+    const other = renderDocumentSvg({ ...doc, metadata: { ...doc.metadata, id: 'd_other' } }).svg;
+    const ids = (svg: string) => new Set([...svg.matchAll(/ id="([^"]+)"/g)].map((m) => m[1]!));
+    expect(ids(one).size).toBeGreaterThan(0);
+    for (const id of ids(one)) expect(ids(other).has(id), id).toBe(false);
+    // Every reference points at a def of its own export.
+    for (const ref of one.matchAll(/url\(#([^)]+)\)/g)) expect(ids(one).has(ref[1]!), ref[1]).toBe(true);
+    // And the same export is the same bytes.
+    expect(renderDocumentSvg(doc).svg).toBe(one);
+  });
+
+  it('draws its shadow with SVG 1.1 primitives, and declares xlink for the readers that need it', () => {
+    const { svg } = renderDocumentSvg(exportFixture());
+    expect(svg).not.toContain('feDropShadow');
+    expect(svg).toContain('<feGaussianBlur');
+    expect(svg).toContain('<feMerge');
+    expect(svg).toContain('xmlns:xlink="http://www.w3.org/1999/xlink"');
+  });
+
+  it('drops the two non-characters XML forbids, along with the control characters', () => {
+    expect(stripInvalidXml('a￾b￿c\u0001d')).toBe('abcd');
+  });
+});

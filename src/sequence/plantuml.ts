@@ -30,19 +30,39 @@ function plantUmlKeyword(kind: ParticipantKind): string {
   }
 }
 
+/**
+ * PlantUML reads markup *inside* text: Creole (`**bold**`, `--strike--`, `~~wave~~`), a subset of
+ * HTML (`<b>`, `<color:red>`, `<img:file.png>` — which loads a file — and `<U+XXXX>`), preprocessor
+ * calls (`%date()`, `%getenv("HOME")` — which runs), and `\n` as a line break. None of it is what a
+ * label typed in the editor meant. The characters that open any of it are written as PlantUML's
+ * own `<U+XXXX>` codes, which render as exactly that character and start nothing: `<` (every tag
+ * and image include), `%` (every preprocessor call), `~` (Creole's escape and wave markup), `\`
+ * (the `\n` break), `*`, `-` and `_` only when doubled (bold, strike, underline). Checked against
+ * PlantUML 1.2025: `<U+003C>b<U+003E>` renders as `<b>`.
+ */
+function escapePlantUmlText(text: string): string {
+  return text.replace(/<|%|~|\\|\*\*|--|__/g, (token) =>
+    token.length === 2 ? `${unicodeCode(token)}${token[1]}` : unicodeCode(token),
+  );
+}
+
+function unicodeCode(text: string): string {
+  return `<U+${text.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0')}>`;
+}
+
 /** PlantUML declares a participant as `<keyword> "<display name>" as <alias>` — the quoted name
  *  may contain any character except an unescaped double quote. Newlines are collapsed since a
- *  declaration is a single line. Backslashes are escaped before quotes: escaping in the other
- *  order would let a label ending `\"` turn into `\\"` — an escaped backslash followed by a bare,
- *  string-closing quote. */
+ *  declaration is a single line. The quote is the one character `escapePlantUmlText` leaves, and
+ *  the only one the quoted form itself cares about. */
 function sanitizeParticipantName(label: string): string {
-  return label.replace(/\r\n?|\n/g, ' ').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  return escapePlantUmlText(label.replace(/\r\n?|\n/g, ' ')).replace(/"/g, '<U+0022>');
 }
 
 /** A PlantUML message's text runs to the end of the line, with no delimiter character of its own
- *  to guard (unlike Mermaid's `:`) — only newlines need collapsing to keep it on one line. */
+ *  to guard (unlike Mermaid's `:`) — only newlines need collapsing to keep it on one line, and
+ *  the markup above needs disarming. */
 function sanitizeMessageLabel(label: string): string {
-  const clean = label.replace(/\r\n?|\n/g, ' ').trim();
+  const clean = escapePlantUmlText(label.replace(/\r\n?|\n/g, ' ').trim());
   return clean || 'Message';
 }
 
@@ -50,7 +70,7 @@ function sanitizeMessageLabel(label: string): string {
  *  a Flow's title would otherwise close the line early and let the rest be read as new PlantUML
  *  statements. */
 function sanitizeGroupLabel(label: string): string {
-  const clean = label.replace(/\r\n?|\n/g, ' ').trim();
+  const clean = escapePlantUmlText(label.replace(/\r\n?|\n/g, ' ').trim());
   return clean || 'Group';
 }
 
@@ -73,8 +93,7 @@ const NOTE_PREFIX: Partial<Record<NoteKind, string>> = {
 /** `end note` → `<U+0065>nd note`: the same text on screen, no longer a command to the parser. */
 function unicodeFirst(line: string): string {
   const first = line.codePointAt(0)!;
-  const rest = line.slice(first > 0xffff ? 2 : 1);
-  return `<U+${first.toString(16).toUpperCase().padStart(4, '0')}>${rest}`;
+  return `${unicodeCode(line)}${line.slice(first > 0xffff ? 2 : 1)}`;
 }
 
 function noteBlock(
@@ -96,9 +115,10 @@ function noteBlock(
   // SQL or shell snippet can start either way. Writing the first character as a `<U+XXXX>` code keeps
   // each literal and renders as just that character — the `~` escape doesn't: checked against the
   // PlantUML server, `~end note` keeps its tilde on screen and `~@enduml` renders as a lone `~`.
-  const contentLines = (rawLines.length > 0 ? rawLines : ['Note']).map((line) =>
-    /^\s*(?:!|@|'|\/'|end\s*[hr]?note\b)/i.test(line) ? unicodeFirst(line.trimStart()) : line,
-  );
+  const contentLines = (rawLines.length > 0 ? rawLines : ['Note']).map((line) => {
+    const escaped = escapePlantUmlText(line);
+    return /^\s*(?:!|@|'|\/'|end\s*[hr]?note\b)/i.test(escaped) ? unicodeFirst(escaped.trimStart()) : escaped;
+  });
   const prefix = noteKind ? (NOTE_PREFIX[noteKind] ?? '') : '';
 
   const lines = [`${pad}note over ${anchor}`, `${INDENT.repeat(depth + 1)}${prefix}${contentLines[0]}`];

@@ -7,6 +7,16 @@
 /** Mermaid/PlantUML keywords that would break parsing (or spec-legibility) if used as a bare,
  *  unquoted alias — checked case-insensitively. */
 const RESERVED_ALIASES = new Set([
+  // Mermaid statement keywords a bare alias would be read as — `option` opens a diagram option,
+  // `link`/`links`/`properties`/`details` attach metadata to a participant, `off` is a flag value,
+  // and `sequenceDiagram` restarts the header. Each has cost a real export its first participant.
+  'sequencediagram',
+  'option',
+  'link',
+  'links',
+  'properties',
+  'details',
+  'off',
   'participant',
   'actor',
   'database',

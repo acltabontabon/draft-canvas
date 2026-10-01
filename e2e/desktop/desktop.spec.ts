@@ -536,6 +536,9 @@ test('the native Edit menu undoes what was drawn', async ({ page }) => {
   await expect(page.locator('.dc-editor')).toBeVisible();
   await drawService(page);
   await expect(page.locator('.dc-node')).toHaveCount(1);
+  // The new shape opens ready to name; while its editor has the keyboard, Undo is the editor's.
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.dc-node-editor')).toHaveCount(0);
 
   await page.evaluate(() => window.__shell.emit({ type: 'menu', command: 'undo' }));
   await expect(page.locator('.dc-node')).toHaveCount(0);

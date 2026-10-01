@@ -1,5 +1,9 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
+  backgroundTravels,
+  collectLevels,
+  countPlayableFlows,
+  exportEveryLevel,
   exportPngFile,
   exportProjectFile,
   exportSecureProjectFile,
@@ -7,12 +11,13 @@ import {
   exportSequencePlantUmlFile,
   exportSvgFile,
   fileNameFor,
+  hasRooms,
+  LEVELS_EXTENSION,
   MERMAID_EXTENSION,
   PLANTUML_EXTENSION,
   SECURE_EXPORT_FILE_EXTENSION,
   type SequenceFormat,
 } from '../../export';
-import { flowIsPlayable } from '../../document/flow';
 import { readPreference, writePreference } from '../../lib/preferences';
 import { fileOf, fileWithLiveViewport, useEditorStore } from '../../store/editorStore';
 import { ownerAt } from '../../depth/tree';
@@ -29,14 +34,16 @@ import { ExportImagePanel } from './ExportImagePanel';
 import { ExportSequencePanel } from './ExportSequencePanel';
 import { ExportArtifact, type ArtifactVisual } from './ExportArtifact';
 import { SecureExportPrompt } from './SecureExportPrompt';
-import type { DocumentFormat, ExportMode, ImageFormat } from './exportTypes';
+import { DEFAULT_PNG_SCALE, PNG_SCALES, type DocumentFormat, type ExportMode, type ImageFormat, type PngScale } from './exportTypes';
 import type { ThemeName } from '../../render/theme/tokens';
+import { fittedScale } from '../../render/png/rasterize';
 import { count } from '../../lib/plural';
 import { hasUnresolvedIn } from '../../openPoints/collect';
 
 const EXPORT_MODE_PREFERENCE = 'export-mode';
 const EXPORT_DOCUMENT_FORMAT_PREFERENCE = 'export-document-format';
 const EXPORT_IMAGE_FORMAT_PREFERENCE = 'export-image-format';
+const EXPORT_PNG_SCALE_PREFERENCE = 'export-png-scale';
 const SEQUENCE_FORMAT_PREFERENCE = 'sequence-export-format';
 
 // First-ever open defaults to Image/PNG — the dominant "I just want a PNG" case — rather than
@@ -53,6 +60,22 @@ function readDocumentFormatPreference(): DocumentFormat {
 
 function readImageFormatPreference(): ImageFormat {
   return readPreference(EXPORT_IMAGE_FORMAT_PREFERENCE) === 'svg' ? 'svg' : 'png';
+}
+
+function readPngScalePreference(): PngScale {
+  const value = readPreference(EXPORT_PNG_SCALE_PREFERENCE);
+  return PNG_SCALES.find((scale) => scale === value) ?? DEFAULT_PNG_SCALE;
+}
+
+/**
+ * "4000 × 3000 px · 2×", or "… · 2× (fitted to 1.4×)" when the browser's canvas limits would not
+ * let the chosen scale through — the tile must never claim a resolution the file will not have.
+ */
+function describePng(width: number, height: number, scale: PngScale): string {
+  const chosen = Number(scale);
+  const fitted = fittedScale(width, height, chosen);
+  const size = `${Math.round(width * fitted)} × ${Math.round(height * fitted)} px · ${scale}×`;
+  return fitted < chosen ? `${size} (fitted to ${fitted.toFixed(1)}×)` : size;
 }
 
 function readSequenceFormatPreference(): SequenceFormat {
@@ -94,11 +117,31 @@ export function ExportDialog() {
   const [mode, setModeState] = useState<ExportMode>(readExportModePreference);
   const [documentFormat, setDocumentFormatState] = useState<DocumentFormat>(readDocumentFormatPreference);
   const [imageFormat, setImageFormatState] = useState<ImageFormat>(readImageFormatPreference);
+  const [pngScale, setPngScaleState] = useState<PngScale>(readPngScalePreference);
   const [paletteName, setPaletteName] = useState<ThemeName>(name);
   const [transparent, setTransparent] = useState(false);
   const [selectionOnly, setSelectionOnly] = useState(false);
   const [includeBackground, setIncludeBackground] = useState(true);
   const [includeOpenPoints, setIncludeOpenPoints] = useState(true);
+  // One image per room, zipped. Per open, like "Selection only": it is a choice about this picture.
+  const [everyLevel, setEveryLevel] = useState(false);
+  // Whether the background image rides along in the `.draftcanvas` file (up to 2 MB) — looked up
+  // once per open document, since it needs the stored image's size.
+  const [backgroundState, setBackgroundState] = useState<'embedded' | 'too-large' | 'none'>('none');
+  useEffect(() => {
+    if (!open || !document) return;
+    let cancelled = false;
+    void backgroundTravels(document)
+      .then((state) => {
+        if (!cancelled) setBackgroundState(state);
+      })
+      .catch(() => {
+        if (!cancelled) setBackgroundState('none');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, document]);
   const [busy, setBusy] = useState(false);
   const [securePromptOpen, setSecurePromptOpen] = useState(false);
   const running = useRef(false);
@@ -119,6 +162,7 @@ export function ExportDialog() {
     // The checkbox is per open: left ticked, a reopen with nothing selected shows it ticked and
     // disabled, and a later single selection would export only that.
     setSelectionOnly(false);
+    setEveryLevel(false);
     setOpen(false);
   };
 
@@ -137,6 +181,10 @@ export function ExportDialog() {
     setImageFormatState(next);
     writePreference(EXPORT_IMAGE_FORMAT_PREFERENCE, next);
   };
+  const setPngScale = (next: PngScale) => {
+    setPngScaleState(next);
+    writePreference(EXPORT_PNG_SCALE_PREFERENCE, next);
+  };
   const setSequenceFormatValue = (next: SequenceFormat) => {
     setSequenceFormat(next);
     writePreference(SEQUENCE_FORMAT_PREFERENCE, next);
@@ -144,11 +192,18 @@ export function ExportDialog() {
 
   // Re-derived every render rather than a `useState` default: a flow created
   // after this dialog first mounted must still show up without a remount. Only a
-  // flow with something to play is offered — an empty one would just fail to export.
-  const playableFlows = document.flows.filter((flow) => flowIsPlayable(document, flow));
+  // flow with something to play is counted — an empty one would just fail to export — and the
+  // count spans every room, since the source does.
+  const playableFlowCount = countPlayableFlows(document);
 
+  // "Every level" is only a question when there is a level below this one; a flat canvas has one
+  // picture. A selection belongs to one room, so the two cannot combine.
+  const roomsBelow = hasRooms(document);
+  const levelsOn = effectiveMode === 'image' && roomsBelow && everyLevel;
+  const backgroundNote =
+    backgroundState === 'embedded' ? ' · background inside' : backgroundState === 'too-large' ? ' · background over 2 MB, not included' : '';
   const only =
-    effectiveSelectionOnly && selection.nodes.length > 0 ? new Set(selection.nodes) : undefined;
+    effectiveSelectionOnly && !levelsOn && selection.nodes.length > 0 ? new Set(selection.nodes) : undefined;
   const hasBackground = document.settings.background.enabled;
   // Only what is in the picture counts: a selection-only export of an unmarked corner has no
   // markers to offer leaving out.
@@ -165,8 +220,6 @@ export function ExportDialog() {
     openPoints: hasOpenPoints ? includeOpenPoints : false,
   };
 
-  const playableFlowCount = playableFlows.length;
-
   const title = document.metadata.title;
   const onlyKey = only ? selection.nodes.join(',') : '';
 
@@ -179,12 +232,22 @@ export function ExportDialog() {
               type: 'file',
               icon: 'pencil',
               badge: 'DRAFTCANVAS',
-              meta: `${count(document.nodes.length, 'element')} · ${count(document.edges.length, 'connector')}`,
+              meta: `${count(document.nodes.length, 'element')} · ${count(document.edges.length, 'connector')}${backgroundNote}`,
             },
           }
         : {
             fileName: fileNameFor(title, SECURE_EXPORT_FILE_EXTENSION),
             visual: { type: 'file', icon: 'lock', badge: 'DCENC', meta: 'AES-GCM · passphrase required' },
+          }
+      : levelsOn
+        ? {
+            fileName: fileNameFor(title, LEVELS_EXTENSION),
+            visual: {
+              type: 'file',
+              icon: 'file',
+              badge: 'ZIP',
+              meta: `${count(collectLevels(document).length, 'image')} · ${imageFormat.toUpperCase()}`,
+            },
           }
       : effectiveMode === 'image'
         ? {
@@ -195,9 +258,8 @@ export function ExportDialog() {
               theme: paletteName,
               options,
               onlyKey,
-              scale: imageFormat === 'png' ? 2 : 1,
               describe: (width, height) =>
-                imageFormat === 'png' ? `${width} × ${height} px · 2×` : `${width} × ${height} · vector`,
+                imageFormat === 'png' ? describePng(width, height, pngScale) : `${width} × ${height} · vector`,
             },
           }
         : {
@@ -242,12 +304,23 @@ export function ExportDialog() {
             onClick: () => void run(() => exportProjectFile(fileWithLiveViewport(useEditorStore.getState())), 'Document export'),
           }
         : { label: 'Export securely…', disabled: busy, onClick: () => setSecurePromptOpen(true) }
+      : levelsOn
+        ? {
+            label: 'Export every level',
+            disabled: busy,
+            onClick: () =>
+              void run(
+                () => exportEveryLevel(document, { ...options, format: imageFormat, scale: Number(pngScale) }),
+                'Every level export',
+              ),
+          }
       : effectiveMode === 'image'
         ? imageFormat === 'png'
           ? {
               label: 'Export PNG',
               disabled: busy,
-              onClick: () => void run(() => exportPngFile(document, options), 'PNG export'),
+              onClick: () =>
+                void run(() => exportPngFile(document, { ...options, scale: Number(pngScale) }), 'PNG export'),
             }
           : {
               label: 'Export SVG',
@@ -306,6 +379,8 @@ export function ExportDialog() {
             <ExportImagePanel
               format={imageFormat}
               onFormatChange={setImageFormat}
+              scale={pngScale}
+              onScaleChange={setPngScale}
               paletteName={paletteName}
               onPaletteChange={setPaletteName}
               transparent={transparent}
@@ -313,8 +388,8 @@ export function ExportDialog() {
               hasBackground={hasBackground}
               includeBackground={includeBackground}
               onIncludeBackgroundChange={setIncludeBackground}
-              selectionCount={selection.nodes.length}
-              selectionOnly={effectiveSelectionOnly}
+              selectionCount={levelsOn ? 0 : selection.nodes.length}
+              selectionOnly={effectiveSelectionOnly && !levelsOn}
               onSelectionOnlyChange={(checked) => {
                 setSelectionOnly(checked);
                 requestExportSelection(false);
@@ -322,6 +397,9 @@ export function ExportDialog() {
               hasOpenPoints={hasOpenPoints}
               includeOpenPoints={includeOpenPoints}
               onIncludeOpenPointsChange={setIncludeOpenPoints}
+              hasRooms={roomsBelow}
+              everyLevel={levelsOn}
+              onEveryLevelChange={setEveryLevel}
             />
           )}
 

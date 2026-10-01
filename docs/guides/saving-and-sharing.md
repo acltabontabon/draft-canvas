@@ -68,14 +68,16 @@ command palette. The dialog has four modes (Document comes in two kinds):
 
 Notes on each:
 
-- **`.draftcanvas`** holds the whole diagram, including everything you drew inside shapes. It doesn't
-  include a canvas background image (those last only in this browser), and it doesn't record which
-  project the diagram was in.
+- **`.draftcanvas`** holds the whole diagram, including everything you drew inside shapes. A canvas
+  background image travels inside the file when it is 2 MB or smaller (the dialog says when one is
+  too large to come along), and the file doesn't record which project the diagram was in.
 - **`.dcenc`** asks for a passphrase of at least 8 characters, twice. Draft Canvas never stores it and
   can't recover it. If it's lost, the file can't be opened by anyone. It uses its own key, unrelated
   to the one that protects your saved diagrams.
 - **Image** offers a **Light** or **Dark** palette, **Transparent**, and **Selection only**.
-  PNGs export at 2× and SVGs are vector. Inside a shape, you choose between that shape's canvas
+  PNGs export at 2× unless you pick **1×** or **3×** beside the format — the preview quotes the
+  pixel size you will get, and says so if a very large diagram has to be fitted to a smaller scale
+  than the one you chose. SVGs are vector. Inside a shape, you choose between that shape's canvas
   and the whole diagram. A diagram with [open points](open-points.md) keeps their markers, with a
   key, unless you untick **Open point markers**.
 - **Source** needs a flow. See [Getting started](getting-started.md#present-a-flow) for making one.

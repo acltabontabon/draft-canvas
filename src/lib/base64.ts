@@ -1,5 +1,5 @@
 /**
- * A background image travelling between the app and its host (see `LoadMessage.background`). In a
+ * Binary-to-base64 both ways. A background image travels between the app and its host this way (see `LoadMessage.background`): in a
  * host the app's own store is memory only, so the host keeps the bytes beside the file — as base64,
  * which passes through the wrapper page's JSON relay unchanged.
  */

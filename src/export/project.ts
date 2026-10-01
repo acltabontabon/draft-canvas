@@ -1,6 +1,7 @@
 import { LIMITS } from '../document/limits';
 import { CURRENT_VERSION, DRAFT_FORMAT, type DraftDocument } from '../document/types';
 import { parseDocument, type NormalizeResult } from '../document/validate';
+import { canonical } from './canonical';
 
 const FILE_EXTENSION = '.draftcanvas';
 export const FILE_MIME = 'application/json';
@@ -9,8 +10,9 @@ export const FILE_MIME = 'application/json';
  * Serializes a document to the portable `.draftcanvas` format.
  *
  * The file is plain JSON on purpose: it can be diffed, put in a repository, and
- * read by a human. Field order is fixed so that saving an unchanged document
- * twice produces identical bytes.
+ * read by a human. Field order is fixed at every level — here for the top of the file, in
+ * `canonical.ts` for everything inside it — so that the same diagram produces identical bytes
+ * however its objects were built, and saving an unchanged document twice changes nothing.
  */
 export function serializeDocument(document: DraftDocument): string {
   const payload = {
@@ -22,15 +24,15 @@ export function serializeDocument(document: DraftDocument): string {
       createdAt: document.metadata.createdAt,
       updatedAt: document.metadata.updatedAt,
     },
-    nodes: document.nodes,
-    edges: document.edges,
-    viewport: document.viewport,
-    settings: document.settings,
-    flows: document.flows,
+    nodes: canonical.nodes(document.nodes),
+    edges: canonical.edges(document.edges),
+    viewport: canonical.viewport(document.viewport),
+    settings: canonical.settings(document.settings),
+    flows: canonical.flows(document.flows),
     // Same rule as `level` below, and for the same reason: most canvases never raise a point, and an
     // empty array written into every one of them would change the bytes of every file in every
     // repository the moment this shipped. Absent is what `normalizeDocument` reads as none.
-    ...((document.openPoints?.length ?? 0) === 0 ? {} : { openPoints: document.openPoints }),
+    ...((document.openPoints?.length ?? 0) === 0 ? {} : { openPoints: canonical.openPoints(document.openPoints) }),
     // Only written when the canvas actually has one, so a file from a canvas nobody said anything
     // about is byte-identical to what this has always produced.
     ...(document.level === undefined ? {} : { level: document.level }),

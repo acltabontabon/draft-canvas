@@ -3,6 +3,7 @@ import { cloneDocumentAsNew, createDocument } from '../document/factory';
 import { createId } from '../document/ids';
 import { LIMITS } from '../document/limits';
 import type { DraftDocument, DraftSummary, Project } from '../document/types';
+import { adoptEmbeddedBackground } from '../export/background';
 import { hostKind } from '../host/hostInfo';
 import { clearDocUrl, docIdFromLocation, pushDocUrl, replaceDocUrl } from '../lib/documentUrl';
 import { stashForReload, takeReloadStash } from '../storage/reloadStash';
@@ -386,6 +387,10 @@ export function useDocumentSession(): DocumentSession {
         // anything is stored under the id, not whether it can be read.
         const taken = await repository.has(document.metadata.id).catch(() => true);
         if (taken) document = cloneDocumentAsNew(document, document.metadata.title);
+        // A file that brought its background along: the image goes into its own store under the
+        // id the canvas will have (so after the clone above), and out of the document, so the
+        // Library never holds it twice. Nothing stored here ever carries `image`.
+        document = await adoptEmbeddedBackground(document, repository);
         await repository.save(document);
         const { useEditorStore } = await loadEditorStore();
         // Saved either way — it's in the Library — but only the latest open/create takes the editor.

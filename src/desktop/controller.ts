@@ -6,6 +6,7 @@ import type { AgentHost } from './agent';
 import { agentActivity } from './agentActivity';
 import { confirmWrite, takeWrite, type AgentWrite } from './agentWrites';
 import { logDiagnostic } from '../lib/diagnostics';
+import { isRecord } from '../lib/isRecord';
 import type { StarterId } from '../starters';
 import { loadStarters } from '../starters/load';
 import {
@@ -85,6 +86,45 @@ const realClock: Clock = {
 };
 
 const encoder = new TextEncoder();
+
+/** A room's text without its camera — the document's own `viewport` and, recursively, each room's. */
+function withoutCameras(room: unknown): unknown {
+  if (!isRecord(room)) return room;
+  const { viewport: _camera, ...content } = room;
+  if (Array.isArray(content.nodes)) {
+    content.nodes = content.nodes.map((node: unknown) =>
+      isRecord(node) && isRecord(node.inside) ? { ...node, inside: withoutCameras(node.inside) } : node,
+    );
+  }
+  return content;
+}
+
+const contentCache = new Map<string, string>();
+
+/**
+ * What of a file's text counts as its content: everything but where the camera was. Panning and
+ * zooming are not edits — the app posts nothing for them — but the camera rides along with the
+ * next real edit, so an edit that is then undone would leave the file "changed" by nothing but the
+ * scroll position, and ⌘S would rewrite it (and its stamp) for that. The desktop keeps no camera
+ * per file: a reopened file shows the camera its last content save happened to carry, and the
+ * recovery snapshot, written only while there is a real change, keeps the current one.
+ *
+ * Cached by text, since `dirty` is read on every publish and the texts are the same two strings
+ * until the next edit or save.
+ */
+function contentOf(text: string): string {
+  const cached = contentCache.get(text);
+  if (cached !== undefined) return cached;
+  let content = text;
+  try {
+    content = JSON.stringify(withoutCameras(JSON.parse(text)));
+  } catch {
+    // Not a diagram the app wrote: compared as it is.
+  }
+  if (contentCache.size >= 4) contentCache.delete(contentCache.keys().next().value!);
+  contentCache.set(text, content);
+  return content;
+}
 
 function uuid(): string {
   if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
@@ -503,7 +543,7 @@ export class DesktopController {
   private get dirty(): boolean {
     if (this.session.kind === 'quick' || this.session.kind === 'pending') return this.edited;
     if (this.session.kind !== 'file') return false;
-    return this.savedText === null || this.latestText !== this.savedText;
+    return this.savedText === null || this.latestText === null || contentOf(this.latestText) !== contentOf(this.savedText);
   }
 
   private get displayName(): string {
