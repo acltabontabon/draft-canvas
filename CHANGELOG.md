@@ -129,6 +129,7 @@ long list of fixes to saving, editing and exporting. Every diagram you already h
   against the canvas in both themes, and the command palette's hints are readable on the highlighted row.
 - **The canvas holds still while you draw.** Placing the first shape inside an empty shape, or the
   first shape after fitting an empty canvas, no longer slides the view out from under the pointer.
+- A presented note no longer lingers on screen after its step when its fade-out is interrupted.
 - Letter shortcuts no longer fire while a toolbar or panel button has keyboard focus.
 - The C4 fields in the details panel follow undo instead of showing what was there before.
 - A duplicate connector selects the one that exists and says so; dragging a connector's end onto a

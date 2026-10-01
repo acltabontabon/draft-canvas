@@ -31,8 +31,9 @@ const LINE_THICKNESS = 10;
 const MIN_ROOM = 72;
 /** Everything riding on a connector that a callout would hide: labels, captions, chips. */
 const DRAWN_LABELS = '.dc-edge-label, .dc-edge-caption, .dc-edge-meta, .dc-attachment-chip-row';
-/** Must match `@keyframes dc-callout-out` in `canvas.css`. */
+/** Must match `@keyframes dc-callout-out` in `canvas.css`, and its 140 ms there. */
 const EXIT_ANIMATION = 'dc-callout-out';
+const EXIT_MS = 140;
 
 function chromeBox(selector: string): Box | null {
   const element = window.document.querySelector(selector);
@@ -226,6 +227,15 @@ export function PresentationCallout({
   useEffect(() => {
     if (leaving && !anchor) onSettled(subject.key);
   }, [leaving, anchor, onSettled, subject.key]);
+  // `animationend` is how a departing callout normally goes, but an exit the browser cancels — or
+  // never gets round to on a starved page — sends none, and the callout stayed on screen as a ghost
+  // until the next step replaced it. (React has no `animationcancel`.) This lets it go regardless;
+  // `settle` ignores a key that has already gone, so the two never both act.
+  useEffect(() => {
+    if (!leaving) return;
+    const timer = window.setTimeout(() => onSettled(subject.key), EXIT_MS + 260);
+    return () => window.clearTimeout(timer);
+  }, [leaving, onSettled, subject.key]);
 
   if (!portalTarget || !anchor) return null;
 
