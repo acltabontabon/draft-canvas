@@ -1,4 +1,4 @@
-import { chromium, type FullConfig } from '@playwright/test';
+import { chromium, firefox, webkit, type FullConfig } from '@playwright/test';
 
 /**
  * Warms a freshly started dev server before the first test runs. Vite compiles each chunk the first
@@ -8,9 +8,12 @@ import { chromium, type FullConfig } from '@playwright/test';
  * any test's clock. A server that is already warm (reused, or a built site) costs a second.
  */
 export default async function warm(config: FullConfig): Promise<void> {
-  const baseURL = config.projects[0]?.use.baseURL;
+  const project = config.projects[0];
+  const baseURL = project?.use.baseURL;
   if (!baseURL) return;
-  const browser = await chromium.launch();
+  // The engine this run uses — a CI shard installs only its own browser.
+  const engines = { chromium, firefox, webkit };
+  const browser = await engines[project?.use.defaultBrowserType ?? 'chromium'].launch();
   try {
     const page = await browser.newPage();
     await page.goto(baseURL, { waitUntil: 'load', timeout: 120_000 });

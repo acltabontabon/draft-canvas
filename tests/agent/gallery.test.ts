@@ -39,7 +39,9 @@ const geometry = (doc: DraftDocument) => {
   return JSON.stringify(out);
 };
 
-describe('layout gallery', () => {
+// Each case composes and lays out a whole diagram, and some sweep the entire gallery: seconds of real
+// work on a two-core CI runner, not a hang.
+describe('layout gallery', { timeout: 30_000 }, () => {
   for (const entry of GALLERY) {
     it(`${entry.id}: ${entry.title}`, () => {
       const { doc, before, touched } = galleryDocument(entry);
