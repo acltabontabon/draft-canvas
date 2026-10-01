@@ -11,6 +11,8 @@ the release notes and the in-app What's New are generated from here. See
 
 ## [Unreleased]
 
+## [1.12.0] - 2026-10-01
+
 A smaller, more focused Draft Canvas that gets diagrams in and out: share links, Mermaid import,
 architecture export to C4, Structurizr and draw.io, connectors that say what actually happens, and a
 long list of fixes to saving, editing and exporting. Every diagram you already have still opens.
@@ -1792,7 +1794,8 @@ pre-release milestone; this is the one meant for real use.
 - Fully local and private by design — no accounts, no cloud sync, nothing you draw ever leaves
   your device. Documents are encrypted at rest in your browser.
 
-[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.11.1...main
+[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.12.0...main
+[1.12.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.11.1...v1.12.0
 [1.12.0-beta.2]: https://github.com/acltabontabon/draft-canvas/compare/desktop-v1.12.0-beta.1...desktop-v1.12.0-beta.2
 [1.12.0-beta.1]: https://github.com/acltabontabon/draft-canvas/compare/v1.11.1...desktop-v1.12.0-beta.1
 [1.11.1]: https://github.com/acltabontabon/draft-canvas/compare/v1.11.0...v1.11.1

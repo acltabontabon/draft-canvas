@@ -74,9 +74,14 @@ step, the button to the right of the title names the flow that follows.
 ## Export a flow as a sequence diagram
 
 Press `⌘⇧E` and choose **Source**, then **Mermaid** or **PlantUML**. Every playable flow becomes one
-sequence diagram, as plain text for a README or a wiki that already renders those formats. A
-connector's asynchronous mode and its response line come through; sequence diagrams have no notation
-for open points, so those are left out.
+sequence diagram, as plain text for a README or a wiki that already renders those formats; the panel
+shows the text, and **Copy** puts it on the clipboard. Flows inside other levels come too, one section
+per level. A connector's asynchronous mode and its response line come through; sequence diagrams have
+no notation for open points, so those are left out.
+
+Each message is sent by whoever acts. A connector drawn from a store or a queue to the thing that
+reads it — *Database → Worker: read by* — becomes the worker reading the database
+(`Worker ->> Database: reads from`), because in a sequence diagram the arrow is the call.
 
 For a picture of one step, present it and take a screenshot, or export **Image** with the flow
 selected: its step badges are drawn on the connectors.

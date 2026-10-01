@@ -18,16 +18,16 @@ between the markers is written by that script, so edit the prose around it, not 
 <!-- performance-results:start -->
 ### At rest
 
-On a typical architecture diagram (~90 nodes — services, databases, queues, boundaries), Draft Canvas loads in about 427 ms and settles at about 17 MiB of memory. A larger, more detailed diagram (~225 nodes) loads in about 529 ms and uses about 32 MiB.
+On a typical architecture diagram (~90 nodes — services, databases, queues, boundaries), Draft Canvas loads in about 429 ms and settles at about 17 MiB of memory. A larger, more detailed diagram (~225 nodes) loads in about 502 ms and uses about 33 MiB.
 
 | Diagram | Size | Load time | Memory (JS heap) | 40-step drag |
 |---|---|---|---|---|
-| Typical | 90 nodes / 79 connections | 427 ms | 17 MiB | 700 ms |
-| Large | 225 nodes / 192 connections | 529 ms | 32 MiB | 688 ms |
+| Typical | 90 nodes / 73 connections | 429 ms | 17 MiB | 699 ms |
+| Large | 225 nodes / 182 connections | 502 ms | 33 MiB | 689 ms |
 
 Measured against the production build in Chromium, on real architecture diagrams (not synthetic shapes) built from Draft Canvas's own starter catalog. These are reference-machine numbers, not a guarantee for every device. The drag column is how long a scripted 40-step drag takes end to end — one step per frame at 60 Hz, so it is the length of the gesture rather than any lag in it; how each frame fares is in the next table.
 
-Measured on: Apple M2 Pro, macOS 27.0.0, Chromium 153.0.8010.12, Draft Canvas 1.11.1.
+Measured on: Apple M2 Pro, macOS 27.0.0, Chromium 153.0.8010.12, Draft Canvas 1.12.0.
 
 ![JS heap vs. diagram size](../../benchmark/memory-chart.svg)
 
@@ -49,12 +49,12 @@ How long a diagram takes to appear after you choose it, the longest stretch the 
 
 | Diagram | Opens in | Longest freeze while opening | Export |
 |---|---|---|---|
-| Small — 50 shapes / 75 connectors | 459 ms | 67 ms | – |
-| Medium — 200 shapes / 300 connectors | 626 ms | 184 ms | 77 ms / 766 ms |
-| Large — 500 shapes / 800 connectors | 929 ms | 395 ms | 97 ms / 1.7 s |
-| Stress — 1,000 shapes / 1,500 connectors | 1.2 s | 520 ms | 130 ms / 1.8 s |
+| Small — 50 shapes / 75 connectors | 443 ms | 55 ms | – |
+| Medium — 200 shapes / 300 connectors | 581 ms | 164 ms | 193 ms / 841 ms |
+| Large — 500 shapes / 800 connectors | 845 ms | 356 ms | 102 ms / 1.8 s |
+| Stress — 1,000 shapes / 1,500 connectors | 1.3 s | 715 ms | 161 ms / 2.1 s |
 
-100 saved diagrams show up in the library in 94 ms. Switching between diagrams 25 times grew the JS heap by 0.8 MiB in total, and left no DOM nodes or listeners behind. Dragging a shape out and back 150 times on the large diagram — enough to fill the undo history — took the heap from 95 MiB to 96 MiB, where it stopped growing.
+100 saved diagrams show up in the library in 89 ms. Switching between diagrams 25 times grew the JS heap by 0.9 MiB in total, and left no DOM nodes or listeners behind. Dragging a shape out and back 150 times on the large diagram — enough to fill the undo history — took the heap from 101 MiB to 103 MiB, where it stopped growing.
 
 <!-- performance-results:end -->
 
