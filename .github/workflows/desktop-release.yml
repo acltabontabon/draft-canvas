@@ -9,6 +9,8 @@ name: Desktop Release
 #   a desktop-vX.Y.Z-alpha.N tag        A desktop preview ahead of the release it leads to. This creates
 #                                       its own prerelease, "Draft Canvas X.Y.Z-alpha.N"; its notes say it
 #                                       is the desktop app's.
+#   Run workflow, with a vX.Y.Z tag     Rebuilds an existing release's desktop files from its tagged
+#                                       source — for a release whose desktop builds failed.
 #
 # The installers are signed for the operating system only when the repository has the secrets for
 # it (see "Prepare OS signing" below and docs/reference/desktop-updates.md). Without them — the case
@@ -29,6 +31,32 @@ on:
         required: true
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD:
         required: true
+      # OS signing, used only when present (see "Prepare OS signing").
+      APPLE_CERTIFICATE:
+        required: false
+      APPLE_CERTIFICATE_PASSWORD:
+        required: false
+      APPLE_SIGNING_IDENTITY:
+        required: false
+      APPLE_ID:
+        required: false
+      APPLE_PASSWORD:
+        required: false
+      APPLE_TEAM_ID:
+        required: false
+      WINDOWS_CERTIFICATE:
+        required: false
+      WINDOWS_CERTIFICATE_PASSWORD:
+        required: false
+  # Rebuilds the desktop files of a vX.Y.Z release that already exists — when its desktop builds
+  # failed, say — from the tagged source, with this workflow as it is on the branch it runs from.
+  # Every upload replaces what is there, so running it again is safe.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to rebuild the desktop files of, e.g. v1.12.0
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -48,6 +76,8 @@ jobs:
       preview: ${{ steps.version.outputs.preview }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag || github.ref }}
       - uses: actions/setup-node@v7
         with:
           node-version: 22.14.0
@@ -90,6 +120,8 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag || github.ref }}
       - uses: actions/setup-node@v7
         with:
           node-version: 22.14.0
@@ -152,6 +184,7 @@ jobs:
       # upload below goes through `gh` with GH_TOKEN, so git itself never needs the credential.
       - uses: actions/checkout@v7
         with:
+          ref: ${{ inputs.tag || github.ref }}
           persist-credentials: false
       - uses: actions/setup-node@v7
         with:
@@ -184,13 +217,26 @@ jobs:
         id: signing
         shell: bash
         env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
           WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
         run: |
           config='{}'
           if [[ "$RUNNER_OS" == "macOS" && -n "$APPLE_SIGNING_IDENTITY" ]]; then
             config="$(node -e 'console.log(JSON.stringify({ bundle: { macOS: { signingIdentity: process.env.APPLE_SIGNING_IDENTITY } } }))')"
+            # Handed to the build only when they hold something: the bundler imports a certificate
+            # whenever APPLE_CERTIFICATE is *set*, and an empty one failed the 1.12.0 macOS builds with
+            # "failed to import keychain certificate" although nothing was meant to be signed.
+            for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+              if [[ -n "${!name}" ]]; then
+                { echo "$name<<__DRAFT_CANVAS_SIGNING__"; printf '%s\n' "${!name}"; echo "__DRAFT_CANVAS_SIGNING__"; } >> "$GITHUB_ENV"
+              fi
+            done
             echo "::notice::macOS build will be signed as $APPLE_SIGNING_IDENTITY."
           elif [[ "$RUNNER_OS" == "Windows" && -n "$WINDOWS_CERTIFICATE" ]]; then
             echo "$WINDOWS_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/signing.pfx"
@@ -206,19 +252,14 @@ jobs:
       # TAURI_SIGNING_* signs the update packages for the in-app updater (Tauri's own minisign signing),
       # a separate thing from OS signing above. The signature records the version, which the app
       # insists on, so a package can't be paired with another version's manifest. The APPLE_* values
-      # are tauri-action's own inputs for importing the certificate and notarizing; empty when unset.
+      # the bundler reads to import the certificate and notarize come from "Prepare OS signing", and
+      # only when they exist — never set here, where an unset secret would still arrive, empty.
       - name: Build the installer and the signed update package
         id: tauri
         uses: tauri-apps/tauri-action@v1
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           args: ${{ matrix.args }} --config src-tauri/tauri.sidecar.conf.json --config src-tauri/tauri.updater.conf.json --config src-tauri/tauri.version.conf.json --config src-tauri/tauri.signing.conf.json
       # The agent connector rides inside the app bundle (Settings → AI agents points agents at it): it
@@ -293,6 +334,8 @@ jobs:
       attestations: write
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag || github.ref }}
       - uses: actions/setup-node@v7
         with:
           node-version: 22.14.0
