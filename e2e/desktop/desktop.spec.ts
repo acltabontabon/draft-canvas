@@ -335,6 +335,9 @@ test('opens diagrams from a project’s root and its subfolders, namesakes and n
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto('/');
+  // Home finishes arriving before the reload below replaces it: WebKit reports a lazy chunk the
+  // reload cut off as "Importing a module script failed", which this test would count as a crash.
+  await page.waitForLoadState('networkidle');
   const texts = {
     root: await documentText(page, 'Root canvas', 1),
     sub: await documentText(page, 'Sub canvas', 2),
