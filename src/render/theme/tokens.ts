@@ -71,7 +71,10 @@ export const DARK: Theme = {
     // an intentional slate surface sitting *on* the canvas, not flush with it —
     // `fill` lifts to `surfaceRaised` rather than `surface`, and `line`/`chip`
     // carry a faint cool lean of their own instead of reusing UI-chrome grays.
-    neutral: { fill: '#1e222a', line: '#4b5563', text: '#e6e9ee', chip: '#9aa4b2' },
+    // `line` sits at 3.4:1 against the canvas and 3.1:1 against a surface (`tests/theme-contrast.test.ts`
+    // holds it there): the WCAG floor for a graphical object's outline, and no higher, so a default
+    // shape still reads as a quiet outline rather than a box.
+    neutral: { fill: '#1e222a', line: '#5e6979', text: '#e6e9ee', chip: '#9aa4b2' },
     // Low-chroma, deeper hues — pigments rather than highlighter. The previous set led with a mint
     // `#5fd6c9` and a sky `#6aa9f0`, which at full saturation across a whole diagram read as
     // playful; the identifying work a colour does here is done by *hue*, and hue survives having
@@ -79,7 +82,9 @@ export const DARK: Theme = {
     // sitting quietly next to the neutral slate the default shapes wear.
     teal: { fill: '#15201f', line: '#3d7a74', text: '#9ccbc4', chip: '#5ba49c' },
     blue: { fill: '#161c25', line: '#456b96', text: '#a6c1dc', chip: '#6390bf' },
-    violet: { fill: '#1b1926', line: '#61578f', text: '#b6aed4', chip: '#8479b8' },
+    // `line` nudged two steps up from #61578f: the one accent outline that sat under the 3:1 floor
+    // `tests/theme-contrast.test.ts` holds every outline to against the canvas.
+    violet: { fill: '#1b1926', line: '#655b94', text: '#b6aed4', chip: '#8479b8' },
     amber: { fill: '#211d15', line: '#8a6f3c', text: '#d6bf95', chip: '#b89a5f' },
     rose: { fill: '#211719', line: '#8c5a62', text: '#d3a7ad', chip: '#b87d85' },
     green: { fill: '#171e18', line: '#4f7a4f', text: '#a8c7a4', chip: '#6f9b69' },
@@ -109,7 +114,9 @@ export const LIGHT: Theme = {
     // Same reasoning as DARK.neutral, tuned independently rather than inverted:
     // a hair warmer than pure white, and a line/chip with a touch more presence
     // than the plain UI-chrome border/muted-text grays they used to alias.
-    neutral: { fill: '#fdfcfa', line: '#a9b1bd', text: '#1a1d23', chip: '#5b6472' },
+    // `line` at 3.2:1 against the canvas and 3.4:1 against white — the same floor as DARK's, met
+    // from the other side (`tests/theme-contrast.test.ts`).
+    neutral: { fill: '#fdfcfa', line: '#858d99', text: '#1a1d23', chip: '#5b6472' },
     // The same pigments read from the other side: tinted-paper surfaces, and a line/chip deep
     // enough to hold its own against near-white without turning fluorescent. Text is darker than
     // the chip it belongs to, so a name stays the most legible thing in its own shape.

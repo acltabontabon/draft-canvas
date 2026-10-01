@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { cameraAtRest } from './canvas';
 
 /**
  * Line jumps on the live canvas.
@@ -52,6 +53,7 @@ async function crossingDiagram(page: Page) {
     buffer: Buffer.from(JSON.stringify(crossingDocument())),
   });
   await page.waitForSelector('.dc-editor');
+  await cameraAtRest(page); // the opening ease has to finish before anything is measured on screen
   await expect(page.locator('.dc-edge-line')).toHaveCount(2);
 }
 
@@ -131,6 +133,7 @@ test.describe('line jumps', () => {
       buffer: Buffer.from(JSON.stringify(doubleCrossingDocument())),
     });
     await page.waitForSelector('.dc-editor');
+    await cameraAtRest(page); // the opening ease has to finish before anything is measured on screen
     await expect(page.locator('.dc-edge-line')).toHaveCount(3);
     // Both crossings are the horizontal connector's to hop.
     await expect.poll(() => humps(page, 'across')).toBe(2);

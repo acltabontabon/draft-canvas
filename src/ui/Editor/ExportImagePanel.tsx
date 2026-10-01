@@ -26,6 +26,9 @@ interface ImagePanelProps {
   hasRooms: boolean;
   everyLevel: boolean;
   onEveryLevelChange: (value: boolean) => void;
+  /** Whether the image carries the `.draftcanvas` inside it — per format, remembered. */
+  editable: boolean;
+  onEditableChange: (value: boolean) => void;
 }
 
 const DESCRIPTIONS: Record<ImageFormat, string> = {
@@ -54,6 +57,8 @@ export function ExportImagePanel({
   hasRooms,
   everyLevel,
   onEveryLevelChange,
+  editable,
+  onEditableChange,
 }: ImagePanelProps) {
   return (
     <div className="dc-export-panel">
@@ -136,6 +141,19 @@ export function ExportImagePanel({
             {selectionCount > 0 && <span className="dc-muted"> ({selectionCount})</span>}
           </span>
         </label>
+
+        {!everyLevel && (
+          // The picture stays a picture to every viewer; Draft Canvas reads the diagram back out of
+          // it on import. On by default for SVG, where a few kilobytes of text cost nothing beside
+          // the markup; off for PNG, where an image is usually meant as just an image.
+          <label className="dc-check" title="The whole diagram travels inside the image, so importing the file reopens it as a diagram. Other viewers see only the picture.">
+            <input type="checkbox" checked={editable} onChange={(event) => onEditableChange(event.target.checked)} />
+            <span>
+              Editable
+              <span className="dc-muted"> — carries the diagram inside</span>
+            </span>
+          </label>
+        )}
 
         {hasRooms && (
           // Only offered when a room exists below this canvas: a flat diagram has one picture, and a

@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 /**
  * The same diagram open in two tabs. Draft Canvas checks every save against what the other tab last
@@ -41,8 +41,13 @@ test('looking around in one tab does not make the other tab conflict on its next
   await one.bringToFront();
   await one.mouse.move(800, 500);
   for (let i = 0; i < 6; i += 1) await one.mouse.wheel(30, 20);
-  // Past the autosave debounce, so the camera move has really been written before tab two saves.
-  await one.waitForTimeout(1600);
+  // The gesture's end is what the editor keeps (`persistViewport`, from React Flow's `onMoveEnd`);
+  // only then is there a camera to save — the opening's own fit is never one.
+  await expect.poll(() => liveViewportOf(one), { message: 'the pan is the camera the editor keeps' }).not.toBeNull();
+  // Then past the autosave debounce: the camera move has really been written before tab two saves.
+  await expect.poll(async () => sameViewport(await storedViewportOf(one), await liveViewportOf(one)), {
+    message: 'the stored copy carries the pan',
+  }).toBe(true);
   await expect(one.locator('.dc-save')).toContainText('Saved locally');
 
   // Tab two makes a real edit, and is not told the canvas changed underneath it.
@@ -52,8 +57,59 @@ test('looking around in one tab does not make the other tab conflict on its next
   await two.mouse.down();
   await two.mouse.move(box.x + 200, box.y + 120, { steps: 8 });
   await two.mouse.up();
-  await two.waitForTimeout(1600);
+  // The edit has landed in storage: a conflict would have stopped this save from ever being written,
+  // so once the stored shape matches the moved one, the save went through and nothing asked.
+  await expect.poll(async () => (await storedNodeXOf(two)) === (await nodeXOf(two)), {
+    message: 'the stored copy carries the move',
+  }).toBe(true);
 
   await expect(two.locator('.dc-save-conflict')).toHaveCount(0);
   await expect(two.locator('.dc-save')).toContainText('Saved locally');
 });
+
+type Viewport = { x: number; y: number; zoom: number };
+
+/** The camera a gesture left behind, as the editor would save it — `null` until one has. */
+const liveViewportOf = (page: Page): Promise<Viewport | null> =>
+  page.evaluate(async () => {
+    const { useEditorStore } = await import('/src/store/editorStore.ts');
+    return useEditorStore.getState().liveViewport;
+  });
+
+/**
+ * The stored copy, read straight out of the `bodies` row (`IndexedDbRepository.ts`'s plain body)
+ * rather than through the app's repository: its `load()` records the row's stamp as what this tab
+ * last saw, which is exactly what a save checks for a conflict — reading through it from tab two
+ * would hide the conflict this test exists to rule out — and writes a migrated copy back.
+ */
+const storedDocumentOf = (page: Page): Promise<{ viewport: Viewport; nodes: { id: string; x: number }[] } | null> =>
+  page.evaluate(
+    () =>
+      new Promise((resolve, reject) => {
+        const request = indexedDB.open('draft-canvas');
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          const db = request.result;
+          const get = db.transaction('bodies', 'readonly').objectStore('bodies').get('two-tabs');
+          get.onerror = () => reject(get.error);
+          get.onsuccess = () => {
+            db.close();
+            resolve(get.result?.document ?? null);
+          };
+        };
+      }),
+  );
+
+const storedViewportOf = async (page: Page): Promise<Viewport | null> => (await storedDocumentOf(page))?.viewport ?? null;
+
+const sameViewport = (a: Viewport | null, b: Viewport | null) =>
+  a !== null && b !== null && a.x === b.x && a.y === b.y && a.zoom === b.zoom;
+
+const nodeXOf = (page: Page): Promise<number | undefined> =>
+  page.evaluate(async () => {
+    const { useEditorStore } = await import('/src/store/editorStore.ts');
+    return useEditorStore.getState().document.nodes.find((node: { id: string }) => node.id === 'a')?.x;
+  });
+
+const storedNodeXOf = async (page: Page): Promise<number | undefined> =>
+  (await storedDocumentOf(page))?.nodes.find((node) => node.id === 'a')?.x;

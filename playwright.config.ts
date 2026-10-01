@@ -22,7 +22,13 @@ export default defineConfig({
     // Downloads are asserted in the export tests.
     acceptDownloads: true,
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  // Every engine the app ships to. `PLAYWRIGHT_BROWSER=webkit` runs one of them (CI shards the suite
+  // that way); with nothing set, a local run takes all three, slowest last.
+  projects: [
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
+    { name: 'webkit', use: { ...devices['Desktop Safari'] } },
+  ].filter((project) => !process.env.PLAYWRIGHT_BROWSER || project.name === process.env.PLAYWRIGHT_BROWSER),
   webServer: {
     command: 'npm run dev -- --port 5180 --strictPort',
     url: 'http://localhost:5180',

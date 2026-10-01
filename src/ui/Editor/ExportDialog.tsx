@@ -2,27 +2,39 @@ import { useEffect, useRef, useState } from 'react';
 import {
   backgroundTravels,
   collectLevels,
+  copyImage,
+  copySource,
+  copySvg,
   countPlayableFlows,
   exportEveryLevel,
   exportPngFile,
   exportProjectFile,
   exportSecureProjectFile,
-  exportSequenceMermaidFile,
-  exportSequencePlantUmlFile,
+  exportSourceFile,
   exportSvgFile,
   fileNameFor,
   hasRooms,
   LEVELS_EXTENSION,
-  MERMAID_EXTENSION,
-  PLANTUML_EXTENSION,
   SECURE_EXPORT_FILE_EXTENSION,
-  type SequenceFormat,
+  SOURCE_FORMAT_INFO,
+  sourceFileNameFor,
+  sourceTextFor,
+  type CopyResult,
+  type SourceFormat,
 } from '../../export';
 import { readPreference, writePreference } from '../../lib/preferences';
+import {
+  readEditableImagePreference,
+  readSourceFormatPreference,
+  writeEditableImagePreference,
+  writeSourceFormatPreference,
+} from './exportPreferences';
 import { fileOf, fileWithLiveViewport, useEditorStore } from '../../store/editorStore';
 import { ownerAt } from '../../depth/tree';
 import { displayNameFor } from '../../document/factory';
 import { useUiStore } from '../../store/uiStore';
+import { hostKind } from '../../host/hostInfo';
+import { copyShareLink } from '../../share';
 import { usePersonality } from '../personality/usePersonality';
 import { useTheme } from '../theme/useTheme';
 import { Button } from '../common/Button';
@@ -44,7 +56,6 @@ const EXPORT_MODE_PREFERENCE = 'export-mode';
 const EXPORT_DOCUMENT_FORMAT_PREFERENCE = 'export-document-format';
 const EXPORT_IMAGE_FORMAT_PREFERENCE = 'export-image-format';
 const EXPORT_PNG_SCALE_PREFERENCE = 'export-png-scale';
-const SEQUENCE_FORMAT_PREFERENCE = 'sequence-export-format';
 
 // First-ever open defaults to Image/PNG — the dominant "I just want a PNG" case — rather than
 // Document, which was only ever first by accident of list order in the old flat layout.
@@ -78,11 +89,10 @@ function describePng(width: number, height: number, scale: PngScale): string {
   return fitted < chosen ? `${size} (fitted to ${fitted.toFixed(1)}×)` : size;
 }
 
-function readSequenceFormatPreference(): SequenceFormat {
-  return readPreference(SEQUENCE_FORMAT_PREFERENCE) === 'plantuml' ? 'plantuml' : 'mermaid';
+/** What the Copy toast says: the clipboard took it, or a file went out instead and why. */
+function describeCopy(what: string, result: CopyResult): string {
+  return result.copied ? `${what} copied.` : `${what} downloaded — this browser can't copy it to the clipboard.`;
 }
-
-const SEQUENCE_FORMAT_LABEL: Record<SequenceFormat, string> = { mermaid: 'Mermaid', plantuml: 'PlantUML' };
 
 /**
  * Export is choose → configure → export: one mode picker, one contextual panel for whatever's
@@ -145,7 +155,11 @@ export function ExportDialog() {
   const [busy, setBusy] = useState(false);
   const [securePromptOpen, setSecurePromptOpen] = useState(false);
   const running = useRef(false);
-  const [sequenceFormat, setSequenceFormat] = useState<SequenceFormat>(readSequenceFormatPreference);
+  const [sourceFormat, setSourceFormat] = useState<SourceFormat>(readSourceFormatPreference);
+  // Per image format, remembered: a few kilobytes of text inside an SVG is nothing, so it is on by
+  // default there; a PNG is usually meant as just a picture, so it is off until asked for.
+  const [editableSvg, setEditableSvg] = useState(() => readEditableImagePreference('svg'));
+  const [editablePng, setEditablePng] = useState(() => readEditableImagePreference('png'));
 
   // "Export selection…" from the command palette: the request simply reads as Image mode with the
   // checkbox on until the user touches it (a mode card, or the checkbox itself) or closes the
@@ -185,16 +199,29 @@ export function ExportDialog() {
     setPngScaleState(next);
     writePreference(EXPORT_PNG_SCALE_PREFERENCE, next);
   };
-  const setSequenceFormatValue = (next: SequenceFormat) => {
-    setSequenceFormat(next);
-    writePreference(SEQUENCE_FORMAT_PREFERENCE, next);
+  const setSourceFormatValue = (next: SourceFormat) => {
+    setSourceFormat(next);
+    writeSourceFormatPreference(next);
   };
+  const editable = imageFormat === 'png' ? editablePng : editableSvg;
+  const setEditable = (next: boolean) => {
+    (imageFormat === 'png' ? setEditablePng : setEditableSvg)(next);
+    writeEditableImagePreference(imageFormat, next);
+  };
+  // The whole file goes inside an editable image, every room, the way a `.draftcanvas` carries it —
+  // whatever room the picture itself shows.
+  const embedded = () => (editable ? fileWithLiveViewport(useEditorStore.getState()) : undefined);
 
   // Re-derived every render rather than a `useState` default: a flow created
   // after this dialog first mounted must still show up without a remount. Only a
   // flow with something to play is counted — an empty one would just fail to export — and the
   // count spans every room, since the source does.
   const playableFlowCount = countPlayableFlows(document);
+  const sourceInfo = SOURCE_FORMAT_INFO[sourceFormat];
+  const sourceEmpty = sourceInfo.family === 'sequence' && playableFlowCount === 0;
+  // The text itself, generated on every render the Source panel shows — a few milliseconds for a
+  // large canvas, and it is exactly what the file and the clipboard will get.
+  const sourceText = effectiveMode === 'sequence' && !sourceEmpty ? sourceTextFor(document, sourceFormat) : null;
 
   // "Every level" is only a question when there is a level below this one; a flat canvas has one
   // picture. A selection belongs to one room, so the two cannot combine.
@@ -259,17 +286,21 @@ export function ExportDialog() {
               options,
               onlyKey,
               describe: (width, height) =>
-                imageFormat === 'png' ? describePng(width, height, pngScale) : `${width} × ${height} · vector`,
+                `${imageFormat === 'png' ? describePng(width, height, pngScale) : `${width} × ${height} · vector`}${editable ? ' · diagram inside' : ''}`,
             },
           }
         : {
-            fileName: fileNameFor(title, sequenceFormat === 'mermaid' ? MERMAID_EXTENSION : PLANTUML_EXTENSION),
-            empty: playableFlowCount === 0,
+            fileName: sourceFileNameFor(document, sourceFormat),
+            empty: sourceEmpty,
             visual: {
               type: 'file',
               icon: 'code',
-              badge: sequenceFormat === 'mermaid' ? 'MMD' : 'PUML',
-              meta: playableFlowCount > 0 ? `${count(playableFlowCount, 'Flow')} · plain text` : 'No Flow yet',
+              badge: sourceInfo.badge,
+              meta: sourceEmpty
+                ? 'No Flow yet'
+                : sourceInfo.family === 'sequence'
+                  ? `${count(playableFlowCount, 'Flow')} · plain text`
+                  : `${count(sourceText?.split('\n').length ?? 0, 'line')} · ${sourceFormat === 'drawio' ? 'XML' : 'plain text'}`,
             },
           };
 
@@ -320,25 +351,48 @@ export function ExportDialog() {
               label: 'Export PNG',
               disabled: busy,
               onClick: () =>
-                void run(() => exportPngFile(document, { ...options, scale: Number(pngScale) }), 'PNG export'),
+                void run(() => exportPngFile(document, { ...options, scale: Number(pngScale), editable: embedded() }), 'PNG export'),
             }
           : {
               label: 'Export SVG',
               disabled: busy,
-              onClick: () => void run(() => exportSvgFile(document, options), 'SVG export'),
+              onClick: () => void run(() => exportSvgFile(document, { ...options, editable: embedded() }), 'SVG export'),
             }
         : {
-            label: `Export ${SEQUENCE_FORMAT_LABEL[sequenceFormat]}`,
-            disabled: busy || playableFlowCount === 0,
-            onClick: () =>
-              void run(
-                () =>
-                  sequenceFormat === 'mermaid'
-                    ? exportSequenceMermaidFile(document)
-                    : exportSequencePlantUmlFile(document),
-                'Sequence Diagram export',
-              ),
+            label: `Export ${sourceInfo.label}`,
+            disabled: busy || sourceEmpty,
+            onClick: () => void run(() => exportSourceFile(document, sourceFormat), `${sourceInfo.label} export`),
           };
+
+  // The same export, pointed at the clipboard. The dialog stays open: a copy is often the first of
+  // several, and nothing was downloaded to go and look at.
+  const copy =
+    effectiveMode === 'image' && !levelsOn
+      ? {
+          what: imageFormat === 'png' ? 'Image' : 'SVG',
+          disabled: busy,
+          task: () =>
+            imageFormat === 'png'
+              ? copyImage(document, { ...options, scale: Number(pngScale), editable: embedded() })
+              : copySvg(document, { ...options, editable: embedded() }),
+        }
+      : effectiveMode === 'sequence'
+        ? { what: `${sourceInfo.label} source`, disabled: busy || sourceEmpty, task: () => copySource(document, sourceFormat) }
+        : null;
+  const runCopy = async () => {
+    if (!copy || running.current) return;
+    running.current = true;
+    setBusy(true);
+    try {
+      notify(describeCopy(copy.what, await copy.task()));
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
+      notify(error instanceof Error ? `Copy failed: ${error.message}` : 'Copy failed.', 'error');
+    } finally {
+      running.current = false;
+      setBusy(false);
+    }
+  };
 
   return (
     <Modal
@@ -356,6 +410,11 @@ export function ExportDialog() {
             Generated locally in your browser.
           </span>
           <span className="dc-export-footer-actions">
+            {copy && (
+              <Button icon="copy" disabled={copy.disabled} onClick={() => void runCopy()}>
+                Copy
+              </Button>
+            )}
             <Button variant="solid" icon="export" disabled={cta.disabled} aria-busy={busy || undefined} onClick={cta.onClick}>
               {busy ? 'Exporting…' : cta.label}
             </Button>
@@ -368,7 +427,24 @@ export function ExportDialog() {
       <div className="dc-export-body">
         <div className="dc-export-config" key={effectiveMode}>
           {effectiveMode === 'document' && (
-            <ExportDocumentPanel format={documentFormat} onChange={setDocumentFormat} />
+            <>
+              <ExportDocumentPanel format={documentFormat} onChange={setDocumentFormat} />
+              {/* The web app only — see the matching command in `commands/registry.ts`. The whole
+                  file goes into the link, every room, which is why this ignores the room scope. */}
+              {!hostKind() && (
+                <div className="dc-export-share">
+                  <Button
+                    icon="copy"
+                    onClick={() => void copyShareLink(fileWithLiveViewport(useEditorStore.getState()), notify)}
+                  >
+                    Copy share link
+                  </Button>
+                  <p className="dc-export-panel-description">
+                    Read-only, and the whole diagram is in the link itself — anyone who has it can open it. Nothing is uploaded.
+                  </p>
+                </div>
+              )}
+            </>
           )}
 
           {inRoom && effectiveMode !== 'document' && (
@@ -400,14 +476,17 @@ export function ExportDialog() {
               hasRooms={roomsBelow}
               everyLevel={levelsOn}
               onEveryLevelChange={setEveryLevel}
+              editable={editable}
+              onEditableChange={setEditable}
             />
           )}
 
           {effectiveMode === 'sequence' && (
             <ExportSequencePanel
-              format={sequenceFormat}
-              onFormatChange={setSequenceFormatValue}
+              format={sourceFormat}
+              onFormatChange={setSourceFormatValue}
               playableFlowCount={playableFlowCount}
+              source={sourceText}
             />
           )}
         </div>

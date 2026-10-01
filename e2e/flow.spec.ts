@@ -1,23 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
-import { newCanvas, connect, reopenAfterReload } from './canvas';
+import { newCanvas, connect, create, reopenAfterReload } from './canvas';
 
 /**
  * Flows: build one from existing connectors, present it, and reuse the same
  * architecture for a second scenario without redrawing anything.
  */
-
-async function createNode(page: Page, tool: string, at: { x: number; y: number }) {
-  await page.getByRole('button', { name: tool, exact: true }).click();
-  await page.locator('.react-flow__pane').click({ position: at });
-  // A new Text node opens ready to type into, and an untyped one is deleted the instant it's
-  // deselected (`finishTextEdit`, so it never becomes an invisible ghost) — Escape included, since
-  // Escape never commits for Text. Typing something and committing with Cmd/Ctrl+Enter is the only
-  // way to leave a Text node on the canvas.
-  if (tool === 'Text') {
-    await page.keyboard.type('Text');
-    await page.keyboard.press('ControlOrMeta+Enter');
-  }
-}
 
 /**
  * Shows the Flows panel — the one surface for flows — unless it is already showing. Creating
@@ -126,13 +113,13 @@ async function addToFlow(page: Page, edgeIndex: number, existingFlowTitle?: stri
  * its kind, "Queue"/"Topic"/"Stream"), so there's nothing here to type.
  */
 async function buildArchitecture(page: Page) {
-  await createNode(page, 'Actor', { x: 150, y: 180 });
+  await create(page, 'Actor', { x: 150, y: 180 });
   await labelNode(page, 0, 'Client');
-  await createNode(page, 'Service', { x: 430, y: 180 });
+  await create(page, 'Service', { x: 430, y: 180 });
   await labelNode(page, 1, 'API');
-  await createNode(page, 'Service', { x: 710, y: 180 });
+  await create(page, 'Service', { x: 710, y: 180 });
   await labelNode(page, 2, 'Payment');
-  await createNode(page, 'Queue', { x: 990, y: 180 });
+  await create(page, 'Queue', { x: 990, y: 180 });
 
   await connect(page, 0, 1); // Client -> API
   await connect(page, 1, 2); // API -> Payment
@@ -382,8 +369,8 @@ test.describe('Flows', () => {
     // fields entirely, see `connector-semantics.spec.ts`'s "Junction connector" tests). Two
     // `Text` nodes have no capability-matrix entry at all, so they keep the generic,
     // unrestricted "Flow kind" picker this coupling still applies to.
-    await createNode(page, 'Text', { x: 300, y: 250 });
-    await createNode(page, 'Text', { x: 700, y: 250 });
+    await create(page, 'Text', { x: 300, y: 250 });
+    await create(page, 'Text', { x: 700, y: 250 });
     await connect(page, 0, 1);
 
     await clickEdgeBetween(page, 0);

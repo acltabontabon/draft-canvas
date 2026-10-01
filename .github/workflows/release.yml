@@ -1,8 +1,8 @@
 name: Release
 
 # A Draft Canvas release: the web app (Pages, from pages.yml on the same tag), the Docker image and the
-# desktop app, one version and one GitHub release. The VS Code extension releases from extension-vX.Y.Z
-# tags in vscode-release.yml; a desktop preview (desktop-vX.Y.Z-alpha.N) from desktop-release.yml.
+# desktop app, one version and one GitHub release. A desktop preview (desktop-vX.Y.Z-alpha.N) releases
+# from desktop-release.yml. (The VS Code extension is retired; its last release was extension-v0.2.0.)
 on:
   push:
     tags:

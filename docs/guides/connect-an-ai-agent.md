@@ -56,7 +56,13 @@ doesn't start the app for you, and it says so if the app isn't open.
 - **Add notes and flows.** A note can sit beside a shape, inside a boundary, or be attached to a shape
   or connector so it moves with it. Flows walk through the connectors that are already there, and
   play in presentation mode.
-- **Read a diagram**, including what is inside a shape, a boundary or a flow on its own.
+- **Read a diagram**, including what is inside a shape, a boundary or a flow on its own — or read its
+  flows as Mermaid or PlantUML sequence-diagram source, the same text **Export** writes
+  (`read_diagram` with `format: "mermaid"` or `"plantuml"`).
+- **Look at a diagram** the way you see it: `render_diagram` draws one view as a PNG (handed to the
+  agent as an image) or as SVG text, in either theme, at 1×, 2× or 3×. It is the same renderer the
+  export uses, so what the agent sees is what you would export. An image larger than Draft Canvas
+  can draw, or over 8 MB, is refused with the scale that would fit — never quietly shrunk.
 - **Edit only what you selected.** Select a service and the thing downstream of it, then ask for "a
   retry path around this selection, preserve everything else" — the agent reads exactly those ids and
   a few neighbours for orientation, and edits only them, even if you click something else on screen
@@ -173,6 +179,27 @@ changed in that case.
   detail drawn inside its shapes.
 - **The agent's connector is a different version.** Point the agent at the connector inside the Draft
   Canvas you are running: copy the setup from Settings again after updating the app.
+
+## For agent authors
+
+The tool definitions an agent sees are generated from the app's own source, so they say exactly what
+the app accepts:
+
+- `update_diagram.ops` (and `submit_proposal.ops`, the very same schema) is one closed shape per op —
+  `add`, `update`, `remove`, `setLevel`, `arrange` — each listing only the fields that op reads. A field
+  that belongs to another op (`ids` on an `update`, `set` on a `remove`) is a schema error, as it is
+  a validation error in the app.
+- An element's `inside` view is typed to the depth the app allows (three rooms down), through local
+  `$defs` in each tool's schema; a misspelt field three levels deep is caught like one at the top.
+- `read_diagram` takes `format`: `draft` (the default, the structured read), `mermaid` or `plantuml`
+  (the flows as sequence-diagram source, every view included, with the revision), or `c4` (the
+  architecture as C4-PlantUML — containers, components, boundaries and relationships, every view).
+- `render_diagram({diagramId, view?, format?: "png" | "svg", scale?: 1 | 2 | 3, theme?: "light" |
+  "dark"})` returns a PNG as MCP image content (its id, revision and pixel size as structured content
+  beside it) or the SVG as text. It is read-only and refuses, rather than shrinks, a picture past
+  the app's canvas limits or 8 MB.
+- A receipt lists at most ten advisories on a create and five on an update; when more were found,
+  `advisoriesDropped` says how many were left out.
 
 For how it works — the protocol, the guarantees about retries, what is and isn't supported — see
 [Agent integration](../reference/agent-integration.md).

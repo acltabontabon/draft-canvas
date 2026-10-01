@@ -15,7 +15,7 @@ import { useCommandContext } from '../../commands/useCommandContext';
 import type { DraftNode } from '../../document/types';
 import { MOD_SYMBOL } from '../../lib/platform';
 import type { FlowPlaybackController } from '../../presentation/useFlowPlayback';
-import { useEditorStore } from '../../store/editorStore';
+import { fileOf, useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
 import { Icon } from '../common/Icon';
 import { handOffFocus, useFocusReturn } from '../common/useFocusReturn';
@@ -63,6 +63,9 @@ function CommandPaletteBody({ createAt, createAtPointer, playback, onPresent }: 
   const mode = useEditorStore((state) => state.mode);
   const selection = useEditorStore((state) => state.selection);
   const document = useEditorStore((state) => state.document);
+  // The jump rows reach every room, not just the one on screen, so they need the file as well.
+  const path = useEditorStore((state) => state.path);
+  const outer = useEditorStore((state) => state.outer);
   const focus = useEditorStore((state) => state.focus);
   const flowPlayback = useEditorStore((state) => state.flowPlayback);
   const selectedFlowId = useEditorStore((state) => state.selectedFlowId);
@@ -104,14 +107,15 @@ function CommandPaletteBody({ createAt, createAtPointer, playback, onPresent }: 
     // handicapped, see `JUMP_RANK_PENALTY`) and capped so a big canvas never floods the list.
     // Frequently used commands get a small nudge — never enough to beat a better text match.
     const groupOf = (entry: Entry) => ('group' in entry ? entry.group : undefined);
-    const ranked = rank(query, [...commands, ...(jumpCommands(document) as Entry[])], (entry) =>
+    const jumps = jumpCommands(document, { file: fileOf({ document, path, outer }), path });
+    const ranked = rank(query, [...commands, ...(jumps as Entry[])], (entry) =>
       groupOf(entry) === 'jump' ? -JUMP_RANK_PENALTY : frequencyBonus(entry.id),
     );
-    let jumps = 0;
-    return ranked.filter((row) => (groupOf(row.entry) === 'jump' ? jumps++ < JUMP_LIMIT : true));
+    let shown = 0;
+    return ranked.filter((row) => (groupOf(row.entry) === 'jump' ? shown++ < JUMP_LIMIT : true));
     // The reactive slices are what make this recompute; they aren't read here directly.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [stage, query, buildContext, mode, selection, document, focus, flowPlayback, selectedFlowId]);
+  }, [stage, query, buildContext, mode, selection, document, path, outer, focus, flowPlayback, selectedFlowId]);
 
   // Nothing else may keep competing for the keyboard. (State starts fresh on its own: the body
   // only exists while the palette is open.)

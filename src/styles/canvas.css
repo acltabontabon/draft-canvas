@@ -9,6 +9,10 @@
   position: absolute;
   inset: 0;
   background: var(--dc-canvas);
+  /* Every touch gesture on the diagram belongs to React Flow — a one-finger drag pans or moves a
+     shape, two fingers pinch-zoom — never to the page. React Flow sets this on its pane alone;
+     shapes, handles and connectors sit outside the pane. */
+  touch-action: none;
 }
 
 .dc-canvas .react-flow {
@@ -265,6 +269,19 @@
    stays centred, with a smaller cap. */
 .dc-edge-endpoint {
   --dc-hit: clamp(9px, calc(16px / var(--dc-zoom, 1)), 24px);
+}
+
+/* A finger is wider than a pointer: on a touch screen every hit ring is at least 32 screen pixels
+   (WCAG 2.5.8's floor, with room), whatever the zoom. The dots themselves stay their size and
+   `visibility: hidden` until something reveals them — the ring inherits that, so an unrevealed
+   handle still costs no hit test. Neighbouring rings on one side overlap; React Flow's own
+   nearest-handle pick decides between them, as it already does mid-connection. */
+@media (pointer: coarse) {
+  .dc-handle,
+  .dc-resize-handle,
+  .dc-edge-endpoint {
+    --dc-hit: clamp(32px, calc(32px / var(--dc-zoom, 1)), 64px);
+  }
 }
 
 .dc-node:hover .dc-handle,

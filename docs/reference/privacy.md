@@ -14,14 +14,14 @@ Everything you draw. Four object stores:
 | Store | Key | Contents | Encrypted? |
 | --- | --- | --- | --- |
 | `documents` | `id` | Title, created and updated timestamps, node and edge counts, and a small topology sketch (shape kinds and their relative positions, for the list thumbnail). Used to render the library list without loading any canvas. | No — plain text. |
-| `bodies` | `id` | The full document: nodes, connections, text, code, viewport, settings. | No, since 2.0 — a plain record with a per-write stamp. A row written by a build from 1.0 to 1.11 is still AES-256-GCM ciphertext, read with the key that build left, until the diagram is next saved (see below). |
+| `bodies` | `id` | The full document: nodes, connections, text, code, viewport, settings. | No, since 1.12 — a plain record with a per-write stamp. A row written by a build from 1.0 to 1.11 is still AES-256-GCM ciphertext, read with the key that build left, until the diagram is next saved (see below). |
 | `projects` | `id` | The names of the Library's flat project folders. | No — plain text, like the summaries. |
 | `backgroundImages` | `id` | The optional canvas background image, one per diagram, as a blob. | No. A wallpaper is far less sensitive than diagram content, and encrypting a blob would add a lot of plumbing for little. If a background image is sensitive, don't use it. |
 
 ### IndexedDB — database `draft-canvas-keys`
 
 One object store, `keys`, holding the non-extractable AES-256-GCM key a build from 1.0 to 1.11
-generated to encrypt `bodies`. Since 2.0 it is only read (`src/crypto/keyStore.ts`), to open rows
+generated to encrypt `bodies`. Since 1.12 it is only read (`src/crypto/keyStore.ts`), to open rows
 those builds wrote; a profile that never had one never gets one. See
 [`SECURITY.md`](../../SECURITY.md#browser-storage) for what it protected and why it was retired.
 
@@ -55,9 +55,11 @@ Short, named UI preferences only, every key prefixed `draft-canvas.`:
 | `personality` | The roughness preset |
 | `continuation` | Whether next-move suggestions are on (`on`/`off`) |
 | `command-recent.<n>`, `command-use.<id>` | The ids of the last few commands run, and a per-command counter for the palette. Command ids name actions ("add-service", "connect-to"), never elements |
-| `export-mode`, `export-document-format`, `export-image-format`, `export-png-scale`, `sequence-export-format` | The last Export dialog choices (`export-png-scale` is `1`, `2` or `3`), so it opens where you left it |
+| `export-mode`, `export-document-format`, `export-image-format`, `export-png-scale`, `sequence-export-format` | The last Export dialog choices (`export-png-scale` is `1`, `2` or `3`; `sequence-export-format` is one of `mermaid`, `plantuml`, `mermaid-flowchart`, `c4-plantuml`, `structurizr`, `drawio`), so it opens where you left it |
+| `export-editable-svg`, `export-editable-png` | `on`/`off`: whether an exported SVG or PNG carries the diagram inside it (see [editable images](../guides/saving-and-sharing.md#editable-images)) |
 | `clipboard-permission` | `granted`/`denied`: whether you already answered "Allow clipboard access?" for the right-click and ⌘K Paste commands, so you aren't asked again. Cmd/Ctrl+V never touches it: it reads the native paste event directly and never prompts |
 | `last-seen-product-release` | The last version whose "What's New" you saw |
+| `last-backup-at` | When the Library was last backed up to a `.zip` (an ISO timestamp), so the backup nudge knows whether a week has passed |
 
 Nothing about a diagram's content is stored here.
 
@@ -136,6 +138,34 @@ choose at export time (PBKDF2, ≥600,000 iterations, a fresh random salt per fi
 someone who has both the file and that passphrase. Draft Canvas never stores the passphrase and has
 no way to recover a forgotten one — see [`SECURITY.md`](../../SECURITY.md) for the full key lifecycle.
 
+### Share links
+
+**Copy share link** (in the command palette, and under Export → Document) makes a link that holds
+the entire diagram — every shape, every connector, every room inside a shape, all of its text and
+code — compressed and encoded into the address itself, after the `#`. Be clear about what that
+means:
+
+- **Nothing is uploaded.** There is no server involved, which is also why the link works at all:
+  the diagram travels *as* the link. The part after `#` is never sent to the host serving the app,
+  so even that host does not see what you shared.
+- **Anyone who has the link has the diagram.** A share link is the diagram in plain (compressed)
+  text, exactly like a `.draftcanvas` file. There is no password and no way to add one; for
+  something that needs protecting, send a `.dcenc` export instead.
+- **Links get kept.** Browsers keep them in history. Chat apps, mail clients and wikis keep them in
+  messages and may fetch them to draw a preview. Anywhere a link goes, the diagram goes.
+- **Links never expire.** There is no server to expire them, revoke them or count who opened them.
+  The only way to take a share link back is for every copy of it to be deleted.
+- **The background image stays behind.** It would be most of the link on its own, and a link has
+  nowhere to put it.
+- **The link is capped at 32 KB** of encoded payload (`src/share/link.ts`). A diagram past that is
+  told so and asked to export a file instead, rather than given a link that some apps would cut short.
+
+Opening a share link opens the diagram read-only, without saving it: it is not in the Library,
+nothing is autosaved, and the editor refuses every change. **Make an editable copy** saves it as a
+new diagram of your own, under a fresh id, so it can never overwrite one you already have. A link
+is validated and repaired on the way in exactly as an imported file is (`src/document/validate.ts`),
+and a damaged one is refused.
+
 ### Imports
 
 Reading a file uses the `File` API on a file you chose. Nothing is uploaded. A plain
@@ -193,7 +223,7 @@ Being honest about the limits:
 - **Diagrams are per-browser and per-device.** A diagram made in Chrome is not in Safari, and not
   on your other laptop. Moving one means exporting and importing it.
 - **Private windows usually discard storage** when the window closes.
-- **Diagrams are stored as plain records** since 2.0. Builds from 1.0 to 1.11 encrypted them with a
+- **Diagrams are stored as plain records** since 1.12. Builds from 1.0 to 1.11 encrypted them with a
   key kept in the same browser profile, which protected the stored bytes against a copy made without
   that key and against little else, while making saving impossible over plain `http://` and losing
   every diagram if only the key store was lost. Rows saved by those builds stay readable and are

@@ -4,19 +4,21 @@ import { newCanvas, create, reopenAfterReload } from './canvas';
 /** Node attachments: drag-to-attach arming, the badge opening a connector-style chip row/card
  *  (`AttachmentPresentation.tsx`, shared with `DraftEdgeView.tsx`), detach, delete. */
 
-/** Drags a node by its center to a new center point, holding partway through. */
+/** Drags a node by its center to a new center point. With `dwell`, holds there until the target
+ *  under the pointer has armed — the dwell is a timer in `Canvas.tsx` (`ATTACH_DWELL_MS`), and the
+ *  armed target is its one visible effect, so that is what is waited for rather than its length. */
 async function dragNodeCenterTo(
   page: Page,
   node: ReturnType<Page['locator']>,
   target: { x: number; y: number },
-  options: { holdMs?: number; steps?: number } = {},
+  options: { dwell?: boolean; steps?: number } = {},
 ) {
   const box = (await node.boundingBox())!;
   const start = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
   await page.mouse.move(start.x, start.y);
   await page.mouse.down();
   await page.mouse.move(target.x, target.y, { steps: options.steps ?? 15 });
-  if (options.holdMs) await page.waitForTimeout(options.holdMs);
+  if (options.dwell) await expect(page.locator('.dc-node[data-attach-target="true"]')).toHaveCount(1);
   return async () => page.mouse.up();
 }
 
@@ -111,7 +113,7 @@ test.describe('attachments', () => {
     // the drop point somewhere this test didn't intend.
     const dwellPoint = { x: serviceBox.x + 110, y: serviceBox.y + serviceBox.height / 2 };
 
-    const release = await dragNodeCenterTo(page, note, dwellPoint, { holdMs: 400 });
+    const release = await dragNodeCenterTo(page, note, dwellPoint, { dwell: true });
     await expect(page.locator('.dc-node[data-attach-target="true"]')).toHaveCount(1);
     await release();
 
@@ -314,7 +316,7 @@ test.describe('attachments', () => {
 
     // Dwell over the centre rather than relying on instant-arm overlap: a fresh note is a compact
     // two-line box now, and the first mouse step of a drag is what starts it rather than moving it.
-    const release = await dragNodeCenterTo(page, note, serviceCenter, { holdMs: 400 });
+    const release = await dragNodeCenterTo(page, note, serviceCenter, { dwell: true });
     await release();
 
     // Attached to the Service, not reparented into the boundary.

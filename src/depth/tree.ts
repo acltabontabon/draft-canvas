@@ -126,6 +126,54 @@ export interface Graph {
   viewport: DraftViewport;
 }
 
+/** One room of the file with the shapes that own it, outermost first — `[]` at the root. */
+export interface Room {
+  path: DepthPath;
+  owners: DraftNode[];
+  graph: Graph;
+}
+
+/**
+ * Every room of the file, outermost first, each with its owner chain — for the surfaces that read
+ * the whole tree rather than the room on screen (the palette's search, a find-and-replace count).
+ * `walkGraphs` gives the same rooms without the owners; this exists so nobody rebuilds the chain.
+ */
+export function roomsOf(file: DraftDocument): Room[] {
+  const rooms: Room[] = [{ path: ROOT_PATH, owners: [], graph: file }];
+  const descend = (nodes: readonly DraftNode[], path: DepthPath, owners: DraftNode[]) => {
+    for (const node of nodes) {
+      if (!hasInside(node)) continue;
+      const here = [...path, node.id];
+      const chain = [...owners, node];
+      rooms.push({ path: here, owners: chain, graph: node.inside! });
+      descend(node.inside!.nodes, here, chain);
+    }
+  };
+  descend(file.nodes, ROOT_PATH, []);
+  return rooms;
+}
+
+/**
+ * The file with `fn` applied to every room, outermost first. Structural sharing all the way down:
+ * a room `fn` hands back unchanged keeps its identity, and so does every owner above it, so the
+ * store's "nothing changed" identity check still answers for a file-wide edit that found nothing.
+ */
+export function mapRooms(file: DraftDocument, fn: <G extends Graph>(graph: G, path: DepthPath) => G): DraftDocument {
+  const visit = <G extends Graph>(graph: G, path: DepthPath): G => {
+    const mapped = fn(graph, path);
+    let changed = false;
+    const nodes = mapped.nodes.map((node) => {
+      if (!node.inside) return node;
+      const inside = visit(node.inside, [...path, node.id]);
+      if (inside === node.inside) return node;
+      changed = true;
+      return { ...node, inside };
+    });
+    return changed ? { ...mapped, nodes } : mapped;
+  };
+  return visit(file, ROOT_PATH);
+}
+
 /**
  * The room at `path`, as an ordinary document the whole app can edit.
  *

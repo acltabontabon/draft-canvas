@@ -61,7 +61,7 @@ export function onStorageSuperseded(listener: (reason: StorageLossReason) => voi
  *
  * A `bodies` row is one of three shapes, told apart by shape rather than a flag — the same
  * repair-don't-reject discipline `document/validate.ts` uses (see `crypto/bodyShapes.ts`):
- * `PlainBody`, what every save since 2.0 writes; `EncryptedBody`, what builds 1.0–1.11 wrote and
+ * `PlainBody`, what every save since 1.12 writes; `EncryptedBody`, what builds 1.0–1.11 wrote and
  * this build still reads with the key those builds left in `draft-canvas-keys`; and the
  * versionless `LegacyBody` from before 1.0. A row keeps its shape until it is next written:
  * `load()` rewrites only what it always did (a legacy row, or a schema migration), and an encrypted

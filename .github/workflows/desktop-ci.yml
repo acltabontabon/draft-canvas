@@ -72,8 +72,10 @@ jobs:
             echo "::error::The web bundle contains desktop code."
             exit 1
           fi
-      - run: npx playwright install --with-deps chromium
-      - run: npm run e2e:desktop
+      - run: npx playwright install --with-deps chromium webkit
+      # Chromium and WebKit: the engines the desktop shell actually embeds (WebView2, WebKitGTK/WKWebView).
+      - run: PLAYWRIGHT_BROWSER=chromium npm run e2e:desktop -- --fail-on-flaky-tests
+      - run: PLAYWRIGHT_BROWSER=webkit npm run e2e:desktop -- --fail-on-flaky-tests
       - uses: actions/upload-artifact@v7
         if: failure()
         with:

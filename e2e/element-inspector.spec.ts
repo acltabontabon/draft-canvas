@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { newCanvas, create } from './canvas';
+import { cameraAtRest, create, newCanvas } from './canvas';
 
 /** Contextual popover for a single selected element, anchored at the element instead of docked
  *  at the bottom of the screen — mirrors `connector-semantics.spec.ts`'s coverage of the
@@ -136,6 +136,7 @@ test.describe('element inspector popover', () => {
       buffer: Buffer.from(JSON.stringify(document)),
     });
     await page.waitForSelector('.dc-editor');
+    await cameraAtRest(page); // the opening ease has to finish before anything is measured on screen
 
     // Opening frames the whole diagram, which makes the boundary small. Zoom back in on its left
     // edge — as someone working inside it would have — until it runs far off the top and bottom.
@@ -147,7 +148,10 @@ test.describe('element inspector popover', () => {
       await page.keyboard.down('Control');
       await page.mouse.wheel(0, -120);
       await page.keyboard.up('Control');
-      await page.waitForTimeout(30);
+      // Each tick is read back before the next, so the next frame is measured at the zoom it
+      // produced rather than mid-way; the target is far under the canvas's zoom ceiling, so every
+      // tick grows the boundary.
+      await expect.poll(async () => (await boundary.boundingBox())!.height, { message: 'the zoom tick landed' }).toBeGreaterThan(frame.height);
     }
     const frame = (await boundary.boundingBox())!;
     expect(frame.height).toBeGreaterThan(4000);

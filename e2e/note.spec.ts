@@ -49,7 +49,12 @@ test.describe('Note', () => {
     expect(after.width).toBe(before.width);
   });
 
-  test('keys typed into a note never reach the canvas: no shapes, no delete, no pan', async ({ page }) => {
+  test('keys typed into a note never reach the canvas: no shapes, no delete, no pan', async ({ page, browserName }) => {
+    // Line start and end the way the platform spells them: on a Mac, WebKit follows the system and
+    // Home/End scroll the field instead of moving the caret.
+    const macWebKit = browserName === 'webkit' && process.platform === 'darwin';
+    const lineStart = macWebKit ? 'Meta+ArrowLeft' : 'Home';
+    const lineEnd = macWebKit ? 'Meta+ArrowRight' : 'End';
     await newCanvas(page, 'Note keyboard');
     await newNote(page, { x: 400, y: 300 });
     const viewport = page.locator('.react-flow__viewport');
@@ -58,9 +63,9 @@ test.describe('Note', () => {
     await page.keyboard.type('n s c t ');
     await page.keyboard.press('Backspace');
     await page.keyboard.press('Delete');
-    await page.keyboard.press('Home');
+    await page.keyboard.press(lineStart);
     await page.keyboard.type('> ');
-    await page.keyboard.press('End');
+    await page.keyboard.press(lineEnd);
     await page.keyboard.type('!');
     await page.keyboard.press('Shift+ArrowLeft');
     await page.keyboard.press('ControlOrMeta+a');

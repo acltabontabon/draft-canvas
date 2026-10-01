@@ -35,7 +35,7 @@ export function isEncryptedBody(row: unknown): row is EncryptedBody {
   );
 }
 
-/** A row written since 2.0: plaintext under `PLAIN_STORAGE_VERSION`, with a per-write stamp. */
+/** A row written since 1.12: plaintext under `PLAIN_STORAGE_VERSION`, with a per-write stamp. */
 export function isPlainBody(row: unknown): row is PlainBody {
   return (
     isRecord(row) &&
@@ -48,8 +48,8 @@ export function isPlainBody(row: unknown): row is PlainBody {
 
 /**
  * Deliberately what an older build's own test was — "has a `document` and is not encrypted" — minus
- * the plain shape: a 1.x client reading a 2.0 row sees a legacy plaintext row it can open, and at
- * worst re-encrypts it, which the next 2.0 save undoes. Nothing about the transition can make a row
+ * the plain shape: a 1.x client reading a 1.12 row sees a legacy plaintext row it can open, and at
+ * worst re-encrypts it, which the next 1.12 save undoes. Nothing about the transition can make a row
  * unreadable to either side.
  */
 export function isLegacyBody(row: unknown): row is LegacyBody {

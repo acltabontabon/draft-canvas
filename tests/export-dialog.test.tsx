@@ -140,19 +140,102 @@ describe('ExportDialog — Source (Sequence) panel', () => {
     expect(screen.getByRole('button', { name: 'Export PlantUML' })).toBeInTheDocument();
   });
 
-  it('does not show a rendered preview or clipboard actions — Format is the only control', async () => {
+  it('shows the generated text itself, read-only, with Copy beside the export — never a rendered diagram', async () => {
     const user = userEvent.setup();
     useEditorStore.setState({ document: withFlow(), selection: { nodes: [], edges: [] }, selectedFlowId: null });
     renderDialog();
     await switchMode(user, /Source/);
 
     const dialog = screen.getByRole('dialog');
+    const preview = within(dialog).getByTestId('export-source-preview');
+    expect(preview.querySelector('pre')!.textContent).toContain('sequenceDiagram');
     expect(within(dialog).queryByRole('textbox')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Copy source' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Copy as Markdown' })).not.toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Copy' })).toBeEnabled();
     // The artifact is the file tile, never a rendered diagram.
     expect(dialog.querySelector('.dc-export-file')).not.toBeNull();
     expect(dialog.querySelector('.dc-export-stage img')).toBeNull();
+  });
+
+  it('offers the architecture formats without needing a Flow, and remembers the choice', async () => {
+    const user = userEvent.setup();
+    useEditorStore.setState({ document: withoutFlows(), selection: { nodes: [], edges: [] }, selectedFlowId: null });
+    const { unmount } = renderDialog();
+    await switchMode(user, /Source/);
+    expect(screen.getByRole('button', { name: 'Export Mermaid' })).toBeDisabled();
+
+    await user.click(screen.getByRole('radio', { name: 'Architecture' }));
+    expect(screen.getByRole('radio', { name: 'Mermaid flowchart' })).toBeChecked();
+    expect(screen.getByRole('button', { name: 'Export Mermaid flowchart' })).toBeEnabled();
+    expect(screen.getByTestId('export-source-preview').textContent).toContain('flowchart LR');
+    expect(screen.getByTitle('my-diagram.mmd')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('radio', { name: 'draw.io' }));
+    expect(screen.getByTitle('my-diagram.drawio')).toBeInTheDocument();
+    expect(screen.getByTestId('export-source-preview').textContent).toContain('<mxfile');
+    await user.click(screen.getByRole('radio', { name: 'Structurizr DSL' }));
+    expect(screen.getByTitle('my-diagram.dsl')).toBeInTheDocument();
+    await user.click(screen.getByRole('radio', { name: 'C4-PlantUML' }));
+    expect(screen.getByTitle('my-diagram.puml')).toBeInTheDocument();
+    expect(prefs.get('sequence-export-format')).toBe('c4-plantuml');
+
+    unmount();
+    renderDialog();
+    expect(screen.getByRole('radio', { name: 'C4-PlantUML' })).toBeChecked();
+  });
+
+  it('caps the preview at 200 lines and says how many more there are', async () => {
+    const user = userEvent.setup();
+    const nodes = Array.from({ length: 220 }, (_, i) => createNode({ type: 'service', x: i * 10, y: 0, text: `Service ${i}` }));
+    useEditorStore.setState({ document: { ...createDocument('Big'), nodes }, selection: { nodes: [], edges: [] }, selectedFlowId: null });
+    prefs.set('sequence-export-format', 'mermaid-flowchart');
+    renderDialog();
+    await switchMode(user, /Source/);
+    const preview = screen.getByTestId('export-source-preview');
+    expect(preview.querySelector('pre')!.textContent!.split('\n')).toHaveLength(200);
+    expect(preview.textContent).toMatch(/… \d+ more lines/);
+  });
+
+  it('copies the source text and says so', async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn<(text: string) => Promise<void>>(async () => {});
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    useEditorStore.setState({ document: withFlow(), selection: { nodes: [], edges: [] }, selectedFlowId: null });
+    renderDialog();
+    await switchMode(user, /Source/);
+    await user.click(screen.getByRole('button', { name: 'Copy' }));
+    expect(writeText).toHaveBeenCalledOnce();
+    expect(writeText.mock.calls[0]![0]).toContain('sequenceDiagram');
+    expect(useUiStore.getState().toasts.some((toast) => toast.message === 'Mermaid source copied.')).toBe(true);
+    // Copying keeps the dialog open: it is often the first of several.
+    expect(useUiStore.getState().exportOpen).toBe(true);
+  });
+});
+
+describe('ExportDialog — editable images', () => {
+  it('is on by default for SVG and off for PNG, remembered per format, and noted on the tile', async () => {
+    const user = userEvent.setup();
+    useEditorStore.setState({ document: withFlow(), selection: { nodes: [], edges: [] }, selectedFlowId: null });
+    const { unmount } = renderDialog();
+
+    const editable = () => screen.getByRole('checkbox', { name: /Editable/ });
+    const meta = () => document.querySelector('.dc-export-meta')!.textContent;
+    expect(editable()).not.toBeChecked();
+    expect(meta()).not.toContain('diagram inside');
+    await user.click(screen.getByRole('radio', { name: 'SVG' }));
+    expect(editable()).toBeChecked();
+    expect(meta()).toMatch(/· diagram inside$/);
+
+    await user.click(editable());
+    expect(prefs.get('export-editable-svg')).toBe('off');
+    await user.click(screen.getByRole('radio', { name: 'PNG' }));
+    await user.click(editable());
+    expect(prefs.get('export-editable-png')).toBe('on');
+
+    unmount();
+    renderDialog();
+    expect(editable()).toBeChecked();
+    await user.click(screen.getByRole('radio', { name: 'SVG' }));
+    expect(editable()).not.toBeChecked();
   });
 });
 
@@ -204,7 +287,7 @@ describe('ExportDialog — output artifact', () => {
     // An SVG has no pixels to multiply.
     await user.click(screen.getByRole('radio', { name: 'SVG' }));
     expect(screen.queryByRole('radiogroup', { name: 'Scale' })).not.toBeInTheDocument();
-    expect(screen.getByText(/^\d+ × \d+ · vector$/)).toBeInTheDocument();
+    expect(screen.getByText(/^\d+ × \d+ · vector/)).toBeInTheDocument();
 
     await user.click(screen.getByRole('radio', { name: 'PNG' }));
     unmount();
@@ -267,6 +350,11 @@ describe('ExportDialog — keyboard navigation', () => {
     screen.getByRole('radio', { name: 'Mermaid' }).focus();
     expect(document.activeElement).toBe(screen.getByRole('radio', { name: 'Mermaid' }));
 
+    // Format, then the preview (scrollable, so it takes focus), then Copy, then the CTA.
+    await user.tab();
+    expect(document.activeElement).toBe(screen.getByLabelText('Mermaid source'));
+    await user.tab();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Copy' }));
     await user.tab();
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Export Mermaid' }));
   });

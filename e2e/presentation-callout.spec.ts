@@ -40,10 +40,43 @@ async function goToStep(page: Page, step: number) {
  * React, so under load one can read as "settled" a frame or two before the other catches up.
  * Polling them together, and only accepting a frame where neither moved, is what actually proves
  * the camera (or entrance animation) has finished — settling either one alone doesn't.
+ *
+ * First the two things that move them are waited out by name — the camera (a per-frame d3
+ * transition on the viewport, so a transform that holds over several consecutive frames has
+ * finished) and any animation or transition still running under the elements themselves — and
+ * then the boxes are sampled a rendered frame apart, twice over, so the frame React needs to catch
+ * the callout up with the canvas is what separates the samples rather than a guessed interval.
  */
 async function settledBoxes(locators: readonly Locator[]): Promise<Box[]> {
+  const page = locators[0]!.page();
+  // `page.evaluate` awaits the frames; `waitForFunction` would take the pending promise as truthy.
+  await expect
+    .poll(
+      () =>
+        page.evaluate(async () => {
+          const viewport = document.querySelector<HTMLElement>('.react-flow__viewport');
+          if (!viewport) return false;
+          const transform = viewport.style.transform;
+          for (let frame = 0; frame < 6; frame += 1) {
+            await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+            if (viewport.style.transform !== transform) return false;
+          }
+          return true;
+        }),
+      { message: 'the camera has come to rest' },
+    )
+    .toBe(true);
+  for (const locator of locators) {
+    await expect
+      .poll(() => locator.evaluate((el) => el.getAnimations({ subtree: true }).filter((animation) => animation.playState === 'running').length), {
+        message: 'nothing under the element is still animating',
+      })
+      .toBe(0);
+  }
+  const nextFrame = () => page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
   let previous: Box[] | null = null;
-  for (let i = 0; i < 40; i++) {
+  let stableRuns = 0;
+  for (let i = 0; i < 120; i++) {
     const boxes = await Promise.all(locators.map((locator) => locator.boundingBox()));
     if (boxes.every((box) => box !== null)) {
       const current = boxes as Box[];
@@ -55,12 +88,15 @@ async function settledBoxes(locators: readonly Locator[]): Promise<Box[]> {
             Math.abs(previous![index]!.y - box.y) < 0.5 &&
             previous![index]!.width === box.width,
         );
-      if (stable) return current;
+      // Two still comparisons in a row: one could straddle the frame before a move's first tick.
+      stableRuns = stable ? stableRuns + 1 : 0;
+      if (stableRuns >= 2) return current;
       previous = current;
     } else {
       previous = null;
+      stableRuns = 0;
     }
-    await locators[0]!.page().waitForTimeout(120);
+    await nextFrame();
   }
   throw new Error('boxes never settled together');
 }
@@ -223,15 +259,17 @@ test.describe('Presentation callouts', () => {
   });
 
   test('a presenter can ask another element to speak, and the step change lets it go', async ({ page }) => {
+    // The Command API: on screen at steps 5 and 6 at this window size, in every engine (Read Store,
+    // further right, is only reachable by scrolling the canvas, which only Chromium allows).
     await presentSubmitCommand(page);
     await goToStep(page, 5);
-    await nodeNamed(page, 'Read Store').locator('.dc-attachment-badge').click();
+    await nodeNamed(page, 'Command API').locator('.dc-attachment-badge').click();
     await expect(page.locator('.dc-callout')).toHaveCount(1);
-    await expect(page.locator('.dc-callout')).toContainText('Shaped for the questions');
+    await expect(page.locator('.dc-callout')).toContainText('ChangeStatus');
     // Clicking inside the callout neither steps the presentation nor dismisses it.
-    await page.locator('.dc-callout-note').click();
+    await page.locator('.dc-callout-card').click();
     await expect(page.locator('.dc-explain-count')).toHaveText('Step 5 / 7');
-    await expect(page.locator('.dc-callout')).toContainText('Shaped for the questions');
+    await expect(page.locator('.dc-callout')).toContainText('ChangeStatus');
 
     await page.keyboard.press('ArrowRight');
     await expect(page.locator('.dc-callout')).toHaveCount(0);
@@ -242,10 +280,10 @@ test.describe('Presentation callouts', () => {
   test('a reveal never flashes into the next step, and closes on a second click or Escape', async ({ page }) => {
     await presentSubmitCommand(page);
     await goToStep(page, 5);
-    const badge = nodeNamed(page, 'Read Store').locator('.dc-attachment-badge');
+    const badge = nodeNamed(page, 'Command API').locator('.dc-attachment-badge');
     await badge.click();
     await expect(page.locator('.dc-callout')).toHaveCount(1);
-    await expect(page.locator('.dc-callout')).toContainText('Shaped for the questions');
+    await expect(page.locator('.dc-callout')).toContainText('ChangeStatus');
     await settledBox(page.locator('.dc-callout .dc-callout-card'));
 
     // Count every callout that mounts from here on: stepping must not mount a fresh one for the

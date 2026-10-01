@@ -4,7 +4,7 @@ import { AES_GCM, AES_KEY_LENGTH } from './types';
 /**
  * The local encryption key that every build up to 1.11 encrypted stored diagrams with.
  *
- * Since 2.0 nothing is encrypted at rest (see `crypto/types.ts` for why), so this module is a
+ * Since 1.12 nothing is encrypted at rest (see `crypto/types.ts` for why), so this module is a
  * reader: `getMasterKey` opens whatever key an earlier build left behind, and never makes one. A
  * profile with encrypted rows but no key has lost them, and generating a fresh key would only
  * disguise that as a decrypt failure.

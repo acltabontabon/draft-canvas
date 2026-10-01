@@ -1119,7 +1119,7 @@ async function stripShape(repository: IndexedDbRepository, id: string): Promise<
   await putRawSummary(rest);
 }
 
-describe('body shapes: plain since 2.0, encrypted and legacy still read', () => {
+describe('body shapes: plain since 1.12, encrypted and legacy still read', () => {
   it('save() writes a plain row with a fresh stamp per write, and makes no key', async () => {
     const repository = await IndexedDbRepository.open();
     const doc = documentWith('Plain', 2);

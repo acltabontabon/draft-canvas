@@ -1,7 +1,34 @@
 import { expect, test, type Page } from '@playwright/test';
-import { newCanvas, create, connect, reopenAfterReload } from './canvas';
+import { cameraAtRest, connect, create, newCanvas, nextFrames, reopenAfterReload } from './canvas';
 
 /** Editing mechanics that the critical journey does not exercise. */
+
+/** How many undo steps the editor holds. */
+const undoDepth = (page: Page) =>
+  page.evaluate(async () => {
+    const { useEditorStore } = await import('/src/store/editorStore.ts');
+    return useEditorStore.getState().history.past.length;
+  });
+
+/**
+ * A resize gesture has been let go of by the editor: its undo step is in, and the interaction
+ * bracket that makes the keyboard ignore every shortcut while a drag is in flight
+ * (`EditorScreen.tsx`'s key handler returns on `interactionActive`) has closed — the two things
+ * a ⌘Z straight after `mouse.up` was otherwise racing.
+ */
+async function gestureCommitted(page: Page, undoDepthBefore: number) {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(async () => {
+          const { useUiStore } = await import('/src/store/uiStore.ts');
+          return useUiStore.getState().interactionActive;
+        }),
+      { message: 'the gesture has released the keyboard' },
+    )
+    .toBe(false);
+  await expect.poll(() => undoDepth(page), { message: 'the gesture is an undo step' }).toBeGreaterThan(undoDepthBefore);
+}
 
 test.describe('editing', () => {
   test('resizes a node and keeps the new size after a reload', async ({ page }) => {
@@ -72,13 +99,14 @@ test.describe('editing', () => {
     const node = page.locator('.dc-node').first();
     await node.click();
     const before = (await node.boundingBox())!;
+    const undoDepthBefore = await undoDepth(page);
 
     const corner = (await page.locator('.dc-resize-handle').nth(3).boundingBox())!;
     await page.mouse.move(corner.x + corner.width / 2, corner.y + corner.height / 2);
     await page.mouse.down();
     await page.mouse.move(corner.x + 150, corner.y + 100, { steps: 15 });
     await page.mouse.up();
-    await page.waitForTimeout(200);
+    await gestureCommitted(page, undoDepthBefore);
 
     await page.keyboard.press('Meta+z');
     await expect
@@ -117,6 +145,7 @@ test.describe('editing', () => {
     const node = page.locator('.dc-node').first();
     await node.click();
     const before = (await node.boundingBox())!;
+    const undoDepthBefore = await undoDepth(page);
     const handles = page.locator('.dc-resize-handle');
     await expect(handles).toHaveCount(4);
     const corner = (await handles.nth(3).boundingBox())!;
@@ -126,7 +155,7 @@ test.describe('editing', () => {
     await page.mouse.up();
     await expect.poll(async () => (await node.boundingBox())!.width).toBeGreaterThan(before.width + 80);
     await expect.poll(gap).toBeLessThan(6);
-    await page.waitForTimeout(200);
+    await gestureCommitted(page, undoDepthBefore);
 
     await page.keyboard.press(process.platform === 'darwin' ? 'Meta+z' : 'Control+z');
     await expect.poll(async () => Math.abs((await node.boundingBox())!.width - before.width)).toBeLessThan(4);
@@ -252,7 +281,6 @@ test.describe('editing', () => {
     await page.mouse.move(corner.x + corner.width / 2, corner.y + corner.height / 2);
     await page.mouse.down();
     await page.mouse.move(targetRight, corner.y + corner.height / 2, { steps: 12 });
-    await page.waitForTimeout(150);
 
     // Both nodes share a height, so the unmoved bottom edge coincidentally
     // lines up with the neighbour's too — assert the x-axis guide this test
@@ -508,7 +536,10 @@ test.describe('editing', () => {
     await expect(page.locator('.dc-node')).toHaveCount(2);
   });
 
-  test('pastes a copied selection into a different diagram after a reload', async ({ page, context }) => {
+  test('pastes a copied selection into a different diagram after a reload', async ({ page, context, browserName }) => {
+    // Reads the OS clipboard back, which only Chromium lets a test grant (WebKit and Firefox reject
+    // `clipboard-read`); the paste paths themselves run on every engine in the other specs.
+    test.skip(browserName !== 'chromium', 'clipboard permissions are Chromium-only in Playwright');
     // The in-memory clipboard alone already survives switching diagrams within the same tab; a
     // reload after copying is what forces this test through the OS clipboard instead. Plain
     // Cmd/Ctrl+V itself never calls `navigator.clipboard.readText()` — it reads a native `paste`
@@ -621,6 +652,7 @@ test.describe('editing', () => {
     await page.mouse.move(grab.x, grab.y);
     await page.mouse.down();
     await page.mouse.move(grab.x + dragDx, grab.y + dragDy, { steps: 10 });
+    await nextFrames(page);
     await page.mouse.up();
 
     const boundaryAfter = (await boundary.boundingBox())!;
@@ -731,6 +763,8 @@ test.describe('editing', () => {
     });
     await page.waitForSelector('.dc-editor');
     await expect(page.locator('.dc-node')).toHaveCount(4);
+    // Opening frames the diagram with a short ease; the drag below is measured on screen.
+    await cameraAtRest(page);
 
     const node = (id: string) => page.locator(`.react-flow__node[data-id="${id}"] .dc-node`);
     const boundary = node('b');
@@ -746,6 +780,7 @@ test.describe('editing', () => {
     await page.mouse.move(from.x, from.y);
     await page.mouse.down();
     await page.mouse.move(from.x + 380, from.y + 300, { steps: 16 });
+    await nextFrames(page);
     await page.mouse.up();
     const outside = (await node('m1').boundingBox())!;
     const frame = (await boundary.boundingBox())!;
@@ -816,6 +851,7 @@ test.describe('editing', () => {
     await page.mouse.move(grab.x, grab.y);
     await page.mouse.down();
     await page.mouse.move(grab.x + dragDx, grab.y + dragDy, { steps: 10 });
+    await nextFrames(page);
     await page.mouse.up();
 
     const outerAfter = (await groups.nth(outerEntry.index).boundingBox())!;
@@ -983,8 +1019,8 @@ test.describe('editing', () => {
     const remaining = targetCentre + 4 - (moving.x + moving.width / 2);
 
     await page.mouse.move(pointer.x + remaining, pointer.y, { steps: 8 });
-    await page.waitForTimeout(150);
 
+    // The guide is drawn from the move itself; the count assertion retries until it is.
     await expect(page.locator('.dc-guide')).toHaveCount(1);
     await page.mouse.up();
 
@@ -993,7 +1029,10 @@ test.describe('editing', () => {
     expect(Math.abs(landed.x + landed.width / 2 - targetCentre)).toBeLessThan(1.5);
   });
 
-  test('copies a code card\'s contents to the clipboard', async ({ page, context }) => {
+  test('copies a code card\'s contents to the clipboard', async ({ page, context, browserName }) => {
+    // Reads the OS clipboard back, which only Chromium lets a test grant (WebKit and Firefox reject
+    // `clipboard-read`); the paste paths themselves run on every engine in the other specs.
+    test.skip(browserName !== 'chromium', 'clipboard permissions are Chromium-only in Playwright');
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     await newCanvas(page, 'Copy code');
     await create(page, 'Code', { x: 400, y: 300 });

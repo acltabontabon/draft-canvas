@@ -34,6 +34,8 @@ import { presentationScope, revealIn } from '../../presentation/presentationAtta
 import { useThemeValue } from '../theme/useTheme';
 import { backOut, lookInside } from './depthNavigation';
 import { OpenPointsPanel } from './OpenPointsPanel';
+import { OutlinePanel } from './OutlinePanel';
+import { useSelectionAnnouncements } from './useSelectionAnnouncements';
 import { OpenPointPopover } from '../../canvas/OpenPointPopover';
 import { DepthAnnouncer, DepthStack } from './DepthStack';
 import { DepthTransition } from './DepthTransition';
@@ -41,6 +43,7 @@ import { EmptyState } from './EmptyState';
 import { FlowBar } from './FlowBar';
 import { FlowPanel } from './FlowPanel';
 import { FocusIndicator } from './FocusIndicator';
+import { dragCarriesImport, importDroppedFile, insertMermaidText, looksLikeMermaid } from './importIntoEditor';
 import { CanvasSettingsDialog } from './CanvasSettingsDialog';
 import { CommandPalette } from './CommandPalette';
 import { Inspector } from './Inspector';
@@ -138,6 +141,9 @@ function EditorScreen({ session }: { session: DocumentSession }) {
 
   const armed = useUiStore((state) => state.armed);
   const arm = useUiStore((state) => state.arm);
+  // A diagram that came by share link: the store refuses every edit while this is set, and the
+  // banner below is how you turn it into a diagram of your own.
+  const readOnly = useUiStore((state) => state.readOnly);
   const setExportOpen = useUiStore((state) => state.setExportOpen);
   const setShortcutsOpen = useUiStore((state) => state.setShortcutsOpen);
   const exportOpen = useUiStore((state) => state.exportOpen);
@@ -385,6 +391,36 @@ function EditorScreen({ session }: { session: DocumentSession }) {
   }, [mode, setViewport]);
 
   useKeyboard({ createAtPointer, onPresent, playback });
+  useSelectionAnnouncements();
+
+  // A file or flowchart text dropped onto the canvas. The browser's default for a dropped file is
+  // to navigate away from the editor — and lose the diagram's unsaved edits — so `dragover` is
+  // claimed for anything the canvas can take and nothing else. A drop onto a text field (a note
+  // being edited) is that field's.
+  useEffect(() => {
+    const onDragOver = (event: DragEvent) => {
+      if (isEditableTarget(event.target) || !dragCarriesImport(event.dataTransfer)) return;
+      event.preventDefault();
+    };
+    const onDrop = (event: DragEvent) => {
+      if (isEditableTarget(event.target) || !dragCarriesImport(event.dataTransfer)) return;
+      event.preventDefault();
+      if (modalIsOpen() || useEditorStore.getState().mode === 'present') return;
+      const file = event.dataTransfer?.files[0];
+      if (file) {
+        void importDroppedFile(file, session);
+        return;
+      }
+      const text = event.dataTransfer?.getData('text/plain');
+      if (text && looksLikeMermaid(text)) void insertMermaidText(text);
+    };
+    window.addEventListener('dragover', onDragOver);
+    window.addEventListener('drop', onDrop);
+    return () => {
+      window.removeEventListener('dragover', onDragOver);
+      window.removeEventListener('drop', onDrop);
+    };
+  }, [session]);
 
   const buildCommandContext = useCommandContext({ createAt, createAtPointer, playback, onPresent });
 
@@ -462,11 +498,21 @@ function EditorScreen({ session }: { session: DocumentSession }) {
           onBack={() => returnHome(session.closeDocument)}
           onPresent={onPresent}
           onExport={() => setExportOpen(true)}
+          readOnly={readOnly !== null}
         />
       )}
 
       <div className="dc-editor-body">
         <div className="dc-editor-canvas">
+          {readOnly && !presenting && (
+            <div className="dc-read-only-banner" role="status">
+              <span>Shared diagram — read only</span>
+              <span aria-hidden="true">·</span>
+              <Button variant="quiet" onClick={() => void session.makeEditableCopy()}>
+                Make an editable copy
+              </Button>
+            </div>
+          )}
           <ErrorBoundary
             key={canvasInstanceKey}
             message="Something went wrong while rendering this canvas."
@@ -554,7 +600,9 @@ function EditorScreen({ session }: { session: DocumentSession }) {
             </div>
           )}
         </div>
-
+        {/* Docked to the right of the canvas, outside it: `canvasFrame.ts` measures the canvas column, so
+            every "is it on screen" and "stay clear of the edge" check already accounts for the panel. */}
+        {!presenting && <OutlinePanel buildCommandContext={buildCommandContext} />}
       </div>
 
       <StatusBar
@@ -766,6 +814,12 @@ export function useKeyboard({
       // Text that isn't shapes was copied after this tab's last copy, so the shapes still held in
       // memory are not what the person means to paste — pasting them anyway dropped a stale copy.
       if (text && !useEditorStore.getState().applyExternalClipboardText(text)) {
+        // Foreign text that reads as a Mermaid flowchart is drawn, in this room, as one undo step
+        // (`importIntoEditor.ts`); any other text is still nothing to paste.
+        if (looksLikeMermaid(text)) {
+          void insertMermaidText(text);
+          return;
+        }
         useUiStore.getState().notify('Nothing to paste — the clipboard holds text, not shapes.');
         return;
       }
@@ -1016,6 +1070,18 @@ export function useKeyboard({
         // Otherwise the "?" that opened the sheet types itself into the sheet's own filter.
         event.preventDefault();
         setShortcutsOpen(true);
+        return;
+      }
+
+      // Alt+O: the Outline. By `event.code` for the same reason as above — on macOS, Option+O
+      // produces "ø", so the character can never match. Ahead of the keyboard-region check so the
+      // chord that opened the panel also closes it from inside; dead while presenting, where the
+      // panel is not shown.
+      if (event.altKey && !event.metaKey && !event.ctrlKey && !event.shiftKey && event.code === 'KeyO') {
+        if (presenting || modalIsOpen()) return;
+        event.preventDefault();
+        const ui = useUiStore.getState();
+        ui.setOutlinePanelOpen(!ui.outlinePanelOpen);
         return;
       }
 

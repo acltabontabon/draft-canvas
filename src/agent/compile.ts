@@ -143,10 +143,21 @@ function composeWithin(raw: unknown, diagramId: string, report: Report): Compose
       quality: qualityReceipt('whole-diagram', found),
       legibility: legibilityReceipt(legibility),
       ...(fit ? { fit } : {}),
-      ...(advice.length
-        ? { advisories: advice.slice(0, 10) }
-        : {}),
+      ...advisoriesReceipt(advice, 10),
     },
+  };
+}
+
+/**
+ * Advisories as a receipt carries them: the first `cap`, and — when there were more — how many were
+ * left out, as `advisoriesDropped`. A list cut to five that said nothing about the rest read as "that
+ * is all"; an agent that applied them and asked again would never know why new ones kept appearing.
+ */
+export function advisoriesReceipt(advisories: readonly string[], cap: number): { advisories?: string[]; advisoriesDropped?: number } {
+  if (!advisories.length) return {};
+  return {
+    advisories: advisories.slice(0, cap),
+    ...(advisories.length > cap ? { advisoriesDropped: advisories.length - cap } : {}),
   };
 }
 

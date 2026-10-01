@@ -26,14 +26,17 @@ async function ordered(page: Page): Promise<number[]> {
 
 async function connect(page: Page, fromIndex: number, toIndex: number) {
   const source = page.locator('.dc-node').nth(fromIndex);
+  await page.mouse.move(1, 1); // WebKit refreshes hover only on real movement (see e2e/canvas.ts)
   await source.hover();
   const handle = (await source.locator('.dc-handle').nth(1).boundingBox())!;
   const target = (await page.locator('.dc-node').nth(toIndex).boundingBox())!;
+  const before = await page.locator('.dc-edge').count();
   await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
   await page.mouse.down();
   await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 12 });
   await page.mouse.up();
-  await page.waitForTimeout(120);
+  // The drop is a connector on the canvas before the next gesture reads the nodes' positions.
+  await expect(page.locator('.dc-edge')).toHaveCount(before + 1);
 }
 
 /** One hub on the left calling five services stacked down the right — the shape
@@ -48,7 +51,10 @@ async function fanOut(page: Page) {
     await connect(page, order[0]!, order.slice(1)[n]!);
     await page.keyboard.press('Escape');
   }
-  await page.waitForTimeout(300);
+  // Five connectors drawn and none left selected: the bundle is derived in the same render that
+  // draws the fifth (`routingPlan` is read in `DraftEdgeView`'s selector), so nothing later is waited for.
+  await expect(page.locator('.dc-edge-hit')).toHaveCount(5);
+  await expect(page.locator('.dc-edge[data-selected="true"]')).toHaveCount(0);
 }
 
 test.describe('Smart Routing — fan-out on the live canvas', () => {

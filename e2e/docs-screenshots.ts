@@ -160,6 +160,7 @@ async function clickConnector(page: Page, from: number, to: number) {
 /** Drags from one shape's right-hand handle onto another shape. */
 async function connectNodes(page: Page, from: number, to: number) {
   const source = page.locator('.dc-node').nth(from);
+  await page.mouse.move(1, 1); // WebKit refreshes hover only on real movement (see e2e/canvas.ts)
   await source.hover();
   const handle = await box(source.locator('.dc-handle').nth(1));
   const target = await nodeCentre(page, to);

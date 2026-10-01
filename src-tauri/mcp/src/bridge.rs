@@ -296,8 +296,9 @@ async fn send<W: AsyncWrite + Unpin>(write: &mut W, frame: &Value) -> std::io::R
     write.flush().await
 }
 
-/// A generous cap: the app refuses frames past 4 MiB, and nothing it sends is larger.
-const MAX_FRAME: usize = 8 * 1024 * 1024;
+/// A generous cap. The app refuses frames past 4 MiB, and the largest it sends is a `render_diagram`
+/// answer: a PNG the page caps at 8 MB, which is ~10.7 MB once base64-encoded into the frame.
+const MAX_FRAME: usize = 16 * 1024 * 1024;
 
 async fn read_frame<R: AsyncRead + Unpin>(
     reader: &mut BufReader<R>,

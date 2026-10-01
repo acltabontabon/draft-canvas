@@ -2,7 +2,7 @@
  * An agent's request through the desktop controller, against the real editor store: the ack, the
  * turn, the revision check, the commit gate, one undo step, and save-if-clean — with the shell faked.
  */
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { compose } from '../../src/agent/compile';
 import { handleAgentRequest as answerInEditor, currentRevision } from '../../src/host/agentBridge';
 import { deserializeDocument, serializeDocument } from '../../src/export/project';
@@ -14,6 +14,23 @@ import { __resetAgentWrites } from '../../src/desktop/agentWrites';
 import { agentActivity } from '../../src/desktop/agentActivity';
 import { useUiStore } from '../../src/store/uiStore';
 import { createHarness, decoder, type Harness } from './harness';
+
+/** A 1×1 PNG, as the browser's encoder would hand it back (no `pHYs` chunk of its own). */
+const ONE_PIXEL_PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
+
+// jsdom has no canvas: the rasterizer is the one piece of `render_diagram` faked here. Everything
+// before it — the document, the view, the SVG — is real, and the SVG it was asked to draw is kept.
+const rasterized: { svg: string; options: Record<string, unknown> }[] = [];
+vi.mock('../../src/render/png/rasterize', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/render/png/rasterize')>();
+  return {
+    ...actual,
+    rasterizeSvg: vi.fn(async (svg: string, options: Record<string, unknown>) => {
+      rasterized.push({ svg, options });
+      return new Blob([new Uint8Array(ONE_PIXEL_PNG)], { type: 'image/png' });
+    }),
+  };
+});
 
 const diagramText = () =>
   compose(
@@ -297,6 +314,76 @@ describe('agent requests on desktop', () => {
     const handle = await openOrders();
     const out = await request('active_context', {}, {});
     expect(out.value).toEqual({ title: 'Orders', revision: `f:${h.files.get(handle)!.version}`, view: { path: [] } });
+  });
+
+  it('reads a diagram as sequence-diagram source when asked, open or not, with its revision', async () => {
+    const handle = await openOrders();
+    const open = await request('read_diagram', { diagramId: 'd_orders000001', format: 'mermaid' }, { handle, open: true, diagramId: 'd_orders000001' });
+    expect(open.ok).toBe(true);
+    expect(open.value).toMatchObject({ diagramId: 'd_orders000001', title: 'Orders', revision: `f:${h.files.get(handle)!.version}`, format: 'mermaid', flows: 0 });
+    expect(String(open.value!.source)).toContain('sequenceDiagram');
+    expect(open.value!.elements).toBeUndefined();
+
+    const other = h.addFile('Other', diagramText());
+    const closed = await request('read_diagram', { diagramId: 'd_orders000001', format: 'plantuml' }, closedContext(other));
+    expect(closed.ok).toBe(true);
+    expect(closed.value).toMatchObject({ revision: 'f:1', format: 'plantuml' });
+    expect(String(closed.value!.source)).toContain('@startuml');
+
+    // The default is still the structured read; c4 is the architecture as C4-PlantUML; a format the
+    // app doesn't have is named as such.
+    const plain = await request('read_diagram', { diagramId: 'd_orders000001' }, { handle, open: true, diagramId: 'd_orders000001' });
+    expect(Array.isArray(plain.value!.elements)).toBe(true);
+    const c4 = await request('read_diagram', { diagramId: 'd_orders000001', format: 'c4' }, { handle, open: true, diagramId: 'd_orders000001' });
+    expect(c4.value).toMatchObject({ revision: 'f:1', format: 'c4' });
+    expect(String(c4.value!.source)).toContain('!include <C4/C4_');
+    const unknown = await request('read_diagram', { diagramId: 'd_orders000001', format: 'dot' }, { handle, open: true, diagramId: 'd_orders000001' });
+    expect(unknown.ok).toBe(false);
+    expect(unknown.error).toMatchObject({ code: 'INVALID_INPUT', details: { path: '/format' } });
+  });
+
+  it('renders a diagram as a PNG the agent receives as an image, or as SVG text, never touching it', async () => {
+    const handle = await openOrders();
+    const before = JSON.stringify(fileOf(useEditorStore.getState()));
+    rasterized.length = 0;
+
+    const png = await request('render_diagram', { diagramId: 'd_orders000001', scale: 2, theme: 'dark' }, { handle, open: true, diagramId: 'd_orders000001' });
+    expect(png.ok).toBe(true);
+    expect(png.value).toMatchObject({ diagramId: 'd_orders000001', title: 'Orders', revision: `f:${h.files.get(handle)!.version}`, format: 'png', mimeType: 'image/png', scale: 2 });
+    expect(png.value!.width).toBeGreaterThan(0);
+    expect(png.value!.height).toBeGreaterThan(0);
+    // Drawn from the real SVG of the document, with the theme's canvas behind it, at the scale asked.
+    expect(rasterized).toHaveLength(1);
+    expect(rasterized[0]!.svg.startsWith('<svg')).toBe(true);
+    expect(rasterized[0]!.svg).toContain('Orders API');
+    expect(rasterized[0]!.options).toMatchObject({ scale: 2 });
+    expect(typeof rasterized[0]!.options.background).toBe('string');
+    // The bytes are the encoder's PNG with the density stamped in (`pHYs`), base64 for the frame.
+    const bytes = Buffer.from(String(png.value!.data), 'base64');
+    expect(bytes.subarray(0, 8)).toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+    expect(bytes.includes('pHYs')).toBe(true);
+    expect(png.value!.bytes).toBe(bytes.length);
+
+    const svg = await request('render_diagram', { diagramId: 'd_orders000001', format: 'svg' }, { handle, open: true, diagramId: 'd_orders000001' });
+    expect(svg.ok).toBe(true);
+    expect(svg.value).toMatchObject({ format: 'svg', mimeType: 'image/svg+xml' });
+    expect(String(svg.value!.svg).startsWith('<svg')).toBe(true);
+    expect(svg.value!.data).toBeUndefined();
+    expect(rasterized).toHaveLength(1);
+
+    // A closed file renders from its text under its file revision; what is open never changed.
+    const other = h.addFile('Other', diagramText());
+    const closed = await request('render_diagram', { diagramId: 'd_orders000001', format: 'svg', theme: 'light' }, closedContext(other));
+    expect(closed.value).toMatchObject({ revision: 'f:1', format: 'svg' });
+    expect(JSON.stringify(fileOf(useEditorStore.getState()))).toBe(before);
+    expect(h.files.get(handle)!.version).toBe(1);
+
+    // What the app can't draw is refused, with the field named — never a different picture.
+    const scale = await request('render_diagram', { diagramId: 'd_orders000001', scale: 4 }, { handle, open: true, diagramId: 'd_orders000001' });
+    expect(scale.error).toMatchObject({ code: 'INVALID_INPUT', details: { path: '/scale' } });
+    const view = await request('render_diagram', { diagramId: 'd_orders000001', view: { inside: ['nowhere'] } }, { handle, open: true, diagramId: 'd_orders000001' });
+    expect(view.error).toMatchObject({ code: 'NOT_FOUND' });
+    expect(rasterized).toHaveLength(1);
   });
 
   it('refuses an edit whose growth would run into a neighbour, and moves nothing', async () => {

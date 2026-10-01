@@ -4,6 +4,8 @@ import { isImeKeyEvent } from '../../../lib/isEditableTarget';
 interface DiagramTitleFieldProps {
   title: string;
   onTitleChange: (title: string) => void;
+  /** A shared diagram's name is shown, not edited. */
+  readOnly?: boolean;
 }
 
 /**
@@ -19,7 +21,7 @@ interface DiagramTitleFieldProps {
  * the reverted value, so onBlur can't trust the DOM's own `.value` or a `localTitle` closure —
  * only a ref is guaranteed current at that point.
  */
-export function DiagramTitleField({ title, onTitleChange }: DiagramTitleFieldProps) {
+export function DiagramTitleField({ title, onTitleChange, readOnly = false }: DiagramTitleFieldProps) {
   const [localTitle, setLocalTitle] = useState(title);
   const localTitleRef = useRef(title);
   const editingTitleRef = useRef(false);
@@ -40,6 +42,8 @@ export function DiagramTitleField({ title, onTitleChange }: DiagramTitleFieldPro
       value={localTitle}
       maxLength={200}
       aria-label="Diagram title"
+      readOnly={readOnly}
+      aria-disabled={readOnly || undefined}
       onFocus={() => {
         editingTitleRef.current = true;
       }}

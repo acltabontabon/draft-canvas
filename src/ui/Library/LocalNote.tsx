@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react';
 import type { DraftRepository } from '../../storage';
+import { backupIsStale, LAST_BACKUP_PREFERENCE } from '../../storage/backup';
+import { readPreference } from '../../lib/preferences';
 import { isStoragePersisted } from '../../lib/storagePersistence';
+import { useUiStore } from '../../store/uiStore';
 import { Icon } from '../common/Icon';
+import { backUpLibrary } from './backupActions';
 
 /**
  * The local-first promise, sized to how often someone needs to read it: one
@@ -18,6 +22,12 @@ export function LocalNote({ durable, repository }: { durable: boolean; repositor
   const [open, setOpen] = useState(!durable);
   const estimate = useStorageEstimate(repository, open);
   const persisted = usePersisted(durable);
+  const notify = useUiStore((state) => state.notify);
+  // Re-read after a backup from here, so the nudge goes away the moment it has been answered.
+  const [lastBackupAt, setLastBackupAt] = useState(() => readPreference(LAST_BACKUP_PREFERENCE));
+  // Only where the warning already applies: storage is real but the browser hasn't promised to keep
+  // it, and no backup has been written for a week. With persistence granted there is nothing to nudge.
+  const nudge = durable && persisted === false && repository !== null && backupIsStale(lastBackupAt);
 
   return (
     <div className="dc-local" data-warn={durable ? undefined : 'true'}>
@@ -30,6 +40,20 @@ export function LocalNote({ durable, repository }: { durable: boolean; repositor
         </span>
         <span className="dc-local-more">{open ? 'Less' : 'Details'}</span>
       </button>
+      {nudge && (
+        <p className="dc-local-nudge">
+          Back up your diagrams — the browser hasn&rsquo;t promised to keep them.{' '}
+          <button
+            type="button"
+            className="dc-local-more"
+            onClick={() =>
+              void backUpLibrary(repository, notify).then(() => setLastBackupAt(readPreference(LAST_BACKUP_PREFERENCE)))
+            }
+          >
+            Back up now
+          </button>
+        </p>
+      )}
       {open && (
         <div className="dc-local-detail">
           {durable ? (

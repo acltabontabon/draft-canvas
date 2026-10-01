@@ -5,6 +5,7 @@ import { PRODUCT } from '../../../product';
 import { applicableReleases, hasUnreadRelease } from '../../../releases/productReleases';
 import { Button } from '../../common/Button';
 import { Tooltip } from '../../common/Tooltip';
+import { FindReplaceHost } from '../FindReplaceDialog';
 import { ToolbarMenu, type ToolbarMenuItem } from './ToolbarMenu';
 import { toolbarLabel, toolbarTooltip } from './toolbarTooltips';
 
@@ -25,6 +26,7 @@ export function ToolbarActions({ onPresent, onExport }: ToolbarActionsProps) {
   const setShortcutsOpen = useUiStore((state) => state.setShortcutsOpen);
   const setAboutOpen = useUiStore((state) => state.setAboutOpen);
   const setSettingsOpen = useUiStore((state) => state.setSettingsOpen);
+  const setFindReplaceOpen = useUiStore((state) => state.setFindReplaceOpen);
   const flowPanelOpen = useUiStore((state) => state.flowPanelOpen);
   const setFlowPanelOpen = useUiStore((state) => state.setFlowPanelOpen);
   const activeFlowTitle = useEditorStore((state) =>
@@ -90,6 +92,33 @@ export function ToolbarActions({ onPresent, onExport }: ToolbarActionsProps) {
       onSelect: () => {
         closeMenu();
         setAboutOpen(true);
+      },
+    },
+    // The two document-wide edits, after the app-level utilities so the rows above keep their
+    // places under the keyboard. Both are palette commands too: each row only names the store
+    // action the command names.
+    {
+      id: 'arrange',
+      label: toolbarLabel('arrange'),
+      onSelect: () => {
+        closeMenu();
+        // No camera up here (the toolbar renders without React Flow in its tests), so the fit is
+        // asked for through the UI store and answered by the status bar's zoom controls.
+        void useEditorStore
+          .getState()
+          .arrangeRoom()
+          .then((moved) => {
+            if (moved) useUiStore.getState().requestFit();
+          });
+      },
+    },
+    {
+      id: 'find-replace',
+      label: toolbarLabel('findReplace'),
+      shortcut: toolbarTooltip('findReplace').shortcut,
+      onSelect: () => {
+        closeMenu();
+        setFindReplaceOpen(true);
       },
     },
   ];
@@ -228,6 +257,8 @@ export function ToolbarActions({ onPresent, onExport }: ToolbarActionsProps) {
           onDismiss={closeMenu}
         />
       )}
+      {/* The dialog lives with the menu row that opens it; the host also owns the ⌘H chord. */}
+      <FindReplaceHost />
     </div>
   );
 }

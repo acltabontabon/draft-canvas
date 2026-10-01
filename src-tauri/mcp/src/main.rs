@@ -15,8 +15,8 @@ mod endpoint;
 use bridge::Bridge;
 use rmcp::model::{
     CallToolRequestParams, CallToolResponse, CallToolResult, CancelledNotificationParam,
-    Implementation, ListToolsResult, PaginatedRequestParams, ProgressNotificationParam,
-    ServerCapabilities, ServerConfig, Tool,
+    ContentBlock, Implementation, ListToolsResult, PaginatedRequestParams,
+    ProgressNotificationParam, ServerCapabilities, ServerConfig, Tool,
 };
 use rmcp::service::{NotificationContext, RequestContext};
 use rmcp::{ErrorData as McpError, RoleServer, ServerHandler, ServiceExt};
@@ -53,12 +53,66 @@ struct Server {
     calls: Arc<Mutex<HashMap<String, u64>>>,
 }
 
+/// A rendered picture in a page answer (`render_diagram`): the base64 bytes of an image under its
+/// `mimeType`, or SVG source. Anything else is an ordinary value.
+enum Picture {
+    Image { data: String, mime: String },
+    Svg(String),
+}
+
+fn picture(value: &Value) -> Option<Picture> {
+    let mime = value.get("mimeType")?.as_str()?;
+    if mime == "image/svg+xml" {
+        return value
+            .get("svg")
+            .and_then(Value::as_str)
+            .map(|svg| Picture::Svg(svg.to_string()));
+    }
+    if !mime.starts_with("image/") {
+        return None;
+    }
+    value
+        .get("data")
+        .and_then(Value::as_str)
+        .map(|data| Picture::Image {
+            data: data.to_string(),
+            mime: mime.to_string(),
+        })
+}
+
+/// `value` without the picture's bytes: what is left is its metadata (id, revision, size).
+fn without(value: &Value, key: &str) -> Value {
+    let mut meta = value.clone();
+    if let Value::Object(map) = &mut meta {
+        map.remove(key);
+    }
+    meta
+}
+
 /// The tool result an agent sees: the value as structured content (and as its JSON text, which the
 /// spec asks for so clients without structured-content support still get it), or the error object
-/// marked `isError`.
+/// marked `isError`. A rendered image goes out as MCP image content — the one thing a structured
+/// value can't carry — with its metadata as the text and structured parts; an SVG as the source text
+/// itself, since that is what was asked for.
 fn result(outcome: Result<Value, Value>) -> CallToolResult {
     match outcome {
-        Ok(value) => CallToolResult::structured(value),
+        Ok(value) => match picture(&value) {
+            Some(Picture::Image { data, mime }) => {
+                let meta = without(&value, "data");
+                let mut result = CallToolResult::success(vec![
+                    ContentBlock::image(data, mime),
+                    ContentBlock::text(meta.to_string()),
+                ]);
+                result.structured_content = Some(meta);
+                result
+            }
+            Some(Picture::Svg(svg)) => {
+                let mut result = CallToolResult::success(vec![ContentBlock::text(svg)]);
+                result.structured_content = Some(without(&value, "svg"));
+                result
+            }
+            None => CallToolResult::structured(value),
+        },
         Err(error) => CallToolResult::structured_error(serde_json::json!({ "error": error })),
     }
 }
@@ -204,6 +258,7 @@ mod tests {
                 "read_diagram",
                 "read_selection",
                 "get_implementation_context",
+                "render_diagram",
                 "create_diagram",
                 "update_diagram",
                 "submit_proposal",
@@ -211,6 +266,68 @@ mod tests {
                 "list_proposals"
             ]
         );
+    }
+
+    /// `render_diagram`'s PNG is the one answer an agent must receive as image content, not as a
+    /// JSON string it would have to decode itself; its metadata still travels as structured content.
+    #[test]
+    fn a_rendered_png_is_image_content_with_its_metadata_beside_it() {
+        let value = serde_json::json!({
+            "diagramId": "d_x", "revision": "f:1", "format": "png", "mimeType": "image/png",
+            "width": 2, "height": 2, "scale": 1, "bytes": 8, "data": "iVBORw0KGgo="
+        });
+        let out = result(Ok(value));
+        assert_eq!(out.is_error, Some(false));
+        let ContentBlock::Image(image) = &out.content[0] else {
+            panic!("the first block is the image");
+        };
+        assert_eq!(image.mime_type, "image/png");
+        assert_eq!(image.data, "iVBORw0KGgo=");
+        let meta = out
+            .structured_content
+            .expect("metadata as structured content");
+        assert_eq!(meta["revision"], "f:1");
+        assert_eq!(meta["width"], 2);
+        assert!(
+            meta.get("data").is_none(),
+            "the bytes travel once, as the image"
+        );
+        let ContentBlock::Text(text) = &out.content[1] else {
+            panic!("the second block is the metadata as text");
+        };
+        assert!(!text.text.contains("iVBOR"));
+    }
+
+    #[test]
+    fn a_rendered_svg_is_its_source_as_text() {
+        let value = serde_json::json!({
+            "diagramId": "d_x", "revision": "f:1", "format": "svg", "mimeType": "image/svg+xml",
+            "width": 10, "height": 10, "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\"/>"
+        });
+        let out = result(Ok(value));
+        let ContentBlock::Text(text) = &out.content[0] else {
+            panic!("the SVG is text content");
+        };
+        assert!(text.text.starts_with("<svg"));
+        assert_eq!(out.content.len(), 1);
+        let meta = out
+            .structured_content
+            .expect("metadata as structured content");
+        assert!(meta.get("svg").is_none());
+        assert_eq!(meta["format"], "svg");
+    }
+
+    /// Every other answer is unchanged: a value with no picture in it is structured content as before.
+    #[test]
+    fn an_ordinary_value_stays_structured_content() {
+        let out = result(Ok(
+            serde_json::json!({"diagramId": "d_x", "mimeType": "text/plain"}),
+        ));
+        assert!(out.structured_content.is_some());
+        let ContentBlock::Text(text) = &out.content[0] else {
+            panic!("the JSON text");
+        };
+        assert!(text.text.contains("d_x"));
     }
 
     /// Resolving a proposal (accept/reject/dismiss) is a native, human-only action — never a tool an

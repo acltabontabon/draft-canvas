@@ -22,6 +22,12 @@ function isTabbable(element: HTMLElement): boolean {
 /**
  * Keeps a Tab keypress inside `root`, wrapping at either end rather than blocking Tab outright. Call
  * from a keydown handler; does nothing for any other key.
+ *
+ * Every step is taken here, not only the wrap at the ends. Safari, by default, Tabs only between
+ * text fields and skips buttons — so a trap that let the browser take the middle steps lost focus
+ * out of the dialog the moment the next text field in document order was behind it (Shift+Tab from
+ * the shortcut sheet's search box landed in the diagram title). Inside a dialog every control is one
+ * Tab away, in every browser.
  */
 export function trapTab(event: KeyboardEvent, root: HTMLElement): void {
   if (event.key !== 'Tab') return;
@@ -39,11 +45,16 @@ export function trapTab(event: KeyboardEvent, root: HTMLElement): void {
   // A surface may focus its own root first (so a screen reader announces its label before any one
   // control) — so "at the boundary" also means "focus hasn't left the root yet".
   const atRoot = document.activeElement === root;
-  if (event.shiftKey && (document.activeElement === first || atRoot)) {
+  if (atRoot) {
     event.preventDefault();
-    last.focus();
-  } else if (!event.shiftKey && (document.activeElement === last || atRoot)) {
-    event.preventDefault();
-    first.focus();
+    (event.shiftKey ? last : first).focus();
+    return;
   }
+  const index = focusable.indexOf(document.activeElement as HTMLElement);
+  // Focus on something the list doesn't name (a control inside a widget that manages its own
+  // focus): only the wrap is ours, the step is the browser's.
+  if (index === -1) return;
+  event.preventDefault();
+  const next = event.shiftKey ? (index === 0 ? last : focusable[index - 1]!) : index === focusable.length - 1 ? first : focusable[index + 1]!;
+  next.focus();
 }

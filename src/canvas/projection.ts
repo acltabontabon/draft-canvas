@@ -1,6 +1,7 @@
 import type { Edge, Node } from '@xyflow/react';
 import { handleIdForAnchor } from '../edges/routing';
 import type { DraftDocument, DraftEdge, DraftNode } from '../document/types';
+import { connectorReading, nodeLookupOf } from '../nodes/readings';
 
 /**
  * Projects the document into the arrays React Flow renders.
@@ -85,12 +86,18 @@ export function projectEdges(
 ): DraftRfEdge[] {
   const before = new Map(previous.map((edge) => [edge.id, edge]));
   let changed = previous.length !== document.edges.length;
+  const lookup = nodeLookupOf(document.nodes);
 
   const projected = document.edges.map((edge) => {
     const selected = options.selectedEdges.has(edge.id);
     const existing = before.get(edge.id);
     const sourceHandle = handleIdForAnchor(edge.sourceAnchor);
     const targetHandle = handleIdForAnchor(edge.targetAnchor);
+    // What a screen reader says for the connector. React Flow's wrapper is `role="img"` named
+    // "Edge from <id> to <id>" by default, and an `img` makes everything inside it presentational —
+    // so the sentence has to be given to the wrapper here, not drawn in `DraftEdgeView`. Computed
+    // from the document once per projection, never per edge per store update.
+    const ariaLabel = connectorReading(edge, lookup);
     if (
       existing &&
       existing.selected === selected &&
@@ -98,7 +105,8 @@ export function projectEdges(
       existing.target === edge.target &&
       existing.sourceHandle === sourceHandle &&
       existing.targetHandle === targetHandle &&
-      existing.selectable === options.interactive
+      existing.selectable === options.interactive &&
+      existing.ariaLabel === ariaLabel
     ) {
       return existing;
     }
@@ -119,6 +127,7 @@ export function projectEdges(
       selected,
       selectable: options.interactive,
       focusable: options.interactive,
+      ariaLabel,
       // Geometry is derived by the edge component from live node rectangles, so
       // nothing about the shape of the connector is carried here.
       data: { id: edge.id },

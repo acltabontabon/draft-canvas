@@ -50,6 +50,8 @@ const SPECS = {
     usageHint: 'With a flow active, reveals it one step at a time.',
   },
   export: { title: 'Export', commandId: 'export' },
+  arrange: { title: 'Arrange diagram', commandId: 'arrange' },
+  findReplace: { title: 'Find and replace…', commandId: 'find-replace' },
   settings: { title: 'Canvas settings', commandId: 'settings' },
   help: { title: 'Documentation', commandId: 'open-docs', description: 'The guides and reference, in a new tab.' },
   shortcuts: { title: 'Keyboard shortcuts', commandId: 'shortcuts' },

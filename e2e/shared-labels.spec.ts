@@ -31,7 +31,35 @@ async function open(page: Page) {
     buffer: Buffer.from(JSON.stringify(checkout())),
   });
   await page.waitForSelector('.dc-editor');
-  await page.waitForTimeout(700);
+  // Opening frames the diagram with a short ease; the labels are read off the settled camera.
+  await cameraAtRest(page);
+}
+
+/**
+ * The camera has come to rest and the editor has caught up with it: a move is a per-frame d3
+ * transition, so a transform that holds still over several consecutive frames has finished, and
+ * `--dc-zoom` (`Canvas.tsx`'s `useZoomVariable`) follows the zoom only once it has held still.
+ */
+async function cameraAtRest(page: Page) {
+  // `page.evaluate` awaits the frames; `waitForFunction` would take the pending promise as truthy.
+  await expect
+    .poll(
+      () =>
+        page.evaluate(async () => {
+          const viewport = document.querySelector<HTMLElement>('.react-flow__viewport');
+          const root = document.querySelector<HTMLElement>('.react-flow');
+          if (!viewport || !root) return false;
+          const transform = viewport.style.transform;
+          for (let frame = 0; frame < 6; frame += 1) {
+            await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+            if (viewport.style.transform !== transform) return false;
+          }
+          const zoom = Number(/scale\(([-\d.]+)\)/.exec(transform)?.[1] ?? 1);
+          return root.style.getPropertyValue('--dc-zoom') === String(Math.round(zoom * 20) / 20);
+        }),
+      { message: 'the camera has come to rest and --dc-zoom has followed it' },
+    )
+    .toBe(true);
 }
 
 const labels = (page: Page) => page.locator('.dc-edge-label');

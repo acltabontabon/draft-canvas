@@ -1,15 +1,17 @@
 import type { DraftDocument } from '../document/types';
-import { rasterizeSvg } from '../render/png/rasterize';
-import { renderDocumentSvg, type ExportOptions } from '../render/svg/document';
-import { themeFor } from '../render/theme/tokens';
 import { resolveExportBackground, withEmbeddedBackground } from './background';
 import { downloadBlob, downloadText } from './download';
+import { renderPngBlob, renderSvgText, type ImageExportOptions, type PngExportOptions } from './image';
 import { LEVELS_EXTENSION, zipEveryLevel, type EveryLevelOptions } from './levels';
 import { FILE_MIME, fileNameFor, serializeDocument } from './project';
 
 export * from './project';
 export * from './secureProject';
 export * from './sequence';
+export * from './source';
+export * from './clipboard';
+export { readDocumentFromPng, readDocumentFromSvg, withDocumentChunk, withDocumentMetadata } from './editable';
+export type { ImageExportOptions, PngExportOptions } from './image';
 export { collectLevels, LEVELS_EXTENSION, type EveryLevelOptions, type LevelImageFormat } from './levels';
 export { hasRooms } from './rooms';
 export { backgroundTravels } from './background';
@@ -20,24 +22,13 @@ export async function exportProjectFile(document: DraftDocument): Promise<void> 
   await downloadText(serializeDocument(file), fileNameFor(document.metadata.title), FILE_MIME);
 }
 
-export async function exportSvgFile(document: DraftDocument, options: ExportOptions = {}): Promise<void> {
-  const background = await resolveExportBackground(document, options.includeBackground !== false);
-  const { svg } = renderDocumentSvg(document, { ...options, background });
+export async function exportSvgFile(document: DraftDocument, options: ImageExportOptions = {}): Promise<void> {
+  const svg = await renderSvgText(document, options);
   await downloadText(svg, fileNameFor(document.metadata.title, '.svg'), 'image/svg+xml');
 }
 
-export async function exportPngFile(
-  document: DraftDocument,
-  options: ExportOptions & { scale?: number } = {},
-): Promise<void> {
-  const background = await resolveExportBackground(document, options.includeBackground !== false);
-  const rendered = renderDocumentSvg(document, { ...options, background });
-  const blob = await rasterizeSvg(rendered.svg, {
-    width: rendered.width,
-    height: rendered.height,
-    scale: options.scale ?? 2,
-    background: options.transparent ? undefined : themeFor(options.theme ?? 'dark').canvas,
-  });
+export async function exportPngFile(document: DraftDocument, options: PngExportOptions = {}): Promise<void> {
+  const blob = await renderPngBlob(document, options);
   await downloadBlob(blob, fileNameFor(document.metadata.title, '.png'));
 }
 

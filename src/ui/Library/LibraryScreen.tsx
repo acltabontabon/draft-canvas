@@ -1,6 +1,6 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { readProjectFile } from '../../export/project';
-import { looksLikeSecureExport, readSecureProjectFile } from '../../export/secureProject';
+import { useEffect, useId, useMemo, useRef, useState, type DragEvent } from 'react';
+import { readSecureProjectFile } from '../../export/secureProject';
+import { IMPORT_ACCEPT, routeImportFile, unsupportedNotice } from '../../import/route';
 import type { DraftSummary } from '../../document/types';
 import type { NormalizeResult } from '../../document/validate';
 import { isEditableTarget, isImeKeyEvent } from '../../lib/isEditableTarget';
@@ -15,6 +15,7 @@ import { relativeTime } from '../../lib/relativeTime';
 import { Fingerprint } from './Fingerprint';
 import { LibraryBrand } from './LibraryBrand';
 import { LocalNote } from './LocalNote';
+import { backUpLibrary, restoreLibrary } from './backupActions';
 import { MoveToProjectMenu } from './MoveToProjectMenu';
 import { ProjectSidebar } from './ProjectSidebar';
 import { StarterGrid } from './StarterGrid';
@@ -48,6 +49,7 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
   const moveMenuOpenFor = useUiStore((state) => state.moveMenuOpenFor);
   const setMoveMenuOpenFor = useUiStore((state) => state.setMoveMenuOpenFor);
   const fileInput = useRef<HTMLInputElement>(null);
+  const restoreInput = useRef<HTMLInputElement>(null);
   const searchInput = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLElement>(null);
   const [confirmDelete, setConfirmDelete] = useState<DraftSummary | null>(null);
@@ -111,23 +113,65 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
 
   const onImport = async (file: File | undefined) => {
     if (!file) return;
-    if (await looksLikeSecureExport(file)) {
+    // What the file is — a document, an encrypted one, a Mermaid flowchart, an editable image — is
+    // decided in one place for every entry point (`import/route.ts`).
+    const routed = await routeImportFile(file);
+    if (routed.kind === 'secure') {
       // Reading it needs a passphrase first — hand off to the prompt below
       // rather than reading (and failing) here.
       setSecurePendingFile(file);
       return;
     }
-    await finishImport(await readProjectFile(file));
+    // Named before the document opens, so what was left out is read once, not found later.
+    const notice = unsupportedNotice(routed.unsupported ?? []);
+    if (notice) notify(notice);
+    await finishImport(routed.result);
+  };
+
+  // A file dropped anywhere on the Library imports the same way the button does. `dragover` must be
+  // claimed or the browser opens the file in place of the app.
+  const dropProps = {
+    onDragOver: (event: DragEvent) => {
+      if (Array.from(event.dataTransfer.types).includes('Files')) event.preventDefault();
+    },
+    onDrop: (event: DragEvent) => {
+      if (!Array.from(event.dataTransfer.types).includes('Files')) return;
+      event.preventDefault();
+      void onImport(event.dataTransfer.files[0]);
+    },
   };
 
   const fileInputElement = (
     <input
       ref={fileInput}
       type="file"
-      accept=".draftcanvas,.json,application/json,.dcenc"
+      accept={IMPORT_ACCEPT}
       hidden
       onChange={(event) => {
         void onImport(event.target.files?.[0]);
+        event.target.value = '';
+      }}
+    />
+  );
+
+  // Restore adds, never replaces: every diagram in the archive arrives beside what is here, a
+  // taken id becoming a copy — so the list and the project nav are simply refreshed afterwards.
+  const onRestore = async (file: File | undefined) => {
+    if (!file || !session.repository) return;
+    const result = await restoreLibrary(session.repository, file, notify);
+    if (!result) return;
+    await session.refreshProjects();
+    await session.refreshLibrary();
+  };
+  const restoreInputElement = (
+    <input
+      ref={restoreInput}
+      type="file"
+      accept=".zip,application/zip"
+      aria-label="Backup file"
+      hidden
+      onChange={(event) => {
+        void onRestore(event.target.files?.[0]);
         event.target.value = '';
       }}
     />
@@ -166,16 +210,16 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
 
   if (firstRun) {
     return (
-      <>
+      <div style={{ display: 'contents' }} {...dropProps}>
         <FirstRunHome session={session} onImport={() => fileInput.current?.click()} />
         {fileInputElement}
         {secureImport}
-      </>
+      </div>
     );
   }
 
   return (
-    <div className="dc-library">
+    <div className="dc-library" {...dropProps}>
       <main className="dc-library-inner">
         <header className="dc-library-header">
           <LibraryBrand />
@@ -196,6 +240,22 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
             {!searching && <kbd aria-hidden="true">/</kbd>}
           </label>
           <div className="dc-library-actions">
+            {/* The whole Library in one file and back — only where a repository stands behind it. */}
+            {session.repository && (
+              <>
+                <Button
+                  variant="quiet"
+                  icon="export"
+                  aria-label="Back up all diagrams"
+                  onClick={() => void backUpLibrary(session.repository!, notify)}
+                >
+                  Back up
+                </Button>
+                <Button variant="quiet" icon="file" aria-label="Restore from backup…" onClick={() => restoreInput.current?.click()}>
+                  Restore…
+                </Button>
+              </>
+            )}
             <Button variant="quiet" icon="upload" onClick={() => fileInput.current?.click()}>
               Import
             </Button>
@@ -206,6 +266,7 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
         </div>
 
         {fileInputElement}
+        {restoreInputElement}
 
         <div className="dc-library-body">
           {showSidebar && (

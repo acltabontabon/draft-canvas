@@ -40,8 +40,7 @@ export function getIt(version) {
     '',
     '- **On the web:** [acltabontabon.com/draft-canvas](https://acltabontabon.com/draft-canvas/). Nothing you draw leaves your browser.',
     `- **Desktop (macOS and Windows):** the installers under **Assets** below. Installed copies update themselves.`,
-    `- **Docker:** \`docker run -d -p 8080:80 acltabontabon/draft-canvas:${version}\``,
-    '- **VS Code:** [Draft Canvas for VS Code](https://marketplace.visualstudio.com/items?itemName=acltabontabon.draft-canvas), on its own release schedule.',
+    `- **Docker:** \`docker run -d -p 8080:8080 acltabontabon/draft-canvas:${version}\` (port 8080 inside the container since 1.12)`,
   ].join('\n');
 }
 
@@ -51,7 +50,7 @@ export function getItOnTheWeb(version) {
     '### Get it',
     '',
     '- **On the web:** [acltabontabon.com/draft-canvas](https://acltabontabon.com/draft-canvas/). Nothing you draw leaves your browser.',
-    `- **Docker:** \`docker run -d -p 8080:80 acltabontabon/draft-canvas:${version}\``,
+    `- **Docker:** \`docker run -d -p 8080:8080 acltabontabon/draft-canvas:${version}\` (port 8080 inside the container since 1.12)`,
   ].join('\n');
 }
 

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { cameraAtRest } from './canvas';
 
 /**
  * Clicking and hovering a connector, with a real mouse.
@@ -67,7 +68,7 @@ async function open(page: Page, document: object) {
   });
   await page.waitForSelector('.dc-editor');
   // Opening frames the diagram with a short ease; sample the settled camera.
-  await page.waitForTimeout(700);
+  await cameraAtRest(page);
 }
 
 /** Points along a connector's route on screen, `offset` pixels to one side of it. */
@@ -141,13 +142,16 @@ async function setZoom(page: Page, zoom: number) {
   const current = async () =>
     page.locator('.react-flow__viewport').evaluate((el) => new DOMMatrix(getComputedStyle(el).transform).a);
   for (let i = 0; i < 40 && Math.abs((await current()) - zoom) > 0.08; i += 1) {
+    const before = await current();
     await page.keyboard.down('Control');
-    await page.mouse.wheel(0, (await current()) > zoom ? 60 : -60);
+    await page.mouse.wheel(0, before > zoom ? 60 : -60);
     await page.keyboard.up('Control');
-    await page.waitForTimeout(40);
+    // Each tick is read back before the next, so the loop steps on the zoom it has, not the one
+    // still being applied — the targets sit well inside the 0.1–4 limits, so every tick moves it.
+    await expect.poll(current, { message: `zoom moves from ${before}` }).not.toBe(before);
   }
   // `--dc-zoom`, which sizes the hit band on screen, follows once the zoom holds still.
-  await page.waitForTimeout(300);
+  await cameraAtRest(page);
 }
 
 test.describe('clicking a connector', () => {

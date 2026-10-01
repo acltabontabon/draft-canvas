@@ -313,6 +313,11 @@ function AboutDialogBody() {
           <div className="dc-about-signature">
             <span>
               Built by <strong>{PRODUCT.author}</strong>
+              {' · '}
+              {/* Relative, so it resolves wherever the build is served from — and inside the desktop bundle. */}
+              <a className="dc-about-licenses" href="./THIRD_PARTY_LICENSES.txt" target="_blank" rel="noreferrer">
+                Third-party licences
+              </a>
             </span>
             <div className="dc-about-links">
               <a

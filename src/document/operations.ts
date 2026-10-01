@@ -1339,3 +1339,79 @@ export function setSettings(doc: DraftDocument, patch: Partial<DraftSettings>): 
 export function touch(doc: DraftDocument, at = Date.now()): DraftDocument {
   return { ...doc, metadata: { ...doc.metadata, updatedAt: at } };
 }
+
+/* --------------------------------------------------------- find/replace ---- */
+
+export interface ReplaceOptions {
+  /** Default `false`: "api" finds "API". */
+  matchCase?: boolean;
+  /** Default `false`: "order" also finds "orders". On, a match has no letter, digit or `_` on either side. */
+  wholeWord?: boolean;
+}
+
+/** The text a find-and-replace sees: shape names, connector labels, attachment text, flow titles. */
+type Labelled = Pick<DraftDocument, 'nodes' | 'edges' | 'flows'>;
+
+/**
+ * `find` as a regular expression that matches it literally, as many times as it occurs. Unicode
+ * letters count as word characters, so "café" is a whole word and "設計" is not cut at a syllable.
+ */
+function matcherFor(find: string, options: ReplaceOptions): RegExp {
+  const literal = find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = options.wholeWord ? `(?<![\\p{L}\\p{N}_])${literal}(?![\\p{L}\\p{N}_])` : literal;
+  return new RegExp(pattern, options.matchCase ? 'gu' : 'giu');
+}
+
+/**
+ * Every occurrence of `find` across the room's labels replaced with `replace`, and how many there
+ * were. Only the text a person typed is searched — a connector showing its inferred relationship
+ * has no label to change, and a shape named by its kind has no text. Structural sharing: a node,
+ * edge or flow nothing matched in keeps its identity, and so does the room when the count is zero,
+ * which is what lets a file-wide pass over every room cost nothing where nothing matched.
+ */
+export function replaceLabels<T extends Labelled>(doc: T, find: string, replace: string, options: ReplaceOptions = {}): { doc: T; count: number } {
+  if (find.length === 0) return { doc, count: 0 };
+  const matcher = matcherFor(find, options);
+  let count = 0;
+  const swap = (text: string | undefined): string | undefined => {
+    if (!text) return text;
+    const found = text.match(matcher)?.length ?? 0;
+    if (found === 0) return text;
+    count += found;
+    return text.replace(matcher, () => replace);
+  };
+  const attachments = (list: Attachment[] | undefined): Attachment[] | undefined => {
+    if (!list) return list;
+    let changed = false;
+    const next = list.map((attachment) => {
+      const text = swap(attachment.text);
+      if (text === attachment.text) return attachment;
+      changed = true;
+      return { ...attachment, text };
+    });
+    return changed ? next : list;
+  };
+  const nodes = doc.nodes.map((node) => {
+    const text = swap(node.text);
+    const list = attachments(node.attachments);
+    if (text === node.text && list === node.attachments) return node;
+    return { ...node, ...(text === node.text ? {} : { text }), ...(list === node.attachments ? {} : { attachments: list }) };
+  });
+  const edges = doc.edges.map((edge) => {
+    const label = swap(edge.label);
+    const list = attachments(edge.attachments);
+    if (label === edge.label && list === edge.attachments) return edge;
+    return { ...edge, ...(label === edge.label ? {} : { label }), ...(list === edge.attachments ? {} : { attachments: list }) };
+  });
+  const flows = doc.flows.map((flow) => {
+    const title = swap(flow.title);
+    return title === flow.title ? flow : { ...flow, title: title ?? flow.title };
+  });
+  if (count === 0) return { doc, count: 0 };
+  return { doc: { ...doc, nodes, edges, flows }, count };
+}
+
+/** How many times `find` occurs in the room's labels — what `replaceLabels` would change. */
+export function countLabelMatches(doc: Labelled, find: string, options: ReplaceOptions = {}): number {
+  return replaceLabels(doc, find, '', options).count;
+}

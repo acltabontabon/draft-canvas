@@ -32,15 +32,40 @@ jobs:
       - run: npm run typecheck:tooling
       # Builds the editor, the site, and the assembled dist-web/ the deploy publishes.
       - run: npm run build:web
-      - run: npm test
-      - run: npx playwright install --with-deps chromium
-      - run: npm run e2e
-      - run: npm run e2e:offline
-      - run: npm run e2e:web
+      # Unit tests with the coverage floor (vite.config.ts): a drop below it fails the build.
+      - run: npm run test:coverage
+      - run: npm run licenses:check
+
+  # The whole journey suite, once per engine the app ships to. Retries stay on so a flaky test is
+  # *identified* rather than merely re-rolled: `--fail-on-flaky-tests` fails the run when a test only
+  # passed on its retry, so a flake is fixed, not tolerated.
+  e2e:
+    needs: verify
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    env:
+      PLAYWRIGHT_BROWSER: ${{ matrix.browser }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.14.0
+          cache: npm
+      - run: npm ci
+      - run: npm ci
+        working-directory: www
+      - run: npm run build:web
+      - run: npx playwright install --with-deps ${{ matrix.browser }}
+      - run: npm run e2e -- --fail-on-flaky-tests
+      - run: npm run e2e:offline -- --fail-on-flaky-tests
+      - run: npm run e2e:web -- --fail-on-flaky-tests
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.browser }}
           path: |
             playwright-report/
             playwright-report-offline/
@@ -59,9 +84,14 @@ jobs:
       - run: docker build --tag draft-canvas:ci .
       - name: The image serves the app
         run: |
-          docker run --detach --name draft-canvas --publish 8080:80 draft-canvas:ci
+          docker run --detach --name draft-canvas --publish 8080:8080 draft-canvas:ci
           for _ in $(seq 1 30); do curl -fsS -o /dev/null http://127.0.0.1:8080/ && break; sleep 1; done
           curl -fsS http://127.0.0.1:8080/ | grep -q '<div id="root">'
+          # Non-root, and the headers the privacy promise is enforced with.
+          test "$(docker exec draft-canvas id -u)" != 0
+          curl -fsSI http://127.0.0.1:8080/ | grep -qi "content-security-policy: .*frame-ancestors 'none'"
+          curl -fsSI http://127.0.0.1:8080/ | grep -qi 'x-frame-options: DENY'
+          curl -fsS http://127.0.0.1:8080/THIRD_PARTY_LICENSES.txt | grep -q 'react'
           asset="$(curl -fsS http://127.0.0.1:8080/ | grep -oE 'assets/index-[A-Za-z0-9_-]+\.js' | head -n 1)"
           test -n "$asset"
           curl -fsSI "http://127.0.0.1:8080/$asset" | grep -qi 'cache-control: public, max-age=31536000, immutable'

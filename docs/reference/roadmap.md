@@ -1,17 +1,18 @@
 # What comes next, and in what order
 
-The 2.0 release made Draft Canvas smaller on purpose (see the [changelog](../../CHANGELOG.md)). The
-five pieces of work below were weighed while doing that and deliberately kept out of it: each is new
-surface, and each deserves its own release with its own tests. They are ordered by how much they
-change for someone drawing and explaining a system in a meeting, then by dependency, then by cost.
-None of them is promised, and nothing here has a date.
+The 1.12 release made Draft Canvas smaller on purpose (see the [changelog](../../CHANGELOG.md)). The
+five pieces of work below were weighed while doing that; three of them — B, C and D — shipped in
+1.12 after all, and their sections stay here as the record of what was decided and why. A and E
+are still ahead: each is new surface, and each deserves its own release with its own tests. They
+are ordered by how much they change for someone drawing and explaining a system in a meeting, then
+by dependency, then by cost. Neither is promised, and nothing here has a date.
 
 | # | Work | Why first | Cost / risk |
 | --- | --- | --- | --- |
 | A | Files on the web | The README still says "diagrams live in one browser"; this makes the web app as dependable as the desktop about where work lives | Medium / medium |
-| B | Read-only share links | A meeting is more than one person, and today the only way to hand a diagram over is a file | Small / medium (untrusted input, URL limits) |
-| C | Editable PNG and SVG | Every picture pasted into a README or a PR becomes a way back into the editor | Small / low |
-| D | One bounded import | People arrive with diagrams; Mermaid flowcharts are the common case | Medium / medium |
+| B | Read-only share links | **Shipped in 1.12.** A meeting is more than one person, and a file was the only way to hand a diagram over | Small / medium (untrusted input, URL limits) |
+| C | Editable PNG and SVG | **Shipped in 1.12.** Every picture pasted into a README or a PR is a way back into the editor | Small / low |
+| D | One bounded import | **Shipped in 1.12.** People arrive with diagrams; Mermaid flowcharts are the common case | Medium / medium |
 | E | Agent entry point and review | Builds on MCP and proposals that already exist; the front door is what is missing | Medium / low |
 
 ## A. Open, Save and Save As on the web
@@ -43,7 +44,7 @@ Import/Export only and no broken commands.
 command registry, `docs/guides/saving-and-sharing.md`. `tests/privacy.test.ts` is unaffected: the
 API makes no network requests.
 
-## B. Read-only share links
+## B. Read-only share links (shipped in 1.12)
 
 **Scope.** **Share → Copy link** puts a versioned, compressed snapshot of the current document in the
 URL fragment (`#d=<version>.<deflate-raw, base64url>`). Opening such a link shows the diagram
@@ -74,7 +75,7 @@ and at a Docker root path.
 `App.tsx` (read-only mode is a `mode` on the editor store, like presenting), the command registry, the
 toolbar, `docs/guides/saving-and-sharing.md`, `docs/reference/privacy.md`.
 
-## C. Editable PNG and SVG
+## C. Editable PNG and SVG (shipped in 1.12)
 
 **Scope.** An **Include editable diagram data** checkbox in the Image export (default on for SVG, off
 for PNG, remembered as a preference). SVG carries the serialized document in a `<metadata>` element;
@@ -98,7 +99,7 @@ failing; the visual output is byte-identical to today's when the box is unticked
 **Modules.** `src/render/svg/document.ts`, `src/render/png/rasterize.ts` (chunk writer), `src/export/`,
 `LibraryScreen.tsx` import, `docs/guides/saving-and-sharing.md`.
 
-## D. One bounded import: Mermaid flowcharts
+## D. One bounded import: Mermaid flowcharts (shipped in 1.12)
 
 **Scope.** `graph`/`flowchart` only: nodes with the common shape brackets, edges with and without
 labels, subgraphs as boundaries, direction hints for the initial layout. Everything else (classes,
@@ -124,7 +125,7 @@ picker (`.mmd`, pasted text), `docs/guides/saving-and-sharing.md`.
 
 ## E. Agent entry point and review
 
-**Scope.** On the desktop, one obvious door: Home's **Connect an agent…** (shipped in 2.0) grows a
+**Scope.** On the desktop, one obvious door: Home's **Connect an agent…** (shipped in 1.12) grows a
 status line — off, on, connected, with the last request's diagram — and the editor's status bar shows
 where an agent's change will land (which diagram, which room) while a proposal is pending. The
 proposal review keeps its visual diff and explicit Accept. Verified clients are named as such

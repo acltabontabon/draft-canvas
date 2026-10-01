@@ -6,6 +6,7 @@ import type { DraftDocument, DraftSummary, Project } from '../document/types';
 import { adoptEmbeddedBackground } from '../export/background';
 import { hostKind } from '../host/hostInfo';
 import { clearDocUrl, docIdFromLocation, pushDocUrl, replaceDocUrl } from '../lib/documentUrl';
+import { clearShareFragment, decodeShareLink, sharePayloadFromHash } from '../share';
 import { stashForReload, takeReloadStash } from '../storage/reloadStash';
 import { logDiagnostic } from '../lib/diagnostics';
 import { loadFailureNotice } from '../lib/staleChunk';
@@ -91,6 +92,13 @@ export interface DocumentSession {
    *  Architecture Starter, titled after it unless `title` says otherwise. */
   newDocument: (title?: string, starterId?: StarterId) => Promise<void>;
   adoptDocument: (document: DraftDocument, options?: { fresh?: boolean }) => Promise<void>;
+  /**
+   * Shows a diagram that arrived by share link (`src/share/`): read-only (`uiStore.readOnly`), never
+   * saved, never autosaved — it is not in the library until `makeEditableCopy` puts a copy there.
+   */
+  openShared: (document: DraftDocument) => Promise<void>;
+  /** Copies the shared diagram on screen into the library, under a fresh id, and opens that copy editable. */
+  makeEditableCopy: () => Promise<void>;
   /** Resolves `true` once the canvas is closed, `false` when unsaved work kept it open. */
   closeDocument: () => Promise<boolean>;
   /**
@@ -148,6 +156,18 @@ export function useDocumentSession(): DocumentSession {
     openIdRef.current = openId;
   }, [openId]);
   const notify = useUiStore((state) => state.notify);
+  /**
+   * True while the open canvas came from a share link. A ref, like `openIdRef`: the autosave effect
+   * below reads it to stay away from a diagram that is nobody's file, and every path that puts a
+   * real, stored document on screen clears it through `leaveShared`.
+   */
+  const sharedRef = useRef(false);
+  const leaveShared = useCallback(() => {
+    if (!sharedRef.current) return;
+    sharedRef.current = false;
+    useUiStore.getState().setReadOnly(null);
+    clearShareFragment();
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -236,7 +256,8 @@ export function useDocumentSession(): DocumentSession {
    * scheduled by an actual edit and never by a re-render.
    */
   useEffect(() => {
-    if (!openId) return;
+    // A shared diagram is read-only and has no row to save into: nothing to track, nothing to schedule.
+    if (!openId || sharedRef.current) return;
     let unsubscribe: (() => void) | undefined;
     let cancelled = false;
     // Already loaded — `openId` is only ever set after the document went into the store — so this
@@ -337,6 +358,7 @@ export function useDocumentSession(): DocumentSession {
       // that tracks a newly opened document doesn't run again. Tracked before `setDocument`: the
       // still-live autosave subscription sees that revision bump, and must recognise the copy it
       // hands over as the stored one rather than write it again.
+      leaveShared();
       autosave.current?.track(loaded);
       // Reopening the same canvas — the desktop shell reloading the file after an outside edit, or taking
       // another tab's copy — should leave you standing in the room you were in, as long as the
@@ -359,8 +381,52 @@ export function useDocumentSession(): DocumentSession {
       }
       setOpenId(loaded.metadata.id);
     },
-    [notify, refreshLibrary, repository],
+    [leaveShared, notify, refreshLibrary, repository],
   );
+
+  const openShared = useCallback(
+    async (document: DraftDocument) => {
+      const request = (navigation.current += 1);
+      let editorStore: EditorStoreModule;
+      try {
+        editorStore = await loadEditorStore();
+      } catch (error) {
+        logDiagnostic(error, { operation: 'load-editor', documentId: document.metadata.id });
+        const notice = loadFailureNotice(error, 'The editor could not be loaded. Check your connection and try again.');
+        notify(notice.message, 'error', notice.action);
+        return;
+      }
+      if (request !== navigation.current) return;
+      // Marked before `setOpenId`, so the autosave effect that runs for the new id sees it and stays
+      // out. Deliberately no `autosave.track`, no repository write, no address entry: the diagram
+      // exists only on screen until `makeEditableCopy` is asked for.
+      sharedRef.current = true;
+      useUiStore.getState().setReadOnly({ sharedTitle: document.metadata.title });
+      editorStore.useEditorStore.getState().setDocument(document);
+      arriveWith(document, { reopening: false });
+      setOpenId(document.metadata.id);
+    },
+    [notify],
+  );
+
+  /** The address carries a share payload: decode it as an import, then show it read-only. */
+  const openFromShareHash = useCallback(async () => {
+    let result: Awaited<ReturnType<typeof decodeShareLink>>;
+    try {
+      result = await decodeShareLink(window.location.hash);
+    } catch (error) {
+      logDiagnostic(error, { operation: 'open-share-link' });
+      result = { ok: false, error: 'This share link could not be read in this browser.' };
+    }
+    if (!result) return;
+    if (!result.ok) {
+      clearShareFragment();
+      notify(`This share link could not be opened. ${result.error}`, 'error');
+      return;
+    }
+    await openShared(result.document);
+    if (result.repairs.length > 0) notify(`Opened with repairs: ${result.repairs.join(' ')}`);
+  }, [notify, openShared]);
 
   const adoptDocument = useCallback(
     async (incoming: DraftDocument, options?: { fresh?: boolean }) => {
@@ -395,6 +461,7 @@ export function useDocumentSession(): DocumentSession {
         const { useEditorStore } = await loadEditorStore();
         // Saved either way — it's in the Library — but only the latest open/create takes the editor.
         if (request === navigation.current) {
+          leaveShared();
           useEditorStore.getState().setDocument(document);
           arriveWith(document, { reopening: false, fresh: options?.fresh });
           setOpenId(document.metadata.id);
@@ -405,8 +472,17 @@ export function useDocumentSession(): DocumentSession {
         notify('Could not save that diagram — local storage may be full or unavailable.', 'error');
       }
     },
-    [notify, projects, refreshLibrary, repository],
+    [leaveShared, notify, projects, refreshLibrary, repository],
   );
+
+  const makeEditableCopy = useCallback(async () => {
+    if (!sharedRef.current) return;
+    const { useEditorStore, fileOf } = await loadEditorStore();
+    const file = fileOf(useEditorStore.getState());
+    // A fresh id, not the one on screen: `setOpenId` with the same id would not re-run the autosave
+    // effect, and the shared copy was never tracked — the copy has to arrive the way any new canvas does.
+    await adoptDocument(cloneDocumentAsNew(file, file.metadata.title));
+  }, [adoptDocument]);
 
   const newDocument = useCallback(
     async (title?: string, starterId?: StarterId) => {
@@ -439,6 +515,13 @@ export function useDocumentSession(): DocumentSession {
   );
 
   const closeDocument = useCallback(async () => {
+    // A shared diagram has nothing to flush and nothing stored to prune: it simply leaves the screen.
+    if (sharedRef.current) {
+      leaveShared();
+      setOpenId(null);
+      await refreshLibrary().catch((error: unknown) => logDiagnostic(error, { operation: 'refresh-library' }));
+      return true;
+    }
     const saved = (await autosave.current?.flush()) ?? true;
     if (!saved) {
       // Leaving now would drop the only copy of the unsaved edits — the editor
@@ -474,7 +557,7 @@ export function useDocumentSession(): DocumentSession {
     // Home is already showing; a list that can't be re-read just stays as it was.
     await refreshLibrary().catch((error: unknown) => logDiagnostic(error, { operation: 'refresh-library' }));
     return true;
-  }, [notify, openId, refreshLibrary, repository]);
+  }, [leaveShared, notify, openId, refreshLibrary, repository]);
 
   // The open canvas in the address (`lib/documentUrl.ts`), so a refresh, Back/Forward and a bookmark
   // all come back to it. The web app only: the desktop shell opens files and owns its own navigation.
@@ -484,8 +567,10 @@ export function useDocumentSession(): DocumentSession {
   const arrivalSettled = useRef(false);
   useEffect(() => {
     if (!urlRouting || !arrivalSettled.current) return;
-    if (openId) pushDocUrl(openId);
-    else clearDocUrl();
+    // A shared diagram's address is the `#d=` link it came by — not a `#doc=` id this browser has.
+    if (openId) {
+      if (!sharedRef.current) pushDocUrl(openId);
+    } else clearDocUrl();
   }, [openId, urlRouting]);
 
   // Arriving at an address that names a canvas: open it once the Library is readable.
@@ -493,6 +578,13 @@ export function useDocumentSession(): DocumentSession {
   useEffect(() => {
     if (!urlRouting || !ready || !repository || arrived.current) return;
     arrived.current = true;
+    // A share link first: it carries the diagram itself, so there is no library row to look for.
+    if (sharePayloadFromHash(window.location.hash) !== null) {
+      void openFromShareHash().finally(() => {
+        arrivalSettled.current = true;
+      });
+      return;
+    }
     const id = docIdFromLocation();
     if (!id) {
       arrivalSettled.current = true;
@@ -513,12 +605,18 @@ export function useDocumentSession(): DocumentSession {
         if (open) pushDocUrl(open);
         else clearDocUrl();
       });
-  }, [notify, openDocument, ready, repository, urlRouting]);
+  }, [notify, openDocument, openFromShareHash, ready, repository, urlRouting]);
 
   // Back and Forward: the address changed under the app, so the screen follows it.
   useEffect(() => {
     if (!urlRouting) return;
     const onPopState = () => {
+      // A share link pasted into the address bar of a tab already on the app is a same-document
+      // navigation: no reload, so the arrival effect above never sees it — this does.
+      if (sharePayloadFromHash(window.location.hash) !== null) {
+        if (!sharedRef.current) void openFromShareHash();
+        return;
+      }
       const id = docIdFromLocation();
       const open = openIdRef.current;
       if (id === open) return;
@@ -534,7 +632,7 @@ export function useDocumentSession(): DocumentSession {
     };
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
-  }, [closeDocument, openDocument, urlRouting]);
+  }, [closeDocument, openDocument, openFromShareHash, urlRouting]);
 
   const resolveConflict = useCallback(
     async (choice: 'keep' | 'discard') => {
@@ -721,6 +819,8 @@ export function useDocumentSession(): DocumentSession {
     openDocument,
     newDocument,
     adoptDocument,
+    openShared,
+    makeEditableCopy,
     closeDocument,
     resolveConflict,
     renameDocument,

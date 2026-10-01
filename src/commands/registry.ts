@@ -21,12 +21,17 @@ import { TEXT_ROLE_OPTION_LABELS } from '../ui/Editor/nodeKindLabels';
 import { requestClipboardRead } from '../lib/clipboardPermission';
 import { effectiveTextRole } from '../nodes/describe';
 import { continuationsFor, materialize } from '../continuation';
-import { MOD_SYMBOL } from '../lib/platform';
+import { ALT_SYMBOL, MOD_SYMBOL } from '../lib/platform';
 import { canCreateInside, hasInside, ownerAt, totals } from '../depth/tree';
 import { backOut, lookInside } from '../ui/Editor/depthNavigation';
 import { inheritedLevel, LEVEL_HINTS, LEVEL_LABELS } from '../depth/level';
-import { fileOf, ownsData, viewLevel } from '../store/editorStore';
-import { pointer } from '../store/uiStore';
+import { fileOf, fileWithLiveViewport, ownsData, viewLevel } from '../store/editorStore';
+import { pointer, type UiStore } from '../store/uiStore';
+import { copyImage, copySource, copySvg, SOURCE_FORMAT_INFO, SOURCE_FORMATS, type CopyResult } from '../export';
+import { readEditableImagePreference } from '../ui/Editor/exportPreferences';
+import { systemTheme } from '../ui/theme/systemTheme';
+import { hostKind } from '../host/hostInfo';
+import { copyShareLink } from '../share';
 import { focusBounds, focusNodes } from './search';
 import { ARCHITECTURE_STARTERS } from '../starters';
 import type { StarterCategory } from '../starters';
@@ -530,6 +535,70 @@ function viewCommands(ctx: CommandContext): Command[] {
   return commands;
 }
 
+/**
+ * The Export dialog's Copy buttons, named for the palette: the room on screen, in the palette the
+ * way it looks on screen, with the whole file inside the image when the dialog's "Editable" default
+ * for that format says so. Each is the same `export/clipboard.ts` call the dialog makes — the
+ * palette never renders anything of its own — and the toast says whether the clipboard took it or
+ * a file was downloaded instead.
+ */
+function copyExportCommands(): Command[] {
+  const announce = (ui: UiStore, what: string) => (result: CopyResult) =>
+    ui.notify(result.copied ? `${what} copied.` : `${what} downloaded — this browser can't copy it to the clipboard.`);
+  const fail = (ui: UiStore, what: string) => (error: unknown) =>
+    ui.notify(error instanceof Error ? `${what} failed: ${error.message}` : `${what} failed.`, 'error');
+  const editable = (inner: CommandContext, format: 'svg' | 'png') =>
+    readEditableImagePreference(format) ? fileWithLiveViewport(inner.editor) : undefined;
+  return [
+    {
+      id: 'copy-image',
+      title: 'Copy as image',
+      group: 'canvas',
+      keywords: ['png', 'clipboard', 'picture', 'screenshot', 'paste'],
+      run: (inner) => {
+        void copyImage(inner.editor.document, { theme: systemTheme(), editable: editable(inner, 'png') })
+          .then(announce(inner.ui, 'Image'))
+          .catch(fail(inner.ui, 'Copy as image'));
+      },
+    },
+    {
+      id: 'copy-svg',
+      title: 'Copy as SVG',
+      group: 'canvas',
+      keywords: ['svg', 'clipboard', 'vector', 'markup', 'readme'],
+      run: (inner) => {
+        void copySvg(inner.editor.document, { theme: systemTheme(), editable: editable(inner, 'svg') })
+          .then(announce(inner.ui, 'SVG'))
+          .catch(fail(inner.ui, 'Copy as SVG'));
+      },
+    },
+    {
+      id: 'copy-source',
+      title: 'Copy source as…',
+      group: 'canvas',
+      // Not "text": a bare "text" in the palette is the Text shape (`tests/label-text-semantics`).
+      keywords: ['mermaid', 'plantuml', 'c4', 'structurizr', 'drawio', 'draw.io', 'uml', 'sequence diagram', 'flowchart', 'clipboard', 'source code'],
+      hint: 'Mermaid · PlantUML · C4 · Structurizr · draw.io',
+      run: () => ({
+        prompt: 'Copy source as',
+        options: SOURCE_FORMATS.map((format) => {
+          const info = SOURCE_FORMAT_INFO[format];
+          return {
+            id: `copy-source-${format}`,
+            title: info.label,
+            hint: info.family === 'sequence' ? 'Sequence diagram from your Flows' : `Architecture · ${info.extension}`,
+            run: (inner: CommandContext) => {
+              void copySource(inner.editor.document, format)
+                .then(announce(inner.ui, `${info.label} source`))
+                .catch(fail(inner.ui, 'Copy source'));
+            },
+          };
+        }),
+      }),
+    },
+  ];
+}
+
 export function canvasCommands(ctx: CommandContext): Command[] {
   const commands: Command[] = [];
   if (ctx.editor.canUndo()) {
@@ -560,6 +629,35 @@ export function canvasCommands(ctx: CommandContext): Command[] {
       run: (inner) => inner.editor.tidyConnections(),
     });
   }
+  // Only with shapes to move: the layout engine has nothing to do with an empty room, and a
+  // command that does nothing is worse than one that is absent.
+  if (ctx.editor.document.nodes.some((node) => node.type !== 'group' && node.type !== 'note' && node.type !== 'text' && node.type !== 'code')) {
+    commands.push({
+      id: 'arrange',
+      title: 'Arrange diagram',
+      group: 'canvas',
+      keywords: ['layout', 'auto layout', 'tidy', 'clean up', 'organize', 'rearrange', 'align'],
+      hint: 'Lay this view out again — one undo step',
+      run: (inner) => {
+        // The camera follows only once the engine has moved things: fitting first would frame the
+        // old positions, and the engine loads on demand.
+        void inner.editor.arrangeRoom().then((moved) => {
+          if (moved) void inner.camera.fitView({ padding: 0.2, duration: 320 });
+        });
+      },
+    });
+  }
+  commands.push({
+    id: 'find-replace',
+    title: 'Find and replace…',
+    group: 'canvas',
+    // Not "text" or "label": those words must keep leading to Add Text (see label-text-semantics).
+    keywords: ['search', 'rename', 'replace', 'every room'],
+    hint: 'Across every shape, connector, note and flow in the file',
+    // ⌘H would be the OS's Hide on a Mac, so the Mac chord is the one editors use for replace.
+    shortcut: MOD_SYMBOL === '⌘' ? '⌘ ⌥ F' : `${MOD_SYMBOL} H`,
+    run: (inner) => inner.ui.setFindReplaceOpen(true),
+  });
   if (ctx.editor.document.nodes.length > 0) {
     commands.push({
       id: 'select-all',
@@ -601,12 +699,38 @@ export function canvasCommands(ctx: CommandContext): Command[] {
       shortcut: `${MOD_SYMBOL} Shift E`,
       run: (inner) => inner.ui.setExportOpen(true),
     },
+    ...copyExportCommands(),
+    // The web app only: the desktop app's address is its own window, not a page anyone else can open.
+    ...(hostKind()
+      ? []
+      : [
+          {
+            id: 'copy-share-link',
+            title: 'Copy share link',
+            group: 'canvas' as const,
+            keywords: ['share', 'link', 'url', 'read only', 'send', 'clipboard'],
+            hint: 'Read-only · the whole diagram is in the link',
+            // The whole file, every room — a link that opened into one room would lose the rest.
+            run: (inner: CommandContext) => {
+              void copyShareLink(fileWithLiveViewport(inner.editor), inner.ui.notify);
+            },
+          },
+        ]),
     {
       id: 'settings',
       title: 'Canvas settings…',
       group: 'canvas',
       keywords: ['background', 'personality', 'roughness', 'sketch', 'appearance', 'image', 'theme'],
       run: (inner) => inner.ui.setSettingsOpen(true),
+    },
+    {
+      id: 'outline',
+      title: 'Outline',
+      group: 'canvas',
+      keywords: ['tree', 'list', 'structure', 'navigate', 'screen reader', 'shapes', 'connectors', 'accessibility'],
+      hint: ctx.ui.outlinePanelOpen ? 'Showing' : 'This view as a list',
+      shortcut: `${ALT_SYMBOL} O`,
+      run: (inner) => inner.ui.setOutlinePanelOpen(!inner.ui.outlinePanelOpen),
     },
     {
       id: 'shortcuts',

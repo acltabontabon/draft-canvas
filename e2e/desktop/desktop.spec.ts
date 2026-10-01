@@ -263,7 +263,8 @@ test('holds many projects: one Projects tab, a row of the newest, and everything
   await page.getByRole('button', { name: /^Everything/ }).click();
   await expect.poll(async () => (await called()).filter((command) => command === 'project_scan').length).toBeGreaterThanOrEqual(10);
   await page.getByLabel('Find a diagram').fill('p7-diagram-12');
-  await expect(page.getByRole('status')).toHaveText(/^\d+ diagrams? match/);
+  // The search summary — the page also holds the screen-reader announcer's own status regions.
+  await expect(page.getByRole('status').filter({ hasText: /diagrams? match/ })).toHaveText(/^\d+ diagrams? match/);
   // Everything is one combined list, not grouped by project — the match shows up in it directly.
   await expect(page.locator('.dc-browse-group')).toHaveCount(1);
   await expect(page.getByRole('region', { name: 'Everything' }).locator('.dc-desk-tile').first()).toContainText('p7-diagram-12');
@@ -311,7 +312,8 @@ test('browses a project’s folders one level at a time, with breadcrumbs back u
 
   // A search from the root still reaches into the folder, unlike browsing it.
   await page.getByLabel('Find a diagram').fill('step-1');
-  await expect(page.getByRole('status')).toHaveText(/^\d+ diagrams? match/);
+  // The search summary — the page also holds the screen-reader announcer's own status regions.
+  await expect(page.getByRole('status').filter({ hasText: /diagrams? match/ })).toHaveText(/^\d+ diagrams? match/);
   await expect(group.getByRole('button', { name: 'Open step-1', exact: true })).toBeVisible();
   await page.getByLabel('Find a diagram').fill('');
 
@@ -656,7 +658,7 @@ test('Settings → AI agents is off until turned on, and each folder is allowed 
   expect(patches[1]).toMatchObject({ project: { agent: true } });
 });
 
-test('Settings moves between pages by keyboard, shows one agent setup at a time, and ends connections apart from setup', async ({ page }) => {
+test('Settings moves between pages by keyboard, shows one agent setup at a time, and ends connections apart from setup', async ({ page, browserName }) => {
   await page.addInitScript(() =>
     window.__shell.seed({
       projects: [
@@ -719,13 +721,18 @@ test('Settings moves between pages by keyboard, shows one agent setup at a time,
   await expect(fallback).toHaveAttribute('aria-expanded', 'true');
   await expect(settings.getByText(/"mcpServers"/)).toBeVisible();
   await settings.getByRole('radio', { name: 'Other MCP clients' }).check({ force: true });
-  await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+  // Reading the clipboard back needs a permission only Chromium lets a test grant; the copy itself
+  // (a click, so a user gesture) works everywhere.
+  const readBack = browserName === 'chromium';
+  if (readBack) await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
   await settings.getByRole('button', { name: 'Copy', exact: true }).click();
   await expect(settings.getByRole('button', { name: 'Copied' })).toBeVisible();
   // The whole config, not just what the block has room to show.
-  expect(JSON.parse(await page.evaluate(() => navigator.clipboard.readText()))).toEqual({
-    mcpServers: { 'draft-canvas': { command: '/Applications/Draft Canvas.app/Contents/MacOS/draft-canvas-mcp' } },
-  });
+  if (readBack) {
+    expect(JSON.parse(await page.evaluate(() => navigator.clipboard.readText()))).toEqual({
+      mcpServers: { 'draft-canvas': { command: '/Applications/Draft Canvas.app/Contents/MacOS/draft-canvas-mcp' } },
+    });
+  }
 
   // Ending connections is its own action, and says it happened.
   await page.evaluate(() => window.__shell.setAgent({ connections: 2 }));

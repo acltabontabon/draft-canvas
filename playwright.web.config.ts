@@ -31,7 +31,12 @@ export default defineConfig({
     baseURL: `http://localhost:${port}`,
     trace: 'on-first-retry',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  // Every engine the app ships to; `PLAYWRIGHT_BROWSER=<name>` runs one (how CI shards).
+  projects: [
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
+    { name: 'webkit', use: { ...devices['Desktop Safari'] } },
+  ].filter((project) => !process.env.PLAYWRIGHT_BROWSER || project.name === process.env.PLAYWRIGHT_BROWSER),
   webServer: {
     command: `npm run site:preview -- ${port}`,
     url: `http://localhost:${port}/draft-canvas/`,

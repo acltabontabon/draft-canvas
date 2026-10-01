@@ -1493,6 +1493,21 @@ kbd {
   color: var(--dc-danger);
 }
 
+/* The backup nudge: one quiet sentence under the toggle, its button styled like "Details". */
+.dc-local-nudge {
+  margin: 4px 0 0 21px;
+  font-size: 12px;
+  color: var(--dc-text-muted);
+}
+
+.dc-local-nudge button {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+
 .dc-local-detail {
   margin-top: 6px;
   max-width: 46ch;
@@ -3449,6 +3464,129 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   font-size: 13px;
 }
 
+/* ---------------------------------------------------------------- outline -- */
+
+/* Docked beside the canvas (a flex sibling of `.dc-editor-canvas`, never over it), so the row just
+   chosen is never under the panel that chose it. `canvasFrame.ts` measures the canvas column, which is
+   what keeps floating overlays clear of it. */
+.dc-outline {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  width: min(280px, 40vw);
+  min-height: 0;
+  border-left: 1px solid var(--dc-border);
+  background: var(--dc-surface);
+}
+
+.dc-outline-header {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 2px;
+  padding: 7px 8px 7px 14px;
+  border-bottom: 1px solid var(--dc-border);
+}
+
+/* The same small-caps voice as the Open points title. */
+.dc-outline-title {
+  flex: 1;
+  font-size: 12px;
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.06em;
+  color: var(--dc-text-muted);
+}
+
+.dc-outline-scroll {
+  overflow-y: auto;
+  padding: 6px 8px 8px;
+}
+
+.dc-outline-tree,
+.dc-outline-group {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dc-outline-item {
+  outline: none;
+}
+
+.dc-outline-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  padding-right: 8px;
+  border-radius: var(--dc-radius-sm);
+  font-size: 13px;
+  color: var(--dc-text);
+  cursor: default;
+}
+
+.dc-outline-row:hover {
+  background: color-mix(in srgb, var(--dc-text) 6%, transparent);
+}
+
+.dc-outline-item[data-selected='true'] > .dc-outline-row {
+  background: var(--dc-selection-soft);
+}
+
+/* Focus is drawn on the row, not the whole subtree the `li` spans. */
+.dc-outline-item:focus-visible > .dc-outline-row {
+  box-shadow: inset 0 0 0 2px var(--dc-selection);
+}
+
+.dc-outline-twisty {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  color: var(--dc-text-faint);
+}
+
+.dc-outline-twisty[data-foldable='true'] {
+  cursor: pointer;
+}
+
+.dc-outline-arrow {
+  flex: none;
+  color: var(--dc-text-faint);
+}
+
+.dc-outline-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dc-outline-detail {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 55%;
+  margin-left: auto;
+  padding-left: 6px;
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--dc-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dc-outline-item[data-kind='edge'] > .dc-outline-row {
+  font-size: 12.5px;
+}
+
+.dc-outline-empty {
+  margin: 0;
+  padding: 12px 14px;
+  font-size: 13px;
+}
+
 /* Proposal review (`desktop/ui/ProposalPanel.tsx`, desktop only) — bottom-right, so it never
    overlaps the Flows panel above it. */
 .dc-proposal-badge {
@@ -4391,6 +4529,49 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 20px;
+}
+
+/* Find and replace: two fields, the two options, then the live count — one column. */
+.dc-find-replace {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* The Source panel's preview: the generated text itself, read-only, in the editor's own monospace.
+   Capped in height so a long diagram scrolls inside the dialog rather than stretching it; the
+   "… N more lines" note sits below as a caption, not inside the text. */
+.dc-export-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.dc-export-preview pre {
+  margin: 0;
+  max-height: 220px;
+  overflow: auto;
+  padding: 8px 10px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-sm);
+  background: var(--dc-canvas);
+  color: var(--dc-text);
+  font-family: var(--dc-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre;
+  tab-size: 4;
+}
+
+.dc-export-preview pre:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 1px;
+}
+
+.dc-export-preview-more {
+  color: var(--dc-text-faint);
+  font-size: 11.5px;
 }
 
 /* ---- the artifact: exactly what the download will be -------------------- */
@@ -5493,7 +5674,9 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--dc-text-faint);
+  /* Muted, not faint: on the highlighted row the faint grey fell to 4.1:1 against the selection tint
+     (`e2e/a11y.spec.ts` holds small text to 4.5:1). */
+  color: var(--dc-text-muted);
   font-size: 12px;
 }
 
@@ -5963,4 +6146,44 @@ button.dc-open-points-main:focus-visible .dc-open-points-kind {
 
 .dc-retired-host-actions a {
   color: var(--dc-selection);
+}
+
+/* A diagram opened from a share link (`uiStore.readOnly`): one slim strip across the top of the
+   canvas, over it rather than in the flow, so the camera and every popover measure the same pane
+   they always do. */
+.dc-read-only-banner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 4px 12px;
+  border-bottom: 1px solid var(--dc-border);
+  background: var(--dc-surface-raised);
+  color: var(--dc-text-muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.dc-read-only-banner .dc-button {
+  color: var(--dc-selection);
+}
+
+.dc-title-input[readonly] {
+  cursor: default;
+}
+
+/* The Export dialog's "Copy share link", under the document formats: the one export that produces
+   no file, so it sits apart from the format picker rather than pretending to be a third kind. */
+.dc-export-share {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding-top: 12px;
+  border-top: 1px solid var(--dc-border);
 }

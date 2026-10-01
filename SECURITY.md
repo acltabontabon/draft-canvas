@@ -9,7 +9,7 @@ for the module boundary.
 
 ## Browser storage
 
-The web app keeps diagrams in the browser's IndexedDB, **as plain records** since 2.0. Builds from
+The web app keeps diagrams in the browser's IndexedDB, **as plain records** since 1.12. Builds from
 1.0 to 1.11 encrypted each diagram's body with a key kept in the same browser profile; that has been
 retired for new writes, and this section says why and what it means for diagrams that were saved
 under it.
@@ -47,9 +47,9 @@ rather than by a key stored beside the data.
 - **Nothing generates a new key.** A profile with encrypted rows but no key has lost them; the app
   says so ("could not be read from local storage") rather than inventing a key that would fail the
   same way. Export the diagram from another browser that still has it, or import the file you kept.
-- **A 1.x build can still open a 2.0 profile.** A plain 2.0 row is a superset of the plaintext shape
+- **A 1.x build can still open a 1.12 profile.** A plain 1.12 row is a superset of the plaintext shape
   builds before 1.0 wrote, so an older client reads it as one and, at worst, encrypts it again; the
-  next 2.0 save writes it plain. Neither direction can make a row unreadable to the other.
+  next 1.12 save writes it plain. Neither direction can make a row unreadable to the other.
 - **The recovery route is the same as it always was**: a `.draftcanvas` export is the copy you
   control. There is no server and no second copy.
 

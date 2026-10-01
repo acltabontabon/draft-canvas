@@ -9,7 +9,7 @@ const MODE_ORDER: ExportMode[] = ['document', 'image', 'sequence'];
 const MODE_META: Record<ExportMode, { label: string; hint: string; icon: IconName }> = {
   document: { label: 'Document', hint: 'editable or encrypted', icon: 'file' },
   image: { label: 'Image', hint: 'PNG or SVG', icon: 'image' },
-  sequence: { label: 'Source', hint: 'Mermaid or PlantUML sequence diagram', icon: 'code' },
+  sequence: { label: 'Source', hint: 'Mermaid, PlantUML, C4, Structurizr or draw.io text', icon: 'code' },
 };
 
 /**

@@ -8,9 +8,11 @@ import { PanelBoundary } from './ui/common/PanelBoundary';
 import { retryableLazy } from './ui/common/retryableLazy';
 import { loadFailureNotice } from './lib/staleChunk';
 import { Toasts } from './ui/common/Toasts';
+import { LiveAnnouncer } from './ui/common/LiveAnnouncer';
 import { ThemeProvider } from './ui/theme/ThemeProvider';
 import { PersonalityProvider } from './ui/personality/PersonalityProvider';
 import { logDiagnostic } from './lib/diagnostics';
+import { reloadApp } from './lib/serviceWorker';
 import { retirePreferences } from './lib/preferences';
 import { useUiStore } from './store/uiStore';
 
@@ -93,7 +95,8 @@ function Shell() {
         resetKey={session.openId}
         actions={[
           ...(session.openId ? [{ label: 'Return home', onClick: () => returnHome(session.closeDocument) }] : []),
-          { label: 'Reload app', onClick: () => window.location.reload() },
+          // Activates a waiting update first — a crash caused by a stale chunk must not reload into itself.
+          { label: 'Reload app', onClick: reloadApp },
         ]}
         onError={(error, componentStack) => {
           EditorChunk.reset();
@@ -119,6 +122,7 @@ function Shell() {
         </p>
       )}
       <Toasts />
+      <LiveAnnouncer />
       <LazyAboutDialog />
       {DesktopSettingsChunk && hostKind() === 'desktop' && (
         <Suspense fallback={null}>

@@ -62,3 +62,35 @@ export function initServiceWorker(
     return null;
   }
 }
+
+/**
+ * The "Reload app" of last resort (the error boundary). A plain `location.reload()` brings back the
+ * same build: a worker that has already downloaded a newer one keeps waiting until every tab is
+ * gone, so a crash caused by a stale chunk reloaded into the very same crash. The waiting worker is
+ * asked to take over first (Workbox's `SKIP_WAITING` message), the reload follows once it controls
+ * the page — or after a moment, if there was nothing waiting or it never answered.
+ */
+export function reloadApp(): void {
+  const reload = () => window.location.reload();
+  if (!('serviceWorker' in navigator)) {
+    reload();
+    return;
+  }
+  navigator.serviceWorker
+    .getRegistration()
+    .then((registration) => {
+      const waiting = registration?.waiting;
+      if (!waiting) return;
+      return new Promise<void>((resolve) => {
+        const done = () => {
+          navigator.serviceWorker.removeEventListener('controllerchange', done);
+          resolve();
+        };
+        navigator.serviceWorker.addEventListener('controllerchange', done);
+        waiting.postMessage({ type: 'SKIP_WAITING' });
+        setTimeout(done, 2000);
+      });
+    })
+    .catch(() => undefined)
+    .finally(reload);
+}

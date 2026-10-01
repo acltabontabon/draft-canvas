@@ -12,6 +12,9 @@ interface ToolbarProps {
   onBack?: () => void;
   onPresent: () => void;
   onExport: () => void;
+  /** A shared diagram on screen (`uiStore.readOnly`): no renaming, no create tools. The editor
+   *  store's own guard is what protects the document; this just stops offering what it refuses. */
+  readOnly?: boolean;
 }
 
 /**
@@ -26,6 +29,7 @@ export function Toolbar({
   onBack,
   onPresent,
   onExport,
+  readOnly = false,
 }: ToolbarProps) {
   return (
     <TooltipGroup>
@@ -47,10 +51,10 @@ export function Toolbar({
               )}
             </Tooltip>
           )}
-          <DiagramTitleField title={title} onTitleChange={onTitleChange} />
+          <DiagramTitleField title={title} onTitleChange={onTitleChange} readOnly={readOnly} />
         </div>
 
-        <CreateRail />
+        {readOnly ? <div aria-hidden="true" /> : <CreateRail />}
 
         <ToolbarActions onPresent={onPresent} onExport={onExport} />
       </header>

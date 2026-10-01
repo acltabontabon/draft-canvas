@@ -11,65 +11,129 @@ the release notes and the in-app What's New are generated from here. See
 
 ## [Unreleased]
 
-A smaller, more focused Draft Canvas: the web editor and the desktop app, with less in the way of
-drawing. Every diagram you already have still opens.
+A smaller, more focused Draft Canvas that gets diagrams in and out: share links, Mermaid import,
+architecture export to C4, Structurizr and draw.io, connectors that say what actually happens, and a
+long list of fixes to saving, editing and exporting. Every diagram you already have still opens.
 
 ### Shared
 
 #### Added
 
+- **Share a diagram with a link.** Copy share link (⌘K, or the Export dialog) puts the whole diagram
+  in the address itself — nothing is uploaded, and anyone with the link can read it. It opens
+  read-only, with **Make an editable copy**. Links hold up to 32 KB of diagram. <!-- highlight -->
+- **Bring a Mermaid flowchart in.** Paste `flowchart`/`graph` text onto the canvas, drop a `.mmd`
+  or Markdown file on the Library or the canvas, or import one: shapes, boundaries, labels and
+  direction come through and are laid out; what Draft Canvas doesn't draw is listed before the
+  diagram opens. <!-- highlight -->
+- **Get the architecture out, not only the flows.** Source export now also writes a Mermaid
+  flowchart, C4-PlantUML, Structurizr DSL and an editable draw.io file; the Source panel shows the
+  text, with Copy beside Download. Copy as image, Copy as SVG and Copy source are commands too.
+  <!-- highlight -->
+- **A picture that is also the file.** An SVG export carries the diagram inside it (on by default)
+  and a PNG can (off by default); either opens again in Draft Canvas by import or drop.
+- **Arrange diagram** (⌘K) lays the current level out in place, keeping every id, note and flow,
+  as one undo step. **Find and replace** (⌘⌥F, Ctrl+H on Windows and Linux) works across every
+  level, and the command palette's jump rows reach shapes inside other levels and take you there.
+- **An Outline, and a canvas that talks.** ⌥O opens an Outline of the current level — shapes in
+  reading order, boundaries holding their members, each shape's connectors under it — navigable
+  entirely from the keyboard and kept in step with the selection. Screen readers hear what is
+  selected ("Orders API, API service, 2 connectors") and what a connector says, in the canvas's own
+  words. <!-- highlight -->
+- **Touch and pen:** a long press opens the same menu a right-click does, a tap on empty canvas
+  clears the selection, and handles are easier to hit with a finger.
+- **Name a shape as it arrives.** Every new shape opens ready to type its name; F2 renames, like
+  everywhere else.
 - **Open points** — mark what a discussion hasn't settled on the shape or connector it concerns:
   select it and press `I`, or right-click and choose **Add open point…**. The status bar counts what
   is still open. <!-- highlight -->
+- **PNG at the size you meant.** Choose 1×, 2× or 3× in the Export dialog (remembered); the file
+  carries its resolution, so it pastes into a document at its drawn size instead of twice it; the
+  dialog says when a very large diagram had to be fitted to a smaller scale.
+- **Every level, one export.** A canvas with levels inside its shapes can export one image per
+  level, zipped, and the Mermaid/PlantUML source carries every level's flows.
+- A new **reads / writes** relationship: a service and the store it owns, on one connector.
+- **Agents see the picture.** MCP gains `render_diagram` (PNG or SVG), `read_diagram` can answer
+  as Mermaid, PlantUML or C4-PlantUML, every `update_diagram` op has its own strict shape (unknown
+  fields are refused, `inside` is typed), and a receipt says how many advisories it left out.
+- A **Third-party licences** page (linked from About, shipped beside the app) lists every package
+  the app carries, with its licence text.
 - An [Architecture examples](docs/guides/examples.md) guide pictures every starter.
 
 #### Changed
 
+- **Connectors say what happens.** A service and its data store are joined by **reads / writes**
+  (the new Service → Data Store default; *reads* and *writes* are a pick away), a cache is *read
+  from*, and a work queue carries a *command* — dashed, handed off and not waited for — while a
+  topic still *publishes*. Protocols are no longer captions on their own: *calls over HTTP*,
+  *calls over gRPC*, *emits*, *sends command to*, *streams changes to*. Every arrow in the starters
+  starts at whatever does the work. <!-- highlight -->
 - **Five starters up front** — Monolith, Microservices, Event-Driven, Hexagonal and CQRS. The rest are
-  a name away in the command palette (`⌘K`). The starters were also redrawn to be more accurate.
-  <!-- highlight -->
-- **Connectors say what happens.** A service and its data store are now joined by one
-  **reads / writes** relationship (the new Service → Data Store default; *reads* and *writes* are
-  a pick away), a cache is *read from*, and a work queue carries a *command* — dashed, handed off
-  and not waited for — while a topic still *publishes*. Protocols are no longer captions on their
-  own: *calls over HTTP*, *calls over gRPC*, *emits*, *sends command to*, *streams changes to*.
-  Every arrow in the starters starts at whatever does the work, so a worker reads its outbox and a
-  serving layer reads Gold, never the other way round. <!-- highlight -->
+  a name away in the command palette (`⌘K`). The starters were also redrawn to be more accurate:
+  the sagas finish (the orchestrator's steps carry their reply; the choreography's outcome reaches
+  the Order Service over a topic, for the confirmation and the cancellation). <!-- highlight -->
 - **Streams are their own kind.** A stream is read by each consumer group in full ("read by",
-  never "consumed by"), and the dead-letter suggestion now goes to the consumer that needs it, not
-  to the stream, which never dead-letters.
+  never "consumed by"), and the dead-letter suggestion goes to the consumer that needs it, not to
+  the stream, which never dead-letters.
 - **Sequence exports send each message from the doer.** A connector that reads passively on the
   canvas (*Database → Worker: read by*) exports as the worker reading the database.
-- **The sagas finish.** The orchestrator's steps carry their reply (*reserved / failed*) and the
-  compensation hangs off the failed one; the choreographed saga's outcome reaches the Order Service
-  the same way everything else does — over a topic — for the confirmation and the cancellation.
-- Document format **v18**: a *writes* connector labelled "reads / writes" becomes the relationship
-  itself. Diagrams migrate on open; a build older than this one refuses a v18 file by name rather
-  than reading it wrongly.
-- **Exports that survive other tools.** An SVG's ids are scoped to the diagram, so two exports
-  inlined on one page keep their own shadows and arrowheads; the shadow is drawn with SVG 1.1
-  primitives instead of `feDropShadow`, images carry `xlink:href` too, and code keeps its columns
-  in any monospace font. Mermaid exports keep colons in labels (they were dashes), escape `%` so a
-  label can never smuggle in a `%%{init}%%` directive, and avoid aliases Mermaid treats as
-  keywords; PlantUML exports disarm Creole, HTML and preprocessor markup in labels, so
-  `<b>`, `%date()` and `**bold**` come out as the characters typed. Every starter's Mermaid export
-  is now checked against Mermaid's own parser.
-- **PNG at the size you meant.** Choose 1×, 2× or 3× in the Export dialog (remembered); the file
-  carries its resolution, so it pastes into a document at its drawn size instead of twice it; the
-  dialog says when a very large diagram had to be fitted to a smaller scale; and iPhones and iPads
-  no longer get a blank image past their canvas limit.
-- **Every level, one export.** A canvas with rooms inside its shapes can export one image per room,
-  zipped, and the Mermaid/PlantUML source now carries every room's flows, one section per room.
+- **A connector you just drew stays out of the way.** Its panel opens when you click it or press
+  Enter, not over the shapes you are still looking at; panels also keep clear of the shapes they
+  belong to.
+- **The address keeps your place.** The open diagram is in the URL, so a refresh, Back and a
+  bookmark come back to it.
+- **Escape is predictable.** In a note, text or code block it keeps what you typed; in a name it
+  puts the old one back.
 - **Files that diff.** A `.draftcanvas` file is written with one fixed key order, so saving an
-  unchanged diagram — however it was built or migrated — gives identical bytes, and a background
-  image of up to 2 MB travels inside the file and comes back on import. On the desktop, panning or
-  zooming never marks a file changed or rewrites it; only an edit does.
+  unchanged diagram gives identical bytes, and a background image of up to 2 MB travels inside the
+  file and comes back on import.
 - **Browser storage is no longer encrypted.** It protected little, needed HTTPS to save, and one
   lost key lost every diagram. Your diagrams still open and nothing is rewritten on upgrade. For a
   protected copy, export a passphrase-protected `.dcenc`. [Why](SECURITY.md#browser-storage).
   <!-- highlight -->
+- Document format **v18**: a *writes* connector labelled "reads / writes" becomes the relationship
+  itself. Diagrams migrate on open; an older build refuses a v18 file by name rather than reading it
+  wrongly.
 - Presenting lights a shape along its own outline instead of drawing a box around it.
 - A connector from an Adapter or Service to a Port can say **implements**.
+
+#### Fixed
+
+- **Undo no longer comes back after a save.** An undo made while the edit it undid was still being
+  written was lost on the next open; a failed save no longer turns into a camera-only one; and
+  closing a canvas after undoing a failed edit no longer refuses.
+- **A refresh keeps the last few seconds of work.** The browser aborts storage writes as a page
+  unloads, so edits made just before a reload were lost; they are now carried across and saved.
+- **Text is held to the limits a file can be opened with**, with a notice when something is cut,
+  and control characters never reach a file. Opening a repaired file says what was repaired. You are
+  warned before a diagram gets too big to export and import again.
+- Another tab's new background image is no longer deleted by this one's cleanup.
+- **Moving shapes keeps boundaries honest:** nudging, aligning, distributing and resizing a boundary
+  all update what is inside it, and grouping shapes from different boundaries keeps them inside the
+  one they shared.
+- **The clipboard says what it's doing:** ⌘C and ⌘X work outside secure contexts, copying only
+  connectors says it needs their shapes, pasting text that isn't shapes says so, and repeated pastes
+  start over when you paste somewhere else.
+- **Connectors never run through their own shapes**, whatever anchors were saved, and captions sit
+  where the exported image puts them. Attachment chips and badges now appear in exported images.
+- **Right-to-left text and emoji** wrap and truncate by character, not by byte, and lay out in their
+  own direction, on the canvas and in exports.
+- **Exports survive other tools.** An SVG's ids are scoped to the diagram, so two exports on one page
+  keep their own shadows and arrowheads; the shadow uses SVG 1.1 primitives; images carry
+  `xlink:href`; code keeps its columns in any monospace font. Mermaid keeps colons in labels, escapes
+  `%` so a label can never smuggle in a directive, and avoids aliases Mermaid treats as keywords;
+  PlantUML disarms Creole, HTML and preprocessor markup in labels.
+- **Outlines you can see.** The neutral shape outline (and dark mode's violet) now reach 3:1 contrast
+  against the canvas in both themes, and the command palette's hints are readable on the highlighted row.
+- Letter shortcuts no longer fire while a toolbar or panel button has keyboard focus.
+- The C4 fields in the details panel follow undo instead of showing what was there before.
+- A duplicate connector selects the one that exists and says so; dragging a connector's end onto a
+  boundary attaches it.
+- On narrow windows the toolbar scrolls with visible cues, the title keeps its width, and the empty
+  canvas shows its starters three and two.
+- iPhones and iPads no longer get a blank PNG past their canvas limit.
+- "Reload app" in the crash screen activates a downloaded update first, so a stale-chunk crash no
+  longer reloads into the same crash.
 
 #### Removed
 
@@ -82,6 +146,21 @@ drawing. Every diagram you already have still opens.
 - **Draft Canvas for VS Code.** Your `.draftcanvas` files open in the desktop app or the web editor.
   [How to move a diagram](docs/guides/vscode-retired.md).
 
+### Web
+
+#### Added
+
+- **Back up all diagrams** writes one zip of `.draftcanvas` files from the Library; **Restore from
+  backup** brings them back without overwriting anything. When the browser hasn't promised to keep
+  storage and the last backup is over a week old, the Library says so. <!-- highlight -->
+
+#### Changed
+
+- **The Docker image listens on port 8080 and runs as a non-root user.** Change `-p 8080:80` to
+  `-p 8080:8080` (or `-p 80:8080`). It now also sends a Content-Security-Policy that forbids framing
+  and outside connections. Both base images are pinned by digest.
+- An unknown path is a 404 offline as well as on, instead of quietly becoming the app.
+
 ### Desktop
 
 #### Changed
@@ -89,10 +168,23 @@ drawing. Every diagram you already have still opens.
 - **The tray menu is simpler:** show the window, agent status, Settings and Quit. Closing the window
   still keeps connected agents running.
 - Home has **Connect an agent…** under More ways in.
+- **Panning or zooming never marks a file changed or rewrites it**; only an edit does.
 
 #### Added
 
 - A connected agent can read, raise and resolve open points when you ask it to.
+
+#### Fixed
+
+- **An agent works on the file as it is on disk.** A file changed by `git pull` or another editor is
+  reloaded before an agent reads or changes it, and an agent's change is refused rather than
+  applied to a stale copy when there are unsaved edits; agents can ask to rebase an edit onto
+  changes that don't overlap.
+- **Recovering after a crash is honest** about a file that changed on disk since, and a save no
+  longer throws away the recovery snapshot of edits made while it ran.
+- Saving a new file never overwrites one that appeared at the same path; a file starting with a
+  byte-order mark opens; folders such as `node_modules`, `vendor` and `target` are skipped when
+  looking for diagrams, and an agent is told when a search stopped early.
 
 ## [1.12.0-beta.2] - 2026-09-26
 

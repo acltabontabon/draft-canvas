@@ -25,40 +25,43 @@ test.describe('focus mode', () => {
 
     await expect(page.locator('.dc-canvas[data-focus="on"]')).toBeVisible();
     await expect(page.locator('.dc-focus-indicator')).toContainText('2 nodes');
-    // Dimming animates over 180ms — let it settle before reading computed opacity.
-    await page.waitForTimeout(250);
 
     // A and B stay lit; C is dimmed — checked via the actual visual effect
     // (the react-flow wrapper's opacity), since that is what the feature promises.
+    // Dimming animates over 180ms, so the dimmed reads are polled to their end state rather than
+    // sampled mid-fade; the lit ones never move.
     await expect(page.locator('.dc-node').nth(0)).toHaveAttribute('data-focused', 'true');
     await expect(page.locator('.dc-node').nth(1)).toHaveAttribute('data-focused', 'true');
     const wrapperOpacity = async (index: number) =>
-      page
-        .locator('.react-flow__node')
-        .nth(index)
-        .evaluate((el) => getComputedStyle(el).opacity);
+      Number(
+        await page
+          .locator('.react-flow__node')
+          .nth(index)
+          .evaluate((el) => getComputedStyle(el).opacity),
+      );
 
-    expect(Number(await wrapperOpacity(0))).toBeCloseTo(1, 1);
-    expect(Number(await wrapperOpacity(1))).toBeCloseTo(1, 1);
-    expect(Number(await wrapperOpacity(2))).toBeLessThan(0.5);
+    expect(await wrapperOpacity(0)).toBeCloseTo(1, 1);
+    expect(await wrapperOpacity(1)).toBeCloseTo(1, 1);
+    await expect.poll(() => wrapperOpacity(2)).toBeLessThan(0.5);
 
     // The A->B edge is inferred-focused (both endpoints are focused) and
     // stays lit; the B->C edge, touching only one focused node, is dimmed.
     // Opacity is set on the `.dc-edge` group (SVG composites it with its
     // children), not on the line itself, so that is what must be checked.
     const edgeOpacity = async (index: number) =>
-      page
-        .locator('.dc-edge')
-        .nth(index)
-        .evaluate((el) => getComputedStyle(el).opacity);
-    expect(Number(await edgeOpacity(0))).toBeCloseTo(1, 1);
-    expect(Number(await edgeOpacity(1))).toBeLessThan(0.5);
+      Number(
+        await page
+          .locator('.dc-edge')
+          .nth(index)
+          .evaluate((el) => getComputedStyle(el).opacity),
+      );
+    expect(await edgeOpacity(0)).toBeCloseTo(1, 1);
+    await expect.poll(() => edgeOpacity(1)).toBeLessThan(0.5);
 
     await page.keyboard.press('Escape');
     await expect(page.locator('.dc-canvas[data-focus="on"]')).toHaveCount(0);
     await expect(page.locator('.dc-focus-indicator')).toHaveCount(0);
-    await page.waitForTimeout(250);
-    expect(Number(await wrapperOpacity(2))).toBeCloseTo(1, 1);
+    await expect.poll(() => wrapperOpacity(2)).toBeGreaterThan(0.95);
   });
 
   test('the indicator\'s close button exits focus, and focus never creates an undo entry', async ({

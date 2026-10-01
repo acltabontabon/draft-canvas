@@ -62,6 +62,24 @@ export async function backOut(depth?: number): Promise<void> {
 }
 
 /**
+ * Stand in the room at `path`, from wherever you are. Out to the deepest room both paths share,
+ * then down the rest of the way — each step is the ordinary navigation, so the room transitions
+ * play exactly as they do by hand. `false` when the climb refused (a drag was still under way, or a
+ * room stopped resolving) and you are somewhere else than asked.
+ */
+export async function navigateToRoom(path: readonly string[]): Promise<boolean> {
+  const from = useEditorStore.getState().path;
+  let shared = 0;
+  while (shared < from.length && shared < path.length && from[shared] === path[shared]) shared += 1;
+  if (from.length > shared) await backOut(shared);
+  for (let depth = shared; depth < path.length; depth += 1) {
+    await lookInside(path[depth]!);
+  }
+  const arrived = useEditorStore.getState().path;
+  return arrived.length === path.length && arrived.every((id, index) => id === path[index]);
+}
+
+/**
  * Go to one element and make it obvious — wherever in the file it lives.
  *
  * The composition that was missing. `focusNodes` + `flash` has always been able to reach
@@ -77,20 +95,9 @@ export async function navigateToElement(
   target: { kind: 'node' | 'edge'; id: string; path: readonly string[] },
   buildContext: () => CommandContext,
 ): Promise<void> {
-  const from = useEditorStore.getState().path;
-  let shared = 0;
-  while (shared < from.length && shared < target.path.length && from[shared] === target.path[shared]) shared += 1;
-
-  // Out to the deepest room both paths share, then down the rest of the way. Each step is the
-  // ordinary navigation, so the room transitions play exactly as they do by hand.
-  if (from.length > shared) await backOut(shared);
-  for (let depth = shared; depth < target.path.length; depth += 1) {
-    await lookInside(target.path[depth]!);
-  }
-
   // The climb refused (a drag was still under way, or a room stopped resolving): aiming the
   // camera at a room nobody is standing in would be worse than not moving at all.
-  if (useEditorStore.getState().path.length !== target.path.length) return;
+  if (!(await navigateToRoom(target.path))) return;
 
   const ctx = buildContext();
   const document = ctx.editor.document;

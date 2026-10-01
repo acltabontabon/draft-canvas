@@ -78,6 +78,7 @@ const TOOLS: &[&str] = &[
     "read_diagram",
     "read_selection",
     "get_implementation_context",
+    "render_diagram",
     "create_diagram",
     "update_diagram",
     "submit_proposal",
@@ -161,6 +162,7 @@ pub async fn call(agent: &Agent, tool: &str, args: Value, calls: &CallRegistry) 
         "get_implementation_context" => {
             implementation_context(agent, &app, &projects, &args, calls).await
         }
+        "render_diagram" => render(agent, &app, &projects, &args, calls).await,
         "create_diagram" => create(agent, &app, &projects, &args, calls).await,
         "update_diagram" => update(agent, &app, &projects, &args, calls).await,
         "submit_proposal" => submit_proposal(agent, &app, &projects, &args, calls).await,
@@ -658,6 +660,25 @@ async fn implementation_context(
         calls,
     )
     .await
+}
+
+// ─── render_diagram ─────────────────────────────────────────────────────────────────────────────
+
+/// Read-only, open or not, dispatched exactly as `read_diagram` is: the page draws the view (its
+/// renderer needs the page's text measurer and, for a PNG, a canvas) and answers with the image as
+/// base64 under `data` with its `mimeType`, or the SVG text under `svg`. The sidecar turns that
+/// into MCP image or text content; nothing here looks inside the picture.
+async fn render(
+    agent: &Agent,
+    app: &AppHandle,
+    projects: &[Project],
+    args: &Value,
+    calls: &CallRegistry,
+) -> ToolResult {
+    let id = diagram_id(args)?;
+    let diagram = locate(agent, projects, &id)?;
+    let context = diagram_context(agent, &diagram, true)?;
+    to_page(agent, app, "render_diagram", args, context, calls).await
 }
 
 // ─── create_diagram ─────────────────────────────────────────────────────────────────────────────
@@ -1592,6 +1613,20 @@ mod tests {
             fingerprint("create_diagram", &a),
             fingerprint("update_diagram", &a)
         );
+    }
+
+    /// The sidecar offers whatever `tools.json` (generated from `src/agent/schema.ts`) lists, and
+    /// forwards every call here: a tool defined there but not dispatched here would reach an agent as
+    /// `UNKNOWN_TOOL` — from a server that just advertised it.
+    #[test]
+    fn every_tool_the_sidecar_offers_is_dispatched_here() {
+        let tools: Vec<Value> = serde_json::from_str(include_str!("../../mcp/tools.json"))
+            .expect("tools.json is generated from src/agent/schema.ts");
+        let offered: Vec<&str> = tools
+            .iter()
+            .filter_map(|t| t.get("name").and_then(Value::as_str))
+            .collect();
+        assert_eq!(offered, TOOLS);
     }
 
     #[test]

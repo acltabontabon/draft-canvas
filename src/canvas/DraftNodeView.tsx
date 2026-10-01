@@ -20,6 +20,7 @@ import {
   naturalTextHeight,
   noteLayout,
 } from '../nodes/describe';
+import { nodeReading } from '../nodes/readings';
 import { HANDLE_ANCHORS } from '../edges/routing';
 import { beginClipScope, emitDisplayList } from '../render/svg/emit';
 import { useSettle } from './useContinuation';
@@ -408,6 +409,12 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   return (
     <div
       className="dc-node"
+      // Named for assistive tech from what this component already has — React Flow's wrapper carries
+      // no role of its own here (nodes are not DOM tab stops; see `Canvas.tsx`'s `nodesFocusable`),
+      // so without this a screen reader reaches an unnamed box. `group`, not `img`: the attachment
+      // chip and the text field inside stay reachable.
+      role="group"
+      aria-label={nodeReading(node)}
       data-type={node.type}
       data-selected={selected ? 'true' : undefined}
       data-explain-active={explainTier === 'active' ? 'true' : undefined}

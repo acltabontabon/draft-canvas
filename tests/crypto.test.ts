@@ -148,7 +148,7 @@ describe('shape guards', () => {
     expect(isLegacyBody(legacy)).toBe(true);
   });
 
-  it('tells a plain 2.0 row from both, and a 1.x build would read it as legacy plaintext', () => {
+  it('tells a plain 1.12 row from both, and a 1.x build would read it as legacy plaintext', () => {
     const plain = { id: 'd1', storageVersion: 2, stamp: 'b_1', document: createDocument('C') };
     expect(isPlainBody(plain)).toBe(true);
     expect(isEncryptedBody(plain)).toBe(false);

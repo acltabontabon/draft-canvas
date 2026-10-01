@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { cameraAtRest } from './canvas';
 
 /**
  * Presentation Mode's journey — "follow the signal": an opening that frames the flow under its
@@ -22,6 +23,16 @@ async function cameraOf(page: Page): Promise<{ x: number; y: number; zoom: numbe
     const viewport = document.querySelector<HTMLElement>('.react-flow__viewport')!;
     const match = viewport.style.transform.match(/translate\(([-\d.]+)px, ([-\d.]+)px\) scale\(([-\d.]+)\)/);
     return match ? { x: Number(match[1]), y: Number(match[2]), zoom: Number(match[3]) } : { x: 0, y: 0, zoom: 1 };
+  });
+}
+
+/** The one signal's travel (`canvas.css`'s `dc-signal-*` animations, played once, `both`) has ended. */
+async function signalArrived(page: Page) {
+  await page.waitForFunction(() => {
+    const signal = document.querySelector('.dc-signal');
+    if (!signal) return false;
+    const animations = signal.getAnimations({ subtree: true });
+    return animations.length > 0 && animations.every((animation) => animation.playState === 'finished');
   });
 }
 
@@ -61,8 +72,9 @@ test.describe('Presentation journey', () => {
     await expect(page.locator('.dc-node[data-explain-crossed="true"]')).toHaveCount(1);
     await expect(page.locator('.dc-present-tick[aria-current="step"]')).toHaveAttribute('aria-label', /Step 1/);
 
-    // Once the signal has arrived, the scene is still: the same one signal element, no loop.
-    await page.waitForTimeout(1200);
+    // Once the signal has arrived, the scene is still: the same one signal element, no loop — its
+    // animations have finished rather than restarted, and nothing mounted a second one.
+    await signalArrived(page);
     await expect(page.locator('.dc-signal')).toHaveCount(1);
 
     // The last step, then the closing: the whole path again, replay and the next flow offered.
@@ -123,7 +135,7 @@ test.describe('Presentation journey', () => {
     // Leave the editor somewhere deliberate, so coming back has something to restore.
     await page.mouse.move(700, 450);
     await page.mouse.wheel(0, 240);
-    await page.waitForTimeout(300);
+    await cameraAtRest(page);
     const before = await cameraOf(page);
 
     await page.getByRole('button', { name: 'Present', exact: true }).click();
@@ -131,31 +143,31 @@ test.describe('Presentation journey', () => {
     await expect(page.locator('.dc-present-card[data-kind="opening"]')).toBeVisible();
     await page.keyboard.press('ArrowRight');
     await expect(page.locator('.dc-explain-count')).toHaveText('Step 1 / 4');
-    await page.waitForTimeout(600);
+    await cameraAtRest(page);
     const framed = await cameraOf(page);
 
     // Overview pulls back to the whole flow without losing the step; O again returns to it.
     await page.keyboard.press('o');
     await expect(page.getByRole('button', { name: 'Back to the step' })).toBeVisible();
     await expect(page.locator('.dc-explain-count')).toHaveText('Step 1 / 4');
-    await page.waitForTimeout(700);
+    await cameraAtRest(page);
     const overview = await cameraOf(page);
     expect(overview.zoom).toBeLessThan(framed.zoom);
     await page.keyboard.press('o');
     await expect(page.getByRole('button', { name: 'Overview' })).toBeVisible();
-    await page.waitForTimeout(700);
+    await cameraAtRest(page);
     expect((await cameraOf(page)).zoom).toBeCloseTo(framed.zoom, 2);
 
     // A hand on the camera: the presentation stands down and offers the way back.
     await page.mouse.move(700, 450);
     await page.mouse.wheel(0, 200);
     await expect(page.getByRole('button', { name: 'Re-centre on the step' })).toBeVisible();
-    await page.waitForTimeout(400);
+    await cameraAtRest(page);
     const moved = await cameraOf(page);
     expect(moved.y).not.toBeCloseTo(framed.y, 0);
     await page.keyboard.press('r');
     await expect(page.getByRole('button', { name: 'Overview' })).toBeVisible();
-    await page.waitForTimeout(700);
+    await cameraAtRest(page);
     expect((await cameraOf(page)).y).toBeCloseTo(framed.y, 0);
 
     // The pointer follows the cursor while on, and comes off with the mode.
@@ -167,7 +179,7 @@ test.describe('Presentation journey', () => {
     await expect(page.locator('.dc-present-pointer')).toHaveCount(0);
     await expect(page.locator('.dc-signal')).toHaveCount(0);
     await expect(page.locator('.dc-emphasis')).toHaveCount(0);
-    await page.waitForTimeout(500);
+    await cameraAtRest(page);
     const after = await cameraOf(page);
     expect(after.x).toBeCloseTo(before.x, 0);
     expect(after.y).toBeCloseTo(before.y, 0);

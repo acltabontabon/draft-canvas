@@ -3,6 +3,9 @@ import { edgeRelationLabel } from '../document/connectorSemantics';
 import { displayNameFor } from '../document/factory';
 import { boundsOf, type Bounds } from '../document/operations';
 import type { DraftDocument, DraftEdge, DraftNode } from '../document/types';
+import { pathKey, roomsOf, type DepthPath } from '../depth/tree';
+import { useEditorStore } from '../store/editorStore';
+import { useUiStore } from '../store/uiStore';
 import type { Command, CommandContext } from './types';
 import { count } from '../lib/plural';
 
@@ -105,10 +108,69 @@ export function focusBoundsInView(camera: Pick<CommandContext['camera'], 'viewWi
   void camera.setViewport(viewport, { duration: 320 });
 }
 
-/** Every jumpable thing on the canvas as a command, unranked — the palette ranks and caps. */
-export function jumpCommands(document: DraftDocument): Command[] {
+/**
+ * The whole file, for rows that reach into other rooms. Without it only `document` — the room on
+ * screen — is listed, which is what the unit tests and any caller without a file in hand get.
+ */
+export interface JumpScope {
+  file: DraftDocument;
+  /** The room on screen, whose rows arrive without a room subtitle and without a climb. */
+  path: DepthPath;
+}
+
+/**
+ * Every jumpable thing in the file as a command, unranked — the palette ranks and caps. The room
+ * on screen first, then every other room, each of those rows subtitled with where it lives
+ * ("inside Orders API") and reached by climbing there first — the same navigation the depth map
+ * and ⌘↓ use — before the element is selected, framed and flashed exactly as a local row is.
+ */
+export function jumpCommands(document: DraftDocument, scope?: JumpScope): Command[] {
+  const commands = roomJumpCommands(document, null);
+  if (!scope) return commands;
+  const here = pathKey(scope.path);
+  for (const room of roomsOf(scope.file)) {
+    if (pathKey(room.path) === here) continue;
+    // Seen from inside a shape, the top level is "elsewhere" too, and has no owner to be named by.
+    const where = room.owners.length === 0 ? 'at the top level' : `inside ${room.owners.map(displayNameFor).join(' › ')}`;
+    const words = room.owners.length === 0 ? ['top level'] : room.owners.map(displayNameFor);
+    commands.push(...roomJumpCommands({ ...scope.file, ...room.graph }, { path: room.path, where, words }));
+  }
+  return commands;
+}
+
+/** The room a row belongs to when it is not the one on screen: how to get there, and how to say it. */
+interface Elsewhere {
+  path: DepthPath;
+  /** "inside Orders API" — the subtitle's tail. */
+  where: string;
+  /** The owner names, so a query for the room finds what it holds. */
+  words: string[];
+}
+
+/**
+ * A context for the room arrived in. `ctx.editor` is a snapshot from before the climb, so its
+ * `document` is still the room the row was picked in; the camera and callbacks are the same.
+ */
+function arrived(ctx: CommandContext): CommandContext {
+  return { ...ctx, editor: useEditorStore.getState(), ui: useUiStore.getState() };
+}
+
+/** Climbs to `path` first, then does what the local row does — loaded lazily, since the editor's
+ *  navigation module imports this one. */
+function thereThen(ctx: CommandContext, path: DepthPath, then: (fresh: CommandContext) => void): void {
+  void import('../ui/Editor/depthNavigation').then(async ({ navigateToRoom }) => {
+    if (await navigateToRoom(path)) then(arrived(ctx));
+  });
+}
+
+function roomJumpCommands(document: DraftDocument, elsewhere: Elsewhere | null): Command[] {
   const commands: Command[] = [];
   const names = new Map(document.nodes.map((node) => [node.id, displayNameFor(node)]));
+  const where = elsewhere ? ` · ${elsewhere.where}` : '';
+  const roomWords = elsewhere ? elsewhere.words : [];
+  // A local row acts on the context it is given; a row elsewhere climbs there and acts on a fresh one.
+  const act = (ctx: CommandContext, action: (fresh: CommandContext) => void) =>
+    elsewhere ? thereThen(ctx, elsewhere.path, action) : action(ctx);
 
   for (const node of document.nodes) {
     const name = names.get(node.id)!;
@@ -117,12 +179,14 @@ export function jumpCommands(document: DraftDocument): Command[] {
       id: `jump-node:${node.id}`,
       title: name,
       group: 'jump',
-      hint: TYPE_CAPTIONS[node.type] ?? node.type,
-      run: (ctx) => {
-        ctx.editor.setSelection({ nodes: [node.id], edges: [] });
-        focusNodes(ctx, [node.id]);
-        flash(ctx, node.id);
-      },
+      keywords: roomWords,
+      hint: `${TYPE_CAPTIONS[node.type] ?? node.type}${where}`,
+      run: (ctx) =>
+        act(ctx, (fresh) => {
+          fresh.editor.setSelection({ nodes: [node.id], edges: [] });
+          focusNodes(fresh, [node.id]);
+          flash(fresh, node.id);
+        }),
     });
   }
 
@@ -132,22 +196,23 @@ export function jumpCommands(document: DraftDocument): Command[] {
       id: `jump-flow:${flow.id}`,
       title: flow.title,
       group: 'jump',
-      keywords: ['flow'],
-      hint: `Flow · ${count(flow.steps.length, 'step')}`,
-      run: (ctx) => {
-        ctx.editor.setSelectedFlowId(flow.id);
-        const edgesById = new Map(ctx.editor.document.edges.map((edge) => [edge.id, edge]));
-        const members = new Set<string>();
-        for (const step of flow.steps) {
-          const edge = step.edgeId ? edgesById.get(step.edgeId) : undefined;
-          if (edge) {
-            members.add(edge.source);
-            members.add(edge.target);
+      keywords: ['flow', ...roomWords],
+      hint: `Flow · ${count(flow.steps.length, 'step')}${where}`,
+      run: (ctx) =>
+        act(ctx, (fresh) => {
+          fresh.editor.setSelectedFlowId(flow.id);
+          const edgesById = new Map(fresh.editor.document.edges.map((edge) => [edge.id, edge]));
+          const members = new Set<string>();
+          for (const step of flow.steps) {
+            const edge = step.edgeId ? edgesById.get(step.edgeId) : undefined;
+            if (edge) {
+              members.add(edge.source);
+              members.add(edge.target);
+            }
+            for (const extra of step.extraNodeIds ?? []) members.add(extra);
           }
-          for (const extra of step.extraNodeIds ?? []) members.add(extra);
-        }
-        focusNodes(ctx, [...members]);
-      },
+          focusNodes(fresh, [...members]);
+        }),
     });
   }
 
@@ -160,13 +225,14 @@ export function jumpCommands(document: DraftDocument): Command[] {
       id: `jump-edge:${edge.id}`,
       title: label,
       group: 'jump',
-      keywords: [from, to],
-      hint: `${from} → ${to}`,
-      run: (ctx) => {
-        ctx.editor.setSelection({ nodes: [], edges: [edge.id] });
-        focusNodes(ctx, [edge.source, edge.target]);
-        flash(ctx, edge.id);
-      },
+      keywords: [from, to, ...roomWords],
+      hint: `${from} → ${to}${where}`,
+      run: (ctx) =>
+        act(ctx, (fresh) => {
+          fresh.editor.setSelection({ nodes: [], edges: [edge.id] });
+          focusNodes(fresh, [edge.source, edge.target]);
+          flash(fresh, edge.id);
+        }),
     });
   }
 

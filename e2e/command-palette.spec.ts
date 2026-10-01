@@ -63,7 +63,10 @@ test.describe('command palette', () => {
   test('closing it returns focus to whatever opened it', async ({ page }) => {
     await newCanvas(page, 'Palette focus return');
     const trigger = page.getByRole('button', { name: 'Commands', exact: true });
-    await trigger.click();
+    // Opened from the keyboard: Safari never focuses a button that is clicked, so a mouse open there
+    // has no focus to give back — focus return is for the people who reached the button by Tab.
+    await trigger.focus();
+    await page.keyboard.press('Enter');
     await expect(page.getByRole('dialog', { name: 'Commands' })).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog', { name: 'Commands' })).toBeHidden();

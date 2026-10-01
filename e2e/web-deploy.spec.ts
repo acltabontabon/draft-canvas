@@ -50,11 +50,11 @@ test("the editor's service worker is scoped to the editor, and never to the land
   page,
 }) => {
   await page.goto(EDITOR);
-  const handle = await page.waitForFunction(async () => {
-    const registrations = await navigator.serviceWorker.getRegistrations();
-    return registrations.length ? registrations.map((registration) => registration.scope) : null;
-  });
-  const scopes = (await handle.jsonValue()) ?? [];
+  // A poll over `page.evaluate`, not `waitForFunction`: the latter does not await an async predicate.
+  const scopesNow = () =>
+    page.evaluate(async () => (await navigator.serviceWorker.getRegistrations()).map((registration) => registration.scope));
+  await expect.poll(async () => (await scopesNow()).length, { timeout: 30_000 }).toBeGreaterThan(0);
+  const scopes = await scopesNow();
 
   expect(scopes.length, 'the editor registers a worker of its own').toBeGreaterThan(0);
   for (const scope of scopes) {

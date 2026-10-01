@@ -27,7 +27,7 @@
  */
 
 import { capabilities } from '../agent/capabilities';
-import { gate, legibilityReceipt, qualityReceipt } from '../agent/compile';
+import { advisoriesReceipt, gate, legibilityReceipt, qualityReceipt } from '../agent/compile';
 import { AgentError, toAgentError } from '../agent/errors';
 import type { JobResult } from '../agent/jobs';
 import { runOffThread, type Progress } from '../agent/offThread';
@@ -39,7 +39,13 @@ import { readSelectionContext } from '../agent/selection';
 import { viewOf } from '../depth/tree';
 import type { DraftDocument } from '../document/types';
 import { deserializeDocument } from '../export/project';
+import { countPlayableFlows, sequenceSourceFor, type SequenceFormat } from '../export/sequence';
+import { c4PlantUmlSource } from '../export/source/c4plantuml';
 import type { AgentEditorReply, AgentEditorRequest } from '../host/agentBridge';
+import { withPhysChunk } from '../render/png/phys';
+import { fittedScale, rasterizeSvg } from '../render/png/rasterize';
+import { renderDocumentSvg } from '../render/svg/document';
+import { themeFor, type ThemeName } from '../render/theme/tokens';
 import { agentActivity } from './agentActivity';
 import { forgetPendingWrite, rememberPendingWrite } from './agentWrites';
 import type { AgentContext, DesktopApi, Handle, HostEvent } from './api';
@@ -150,6 +156,8 @@ async function run(api: DesktopApi, host: AgentHost, event: Request): Promise<un
       return capabilities(args);
     case 'read_diagram':
       return read(host, args, context);
+    case 'render_diagram':
+      return render(host, args, context);
     case 'read_selection':
       return readSelection(host, context);
     case 'get_implementation_context':
@@ -186,8 +194,11 @@ async function run(api: DesktopApi, host: AgentHost, event: Request): Promise<un
   }
 }
 
-async function read(host: AgentHost, args: Record<string, unknown>, context: AgentContext) {
-  const diagramId = context.diagramId ?? '';
+/**
+ * The diagram a read-only tool asks about, as it stands: the open document (brought in step with
+ * its file, and past whatever edit is in flight), or the file's text as the shell read it.
+ */
+async function fileFor(host: AgentHost, context: AgentContext): Promise<{ file: DraftDocument; revision: string }> {
   if (context.open) {
     const snapshot = await host.inTurn(async () => {
       await host.syncWithDisk();
@@ -195,12 +206,104 @@ async function read(host: AgentHost, args: Record<string, unknown>, context: Age
       return host.askEditor({ kind: 'snapshot' });
     });
     if (snapshot.kind !== 'snapshot') throw new AgentError('INTERNAL', 'The editor did not answer.');
-    return readDiagram(snapshot.file, args, handOut(host, snapshot), diagramId);
+    return { file: snapshot.file, revision: handOut(host, snapshot) };
   }
   if (context.text === undefined || context.stamp === undefined) throw new AgentError('NOT_FOUND', 'That diagram could not be read.');
   const parsed = deserializeDocument(context.text);
   if (!parsed.ok) throw new AgentError('UNSUPPORTED', `That file can't be read as a diagram: ${parsed.error}`);
-  return readDiagram(parsed.document, args, fileRevision(context.stamp), diagramId);
+  return { file: parsed.document, revision: fileRevision(context.stamp) };
+}
+
+/** `raw` as one of `allowed`, `fallback` when left out; anything else is the agent's mistake, named. */
+function oneOf<T extends string | number>(raw: unknown, allowed: readonly T[], fallback: T, path: string): T {
+  if (raw === undefined) return fallback;
+  if ((allowed as readonly unknown[]).includes(raw)) return raw as T;
+  throw new AgentError('INVALID_INPUT', `${path.slice(1)} must be one of ${allowed.map((a) => JSON.stringify(a)).join(', ')}.`, { path });
+}
+
+const READ_FORMATS = ['draft', 'mermaid', 'plantuml', 'c4'] as const;
+
+async function read(host: AgentHost, args: Record<string, unknown>, context: AgentContext) {
+  const diagramId = context.diagramId ?? '';
+  const format = oneOf(args.format, READ_FORMATS, 'draft', '/format');
+  const { file, revision } = await fileFor(host, context);
+  if (format === 'draft') return readDiagram(file, args, revision, diagramId);
+  // The architecture itself as C4-PlantUML — the same text the Source export writes.
+  if (format === 'c4') return { diagramId, title: file.metadata.title, revision, format, source: c4PlantUmlSource(file) };
+  // The flows as sequence-diagram source — the same text the app's own export writes, every view
+  // included, so an agent never has to walk the rooms itself.
+  return {
+    diagramId,
+    title: file.metadata.title,
+    revision,
+    format,
+    flows: countPlayableFlows(file),
+    source: sequenceSourceFor(file, format as SequenceFormat),
+  };
+}
+
+/** The largest image handed back; past it the picture is better asked for as svg, or one view at a time. */
+export const RENDER_MAX_BYTES = 8 * 1024 * 1024;
+const RENDER_SCALES = [1, 2, 3] as const;
+
+function toBase64(bytes: Uint8Array): string {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(binary);
+}
+
+/**
+ * `render_diagram`: one view drawn by the same renderer the app exports with, on the page itself —
+ * the SVG needs the page's text measurer and the PNG a `<canvas>`, neither of which the agent worker
+ * has. Refused outright, never silently shrunk, when the picture would not fit the canvas the app
+ * can draw or `RENDER_MAX_BYTES`: an agent reading a quietly down-scaled image would trust text it
+ * can no longer read.
+ */
+async function render(host: AgentHost, args: Record<string, unknown>, context: AgentContext) {
+  const diagramId = context.diagramId ?? '';
+  const format = oneOf(args.format, ['png', 'svg'] as const, 'png', '/format');
+  const theme: ThemeName = oneOf(args.theme, ['light', 'dark'] as const, 'light', '/theme');
+  const scale = oneOf(args.scale, RENDER_SCALES, 1, '/scale');
+  const { file, revision } = await fileFor(host, context);
+  const path = viewPathOf(file, args.view);
+  const view = path.length ? viewOf(file, path) : file;
+  if (!view) throw new AgentError('NOT_FOUND', 'That view no longer exists.');
+
+  const rendered = renderDocumentSvg(view, { theme, includeBackground: false, idScope: path.length ? `agent-${path.join('.')}` : 'agent' });
+  const base = { diagramId, title: file.metadata.title, revision, ...(path.length ? { view: { path } } : {}) };
+  const tooLarge = (what: string, hint: string) =>
+    new AgentError('LIMIT_EXCEEDED', `${what} Nothing was rendered.`, { hint, details: { width: rendered.width, height: rendered.height, maxBytes: RENDER_MAX_BYTES } });
+
+  if (format === 'svg') {
+    if (rendered.svg.length > RENDER_MAX_BYTES) throw tooLarge('The SVG of this view is larger than 8 MB.', 'Render one view at a time (view.inside), or read it with read_diagram instead.');
+    return { ...base, format: 'svg', mimeType: 'image/svg+xml', width: rendered.width, height: rendered.height, svg: rendered.svg };
+  }
+
+  // The app's own canvas limits (`fittedScale` is what the Export dialog quotes): asked beyond them,
+  // say so and name the scale that fits rather than hand back a smaller picture than was asked for.
+  const fitted = fittedScale(rendered.width, rendered.height, scale);
+  if (fitted < scale) {
+    const largest = Math.floor(fitted);
+    throw tooLarge(
+      `At scale ${scale} the image would be ${Math.round(rendered.width * scale)}×${Math.round(rendered.height * scale)} px, more than the canvas Draft Canvas can draw.`,
+      largest >= 1 ? `Ask for scale ${largest}, or for format "svg".` : 'Ask for format "svg", or render one view at a time (view.inside).',
+    );
+  }
+  const blob = await rasterizeSvg(rendered.svg, { width: rendered.width, height: rendered.height, scale, background: themeFor(theme).canvas });
+  const png = withPhysChunk(new Uint8Array(await blob.arrayBuffer()), scale);
+  if (png.byteLength > RENDER_MAX_BYTES) {
+    throw tooLarge(`The PNG at scale ${scale} is ${(png.byteLength / (1024 * 1024)).toFixed(1)} MB, more than 8 MB.`, scale > 1 ? `Ask for scale ${scale - 1}, or for format "svg".` : 'Ask for format "svg", or render one view at a time (view.inside).');
+  }
+  return {
+    ...base,
+    format: 'png',
+    mimeType: 'image/png',
+    width: Math.round(rendered.width * scale),
+    height: Math.round(rendered.height * scale),
+    scale,
+    bytes: png.byteLength,
+    data: toBase64(png),
+  };
 }
 
 async function implementationContext(host: AgentHost, args: Record<string, unknown>, context: AgentContext) {
@@ -301,7 +404,7 @@ function receiptCounts(result: Extract<JobResult, { kind: 'update' }>) {
     updated: result.counts.updated,
     removed: result.counts.removed,
     ...(result.counts.arranged ? { arranged: result.counts.arranged } : {}),
-    ...(result.advisories.length ? { advisories: result.advisories.slice(0, 5) } : {}),
+    ...advisoriesReceipt(result.advisories, 5),
     quality: qualityReceipt('touched', result.quality),
     ...(result.legibility ? { legibility: legibilityReceipt(result.legibility) } : {}),
   };

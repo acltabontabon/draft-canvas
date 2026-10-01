@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { newCanvas, reopenAfterReload } from './canvas';
+import { cameraAtRest, newCanvas, reopenAfterReload } from './canvas';
 
 /**
  * Architecture Starters, driven the way they are meant to be used: ⌘K, a few letters, Enter, and a
@@ -17,6 +17,7 @@ async function insertViaPalette(page: Page, query: string) {
 /** Selects a connector by its position in creation order — `.dc-edge-line`'s DOM order — clicking
  *  the midpoint of its drawn path, the same way `critical-journey.spec.ts` does. */
 async function clickEdgeBetween(page: Page, edgeIndex: number) {
+  await cameraAtRest(page); // the point is read off the screen, so the camera must have stopped
   const path = page.locator('.dc-edge-line').nth(edgeIndex);
   const point = await path.evaluate((el: SVGPathElement) => {
     const len = el.getTotalLength();

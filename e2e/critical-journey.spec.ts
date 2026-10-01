@@ -69,6 +69,7 @@ async function clickEdgeBetween(page: Page, edgeIndex: number) {
 /** Drags from a node's right-hand handle onto another node. */
 async function connect(page: Page, fromIndex: number, toIndex: number) {
   const source = page.locator('.dc-node').nth(fromIndex);
+  await page.mouse.move(1, 1); // WebKit refreshes hover only on real movement (see e2e/canvas.ts)
   await source.hover();
   const handle = (await source.locator('.dc-handle').nth(1).boundingBox())!;
   const target = (await page.locator('.dc-node').nth(toIndex).boundingBox())!;

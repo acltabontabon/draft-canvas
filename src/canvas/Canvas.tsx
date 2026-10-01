@@ -83,6 +83,11 @@ const PRO_OPTIONS = { hideAttribution: true } as const;
  *  its own independently-declared constant, per this file's usual "no shared clearance/threshold
  *  numbers across gestures" house style (see `DraftEdgeView.tsx`'s own `DRAG_THRESHOLD_PX`). */
 const CONTEXT_MENU_DRAG_THRESHOLD_PX = 4;
+/** A touch or pen held this long, moving less than `LONG_PRESS_DRIFT_PX`, is a long-press — the
+ *  finger's right-click. 500 ms is the platforms' own hold time; 8 px absorbs the wobble of a held
+ *  finger without letting a slow drag count. */
+const LONG_PRESS_MS = 500;
+const LONG_PRESS_DRIFT_PX = 8;
 /** How far (screen px) a dragged card moves before the connector under it is hit-tested again. */
 const EDGE_PROBE_STEP_PX = 4;
 
@@ -591,6 +596,12 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   /** Where the right mouse button went down, in screen coordinates — compared against the native
    *  `contextmenu` event's own position to tell a stationary right-click from a right-drag. */
   const rightPointerDown = useRef<{ x: number; y: number } | null>(null);
+  /** A touch/pen press being timed for a long-press, and the one that just fired — whose trailing
+   *  `click` must not reach the canvas (it would deselect what the menu is for, or close the menu). */
+  const longPress = useRef<{ x: number; y: number; target: EventTarget | null; timer: number } | null>(null);
+  const longPressFired = useRef(false);
+  /** What the last press was made with — a tap on empty canvas is answered differently from a click. */
+  const lastPressPointerType = useRef<string>('mouse');
   /**
    * The aim point of a note/code drag: where on the card the grab landed, in flow units from its
    * own top-left. Recorded once, then added to the card's live position every frame — the card
@@ -1593,6 +1604,97 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
     [edgeAtEvent, interactive, openEdgeContextMenu],
   );
 
+  /**
+   * The finger's right-click. Pointer events rather than the browser's own contextmenu-on-hold:
+   * Safari never fires one for touch, and Chrome's comes on its own schedule with its own thresholds,
+   * so the two platforms would disagree about what a hold does. Resolves the target the way the
+   * mouse handlers above do — a connector under the point wins over the node whose handle ring it
+   * ends on, then a shape, then empty canvas — and keeps a multi-selection the press landed in.
+   */
+  const openContextMenuFromPress = useCallback(
+    (clientX: number, clientY: number, target: EventTarget | null) => {
+      if (!interactive || isEditableTarget(target)) return;
+      const element = target instanceof Element ? target : null;
+      const screenPosition = { x: clientX, y: clientY };
+      const flowPosition = screenToFlowPosition(screenPosition);
+      const editor = useEditorStore.getState();
+      const before = editor.selection;
+      const multiple = before.nodes.length + before.edges.length >= 2;
+      const pick = edgeAtEvent({ clientX, clientY });
+      if (pick && pick.part !== 'control') {
+        const partOfMultiSelection = multiple && before.edges.includes(pick.id);
+        editor.setSelection(partOfMultiSelection ? before : { nodes: [], edges: [pick.id] });
+        useUiStore.getState().setContextMenu({
+          target: partOfMultiSelection ? { kind: 'selection' } : { kind: 'edge', id: pick.id },
+          screenPosition,
+          flowPosition,
+        });
+        return;
+      }
+      const nodeId = element?.closest('.react-flow__node')?.getAttribute('data-id');
+      if (nodeId) {
+        const partOfMultiSelection = multiple && before.nodes.includes(nodeId);
+        editor.setSelection(partOfMultiSelection ? before : { nodes: [nodeId], edges: [] });
+        useUiStore.getState().setContextMenu({
+          target: partOfMultiSelection ? { kind: 'selection' } : { kind: 'node', id: nodeId },
+          screenPosition,
+          flowPosition,
+        });
+        return;
+      }
+      if (!element?.classList.contains('react-flow__pane')) return;
+      editor.setSelection({ nodes: [], edges: [] });
+      useUiStore.getState().setContextMenu({
+        target: { kind: 'pane' },
+        screenPosition,
+        flowPosition: { x: Math.round(flowPosition.x), y: Math.round(flowPosition.y) },
+      });
+    },
+    [edgeAtEvent, interactive, screenToFlowPosition],
+  );
+
+  const cancelLongPress = useCallback(() => {
+    const pending = longPress.current;
+    if (!pending) return;
+    window.clearTimeout(pending.timer);
+    longPress.current = null;
+  }, []);
+
+  /** Every press reaches here first (capture phase): the right-click snapshot, then a long-press timer
+   *  for a touch or pen. A mouse never qualifies — a held left button is a drag about to start — and
+   *  a second finger cancels, since that is a pinch, not a hold. */
+  const onCanvasPressStart = useCallback(
+    (event: React.PointerEvent) => {
+      onCanvasPointerDown(event);
+      cancelLongPress();
+      longPressFired.current = false;
+      lastPressPointerType.current = event.pointerType;
+      if (event.pointerType === 'mouse' || event.button !== 0 || !event.isPrimary) return;
+      const { clientX, clientY, target } = event;
+      longPress.current = {
+        x: clientX,
+        y: clientY,
+        target,
+        timer: window.setTimeout(() => {
+          longPress.current = null;
+          longPressFired.current = true;
+          openContextMenuFromPress(clientX, clientY, target);
+        }, LONG_PRESS_MS),
+      };
+    },
+    [cancelLongPress, onCanvasPointerDown, openContextMenuFromPress],
+  );
+
+  /** One ref read per move while nothing is pending — nothing is measured unless a hold is being timed. */
+  const onCanvasPressMove = useCallback(
+    (event: React.PointerEvent) => {
+      const pending = longPress.current;
+      if (!pending) return;
+      if (Math.hypot(event.clientX - pending.x, event.clientY - pending.y) > LONG_PRESS_DRIFT_PX) cancelLongPress();
+    },
+    [cancelLongPress],
+  );
+
   const onPaneDoubleClick = useCallback(
     (event: React.MouseEvent) => {
       if (!interactive) return;
@@ -1707,6 +1809,29 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
    */
   const onCanvasClickCapture = useCallback(
     (event: React.MouseEvent) => {
+      // The lift after a long-press still produces a click; the menu is up and that click is not
+      // a click on anything.
+      if (longPressFired.current) {
+        longPressFired.current = false;
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+      // React Flow leaves a touch on empty canvas to its touch panning — `Pane`'s pointer-down
+      // capture steps aside for `pointerType === 'touch'` — and with marquee selection on, its pane
+      // click only ever fires from that pointer path. So a finger's tap on empty canvas reaches
+      // neither its deselect nor `onPaneClick`; both are answered here instead.
+      if (
+        interactive &&
+        event.button === 0 &&
+        lastPressPointerType.current !== 'mouse' &&
+        event.target instanceof Element &&
+        event.target.classList.contains('react-flow__pane')
+      ) {
+        if (useUiStore.getState().armed) onPaneClick(event);
+        else useEditorStore.getState().setSelection({ nodes: [], edges: [] });
+        return;
+      }
       if (!interactive || event.button !== 0 || useUiStore.getState().armed) return;
       if (isEditableTarget(event.target)) return;
       const pick = edgeAtEvent(event);
@@ -1728,7 +1853,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       }
       setHover(pick.group ? edgeToSelect(pick, useEditorStore.getState().selection.edges) : pick.id, event);
     },
-    [edgeAtEvent, interactive, setHover],
+    [edgeAtEvent, interactive, onPaneClick, setHover],
   );
 
   // A pan or zoom by the user slides the canvas out from under a menu pinned to a screen point, and
@@ -1779,7 +1904,10 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
           ? ({ '--dc-explain-accent': explainAccent ? accentOf(theme, explainAccent).chip : theme.selection } as CSSProperties)
           : undefined
       }
-      onPointerDownCapture={onCanvasPointerDown}
+      onPointerDownCapture={onCanvasPressStart}
+      onPointerMoveCapture={onCanvasPressMove}
+      onPointerUpCapture={cancelLongPress}
+      onPointerCancelCapture={cancelLongPress}
       onClickCapture={onCanvasClickCapture}
       onPointerLeave={clearHover}
       // The one Tab stop for the whole diagram — individual nodes/edges are deliberately not

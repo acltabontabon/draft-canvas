@@ -71,6 +71,10 @@ async fn a_real_client_lists_the_tools_and_round_trips_a_call() {
         "create_diagram" => {
             json!({"diagramId": "d_x", "revision": "f:1", "persisted": true, "echo": args["title"]})
         }
+        "render_diagram" => json!({
+            "diagramId": "d_x", "revision": "f:1", "format": "png", "mimeType": "image/png",
+            "width": 1, "height": 1, "scale": 1, "bytes": 8, "data": "iVBORw0KGgo="
+        }),
         _ => json!({"error": {"code": "NOT_FOUND", "message": "nope"}}),
     });
     let agent_dir = dir.path().to_path_buf();
@@ -98,6 +102,7 @@ async fn a_real_client_lists_the_tools_and_round_trips_a_call() {
             "read_diagram",
             "read_selection",
             "get_implementation_context",
+            "render_diagram",
             "create_diagram",
             "update_diagram",
             "submit_proposal",
@@ -124,6 +129,25 @@ async fn a_real_client_lists_the_tools_and_round_trips_a_call() {
         .unwrap();
     assert_eq!(ok.is_error, Some(false));
     assert_eq!(ok.structured_content.as_ref().unwrap()["echo"], "Hello");
+
+    // A rendered diagram reaches the client as MCP image content, through the real protocol.
+    let rendered = client
+        .call_tool(
+            CallToolRequestParams::new("render_diagram")
+                .with_arguments(json!({"diagramId": "d_x"}).as_object().unwrap().clone()),
+        )
+        .await
+        .unwrap();
+    assert_eq!(rendered.is_error, Some(false));
+    let rmcp::model::ContentBlock::Image(image) = &rendered.content[0] else {
+        panic!("the first content block is the image");
+    };
+    assert_eq!(image.mime_type, "image/png");
+    assert_eq!(image.data, "iVBORw0KGgo=");
+    assert_eq!(
+        rendered.structured_content.as_ref().unwrap()["revision"],
+        "f:1"
+    );
 
     let failed = client
         .call_tool(

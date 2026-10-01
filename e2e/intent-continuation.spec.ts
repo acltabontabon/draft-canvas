@@ -22,6 +22,7 @@ async function chooseInspectorOption(page: Page, ariaLabel: string, optionLabel:
 /** Drags from a node's right-hand handle to a screen point (another node's centre, or empty canvas). */
 async function dragHandleTo(page: Page, fromIndex: number, to: { x: number; y: number }) {
   const source = page.locator('.dc-node').nth(fromIndex);
+  await page.mouse.move(1, 1); // WebKit refreshes hover only on real movement (see e2e/canvas.ts)
   await source.hover();
   const handle = (await source.locator('.dc-handle').nth(1).boundingBox())!;
   await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);

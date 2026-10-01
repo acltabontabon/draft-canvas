@@ -20,6 +20,7 @@ import {
   canCreateInside,
   embed,
   hasInside,
+  mapRooms,
   pathKey,
   resolvePath,
   ROOT_PATH,
@@ -61,6 +62,7 @@ import {
   reconcileMembership as reconcileMembershipOp,
   reconcileAfterResize,
   reorderEdgeAttachment as reorderEdgeAttachmentOp,
+  replaceLabels,
   sendBackward,
   sendToBack,
   setParent,
@@ -74,6 +76,7 @@ import {
   updateNode,
   type AlignEdge,
   type Clipboard,
+  type ReplaceOptions,
 } from '../document/operations';
 import { buildStarter, starterSize } from '../starters/build';
 import type { ArchitectureStarter } from '../starters/types';
@@ -362,6 +365,10 @@ export interface EditorStore {
    * `src/starters/`.
    */
   insertStarter: (starter: ArchitectureStarter) => DraftNode[];
+  /** Adds a laid-out document's shapes and connectors to this room, at the free origin, as one
+   *  undo step with the new shapes selected — how an imported flowchart lands in an open diagram.
+   *  Ids are reissued, so the same document can be inserted twice. Returns the new node ids. */
+  insertComposed: (composed: DraftDocument, label: string) => string[];
   /**
    * Accepts an Intent Continuation offer (see `src/continuation/`): the previewed nodes and
    * connectors become real in one undoable step, the node the fragment ends on is selected (so the
@@ -461,6 +468,20 @@ export interface EditorStore {
   /** Hands every manually-routed connector back to Smart Routing, in one undo
    *  step. Never moves a node, and never touches an anchor. */
   tidyConnections: () => void;
+  /**
+   * Lays the room on screen out again with the layout engine the AI agent's `{op:"arrange"}` uses
+   * — same request, same reading direction — as one undo step labelled "Arrange". Every id, note,
+   * flow and the selection survive; only positions (and connector anchors) change. Resolves `true`
+   * when something moved. The engine is loaded on demand, so a canvas that never arranges never
+   * pays for it.
+   */
+  arrangeRoom: () => Promise<boolean>;
+  /**
+   * Replaces `find` with `replace` in every label of every room of the file (shape names, connector
+   * labels, attachment text, flow titles) as one undo step, staying in the room on screen. Returns
+   * how many occurrences changed — `0` when nothing matched, in which case nothing was recorded.
+   */
+  findAndReplace: (find: string, replace: string, options?: ReplaceOptions) => number;
   /** Materializes a real Junction where a connector's shared routing trunk
    *  already appears to branch, and re-points that bundle's members through
    *  it — the deliberate step from automatic routing to explicit control. */
@@ -1216,6 +1237,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   apply(label, recipe, options) {
+    // A diagram opened from a share link is read-only (`uiStore.readOnly`): every operation funnels
+    // through here or `applyToFile`, so refusing at this one gate is what keeps a shared diagram
+    // exactly as it arrived, whichever key or menu asked. Camera moves don't come this way.
+    if (useUiStore.getState().readOnly) return;
     const state = get();
     const before = state.document;
     const next = touch(recipe(before));
@@ -1263,6 +1288,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // A gesture in flight would otherwise absorb this change into its own undo entry — or record
     // its baseline over it. The caller refuses while `isInteracting()`; this is the last guard.
     if (interaction) return false;
+    // Same gate as `apply`: a shared, read-only diagram takes no changes.
+    if (useUiStore.getState().readOnly) return false;
     const state = get();
     if (expectedRevision !== undefined && state.revision !== expectedRevision) return false;
     const file = fileOf(state);
@@ -1397,6 +1424,29 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // the whole architecture and one ⌘⇧Z bring it back.
     const { nodes, edges, flows } = buildStarter(starter, freeOriginFor(state.document, starterSize(starter)));
     return state.addNodesWithEdges(nodes, edges, `Insert ${starter.name}`, flows) ? nodes : [];
+  },
+
+  insertComposed(composed, label) {
+    const state = get();
+    const bounds = boundsOf(composed.nodes);
+    if (!bounds) return [];
+    // The composed document is laid out around its own origin; the paste machinery already knows
+    // how to reissue ids, re-home members under their boundaries and respect the file's caps, so
+    // this is a paste of it, shifted onto the free space beside what is drawn (`freeOriginFor`,
+    // the same spot a starter lands). Flows it carries are not brought along: a flowchart has none.
+    const origin = freeOriginFor(state.document, { width: bounds.width, height: bounds.height });
+    const offset = { x: origin.x - bounds.x, y: origin.y - bounds.y };
+    const result = pasteFragment(state.document, { nodes: composed.nodes, edges: composed.edges }, offset, {
+      ...totals(fileOf(state)),
+      depth: state.path.length,
+    });
+    if (result.nodeIds.length === 0) {
+      notifyNothingAdded(result.tooDeep);
+      return [];
+    }
+    state.apply(label, () => result.doc, { selection: { nodes: result.nodeIds, edges: result.edgeIds } });
+    if (result.truncated) useUiStore.getState().notify('Imported the first part — the rest would make this diagram too large.');
+    return result.nodeIds;
   },
 
   connect(source, target, sourceSide, targetSide, sourceOffset = 0.5, targetOffset = 0.5) {
@@ -1880,6 +1930,55 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     state.apply('Tidy connectors', (doc) =>
       manual.reduce((next, edge) => updateEdge(next, edge.id, { routeMode: undefined }), doc),
     );
+  },
+
+  async arrangeRoom() {
+    if (interaction) return false;
+    // The layout engine is the agent's chunk, loaded here on demand: the store must not pull it into
+    // the editor's bundle, and the agent must never reach back into the store — one direction.
+    const [{ arrangeView, readingDirectionOf }, { measureContext }, { Problems }] = await Promise.all([
+      import('../agent/arrange'),
+      import('../agent/place'),
+      import('../agent/errors'),
+    ]);
+    // Read inside the recipe, not before the import: the room may have changed while the engine
+    // loaded, and `apply` hands the recipe the document as it is at commit time.
+    let moved = false;
+    get().apply('Arrange', (doc) => {
+      const arranged = arrangeView(
+        doc,
+        {
+          connectors: 'tidy',
+          move: true,
+          // The same defaults the agent's `{op:"arrange"}` resolves to when it names nothing: the
+          // room keeps the way it already reads, manual sizes are kept, and the engine may try the
+          // other direction only when it reads clearly better.
+          layout: { direction: readingDirectionOf(doc), spacing: 'comfortable', allowDegraded: false, normalizePeerSizes: false },
+        },
+        measureContext(),
+        new Problems(),
+        '/arrange',
+      );
+      if (!arranged || arranged.touched.size === 0) return doc;
+      moved = true;
+      return arranged.view;
+    });
+    return moved;
+  },
+
+  findAndReplace(find, replace, options) {
+    if (find.length === 0) return 0;
+    let count = 0;
+    // One file-wide step: `applyToFile` records the whole file and keeps the room on screen, so an
+    // undo puts every room's text back at once rather than one room per step.
+    const changed = get().applyToFile('Find and replace', (file) =>
+      mapRooms(file, (graph) => {
+        const result = replaceLabels(graph, find, replace, options);
+        count += result.count;
+        return result.doc;
+      }),
+    );
+    return changed ? count : 0;
   },
 
   convertBundleToJunction(edgeId) {

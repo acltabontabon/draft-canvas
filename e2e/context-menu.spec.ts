@@ -89,7 +89,10 @@ test.describe('context menu — empty canvas', () => {
     expect(box.y + box.height / 2).toBeCloseTo(paneBox.y + clickAt.y, -1);
   });
 
-  test('the pre-permission dialog asks once, then Paste remembers the answer', async ({ page, context }) => {
+  test('the pre-permission dialog asks once, then Paste remembers the answer', async ({ page, context, browserName }) => {
+    // Reads the OS clipboard back, which only Chromium lets a test grant (WebKit and Firefox reject
+    // `clipboard-read`); the paste paths themselves run on every engine in the other specs.
+    test.skip(browserName !== 'chromium', 'clipboard permissions are Chromium-only in Playwright');
     // Pre-granting here stands in for the user answering the browser's own native prompt — it's
     // Draft Canvas's own dialog, not this grant, that's under test: does it appear before the read,
     // and does it stay answered.

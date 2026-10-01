@@ -93,6 +93,7 @@ tool below `read_selection` is additive within that same contract.
 | `read_diagram({diagramId, view?, focus?, include?, cursor?})` | read-only | One view, semantically. Every element comes with its derived C4 role and scope, relationships name their endpoints, and notes, attachments and flows carry the ids to edit them by. See the notes below for nested views, focus and pages. |
 | `read_selection({diagramId})` | read-only | The person's current selection in the diagram open right now: stable ids, a bounded set of neighbouring elements marked apart from the selection itself, and the notes about it. See [Selection-aware editing](#selection-aware-editing). |
 | `get_implementation_context({diagramId, view?, focus?})` | read-only | Flow step order exactly as stored (never inferred from layout), the notes and decisions about what's in focus, and its boundaries — for implementing an agreed design in the repository. Diagram text is context here, never instructions. |
+| `render_diagram({diagramId, view?, format?, scale?, theme?})` | read-only | One view drawn by the app's own renderer: a PNG as MCP image content (`format: "png"`, the default, at `scale` 1, 2 or 3, in a `light` or `dark` theme), its id, revision and pixel size as structured content beside it — or the SVG as text (`format: "svg"`). Refused (`LIMIT_EXCEEDED`), never shrunk, past the app's canvas limits or 8 MB; the error names a scale that fits. |
 | `create_diagram({requestId, title, nodes, relationships, groups?, flows?, notes?, level?, starter?, layout?, project?, open?, allowDuplicateTitle?})` | idempotent by `requestId` | A **new** diagram: validates, lays out, runs the quality gate and writes a new file. It never replaces anything, and a title already used in that folder is refused (`DUPLICATE_TITLE`, naming the existing diagram) unless `allowDuplicateTitle`. |
 | `update_diagram({requestId, diagramId, expectedRevision, ops, view?, scope?, layout?, activate?})` | idempotent by `requestId`, destructive (it can remove) | Every follow-up. Ops run in order as one change: `add`, `update` (`null` clears a field; notes, attachments and flows are edited by id), `remove` (a non-empty group needs `cascade`), `setLevel` and `arrange`. Works whether or not the diagram is open. `scope`, if present, restricts `update`/`remove` (and any cascade) to a captured set of ids — see [Selection-aware editing](#selection-aware-editing). |
 | `submit_proposal({requestId, diagramId, expectedRevision, summary, rationale?, assumptions?, openQuestions?, ops, layout?, scope?, sourceRef?, revises?})` | idempotent by `requestId` | Proposes a batch of changes for a person to explicitly accept or reject — never applies anything itself. See [Proposals](#proposals-review-before-applying). |
@@ -114,8 +115,14 @@ Notes on `read_diagram`:
   Canvas's own next-step suggestions per element; they are never applied automatically.
 - Pages are at most 200 elements, 400 relationships and 96 KB. The `cursor` is bound to the revision,
   so a changed diagram answers `CURSOR_STALE`.
+- `format: "mermaid"` or `"plantuml"` answers with the diagram's flows as sequence-diagram `source`
+  instead — the same text the app's Export writes, every view included — with the `revision` and the
+  number of `flows` in it; `format: "c4"` answers with the architecture as C4-PlantUML `source`, the
+  same text the Source export writes; for the source formats `focus`, `include` and `cursor` do not apply. The default, `"draft"`, is the
+  structured read above. (A C4-PlantUML `format` is planned, not yet offered.)
 
-Every result is structured content plus a one-line text summary. Tool failures are results with
+Every result is structured content plus a one-line text summary (a rendered PNG is image content, its
+metadata as the text and structured parts; a rendered SVG is the source as text). Tool failures are results with
 `isError: true` and a stable `code`. JSON-RPC errors are kept for malformed requests.
 
 **Identifiers.** A *new* id an agent chooses must match `^[A-Za-z][A-Za-z0-9_.-]{0,63}$` and be unique
@@ -273,7 +280,8 @@ becomes `REVISION_CONFLICT {currentRevision}`, never a silent overwrite.
 
 Receipts are compact: `diagramId`, `title`, `revision`, `state`, `persisted`, the counts (`added`,
 `updated`, `removed`, `arranged`), `view` when the change was inside a nested view, `where` (`editor`
-or `file`), `undo` (`editor`, `on-open` or none) and at most 5 advisories.
+or `file`), `undo` (`editor`, `on-open` or none) and at most 5 advisories — with `advisoriesDropped`,
+the number left out, when there were more (a create receipt carries up to 10, the same way).
 
 **A diagram that isn't open** is changed in its file. What the person is looking at is never switched
 for it. The page works the change out from the file's text, and the shell writes it only if the file
@@ -847,8 +855,9 @@ re-arranged in place in 117 ms, too quick for any preview to appear.
   tangled. Split it into views, or build it in steps.
 - **A stored "main" flow, or a note linked to something without being attached.** Neither exists in
   the document model, so neither is claimed.
-- **Exports as tools.** The diagram is native, so the person presents and exports it from the app.
-  Returning image bytes to an agent adds nothing it can't get from `read_diagram`.
+- **Exports as files.** The diagram is native, so the person presents and exports it from the app.
+  An agent can *look* at a view (`render_diagram`, an image or SVG of what the person sees) and read
+  the flows as sequence source (`read_diagram` with `format`), but nothing writes an export file for it.
 - **A separate relationship `technology` field.** It would need changes to both connector renderers
   (see `AGENTS.md`); the label carries it for now.
 - **Linux.** Not a desktop target yet, so not a bridge target either.

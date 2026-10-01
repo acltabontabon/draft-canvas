@@ -86,6 +86,7 @@ all appear as **Jump to** results. Choosing one selects it and moves the view to
 | `⌘A` | Select all shapes |
 | `⌘G` / `⌘⇧G` | Group into a Boundary / ungroup |
 | `⌘B` / `⌘I` | Bold / italic, for a selected Text shape |
+| `⌘⌥F` (`Ctrl+H` on Windows and Linux) | Find and replace, across every shape, connector, note and flow in every room — one undo step |
 
 While you type, `Enter` commits a shape's label and `Shift+Enter` adds a line. Notes work the other
 way round: `Enter` adds a line and `⌘Enter` commits. In a Code shape, `Enter` is always a new line.
@@ -94,6 +95,25 @@ caption.
 
 `Shift+F10` (or the Menu key) opens the context menu for the selection, the keyboard route to the
 same actions as a right-click.
+
+## The Outline, and what a screen reader hears
+
+`⌥O` (or **Outline** in the palette) docks a list of the current view beside the canvas: every shape in
+reading order, boundaries holding their members, and under each shape the connectors that touch it
+("→ Orders: writes to"). It is the same selection as the canvas, both ways: arrow through the list and
+the canvas selects along with you, panning a shape into view if it was off screen; click a shape on the
+canvas and its row lights up. `→` and `←` fold and unfold a shape's connectors or a boundary's members,
+`Enter` edits the row's element exactly as it does on the canvas, `Esc` closes the list and puts focus
+back on the canvas.
+
+Every shape has a name a screen reader can read ("Orders API, service") and every connector is read
+as a sentence in the arrow's direction ("Orders API writes to Orders") — the same words the canvas
+captions it with. Selecting something announces it once the selection settles ("Orders API, service,
+2 connectors"; "3 elements selected"), so arrowing through a diagram speaks where you land, not every
+step on the way.
+
+On a touch screen, a tap selects, a finger held still for half a second opens the same menu a
+right-click does, and two fingers zoom.
 
 ## What the command palette does
 
@@ -107,8 +127,14 @@ you used lately, then what applies to the current selection, then everything els
   with a composed, editable architecture (Monolith, Microservices, CQRS, Saga, Outbox and others).
 - **Flows** and **Open points**: start a presentation, add a flow, raise a point about the selection,
   open the list of what is still unsettled.
-- **View** and **Canvas**: fit and zoom, **View level…**, **Tidy connectors**, **Export…**,
-  **Canvas settings…**, **Keyboard shortcuts**, and **Open the documentation**.
+- **View** and **Canvas**: fit and zoom, **View level…**, **Tidy connectors**, **Arrange diagram**
+  (lays the current view out again as one undo step, keeping every connector, note, flow and the
+  selection), **Find and replace…**, **Export…**, **Canvas settings…**, **Keyboard shortcuts**, and
+  **Open the documentation**.
+
+Typing also searches the diagram itself: every named shape, labelled connector and flow is a
+**Jump to** row, in every room of the file — a row from inside another shape says so ("inside Orders
+API") and takes you there first.
 
 Typing narrows the list with a forgiving match: `svc` finds **Add Service**. A few commands ask a
 follow-up question in a second list, such as **Connect to…** or **View level…**; `Esc` steps back.

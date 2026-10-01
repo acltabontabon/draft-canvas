@@ -142,7 +142,7 @@ async function openSourceExport(page: Page) {
 }
 
 test.describe('Sequence Diagram export', () => {
-  test('lives inside Export, under Source — no toolbar action, no preview', async ({ page }) => {
+  test('lives inside Export, under Source — no toolbar action, the text itself as the preview', async ({ page }) => {
     await importDocument(page, sagaDocument(), 'saga.draftcanvas');
 
     // No dedicated toolbar button for it.
@@ -150,7 +150,8 @@ test.describe('Sequence Diagram export', () => {
 
     const dialog = await openSourceExport(page);
     await expect(dialog.getByText('Sequence diagram source generated from your Flows.')).toBeVisible();
-    // No rendered preview: the artifact is the file tile, never a drawn diagram.
+    // The preview is the generated source, read-only; the artifact is the file tile, never a drawn diagram.
+    await expect(dialog.getByTestId('export-source-preview')).toContainText('sequenceDiagram');
     await expect(dialog.locator('.dc-export-file')).toBeVisible();
     await expect(dialog.locator('.dc-export-stage img')).toHaveCount(0);
   });
@@ -217,11 +218,11 @@ test.describe('Sequence Diagram export', () => {
     await expect(dialog.getByRole('button', { name: /Export (Mermaid|PlantUML)/ })).toBeDisabled();
   });
 
-  test('has no clipboard actions — file export is the only way out', async ({ page }) => {
+  test('offers Copy beside the export, and nothing Markdown-shaped', async ({ page }) => {
     await importDocument(page, sagaDocument(), 'saga.draftcanvas');
     const dialog = await openSourceExport(page);
 
-    await expect(dialog.getByRole('button', { name: 'Copy source' })).toHaveCount(0);
+    await expect(dialog.getByRole('button', { name: 'Copy', exact: true })).toBeEnabled();
     await expect(dialog.getByRole('button', { name: 'Copy as Markdown' })).toHaveCount(0);
   });
 
@@ -245,7 +246,12 @@ test.describe('Sequence Diagram export', () => {
     await expect(dialog.getByRole('radio', { name: 'PlantUML', exact: true })).toBeChecked();
 
     const download = page.waitForEvent('download');
-    await page.keyboard.press('Tab'); // Export PlantUML — the only control after Format now
+    // After Format: the source preview (scrollable, so focusable), then Copy, then Export.
+    await page.keyboard.press('Tab');
+    await expect(page.locator(':focus')).toHaveAttribute('aria-label', 'PlantUML source');
+    await page.keyboard.press('Tab');
+    await expect(page.locator(':focus')).toHaveText('Copy');
+    await page.keyboard.press('Tab');
     await expect(page.locator(':focus')).toHaveText('Export PlantUML');
     await page.keyboard.press('Enter');
     const file = await download;

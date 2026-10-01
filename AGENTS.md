@@ -3,7 +3,7 @@
 Draft Canvas is a local-first React + TypeScript SPA (Vite) for explaining software visually.
 No backend, no accounts, and no network calls in the editor's code. The same editor ships as the web
 app, a Docker image and a Tauri 2 desktop app (`src-tauri/` + `src/desktop/`). [`CONTRIBUTING.md`](CONTRIBUTING.md)
-has the repository map and how each platform saves a document. (A VS Code extension existed until 2.0
+has the repository map and how each platform saves a document. (A VS Code extension existed until 1.12
 and is retired; `?host=vscode` now shows a notice, see `src/ui/RetiredHostNotice.tsx`.)
 
 ## Commands
@@ -14,7 +14,10 @@ npm run build      # tsc -b && vite build
 npm run lint       # oxlint
 npm test           # vitest run
 npm run e2e        # playwright (npm run e2e:install once first)
-npm run check      # lint + e2e/benchmark/demo typecheck + build + unit tests — run this before calling work done
+npm run check      # lint + e2e/benchmark/demo typecheck + build + unit tests
+npm run check:full # check + every browser journey (e2e, e2e:offline, e2e:web) — "done" means this passed
+npm run test:coverage  # unit tests with a coverage report (the floor is in vite.config.ts)
+npm run licenses   # regenerates THIRD_PARTY_LICENSES.txt (a test fails when a dependency is missing from it)
 npm run site:dev   # the landing page (www/) alone, on :5280
 npm run build:web  # editor + landing page, assembled into dist-web/ the way Pages serves it
 npm run e2e:web    # the assembled artifact, served at /draft-canvas/ like production

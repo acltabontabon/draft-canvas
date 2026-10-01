@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { useFocusReturn } from './useFocusReturn';
 import { Button } from './Button';
 import { Icon } from './Icon';
@@ -35,7 +35,10 @@ export function Modal({ title, onClose, children, footer, width = 460, className
   const panel = useRef<HTMLDivElement>(null);
   const [order] = useState(() => (modalSequence += 1));
 
-  useEffect(() => {
+  // Layout effects, this one and the key listener below: a dialog has to be listening before it is
+  // first painted. After paint, a loaded machine showed the dialog a frame before it heard Escape,
+  // and a keyboard user quick enough to press it then found the dialog would not close.
+  useLayoutEffect(() => {
     openModals.add(order);
     return () => {
       openModals.delete(order);
@@ -64,7 +67,7 @@ export function Modal({ title, onClose, children, footer, width = 460, className
     if (document.activeElement !== initialFocus.current) initialFocus.current.focus();
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (Math.max(...openModals) !== order) return;
       // Escape that cancels an IME conversion in one of the dialog's fields isn't "close".

@@ -221,10 +221,25 @@ export interface UiStore {
   /** The preset a canvas click will place, or null for plain selection. */
   armed: Preset | null;
   shortcutsOpen: boolean;
+  /** The Find and replace dialog (⌘H, or the palette's "Find and replace…"). */
+  findReplaceOpen: boolean;
+  /**
+   * A one-shot "fit the whole diagram" ask from a surface that has no camera of its own (the
+   * toolbar's Arrange item). Consumed — set back to `0` — by the status bar's zoom controls, which
+   * hold the React Flow instance; `0` is "nothing asked". A counter rather than a flag so two asks
+   * in a row both run.
+   */
+  fitRequestId: number;
   exportOpen: boolean;
   aboutOpen: boolean;
   /** Canvas Settings — background image and personality preset. */
   settingsOpen: boolean;
+  /**
+   * Set while a diagram opened from a share link (`src/share/`) is on screen. It is nobody's file:
+   * not in the library, never autosaved, and `editorStore.apply`/`applyToFile` refuse every change
+   * while this is set — the camera still moves. Cleared by closing it or by making an editable copy.
+   */
+  readOnly: { sharedTitle: string } | null;
   toasts: Toast[];
   quickConnect: QuickConnectState | null;
   contextMenu: ContextMenuState | null;
@@ -302,6 +317,8 @@ export interface UiStore {
   openPointsResolvedOpen: boolean;
   /** Whether the Flows panel — the one surface for flows (`FlowPanel.tsx`) — is visible. */
   flowPanelOpen: boolean;
+  /** Whether the Outline — this view as a navigable list (`OutlinePanel.tsx`) — is docked open. */
+  outlinePanelOpen: boolean;
   /** Whether the proposal review panel (`desktop/ui/ProposalPanel.tsx`, desktop only) is open, and
    *  which proposal it's showing — `null` shows the list for the current diagram. */
   proposalPanelOpen: boolean;
@@ -465,7 +482,11 @@ export interface UiStore {
 
   arm: (preset: Preset | null) => void;
   setShortcutsOpen: (open: boolean) => void;
+  setFindReplaceOpen: (open: boolean) => void;
+  requestFit: () => void;
+  clearFitRequest: (id: number) => void;
   setExportOpen: (open: boolean) => void;
+  setReadOnly: (readOnly: UiStore['readOnly']) => void;
   setAboutOpen: (open: boolean) => void;
   setSettingsOpen: (open: boolean) => void;
   setQuickConnect: (state: QuickConnectState | null) => void;
@@ -489,6 +510,7 @@ export interface UiStore {
   setOpenPointsPanelOpen: (open: boolean) => void;
   setOpenPointsResolvedOpen: (open: boolean) => void;
   setFlowPanelOpen: (open: boolean) => void;
+  setOutlinePanelOpen: (open: boolean) => void;
   requestFlowRename: (flowId: string | null) => void;
   /** Opens the proposal panel (optionally straight to one proposal), or closes it. */
   setProposalPanelOpen: (open: boolean, proposalId?: string | null) => void;
@@ -576,9 +598,12 @@ let activateFn: (() => void) | null = null;
 export const useUiStore = create<UiStore>((set, get) => ({
   armed: null,
   shortcutsOpen: false,
+  findReplaceOpen: false,
+  fitRequestId: 0,
   exportOpen: false,
   aboutOpen: false,
   settingsOpen: false,
+  readOnly: null,
   toasts: [],
   quickConnect: null,
   contextMenu: null,
@@ -596,6 +621,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   openPointsPanelOpen: false,
   openPointsResolvedOpen: false,
   flowPanelOpen: false,
+  outlinePanelOpen: false,
   proposalPanelOpen: false,
   proposalPanelId: null,
   flowRenameRequestId: null,
@@ -630,7 +656,11 @@ export const useUiStore = create<UiStore>((set, get) => ({
 
   arm: (armed) => set({ armed }),
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
+  setFindReplaceOpen: (findReplaceOpen) => set({ findReplaceOpen }),
+  requestFit: () => set((state) => ({ fitRequestId: state.fitRequestId + 1 })),
+  clearFitRequest: (id) => set((state) => (state.fitRequestId === id ? { fitRequestId: 0 } : state)),
   setExportOpen: (exportOpen) => set({ exportOpen }),
+  setReadOnly: (readOnly) => set({ readOnly }),
   setAboutOpen: (aboutOpen) => set({ aboutOpen }),
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
   setQuickConnect: (quickConnect) => set({ quickConnect }),
@@ -693,6 +723,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   setOpenPointsPanelOpen: (openPointsPanelOpen) => set({ openPointsPanelOpen }),
   setOpenPointsResolvedOpen: (openPointsResolvedOpen) => set({ openPointsResolvedOpen }),
   setFlowPanelOpen: (flowPanelOpen) => set({ flowPanelOpen }),
+  setOutlinePanelOpen: (outlinePanelOpen) => set({ outlinePanelOpen }),
   setProposalPanelOpen: (proposalPanelOpen, proposalId = null) => set({ proposalPanelOpen, proposalPanelId: proposalPanelOpen ? proposalId : null }),
   requestFlowRename: (flowRenameRequestId) => set({ flowRenameRequestId }),
   setInteractionActive: (interactionActive, movingNodeIds) =>

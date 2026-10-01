@@ -38,6 +38,7 @@ async function labelNode(page: Page, index: number, text: string) {
 
 async function connect(page: Page, fromIndex: number, toIndex: number) {
   const source = page.locator('.dc-node').nth(fromIndex);
+  await page.mouse.move(1, 1); // WebKit refreshes hover only on real movement (see e2e/canvas.ts)
   await source.hover();
   // A handle turns visible only a frame after its node is hovered (a `visibility` transition), and
   // until then a press on it falls through to whatever is beneath — here, the connector already

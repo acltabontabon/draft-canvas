@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useReactFlow, useStore } from '@xyflow/react';
 import { flowFitViewNodes, useEditorStore, viewLevel } from '../../store/editorStore';
 import { count } from '../../lib/plural';
@@ -186,6 +187,14 @@ function LevelChip() {
 function ZoomControls() {
   const percent = useStore((state) => Math.round(state.transform[2] * 100));
   const { zoomIn, zoomOut, fitView } = useReactFlow();
+  // A surface without a camera (the toolbar's Arrange item) asks for a fit through the UI store;
+  // this is the one always-mounted control that holds the React Flow instance, so it answers.
+  const fitRequestId = useUiStore((state) => state.fitRequestId);
+  useEffect(() => {
+    if (fitRequestId === 0) return;
+    void fitView({ padding: 0.2, duration: motionMs(320), nodes: flowFitViewNodes(useEditorStore.getState()) });
+    useUiStore.getState().clearFitRequest(fitRequestId);
+  }, [fitRequestId, fitView]);
   return (
     <>
       <Button variant="quiet" onClick={() => void zoomOut()} aria-label="Zoom out">
