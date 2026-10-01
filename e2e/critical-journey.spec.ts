@@ -174,6 +174,7 @@ test.describe('Draft Canvas', () => {
     await page.mouse.move(before!.x + before!.width / 2 + 130, before!.y + before!.height / 2 + 90, {
       steps: 10,
     });
+    await nextFrames(page);
     await page.mouse.up();
 
     const moved = await movable.boundingBox();

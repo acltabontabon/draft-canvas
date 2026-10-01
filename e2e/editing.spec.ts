@@ -352,6 +352,7 @@ test.describe('editing', () => {
       before[0]!.y + before[0]!.height / 2 + 180,
       { steps: 12 },
     );
+    await nextFrames(page);
     await page.mouse.up();
 
     const after = [

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { newCanvas, create, connect } from './canvas';
+import { connect, create, newCanvas, nextFrames } from './canvas';
 
 /**
  * Connection-attached details: dragging an existing Note/Code node onto a connector folds it into
@@ -71,6 +71,7 @@ async function dragNodeCenterTo(page: Page, node: ReturnType<Page['locator']>, t
       if (await armed()) break;
       await page.mouse.move(target.x + dx, target.y + dy, { steps: 3 });
     }
+    await nextFrames(page);
     await page.mouse.up();
     if ((await node.count()) === 0) return; // Folded into the connector's attachment.
   }
