@@ -67,6 +67,8 @@ async function zoomOf(page: Page) {
 }
 
 test.describe('touch', () => {
+  // Playwright emulates a touch device (`isMobile`) only in Chromium and WebKit.
+  test.skip(({ browserName }) => browserName === 'firefox', 'mobile emulation is not available for Firefox in Playwright');
   test('a tap selects a shape, and a tap on empty canvas clears it', async ({ page }) => {
     await newCanvas(page, 'Touch tap');
     await addService(page);
@@ -113,6 +115,9 @@ test.describe('touch', () => {
 
   test('two fingers moving apart zoom the canvas in', async ({ page, browserName }) => {
     test.skip(browserName !== 'chromium', 'raw multi-touch is only dispatchable through CDP');
+    // Headless Chromium on Linux receives the CDP touch points but does not turn two of them into a
+    // pinch (the zoom never moves), where the macOS build does; CI's runners are Linux.
+    test.skip(process.platform === 'linux', 'headless Chromium on Linux does not synthesize pinch-zoom from CDP touches');
     await newCanvas(page, 'Touch pinch');
     await addService(page);
     const before = await zoomOf(page);

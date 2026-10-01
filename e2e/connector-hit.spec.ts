@@ -194,7 +194,7 @@ test.describe('clicking a connector', () => {
       await clearSelection(page);
       const [far] = await routePoints(page, 'dashed', [0.5], 16);
       await page.mouse.click(far!.x, far!.y);
-      expect(await selectedEdges(page)).toEqual([]);
+      await expect.poll(() => selectedEdges(page)).toEqual([]);
     }
   });
 
@@ -203,14 +203,14 @@ test.describe('clicking a connector', () => {
     const [inside] = await routePoints(page, 'dashed', [0], 0);
     // Just inside shape `a`, where the dashed connector leaves it.
     await page.mouse.click(inside!.x - 6, inside!.y);
-    expect(await selectedEdges(page)).toEqual([]);
+    await expect.poll(() => selectedEdges(page)).toEqual([]);
     await expect(page.locator('.react-flow__node[data-id="a"] .dc-node[data-selected="true"]')).toHaveCount(1);
 
     const [mid] = await routePoints(page, 'dashed', [0.5]);
     await page.mouse.click(mid!.x, mid!.y);
-    expect(await selectedEdges(page)).toEqual(['dashed']);
+    await expect.poll(() => selectedEdges(page)).toEqual(['dashed']);
     await page.mouse.click(8, 300);
-    expect(await selectedEdges(page)).toEqual([]);
+    await expect.poll(() => selectedEdges(page)).toEqual([]);
   });
 
   test('a click changes nothing about the connector — no move, no new connector, nothing to undo', async ({ page }) => {
@@ -238,7 +238,7 @@ test.describe('clicking a connector', () => {
     await page.keyboard.down('Meta');
     await page.mouse.click(second.x, second.y);
     await page.keyboard.up('Meta');
-    expect(await selectedEdges(page)).toEqual(['curve']);
+    await expect.poll(() => selectedEdges(page)).toEqual(['curve']);
   });
 
   test('of two parallel connectors, the one under the pointer wins, not the one painted last', async ({ page }) => {

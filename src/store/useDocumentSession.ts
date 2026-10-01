@@ -131,7 +131,7 @@ export function useDocumentSession(): DocumentSession {
   const [repository, setRepository] = useState<DraftRepository | null>(null);
   const [library, setLibrary] = useState<DraftSummary[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openId, setOpenIdState] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
 
   const autosave = useRef<Autosave | null>(null);
@@ -152,9 +152,14 @@ export function useDocumentSession(): DocumentSession {
    * down the host's message subscription each time a canvas was opened.
    */
   const openIdRef = useRef<string | null>(null);
-  useEffect(() => {
-    openIdRef.current = openId;
-  }, [openId]);
+  // The ref moves with the state, not an effect later: code that runs as an open finishes — the
+  // arrival effect deciding what the address should say — read it while it still said "nothing
+  // open", cleared the address, and (a reload keeps `history.state`) stepped Back to the Library.
+  // Firefox users landed on the Library on every refresh.
+  const setOpenId = useCallback((id: string | null) => {
+    openIdRef.current = id;
+    setOpenIdState(id);
+  }, []);
   const notify = useUiStore((state) => state.notify);
   /**
    * True while the open canvas came from a share link. A ref, like `openIdRef`: the autosave effect
@@ -381,7 +386,7 @@ export function useDocumentSession(): DocumentSession {
       }
       setOpenId(loaded.metadata.id);
     },
-    [leaveShared, notify, refreshLibrary, repository],
+    [leaveShared, notify, refreshLibrary, repository, setOpenId],
   );
 
   const openShared = useCallback(
@@ -406,7 +411,7 @@ export function useDocumentSession(): DocumentSession {
       arriveWith(document, { reopening: false });
       setOpenId(document.metadata.id);
     },
-    [notify],
+    [notify, setOpenId],
   );
 
   /** The address carries a share payload: decode it as an import, then show it read-only. */
@@ -472,7 +477,7 @@ export function useDocumentSession(): DocumentSession {
         notify('Could not save that diagram — local storage may be full or unavailable.', 'error');
       }
     },
-    [leaveShared, notify, projects, refreshLibrary, repository],
+    [leaveShared, notify, projects, refreshLibrary, repository, setOpenId],
   );
 
   const makeEditableCopy = useCallback(async () => {
@@ -557,7 +562,7 @@ export function useDocumentSession(): DocumentSession {
     // Home is already showing; a list that can't be re-read just stays as it was.
     await refreshLibrary().catch((error: unknown) => logDiagnostic(error, { operation: 'refresh-library' }));
     return true;
-  }, [leaveShared, notify, openId, refreshLibrary, repository]);
+  }, [leaveShared, notify, openId, refreshLibrary, repository, setOpenId]);
 
   // The open canvas in the address (`lib/documentUrl.ts`), so a refresh, Back/Forward and a bookmark
   // all come back to it. The web app only: the desktop shell opens files and owns its own navigation.
@@ -653,7 +658,7 @@ export function useDocumentSession(): DocumentSession {
       setOpenId(null);
       await refreshLibrary().catch((error: unknown) => logDiagnostic(error, { operation: 'refresh-library' }));
     },
-    [notify, openDocument, openId, refreshLibrary, repository],
+    [notify, openDocument, openId, refreshLibrary, repository, setOpenId],
   );
 
   const renameDocument = useCallback(
@@ -723,7 +728,7 @@ export function useDocumentSession(): DocumentSession {
         notify('Could not delete that diagram — local storage may be full or unavailable.', 'error');
       }
     },
-    [notify, openId, refreshLibrary, repository],
+    [notify, openId, refreshLibrary, repository, setOpenId],
   );
 
   const refreshProjects = useCallback(async () => {

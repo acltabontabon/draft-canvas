@@ -424,9 +424,12 @@ test.describe('Draft Canvas', () => {
       if (await page.evaluate(() => document.activeElement?.classList.contains('dc-canvas'))) break;
     }
     await expect(page.locator('.dc-canvas')).toBeFocused();
-    await page.locator('.dc-node').first().click();
+    // Selected from the keyboard too: a mouse click ends keyboard focus in Firefox (as
+    // `:focus-visible` allows), so the ring is checked on the path it exists for.
+    await page.keyboard.press('ControlOrMeta+a');
     const afterKeyboardFocus = await page
       .locator('.dc-node[data-selected="true"]')
+      .first()
       .evaluate((el) => getComputedStyle(el, '::after').boxShadow);
     expect(afterKeyboardFocus).not.toBe('none');
   });
