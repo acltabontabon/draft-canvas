@@ -25,6 +25,9 @@ export interface SourceFormatInfo {
   family: SourceFamily;
   /** The format's name as the dialog and the palette show it. */
   label: string;
+  /** Its name in the Export dialog's format picker, where a family's formats sit side by side —
+   *  short enough that four fit on one line ("Structurizr DSL" wrapped mid-pill there). */
+  pick: string;
   /** The file tile's badge — the extension, upper-cased, the way the other tiles read. */
   badge: string;
   extension: string;
@@ -32,12 +35,12 @@ export interface SourceFormatInfo {
 }
 
 export const SOURCE_FORMAT_INFO: Record<SourceFormat, SourceFormatInfo> = {
-  mermaid: { id: 'mermaid', family: 'sequence', label: 'Mermaid', badge: 'MMD', extension: MERMAID_EXTENSION, mime: 'text/plain' },
-  plantuml: { id: 'plantuml', family: 'sequence', label: 'PlantUML', badge: 'PUML', extension: PLANTUML_EXTENSION, mime: 'text/plain' },
-  'mermaid-flowchart': { id: 'mermaid-flowchart', family: 'architecture', label: 'Mermaid flowchart', badge: 'MMD', extension: MERMAID_EXTENSION, mime: 'text/plain' },
-  'c4-plantuml': { id: 'c4-plantuml', family: 'architecture', label: 'C4-PlantUML', badge: 'PUML', extension: PLANTUML_EXTENSION, mime: 'text/plain' },
-  structurizr: { id: 'structurizr', family: 'architecture', label: 'Structurizr DSL', badge: 'DSL', extension: '.dsl', mime: 'text/plain' },
-  drawio: { id: 'drawio', family: 'architecture', label: 'draw.io', badge: 'DRAWIO', extension: '.drawio', mime: 'application/xml' },
+  mermaid: { id: 'mermaid', family: 'sequence', label: 'Mermaid', pick: 'Mermaid', badge: 'MMD', extension: MERMAID_EXTENSION, mime: 'text/plain' },
+  plantuml: { id: 'plantuml', family: 'sequence', label: 'PlantUML', pick: 'PlantUML', badge: 'PUML', extension: PLANTUML_EXTENSION, mime: 'text/plain' },
+  'mermaid-flowchart': { id: 'mermaid-flowchart', family: 'architecture', label: 'Mermaid flowchart', pick: 'Mermaid', badge: 'MMD', extension: MERMAID_EXTENSION, mime: 'text/plain' },
+  'c4-plantuml': { id: 'c4-plantuml', family: 'architecture', label: 'C4-PlantUML', pick: 'C4-PlantUML', badge: 'PUML', extension: PLANTUML_EXTENSION, mime: 'text/plain' },
+  structurizr: { id: 'structurizr', family: 'architecture', label: 'Structurizr DSL', pick: 'Structurizr', badge: 'DSL', extension: '.dsl', mime: 'text/plain' },
+  drawio: { id: 'drawio', family: 'architecture', label: 'draw.io', pick: 'draw.io', badge: 'DRAWIO', extension: '.drawio', mime: 'application/xml' },
 };
 
 export function isSourceFormat(value: unknown): value is SourceFormat {

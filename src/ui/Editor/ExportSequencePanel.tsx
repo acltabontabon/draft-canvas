@@ -64,7 +64,7 @@ export function ExportSequencePanel({ format, onFormatChange, playableFlowCount,
           value={format}
           onChange={onFormatChange}
           disabled={empty}
-          options={FAMILY_FORMATS[family].map((id) => ({ value: id, label: SOURCE_FORMAT_INFO[id].label }))}
+          options={FAMILY_FORMATS[family].map((id) => ({ value: id, label: SOURCE_FORMAT_INFO[id].pick, name: SOURCE_FORMAT_INFO[id].label }))}
         />
       </div>
       {preview && (

@@ -7,6 +7,9 @@
 interface SegmentedOption<T extends string> {
   value: T;
   label: string;
+  /** The full name, when `label` is a shortened one to fit beside the others; it should contain
+   *  `label`, so what a voice-control user reads off the pill still names it. */
+  name?: string;
 }
 
 interface SegmentedControlProps<T extends string> {
@@ -37,7 +40,7 @@ export function SegmentedControl<T extends string>({
             checked={value === option.value}
             disabled={disabled}
             onChange={() => onChange(option.value)}
-            aria-label={option.label}
+            aria-label={option.name ?? option.label}
           />
           {option.label}
         </label>
