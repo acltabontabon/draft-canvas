@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { newCanvas, create, reopenAfterReload } from './canvas';
+import { create, newCanvas, nextFrames, reopenAfterReload } from './canvas';
 
 /** Node attachments: drag-to-attach arming, the badge opening a connector-style chip row/card
  *  (`AttachmentPresentation.tsx`, shared with `DraftEdgeView.tsx`), detach, delete. */
@@ -81,6 +81,7 @@ test.describe('attachments', () => {
     await page.mouse.move(corner.x + corner.width / 2, corner.y + corner.height / 2);
     await page.mouse.down();
     await page.mouse.move(corner.x + 260, corner.y + 220, { steps: 12 });
+    await nextFrames(page);
     await page.mouse.up();
 
     const targetBox = (await target.boundingBox())!;

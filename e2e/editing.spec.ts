@@ -46,6 +46,7 @@ test.describe('editing', () => {
     await page.mouse.move(corner.x + corner.width / 2, corner.y + corner.height / 2);
     await page.mouse.down();
     await page.mouse.move(corner.x + 140, corner.y + 90, { steps: 12 });
+    await nextFrames(page);
     await page.mouse.up();
 
     const after = (await node.boundingBox())!;
@@ -72,6 +73,7 @@ test.describe('editing', () => {
     await page.mouse.move(corner.x + corner.width / 2, corner.y + corner.height / 2);
     await page.mouse.down();
     await page.mouse.move(corner.x - 120, corner.y - 80, { steps: 12 });
+    await nextFrames(page);
     await page.mouse.up();
 
     // The bottom-right corner stays put; the top-left moved out with the pointer.
@@ -105,6 +107,7 @@ test.describe('editing', () => {
     await page.mouse.move(corner.x + corner.width / 2, corner.y + corner.height / 2);
     await page.mouse.down();
     await page.mouse.move(corner.x + 150, corner.y + 100, { steps: 15 });
+    await nextFrames(page);
     await page.mouse.up();
     await gestureCommitted(page, undoDepthBefore);
 
@@ -152,6 +155,7 @@ test.describe('editing', () => {
     await page.mouse.move(corner.x + corner.width / 2, corner.y + corner.height / 2);
     await page.mouse.down();
     await page.mouse.move(corner.x + 120, corner.y + 80, { steps: 12 });
+    await nextFrames(page);
     await page.mouse.up();
     await expect.poll(async () => (await node.boundingBox())!.width).toBeGreaterThan(before.width + 80);
     await expect.poll(gap).toBeLessThan(6);
@@ -209,6 +213,7 @@ test.describe('editing', () => {
     await page.mouse.down();
     // Drag the bottom-right handle far up and to the left of the node's origin.
     await page.mouse.move(corner.x - 400, corner.y - 300, { steps: 20 });
+    await nextFrames(page);
     await page.mouse.up();
 
     const after = (await node.boundingBox())!;
@@ -231,6 +236,7 @@ test.describe('editing', () => {
     await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
     await page.mouse.down();
     await page.mouse.move(handle.x + 260, handle.y + 40, { steps: 12 });
+    await nextFrames(page);
     await page.mouse.up();
 
     const menu = page.locator('.dc-quick-connect');
@@ -254,6 +260,7 @@ test.describe('editing', () => {
     await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
     await page.mouse.down();
     await page.mouse.move(handle.x + 260, handle.y + 40, { steps: 12 });
+    await nextFrames(page);
     await page.mouse.up();
 
     const menu = page.locator('.dc-quick-connect');
@@ -322,6 +329,7 @@ test.describe('editing', () => {
     await page.mouse.move(200, 150);
     await page.mouse.down();
     await page.mouse.move(760, 420, { steps: 12 });
+    await nextFrames(page);
     await page.mouse.up();
 
     await expect(page.locator('.dc-node[data-selected="true"]')).toHaveCount(2);
@@ -390,6 +398,7 @@ test.describe('editing', () => {
     await page.mouse.move(200, 150);
     await page.mouse.down();
     await page.mouse.move(760, 420, { steps: 12 });
+    await nextFrames(page);
     await page.mouse.up();
 
     await expect(page.locator('.dc-editor')).toBeVisible();
@@ -417,16 +426,27 @@ test.describe('editing', () => {
     await page.mouse.down();
     await page.mouse.move(760, 420, { steps: 12 });
     await page.mouse.move(400, 20, { steps: 6 }); // over the toolbar, above the canvas pane
+    await nextFrames(page);
     await page.mouse.up();
 
     await expect(page.locator('.dc-editor')).toBeVisible();
     expect(errors).toEqual([]);
 
     // A subsequent, ordinary marquee still works correctly — the real
-    // regression signal, proving no stale state carried over.
-    await page.mouse.move(200, 150);
+    // regression signal, proving no stale state carried over. Drawn around
+    // where the shapes are now: a marquee held at the pane's edge auto-pans
+    // the camera, so they are no longer where the first one found them.
+    const first = (await page.locator('.dc-node').nth(0).boundingBox())!;
+    const second = (await page.locator('.dc-node').nth(1).boundingBox())!;
+    const from = { x: Math.min(first.x, second.x) - 40, y: Math.min(first.y, second.y) - 40 };
+    const to = {
+      x: Math.max(first.x + first.width, second.x + second.width) + 40,
+      y: Math.max(first.y + first.height, second.y + second.height) + 40,
+    };
+    await page.mouse.move(from.x, from.y);
     await page.mouse.down();
-    await page.mouse.move(760, 420, { steps: 12 });
+    await page.mouse.move(to.x, to.y, { steps: 12 });
+    await nextFrames(page);
     await page.mouse.up();
     await expect(page.locator('.dc-node[data-selected="true"]')).toHaveCount(2);
     expect(errors).toEqual([]);
@@ -449,6 +469,7 @@ test.describe('editing', () => {
       await page.mouse.move(200, 150);
       await page.mouse.down();
       await page.mouse.move(760, 420, { steps: 10 });
+      await nextFrames(page);
       await page.mouse.up();
     }
 
@@ -479,6 +500,7 @@ test.describe('editing', () => {
     await page.mouse.move(200, 150);
     await page.mouse.down();
     await page.mouse.move(760, 420, { steps: 12 });
+    await nextFrames(page);
     await page.mouse.up();
     await expect(page.locator('.dc-node[data-selected="true"]')).toHaveCount(2);
   });
@@ -711,6 +733,7 @@ test.describe('editing', () => {
     await page.keyboard.press('Escape');
     // Let go over the very shape it was aimed at, which is what would normally connect them.
     await page.mouse.move(aim.x + 3, aim.y, { steps: 2 });
+    await nextFrames(page);
     await page.mouse.up();
 
     await expect(page.locator('.dc-edge')).toHaveCount(0);
@@ -727,6 +750,7 @@ test.describe('editing', () => {
     await page.mouse.move(again.x + again.width / 2, again.y + again.height / 2);
     await page.mouse.down();
     await page.mouse.move(aim.x, aim.y, { steps: 10 });
+    await nextFrames(page);
     await page.mouse.up();
     await expect(page.locator('.dc-edge')).toHaveCount(1);
   });
@@ -912,6 +936,7 @@ test.describe('editing', () => {
     await page.mouse.move(grab.x, grab.y);
     await page.mouse.down();
     await page.mouse.move(grab.x + 90, grab.y + 40, { steps: 10 });
+    await nextFrames(page);
     await page.mouse.up();
     const extraAfterSweep = (await extra.boundingBox())!;
     expect(extraAfterSweep.x - extraBeforeSweep.x).toBeGreaterThan(60);
@@ -936,6 +961,7 @@ test.describe('editing', () => {
     await page.mouse.move(grab2.x, grab2.y);
     await page.mouse.down();
     await page.mouse.move(grab2.x + 90, grab2.y + 40, { steps: 10 });
+    await nextFrames(page);
     await page.mouse.up();
     const extraAfterSweep2 = (await extra.boundingBox())!;
     expect(Math.abs(extraAfterSweep2.x - extraBeforeSweep2.x)).toBeLessThan(1.5);
@@ -960,6 +986,7 @@ test.describe('editing', () => {
     await page.mouse.move(resizeHandle.x + resizeHandle.width / 2, resizeHandle.y + resizeHandle.height / 2);
     await page.mouse.down();
     await page.mouse.move(resizeHandle.x + 260, resizeHandle.y + 260, { steps: 12 });
+    await nextFrames(page);
     await page.mouse.up();
     box = (await inner.boundingBox())!;
 
@@ -980,6 +1007,7 @@ test.describe('editing', () => {
     await page.mouse.move(extraStart.x + extraStart.width / 2, extraStart.y + extraStart.height / 2);
     await page.mouse.down();
     await page.mouse.move(dropPoint.x, dropPoint.y, { steps: 15 });
+    await nextFrames(page);
     await page.mouse.up();
 
     // Grab the inner boundary at an empty point (its own top-left padding —
@@ -990,6 +1018,7 @@ test.describe('editing', () => {
     await page.mouse.move(grab.x, grab.y);
     await page.mouse.down();
     await page.mouse.move(grab.x + 70, grab.y + 50, { steps: 10 });
+    await nextFrames(page);
     await page.mouse.up();
     const extraAfter = (await extra.boundingBox())!;
 
@@ -1225,6 +1254,7 @@ test.describe('editing', () => {
     await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
     await page.mouse.down();
     await page.mouse.move(handle.x + 260, handle.y + 40, { steps: 12 });
+    await nextFrames(page);
     await page.mouse.up();
     await expect(page.locator('.dc-quick-connect')).toBeVisible();
 
@@ -1294,6 +1324,7 @@ test.describe('reconnection', () => {
     await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2);
     await page.mouse.down();
     await page.mouse.move(queue.x + queue.width / 2, queue.y + queue.height / 2, { steps: 10 });
+    await nextFrames(page);
     await page.mouse.up();
 
     // Reconnected onto the queue: the relationship is freshly inferred as a command
@@ -1324,6 +1355,7 @@ test.describe('reconnection', () => {
     await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2);
     await page.mouse.down();
     await page.mouse.move(nodeB.x + nodeB.width / 2, nodeB.y + nodeB.height - 4, { steps: 10 });
+    await nextFrames(page);
     await page.mouse.up();
 
     await expect(page.locator('.dc-node')).toHaveCount(2);
@@ -1387,6 +1419,7 @@ test.describe('reconnection', () => {
     await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2);
     await page.mouse.down();
     await page.mouse.move(target.x + 300, target.y + 250, { steps: 10 });
+    await nextFrames(page);
     await page.mouse.up();
 
     // Empty canvas: a clean no-op — unlike drawing a brand-new connection,
@@ -1422,6 +1455,7 @@ test.describe('reconnection', () => {
     await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2);
     await page.mouse.down();
     await page.mouse.move(queue.x + queue.width / 2, queue.y + queue.height / 2, { steps: 10 });
+    await nextFrames(page);
     await page.mouse.up();
 
     const select = page.getByRole('button', { name: 'Interaction type' });
@@ -1475,6 +1509,7 @@ test.describe('editing — commands during a drag', () => {
     await page.mouse.move(start.x + start.width / 2 + 60, start.y + start.height / 2, { steps: 6 });
     await page.keyboard.press('Delete');
     await page.mouse.move(start.x + start.width / 2 + 160, start.y + start.height / 2, { steps: 6 });
+    await nextFrames(page);
     await page.mouse.up();
 
     await expect(page.locator('.dc-node')).toHaveCount(1);
@@ -1507,6 +1542,7 @@ test.describe('editing — commands during a drag', () => {
     });
     await expect(page.locator('.dc-node')).toHaveCount(0);
     await page.mouse.move(start.x + start.width / 2 + 120, start.y + start.height / 2, { steps: 6 });
+    await nextFrames(page);
     await page.mouse.up();
 
     await expect

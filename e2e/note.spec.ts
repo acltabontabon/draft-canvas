@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { newCanvas, reopenAfterReload } from './canvas';
+import { newCanvas, nextFrames, reopenAfterReload } from './canvas';
 
 const CANVAS = '.react-flow__pane';
 const NOTE = '.dc-node[data-type="note"]';
@@ -145,6 +145,7 @@ test.describe('Note', () => {
     await page.mouse.move(corner.x + corner.width / 2, corner.y + corner.height / 2);
     await page.mouse.down();
     await page.mouse.move(corner.x + 120, corner.y + 140, { steps: 8 });
+    await nextFrames(page);
     await page.mouse.up();
     const resized = (await page.locator(NOTE).boundingBox())!;
     expect(resized.height).toBeGreaterThan(150);
@@ -170,6 +171,7 @@ test.describe('Note', () => {
     await page.mouse.move(box.x + 4, box.y + 8);
     await page.mouse.down();
     await page.mouse.move(box.x + 60, box.y + 8, { steps: 6 });
+    await nextFrames(page);
     await page.mouse.up();
 
     const selected = await editor.evaluate((el: HTMLTextAreaElement) => el.selectionEnd - el.selectionStart);

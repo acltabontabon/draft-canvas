@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { nextFrames } from './canvas';
 
 /**
  * The same diagram open in two tabs. Draft Canvas checks every save against what the other tab last
@@ -56,6 +57,7 @@ test('looking around in one tab does not make the other tab conflict on its next
   await two.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await two.mouse.down();
   await two.mouse.move(box.x + 200, box.y + 120, { steps: 8 });
+  await nextFrames(two);
   await two.mouse.up();
   // The edit has landed in storage: a conflict would have stopped this save from ever being written,
   // so once the stored shape matches the moved one, the save went through and nothing asked.

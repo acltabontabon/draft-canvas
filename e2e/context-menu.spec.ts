@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { newCanvas, create, connect } from './canvas';
+import { connect, create, newCanvas, nextFrames } from './canvas';
 
 /** The right-click contextual menu — empty canvas, a single node, and multi-selection. */
 
@@ -636,6 +636,7 @@ test.describe('context menu — after a box selection', () => {
     await page.mouse.move(150, 120);
     await page.mouse.down();
     await page.mouse.move(820, 440, { steps: 12 });
+    await nextFrames(page);
     await page.mouse.up();
     await expect(page.locator('.dc-node[data-selected="true"]')).toHaveCount(2);
 

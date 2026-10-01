@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { connectAndOpen, create, newCanvas } from './canvas';
+import { connectAndOpen, create, newCanvas, nextFrames } from './canvas';
 
 /**
  * Intent Continuation, driven through the real UI: the ghost that appears beside a node with an
@@ -28,6 +28,7 @@ async function dragHandleTo(page: Page, fromIndex: number, to: { x: number; y: n
   await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
   await page.mouse.down();
   await page.mouse.move(to.x, to.y, { steps: 12 });
+  await nextFrames(page);
   await page.mouse.up();
 }
 
@@ -94,6 +95,7 @@ test.describe('Intent Continuation', () => {
     await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
     await page.mouse.down();
     await page.mouse.move(handle.x + 30, handle.y + 20, { steps: 8 });
+    await nextFrames(page);
     await page.mouse.up();
 
     // Still the same one node selected (the resize did not steal or drop selection) and the same

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { newCanvas, create } from './canvas';
+import { create, newCanvas, nextFrames } from './canvas';
 
 /**
  * Smart Routing on the live canvas.
@@ -34,6 +34,7 @@ async function connect(page: Page, fromIndex: number, toIndex: number) {
   await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
   await page.mouse.down();
   await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 12 });
+  await nextFrames(page);
   await page.mouse.up();
   // The drop is a connector on the canvas before the next gesture reads the nodes' positions.
   await expect(page.locator('.dc-edge')).toHaveCount(before + 1);

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { connectAndOpen, create, newCanvas } from './canvas';
+import { connectAndOpen, create, newCanvas, nextFrames } from './canvas';
 
 /**
  * The opinionated relationship model beyond what `connector-semantics.spec.ts` already covers:
@@ -127,6 +127,7 @@ test.describe('Topic-aware relationships', () => {
     await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2);
     await page.mouse.down();
     await page.mouse.move(topic.x + topic.width / 2, topic.y + topic.height / 2, { steps: 10 });
+    await nextFrames(page);
     await page.mouse.up();
 
     // Still reads "Writes" — an explicit choice is never silently overwritten by a reconnect.

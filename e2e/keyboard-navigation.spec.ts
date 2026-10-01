@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { newCanvas } from './canvas';
+import { newCanvas, nextFrames } from './canvas';
 
 /**
  * Alt+Arrow (spatial navigation between nearby elements) and Alt+Shift+Left/Right (relationship
@@ -48,6 +48,7 @@ async function connect(page: Page, fromIndex: number, toIndex: number) {
   const target = (await page.locator('.dc-node').nth(toIndex).boundingBox())!;
   await page.mouse.down();
   await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 10 });
+  await nextFrames(page);
   await page.mouse.up();
 }
 

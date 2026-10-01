@@ -30,9 +30,26 @@ export async function create(page: Page, tool: string, at: { x: number; y: numbe
   // toolbar can, where an engine's fonts make it wider. Escape clears that selection (a toolbar
   // means something is selected, so this never steps out of a level). Anywhere else the selection
   // is left exactly as the test made it.
+  //
+  // Judged only once the toolbar has landed: it mounts a frame after a single shape is selected and
+  // grows in over 120 ms, so a check made straight after naming the last shape saw open canvas and
+  // Firefox's click then went into the toolbar.
   await page.mouse.move(point.x, point.y);
-  const covered = await page.evaluate(
-    ([x, y]) => Boolean(document.elementFromPoint(x, y)?.closest('.dc-element-inspector, .dc-edge-inspector')),
+  const toolbars = page.locator('.dc-element-inspector:not([data-closing="true"]), .dc-edge-inspector:not([data-closing="true"])');
+  const oneShapeSelected =
+    (await page.locator('.react-flow__node.selected').count()) === 1 && (await page.locator('.react-flow__edge.selected').count()) === 0;
+  if (oneShapeSelected) await toolbars.first().waitFor({ state: 'visible', timeout: 5_000 }).catch(() => undefined);
+  const covered = await toolbars.evaluateAll(
+    async (elements, [x, y]) => {
+      const entrances = elements.flatMap((el) => el.getAnimations({ subtree: true }));
+      await Promise.all(
+        entrances.filter((a) => a.effect?.getComputedTiming().iterations !== Infinity).map((a) => a.finished.catch(() => undefined)),
+      );
+      return elements.some((el) => {
+        const r = el.getBoundingClientRect();
+        return x >= r.left - 8 && x <= r.right + 8 && y >= r.top - 8 && y <= r.bottom + 8;
+      });
+    },
     [point.x, point.y] as const,
   );
   if (covered) {

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { newCanvas, reopenAfterReload } from './canvas';
+import { newCanvas, nextFrames, reopenAfterReload } from './canvas';
 import { readFileSync, existsSync } from 'node:fs';
 
 /**
@@ -80,6 +80,7 @@ async function connect(page: Page, fromIndex: number, toIndex: number) {
   await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
   await page.mouse.down();
   await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 12 });
+  await nextFrames(page);
   await page.mouse.up();
 }
 

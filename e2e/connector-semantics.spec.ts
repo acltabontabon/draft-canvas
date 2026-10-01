@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { connect, connectAndOpen, create, newCanvas } from './canvas';
+import { connect, connectAndOpen, create, newCanvas, nextFrames } from './canvas';
 
 /**
  * The contextual connector toolbar — see `document/connectorSemantics.ts`'s
@@ -250,6 +250,7 @@ test.describe('contextual connector toolbar', () => {
     await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2);
     await page.mouse.down();
     await page.mouse.move(database.x + database.width / 2, database.y + database.height / 2, { steps: 10 });
+    await nextFrames(page);
     await page.mouse.up();
 
     // The panel itself was never closed by the reconnect — the pairing swapping from
