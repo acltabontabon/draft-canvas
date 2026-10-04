@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { cameraAtRest, connect, create, newCanvas, nextFrames, reopenAfterReload } from './canvas';
+import { cameraAtRest, clickEdge, connect, create, newCanvas, nextFrames, reopenAfterReload } from './canvas';
 
 /** Editing mechanics that the critical journey does not exercise. */
 
@@ -1282,12 +1282,7 @@ test.describe('reconnection', () => {
     await create(page, 'Data Store', { x: 600, y: 200 });
     await connect(page, 0, 1);
 
-    const nodeA = (await page.locator('.dc-node').nth(0).boundingBox())!;
-    const nodeB = (await page.locator('.dc-node').nth(1).boundingBox())!;
-    await page.mouse.click(
-      (nodeA.x + nodeA.width + nodeB.x) / 2,
-      (nodeA.y + nodeA.height / 2 + nodeB.y + nodeB.height / 2) / 2,
-    );
+    await clickEdge(page);
     await expect(page.locator('.dc-edge[data-selected="true"]')).toHaveCount(1);
 
     const pathBefore = await page.locator('.dc-edge-line').getAttribute('d');
@@ -1311,12 +1306,7 @@ test.describe('reconnection', () => {
     await create(page, 'Queue', { x: 600, y: 450 });
     await connect(page, 0, 1);
 
-    const nodeA = (await page.locator('.dc-node').nth(0).boundingBox())!;
-    const nodeB = (await page.locator('.dc-node').nth(1).boundingBox())!;
-    await page.mouse.click(
-      (nodeA.x + nodeA.width + nodeB.x) / 2,
-      (nodeA.y + nodeA.height / 2 + nodeB.y + nodeB.height / 2) / 2,
-    );
+    await clickEdge(page);
     await expect(page.locator('.dc-edge[data-selected="true"]')).toHaveCount(1);
     await expect(page.locator('.dc-edge-endpoint')).toHaveCount(2);
 
@@ -1343,12 +1333,8 @@ test.describe('reconnection', () => {
     await create(page, 'Data Store', { x: 650, y: 300 });
     await connect(page, 0, 1);
 
-    const nodeA = (await page.locator('.dc-node').nth(0).boundingBox())!;
     const nodeB = (await page.locator('.dc-node').nth(1).boundingBox())!;
-    await page.mouse.click(
-      (nodeA.x + nodeA.width + nodeB.x) / 2,
-      (nodeA.y + nodeA.height / 2 + nodeB.y + nodeB.height / 2) / 2,
-    );
+    await clickEdge(page);
     await expect(page.locator('.dc-edge[data-selected="true"]')).toHaveCount(1);
 
     const target = await endpointBox(page, 1);
@@ -1372,12 +1358,7 @@ test.describe('reconnection', () => {
     await create(page, 'Queue', { x: 600, y: 450 });
     await connect(page, 0, 1);
 
-    const nodeA = (await page.locator('.dc-node').nth(0).boundingBox())!;
-    const nodeB = (await page.locator('.dc-node').nth(1).boundingBox())!;
-    await page.mouse.click(
-      (nodeA.x + nodeA.width + nodeB.x) / 2,
-      (nodeA.y + nodeA.height / 2 + nodeB.y + nodeB.height / 2) / 2,
-    );
+    await clickEdge(page);
     await expect(page.locator('.dc-edge[data-selected="true"]')).toHaveCount(1);
 
     const target = await endpointBox(page, 1);
@@ -1393,10 +1374,7 @@ test.describe('reconnection', () => {
     // and still the original Service → Database pair, never reassigned to
     // the Queue mid-drag.
     await expect(page.locator('.dc-edge')).toHaveCount(1);
-    await page.mouse.click(
-      (nodeA.x + nodeA.width + nodeB.x) / 2,
-      (nodeA.y + nodeA.height / 2 + nodeB.y + nodeB.height / 2) / 2,
-    );
+    await clickEdge(page);
     // Still the original Service → Database pair, which infers `readsWrites`.
     const select = page.getByRole('button', { name: 'Interaction type' });
     await expect(select).toHaveText('Reads / writes');
@@ -1408,12 +1386,7 @@ test.describe('reconnection', () => {
     await create(page, 'Data Store', { x: 600, y: 200 });
     await connect(page, 0, 1);
 
-    const nodeA = (await page.locator('.dc-node').nth(0).boundingBox())!;
-    const nodeB = (await page.locator('.dc-node').nth(1).boundingBox())!;
-    await page.mouse.click(
-      (nodeA.x + nodeA.width + nodeB.x) / 2,
-      (nodeA.y + nodeA.height / 2 + nodeB.y + nodeB.height / 2) / 2,
-    );
+    await clickEdge(page);
     await expect(page.locator('.dc-edge[data-selected="true"]')).toHaveCount(1);
 
     const target = await endpointBox(page, 1);
@@ -1429,10 +1402,7 @@ test.describe('reconnection', () => {
     await expect(page.locator('.dc-quick-connect')).toHaveCount(0);
     await expect(page.locator('.dc-edge')).toHaveCount(1);
     await expect(page.locator('.dc-node')).toHaveCount(2);
-    await page.mouse.click(
-      (nodeA.x + nodeA.width + nodeB.x) / 2,
-      (nodeA.y + nodeA.height / 2 + nodeB.y + nodeB.height / 2) / 2,
-    );
+    await clickEdge(page);
     // Still the original Service → Database pair, which infers `readsWrites`.
     const select = page.getByRole('button', { name: 'Interaction type' });
     await expect(select).toHaveText('Reads / writes');
@@ -1445,12 +1415,7 @@ test.describe('reconnection', () => {
     await create(page, 'Queue', { x: 600, y: 450 });
     await connect(page, 0, 1);
 
-    const nodeA = (await page.locator('.dc-node').nth(0).boundingBox())!;
-    const nodeB = (await page.locator('.dc-node').nth(1).boundingBox())!;
-    await page.mouse.click(
-      (nodeA.x + nodeA.width + nodeB.x) / 2,
-      (nodeA.y + nodeA.height / 2 + nodeB.y + nodeB.height / 2) / 2,
-    );
+    await clickEdge(page);
     const target = await endpointBox(page, 1);
     const queue = (await page.locator('.dc-node').nth(2).boundingBox())!;
     await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2);
@@ -1477,12 +1442,7 @@ test.describe('reconnection', () => {
     await create(page, 'Data Store', { x: 600, y: 200 });
     await connect(page, 0, 1);
 
-    const nodeA = (await page.locator('.dc-node').nth(0).boundingBox())!;
-    const nodeB = (await page.locator('.dc-node').nth(1).boundingBox())!;
-    await page.mouse.click(
-      (nodeA.x + nodeA.width + nodeB.x) / 2,
-      (nodeA.y + nodeA.height / 2 + nodeB.y + nodeB.height / 2) / 2,
-    );
+    await clickEdge(page);
     await expect(page.locator('.dc-edge[data-selected="true"]')).toHaveCount(1);
     const pathBefore = await page.locator('.dc-edge-line').getAttribute('d');
 

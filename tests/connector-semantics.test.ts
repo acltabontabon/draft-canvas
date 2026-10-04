@@ -1106,6 +1106,32 @@ describe('updateNodeById() — reclassifying incident edges when a node\'s subty
     expect(stored.semanticsOrigin).toBe('inferred');
   });
 
+  it('clears inferred dashing when a queue becomes a stream, and undo restores it', () => {
+    const source = store.getState().addNode({ type: 'service', x: 0, y: 0 });
+    const target = store.getState().addNode({ type: 'queue', queueKind: 'queue', x: 300, y: 0 });
+    store.getState().connect(source.id, target.id);
+    const original = store.getState().document.edges[0]!;
+    expect(original).toMatchObject({ kind: 'async', async: true });
+
+    store.getState().updateNodeById(target.id, { queueKind: 'stream' });
+    expect(store.getState().document.edges[0]).toMatchObject({ semantic: 'publishes', kind: 'event' });
+    expect(store.getState().document.edges[0]!.async).toBeUndefined();
+    store.getState().undo();
+    expect(store.getState().document.edges[0]).toEqual(original);
+    store.getState().redo();
+    expect(store.getState().document.edges[0]!.async).toBeUndefined();
+  });
+
+  it('preserves explicit connector choices when a queue becomes a stream', () => {
+    const source = store.getState().addNode({ type: 'service', x: 0, y: 0 });
+    const target = store.getState().addNode({ type: 'queue', queueKind: 'queue', x: 300, y: 0 });
+    const edge = store.getState().connect(source.id, target.id)!;
+    store.getState().setEdgeSemantic(edge.id, 'command');
+    const original = store.getState().document.edges[0]!;
+    store.getState().updateNodeById(target.id, { queueKind: 'stream' });
+    expect(store.getState().document.edges[0]).toEqual(original);
+  });
+
   it('does not touch an edge with an explicitly-chosen semantic when the node\'s subtype changes', () => {
     const genericService = store.getState().addNode({ type: 'service', x: 0, y: 0 });
     const worker = store.getState().addNode({ type: 'service', serviceKind: 'worker', x: 300, y: 0 });
@@ -1523,6 +1549,31 @@ describe('resolveTransparentCategory — seeing through a Junction', () => {
       edges: [createEdge({ source: service.id, target: j1.id }), createEdge({ source: j1.id, target: j2.id })],
     };
     expect(resolveTransparentCategory(g, j2.id, 'source')).toBe('service');
+  });
+});
+
+describe('Junction traversal hardening', () => {
+  it.each(['source', 'target'] as const)('keeps nested mixed categories ambiguous on the %s side, in either edge order', (role) => {
+    const service = createNode({ id: 's', type: 'service', x: 0, y: 0 });
+    const queue = createNode({ id: 'q', type: 'queue', x: 0, y: 100 });
+    const inner = createNode({ id: 'inner', type: 'ellipse', x: 200, y: 0 });
+    const outer = createNode({ id: 'outer', type: 'ellipse', x: 400, y: 0 });
+    const pairs = [['s', 'inner'], ['q', 'inner'], ['inner', 'outer'], ['s', 'outer']];
+    const edges = pairs.map(([a, b]) => createEdge({ source: role === 'source' ? a! : b!, target: role === 'source' ? b! : a! }));
+    for (const ordered of [edges, [...edges].reverse()]) {
+      expect(resolveTransparentCategory({ nodes: [service, queue, inner, outer], edges: ordered }, outer.id, role)).toBe('junction');
+    }
+  });
+
+  it('handles a deep Junction chain without exhausting the call stack', () => {
+    const service = createNode({ id: 's', type: 'service', x: 0, y: 0 });
+    const junctions = Array.from({ length: 12_000 }, (_, i) => createNode({ id: `j${i}`, type: 'ellipse', x: i * 10, y: 0 }));
+    const graph = {
+      nodes: [service, ...junctions],
+      edges: junctions.map((node, i) => createEdge({ source: i === 0 ? service.id : junctions[i - 1]!.id, target: node.id })),
+    };
+    expect(resolveTransparentCategory(graph, junctions.at(-1)!.id, 'source')).toBe('service');
+    expect(resolveJunctionEndpoint(graph, junctions.at(-1)!.id, 'source')).toEqual({ status: 'resolved', nodeId: service.id });
   });
 });
 

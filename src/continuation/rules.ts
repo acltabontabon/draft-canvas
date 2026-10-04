@@ -1,5 +1,5 @@
 import type { EdgeSemantic } from '../document/types';
-import { DELIVERY_SEMANTICS, defineChain, defineFanOut, hasInboundEvidence, hasOutboundSemantic, isExplicit } from './families';
+import { DELIVERY_SEMANTICS, defineChain, defineFanOut, hasInboundEvidence, hasInboundWrite, hasOutboundSemantic, isExplicit } from './families';
 import type { ContinuationRule, Neighborhood } from './types';
 
 /**
@@ -82,6 +82,7 @@ const TOPIC_FAN_OUT_WORKER: ContinuationRule = {
   label: 'Worker',
   reason: 'Subscribers can also receive directly from the topic.',
   when: TOPIC_FAN_OUT_QUEUE.when,
+  silentAt: NOT_IN_AN_OVERVIEW,
   fragment: () => ({
     nodes: [{ key: 'worker', type: 'service', serviceKind: 'worker' }],
     edges: [{ from: 'anchor', to: 'worker' }],
@@ -202,13 +203,14 @@ const SCHEDULER_TRIGGER = defineFanOut(
  * An Object Storage bucket already being written to with nowhere for that write to notify —
  * `MATRIX['objectStorage>queue']`/`['objectStorage>topic']` (both `publishes`/`event`), the one
  * storage kind that legitimately triggers a downstream event. Same "already receiving, nothing
- * leaves yet" evidence the Topic fan-out above uses, reused via `defineFanOut` rather than
- * repeated by hand. There is no Worker target here — Object Storage has no `worker` row in the
- * matrix, so `fragmentIsValid` would reject one anyway; it is simply never offered as a target.
+ * leaves yet" evidence the Topic fan-out above uses, reused via `defineFanOut`. Inbound reads or a
+ * structural dependency do not demonstrate an upload and must not trigger this suggestion. There
+ * is no Worker target here — Object Storage has no `worker` row in the matrix, so
+ * `fragmentIsValid` would reject one anyway; it is simply never offered as a target.
  */
 const OBJECT_STORAGE_FAN_OUT = defineFanOut(
   ['objectStorage'],
-  (nb) => hasInboundEvidence(nb) && !hasOutboundSemantic(nb, ...DELIVERY_SEMANTICS),
+  (nb) => hasInboundWrite(nb) && !hasOutboundSemantic(nb, ...DELIVERY_SEMANTICS),
   [
     {
       id: 'object-storage-fan-out-queue',

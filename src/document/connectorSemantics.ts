@@ -8,7 +8,7 @@ import type { ConnectorKind, DraftEdge, DraftNode, EdgeSemantic } from './types'
  * `objectStorage`, and `searchIndex` come from a node's *sub-kind*
  * (`serviceKind`/`databaseKind`/`queueKind`), not a distinct `DraftNodeType`,
  * because that's what they already are in the document model — see
- * `nodes/describe.ts`. `queueKind: 'stream'` stays folded into `queue`, and
+ * `nodes/describe.ts`. Streams and dead-letter queues have their own categories, while
  * `databaseKind: 'sql'`/`'nosql'` both stay folded into `database`, and
  * `serviceKind: 'api'` stays folded into `service` — each gets its own
  * *shape*, but no relationship rule below distinguishes it from its plain
@@ -567,13 +567,39 @@ export interface GraphLike {
   edges: readonly DraftEdge[];
 }
 
-/** Every node id directly feeding (`role: 'source'`) or fed by (`role: 'target'`) `nodeId`, via a
- *  single edge hop — the one piece of graph-walking both `resolveTransparentCategory` (category-
- *  level) and `resolveJunctionEndpoint` (node-identity-level) share. */
-function junctionNeighborIds(graph: GraphLike, nodeId: string, role: EdgeEndpointRole): string[] {
-  return role === 'source'
-    ? graph.edges.filter((e) => e.target === nodeId).map((e) => e.source)
-    : graph.edges.filter((e) => e.source === nodeId).map((e) => e.target);
+/**
+ * Collect concrete endpoints across the whole Junction chain. Gathering terminals before
+ * deciding ambiguity keeps a mixed branch from disappearing behind an unambiguous sibling.
+ * An explicit worklist also handles deep imported chains without using the call stack; indexes
+ * are built once per traversal rather than scanning all nodes and edges at every Junction.
+ */
+function junctionEndpoints(
+  graph: GraphLike,
+  nodeId: string,
+  role: EdgeEndpointRole,
+  visited: Set<string>,
+): DraftNode[] {
+  const byId = new Map(graph.nodes.map((node) => [node.id, node]));
+  const neighbors = new Map<string, string[]>();
+  for (const edge of graph.edges) {
+    const from = role === 'source' ? edge.target : edge.source;
+    const to = role === 'source' ? edge.source : edge.target;
+    const bucket = neighbors.get(from);
+    if (bucket) bucket.push(to);
+    else neighbors.set(from, [to]);
+  }
+  const pending = [nodeId];
+  const endpoints: DraftNode[] = [];
+  while (pending.length > 0) {
+    const id = pending.pop()!;
+    if (visited.has(id)) continue;
+    visited.add(id);
+    const node = byId.get(id);
+    if (!node) continue;
+    if (categoryOf(node) !== 'junction') endpoints.push(node);
+    else for (const neighbor of neighbors.get(id) ?? []) pending.push(neighbor);
+  }
+  return endpoints;
 }
 
 /**
@@ -583,7 +609,7 @@ function junctionNeighborIds(graph: GraphLike, nodeId: string, role: EdgeEndpoin
  * `categoryOf`. A Junction resolves to whatever real node feeds it on the requested `role`: the
  * categories of the nodes on the other end of its *incoming* edges when asked as a `'source'`
  * (what supplies it), or of its *outgoing* edges' targets when asked as a `'target'` (what it
- * feeds) — recursing through any further Junctions on that same side. A single, unambiguous
+ * feeds) — walking through any further Junctions on that same side. A single, unambiguous
  * non-Junction category resolves to that category; none, or more than one distinct category,
  * resolves to `'junction'` itself — the module's own existing "no opinion" signal (`capabilityFor`
  * has no matrix entry for it, so callers already fall back to the full, unrestricted vocabulary),
@@ -599,25 +625,20 @@ export function resolveTransparentCategory(
   if (!node) return 'generic';
   const own = categoryOf(node);
   if (own !== 'junction' || visited.has(nodeId)) return own;
-  visited.add(nodeId);
-  const resolved = new Set<NodeCategory>();
-  for (const id of junctionNeighborIds(graph, nodeId, role)) {
-    const category = resolveTransparentCategory(graph, id, role, visited);
-    if (category !== 'junction') resolved.add(category);
-  }
-  return resolved.size === 1 ? [...resolved][0]! : 'junction';
+  const categories = new Set(junctionEndpoints(graph, nodeId, role, visited).map(categoryOf));
+  return categories.size === 1 ? [...categories][0]! : 'junction';
 }
 
 /**
  * Node-identity-level sibling of `resolveTransparentCategory`, for callers that need the actual
  * node a Junction chain resolves to, not just its category — the Sequence Diagram transform,
  * which cannot render a Junction as a lifeline and needs to know exactly *which* real node stands
- * in for it. Deliberately a separate function rather than a shared implementation:
+ * in for it. Category and identity remain separate decisions:
  * `resolveTransparentCategory` correctly treats two different concrete nodes of the same category
  * (e.g. two distinct Services) as unambiguous, because category is all a capability lookup needs;
  * an identity-level caller cannot make that same call; two different concrete nodes are a genuine
  * ambiguity it must surface, not collapse. `'resolved'`: exactly one concrete non-Junction node is
- * reachable on `role`'s side, walking the whole graph and recursing through further Junctions.
+ * reachable on `role`'s side, walking through further Junctions across the whole graph.
  * `'unresolved'`: nothing is connected on that side (a dangling Junction). `'ambiguous'`: more than
  * one distinct concrete node is reachable (a genuine fan-in/out from different origins). Both
  * `'unresolved'` and `'ambiguous'` report the Junction's own `nodeId` back, so a caller can fall
@@ -636,22 +657,9 @@ export function resolveJunctionEndpoint(
   const node = graph.nodes.find((n) => n.id === nodeId);
   if (!node) return { status: 'unresolved', nodeId };
   if (categoryOf(node) !== 'junction') return { status: 'resolved', nodeId };
-  visited.add(nodeId);
-  const resolvedIds = new Set<string>();
-  for (const id of junctionNeighborIds(graph, nodeId, role)) {
-    // A Junction already walked (a cycle, or the far corner of a diamond reached a second way)
-    // contributes nothing new: whatever it leads to was collected the first time. Resolving it to
-    // *itself* instead would count the Junction as a second concrete endpoint and turn an
-    // unambiguous diamond into a false "ambiguous".
-    if (visited.has(id)) continue;
-    const result = resolveJunctionEndpoint(graph, id, role, visited);
-    // A downstream Junction that itself fans out to several nodes makes this one ambiguous too —
-    // dropping it would report whichever sibling happened to resolve as the lone endpoint.
-    if (result.status === 'ambiguous') return { status: 'ambiguous', nodeId };
-    if (result.status === 'resolved') resolvedIds.add(result.nodeId);
-  }
-  if (resolvedIds.size === 1) return { status: 'resolved', nodeId: [...resolvedIds][0]! };
-  return { status: resolvedIds.size === 0 ? 'unresolved' : 'ambiguous', nodeId };
+  const endpoints = junctionEndpoints(graph, nodeId, role, visited);
+  if (endpoints.length === 1) return { status: 'resolved', nodeId: endpoints[0]!.id };
+  return { status: endpoints.length === 0 ? 'unresolved' : 'ambiguous', nodeId };
 }
 
 /**

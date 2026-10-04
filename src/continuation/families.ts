@@ -34,6 +34,11 @@ export function hasInboundEvidence(nb: Neighborhood): boolean {
   return nb.in.length > 0;
 }
 
+/** A bucket read or dependency does not establish that an upload happened. */
+export function hasInboundWrite(nb: Neighborhood): boolean {
+  return nb.in.some(({ edge }) => edge.semantic === 'writes' || edge.semantic === 'readsWrites');
+}
+
 /** A queue-family node's delivery path: something is consuming from it or being delivered to it.
  *  Shared by every fan-out family below that asks "is this already going somewhere downstream." */
 export const DELIVERY_SEMANTICS: readonly EdgeSemantic[] = ['consumes', 'deliversTo', 'fansOut'];

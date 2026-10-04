@@ -2,6 +2,8 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { MATRIX, type NodeCategory } from '../src/document/connectorSemantics';
+import { CONNECTOR_KINDS, EDGE_SEMANTICS } from '../src/document/types';
+import { isStructural } from '../src/sequence/structural';
 
 /**
  * `docs/reference/semantics.md`'s capability-matrix table is a copy of `MATRIX`, and a copy drifts.
@@ -48,5 +50,23 @@ describe('docs/reference/semantics.md capability-matrix table', () => {
       return [`${NAMES[source]} → ${NAMES[target]}`, cap.relations.join(', '), cap.defaultRelation ?? '*(none)*'];
     });
     expect(rows).toEqual(expected);
+  });
+});
+
+describe('docs/reference/semantics.md vocabularies', () => {
+  const doc = readFileSync(resolve(__dirname, '../docs/reference/semantics.md'), 'utf8');
+  const vocabulary = doc.split('## Two independent vocabularies')[1]!.split('## Junctions')[0]!;
+  const listed = (text: string) => [...text.matchAll(/`([a-zA-Z]+)`/g)].map((match) => match[1]!).sort();
+
+  it('names every stored semantic and connector kind exactly once', () => {
+    const semantic = vocabulary.split('- **`EdgeSemantic`**')[1]!.split('- **`ConnectorKind`**')[0]!;
+    const kind = vocabulary.split('- **`ConnectorKind`**')[1]!.split('`event` appears')[0]!;
+    expect(listed(semantic)).toEqual([...EDGE_SEMANTICS].sort());
+    expect(listed(kind)).toEqual([...CONNECTOR_KINDS].sort());
+  });
+
+  it('names exactly the structural relationships excluded from sequence messages', () => {
+    const structural = doc.split('`STRUCTURAL_SEMANTICS` (')[1]!.split(')')[0]!;
+    expect(listed(structural)).toEqual(EDGE_SEMANTICS.filter((semantic) => isStructural({ semantic })).sort());
   });
 });

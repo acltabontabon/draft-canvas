@@ -42,7 +42,10 @@ being named, so press `Enter` to type its name. Prefer the keyboard? Select a sh
 
 When you select a shape, Draft Canvas sometimes shows a faint ghost of the likeliest next shape and
 connector, for instance a Worker after a Queue. It only suggests when the diagram gives it a
-reason, and it stays quiet otherwise.
+reason, and it stays quiet otherwise. A bucket only gets an upload-notification suggestion once
+something writes to it; reading it is not enough. In a **System context** view, suggestions stay with
+people and systems, including when connecting to shapes already drawn. Use `]` to ask for
+alternatives; choosing a suggestion is always your decision.
 
 | Key | Does |
 | --- | --- |

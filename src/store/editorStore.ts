@@ -737,9 +737,9 @@ const KIND_FIELDS = ['serviceKind', 'databaseKind', 'queueKind', 'actorKind', 'c
  * semantic is never touched; one whose semantic was inferred or never set gets recomputed against
  * the node's new category.
  */
-function reinferIncidentEdges(doc: DraftDocument, nodeId: string): DraftDocument {
+function reinferIncidentEdges(doc: DraftDocument, nodeId: string, before: DraftDocument): DraftDocument {
   const incidentIds = doc.edges.filter((e) => e.source === nodeId || e.target === nodeId).map((e) => e.id);
-  return incidentIds.reduce((d, edgeId) => reinferIfEligible(d, edgeId), doc);
+  return incidentIds.reduce((d, edgeId) => reinferIfEligible(d, edgeId, before), doc);
 }
 
 /**
@@ -1531,7 +1531,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         next = growTextToFit(next, id);
       }
       const changesKind = KIND_FIELDS.some((field) => field in patch);
-      return changesKind ? reinferIncidentEdges(next, id) : next;
+      return changesKind ? reinferIncidentEdges(next, id, doc) : next;
     });
   },
 

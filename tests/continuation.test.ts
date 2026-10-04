@@ -1836,3 +1836,47 @@ describe('what a view is showing changes what comes next', () => {
     expect(asked(doc, platform.id, level)).toEqual(WHOLE_VOCABULARY);
   });
 });
+
+describe('continuation evidence and view-level hardening', () => {
+  it.each(['select', 'invoke', 'drop'] as const)('keeps every Topic alternative out of System Context on %s', (trigger) => {
+    const doc = graph([service('publisher'), topic('t')], [['publisher', 't']]);
+    expect(continuationsFor(doc, 't', trigger, { level: 'context' })).toEqual([]);
+  });
+
+  it.each(['select', 'invoke'] as const)('keeps existing infrastructure out of System Context on %s', (trigger) => {
+    const doc = graph([{ ...service('s'), x: 0, text: 'Order Service' }, { ...database('db'), x: 300, text: 'Orders DB' }, { ...queue('q'), x: 300, y: 200 }], []);
+    const choices = continuationsFor(doc, 's', trigger, { level: 'context' });
+    expect(choices.some((c) => c.ruleId === 'connect-existing')).toBe(false);
+    const sets = continuationSets(doc, 's', { level: 'context' });
+    expect(trigger === 'select' ? sets.quiet : sets.explicit).toEqual(choices);
+    expect(continuationsFor(doc, 's', trigger).some((c) => c.ruleId === 'connect-existing')).toBe(true);
+  });
+
+  it('still connects a person to an existing system in System Context', () => {
+    const doc = graph([{ ...actor('a'), x: 0 }, { ...service('s'), x: 300 }], []);
+    expect(continuationsFor(doc, 'a', 'invoke', { level: 'context' }).some((c) => c.id === 'connect-existing:s')).toBe(true);
+  });
+
+  it.each(['reads', 'dependsOn'] as const)('does not treat %s from a bucket as upload evidence', (semantic) => {
+    const doc = reword(graph([service('s'), objectStorage('bucket')], [['s', 'bucket']]), 's', 'bucket', semantic);
+    expect(continuationsFor(doc, 'bucket', 'select')).toEqual([]);
+    expect(ids(doc, 'bucket', 'invoke')).toContain('object-storage-fan-out-queue');
+  });
+
+  it.each(['writes', 'readsWrites'] as const)('offers upload notifications when the bucket is receiving %s', (semantic) => {
+    const doc = reword(graph([service('s'), objectStorage('bucket')], [['s', 'bucket']]), 's', 'bucket', semantic);
+    expect(ids(doc, 'bucket', 'select')).toEqual(['object-storage-fan-out-queue']);
+  });
+});
+
+describe('existing bucket notification evidence', () => {
+  it('keeps a nearby notification queue asked-for when the bucket is only being read', () => {
+    const doc = reword(graph([
+      { ...service('s'), x: -300 },
+      { ...objectStorage('bucket'), x: 0 },
+      { ...queue('q'), x: 300 },
+    ], [['s', 'bucket']]), 's', 'bucket', 'reads');
+    expect(continuationsFor(doc, 'bucket', 'select')).toEqual([]);
+    expect(continuationsFor(doc, 'bucket', 'invoke').find((c) => c.id === 'connect-existing:q')?.confidence).toBe('medium');
+  });
+});

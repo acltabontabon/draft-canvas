@@ -50,11 +50,11 @@ test.describe('Note', () => {
   });
 
   test('keys typed into a note never reach the canvas: no shapes, no delete, no pan', async ({ page, browserName }) => {
-    // Line start and end the way the platform spells them: on a Mac, WebKit follows the system and
-    // Home/End scroll the field instead of moving the caret.
-    const macWebKit = browserName === 'webkit' && process.platform === 'darwin';
-    const lineStart = macWebKit ? 'Meta+ArrowLeft' : 'Home';
-    const lineEnd = macWebKit ? 'Meta+ArrowRight' : 'End';
+    // Firefox and WebKit follow macOS here: Home/End scroll the field rather than moving
+    // the caret. Use the platform's line-navigation keys while still testing shortcut isolation.
+    const macCaretKeys = browserName !== 'chromium' && process.platform === 'darwin';
+    const lineStart = macCaretKeys ? 'Meta+ArrowLeft' : 'Home';
+    const lineEnd = macCaretKeys ? 'Meta+ArrowRight' : 'End';
     await newCanvas(page, 'Note keyboard');
     await newNote(page, { x: 400, y: 300 });
     const viewport = page.locator('.react-flow__viewport');

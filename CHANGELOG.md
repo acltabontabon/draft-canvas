@@ -11,6 +11,26 @@ the release notes and the in-app What's New are generated from here. See
 
 ## [Unreleased]
 
+### Shared
+
+#### Fixed
+
+- Junction chains no longer lose ambiguity from mixed endpoint categories behind nested branches,
+  or hit recursive stack limits when resolving a deep chain.
+- System Context suggestions consistently leave out infrastructure, including Topic alternatives
+  and connections to existing shapes.
+- Bucket notification suggestions require a write before appearing unprompted; read-only access
+  no longer implies an upload, including when a notification queue is already drawn nearby.
+- Changing a node's subtype clears obsolete inferred connector dashing. Explicit connector choices
+  stay intact, and undo restores the original subtype and connector together.
+- Documentation now describes the current browser storage, Mermaid import, connector defaults and
+  complete relationship vocabulary accurately.
+
+#### Changed
+
+- Deep Junction chains resolve without repeatedly scanning the full diagram: each traversal indexes
+  nodes and connectors once.
+
 ## [1.12.0] - 2026-10-02
 
 A smaller, more focused Draft Canvas that gets diagrams in and out: share links, Mermaid import,

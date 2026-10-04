@@ -129,9 +129,9 @@ folded (a Worker as a Service), then the target folded, then both. That is how W
 queue finds its own row instead of plain Service → Queue, and Gateway → Worker routes. A
 dead-letter queue only folds with both sides at once, so DLQ → DLQ stays unlisted.
 
-`dependsOn` is only offered where the source can depend on something — never from a store, a
-channel or a port, where "depends on" would read backwards. The three `unusual` rows keep it as
-their one neutral choice.
+Ordinary rows offer `dependsOn` where the source can depend on something, rather than from a
+store, channel or port. Unusual pairings retain it as a neutral option alongside any other
+contextual vocabulary, with no inferred default.
 
 A relation offered here is a *suggestion*, never a restriction — the inspector always keeps an
 edge's current value selectable even if it's not in the list.
@@ -144,9 +144,12 @@ note. Queue → Topic additionally offers a one-click **Insert Worker** fix that
 in between and re-derives both new connectors' semantics from the matrix.
 
 A capability may also set `defaultAsync`, asking a freshly inferred connector for a dashed line as
-well as its default behaviour. Only Queue → Dead-letter queue does today: `failure` has no dash
-pattern of its own, and dead-lettering is genuinely asynchronous. Everything else leaves dashing to
-the behaviour (`event` dots its own line) or to the user.
+well as its default behaviour. Service → Queue and Queue → Service use it for asynchronous work
+handoffs; Queue → Dead-letter queue and Service → Dead-letter queue use it for failure paths.
+Their service-shaped variants inherit those defaults. Topics and streams use the `event` behaviour's
+dotted line instead. Reconnecting, reversing or changing a node's subtype removes dashing that the
+old pairing inferred when the new pairing no longer asks for it. Explicit connector choices remain
+untouched.
 
 ## Captions read in the arrow's direction
 
@@ -209,16 +212,16 @@ judgement calls that remain on purpose:
 | Service → Queue "sends command to", dashed | A work queue carries a job for exactly one worker — a command, handed off and not waited for. A topic keeps "publishes to" and "emits": a fact, for whoever cares. |
 | Service → Service "calls" | No behaviour is assumed: sync, async, retry and the rest stay one pick away. |
 | Scheduler → Service / Worker "triggers" | Says nothing about how, so it doesn't pretend a scheduler makes a synchronous call. |
-| Service → Table "writes to" | A Table folds into Data Store; the caption names data access, not a network hop. |
+| Service → Table "reads / writes" | A Table folds into Data Store; the caption names data access, not a network hop. |
 | Database → Queue, Queue → Queue, Actor → Database | Unlisted on purpose: CDC, bridges and odd shapes are all real, and no opinion beats a wrong one. |
-| The three `unusual` rows | Still offer "depends on" as their one neutral pick; the ▲ marker already says to look again. |
+| The `unusual` rows | Have no inferred default; "depends on" and any other contextual choices stay available alongside the ▲ guidance marker. |
 
 ## Two independent vocabularies
 
 - **`EdgeSemantic`** — what the connection *represents*: `http`, `grpc`, `event`, `command`,
-  `query`, `reads`, `writes`, `publishes`, `consumes`, `calls`, `dependsOn`, `fansOut`,
+  `query`, `reads`, `writes`, `readsWrites`, `publishes`, `consumes`, `calls`, `dependsOn`, `fansOut`,
   `deliversTo`, `ingests`, `replicates`, `cdc`, `syncs`, `deadLetters`, `invalidates`, `watches`,
-  `searches`, `indexes`, `routes`, `triggers`, `uses`, `implementedBy`, `compensates`,
+  `searches`, `indexes`, `routes`, `triggers`, `uses`, `implements`, `implementedBy`, `compensates`,
   `transforms`. A label convenience only — never changes the connector's colour.
 - **`ConnectorKind`** — how it *behaves*: `sync`, `async`, `event`, `callback`, `conditional`,
   `retry`, `failure`, `fallback`. Drives the solid/dashed line and small glyphs, not the caption.
@@ -231,7 +234,9 @@ exist as label conveniences for the one pairing (service-to-service) ambiguous e
 
 The Junction shape (an ellipse) organizes topology and has no meaning of its own. A connection
 through one resolves by looking at what actually feeds it — `Service → Junction → Database` still
-infers `writes`. If a Junction has no clear single category on one side, it resolves to
+infers `readsWrites`. The entire chain is considered, including mixed branches behind other Junctions;
+cycles and shared branches are visited once. If a Junction has no clear single category on one side,
+it resolves to
 `'junction'` itself, and the connector falls back to the full, unrestricted vocabulary.
 
 The Sequence Diagram (`src/sequence/`, see `architecture.md`) applies the same principle one
@@ -257,7 +262,7 @@ vocabularies (`EdgeSemantic`, `ConnectorKind`) plus `hasResponse` — it adds no
 
 A connector's `semantic` can also be purely **structural** — a static architectural fact rather
 than something that happens at a point in time during a Flow. `src/sequence/structural.ts`'s
-`STRUCTURAL_SEMANTICS` (`dependsOn`, `implementedBy`) is checked before a Flow step's edge is ever
+`STRUCTURAL_SEMANTICS` (`dependsOn`, `implementedBy`, `implements`) is checked before a Flow step's edge is ever
 turned into a message: a structural edge contributes no message at all (though its endpoints may
 still appear as participants via some *other*, behavioral edge). Deliberately small — every other
 `EdgeSemantic`, including `uses` (Component ↔ Component) and `compensates` (Saga),
@@ -395,16 +400,23 @@ so the same shape is never listed twice.
 
 Before drawing something new, the engine looks for a node already on the canvas that finishes the
 sentence — "Order Service *publishes* Order Events", the topic right next to it. Only these verbs
-qualify: publishes, writes, fans out, delivers to, consumes, routes, triggers, and calls from an
-Actor. A candidate must be nearby, in the same boundary, not already connected either way, not two
-hops upstream (no loops), and not already receiving that verb from someone else.
+qualify: publishes, writes, reads / writes, command, fans out, delivers to, consumes, routes,
+triggers, and calls from an Actor. In a System Context view, existing-node suggestions connect only
+people and systems, just like suggestions that create a new shape. A candidate must be nearby, in
+the same boundary, not already connected either way, not two hops away in either direction
+(no loops or shortcuts), and not already receiving that verb from someone else.
 
 It ghosts unprompted only when the target has no connections coming in, the anchor doesn't
 already do the same thing to the same kind of node, the names share a word ("Payment Service" /
 "Payments DB") or it is the only such node around, and the direction is not a coin toss. Two loose
 shapes that could each continue into the other — a Service and a Topic side by side — stay quiet
 until one of them is connected. The ghost is only the connector plus an outline on the target;
-nothing is duplicated.
+nothing is duplicated. A bucket needs an inbound `writes` or `readsWrites` connector before a
+notification path can appear unprompted, whether it creates a Queue or connects to one already
+drawn. Reading a bucket or depending on it is insufficient evidence of an upload; asking explicitly
+still offers notification paths. This models object creation notifications, such as
+[Amazon S3's supported event types](https://docs.aws.amazon.com/AmazonS3/latest/userguide/notification-how-to-event-types-and-destinations.html),
+without treating reads as creation events.
 
 ### Compensation
 
@@ -441,6 +453,10 @@ A rule can care about the level in two ways, and the asymmetry is the policy:
   dead-letter queue has no business in a diagram of systems and the people who use them.
 - **`levels`** — offered only where the level is known to be one of them, for a rule that makes
   sense at one altitude and nowhere else (`person-system`, `component-*`).
+
+These limits apply to every Topic alternative and to nearby existing infrastructure as well as
+new shapes. They follow the [C4 System Context scope](https://c4model.com/diagrams/system-context):
+people and software systems, with technology details a level down.
 
 So a level someone chose can take a suggestion away, and only a level someone chose can introduce
 one — nothing ever changes on a guess. Where a level is in force, it is on screen: the status bar

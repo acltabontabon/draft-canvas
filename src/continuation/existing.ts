@@ -2,6 +2,7 @@ import { capabilityFor, categoryOf, type NodeCategory } from '../document/connec
 import { displayNameFor } from '../document/factory';
 import type { DraftDocument, DraftNode, EdgeSemantic } from '../document/types';
 import { ANCHOR_TYPES } from './context';
+import { hasInboundWrite } from './families';
 import type { Continuation, Neighborhood } from './types';
 
 /** How close, edge to edge in flow units, a node must be to count as "right here". */
@@ -9,6 +10,9 @@ const NEARBY_GAP = 360;
 
 /** Never more than this many connect-to-existing candidates for one anchor — nearest first. */
 const MAX_CANDIDATES = 3;
+
+/** A System Context view connects people and systems, leaving infrastructure a level down. */
+const CONTEXT_CATEGORIES: ReadonlySet<NodeCategory> = new Set(['actor', 'service', 'external']);
 
 /**
  * The verbs worth completing with something already drawn: each reads as the next word of an
@@ -54,6 +58,9 @@ const CONNECTABLE: Partial<Record<EdgeSemantic, readonly NodeCategory[] | 'any'>
  */
 export function existingTargetCandidates(doc: DraftDocument, nb: Neighborhood): Continuation[] {
   const anchor = nb.node;
+  // Reusing an existing shape must respect the same altitude as adding a new one.
+  const overview = nb.level === 'context';
+  if (overview && !CONTEXT_CATEGORIES.has(nb.category)) return [];
   // Already part of this sentence: connected either way, or already reached two hops downstream
   // (a Topic's own subscriber's Worker is not a second thing to deliver to).
   const excluded = new Set<string>([anchor.id, ...nb.out.map((e) => e.other.id), ...nb.in.map((e) => e.other.id)]);
@@ -67,6 +74,7 @@ export function existingTargetCandidates(doc: DraftDocument, nb: Neighborhood): 
     const gap = rectGap(anchor, node);
     if (gap > NEARBY_GAP) continue;
     const category = categoryOf(node);
+    if (overview && !CONTEXT_CATEGORIES.has(category)) continue;
     const capability = capabilityFor(nb.category, category);
     const semantic = capability?.defaultRelation;
     if (!semantic || (capability.status ?? 'valid') !== 'valid' || !connectable(semantic, nb.category)) continue;
@@ -99,7 +107,8 @@ export function existingTargetCandidates(doc: DraftDocument, nb: Neighborhood): 
     const affinity = anchorWords.size > 0 && [...wordsOf(node.text)].some((word) => anchorWords.has(word));
     const alreadyDoesThis = nb.out.some((out) => out.edge.semantic === semantic && out.category === category);
     const coinToss = nb.in.length === 0 && outbound === 0 && continuesInto(category, nb.category);
-    const high = inbound === 0 && !alreadyDoesThis && !coinToss && (affinity || open.length === 1);
+    const evidence = nb.category !== 'objectStorage' || hasInboundWrite(nb);
+    const high = evidence && inbound === 0 && !alreadyDoesThis && !coinToss && (affinity || open.length === 1);
     const name = displayNameFor(node);
     return {
       id: `connect-existing:${node.id}`,

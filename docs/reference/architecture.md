@@ -264,7 +264,7 @@ flowchart TD
 The two-store split is what lets the library list itself without deserializing a single canvas. The
 fingerprint drawn as a library thumbnail is **silhouettes, never words**.
 
-Bodies are plain records since 2.0. Builds 1.0–1.11 encrypted them under a key kept in the same
+Bodies are plain records since 1.12. Builds 1.0–1.11 encrypted them under a key kept in the same
 profile; `crypto/` is now a reader for those rows (and the home of the passphrase export, which is a
 different mechanism with a different threat model — see `SECURITY.md`). A row keeps its shape until
 it is next written: nothing sweeps the store, and opening a diagram never rewrites it.
@@ -391,7 +391,7 @@ find diagrams, when agents are turned on), and the app never holds a path: the s
 handles for files and folders the user picked (or the OS opened) and accepts only those back, so no path that
 didn't come from the user can be read or written.
 
-The browser's storage is untouched. `DraftRepository`, `Autosave` and the encrypted IndexedDB store are the web
+The browser's storage is untouched. `DraftRepository`, `Autosave` and the IndexedDB store are the web
 host's, and the desktop app doesn't open them: a file the user picked is only ever written by an explicit
 Save, and unsaved work goes to recovery copies in the app's own data folder. The one exception is an AI agent
 the person allowed (below), whose change to a document with no unsaved changes is saved for it.
@@ -428,4 +428,6 @@ AI generation · template galleries · cloud-provider icon packs
 
 Each would be a reasonable product; none of them is this one.
 
-Kept out of the way rather than designed for: Mermaid import, image nodes, PWA install.
+Mermaid flowchart import is a local parser with a preview and unsupported-syntax warnings; see
+[Saving, backing up and sharing](../guides/saving-and-sharing.md#importing-a-mermaid-flowchart).
+Standalone image nodes and a dedicated PWA install flow remain outside the editor's scope.
