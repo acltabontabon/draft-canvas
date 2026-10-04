@@ -1,3 +1,4 @@
+import type { FileAssociation } from './fileHandles';
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import { requestPersistentStorage } from '../lib/storagePersistence';
 import { parseDocument } from '../document/validate';
@@ -25,7 +26,7 @@ import type { DraftDocument, DraftSummary, Project } from '../document/types';
 import { isRecord } from '../lib/isRecord';
 
 const DB_NAME = 'draft-canvas';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 /** Ask for persistent storage once there's something worth protecting, not
  *  on every save — see `requestPersistentStorage`. */
@@ -99,6 +100,7 @@ interface BackgroundImageRow {
 const UNREFERENCED_IMAGE_GRACE_MS = 24 * 60 * 60 * 1000;
 
 interface DraftDb extends DBSchema {
+  fileAssociations: { key: string; value: FileAssociation };
   documents: {
     key: string;
     value: DraftSummary;
@@ -141,6 +143,7 @@ export class IndexedDbRepository implements DraftRepository {
       let opened: IDBPDatabase<DraftDb> | undefined;
       const db = await openDB<DraftDb>(DB_NAME, DB_VERSION, {
         upgrade(database) {
+          if (!database.objectStoreNames.contains('fileAssociations')) database.createObjectStore('fileAssociations', { keyPath: 'documentId' });
           if (!database.objectStoreNames.contains('documents')) {
             const store = database.createObjectStore('documents', { keyPath: 'id' });
             store.createIndex('updatedAt', 'updatedAt');
@@ -513,12 +516,25 @@ export class IndexedDbRepository implements DraftRepository {
     throw new Error(`[draft-canvas] ${id} kept changing in another tab; the change was not saved.`);
   }
 
+  async listFileAssociations(): Promise<FileAssociation[]> { return this.db.getAll('fileAssociations'); }
+
+  async putFileAssociation(association: FileAssociation): Promise<void> {
+    const tx = this.db.transaction(['documents', 'fileAssociations'], 'readwrite');
+    if (!(await tx.objectStore('documents').get(association.documentId))) {
+      await tx.done;
+      throw new Error('The browser recovery copy is no longer available.');
+    }
+    await tx.objectStore('fileAssociations').put(association);
+    await tx.done;
+  }
+
   async remove(id: string): Promise<void> {
-    const tx = this.db.transaction(['documents', 'bodies', 'backgroundImages'], 'readwrite');
+    const tx = this.db.transaction(['documents', 'bodies', 'backgroundImages', 'fileAssociations'], 'readwrite');
     const images = tx.objectStore('backgroundImages');
     // Every image the document ever had under `BackgroundSettings.imageId` (`<id>#<imageId>`).
     const imageKeys = await ownedImageKeys(images, id);
     await Promise.all([
+      tx.objectStore('fileAssociations').delete(id),
       tx.objectStore('documents').delete(id),
       tx.objectStore('bodies').delete(id),
       images.delete(id),

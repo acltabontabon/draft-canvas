@@ -1,6 +1,6 @@
 # Saving, backing up and sharing
 
-Draft Canvas saves your work in your browser as you draw. It does not save it anywhere else. This
+Draft Canvas saves a recovery copy in your browser as you draw. Writing a linked disk file requires an explicit Save. This
 guide separates what happens on its own from what you have to do, because the second list is what
 protects you from losing a diagram.
 
@@ -25,6 +25,30 @@ protects you from losing a diagram.
 - **Two tabs, one diagram.** If you edit the same diagram in two tabs, the second tab to save is
   stopped and the status bar asks which copy to keep: **Keep mine** or **Load the other tab's**.
   Nothing is overwritten until you choose.
+
+## Open and save a linked file
+
+In a supported, secure, top-level browser window, **Open file…** is available on Home and the
+Library. In the editor, the **File** menu offers **Open file…**, **Save** and **Save As…**.
+Use `⌘O`, `⌘S`, and `⌘⇧S` (Ctrl on Windows/Linux). Save asks for a location when no file is linked.
+Import and Export remain available in every browser; embedded and unsupported contexts hide file actions.
+
+A successful write says **Saved to filename**. Later edits say **Changes recovered in this browser —
+filename not updated** once automatic recovery succeeds. You may return to the Library without
+writing to disk; reopening makes those recovered changes clear. Linked Library entries show their
+filename. Duplicates and backups contain diagrams, never file handles or permissions.
+
+A remembered file may need permission again; see the [browser permission contract](https://developer.mozilla.org/en-US/docs/Web/API/FileSystemHandle/queryPermission). Refusal, cancellation, missing files and failed writes
+leave the editable diagram and its recovery copy available. The file is linked only after Save As
+succeeds. Files with identical internal diagram IDs remain separate Library entries, while reopening
+the same file returns to its existing entry.
+
+If both the file and recovery changed, opening offers **Use disk version**, **Save recovered copy
+as…**, or **Cancel**. Saving checks the disk again and offers **Reload file**, **Save As…**,
+**Overwrite**, or **Cancel**. Resolve any browser-storage conflict before saving a file. Concurrent
+file writes from this origin are serialized. Edits made during a save remain unsaved to disk.
+The portable content follows editable export, including embedded backgrounds; a background that
+cannot travel is explained before writing, with an option to cancel.
 
 ## What you have to do
 
@@ -234,3 +258,15 @@ whichever of these fits:
   this one first.
 - **Saving stopped and says another tab updated Draft Canvas.** Export your recent changes, then
   reload.
+
+## Choose where a shared explanation begins
+
+Open **Share from here…** in the command palette, or use the share controls in Export's document
+view. **Start at** offers **Diagram overview**, **Current level**, and playable flows labelled with
+their location. It defaults to the selected playable flow, then the current nested level, then the
+overview. The quick **Copy share link** command always starts at the overview.
+
+A flow link opens read-only at its introduction; the reader advances it themselves. They may explore
+or make an editable copy. The starting point changes where reading begins, not what is shared:
+**the link still contains the whole document**. Old links work as before. An unavailable level or
+flow falls back to the overview with a notice. The starting metadata counts toward the link-size limit.

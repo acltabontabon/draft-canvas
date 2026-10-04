@@ -44,7 +44,7 @@ export const STARTER_IDS = [
   'transactional-outbox',
 ] as const;
 
-export type StarterId = (typeof STARTER_IDS)[number];
+export type StarterId = (typeof STARTER_IDS)[number] | 'order-processing';
 
 /**
  * Where a starter sits in discovery. *Starter* is the umbrella: one architectural idea at one

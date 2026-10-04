@@ -232,6 +232,8 @@ export function DesktopHome() {
               <kbd aria-hidden="true">{chord(mac, 'N')}</kbd>
             </button>
 
+            <Button variant="quiet" onClick={() => void controller.newQuickDraft('order-processing')}>Try an example</Button>
+
             <div className="dc-desk-label">
               {history ? (
                 <div role="tablist" aria-label="Show">

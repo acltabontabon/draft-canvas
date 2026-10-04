@@ -143,6 +143,10 @@ function OutlineTree({ buildCommandContext }: { buildCommandContext: () => Comma
   const edit = useCallback(
     (row: OutlineRow) => {
       select(row);
+      if (useUiStore.getState().flowTrace) {
+        if (row.kind === 'edge') useEditorStore.getState().traceEdge(row.id);
+        return;
+      }
       buildCommandContext().ui.requestEdit(row.id);
     },
     [buildCommandContext, select],
@@ -229,6 +233,7 @@ function OutlineTree({ buildCommandContext }: { buildCommandContext: () => Comma
         data-outline-key={row.key}
         data-kind={row.kind}
         data-selected={selectedIds.has(row.id) ? 'true' : undefined}
+        onFocus={(event) => { if (event.target === event.currentTarget) setActiveKey(row.key); }}
         onClick={onClick}
         onDoubleClick={onDoubleClick}
       >

@@ -3,6 +3,7 @@ import { PRODUCT } from '../../product';
 import type { StarterId } from '../../starters';
 import type { DocumentSession } from '../../store/useDocumentSession';
 import { MOD_SYMBOL } from '../../lib/platform';
+import { BrowserFileButtons } from '../common/BrowserFileButtons';
 import { Button } from '../common/Button';
 import { Icon } from '../common/Icon';
 import { LibraryBrand } from './LibraryBrand';
@@ -89,6 +90,7 @@ export function FirstRunHome({ session, onImport }: { session: DocumentSession; 
                 <kbd aria-hidden="true">↵</kbd>
               </span>
             </button>
+            <BrowserFileButtons />
             <Button variant="quiet" icon="upload" className="dc-home-import" onClick={onImport} aria-describedby={importHintId}>
               Import <span className="dc-home-import-ext">.draftcanvas</span>
             </Button>
@@ -98,6 +100,7 @@ export function FirstRunHome({ session, onImport }: { session: DocumentSession; 
           </div>
 
           <div className="dc-home-starters">
+            <Button variant="quiet" onClick={() => void session.newDocument(undefined, 'order-processing')}>Try an example</Button>
             <p className="dc-home-starters-label">Or start from an architecture</p>
             {starters ? (
               <StarterGrid starters={starters.PRIMARY_STARTERS} onStart={startFrom} onExitStart={() => sheetRef.current?.focus()} gridRef={gridRef} />

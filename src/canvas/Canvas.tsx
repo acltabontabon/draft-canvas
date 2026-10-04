@@ -1,3 +1,4 @@
+import { FlowTraceBadges } from './FlowTraceBadges';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
   Background,
@@ -550,7 +551,8 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
     useUiStore.getState().clearOpenFit(document.metadata.id);
   }, [path, openFitDocumentId, document, openFitWidth, openFitHeight, setViewport]);
 
-  const interactive = mode === 'edit';
+  const tracing = useUiStore((state) => state.flowTrace !== null);
+  const interactive = mode === 'edit' && !tracing;
   useContinuation(interactive);
 
   useZoomVariable();
@@ -1836,6 +1838,18 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
         else useEditorStore.getState().setSelection({ nodes: [], edges: [] });
         return;
       }
+      const trace = useUiStore.getState().flowTrace;
+      if (trace && event.button === 0) {
+        const pick = edgeAtEvent(event);
+        if (pick && pick.part !== 'control') {
+          event.preventDefault();
+          event.stopPropagation();
+          const choices = pick.group ?? pick.tied;
+          if (choices.length > 1) useUiStore.getState().setFlowTrace({ ...trace, choices });
+          else useEditorStore.getState().traceEdge(pick.id);
+        }
+        return;
+      }
       if (!interactive || event.button !== 0 || useUiStore.getState().armed) return;
       if (isEditableTarget(event.target)) return;
       const pick = edgeAtEvent(event);
@@ -1913,6 +1927,9 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       onPointerUpCapture={cancelLongPress}
       onPointerCancelCapture={cancelLongPress}
       onClickCapture={onCanvasClickCapture}
+      onDoubleClickCapture={(event) => {
+        if (useUiStore.getState().flowTrace) { event.preventDefault(); event.stopPropagation(); }
+      }}
       onPointerLeave={clearHover}
       // The one Tab stop for the whole diagram — individual nodes/edges are deliberately not
       // real DOM tab stops (see `nodesFocusable`/`edgesFocusable` below); Tab reaches "the
@@ -2025,6 +2042,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
         )}
 
         <ViewportPortal>
+          {tracing && <FlowTraceBadges />}
           {/*
             Both of these are drag-in-progress chrome, meaningless once the
             gesture that produced them ends — and impossible to produce at all

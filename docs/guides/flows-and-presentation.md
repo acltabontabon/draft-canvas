@@ -6,7 +6,24 @@ Nothing about presenting changes the diagram; it is a reading of it.
 
 Shortcuts are written for a Mac. On Windows and Linux, read `⌘` as `Ctrl`.
 
-## Build a flow
+## Trace a flow
+
+Choose **Trace a flow** in the Flows panel or command palette. Name the flow, then click
+connectors in the order you want to explain them. The tracing bar counts the steps and the canvas
+previews their numbers. Branches and disconnected connectors are fine: only your choices determine
+the order. A connector already included tells you its step number instead of adding a duplicate.
+When several connectors share a label or line, choose the connector from the tracing bar.
+
+**Remove last** (or `Backspace` outside a text field) removes your most recent provisional step.
+**Finish** commits the whole trace as one undo step and opens its flow. **Cancel** or `Escape`
+discards it. A flow's **Trace more steps** appends using the same controls and continues its numbering.
+You can pan and zoom while tracing, but drawing is suspended. Leaving the diagram or level, or an
+outside edit, cancels the preview. Nothing provisional is saved or exported.
+
+For a keyboard path, open **Outline** from the tracing bar, use arrow keys to reach a connector and
+press `Enter` to append it. Additions and removals are announced.
+
+## Build a flow one step at a time
 
 1. Click a connector. Its popover has **Add to flow** at the top. The first time, that creates a new
    flow with this connector as step 1 and opens the **Flows** panel with the name selected; type a

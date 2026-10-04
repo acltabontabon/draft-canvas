@@ -1,3 +1,4 @@
+import { BrowserFileButtons } from '../../common/BrowserFileButtons';
 import { useCallback, useRef, useState } from 'react';
 import { useEditorStore } from '../../../store/editorStore';
 import { useUiStore } from '../../../store/uiStore';
@@ -126,6 +127,7 @@ export function ToolbarActions({ onPresent, onExport }: ToolbarActionsProps) {
 
   return (
     <div className="dc-toolbar-trail">
+      <BrowserFileButtons editor />
       <div className="dc-toolbar-history">
         <Tooltip content={toolbarTooltip('undo')}>
           {(tip) => (

@@ -190,6 +190,7 @@ function EmptyCanvas({ onInsertStarter, leaving }: EmptyStateProps & { leaving: 
                 </div>
               ))}
             </div>
+            <button type="button" className="dc-example-link" onClick={() => useUiStore.getState().requestExample()}>Try an example</button>
             <p className="dc-empty-more" aria-hidden="true">
               More in the palette: <kbd>{MOD_SYMBOL}</kbd>
               <kbd>K</kbd>, then a name

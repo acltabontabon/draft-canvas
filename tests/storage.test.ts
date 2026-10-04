@@ -11,6 +11,7 @@ import { getOrCreateMasterKey, __resetKeyCacheForTests } from '../src/crypto/key
 import { isEncryptedBody, isLegacyBody, isPlainBody } from '../src/crypto/bodyShapes';
 import { encryptDocument } from '../src/crypto/documentCipher';
 import type { EncryptedBody, PlainBody } from '../src/crypto/types';
+import type { LocalFileHandle } from '../src/storage/fileHandles';
 import { CURRENT_VERSION, type DraftDocument } from '../src/document/types';
 
 
@@ -1332,4 +1333,20 @@ describe('library fingerprints', () => {
     expect(row!.title).toBe('After');
     expect(row!.shape?.nodes).toHaveLength(2);
   });
+});
+
+
+it('keeps file associations out of documents, duplicates, and removes them with their Library entry', async () => {
+  const repo = await IndexedDbRepository.open();
+  const doc = createDocument('Linked');
+  await repo.save(doc);
+  const handle = { name: 'linked.draftcanvas' } as LocalFileHandle;
+  await repo.putFileAssociation({ documentId: doc.metadata.id, handle, diskHash: 'disk', savedContentHash: 'snapshot', savedAt: 1 });
+  const copy = cloneDocumentAsNew(doc, 'Copy');
+  await repo.save(copy);
+  expect(await repo.listFileAssociations()).toHaveLength(1);
+  expect(JSON.stringify(await repo.load(doc.metadata.id))).not.toContain('diskHash');
+  await repo.remove(doc.metadata.id);
+  expect(await repo.listFileAssociations()).toHaveLength(0);
+  expect(await repo.has(copy.metadata.id)).toBe(true);
 });

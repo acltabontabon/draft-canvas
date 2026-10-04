@@ -10,6 +10,10 @@ export function setDesktopController(next: DesktopController | null): void {
 }
 
 export function useDesktopController(): DesktopController {
+  return getDesktopController();
+}
+
+export function getDesktopController(): DesktopController {
   if (!controller) throw new Error('The desktop shell has not started.');
   return controller;
 }

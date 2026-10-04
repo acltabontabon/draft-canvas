@@ -24,10 +24,11 @@ export {
 } from './types';
 
 import { ARCHITECTURE_STARTERS } from './catalog';
+import { ORDER_PROCESSING } from './order-processing';
 import type { ArchitectureStarter, StarterId } from './types';
 
 const BY_ID = new Map<StarterId, ArchitectureStarter>(
-  ARCHITECTURE_STARTERS.map((starter) => [starter.id, starter]),
+  [...ARCHITECTURE_STARTERS, ORDER_PROCESSING].map((starter) => [starter.id, starter]),
 );
 
 export function starterById(id: StarterId): ArchitectureStarter | undefined {

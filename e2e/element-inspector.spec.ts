@@ -172,7 +172,8 @@ test.describe('element inspector popover', () => {
   test('an open dropdown moves out of the way when the window is made smaller under it', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 760 });
     await newCanvas(page, 'Dropdown and resize');
-    await create(page, 'Service', { x: 500, y: 60 });
+    // Keep the placement away from the toolbar's explanatory tooltip; this tests menu resizing.
+    await create(page, 'Service', { x: 800, y: 60 });
     await page.locator('.dc-node').first().click();
     await page.getByRole('button', { name: 'Service type' }).click();
     const menu = page.getByRole('listbox');

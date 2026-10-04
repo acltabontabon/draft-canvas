@@ -15,6 +15,13 @@ On the first visit, choose **New canvas** (pressing `Enter` also works). Later, 
 canvas** button is at the top of the Library, the list of your saved diagrams. Your diagram
 saves itself as you work; see [Saving, backing up and sharing](saving-and-sharing.md).
 
+## Try a complete explanation
+
+**Try an example** on first-run Home or an empty canvas opens a new **Order processing** diagram.
+The command palette offers it later too. **Play explanation** presents its three-step **Place an
+order** flow; return to editing to change its ordinary shapes, connectors, captions and queue note.
+Every opening makes a fresh document. On desktop it is a normal Quick Draft.
+
 ## Draw Service → Queue → Worker
 
 1. **Add the service.** Move your pointer over the canvas and press `S`. A Service appears under it,
@@ -162,3 +169,11 @@ exports.
 - **Go faster.** [Keyboard shortcuts and the command palette](keyboard-and-commands.md).
 - **Say what is still open.** [Mark what is still open](open-points.md) attaches a tentative, awaiting-input
   or parked point to a shape or connector, for the next conversation to pick up.
+
+## Clean up part of a drawing
+
+Select the shapes to tidy, then choose **Arrange selection** from the command palette or context
+menu. A selected boundary includes its contents. Unselected shapes and free notes stay fixed;
+containing boundaries may grow but do not shrink or change membership. Connectors alone do not
+select their endpoints. If there is too little room, select a larger area and try again.
+The result is one undo step. **Arrange diagram** remains available for a whole-diagram cleanup.

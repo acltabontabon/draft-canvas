@@ -1,5 +1,5 @@
 import type { DraftDocument } from '../document/types';
-import { encodeShareLink } from './link';
+import { encodeShareLink, type ShareStart } from './link';
 
 export const SHARE_LINK_COPIED = 'Link copied — anyone with it can read this diagram.';
 
@@ -16,10 +16,11 @@ export function tooLargeMessage(bytes: number): string {
 export async function copyShareLink(
   file: DraftDocument,
   notify: (message: string, tone?: 'info' | 'error') => void,
+  start?: ShareStart,
 ): Promise<void> {
   let result: Awaited<ReturnType<typeof encodeShareLink>>;
   try {
-    result = await encodeShareLink(file);
+    result = await encodeShareLink(file, undefined, start);
   } catch {
     notify('A share link could not be made in this browser. Export the file instead.', 'error');
     return;

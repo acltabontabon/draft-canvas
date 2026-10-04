@@ -164,3 +164,21 @@ test.describe('a label shared by connectors leaving together', () => {
     await expect(labels(page)).toHaveCount(1);
   });
 });
+
+test('tracing a shared label asks which connector and identifies duplicate choices', async ({ page }) => {
+  await open(page);
+  await page.keyboard.press('ControlOrMeta+k');
+  await page.getByRole('combobox').fill('Trace a flow');
+  await page.keyboard.press('Enter');
+  await labels(page).click();
+  const chooser = page.getByRole('group', { name: 'Choose a connector' });
+  await expect(chooser).toBeVisible();
+  await chooser.getByRole('button', { name: /Stripe/ }).click();
+  const trace = page.getByRole('region', { name: 'Trace a flow' });
+  await expect(trace.getByText('1 step', { exact: true })).toBeVisible();
+  await labels(page).click();
+  await chooser.getByRole('button', { name: /Stripe/ }).click();
+  await expect(trace.getByRole('status')).toContainText('Already included at step 1');
+  await trace.getByRole('button', { name: 'Finish', exact: true }).click();
+  await expect(trace).toHaveCount(0);
+});

@@ -174,6 +174,7 @@ export function FlowPanel({ onPresent }: { onPresent: (flowId?: string) => void 
     <div className="dc-flow-panel" role="region" aria-label="Flows" ref={rootRef} onKeyDown={onKeyDown}>
       <header className="dc-flow-panel-header">
         <strong>Flows</strong>
+        {!useUiStore.getState().readOnly && <Button variant="quiet" onClick={() => useEditorStore.getState().beginFlowTrace()}>Trace a flow</Button>}
         {document.flows.length > 0 && (
           <Button variant="quiet" icon="plus" aria-label="New flow" title="New flow" onClick={createNewFlow} />
         )}
@@ -308,6 +309,7 @@ export function FlowPanel({ onPresent }: { onPresent: (flowId?: string) => void 
                     />
                   </span>
                 </div>
+                {!useUiStore.getState().readOnly && <Button className="dc-flow-trace-more" variant="quiet" aria-label={`Trace more steps: ${flow.title}`} onClick={() => useEditorStore.getState().beginFlowTrace(flow.id)}>Trace more steps</Button>}
 
                 {expanded && (
                   <ol className="dc-flow-steps">

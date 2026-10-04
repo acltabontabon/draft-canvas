@@ -11,6 +11,22 @@ the release notes and the in-app What's New are generated from here. See
 
 ## [Unreleased]
 
+### Shared
+
+- **Trace a flow** by choosing connectors on the canvas or in the Outline. Preview numbers,
+  remove the last choice, cancel, or finish a new/extended flow as one undoable change.
+- **Try an example** opens an editable Order processing diagram with a three-step explanation
+  and a note explaining the queue. Play it, edit it, and reuse the same controls for your own work.
+- **Arrange selection** tidies selected shapes and boundary contents while keeping surrounding
+  shapes and free notes fixed, with one undo step.
+
+### Web
+
+- Share links can start at a chosen level or playable flow's introduction. Readers still receive
+  the whole document; existing links and quick overview sharing keep their behavior.
+- Supported browsers offer **Open file…**, **Save**, and **Save As…**, with remembered file links,
+  explicit disk writes, automatic browser recovery, and choices when disk and recovery disagree.
+
 ## [1.12.1] - 2026-10-04
 
 More accurate diagrams, with suggestions that respect the view you're drawing and connectors that

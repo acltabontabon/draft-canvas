@@ -216,6 +216,7 @@ describe('contextMenuCommandsFor — a regular node', () => {
     const types = entries.map((e) => (e.type === 'separator' ? 'sep' : e.command.id));
     expect(types).toEqual([
       'edit-text',
+      'arrange-selection',
       'sep',
       'attach-note',
       'attach-code',
@@ -257,6 +258,7 @@ describe('contextMenuCommandsFor — a junction', () => {
     const types = entries.map((e) => (e.type === 'separator' ? 'sep' : e.command.id));
     expect(types).toEqual([
       'edit-text',
+      'arrange-selection',
       'sep',
       'duplicate',
       'copy',

@@ -447,11 +447,12 @@ test.describe('context menu — keyboard-only operation', () => {
     await expect(menu(page)).toBeVisible();
     await expect(menuItem(page, 'Edit text')).toBeVisible();
 
-    // Down three times from the first item lands on Add Code — the node menu reads Edit text,
-    // Look inside, Add Note, Add Code, …
+    // The node menu reads Edit text, Look inside, Arrange selection, Add Note, Add Code.
     await page.keyboard.press('ArrowDown');
     await page.keyboard.press('ArrowDown');
     await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('ArrowDown');
+    await expect(menu(page).locator('[data-highlighted="true"]')).toHaveText('Add Code');
     await page.keyboard.press('Enter');
     await expect(menu(page)).toBeHidden();
     await expect(page.locator('.dc-attachment-chip[data-kind="code"]')).toHaveCount(1);

@@ -82,6 +82,8 @@ import { buildStarter, starterSize } from '../starters/build';
 import type { ArchitectureStarter } from '../starters/types';
 import {
   addFlow,
+  appendFlowTrace,
+  stepIndexOf,
   createFlow as createFlowEntity,
   addStepToFlow,
   addStepExtraEdge,
@@ -476,6 +478,7 @@ export interface EditorStore {
    * pays for it.
    */
   arrangeRoom: () => Promise<boolean>;
+  arrangeSelection: () => Promise<boolean>;
   /**
    * Replaces `find` with `replace` in every label of every room of the file (shape names, connector
    * labels, attachment text, flow titles) as one undo step, staying in the room on screen. Returns
@@ -564,6 +567,9 @@ export interface EditorStore {
 
   /* Flows */
   /** Returns the new flow's id, or `null` when the document is already at `LIMITS.maxFlows`. */
+  beginFlowTrace: (flowId?: string) => void;
+  traceEdge: (edgeId: string) => void;
+  finishFlowTrace: () => boolean;
   createFlow: (title?: string) => string | null;
   renameFlow: (flowId: string, title: string) => void;
   /** Sets, or clears (`accent: null`), a flow's lens accent — see `DraftFlow.accent`. */
@@ -991,6 +997,7 @@ export function viewLevel(state: FileState): ViewLevel | undefined {
  */
 function resetViewSession(): Pick<EditorStore, 'selection' | 'flowPlayback' | 'editReturn' | 'focus' | 'selectedFlowId'> {
   const ui = useUiStore.getState();
+  if (ui.flowTrace) { ui.setFlowTrace(null); ui.notify('Tracing cancelled because the diagram or level changed.'); }
   ui.resetContinuation();
   ui.arm(null);
   useUiStore.setState({
@@ -1250,7 +1257,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // A diagram opened from a share link is read-only (`uiStore.readOnly`): every operation funnels
     // through here or `applyToFile`, so refusing at this one gate is what keeps a shared diagram
     // exactly as it arrived, whichever key or menu asked. Camera moves don't come this way.
-    if (useUiStore.getState().readOnly) return;
+    if (useUiStore.getState().readOnly || useUiStore.getState().flowTrace) return;
     const state = get();
     const before = state.document;
     const next = touch(recipe(before));
@@ -1942,6 +1949,30 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     );
   },
 
+  async arrangeSelection() {
+    const before = get();
+    if (interaction || useUiStore.getState().readOnly || useUiStore.getState().flowTrace || !before.selection.nodes.length) return false;
+    const [{ arrangeView, readingDirectionOf }, { measureContext }, { Problems }] = await Promise.all([
+      import('../agent/arrange'), import('../agent/place'), import('../agent/errors'),
+    ]);
+    const current = get();
+    if (current.document !== before.document || current.path !== before.path || current.selection !== before.selection || interaction) {
+      useUiStore.getState().notify('Selection changed. Choose Arrange selection again.');
+      return false;
+    }
+    const arranged = arrangeView(current.document, {
+      scope: { nodes: [...current.selection.nodes] }, keepOutsideFixed: true, connectors: 'tidy', move: true,
+      layout: { direction: readingDirectionOf(current.document), directionChosen: true, spacing: 'comfortable', allowDegraded: false, normalizePeerSizes: false },
+    }, measureContext(), new Problems(), '/arrange');
+    if (!arranged) {
+      useUiStore.getState().notify('There is not enough room. Arrange a larger selection or the whole diagram.');
+      return false;
+    }
+    if (!arranged.touched.size) return false;
+    current.apply('Arrange selection', () => arranged.view);
+    return get().document !== current.document;
+  },
+
   async arrangeRoom() {
     if (interaction) return false;
     // The layout engine is the agent's chunk, loaded here on demand: the store must not pull it into
@@ -2527,6 +2558,63 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     );
   },
 
+  beginFlowTrace(flowId) {
+    const state = get();
+    const ui = useUiStore.getState();
+    if (state.mode !== 'edit' || ui.readOnly || interaction) return;
+    const flow = flowId ? findFlow(state.document, flowId) : undefined;
+    if (flowId && !flow) return;
+    if (!flow && totals(fileOf(state)).flows >= LIMITS.maxFlows) {
+      ui.notify('This diagram has reached its flow limit.', 'error');
+      return;
+    }
+    ui.arm(null);
+    ui.setQuickConnect(null);
+    ui.setContextMenu(null);
+    ui.setContinuation(null);
+    state.setSelectedFlowId(flowId ?? null);
+    ui.setFlowTrace({ documentId: state.document.metadata.id, path: [...state.path], revision: state.revision,
+      flowId, title: flow?.title ?? '', edgeIds: [], choices: [], message: 'Choose connectors in the order you want to explain them.' });
+  },
+
+  traceEdge(edgeId) {
+    const ui = useUiStore.getState();
+    const trace = ui.flowTrace;
+    const state = get();
+    if (!trace || trace.revision !== state.revision || trace.documentId !== state.document.metadata.id || JSON.stringify(trace.path) !== JSON.stringify(state.path)) return;
+    if (!state.document.edges.some((edge) => edge.id === edgeId)) return;
+    const flow = trace.flowId ? findFlow(state.document, trace.flowId) : undefined;
+    const existing = flow ? stepIndexOf(flow, edgeId) : undefined;
+    const previewIndex = trace.edgeIds.indexOf(edgeId);
+    const position = existing ?? (previewIndex < 0 ? undefined : (flow?.steps.length ?? 0) + previewIndex + 1);
+    if (position !== undefined) {
+      ui.setFlowTrace({ ...trace, choices: [], message: `Already included at step ${position}.` });
+      return;
+    }
+    const count = (flow?.steps.length ?? 0) + trace.edgeIds.length;
+    if (count >= LIMITS.maxStepsPerFlow) {
+      ui.setFlowTrace({ ...trace, choices: [], message: 'This flow has reached its step limit.' });
+      return;
+    }
+    ui.setFlowTrace({ ...trace, choices: [], edgeIds: [...trace.edgeIds, edgeId], message: `Added step ${count + 1}.` });
+  },
+
+  finishFlowTrace() {
+    const ui = useUiStore.getState();
+    const trace = ui.flowTrace;
+    const state = get();
+    if (!trace || !trace.edgeIds.length || trace.revision !== state.revision || trace.documentId !== state.document.metadata.id || JSON.stringify(trace.path) !== JSON.stringify(state.path)) return false;
+    const flow = trace.flowId ? findFlow(state.document, trace.flowId) : createFlowEntity({ title: trace.title.trim() || nextFlowTitle(state.document) });
+    if (!flow || (!trace.flowId && totals(fileOf(state)).flows >= LIMITS.maxFlows)) return false;
+    const next = appendFlowTrace(state.document, flow, trace.edgeIds);
+    if (next === state.document || ui.readOnly) return false;
+    ui.setFlowTrace(null);
+    state.apply(trace.flowId ? 'Extend flow' : 'Trace flow', () => next);
+    get().setSelectedFlowId(flow.id);
+    ui.setFlowPanelOpen(true);
+    return true;
+  },
+
   createFlow(title) {
     if (totals(fileOf(get())).flows >= LIMITS.maxFlows) return null;
     const flow = createFlowEntity({ title: title?.trim() || nextFlowTitle(get().document) });
@@ -2681,6 +2769,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   undo() {
+    if (useUiStore.getState().flowTrace) return;
     const state = get();
     // Mid-gesture (a drag or resize still held), swapping the document out from under it would
     // fold the restored state into the gesture's own entry and clear the redo stack.
@@ -2701,6 +2790,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   redo() {
+    if (useUiStore.getState().flowTrace) return;
     const state = get();
     if (interaction) return;
     const { history, entry } = redoStack(state.history);

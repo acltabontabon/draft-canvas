@@ -3,6 +3,7 @@ import { categoryOf } from '../document/connectorSemantics';
 import type { DraftNode } from '../document/types';
 import {
   canvasCommands,
+  arrangeSelectionCommands,
   createCommandAt,
   edgeCommands,
   multiCommands,
@@ -72,7 +73,7 @@ function paneMenu(ctx: CommandContext, flowPosition: { x: number; y: number }): 
  *  matching how compact the shape itself stays. */
 function junctionMenu(commands: Command[]): ContextMenuEntry[] {
   return grouped([
-    pick(commands, ['edit-text']),
+    pick(commands, ['edit-text', 'arrange-selection']),
     pick(commands, ['duplicate', 'copy', 'cut']),
     pick(commands, ['bring-to-front', 'send-to-back']),
     pick(commands, ['spotlight']),
@@ -86,7 +87,7 @@ function regularNodeMenu(ctx: CommandContext, node: DraftNode, commands: Command
   const outgoing = ctx.editor.document.edges.filter((edge) => edge.source === node.id);
   const lastGroup = outgoing.length === 1 ? ['spotlight', 'flow-start-here'] : ['spotlight'];
   return grouped([
-    pick(commands, ['edit-text', 'look-inside']),
+    pick(commands, ['edit-text', 'look-inside', 'arrange-selection']),
     pick(commands, ['attach-note', 'attach-code', 'open-point-add']),
     pick(commands, ['add-consumer', 'add-dead-letter-queue', 'remove-dead-letter-queue', 'add-subscriber']),
     pick(commands, ['duplicate', 'copy', 'cut']),
@@ -103,7 +104,7 @@ function regularNodeMenu(ctx: CommandContext, node: DraftNode, commands: Command
  *  any extra check here. */
 function boundaryMenu(commands: Command[]): ContextMenuEntry[] {
   return grouped([
-    pick(commands, ['edit-text', 'select-contents']),
+    pick(commands, ['edit-text', 'select-contents', 'arrange-selection']),
     pick(commands, ['attach-note', 'attach-code', 'open-point-add']),
     pick(commands, ['duplicate', 'copy', 'cut']),
     pick(commands, ['bring-to-front', 'bring-forward', 'send-backward', 'send-to-back']),
@@ -117,7 +118,7 @@ function nodeMenu(ctx: CommandContext, node: DraftNode): ContextMenuEntry[] {
   // Raising a point lives in its own builder (it is a canvas-level command, not a node one), so it
   // is borrowed in here the same way `paneMenu` borrows Select all — one command object, picked
   // into a second menu, never a second copy of it.
-  const commands = [...nodeCommands(ctx, node), ...pick(openPointCommands(ctx), ['open-point-add'])];
+  const commands = [...arrangeSelectionCommands(ctx), ...nodeCommands(ctx, node), ...pick(openPointCommands(ctx), ['open-point-add'])];
   if (node.type === 'group') return boundaryMenu(commands);
   if (categoryOf(node) === 'junction') return junctionMenu(commands);
   return regularNodeMenu(ctx, node, commands);
@@ -154,7 +155,7 @@ function edgeMenu(commands: Command[]): ContextMenuEntry[] {
  */
 function selectionMenu(commands: Command[]): ContextMenuEntry[] {
   return grouped([
-    pick(commands, ['group', 'ungroup']),
+    pick(commands, ['group', 'ungroup', 'arrange-selection']),
     // One shared point for everything selected — its title says so ("for 3 elements").
     pick(commands, ['open-point-add']),
     pick(commands, [
@@ -195,7 +196,7 @@ export function contextMenuCommandsFor(
     case 'selection': {
       const { nodes, edges } = ctx.editor.selection;
       if (nodes.length + edges.length < 2) return []; // no longer a multi-selection — see the effect that closes the menu when this happens
-      return selectionMenu([...multiCommands(ctx), ...pick(openPointCommands(ctx), ['open-point-add'])]);
+      return selectionMenu([...arrangeSelectionCommands(ctx), ...multiCommands(ctx), ...pick(openPointCommands(ctx), ['open-point-add'])]);
     }
     default:
       return [];

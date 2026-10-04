@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { createDocument } from '../src/document/factory';
+import { createAttachment, createDocument } from '../src/document/factory';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
 
 /**
@@ -68,4 +68,64 @@ describe('arrangeRoom', () => {
     expect(await useEditorStore.getState().arrangeRoom()).toBe(false);
     expect(useEditorStore.getState().history.past.length).toBe(steps);
   });
+});
+
+describe('arrangeSelection', () => {
+  beforeEach(reset);
+  it('keeps unselected shapes and nearby notes fixed, and undoes once', async () => {
+    const editor = useEditorStore.getState();
+    const a = editor.addNode({ type: 'service', x: 100, y: 100 });
+    const b = editor.addNode({ type: 'database', x: 100, y: 100 });
+    const fixed = editor.addNode({ type: 'service', x: 1600, y: 100 });
+    const note = editor.addNode({ type: 'note', x: 100, y: 250, text: 'Stay here' });
+    editor.connect(a.id, b.id);
+    editor.setSelection({ nodes: [a.id, b.id, note.id], edges: [] });
+    const before = useEditorStore.getState();
+    await editor.arrangeSelection();
+    const after = useEditorStore.getState();
+    expect(after.document.nodes.find((node) => node.id === fixed.id)).toBe(before.document.nodes.find((node) => node.id === fixed.id));
+    expect(after.document.nodes.find((node) => node.id === note.id)).toBe(before.document.nodes.find((node) => node.id === note.id));
+    expect(after.history.past.length).toBe(before.history.past.length + 1);
+    after.undo();
+    expect(useEditorStore.getState().document.nodes).toEqual(before.document.nodes);
+  });
+  it('rejects a selection changed while the engine loads', async () => {
+    const editor = useEditorStore.getState();
+    const node = editor.addNode({ type: 'service', x: 0, y: 0 });
+    editor.setSelection({ nodes: [node.id], edges: [] });
+    const pending = editor.arrangeSelection();
+    editor.setSelection({ nodes: [], edges: [] });
+    expect(await pending).toBe(false);
+  });
+});
+
+
+it('arranges boundary members without shrinking their container or losing explanation metadata', async () => {
+  reset();
+  const editor = useEditorStore.getState();
+  const a = editor.addNode({ type: 'service', x: 100, y: 100, text: 'API' });
+  const b = editor.addNode({ type: 'queue', x: 100, y: 100, text: 'Orders' });
+  const edge = editor.connect(a.id, b.id)!;
+  editor.attachToNode(a.id, createAttachment({ type: 'note', text: 'Keep this context' }));
+  const flow = editor.createFlow('Order')!;
+  editor.addEdgeToFlow(flow, edge.id);
+  editor.addOpenPoint('tentative', [{ kind: 'node', id: a.id }], 'Who owns this?');
+  editor.setSelection({ nodes: [a.id, b.id], edges: [] });
+  editor.groupSelection();
+  const group = useEditorStore.getState().document.nodes.find(node => node.type === 'group')!;
+  editor.setSelection({ nodes: [a.id, b.id], edges: [] });
+  const before = useEditorStore.getState().document;
+  expect(await editor.arrangeSelection()).toBe(true);
+  const after = useEditorStore.getState().document;
+  expect(after.flows).toEqual(before.flows);
+  expect(after.openPoints).toHaveLength(1);
+  expect(after.openPoints).toEqual(before.openPoints);
+  expect(after.nodes.find(node => node.id === a.id)!.attachments).toEqual(before.nodes.find(node => node.id === a.id)!.attachments);
+  expect(after.nodes.filter(node => node.parentId === group.id).map(node => node.id)).toEqual([a.id, b.id]);
+  const grown = after.nodes.find(node => node.id === group.id)!;
+  expect(grown.width).toBeGreaterThanOrEqual(group.width);
+  expect(grown.height).toBeGreaterThanOrEqual(group.height);
+  expect(after.edges[0]!.semantic).toBe(before.edges[0]!.semantic);
+  editor.undo();
+  expect(useEditorStore.getState().document.nodes).toEqual(before.nodes);
 });

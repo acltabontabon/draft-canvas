@@ -37,6 +37,8 @@ import { drawnRoute, overlaps, pastDeadline, repairAnchors, segmentHitsBox } fro
 type Json = Record<string, unknown>;
 
 export interface ArrangeRequest {
+  /** Editor selection cleanup keeps even nearby unselected notes fixed. */
+  keepOutsideFixed?: boolean;
   scope?: { group?: string; nodes?: string[] };
   connectors: 'tidy' | 'keep' | 'orthogonal';
   /** `false`: re-anchor connectors touching the scope without moving, resizing or re-peer-sizing any
@@ -150,6 +152,10 @@ const cost = (c: Judged) => legibilityCost(legibilityOf(c.arranged.view.nodes, c
  */
 export function arrangeView(view: DraftDocument, request: ArrangeRequest, ctx: DescribeContext, problems: Problems, at: string): Arranged | undefined {
   const inScope = scopeOf(view, request.scope);
+  // Free notes keep their deliberate place even when a box selection also caught them.
+  if (request.keepOutsideFixed) for (const node of view.nodes) {
+    if (isNoteLike(node) && !node.parentId) inScope.delete(node.id);
+  }
   const movable = view.nodes.filter((n) => inScope.has(n.id) && (!isNoteLike(n) || (n.parentId !== undefined && inScope.has(n.parentId))));
   if (!movable.some((n) => n.type !== 'group' && !isNoteLike(n))) return { view, touched: new Set() };
 
@@ -233,7 +239,7 @@ function arrangeOnce(view: DraftDocument, inScope: ReadonlySet<string>, request:
   const oldBox = boxOf(before);
   const newBox = boxOf(moved);
   // Free notes follow the shape they sit beside, so they aren't in the way either.
-  const followers = new Set(view.nodes.filter((n) => isNoteLike(n) && !n.parentId && inScope.has(nearestShape(n, view.nodes)?.id ?? '')).map((n) => n.id));
+  const followers = new Set(view.nodes.filter((n) => !request.keepOutsideFixed && isNoteLike(n) && !n.parentId && inScope.has(nearestShape(n, view.nodes)?.id ?? '')).map((n) => n.id));
   const outside = view.nodes.filter((n) => !inScope.has(n.id) && !followers.has(n.id) && !containsScope(n, before, byId));
   let origin = { x: oldBox.x, y: oldBox.y };
   const collides = (o: { x: number; y: number }) =>
@@ -267,6 +273,7 @@ function arrangeOnce(view: DraftDocument, inScope: ReadonlySet<string>, request:
   // spot"), and only replaced with a fresh `placeBeside` when that offset is no longer free.
   const touched = new Set<string>([...placed.keys(), ...changed.keys()]);
   for (const note of view.nodes) {
+    if (request.keepOutsideFixed && !inScope.has(note.id)) continue;
     if (!isNoteLike(note) || placed.has(note.id) || (note.parentId && byId.get(note.parentId)?.type === 'group')) continue;
     const host = nearestShape(note, view.nodes);
     if (!host || !placed.has(host.id)) continue;
@@ -281,6 +288,18 @@ function arrangeOnce(view: DraftDocument, inScope: ReadonlySet<string>, request:
   }
   // Boundaries the scope sits in grow to hold it.
   for (const node of moved) if (node.parentId && !inScope.has(node.parentId)) next = fitGroups(next, node.id);
+  if (request.keepOutsideFixed) {
+    // Growing a containing boundary must not swallow a fixed neighbour or change its membership.
+    for (const group of next.nodes) {
+      const old = byId.get(group.id);
+      if (group.type !== 'group' || !old || group === old || inScope.has(group.id)) continue;
+      const members = scopeOf(view, { group: group.id });
+      for (const fixed of outside) {
+        if (members.has(fixed.id) || containsScope(fixed, [group], byId)) continue;
+        if (overlaps(group, fixed) && !overlaps(old, fixed)) return undefined;
+      }
+    }
+  }
   return { view: next, touched };
 }
 

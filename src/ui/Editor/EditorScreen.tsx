@@ -1,3 +1,5 @@
+import { ExampleBanner } from './ExampleBanner';
+import { FlowTraceBar } from './FlowTraceBar';
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ReactFlowProvider, useReactFlow } from '@xyflow/react';
 import { AttachmentPopover } from '../../canvas/AttachmentPopover';
@@ -126,6 +128,7 @@ export function EditorRoute({ session }: { session: DocumentSession }) {
 }
 
 function EditorScreen({ session }: { session: DocumentSession }) {
+  const tracing = useUiStore((state) => state.flowTrace !== null);
   const title = useEditorStore((state) => state.document.metadata.title);
   const mode = useEditorStore((state) => state.mode);
   const rename = useEditorStore((state) => state.rename);
@@ -372,6 +375,16 @@ function EditorScreen({ session }: { session: DocumentSession }) {
     [playback, fitView, getViewport, setMode],
   );
 
+  const sharedIntroduction = useUiStore((state) => state.sharedFlowIntroduction);
+  useEffect(() => {
+    if (!sharedIntroduction || sharedIntroduction.documentId !== useEditorStore.getState().document.metadata.id) return;
+    const frame = requestAnimationFrame(() => {
+      useUiStore.setState({ sharedFlowIntroduction: null });
+      onPresent(sharedIntroduction.flowId);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [sharedIntroduction, onPresent]);
+
   // Coming back out. The selection is restored by the store (`setMode` is the one door every exit
   // goes through); the camera can only be restored here, because React Flow owns it. Keyed on the
   // transition rather than on any one exit path, so all six of them — Escape, ⌘Enter, the bar's
@@ -488,10 +501,12 @@ function EditorScreen({ session }: { session: DocumentSession }) {
     <div
       className="dc-editor"
       data-mode={mode}
+      data-tracing={tracing || undefined}
       data-armed={armed ? 'true' : undefined}
       data-reconnecting={reconnecting ? 'true' : undefined}
     >
       {!presenting && (
+        <div style={{ display: 'contents' }} inert={tracing}>
         <Toolbar
           title={title}
           onTitleChange={rename}
@@ -500,6 +515,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
           onExport={() => setExportOpen(true)}
           readOnly={readOnly !== null}
         />
+        </div>
       )}
 
       <div className="dc-editor-body">
@@ -564,23 +580,25 @@ function EditorScreen({ session }: { session: DocumentSession }) {
               onDismiss={dismissContextMenu}
             />
           )}
-          {!presenting && <AttachmentPopover />}
+          {!presenting && !tracing && <AttachmentPopover />}
           {/* In every mode: while presenting it opens read-only, so a presenter can show what is still
               open here without any editing surface appearing over the story. */}
           <OpenPointPopover />
-          {!presenting && <EdgeInspectorPopover />}
-          {!presenting && <ElementInspectorPopover buildCommandContext={buildCommandContext} />}
+          {!presenting && !tracing && <EdgeInspectorPopover />}
+          {!presenting && !tracing && <ElementInspectorPopover buildCommandContext={buildCommandContext} />}
+          {!presenting && !tracing && <ExampleBanner onPresent={onPresent} />}
+          <FlowTraceBar />
           <PresentationCalloutLayer />
           <EmptyState onInsertStarter={insertStarter} />
           {!presenting && <ContinuationAnnouncer />}
-          {!presenting && <Inspector />}
-          {!presenting && <FlowPanel onPresent={onPresent} />}
+          {!presenting && !tracing && <Inspector />}
+          {!presenting && !tracing && <FlowPanel onPresent={onPresent} />}
           {!presenting && ProposalPanelChunk && (
             <Suspense fallback={null}>
               <ProposalPanelChunk.Component />
             </Suspense>
           )}
-          {!presenting && <OpenPointsPanel buildCommandContext={buildCommandContext} />}
+          {!presenting && !tracing && <OpenPointsPanel buildCommandContext={buildCommandContext} />}
           <FlowBar playback={playback} />
           <FocusIndicator />
           <DepthStack />
@@ -888,7 +906,7 @@ export function useKeyboard({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (isEditableTarget(event.target)) return;
+      if (isEditableTarget(event.target) || useUiStore.getState().flowTrace) return;
 
       // While the command palette is up it owns the keyboard outright — even if focus has
       // somehow left its input, a stray "t" must never spawn a Text node behind it.

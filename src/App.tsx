@@ -1,3 +1,4 @@
+import { BrowserFileDialog } from './ui/common/BrowserFileButtons';
 import { Suspense, useEffect } from 'react';
 import { currentDesktopHost, hostKind, returnHome } from './host/hostInfo';
 import { useHostDocument } from './host/useHostDocument';
@@ -71,6 +72,16 @@ function LazyAboutDialog() {
 function Shell() {
   const session = useDocumentSession();
   const host = useHostDocument(session, currentDesktopHost()?.channel);
+  const exampleRequested = useUiStore((state) => state.exampleRequested);
+  useEffect(() => {
+    if (!exampleRequested) return;
+    useUiStore.setState({ exampleRequested: false });
+    if (__DESKTOP__ && hostKind() === 'desktop') {
+      void import('./desktop/useDesktop').then(({ getDesktopController }) => getDesktopController().newQuickDraft('order-processing'));
+    } else {
+      void session.closeDocument().then((closed) => { if (closed) return session.newDocument(undefined, 'order-processing'); });
+    }
+  }, [exampleRequested, session]);
 
   // Keys older builds left behind (a pinned theme, the old Learn mode's hints) — see
   // `RETIRED_PREFERENCE_KEYS`. Documents are never touched: they live in IndexedDB.
@@ -121,6 +132,7 @@ function Shell() {
           change the file until the text is fixed.
         </p>
       )}
+      <BrowserFileDialog />
       <Toasts />
       <LiveAnnouncer />
       <LazyAboutDialog />

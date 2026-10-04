@@ -1,26 +1,28 @@
 # What comes next, and in what order
 
-The 1.12 release made Draft Canvas smaller on purpose (see the [changelog](../../CHANGELOG.md)). The
-five pieces of work below were weighed while doing that; three of them — B, C and D — shipped in
-1.12 after all, and their sections stay here as the record of what was decided and why. A and E
-are still ahead: each is new surface, and each deserves its own release with its own tests. They
-are ordered by how much they change for someone drawing and explaining a system in a meeting, then
-by dependency, then by cost. Neither is promised, and nothing here has a date.
+The current implementation follows five independently reviewable milestones, in this order.
+All five are implemented in the working tree. Full Chromium and WebKit checks and all 80 desktop
+journeys passed. Release acceptance remains conditional on Firefox verification (its runtime could
+not launch here), a real file-picker check, and the human observations described in
+[the usability protocol and validation record](explanation-usability.md). No editor telemetry is added.
 
-| # | Work | Why first | Cost / risk |
-| --- | --- | --- | --- |
-| A | Files on the web | The README still says "diagrams live in one browser"; this makes the web app as dependable as the desktop about where work lives | Medium / medium |
-| B | Read-only share links | **Shipped in 1.12.** A meeting is more than one person, and a file was the only way to hand a diagram over | Small / medium (untrusted input, URL limits) |
-| C | Editable PNG and SVG | **Shipped in 1.12.** Every picture pasted into a README or a PR is a way back into the editor | Small / low |
-| D | One bounded import | **Shipped in 1.12.** People arrive with diagrams; Mermaid flowcharts are the common case | Medium / medium |
-| E | Agent entry point and review | Builds on MCP and proposals that already exist; the front door is what is missing | Medium / low |
+| Milestone | Outcome | Main implementation |
+| --- | --- | --- |
+| 1. Trace a flow | Choose a story's connectors, then finish once | [Atomic flow operation](../../src/document/flow.ts), [trace controls](../../src/ui/Editor/FlowTraceBar.tsx) and canvas preview |
+| 2. Complete example | Play and edit Order processing | [Ordinary starter data](../../src/starters/order-processing.ts) with fresh IDs |
+| 3. Intentional sharing | Choose a level or flow introduction | [Optional fragment metadata](../../src/share/link.ts) outside the document schema |
+| 4. Arrange selection | Tidy a local area without moving its neighbors | [Scoped arrangement](../../src/agent/arrange.ts) with fixed outside content |
+| 5. Web files | Explicit disk writes plus automatic recovery | [Browser file sessions](../../src/storage/browserFiles.ts), [adapter](../../src/storage/fileHandles.ts) and separate associations |
 
-## A. Open, Save and Save As on the web
+The earlier rationale below is retained for reference. Files on the web are implemented by milestone
+5 above. Agent entry point and review remains future work. No document schema migration is needed.
+
+## A. Open, Save and Save As on the web (implemented; validation pending)
 
 **Scope.** In browsers with the File System Access API (Chromium; Safari and Firefox do not have
 `showSaveFilePicker`), **Open…** reads a `.draftcanvas` into the editor with a handle, **Save** writes
-back to that handle, **Save As…** asks for a new one. Elsewhere the same commands fall back to the
-existing Import (upload) and Export (download). The handle is remembered per document in IndexedDB
+back to that handle, **Save As…** asks for a new one. Elsewhere these commands are hidden and the
+existing Import (upload) and Export (download) controls remain available. The handle is remembered per document in IndexedDB
 (handles are structured-cloneable) so a reopened tab can offer **Save** again after asking permission.
 
 **Source of truth.** A document with a handle is *the file*; IndexedDB keeps the autosaved copy only

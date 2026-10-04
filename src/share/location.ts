@@ -1,4 +1,4 @@
-import { SHARE_PARAM, sharePayloadFromHash } from './link';
+import { SHARE_PARAM, SHARE_START_PARAM, sharePayloadFromHash } from './link';
 
 /**
  * Drops the share payload from the address once the shared diagram has been closed or copied into
@@ -11,6 +11,7 @@ export function clearShareFragment(): void {
   const url = new URL(window.location.href);
   const params = new URLSearchParams(url.hash.replace(/^#/, ''));
   params.delete(SHARE_PARAM);
+  params.delete(SHARE_START_PARAM);
   const hash = params.toString();
   window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${hash ? `#${hash}` : ''}`);
 }

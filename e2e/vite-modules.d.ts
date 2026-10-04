@@ -29,4 +29,5 @@ declare module '/src/*' {
   export const deserializeDocument: (text: string) => { document: any };
   // oxlint-disable-next-line typescript/no-explicit-any
   export const serializeDocument: (doc: any) => string;
+  export function encodeShareLink(document: unknown, base?: string, start?: { path: string[]; flowId?: string }): Promise<{ url: string } | { tooLarge: true; bytes: number }>;
 }

@@ -18,6 +18,7 @@ export interface ToolbarMenuItem {
 }
 
 interface ToolbarMenuProps {
+  label?: string;
   /** The trigger's own rect, so the menu hangs off the button rather than off a bare point. */
   anchorRect: DOMRect;
   /** The trigger itself. Pointer events on it are not "outside": it owns the open/closed toggle,
@@ -47,7 +48,7 @@ const GAP = 6;
  * dismissal behaviour but different rows (this one has badge dots and key caps, which a
  * canvas right-click never needs), and a shared abstraction would have to grow both.
  */
-export function ToolbarMenu({ anchorRect, trigger, items, onDismiss }: ToolbarMenuProps) {
+export function ToolbarMenu({ label = 'More', anchorRect, trigger, items, onDismiss }: ToolbarMenuProps) {
   const panel = useRef<HTMLDivElement>(null);
   const [measuredSize, setMeasuredSize] = useState({ width: 0, height: 0 });
 
@@ -166,7 +167,7 @@ export function ToolbarMenu({ anchorRect, trigger, items, onDismiss }: ToolbarMe
       ref={panel}
       className="dc-context-menu dc-toolbar-menu"
       role="menu"
-      aria-label="More"
+      aria-label={label}
       aria-activedescendant={`dc-toolbar-menu-item-${highlight}`}
       tabIndex={-1}
       style={{ transform }}

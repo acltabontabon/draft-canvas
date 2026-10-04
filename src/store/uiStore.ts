@@ -1,3 +1,4 @@
+import type { BrowserFileActions, FileQuestion } from '../storage/fileHandles';
 import { create } from 'zustand';
 import type { Preset } from '../canvas/presets';
 import { ANY_CANDIDATE, dismissalKey } from '../continuation/dismissal';
@@ -9,6 +10,17 @@ import { PRODUCT } from '../product';
 import { markLastSeenRelease, readLastSeenRelease } from '../releases/seen';
 
 /** A toast's one optional button — e.g. "Undo" for something that was just removed. */
+export interface FlowTrace {
+  documentId: string;
+  path: string[];
+  revision: number;
+  flowId?: string;
+  title: string;
+  edgeIds: string[];
+  choices: string[];
+  message: string;
+}
+
 export type ToastAction = { label: string; run: () => void };
 export type Toast = { id: number; message: string; tone: 'info' | 'error'; action?: ToastAction };
 
@@ -218,6 +230,21 @@ export interface OpenPointPopoverState {
 }
 
 export interface UiStore {
+  browserFiles: BrowserFileActions | null;
+  browserFileLabels: Record<string, string>;
+  browserFileNames: Record<string, string>;
+  fileQuestion: FileQuestion | null;
+
+  sharedFlowIntroduction: { documentId: string; flowId: string } | null;
+  shareFromHere: boolean;
+  requestShareFromHere: () => void;
+  exampleDocumentId: string | null;
+  setExampleDocumentId: (id: string | null) => void;
+  exampleRequested: boolean;
+  requestExample: () => void;
+  flowTrace: FlowTrace | null;
+  setFlowTrace: (trace: FlowTrace | null) => void;
+
   /** The preset a canvas click will place, or null for plain selection. */
   armed: Preset | null;
   shortcutsOpen: boolean;
@@ -596,6 +623,19 @@ let toastsPaused = false;
 let activateFn: (() => void) | null = null;
 
 export const useUiStore = create<UiStore>((set, get) => ({
+  browserFiles: null,
+  browserFileLabels: {},
+  browserFileNames: {},
+  fileQuestion: null,
+  sharedFlowIntroduction: null,
+  shareFromHere: false,
+  requestShareFromHere: () => set({ shareFromHere: true, exportOpen: true, exportSelectionRequested: false }),
+  exampleDocumentId: null,
+  setExampleDocumentId: (exampleDocumentId) => set({ exampleDocumentId }),
+  exampleRequested: false,
+  requestExample: () => set({ exampleRequested: true }),
+  flowTrace: null,
+  setFlowTrace: (flowTrace) => set({ flowTrace }),
   armed: null,
   shortcutsOpen: false,
   findReplaceOpen: false,
@@ -659,7 +699,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   setFindReplaceOpen: (findReplaceOpen) => set({ findReplaceOpen }),
   requestFit: () => set((state) => ({ fitRequestId: state.fitRequestId + 1 })),
   clearFitRequest: (id) => set((state) => (state.fitRequestId === id ? { fitRequestId: 0 } : state)),
-  setExportOpen: (exportOpen) => set({ exportOpen }),
+  setExportOpen: (exportOpen) => set({ exportOpen, ...(!exportOpen ? { shareFromHere: false } : {}) }),
   setReadOnly: (readOnly) => set({ readOnly }),
   setAboutOpen: (aboutOpen) => set({ aboutOpen }),
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),

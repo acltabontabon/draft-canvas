@@ -126,6 +126,7 @@ reaches the canvas. Files arrive through `src/export/project.ts`.
 ## Which checks for which change
 
 `npm run check` is for every PR. Add the rows that match what you touched; CI runs all of them.
+The editor browser suite defaults to one worker; set `PLAYWRIGHT_WORKERS=2` to run independent test files concurrently.
 
 | You changed | Also run |
 | --- | --- |

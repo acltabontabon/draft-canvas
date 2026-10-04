@@ -63,6 +63,8 @@ function ConflictChoice({ conflict, onResolveConflict }: { conflict: 'changed' |
 
 export function StatusBar({ durable, presenting = false, onResolveConflict }: StatusBarProps) {
   const save = useEditorStore((state) => state.save);
+  const documentId = useEditorStore((state) => state.document.metadata.id);
+  const fileLabel = useUiStore((state) => state.browserFileLabels[documentId]);
   const nodeCount = useEditorStore((state) => state.document.nodes.length);
   const edgeCount = useEditorStore((state) => state.document.edges.length);
 
@@ -87,7 +89,7 @@ export function StatusBar({ durable, presenting = false, onResolveConflict }: St
       ) : (
         <div className="dc-status-left">
           <span className="dc-save" data-status={save.status}>
-            {saveLabel(save, durable)}
+            {save.status === 'error' ? saveLabel(save, durable) : fileLabel ?? saveLabel(save, durable)}
           </span>
           {save.conflict && onResolveConflict && <ConflictChoice conflict={save.conflict} onResolveConflict={onResolveConflict} />}
           {/* Announced separately from the label, which cycles Unsaved → Saving… → Saved on every
@@ -96,7 +98,7 @@ export function StatusBar({ durable, presenting = false, onResolveConflict }: St
             {!durable ? 'Storage unavailable. Changes are kept in memory only.' : save.status === 'error' ? saveLabel(save, durable) : ''}
           </span>
           <span className="dc-muted dc-status-hint" hidden={Boolean(save.conflict)}>
-            {durable
+            {fileLabel ? 'File writes happen when you choose Save. Browser recovery is automatic.' : durable
               ? 'Your diagrams stay in this browser. Nothing you draw is uploaded.'
               : 'This browser is blocking storage — export to keep your work.'}
           </span>

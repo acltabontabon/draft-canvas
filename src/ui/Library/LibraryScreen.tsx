@@ -10,6 +10,7 @@ import type { DocumentSession } from '../../store/useDocumentSession';
 import { Button } from '../common/Button';
 import { Icon } from '../common/Icon';
 import { Modal } from '../common/Modal';
+import { BrowserFileButtons } from '../common/BrowserFileButtons';
 import { FirstRunHome } from './FirstRunHome';
 import { relativeTime } from '../../lib/relativeTime';
 import { Fingerprint } from './Fingerprint';
@@ -39,6 +40,7 @@ import { headingFor, visibleCanvases, type LibrarySort } from './libraryFilter';
  * a card, or a banner.
  */
 export function LibraryScreen({ session }: { session: DocumentSession }) {
+  const fileNames = useUiStore((state) => state.browserFileNames);
   const notify = useUiStore((state) => state.notify);
   const searchQuery = useUiStore((state) => state.librarySearchQuery);
   const setSearchQuery = useUiStore((state) => state.setLibrarySearchQuery);
@@ -256,6 +258,7 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
                 </Button>
               </>
             )}
+            <BrowserFileButtons />
             <Button variant="quiet" icon="upload" onClick={() => fileInput.current?.click()}>
               Import
             </Button>
@@ -337,7 +340,7 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
                   >
                     <Fingerprint shape={entry.shape} />
                     <span className="dc-library-item-text">
-                      <span className="dc-library-item-title">{entry.title}</span>
+                      <span className="dc-library-item-title">{entry.title}{fileNames[entry.id] && <small className="dc-muted"> · File: {fileNames[entry.id]}</small>}</span>
                       {/* Element and connector counts used to live here. They said nothing anyone
                           was deciding between two rows on — the fingerprint already shows how big
                           and how tangled a canvas is, and shows it faster. */}

@@ -12,7 +12,7 @@ export default defineConfig({
   // A cold `vite dev` compiles the editor chunk on the first test's clock — see `e2e/warm.ts`.
   globalSetup: './e2e/warm.ts',
   fullyParallel: false,
-  workers: 1,
+  workers: Number(process.env.PLAYWRIGHT_WORKERS ?? 1),
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : [['list']],
   timeout: 60_000,

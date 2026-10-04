@@ -34,7 +34,7 @@ import { ownerAt } from '../../depth/tree';
 import { displayNameFor } from '../../document/factory';
 import { useUiStore } from '../../store/uiStore';
 import { hostKind } from '../../host/hostInfo';
-import { copyShareLink } from '../../share';
+import { ShareStartPicker } from './ShareStartPicker';
 import { usePersonality } from '../personality/usePersonality';
 import { useTheme } from '../theme/useTheme';
 import { Button } from '../common/Button';
@@ -169,7 +169,8 @@ export function ExportDialog() {
   const requestExportSelection = useUiStore((state) => state.requestExportSelection);
   // A selection belongs to the room it was made in, so it means nothing about the whole file.
   const effectiveSelectionOnly = (selectionOnly || selectionRequested) && !scopeIsWhole;
-  const effectiveMode: ExportMode = selectionRequested ? 'image' : mode;
+  const shareRequested = useUiStore((state) => state.shareFromHere);
+  const effectiveMode: ExportMode = shareRequested ? 'document' : selectionRequested ? 'image' : mode;
 
   const close = () => {
     requestExportSelection(false);
@@ -422,7 +423,7 @@ export function ExportDialog() {
         </div>
       }
     >
-      <ExportModePicker mode={effectiveMode} onChange={setMode} />
+      <ExportModePicker mode={effectiveMode} onChange={(next) => { useUiStore.setState({ shareFromHere: false }); setMode(next); }} />
 
       <div className="dc-export-body">
         <div className="dc-export-config" key={effectiveMode}>
@@ -432,17 +433,7 @@ export function ExportDialog() {
               {/* The web app only — see the matching command in `commands/registry.ts`. The whole
                   file goes into the link, every room, which is why this ignores the room scope. */}
               {!hostKind() && (
-                <div className="dc-export-share">
-                  <Button
-                    icon="copy"
-                    onClick={() => void copyShareLink(fileWithLiveViewport(useEditorStore.getState()), notify)}
-                  >
-                    Copy share link
-                  </Button>
-                  <p className="dc-export-panel-description">
-                    Read-only, and the whole diagram is in the link itself — anyone who has it can open it. Nothing is uploaded.
-                  </p>
-                </div>
+                <ShareStartPicker />
               )}
             </>
           )}

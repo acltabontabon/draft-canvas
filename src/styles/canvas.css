@@ -4235,3 +4235,33 @@
 .dc-open-point-resolved .dc-open-point-list {
   border-top: 1px solid var(--dc-border);
 }
+
+.dc-trace-bar {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  width: max-content;
+  max-width: calc(100% - 24px);
+  padding: 12px;
+  background: var(--dc-surface-raised);
+  color: var(--dc-text);
+  border: 1px solid var(--dc-border);
+  border-radius: 12px;
+  box-shadow: 0 4px 20px #0002;
+}
+.dc-trace-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.dc-trace-bar p { margin: 8px 0 0; font-size: 12px; }
+.dc-trace-bar input { max-width: 180px; padding: 6px; color: inherit; background: transparent; border: 1px solid currentColor; border-radius: 4px; }
+.dc-trace-badges { pointer-events: none; }
+.dc-trace-badge { position: absolute; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: #245bcc; color: white; border: 2px solid white; font: 600 13px system-ui; }
+.dc-editor[data-tracing] .dc-toolbar { pointer-events: none; opacity: .5; }
+.dc-editor[data-tracing] :is(.dc-flow-panel, .dc-inspector, .dc-edge-popover, .dc-element-popover, .dc-node-resizer, .react-flow__resize-control) { display: none; }
+
+.dc-example-link { pointer-events: auto; color: var(--dc-text); background: transparent; border: 0; text-decoration: underline; cursor: pointer; margin: 12px 0; }
+
+/* Tracing keeps connector hit bands active while editing gestures are suspended. */
+.dc-editor[data-tracing] .dc-edge-hit { pointer-events: stroke; cursor: pointer; }
+
+.dc-flow-trace-more { margin: 0 8px 6px; font-size: 11px; }

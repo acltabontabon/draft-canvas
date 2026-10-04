@@ -368,6 +368,18 @@ export function removeStepFromFlow(doc: DraftDocument, flowId: string, stepId: s
   return withFlows(doc, doc.flows.map((f) => (f.id === flowId ? { ...f, steps } : f)));
 }
 
+/** One trace is an atomic edit: invalid or overflowing input cannot leave a partial story. */
+export function appendFlowTrace(doc: DraftDocument, flow: DraftFlow, edgeIds: readonly string[]): DraftDocument {
+  const existing = findFlow(doc, flow.id);
+  const target = existing ?? flow;
+  const ids = [...new Set(edgeIds)].filter((id) => stepIndexOf(target, id) === undefined);
+  if (!ids.length || ids.some((id) => !doc.edges.some((edge) => edge.id === id))) return doc;
+  if (target.steps.length + ids.length > LIMITS.maxStepsPerFlow) return doc;
+  if (!existing && doc.flows.length >= LIMITS.maxFlows) return doc;
+  const next = { ...target, steps: [...target.steps, ...ids.map((edgeId) => ({ id: createId('fs'), edgeId }))] };
+  return withFlows(doc, existing ? doc.flows.map((item) => item.id === flow.id ? next : item) : [...doc.flows, next]);
+}
+
 /** Moves a step one position earlier or later, swapping with its neighbor. */
 export function moveStepInFlow(
   doc: DraftDocument,

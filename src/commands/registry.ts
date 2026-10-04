@@ -391,7 +391,13 @@ export function openPointCommands(ctx: CommandContext): Command[] {
 
 function flowCommands(ctx: CommandContext): Command[] {
   const { flows } = ctx.editor.document;
-  const commands: Command[] = [];
+  const commands: Command[] = ctx.ui.readOnly ? [] : [{
+    id: 'flow-trace', title: 'Trace a flow', group: 'flow', keywords: ['story', 'path', 'steps'],
+    run: (inner) => inner.editor.beginFlowTrace(),
+  }, ...flows.map((flow): Command => ({
+    id: `flow-trace-${flow.id}`, title: `Trace more steps: ${flow.title}`, group: 'flow',
+    run: (inner) => inner.editor.beginFlowTrace(flow.id),
+  }))];
   if (flows.length > 0) {
     commands.push({
       id: 'present',
@@ -1729,6 +1735,19 @@ export function multiCommands(ctx: CommandContext): Command[] {
 }
 
 /** The selection-dependent part of the list — empty when nothing is selected. */
+export function arrangeSelectionCommands(ctx: CommandContext): Command[] {
+  if (ctx.ui.readOnly || !ctx.editor.selection.nodes.some((id) => {
+    const node = ctx.editor.document.nodes.find((item) => item.id === id);
+    if (node?.type === 'group') return descendantsOf(ctx.editor.document, id).some((childId) => {
+      const child = ctx.editor.document.nodes.find((item) => item.id === childId);
+      return child && !['group', 'note', 'text', 'code'].includes(child.type);
+    });
+    return node && !['note', 'text', 'code'].includes(node.type);
+  })) return [];
+  return [{ id: 'arrange-selection', title: 'Arrange selection', group: 'selection', keywords: ['layout', 'tidy'],
+    run: (inner) => { void inner.editor.arrangeSelection(); } }];
+}
+
 function selectionCommands(ctx: CommandContext): Command[] {
   const { nodes, edges } = ctx.editor.selection;
   const { document } = ctx.editor;
@@ -1783,14 +1802,25 @@ export function starterCommands(): Command[] {
 /** Every command that applies to `ctx` right now, in display order. */
 
 export function commandsFor(ctx: CommandContext): Command[] {
+  if (ctx.ui.flowTrace) return [{ id: 'trace-cancel', title: 'Cancel tracing', group: 'flow', run: (inner) => inner.ui.setFlowTrace(null) }];
   if (ctx.editor.mode === 'present') return presentModeCommands(ctx);
   return [
     ...selectionCommands(ctx),
     ...ALL_PRESETS.map(createCommand),
+    { id: 'try-example', title: 'Try an example', group: 'canvas', keywords: ['order', 'processing', 'learn'], run: (inner) => inner.ui.requestExample() },
     ...starterCommands(),
     ...flowCommands(ctx),
     ...openPointCommands(ctx),
     ...viewCommands(ctx),
+    ...(!hostKind() ? [{ id: 'share-from-here', title: 'Share from here…', group: 'canvas' as const, run: (inner: CommandContext) => inner.ui.requestShareFromHere() }] : []),
+    ...(ctx.ui.browserFiles ? [
+      { id: 'file-open', title: 'Open file…', group: 'canvas' as const, run: (inner: CommandContext) => { void inner.ui.browserFiles?.open(); } },
+      ...(!ctx.ui.readOnly ? [
+        { id: 'file-save', title: 'Save', group: 'canvas' as const, run: (inner: CommandContext) => { void inner.ui.browserFiles?.save(); } },
+        { id: 'file-save-as', title: 'Save As…', group: 'canvas' as const, run: (inner: CommandContext) => { void inner.ui.browserFiles?.save(true); } },
+      ] : []),
+    ] : []),
+    ...arrangeSelectionCommands(ctx),
     ...canvasCommands(ctx),
   ];
 }

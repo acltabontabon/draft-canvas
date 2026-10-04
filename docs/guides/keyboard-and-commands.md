@@ -183,3 +183,14 @@ Leaving puts the editor back where you left it: the same view, and the same shap
 **Keyboard shortcuts** (`?`, or the toolbar's More menu) lists every key the editor answers to, with a
 filter. The other guides in [the documentation index](../index.md) are the longer walkthroughs: shapes,
 connectors and boundaries; flows and presenting; depth; open points; saving and sharing.
+
+## Browser files and flow tracing
+
+In supported top-level browsers, `⌘O` opens a file, `⌘S` saves, and `⌘⇧S` chooses Save As.
+Use Ctrl on Windows/Linux. Save commits an active text edit before capturing the file. Import and
+Export remain available everywhere.
+
+**Trace a flow** and **Trace more steps** are in the command palette and Flows panel. While tracing,
+`Escape` cancels and `Backspace` outside a text field removes the last provisional step. Open the
+Outline, navigate to a connector with arrow keys and press `Enter` to append it. Finish commits once.
+**Arrange selection** tidies the selected shapes; **Arrange diagram** handles the whole level.

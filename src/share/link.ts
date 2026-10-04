@@ -1,3 +1,5 @@
+import { viewOf, ownerAt } from '../depth/tree';
+import { flowIsPlayable } from '../document/flow';
 import { cloneDocumentAsNew } from '../document/factory';
 import { LIMITS } from '../document/limits';
 import type { DraftDocument } from '../document/types';
@@ -21,6 +23,20 @@ import { serializeDocument } from '../export/project';
 /** The fragment parameter the payload travels in. `lib/documentUrl.ts` owns `doc`; this owns `d`. */
 export const SHARE_PARAM = 'd';
 const FORMAT_VERSION = '1';
+export const SHARE_START_PARAM = 'start';
+export interface ShareStart { path: string[]; flowId?: string }
+export type SharedDocumentResult = NormalizeResult & { start?: ShareStart; startWarning?: string };
+
+export function validatedShareStart(document: DraftDocument, value: unknown): ShareStart | null {
+  if (!value || typeof value !== 'object') return null;
+  const { path, flowId } = value as Partial<ShareStart>;
+  if (!Array.isArray(path) || path.length > 32 || path.some((id) => typeof id !== 'string' || id.length > 200)) return null;
+  if (path.length && !ownerAt(document, path)?.inside?.nodes.length) return null;
+  const room = viewOf(document, path);
+  if (!room) return null;
+  if (flowId !== undefined && (typeof flowId !== 'string' || !room.flows.some((flow) => flow.id === flowId && flowIsPlayable(room, flow)))) return null;
+  return { path, ...(flowId === undefined ? {} : { flowId }) };
+}
 /** The longest encoded payload a link may carry. Past this, chat apps truncate and browsers start
  *  refusing, so the honest answer is "export the file" rather than a link that only sometimes works. */
 export const MAX_SHARE_PAYLOAD_BYTES = 32 * 1024;
@@ -120,15 +136,18 @@ export function sharePayloadFromHash(hash: string): string | null {
  * The link for `document` — the whole file, every room — or how far over the cap it landed.
  * `base` is the page the link should open (defaults to this one, without its fragment).
  */
-export async function encodeShareLink(document: DraftDocument, base?: string): Promise<EncodeShareLinkResult> {
+export async function encodeShareLink(document: DraftDocument, base?: string, start?: ShareStart): Promise<EncodeShareLinkResult> {
   const json = serializeDocument(withoutBackgroundImage(document));
   const bytes = new TextEncoder().encode(json);
   const Compression = streamCtor('CompressionStream');
   const deflated = await transform(bytes, new Compression('deflate-raw'), Number.MAX_SAFE_INTEGER);
   const payload = `${FORMAT_VERSION}.${toBase64Url(deflated)}`;
-  if (payload.length > MAX_SHARE_PAYLOAD_BYTES) return { tooLarge: true, bytes: payload.length };
+  const params = new URLSearchParams({ [SHARE_PARAM]: payload });
+  if (start) params.set(SHARE_START_PARAM, JSON.stringify(start));
+  const fragment = params.toString();
+  if (fragment.length > MAX_SHARE_PAYLOAD_BYTES) return { tooLarge: true, bytes: fragment.length };
   const url = new URL(base ?? window.location.href);
-  url.hash = `${SHARE_PARAM}=${payload}`;
+  url.hash = fragment;
   return { url: url.toString() };
 }
 
@@ -140,7 +159,7 @@ export async function encodeShareLink(document: DraftDocument, base?: string): P
  * The result's document always has a fresh id: the sender's id means nothing here, and keeping it
  * could collide with a diagram already in the reader's own library when they make a copy.
  */
-export async function decodeShareLink(hash: string): Promise<NormalizeResult | null> {
+export async function decodeShareLink(hash: string): Promise<SharedDocumentResult | null> {
   const payload = sharePayloadFromHash(hash);
   if (payload === null) return null;
   const dot = payload.indexOf('.');
@@ -148,7 +167,7 @@ export async function decodeShareLink(hash: string): Promise<NormalizeResult | n
   if (version !== FORMAT_VERSION) {
     return { ok: false, error: 'This link was made with a newer version of Draft Canvas. Reload the page and try again.' };
   }
-  if (payload.length > MAX_SHARE_PAYLOAD_BYTES) return { ok: false, error: 'This link is too long to be a Draft Canvas share link.' };
+  if (hash.replace(/^#/, '').length > MAX_SHARE_PAYLOAD_BYTES) return { ok: false, error: 'This link is too long to be a Draft Canvas share link.' };
   const bytes = fromBase64Url(payload.slice(dot + 1));
   if (!bytes) return { ok: false, error: 'This share link is damaged — part of it may have been lost when it was copied.' };
   let json: string;
@@ -161,5 +180,13 @@ export async function decodeShareLink(hash: string): Promise<NormalizeResult | n
   }
   const result = parseDocument(json);
   if (!result.ok) return result;
-  return { ...result, document: cloneDocumentAsNew(result.document, result.document.metadata.title) };
+  const rawStart = new URLSearchParams(hash.replace(/^#/, '')).get(SHARE_START_PARAM);
+  let start: ShareStart | null = null;
+  if (rawStart !== null) {
+    try { start = validatedShareStart(result.document, JSON.parse(rawStart)); } catch { /* Invalid starting metadata never hides a valid diagram. */ }
+  }
+  return { ...result, document: cloneDocumentAsNew(result.document, result.document.metadata.title),
+    ...(start ? { start } : {}),
+    ...(rawStart !== null && !start ? { startWarning: 'That starting point is unavailable. Showing the diagram overview.' } : {}),
+  };
 }

@@ -1,3 +1,4 @@
+import { useUiStore } from '../store/uiStore';
 import { createDocument } from '../document/factory';
 import { deserializeDocument, fileNameFor, serializeDocument } from '../export/project';
 import type { AgentEditorReply, AgentEditorRequest } from '../host/agentBridge';
@@ -767,6 +768,7 @@ export class DesktopController {
       const starter = starterId ? catalog?.starterById(starterId) : undefined;
       if (!(await this.settleBeforeLeaving())) return;
       const document = starter && catalog ? catalog.starterDocument(starter) : createDocument(QUICK_DRAFT_TITLE);
+      if (starterId === 'order-processing') useUiStore.getState().setExampleDocumentId(document.metadata.id);
       this.session = { kind: 'quick', id: `q_${uuid()}` };
       this.edited = false;
       this.load(serializeDocument(document), document.metadata.title, { baseline: true });
