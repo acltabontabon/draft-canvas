@@ -243,6 +243,8 @@ generated from it, filtered to who it's for:
 
 Nothing fetches notes at runtime, and nothing is written twice: the install steps, downloads and
 signing caveats around each release body are fixed templates in `release-notes.mjs`, not changelog text.
+Stable patch release pages lead with their summary and changes, omit the demo GIF, and collapse the
+first-time desktop installation notes. Minor and major releases, and desktop previews, keep the demo.
 
 ### Where a change goes
 

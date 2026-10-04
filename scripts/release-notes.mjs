@@ -7,16 +7,16 @@
 //   node scripts/release-notes.mjs v1.10.0 --draft                previews a release with no section yet
 //
 // A `vX.Y.Z` tag is a Draft Canvas release: the web app, the Docker image and the desktop app, one
-// version, one GitHub release. Its body leads with the demo and the ways to get it, then every change
-// since the last release (Web and desktop, Desktop, Web), then how to open the desktop installers the
-// first time. A `desktop-vX.Y.Z-alpha.N` tag is a desktop preview ahead of the release it leads to:
+// version, one GitHub release. Minor and major releases lead with the demo and ways to get it;
+// stable patches lead with their changes and collapse first-time installation guidance.
+// A `desktop-vX.Y.Z-alpha.N` tag is a desktop preview ahead of the release it leads to:
 // it leads with the desktop reel, lists only what reaches the desktop app, and has no "Get it"
 // (there's nothing yet to `docker run` or open on the web).
 
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ChangelogError, REPO, parseChangelog, releaseNotes, unwrap, versionFromTag, withDraft } from './changelog.mjs';
+import { ChangelogError, REPO, parseChangelog, parseVersion, releaseNotes, unwrap, versionFromTag, withDraft } from './changelog.mjs';
 
 export { unwrap };
 
@@ -73,6 +73,15 @@ export function releaseBody(tag, changelog, { platform } = {}) {
   const { version, desktopPreview } = versionFromTag(tag);
   const audience = platform ?? (desktopPreview ? 'desktop' : 'all');
   const notes = unwrap(releaseNotes(changelog, { version, platform: audience, tag }));
+  const parsed = parseVersion(version);
+  // A patch should explain its fixes first; the product demo belongs to larger releases.
+  if (!desktopPreview && parsed.patch > 0 && parsed.pre.length === 0) {
+    const access = audience === 'desktop' ? [] : [audience === 'web' ? getItOnTheWeb(version) : getIt(version)];
+    const installation = audience === 'web' ? [] : [
+      `<details>\n<summary>First-time desktop installation</summary>\n\n${FIRST_LAUNCH}\n\n</details>`,
+    ];
+    return `${[notes, ...access, ...installation].join('\n\n')}\n`;
+  }
   const parts =
     audience === 'desktop'
       ? [demo(tag, 'desktop-demo.gif', 'Draft Canvas Desktop demo'), notes, FIRST_LAUNCH]

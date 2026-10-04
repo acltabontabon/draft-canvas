@@ -11,18 +11,25 @@ the release notes and the in-app What's New are generated from here. See
 
 ## [Unreleased]
 
+## [1.12.1] - 2026-10-04
+
+More accurate diagrams, with suggestions that respect the view you're drawing and connectors that
+keep up when a shape changes. This patch also makes deep Junction chains faster and more reliable.
+
 ### Shared
 
 #### Fixed
 
 - Junction chains no longer lose ambiguity from mixed endpoint categories behind nested branches,
   or hit recursive stack limits when resolving a deep chain.
-- System Context suggestions consistently leave out infrastructure, including Topic alternatives
-  and connections to existing shapes.
-- Bucket notification suggestions require a write before appearing unprompted; read-only access
-  no longer implies an upload, including when a notification queue is already drawn nearby.
-- Changing a node's subtype clears obsolete inferred connector dashing. Explicit connector choices
-  stay intact, and undo restores the original subtype and connector together.
+- **Suggestions respect the view.** System Context suggestions consistently leave out infrastructure,
+  including Topic alternatives and connections to existing shapes. <!-- highlight -->
+- **Reads don't imply uploads.** Bucket notification suggestions require a write before appearing
+  unprompted; read-only access no longer implies an upload, including when a notification queue is
+  already drawn nearby. <!-- highlight -->
+- **Connector styles follow the shape.** Changing a node's subtype clears obsolete inferred connector
+  dashing. Explicit connector choices stay intact, and undo restores the original subtype and
+  connector together. <!-- highlight -->
 - Documentation now describes the current browser storage, Mermaid import, connector defaults and
   complete relationship vocabulary accurately.
 
@@ -30,6 +37,8 @@ the release notes and the in-app What's New are generated from here. See
 
 - Deep Junction chains resolve without repeatedly scanning the full diagram: each traversal indexes
   nodes and connectors once.
+- Patch release pages lead with the changes and download links, without repeating the demo GIF;
+  first-time desktop installation notes are available in an expandable section.
 
 ## [1.12.0] - 2026-10-02
 
@@ -1826,7 +1835,8 @@ pre-release milestone; this is the one meant for real use.
 - Fully local and private by design — no accounts, no cloud sync, nothing you draw ever leaves
   your device. Documents are encrypted at rest in your browser.
 
-[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.12.0...main
+[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.12.1...main
+[1.12.1]: https://github.com/acltabontabon/draft-canvas/compare/v1.12.0...v1.12.1
 [1.12.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.11.1...v1.12.0
 [1.12.0-beta.2]: https://github.com/acltabontabon/draft-canvas/compare/desktop-v1.12.0-beta.1...desktop-v1.12.0-beta.2
 [1.12.0-beta.1]: https://github.com/acltabontabon/draft-canvas/compare/v1.11.1...desktop-v1.12.0-beta.1

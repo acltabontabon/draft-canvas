@@ -162,6 +162,25 @@ describe('release notes are the changelog, filtered by platform', () => {
     expect(release).toContain('stale shell');
   });
 
+  it('leads a stable patch with its summary and fixes, without a demo, and retains installation guidance', () => {
+    const patch = CHANGELOG.replace('## [1.10.0]', '## [1.10.1] - 2026-10-02\n\nMore accurate diagrams.\n\n### Shared\n\n#### Fixed\n\n- Suggestions stay at the right level.\n\n## [1.10.0]');
+    const body = releaseBody('v1.10.1', patch);
+    expect(body).toMatch(/^More accurate diagrams\./);
+    expect(body).toContain('Suggestions stay at the right level.');
+    expect(body).not.toContain('Framed on open');
+    expect(body).not.toContain('demo.gif');
+    expect(body).toContain('acltabontabon/draft-canvas:1.10.1');
+    expect(body).toContain('<summary>First-time desktop installation</summary>');
+    expect(body).toContain('SHA256SUMS.txt');
+    expect(body).toContain('System Settings → Privacy & Security');
+    expect(body).toContain('</details>');
+    const web = releaseBody('v1.10.1', patch, { platform: 'web' });
+    expect(web).not.toContain('First-time desktop installation');
+    expect(web).toContain('### Get it');
+    const preview = releaseBody('v1.10.1-rc.1', patch.replace('## [1.10.1]', '## [1.10.1-rc.1]'));
+    expect(preview).toMatch(/^!\[Draft Canvas demo\]/);
+  });
+
   it('tells an installed desktop copy only what reached the desktop — or says there was nothing', () => {
     expect(desktopNotes(CHANGELOG, '1.10.0', 'v1.10.0')).not.toContain('stale shell');
     const webOnly = CHANGELOG.replace('## [1.9.4]', '## [1.9.5] - 2026-09-20\n\n### Web\n\n- Web only.\n\n## [1.9.4]');
@@ -215,6 +234,18 @@ describe('What’s New is the changelog’s marked highlights, for this platform
 
 describe('the real changelog and release configuration', () => {
   const changelog = read('CHANGELOG.md');
+
+  it('ships the patch’s three highlights in What’s New on both platforms', () => {
+    for (const platform of ['web', 'desktop'] as const) {
+      const patch = whatsNew(changelog, platform).find((release) => release.version === '1.12.1');
+      expect(patch).toMatchObject({ version: '1.12.1', date: '2026-10-04' });
+      expect(patch!.highlights.map((highlight) => highlight.title)).toEqual([
+        'Suggestions respect the view',
+        "Reads don't imply uploads",
+        'Connector styles follow the shape',
+      ]);
+    }
+  });
 
   it('parses, and every version’s notes can be generated', () => {
     for (const entry of parseChangelog(changelog)) {
