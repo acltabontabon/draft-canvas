@@ -922,8 +922,12 @@ test.describe('editing', () => {
     await page.mouse.down();
     await page.mouse.move(dropPoint.x, dropPoint.y, { steps: 15 });
 
+    // WebKit coalesces moves into the next frame. Compare the rendered final drag position
+    // with the rendered commit, so a pending move cannot look like a reparenting jump.
+    await nextFrames(page);
     const justBeforeDrop = (await extra.boundingBox())!;
     await page.mouse.up();
+    await nextFrames(page);
     const justAfterDrop = (await extra.boundingBox())!;
 
     // The critical invariant: assigning parentId must not move the node.
@@ -949,8 +953,10 @@ test.describe('editing', () => {
     await page.mouse.move(extraNow.x + extraNow.width / 2, extraNow.y + extraNow.height / 2);
     await page.mouse.down();
     await page.mouse.move(outside.x, outside.y, { steps: 15 });
+    await nextFrames(page);
     const justBeforeExit = (await extra.boundingBox())!;
     await page.mouse.up();
+    await nextFrames(page);
     const justAfterExit = (await extra.boundingBox())!;
     expect(Math.abs(justAfterExit.x - justBeforeExit.x)).toBeLessThan(1.5);
     expect(Math.abs(justAfterExit.y - justBeforeExit.y)).toBeLessThan(1.5);
