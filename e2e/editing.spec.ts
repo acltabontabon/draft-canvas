@@ -1049,6 +1049,7 @@ test.describe('editing', () => {
     // The node trails the pointer by the first move of a drag, so aim is taken
     // after the gesture has actually begun rather than from the start position.
     await page.mouse.move(start.x + start.width / 2 - 40, start.y + start.height / 2, { steps: 4 });
+    await nextFrames(page);
 
     const moving = (await mover.boundingBox())!;
     const pointer = { x: start.x + start.width / 2 - 40, y: start.y + start.height / 2 };
@@ -1057,14 +1058,20 @@ test.describe('editing', () => {
     const remaining = targetCentre + 4 - (moving.x + moving.width / 2);
 
     await page.mouse.move(pointer.x + remaining, pointer.y, { steps: 8 });
+    await nextFrames(page);
 
-    // The guide is drawn from the move itself; the count assertion retries until it is.
+    // The sweep crosses other edge/centre alignments first, so one guide alone can belong to
+    // an earlier move WebKit has rendered. Wait for the intended alignment before releasing.
     await expect(page.locator('.dc-guide')).toHaveCount(1);
+    const centreOffset = async () => {
+      const box = (await mover.boundingBox())!;
+      return Math.abs(box.x + box.width / 2 - targetCentre);
+    };
+    await expect.poll(centreOffset).toBeLessThan(1.5);
     await page.mouse.up();
 
-    const landed = (await mover.boundingBox())!;
     // Pulled onto the guide, not left a few pixels off it.
-    expect(Math.abs(landed.x + landed.width / 2 - targetCentre)).toBeLessThan(1.5);
+    await expect.poll(centreOffset).toBeLessThan(1.5);
   });
 
   test('copies a code card\'s contents to the clipboard', async ({ page, context, browserName }) => {
