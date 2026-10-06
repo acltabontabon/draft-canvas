@@ -20,7 +20,7 @@ RUN npm run build
 # image runs nginx as its own non-root user on a high port, so nothing in the container ever has
 # root — a listener on 80 would need it, which is why the port is 8080 (map it however you like:
 # `-p 80:8080`).
-FROM nginxinc/nginx-unprivileged:1.30-alpine@sha256:ed04ec1ff34502c339ee5c3ae3f855442398edc1d05591e2b98981dcbbd20b1e
+FROM nginxinc/nginx-unprivileged:1.31-alpine@sha256:26b0bf6fbf07297983cb341998d79c831508787de26627dd2a112321b9c3a4af
 
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
