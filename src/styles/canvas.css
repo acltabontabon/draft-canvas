@@ -143,13 +143,12 @@
    exports as an empty note. */
 .dc-note-placeholder {
   position: absolute;
-  overflow: hidden;
   color: var(--dc-text-faint);
-  white-space: nowrap;
-  text-overflow: ellipsis;
   pointer-events: none;
   -webkit-user-select: none;
   user-select: none;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 /* Sits in the code card's own header row — visible on hover/selection only,
@@ -1777,17 +1776,17 @@
 .dc-edge-inspector-caption,
 .dc-edge-inspector-flows {
   max-width: 180px;
-  height: var(--dc-popover-control);
+  min-height: var(--dc-popover-control);
+  height: auto;
   padding: 0 9px;
   border: 1px solid transparent;
   border-radius: var(--dc-radius-pill);
   background: var(--dc-surface-raised);
   color: var(--dc-text);
   font-size: var(--dc-popover-font);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   cursor: pointer;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .dc-edge-inspector-caption:hover,
@@ -1937,14 +1936,16 @@
   justify-content: space-between;
   gap: 6px;
   width: 100%;
+  height: auto;
+  min-height: var(--dc-popover-control);
   text-align: left;
   cursor: pointer;
 }
 
 .dc-inspector-select-value {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .dc-inspector-select-chevron {
@@ -2004,9 +2005,8 @@
 .dc-inspector-select-option-label {
   flex: 1;
   min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .dc-inspector-select-option[data-highlighted='true'] {
@@ -2282,9 +2282,8 @@
 .dc-edge-inspector-membership-title {
   flex: 1;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .dc-edge-inspector-membership-step {
@@ -2379,10 +2378,9 @@
 .dc-context-menu-title {
   flex: 1;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   font-size: 13px;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .dc-context-menu-kbd {
@@ -3738,16 +3736,15 @@
 /* On the corner of the sheet, the way a drawing is labelled — not a title above a box. */
 .dc-room-name {
   position: absolute;
-  top: -22px;
+  bottom: calc(100% + 8px);
   left: 1px;
   max-width: 100%;
-  overflow: hidden;
   color: var(--dc-text-faint);
   font-size: 12px;
   font-variant-caps: all-small-caps;
   letter-spacing: 0.08em;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 /**
@@ -3936,10 +3933,7 @@
 }
 
 .dc-open-point-preview-text {
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 4;
+  display: block;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
@@ -3987,12 +3981,11 @@
 .dc-open-point-subject {
   flex: 1;
   min-width: 0;
-  overflow: hidden;
   color: var(--dc-text);
   font-size: 12px;
   font-weight: 500;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .dc-open-point-picker {

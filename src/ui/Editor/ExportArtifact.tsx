@@ -116,7 +116,7 @@ function Thumbnail({
 
 function Caption({ fileName, meta }: { fileName: string; meta: string }) {
   // `fileNameFor` slugs the title to `[a-z0-9-]`, so the first dot is where the extension starts.
-  // A long title truncates its base, never the extension — that's the part that says what it is.
+  // Keep the extension beside a wrapping base so the file type stays easy to identify.
   const dot = fileName.indexOf('.');
   const base = dot > 0 ? fileName.slice(0, dot) : fileName;
   const extension = dot > 0 ? fileName.slice(dot) : '';

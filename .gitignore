@@ -53,3 +53,6 @@ playwright-report-desktop
 
 # Local agent tooling
 .claude/
+
+# Dependency scan reports are local/CI artifacts, never user documents.
+audit-results/

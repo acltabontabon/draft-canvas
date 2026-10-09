@@ -4,6 +4,7 @@ import { backupFileName, buildBackup, describeRestore, LAST_BACKUP_PREFERENCE, r
 import type { DraftRepository } from '../../storage';
 
 type Notify = (message: string, tone?: 'info' | 'error') => void;
+export const BACKUP_COMPLETED_EVENT = 'draft-canvas:backup-completed';
 
 /**
  * The Library's two backup actions, shared by the action row and the storage footnote's nudge so
@@ -11,18 +12,23 @@ type Notify = (message: string, tone?: 'info' | 'error') => void;
  */
 export async function backUpLibrary(repository: DraftRepository, notify: Notify): Promise<void> {
   try {
-    const { bytes, count } = await buildBackup(repository);
+    const { bytes, count, skipped } = await buildBackup(repository);
     if (count === 0) {
-      notify('Nothing to back up yet.');
+      notify(skipped.length ? 'No diagrams could be read for this backup. Your stored copies have not been changed.' : 'Nothing to back up yet.', skipped.length ? 'error' : 'info');
       return;
     }
     await downloadBlob(new Blob([bytes], { type: 'application/zip' }), backupFileName());
     // Written once the download was handed over, not when it was asked for: a Save dialog that
     // was cancelled (the desktop app rejects with `AbortError`) must not count as a backup.
+    if (skipped.length) {
+      notify(`Partial backup: saved ${count === 1 ? '1 diagram' : `${count} diagrams`}; ${skipped.length} could not be read. Keep your earlier backup.`, 'error');
+      return;
+    }
     writePreference(LAST_BACKUP_PREFERENCE, new Date().toISOString());
+    window.dispatchEvent(new Event(BACKUP_COMPLETED_EVENT));
     notify(`Backed up ${count === 1 ? '1 diagram' : `${count} diagrams`}.`);
   } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') return;
+    if ((error instanceof Error || error instanceof DOMException) && error.name === 'AbortError') return;
     notify(error instanceof Error ? error.message : 'The backup could not be written.', 'error');
   }
 }

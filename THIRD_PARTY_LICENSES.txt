@@ -8947,7 +8947,7 @@ SPDX-License-Identifier: Unicode-3.0
 Portions of ICU4X may have been adapted from ICU4C and/or ICU4J.
 ICU 1.8.1 to ICU 57.1 © 1995-2016 International Business Machines Corporation and others.
 
-### yoke-derive 0.8.3 — Unicode-3.0
+### yoke-derive 0.8.4 — Unicode-3.0
 
 UNICODE LICENSE V3
 

@@ -48,7 +48,7 @@ export function FirstRunHome({ session, onImport }: { session: DocumentSession; 
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
-  const note = <LocalNote durable={session.durable} repository={session.repository} />;
+  const note = <LocalNote durable={session.durable} repository={session.repository} hasDocuments={false} />;
   // A note that has to warn moves up out of the footer, where it can't be missed.
   const warn = !session.durable;
 

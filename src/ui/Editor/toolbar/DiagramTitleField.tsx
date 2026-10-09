@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { isImeKeyEvent } from '../../../lib/isEditableTarget';
 
 interface DiagramTitleFieldProps {
@@ -25,6 +25,7 @@ export function DiagramTitleField({ title, onTitleChange, readOnly = false }: Di
   const [localTitle, setLocalTitle] = useState(title);
   const localTitleRef = useRef(title);
   const editingTitleRef = useRef(false);
+  const fieldRef = useRef<HTMLTextAreaElement>(null);
   const setLocalTitleValue = (value: string) => {
     localTitleRef.current = value;
     setLocalTitle(value);
@@ -36,8 +37,32 @@ export function DiagramTitleField({ title, onTitleChange, readOnly = false }: Di
     }
   }, [title]);
 
+  useLayoutEffect(() => {
+    const field = fieldRef.current;
+    if (!field) return;
+    field.style.height = 'auto';
+    field.style.height = `${Math.max(28, field.scrollHeight + 2)}px`;
+  }, [localTitle]);
+
+  useEffect(() => {
+    const field = fieldRef.current;
+    if (!field || typeof ResizeObserver === 'undefined') return;
+    let width = field.getBoundingClientRect().width;
+    const observer = new ResizeObserver(() => {
+      const nextWidth = field.getBoundingClientRect().width;
+      if (nextWidth === width) return;
+      width = nextWidth;
+      field.style.height = 'auto';
+      field.style.height = `${Math.max(28, field.scrollHeight + 2)}px`;
+    });
+    observer.observe(field);
+    return () => observer.disconnect();
+  }, []);
+
   return (
-    <input
+    <textarea
+      ref={fieldRef}
+      rows={1}
       className="dc-title-input"
       value={localTitle}
       maxLength={200}
@@ -47,7 +72,7 @@ export function DiagramTitleField({ title, onTitleChange, readOnly = false }: Di
       onFocus={() => {
         editingTitleRef.current = true;
       }}
-      onChange={(event) => setLocalTitleValue(event.target.value)}
+      onChange={(event) => setLocalTitleValue(event.target.value.replace(/[\r\n]+/g, ' '))}
       onBlur={() => {
         editingTitleRef.current = false;
         onTitleChange(localTitleRef.current);

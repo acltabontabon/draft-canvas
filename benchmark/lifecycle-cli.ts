@@ -67,6 +67,7 @@ async function main(): Promise<void> {
     soak: SoakResult[];
   } = { meta: {}, load: [], exports: [], soak: [] };
 
+  let failed = false;
   try {
     const { commit, branch } = getGitInfo();
     result.meta = { label, commit, branch, timestamp: new Date().toISOString(), environment: await collectEnvironment(browser.version()) };
@@ -89,6 +90,7 @@ async function main(): Promise<void> {
             result.exports.push({ ...exported, size });
             console.log(`${exported.ms.toFixed(0)} ms, longest task ${exported.longestTaskMs.toFixed(0)} ms, ${(exported.bytes / 1024).toFixed(0)} KiB`);
           } catch (error) {
+            failed = true;
             console.log(`FAILED: ${(error as Error).message.split('\n')[0]}`);
           }
         }
@@ -117,6 +119,7 @@ async function main(): Promise<void> {
     mkdirSync(dirname(out), { recursive: true });
     writeFileSync(out, JSON.stringify(result, null, 2));
     console.log(`\nResults: ${out}`);
+    if (failed) throw new Error('One or more benchmark measurements failed; the retained report is incomplete.');
   } finally {
     await stop();
   }

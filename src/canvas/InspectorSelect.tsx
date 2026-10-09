@@ -111,6 +111,11 @@ export function InspectorSelect({
     if (open) listRef.current?.focus();
   }, [open]);
 
+  useLayoutEffect(() => {
+    if (!open) return;
+    listRef.current?.querySelector<HTMLElement>('[data-highlighted="true"]')?.scrollIntoView?.({ block: 'nearest' });
+  }, [open, highlighted, maxHeight]);
+
   // The menu is placed from what was measured when it opened, and a menu that stays open while the
   // window is resized, or the canvas is panned or zoomed with the wheel underneath it, is being
   // judged against a screen that no longer exists: what fitted below the trigger a moment ago may

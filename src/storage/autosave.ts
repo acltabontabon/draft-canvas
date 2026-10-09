@@ -1,4 +1,5 @@
 import type { DraftDocument } from '../document/types';
+import { logDiagnostic } from '../lib/diagnostics';
 import { clamp } from '../lib/math';
 import {
   DocumentConflictError,
@@ -274,7 +275,7 @@ export class Autosave {
             ? error.message
             : 'Could not save to this browser. Export your diagram to keep a copy.',
       });
-      console.error('[draft-canvas] Autosave failed.', error);
+      logDiagnostic(error, { operation: 'autosave' });
     } finally {
       this.inFlight = false;
       this.writing = null;

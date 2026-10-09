@@ -38,7 +38,9 @@ export default defineConfig({
     { name: 'webkit', use: { ...devices['Desktop Safari'] } },
   ].filter((project) => !process.env.PLAYWRIGHT_BROWSER || project.name === process.env.PLAYWRIGHT_BROWSER),
   webServer: {
-    command: `npm run site:preview -- ${port}`,
+    command: process.env.DC_TEST_BUILT === '1'
+      ? `node scripts/stage-subpath.mjs && node scripts/serve-web.mjs ${port}`
+      : `npm run site:preview -- ${port}`,
     url: `http://localhost:${port}/draft-canvas/`,
     reuseExistingServer: !process.env.CI,
     timeout: 240_000,

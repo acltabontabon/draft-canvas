@@ -29,6 +29,7 @@ import { Icon } from '../common/Icon';
  */
 export function FlowPanel({ onPresent }: { onPresent: (flowId?: string) => void }) {
   const open = useUiStore((state) => state.flowPanelOpen);
+  const readOnly = useUiStore((state) => Boolean(state.readOnly));
   const setOpen = useUiStore((state) => state.setFlowPanelOpen);
   const renameRequestId = useUiStore((state) => state.flowRenameRequestId);
   // Only while open: a closed panel has no reason to re-render on every drag frame.
@@ -46,10 +47,11 @@ export function FlowPanel({ onPresent }: { onPresent: (flowId?: string) => void 
   useEffect(() => {
     if (!renameRequestId) return;
     useUiStore.getState().requestFlowRename(null);
+    if (readOnly) return;
     // oxlint-disable-next-line react/set-state-in-effect -- one-shot external command, see comment above.
     setRenamingId(renameRequestId);
     setExpandedId(renameRequestId);
-  }, [renameRequestId]);
+  }, [renameRequestId, readOnly]);
 
   // A keyboard user who opened the panel via the bare `F` shortcut otherwise has no idea how many
   // Tabs away it is — give it real focus the moment it appears. Skipped when this open is for a
@@ -75,7 +77,7 @@ export function FlowPanel({ onPresent }: { onPresent: (flowId?: string) => void 
     // any `.dc-flow-row` at all — focus that button instead, so opening the panel this way is
     // never a dead end for a keyboard user with nothing to navigate to yet.
     const target = rows.length > 0 ? (rows.find((row) => row.dataset.selected === 'true') ?? rows[0]) : rootRef.current?.querySelector<HTMLElement>('.dc-flow-panel-empty button');
-    target?.focus();
+    (target ?? rootRef.current)?.focus();
   }, [open, renameRequestId, renamingId]);
 
   if (!open || !document || !selection) return null;
@@ -83,9 +85,10 @@ export function FlowPanel({ onPresent }: { onPresent: (flowId?: string) => void 
   const nodes = nodeIndex(document.nodes);
   const edges = edgeIndex(document.edges);
   // A rename in progress on a flow that has since gone (undo) simply ends.
-  const renaming = renamingId && document.flows.some((flow) => flow.id === renamingId) ? renamingId : null;
+  const renaming = !readOnly && renamingId && document.flows.some((flow) => flow.id === renamingId) ? renamingId : null;
 
   const beginRename = (flowId: string) => {
+    if (readOnly) return;
     setSelectedFlowId(flowId);
     setExpandedId(flowId);
     setRenamingId(flowId);
@@ -163,7 +166,7 @@ export function FlowPanel({ onPresent }: { onPresent: (flowId?: string) => void 
       case 'Backspace':
         // Consumed wherever focus is in the panel (like F2), so it never reaches the canvas selection.
         consume();
-        if (flow && target === row) deleteFlowWithUndo(flow);
+        if (!readOnly && flow && target === row) deleteFlowWithUndo(flow);
         return;
       default:
         return;
@@ -171,11 +174,11 @@ export function FlowPanel({ onPresent }: { onPresent: (flowId?: string) => void 
   };
 
   return (
-    <div className="dc-flow-panel" role="region" aria-label="Flows" ref={rootRef} onKeyDown={onKeyDown}>
+    <div className="dc-flow-panel" role="region" aria-label="Flows" tabIndex={-1} ref={rootRef} onKeyDown={onKeyDown}>
       <header className="dc-flow-panel-header">
         <strong>Flows</strong>
-        {!useUiStore.getState().readOnly && <Button variant="quiet" onClick={() => useEditorStore.getState().beginFlowTrace()}>Trace a flow</Button>}
-        {document.flows.length > 0 && (
+        {!readOnly && <Button variant="quiet" onClick={() => useEditorStore.getState().beginFlowTrace()}>Trace a flow</Button>}
+        {!readOnly && document.flows.length > 0 && (
           <Button variant="quiet" icon="plus" aria-label="New flow" title="New flow" onClick={createNewFlow} />
         )}
         <Button variant="quiet" icon="close" aria-label="Close" title="Close (Esc)" onClick={closePanel} />
@@ -190,9 +193,9 @@ export function FlowPanel({ onPresent }: { onPresent: (flowId?: string) => void 
             A flow is an ordered path across connectors you've already drawn — a request, a payment, an
             event. Present it and each step lights up while the rest of the canvas quiets down.
           </p>
-          <Button variant="solid" icon="plus" onClick={createNewFlow}>
+          {!readOnly && <Button variant="solid" icon="plus" onClick={createNewFlow}>
             New flow
-          </Button>
+          </Button>}
         </div>
       ) : (
         <ul className="dc-flow-list" role="listbox" aria-label="Flows">
@@ -257,8 +260,7 @@ export function FlowPanel({ onPresent }: { onPresent: (flowId?: string) => void 
                       type="button"
                       className="dc-flow-title"
                       tabIndex={-1}
-                      // The title truncates, so the tooltip leads with the whole name.
-                      title={`${flow.title} — double-click to rename`}
+                      title={readOnly ? flow.title : `${flow.title} — double-click to rename`}
                       onClick={(event) => {
                         event.stopPropagation();
                         setSelectedFlowId(flow.id);
@@ -280,6 +282,7 @@ export function FlowPanel({ onPresent }: { onPresent: (flowId?: string) => void 
                       icon="pencil"
                       aria-label={`Rename ${flow.title}`}
                       title="Rename (F2)"
+                      disabled={readOnly}
                       onClick={(event) => {
                         event.stopPropagation();
                         beginRename(flow.id);
@@ -302,6 +305,7 @@ export function FlowPanel({ onPresent }: { onPresent: (flowId?: string) => void 
                       icon="trash"
                       aria-label={`Delete ${flow.title}`}
                       title="Delete"
+                      disabled={readOnly}
                       onClick={(event) => {
                         event.stopPropagation();
                         deleteFlowWithUndo(flow);
@@ -309,7 +313,7 @@ export function FlowPanel({ onPresent }: { onPresent: (flowId?: string) => void 
                     />
                   </span>
                 </div>
-                {!useUiStore.getState().readOnly && <Button className="dc-flow-trace-more" variant="quiet" aria-label={`Trace more steps: ${flow.title}`} onClick={() => useEditorStore.getState().beginFlowTrace(flow.id)}>Trace more steps</Button>}
+                {!readOnly && <Button className="dc-flow-trace-more" variant="quiet" aria-label={`Trace more steps: ${flow.title}`} onClick={() => useEditorStore.getState().beginFlowTrace(flow.id)}>Trace more steps</Button>}
 
                 {expanded && (
                   <ol className="dc-flow-steps">
@@ -318,6 +322,7 @@ export function FlowPanel({ onPresent }: { onPresent: (flowId?: string) => void 
                         key={step.id}
                         flow={flow}
                         step={step}
+                        readOnly={readOnly}
                         index={index}
                         nodes={nodes}
                         edges={edges}
@@ -415,6 +420,7 @@ function StepRow({
   onToggleTools,
   canAddSelection,
   addSelection,
+  readOnly,
 }: {
   flow: DraftFlow;
   step: DraftFlowStep;
@@ -425,6 +431,7 @@ function StepRow({
   onToggleTools: () => void;
   canAddSelection: boolean;
   addSelection: () => void;
+  readOnly: boolean;
 }) {
   const edge = step.edgeId ? edges.get(step.edgeId) : undefined;
   if (step.edgeId && !edge) return null; // dangling — pruned on next edit, not shown meanwhile
@@ -493,7 +500,7 @@ function StepRow({
             variant="quiet"
             aria-label={`Move step ${index + 1} earlier`}
             title="Move earlier"
-            disabled={index === 0}
+            disabled={readOnly || index === 0}
             onClick={() => useEditorStore.getState().moveFlowStep(flow.id, step.id, -1)}
           />
           <Button
@@ -501,7 +508,7 @@ function StepRow({
             variant="quiet"
             aria-label={`Move step ${index + 1} later`}
             title="Move later"
-            disabled={index === flow.steps.length - 1}
+            disabled={readOnly || index === flow.steps.length - 1}
             onClick={() => useEditorStore.getState().moveFlowStep(flow.id, step.id, 1)}
           />
           <Button
@@ -511,6 +518,7 @@ function StepRow({
             aria-expanded={toolsOpen}
             aria-label={`More for step ${index + 1}`}
             title="Spotlight extra shapes, or pin the camera for this step"
+            disabled={readOnly}
             onClick={onToggleTools}
           />
           <Button
@@ -518,6 +526,7 @@ function StepRow({
             variant="quiet"
             aria-label={`Remove step ${index + 1}`}
             title="Remove step"
+            disabled={readOnly}
             onClick={() => useEditorStore.getState().removeFlowStep(flow.id, step.id)}
           />
         </span>
@@ -534,6 +543,7 @@ function StepRow({
                 icon="close"
                 variant="quiet"
                 aria-label={`Remove ${displayNameFor(node)} from step`}
+                disabled={readOnly}
                 onClick={() => useEditorStore.getState().removeFlowStepExtraNode(flow.id, step.id, node.id)}
               />
             </span>
@@ -551,6 +561,7 @@ function StepRow({
                   icon="close"
                   variant="quiet"
                   aria-label="Remove connector from step"
+                  disabled={readOnly}
                   onClick={() => useEditorStore.getState().removeFlowStepExtraEdge(flow.id, step.id, extraEdge.id)}
                 />
               </span>
@@ -563,6 +574,7 @@ function StepRow({
                 icon="close"
                 variant="quiet"
                 aria-label="Clear this step's saved view"
+                disabled={readOnly}
                 onClick={() => useEditorStore.getState().setFlowStepViewport(flow.id, step.id, null)}
               />
             </span>
@@ -570,7 +582,7 @@ function StepRow({
         </div>
       )}
 
-      {toolsOpen && (
+      {!readOnly && toolsOpen && (
         <div className="dc-flow-step-tools">
           {/* No aria-label: the visible words are the name, so speech control users can say them. */}
           <Button

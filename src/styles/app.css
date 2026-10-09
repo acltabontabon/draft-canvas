@@ -381,15 +381,13 @@ kbd {
 .dc-sidebar-project-name {
   flex: 1;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  padding-right: 54px;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
-/* Overlaid rather than laid out inline, so two hidden action icons don't
-   permanently steal width from the project name at rest — the sidebar
-   column is narrow enough that the usual `.dc-library-item-actions`
-   opacity-only trick would truncate names needlessly. */
+/* Overlay the project actions in the space reserved beside the wrapping name, so hovering
+   never changes a row's height or covers its text. */
 .dc-sidebar-project-actions {
   position: absolute;
   right: 2px;
@@ -398,7 +396,7 @@ kbd {
   display: flex;
   padding-left: 4px;
   border-radius: 0 var(--dc-radius-sm) var(--dc-radius-sm) 0;
-  /* Opaque (it covers the end of a long name) and painted as the row beneath it: the page, plus the
+  /* Painted as the row beneath it: the page, plus the
   row's own hover or active tint layered on top — `--dc-selection-soft` is translucent. */
   --dc-project-row-tint: transparent;
   background: linear-gradient(var(--dc-project-row-tint), var(--dc-project-row-tint)), var(--dc-canvas);
@@ -476,9 +474,8 @@ kbd {
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--dc-text-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .dc-library-count {
@@ -533,9 +530,8 @@ kbd {
 .dc-library-item-title {
   font-size: 15px;
   font-weight: 550;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .dc-library-item:hover .dc-library-item-title {
@@ -681,9 +677,8 @@ kbd {
 
 .dc-move-menu-row > span:last-child {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .dc-move-menu-row:hover,
@@ -1202,13 +1197,12 @@ kbd {
   min-width: 0;
   max-width: 100%;
   padding: 0 2px;
-  overflow: hidden;
   font-size: 13px;
   font-weight: 550;
   line-height: 20px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   transition: color 120ms ease;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .dc-starter:hover .dc-starter-name,
@@ -1663,8 +1657,8 @@ kbd {
 
 /* Three tracks. The outer two are equal fractions and the middle is intrinsic, so the create
    rail sits on a stable optical centre no matter how long the canvas title or the active flow's
-   name grows — under `space-between` it drifted with every rename. The side tracks truncate
-   rather than push; the width tiers further down are what keep that promise as space runs out.
+   name grows — under `space-between` it drifted with every rename. Names wrap vertically while
+   the width tiers further down keep the side tracks from pushing into the create rail.
 
    `.dc-toolbar` stays the single outer element: `ElementInspectorPopover` and its sibling measure
    this box's height to know how much room they have. */
@@ -1692,8 +1686,8 @@ kbd {
   grid-template-columns: minmax(max-content, 1fr) minmax(0, auto) minmax(max-content, 1fr);
   align-items: center;
   gap: 22px;
-  height: var(--dc-bar-height);
-  padding: 0 10px;
+  min-height: var(--dc-bar-height);
+  padding: 7px 10px;
   border-bottom: 1px solid var(--dc-border);
   background: var(--dc-surface);
   flex-shrink: 0;
@@ -1710,23 +1704,26 @@ kbd {
 }
 
 .dc-title-input {
-  /* Enough for a two-word title to be read, not "Untitle…" — the rail scrolls before this shrinks. */
+  /* Keep a readable column; longer titles grow the toolbar vertically. */
   min-width: 120px;
   max-width: 240px;
+  width: clamp(120px, 18vw, 240px);
+  box-sizing: border-box;
+  resize: none;
   height: 28px;
-  padding: 0 8px;
+  padding: 3px 8px;
   border: 1px solid transparent;
   border-radius: var(--dc-radius-sm);
   background: transparent;
   color: var(--dc-text);
   font: inherit;
   font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 20px;
   transition:
   background-color 120ms var(--dc-ease-out),
   border-color 120ms var(--dc-ease-out);
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .dc-title-input:hover {
@@ -1927,10 +1924,14 @@ kbd {
 
 .dc-flow-toggle-title {
   max-width: 150px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   font-weight: 400;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.dc-flow-toggle {
+  height: auto;
+  min-height: 30px;
 }
 
 /* --- utilities --- */
@@ -2049,8 +2050,8 @@ kbd {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  height: var(--dc-status-height);
-  padding: 0 12px;
+  min-height: var(--dc-status-height);
+  padding: 4px 12px;
   border-top: 1px solid var(--dc-border);
   background: var(--dc-surface);
   font-size: 12px;
@@ -2096,9 +2097,8 @@ kbd {
 }
 
 .dc-status-hint {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 /* The count is one phrase, and the bar a fixed height: at a laptop's narrower widths it used to
@@ -2310,10 +2310,9 @@ button.dc-status-level:focus-visible {
 }
 
 .dc-depth-here {
-  overflow: hidden;
   font-weight: 600;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .dc-depth-level,
@@ -2481,11 +2480,10 @@ button.dc-depth-plate-step {
 
 .dc-depth-plate-name {
   max-width: 150px;
-  overflow: hidden;
   color: var(--dc-text-muted);
   opacity: calc(1.05 - var(--dist, 1) * 0.15);
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 /* A deep path folds its middle planes down to their edges. */
@@ -2584,12 +2582,11 @@ button.dc-depth-plate-step {
 
 .dc-depth-room-name {
   max-width: calc(var(--plane-w) - 6px);
-  overflow: hidden;
   color: var(--dc-text-muted);
   font-size: 11.5px;
   line-height: 1.25;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 /* Where you are: the one crisp plane, raised a little off its row, named beside it. */
@@ -2882,6 +2879,7 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   flex-direction: column;
   gap: 8px;
   align-items: center;
+  width: max-content;
   max-width: min(860px, calc(100% - 32px));
   transition: opacity 260ms ease, translate 260ms var(--dc-ease-out);
 }
@@ -2898,11 +2896,21 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   display: flex;
   align-items: center;
   gap: 6px;
+  max-width: 100%;
+  max-height: 104px;
+  overflow: auto;
+  overscroll-behavior: contain;
   padding: 6px 8px 6px 12px;
   border: 1px solid var(--dc-border);
   border-radius: var(--dc-radius-pill);
   background: var(--dc-surface);
   box-shadow: var(--dc-shadow-panel);
+}
+
+/* Keep each control's readable width. The strip scrolls on small windows rather than crushing
+   its flow name into a vertical column; its height stays inside PRESENTATION_INSETS.bottom. */
+.dc-explain-bar > * {
+  flex-shrink: 0;
 }
 
 /* Presentation's chapter marks: one per step, filled once told, the current one in the accent and
@@ -2987,25 +2995,63 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 }
 
 .dc-present-card {
-  bottom: 88px;
+  bottom: 128px;
   left: 24px;
   max-width: min(440px, calc(100% - 48px));
+  max-height: calc(100% - 192px);
+  overflow: auto;
 }
 
 .dc-present-caption {
   width: max-content;
   max-width: min(360px, calc(100% - 48px));
+  /* Match CAPTION_SIZE in useFlowPlayback: long text remains readable by scrolling without
+     taking over the clear corner the presentation camera reserved. */
+  max-height: min(132px, calc(100% - 192px));
+  overflow: auto;
   pointer-events: none;
 }
 
+.dc-present-caption:focus-within {
+  pointer-events: auto;
+}
+
+.dc-present-caption:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 2px;
+}
+
+/* The caption normally lets canvas gestures pass through it. Opt into reading its overflow,
+   then allow scrolling while it has focus; an idle card must never swallow a connector's chip. */
+.dc-present-read-more {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-sm);
+  background: var(--dc-surface);
+  color: var(--dc-text-muted);
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.dc-present-card > *,
+.dc-present-caption > * {
+  flex-shrink: 0;
+}
+
 .dc-present-caption[data-corner='bottom-left'] {
-  bottom: 88px;
+  bottom: 128px;
   left: 24px;
 }
 
 .dc-present-caption[data-corner='bottom-right'] {
   right: 24px;
-  bottom: 88px;
+  bottom: 128px;
 }
 
 .dc-present-caption[data-corner='top-left'] {
@@ -3033,14 +3079,13 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 }
 
 .dc-present-eyebrow {
-  overflow: hidden;
   color: var(--dc-text-muted);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.08em;
-  text-overflow: ellipsis;
   text-transform: uppercase;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .dc-present-title {
@@ -3072,14 +3117,12 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 }
 
 .dc-present-text {
-  display: -webkit-box;
-  overflow: hidden;
+  display: block;
   color: var(--dc-text-muted);
   font-size: 13.5px;
   line-height: 1.45;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .dc-present-route {
@@ -3170,9 +3213,8 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 
 .dc-explain-flow strong {
   font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .dc-explain-arrow {
@@ -3181,16 +3223,14 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 
 /* The flow's name, now the picker's trigger rather than a caption above one: it is what the
    presenter reads to know where they are, so it carries the bar's normal text weight and keeps its
-   own words instead of being shouted in uppercase. Long names ellipsis; the full one is the
-   button's `title`. */
+   own words instead of being shouted in uppercase. Long names wrap within the control. */
 .dc-explain-flow-title {
   max-width: 200px;
-  overflow: hidden;
   color: var(--dc-text);
   font-size: 13px;
   font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 /* The one control that opens the flow list. Quiet until it is wanted — the diagram is the thing
@@ -3227,10 +3267,15 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 .dc-explain-next-flow {
   display: inline-block;
   max-width: 150px;
-  overflow: hidden;
-  text-overflow: ellipsis;
   vertical-align: bottom;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.dc-explain-next-flow-button {
+  height: auto;
+  min-height: 28px;
+  padding: 4px 8px;
 }
 
 /* The last step of the last flow. A word, not a disabled arrow to keep pressing. */
@@ -3244,11 +3289,10 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 
 .dc-explain-caption {
   max-width: 260px;
-  overflow: hidden;
   color: var(--dc-text);
   font-size: 13px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .dc-explain-condition {
@@ -3364,9 +3408,8 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 .dc-flow-picker-name {
   flex: 1;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .dc-flow-picker-steps {
@@ -3545,9 +3588,8 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 
 .dc-outline-name {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .dc-outline-detail {
@@ -3556,11 +3598,10 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   max-width: 55%;
   margin-left: auto;
   padding-left: 6px;
-  overflow: hidden;
   font-size: 12px;
   color: var(--dc-text-muted);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .dc-outline-item[data-kind='edge'] > .dc-outline-row {
@@ -3974,10 +4015,9 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   font-size: 12.5px;
   font-weight: 600;
   text-align: left;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   cursor: pointer;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .dc-flow-row[data-selected='true'] .dc-flow-title {
@@ -4079,10 +4119,9 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   font: inherit;
   font-size: 12px;
   text-align: left;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   cursor: pointer;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .dc-flow-step-label:hover {
@@ -4154,11 +4193,11 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   white-space: nowrap;
 }
 
-/* A long element name truncates; the remove button beside it always stays reachable. */
+/* A long element name wraps; the remove button beside it always stays reachable. */
 .dc-flow-step-chip-label {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .dc-flow-step-chip .dc-button {
@@ -4507,7 +4546,8 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 
 .dc-export-field .dc-select {
   max-width: 200px;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .dc-export-checks {
@@ -4665,8 +4705,8 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 
 .dc-export-filename-base {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .dc-export-filename-ext {
@@ -4969,6 +5009,15 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   font-size: 14.5px;
   font-weight: 600;
   color: var(--dc-text);
+}
+
+.dc-diagnostics-preview {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  font-family: monospace;
+  color: inherit;
+  background: transparent;
 }
 
 .dc-about .dc-about-sub {
@@ -5644,9 +5693,8 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 .dc-palette-title {
   flex: 1;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .dc-palette-title mark {
@@ -5659,13 +5707,12 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 .dc-palette-tag {
   flex: none;
   max-width: 40%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   /* Muted, not faint: on the highlighted row the faint grey fell to 4.1:1 against the selection tint
      (`e2e/a11y.spec.ts` holds small text to 4.5:1). */
   color: var(--dc-text-muted);
   font-size: 12px;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .dc-palette-tag {
@@ -5867,9 +5914,8 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 }
 
 .dc-points-context-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .dc-points-chip-arrow {

@@ -2567,6 +2567,20 @@ export function boundaryTitleX(node: DraftNode): number {
   return BOUNDARY_STYLES[node.boundaryPreset ?? 'boundary'].marker ? 1 + BOUNDARY_PLATE_GAP + BOUNDARY_PLATE + BOUNDARY_TEXT_GAP : BOUNDARY_INSET_X;
 }
 
+/** A boundary's title shares a row with its children below, so grow its width rather than
+ *  wrapping the title into their space. Use the same font and insets as its display list. */
+export function naturalBoundaryWidth(node: DraftNode, ctx: DescribeContext): number {
+  const style = BOUNDARY_STYLES[node.boundaryPreset ?? 'boundary'];
+  const title = layoutText(node.text ?? '', {
+    font: FONTS.groupTitle,
+    maxWidth: Number.POSITIVE_INFINITY,
+    lineHeight: FONTS.groupTitle.size * LINE_HEIGHTS.label,
+    measurer: ctx.measurer,
+  });
+  const rightInset = style.header === 'tab' ? 1 + BOUNDARY_RADIUS + BOUNDARY_INSET_X : BOUNDARY_INSET_X;
+  return Math.ceil(boundaryTitleX(node) + title.width + rightInset);
+}
+
 function boundaryHeader(node: DraftNode, ctx: DescribeContext, style: BoundaryStyle, palette: AccentPalette): Shape[] {
   const shapes: Shape[] = [];
   const bottom = 1 + BOUNDARY_HEADER_HEIGHT;
@@ -2863,16 +2877,16 @@ export function naturalCodeSize(
  * Asks the renderer itself rather than restating each kind's insets (a cube glyph, a tag row, a
  * notch, a Data Store glyph that scales with its box): `describeNode` is the one authority on
  * where text goes, and a second copy of that geometry would drift from it. Width grows first, to at
- * most `maxWidth`, until the name sits at its full size in two lines or fewer; height then grows
+ * most `maxWidth`, until the name sits at its full size in `maxNameLines` (two by default); height then grows
  * until the detail fits. `fits` is false when even the largest box truncates something — the
  * caller reports that rather than accepting a clipped label silently.
  */
 export function naturalArchitectureSize(
   node: DraftNode,
   ctx: DescribeContext,
-  bounds: { maxWidth: number; maxHeight: number } = { maxWidth: 280, maxHeight: 320 },
+  bounds: { maxWidth: number; maxHeight: number; maxNameLines?: number } = { maxWidth: 280, maxHeight: 320 },
 ): { width: number; height: number; fits: boolean } {
-  const verdict = (width: number, height: number) => captionVerdict(describeNode({ ...node, width, height }, ctx).shapes, node);
+  const verdict = (width: number, height: number) => captionVerdict(describeNode({ ...node, width, height }, ctx).shapes, node, bounds.maxNameLines ?? 2);
   const start = verdict(node.width, node.height);
   if (start.fits) return { width: node.width, height: node.height, fits: true };
 
@@ -2893,6 +2907,20 @@ export function naturalArchitectureSize(
     }
     return high;
   };
+  // Editing permits additional name lines. Avoid scanning every intermediate width for a pasted
+  // paragraph: each verdict lays out the whole label. A compact box first, then the wider column,
+  // gives the same readable result with bounded work even at the document's text limit.
+  if (bounds.maxNameLines === Number.POSITIVE_INFINITY) {
+    const compactHeight = minHeightAt(node.width);
+    if (compactHeight !== undefined && compactHeight <= Math.max(node.height, node.width)) {
+      return { width: node.width, height: compactHeight, fits: true };
+    }
+    const height = minHeightAt(bounds.maxWidth);
+    if (height !== undefined) return { width: bounds.maxWidth, height, fits: true };
+    return compactHeight !== undefined
+      ? { width: node.width, height: compactHeight, fits: true }
+      : { width: bounds.maxWidth, height: bounds.maxHeight, fits: false };
+  }
   // A Data Store's glyph grows with the smaller of its box's two growths (`dataStoreScale`), so a box
   // grown both ways draws a giant glyph: for one, the shortest box that fits wins outright.
   const shortest = node.type === 'database';
@@ -2910,8 +2938,8 @@ export function naturalArchitectureSize(
 
 /** Whether every text in a shape's display list shows in full — the C4 detail drawn at all, not just
  *  not cut short, since a part with no room is left out rather than ellipsised — and whether the name
- *  shows at its own full size in at most two lines. */
-function captionVerdict(shapes: Shape[], node: DraftNode): { fits: boolean; nameComfortable: boolean } {
+ *  shows at its own full size within the requested line count. */
+function captionVerdict(shapes: Shape[], node: DraftNode, maxNameLines: number): { fits: boolean; nameComfortable: boolean } {
   let fits = true;
   let nameComfortable = true;
   let technology = !node.technology;
@@ -2926,7 +2954,7 @@ function captionVerdict(shapes: Shape[], node: DraftNode): { fits: boolean; name
     if (shape.font === FONTS.nodeTechnology) technology = true;
     if (shape.font === FONTS.nodeDescription) description = true;
     if (shape.role === 'label') {
-      if (shape.layout.truncated || shape.font.size < TEXT_SIZES.nodeLabel || shape.layout.lines.length > 2) {
+      if (shape.layout.truncated || shape.font.size < TEXT_SIZES.nodeLabel || shape.layout.lines.length > maxNameLines) {
         nameComfortable = false;
       }
     }

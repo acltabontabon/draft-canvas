@@ -89,19 +89,22 @@ palette — rather than a second one that would drift away from it.
 
 ## Deploying
 
-`pages.yml` is the only workflow that deploys. It runs on a `vX.Y.Z` tag, on demand, and through
+`pages.yml` is the only workflow that deploys. Release tags start `release.yml`, which completes
+reusable CI and desktop acceptance before calling Pages with the verified web artifact. Pages
+checks its recorded commit and promotes those same bytes. It also runs on demand and through
 `workflow_call`; `pages-site.yml` calls it on a push to `main` that touches `www/`, so a rewritten
-sentence does not have to wait for a release. The two share the `pages` concurrency group.
+sentence does not have to wait for a release. Calls share the `pages` concurrency group.
 
-The editor half only ever changes on a release. On a `vX.Y.Z` tag, both halves come from that tag.
-Anywhere else — a site-only push, or a run on demand from a branch — `pages.yml` checks out the
-newest stable `vX.Y.Z`, lays the commit's `www/` and `scripts/assemble-web.mjs` over it, and builds
-that. So `/draft-canvas/editor/` never serves unreleased code, and the site's download links carry a
-version whose installers exist.
+The editor half only ever changes on a release or an explicit withdrawal. For site-only changes,
+`pages.yml` checks out the newest stable `vX.Y.Z`, lays the commit's `www/` and
+`scripts/assemble-web.mjs` over it, builds once, and tests that combined artifact in all three
+browser engines before publication. Tests use the selected release's documentation and journeys.
+So `/draft-canvas/editor/` never serves unreleased code, and download links carry a released version.
 
-They are two files rather than two triggers on one because a `push` filtered by both refs and paths
-requires every filter to match — adding a path filter to `pages.yml` would also gate the release tags
-and silently stop deploying releases.
+For withdrawal, run the current workflow from `main` with `release-tag` naming the last good
+editor tag; the selected source still has to pass verification. Follow
+[the compatibility and recovery procedure](reliability.md#withdrawal-and-recovery-procedure) before
+putting an older editor in front of documents saved by a newer one.
 
 Nothing about the domain lives in this repository. The apex belongs to `acltabontabon.github.io`, and
 GitHub applies a user site's custom domain to every project site of the same account, so the

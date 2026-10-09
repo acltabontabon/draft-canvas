@@ -79,6 +79,7 @@ async function main(): Promise<void> {
   };
   process.once('SIGINT', () => void stop().then(() => process.exit(130)));
 
+  let failed = false;
   try {
     const environment = await collectEnvironment(browser.version());
     const { commit, branch } = getGitInfo();
@@ -122,6 +123,7 @@ async function main(): Promise<void> {
               : `p95 ${summary.headline.frameP95.toFixed(1)} ms, max ${summary.headline.frameMax.toFixed(0)} ms${summary.problems.length > 0 ? `, ${summary.problems.length} page error(s)` : ''}`,
           );
         } catch (error) {
+          failed = true;
           console.log(`FAILED: ${(error as Error).message.split('\n')[0]}`);
         }
       }
@@ -157,6 +159,7 @@ async function main(): Promise<void> {
       writeFileSync(otherOut, JSON.stringify(other, null, 2));
       console.log(`\n${formatRun(other)}\n\n${formatComparison(other, result)}\n\nResults: ${otherOut}`);
     }
+    if (failed) throw new Error('One or more benchmark measurements failed; the retained report is incomplete.');
   } finally {
     await stop();
   }

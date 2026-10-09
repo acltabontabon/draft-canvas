@@ -218,9 +218,12 @@ test.describe('Presentation callouts', () => {
     // rightly docks the callout above the flow bar, far from the chip.
     const chip = (await chipRow.boundingBox())!;
     const pointer = { x: chip.x + chip.width / 2, y: chip.y + chip.height / 2 };
-    expect(
-      await page.evaluate(({ x, y }) => !!document.elementFromPoint(x, y)?.closest('.dc-attachment-chip-row'), pointer),
-    ).toBe(true);
+    const hit = await page.evaluate(({ x, y }) => {
+      const element = document.elementFromPoint(x, y);
+      return { chip: !!element?.closest('.dc-attachment-chip-row'), className: element?.getAttribute('class'), text: element?.textContent?.slice(0, 100) };
+    }, pointer);
+    if (!hit.chip) await page.screenshot({ path: test.info().outputPath('covered-chip.png') });
+    expect(hit.chip, `Chip covered by ${JSON.stringify(hit)}`).toBe(true);
     const zoom = () =>
       page.locator('.react-flow__viewport').evaluate((viewport) => new DOMMatrixReadOnly(getComputedStyle(viewport).transform).a);
     const before = await zoom();

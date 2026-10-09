@@ -94,7 +94,7 @@ describe('logDiagnostic', () => {
     expect(spy.mock.calls[0]).toContain('component stack here');
   });
 
-  it('logs only ids and counts, never node/edge content, in production', () => {
+  it('logs only failure categories and counts, never raw errors or identifiers, in production', () => {
     vi.stubEnv('DEV', false);
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const error = new Error('boom');
@@ -107,15 +107,16 @@ describe('logDiagnostic', () => {
     });
     expect(spy).toHaveBeenCalledTimes(1);
     const [message, meta] = spy.mock.calls[0] as [string, Record<string, unknown>];
-    expect(message).toContain('boom');
+    expect(message).toContain('Unexpected failure');
+    expect(message).not.toContain('boom');
     expect(message).not.toContain('secret node text');
     expect(JSON.stringify(meta)).not.toContain('secret node text');
     expect(meta).toEqual({
-      documentId: 'doc-1',
-      flowId: 'flow-1',
+      at: expect.any(String),
+      operation: 'other',
+      errorType: 'Error',
       nodeCount: 2,
       edgeCount: 1,
-      schemaVersion: expect.any(Number),
     });
   });
 });

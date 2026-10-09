@@ -5,21 +5,51 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: Source ref to verify; resolved once to a commit before any checks.
+        type: string
+        default: ''
+    outputs:
+      artifact-name:
+        value: ${{ jobs.verify.outputs.artifact-name }}
+      commit:
+        value: ${{ jobs.source.outputs.commit }}
 
 permissions:
   contents: read
 
 # A new push to a pull request supersedes the run before it. Runs on main always finish.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}-${{ inputs.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  verify:
+  source:
     runs-on: ubuntu-latest
+    outputs:
+      commit: ${{ steps.source.outputs.commit }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+      - id: source
+        run: echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  verify:
+    needs: source
+    runs-on: ubuntu-latest
+    outputs:
+      artifact-name: verified-web-${{ github.run_id }}
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.source.outputs.commit }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 22.14.0
           cache: npm
@@ -28,6 +58,10 @@ jobs:
       # at deploy time.
       - run: npm ci
         working-directory: www
+      - name: Validate workflow syntax and expressions
+        run: |
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+          "$(go env GOPATH)/bin/actionlint"
       - run: npm run lint
       - run: npm run typecheck:tooling
       # Builds the editor, the site, and the assembled dist-web/ the deploy publishes.
@@ -35,12 +69,24 @@ jobs:
       # Unit tests with the coverage floor (vite.config.ts): a drop below it fails the build.
       - run: npm run test:coverage
       - run: npm run licenses:check
+      - name: Record the source and preserve the built artifact
+        env:
+          VERIFIED_COMMIT: ${{ needs.source.outputs.commit }}
+        run: |
+          node -e 'require("fs").writeFileSync("verified-source.json", JSON.stringify({ commit: process.env.VERIFIED_COMMIT }))'
+          tar -cf verified-web.tar dist dist-web verified-source.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: verified-web-${{ github.run_id }}
+          path: verified-web.tar
+          if-no-files-found: error
+          retention-days: 7
 
   # The whole journey suite, once per engine the app ships to. Retries stay on so a flaky test is
   # *identified* rather than merely re-rolled: `--fail-on-flaky-tests` fails the run when a test only
   # passed on its retry, so a flake is fixed, not tolerated.
   e2e:
-    needs: verify
+    needs: [source, verify]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -48,21 +94,34 @@ jobs:
         browser: [chromium, firefox, webkit]
     env:
       PLAYWRIGHT_BROWSER: ${{ matrix.browser }}
+      DC_TEST_BUILT: '1'
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.source.outputs.commit }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 22.14.0
           cache: npm
+      - name: Use the artifact-only server configuration
+        env:
+          CONTROL_COMMIT: ${{ github.sha }}
+        run: |
+          git fetch --no-tags --depth=1 origin "$CONTROL_COMMIT"
+          git checkout FETCH_HEAD -- playwright.dist.config.ts playwright.web.config.ts
       - run: npm ci
       - run: npm ci
         working-directory: www
-      - run: npm run build:web
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: ${{ needs.verify.outputs.artifact-name }}
+      - run: tar -xf verified-web.tar
       - run: npx playwright install --with-deps ${{ matrix.browser }}
       - run: npm run e2e -- --fail-on-flaky-tests
       - run: npm run e2e:offline -- --fail-on-flaky-tests
       - run: npm run e2e:web -- --fail-on-flaky-tests
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: failure()
         with:
           name: playwright-report-${{ matrix.browser }}
@@ -76,10 +135,12 @@ jobs:
   # nginx.conf or base-image bump from Dependabot would only surface while publishing. One platform
   # is enough here: the build stage runs on the build platform either way.
   docker:
+    needs: source
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: ${{ needs.source.outputs.commit }}
           persist-credentials: false
       - run: docker build --tag draft-canvas:ci .
       - name: The image serves the app
@@ -97,3 +158,15 @@ jobs:
           curl -fsSI "http://127.0.0.1:8080/$asset" | grep -qi 'cache-control: public, max-age=31536000, immutable'
           # No SPA fallback: an unknown path is a 404, not index.html (see nginx.conf).
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/nope/deeper)" = 404
+
+  security:
+    needs: source
+    uses: ./.github/workflows/security.yml
+    with:
+      ref: ${{ needs.source.outputs.commit }}
+
+  performance:
+    needs: source
+    uses: ./.github/workflows/performance.yml
+    with:
+      ref: ${{ needs.source.outputs.commit }}

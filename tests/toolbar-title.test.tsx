@@ -22,7 +22,7 @@ function renderToolbar(title: string, onTitleChange = vi.fn()) {
       onExport={() => {}}
     />,
   );
-  return { onTitleChange, input: screen.getByLabelText('Diagram title') as HTMLInputElement };
+  return { onTitleChange, input: screen.getByLabelText('Diagram title') as HTMLTextAreaElement };
 }
 
 beforeEach(() => {

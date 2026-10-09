@@ -396,7 +396,7 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
         </div>
 
         <footer className="dc-library-foot">
-          <LocalNote durable={session.durable} repository={session.repository} />
+          <LocalNote durable={session.durable} repository={session.repository} hasDocuments={session.library.length > 0} />
         </footer>
       </main>
 

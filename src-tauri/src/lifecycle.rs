@@ -347,8 +347,8 @@ fn explain_tray(app: &AppHandle) {
 
 // --- smoke test --------------------------------------------------------------------------------
 
-/// CI launches the packaged app with `DRAFT_CANVAS_SMOKE=1` to prove it starts: once the page reports in
-/// (or after a timeout) it prints a marker and exits.
+/// CI launches the packaged app with `DRAFT_CANVAS_SMOKE=1` to prove the renderer reports ready.
+/// A timeout or disconnected renderer must fail rather than print the acceptance marker.
 fn smoke_requested(value: Option<&str>) -> bool {
     value == Some("1")
 }
@@ -357,10 +357,15 @@ fn start_smoke(app: &AppHandle) {
     let (tx, rx) = mpsc::channel();
     *lock(&app.state::<AppState>().smoke_ready) = Some(tx);
     let app = app.clone();
-    std::thread::spawn(move || {
-        let _ = rx.recv_timeout(SMOKE_TIMEOUT);
-        println!("{SMOKE_MARKER}");
-        app.exit(0);
+    std::thread::spawn(move || match rx.recv_timeout(SMOKE_TIMEOUT) {
+        Ok(()) => {
+            println!("{SMOKE_MARKER}");
+            app.exit(0);
+        }
+        Err(error) => {
+            eprintln!("Draft Canvas smoke test failed: renderer did not become ready: {error}");
+            app.exit(1);
+        }
     });
 }
 

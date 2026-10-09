@@ -1,0 +1,10 @@
+[
+  {
+    "ecosystem": "cargo",
+    "id": "RUSTSEC-2024-0429",
+    "package": "glib",
+    "reason": "Tauri's Linux-only GTK dependency. cargo tree for aarch64-apple-darwin and x86_64-pc-windows-msvc contains no glib. Distributed desktop targets are macOS and Windows only; adding Linux requires resolving this advisory first.",
+    "expires": "2026-11-08",
+    "tracking": "docs/reference/reliability.md#dependency-triage"
+  }
+]

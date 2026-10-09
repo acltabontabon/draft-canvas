@@ -26,6 +26,10 @@ on:
         description: The vX.Y.Z tag release.yml is running for.
         required: true
         type: string
+      verified-commit:
+        description: Commit already verified by the release orchestrator.
+        type: string
+        default: ''
     secrets:
       TAURI_SIGNING_PRIVATE_KEY:
         required: true
@@ -74,13 +78,17 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       preview: ${{ steps.version.outputs.preview }}
+      commit: ${{ steps.source.outputs.commit }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ inputs.tag || github.ref }}
-      - uses: actions/setup-node@v7
+          ref: ${{ inputs.verified-commit || inputs.tag || github.ref }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 22.14.0
+      - id: source
+        run: echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - id: version
         run: |
           case "$TAG" in
@@ -110,19 +118,26 @@ jobs:
           fi
           node scripts/update-manifest.mjs check-config
 
-  # A preview's own draft release, for the matrix jobs to upload into so they can't race to create it.
-  # A vX.Y.Z release already exists: release.yml made it before calling this.
-  draft:
+  acceptance:
     needs: verify
+    uses: ./.github/workflows/desktop-ci.yml
+    with:
+      ref: ${{ needs.verify.outputs.commit }}
+
+  # A preview's own draft release, for the matrix jobs to upload into so they can't race to create it.
+  # A vX.Y.Z draft already exists: release.yml made it after web verification.
+  draft:
+    needs: [verify, acceptance]
     if: needs.verify.outputs.preview == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ inputs.tag || github.ref }}
-      - uses: actions/setup-node@v7
+          ref: ${{ needs.verify.outputs.commit }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 22.14.0
       - env:
@@ -137,13 +152,13 @@ jobs:
 
   build:
     name: build (${{ matrix.name }})
-    needs: [verify, draft]
+    needs: [verify, acceptance, draft]
     # The draft is skipped for a release (release.yml made it); a failed draft still stops the build.
-    if: ${{ !cancelled() && needs.verify.result == 'success' && needs.draft.result != 'failure' }}
+    if: ${{ !cancelled() && needs.verify.result == 'success' && needs.acceptance.result == 'success' && needs.draft.result != 'failure' }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     permissions:
-      contents: write
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -180,20 +195,19 @@ jobs:
             update: Draft-Canvas_VERSION_Windows_x64.exe
             update-extension: -setup.exe
     steps:
-      # This job runs npm install scripts and cargo build scripts while holding a write token. The
-      # upload below goes through `gh` with GH_TOKEN, so git itself never needs the credential.
-      - uses: actions/checkout@v7
+      # Build jobs can stage artifacts but cannot replace public release assets.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          ref: ${{ needs.verify.outputs.commit }}
           persist-credentials: false
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 22.14.0
           cache: npm
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
         with:
           targets: ${{ matrix.target }}
-      - uses: swatinem/rust-cache@v2
+      - uses: swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           workspaces: src-tauri
       - run: npm ci
@@ -256,7 +270,7 @@ jobs:
       # only when they exist — never set here, where an unset secret would still arrive, empty.
       - name: Build the installer and the signed update package
         id: tauri
-        uses: tauri-apps/tauri-action@v1
+        uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
@@ -279,6 +293,34 @@ jobs:
           if [[ "$TARGET" == "aarch64-apple-darwin" ]]; then
             [[ "$("$sidecar" --version)" == "draft-canvas-mcp $VERSION" ]] || { echo "::error::The connector is not version $VERSION."; exit 1; }
           fi
+      - name: The packaged macOS app starts
+        if: matrix.target == 'aarch64-apple-darwin'
+        shell: bash
+        env:
+          DRAFT_CANVAS_SMOKE: '1'
+        run: |
+          app="$(find src-tauri/target/aarch64-apple-darwin/release/bundle/macos -maxdepth 1 -name '*.app' | head -n 1)"
+          output="$("$app/Contents/MacOS/draft-canvas")"
+          echo "$output" | grep -q DRAFT_CANVAS_SMOKE_OK
+      - name: The Windows installer installs and the installed app starts
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          DRAFT_CANVAS_SMOKE: '1'
+          ARTIFACTS: ${{ steps.tauri.outputs.artifactPaths }}
+        run: |
+          $paths = ConvertFrom-Json $env:ARTIFACTS
+          $installer = @($paths | Where-Object { $_ -like '*-setup.exe' })[0]
+          if (-not $installer) { throw 'No NSIS installer was built.' }
+          $installDir = Join-Path $env:RUNNER_TEMP 'draft-canvas-smoke'
+          $installed = Start-Process -FilePath $installer -ArgumentList @('/S', "/D=$installDir") -Wait -PassThru
+          if ($installed.ExitCode -ne 0) { throw "Installer failed: $($installed.ExitCode)" }
+          # A release executable has the GUI subsystem, so capture inherited handles explicitly.
+          $stdout = Join-Path $env:RUNNER_TEMP 'draft-canvas-smoke.stdout'
+          $stderr = Join-Path $env:RUNNER_TEMP 'draft-canvas-smoke.stderr'
+          $smoke = Start-Process -FilePath (Join-Path $installDir 'draft-canvas.exe') -Wait -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+          $output = Get-Content -Raw $stdout
+          if ($smoke.ExitCode -ne 0 -or $output -notmatch 'DRAFT_CANVAS_SMOKE_OK') { throw 'Installed app failed its startup check.' }
       # tauri-action names files after the product ("Draft Canvas_1.9.4_x64-setup.exe"); the release
       # gets names a person can read and a script can predict.
       - name: Name the installer and the update package
@@ -317,13 +359,15 @@ jobs:
           UPDATE: ${{ matrix.update }}
         run: node scripts/update-manifest.mjs check-artifact "installers/${UPDATE/VERSION/$VERSION}" "$VERSION"
       - name: Upload
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$TAG" installers/* --clobber
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: desktop-package-${{ github.run_id }}-${{ matrix.name }}
+          path: installers/*
+          if-no-files-found: error
+          retention-days: 7
 
   # Checksums, the update manifest and a build attestation. A preview then goes out as a prerelease,
-  # never "Latest"; a release is already out, made by release.yml, and keeps its own settings.
+  # never "Latest"; a stable release leaves draft only after every package passed.
   publish:
     needs: [verify, build]
     if: ${{ !cancelled() && needs.build.result == 'success' }}
@@ -333,17 +377,20 @@ jobs:
       id-token: write
       attestations: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ inputs.tag || github.ref }}
-      - uses: actions/setup-node@v7
+          ref: ${{ needs.verify.outputs.commit }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 22.14.0
-      - env:
-          GH_TOKEN: ${{ github.token }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: desktop-package-${{ github.run_id }}-*
+          path: assets
+          merge-multiple: true
+      - name: Checksum the staged packages
         run: |
-          mkdir assets
-          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir assets --pattern 'Draft-Canvas_*'
           # What people download; the .sig files are for the updater, which checks them itself.
           (cd assets && find . -maxdepth 1 -name 'Draft-Canvas_*' ! -name '*.sig' -printf '%f\0' | sort -z | xargs -0 sha256sum > SHA256SUMS.txt && cat SHA256SUMS.txt)
       # Built from the signatures the builds made, then checked against the packages themselves: every
@@ -357,16 +404,19 @@ jobs:
           node scripts/update-manifest.mjs build "$VERSION" assets --tag "$TAG" > assets/latest.json
           node scripts/update-manifest.mjs verify assets/latest.json "$VERSION" --tag "$TAG" --artifacts assets
           cat assets/latest.json
-      - uses: actions/attest-build-provenance@v4
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
         with:
           subject-path: assets/Draft-Canvas_*
       - env:
           GH_TOKEN: ${{ github.token }}
           PREVIEW: ${{ needs.verify.outputs.preview }}
         run: |
-          gh release upload "$TAG" assets/SHA256SUMS.txt assets/latest.json --repo "$GITHUB_REPOSITORY" --clobber
+          gh release upload "$TAG" assets/* --repo "$GITHUB_REPOSITORY" --clobber
           if [ "$PREVIEW" = true ]; then
             gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease --latest=false
+          else
+            # A stable release stays a draft until all installers and update signatures passed.
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false
           fi
 
   # Only now, with the release public and every file on it, are installed copies told about it.

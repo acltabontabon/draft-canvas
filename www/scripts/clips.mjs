@@ -2,7 +2,7 @@
 /*
  * Cuts the site's short demo clips out of the full demo reel.
  *
- * docs/media/demo.mp4 is 148 seconds — the right length for a README, far too long for a landing
+ * docs/media/demo.mp4 is 162 seconds — the right length for a README, far too long for a landing
  * page to open with. These are its chapters, trimmed to the beat each one is actually about, at a
  * size and bitrate a page can afford. Nothing is re-staged or re-recorded: this is the same footage
  * of the same real UI, cut shorter. The chapter names and boundaries come from demo/scenes.ts.
@@ -28,10 +28,11 @@ const out = join(www, 'public', 'clips');
 
 /** `poster` is the offset into the clip to freeze for its poster frame, not into the reel. */
 const CLIPS = [
-  { name: 'draw', start: 10.5, duration: 13, poster: 9.5 },
-  { name: 'compose', start: 36.4, duration: 8, poster: 6.8 },
-  { name: 'present', start: 63.5, duration: 14, poster: 6 },
-  { name: 'inside', start: 96.3, duration: 14, poster: 11 },
+  { name: 'draw', start: 9.4, duration: 16.2, poster: 12.8 },
+  { name: 'compose', start: 34.3, duration: 8.9, poster: 5.7 },
+  { name: 'present', start: 63, duration: 16, poster: 14 },
+  { name: 'inside', start: 94.3, duration: 16, poster: 3.6 },
+  { name: 'io', start: 128.8, duration: 20, poster: 6 },
 ];
 
 if (!existsSync(reel)) {

@@ -10,20 +10,27 @@ name: Deploy to Pages
 # and no custom-domain setting of its own, and the /draft-canvas/ prefix comes from the repository
 # name. Adding a CNAME here would try to claim the apex from the root site.
 #
-# This is the only workflow that deploys. pages-site.yml calls it rather than building its own
+# Releases call this only after verification and desktop acceptance. This is the only workflow that deploys. pages-site.yml calls it rather than building its own
 # copy, so there is exactly one definition of what gets published. On a release tag both halves
 # come from that tag; anywhere else the landing page comes from the commit and the editor from the
 # latest vX.Y.Z (see the first step), so the editor only ever changes on a release.
 
 on:
-  push:
-    tags:
-      # Web app releases only: vX.Y.Z and prereleases like vX.Y.Z-rc.1. The VS Code extension
-      # releases from extension-vX.Y.Z tags in vscode-release.yml.
-      - 'v[0-9]+.[0-9]+.[0-9]+'
-      - 'v[0-9]+.[0-9]+.[0-9]+-*'
   workflow_dispatch:
+    inputs:
+      release-tag:
+        description: Optional last-good editor tag for withdrawal; run the current workflow from main.
+        type: string
+        default: ''
   workflow_call:
+    inputs:
+      artifact-name:
+        description: Same-run artifact supplied only by the verified release orchestrator.
+        type: string
+        default: ''
+      verified-commit:
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -35,24 +42,35 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  build:
+    if: inputs.artifact-name == ''
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
+    permissions:
+      contents: read
+    outputs:
+      editor-commit: ${{ steps.source.outputs.editor-commit }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       # The editor half is only ever a release. A site-only push (pages-site.yml) or a run on demand
       # from a branch would otherwise build main's unreleased editor into /draft-canvas/editor/ —
       # the page installed VS Code extensions load — and stamp the site's download links with a
       # package.json version that has no installers yet. So off a tag, check out the newest stable
       # vX.Y.Z and lay this commit's www/ (and the script that assembles it) over it.
       - name: Build the editor from the latest release
-        if: github.ref_type != 'tag'
+        if: github.ref_type != 'tag' || inputs.release-tag != ''
+        env:
+          RELEASE_TAG: ${{ inputs.release-tag }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           site="$(git rev-parse HEAD)"
-          tag="$(git ls-remote --tags --refs origin 'v*' | sed 's#.*refs/tags/##' \
-            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)"
+          if [ -n "$RELEASE_TAG" ]; then
+            echo "$RELEASE_TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$' || exit 1
+            tag="$RELEASE_TAG"
+          else
+            # A tag may still be waiting on acceptance, or belong to a failed draft release.
+            tag="$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq '.tag_name')"
+            echo "$tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$' || exit 1
+          fi
           if [ -z "$tag" ]; then
             echo "::error::No vX.Y.Z release tag to build the editor from."
             exit 1
@@ -63,7 +81,7 @@ jobs:
           rm -rf www
           git checkout "$site" -- www scripts/assemble-web.mjs
           echo "::notice::Editor from $tag, landing page from ${site:0:7}."
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 22.14.0
           cache: npm
@@ -74,9 +92,89 @@ jobs:
       # Builds the editor, builds the site, and assembles dist-web/ — failing loudly if either
       # half is missing a file the deploy needs.
       - run: npm run build:web
-      - uses: actions/configure-pages@v6
-      - uses: actions/upload-pages-artifact@v5
+      - run: npm run test:coverage
+      - run: npm run licenses:check
+      - run: npm audit --audit-level=high
+      - run: npm audit --audit-level=high
+        working-directory: www
+      - name: Record the assembled source
+        id: source
+        env:
+          WORKFLOW_COMMIT: ${{ github.sha }}
+        run: |
+          node -e 'const fs=require("fs"),cp=require("child_process"); fs.writeFileSync("verified-source.json",JSON.stringify({ commit: process.env.WORKFLOW_COMMIT, editorCommit: cp.execSync("git rev-parse HEAD").toString().trim(), siteCommit: process.env.WORKFLOW_COMMIT }))'
+          echo "editor-commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          tar -cf verified-web.tar dist dist-web verified-source.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: verified-site-${{ github.run_id }}
+          path: verified-web.tar
+          if-no-files-found: error
+
+  acceptance:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    env:
+      PLAYWRIGHT_BROWSER: ${{ matrix.browser }}
+      DC_TEST_BUILT: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.build.outputs.editor-commit }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 22.14.0
+          cache: npm
+      # Test the selected editor's journeys, with the current no-rebuild server configuration.
+      - name: Use the artifact-only server configuration
+        env:
+          CONTROL_COMMIT: ${{ github.sha }}
+        run: |
+          git fetch --no-tags --depth=1 origin "$CONTROL_COMMIT"
+          git checkout FETCH_HEAD -- playwright.dist.config.ts playwright.web.config.ts
+      - run: npm ci
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: verified-site-${{ github.run_id }}
+      - run: tar -xf verified-web.tar
+      - run: npx playwright install --with-deps ${{ matrix.browser }}
+      - run: npm run e2e:offline -- --fail-on-flaky-tests
+      - run: npm run e2e:web -- --fail-on-flaky-tests
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: failure()
+        with:
+          name: site-acceptance-${{ matrix.browser }}
+          path: |
+            playwright-report-offline/
+            playwright-report-web/
+
+  deploy:
+    needs: [build, acceptance]
+    # A release caller already completed CI. Site-only builds must pass every browser shard.
+    if: ${{ !cancelled() && (inputs.artifact-name != '' || (needs.build.result == 'success' && needs.acceptance.result == 'success')) }}
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: ${{ inputs.artifact-name || format('verified-site-{0}', github.run_id) }}
+      - run: tar -xf verified-web.tar
+      - name: The artifact belongs to the verified source
+        env:
+          EXPECTED_COMMIT: ${{ inputs.verified-commit || github.sha }}
+        run: node -e 'const source=require("./verified-source.json"); if(source.commit !== process.env.EXPECTED_COMMIT) throw new Error("Artifact source does not match verification")'
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
         with:
           path: dist-web/
       - id: deploy
-        uses: actions/deploy-pages@v5
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5

@@ -38,13 +38,18 @@ on:
       - 'tray.html'
       - '.github/workflows/desktop-*.yml'
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        default: ''
 
 permissions:
   contents: read
 
 concurrency:
-  group: desktop-ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: desktop-ci-${{ github.workflow }}-${{ github.ref }}-${{ inputs.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # Everything that needs no window: the frontend the desktop app bundles, and that it is the
@@ -56,8 +61,11 @@ jobs:
     # package at a time — 15 minutes on 2026-10-01, which cut the WebKit run off at the old 20.
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 22.14.0
           cache: npm
@@ -79,7 +87,7 @@ jobs:
       # Chromium and WebKit: the engines the desktop shell actually embeds (WebView2, WebKitGTK/WKWebView).
       - run: PLAYWRIGHT_BROWSER=chromium npm run e2e:desktop -- --fail-on-flaky-tests
       - run: PLAYWRIGHT_BROWSER=webkit npm run e2e:desktop -- --fail-on-flaky-tests
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: failure()
         with:
           name: playwright-report-desktop
@@ -99,15 +107,18 @@ jobs:
           - { name: macOS arm64, os: macos-latest, binary: src-tauri/target/debug/draft-canvas }
           - { name: Windows x64, os: windows-latest, binary: src-tauri/target/debug/draft-canvas.exe }
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 22.14.0
           cache: npm
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
         with:
           components: rustfmt, clippy
-      - uses: swatinem/rust-cache@v2
+      - uses: swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           workspaces: src-tauri
       - run: npm ci

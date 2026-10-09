@@ -1,10 +1,14 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createDocument, createNode } from '../src/document/factory';
 import { addNodes } from '../src/document/operations';
 import type { DraftDocument } from '../src/document/types';
 import { unzipFiles } from '../src/export/zip';
 import { backupFileName, backupIsStale, buildBackup, describeRestore, restoreBackup } from '../src/storage/backup';
 import { MemoryRepository } from '../src/storage/MemoryRepository';
+import { setFileSaver } from '../src/export/download';
+import { backUpLibrary } from '../src/ui/Library/backupActions';
+import { readPreference, writePreference } from '../src/lib/preferences';
+import { LAST_BACKUP_PREFERENCE } from '../src/storage/backup';
 
 function documentWith(title: string, projectId?: string): DraftDocument {
   const doc = addNodes(createDocument(title), [createNode({ type: 'service', x: 0, y: 0, text: `${title} API` })]);
@@ -22,6 +26,71 @@ async function seeded(): Promise<{ repository: MemoryRepository; orders: DraftDo
 }
 
 describe('buildBackup', () => {
+  it('keeps opaque ids in the files without turning them into unsafe or colliding archive paths', async () => {
+    const repository = new MemoryRepository();
+    await repository.saveProject({ id: 'p_safe', name: 'Preserved grouping', createdAt: 1, updatedAt: 1 });
+    const ids = ['../../escape', '..\\escape', '/absolute', '__proto__', 'constructor', 'x\u0000y', 'x/y', 'x~002fy', 'x', 'X', '\ud800', '\ud801', 'a'.repeat(100) + '/'.repeat(20), 'a'.repeat(100) + '\\'.repeat(20), 'a'.repeat(128)];
+    for (const id of ids) {
+      const document = documentWith(id.length === 128 ? '設'.repeat(60) : 'Same title', 'p_safe');
+      await repository.save({ ...document, metadata: { ...document.metadata, id } });
+    }
+    const { bytes, count } = await buildBackup(repository);
+    expect(count).toBe(ids.length);
+    const entries = unzipFiles(bytes).filter((entry) => entry.name.endsWith('.draftcanvas'));
+    expect(new Set(entries.map((entry) => entry.name.toLowerCase())).size).toBe(ids.length);
+    for (const entry of entries) {
+      expect(entry.name).not.toMatch(/[/\\]/);
+      expect(entry.name).not.toContain('\u0000');
+      expect(entry.name).not.toContain('..');
+      expect(new TextEncoder().encode(entry.name).length).toBeLessThanOrEqual(255);
+    }
+    const restored = new MemoryRepository();
+    await restoreBackup(restored, bytes);
+    expect((await restored.list()).map((entry) => entry.id).sort()).toEqual([...ids].sort());
+    expect((await restored.list()).every((entry) => entry.projectId === 'p_safe')).toBe(true);
+    const collisions = new MemoryRepository();
+    for (const [title, id] of [['a', 'b-c'], ['a-b', 'c']]) {
+      const document = documentWith(title!);
+      await collisions.save({ ...document, metadata: { ...document.metadata, id: id! } });
+    }
+    const collided = unzipFiles((await buildBackup(collisions)).bytes).filter((entry) => entry.name.endsWith('.draftcanvas'));
+    expect(new Set(collided.map((entry) => entry.name)).size).toBe(2);
+  });
+
+  it('reports unreadable diagrams and never records a partial archive as a complete backup', async () => {
+    const { repository, orders } = await seeded();
+    const load = repository.load.bind(repository);
+    vi.spyOn(repository, 'load').mockImplementation((id) => id === orders.metadata.id ? Promise.reject(new Error('Unreadable row')) : load(id));
+    const result = await buildBackup(repository);
+    expect(result.count).toBe(1);
+    expect(result.skipped).toEqual([orders.metadata.id]);
+    const previous = '2026-01-01T00:00:00Z';
+    writePreference(LAST_BACKUP_PREFERENCE, previous);
+    const saver = vi.fn(async () => {});
+    const notify = vi.fn();
+    setFileSaver(saver);
+    try { await backUpLibrary(repository, notify); } finally { setFileSaver(null); }
+    expect(saver).toHaveBeenCalledOnce();
+    expect(notify).toHaveBeenCalledWith(expect.stringContaining('Partial backup'), 'error');
+    expect(readPreference(LAST_BACKUP_PREFERENCE)).toBe(previous);
+  });
+
+  it('does not silently omit the project manifest after a storage failure', async () => {
+    const { repository } = await seeded();
+    vi.spyOn(repository, 'listProjects').mockRejectedValue(new Error('Projects unavailable'));
+    await expect(buildBackup(repository)).rejects.toThrow('Projects unavailable');
+  });
+
+  it('does not mark a cancelled or failed download as a backup', async () => {
+    const { repository } = await seeded();
+    const previous = '2026-01-01T00:00:00Z';
+    writePreference(LAST_BACKUP_PREFERENCE, previous);
+    setFileSaver(async () => { throw new DOMException('Cancelled', 'AbortError'); });
+    const notify = vi.fn();
+    try { await backUpLibrary(repository, notify); } finally { setFileSaver(null); }
+    expect(notify).not.toHaveBeenCalled();
+    expect(readPreference(LAST_BACKUP_PREFERENCE)).toBe(previous);
+  });
   it('writes one .draftcanvas per stored diagram, named by slug and id, plus the project manifest', async () => {
     const { repository, orders, billing } = await seeded();
     const { bytes, count } = await buildBackup(repository);

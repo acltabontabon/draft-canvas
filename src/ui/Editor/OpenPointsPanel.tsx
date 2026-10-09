@@ -157,6 +157,7 @@ function TargetLinks({ row, goTo }: { row: OpenPointRow; goTo: (row: OpenPointRo
 }
 
 function OpenRow({ row, goTo }: { row: OpenPointRow; goTo: (row: OpenPointRow, target: ElementTarget) => void }) {
+  const readOnly = useUiStore((state) => Boolean(state.readOnly));
   const { point } = row;
   const first = row.targets[0];
   return (
@@ -179,6 +180,7 @@ function OpenRow({ row, goTo }: { row: OpenPointRow; goTo: (row: OpenPointRow, t
           variant="quiet"
           className="dc-points-remove dc-open-points-resolve"
           title="Resolve — settled, the marker goes"
+          disabled={readOnly}
           onClick={() => useEditorStore.getState().resolveOpenPoint(point.id)}
         >
           Resolve
@@ -190,6 +192,7 @@ function OpenRow({ row, goTo }: { row: OpenPointRow; goTo: (row: OpenPointRow, t
 }
 
 function ResolvedRowItem({ row, goTo }: { row: OpenPointRow; goTo: (row: OpenPointRow, target: ElementTarget) => void }) {
+  const readOnly = useUiStore((state) => Boolean(state.readOnly));
   const { point } = row;
   return (
     <li className="dc-points-row dc-open-points-row" data-kind={point.kind} data-done="">
@@ -204,7 +207,7 @@ function ResolvedRowItem({ row, goTo }: { row: OpenPointRow; goTo: (row: OpenPoi
             {point.resolution && <span className="dc-open-points-resolution">{point.resolution}</span>}
           </span>
         </span>
-        <Button variant="quiet" className="dc-points-remove" title="Reopen" onClick={() => useEditorStore.getState().reopenOpenPoint(point.id)}>
+        <Button variant="quiet" className="dc-points-remove" title="Reopen" disabled={readOnly} onClick={() => useEditorStore.getState().reopenOpenPoint(point.id)}>
           Reopen
         </Button>
         <Button
@@ -213,6 +216,7 @@ function ResolvedRowItem({ row, goTo }: { row: OpenPointRow; goTo: (row: OpenPoi
           className="dc-points-remove"
           aria-label="Delete resolved point"
           title="Delete"
+          disabled={readOnly}
           onClick={() => useEditorStore.getState().removeOpenPoint(point.id)}
         />
       </div>

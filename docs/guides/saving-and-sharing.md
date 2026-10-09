@@ -270,3 +270,15 @@ A flow link opens read-only at its introduction; the reader advances it themselv
 or make an editable copy. The starting point changes where reading begins, not what is shared:
 **the link still contains the whole document**. Old links work as before. An unavailable level or
 flow falls back to the overview with a notice. The starting metadata counts toward the link-size limit.
+
+## Checking backups and reporting a failure
+
+The Library reminds you when your last backup is missing or over a week old, including when the
+browser has granted persistent storage. A partial backup keeps readable diagrams but says how many
+could not be read; it does not count as a complete backup. Keep an earlier backup until the problem
+is resolved. Browser persistence does not protect against clearing site data or losing the device.
+
+For a problem report, open About → **Diagnostic report…**, review the displayed JSON, and choose
+**Download report**. It includes recent failure categories and versions, excluding diagram content
+and file paths. It is never sent automatically. Saving and recovery limits are explained in
+[reliability](../reference/reliability.md#recovery-guarantees-and-limits).

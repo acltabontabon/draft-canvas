@@ -123,11 +123,47 @@ describe('C4 text grows a shape only when growing shows it', () => {
     expect(grown.height).toBeGreaterThan(node.height);
   });
 
-  it('leaves an unnamed shape, or one whose technology can never fit, the size it was', () => {
+  it('leaves an unnamed shape the size it was', () => {
     const queue = createNode({ type: 'queue', x: 0, y: 0 });
     expect(edit(queue, { technology: 'RabbitMQ' })).toMatchObject({ width: queue.width, height: queue.height });
+  });
+
+  it('grows wide enough to show a long technology in full', () => {
     const service = createNode({ type: 'service', x: 0, y: 0, text: 'Orders API' });
     const long = edit(service, { technology: 'Spring Boot 3 on Kubernetes with Istio and Envoy sidecars' });
-    expect(long).toMatchObject({ width: service.width, height: service.height });
+    expect(long.width).toBeGreaterThan(service.width);
+    const texts = describeNode(long, describeContext(LIGHT)).shapes.filter((s) => s.t === 'text');
+    expect(texts.every((s) => !s.layout.truncated)).toBe(true);
   });
+});
+
+describe('edited shape names fit without shortening', () => {
+  it('explicitly fits an existing small box without changing its name or position', () => {
+    const node = createNode({ type: 'service', x: 100, y: 200, text: 'LongArchitectureName'.repeat(8) });
+    useEditorStore.setState({ document: { ...createDocument('Saved names'), nodes: [node] }, path: [], outer: null, history: { past: [], future: [] }, selection: { nodes: [node.id], edges: [] } });
+    expect(describeNode(node, describeContext(LIGHT)).shapes.some((s) => s.t === 'text' && s.layout.truncated)).toBe(true);
+    useEditorStore.getState().fitSelectedLabels();
+    const grown = useEditorStore.getState().document.nodes[0]!;
+    expect(grown).toMatchObject({ text: node.text, x: node.x, y: node.y });
+    expect(describeNode(grown, describeContext(LIGHT)).shapes.every((s) => s.t !== 'text' || !s.layout.truncated)).toBe(true);
+    useEditorStore.getState().undo();
+    expect(useEditorStore.getState().document.nodes[0]).toEqual(node);
+  });
+
+  for (const type of ['service', 'database', 'queue', 'actor', 'component', 'group'] as const) {
+    it(`shows a long ${type} name in full and undoes its size with the name`, () => {
+      const node = createNode({ type, x: 0, y: 0, text: 'Original' });
+      const title = 'LongArchitectureName'.repeat(20);
+      useEditorStore.setState({ document: { ...createDocument('Names'), nodes: [node] }, path: [], outer: null, history: { past: [], future: [] } });
+      useEditorStore.getState().updateNodeText(node.id, title);
+      const grown = useEditorStore.getState().document.nodes[0]!;
+      const labels = describeNode(grown, describeContext(LIGHT)).shapes.filter((s) => s.t === 'text').filter((s) => s.role === 'label');
+      expect(labels.length).toBeGreaterThan(0);
+      expect(labels.every((s) => !s.layout.truncated)).toBe(true);
+      expect(labels.flatMap((s) => s.layout.lines.map((line) => line.text)).join('')).toBe(title);
+      expect(grown.width >= node.width && grown.height >= node.height).toBe(true);
+      useEditorStore.getState().undo();
+      expect(useEditorStore.getState().document.nodes[0]).toEqual(node);
+    });
+  }
 });

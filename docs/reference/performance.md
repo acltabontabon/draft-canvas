@@ -225,8 +225,9 @@ npm run perf:save-baseline
 Runs the benchmark and saves the result to `benchmark/baseline.json` (git-tracked, committed
 deliberately when you want a new reference point). Every subsequent `npm run perf` / `perf:stress`
 that finds this file prints a "Compared with baseline" block of plain percentage diffs
-(`(current - baseline) / baseline * 100`). This is informational only — there are no pass/fail
-thresholds or CI gates tied to it.
+(`(current - baseline) / baseline * 100`). This comparison remains informational: a laptop baseline is not comparable to a shared CI runner.
+`npm run perf:check` separately enforces the supported-workload budgets described in
+[release acceptance](reliability.md#performance-acceptance).
 
 ## Publishing results
 
@@ -251,6 +252,6 @@ stops with an error if either pair is missing.
 ## CI
 
 The [`Performance`](../../.github/workflows/performance.yml) GitHub Actions workflow runs the
-identical `npm run perf` command on demand via `workflow_dispatch` and uploads
-`benchmark/results/latest.json` and `benchmark/memory-chart.svg` as artifacts. It is not part of
-the regular CI pipeline and gates nothing.
+`npm run perf:check` on every CI and release verification, and retains the interaction/lifecycle
+JSON reports. Weekly and manual runs also measure larger workloads and long sessions. Missing or
+failed measurements cannot pass. See [the budgets and their limits](reliability.md#performance-acceptance).

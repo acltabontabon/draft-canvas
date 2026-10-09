@@ -3,6 +3,8 @@ import { formatReleaseDate, formatReleaseDateCompact } from '../../lib/date';
 import { versionKind } from '../../lib/semver';
 import { hostKind } from '../../host/hostInfo';
 import { PRODUCT } from '../../product';
+import { diagnosticReport } from '../../lib/diagnostics';
+import { downloadText } from '../../export/download';
 import {
   applicableReleases,
   groupReleasesByYear,
@@ -197,6 +199,7 @@ function DetailView({ release, headingRef }: { release: ProductRelease | undefin
 
 type View =
   | { kind: 'about' }
+  | { kind: 'diagnostics' }
   | { kind: 'whats-new' }
   | { kind: 'history' }
   | { kind: 'detail'; version: string; from: 'whats-new' | 'history' };
@@ -216,6 +219,8 @@ function AboutDialogBody() {
   const markProductReleaseSeen = useUiStore((state) => state.markProductReleaseSeen);
 
   const [view, setView] = useState<View>({ kind: 'about' });
+  const [report, setReport] = useState('');
+  const notify = useUiStore((state) => state.notify);
   const isFirstRender = useRef(true);
   const headingRef = useRef<HTMLHeadingElement>(null);
 
@@ -240,9 +245,9 @@ function AboutDialogBody() {
   };
 
   const isWide = view.kind !== 'about';
-  const modalTitle = view.kind === 'about' ? 'About' : view.kind === 'whats-new' ? "What's New" : 'Release History';
+  const modalTitle = view.kind === 'about' ? 'About' : view.kind === 'diagnostics' ? 'Diagnostic report' : view.kind === 'whats-new' ? "What's New" : 'Release History';
   const backLabel =
-    view.kind === 'whats-new'
+    view.kind === 'whats-new' || view.kind === 'diagnostics'
       ? 'Back to About'
       : view.kind === 'history'
         ? "Back to What's New"
@@ -252,7 +257,7 @@ function AboutDialogBody() {
   const onBack =
     view.kind === 'about'
       ? undefined
-      : view.kind === 'whats-new'
+      : view.kind === 'whats-new' || view.kind === 'diagnostics'
         ? () => setView({ kind: 'about' })
         : view.kind === 'history'
           ? () => setView({ kind: 'whats-new' })
@@ -381,6 +386,28 @@ function AboutDialogBody() {
           >
             ☕ Buy the builder a coffee ↗
           </a>
+          <button type="button" className="dc-about-version-action" onClick={() => {
+            setReport(diagnosticReport());
+            setView({ kind: 'diagnostics' });
+          }}>
+            Diagnostic report…
+          </button>
+        </div>
+      )}
+
+      {view.kind === 'diagnostics' && (
+        <div className="dc-about dc-view-enter">
+          <h3 ref={headingRef} tabIndex={-1}>Recent failures</h3>
+          <p>A local report of recent failures in this session. It excludes diagram content, file paths, identifiers and error messages. Review it before sharing.</p>
+          <textarea aria-label="Diagnostic report contents" readOnly value={report} rows={12} className="dc-diagnostics-preview" />
+          <button type="button" className="dc-about-version-action" onClick={() => {
+            void downloadText(report, 'draft-canvas-diagnostics.json', 'application/json').catch((error: unknown) => {
+              if ((error instanceof Error || error instanceof DOMException) && error.name === 'AbortError') return;
+              notify('The diagnostic report could not be saved.', 'error');
+            });
+          }}>
+            Download report
+          </button>
         </div>
       )}
 

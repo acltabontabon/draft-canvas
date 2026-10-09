@@ -245,3 +245,11 @@ grep -rn "fetch\|XMLHttpRequest\|WebSocket\|sendBeacon" src/
 ```
 
 Or open the network tab, draw for a while, and watch nothing happen.
+
+## Optional local diagnostic report
+
+About → **Diagnostic report…** previews an in-memory record of up to twenty recent failure
+categories, timestamps, versions and optional element counts. Raw errors, component stacks,
+diagram content, identifiers, URLs and file paths are excluded. Downloading writes that preview
+to a local JSON file through the normal export mechanism; it never uploads anything. The record
+is cleared by reloading. See [release acceptance](reliability.md#local-diagnostic-reports).

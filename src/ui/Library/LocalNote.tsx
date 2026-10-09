@@ -5,7 +5,7 @@ import { readPreference } from '../../lib/preferences';
 import { isStoragePersisted } from '../../lib/storagePersistence';
 import { useUiStore } from '../../store/uiStore';
 import { Icon } from '../common/Icon';
-import { backUpLibrary } from './backupActions';
+import { backUpLibrary, BACKUP_COMPLETED_EVENT } from './backupActions';
 
 /**
  * The local-first promise, sized to how often someone needs to read it: one
@@ -18,16 +18,24 @@ import { backUpLibrary } from './backupActions';
  * starts open: that is the one time this footnote is the most important
  * thing on the screen.
  */
-export function LocalNote({ durable, repository }: { durable: boolean; repository: DraftRepository | null }) {
+export function LocalNote({ durable, repository, hasDocuments }: { durable: boolean; repository: DraftRepository | null; hasDocuments: boolean }) {
   const [open, setOpen] = useState(!durable);
   const estimate = useStorageEstimate(repository, open);
   const persisted = usePersisted(durable);
   const notify = useUiStore((state) => state.notify);
   // Re-read after a backup from here, so the nudge goes away the moment it has been answered.
   const [lastBackupAt, setLastBackupAt] = useState(() => readPreference(LAST_BACKUP_PREFERENCE));
-  // Only where the warning already applies: storage is real but the browser hasn't promised to keep
-  // it, and no backup has been written for a week. With persistence granted there is nothing to nudge.
-  const nudge = durable && persisted === false && repository !== null && backupIsStale(lastBackupAt);
+  useEffect(() => {
+    const refresh = () => setLastBackupAt(readPreference(LAST_BACKUP_PREFERENCE));
+    window.addEventListener(BACKUP_COMPLETED_EVENT, refresh);
+    window.addEventListener('storage', refresh);
+    return () => {
+      window.removeEventListener(BACKUP_COMPLETED_EVENT, refresh);
+      window.removeEventListener('storage', refresh);
+    };
+  }, []);
+  // Persistence prevents eviction, not profile deletion or device loss. Both need another copy.
+  const nudge = hasDocuments && durable && repository !== null && backupIsStale(lastBackupAt);
 
   return (
     <div className="dc-local" data-warn={durable ? undefined : 'true'}>
@@ -42,7 +50,7 @@ export function LocalNote({ durable, repository }: { durable: boolean; repositor
       </button>
       {nudge && (
         <p className="dc-local-nudge">
-          Back up your diagrams — the browser hasn&rsquo;t promised to keep them.{' '}
+          Keep another copy of your diagrams — your last backup is missing or over a week old.{' '}
           <button
             type="button"
             className="dc-local-more"

@@ -20,7 +20,8 @@ describe('MoveToProjectMenu keyboard navigation', () => {
     expect(menu).toHaveAttribute('aria-activedescendant', 'dc-move-menu-item-1');
 
     fireEvent.keyDown(window, { key: 'Enter' });
-    expect(onMove).toHaveBeenCalledWith('p1');
+    // Match the alphabetical order used in the sidebar, not storage insertion order.
+    expect(onMove).toHaveBeenCalledWith('p2');
   });
 
   it('End jumps to the last row, Home back to the first', () => {

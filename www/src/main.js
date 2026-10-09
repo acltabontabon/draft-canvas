@@ -189,6 +189,7 @@ const CAPTIONS = {
   compose: 'Ask the palette for a pattern. A whole CQRS architecture lands laid out, wired, and ready to present.',
   present: 'A flow, one step at a time. Each step brings its own notes and code; the rest dims.',
   inside: '<kbd>⌘↓</kbd> steps inside a shape, for the detail the overview shouldn&rsquo;t carry.',
+  io: 'Paste a Mermaid flowchart and it lands laid out. Send it back out as C4-PlantUML, Structurizr or a link.',
 };
 
 function setUpDemo() {

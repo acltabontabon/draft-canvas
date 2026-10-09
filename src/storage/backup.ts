@@ -35,6 +35,8 @@ export interface BackupResult {
   bytes: Uint8Array<ArrayBuffer>;
   /** Diagrams written. */
   count: number;
+  /** Unreadable document ids. A partial archive must never reset the complete-backup reminder. */
+  skipped: string[];
 }
 
 export interface RestoreResult {
@@ -53,9 +55,17 @@ export function backupFileName(now = new Date()): string {
 }
 
 /** The archive path of one diagram: a slug of its title, then its id so two "Untitled" never collide. */
-function entryNameFor(document: DraftDocument): string {
+function entryNameFor(document: DraftDocument, index: number): string {
   const slug = fileNameFor(document.metadata.title, '');
-  return `${slug}-${document.metadata.id}${DOCUMENT_EXTENSION}`;
+  // IDs are opaque model keys, not paths. Restored files may legitimately contain slashes, dots,
+  // control characters or lone surrogates; escaping UTF-16 units keeps distinct IDs distinct.
+  const encoded = document.metadata.id.replace(/[^a-z0-9_-]/g, (char) => `~${char.charCodeAt(0).toString(16).padStart(4, '0')}`);
+  // Keep a portable component length. This marker cannot occur in an escaped ID, and the archive
+  // index makes truncated IDs unique without rewriting their identity inside the document.
+  const limit = Math.min(128, 225 - new TextEncoder().encode(slug).length);
+  const marker = `~long-${index}`;
+  const id = encoded.length > limit ? `${encoded.slice(0, limit - marker.length)}${marker}` : encoded;
+  return `${slug}-${id}${DOCUMENT_EXTENSION}`;
 }
 
 /**
@@ -66,17 +76,29 @@ function entryNameFor(document: DraftDocument): string {
 export async function buildBackup(repository: DraftRepository): Promise<BackupResult> {
   const summaries = await repository.list();
   const entries: { name: string; data: string }[] = [];
-  const membership: Record<string, string> = {};
+  // Opaque ids such as "__proto__" are data keys, not inherited object properties.
+  const membership: Record<string, string> = Object.create(null) as Record<string, string>;
+  const skipped: string[] = [];
+  const names = new Set<string>();
   for (const summary of summaries) {
     const document = await repository.load(summary.id).catch(() => null);
-    if (!document) continue;
-    entries.push({ name: entryNameFor(document), data: serializeDocument(document) });
+    if (!document) {
+      skipped.push(summary.id);
+      continue;
+    }
+    let name = entryNameFor(document, entries.length);
+    const key = (value: string) => value.normalize('NFC').toLowerCase();
+    // Title + id concatenation can collide too (a/b-c versus a-b/c). This marker cannot occur in
+    // the escaped name and its index is unique; the component budget leaves room for it.
+    if (names.has(key(name))) name = `${name.slice(0, -DOCUMENT_EXTENSION.length)}~copy-${entries.length}${DOCUMENT_EXTENSION}`;
+    names.add(key(name));
+    entries.push({ name, data: serializeDocument(document) });
     if (document.metadata.projectId) membership[document.metadata.id] = document.metadata.projectId;
   }
-  const projects = await repository.listProjects().catch(() => [] as Project[]);
+  const projects = await repository.listProjects();
   const manifest: Manifest = { projects, membership };
   entries.push({ name: MANIFEST_NAME, data: `${JSON.stringify(manifest, null, 2)}\n` });
-  return { bytes: zipFiles(entries), count: entries.length - 1 };
+  return { bytes: zipFiles(entries), count: entries.length - 1, skipped };
 }
 
 const decoder = new TextDecoder();
@@ -94,7 +116,7 @@ function readManifest(data: Uint8Array | undefined): Manifest {
             !!p && typeof p === 'object' && typeof p.id === 'string' && typeof p.name === 'string' && typeof p.createdAt === 'number' && typeof p.updatedAt === 'number',
         )
       : [];
-    const membership: Record<string, string> = {};
+    const membership: Record<string, string> = Object.create(null) as Record<string, string>;
     if (raw.membership && typeof raw.membership === 'object') {
       for (const [id, projectId] of Object.entries(raw.membership)) if (typeof projectId === 'string') membership[id] = projectId;
     }

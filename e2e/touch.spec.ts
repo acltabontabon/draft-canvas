@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { newCanvas } from './canvas';
+import { cameraAtRest, newCanvas } from './canvas';
 
 /**
  * The editor under a finger: a phone-sized viewport with a touch screen. A tap selects, a hold opens
@@ -18,6 +18,8 @@ async function addService(page: Page) {
   await page.keyboard.press('Escape');
   await expect(page.locator('.dc-node-editor')).toHaveCount(0);
   await page.keyboard.press('Shift+1');
+  // Fit animates: a gesture sent while that camera move is in flight can be overwritten by its tail.
+  await cameraAtRest(page);
 }
 
 async function nodeCenter(page: Page) {
@@ -120,11 +122,16 @@ test.describe('touch', () => {
     test.skip(process.platform === 'linux', 'headless Chromium on Linux does not synthesize pinch-zoom from CDP touches');
     await newCanvas(page, 'Touch pinch');
     await addService(page);
+    await page.locator('.react-flow__pane').click({ position: { x: 5, y: 5 } });
     const before = await zoomOf(page);
 
     const cdp = await page.context().newCDPSession(page);
-    const cx = 206;
-    const cy = 520;
+    // Fit puts the shape at the canvas centre. Pinching there starts a node drag, not a canvas
+    // gesture; choose empty canvas below it, with every touch point inside the viewport.
+    const pane = (await page.locator('.react-flow__pane').boundingBox())!;
+    const cx = pane.x + pane.width / 2;
+    const cy = pane.y + pane.height * 0.8;
+    expect(await page.evaluate(({ x, y }) => Boolean(document.elementFromPoint(x, y)?.classList.contains('react-flow__pane')), { x: cx, y: cy })).toBe(true);
     await cdp.send('Input.dispatchTouchEvent', {
       type: 'touchStart',
       touchPoints: [
@@ -132,6 +139,10 @@ test.describe('touch', () => {
         { x: cx + 30, y: cy, id: 1 },
       ],
     });
+    // A real gesture spans frames. Sending every move and the release in one compositor frame can
+    // coalesce away the starting distance, so Chromium never recognizes a pinch.
+    const nextFrame = () => page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+    await nextFrame();
     for (let step = 1; step <= 8; step += 1) {
       const spread = 30 + step * 15;
       await cdp.send('Input.dispatchTouchEvent', {
@@ -141,6 +152,7 @@ test.describe('touch', () => {
           { x: cx + spread, y: cy, id: 1 },
         ],
       });
+      await nextFrame();
     }
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     await cdp.detach();

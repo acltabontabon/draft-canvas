@@ -654,6 +654,19 @@ export function canvasCommands(ctx: CommandContext): Command[] {
       },
     });
   }
+  if (!ctx.ui.readOnly && ctx.editor.selection.nodes.some((id) => {
+    const node = ctx.editor.document.nodes.find((item) => item.id === id);
+    return node && ['service', 'database', 'queue', 'actor', 'component', 'group'].includes(node.type);
+  })) {
+    commands.push({
+      id: 'fit-shapes-to-text',
+      title: 'Fit shapes to text',
+      group: 'selection',
+      keywords: ['expand', 'readable', 'resize', 'long names', 'untruncate'],
+      hint: 'Expand selected shapes to show their full names — one undo step',
+      run: (inner) => inner.editor.fitSelectedLabels(),
+    });
+  }
   commands.push({
     id: 'find-replace',
     title: 'Find and replace…',

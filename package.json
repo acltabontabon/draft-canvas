@@ -61,7 +61,10 @@
     "release:notes": "node scripts/release-notes.mjs",
     "release:whats-new": "node scripts/whats-new.mjs",
     "desktop:check": "npm run desktop:web && npm run desktop:rust && npm run desktop:version",
-    "e2e:desktop": "playwright test --config=playwright.desktop.config.ts"
+    "e2e:desktop": "playwright test --config=playwright.desktop.config.ts",
+    "audit:npm": "tsx scripts/dependency-audit.ts npm",
+    "audit:rust": "tsx scripts/dependency-audit.ts cargo",
+    "perf:check": "npm run build && npm run perf:interaction -- --skip-build --sizes medium --scenarios pan-drag,drag-single,select-clicks --iterations 3 && npm run perf:lifecycle -- --skip-build --sizes medium --only load,export && tsx benchmark/gate-cli.ts"
   },
   "dependencies": {
     "@xyflow/react": "^12.12.0",

@@ -19,10 +19,11 @@ interface MoveToProjectMenuProps {
  */
 export function MoveToProjectMenu({ currentProjectId, projects, onMove, onClose }: MoveToProjectMenuProps) {
   const rootRef = useRef<HTMLDivElement>(null);
+  const sortedProjects = useMemo(() => [...projects].sort((a, b) => a.name.localeCompare(b.name)), [projects]);
 
   // Unorganized, then every project — the same order rows render in below, so a row's index here
   // is also its `dc-move-menu-item-<index>` id and its position for Arrow/Home/End.
-  const ids = useMemo(() => [undefined, ...projects.map((project) => project.id as string | undefined)], [projects]);
+  const ids = useMemo(() => [undefined, ...sortedProjects.map((project) => project.id as string | undefined)], [sortedProjects]);
   const [highlight, setHighlight] = useState(() => Math.max(0, ids.indexOf(currentProjectId)));
   const highlightRef = useRef(highlight);
   useEffect(() => {
@@ -35,7 +36,11 @@ export function MoveToProjectMenu({ currentProjectId, projects, onMove, onClose 
   }, []);
   // Closing hands focus back to whatever had it before the menu opened (the trigger button) —
   // shared with `Modal`/`CommandPalette` so every dismissible surface in the app agrees on this.
-  useFocusReturn(true);
+  const returnFocusTo = useFocusReturn(true);
+
+  useLayoutEffect(() => {
+    rootRef.current?.querySelector<HTMLElement>('[data-highlighted="true"]')?.scrollIntoView?.({ block: 'nearest' });
+  }, [highlight]);
 
   useEffect(() => {
     const select = (index: number) => {
@@ -79,7 +84,14 @@ export function MoveToProjectMenu({ currentProjectId, projects, onMove, onClose 
       }
     };
     const onPointerDown = (event: PointerEvent) => {
-      if (rootRef.current && !rootRef.current.contains(event.target as Node)) onClose();
+      const root = rootRef.current;
+      const target = event.target as Node;
+      // The anchor includes the folder trigger, which owns its own toggle. Dismissing on its
+      // pointerdown would make its later click open the menu again.
+      if (!root || root.parentElement?.contains(target)) return;
+      // An outside click is moving focus somewhere else; closing must not steal it back.
+      returnFocusTo.current = null;
+      onClose();
     };
     window.addEventListener('keydown', onKeyDown, true);
     // Deferred one tick so the pointerdown that opened this menu doesn't also close it.
@@ -89,7 +101,7 @@ export function MoveToProjectMenu({ currentProjectId, projects, onMove, onClose 
       window.removeEventListener('pointerdown', onPointerDown);
       window.clearTimeout(id);
     };
-  }, [ids, onClose, onMove]);
+  }, [ids, onClose, onMove, returnFocusTo]);
 
   const row = (index: number, label: string) => (
     <button
@@ -126,7 +138,7 @@ export function MoveToProjectMenu({ currentProjectId, projects, onMove, onClose 
     >
       {row(0, 'Unorganized')}
       {projects.length > 0 && <span className="dc-move-menu-divider" />}
-      {projects.map((project, index) => row(index + 1, project.name))}
+      {sortedProjects.map((project, index) => row(index + 1, project.name))}
     </div>
   );
 }

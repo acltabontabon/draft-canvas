@@ -42,6 +42,7 @@ Running your own copy is covered in the [README](../README.md#try-it). The VS Co
 | [Desktop updates](reference/desktop-updates.md) | Set up and check the desktop app's signed updates (maintainers) |
 | [What comes next](reference/roadmap.md) | Drawing, explanation, sharing, arrangement and file-saving milestones and their remaining acceptance checks |
 | [Explanation usability](reference/explanation-usability.md) | Run the observed drawing task and five-person recipient handoff; record evidence without telemetry |
+| [Reliability and release acceptance](reference/reliability.md) | Follow release gates, recovery drills, performance budgets and remaining manual acceptance |
 | [Security](../SECURITY.md) | Read the threat model, key lifecycle and how to report a concern |
 | [Changelog](../CHANGELOG.md) | See what changed in each release |
 

@@ -30,7 +30,7 @@ import {
   type DepthPath,
 } from '../depth/tree';
 import { getMeasurer } from '../render/text/measure';
-import { describeContext, naturalArchitectureSize, naturalNoteHeight, naturalTextHeight } from '../nodes/describe';
+import { describeContext, naturalArchitectureSize, naturalBoundaryWidth, naturalNoteHeight, naturalTextHeight } from '../nodes/describe';
 import { LIGHT } from '../render/theme/tokens';
 import {
   addEdges,
@@ -564,6 +564,8 @@ export interface EditorStore {
   commitMove: (positions: Map<string, { x: number; y: number }>, movedIds: Iterable<string>) => void;
   /** A resize handle let go: the new box, with membership following (see `reconcileAfterResize`). */
   resizeNode: (id: string, box: { x?: number; y?: number; width: number; height: number }) => void;
+  /** Explicitly expand saved or manually resized architecture labels, as one undoable change. */
+  fitSelectedLabels: () => void;
 
   /* Flows */
   /** Returns the new flow's id, or `null` when the document is already at `LIMITS.maxFlows`. */
@@ -1538,6 +1540,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         next = growTextToFit(next, id);
       }
       const changesKind = KIND_FIELDS.some((field) => field in patch);
+      if (changesKind || 'text' in patch) next = growArchitectureToFit(next, id);
       return changesKind ? reinferIncidentEdges(next, id, doc) : next;
     });
   },
@@ -1579,7 +1582,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           if (named && node.height < DEFAULTS.queueNamedHeight) patch.height = DEFAULTS.queueNamedHeight;
           else if (!named && node.height === DEFAULTS.queueNamedHeight) patch.height = DEFAULTS.queueHeight;
         }
-        return updateNode(doc, id, patch);
+        return growArchitectureToFit(updateNode(doc, id, patch), id);
       },
       { coalesceKey: `text:${id}` },
     );
@@ -2155,6 +2158,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   resizeNode(id, box) {
     get().apply('Resize', (doc) => reconcileAfterResize(updateNode(doc, id, box), id));
+  },
+
+  fitSelectedLabels() {
+    const ids = get().selection.nodes;
+    if (ids.length === 0) return;
+    get().apply('Fit shapes to text', (doc) => ids.reduce((next, id) => growArchitectureToFit(next, id), doc));
   },
 
   nudgeSelection(dx, dy) {
@@ -3045,11 +3054,20 @@ function growNoteToFit(doc: DraftDocument, id: string): DraftDocument {
  *  colour never changes where text goes. */
 function growArchitectureToFit(doc: DraftDocument, id: string): DraftDocument {
   const node = doc.nodes.find((n) => n.id === id);
-  if (!node || !(C4_TEXT_TYPES as readonly string[]).includes(node.type)) return doc;
-  if (!node.technology && !node.description) return doc;
-  const needed = naturalArchitectureSize(node, describeContext(LIGHT));
-  // No size shows it all — an unnamed shape draws no detail, and a technology too long for one line
-  // never fits — so growing to the search's ceiling would only leave an empty 280×320 box.
+  if (!node) return doc;
+  if (node.type === 'group') {
+    const width = Math.min(LIMITS.maxNodeSize, Math.max(node.width, naturalBoundaryWidth(node, describeContext(LIGHT))));
+    return width > node.width ? updateNode(doc, id, { width }) : doc;
+  }
+  if (!(C4_TEXT_TYPES as readonly string[]).includes(node.type)) return doc;
+  if (!node.text?.trim() && !node.technology && !node.description) return doc;
+  const needed = naturalArchitectureSize(node, describeContext(LIGHT), {
+    maxWidth: Math.max(node.width, 640),
+    maxHeight: LIMITS.maxNodeSize,
+    maxNameLines: Number.POSITIVE_INFINITY,
+  });
+  // An unnamed shape draws no detail. If no searched box can show everything, avoid growing it
+  // to a giant empty box merely to reach the search ceiling.
   if (!needed.fits) return doc;
   if (needed.width <= node.width && needed.height <= node.height) return doc;
   return updateNode(doc, id, { width: Math.max(node.width, needed.width), height: Math.max(node.height, needed.height) });

@@ -31,7 +31,7 @@ export default defineConfig({
     { name: 'webkit', use: { ...devices['Desktop Safari'] } },
   ].filter((project) => !process.env.PLAYWRIGHT_BROWSER || project.name === process.env.PLAYWRIGHT_BROWSER),
   webServer: {
-    command: 'npm run build && npm run preview -- --port 5190 --strictPort',
+    command: `${process.env.DC_TEST_BUILT === '1' ? '' : 'npm run build && '}npm run preview -- --port 5190 --strictPort`,
     url: 'http://localhost:5190',
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,

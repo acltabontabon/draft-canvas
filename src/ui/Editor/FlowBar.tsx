@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { useStore, useStoreApi } from '@xyflow/react';
 import { categoryOf } from '../../document/connectorSemantics';
 import { effectiveConnectorText } from '../../document/edgeSemantics';
@@ -311,6 +311,7 @@ export function FlowBar({ playback }: { playback: FlowPlaybackController }) {
             <Button
               icon="flowNext"
               variant="quiet"
+              className="dc-explain-next-flow-button"
               // At the end of a flow the next one names itself: the hand-off is the thing the
               // presenter is about to say out loud, not a bare arrow they have to remember.
               aria-label={upcoming ? `Next flow: ${upcoming.title}` : 'Next flow'}
@@ -458,6 +459,19 @@ function StepCaption({
   nodes: ReadonlyMap<string, DraftNode>;
 }) {
   const corner = useUiStore((state) => state.presentation.captionCorner);
+  const captionRef = useRef<HTMLDivElement>(null);
+  const [scrollable, setScrollable] = useState(false);
+  useLayoutEffect(() => {
+    const caption = captionRef.current;
+    if (!caption) return;
+    caption.scrollTop = 0;
+    const measure = () => setScrollable(caption.scrollHeight > caption.clientHeight + 1);
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(caption);
+    return () => observer.disconnect();
+  }, [step.step, story.caption, story.from, story.to, story.headline, flow.id, flow.title]);
   useCaptionFollowsCamera();
   const crossed = useMemo(
     () => (step.edge ? crossedBoundaries(nodes, step.edge.source, step.edge.target) : []),
@@ -466,7 +480,28 @@ function StepCaption({
   const chips = chipsFor(step.edge, step.edges.length, crossed);
   const base = useEditorStore((state) => (flow.variantOf ? state.document.flows.find((f) => f.id === flow.variantOf) : undefined));
   return (
-    <div className="dc-present-caption" data-corner={corner} aria-hidden="true">
+    <div
+      className="dc-present-caption nowheel nopan"
+      ref={captionRef}
+      data-corner={corner}
+      role="region"
+      aria-label="Step details"
+      tabIndex={0}
+      onKeyDown={(event) => {
+        if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(event.key)) event.stopPropagation();
+      }}
+    >
+      {scrollable && (
+        <button
+          type="button"
+          className="dc-present-read-more"
+          aria-label="Read full step details"
+          title="Read full step details"
+          onClick={() => captionRef.current?.focus()}
+        >
+          <Icon name="down" size={12} />
+        </button>
+      )}
       <span className="dc-present-eyebrow">
         Step {step.step} of {total}
         {base ? <> · variant of {base.title}</> : null}

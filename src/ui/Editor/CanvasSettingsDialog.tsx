@@ -100,7 +100,7 @@ function CanvasSettingsBody() {
             ref={fileInput}
             type="file"
             accept={ACCEPTED_TYPES}
-            className="dc-sr-only"
+            hidden
             onChange={(event) => {
               const file = event.target.files?.[0];
               event.target.value = '';

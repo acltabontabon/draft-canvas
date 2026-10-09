@@ -402,11 +402,23 @@ export class IndexedDbRepository implements DraftRepository {
     const tx = this.db.transaction(['documents', 'bodies'], 'readwrite');
     const documents = tx.objectStore('documents');
     const bodies = tx.objectStore('bodies');
-    const write = (doc: DraftDocument) => Promise.all([documents.put({ ...summarize(doc), contentStamp: stamp }), bodies.put(plainBody(doc))]);
-    const read = base || checked ? documents.get(id) : Promise.resolve(undefined);
-    const first = write(document);
+    const requests: Promise<unknown>[] = [];
+    const write = (doc: DraftDocument) => {
+      // A synchronous put failure (for example a clone error) must abort the summary already queued.
+      // Keep each promise before queuing the next request, so that abort cannot reject an orphan.
+      const summary = documents.put({ ...summarize(doc), contentStamp: stamp });
+      requests.push(summary);
+      const body = bodies.put(plainBody(doc));
+      requests.push(body);
+      const result = Promise.all([summary, body]);
+      requests.push(result);
+      return result;
+    };
     let written = document;
     try {
+      const read = base || checked ? documents.get(id) : Promise.resolve(undefined);
+      requests.push(read);
+      const first = write(document);
       const before = await read;
       const conflict = conflictIn(before);
       if (conflict) {
@@ -425,6 +437,8 @@ export class IndexedDbRepository implements DraftRepository {
       if (written !== document) return sharedMetadataOf(written.metadata);
       return;
     } catch (error) {
+      try { tx.abort(); } catch { /* A failed transaction may already have aborted. */ }
+      await Promise.allSettled([...requests, tx.done]);
       if (isQuotaError(error)) throw new QuotaExceededError(error);
       throw error;
     }
@@ -683,4 +697,3 @@ async function ownedImageKeys(
   const keys = await store.getAllKeys(IDBKeyRange.bound(prefix, `${prefix}\uffff`));
   return keys.filter((key): key is string => typeof key === 'string' && isBackgroundImageKeyOf(key, documentId));
 }
-

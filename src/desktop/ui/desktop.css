@@ -409,16 +409,13 @@
   }
 }
 
-/* Long names get two lines before they give up, and the whole name is a hover away. */
+/* Long names wrap fully inside the tile. */
 .dc-desk-row .dc-starter-name {
-  display: -webkit-box;
+  display: block;
   font-size: 13.5px;
   line-height: 19px;
   white-space: normal;
   overflow-wrap: anywhere;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
 }
 
 .dc-desk-row .dc-starter:focus-visible .dc-starter-name {
@@ -430,12 +427,11 @@
 .dc-desk-tile-meta {
   max-width: 100%;
   margin-top: -4px;
-  overflow: hidden;
   color: var(--dc-text-faint);
   font-size: 11.5px;
   line-height: 16px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 /* A draft holds work no file does yet: the dot macOS puts in a window's close button. */
@@ -583,13 +579,12 @@
   max-width: 100%;
   min-height: 20px;
   margin: 10px 0 0;
-  overflow: hidden;
   color: var(--dc-text-muted);
   font-size: 12.5px;
   line-height: 20px;
   text-align: center;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .dc-desk-readout[data-idle] {
@@ -615,12 +610,11 @@
 .dc-desk-aside-path {
   max-width: 100%;
   padding: 0 8px;
-  overflow: hidden;
   color: var(--dc-text-faint);
   font-family: var(--dc-mono);
   font-size: 11.5px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 /* Everything else there is to do, as one quiet line: the other way to start, then the ways in. */
@@ -840,11 +834,10 @@
 
 .dc-browse-meta {
   min-width: 0;
-  overflow: hidden;
   color: var(--dc-text-faint);
   font-size: 12.5px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 /* A group's own actions, out of the way until the group is under the pointer or focus. */
@@ -1367,10 +1360,9 @@
 
 .dc-agent-activity-text {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   color: var(--dc-text-muted);
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .dc-agent-activity-who {
@@ -1431,11 +1423,10 @@
 
 .dc-agent-generation-title {
   margin: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   font-size: 14px;
   font-weight: 600;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .dc-agent-generation-badge {

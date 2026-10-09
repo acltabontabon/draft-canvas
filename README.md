@@ -13,7 +13,7 @@ It gives you architecture-aware shapes, familiar technical relationships, and sm
 [![Docker Hub](https://img.shields.io/badge/Docker-Hub-2496ED)](https://hub.docker.com/r/acltabontabon/draft-canvas)
 [![GitHub Release](https://img.shields.io/github/v/release/acltabontabon/draft-canvas)](https://github.com/acltabontabon/draft-canvas/releases)
 
-<img width="100%" alt="A run through Draft Canvas: drawing a Service, Queue and Worker with the keyboard, dropping in a composed CQRS architecture, attaching a note to a connector, presenting a flow step by step and moving to the next flow without leaving and looking inside a shape with Cmd+Down." src="docs/media/demo.gif">
+<img width="100%" alt="A run through Draft Canvas: drawing a Service, Queue and Worker with the keyboard, dropping in a composed CQRS architecture, attaching a note to a connector, presenting a flow step by step, looking inside a shape with Cmd+Down, then pasting a Mermaid flowchart that lands laid out, exporting it as C4-PlantUML and Structurizr, and copying a share link." src="docs/media/demo.gif">
 
 **[Try it →](https://acltabontabon.com/draft-canvas/editor/)** Nothing you draw leaves your browser.
 There's a [landing page](https://acltabontabon.com/draft-canvas/) too, if you'd rather read about it first.

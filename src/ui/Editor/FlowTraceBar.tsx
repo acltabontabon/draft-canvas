@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
-import { isEditableTarget } from '../../lib/isEditableTarget';
+import { isEditableTarget, isImeKeyEvent, overlayAboveCanvasIsOpen } from '../../lib/isEditableTarget';
 import { LIMITS } from '../../document/limits';
 import { displayNameFor } from '../../document/factory';
 import { Button } from '../common/Button';
@@ -29,6 +29,8 @@ export function FlowTraceBar() {
     const onKey = (event: KeyboardEvent) => {
       const current = useUiStore.getState().flowTrace;
       if (!current) return;
+      // Escape cancelling an IME conversion belongs to the field, not to the provisional path.
+      if (isImeKeyEvent(event) || overlayAboveCanvasIsOpen()) return;
       if (event.key === 'Escape') {
         event.preventDefault();
         event.stopImmediatePropagation();

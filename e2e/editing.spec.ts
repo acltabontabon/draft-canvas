@@ -1206,16 +1206,21 @@ test.describe('editing', () => {
     await create(page, 'Data Store', { x: 600, y: 250 });
     await connect(page, 0, 1);
 
-    const nodeA = (await page.locator('.dc-node').nth(0).boundingBox())!;
-    const nodeB = (await page.locator('.dc-node').nth(1).boundingBox())!;
-    const midX = (nodeA.x + nodeA.width + nodeB.x) / 2;
-    const midY = (nodeA.y + nodeA.height / 2 + nodeB.y + nodeB.height / 2) / 2;
-
-    // The visible stroke is under 3px wide; 6px off its centre lands well
-    // outside it but safely inside `BaseEdge`'s invisible `interactionWidth`
-    // corridor (Chromium's own stroke hit-testing gives that a little less
-    // than the raw 18px prop value, but comfortably more than 6px either side).
-    await page.mouse.click(midX, midY - 6);
+    // Different silhouettes can meet the connector away from their box centres. Sample the actual
+    // route, away from the central label, so this tests the hit corridor rather than guessed geometry.
+    const at = await page.locator('.dc-edge-hit').first().evaluate((element) => {
+      const path = element as SVGPathElement;
+      const length = path.getTotalLength();
+      const matrix = path.getScreenCTM()!;
+      const point = path.getPointAtLength(length * 0.3).matrixTransform(matrix);
+      const before = path.getPointAtLength(length * 0.3 - 2).matrixTransform(matrix);
+      const after = path.getPointAtLength(length * 0.3 + 2).matrixTransform(matrix);
+      const dx = after.x - before.x;
+      const dy = after.y - before.y;
+      const norm = Math.hypot(dx, dy);
+      return { x: point.x - dy / norm * 6, y: point.y + dx / norm * 6 };
+    });
+    await page.mouse.click(at.x, at.y);
     await expect(page.locator('.dc-edge[data-selected="true"]')).toHaveCount(1);
   });
 

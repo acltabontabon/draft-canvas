@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { IDBFactory } from 'fake-indexeddb';
+import { IDBFactory, IDBObjectStore } from 'fake-indexeddb';
 import { cloneDocumentAsNew, createDocument, createNode } from '../src/document/factory';
 import { addNodes } from '../src/document/operations';
 import { IndexedDbRepository } from '../src/storage/IndexedDbRepository';
@@ -88,6 +88,24 @@ beforeEach(() => {
 });
 
 describe('local persistence', () => {
+  it('a body write that throws synchronously cannot commit a newer summary beside an older body', async () => {
+    const repository = await IndexedDbRepository.open();
+    const original = documentWith('Confirmed copy');
+    await repository.save(original);
+    const put = IDBObjectStore.prototype.put;
+    const failure = vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementation(function (this: IDBObjectStore, ...args: Parameters<typeof put>) {
+      if (this.name === 'bodies') throw new DOMException('Disk full', 'QuotaExceededError');
+      return put.apply(this, args);
+    });
+    try {
+      await expect(repository.save({ ...original, metadata: { ...original.metadata, title: 'Unconfirmed copy' } })).rejects.toBeInstanceOf(QuotaExceededError);
+    } finally {
+      failure.mockRestore();
+    }
+    const reopened = await IndexedDbRepository.open();
+    expect((await reopened.list())[0]!.title).toBe('Confirmed copy');
+    expect((await reopened.load(original.metadata.id))!.metadata.title).toBe('Confirmed copy');
+  });
   it('saves and restores a document across a fresh connection', async () => {
     const repository = await IndexedDbRepository.open();
     const doc = documentWith('Payment Flow', 3);

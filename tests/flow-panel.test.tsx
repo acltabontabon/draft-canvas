@@ -25,7 +25,7 @@ function reset() {
     focus: { active: false, nodeIds: [], edgeIds: [] },
     selectedFlowId: null,
   });
-  useUiStore.setState({ flowPanelOpen: true, flowRenameRequestId: null });
+  useUiStore.setState({ flowPanelOpen: true, flowRenameRequestId: null, readOnly: null });
 }
 
 const onPresent = vi.fn();
@@ -47,6 +47,26 @@ function rowFor(title: string): HTMLElement {
 
 describe('FlowPanel', () => {
   beforeEach(reset);
+
+  it('keeps shared flow navigation available but does not offer edits that cannot save', () => {
+    const edge = addConnectedPair();
+    const state = useEditorStore.getState();
+    const id = state.createFlow('Shared flow')!;
+    state.addEdgeToFlow(id, edge.id);
+    useUiStore.setState({ readOnly: { sharedTitle: 'Shared diagram' } });
+    mount();
+    expect(screen.queryByRole('button', { name: 'New flow' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Rename Shared flow' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Delete Shared flow' })).toBeDisabled();
+    fireEvent.doubleClick(screen.getByText('Shared flow'));
+    fireEvent.keyDown(rowFor('Shared flow'), { key: 'F2' });
+    expect(screen.queryByLabelText('Flow name')).toBeNull();
+    fireEvent.keyDown(rowFor('Shared flow'), { key: 'Delete' });
+    expect(useEditorStore.getState().document.flows).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Expand' }));
+    expect(screen.getByRole('button', { name: 'Remove step 1' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Present Shared flow' })).toBeEnabled();
+  });
 
   it('teaches the concept when there are no flows and offers New flow as the one action', () => {
     mount();

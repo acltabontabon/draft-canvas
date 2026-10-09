@@ -13,6 +13,15 @@ the release notes and the in-app What's New are generated from here. See
 
 ### Shared
 
+- Long diagram, project and flow names wrap in the interface. Edited architecture names grow their
+  shapes to show the full label; boundary names gain width without covering their contents. Select
+  existing small shapes and run **Fit shapes to text** to expand their labels in one undoable edit.
+- Fix project-menu toggling and keyboard scrolling, hidden focus stops in Canvas settings, and
+  Escape cancelling a flow trace while composing text. Shared flows and open points show editing
+  controls as unavailable instead of offering changes that cannot be saved.
+
+- Preview and download a local diagnostic report from About, without diagram content or file paths.
+
 - **Trace a flow** by choosing connectors on the canvas or in the Outline. Preview numbers,
   remove the last choice, cancel, or finish a new/extended flow as one undoable change.
 - **Try an example** opens an editable Order processing diagram with a three-step explanation
@@ -21,6 +30,9 @@ the release notes and the in-app What's New are generated from here. See
   shapes and free notes fixed, with one undo step.
 
 ### Web
+
+- Backup reminders also apply to persistent browser storage. Partial backups report unreadable
+  diagrams and do not reset the complete-backup date; failed writes keep the previous stored copy.
 
 - Share links can start at a chosen level or playable flow's introduction. Readers still receive
   the whole document; existing links and quick overview sharing keep their behavior.
