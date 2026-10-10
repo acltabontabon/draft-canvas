@@ -15,7 +15,9 @@ permissions:
 
 jobs:
   benchmark:
-    runs-on: ubuntu-latest
+    # Keep the OS and architecture stable for timing gates. The x64 hosted pool rotated between
+    # EPYC generations, moving selection p95 from 50 to 67 ms with unchanged selection code.
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
