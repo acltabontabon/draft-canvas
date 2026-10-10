@@ -58,7 +58,7 @@ export async function measureLoad(
     await settle(page, 3);
     await startRecording(page);
     const t0 = Date.now();
-    await page.setInputFiles('input[type="file"]', {
+    await page.setInputFiles('input[type="file"][accept*=".draftcanvas"]', {
       name: `${manifest.spec.name}.draftcanvas`,
       mimeType: 'application/json',
       buffer: fixture,
@@ -140,7 +140,7 @@ export async function measureLibrary(browser: Browser, baseUrl: string, count: n
   await page.goto(`${baseUrl}/?bench=1`);
   for (let i = 0; i < count; i += 1) {
     const copy = { ...seed, metadata: { ...seed.metadata, id: `bench-lib-${i}`, title: `Diagram ${i + 1}` } };
-    await page.setInputFiles('input[type="file"]', {
+    await page.setInputFiles('input[type="file"][accept*=".draftcanvas"]', {
       name: `diagram-${i}.draftcanvas`,
       mimeType: 'application/json',
       buffer: Buffer.from(JSON.stringify(copy)),
@@ -229,7 +229,7 @@ export async function soakSwitching(
   // A second diagram to switch to, so every cycle really unmounts one canvas and mounts another.
   await page.getByRole('button', { name: 'Back to your diagrams' }).click();
   const other = { ...seed, metadata: { ...seed.metadata, id: 'bench-other', title: 'Other diagram' } };
-  await page.setInputFiles('input[type="file"]', {
+  await page.setInputFiles('input[type="file"][accept*=".draftcanvas"]', {
     name: 'other.draftcanvas',
     mimeType: 'application/json',
     buffer: Buffer.from(JSON.stringify(other)),

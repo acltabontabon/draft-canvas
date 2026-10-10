@@ -137,7 +137,7 @@ export async function openFixture(
   await cdp.send('HeapProfiler.enable');
 
   await page.goto(`${baseUrl}/?bench=1`);
-  await page.setInputFiles('input[type="file"]', {
+  await page.setInputFiles('input[type="file"][accept*=".draftcanvas"]', {
     name: `${manifest.spec.name}.draftcanvas`,
     mimeType: 'application/json',
     buffer: fixture,
