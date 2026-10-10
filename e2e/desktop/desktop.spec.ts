@@ -490,6 +490,9 @@ test('opens a file, says when it has unsaved changes, and asks before leaving it
 
 test('the native menu saves, and a file the OS opens replaces Home', async ({ page }) => {
   await page.goto('/');
+  // Home renders after host_ready attaches the event channel. Sending a fake OS event before
+  // that handshake drops it in the mock, unlike an event delivered to the visible native app.
+  await expect(page.getByRole('button', { name: 'New Quick Draft' })).toBeVisible();
   const text = await documentText(page, 'Checkout', 0);
   const handle = await page.evaluate((text) => window.__shell.addFile('checkout', text), text);
 
