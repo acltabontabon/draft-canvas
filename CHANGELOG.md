@@ -13,14 +13,7 @@ the release notes and the in-app What's New are generated from here. See
 
 ### Shared
 
-- Long diagram, project and flow names wrap in the interface. Edited architecture names grow their
-  shapes to show the full label; boundary names gain width without covering their contents. Select
-  existing small shapes and run **Fit shapes to text** to expand their labels in one undoable edit.
-- Fix project-menu toggling and keyboard scrolling, hidden focus stops in Canvas settings, and
-  Escape cancelling a flow trace while composing text. Shared flows and open points show editing
-  controls as unavailable instead of offering changes that cannot be saved.
-
-- Preview and download a local diagnostic report from About, without diagram content or file paths.
+#### Added
 
 - **Trace a flow** by choosing connectors on the canvas or in the Outline. Preview numbers,
   remove the last choice, cancel, or finish a new/extended flow as one undoable change.
@@ -28,16 +21,58 @@ the release notes and the in-app What's New are generated from here. See
   and a note explaining the queue. Play it, edit it, and reuse the same controls for your own work.
 - **Arrange selection** tidies selected shapes and boundary contents while keeping surrounding
   shapes and free notes fixed, with one undo step.
+- **Fit shapes to text** expands selected architecture shapes and boundaries to show their full
+  labels, including existing small shapes, as one undoable change.
+- Preview and download a local diagnostic report from About, without diagram content or file paths.
+
+#### Changed
+
+- Long diagram and flow names wrap in the toolbar, panels, menus and command palette. Edited
+  architecture names grow their shapes to show the full label; boundary names gain width without
+  covering their contents.
+- Presentation captions retain the full explanation in a bounded, keyboard-accessible scrolling
+  area instead of cutting it off after a few lines.
+
+#### Fixed
+
+- Inspector menus keep keyboard-highlighted options in view, and Canvas settings no longer has
+  an invisible image-picker tab stop.
+- Escape no longer cancels a flow trace while composing text with an input method.
+- Read-only shared flows and open points show editing controls as unavailable instead of offering
+  changes that cannot be saved.
+- Long playback names no longer squeeze into narrow columns or cover connector attachment chips;
+  the **Next flow** button grows with its name.
+- Advancing or returning to a presentation step starts its explanation at the top, cancels the
+  previous step's scrolling, and preserves keyboard focus.
+
+### Desktop
+
+#### Changed
+
+- Long file names, folder paths and agent activity text wrap in Home, Find a Diagram and agent
+  panels instead of being shortened.
 
 ### Web
 
-- Backup reminders also apply to persistent browser storage. Partial backups report unreadable
-  diagrams and do not reset the complete-backup date; failed writes keep the previous stored copy.
+#### Added
 
 - Share links can start at a chosen level or playable flow's introduction. Readers still receive
   the whole document; existing links and quick overview sharing keep their behavior.
 - Supported browsers offer **Open file…**, **Save**, and **Save As…**, with remembered file links,
   explicit disk writes, automatic browser recovery, and choices when disk and recovery disagree.
+
+#### Changed
+
+- Diagram and project names wrap in the Library and project menus instead of being shortened.
+  The move-to-project menu lists projects alphabetically, matching the sidebar.
+- Backup reminders also apply to persistent browser storage.
+
+#### Fixed
+
+- Project-menu triggers toggle closed correctly, keyboard navigation keeps the highlighted project
+  visible, and clicking outside a menu keeps focus on the control you clicked.
+- Partial backups report unreadable diagrams and do not reset the complete-backup date.
+- Failed browser saves keep the previous stored diagram intact.
 
 ## [1.12.1] - 2026-10-04
 
