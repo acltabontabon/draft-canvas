@@ -138,6 +138,9 @@ jobs:
 
   publish:
     needs: build
+    # A release caller skips verification because it already supplied a verified commit. An
+    # explicit condition keeps that skipped ancestor from suppressing promotion of the tested image.
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
