@@ -17,10 +17,9 @@ dist-ssr
 Dockerfile
 .dockerignore
 
-# Docs, media, benchmarks, demo recordings and browser tests.
-# `tests/` stays in: `tsc -b` type-checks it as part of `npm run build`.
+# Docs, media, demo recordings and browser tests.
+# `tests/` and `benchmark/` stay in: `tsc -b` checks tests, including their benchmark imports.
 docs
-benchmark
 demo
 e2e
 vscode-extension

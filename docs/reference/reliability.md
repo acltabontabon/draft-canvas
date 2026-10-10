@@ -98,6 +98,9 @@ The scan also runs weekly so new advisories do not wait for the next code change
 
 Update compatible dependencies first. The source-map-js indexed-map denial-of-service advisory
 GHSA-68fv-2mgg-jv7q was resolved by updating both lockfiles to 1.2.2.
+Site-only deployments also refresh that compatible build-only dependency in the published editor's
+lockfile before installation. They retain the full audit and browser acceptance gates, and record
+the installed build-lock digest and source-map version beside the released source commit.
 If no supported fix is available, an entry in
 [advisory-exceptions.json](../../.github/advisory-exceptions.json) must name the ecosystem, advisory,
 package, technical reason, tracking reference and expiry. Expired or incomplete entries fail even

@@ -460,10 +460,22 @@ function StepCaption({
 }) {
   const corner = useUiStore((state) => state.presentation.captionCorner);
   const captionRef = useRef<HTMLDivElement>(null);
+  const restoreCaptionFocus = useRef(false);
+  const setCaptionRef = useCallback((caption: HTMLDivElement | null) => {
+    if (!caption) {
+      const previous = captionRef.current;
+      restoreCaptionFocus.current = !!previous && previous.contains(document.activeElement);
+    }
+    captionRef.current = caption;
+  }, []);
   const [scrollable, setScrollable] = useState(false);
   useLayoutEffect(() => {
     const caption = captionRef.current;
     if (!caption) return;
+    if (restoreCaptionFocus.current) {
+      caption.focus({ preventScroll: true });
+      restoreCaptionFocus.current = false;
+    }
     caption.scrollTop = 0;
     const measure = () => setScrollable(caption.scrollHeight > caption.clientHeight + 1);
     measure();
@@ -481,8 +493,11 @@ function StepCaption({
   const base = useEditorStore((state) => (flow.variantOf ? state.document.flows.find((f) => f.id === flow.variantOf) : undefined));
   return (
     <div
+      // A browser's pending keyboard scroll belongs to one step. Replacing its scroll surface
+      // prevents that motion reaching the next explanation, while the ref carries focus forward.
+      key={`${flow.id}:${step.step}`}
       className="dc-present-caption nowheel nopan"
-      ref={captionRef}
+      ref={setCaptionRef}
       data-corner={corner}
       role="region"
       aria-label="Step details"

@@ -3009,6 +3009,7 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
      taking over the clear corner the presentation camera reserved. */
   max-height: min(132px, calc(100% - 192px));
   overflow: auto;
+  overflow-anchor: none;
   pointer-events: none;
 }
 

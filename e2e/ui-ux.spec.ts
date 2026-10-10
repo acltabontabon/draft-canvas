@@ -175,7 +175,18 @@ test('long presentation details remain scrollable within the camera footprint', 
   await expect(details.locator('.dc-present-eyebrow')).toContainText('Step 1 of 2');
   await page.keyboard.press('ArrowRight');
   await expect(details.locator('.dc-present-eyebrow')).toContainText('Step 2 of 2');
+  await expect(details).toBeFocused();
   await expect.poll(() => details.evaluate((element) => element.scrollTop)).toBe(0);
+  // Linux browsers animate keyboard scrolling. Exercise an in-flight scroll explicitly too,
+  // so advancing cannot let motion from the old explanation finish inside the next one.
+  await details.evaluate((element) => element.scrollTo({ top: element.scrollHeight, behavior: 'smooth' }));
+  await expect.poll(() => details.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  await page.keyboard.press('ArrowLeft');
+  await expect(details.locator('.dc-present-eyebrow')).toContainText('Step 1 of 2');
+  await expect(details).toBeFocused();
+  await expect.poll(() => details.evaluate((element) => element.scrollTop)).toBe(0);
+  await page.keyboard.press('ArrowRight');
+  await expect(details.locator('.dc-present-eyebrow')).toContainText('Step 2 of 2');
   await page.keyboard.press('ArrowRight');
   const nextFlowButton = page.locator('.dc-explain-next-flow-button');
   await expect(nextFlowButton).toHaveAccessibleName(`Next flow: ${nextTitle}`);

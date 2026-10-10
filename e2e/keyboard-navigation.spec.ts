@@ -105,7 +105,8 @@ test.describe('spatial navigation (Alt+Arrow)', () => {
     await createNode(page, 'Service', { x: 1140, y: 300 });
     await labelNode(page, 0, 'Only');
 
-    await page.mouse.click(50, 50); // clear selection
+    const canvas = await page.locator('.react-flow__pane').boundingBox();
+    await page.mouse.click(canvas!.x + 30, canvas!.y + 30);
     await expect(page.locator('.dc-node[data-selected="true"]')).toHaveCount(0);
 
     await page.keyboard.press('Alt+ArrowRight');
