@@ -30,4 +30,14 @@ describe('performance acceptance', () => {
     lifecycle.exports.pop();
     expect(performanceFailures(interaction, lifecycle)).toHaveLength(5);
   });
+
+  it('accounts for frame timestamp precision without accepting a larger frame miss', () => {
+    const { interaction, lifecycle } = reports();
+    interaction.scenarios[2]!.headline.frameP95 = 50.100000000000364;
+    expect(performanceFailures(interaction, lifecycle)).toEqual([]);
+    interaction.scenarios[2]!.headline.frameP95 = 50.6;
+    expect(performanceFailures(interaction, lifecycle)).toHaveLength(1);
+    interaction.scenarios[2]!.headline.frameP95 = -0.1;
+    expect(performanceFailures(interaction, lifecycle)).toHaveLength(1);
+  });
 });
