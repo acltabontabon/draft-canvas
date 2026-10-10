@@ -268,6 +268,21 @@ export const SCENARIOS: Scenario[] = [
         await page.getByRole('combobox', { name: 'Search commands' }).fill('Retries are idempotent');
         await page.keyboard.press('Enter');
         await page.getByRole('combobox', { name: 'Search commands' }).waitFor({ state: 'hidden' });
+        await settle(page, 30);
+        const framed = await page.locator(`.react-flow__node[data-id="${looseNoteIds[0]}"]`).boundingBox();
+        if (!framed) throw new Error('The fixture has no loose Note to frame.');
+        const start = centreOf(area);
+        // Keep the note left of the dense diagram: the recorded drag must cross connectors,
+        // rather than move only a few pixels around the centre the jump command chose.
+        const target = { x: area.x + area.width * 0.25, y: area.y + area.height * 0.5 };
+        const end = {
+          x: start.x + target.x - (framed.x + framed.width / 2),
+          y: start.y + target.y - (framed.y + framed.height / 2),
+        };
+        await page.mouse.move(start.x, start.y);
+        await page.mouse.down({ button: 'middle' });
+        await glide(page, start, end, 12);
+        await page.mouse.up({ button: 'middle' });
         // Camera animation and the debounced viewport save belong to preparation, not the drag.
         await page.waitForTimeout(1000);
         note = (await visibleNodes(page, area)).find((n) => looseNoteIds.includes(n.id));
