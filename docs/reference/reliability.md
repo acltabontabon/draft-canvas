@@ -87,6 +87,9 @@ not a CI-runner calibration or ordinary-laptop validation. The coarse limits pro
 shared runners and detect material regressions; tighten them only from repeatable evidence.
 An idle frame floor over 25 ms fails acceptance as a throttled environment, rather than passing a
 misleading run. Missing, failed, nonnumeric, duplicate or broken measurements fail the gate.
+Larger workloads and long-session measurements run on the dedicated Performance schedule or its
+explicit manual option. Manual Docker, Pages and CI verification run the same required gate as a
+release; their inherited manual trigger does not opt them into the extended measurement suite.
 The coarse frame-time gate compares whole milliseconds: three nominal 60 Hz frames may be recorded
 as 50.1 ms. Raw measurements remain unchanged in the reports; other limits retain their full precision.
 CI pins timing measurements to the `ubuntu-24.04-arm` runner image; browser journeys retain their

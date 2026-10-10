@@ -260,7 +260,18 @@ export const SCENARIOS: Scenario[] = [
     title: 'Drag a Note across dense connectors (attach probing)',
     tailMs: 1200,
     async prepare({ page, area, looseNoteIds }) {
-      const note = (await visibleNodes(page, area)).find((n) => looseNoteIds.includes(n.id));
+      let note = (await visibleNodes(page, area)).find((n) => looseNoteIds.includes(n.id));
+      if (!note) {
+        // Opening a large diagram fits its full bounds, leaving these margin notes too small
+        // or behind the create rail. Use the same jump command a person uses to frame one.
+        await page.keyboard.press('ControlOrMeta+k');
+        await page.getByRole('combobox', { name: 'Search commands' }).fill('Retries are idempotent');
+        await page.keyboard.press('Enter');
+        await page.getByRole('combobox', { name: 'Search commands' }).waitFor({ state: 'hidden' });
+        // Camera animation and the debounced viewport save belong to preparation, not the drag.
+        await page.waitForTimeout(1000);
+        note = (await visibleNodes(page, area)).find((n) => looseNoteIds.includes(n.id));
+      }
       if (!note) throw new Error('No loose Note on screen.');
       return { note };
     },
