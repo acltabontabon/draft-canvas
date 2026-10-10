@@ -76,7 +76,9 @@ jobs:
         env:
           DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
         with:
-          context: git
+          # Verification checks out a commit, so HEAD has no ref to infer. Tags come from the
+          # explicit release input; revision must name that source, even on a manual main run.
+          context: workflow
           images: acltabontabon/draft-canvas
           flavor: latest=auto
           tags: |
@@ -88,12 +90,14 @@ jobs:
             org.opencontainers.image.source=https://github.com/acltabontabon/draft-canvas
             org.opencontainers.image.url=https://github.com/acltabontabon/draft-canvas
             org.opencontainers.image.licenses=Apache-2.0
+            org.opencontainers.image.revision=${{ inputs.verified-commit || needs.verification.outputs.commit }}
           annotations: |
             org.opencontainers.image.title=Draft Canvas
             org.opencontainers.image.description=A local-first canvas for developers to explain software visually.
             org.opencontainers.image.source=https://github.com/acltabontabon/draft-canvas
             org.opencontainers.image.url=https://github.com/acltabontabon/draft-canvas
             org.opencontainers.image.licenses=Apache-2.0
+            org.opencontainers.image.revision=${{ inputs.verified-commit || needs.verification.outputs.commit }}
       # An OCI archive preserves both platforms and their SBOM/provenance manifests. Publication
       # copies this archive, rather than rebuilding after the runtime tests.
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
