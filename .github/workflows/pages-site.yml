@@ -25,5 +25,33 @@ permissions:
   id-token: write
 
 jobs:
+  eligibility:
+    runs-on: ubuntu-latest
+    outputs:
+      deploy: ${{ steps.release.outputs.deploy }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          sparse-checkout: package.json
+          sparse-checkout-cone-mode: false
+      # A release-preparation push contains new media but still selects the previous editor.
+      # Pages identifies deployments by the workflow commit: publishing here would occupy the
+      # same identifier the tag needs with different bytes. Let the release own that deployment.
+      - id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          latest="$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq '.tag_name')"
+          current="v$(node -p 'require("./package.json").version')"
+          if [ "$latest" = "$current" ]; then
+            echo 'deploy=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'deploy=false' >> "$GITHUB_OUTPUT"
+            echo '::notice::Site changes wait for the tagged release while the package version is unreleased.'
+          fi
+
   deploy:
+    needs: eligibility
+    if: needs.eligibility.outputs.deploy == 'true'
     uses: ./.github/workflows/pages.yml

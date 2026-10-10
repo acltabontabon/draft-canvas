@@ -95,6 +95,11 @@ checks its recorded commit and promotes those same bytes. It also runs on demand
 `workflow_call`; `pages-site.yml` calls it on a push to `main` that touches `www/`, so a rewritten
 sentence does not have to wait for a release. Calls share the `pages` concurrency group.
 
+Site-only publication waits when `package.json` names a version newer than the latest published
+stable release. A release-preparation push can update media while the newest available editor is
+still the previous version; deploying that combination would reuse the tagged release's Pages
+deployment identifier for different contents. The tagged release owns that publication instead.
+
 The editor half only ever changes on a release or an explicit withdrawal. For site-only changes,
 `pages.yml` checks out the newest stable `vX.Y.Z`, lays the commit's `www/` and
 `scripts/assemble-web.mjs` over it, builds once, and tests that combined artifact in all three
