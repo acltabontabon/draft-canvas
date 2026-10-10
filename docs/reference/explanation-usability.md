@@ -28,6 +28,15 @@ task wording and system facts. Do not add editor telemetry.
 
 These results do not satisfy the human observation gates below.
 
+## Hosted engineering verification (10 October 2026)
+
+[CI on 60f3eca](https://github.com/acltabontabon/draft-canvas/actions/runs/38040880397) passed all three
+browser shards, including Firefox, plus offline and assembled-site acceptance. The browser launch
+problem above is limited to the local macOS environment. [Desktop CI on 584bf60](https://github.com/acltabontabon/draft-canvas/actions/runs/38018279380)
+also passed its fake-shell, Rust and packaged-startup checks. These results verify the implementation
+prepared for 1.13.0; the observed baseline and five-person handoff remain unrecorded and must not be inferred from
+automated test success. The web linked-file experiment was removed before release.
+
 ## Baseline task
 
 Use a familiar order-processing system: an API accepts an order, a queue holds accepted work,
@@ -69,8 +78,6 @@ proposed adjustment. Prioritize mistaken starting points, unintentionally commit
 unclear read-only/copy controls, and confusion between browser recovery and disk saving. Repeat the
 affected task after changing it; retain the original observations.
 
-Check a real supported browser's Open and Save As dialogs separately from the injected adapter
-journeys: save to a temporary file, edit and Save, cancel Save As, reload and grant/decline renewed
-permission, change the file outside the app, and verify the conflict choices and actual file bytes.
-Record browser version and results. Do not mark this check passed solely because an automated
-adapter test succeeds.
+For web file handoff, export a disposable diagram and import it in a fresh browser profile; verify
+its shapes, flows and text. Desktop Open, Save and Save As dialogs remain separate native
+acceptance checks, including cancellation, external writes and actual file bytes.

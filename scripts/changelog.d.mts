@@ -40,5 +40,5 @@ export function platformsFor(platform: Audience): Platform[];
 export function unwrap(markdown: string): string;
 export function releaseNotes(changelog: string, options: { version: string; platform: Audience; tag: string }): string;
 export function plainText(markdown: string): string;
-export function whatsNew(changelog: string, platform: 'desktop' | 'web'): WhatsNewRelease[];
+export function whatsNew(changelog: string, platform: Audience): WhatsNewRelease[];
 export function withDraft(changelog: string, version: string): string;

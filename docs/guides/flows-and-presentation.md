@@ -73,6 +73,11 @@ Each press tells one step: a signal travels the connector from where the interac
 it arrives, the destination lights up along its own outline, and the caption names the two shapes and
 what the step says. Then everything holds still so you can talk.
 
+Long captions keep their full text in the corner. Choose **Read full step details** to focus the
+caption, then use `↑`/`↓`, `Page Up`/`Page Down`, `Home`/`End` or `Space` to scroll it. While the caption
+has focus, `←` and `→` still move between steps; the next explanation starts at the top and keeps
+keyboard focus. In a narrow window, the playback controls scroll so long flow names remain readable.
+
 ![Presenting step 1 of 2: the first connector is highlighted, the rest of the diagram is faded, and the queue's note appears above it.](../media/guides/presenting.png)
 
 The notes attached to what a step shows appear beside it, the first time the flow reaches them.

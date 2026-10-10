@@ -1,4 +1,3 @@
-import { BrowserFileDialog } from './ui/common/BrowserFileButtons';
 import { Suspense, useEffect } from 'react';
 import { currentDesktopHost, hostKind, returnHome } from './host/hostInfo';
 import { useHostDocument } from './host/useHostDocument';
@@ -132,7 +131,6 @@ function Shell() {
           change the file until the text is fixed.
         </p>
       )}
-      <BrowserFileDialog />
       <Toasts />
       <LiveAnnouncer />
       <LazyAboutDialog />

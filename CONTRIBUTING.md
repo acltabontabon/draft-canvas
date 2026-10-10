@@ -246,6 +246,8 @@ Nothing fetches notes at runtime, and nothing is written twice: the install step
 signing caveats around each release body are fixed templates in `release-notes.mjs`, not changelog text.
 Stable patch release pages lead with their summary and changes, omit the demo GIF, and collapse the
 first-time desktop installation notes. Minor and major releases, and desktop previews, keep the demo.
+Stable minor and major releases with marked highlights lead with a headline, demo, direct download
+links and feature cards; the complete platform changelog and installation guidance are expandable.
 
 ### Where a change goes
 
@@ -270,7 +272,8 @@ one platform only (a style for a desktop-only screen, say); code under `src/desk
 is always Desktop. `####` sub-headings (Added, Fixed, Changed) are fine inside any of the three; any
 other `###` heading beside them is an error.
 
-A version may open with one short intro paragraph, which What's New shows as the release's summary.
+A version may open with a short headline paragraph followed by an explanatory paragraph. What's New
+uses the first paragraph as its summary; a stable minor or major release uses it as the page's headline.
 
 ### Highlights for What's New
 
@@ -318,12 +321,12 @@ For the maintainer. When preparing a release:
 4. Bump the version through the normal release process, then ship. Once `package.json`'s version
    reaches that section, About → What's New shows it on its own — no other wiring needed.
 
-Pushing the `vX.Y.Z` tag does the rest: one version, one GitHub Release, everything in it. It creates
-the Release (titled "Draft Canvas X.Y.Z", its body led by how to get it), deploys Pages, and, once the
-Release exists, publishes `acltabontabon/draft-canvas` to Docker Hub (see
-`.github/workflows/docker-publish.yml`) and builds the desktop installers into it, then tells installed
-desktop copies about the update (`desktop-release.yml`, about 15 minutes after the rest). Desktop-only
-changes go in the same `CHANGELOG.md` section as everything else, under its `### Desktop`.
+Pushing the `vX.Y.Z` tag does the rest: one version, one GitHub Release, everything in it. Full CI
+passes before a draft Release is created. Desktop acceptance, packaging, startup and update-signature
+checks then pass before the Release becomes public and installed copies receive the update.
+Pages publishes the verified web artifact and Docker publishes its verified multi-platform image
+after desktop packaging succeeds. See `.github/workflows/release.yml` for the dependencies.
+Desktop-only changes go in the same `CHANGELOG.md` section as everything else, under its `### Desktop`.
 
 The landing page at <https://acltabontabon.com/draft-canvas/> needs nothing from you at release time.
 Its desktop download links are built from the root `package.json` version when it is deployed, so

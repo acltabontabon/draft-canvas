@@ -1,4 +1,3 @@
-import type { FileAssociation } from './fileHandles';
 import { totals } from '../depth/tree';
 import { libraryShapeOf } from '../document/shape';
 import type { DraftDocument, DraftSummary, Project } from '../document/types';
@@ -11,9 +10,6 @@ import type { DraftDocument, DraftSummary, Project } from '../document/types';
  * Nothing here talks to a network. That is the whole point.
  */
 export interface DraftRepository {
-  listFileAssociations?: () => Promise<FileAssociation[]>;
-  putFileAssociation?: (association: FileAssociation) => Promise<void>;
-
   /** Human-readable name of the backing store, shown in the privacy panel. */
   readonly kind: 'indexeddb' | 'memory';
   /** True when writes survive a page reload. */

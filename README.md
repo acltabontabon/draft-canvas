@@ -33,12 +33,13 @@ Also lives [on your desktop](#desktop), in a window of its own with your diagram
 
 - **Architecture-aware shapes**: Service, Data Store, Queue/Topic/Stream, Actor and Boundary know what they mean, so connectors label themselves in the arrow's direction (*reads / writes*, *sends command to*, *consumed by*) and the app can suggest a sensible next shape
 - **C4-aware depth**: look inside a Service or Component to draw what runs there, and [explain a system at different levels](docs/guides/depth.md)
-- **Flows and presentations**: group connectors into a flow and present it one step at a time, moving between flows without leaving the presentation; export a flow as a Mermaid or PlantUML sequence diagram
+- **Flows and presentations**: trace connectors in the order you want to explain them, then present the flow one step at a time; explore an editable Order processing example, move between flows, and export Mermaid or PlantUML sequence diagrams
+- **Tidy a selected area**: arrange selected shapes and boundary contents without moving their neighbors; fit existing small shapes to their full names in one undo step
 - **Keyboard-first**: press a letter to drop a shape and type its name, `Tab` to accept a suggestion, `⌘K` for everything else, `⌥O` for an Outline a screen reader can follow
 - **Starters**: begin from a composed architecture — Monolith, Microservices, Event-Driven, Hexagonal or CQRS up front, [eight more](docs/guides/examples.md) by name in the command palette
-- **Local by default**: diagrams are saved in your browser (IndexedDB); no backend and no account. It works offline once loaded, and a test in the suite fails on any network API in the editor's source ([what's stored, and where](docs/reference/privacy.md))
+- **Local by default**: browser diagrams auto-save to IndexedDB; Import and Export move portable files in and out. No backend or account; works offline once loaded. A test fails on any network API in the editor's source ([what's stored, and where](docs/reference/privacy.md))
 - **In and out**: paste or drop a Mermaid flowchart to start from one; export editable `.draftcanvas` JSON, passphrase-encrypted `.dcenc`, PNG and SVG (which can carry the diagram inside), Mermaid and PlantUML sequence diagrams, and the architecture as a Mermaid flowchart, C4-PlantUML, Structurizr or draw.io — or copy any of them straight to the clipboard
-- **Share without a server**: a read-only link carries the whole diagram in the address; nothing is uploaded
+- **Share without a server**: a read-only link carries the whole diagram in the address and can start at a chosen level or flow introduction; nothing is uploaded
 - **Back up and restore** every diagram in a browser as one zip
 
 Diagrams live in one browser on one device. [Export anything you'd mind losing](docs/guides/saving-and-sharing.md#what-you-have-to-do).
@@ -53,7 +54,7 @@ your own server. All three share a version and ship together in each
 
 | | Runs on | Saves to | Status |
 | --- | --- | --- | --- |
-| [Web app](https://acltabontabon.com/draft-canvas/editor/) | A modern browser | The browser (IndexedDB) | Stable |
+| [Web app](https://acltabontabon.com/draft-canvas/editor/) | A modern browser | The browser (IndexedDB); Export creates a portable file | Stable |
 | [Docker](#running-it-yourself) | Your own server, behind HTTPS | The visitor's browser, as above | Stable |
 | [Desktop](#desktop) | macOS (Apple Silicon, Intel), Windows x64 | `.draftcanvas` files and folders | Stable, with unsigned installers; `desktop-v…-alpha`/`-beta` tags are previews that never replace a stable install |
 

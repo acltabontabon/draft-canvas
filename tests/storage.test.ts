@@ -11,7 +11,6 @@ import { getOrCreateMasterKey, __resetKeyCacheForTests } from '../src/crypto/key
 import { isEncryptedBody, isLegacyBody, isPlainBody } from '../src/crypto/bodyShapes';
 import { encryptDocument } from '../src/crypto/documentCipher';
 import type { EncryptedBody, PlainBody } from '../src/crypto/types';
-import type { LocalFileHandle } from '../src/storage/fileHandles';
 import { CURRENT_VERSION, type DraftDocument } from '../src/document/types';
 
 
@@ -1354,17 +1353,33 @@ describe('library fingerprints', () => {
 });
 
 
-it('keeps file associations out of documents, duplicates, and removes them with their Library entry', async () => {
+it('preserves v4 development diagrams without using their obsolete file links', async () => {
   const repo = await IndexedDbRepository.open();
   const doc = createDocument('Linked');
   await repo.save(doc);
-  const handle = { name: 'linked.draftcanvas' } as LocalFileHandle;
-  await repo.putFileAssociation({ documentId: doc.metadata.id, handle, diskHash: 'disk', savedContentHash: 'snapshot', savedAt: 1 });
+  const db = await new Promise<IDBDatabase>((resolve, reject) => {
+    const request = indexedDB.open('draft-canvas', 4);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction('fileAssociations', 'readwrite');
+    tx.objectStore('fileAssociations').put({ documentId: doc.metadata.id, handle: { name: 'linked.draftcanvas' }, diskHash: 'disk' });
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+  const reopened = await IndexedDbRepository.open();
+  expect((await reopened.load(doc.metadata.id))?.metadata.title).toBe('Linked');
   const copy = cloneDocumentAsNew(doc, 'Copy');
-  await repo.save(copy);
-  expect(await repo.listFileAssociations()).toHaveLength(1);
-  expect(JSON.stringify(await repo.load(doc.metadata.id))).not.toContain('diskHash');
-  await repo.remove(doc.metadata.id);
-  expect(await repo.listFileAssociations()).toHaveLength(0);
-  expect(await repo.has(copy.metadata.id)).toBe(true);
+  await reopened.save(copy);
+  expect(JSON.stringify(await reopened.load(doc.metadata.id))).not.toContain('diskHash');
+  await reopened.remove(doc.metadata.id);
+  const remaining = await new Promise<unknown[]>((resolve, reject) => {
+    const request = db.transaction('fileAssociations').objectStore('fileAssociations').getAll();
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+  expect(remaining).toEqual([]);
+  expect(await reopened.has(copy.metadata.id)).toBe(true);
+  db.close();
 });

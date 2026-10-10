@@ -30,9 +30,11 @@ Docker builds a multi-platform OCI archive containing SBOM and provenance manife
 both archived runtime platforms. A separate job holding Docker credentials copies that archive with
 preserved digests to the registry. No publication build follows the tests.
 
-These workflows still need their first successful GitHub-hosted run after these changes. Local
-workflow linting cannot establish that remote runners, credentials, registry behavior or environment
-protection settings are correctly configured. Keep release tags and publishing workflows limited to
+Hosted [CI](https://github.com/acltabontabon/draft-canvas/actions/runs/38040880397),
+[Desktop CI](https://github.com/acltabontabon/draft-canvas/actions/runs/38018279380) and
+[site deployment](https://github.com/acltabontabon/draft-canvas/actions/runs/38018279754) passed on
+10 October 2026. Release tags additionally verify signed update packages and the multi-platform
+Docker publication path before promotion. Keep release tags and publishing workflows limited to
 trusted maintainers. No signing certificate or paid service is required by this milestone.
 
 ## Recovery guarantees and limits
@@ -144,10 +146,21 @@ on reload. Development console logging remains more detailed for local debugging
   and the pinch check waits for Fit, touches empty canvas and sends moves across frames. Both
   passed ten repetitions without retries before the complete suites were rerun successfully.
 
-These results apply to the working tree, not to a published release. No native Chrome browser
-surface was available through computer control, and native app access was blocked by the locked Mac.
-Docker's local daemon was unavailable. The OCI publication path and packaged Windows installation
-check are workflow-validated but still need their first successful hosted execution.
+These local results were recorded before hosted acceptance. Docker's local daemon was unavailable,
+and the native browser file-dialog drill was not completed.
+
+## Hosted automated verification (10 October 2026)
+
+- [CI on 60f3eca](https://github.com/acltabontabon/draft-canvas/actions/runs/38040880397) passed the
+  three-engine editor, offline and assembled-site matrix, coverage, licensing, Docker smoke,
+  dependency policy and performance gates. Firefox acceptance is verified on the Linux runner.
+- [Desktop CI on 584bf60](https://github.com/acltabontabon/draft-canvas/actions/runs/38018279380)
+  passed its fake-shell, Rust and packaged-startup checks.
+- [Site deployment on 584bf60](https://github.com/acltabontabon/draft-canvas/actions/runs/38018279754)
+  passed all three browser acceptance shards and deployed the verified artifact.
+
+These are engineering checks. The manual observations below remain separate, and a release tag must
+pass its own verification and artifact publication gates.
 
 ## Manual acceptance record
 
@@ -156,7 +169,6 @@ Run each drill with disposable copies; record revision, platform, exact steps an
 
 | Drill | Required evidence | Status |
 | --- | --- | --- |
-| Native browser file dialogs | Open/edit/Save, cancel Save As, reload, grant/deny permission, external-write conflict; compare file bytes | Pending |
 | Abrupt browser termination | Confirm a saved version, make a later edit, force quit, reopen; record what survived | Pending |
 | Desktop interrupted save / unavailable drive | Prior confirmed file stays readable; pending edits recover or remain exportable | Pending |
 | Clean install and upgrade | macOS arm64, Intel macOS and Windows; actual dialogs, file associations, unsaved work and updater behavior | Pending |
@@ -166,7 +178,8 @@ Run each drill with disposable copies; record revision, platform, exact steps an
 
 Browser automation must pass all supported engines in CI. Firefox cannot currently launch in this
 local macOS environment ("Could not find profile folder"); changing the runner's temporary directory
-did not resolve it. Treat that as missing evidence, not an application failure or an allowed skip.
+did not resolve it. Its hosted Linux matrix passed; local launch failure is an environment limitation,
+not an application failure or an allowed CI skip.
 
 ## Withdrawal and recovery procedure
 

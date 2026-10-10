@@ -1,4 +1,3 @@
-import type { BrowserFileActions, FileQuestion } from '../storage/fileHandles';
 import { create } from 'zustand';
 import type { Preset } from '../canvas/presets';
 import { ANY_CANDIDATE, dismissalKey } from '../continuation/dismissal';
@@ -230,11 +229,6 @@ export interface OpenPointPopoverState {
 }
 
 export interface UiStore {
-  browserFiles: BrowserFileActions | null;
-  browserFileLabels: Record<string, string>;
-  browserFileNames: Record<string, string>;
-  fileQuestion: FileQuestion | null;
-
   sharedFlowIntroduction: { documentId: string; flowId: string } | null;
   shareFromHere: boolean;
   requestShareFromHere: () => void;
@@ -623,10 +617,6 @@ let toastsPaused = false;
 let activateFn: (() => void) | null = null;
 
 export const useUiStore = create<UiStore>((set, get) => ({
-  browserFiles: null,
-  browserFileLabels: {},
-  browserFileNames: {},
-  fileQuestion: null,
   sharedFlowIntroduction: null,
   shareFromHere: false,
   requestShareFromHere: () => set({ shareFromHere: true, exportOpen: true, exportSelectionRequested: false }),

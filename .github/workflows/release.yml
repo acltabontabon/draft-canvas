@@ -32,7 +32,8 @@ jobs:
           node-version: 22.14.0
 
       # The body is this tag's section of CHANGELOG.md — the one source of truth for what changed — led
-      # by the demo and the ways to get it, and followed by how to open the desktop installers the first
+      # by its headline, demo, downloads and marked highlights, followed by the complete changes and
+      # how to open the desktop installers the first
       # time (scripts/release-notes.mjs). Without a section, GitHub's own notes stand in.
       - name: Write the release notes
         id: changelog

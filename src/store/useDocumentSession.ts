@@ -1,4 +1,3 @@
-import { supportsBrowserFiles, browserFileAdapter } from '../storage/fileHandles';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { cloneDocumentAsNew, createDocument } from '../document/factory';
 import { createId } from '../document/ids';
@@ -135,7 +134,6 @@ export function useDocumentSession(): DocumentSession {
   const [openId, setOpenIdState] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
 
-  const sessionRef = useRef<DocumentSession | null>(null);
   const autosave = useRef<Autosave | null>(null);
   /** Bumped by every open/create: an earlier one still loading when a later one started must not
    *  land on top of it (a slow decrypt resolving after the user already opened something else). */
@@ -178,7 +176,6 @@ export function useDocumentSession(): DocumentSession {
 
   useEffect(() => {
     let cancelled = false;
-    let releaseFiles: (() => void) | undefined;
     void (async () => {
       const repo = await getRepository();
       if (cancelled) return;
@@ -192,25 +189,6 @@ export function useDocumentSession(): DocumentSession {
         // storage…" indefinitely, with no error and no way to retry.
         logDiagnostic(error, { operation: 'library-startup' });
         notify('Could not read your local diagrams. Try reloading the page.', 'error');
-      }
-      if (!hostKind() && supportsBrowserFiles() && repo.listFileAssociations && repo.putFileAssociation) {
-        try {
-          const { BrowserFiles } = await import('../storage/browserFiles');
-          const editor = await loadEditorStore();
-          if (cancelled) return;
-          const files = new BrowserFiles(repo, browserFileAdapter, () => sessionRef.current!);
-          await files.initialize();
-          if (cancelled) { files.dispose(); return; }
-          const actions = { updateStatus: () => files.updateStatus(), open: () => files.open(), save: (as?: boolean) => files.save(as), refreshOnOpen: (id: string) => files.refreshOnOpen(id) };
-          useUiStore.setState({ browserFiles: actions });
-          const unsubscribe = editor.useEditorStore.subscribe((state, previous) => {
-            if (state.revision !== previous.revision || state.save !== previous.save) void files.updateStatus().catch(() => {});
-          });
-          releaseFiles = () => { unsubscribe(); files.dispose(); if (useUiStore.getState().browserFiles === actions) useUiStore.setState({ browserFiles: null }); };
-        } catch (error) {
-          logDiagnostic(error, { operation: 'browser-file-setup' });
-          notify('File access could not start. Import and Export are still available.', 'error');
-        }
       }
       if (cancelled) return;
       setReady(true);
@@ -234,7 +212,6 @@ export function useDocumentSession(): DocumentSession {
     })();
     return () => {
       cancelled = true;
-      releaseFiles?.();
     };
   }, [notify]);
 
@@ -358,10 +335,6 @@ export function useDocumentSession(): DocumentSession {
         if (loaded && stashed && stashed.metadata.updatedAt >= loaded.metadata.updatedAt) {
           await repository.save(stashed);
           loaded = stashed;
-        }
-        if (!hostKind() && useUiStore.getState().browserFiles) {
-          if (!(await useUiStore.getState().browserFiles!.refreshOnOpen(id))) return;
-          loaded = await repository.load(id);
         }
       } catch (error) {
         logDiagnostic(error, { operation: 'open-document', documentId: id });
@@ -883,7 +856,5 @@ export function useDocumentSession(): DocumentSession {
     deleteProject,
     moveDocumentToProject,
   };
-  useEffect(() => { sessionRef.current = session; });
-  useEffect(() => { void useUiStore.getState().browserFiles?.updateStatus().catch(() => {}); }, [openId]);
   return session;
 }

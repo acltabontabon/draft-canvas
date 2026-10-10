@@ -1,10 +1,9 @@
 # What comes next, and in what order
 
-The current implementation follows five independently reviewable milestones, in this order.
-All five are implemented in the working tree. Full Chromium and WebKit checks and all 80 desktop
-journeys passed. Release acceptance remains conditional on Firefox verification (its runtime could
-not launch here), a real file-picker check, and the human observations described in
-[the usability protocol and validation record](explanation-usability.md). No editor telemetry is added.
+The four drawing and explanation milestones below are implemented for 1.13.0. The hosted Chromium, Firefox and WebKit acceptance matrix and
+Desktop CI passed. The human observations described in
+[the usability protocol and validation record](explanation-usability.md) remain separate manual
+acceptance items; automated results do not establish reader comprehension. No editor telemetry is added.
 
 | Milestone | Outcome | Main implementation |
 | --- | --- | --- |
@@ -12,39 +11,18 @@ not launch here), a real file-picker check, and the human observations described
 | 2. Complete example | Play and edit Order processing | [Ordinary starter data](../../src/starters/order-processing.ts) with fresh IDs |
 | 3. Intentional sharing | Choose a level or flow introduction | [Optional fragment metadata](../../src/share/link.ts) outside the document schema |
 | 4. Arrange selection | Tidy a local area without moving its neighbors | [Scoped arrangement](../../src/agent/arrange.ts) with fixed outside content |
-| 5. Web files | Explicit disk writes plus automatic recovery | [Browser file sessions](../../src/storage/browserFiles.ts), [adapter](../../src/storage/fileHandles.ts) and separate associations |
 
-The earlier rationale below is retained for reference. Files on the web are implemented by milestone
-5 above. Agent entry point and review remains future work. No document schema migration is needed.
+The earlier rationale below is retained for reference. The browser-file experiment was removed
+before 1.13.0 publication; web saving uses autosave plus Import and Export. Agent entry point and review remains future work. No document schema migration is needed.
 
-## A. Open, Save and Save As on the web (implemented; validation pending)
+## A. Browser file access (removed before release)
 
-**Scope.** In browsers with the File System Access API (Chromium; Safari and Firefox do not have
-`showSaveFilePicker`), **Open…** reads a `.draftcanvas` into the editor with a handle, **Save** writes
-back to that handle, **Save As…** asks for a new one. Elsewhere these commands are hidden and the
-existing Import (upload) and Export (download) controls remain available. The handle is remembered per document in IndexedDB
-(handles are structured-cloneable) so a reopened tab can offer **Save** again after asking permission.
+The linked-file experiment added permissions, recovery-versus-disk conflicts and a second saving
+model. It was removed before 1.13.0. Browser diagrams auto-save locally; Import opens a portable copy
+and Export creates one. Desktop Open, Save and Save As remain native file operations.
 
-**Source of truth.** A document with a handle is *the file*; IndexedDB keeps the autosaved copy only
-as recovery, and the status bar says which it is showing ("Saved to `checkout.draftcanvas`" against
-"Recovered — not saved to the file since 10:42"). The Library lists both kinds and marks file-backed
-ones.
-
-**Must handle.** Permission prompts (a handle needs `requestPermission` after a reload, and the user
-may decline); a cancelled picker; the file changed on disk since it was read (compare a hash of the
-last-written text before overwriting, and ask); a failed write (quota, a removed drive), which keeps
-the autosaved copy and says so; embedded contexts and browsers without the API, which never see the
-commands at all.
-
-**Acceptance.** Open → edit → Save writes identical bytes to what Export writes; a reload offers Save
-again for the same file after one permission prompt; declining permission leaves the document
-readable and exportable; a save failure never loses the in-memory document; Firefox and Safari show
-Import/Export only and no broken commands.
-
-**Modules.** `src/export/download.ts` (the `FileSaver` seam already exists for the desktop), a new
-`src/storage/fileHandles.ts`, `useDocumentSession.ts`, `StatusBar.tsx`, `LibraryScreen.tsx`, the
-command registry, `docs/guides/saving-and-sharing.md`. `tests/privacy.test.ts` is unaffected: the
-API makes no network requests.
+An unused v4 IndexedDB store is retained so a development build's saved diagrams still open; the
+editor does not read or use its old file links.
 
 ## B. Read-only share links (shipped in 1.12)
 

@@ -177,3 +177,7 @@ menu. A selected boundary includes its contents. Unselected shapes and free note
 containing boundaries may grow but do not shrink or change membership. Connectors alone do not
 select their endpoints. If there is too little room, select a larger area and try again.
 The result is one undo step. **Arrange diagram** remains available for a whole-diagram cleanup.
+
+If an existing shape's name is shortened, select it and run **Fit shapes to text** from the command
+palette. It expands the selected architecture shapes and boundaries without moving them, in one
+undo step. New name edits grow the shapes automatically.

@@ -235,6 +235,38 @@ describe('What’s New is the changelog’s marked highlights, for this platform
 describe('the real changelog and release configuration', () => {
   const changelog = read('CHANGELOG.md');
 
+  it('builds the 1.13 launch page from its highlights and the actual installer naming contract', () => {
+    const body = releaseBody('v1.13.0', changelog);
+    expect(body).toMatch(/^## Explain the architecture\. Keep the detail\./);
+    expect(body).toContain('### Key highlights');
+    expect(body).toContain('/v1.13.0/docs/media/demo.gif');
+    expect(body).toContain('acltabontabon/draft-canvas:1.13.0');
+    expect(body).toContain('<summary>Everything added, changed and fixed</summary>');
+    expect(body.indexOf('### Key highlights')).toBeLessThan(body.indexOf('<summary>Everything added'));
+    expect(body.split('Explain the architecture. Keep the detail.')).toHaveLength(2);
+    for (const [, installer] of read('.github/workflows/desktop-release.yml').matchAll(/installer: (\S+)/g)) {
+      expect(body).toContain(`/v1.13.0/${installer!.replace('VERSION', '1.13.0')}`);
+    }
+    expect(body).not.toContain('<!-- highlight -->');
+    const web = releaseBody('v1.13.0', changelog, { platform: 'web' });
+    const desktop = releaseBody('v1.13.0', changelog, { platform: 'desktop' });
+    expect(web).toContain('**Share the starting point**<br>');
+    expect(web).not.toContain('Draft-Canvas_1.13.0_Windows_x64.exe');
+    expect(desktop).not.toContain('**Share the starting point**<br>');
+    expect(desktop).not.toContain('Open the web editor');
+  });
+
+  it('uses the same 1.13 highlights in the app and release page, filtered by platform', () => {
+    const web = whatsNew(changelog, 'web').find((release) => release.version === '1.13.0')!;
+    const desktop = whatsNew(changelog, 'desktop').find((release) => release.version === '1.13.0')!;
+    expect(web.date).toBe('2026-10-10');
+    expect(web.highlights.map((highlight) => highlight.title)).toEqual([
+      'Trace a flow', 'Try an example', 'Arrange selection', 'Diagnostic report',
+      'Read the full name', 'Share the starting point',
+    ]);
+    expect(desktop.highlights.map((highlight) => highlight.title)).toEqual(web.highlights.slice(0, 5).map((highlight) => highlight.title));
+  });
+
   it('ships the patch’s three highlights in What’s New on both platforms', () => {
     for (const platform of ['web', 'desktop'] as const) {
       const patch = whatsNew(changelog, platform).find((release) => release.version === '1.12.1');

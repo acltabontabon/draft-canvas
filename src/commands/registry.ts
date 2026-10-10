@@ -1826,13 +1826,6 @@ export function commandsFor(ctx: CommandContext): Command[] {
     ...openPointCommands(ctx),
     ...viewCommands(ctx),
     ...(!hostKind() ? [{ id: 'share-from-here', title: 'Share from here…', group: 'canvas' as const, run: (inner: CommandContext) => inner.ui.requestShareFromHere() }] : []),
-    ...(ctx.ui.browserFiles ? [
-      { id: 'file-open', title: 'Open file…', group: 'canvas' as const, run: (inner: CommandContext) => { void inner.ui.browserFiles?.open(); } },
-      ...(!ctx.ui.readOnly ? [
-        { id: 'file-save', title: 'Save', group: 'canvas' as const, run: (inner: CommandContext) => { void inner.ui.browserFiles?.save(); } },
-        { id: 'file-save-as', title: 'Save As…', group: 'canvas' as const, run: (inner: CommandContext) => { void inner.ui.browserFiles?.save(true); } },
-      ] : []),
-    ] : []),
     ...arrangeSelectionCommands(ctx),
     ...canvasCommands(ctx),
   ];

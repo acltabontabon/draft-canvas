@@ -3,7 +3,6 @@ import { PRODUCT } from '../../product';
 import type { StarterId } from '../../starters';
 import type { DocumentSession } from '../../store/useDocumentSession';
 import { MOD_SYMBOL } from '../../lib/platform';
-import { BrowserFileButtons } from '../common/BrowserFileButtons';
 import { Button } from '../common/Button';
 import { Icon } from '../common/Icon';
 import { LibraryBrand } from './LibraryBrand';
@@ -90,7 +89,6 @@ export function FirstRunHome({ session, onImport }: { session: DocumentSession; 
                 <kbd aria-hidden="true">↵</kbd>
               </span>
             </button>
-            <BrowserFileButtons />
             <Button variant="quiet" icon="upload" className="dc-home-import" onClick={onImport} aria-describedby={importHintId}>
               Import <span className="dc-home-import-ext">.draftcanvas</span>
             </Button>

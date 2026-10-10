@@ -9,7 +9,8 @@ This document exists so the privacy claim can be audited rather than believed.
 
 ### IndexedDB — database `draft-canvas`
 
-Diagrams, recovery and optional file associations. Five object stores:
+Diagrams and recovery use four active object stores; a dormant development-build store is retained
+for database-version compatibility:
 
 | Store | Key | Contents | Encrypted? |
 | --- | --- | --- | --- |
@@ -17,11 +18,10 @@ Diagrams, recovery and optional file associations. Five object stores:
 | `bodies` | `id` | The full document: nodes, connections, text, code, viewport, settings. | No, since 1.12 — a plain record with a per-write stamp. A row written by a build from 1.0 to 1.11 is still AES-256-GCM ciphertext, read with the key that build left, until the diagram is next saved (see below). |
 | `projects` | `id` | The names of the Library's flat project folders. | No — plain text, like the summaries. |
 | `backgroundImages` | `id` | The optional canvas background image, one per diagram, as a blob. | No. A wallpaper is far less sensitive than diagram content, and encrypting a blob would add a lot of plumbing for little. If a background image is sensitive, don't use it. |
-| `fileAssociations` | `documentId` | An optional browser file handle, last disk fingerprint, saved content fingerprint and successful-write time. Kept separately from portable diagrams and omitted from shares, exports, backups and duplicates; deleted with its Library entry. | No. The browser still controls permissions to the file. |
+| `fileAssociations` | `documentId` | Dormant links from development builds of the removed browser-file experiment. Never read or used by the editor, never exported, and removed with their Library entry. Retaining the store avoids downgrading an existing v4 database. | No. |
 
-Remembering a handle does not remember permission. On reopening, Draft Canvas queries permission;
-it requests write access only from an explicit Save action. Disk writes happen only when requested,
-while the browser continues to save recovery automatically. File access makes no network request.
+The web app does not request persistent access to disk files. Import reads the file you choose into
+browser storage; Export downloads a separate portable copy. Desktop file handling is described below.
 
 ### IndexedDB — database `draft-canvas-keys`
 

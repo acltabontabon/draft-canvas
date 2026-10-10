@@ -11,25 +11,35 @@ the release notes and the in-app What's New are generated from here. See
 
 ## [Unreleased]
 
+## [1.13.0] - 2026-10-10
+
+Explain the architecture. Keep the detail.
+
+Trace a flow directly on the canvas, tidy the part you're working on, and keep long names readable.
+Choose where a shared story begins and keep portable backups with clearer recovery feedback.
+
 ### Shared
 
 #### Added
 
-- **Trace a flow** by choosing connectors on the canvas or in the Outline. Preview numbers,
-  remove the last choice, cancel, or finish a new/extended flow as one undoable change.
-- **Try an example** opens an editable Order processing diagram with a three-step explanation
+- **Trace a flow** — choose connectors on the canvas or in the Outline in the order you want to
+  explain them. Preview the step numbers, then finish a new or extended flow in one undoable change.
+  <!-- highlight -->
+- **Try an example** — open an editable Order processing diagram with a three-step explanation
   and a note explaining the queue. Play it, edit it, and reuse the same controls for your own work.
-- **Arrange selection** tidies selected shapes and boundary contents while keeping surrounding
-  shapes and free notes fixed, with one undo step.
+  <!-- highlight -->
+- **Arrange selection** — tidy selected shapes and boundary contents while keeping surrounding
+  shapes and free notes fixed, with one undo step. <!-- highlight -->
 - **Fit shapes to text** expands selected architecture shapes and boundaries to show their full
   labels, including existing small shapes, as one undoable change.
-- Preview and download a local diagnostic report from About, without diagram content or file paths.
+- **Diagnostic report** — preview and download local troubleshooting information from About,
+  without diagram content or file paths. Nothing is uploaded. <!-- highlight -->
 
 #### Changed
 
-- Long diagram and flow names wrap in the toolbar, panels, menus and command palette. Edited
-  architecture names grow their shapes to show the full label; boundary names gain width without
-  covering their contents.
+- **Read the full name** — long diagram and flow names wrap in the toolbar, panels, menus and command
+  palette. Edited architecture names grow their shapes; boundary names gain width. Use **Fit shapes
+  to text** for existing small shapes. <!-- highlight -->
 - Presentation captions retain the full explanation in a bounded, keyboard-accessible scrolling
   area instead of cutting it off after a few lines.
 
@@ -56,10 +66,9 @@ the release notes and the in-app What's New are generated from here. See
 
 #### Added
 
-- Share links can start at a chosen level or playable flow's introduction. Readers still receive
-  the whole document; existing links and quick overview sharing keep their behavior.
-- Supported browsers offer **Open file…**, **Save**, and **Save As…**, with remembered file links,
-  explicit disk writes, automatic browser recovery, and choices when disk and recovery disagree.
+- **Share the starting point** — open a share link at a chosen level or a playable flow's
+  introduction. Readers still receive the whole diagram; existing links keep their behavior.
+  <!-- highlight -->
 
 #### Changed
 
@@ -1898,7 +1907,8 @@ pre-release milestone; this is the one meant for real use.
 - Fully local and private by design — no accounts, no cloud sync, nothing you draw ever leaves
   your device. Documents are encrypted at rest in your browser.
 
-[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.12.1...main
+[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.13.0...main
+[1.13.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.12.1...v1.13.0
 [1.12.1]: https://github.com/acltabontabon/draft-canvas/compare/v1.12.0...v1.12.1
 [1.12.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.11.1...v1.12.0
 [1.12.0-beta.2]: https://github.com/acltabontabon/draft-canvas/compare/desktop-v1.12.0-beta.1...desktop-v1.12.0-beta.2

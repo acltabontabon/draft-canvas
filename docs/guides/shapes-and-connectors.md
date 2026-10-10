@@ -27,6 +27,15 @@ table is in [Architecture semantics](../reference/semantics.md#the-capability-ma
 An **External System** is a Service you don't own: a payment provider, an email service. It carries an
 EXTERNAL caption and takes the same connectors a Service does.
 
+## Keep names readable
+
+Long architecture names grow their shapes as you edit them; boundary headings gain width. Names in
+the toolbar, panels and menus wrap so you can read the full name.
+
+For an existing small shape whose label is shortened, select it and choose **Fit shapes to text**
+from the command palette (`⌘K`). You can fit several selected shapes at once. The change keeps their
+positions and membership and can be undone in one step.
+
 ## Say what the arrow means
 
 Drag from a shape's handle onto another shape to connect them. The connector labels itself with the

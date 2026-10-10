@@ -8,7 +8,8 @@
 //
 // A `vX.Y.Z` tag is a Draft Canvas release: the web app, the Docker image and the desktop app, one
 // version, one GitHub release. Minor and major releases lead with the demo and ways to get it;
-// stable patches lead with their changes and collapse first-time installation guidance.
+// stable patches lead with their changes and collapse first-time installation guidance. Stable
+// minor/major releases use the changelog's marked highlights as a launch page with direct downloads.
 // A `desktop-vX.Y.Z-alpha.N` tag is a desktop preview ahead of the release it leads to:
 // it leads with the desktop reel, lists only what reaches the desktop app, and has no "Get it"
 // (there's nothing yet to `docker run` or open on the web).
@@ -16,7 +17,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ChangelogError, REPO, parseChangelog, parseVersion, releaseNotes, unwrap, versionFromTag, withDraft } from './changelog.mjs';
+import { ChangelogError, REPO, parseChangelog, parseVersion, releaseNotes, unwrap, versionFromTag, whatsNew, withDraft } from './changelog.mjs';
 
 export { unwrap };
 
@@ -65,6 +66,53 @@ export const FIRST_LAUNCH = [
 
 const demo = (tag, file, alt) => `![${alt}](https://raw.githubusercontent.com/${REPO}/${tag}/docs/media/${file})`;
 
+const tableText = (text) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\|/g, '&#124;');
+
+/** The marked changelog bullets are both the app's news and the release page's feature cards. */
+function releaseLandingPage(tag, version, changelog, audience, notes) {
+  const news = whatsNew(changelog, audience).find((entry) => entry.version === version);
+  if (!news) return null;
+  const entry = parseChangelog(changelog).find((candidate) => candidate.version === version);
+  const intro = unwrap(entry.intro);
+  const [headline, ...description] = intro.split(/\n\s*\n/);
+  const assets = `https://github.com/${REPO}/releases/download/${tag}`;
+  const cards = news.highlights.map(({ title, description }) =>
+    `**${tableText(title)}**${description ? `<br>${tableText(description)}` : ''}`,
+  );
+  const rows = [];
+  for (let at = 0; at < cards.length; at += 2) rows.push(`| ${cards[at]} | ${cards[at + 1] ?? ''} |`);
+  const downloads = [];
+  if (audience !== 'desktop') downloads.push('**[Open the web editor →](https://acltabontabon.com/draft-canvas/editor/)**');
+  if (audience !== 'web') {
+    downloads.push(
+      `**[macOS · Apple silicon](${assets}/Draft-Canvas_${version}_macOS_arm64.dmg)**`,
+      `**[macOS · Intel](${assets}/Draft-Canvas_${version}_macOS_x64.dmg)**`,
+      `**[Windows · x64](${assets}/Draft-Canvas_${version}_Windows_x64.exe)**`,
+    );
+  }
+  const details = intro && notes.startsWith(intro) ? notes.slice(intro.length).trim() : notes;
+  const parts = [
+    `## ${headline || `Draft Canvas ${version}`}`,
+    ...description,
+    `### Get it\n\n${downloads.join(' · ')}`,
+    'No account. No backend. Diagrams stay on your device.',
+    demo(tag, 'demo.gif', 'Draft Canvas: draw, explain, and share software architecture'),
+    `### Key highlights\n\n| | |\n| --- | --- |\n${rows.join('\n')}`,
+  ];
+  if (audience !== 'desktop') {
+    parts.push(`### Run it on your own server\n\n\`\`\`bash\ndocker run -d -p 8080:8080 acltabontabon/draft-canvas:${version}\n\`\`\``);
+  }
+  parts.push(`<details>\n<summary>Everything added, changed and fixed</summary>\n\n${details}\n\n</details>`);
+  if (audience !== 'web') {
+    parts.push(
+      `[Verify your download with SHA256SUMS.txt](${assets}/SHA256SUMS.txt)`,
+      `<details>\n<summary>First-time desktop installation</summary>\n\n${FIRST_LAUNCH}\n\n</details>`,
+    );
+  }
+  parts.push('**[Getting started](https://acltabontabon.com/draft-canvas/docs/getting-started/)** · **[All guides](https://acltabontabon.com/draft-canvas/docs/)**');
+  return `${parts.join('\n\n')}\n`;
+}
+
 /**
  * The whole body for a tag, or throws when the changelog has nothing for it. `platform` defaults to
  * what the tag publishes: a desktop preview's notes are the desktop app's; a release's are everyone's.
@@ -74,6 +122,10 @@ export function releaseBody(tag, changelog, { platform } = {}) {
   const audience = platform ?? (desktopPreview ? 'desktop' : 'all');
   const notes = unwrap(releaseNotes(changelog, { version, platform: audience, tag }));
   const parsed = parseVersion(version);
+  if (!desktopPreview && parsed.patch === 0 && parsed.pre.length === 0) {
+    const landing = releaseLandingPage(tag, version, changelog, audience, notes);
+    if (landing) return landing;
+  }
   // A patch should explain its fixes first; the product demo belongs to larger releases.
   if (!desktopPreview && parsed.patch > 0 && parsed.pre.length === 0) {
     const access = audience === 'desktop' ? [] : [audience === 'web' ? getItOnTheWeb(version) : getIt(version)];

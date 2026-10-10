@@ -1,4 +1,3 @@
-import type { FileAssociation } from './fileHandles';
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import { requestPersistentStorage } from '../lib/storagePersistence';
 import { parseDocument } from '../document/validate';
@@ -100,7 +99,8 @@ interface BackgroundImageRow {
 const UNREFERENCED_IMAGE_GRACE_MS = 24 * 60 * 60 * 1000;
 
 interface DraftDb extends DBSchema {
-  fileAssociations: { key: string; value: FileAssociation };
+  // Preserve the v4 store opened by development builds. Links are dormant; diagrams remain usable.
+  fileAssociations: { key: string; value: unknown };
   documents: {
     key: string;
     value: DraftSummary;
@@ -528,18 +528,6 @@ export class IndexedDbRepository implements DraftRepository {
       }
     }
     throw new Error(`[draft-canvas] ${id} kept changing in another tab; the change was not saved.`);
-  }
-
-  async listFileAssociations(): Promise<FileAssociation[]> { return this.db.getAll('fileAssociations'); }
-
-  async putFileAssociation(association: FileAssociation): Promise<void> {
-    const tx = this.db.transaction(['documents', 'fileAssociations'], 'readwrite');
-    if (!(await tx.objectStore('documents').get(association.documentId))) {
-      await tx.done;
-      throw new Error('The browser recovery copy is no longer available.');
-    }
-    await tx.objectStore('fileAssociations').put(association);
-    await tx.done;
   }
 
   async remove(id: string): Promise<void> {

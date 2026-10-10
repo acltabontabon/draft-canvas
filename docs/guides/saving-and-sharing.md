@@ -1,7 +1,6 @@
 # Saving, backing up and sharing
 
-Draft Canvas saves a recovery copy in your browser as you draw. Writing a linked disk file requires an explicit Save. This
-guide separates what happens on its own from what you have to do, because the second list is what
+Draft Canvas saves diagrams in your browser as you draw. This guide separates what happens on its own from what you have to do, because the second list is what
 protects you from losing a diagram.
 
 *On the desktop?* The file is the storage there, and none of this applies. See
@@ -26,29 +25,12 @@ protects you from losing a diagram.
   stopped and the status bar asks which copy to keep: **Keep mine** or **Load the other tab's**.
   Nothing is overwritten until you choose.
 
-## Open and save a linked file
+## Import and Export
 
-In a supported, secure, top-level browser window, **Open file…** is available on Home and the
-Library. In the editor, the **File** menu offers **Open file…**, **Save** and **Save As…**.
-Use `⌘O`, `⌘S`, and `⌘⇧S` (Ctrl on Windows/Linux). Save asks for a location when no file is linked.
-Import and Export remain available in every browser; embedded and unsupported contexts hide file actions.
-
-A successful write says **Saved to filename**. Later edits say **Changes recovered in this browser —
-filename not updated** once automatic recovery succeeds. You may return to the Library without
-writing to disk; reopening makes those recovered changes clear. Linked Library entries show their
-filename. Duplicates and backups contain diagrams, never file handles or permissions.
-
-A remembered file may need permission again; see the [browser permission contract](https://developer.mozilla.org/en-US/docs/Web/API/FileSystemHandle/queryPermission). Refusal, cancellation, missing files and failed writes
-leave the editable diagram and its recovery copy available. The file is linked only after Save As
-succeeds. Files with identical internal diagram IDs remain separate Library entries, while reopening
-the same file returns to its existing entry.
-
-If both the file and recovery changed, opening offers **Use disk version**, **Save recovered copy
-as…**, or **Cancel**. Saving checks the disk again and offers **Reload file**, **Save As…**,
-**Overwrite**, or **Cancel**. Resolve any browser-storage conflict before saving a file. Concurrent
-file writes from this origin are serialized. Edits made during a save remain unsaved to disk.
-The portable content follows editable export, including embedded backgrounds; a background that
-cannot travel is explained before writing, with an option to cancel.
+Use **Import** on Home or in the Library to open a portable file. Use **Export → Document → Editable**
+to download a `.draftcanvas` copy you can reopen, move to another device, or commit to a repository.
+An export is a snapshot: export again to keep a new file copy of later edits. Browser autosave keeps
+your local diagram up to date while you work.
 
 ## What you have to do
 
