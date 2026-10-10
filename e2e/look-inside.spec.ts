@@ -176,6 +176,9 @@ test('the depth map opens and closes when asked, and Escape closes it before lea
   await page.locator(CANVAS).click({ position: { x: 700, y: 520 } });
   await head.hover();
   await expect(map).toHaveAttribute('data-open', 'true');
+  // The attribute changes during the commit; test the keyboard once the opened surface has
+  // painted and its Escape listener has attached, as it has when a person sees the map.
+  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
   await page.keyboard.press('Escape');
   await expect(map).not.toHaveAttribute('data-open', 'true');
   await expect(page.locator('.dc-room')).toHaveCount(1);

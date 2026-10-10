@@ -60,16 +60,18 @@ export async function create(page: Page, tool: string, at: { x: number; y: numbe
   // Off the button again before clicking, as a hand would be: its tooltip can sit on the point.
   await page.mouse.move(point.x, point.y);
   await pane.click({ position: at });
+  // Naming is requested by creation and consumed by the node's mount effect. An immediate
+  // count can miss that editor and leave a later shortcut typing into it instead.
+  if (tool === 'Junction') return;
+  const editor = page.locator('.dc-node-editor');
+  await expect(editor).toBeFocused();
   if (tool === 'Text') {
     await page.keyboard.type('Text');
     await page.keyboard.press('ControlOrMeta+Enter');
-    return;
-  }
-  const editor = page.locator('.dc-node-editor');
-  if ((await editor.count()) > 0) {
+  } else {
     await page.keyboard.press('Escape');
-    await expect(editor).toHaveCount(0);
   }
+  await expect(editor).toHaveCount(0);
 }
 
 /** Drags from a node's right-hand handle onto another node. */
