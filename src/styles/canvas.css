@@ -4252,7 +4252,8 @@
 .dc-editor[data-tracing] .dc-toolbar { pointer-events: none; opacity: .5; }
 .dc-editor[data-tracing] :is(.dc-flow-panel, .dc-inspector, .dc-edge-popover, .dc-element-popover, .dc-node-resizer, .react-flow__resize-control) { display: none; }
 
-.dc-example-link { pointer-events: auto; color: var(--dc-text); background: transparent; border: 0; text-decoration: underline; cursor: pointer; margin: 12px 0; }
+/* Inherit the picker's pointer state: its fading empty layer must let clicks through. */
+.dc-example-link { color: var(--dc-text); background: transparent; border: 0; text-decoration: underline; cursor: pointer; margin: 12px 0; }
 
 /* Tracing keeps connector hit bands active while editing gestures are suspended. */
 .dc-editor[data-tracing] .dc-edge-hit { pointer-events: stroke; cursor: pointer; }

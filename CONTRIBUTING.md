@@ -248,6 +248,9 @@ Stable patch release pages lead with their summary and changes, omit the demo GI
 first-time desktop installation notes. Minor and major releases, and desktop previews, keep the demo.
 Stable minor and major releases with marked highlights lead with a headline, demo, direct download
 links and feature cards; the complete platform changelog and installation guidance are expandable.
+An explicitly promoted patch can put `<!-- launch -->` on its own line under a platform section.
+It leads with that patch's fixes, then shows the same minor release's marked highlights as a
+clearly labeled series overview; unmarked patches keep their compact notes.
 
 ### Where a change goes
 
@@ -273,7 +276,7 @@ is always Desktop. `####` sub-headings (Added, Fixed, Changed) are fine inside a
 other `###` heading beside them is an error.
 
 A version may open with a short headline paragraph followed by an explanatory paragraph. What's New
-uses the first paragraph as its summary; a stable minor or major release uses it as the page's headline.
+uses the first paragraph as its summary; a release page with feature cards uses it as the headline.
 
 ### Highlights for What's New
 

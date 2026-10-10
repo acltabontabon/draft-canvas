@@ -10,6 +10,7 @@
 // version, one GitHub release. Minor and major releases lead with the demo and ways to get it;
 // stable patches lead with their changes and collapse first-time installation guidance. Stable
 // minor/major releases use the changelog's marked highlights as a launch page with direct downloads.
+// A patch can opt into that page with <!-- launch -->, keeping its fixes ahead of the series overview.
 // A `desktop-vX.Y.Z-alpha.N` tag is a desktop preview ahead of the release it leads to:
 // it leads with the desktop reel, lists only what reaches the desktop app, and has no "Get it"
 // (there's nothing yet to `docker run` or open on the web).
@@ -70,13 +71,18 @@ const tableText = (text) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').re
 
 /** The marked changelog bullets are both the app's news and the release page's feature cards. */
 function releaseLandingPage(tag, version, changelog, audience, notes) {
-  const news = whatsNew(changelog, audience).find((entry) => entry.version === version);
+  const releases = whatsNew(changelog, audience);
+  const news = releases.find((entry) => entry.version === version);
   if (!news) return null;
+  const parsed = parseVersion(version);
+  const overview = parsed.patch > 0
+    ? releases.find((entry) => entry.version === `${parsed.major}.${parsed.minor}.0`) ?? news
+    : news;
   const entry = parseChangelog(changelog).find((candidate) => candidate.version === version);
   const intro = unwrap(entry.intro);
   const [headline, ...description] = intro.split(/\n\s*\n/);
   const assets = `https://github.com/${REPO}/releases/download/${tag}`;
-  const cards = news.highlights.map(({ title, description }) =>
+  const cards = overview.highlights.map(({ title, description }) =>
     `**${tableText(title)}**${description ? `<br>${tableText(description)}` : ''}`,
   );
   const rows = [];
@@ -96,8 +102,9 @@ function releaseLandingPage(tag, version, changelog, audience, notes) {
     ...description,
     `### Get it\n\n${downloads.join(' · ')}`,
     'No account. No backend. Diagrams stay on your device.',
+    ...(overview !== news ? [`### In this update\n\n${news.highlights.map(({ title, description }) => `**${tableText(title)}** — ${tableText(description ?? '')}`).join('\n\n')}`] : []),
     demo(tag, 'demo.gif', 'Draft Canvas: draw, explain, and share software architecture'),
-    `### Key highlights\n\n| | |\n| --- | --- |\n${rows.join('\n')}`,
+    `### Key highlights${overview !== news ? ` from ${parsed.major}.${parsed.minor}` : ''}\n\n| | |\n| --- | --- |\n${rows.join('\n')}`,
   ];
   if (audience !== 'desktop') {
     parts.push(`### Run it on your own server\n\n\`\`\`bash\ndocker run -d -p 8080:8080 acltabontabon/draft-canvas:${version}\n\`\`\``);
@@ -122,7 +129,8 @@ export function releaseBody(tag, changelog, { platform } = {}) {
   const audience = platform ?? (desktopPreview ? 'desktop' : 'all');
   const notes = unwrap(releaseNotes(changelog, { version, platform: audience, tag }));
   const parsed = parseVersion(version);
-  if (!desktopPreview && parsed.patch === 0 && parsed.pre.length === 0) {
+  const launch = changelogSection(changelog, version)?.includes('<!-- launch -->');
+  if (!desktopPreview && (parsed.patch === 0 || launch) && parsed.pre.length === 0) {
     const landing = releaseLandingPage(tag, version, changelog, audience, notes);
     if (landing) return landing;
   }

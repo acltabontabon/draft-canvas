@@ -267,6 +267,28 @@ describe('the real changelog and release configuration', () => {
     expect(desktop.highlights.map((highlight) => highlight.title)).toEqual(web.highlights.slice(0, 5).map((highlight) => highlight.title));
   });
 
+  it('promotes the 1.13.1 fix while identifying the inherited 1.13 feature overview', () => {
+    const body = releaseBody('v1.13.1', changelog);
+    expect(body).toMatch(/^## Draw\. Keep going\./);
+    expect(body).toContain('### In this update');
+    expect(body).toContain('**Clicks reach the canvas**');
+    expect(body).toContain('### Key highlights from 1.13');
+    expect(body).toContain('**Trace a flow**<br>');
+    expect(body.indexOf('**Clicks reach the canvas**')).toBeLessThan(body.indexOf('### Key highlights from 1.13'));
+    expect(body).toContain('/v1.13.1/docs/media/demo.gif');
+    for (const [, installer] of read('.github/workflows/desktop-release.yml').matchAll(/installer: (\S+)/g)) {
+      expect(body).toContain(`/v1.13.1/${installer!.replace('VERSION', '1.13.1')}`);
+    }
+    expect(body).not.toContain('<!-- launch -->');
+    expect(desktopNotes(changelog, '1.13.1', 'v1.13.1')).not.toContain('<!-- launch -->');
+    expect(whatsNew(changelog, 'web').find((release) => release.version === '1.13.1')!.highlights.map((h) => h.title)).toEqual(['Clicks reach the canvas']);
+    const desktop = releaseBody('v1.13.1', changelog, { platform: 'desktop' });
+    expect(desktop).toContain('**Clicks reach the canvas**');
+    expect(desktop).not.toContain('**Share the starting point**<br>');
+    const compact = releaseBody('v1.13.1', changelog.replace('<!-- launch -->', ''));
+    expect(compact).not.toContain('demo.gif');
+  });
+
   it('ships the patch’s three highlights in What’s New on both platforms', () => {
     for (const platform of ['web', 'desktop'] as const) {
       const patch = whatsNew(changelog, platform).find((release) => release.version === '1.12.1');

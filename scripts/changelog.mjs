@@ -216,9 +216,9 @@ export function unwrap(markdown) {
   return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
-/** The marker is for What's New only. On a line of its own it takes the line with it, or a bullet splits. */
+/** Editorial markers aren't user-facing notes. A standalone marker takes its line too, or a bullet splits. */
 const dropMarkers = (markdown) =>
-  markdown.replace(/\n[ \t]*<!-- highlight -->[ \t]*(?=\n|$)/g, '').replace(/[ \t]*<!-- highlight -->/g, '');
+  markdown.replace(/\n[ \t]*<!-- (?:highlight|launch) -->[ \t]*(?=\n|$)/g, '').replace(/[ \t]*<!-- (?:highlight|launch) -->/g, '');
 /** Under a `### Desktop` a section's own `###` headings (a legacy body) have to step down a level. */
 const demote = (markdown) => markdown.replace(/^### /gm, '#### ');
 

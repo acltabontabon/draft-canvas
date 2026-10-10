@@ -11,6 +11,22 @@ the release notes and the in-app What's New are generated from here. See
 
 ## [Unreleased]
 
+## [1.13.1] - 2026-10-10
+
+Draw. Keep going.
+
+The blank-canvas controls get out of your way as soon as your first shape appears. Keep tracing
+your story, reading the full names, and sharing the right starting point with everything from 1.13.
+
+### Shared
+
+#### Fixed
+
+<!-- launch -->
+
+- **Clicks reach the canvas** — the fading **Try an example** control stops intercepting clicks
+  as soon as the first shape appears, so the next click reaches the diagram. <!-- highlight -->
+
 ## [1.13.0] - 2026-10-10
 
 Explain the architecture. Keep the detail.
@@ -1907,7 +1923,8 @@ pre-release milestone; this is the one meant for real use.
 - Fully local and private by design — no accounts, no cloud sync, nothing you draw ever leaves
   your device. Documents are encrypted at rest in your browser.
 
-[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.13.0...main
+[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.13.1...main
+[1.13.1]: https://github.com/acltabontabon/draft-canvas/compare/v1.13.0...v1.13.1
 [1.13.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.12.1...v1.13.0
 [1.12.1]: https://github.com/acltabontabon/draft-canvas/compare/v1.12.0...v1.12.1
 [1.12.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.11.1...v1.12.0
