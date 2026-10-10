@@ -49,23 +49,31 @@ async function goToStep(page: Page, step: number) {
  */
 async function settledBoxes(locators: readonly Locator[]): Promise<Box[]> {
   const page = locators[0]!.page();
-  // `page.evaluate` awaits the frames; `waitForFunction` would take the pending promise as truthy.
-  await expect
-    .poll(
-      () =>
-        page.evaluate(async () => {
-          const viewport = document.querySelector<HTMLElement>('.react-flow__viewport');
-          if (!viewport) return false;
-          const transform = viewport.style.transform;
-          for (let frame = 0; frame < 6; frame += 1) {
-            await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-            if (viewport.style.transform !== transform) return false;
-          }
-          return true;
-        }),
-      { message: 'the camera has come to rest' },
-    )
-    .toBe(true);
+  // Frame-based observation needs the active test page. Keep observing inside the browser:
+  // restarting six-frame probes through expect.poll can miss the still window under load.
+  await page.bringToFront();
+  const camera = await page.evaluate(() => new Promise<{ settled: boolean; transform: string }>((resolve) => {
+    const viewport = document.querySelector<HTMLElement>('.react-flow__viewport');
+    if (!viewport) return resolve({ settled: false, transform: 'missing viewport' });
+    let transform = viewport.style.transform;
+    let stillFrames = 0;
+    let frame = 0;
+    const finish = (settled: boolean) => {
+      clearTimeout(deadline);
+      cancelAnimationFrame(frame);
+      resolve({ settled, transform });
+    };
+    const deadline = window.setTimeout(() => finish(false), 5000);
+    const observe = () => {
+      const next = viewport.style.transform;
+      stillFrames = next === transform ? stillFrames + 1 : 0;
+      transform = next;
+      if (stillFrames >= 6) finish(true);
+      else frame = requestAnimationFrame(observe);
+    };
+    frame = requestAnimationFrame(observe);
+  }));
+  expect(camera.settled, `the camera has come to rest (${camera.transform})`).toBe(true);
   for (const locator of locators) {
     await expect
       .poll(() => locator.evaluate((el) => el.getAnimations({ subtree: true }).filter((animation) => animation.playState === 'running').length), {
