@@ -18,7 +18,7 @@ import {
   type OnSelectionChangeParams,
   type XYPosition,
 } from '@xyflow/react';
-import { defaultTextFor, maxSizeFor, minSizeFor } from '../document/factory';
+import { defaultTextFor, maxSizeFor } from '../document/factory';
 import { openFitViewport } from '../document/geometry';
 import { boundsOf, descendantsOf, hasAttachmentRoom } from '../document/operations';
 import type { DraftDocument, DraftEdge, DraftNode, DraftViewport, Side } from '../document/types';
@@ -63,7 +63,7 @@ import {
   type DraftRfNode,
 } from './projection';
 import { computeSnap, sameGuides, type Guide } from './snapping';
-import { snapResize } from './resizeSnap';
+import { minResizeSizeFor, snapResize } from './resizeSnap';
 import { AgentPreviewLayer, ProposalPreviewLayer } from './AgentPreviewLayer';
 import { ContinuationGhost } from './ContinuationGhost';
 import { RoomFrame } from './RoomFrame';
@@ -265,7 +265,7 @@ function snapResizeChanges(
     if (statics.length === 0 || node.type === 'ellipse') continue;
     const posChange = changes.find((c) => c.type === 'position' && c.id === change.id && c.position);
     const position = (posChange?.type === 'position' ? posChange.position : undefined) ?? live.position;
-    const min = minSizeFor(node.type);
+    const min = minResizeSizeFor(node);
     const snap = snapResize(
       { x: node.x, y: node.y, width: node.width, height: node.height },
       { ...position, width: change.dimensions.width, height: change.dimensions.height },
@@ -1087,12 +1087,17 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       // Compares against whatever the *next* commit will actually see — a still-pending report
       // from earlier this same burst, if there is one, not the (about to be stale) store value.
       const baseline = pendingSelectionRef.current ?? useEditorStore.getState().selection;
+      const reportedEdgeIds = selectedEdgeList.map((edge) => edge.id);
+      // A report that already matches the store is the controlled view acknowledging our choice.
+      // In particular, Shift-click may deliberately add an edge outside a multi-node selection;
+      // deriving its edges again here would immediately erase that explicit choice.
+      if (sameSelection(baseline, { nodes: nodeIds, edges: reportedEdgeIds })) return;
       // See `resolveSelectedEdgeIds`'s own doc comment (`projection.ts`) for why this can't
       // just trust React Flow's reported `selectedEdgeList` unconditionally.
       const edgeIds = resolveSelectedEdgeIds(
         nodeIds,
         baseline.nodes,
-        selectedEdgeList.map((edge) => edge.id),
+        reportedEdgeIds,
         useEditorStore.getState().document.edges,
       );
       const next = { nodes: nodeIds, edges: edgeIds };

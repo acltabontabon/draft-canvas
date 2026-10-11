@@ -1,78 +1,53 @@
-import { render } from '@testing-library/react';
-import { ReactFlowProvider } from '@xyflow/react';
+import { act, render } from '@testing-library/react';
+import { ReactFlowProvider, type NodeProps } from '@xyflow/react';
 import { describe, expect, it, vi } from 'vitest';
 import { createDocument, createNode } from '../src/document/factory';
 import { addNodes } from '../src/document/operations';
 import { DraftNodeView } from '../src/canvas/DraftNodeView';
 import { useEditorStore } from '../src/store/editorStore';
 import * as describeModule from '../src/nodes/describe';
+import * as readingsModule from '../src/nodes/readings';
 
-/**
- * React Flow passes a fresh `positionAbsoluteX`/`positionAbsoluteY` prop into
- * every node component on every frame of a drag — this component never reads
- * them, since position is applied by React Flow's own transform on the
- * wrapper div. Without a memo boundary keyed on content (not position), the
- * display list — layout, text measurement, code tokenization lookups — would
- * rebuild on every dragged frame for content that never changed.
- */
-describe('DraftNodeView does not rebuild its display list on position-only re-renders', () => {
-  it('skips describeNode when only positionAbsoluteX/Y change', () => {
+/** Placement belongs to React Flow's wrapper, while selection, live size and store content must
+ *  still reach the shape even when its position-only prop updates are skipped. */
+describe('DraftNodeView memo boundary', () => {
+  it('skips position-only frames and still renders selection, resize and content changes', () => {
     const node = createNode({ type: 'note', x: 0, y: 0, text: 'Order Service' });
-    const doc = addNodes(createDocument('Perf'), [node]);
-    useEditorStore.getState().setDocument(doc, { resetHistory: true });
-
+    useEditorStore.getState().setDocument(addNodes(createDocument('Perf'), [node]), { resetHistory: true });
     const describeSpy = vi.spyOn(describeModule, 'describeNode');
-
-    const { rerender } = render(
-      <ReactFlowProvider>
-        <DraftNodeView
-          id={node.id}
-          selected={false}
-          width={node.width}
-          height={node.height}
-          positionAbsoluteX={0}
-          positionAbsoluteY={0}
-          dragging={true}
-          type="draft"
-          data={{ id: node.id }}
-          zIndex={0}
-          isConnectable
-          selectable
-          draggable
-          deletable
-        />
-      </ReactFlowProvider>,
+    const readingSpy = vi.spyOn(readingsModule, 'nodeReading');
+    const props: NodeProps = {
+      id: node.id, selected: false, width: node.width, height: node.height,
+      positionAbsoluteX: 0, positionAbsoluteY: 0, dragging: true, type: 'draft',
+      data: { id: node.id }, zIndex: 0, isConnectable: true, selectable: true,
+      draggable: true, deletable: true,
+    };
+    const view = (patch: Partial<NodeProps> = {}) => (
+      <ReactFlowProvider><DraftNodeView {...props} {...patch} /></ReactFlowProvider>
     );
+    const { rerender, container } = render(view());
+    try {
+      for (let frame = 1; frame <= 10; frame += 1) {
+        rerender(view({ positionAbsoluteX: frame * 4, positionAbsoluteY: frame * 2 }));
+      }
+      expect(describeSpy).toHaveBeenCalledTimes(1);
+      expect(readingSpy).toHaveBeenCalledTimes(1);
 
-    expect(describeSpy).toHaveBeenCalledTimes(1);
+      rerender(view({ selected: true }));
+      expect(container.querySelector('.dc-node')).toHaveAttribute('data-selected', 'true');
+      expect(describeSpy).toHaveBeenCalledTimes(1);
+      expect(readingSpy).toHaveBeenCalledTimes(2);
 
-    // Simulate 10 drag frames: only the position prop moves, nothing about
-    // the node's own content or size changes.
-    for (let frame = 1; frame <= 10; frame += 1) {
-      rerender(
-        <ReactFlowProvider>
-          <DraftNodeView
-            id={node.id}
-            selected={false}
-            width={node.width}
-            height={node.height}
-            positionAbsoluteX={frame * 4}
-            positionAbsoluteY={frame * 2}
-            dragging={true}
-            type="draft"
-            data={{ id: node.id }}
-            zIndex={0}
-            isConnectable
-            selectable
-            draggable
-            deletable
-          />
-        </ReactFlowProvider>,
-      );
+      rerender(view({ selected: true, width: node.width + 100 }));
+      expect(container.querySelector<HTMLElement>('.dc-node')!.style.width).toBe(`${node.width + 100}px`);
+      expect(describeSpy).toHaveBeenCalledTimes(2);
+
+      act(() => useEditorStore.getState().updateNodeText(node.id, 'New content'));
+      expect(container.querySelector('.dc-node')).toHaveTextContent('New content');
+      expect(describeSpy).toHaveBeenCalledTimes(3);
+    } finally {
+      readingSpy.mockRestore();
+      describeSpy.mockRestore();
     }
-
-    expect(describeSpy).toHaveBeenCalledTimes(1);
-
-    describeSpy.mockRestore();
   });
 });

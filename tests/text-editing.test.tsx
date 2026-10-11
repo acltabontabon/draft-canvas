@@ -6,6 +6,8 @@ import { addNodes } from '../src/document/operations';
 import { DraftNodeView } from '../src/canvas/DraftNodeView';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
 import { useUiStore } from '../src/store/uiStore';
+import { describeContext, describeNode, NOTE_AUTO_MAX_HEIGHT, TEXT_AUTO_MAX_HEIGHT } from '../src/nodes/describe';
+import { LIGHT } from '../src/render/theme/tokens';
 
 /**
  * Multiline is first-class for Text (not a rare Shift+Enter escape hatch): plain Enter inserts a
@@ -101,5 +103,39 @@ describe('Text editing — Enter is a newline, Cmd/Ctrl+Enter commits', () => {
     expect(stored.text).toBe('Heading\nmore\nand more');
     // The grown height is committed with the text (React Flow hands it back as the node's size).
     expect(stored.height).toBe(node.height + 80);
+  });
+});
+
+
+describe('inline shape editors', () => {
+  it.each([
+    ['note', NOTE_AUTO_MAX_HEIGHT],
+    ['text', TEXT_AUTO_MAX_HEIGHT],
+  ] as const)('typing into a manually tall %s never shrinks its box to the automatic cap', (type, cap) => {
+    const node = createNode({ type, x: 0, y: 0, height: cap + 100, text: 'Existing content' });
+    const { editor, container } = mount(node);
+    Object.defineProperty(editor()!, 'scrollHeight', { configurable: true, value: cap + 200 });
+    fireEvent.input(editor()!);
+    expect(container.querySelector<HTMLElement>('.dc-node')!.style.height).toBe(`${node.height}px`);
+    fireEvent.keyDown(editor()!, { key: 'Escape' });
+    expect(useEditorStore.getState().document.nodes[0]!.height).toBe(node.height);
+  });
+
+  it.each([
+    { type: 'service', serviceKind: 'api' },
+    { type: 'component', componentKind: 'adapter' },
+    { type: 'database', databaseKind: 'sql' },
+    { type: 'queue', queueKind: 'topic' },
+    { type: 'actor', actorKind: 'device' },
+  ] as const)('edits $type names at their drawn label rather than over their glyph', (variant) => {
+    const node = createNode({ ...variant, x: 0, y: 0, text: 'Orders', height: 120 });
+    const label = describeNode(node, describeContext(LIGHT)).shapes.find((shape) => shape.t === 'text' && shape.role === 'label');
+    expect(label?.t).toBe('text');
+    if (label?.t !== 'text') return;
+    const { editor } = mount(node);
+    const field = editor() as HTMLTextAreaElement;
+    expect(Number.parseFloat(field.style.top)).toBeCloseTo(label.y);
+    expect(Number.parseFloat(field.style.height)).toBeGreaterThanOrEqual(label.layout.height);
+    expect(Number.parseFloat(field.style.left) + Number.parseFloat(field.style.width) / 2).toBeCloseTo(label.x);
   });
 });

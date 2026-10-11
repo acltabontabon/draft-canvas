@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { createNode } from '../src/document/factory';
+import { describeContext, describeNode, noteLayout } from '../src/nodes/describe';
+import { LIGHT } from '../src/render/theme/tokens';
 import { computeSnap, SNAP_THRESHOLD } from '../src/canvas/snapping';
-import { snapResize } from '../src/canvas/resizeSnap';
+import { minResizeSizeFor, snapResize } from '../src/canvas/resizeSnap';
 
 /**
  * Resize snapping reuses `computeSnap` unmodified — see `snapResizeChanges`
@@ -79,5 +82,19 @@ describe('snapResize — only the edges being dragged snap', () => {
     const { rect: snapped, guides } = snapResize(tiny, dragged, [{ x: 300, y: 0, width: 10, height: 10 }], limits);
     expect(snapped).toEqual(dragged);
     expect(guides).toHaveLength(0);
+  });
+});
+
+
+describe('note resize floors', () => {
+  it.each(['note', 'question', 'warning', 'decision'] as const)('keeps the tag and one body line within a %s card', (noteKind) => {
+    const node = createNode({ type: 'note', noteKind, x: 0, y: 0, text: 'Review this' });
+    const min = minResizeSizeFor(node);
+    const drawn = describeNode({ ...node, ...min }, describeContext(LIGHT));
+    for (const shape of drawn.shapes) {
+      if (shape.t === 'text') expect(shape.y + shape.layout.height).toBeLessThanOrEqual(min.height);
+    }
+    const geo = noteLayout(node);
+    expect(geo.top + geo.lineHeight + geo.bottom).toBeLessThanOrEqual(min.height);
   });
 });

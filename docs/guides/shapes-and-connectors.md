@@ -29,6 +29,9 @@ EXTERNAL caption and takes the same connectors a Service does.
 
 ## Keep names readable
 
+Double-click a shape or select it and press `Enter` to edit its name where the label is drawn.
+Press `Enter` to keep the name, or `Escape` to cancel the rename.
+
 Long architecture names grow their shapes as you edit them; boundary headings gain width. Names in
 the toolbar, panels and menus wrap so you can read the full name.
 
@@ -41,6 +44,9 @@ positions and membership and can be undone in one step.
 Drag from a shape's handle onto another shape to connect them. The connector labels itself with the
 most likely relationship for that pair, reading in the direction of the arrow: `Orders API`
 *sends command to* `orders`, and `orders` is *consumed by* `Fulfilment worker`.
+
+Hold `Shift` while clicking shapes or connectors to add them to or remove them from the selection.
+A connector can be selected alongside shapes without selecting both of its endpoints.
 
 To change it, click the connector. Its popover lists only the relationships that make sense for those
 two shapes, with the current one marked. Nothing stops you drawing something unusual on purpose: a

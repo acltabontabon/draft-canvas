@@ -29,5 +29,11 @@ declare module '/src/*' {
   export const deserializeDocument: (text: string) => { document: any };
   // oxlint-disable-next-line typescript/no-explicit-any
   export const serializeDocument: (doc: any) => string;
+  // oxlint-disable-next-line typescript/no-explicit-any
+  export const describeNode: (node: any, context: any) => { shapes: { t: string; role?: string; y: number; labelWidth?: number }[] };
+  // oxlint-disable-next-line typescript/no-explicit-any
+  export const describeContext: (theme: any) => any;
+  export const LIGHT: unknown;
+  export const noteLayout: (node: { noteKind?: string }) => { top: number; bottom: number; lineHeight: number };
   export function encodeShareLink(document: unknown, base?: string, start?: { path: string[]; flowId?: string }): Promise<{ url: string } | { tooLarge: true; bytes: number }>;
 }

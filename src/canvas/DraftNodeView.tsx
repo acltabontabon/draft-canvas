@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Handle, NodeResizer, useUpdateNodeInternals, type NodeProps } from '@xyflow/react';
-import { maxSizeFor, minSizeFor } from '../document/factory';
+import { displayNameFor, maxSizeFor } from '../document/factory';
 import { lensNodeTier, nodeTierInPlayback, type ExplainTier } from '../document/flow';
 import { stepContextOf } from '../presentation/stepContext';
 import { normalizeNoteText } from '../document/noteText';
@@ -25,6 +25,7 @@ import { HANDLE_ANCHORS } from '../edges/routing';
 import { beginClipScope, emitDisplayList } from '../render/svg/emit';
 import { useSettle } from './useContinuation';
 import { DragCapsule } from './DragCapsule';
+import { minResizeSizeFor } from './resizeSnap';
 import { FONTS, LINE_HEIGHTS, cssFont } from '../render/text/fonts';
 import type { Shape } from '../render/displayList';
 import { isNodeFocused, lensFlow, useEditorStore, type EditorStore } from '../store/editorStore';
@@ -257,8 +258,8 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
    * React Flow passes a fresh `positionAbsoluteX`/`positionAbsoluteY` prop into
    * every node component on every frame of a drag, even though this component
    * never reads them (position is applied by React Flow's own transform on the
-   * wrapper div). `memo()` alone can't tell that change apart from one that
-   * actually affects appearance, so without this `useMemo` the display list —
+   * wrapper div). The prop comparator skips those frames; this `useMemo` also
+   * skips selection and preview changes, otherwise the display list —
    * layout, text measurement, code tokenization lookups — would rebuild on
    * every dragged frame for content that never changed. Called unconditionally
    * (ahead of the `!node` early return below) because hooks can't be
@@ -286,7 +287,8 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
    */
   const editingLabel = useMemo<Extract<Shape, { t: 'text' }> | null>(() => {
     if (!editing || !node || isCode || isNote || isText) return null;
-    const drawn = describeNode(node, describeContext(theme, preset));
+    const described = node.text?.trim() ? node : { ...node, text: displayNameFor(node) };
+    const drawn = describeNode(described, describeContext(theme, preset));
     const label = drawn.shapes.find(
       (s): s is Extract<Shape, { t: 'text' }> => s.t === 'text' && s.role === 'label',
     );
@@ -401,7 +403,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
     if (grown !== null) setLiveHeight(grown);
   };
 
-  const min = minSizeFor(node.type);
+  const min = minResizeSizeFor(node);
   const max = maxSizeFor(node.type);
   const attachmentCount = node.attachments?.length ?? 0;
   const insideCount = node.inside?.nodes.length ?? 0;
@@ -613,7 +615,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
           aria-label={isCode ? 'Code' : isNote ? 'Note' : isText ? 'Text' : 'Label'}
           placeholder={isNote ? 'Add a note…' : isText ? 'Type something…' : undefined}
           spellCheck={false}
-          style={editorStyle(node, effectiveHeight >= NOTE_AUTO_MAX_HEIGHT, editingLabel)}
+          style={editorStyle(node, effectiveHeight >= (isText ? TEXT_AUTO_MAX_HEIGHT : NOTE_AUTO_MAX_HEIGHT), editingLabel)}
           onInput={isNote || isText ? (event) => growToFit(event.currentTarget) : undefined}
           onBlur={(event) => {
             commit(event.currentTarget.value);
@@ -703,7 +705,18 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
       )}
     </div>
   );
-});
+}, sameNodeViewProps);
+
+/** React Flow owns placement on its wrapper. Only these props change this component's chrome;
+ *  store subscriptions still deliver content, mode and preview changes independently. */
+function sameNodeViewProps(before: NodeProps, after: NodeProps): boolean {
+  return (
+    before.id === after.id &&
+    before.selected === after.selected &&
+    before.width === after.width &&
+    before.height === after.height
+  );
+}
 
 /**
  * The height a note needs for the text currently in its editor, measured from the textarea
@@ -712,6 +725,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
  * fractional top inset (the tagged kinds) from rounding into a phantom pixel of growth.
  */
 function grownNoteHeight(node: DraftNode, el: HTMLTextAreaElement, current: number): number | null {
+  if (current >= NOTE_AUTO_MAX_HEIGHT) return null;
   const geo = noteLayout(node);
   const needed = Math.ceil(geo.top + el.scrollHeight + geo.bottom);
   if (needed <= current + 1) return null;
@@ -722,6 +736,7 @@ function grownNoteHeight(node: DraftNode, el: HTMLTextAreaElement, current: numb
  *  `inset: 0` (see `editorStyle`), so the textarea's own `scrollHeight` already is the needed box
  *  height. */
 function grownTextHeight(el: HTMLTextAreaElement, current: number): number | null {
+  if (current >= TEXT_AUTO_MAX_HEIGHT) return null;
   const needed = Math.ceil(el.scrollHeight);
   if (needed <= current + 1) return null;
   return Math.min(TEXT_AUTO_MAX_HEIGHT, needed);
@@ -812,6 +827,19 @@ function editorStyle(
   // finishing an edit never snaps the text to a visibly different size than what was just typed.
   // Falls back to the preferred size for a node this component didn't compute one for.
   const font = labelFont ?? FONTS.nodeLabel;
+  if (label) {
+    const width = label.labelWidth ?? Math.max(16, node.width - 20);
+    const left = label.align === 'middle' ? label.x - width / 2 : label.align === 'end' ? label.x - width : label.x;
+    return {
+      font: cssFont(font),
+      lineHeight: `${label.layout.lineHeight}px`,
+      top: label.y,
+      left,
+      width,
+      height: Math.max(label.layout.lineHeight, label.layout.height) + 2,
+      textAlign: label.align === 'middle' ? 'center' : label.align === 'end' ? 'right' : 'left',
+    };
+  }
   return {
     font: cssFont(font),
     lineHeight: `${font.size * LINE_HEIGHTS.label}px`,

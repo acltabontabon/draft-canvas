@@ -65,13 +65,16 @@ describe('sameSelection', () => {
     expect(sameSelection({ nodes: ['a'], edges: [] }, { nodes: ['a', 'b'], edges: [] })).toBe(false);
   });
 
+  it('is false when equally sized selections contain different ids', () => {
+    expect(sameSelection({ nodes: ['a', 'b'], edges: ['e1'] }, { nodes: ['b', 'c'], edges: ['e1'] })).toBe(false);
+    expect(sameSelection({ nodes: ['a'], edges: ['e1', 'e2'] }, { nodes: ['a'], edges: ['e2', 'e3'] })).toBe(false);
+  });
+
   it('is false when the edge sets differ in size', () => {
     expect(sameSelection({ nodes: ['a'], edges: [] }, { nodes: ['a'], edges: ['e1'] })).toBe(false);
   });
 
-  it('is false when the same ids appear in a different order', () => {
-    // Order-sensitive on purpose — `Canvas.tsx`'s own `setSelection` never reorders an
-    // unchanged selection, so an order difference here means the content genuinely changed.
-    expect(sameSelection({ nodes: ['a', 'b'], edges: [] }, { nodes: ['b', 'a'], edges: [] })).toBe(false);
+  it('acknowledges the same membership reported in document order', () => {
+    expect(sameSelection({ nodes: ['b', 'a'], edges: ['e2', 'e1'] }, { nodes: ['a', 'b'], edges: ['e1', 'e2'] })).toBe(true);
   });
 });

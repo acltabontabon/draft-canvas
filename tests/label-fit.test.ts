@@ -144,3 +144,28 @@ describe('shape labels render through the same graceful hierarchy', () => {
     expect(label.layout.truncated).toBe(false);
   });
 });
+
+
+describe('small names stay clear of decorative dots', () => {
+  it.each([
+    { type: 'component', text: 'Component' },
+    { type: 'service', serviceKind: 'generic', text: 'Long Service Name' },
+    { type: 'service', serviceKind: 'worker', text: 'Worker' },
+  ] as const)('keeps $type $text readable at its resize floor', (variant) => {
+    const node = createNode({ ...variant, x: 0, y: 0, width: 96, height: 48 });
+    const shapes = describeNode(node, clean).shapes;
+    const label = labelShape(node);
+    const left = label.x - label.layout.width / 2;
+    for (const shape of shapes) {
+      if (shape.t !== 'group' || shape.clip) continue;
+      for (const dot of shape.children) {
+        if (dot.t !== 'ellipse') continue;
+        const overlaps = left < dot.cx + dot.rx && left + label.layout.width > dot.cx - dot.rx &&
+          label.y < dot.cy + dot.ry && label.y + label.layout.height > dot.cy - dot.ry;
+        expect(overlaps).toBe(false);
+      }
+    }
+    const roomy = describeNode({ ...node, width: 220, height: 120 }, clean);
+    expect(roomy.shapes.some((shape) => shape.t === 'group' && shape.children.some((child) => child.t === 'ellipse'))).toBe(true);
+  });
+});

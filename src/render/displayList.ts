@@ -83,6 +83,8 @@ export interface TextShape {
    *  inline editor reads it back off `describeNode`'s output to size itself at the same font the
    *  fitted label actually rendered at, rather than guessing. Never affects emitted SVG/PNG output. */
   role?: 'label';
+  /** The primary label's available width, for its inline editor. Lookup metadata only, never emitted. */
+  labelWidth?: number;
 }
 
 export interface CodeShape {

@@ -175,18 +175,19 @@ export function resolveSelectedEdgeIds(
     .map((edge) => edge.id);
 }
 
-/** Order-sensitive equality for a `{ nodes, edges }` selection pair — shared by
- *  `Canvas.tsx`'s `onSelectionChange` (both to skip a redundant `setSelection` and to decide
- *  what its *next* report should be compared against while a commit is still pending; see its
- *  own doc comment). */
+/** React Flow reports document order; the store may hold the order things were selected in.
+ *  Equal membership acknowledges the controlled selection without rewriting that order or
+ *  triggering another projection. */
 export function sameSelection(
   a: { nodes: readonly string[]; edges: readonly string[] },
   b: { nodes: readonly string[]; edges: readonly string[] },
 ): boolean {
-  return (
-    a.nodes.length === b.nodes.length &&
-    a.edges.length === b.edges.length &&
-    a.nodes.every((id, index) => b.nodes[index] === id) &&
-    a.edges.every((id, index) => b.edges[index] === id)
-  );
+  return sameIds(a.nodes, b.nodes) && sameIds(a.edges, b.edges);
+}
+
+function sameIds(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false;
+  if (a.every((id, index) => b[index] === id)) return true;
+  const members = new Set(a);
+  return b.every((id) => members.has(id));
 }

@@ -334,6 +334,7 @@ function pinnedCaption(
       fill: options.nameColor,
       align: 'middle',
       role: 'label',
+      labelWidth: maxWidth,
     },
     {
       t: 'text',
@@ -432,6 +433,7 @@ function centredLabel(
       fill: options.color || palette.text,
       align: 'middle',
       role: 'label',
+      labelWidth: maxWidth,
     },
     ...(detail ? detail.place(x, top + layout.height + C4_NAME_GAP, 'middle') : []),
   ];
@@ -558,9 +560,19 @@ const MARK_INSET = 12;
  * double card is a Worker, a dashed outline is a Port — and a row of icon-and-label cards read as
  * a stock icon set rather than as this library.
  */
-function dotsGlyph(rightX: number, cy: number, count: number, color: string): Shape {
+function dotsGlyph(rightX: number, cy: number, count: number, color: string, labels: readonly Shape[]): Shape[] {
   const r = 1.7;
   const gap = 5;
+  // At a small size a wrapped name can reach the corner. The name wins over decorative chrome.
+  const left = rightX - (count - 1) * gap - r;
+  const right = rightX + r;
+  const crowded = labels.some((shape) => {
+    if (shape.t !== 'text') return false;
+    const textLeft = shape.align === 'middle' ? shape.x - shape.layout.width / 2 : shape.align === 'end' ? shape.x - shape.layout.width : shape.x;
+    return textLeft < right + 2 && textLeft + shape.layout.width > left - 2 &&
+      shape.y < cy + r + 2 && shape.y + shape.layout.height > cy - r - 2;
+  });
+  if (crowded) return [];
   const dots: Shape[] = Array.from({ length: count }, (_, i) => ({
     t: 'ellipse',
     cx: rightX - i * gap,
@@ -569,7 +581,7 @@ function dotsGlyph(rightX: number, cy: number, count: number, color: string): Sh
     ry: r,
     fill: color,
   }));
-  return { t: 'group', children: dots };
+  return [{ t: 'group', children: dots }];
 }
 
 /* ----------------------------------------------------------- dev presets -- */
@@ -604,6 +616,7 @@ function service(node: DraftNode, ctx: DescribeContext): Shape[] {
 function serviceGeneric(node: DraftNode, ctx: DescribeContext): Shape[] {
   const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
   const capHeight = 4;
+  const label = centredLabel(node, ctx, { top: capHeight, bottom: 0, color: palette.text });
   return [
     outlineShape(
       node.id,
@@ -632,8 +645,8 @@ function serviceGeneric(node: DraftNode, ctx: DescribeContext): Shape[] {
     // Window-chrome dots, top-right: the family's "this is a running thing" cue. Generic gets the
     // full three; Worker gets two, so the two kinds stay distinguishable by the mark as well as
     // by the silhouette.
-    dotsGlyph(node.width - MARK_INSET, capHeight + 9, 3, palette.chip),
-    ...centredLabel(node, ctx, { top: capHeight, bottom: 0, color: palette.text }),
+    ...dotsGlyph(node.width - MARK_INSET, capHeight + 9, 3, palette.chip, label),
+    ...label,
   ];
 }
 
@@ -706,6 +719,12 @@ function serviceWorker(node: DraftNode, ctx: DescribeContext): Shape[] {
   const stroke: Stroke = { color: palette.line, width: 1.5 };
   const back = { x: 0.75 + offset, y: 0.75 + offset, w: node.width - 1.5 - offset, h: node.height - 1.5 - offset, r: 8 };
   const front = { x: 0.75, y: 0.75, w: node.width - 1.5 - offset, h: node.height - 1.5 - offset, r: 8 };
+  const label = centredLabel(node, ctx, {
+    top: capHeight,
+    bottom: Math.max(offset, tagRow()),
+    color: palette.text,
+    right: offset,
+  });
   return [
     outlineShape(`${node.id}:back`, ctx, back, { fill: palette.fill, stroke }),
     outlineShape(node.id, ctx, front, { fill: palette.fill, stroke, shadow: true }),
@@ -717,13 +736,8 @@ function serviceWorker(node: DraftNode, ctx: DescribeContext): Shape[] {
     // Two dots rather than Generic's three, so the mark itself distinguishes the two kinds. Kept
     // in the top-right corner: the bottom-right is where this kind's own `WORKER` caption sits,
     // and a dot cluster there would land on top of it.
-    dotsGlyph(front.x + front.w - MARK_INSET, front.y + capHeight + 9, 2, palette.chip),
-    ...centredLabel(node, ctx, {
-      top: capHeight,
-      bottom: Math.max(offset, tagRow()),
-      color: palette.text,
-      right: offset,
-    }),
+    ...dotsGlyph(front.x + front.w - MARK_INSET, front.y + capHeight + 9, 2, palette.chip, label),
+    ...label,
     ...variantCaption(node, ctx, SERVICE_KIND_LABELS.worker!, ctx.theme.textMuted),
   ];
 }
@@ -926,10 +940,11 @@ function componentPort(node: DraftNode, ctx: DescribeContext): Shape[] {
 function componentGeneric(node: DraftNode, ctx: DescribeContext): Shape[] {
   const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
   const rect = { x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: 8 };
+  const label = centredLabel(node, ctx, { top: 0, bottom: 0, color: '' });
   return [
     outlineShape(node.id, ctx, rect, { fill: palette.fill, stroke: componentStroke(ctx, node), shadow: true }),
-    dotsGlyph(node.width - MARK_INSET, 10, 3, palette.chip),
-    ...centredLabel(node, ctx, { top: 0, bottom: 0, color: '' }),
+    ...dotsGlyph(node.width - MARK_INSET, 10, 3, palette.chip, label),
+    ...label,
   ];
 }
 
@@ -1211,7 +1226,7 @@ function dataStoreCaption(node: DraftNode, ctx: DescribeContext, palette: Accent
   const detailTop = top + layout.height + C4_NAME_GAP;
   const detail = c4Detail(node, ctx, maxWidth, node.height - 4 - detailTop);
   return [
-    { t: 'text', x: node.width / 2, y: top, layout, font, fill: palette.text, align: 'middle', role: 'label' },
+    { t: 'text', x: node.width / 2, y: top, layout, font, fill: palette.text, align: 'middle', role: 'label', labelWidth: maxWidth },
     ...(detail ? detail.place(node.width / 2, detailTop, 'middle') : []),
   ];
 }
@@ -2188,6 +2203,7 @@ function actor(node: DraftNode, ctx: DescribeContext): Shape[] {
       fill: palette.text,
       align: 'middle',
       role: 'label',
+      labelWidth: maxWidth,
     });
     const detailTop = top + layout.height + C4_NAME_GAP;
     const detail = c4Detail(node, ctx, maxWidth, node.height - 6 - detailTop);
@@ -2692,6 +2708,7 @@ function boundaryHeader(node: DraftNode, ctx: DescribeContext, style: BoundarySt
       fill: style.quietTitle ? ctx.theme.textMuted : ctx.theme.text,
       align: 'start',
       role: 'label',
+      labelWidth: right - x,
     });
   }
   if (caption) {
