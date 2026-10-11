@@ -107,7 +107,7 @@ browser engines before publication. Tests use the selected release's documentati
 So `/draft-canvas/editor/` never serves unreleased code, and download links carry a released version.
 
 For withdrawal, run the current workflow from `main` with `release-tag` naming the last good
-editor tag; the selected source still has to pass verification. Follow
+editor tag; its revision must belong to the default branch's history and pass verification. Follow
 [the compatibility and recovery procedure](reliability.md#withdrawal-and-recovery-procedure) before
 putting an older editor in front of documents saved by a newer one.
 

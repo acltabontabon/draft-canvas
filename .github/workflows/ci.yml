@@ -8,14 +8,18 @@ on:
   workflow_call:
     inputs:
       ref:
-        description: Source ref to verify; resolved once to a commit before any checks.
+        description: Source ref to verify; alternate revisions must belong to default branch history.
         type: string
         default: ''
+      full-checks:
+        description: Reusable callers always verify the complete source, regardless of changed paths.
+        type: boolean
+        default: true
     outputs:
       artifact-name:
-        value: ${{ jobs.verify.outputs.artifact-name }}
+        value: ${{ jobs.build.outputs.artifact-name }}
       commit:
-        value: ${{ jobs.source.outputs.commit }}
+        value: ${{ jobs.source.outputs.revision }}
 
 permissions:
   contents: read
@@ -28,50 +32,79 @@ concurrency:
 jobs:
   source:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
-      commit: ${{ steps.source.outputs.commit }}
+      revision: ${{ steps.source.outputs.revision }}
+      full: ${{ steps.plan.outputs.full }}
+      playwright-image: ${{ steps.plan.outputs.playwright-image }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ inputs.ref || github.sha }}
+          ref: ${{ github.sha }}
           persist-credentials: false
       - id: source
-        run: echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+        # Run the verifier from this workflow's checkout, never from the selected source.
+        env:
+          SOURCE_REF: ${{ inputs.ref }}
+          WORKFLOW_REVISION: ${{ github.sha }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          revision="$(node scripts/verify-source.mjs)"
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
 
-  verify:
+      - id: plan
+        env:
+          SOURCE_REVISION: ${{ steps.source.outputs.revision }}
+          FORCE_FULL: ${{ github.event_name == 'workflow_dispatch' || inputs.full-checks == true || inputs.ref != '' }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: node scripts/ci-plan.mjs
+
+  workflows:
     needs: source
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Validate workflow syntax and expressions
+        run: |
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+          "$(go env GOPATH)/bin/actionlint"
+
+  # Only build-related checks sit on the browser suite's critical path. Coverage runs alongside it.
+  build:
+    needs: source
+    if: needs.source.outputs.full == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     outputs:
       artifact-name: verified-web-${{ github.run_id }}
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ needs.source.outputs.commit }}
+          ref: ${{ needs.source.outputs.revision }}
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 22.14.0
           cache: npm
       - run: npm ci
+        timeout-minutes: 5
       # The site is a separate project with its own lockfile; a break in it should fail here, not
       # at deploy time.
       - run: npm ci
+        timeout-minutes: 5
         working-directory: www
-      - name: Validate workflow syntax and expressions
-        run: |
-          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
-          "$(go env GOPATH)/bin/actionlint"
       - run: npm run lint
       - run: npm run typecheck:tooling
       # Builds the editor, the site, and the assembled dist-web/ the deploy publishes.
       - run: npm run build:web
-      # Unit tests with the coverage floor (vite.config.ts): a drop below it fails the build.
-      - run: npm run test:coverage
       - run: npm run licenses:check
       - name: Record the source and preserve the built artifact
         env:
-          VERIFIED_COMMIT: ${{ needs.source.outputs.commit }}
+          VERIFIED_COMMIT: ${{ needs.source.outputs.revision }}
         run: |
           node -e 'require("fs").writeFileSync("verified-source.json", JSON.stringify({ commit: process.env.VERIFIED_COMMIT }))'
           tar -cf verified-web.tar dist dist-web verified-source.json
@@ -82,23 +115,77 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  # The whole journey suite, once per engine the app ships to. Retries stay on so a flaky test is
-  # *identified* rather than merely re-rolled: `--fail-on-flaky-tests` fails the run when a test only
+  coverage:
+    needs: source
+    if: needs.source.outputs.full == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.source.outputs.revision }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 22.14.0
+          cache: npm
+      - run: npm ci
+        timeout-minutes: 5
+      # Keep the site's dependencies available to the same unit suite as before.
+      - run: npm ci
+        timeout-minutes: 5
+        working-directory: www
+      # Unit tests with the existing coverage floor (vite.config.ts).
+      - run: npm run test:coverage
+
+  docs:
+    needs: source
+    if: needs.source.outputs.full == 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.source.outputs.revision }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 22.14.0
+          cache: npm
+      - run: npm ci
+        timeout-minutes: 5
+      - run: npx vitest run tests/docs.test.ts
+      - run: npm ci
+        timeout-minutes: 5
+        working-directory: www
+      # Published guides are part of the site; validate rendering without rebuilding the editor.
+      - run: npm run site:build
+
+  # The whole journey suite, split by file across three runners per engine. Keep one worker per
+  # runner: parallel browsers on one CPU compete for frames and make interaction tests less stable.
+  # Retries stay on so a flaky test is *identified*: `--fail-on-flaky-tests` fails when a test only
   # passed on its retry, so a flake is fixed, not tolerated.
   e2e:
-    needs: [source, verify]
+    needs: [source, build]
+    if: needs.source.outputs.full == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container:
+      image: ${{ needs.source.outputs.playwright-image }}
+      # Match GitHub's mounted home/workspace owner; Firefox rejects a root process with this home.
+      options: --user 1001 --init --ipc=host
     strategy:
       fail-fast: false
       matrix:
         browser: [chromium, firefox, webkit]
+        shard: [1, 2, 3]
     env:
       PLAYWRIGHT_BROWSER: ${{ matrix.browser }}
       DC_TEST_BUILT: '1'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ needs.source.outputs.commit }}
+          ref: ${{ needs.source.outputs.revision }}
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
@@ -108,23 +195,31 @@ jobs:
         env:
           CONTROL_COMMIT: ${{ github.sha }}
         run: |
+          # Container steps use a different Git HOME from checkout's temporary safe-directory config.
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
           git fetch --no-tags --depth=1 origin "$CONTROL_COMMIT"
           git checkout FETCH_HEAD -- playwright.dist.config.ts playwright.web.config.ts
       - run: npm ci
-      - run: npm ci
-        working-directory: www
+        timeout-minutes: 5
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
-          name: ${{ needs.verify.outputs.artifact-name }}
+          name: ${{ needs.build.outputs.artifact-name }}
       - run: tar -xf verified-web.tar
-      - run: npx playwright install --with-deps ${{ matrix.browser }}
-      - run: npm run e2e -- --fail-on-flaky-tests
-      - run: npm run e2e:offline -- --fail-on-flaky-tests
-      - run: npm run e2e:web -- --fail-on-flaky-tests
+      - id: journeys
+        timeout-minutes: 15
+        run: npm run e2e -- --shard=${{ matrix.shard }}/3 --fail-on-flaky-tests
+      # These small artifact suites run once per engine, not once per journey shard. They consume
+      # the verified build above; neither needs the site's dependencies or a rebuild.
+      - if: ${{ !cancelled() && steps.journeys.outcome != 'skipped' && matrix.shard == 1 && matrix.browser == 'chromium' }}
+        timeout-minutes: 3
+        run: npm run e2e:offline -- --fail-on-flaky-tests
+      - if: ${{ !cancelled() && steps.journeys.outcome != 'skipped' && matrix.shard == 1 }}
+        timeout-minutes: 3
+        run: npm run e2e:web -- --fail-on-flaky-tests
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: failure()
         with:
-          name: playwright-report-${{ matrix.browser }}
+          name: playwright-report-${{ matrix.browser }}-${{ matrix.shard }}
           path: |
             playwright-report/
             playwright-report-offline/
@@ -133,12 +228,38 @@ jobs:
 
   security:
     needs: source
+    if: needs.source.outputs.full == 'true'
     uses: ./.github/workflows/security.yml
     with:
-      ref: ${{ needs.source.outputs.commit }}
+      ref: ${{ needs.source.outputs.revision }}
 
   performance:
     needs: source
+    if: needs.source.outputs.full == 'true'
     uses: ./.github/workflows/performance.yml
     with:
-      ref: ${{ needs.source.outputs.commit }}
+      ref: ${{ needs.source.outputs.revision }}
+
+  # Keep the existing verify check as the final gate, including coverage and every browser shard.
+  verify:
+    needs: [source, workflows, build, coverage, docs, e2e, security, performance]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every applicable check
+        env:
+          FULL: ${{ needs.source.outputs.full }}
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          node <<'NODE'
+          const results = JSON.parse(process.env.RESULTS);
+          const full = process.env.FULL;
+          if (full !== 'true' && full !== 'false') throw new Error('Missing CI scope');
+          const required = new Set(['source', 'workflows', ...(full === 'true'
+            ? ['build', 'coverage', 'e2e', 'security', 'performance'] : ['docs'])]);
+          for (const [job, { result }] of Object.entries(results)) {
+            const expected = required.has(job) ? 'success' : 'skipped';
+            if (result !== expected) throw new Error(`${job}: expected ${expected}, got ${result}`);
+          }
+          NODE

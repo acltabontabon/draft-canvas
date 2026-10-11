@@ -25,6 +25,10 @@ the release notes and the in-app What's New are generated from here. See
 - Docker distribution is retired: image builds, publication and Docker-specific checks stop here.
   Self-hosting remains available by building and serving the static web editor.
 
+#### Fixed
+
+- Pressing Enter starts a blank canvas as soon as the home screen appears.
+
 ### Shared
 
 #### Fixed
