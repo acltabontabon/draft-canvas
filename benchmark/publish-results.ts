@@ -1,10 +1,8 @@
 /**
- * Regenerates the two performance blocks that are spliced into Markdown from
+ * Regenerates the performance results block in the reference documentation from
  * `benchmark/results/latest.json` (plus `interaction.json` and `lifecycle.json` when present) —
  * a straightforward regex splice, not a templating system:
  *
- * - `README.md`, between `<!-- performance:start -->` and `<!-- performance:end -->`: the short
- *   summary — one sentence, the at-rest table and where to read more.
  * - `docs/reference/performance.md`, between `<!-- performance-results:start -->` and
  *   `<!-- performance-results:end -->`: every table and the chart. The methodology around them is
  *   written by hand and left alone.
@@ -23,17 +21,15 @@ import { SCALE_SPECS, type ScaleName } from './workloads/scale';
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const RESULTS_PATH = join(REPO_ROOT, 'benchmark/results/latest.json');
-// Optional: `npm run perf:interaction` — the frame-time half of the story. Absent means the README
-// simply carries the load/memory/drag table it always did.
+// Optional: `npm run perf:interaction` — the frame-time half of the story. Without it,
+// the reference documentation carries only the available load/memory/drag results.
 const INTERACTION_PATH = join(REPO_ROOT, 'benchmark/results/interaction.json');
 // Optional: `npm run perf:lifecycle` — opening, exporting and long sessions.
 const LIFECYCLE_PATH = join(REPO_ROOT, 'benchmark/results/lifecycle.json');
 // Committed at the repo root, not under the gitignored `results/` — see `cli.ts`.
 const CHART_PATH = join(REPO_ROOT, 'benchmark/memory-chart.svg');
-const README_PATH = join(REPO_ROOT, 'README.md');
 const PERFORMANCE_DOC_PATH = join(REPO_ROOT, 'docs/reference/performance.md');
 
-const README_MARKERS = { start: '<!-- performance:start -->', end: '<!-- performance:end -->' };
 const DOC_MARKERS = { start: '<!-- performance-results:start -->', end: '<!-- performance-results:end -->' };
 
 function capitalize(name: string): string {
@@ -185,37 +181,9 @@ function buildLifecycleSection(life: LifecycleResult): string {
   ].join('\n');
 }
 
-const PERFORMANCE_DOC_LINK = 'docs/reference/performance.md';
-
 function measuredOn(result: BenchmarkResult): string {
   const env = result.meta.environment;
   return `Measured on: ${env.cpuModel}, ${friendlyOsName(env.os)} ${env.osVersion}, Chromium ${env.browserVersion}, Draft Canvas ${result.meta.draftCanvasVersion}.`;
-}
-
-/** What the README carries: enough to answer "is it fast?" and a pointer to everything else. */
-function buildReadmeBlock(result: BenchmarkResult): string {
-  const rows = result.workloads
-    .map((w) => {
-      const size = `${w.nodeCount} nodes / ${w.edgeCount} connections`;
-      return `| ${capitalize(w.name)} | ${size} | ${ms(w.diagramLoad.medianMs)} | ${mib(w.jsHeapUsedMiB)} |`;
-    })
-    .join('\n');
-
-  return [
-    README_MARKERS.start,
-    '## Performance',
-    '',
-    buildSummary(result),
-    '',
-    '| Diagram | Size | Load time | Memory (JS heap) |',
-    '|---|---|---|---|',
-    rows,
-    '',
-    `${measuredOn(result)} Reference-machine numbers on real architecture diagrams, not a guarantee for every device.`,
-    '',
-    `Frame times while you pan, zoom and drag in diagrams of up to 1,000 shapes, how long big diagrams take to open, and how to reproduce all of it: [\`${PERFORMANCE_DOC_LINK}\`](${PERFORMANCE_DOC_LINK}).`,
-    README_MARKERS.end,
-  ].join('\n');
 }
 
 /** What `performance.md` carries: the full set of tables, with paths relative to `docs/reference/`. */
@@ -276,7 +244,6 @@ function main(): void {
     ? (JSON.parse(readFileSync(LIFECYCLE_PATH, 'utf-8')) as LifecycleResult)
     : undefined;
 
-  splice(README_PATH, README_MARKERS, buildReadmeBlock(result));
   splice(PERFORMANCE_DOC_PATH, DOC_MARKERS, buildResultsBlock(result, interaction, lifecycle));
 }
 

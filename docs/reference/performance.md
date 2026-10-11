@@ -8,7 +8,7 @@ Three benchmarks, each a reproducible Chromium run against the production build:
 | `npm run perf:interaction` | Does it stay smooth while somebody works: panning, zooming, dragging, connecting? |
 | `npm run perf:lifecycle` | What do whole actions cost (opening, exporting), and does memory settle over a long session? |
 
-The README carries a short summary. Everything measured is below, followed by how it is measured.
+Everything measured is below, followed by how it is measured.
 
 ## Latest results
 
@@ -235,19 +235,17 @@ that finds this file prints a "Compared with baseline" block of plain percentage
 npm run perf:publish
 ```
 
-Regenerates two blocks from `benchmark/results/latest.json`. Run `npm run perf` first.
+Regenerates the full results on this page, between `<!-- performance-results:start -->` and
+`<!-- performance-results:end -->`, from `benchmark/results/latest.json`. Run `npm run perf` first.
 
-- **`README.md`**, between `<!-- performance:start -->` and `<!-- performance:end -->`: a sentence and
-  the at-rest table, with a link here.
-- **This page**, between `<!-- performance-results:start -->` and `<!-- performance-results:end -->`:
-  the full set. When `benchmark/results/interaction.json` exists (the default output of
-  `npm run perf:interaction`) it includes "While you work" — frame times while panning, zooming,
-  selecting and dragging, and the longest freeze after an edit. The same goes for
-  `benchmark/results/lifecycle.json` (the default output of `npm run perf:lifecycle`), which adds
-  "Opening one, and working for a long time".
+When `benchmark/results/interaction.json` exists (the default output of
+`npm run perf:interaction`) it includes "While you work" — frame times while panning, zooming,
+selecting and dragging, and the longest freeze after an edit. The same goes for
+`benchmark/results/lifecycle.json` (the default output of `npm run perf:lifecycle`), which adds
+"Opening one, and working for a long time".
 
 The script is `benchmark/publish-results.ts`. It only replaces what sits between the markers, and
-stops with an error if either pair is missing.
+stops with an error if the marker pair is missing.
 
 ## CI
 

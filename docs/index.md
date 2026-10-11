@@ -16,6 +16,7 @@ New here? Start with [Getting started](guides/getting-started.md). It takes a fe
 | [Explain a system at different levels](guides/depth.md) | Keep the overview small and draw the detail inside a shape, C4-style |
 | [Mark what is still open](guides/open-points.md) | Attach a tentative, awaiting-input or parked point to a shape or connector, and pick the discussion up next time |
 | [Keyboard shortcuts and the command palette](guides/keyboard-and-commands.md) | Draw quickly without the mouse |
+| [Accessibility](guides/accessibility.md) | Use screen readers, the keyboard, touch and pen, and see how contrast and accessibility are checked |
 | [Saving, backing up and sharing](guides/saving-and-sharing.md) | Know what is saved for you, what isn't, and how to move a diagram between browsers |
 | [Draft Canvas Desktop](guides/desktop.md) | Start a Quick Draft from the menu bar or tray, keep diagrams as files and folders, and build the app |
 | [Connect an AI agent](guides/connect-an-ai-agent.md) | Let a coding agent such as Claude Code draw and revise diagrams in the desktop app |
@@ -23,7 +24,7 @@ New here? Start with [Getting started](guides/getting-started.md). It takes a fe
 Inside the app, the toolbar's More menu has **Documentation** (this index) and **Keyboard shortcuts**
 (`?`), and the command palette (`⌘K`) searches every command by name.
 
-Running your own copy is covered in the [README](../README.md#try-it). The VS Code extension has been
+Running your own copy is covered in the [README](../README.md#running-it-yourself). The VS Code extension has been
 [retired](guides/vscode-retired.md).
 
 ## Contributing and reference

@@ -234,7 +234,8 @@ design and reference material lives in `docs/reference/`:
 - `CHANGELOG.md` — user-facing release notes
 
 Docs files are lowercase kebab-case; the conventional root files (`README.md`, `CONTRIBUTING.md`,
-`SECURITY.md`, …) keep their usual names. The performance tables in `README.md` and
+`SECURITY.md`, …) keep their usual names. The performance tables in
 `docs/reference/performance.md` are generated (`npm run perf:publish`) — edit the prose around the
-markers, not what sits between them. `tests/docs.test.ts` fails on a broken relative link or anchor,
-and `npx tsx e2e/docs-screenshots.ts` regenerates the guides' screenshots from the real UI.
+markers, not what sits between them. Keep benchmark details in that reference page, not the README.
+`tests/docs.test.ts` fails on a broken relative link or anchor, and `npx tsx e2e/docs-screenshots.ts`
+regenerates the guides' screenshots from the real UI.
