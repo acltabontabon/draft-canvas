@@ -54,7 +54,18 @@ offline and deployment specs use production builds. Desktop browser specs do not
 `desktop:check` builds the web bundle before running Rust checks.
 
 CI splits the editor suite across three jobs per browser, with one worker per job. A passing retry
-still fails CI.
+still fails CI. Browser jobs use the official Playwright container, with its version selected from
+that source's lockfile, so they do not install browsers or system packages on each runner. Coverage
+runs independently of artifact production; browser checks start when the built artifact is ready.
+The final `verify` job requires all applicable checks, including coverage, security and performance.
+
+Pull requests and pushes to `main` that change only `docs/` Markdown/media or `README.md`,
+`CONTRIBUTING.md`, `AGENTS.md`, `CODE_OF_CONDUCT.md` and `SECURITY.md` run workflow validation,
+documentation link/anchor/image checks and the site build. They skip editor builds, coverage, browser
+suites, audits and benchmarks. Everything else (including `CHANGELOG.md`, which feeds the editor)
+runs full CI. Renames include both paths; missing comparison history falls back to full CI. Manual
+runs and reusable callers (including releases) run every check by default. Keep `full-checks: true`
+for release callers. Jobs and dependency installation steps have explicit time limits.
 
 Reusable CI and historical Pages builds validate alternate sources with `scripts/verify-source.mjs`
 from the workflow's checkout. Selected revisions must belong to the default branch's history before
