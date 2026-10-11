@@ -1,62 +1,54 @@
 # Draft Canvas documentation
 
-Draft Canvas is a tool for drawing and explaining software quickly, with modest architectural
-assistance. It runs in your browser or as a desktop app, with no backend and no account.
-
-New here? Start with [Getting started](guides/getting-started.md). It takes a few minutes.
+Guides and reference for using and developing Draft Canvas.
 
 ## Using Draft Canvas
 
-| Guide | Read it to |
+| Guide | Covers |
 | --- | --- |
-| [Getting started](guides/getting-started.md) | Draw a Service → Queue → Worker, add a note, present it as a flow, and export it |
-| [Shapes, connectors and boundaries](guides/shapes-and-connectors.md) | Pick the kind of a shape, say what an arrow means, show the reply, mark the failure path |
-| [Flows and presenting](guides/flows-and-presentation.md) | Build a numbered path through the diagram and walk the room through it |
-| [Architecture examples](guides/examples.md) | Start from one of thirteen composed architectures and patterns, and see which five are offered up front |
-| [Explain a system at different levels](guides/depth.md) | Keep the overview small and draw the detail inside a shape, C4-style |
-| [Mark what is still open](guides/open-points.md) | Attach a tentative, awaiting-input or parked point to a shape or connector, and pick the discussion up next time |
-| [Keyboard shortcuts and the command palette](guides/keyboard-and-commands.md) | Draw quickly without the mouse |
-| [Accessibility](guides/accessibility.md) | Use screen readers, the keyboard, touch and pen, and see how contrast and accessibility are checked |
-| [Saving, backing up and sharing](guides/saving-and-sharing.md) | Know what is saved for you, what isn't, and how to move a diagram between browsers |
-| [Draft Canvas Desktop](guides/desktop.md) | Start a Quick Draft from the menu bar or tray, keep diagrams as files and folders, and build the app |
-| [Connect an AI agent](guides/connect-an-ai-agent.md) | Let a coding agent such as Claude Code draw and revise diagrams in the desktop app |
+| **[Getting started](guides/getting-started.md)** | Draw, present and export your first diagram |
+| [Shapes and connectors](guides/shapes-and-connectors.md) | Shapes, relationships and boundaries |
+| [Flows and presenting](guides/flows-and-presentation.md) | Explain a flow step by step |
+| [Architecture examples](guides/examples.md) | Start from an existing pattern |
+| [System levels](guides/depth.md) | Draw the detail inside a shape |
+| [Open points](guides/open-points.md) | Track unresolved questions |
+| [Keyboard shortcuts](guides/keyboard-and-commands.md) | Shortcuts and the command palette |
+| [Accessibility](guides/accessibility.md) | Keyboard, screen reader and touch support |
+| [Saving and sharing](guides/saving-and-sharing.md) | Save, back up, export and share |
+| [Desktop app](guides/desktop.md) | Files, projects and Quick Drafts |
+| [AI agents](guides/connect-an-ai-agent.md) | Connect an agent to the desktop app |
+| [Self-hosting](../README.md#running-it-yourself) | Run the web app with Docker |
+| [VS Code migration](guides/vscode-retired.md) | Move files from the retired extension |
 
-Inside the app, the toolbar's More menu has **Documentation** (this index) and **Keyboard shortcuts**
-(`?`), and the command palette (`⌘K`) searches every command by name.
+## Contributing
 
-Running your own copy is covered in the [README](../README.md#running-it-yourself). The VS Code extension has been
-[retired](guides/vscode-retired.md).
-
-## Contributing and reference
-
-| Document | Read it to |
+| Document | Covers |
 | --- | --- |
-| [Contributing](../CONTRIBUTING.md) | Set up, find your way around the repository, run the checks, and send a change |
-| [Development](reference/development.md) | Find commands, repository structure, host wiring and specialized checks |
-| [Releases](reference/releases.md) | Write changelog entries, preview generated notes and follow the release workflow |
-| [`AGENTS.md`](../AGENTS.md) | Learn the rules that are load-bearing before touching core code |
-| [Architecture](reference/architecture.md) | Understand why it is built this way: one renderer, the canvas/store boundary, persistence, and what is deliberately not built |
-| [Architecture semantics](reference/semantics.md) | See what Draft Canvas understands about a diagram: node categories, the connector capability matrix, suggestion rules |
-| [Library adoption](reference/library-adoption.md) | Maintain generated desktop types, native notifications and the layout/schema comparison harness |
-| [Document schema](reference/schema.md) | Find the file format, version history and the import-validation contract |
-| [Privacy](reference/privacy.md) | See exactly what is stored, where, and what leaves your machine |
-| [Performance](reference/performance.md) | Read the benchmark methodology and the latest results |
-| [The website](reference/website.md) | Build, preview and deploy the landing page, and see how the editor's move was made safe |
-| [Agent integration](reference/agent-integration.md) | See how the desktop app's MCP connector works: tools, guarantees about retries and saving, layout, C4, security and limits |
-| [Desktop updates](reference/desktop-updates.md) | Set up and check the desktop app's signed updates (maintainers) |
-| [What comes next](reference/roadmap.md) | Drawing, explanation, sharing, arrangement and file-saving milestones and their remaining acceptance checks |
-| [Explanation usability](reference/explanation-usability.md) | Run the observed drawing task and five-person recipient handoff; record evidence without telemetry |
-| [Reliability and release acceptance](reference/reliability.md) | Follow release gates, recovery drills, performance budgets and remaining manual acceptance |
-| [Security](../SECURITY.md) | Read the threat model, key lifecycle and how to report a concern |
-| [Changelog](../CHANGELOG.md) | See what changed in each release |
+| [Contributing](../CONTRIBUTING.md) | Setup, checks and pull requests |
+| [Development](reference/development.md) | Commands, repository map and host wiring |
+| [Agent instructions](../AGENTS.md) | Implementation rules for coding agents |
+| [Releases](reference/releases.md) | Changelog format and release workflow |
+| [Changelog](../CHANGELOG.md) | Changes by version |
 
-## Where documentation lives
+## Technical reference
 
-- `README.md`: the product, a quick way to try it, and links here.
-- `docs/guides/`: task-oriented guides for people using Draft Canvas.
-- `docs/reference/`: design and reference material. It says *why*, and the code is the source of truth
-  for *what*.
-- `docs/media/`: images and the demo reel. Screenshots in the guides are regenerated by
-  `npx tsx e2e/docs-screenshots.ts`.
-- `www/`: the landing page at <https://acltabontabon.com/draft-canvas/>. A separate Vite project that
-  shares no dependency with the app — see [The website](reference/website.md).
+| Document | Covers |
+| --- | --- |
+| [Architecture](reference/architecture.md) | Design principles and module boundaries |
+| [Semantics](reference/semantics.md) | Connector rules and suggestions |
+| [Document schema](reference/schema.md) | File format, validation and migrations |
+| [Library adoption](reference/library-adoption.md) | Desktop types, notifications and comparison harnesses |
+| [Privacy](reference/privacy.md) | What is stored and what leaves the device |
+| [Security](../SECURITY.md) | Threat model and reporting concerns |
+| [Performance](reference/performance.md) | Benchmarks and results |
+| [Website](reference/website.md) | Build and deploy the landing page |
+| [Agent integration](reference/agent-integration.md) | MCP tools, permissions and guarantees |
+| [Desktop updates](reference/desktop-updates.md) | Update channels, signing and release checks |
+
+## Planning and acceptance
+
+| Document | Covers |
+| --- | --- |
+| [Roadmap](reference/roadmap.md) | Planned work and acceptance checks |
+| [Explanation usability](reference/explanation-usability.md) | Observed drawing and handoff tasks |
+| [Release acceptance](reference/reliability.md) | Reliability checks and recovery drills |
