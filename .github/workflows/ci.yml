@@ -172,7 +172,8 @@ jobs:
     timeout-minutes: 20
     container:
       image: ${{ needs.source.outputs.playwright-image }}
-      options: --init --ipc=host
+      # Match GitHub's mounted home/workspace owner; Firefox rejects a root process with this home.
+      options: --user 1001 --init --ipc=host
     strategy:
       fail-fast: false
       matrix:
