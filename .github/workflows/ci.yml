@@ -194,6 +194,8 @@ jobs:
         env:
           CONTROL_COMMIT: ${{ github.sha }}
         run: |
+          # Container steps use a different Git HOME from checkout's temporary safe-directory config.
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
           git fetch --no-tags --depth=1 origin "$CONTROL_COMMIT"
           git checkout FETCH_HEAD -- playwright.dist.config.ts playwright.web.config.ts
       - run: npm ci
