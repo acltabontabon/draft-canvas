@@ -56,6 +56,10 @@ offline and deployment specs use production builds. Desktop browser specs do not
 CI splits the editor suite across three jobs per browser, with one worker per job. A passing retry
 still fails CI.
 
+Reusable CI and historical Pages builds validate alternate sources with `scripts/verify-source.mjs`
+from the workflow's checkout. Selected revisions must belong to the default branch's history before
+their code runs. This keeps manual runs from executing unmerged code in the default branch's cache scope.
+
 ## Repository map
 
 | Path | Contents |
