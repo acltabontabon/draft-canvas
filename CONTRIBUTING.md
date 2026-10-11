@@ -1,7 +1,6 @@
 # Contributing to Draft Canvas
 
-Thanks for taking a look. Draft Canvas is a small, opinionated tool, and this doc is meant to keep
-it that way — quick to read, quick to act on.
+Setup, repository structure and checks for contributing to Draft Canvas.
 
 ## Running it locally
 
@@ -35,7 +34,8 @@ That's everything the editor needs. Two parts need more, and only when you work 
 | `npm run test:watch` | Vitest in watch mode |
 | `npm run e2e` | Browser tests (Playwright — run `npm run e2e:install` once first) |
 | `npm run e2e:offline` | The offline test against a built, offline-served app |
-| `npm run check` | Lint, type-check the e2e/benchmark tooling, build, and unit tests together — **run this before opening a PR** |
+| `npm run check` | Lint, tooling type-check, build and unit tests — run for code changes |
+| `npm run check:full` | All local checks and browser suites — optional; full browser coverage runs in CI |
 | `npm run site:dev` | The landing page (`www/`) alone, on :5280 |
 | `npm run build:web` | The editor and the landing page, assembled into `dist-web/` as Pages serves them |
 | `npm run e2e:web` | Browser tests against that assembled build, served under `/draft-canvas/` |
@@ -49,7 +49,7 @@ Focused runs, when you're iterating on one thing:
 ```bash
 npx vitest run tests/history.test.ts    # one unit test file
 npx vitest run -t 'coalesces'           # by test name
-npx playwright test e2e/editing.spec.ts # one e2e spec
+PLAYWRIGHT_BROWSER=chromium npx playwright test e2e/editing.spec.ts # one browser, one spec
 ```
 
 ## Repository map
@@ -125,17 +125,26 @@ reaches the canvas. Files arrive through `src/export/project.ts`.
 
 ## Which checks for which change
 
-`npm run check` is for every PR. Add the rows that match what you touched; CI runs all of them.
-The editor browser suite defaults to one worker; set `PLAYWRIGHT_WORKERS=2` to run independent test files concurrently.
+- **Docs only:** check formatting, links, anchors and referenced images. No tests, builds, lint or
+  benchmarks unless requested. Preview rendered docs when layout matters.
+- **Code, scripts or configuration:** run `npm run check` and focused checks for the changed behavior.
+- **Browser coverage:** CI runs the full Chromium, Firefox and WebKit suites. Run focused local
+  browser checks only when needed to verify a change or reproduce an issue. `npm run check:full`
+  is optional unless full verification is requested or needed for an issue.
 
-| You changed | Also run |
+For code changes, add the relevant checks below. Browser checks are focused local runs when needed;
+full suites run in CI.
+
+| You changed | Additional checks |
 | --- | --- |
-| The editor (`src/`) | `npm run e2e` |
-| Anything only the desktop app uses (`src/desktop/`, `src-tauri/`) | `npm run desktop:check` and `npm run e2e:desktop` |
-| AI agent support (`src/agent/`, `src/layout/`, `src-tauri/src/agent/`, `src-tauri/mcp/`) | The above, plus `npm run agent:schemas` if `src/agent/schema.ts` changed, and `npx tsx e2e/agent-gallery.ts --base <dev server> --out <dir>` to look at the layout gallery in both themes |
-| The landing page (`www/`) or `scripts/assemble-web.mjs` | `npm run e2e:web` |
+| The editor (`src/`) | Relevant editor browser specs when needed |
+| Desktop (`src/desktop/`, `src-tauri/`) | `npm run desktop:check`; relevant desktop browser specs when needed |
+| AI agent support (`src/agent/`, `src/layout/`, native agent or MCP code) | Relevant desktop checks; `npm run agent:schemas` if schemas changed; preview the agent gallery if layout changed |
+| The landing page (`www/`) or `scripts/assemble-web.mjs` | `npm run build:web`; relevant web deployment specs when needed |
 | `Dockerfile`, `nginx.conf` | `docker build .`, then run the image and open it |
-| Offline behaviour or the service worker | `npm run e2e:offline` |
+| Offline behavior or the service worker | Relevant offline browser specs when needed |
+
+Report checks actually performed; do not claim pending CI has passed.
 
 Changes to the editor don't need Rust. `desktop:check` builds the desktop web bundle first, which the
 Rust checks need; `npm run desktop:rust` on its own fails on a fresh checkout.
@@ -162,8 +171,8 @@ document model.
 ## Submitting a change
 
 1. Fork, branch, make your change.
-2. `npm run check`, plus the rows above that apply — fix anything they catch. Don't work around a
-   real failure to get green output.
+2. Follow [Which checks for which change](#which-checks-for-which-change). Docs-only changes need
+   formatting and link checks; code changes need the applicable local checks. Fix failures.
 3. If people using Draft Canvas would notice the change, add a line to `CHANGELOG.md` (see
    [Release notes](#release-notes)).
 4. Open a PR against `main` with what changed and why. Small, focused PRs are easier to review than
@@ -216,10 +225,10 @@ design and reference material is in `docs/reference/`. Docs files are lowercase 
 - **Screenshots** in the guides are generated by driving the real app:
   `npx tsx e2e/docs-screenshots.ts` rewrites `docs/media/guides/*.png`. Re-run it when a UI change
   makes one stale. If a step in a guide stops working, the script fails there.
-- **Performance numbers** in `README.md` and `docs/reference/performance.md` are generated by
-  `npm run perf:publish` between their markers. Edit the prose around them, not the tables.
-- `npm test` includes `tests/docs.test.ts`, which fails on a broken relative link or `#anchor` in any
-  Markdown file.
+- **Performance numbers** live in `docs/reference/performance.md`, generated by `npm run perf:publish`
+  between its markers. Edit the prose around them, not the tables.
+- CI checks documentation links through `tests/docs.test.ts`. For docs-only changes, inspect links
+  and formatting directly; no local test run is required.
 
 ## Keeping Draft Canvas fast and simple
 
