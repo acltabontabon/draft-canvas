@@ -14,6 +14,10 @@ permissions:
 
 jobs:
   verification:
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
     uses: ./.github/workflows/ci.yml
 
   release:
@@ -60,6 +64,8 @@ jobs:
   desktop:
     needs: [verification, release]
     permissions:
+      actions: read
+      pull-requests: read
       contents: write
       id-token: write
       attestations: write

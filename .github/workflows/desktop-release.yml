@@ -119,6 +119,10 @@ jobs:
           node scripts/update-manifest.mjs check-config
 
   acceptance:
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
     needs: verify
     uses: ./.github/workflows/desktop-ci.yml
     with:

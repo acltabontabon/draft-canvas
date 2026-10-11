@@ -150,8 +150,8 @@ describe('the final CI verification gate', () => {
     'docs', 'e2e', 'security', 'performance'].map((job) => [job, {
     result: (job === 'source' || job === 'workflows' || (full ? job !== 'docs' : job === 'docs')) ? 'success' : 'skipped',
   }]));
-  const verify = (full: string, checks = results(full === 'true')) => spawnSync(process.execPath, ['-e', gate], {
-    encoding: 'utf8', env: { ...process.env, FULL: full, RESULTS: JSON.stringify(checks) },
+  const verify = (full: string, checks = results(full === 'true'), reused = 'false') => spawnSync(process.execPath, ['-e', gate], {
+    encoding: 'utf8', env: { ...process.env, FULL: full, REUSED: reused, RESULTS: JSON.stringify(checks) },
   }).status;
 
   it('accepts full verification and intentional documentation skips', () => {
@@ -166,6 +166,22 @@ describe('the final CI verification gate', () => {
       checks[job] = { result };
       expect(verify('true', checks)).not.toBe(0);
     }
+  });
+
+  it('accepts reuse only with fresh workflow validation and applicable security checks', () => {
+    for (const full of ['true', 'false']) {
+      const checks = results(full === 'true');
+      for (const job of ['build', 'coverage', 'docs', 'e2e', 'performance']) checks[job] = { result: 'skipped' };
+      expect(verify(full, checks, 'true')).toBe(0);
+      checks.workflows = { result: 'skipped' };
+      expect(verify(full, checks, 'true')).not.toBe(0);
+    }
+    const checks = results(true);
+    for (const job of ['build', 'coverage', 'e2e', 'performance']) checks[job] = { result: 'skipped' };
+    checks.security = { result: 'skipped' };
+    expect(verify('true', checks, 'true')).not.toBe(0);
+    expect(verify('true', results(true), '')).not.toBe(0);
+    expect(verify('true', results(true), 'true')).not.toBe(0);
   });
 
   it('requires the lightweight docs check and a known scope', () => {

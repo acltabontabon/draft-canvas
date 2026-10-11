@@ -67,6 +67,19 @@ runs full CI. Renames include both paths; missing comparison history falls back 
 runs and reusable callers (including releases) run every check by default. Keep `full-checks: true`
 for release callers. Jobs and dependency installation steps have explicit time limits.
 
+After a merge to `main`, web and desktop CI can reuse a completed successful PR run from this
+repository. Each PR run records its tested merge revision and scope in a small evidence artifact.
+CI resolves that commit independently and compares its entire Git tree with the landed commit,
+including workflows, tests and lockfiles. The PR must be merged into `main` at that exact revision;
+matching the PR head alone is insufficient. A docs-only result cannot replace full verification.
+Reused runs link to the original verification in the source job summary. Web CI still validates
+workflows and runs applicable security audits because advisories can change without source changes.
+
+Missing or expired evidence, unavailable API/history, failed or unfinished PR runs, changed trees,
+fork PRs and direct pushes use the normal checks described above. Forced pushes, manual runs and
+release callers also use fresh verification; release builds never consume PR artifacts. Evidence
+expires after seven days and is specific to a workflow run attempt.
+
 Reusable CI and historical Pages builds validate alternate sources with `scripts/verify-source.mjs`
 from the workflow's checkout. Selected revisions must belong to the default branch's history before
 their code runs. This keeps manual runs from executing unmerged code in the default branch's cache scope.
