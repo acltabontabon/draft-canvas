@@ -51,7 +51,7 @@ jobs:
           npm run perf:lifecycle -- --skip-build --sizes medium --only load,export
           npx --no-install tsx .automation/benchmark/gate-cli.ts
       - name: Long-session and larger-workload measurements
-        # A manual Docker/Pages/CI caller also has workflow_dispatch as its event. Only the
+        # A manual Pages/CI caller also has workflow_dispatch as its event. Only the
         # dedicated Performance run opts into these measurements; reusable verification gates.
         if: inputs.extended-measurements || (github.workflow == 'Performance' && github.event_name == 'schedule')
         run: |

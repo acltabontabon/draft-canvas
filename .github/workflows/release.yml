@@ -1,6 +1,6 @@
 name: Release
 
-# A Draft Canvas release: the web app (Pages, from pages.yml on the same tag), the Docker image and the
+# A Draft Canvas release: the web app (Pages, from pages.yml on the same tag) and the
 # desktop app, one version and one GitHub release. A desktop preview (desktop-vX.Y.Z-alpha.N) releases
 # from desktop-release.yml. (The VS Code extension is retired; its last release was extension-v0.2.0.)
 on:
@@ -55,19 +55,6 @@ jobs:
           prerelease: ${{ contains(github.ref_name, '-') }}
           draft: true
 
-  # Publishes the official Docker Hub image once the Release above exists.
-  # Only this job receives the Docker Hub token.
-  docker:
-    needs: [verification, desktop]
-    permissions:
-      contents: read
-    uses: ./.github/workflows/docker-publish.yml
-    with:
-      tag: ${{ github.ref_name }}
-      verified-commit: ${{ needs.verification.outputs.commit }}
-    secrets:
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-
   # Builds the desktop installers and signed update packages into the Release above, then tells
   # installed copies about it. Only this job receives the update signing key.
   desktop:
@@ -104,3 +91,15 @@ jobs:
     with:
       artifact-name: ${{ needs.verification.outputs.artifact-name }}
       verified-commit: ${{ needs.verification.outputs.commit }}
+
+  homebrew:
+    needs: [verification, desktop]
+    if: ${{ !contains(github.ref_name, '-') }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/homebrew.yml
+    with:
+      tag: ${{ github.ref_name }}
+      verified-commit: ${{ needs.verification.outputs.commit }}
+    secrets:
+      HOMEBREW_TAP_DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}

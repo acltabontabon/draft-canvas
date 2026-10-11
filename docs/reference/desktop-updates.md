@@ -44,7 +44,7 @@ launch ──15 s──▶ look ──(daily)──▶ look …
 ## Versions
 
 The desktop app ships in every Draft Canvas release: tag `vX.Y.Z`, where `X.Y.Z` is `package.json`'s — one
-version for the web app, Docker and desktop, one GitHub release. A desktop preview ahead of a release is tagged
+version for the web app and desktop, one GitHub release. A desktop preview ahead of a release is tagged
 `desktop-vX.Y.Z-alpha.N`, and may lead `package.json` — `desktop-v1.10.0-alpha.1` while the web app is at 1.9.4
 — though its `X.Y.Z` can't be older. The release workflow builds the app as the tag's version either way. Every
 version needs a dated `## [X.Y.Z] - YYYY-MM-DD` section in `CHANGELOG.md`, previews included.

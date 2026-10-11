@@ -49,7 +49,6 @@ body:
       label: Where are you running Draft Canvas?
       options:
         - Web app (acltabontabon.com)
-        - Docker image
         - Desktop (macOS)
         - Desktop (Windows)
         - VS Code extension
@@ -60,7 +59,7 @@ body:
     id: browser
     attributes:
       label: Browser
-      description: For the web app or the Docker image.
+      description: For the hosted or self-hosted web app.
       placeholder: e.g. Chrome 141, Safari 18, Firefox 133
     validations:
       required: false

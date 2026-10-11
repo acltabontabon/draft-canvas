@@ -29,7 +29,6 @@ Commands and code locations. See [Contributing](../../CONTRIBUTING.md) for setup
 | `npm run perf` | Measure diagram loading and memory |
 | `npm run perf:publish` | Update generated performance tables |
 | `npx tsx e2e/docs-screenshots.ts` | Regenerate guide screenshots |
-| `docker build .` | Build the Docker image |
 
 ### Focused browser and unit checks
 
@@ -76,7 +75,8 @@ offline and deployment specs use production builds. Desktop browser specs do not
 | `docs/` | Guides, reference and media |
 | `public/` | Static editor assets |
 
-At the root, `index.html` starts the editor; `Dockerfile` and `nginx.conf` serve its web build.
+At the root, `index.html` starts the editor. Build `dist/` for static self-hosting; see the
+[self-hosting guide](../guides/self-hosting.md).
 Playwright configs select editor, offline, web deployment or desktop suites.
 The untracked `demo/` harness is optional; its lint and type-check entries are inactive when absent.
 

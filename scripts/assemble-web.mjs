@@ -7,7 +7,7 @@
  *
  * The app is copied in unchanged. It builds with `base: './'` and registers its service worker
  * relatively, so being served a directory deeper is all the relocation it needs: no rebuild, no
- * base-path flag, and dist/ stays exactly what the Docker image, the offline e2e suite and
+ * base-path flag, and dist/ stays exactly what static self-hosting, the offline e2e suite and
  * `vite preview` already consume.
  *
  * Run through `npm run build:web`, which builds both halves first. Assembling is kept separate from

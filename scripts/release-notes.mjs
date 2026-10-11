@@ -6,14 +6,14 @@
 //   node scripts/release-notes.mjs <tag> --platform desktop|web   previews one platform's notes
 //   node scripts/release-notes.mjs v1.10.0 --draft                previews a release with no section yet
 //
-// A `vX.Y.Z` tag is a Draft Canvas release: the web app, the Docker image and the desktop app, one
+// A `vX.Y.Z` tag is a Draft Canvas release: the web app and the desktop app, one
 // version, one GitHub release. Minor and major releases lead with the demo and ways to get it;
 // stable patches lead with their changes and collapse first-time installation guidance. Stable
 // minor/major releases use the changelog's marked highlights as a launch page with direct downloads.
 // A patch can opt into that page with <!-- launch -->, keeping its fixes ahead of the series overview.
 // A `desktop-vX.Y.Z-alpha.N` tag is a desktop preview ahead of the release it leads to:
 // it leads with the desktop reel, lists only what reaches the desktop app, and has no "Get it"
-// (there's nothing yet to `docker run` or open on the web).
+// (there's nothing yet to open on the web).
 
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -36,23 +36,24 @@ export function changelogSection(changelog, version) {
     .trim();
 }
 
+const HOMEBREW = '- **macOS with Homebrew:** `brew install --cask acltabontabon/tap/draft-canvas`.';
+
 export function getIt(version) {
   return [
     '### Get it',
     '',
     '- **On the web:** [acltabontabon.com/draft-canvas](https://acltabontabon.com/draft-canvas/). Nothing you draw leaves your browser.',
     `- **Desktop (macOS and Windows):** the installers under **Assets** below. Installed copies update themselves.`,
-    `- **Docker:** \`docker run -d -p 8080:8080 acltabontabon/draft-canvas:${version}\` (port 8080 inside the container since 1.12)`,
+    ...(/^\d+\.\d+\.\d+$/.test(version) ? [HOMEBREW] : []),
   ].join('\n');
 }
 
 /** The web app's own ways in, for a preview of the web notes alone. */
-export function getItOnTheWeb(version) {
+export function getItOnTheWeb() {
   return [
     '### Get it',
     '',
     '- **On the web:** [acltabontabon.com/draft-canvas](https://acltabontabon.com/draft-canvas/). Nothing you draw leaves your browser.',
-    `- **Docker:** \`docker run -d -p 8080:8080 acltabontabon/draft-canvas:${version}\` (port 8080 inside the container since 1.12)`,
   ].join('\n');
 }
 
@@ -106,8 +107,9 @@ function releaseLandingPage(tag, version, changelog, audience, notes) {
     demo(tag, 'demo.gif', 'Draft Canvas: draw, explain, and share software architecture'),
     `### Key highlights${overview !== news ? ` from ${parsed.major}.${parsed.minor}` : ''}\n\n| | |\n| --- | --- |\n${rows.join('\n')}`,
   ];
+  if (audience !== 'web') parts.push(HOMEBREW);
   if (audience !== 'desktop') {
-    parts.push(`### Run it on your own server\n\n\`\`\`bash\ndocker run -d -p 8080:8080 acltabontabon/draft-canvas:${version}\n\`\`\``);
+    parts.push('[Self-host the static editor](https://acltabontabon.com/draft-canvas/docs/self-hosting/).');
   }
   parts.push(`<details>\n<summary>Everything added, changed and fixed</summary>\n\n${details}\n\n</details>`);
   if (audience !== 'web') {
@@ -136,18 +138,19 @@ export function releaseBody(tag, changelog, { platform } = {}) {
   }
   // A patch should explain its fixes first; the product demo belongs to larger releases.
   if (!desktopPreview && parsed.patch > 0 && parsed.pre.length === 0) {
-    const access = audience === 'desktop' ? [] : [audience === 'web' ? getItOnTheWeb(version) : getIt(version)];
+    const access = audience === 'desktop' ? [] : [audience === 'web' ? getItOnTheWeb() : getIt(version)];
     const installation = audience === 'web' ? [] : [
+      ...(audience === 'desktop' ? [HOMEBREW] : []),
       `<details>\n<summary>First-time desktop installation</summary>\n\n${FIRST_LAUNCH}\n\n</details>`,
     ];
     return `${[notes, ...access, ...installation].join('\n\n')}\n`;
   }
   const parts =
     audience === 'desktop'
-      ? [demo(tag, 'desktop-demo.gif', 'Draft Canvas Desktop demo'), notes, FIRST_LAUNCH]
+      ? [demo(tag, 'desktop-demo.gif', 'Draft Canvas Desktop demo'), notes, ...(!desktopPreview && parsed.pre.length === 0 ? [HOMEBREW] : []), FIRST_LAUNCH]
       : audience === 'web'
-        ? // A desktop preview never reaches the web or Docker, so there's nothing to "get" there yet.
-          [demo(tag, 'demo.gif', 'Draft Canvas demo'), ...(desktopPreview ? [] : [getItOnTheWeb(version)]), notes]
+        ? // A desktop preview never reaches the web, so there's nothing to "get" there yet.
+          [demo(tag, 'demo.gif', 'Draft Canvas demo'), ...(desktopPreview ? [] : [getItOnTheWeb()]), notes]
         : [demo(tag, 'demo.gif', 'Draft Canvas demo'), getIt(version), notes, FIRST_LAUNCH];
   return `${parts.join('\n\n')}\n`;
 }

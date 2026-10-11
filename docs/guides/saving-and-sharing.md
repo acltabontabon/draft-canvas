@@ -234,7 +234,7 @@ whichever of these fits:
   browser's copy of the key is gone. The Library can still list it because the title is stored
   separately, but there's no way to recover what was drawn. If you exported a file, import that.
 - **The Library is empty.** Diagrams are per browser profile and per origin: `localhost:5180`, a
-  Docker copy on `:8080` and the hosted site each keep their own. Check you're on the same one, and not
+  self-hosted copy and the hosted site each keep their own. Check you're on the same one, and not
   in a private window.
 - **"This browser is out of local storage space."** Delete a diagram you no longer need, or export
   this one first.

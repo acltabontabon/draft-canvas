@@ -3,7 +3,7 @@ name: Desktop Release
 # Builds Draft Canvas Desktop's installers and signed update packages into a GitHub release. Two
 # callers, one version scheme:
 #
-#   release.yml, for every vX.Y.Z tag   A Draft Canvas release: web, Docker and desktop together, one
+#   release.yml, for every vX.Y.Z tag   A Draft Canvas release: web and desktop together, one
 #                                       version (package.json's). release.yml creates the release; this
 #                                       only adds the desktop files to it.
 #   a desktop-vX.Y.Z-alpha.N tag        A desktop preview ahead of the release it leads to. This creates

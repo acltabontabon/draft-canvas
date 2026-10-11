@@ -169,7 +169,7 @@ describe('release notes are the changelog, filtered by platform', () => {
     expect(body).toContain('Suggestions stay at the right level.');
     expect(body).not.toContain('Framed on open');
     expect(body).not.toContain('demo.gif');
-    expect(body).toContain('acltabontabon/draft-canvas:1.10.1');
+    expect(body).toContain('brew install --cask acltabontabon/tap/draft-canvas');
     expect(body).toContain('<summary>First-time desktop installation</summary>');
     expect(body).toContain('SHA256SUMS.txt');
     expect(body).toContain('System Settings → Privacy & Security');
@@ -240,7 +240,7 @@ describe('the real changelog and release configuration', () => {
     expect(body).toMatch(/^## Explain the architecture\. Keep the detail\./);
     expect(body).toContain('### Key highlights');
     expect(body).toContain('/v1.13.0/docs/media/demo.gif');
-    expect(body).toContain('acltabontabon/draft-canvas:1.13.0');
+    expect(body).toContain('brew install --cask acltabontabon/tap/draft-canvas');
     expect(body).toContain('<summary>Everything added, changed and fixed</summary>');
     expect(body.indexOf('### Key highlights')).toBeLessThan(body.indexOf('<summary>Everything added'));
     expect(body.split('Explain the architecture. Keep the detail.')).toHaveLength(2);
@@ -350,5 +350,27 @@ describe('the real changelog and release configuration', () => {
     expect(desktop).toContain('--draft=false --prerelease --latest=false');
     expect(desktop).toContain('installer: Draft-Canvas_VERSION_macOS_arm64.dmg');
     expect(desktop).toContain('installer: Draft-Canvas_VERSION_Windows_x64.exe');
+  });
+});
+
+
+describe('current installation guidance', () => {
+  it('offers Homebrew for stable desktop releases and removes Docker promotion', () => {
+    const command = 'brew install --cask acltabontabon/tap/draft-canvas';
+    for (const version of ['1.13.0', '1.13.1']) {
+      for (const platform of ['all', 'desktop', 'web'] as const) {
+        const body = releaseBody(`v${version}`, read('CHANGELOG.md'), { platform });
+        expect(body.includes(command)).toBe(platform !== 'web');
+        expect(body).not.toContain('docker run');
+        expect(body).not.toContain('### Run it on your own server');
+      }
+    }
+  });
+
+  it('does not advertise the stable cask for a preview', () => {
+    const preview = releaseBody('desktop-v1.10.0-alpha.2', CHANGELOG);
+    expect(preview).not.toContain('brew install');
+    const rc = releaseBody('v1.10.0-rc.1', CHANGELOG.replace('## [1.10.0]', '## [1.10.0-rc.1]'));
+    expect(rc).not.toContain('brew install');
   });
 });

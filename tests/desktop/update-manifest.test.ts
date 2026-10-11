@@ -64,7 +64,7 @@ describe('the update manifest', () => {
     const { signatures } = release();
     const manifest = buildManifest({ version: VERSION, notes: '### Added', pubDate: '2026-09-22T00:00:00.000Z', signatures });
     expect(Object.keys(manifest.platforms).sort()).toEqual(['darwin-aarch64', 'darwin-x86_64', 'windows-x86_64']);
-    // A release is the one vX.Y.Z release the web app and Docker share.
+    // A release is the one vX.Y.Z release the web app shares.
     expect(manifest.platforms['darwin-aarch64']!.url).toBe(
       'https://github.com/acltabontabon/draft-canvas/releases/download/v1.10.0/Draft-Canvas_1.10.0_macOS_arm64.app.tar.gz',
     );
@@ -237,7 +237,7 @@ describe('release notes', () => {
     const release = releaseBody('v1.10.0', changelog);
     expect(release).toMatch(/^!\[Draft Canvas demo\]\(https:\/\/raw\.githubusercontent\.com\/acltabontabon\/draft-canvas\/v1\.10\.0\/docs\/media\/demo\.gif\)/);
     expect(release).toContain('### Get it');
-    expect(release).toContain('acltabontabon/draft-canvas:1.10.0');
+    expect(release).toContain('brew install --cask acltabontabon/tap/draft-canvas');
     expect(release).toContain('### Opening the desktop app the first time');
 
     const preview = releaseBody('desktop-v1.10.0-alpha.1', changelog);

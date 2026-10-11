@@ -13,7 +13,7 @@
 
 ## Checklist
 
-- [ ] `npm run check` passes locally, plus the [checks for what this touches](https://github.com/acltabontabon/draft-canvas/blob/main/CONTRIBUTING.md#which-checks-for-which-change) (desktop, extension, site, Docker)
+- [ ] `npm run check` passes locally, plus the [checks for what this touches](https://github.com/acltabontabon/draft-canvas/blob/main/CONTRIBUTING.md#which-checks-for-which-change) (desktop, site, release tooling)
 - [ ] Tests added/updated for the behavior that changed
 - [ ] A `CHANGELOG.md` line under `[Unreleased]` if people using Draft Canvas would notice this
 - [ ] Docs updated if this changes architecture semantics, the document schema (`src/document/types.ts`, `docs/reference/schema.md`), or anything a guide in `docs/guides/` (or a Learn recipe) describes

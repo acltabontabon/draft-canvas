@@ -8,6 +8,24 @@ Nothing about it needs an account, a server or a network connection. It is one o
 Draft Canvas, and both work on the same file: the [web app](getting-started.md) and this. It is for
 macOS, on Apple Silicon or Intel, and Windows on x64.
 
+## Installing
+
+Download a macOS or Windows installer from the
+[latest stable release](https://github.com/acltabontabon/draft-canvas/releases/latest).
+On macOS 12 or later, Apple Silicon and Intel Macs can also use Homebrew:
+
+```bash
+brew install --cask acltabontabon/tap/draft-canvas
+```
+
+The cask selects your architecture and installs `Draft Canvas.app` in Applications. Homebrew
+preserves macOS Gatekeeper checks: for the current ad-hoc-signed builds, open the app once and then
+choose **System Settings → Privacy & Security → Open Anyway** if prompted. On Windows, use the
+installer and choose **More info → Run anyway** if SmartScreen prompts. See the release notes for platform-specific first-launch details.
+
+The app updates itself with signed updates. `brew upgrade --cask --greedy acltabontabon/tap/draft-canvas` explicitly includes this self-updating cask. Quit the app before
+replacing it. Uninstalling the cask leaves diagrams, Quick Drafts and recovery data alone.
+
 ## Quick Draft
 
 **New Quick Draft** is in the tray menu, the File menu (`⌘N` / `Ctrl+N`) and on Home, where it's the big
@@ -196,3 +214,39 @@ therefore warns the first time, and the release notes say how to continue:
 Signing can be added later without changing anything else; there is deliberately nothing about it in the workflow
 today. Every release is also an update installed copies are offered, signed with the project's own update key;
 [Desktop updates](../reference/desktop-updates.md) has the one-time setup and what the workflow checks.
+
+## Homebrew releases
+
+`Casks/draft-canvas.rb` in [the shared tap](https://github.com/acltabontabon/homebrew-tap) is generated
+by Draft Canvas, alongside Habi's independently managed cask. The Release orchestrator waits for
+stable desktop publication, then explicitly calls `.github/workflows/homebrew.yml`; GitHub does not start release-event workflows from releases
+published using its normal workflow token. Prereleases and drafts never update the stable cask.
+
+The job downloads both published DMGs and `SHA256SUMS.txt`, verifies the bytes, runs Homebrew style
+and audit checks, and commits only the generated cask. It refuses older versions, retries concurrent
+tap pushes, and makes an unchanged rerun a no-op. Pages and signed updater-channel publication run
+independently: a Homebrew failure does not retract a release or block either of them.
+
+### Credentials
+
+Create a dedicated Ed25519 deploy key for Draft Canvas. Add its public half as a write-enabled deploy
+key on `acltabontabon/homebrew-tap`, and store its private half as the `HOMEBREW_TAP_DEPLOY_KEY` Actions
+secret on `acltabontabon/draft-canvas`. The key grants access only to the tap; the normal
+`GITHUB_TOKEN` cannot push to another repository. Never commit either private keys or secret values.
+The workflow fails visibly if its deploy key is missing. Pass the secret only to the Homebrew
+reusable workflow call in the Release orchestrator.
+After a manual desktop rebuild, run Homebrew separately to refresh the cask checksums.
+
+### Retry and recovery
+
+In Draft Canvas's Actions, run **Homebrew**, supplying the published stable tag (for example
+`v1.13.1`). The workflow uses its current source so the initial cask can be published before a new
+app release. A request for a stable release older than the latest published stable release is
+skipped; a cask newer than the requested version is also preserved. A same-version installer rebuild
+can refresh checksums, but identical cask content does not create a commit.
+
+If verification or Homebrew auditing fails, fix the cause before retrying. For a missing key, follow
+the credential setup above. Never disable checksum checks or bypass Gatekeeper. To withdraw a bad
+version or intentionally roll the tap back, make a reviewed correction in the tap; automatic jobs
+refuse downgrades. This does not downgrade already installed copies. See
+[release recovery](../reference/reliability.md#withdrawal-and-recovery-procedure).

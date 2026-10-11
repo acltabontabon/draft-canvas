@@ -58,6 +58,10 @@ test.describe('Home screen', () => {
 
   test('first run is keyboard-first: Enter starts blank, arrows and Enter start a starter', async ({ page }) => {
     await page.goto('/');
+    // The blank button renders before FirstRunHome's passive effect subscribes to Enter. The
+    // catalog is loaded from that initial effect batch: its visible grid means the keyboard
+    // listener is installed too, so WebKit cannot send the shortcut before anyone handles it.
+    await expect(page.getByRole('group', { name: 'Starters' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'New canvas' })).toBeEnabled();
     await page.keyboard.press('Enter');
     await expect(page.locator('.dc-editor')).toBeVisible();

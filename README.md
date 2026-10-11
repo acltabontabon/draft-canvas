@@ -36,13 +36,28 @@ Optional coding agents use their own AI providers.
 
 ## Running it yourself
 
-Serve the web app with Docker:
+Install the macOS desktop app with Homebrew (Apple Silicon or Intel):
 
 ```bash
-docker run -d --name draft-canvas -p 8080:8080 acltabontabon/draft-canvas
+brew install --cask acltabontabon/tap/draft-canvas
 ```
 
-Open `http://localhost:8080`. Use HTTPS when hosting for others to enable offline support.
+See the [desktop guide](docs/guides/desktop.md#installing) for downloads and first-launch guidance.
+
+Build the static web editor from source:
+
+```bash
+npm ci
+npm run build
+```
+
+Serve the contents of `dist/` with a static web host, keeping assets and the service worker at their
+built relative paths. Use HTTPS when hosting for others to enable offline support. Each origin has
+its own browser storage; export diagrams before changing hosts. See
+[self-hosting](docs/guides/self-hosting.md) for deployment details.
+
+Docker distribution is retired. Previously published images remain historical artifacts and receive
+no further updates.
 
 For local development, setup and checks, see [Contributing](CONTRIBUTING.md).
 
