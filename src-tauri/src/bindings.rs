@@ -35,8 +35,9 @@ fn desktop_wire_types_match_rust() {
     if std::env::var_os("DRAFT_CANVAS_WRITE_BINDINGS").is_some() {
         std::fs::write(&path, &generated).unwrap();
     }
+    // Git may check out this text file as CRLF on Windows; only declaration drift matters.
     assert_eq!(
-        std::fs::read_to_string(path).unwrap(),
+        std::fs::read_to_string(path).unwrap().replace("\r\n", "\n"),
         generated,
         "Run npm run desktop:bindings and commit the generated declarations"
     );
