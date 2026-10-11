@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { useFocusReturn } from './useFocusReturn';
+import { ModalOverlay, Modal as AriaModal, Dialog } from 'react-aria-components';
 import { Button } from './Button';
 import { Icon } from './Icon';
 import { isImeKeyEvent } from '../../lib/isEditableTarget';
@@ -45,10 +45,6 @@ export function Modal({ title, onClose, children, footer, width = 460, className
     };
   }, [order]);
 
-  // A `Modal` only ever exists while its caller is showing it — no separate `open` prop — so
-  // "active" for the whole focus-return lifecycle is simply "for as long as this is mounted".
-  useFocusReturn(true);
-
   // Mount-only: focusing the panel on every re-run of the keydown-listener effect below would
   // steal focus back from whatever's focused inside the modal (e.g. a slider or text field)
   // any time a caller passes a fresh `onClose` identity — which most do, on every render.
@@ -81,37 +77,39 @@ export function Modal({ title, onClose, children, footer, width = 460, className
       // canvas/toolbar chrome sits behind the backdrop — a keyboard user has no way back in short
       // of reopening it.
       if (panel.current) trapTab(event, panel.current);
+      // The compatibility Tab policy has already moved focus; Aria must not move it again.
+      if (event.defaultPrevented) event.stopPropagation();
     };
     window.addEventListener('keydown', onKeyDown, true);
     return () => window.removeEventListener('keydown', onKeyDown, true);
   }, [onClose, order]);
 
   return (
-    <div className="dc-modal-backdrop" onPointerDown={onClose}>
-      <div
-        ref={panel}
-        className={className ? `dc-modal ${className}` : 'dc-modal'}
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        tabIndex={-1}
-        style={{ width }}
-        onPointerDown={(event) => event.stopPropagation()}
-      >
-        <header className="dc-modal-header">
-          <div className="dc-modal-header-title">
-            {onBack && (
-              <button type="button" className="dc-modal-back" onClick={onBack} aria-label={backLabel ?? 'Back'}>
-                <Icon name="back" size={13} />
-              </button>
-            )}
-            <h2>{title}</h2>
-          </div>
-          <Button icon="close" variant="quiet" onClick={onClose} aria-label="Close" />
-        </header>
-        <div className="dc-modal-body">{children}</div>
-        {footer && <footer className="dc-modal-footer">{footer}</footer>}
-      </div>
-    </div>
+    <ModalOverlay isOpen isKeyboardDismissDisabled isDismissable onOpenChange={(open) => { if (!open) onClose(); }} className="dc-modal-backdrop">
+      <AriaModal>
+        <Dialog
+          ref={panel}
+          className={className ? `dc-modal ${className}` : 'dc-modal'}
+          role="dialog"
+          aria-modal="true"
+          aria-label={title}
+          style={{ width }}
+        >
+          <header className="dc-modal-header">
+            <div className="dc-modal-header-title">
+              {onBack && (
+                <button type="button" className="dc-modal-back" onClick={onBack} aria-label={backLabel ?? 'Back'}>
+                  <Icon name="back" size={13} />
+                </button>
+              )}
+              <h2>{title}</h2>
+            </div>
+            <Button icon="close" variant="quiet" onClick={onClose} aria-label="Close" />
+          </header>
+          <div className="dc-modal-body">{children}</div>
+          {footer && <footer className="dc-modal-footer">{footer}</footer>}
+        </Dialog>
+      </AriaModal>
+    </ModalOverlay>
   );
 }

@@ -266,6 +266,7 @@ export class DesktopController {
         return this.openHandle(event.handle);
       case 'new-quick-draft':
         return this.newQuickDraft();
+      case 'disk-changed':
       case 'window-focused':
         return this.onFocus();
       case 'recents-changed':
@@ -1021,18 +1022,31 @@ export class DesktopController {
     });
   }
 
-  private async reload(session: Extract<Session, { kind: 'file' }>): Promise<void> {
+  private async reload(session: Extract<Session, { kind: 'file' }>, onlyIfCurrent?: () => boolean): Promise<boolean> {
     const opened = await this.api.openHandle(session.handle);
+    if (onlyIfCurrent) {
+      await this.flushApp();
+      if (!onlyIfCurrent()) return false;
+    }
     if (!deserializeDocument(opened.text).ok) {
       await this.api.showError(`Draft Canvas couldn’t read ${opened.name}.draftcanvas`, 'What is on disk is not a valid diagram, so what is on screen was left as it is.');
-      return;
+      return false;
     }
     await this.discard(session.recoveryId);
+    if (onlyIfCurrent) {
+      await this.flushApp();
+      if (!onlyIfCurrent()) {
+        // An edit arriving during recovery cleanup still needs its own recoverable copy.
+        if (this.session === session && this.dirty) this.scheduleSnapshot();
+        return false;
+      }
+    }
     session.stamp = opened.stamp;
     session.readOnly = opened.readOnly;
     this.edited = false;
     this.load(opened.text, opened.name, { baseline: true });
     this.publish();
+    return true;
   }
 
   async reveal(): Promise<void> {
@@ -1239,7 +1253,7 @@ export class DesktopController {
     }
   }
 
-  /** Coming back to the window: has the open file changed under us? One `stat`, only now. */
+  /** Focus or a native notification: reconcile the file, or refresh the project list on Home. */
   private async onFocus(): Promise<void> {
     if (this.session.kind === 'none') {
       await this.refreshProjects();
@@ -1266,12 +1280,19 @@ export class DesktopController {
     // false and a reload would replace an edit that was on screen.
     await this.flushApp();
     if (this.session !== session || this.saving) return 'unchanged';
-    const check = await this.api.checkStamp(session.handle, session.stamp);
-    if (check === 'unchanged') return 'unchanged';
+    const stamp = session.stamp;
+    const seq = this.seq;
+    const current = () => this.session === session && this.seq === seq && session.stamp === stamp && !this.saving;
+    const check = await this.api.checkStamp(session.handle, stamp);
+    if (!current() || check === 'unchanged') return 'unchanged';
     if (check === 'changed' && !this.dirty) {
-      await this.reload(session);
-      this.ui.notify(`${session.name}.draftcanvas was changed outside Draft Canvas, so it was reloaded.`);
-      return 'reloaded';
+      // A notification can arrive while the person is typing or switching files. Re-check after
+      // each async read/cleanup, including edits still waiting in the renderer's fields.
+      if (await this.reload(session, () => current() && !this.dirty)) {
+        this.ui.notify(`${session.name}.draftcanvas was changed outside Draft Canvas, so it was reloaded.`);
+        return 'reloaded';
+      }
+      if (!current()) return 'unchanged';
     }
     if (this.outside !== check) {
       this.outside = check;

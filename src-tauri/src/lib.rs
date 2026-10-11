@@ -1,4 +1,6 @@
 mod agent;
+#[cfg(test)]
+mod bindings;
 mod commands;
 mod dialogs;
 mod docio;
@@ -16,6 +18,7 @@ mod state;
 mod tray;
 mod updater;
 mod util;
+mod watch;
 mod window;
 #[cfg(test)]
 mod wiring;

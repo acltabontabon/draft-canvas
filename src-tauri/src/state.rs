@@ -22,7 +22,7 @@ use tauri::ipc::Channel;
 
 /// The commands the page may be told a menu item ran. Spelled as `MenuCommand` in `api.ts`; `close` is
 /// there too but never sent: closing the window is decided in Rust (see `lifecycle`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ts_rs::TS)]
 #[serde(rename_all = "kebab-case")]
 pub enum MenuCommand {
     Save,
@@ -42,7 +42,7 @@ pub enum MenuCommand {
 }
 
 /// What Rust tells the page on its own account (`HostEvent` in `api.ts`).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ts_rs::TS)]
 #[serde(
     tag = "type",
     rename_all = "kebab-case",
@@ -66,6 +66,7 @@ pub enum HostEvent {
         snapshot: crate::updater::Snapshot,
     },
     WindowFocused,
+    DiskChanged,
     RecentsChanged,
     Notice {
         message: String,
@@ -74,14 +75,18 @@ pub enum HostEvent {
     /// (`agent_ack`), passes the commit gate before changing anything (`agent_gate`), and answers
     /// (`agent_respond`).
     AgentRequest {
+        #[ts(type = "number")]
         id: u64,
         tool: String,
+        #[ts(type = "unknown")]
         args: serde_json::Value,
+        #[ts(type = "unknown")]
         context: serde_json::Value,
     },
     /// An agent's update to a diagram that isn't open was written to its file (request `id`, as sent in
     /// `AgentRequest`), now at `stamp`: the page offers to show it, with the change as one undo step.
     AgentFileWritten {
+        #[ts(type = "number")]
         id: u64,
         handle: Option<Handle>,
         display_path: String,
@@ -168,6 +173,7 @@ fn extra_files_notice(extra: usize) -> Option<String> {
 }
 
 pub struct AppState {
+    pub watches: Mutex<Option<crate::watch::Watches>>,
     pub grants: Mutex<Grants>,
     pub recents: Recents,
     pub settings: SettingsStore,
@@ -188,6 +194,7 @@ pub struct AppState {
 impl AppState {
     pub fn new(config_dir: &Path, local_data_dir: &Path) -> Self {
         Self {
+            watches: Mutex::new(None),
             grants: Mutex::default(),
             recents: Recents::new(config_dir),
             settings: SettingsStore::new(config_dir),
@@ -203,11 +210,17 @@ impl AppState {
 
     pub fn grant_file(&self, path: &Path) -> Result<Handle, AppError> {
         let canonical = validate_file(path)?;
+        if let (Some(watches), Some(parent)) = (lock(&self.watches).as_mut(), canonical.parent()) {
+            watches.add(parent);
+        }
         Ok(lock(&self.grants).insert_file(canonical))
     }
 
     pub fn grant_project(&self, path: &Path) -> Result<Handle, AppError> {
         let canonical = validate_folder(path)?;
+        if let Some(watches) = lock(&self.watches).as_mut() {
+            watches.add(&canonical);
+        }
         Ok(lock(&self.grants).insert_project(canonical))
     }
 

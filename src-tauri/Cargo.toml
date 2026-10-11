@@ -39,6 +39,8 @@ uuid = { version = "1", features = ["v4"] }
 sha2 = "0.10"
 base64 = "0.23"
 dunce = "1"
+ts-rs = "12"
+notify = "8"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Storage_FileSystem", "Win32_UI_WindowsAndMessaging", "Win32_Foundation", "Win32_Security", "Win32_Security_Authorization"] }
@@ -57,6 +59,7 @@ tempfile = "3"
 # Tauri's own menu library: used only to check that every shortcut string in menu.rs actually parses.
 # Tauri drops an unparseable shortcut without a word.
 muda = { version = "0.20", default-features = false }
+proptest = "1"
 
 [profile.release]
 panic = "abort"

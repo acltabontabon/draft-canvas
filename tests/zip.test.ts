@@ -61,6 +61,13 @@ describe('zipFiles / unzipFiles', () => {
     expect(back[2]!.data).toHaveLength(0);
   });
 
+  it('preserves numeric, prototype-like and duplicate names without object-key interpretation', () => {
+    const names = ['2', '1', '__proto__', 'constructor', 'same', 'same'];
+    const back = unzipFiles(zipFiles(names.map((name, i) => ({ name, data: String(i) }))));
+    expect(back.map((entry) => entry.name)).toEqual(names);
+    expect(back.map((entry) => decoder.decode(entry.data))).toEqual(names.map((_, i) => String(i)));
+  });
+
   it('is reproducible — the same entries give the same bytes, and unzip(zip(x)) is x', () => {
     const once = zipFiles(entries);
     const twice = zipFiles(entries);
@@ -75,19 +82,24 @@ describe('zipFiles / unzipFiles', () => {
 
     // Local header for "a.txt" at the very start.
     expect(le32(archive, 0)).toBe(0x04034b50);
-    expect(le16(archive, 6) & 0x0800).toBe(0x0800); // UTF-8 names
+    expect(le16(archive, 6) & 0x0800).toBe(0); // ASCII needs no encoding flag
     expect(le16(archive, 8)).toBe(0); // stored
     expect(le16(archive, 10)).toBe(0); // 00:00
     expect(le16(archive, 12)).toBe(0x0021); // 1980-01-01
-    expect(le32(archive, 14)).toBe(crc32(encoder.encode('hello')));
-    expect(le32(archive, 18)).toBe(5);
-    expect(le32(archive, 22)).toBe(5);
+    expect(le16(archive, 6) & 0x0008).toBe(0x0008); // CRC and size follow the data
+    expect(le32(archive, 14)).toBe(0);
+    expect(le32(archive, 18)).toBe(0);
+    expect(le32(archive, 22)).toBe(0);
     expect(le16(archive, 26)).toBe(5);
     expect(decoder.decode(archive.subarray(30, 35))).toBe('a.txt');
     expect(decoder.decode(archive.subarray(35, 40))).toBe('hello');
 
-    // Second local header immediately after.
-    const second = 40;
+    // The descriptor records the CRC and size, followed by the next local header.
+    expect(le32(archive, 40)).toBe(0x08074b50);
+    expect(le32(archive, 44)).toBe(crc32(encoder.encode('hello')));
+    expect(le32(archive, 48)).toBe(5);
+    expect(le32(archive, 52)).toBe(5);
+    const second = 56;
     expect(le32(archive, second)).toBe(0x04034b50);
     expect(le32(archive, second + 18)).toBe(0);
 

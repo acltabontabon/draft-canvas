@@ -35,6 +35,7 @@ Running your own copy is covered in the [README](../README.md#running-it-yoursel
 | [`AGENTS.md`](../AGENTS.md) | Learn the rules that are load-bearing before touching core code |
 | [Architecture](reference/architecture.md) | Understand why it is built this way: one renderer, the canvas/store boundary, persistence, and what is deliberately not built |
 | [Architecture semantics](reference/semantics.md) | See what Draft Canvas understands about a diagram: node categories, the connector capability matrix, suggestion rules |
+| [Library adoption](reference/library-adoption.md) | Maintain generated desktop types, native notifications and the layout/schema comparison harness |
 | [Document schema](reference/schema.md) | Find the file format, version history and the import-validation contract |
 | [Privacy](reference/privacy.md) | See exactly what is stored, where, and what leaves your machine |
 | [Performance](reference/performance.md) | Read the benchmark methodology and the latest results |

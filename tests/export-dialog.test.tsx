@@ -262,7 +262,7 @@ describe('ExportDialog — output artifact', () => {
 
   it('renders a live thumbnail for Image, reporting the real 2× PNG size', () => {
     useEditorStore.setState({ document: withFlow(), selection: { nodes: [], edges: [] }, selectedFlowId: null });
-    const { container } = renderDialog();
+    const { baseElement: container } = renderDialog();
 
     const thumbnail = container.querySelector('.dc-export-stage img');
     expect(thumbnail?.getAttribute('src')).toMatch(/^data:image\/svg\+xml/);

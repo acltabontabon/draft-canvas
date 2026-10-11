@@ -16,7 +16,7 @@ use std::path::Path;
 use tauri::ipc::Request;
 use tauri::AppHandle;
 
-#[derive(Debug, PartialEq, Eq, Serialize)]
+#[derive(Debug, PartialEq, Eq, Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectInfo {
     pub handle: Handle,
@@ -86,7 +86,16 @@ pub async fn project_forget(app: AppHandle, handle: String) -> Result<(), AppErr
 #[tauri::command]
 pub async fn project_scan(app: AppHandle, handle: String) -> Result<Scan, AppError> {
     run_blocking(&app, move |_, state| {
-        scan(&state.project(&handle)?.root, &Limits::default())
+        let root = state.project(&handle)?.root;
+        let result = scan(&root, &Limits::default())?;
+        if let Some(watches) = crate::util::lock(&state.watches).as_mut() {
+            for file in &result.files {
+                if let Some(parent) = root.join(&file.rel_path).parent() {
+                    watches.add(parent);
+                }
+            }
+        }
+        Ok(result)
     })
     .await
 }

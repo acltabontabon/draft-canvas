@@ -7,6 +7,13 @@
  * and folders the user picked (or the OS opened), and only a handle is ever sent back — so a path
  * that didn't come from the user can't be read or written.
  */
+import type { Snapshot as UpdateSnapshot, HostEvent as WireHostEvent } from './wire';
+export type { UpdateInfo, Phase as UpdatePhase, Snapshot as UpdateSnapshot, MenuCommand } from './wire';
+/** The agent context is refined by the bridge protocol beyond Rust's JSON value envelope. */
+export type HostEvent = Exclude<WireHostEvent, { type: 'agent-request' }> | (Omit<Extract<WireHostEvent, { type: 'agent-request' }>, 'args' | 'context'> & { args: Record<string, unknown>; context: AgentContext });
+import type { OpenedDoc, SavedAs, SaveResult, ProjectInfo, Scan as ProjectScan } from './wire';
+export type { OpenedDoc, SavedAs, SaveResult, ProjectInfo, ProjectFile, Scan as ProjectScan } from './wire';
+
 export type Handle = string;
 
 export type AppErrorKind =
@@ -34,27 +41,6 @@ export class DesktopError extends Error {
   }
 }
 
-export interface OpenedDoc {
-  handle: Handle;
-  /** The file's name without its extension. */
-  name: string;
-  /** Where it lives, written for display (`~/work/payment-flow.draftcanvas`). */
-  displayPath: string;
-  text: string;
-  /** Opaque: pass it back with the next save so a change made outside the app is noticed. */
-  stamp: string;
-  readOnly: boolean;
-}
-
-export type SaveResult = { outcome: 'saved'; stamp: string } | { outcome: 'conflict' };
-
-export interface SavedAs {
-  handle: Handle;
-  name: string;
-  displayPath: string;
-  stamp: string;
-}
-
 /** Where a canvas created inside a project (but never written to disk) remembers it should be saved. */
 export interface StartLocation {
   projectHandle: Handle;
@@ -68,27 +54,6 @@ export interface RenamedFile {
 }
 
 export type StampCheck = 'unchanged' | 'changed' | 'missing';
-
-export interface ProjectInfo {
-  handle: Handle;
-  name: string;
-  displayPath: string;
-}
-
-export interface ProjectFile {
-  /** Relative to the project, always with `/`. */
-  relPath: string;
-  name: string;
-  mtimeMs: number;
-  size: number;
-}
-
-export interface ProjectScan {
-  files: ProjectFile[];
-  /** The relative path of every folder whose contents weren't fully listed because a limit was hit — the
-   * project root itself is `''`. Empty when nothing was cut off. */
-  truncatedDirs: string[];
-}
 
 export interface RecentItem {
   handle: Handle;
@@ -119,36 +84,6 @@ export interface DesktopSettings {
   autoCheckUpdates: boolean;
 }
 
-/** What a release is, as far as the page says. */
-export interface UpdateInfo {
-  version: string;
-  /** The release's section of the changelog, as Markdown. */
-  notes: string | null;
-}
-
-/** Where an update stands (`updater::Phase` in Rust). */
-export type UpdatePhase =
-  | { phase: 'idle' }
-  | { phase: 'checking' }
-  | { phase: 'up-to-date'; checkedMs: number }
-  | { phase: 'available'; info: UpdateInfo }
-  /** `total` is null when the server didn't say: show movement, not a percentage that lies. */
-  | { phase: 'downloading'; info: UpdateInfo; received: number; total: number | null }
-  | { phase: 'ready'; info: UpdateInfo }
-  | { phase: 'installing'; info: UpdateInfo }
-  | { phase: 'unavailable'; reason: string };
-
-/** Everything the page needs about updating, sent whole on every change. */
-export interface UpdateSnapshot {
-  currentVersion: string;
-  state: UpdatePhase;
-  /** "Later" was said to the version on offer, this run. */
-  dismissed: boolean;
-  /** Why the last install didn't go ahead: the person chose to keep working. */
-  held: string | null;
-  error: { stage: 'check' | 'download' | 'install'; message: string; manual: boolean } | null;
-}
-
 export interface HostBoot {
   /** The app's version, which is also the installer's. */
   version: string;
@@ -164,49 +99,6 @@ export type DocState =
   | { kind: 'none'; dirty: false }
   | { kind: 'quick'; dirty: boolean }
   | { kind: 'file'; dirty: boolean; name: string; handle: Handle };
-
-export type MenuCommand =
-  | 'save'
-  | 'save-as'
-  | 'open'
-  | 'open-project'
-  | 'new-canvas'
-  | 'reveal'
-  | 'revert'
-  | 'rename'
-  | 'settings'
-  | 'about'
-  | 'shortcuts'
-  | 'undo'
-  | 'redo'
-  | 'select-all';
-
-/** What the shell tells the app on its own account: a menu pick, a file the OS opened, the app being asked to quit. */
-export type HostEvent =
-  | { type: 'open'; handle: Handle; name: string; displayPath: string }
-  | { type: 'new-quick-draft' }
-  | { type: 'menu'; command: MenuCommand }
-  | { type: 'quit-requested' }
-  /** The quit question, asked before an update replaces the app. */
-  | { type: 'update-requested' }
-  | { type: 'update'; snapshot: UpdateSnapshot }
-  | { type: 'window-focused' }
-  | { type: 'recents-changed' }
-  | { type: 'notice'; message: string }
-  /**
-   * A request from an AI agent, carried by the local bridge (`src-tauri/src/agent/`). Acknowledge it
-   * at once (`agentAck`), pass the commit gate before changing anything (`agentGate`), answer with
-   * `agentRespond`. `context` is what the shell resolved: the diagram's id, whether it is the one
-   * open, and — for a file that isn't — its text.
-   */
-  | { type: 'agent-request'; id: number; tool: string; args: Record<string, unknown>; context: AgentContext }
-  /**
-   * The shell wrote an agent's update to a diagram that isn't open (request `id`); the file is now at
-   * `stamp`. The page offers to show it, with the change as one undo step.
-   */
-  | { type: 'agent-file-written'; id: number; handle: Handle | null; displayPath: string; stamp: string; created: boolean }
-  /** Agent access was switched on or off: Settings looks again. */
-  | { type: 'agent-changed' };
 
 /** What the shell tells the page about the diagram an agent's request names. */
 export interface AgentContext {
