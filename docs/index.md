@@ -32,6 +32,8 @@ Running your own copy is covered in the [README](../README.md#running-it-yoursel
 | Document | Read it to |
 | --- | --- |
 | [Contributing](../CONTRIBUTING.md) | Set up, find your way around the repository, run the checks, and send a change |
+| [Development](reference/development.md) | Find commands, repository structure, host wiring and specialized checks |
+| [Releases](reference/releases.md) | Write changelog entries, preview generated notes and follow the release workflow |
 | [`AGENTS.md`](../AGENTS.md) | Learn the rules that are load-bearing before touching core code |
 | [Architecture](reference/architecture.md) | Understand why it is built this way: one renderer, the canvas/store boundary, persistence, and what is deliberately not built |
 | [Architecture semantics](reference/semantics.md) | See what Draft Canvas understands about a diagram: node categories, the connector capability matrix, suggestion rules |

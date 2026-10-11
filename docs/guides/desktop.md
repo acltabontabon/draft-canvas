@@ -184,7 +184,7 @@ Before a release, the desktop app can have previews: a `desktop-vX.Y.Z-alpha.N` 
 prerelease of its own, titled "Draft Canvas X.Y.Z-alpha.N", whose `X.Y.Z` may lead `package.json`'s. A preview
 install follows previews until the release it leads to; a release install is never offered a preview. Its notes are its dated section of
 `CHANGELOG.md` — the Shared and Desktop parts of it, generated the same way as any release's (see
-[Release notes](../../CONTRIBUTING.md#release-notes)).
+[Release notes](../reference/releases.md#release-notes)).
 
 The installers are **not signed or notarized**: that needs paid developer certificates. The operating system
 therefore warns the first time, and the release notes say how to continue:

@@ -7,7 +7,7 @@ the release it leads to. Draft Canvas for VS Code, retired at 0.2.0, kept
 
 From 1.10.0, each change says who it's for — **Shared** (web and desktop), **Desktop** or **Web** — and
 the release notes and the in-app What's New are generated from here. See
-[CONTRIBUTING.md](CONTRIBUTING.md#release-notes) for how to write an entry.
+[Release notes](docs/reference/releases.md#release-notes) for how to write an entry.
 
 ## [Unreleased]
 
