@@ -1313,6 +1313,8 @@
                   </ul>
                 </details>
               </div>
+              <p class="dist-fine">Or install on macOS with Homebrew:</p>
+              <code class="dist-cmd">brew install --cask acltabontabon/tap/draft-canvas</code>
               <p class="dist-fine dist-meta">
                 <span>v__VERSION__ · stable</span>
                 <a href="https://github.com/acltabontabon/draft-canvas/releases">All releases</a>
@@ -1324,16 +1326,16 @@
           <div class="dist-host reveal">
             <p class="dist-kicker">Or run the browser editor yourself</p>
             <p>
-              The same editor as a Docker image, for a team that wants it on its own network.
-              <a href="https://hub.docker.com/r/acltabontabon/draft-canvas">Docker Hub</a>
+              Build the static web editor and serve it on your own network.
+              <a href="./docs/self-hosting/">Self-hosting guide</a>
             </p>
-            <code class="dist-cmd">docker run -p 8080:8080 acltabontabon/draft-canvas</code>
+            <code class="dist-cmd">npm ci &amp;&amp; npm run build</code>
           </div>
         </div>
 
         <p class="dist-note">
           <strong>Desktop installers aren&rsquo;t code-signed yet.</strong> macOS and Windows warn you
-          the first time &mdash; <a href="https://github.com/acltabontabon/draft-canvas#desktop">here&rsquo;s how to get past it</a>.
+          the first time &mdash; <a href="./docs/desktop/#installing">here&rsquo;s how to get past it</a>.
         </p>
 
         <aside class="local reveal">
@@ -1390,7 +1392,7 @@
         <a href="./docs/">Docs</a>
         <a href="https://github.com/acltabontabon/draft-canvas/blob/main/CHANGELOG.md">Changelog</a>
         <a href="https://github.com/acltabontabon/draft-canvas/releases">Releases</a>
-        <a href="https://hub.docker.com/r/acltabontabon/draft-canvas">Docker</a>
+        <a href="./docs/self-hosting/">Self-hosting</a>
         <a href="https://acltabontabon.com/">acltabontabon.com</a>
       </nav>
     </footer>

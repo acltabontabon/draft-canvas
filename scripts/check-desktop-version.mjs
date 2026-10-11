@@ -44,7 +44,7 @@ else if (crateVersion && minor(apiVersion) !== minor(crateVersion)) {
 }
 
 // Two kinds of tag build the desktop app:
-//   vX.Y.Z (or vX.Y.Z-rc.N)   a Draft Canvas release — web, Docker and desktop, one version: package.json's.
+//   vX.Y.Z (or vX.Y.Z-rc.N)   a Draft Canvas release — web and desktop, one version: package.json's.
 //   desktop-vX.Y.Z-alpha.N     a desktop preview ahead of the release it leads to. Its X.Y.Z may be
 //                              package.json's or a later one, never an earlier one; the release workflow
 //                              builds it as the tag's version.

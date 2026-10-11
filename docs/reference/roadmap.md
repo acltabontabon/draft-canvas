@@ -49,7 +49,7 @@ the app has no router, so the fragment is free; the landing page's forwarder mus
 **Acceptance.** A shared snapshot renders identically to its source in both themes; a malformed,
 oversized or truncated fragment shows one plain error and an empty Library, never a crash; making a
 copy leaves the recipient's existing diagrams byte-identical; the link works at `/draft-canvas/editor/`
-and at a Docker root path.
+and at a static-host root path.
 
 **Modules.** New `src/share/` (encode/decode, imports `document/` and `export/project.ts` only),
 `App.tsx` (read-only mode is a `mode` on the editor store, like presenting), the command registry, the

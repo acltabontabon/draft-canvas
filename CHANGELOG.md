@@ -1,6 +1,6 @@
 # Changelog
 
-Every notable change to Draft Canvas, written once. The web app, the Docker image and the desktop app
+Every notable change to Draft Canvas, written once. The web app and the desktop app
 share one version and ship together; an `-alpha.N` or `-beta.N` section is a desktop preview ahead of
 the release it leads to. Draft Canvas for VS Code, retired at 0.2.0, kept
 [its own changelog](https://github.com/acltabontabon/draft-canvas/blob/extension-v0.2.0/vscode-extension/CHANGELOG.md).
@@ -10,6 +10,20 @@ the release notes and the in-app What's New are generated from here. See
 [Release notes](docs/reference/releases.md#release-notes) for how to write an entry.
 
 ## [Unreleased]
+
+### Desktop
+
+#### Added
+
+- Install Draft Canvas on macOS with `brew install --cask acltabontabon/tap/draft-canvas`.
+  Stable releases verify both macOS installers and automatically update the shared Homebrew tap.
+
+### Web
+
+#### Changed
+
+- Docker distribution is retired: image builds, publication and Docker-specific checks stop here.
+  Self-hosting remains available by building and serving the static web editor.
 
 ### Shared
 

@@ -9,7 +9,7 @@
 //   One optional intro paragraph — What's New uses it as the release's summary.
 //   ### Shared      both the web app and the desktop app (the editor, export, starters…)
 //   ### Desktop     the desktop app only (files, project folders, the menu bar / tray, installers)
-//   ### Web         the web app only (browser storage, the offline app, Pages, the Docker image)
+//   ### Web         the web app only (browser storage, the offline app, Pages, static self-hosting)
 //
 // `####` sub-headings (Added, Fixed…) are fine inside any of them. A bullet ending in
 // `<!-- highlight -->`, and led by a **bold title**, is also shown in What's New. Sections written

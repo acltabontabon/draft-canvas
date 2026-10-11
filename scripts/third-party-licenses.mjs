@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Writes THIRD_PARTY_LICENSES.txt: every package the shipped app and desktop binary carry, with its
- * licence text. The web app ships it in dist/ (and so in the Docker image), the desktop app bundles
+ * licence text. The web app ships it in dist/ (including static self-hosting), the desktop app bundles
  * it, and About links to it — an Apache-2.0 project redistributing MIT/BSD/ISC code owes each of
  * those authors their notice, and a hand-kept file is wrong the week after it is written.
  *

@@ -1,0 +1,100 @@
+name: Homebrew
+
+# Explicitly called after desktop publication: release events made by GITHUB_TOKEN do not start
+# another workflow. This channel is independent of Pages and signed in-app updater publication.
+on:
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
+      verified-commit:
+        type: string
+        default: ''
+    secrets:
+      HOMEBREW_TAP_DEPLOY_KEY:
+        required: false
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Published stable release tag to retry, such as v1.13.1
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: homebrew-draft-canvas
+  cancel-in-progress: false
+
+jobs:
+  tap:
+    runs-on: macos-15
+    timeout-minutes: 15
+    env:
+      TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.verified-commit || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 22.14.0
+      - name: Verify release eligibility
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" > "$RUNNER_TEMP/release.json"
+          node scripts/homebrew-cask.mjs check-release "$TAG" "$RUNNER_TEMP/release.json"
+          latest=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)
+          if [ "$TAG" != "$latest" ]; then
+            echo 'eligible=false' >> "$GITHUB_OUTPUT"
+            echo "::notice::$TAG is not the latest stable release ($latest); the tap is unchanged."
+          else
+            echo 'eligible=true' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Download and verify both macOS installers
+        if: steps.release.outputs.eligible == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p installers tap-staging/Casks
+          version="${TAG#v}"
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir installers \
+            --pattern "Draft-Canvas_${version}_macOS_arm64.dmg" \
+            --pattern "Draft-Canvas_${version}_macOS_x64.dmg" --pattern SHA256SUMS.txt
+          node scripts/homebrew-cask.mjs generate "$TAG" installers > tap-staging/Casks/draft-canvas.rb
+      - name: Audit the cask
+        if: steps.release.outputs.eligible == 'true'
+        run: |
+          git -C tap-staging init -q -b main
+          git -C tap-staging add Casks/draft-canvas.rb
+          git -C tap-staging -c user.name=ci -c user.email=ci@example.invalid commit -q -m check
+          trap 'brew untap local/draft-canvas-check' EXIT
+          brew tap local/draft-canvas-check "$PWD/tap-staging"
+          brew style local/draft-canvas-check/draft-canvas
+          brew audit --cask --arch=arm local/draft-canvas-check/draft-canvas
+          brew audit --cask --arch=intel local/draft-canvas-check/draft-canvas
+      - name: Update only the Draft Canvas cask
+        if: steps.release.outputs.eligible == 'true'
+        env:
+          TAP_DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
+        run: |
+          if [ -z "$TAP_DEPLOY_KEY" ]; then
+            echo '::error::HOMEBREW_TAP_DEPLOY_KEY is missing. See docs/guides/desktop.md#credentials.'
+            exit 1
+          fi
+          key="$RUNNER_TEMP/draft_canvas_tap_key"
+          umask 077
+          printf '%s\n' "$TAP_DEPLOY_KEY" > "$key"
+          trap 'rm -f "$key"' EXIT
+          # GitHub's published Ed25519 host key, also pinned by Habi's tap writer.
+          echo 'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' > "$RUNNER_TEMP/tap_known_hosts"
+          export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o UserKnownHostsFile=$RUNNER_TEMP/tap_known_hosts -o StrictHostKeyChecking=yes"
+          git clone --depth 1 git@github.com:acltabontabon/homebrew-tap.git tap
+          git -C tap config user.name 'github-actions[bot]'
+          git -C tap config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          node scripts/update-homebrew-tap.mjs "$TAG" tap-staging/Casks/draft-canvas.rb tap

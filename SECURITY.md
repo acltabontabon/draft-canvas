@@ -55,12 +55,12 @@ editor page. Folder permissions are checked on every call and retry, and input i
 Your agent may send diagram content to its own AI provider; that provider is outside Draft Canvas's
 control. See [Agent security](docs/reference/agent-integration.md#security).
 
-Docker serves the same web app and uses browser storage. HTTPS enables its offline cache;
+Static self-hosting serves the same web app and uses browser storage. HTTPS enables its offline cache;
 ordinary saving also works over HTTP.
 
 ## Supported versions
 
-- **Web, Docker and desktop:** the latest stable `vX.Y.Z` release; older releases get no backports.
+- **Web (hosted or self-hosted) and desktop:** the latest stable `vX.Y.Z` release; older releases get no backports.
 - **Desktop previews:** supported until the next preview or the release they lead to.
 - **VS Code extension:** retired at 0.2.0; see the [migration guide](docs/guides/vscode-retired.md).
 

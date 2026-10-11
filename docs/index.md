@@ -17,7 +17,7 @@ Guides and reference for using and developing Draft Canvas.
 | [Saving and sharing](guides/saving-and-sharing.md) | Save, back up, export and share |
 | [Desktop app](guides/desktop.md) | Files, projects and Quick Drafts |
 | [AI agents](guides/connect-an-ai-agent.md) | Connect an agent to the desktop app |
-| [Self-hosting](../README.md#running-it-yourself) | Run the web app with Docker |
+| [Self-hosting](guides/self-hosting.md) | Build and serve the static web editor |
 | [VS Code migration](guides/vscode-retired.md) | Move files from the retired extension |
 
 ## Contributing

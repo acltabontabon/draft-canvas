@@ -62,19 +62,20 @@ inside a platform section. Older What's New entries in `ARCHIVED_RELEASES` remai
 6. Commit and push the release changes, then push the `vX.Y.Z` tag.
 
 CI verifies the release before creating a draft. Desktop packaging, startup and update-signature
-checks gate publication; Pages and Docker publish verified artifacts after desktop packaging succeeds.
+checks gate publication; Pages publishes the verified web artifact after desktop packaging succeeds.
+Homebrew verifies both published macOS installers and updates the cask independently of Pages and
+updater channels. See [Homebrew releases](../guides/desktop.md#homebrew-releases) for credentials and retries.
 The dependencies are in [release.yml](../../.github/workflows/release.yml).
 
 ## Desktop previews
 
 Use `desktop-vX.Y.Z-alpha.N` or `desktop-vX.Y.Z-beta.N` with a matching dated changelog section.
 Its base version may equal or lead the root package version. Preview notes include Shared and Desktop;
-a stable desktop release ships with the web app and Docker under `vX.Y.Z`.
+a stable desktop release ships with the web app under `vX.Y.Z`.
 
 See [Desktop releases](../guides/desktop.md#releasing) for packaging and
 [Desktop updates](desktop-updates.md) for signing and update channels.
 
-## Website and Docker Hub
+## Website
 
 Landing-page changes deploy separately; see [Website](website.md).
-Update the Docker Hub description manually when a release changes the product.

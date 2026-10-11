@@ -966,7 +966,7 @@ export function useKeyboard({
           case 'x': {
             // Not `preventDefault`: the browser's own copy event still follows, and `onCopyOrCut`
             // writes this text through `clipboardData` — the one path that reaches the system
-            // clipboard where `navigator.clipboard` is refused (the Docker image over plain HTTP,
+            // clipboard where `navigator.clipboard` is refused (a self-hosted copy over plain HTTP,
             // say). The work itself happens here, because Safari sends no copy event at all when
             // nothing on the page is selected.
             const text = key === 'c' ? state.copySelection() : state.cutSelection();

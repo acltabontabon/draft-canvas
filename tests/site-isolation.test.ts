@@ -73,7 +73,7 @@ describe('the landing page and the app stay apart', () => {
 
   it('leaves the editor build alone', () => {
     // The editor is deployed by copying `dist/` in unchanged. Anything that made the app's build
-    // aware of the site would end up in the Docker image and the desktop installer too.
+    // aware of the site would end up in the self-hosted editor and the desktop installer too.
     const config = readFileSync(join(ROOT, 'vite.config.ts'), 'utf8');
     expect(config).not.toMatch(/\bwww\b/);
     expect(config).toContain("base: './'");

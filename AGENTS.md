@@ -1,7 +1,7 @@
 # Draft Canvas — agent instructions
 
 Draft Canvas is a local-first React + TypeScript SPA built with Vite. The same editor ships on the
-web, in Docker and in a Tauri 2 desktop app. No backend, accounts or network calls in editor code.
+web and in a Tauri 2 desktop app. No backend, accounts or network calls in editor code.
 
 Make focused changes. Keep updates and final responses brief: what changed, what was checked, and
 any blocker. Complete authorized work without unnecessary confirmation.

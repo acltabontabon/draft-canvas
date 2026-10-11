@@ -48,7 +48,7 @@ that is what a Port is. There are no webfonts, for the same reason the app has n
 `scripts/assemble-web.mjs` puts `www/dist/` and `dist/` together into `dist-web/` and then asserts
 that what it built is deployable — both entry documents present, the editor's own service worker
 inside `editor/`, nothing of the editor's leaked to the root. `dist/` itself is untouched, which is
-what lets the Docker image, the offline e2e suite and the desktop build go on consuming it.
+what lets static self-hosting, the offline e2e suite and the desktop build go on consuming it.
 
 ## The documentation
 

@@ -70,7 +70,7 @@ export const PLATFORMS = [
 ];
 
 /**
- * The tag a version is released under: a release is `vX.Y.Z` (web, Docker and desktop together), a
+ * The tag a version is released under: a release is `vX.Y.Z` (web and desktop together), a
  * desktop preview ahead of one is `desktop-vX.Y.Z-alpha.N`. The workflows pass the tag they run for.
  */
 export const releaseTag = (version) => (isPrerelease(version) ? `desktop-v${version}` : `v${version}`);

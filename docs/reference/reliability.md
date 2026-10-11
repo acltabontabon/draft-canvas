@@ -9,7 +9,7 @@ signed on macOS and unsigned on Windows. The in-app updater's signature checks r
 
 [CI](../../.github/workflows/ci.yml) is reusable. It resolves a source ref to one commit, then runs
 lint, tooling typechecks, build, coverage, license checks, the three-engine editor journeys,
-offline and assembled-site checks, a Docker smoke check, dependency audits and performance budgets.
+offline and assembled-site checks, dependency audits and performance budgets.
 The build artifact records its source commit. Offline and assembled-site browser jobs test its
 compiled files without rebuilding. The editor journeys run against Vite's development server at
 the same source commit; several of those journeys also inspect source modules through that server.
@@ -26,15 +26,15 @@ Site-only changes retain the previous released editor, build the combined artifa
 in Chromium, Firefox and WebKit before deploying. Their unit/coverage and license checks run against
 the selected editor source and current site. Site-only publication does not release a new editor.
 
-Docker builds a multi-platform OCI archive containing SBOM and provenance manifests, then smoke-tests
-both archived runtime platforms. A separate job holding Docker credentials copies that archive with
-preserved digests to the registry. No publication build follows the tests.
+Homebrew verifies both published macOS installers against `SHA256SUMS.txt`, checks the generated
+cask with Homebrew, and updates only that cask in the shared tap. It runs after desktop publication,
+independently of Pages and updater channels. A failed tap update is retried with the **Homebrew**
+workflow; see [Homebrew releases](../guides/desktop.md#homebrew-releases).
 
 Hosted [CI](https://github.com/acltabontabon/draft-canvas/actions/runs/38040880397),
 [Desktop CI](https://github.com/acltabontabon/draft-canvas/actions/runs/38018279380) and
 [site deployment](https://github.com/acltabontabon/draft-canvas/actions/runs/38018279754) passed on
-10 October 2026. Release tags additionally verify signed update packages and the multi-platform
-Docker publication path before promotion. Keep release tags and publishing workflows limited to
+10 October 2026. Release tags additionally verify signed update packages before promotion. Keep release tags and publishing workflows limited to
 trusted maintainers. No signing certificate or paid service is required by this milestone.
 
 ## Recovery guarantees and limits
@@ -88,7 +88,7 @@ shared runners and detect material regressions; tighten them only from repeatabl
 An idle frame floor over 25 ms fails acceptance as a throttled environment, rather than passing a
 misleading run. Missing, failed, nonnumeric, duplicate or broken measurements fail the gate.
 Larger workloads and long-session measurements run on the dedicated Performance schedule or its
-explicit manual option. Manual Docker, Pages and CI verification run the same required gate as a
+explicit manual option. Manual Pages and CI verification run the same required gate as a
 release; their inherited manual trigger does not opt them into the extended measurement suite.
 The coarse frame-time gate compares whole milliseconds: three nominal 60 Hz frames may be recorded
 as 50.1 ms. Raw measurements remain unchanged in the reports; other limits retain their full precision.
@@ -132,6 +132,11 @@ error category and optional element counts. It contains no document ids, names, 
 stacks or raw error messages. Unrecognized operations and error types become generic categories.
 Nothing is uploaded; the record exists only in memory until the person downloads it and disappears
 on reload. Development console logging remains more detailed for local debugging.
+
+## Historical verification
+
+The dated records below describe checks performed before Docker distribution was retired. Docker
+checks in those records are historical evidence, not current release requirements.
 
 ## Local automated verification (9 October 2026)
 
@@ -191,8 +196,9 @@ not an application failure or an allowed CI skip.
 1. Stop promoting the bad release. Do not delete users' files or clear browser storage.
 2. For desktop, run **Desktop update channels** with the last good tag and `force=true`. This stops
    new offers; it does not downgrade people who already installed the bad version.
-3. For Docker, manually run **Docker** for the last good tag. Verification must pass before moving
-   `latest` and the applicable minor tag. Record the resulting registry digests.
+3. For Homebrew, submit a reviewed tap correction to withdraw or replace a bad cask. The automatic
+   workflow refuses downgrades; rolling back the tap is an explicit maintainer action and does not
+   downgrade installed copies.
 4. For web, run the current **Deploy to Pages** workflow from `main`, setting `release-tag` to the
    last good tag. It builds, verifies and promotes that editor source with the current site. Confirm hosted asset loading, document reopening and service-worker scope afterward.
 5. Before offering an older editor, check schema compatibility on exported disposable documents.

@@ -107,7 +107,8 @@ function navigationOf(pages) {
   const reference = [];
   const seen = new Set();
   for (const [, cell] of index.markdown.matchAll(/^\|\s*(.+?)\s*\|/gm)) {
-    const link = cell.match(/^\[([^\]]+)\]\(([^)#\s]+)\)$/);
+    // The index can emphasize a guide without removing it from the generated sidebar.
+    const link = cell.replace(/^\*\*(.*)\*\*$/, '$1').match(/^\[([^\]]+)\]\(([^)#\s]+)\)$/);
     if (!link) continue;
     const page = pages.get(posix.normalize(link[2]));
     if (!page || seen.has(page.source)) continue;
@@ -357,7 +358,7 @@ ${contents.map((a) => `          <li><a href="#${a.id}">${escape(a.text)}</a></l
         <a href="${home}">Docs</a>
         <a href="https://github.com/acltabontabon/draft-canvas/blob/main/CHANGELOG.md">Changelog</a>
         <a href="https://github.com/acltabontabon/draft-canvas/releases">Releases</a>
-        <a href="https://hub.docker.com/r/acltabontabon/draft-canvas">Docker</a>
+        <a href="${home}self-hosting/">Self-hosting</a>
         <a href="https://acltabontabon.com/">acltabontabon.com</a>
       </nav>
     </footer>
