@@ -15,7 +15,7 @@ npm run lint       # oxlint
 npm test           # vitest run
 npm run e2e        # playwright (npm run e2e:install once first)
 npm run check      # lint + e2e/benchmark/demo typecheck + build + unit tests
-npm run check:full # check + every browser journey (e2e, e2e:offline, e2e:web) — "done" means this passed
+npm run check:full # check + every browser journey (e2e, e2e:offline, e2e:web); optional local full verification
 npm run test:coverage  # unit tests with a coverage report (the floor is in vite.config.ts)
 npm run licenses   # regenerates THIRD_PARTY_LICENSES.txt (a test fails when a dependency is missing from it)
 npm run site:dev   # the landing page (www/) alone, on :5280
@@ -38,6 +38,23 @@ npx playwright test --debug                   # headed, inspector
 
 Playwright starts the dev server itself (`webServer` in `playwright.config.ts`) and reuses one
 already running on :5180.
+
+## Verification scope
+
+- **Docs-only changes:** check formatting and links, then commit and push when requested. This
+  includes README copy, guides, reference prose, `AGENTS.md` and other contributor instructions.
+  Do not run tests (including `tests/docs.test.ts`), builds, lint, benchmarks or browser suites for
+  these changes unless the user explicitly asks. Inspect Markdown formatting, local link targets,
+  heading anchors and referenced images directly; preview the rendered document when layout matters.
+  This exception also applies to the blanket check requirements in `CONTRIBUTING.md`.
+- **Code changes:** run `npm run check` and focused checks appropriate to the changed behavior.
+  Changing scripts, configuration or application behavior alongside documentation is a code change.
+- **Browser coverage:** let CI run the full Chromium, Firefox and WebKit suites. Run focused browser
+  checks locally when needed to verify an editor change or reproduce a browser-specific issue.
+  `npm run check:full` is not a routine local requirement or a prerequisite for committing and
+  pushing; use it when the user requests full verification or a relevant issue warrants it.
+
+Report the checks actually performed. Do not describe pending or unobserved CI results as passing.
 
 ## Rules that are load-bearing
 
