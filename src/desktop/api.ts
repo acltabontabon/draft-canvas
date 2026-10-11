@@ -102,6 +102,7 @@ export type DocState =
 
 /** What the shell tells the page about the diagram an agent's request names. */
 export interface AgentContext {
+  session?: string;
   diagramId?: string;
   project?: string;
   path?: string;
@@ -159,7 +160,8 @@ export interface Proposal {
   baseRevision: string;
   ops: unknown[];
   layout: unknown;
-  preconditions: { nodes: Record<string, { label: string; type: string; group?: string }>; edges: Record<string, { from: string; to: string; label?: string }> };
+  preconditions: import('../agent/proposal').PreconditionSnapshot;
+  scope?: unknown;
   counts: { added: number; updated: number; removed: number; arranged?: number };
   summary: string;
   rationale: string;

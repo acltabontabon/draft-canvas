@@ -480,3 +480,55 @@ describe('agent requests on desktop', () => {
     expect(h.api.saveDocument.mock.calls.length).toBe(writes);
   });
 });
+
+
+describe('MCP candidates', () => {
+  it('prepares and renders a candidate without saving, then commits exactly it as one undo step', async () => {
+    const handle = await openOrders();
+    const context = { handle, open: true, diagramId: 'd_orders000001', session: 'agent-a' };
+    const read = await request('read_diagram', { diagramId: context.diagramId }, context);
+    const revision = String(read.value!.revision);
+    const before = fileOf(useEditorStore.getState());
+    const savedBefore = h.api.saveDocument.mock.calls.length;
+    const candidate = await request('preview_diagram', { diagramId: context.diagramId, expectedRevision: revision, ops: [{ op: 'update', id: 'api', set: { label: 'Candidate API' } }] }, context);
+    expect(candidate.ok).toBe(true);
+    expect(candidate.value).toMatchObject({ applied: false, canApply: true });
+    expect(fileOf(useEditorStore.getState())).toBe(before);
+    expect(h.api.saveDocument.mock.calls.length).toBe(savedBefore);
+    const picture = await request('render_diagram', { diagramId: context.diagramId, previewId: candidate.value!.previewId, format: 'svg', focus: { nodes: ['api'] } }, context);
+    expect(picture.ok).toBe(true);
+    expect(picture.value).toMatchObject({ provisional: true });
+    expect(String(picture.value!.svg)).toContain('Candidate API');
+    expect(String(picture.value!.svg)).not.toContain('Orders DB');
+    const commit = await request('update_diagram', { requestId: 'commit-preview', diagramId: context.diagramId, expectedRevision: revision, previewId: candidate.value!.previewId }, context);
+    expect(commit.ok).toBe(true);
+    expect(fileOf(useEditorStore.getState()).nodes[0]?.text).toBe('Candidate API');
+    useEditorStore.getState().undo();
+    expect(fileOf(useEditorStore.getState()).nodes[0]?.text).toBe('Orders API');
+  });
+
+  it('refuses another session and a concurrent human edit without applying a stale candidate', async () => {
+    const handle = await openOrders();
+    const context = { handle, open: true, diagramId: 'd_orders000001', session: 'agent-a' };
+    const read = await request('read_diagram', {}, context);
+    const revision = String(read.value!.revision);
+    const candidate = await request('preview_diagram', { diagramId: context.diagramId, expectedRevision: revision, ops: [{ op: 'update', id: 'api', set: { technology: 'Rust' } }] }, context);
+    const wrongSession = await request('render_diagram', { diagramId: context.diagramId, previewId: candidate.value!.previewId }, { ...context, session: 'agent-b' });
+    expect(wrongSession.error?.code).toBe('NOT_FOUND');
+    useEditorStore.getState().apply('Human edit', (doc) => ({ ...doc, nodes: doc.nodes.map((n) => n.id === 'api' ? { ...n, technology: 'Java' } : n) }));
+    const commit = await request('update_diagram', { requestId: 'stale-preview', diagramId: context.diagramId, expectedRevision: revision, previewId: candidate.value!.previewId }, context);
+    expect(commit.error?.code).toBe('REVISION_CONFLICT');
+    expect(fileOf(useEditorStore.getState()).nodes[0]?.technology).toBe('Java');
+  });
+
+  it('commits a nested candidate in its own view without requiring a second path', async () => {
+    const handle = await openOrders();
+    const context = { handle, open: true, diagramId: 'd_orders000001', session: 'agent-a' };
+    const read = await request('read_diagram', {}, context);
+    const candidate = await request('preview_diagram', { diagramId: context.diagramId, expectedRevision: read.value!.revision, view: { inside: ['api'] }, ops: [{ op: 'add', nodes: [{ id: 'handler', type: 'component', label: 'Handler' }] }] }, context);
+    expect(candidate.ok).toBe(true);
+    const commit = await request('update_diagram', { requestId: 'nested-preview', diagramId: context.diagramId, expectedRevision: read.value!.revision, previewId: candidate.value!.previewId }, context);
+    expect(commit.ok).toBe(true);
+    expect(fileOf(useEditorStore.getState()).nodes.find((n) => n.id === 'api')?.inside?.nodes[0]?.id).toBe('handler');
+  });
+});

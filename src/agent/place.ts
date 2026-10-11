@@ -85,6 +85,7 @@ export function elementFor(spec: NodeSpec, ctx: DescribeContext, parentId?: stri
     ...(spec.color ? { accent: spec.color } : {}),
     ...(parentId ? { parentId } : {}),
   });
+  if (spec.evidence?.length) node.evidence = spec.evidence;
   const attachments = attachmentsOf(spec.attachments);
   if (attachments.length) node.attachments = attachments;
   return sizeToFit(node, ctx);
@@ -246,6 +247,7 @@ export function connectorFor(spec: RelationshipSpec, source: DraftNode, target: 
   });
   const attachments = attachmentsOf(spec.attachments);
   if (attachments.length) edge.attachments = attachments;
+  if (spec.evidence?.length) edge.evidence = spec.evidence;
   return edge;
 }
 

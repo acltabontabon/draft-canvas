@@ -521,6 +521,8 @@ const MIGRATIONS: Record<number, Migration> = {
   15: migrateAddOpenPoints,
   16: migrateActionsToNotes,
   17: everyRoom(migrateReadsWritesLabel),
+  // Evidence is optional on every element/relationship; old graphs already mean exactly the same.
+  18: (document) => document,
 };
 
 export class UnsupportedVersionError extends Error {

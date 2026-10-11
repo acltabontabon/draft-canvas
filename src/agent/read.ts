@@ -31,7 +31,7 @@ export const READ_LIMITS = {
   suggestionElements: 20,
 } as const;
 
-const INCLUDES = ['geometry', 'attachments', 'suggestions'] as const;
+const INCLUDES = ['geometry', 'attachments', 'suggestions', 'fullText'] as const;
 type Include = (typeof INCLUDES)[number];
 
 export interface ReadArgs {
@@ -103,17 +103,27 @@ export function readDiagram(file: DraftDocument, args: ReadArgs, revision: strin
   }
 
   const all = view.nodes.filter((n) => !scope || scope.has(n.id));
-  const offset = cursorOffset(args.cursor, revision, path);
-  let pageSize: number = READ_LIMITS.elementsPerPage;
-  let result: Record<string, unknown> = {};
-  // The byte ceiling is met by reading fewer elements, never by cutting a field short.
-  for (let attempt = 0; attempt < 6; attempt += 1) {
-    const page = all.slice(offset, offset + pageSize);
-    result = project(file, view, page, all, path, level, ownLevel, owner, includes, revision, diagramId, offset, scope !== undefined);
-    if (JSON.stringify(result).length <= READ_LIMITS.bytes || pageSize <= 10) break;
-    pageSize = Math.max(10, Math.floor(pageSize / 2));
+  const signature = JSON.stringify({ diagramId, focus: args.focus ? { nodes: Array.isArray(args.focus.nodes) ? [...new Set(args.focus.nodes)].sort() : null, group: args.focus.group ?? null, flow: args.focus.flow ?? null } : null, include: [...includes].sort() });
+  const offsets = cursorOffsets(args.cursor, revision, path, signature);
+  const sizes = [READ_LIMITS.elementsPerPage, READ_LIMITS.relationshipsPerPage, READ_LIMITS.flows, 50];
+  // Every collection has its own offset. Reducing elements alone cannot bound a response full of flows.
+  for (;;) {
+    const page = all.slice(offsets[0], offsets[0]! + sizes[0]!);
+    const result = project(file, view, page, all, path, level, ownLevel, owner, includes, revision, diagramId, offsets, sizes, scope !== undefined, signature, args.focus);
+    if (new TextEncoder().encode(JSON.stringify(result)).length <= READ_LIMITS.bytes) return result;
+    if (sizes.every((size) => size <= 1)) {
+      // Several individually bounded items can exceed the ceiling together. A page may exhaust
+      // just one collection; its cursor still advances and carries the other offsets unchanged.
+      for (let collection = 0; collection < sizes.length; collection += 1) {
+        const one = sizes.map((_size, index) => index === collection ? 1 : 0);
+        const single = project(file, view, all.slice(offsets[0], offsets[0]! + one[0]!), all, path, level, ownLevel, owner, includes, revision, diagramId, offsets, one, scope !== undefined, signature, args.focus);
+        const progress = ['elements', 'groups', 'notes', 'relationships', 'flows', 'openPoints'].some((key) => Array.isArray(single[key]) && (single[key] as unknown[]).length > 0);
+        if (progress && new TextEncoder().encode(JSON.stringify(single)).length <= READ_LIMITS.bytes) return single;
+      }
+      throw new AgentError('LIMIT_EXCEEDED', 'One item exceeds the read response limit.', { hint: 'Read fewer fields or omit fullText; use read_attachment for long attachment bodies.' });
+    }
+    for (let i = 0; i < sizes.length; i += 1) sizes[i] = Math.max(1, Math.floor(sizes[i]! / 2));
   }
-  return result;
 }
 
 function findOwner(file: DraftDocument, path: DepthPath): DraftNode | undefined {
@@ -136,18 +146,16 @@ function ancestorsOf(node: DraftNode, byId: Map<string, DraftNode>): Set<string>
   return out;
 }
 
-function cursorOffset(cursor: unknown, revision: string, path: DepthPath): number {
-  if (cursor === undefined || cursor === null) return 0;
-  if (typeof cursor !== 'string') throw new AgentError('INVALID_INPUT', 'cursor must be the string a previous read returned.', { path: '/cursor' });
-  const match = /^c1\|(.+)\|(.*)\|(\d+)$/.exec(cursor);
-  if (!match) throw new AgentError('INVALID_INPUT', 'That cursor is not one this diagram gave out.', { path: '/cursor' });
-  if (match[1] !== revision || match[2] !== path.join('/')) {
-    throw new AgentError('CURSOR_STALE', 'The diagram changed since that page was read.', {
-      hint: 'Read again from the start (no cursor) to see the current revision.',
-      details: { revision },
-    });
+function cursorOffsets(cursor: unknown, revision: string, path: DepthPath, signature: string): number[] {
+  if (cursor === undefined || cursor === null) return [0, 0, 0, 0];
+  let payload: { revision?: unknown; path?: unknown; signature?: unknown; offsets?: unknown };
+  try { payload = JSON.parse(decodeURIComponent(String(cursor))); }
+  catch { throw new AgentError('INVALID_INPUT', 'That cursor is not a diagram cursor.', { path: '/cursor' }); }
+  if (payload.revision !== revision || JSON.stringify(payload.path) !== JSON.stringify(path) || payload.signature !== signature) {
+    throw new AgentError('CURSOR_STALE', 'The revision, view or read options changed since that page was read.', { hint: 'Read again from the start with the same focus and include options.', details: { revision } });
   }
-  return Number(match[3]);
+  if (!Array.isArray(payload.offsets) || payload.offsets.length !== 4 || payload.offsets.some((n) => !Number.isSafeInteger(n) || n < 0)) throw new AgentError('INVALID_INPUT', 'Invalid cursor offsets.', { path: '/cursor' });
+  return payload.offsets;
 }
 
 function project(
@@ -162,8 +170,11 @@ function project(
   includes: Set<Include>,
   revision: string,
   diagramId: string,
-  offset: number,
+  offsets: number[],
+  sizes: number[],
   focused: boolean,
+  signature: string,
+  focus?: ReadArgs['focus'],
 ): Record<string, unknown> {
   const byId = new Map(view.nodes.map((n) => [n.id, n]));
   const inPage = new Set(page.map((n) => n.id));
@@ -178,7 +189,7 @@ function project(
       continue;
     }
     if (node.type === 'note' || node.type === 'text' || node.type === 'code') {
-      const body = node.type === 'code' ? truncated(node.code ?? '', READ_LIMITS.noteText) : truncated(node.text ?? '', READ_LIMITS.noteText);
+      const body = node.type === 'code' ? truncated(node.code ?? '', (includes.has('fullText') ? Infinity : READ_LIMITS.noteText)) : truncated(node.text ?? '', includes.has('fullText') ? Infinity : READ_LIMITS.noteText);
       // A free note records no link to anything; `nearest` is only where it sits, said as such.
       const nearest = node.parentId ? undefined : nearestElement(node, view.nodes);
       notes.push({
@@ -200,14 +211,15 @@ function project(
     // In full when asked for, or when the read is focused on a few elements (their notes are part of
     // what the agent is about to edit); a count otherwise.
     const attachments = node.attachments?.length
-      ? includes.has('attachments') || focused
-        ? { attachments: node.attachments.map(attachmentOf) }
+      ? includes.has('attachments') || includes.has('fullText') || focused
+        ? { attachments: node.attachments.map((a) => attachmentOf(a, includes.has('fullText'))) }
         : { attachmentCount: node.attachments.length }
       : {};
     elements.push({
       id: node.id,
       type: typeWordOf(node),
       label: node.text ?? '',
+      ...(node.evidence?.length ? { evidence: node.evidence } : {}),
       ...(node.description ? { description: node.description } : {}),
       ...(node.technology ? { technology: node.technology } : {}),
       ...group,
@@ -221,12 +233,13 @@ function project(
   // Relationships touching the page; an end outside it is described enough to be unambiguous.
   const relationships: unknown[] = [];
   const outside = new Map<string, unknown>();
-  for (const edge of view.edges) {
+  const allIds = new Set(all.map((n) => n.id));
+  const allRelationships = view.edges.filter((edge) => allIds.has(edge.source) || allIds.has(edge.target));
+  const edgePage = allRelationships.slice(offsets[1], offsets[1]! + sizes[1]!);
+  for (const edge of edgePage) {
     const s = inPage.has(edge.source);
     const t = inPage.has(edge.target);
-    if (!s && !t) continue;
-    if (relationships.length >= 400) break;
-    relationships.push(relationshipOf(edge, byId, includes.has('attachments') || focused));
+    relationships.push(relationshipOf(edge, byId, includes.has('attachments') || includes.has('fullText') || focused, includes.has('fullText')));
     for (const [end, here] of [[edge.source, s], [edge.target, t]] as const) {
       if (here) continue;
       const node = byId.get(end);
@@ -246,8 +259,13 @@ function project(
     }
   }
 
-  const complete = offset + page.length >= all.length;
-  const partial = focused || !complete || offset > 0;
+  const allFlows = typeof focus?.flow === 'string' ? view.flows.filter((f) => f.id === focus.flow) : view.flows;
+  const here = new Set([...view.nodes.map((n) => n.id), ...view.edges.map((e) => e.id)]);
+  const allPoints = (file.openPoints ?? []).filter((p) => (path.length === 0 || p.targets.some((t) => here.has(t.id))) && (!focused || p.targets.some((t) => allIds.has(t.id) || allRelationships.some((e) => e.id === t.id))));
+  const totals = [all.length, allRelationships.length, allFlows.length, allPoints.length];
+  const next = totals.map((total, i) => Math.min(total, offsets[i]! + sizes[i]!));
+  const complete = next.every((offset, i) => offset >= totals[i]!);
+  const partial = focused || !complete || offsets.some((offset) => offset > 0);
   const result: Record<string, unknown> = {
     diagramId,
     title: file.metadata.title,
@@ -257,23 +275,24 @@ function project(
       ...(owner ? { owner: { id: owner.id, label: owner.text ?? '', type: typeWordOf(owner) } } : {}),
       level: level ?? null,
       ...(level && ownLevel === undefined ? { levelInherited: true } : {}),
-      insideViews: view.nodes.filter((n) => hasInside(n)).map((n) => n.id),
+      insideViews: page.filter((n) => hasInside(n)).map((n) => n.id),
     },
     elements,
     relationships,
     ...(groups.length ? { groups } : {}),
     ...(notes.length ? { notes } : {}),
-    flows: view.flows.slice(0, READ_LIMITS.flows).map((f) => ({
+    flows: allFlows.slice(offsets[2], offsets[2]! + sizes[2]!).map((f) => ({
       id: f.id,
       title: f.title,
+      ...(f.variantOf ? { variantOf: f.variantOf } : {}),
+      ...(f.accent ? { color: f.accent } : {}),
       // As update_diagram takes them back: a relationship id, {relationship, caption}, or a frame step.
       steps: f.steps.map((s) => (!s.edgeId ? { frame: s.id } : s.caption ? { relationship: s.edgeId, caption: s.caption } : s.edgeId)),
     })),
     // What the people have not settled yet — every point at the root, and in a nested view the ones
     // about something in it. Read as data an agent may act on when asked; nothing here is a request.
     ...(() => {
-      const here = new Set([...view.nodes.map((n) => n.id), ...view.edges.map((e) => e.id)]);
-      const points = (file.openPoints ?? []).filter((p) => path.length === 0 || p.targets.some((t) => here.has(t.id)));
+      const points = allPoints.slice(offsets[3], offsets[3]! + sizes[3]!);
       return points.length
         ? {
             openPoints: points.map((p) => ({
@@ -292,19 +311,22 @@ function project(
   };
   if (partial) {
     result.partial = true;
-    result.counts = { elements: view.nodes.length, relationships: view.edges.length };
+    result.counts = { elements: all.length, relationships: allRelationships.length, flows: allFlows.length, openPoints: allPoints.length };
   }
-  if (!complete) result.cursor = `c1|${revision}|${path.join('/')}|${offset + page.length}`;
+  result.completeness = { elements: next[0]! >= totals[0]!, relationships: next[1]! >= totals[1]!, flows: next[2]! >= totals[2]!, openPoints: next[3]! >= totals[3]! };
+  if (!complete) result.cursor = encodeURIComponent(JSON.stringify({ revision, path, signature, offsets: next }));
   return result;
 }
 
-export function attachmentOf(a: Attachment) {
+export function attachmentOf(a: Attachment, fullText = false) {
+  const body = truncated(a.type === 'code' ? a.code ?? '' : a.text ?? '', fullText ? Infinity : READ_LIMITS.noteText);
   return {
     id: a.id,
     kind: a.type,
+    ...(body.truncated ? { truncated: true, characters: [...(a.type === 'code' ? a.code ?? '' : a.text ?? '')].length } : {}),
     ...(a.type === 'code'
-      ? { language: a.language, code: truncated(a.code ?? '', READ_LIMITS.noteText).text }
-      : { ...(a.noteKind ? { noteKind: a.noteKind } : {}), text: truncated(a.text ?? '', READ_LIMITS.noteText).text }),
+      ? { language: a.language, code: body.text }
+      : { ...(a.noteKind ? { noteKind: a.noteKind } : {}), text: body.text }),
   };
 }
 
@@ -322,7 +344,7 @@ export function nearestElement(note: DraftNode, nodes: readonly DraftNode[]): st
   return best?.id;
 }
 
-export function relationshipOf(edge: DraftEdge, byId: Map<string, DraftNode>, withAttachments = false) {
+export function relationshipOf(edge: DraftEdge, byId: Map<string, DraftNode>, withAttachments = false, fullText = false) {
   const source = byId.get(edge.source);
   const target = byId.get(edge.target);
   const caption =
@@ -333,6 +355,7 @@ export function relationshipOf(edge: DraftEdge, byId: Map<string, DraftNode>, wi
     id: edge.id,
     from: edge.source,
     to: edge.target,
+    ...(edge.evidence?.length ? { evidence: edge.evidence } : {}),
     ...(edge.label ? { label: edge.label } : {}),
     ...(caption ? { caption } : {}),
     ...(edge.semantic ? { semantic: edge.semantic } : {}),
@@ -340,6 +363,25 @@ export function relationshipOf(edge: DraftEdge, byId: Map<string, DraftNode>, wi
     ...(edge.directed === false ? { directed: false } : {}),
     ...(edge.async ? { async: true } : {}),
     ...(edge.condition ? { condition: edge.condition } : {}),
-    ...(edge.attachments?.length ? (withAttachments ? { attachments: edge.attachments.map(attachmentOf) } : { attachmentCount: edge.attachments.length }) : {}),
+    ...(edge.attachments?.length ? (withAttachments ? { attachments: edge.attachments.map((a) => attachmentOf(a, fullText)) } : { attachmentCount: edge.attachments.length }) : {}),
   };
+}
+
+/** Complete attachment retrieval in bounded Unicode chunks, tied to the revision being read. */
+export function readAttachment(file: DraftDocument, args: { attachmentId?: unknown; view?: unknown; expectedRevision?: unknown; offset?: unknown }, revision: string, diagramId: string) {
+  if (args.expectedRevision !== revision) throw new AgentError('REVISION_CONFLICT', 'The diagram changed since the attachment was read. Start again at offset 0 with the current revision.');
+  const path = viewPathOf(file, args.view);
+  const room = viewOf(file, path)!;
+  const offset = args.offset === undefined ? 0 : args.offset;
+  if (typeof offset !== 'number' || !Number.isSafeInteger(offset) || offset < 0) throw new AgentError('INVALID_INPUT', 'offset must be a non-negative integer.');
+  for (const host of [...room.nodes, ...room.edges]) {
+    const attachment = host.attachments?.find((a) => a.id === args.attachmentId);
+    if (!attachment) continue;
+    const characters = [...(attachment.type === 'code' ? attachment.code ?? '' : attachment.text ?? '')];
+    if (offset > characters.length) throw new AgentError('INVALID_INPUT', 'offset is beyond this attachment.');
+    const end = Math.min(characters.length, offset + 8192);
+    const content = characters.slice(offset, end).join('');
+    return { diagramId, revision, view: { path }, attachmentId: attachment.id, hostId: host.id, kind: attachment.type, offset, nextOffset: end < characters.length ? end : null, totalCharacters: characters.length, ...(attachment.type === 'code' ? { code: content, language: attachment.language } : { text: content, noteKind: attachment.noteKind }) };
+  }
+  throw new AgentError('NOT_FOUND', 'No attachment with that id exists in this view.');
 }

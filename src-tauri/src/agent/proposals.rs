@@ -78,6 +78,8 @@ pub struct Proposal {
     pub ops: Value,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub layout: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scope: Option<Value>,
     /// The dry-run's counts at submit/last-revise time — `get_proposal`/`list_proposals` read this
     /// back rather than re-running a dry-run; only the native review UI (Phase 4b) recomputes live.
     #[serde(default)]
@@ -243,6 +245,7 @@ mod tests {
             base_revision: "o:1.1".into(),
             ops: json!([]),
             layout: None,
+            scope: None,
             counts: json!({}),
             preconditions: json!({}),
             summary: "s".into(),

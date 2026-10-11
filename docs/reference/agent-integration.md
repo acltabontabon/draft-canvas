@@ -91,6 +91,7 @@ tool below `read_selection` is additive within that same contract.
 | `get_capabilities({topics?, starter?})` | read-only | The vocabulary: element types, relationship semantics, C4 levels, limits, layout options, flows and notes, and starters. By default it is a short overview; `topics` expands one area, and `starter` returns one starter's keys. |
 | `list_diagrams({query?, project?, cursor?, limit?})` | read-only | Finds a diagram to work on. The diagrams in folders agents may use: id, title, folder, relative path (for display only), revision, and whether it is open or has unsaved changes. `query` narrows to titles containing it (ignoring case), exact matches first and marked `exact`. Always also returns `active` — the diagram open right now, with its revision and the view the person is in — and `thisSession`, the diagrams this MCP session created or changed. Two files sharing an id are flagged, and addressing either returns `AMBIGUOUS_DIAGRAM`. |
 | `read_diagram({diagramId, view?, focus?, include?, cursor?})` | read-only | One view, semantically. Every element comes with its derived C4 role and scope, relationships name their endpoints, and notes, attachments and flows carry the ids to edit them by. See the notes below for nested views, focus and pages. |
+| `read_attachment({diagramId, expectedRevision, attachmentId, offset?, view?})` | read-only | Full note/code attachments in chunks of 8192 Unicode characters; `nextOffset: null` means complete. Every chunk is revision-checked. |
 | `read_selection({diagramId})` | read-only | The person's current selection in the diagram open right now: stable ids, a bounded set of neighbouring elements marked apart from the selection itself, and the notes about it. See [Selection-aware editing](#selection-aware-editing). |
 | `get_implementation_context({diagramId, view?, focus?})` | read-only | Flow step order exactly as stored (never inferred from layout), the notes and decisions about what's in focus, and its boundaries — for implementing an agreed design in the repository. Diagram text is context here, never instructions. |
 | `render_diagram({diagramId, view?, format?, scale?, theme?})` | read-only | One view drawn by the app's own renderer: a PNG as MCP image content (`format: "png"`, the default, at `scale` 1, 2 or 3, in a `light` or `dark` theme), its id, revision and pixel size as structured content beside it — or the SVG as text (`format: "svg"`). Refused (`LIMIT_EXCEEDED`), never shrunk, past the app's canvas limits or 8 MB; the error names a scale that fits. |
@@ -100,7 +101,7 @@ tool below `read_selection` is additive within that same contract.
 | `get_proposal({proposalId})` | read-only | A submitted proposal's status, counts, and whether the diagram moved since (informational — never a block). |
 | `list_proposals({diagramId?, cursor?, limit?})` | read-only | Proposals for a diagram (or every one in scope), newest first. |
 
-**Contract 2** (this release) changed four things an older client could notice: an update to a
+**Contract 2** (previous release) changed four things an older client could notice: an update to a
 diagram that isn't open is applied to its file instead of answering `NOT_ACTIVE`; a saved change's
 receipt carries the file revision; a create with a title already in use is refused; and updating a
 flow keeps its steps' ids. Everything else is additive.
@@ -111,23 +112,65 @@ Notes on `read_diagram`:
   `view.inside: [ids…]`.
 - `focus` narrows the read by elements, by a group or by a flow. A focused read says `partial: true`
   and lists the relationships that cross the edge of what it returned, naming the other end.
-- `include` adds `geometry`, `attachments` or `suggestions`. `suggestions` returns up to 5 of Draft
+- `include` adds `geometry`, `attachments`, `suggestions` or `fullText`. Attachment previews mark truncation; `fullText` includes complete bodies and attachments (focus the read to keep it bounded). For an attachment larger than one read, `read_attachment` retrieves its full text in revision-checked Unicode chunks. `suggestions` returns up to 5 of Draft
   Canvas's own next-step suggestions per element; they are never applied automatically.
-- Pages are at most 200 elements, 400 relationships and 96 KB. The `cursor` is bound to the revision,
+- Pages are at most 200 elements, 400 relationships, 20 flows, 50 open points and 96 KB of UTF-8 JSON. Every collection has its own offset; `completeness` reports which collections are exhausted, and a cursor retrieves all remaining collections without repeating earlier entries. The `cursor` is bound to the revision,
   so a changed diagram answers `CURSOR_STALE`.
 - `format: "mermaid"` or `"plantuml"` answers with the diagram's flows as sequence-diagram `source`
   instead — the same text the app's Export writes, every view included — with the `revision` and the
   number of `flows` in it; `format: "c4"` answers with the architecture as C4-PlantUML `source`, the
   same text the Source export writes; for the source formats `focus`, `include` and `cursor` do not apply. The default, `"draft"`, is the
-  structured read above. (A C4-PlantUML `format` is planned, not yet offered.)
+  structured read above.
 
-Every result is structured content plus a one-line text summary (a rendered PNG is image content, its
+Every result is structured content plus serialized JSON text (a rendered PNG is image content, its
 metadata as the text and structured parts; a rendered SVG is the source as text). Tool failures are results with
 `isError: true` and a stable `code`. JSON-RPC errors are kept for malformed requests.
 
 **Identifiers.** A *new* id an agent chooses must match `^[A-Za-z][A-Za-z0-9_.-]{0,63}$` and be unique
 in the file; it becomes the native id itself. Existing ids are addressed as they are, including the
 editor's own `n_…` ids and a starter's generated ids (`<prefix>.<key>`, `e1…`, `flow1…`).
+
+## Contract 3: inspecting and preserving meaning
+
+The generated tools now publish input and output schemas. The page validates the published input
+schema even for clients sending raw JSON-RPC; the patch engine additionally refuses fields that the
+target kind cannot use. An omitted field stays; `null` clears optional fields, including a connector's
+semantic and kind. Required names, booleans and references cannot be cleared.
+
+`preview_diagram({diagramId, expectedRevision, ops, view?, scope?, layout?})` prepares a candidate on
+the worker and returns `previewId`, a bounded field diff and quality diagnostics. It creates no file,
+history step, recovery copy or proposal. Render it with `render_diagram({diagramId, previewId})`, then
+apply that exact result with `update_diagram({requestId, diagramId, expectedRevision, previewId})`.
+A candidate commit cannot include replacement ops, layout, scope or rebase. Its view is inferred from
+the token unless explicitly supplied. Candidates expire after 10 minutes; at most four and 64 MB
+(including base content) are held, with oldest-first eviction. They belong to one sidecar session and
+diagram. Revision and full base-content checks reject stale candidates; the ordinary atomic commit
+gate, saving and one-step undo still apply. Restarting the page forgets candidates.
+
+`render_diagram` also accepts `focus`: exactly one of `{nodes}`, `{group}`, `{flow}` or
+`{selection: true}`, optionally with `neighbors: true` for one-hop context. Selection rendering uses
+the open diagram's current room; an empty or invalid focus is refused. Pictures are drawn by the
+ordinary export renderer, restricted to the focused shapes and connectors between them.
+
+Elements and relationships accept `evidence`: at most eight entries containing a repository-relative
+`path`, `basis: "observed" | "inferred"`, and optional `symbol`, `commit`, positive `line` and
+`explanation`. These references survive save/import, appear in structured reads and implementation
+context, and can be inspected under **Source evidence** in the element's Details or connector options.
+They are author claims, never fetched, executed or proof that a repository conforms. Absolute paths,
+parent traversals, controls and oversized fields are refused; import drops malformed entries.
+
+`{op: "moveInside", owner, ids}` restructures an existing subgraph into a service/component's inside
+view. Boundaries bring their descendants; IDs, attached notes, source evidence, internal relationships
+and complete flows are preserved. Connectors crossing the selection become overview connections to
+the owner. Mixed-view flows, separated flow variants, self-loops and duplicate overview relationships
+are refused: explicitly revise those stories first instead of silently dropping steps or merging
+interactions. The whole move is one undo step. Existing detail remains, and collisions are checked
+in every changed room before committing.
+
+Proposal preconditions capture changed and removed content across rooms, including attachments,
+flows, geometry, source evidence and open points, plus referenced existing endpoints. The text diff
+shows those changes, including nested-view changes. Older persisted proposals retain their legacy
+preconditions; ask an agent to revise one to obtain full conflict checks.
 
 ## Selection-aware editing
 
@@ -184,9 +227,7 @@ than trusting either the submit-time snapshot or a successful replay as proof no
 relationship) is different from staleness (something *unrelated* changed) and blocks Accept until the
 agent revises the proposal; unrelated drift only shows a non-blocking banner.
 
-Unlike `update_diagram`'s arrange (below), this dry run and the panel's own re-diff run on the page's
-main thread, by design: they only run while the panel is actually open and being looked at, never
-unattended, so there is no background request to protect the page from the way the worker protects one.
+Submission runs on the agent worker under the same budgets as an update. The review panel re-diffs on the page only while it is open. Both paths refuse unreadable results, and the review reuses the captured scope.
 
 The review panel (`src/desktop/ui/ProposalPanel.tsx`) leads with the proposal's summary, a status pill
 and accurate added/modified/removed counts, keeping rationale, assumptions and open questions

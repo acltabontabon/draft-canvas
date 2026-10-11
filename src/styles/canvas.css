@@ -4259,3 +4259,12 @@
 .dc-editor[data-tracing] .dc-edge-hit { pointer-events: stroke; cursor: pointer; }
 
 .dc-flow-trace-more { margin: 0 8px 6px; font-size: 11px; }
+
+.dc-source-evidence { max-width: 320px; font-size: 11px; line-height: 1.5; }
+.dc-source-evidence summary { cursor: pointer; }
+.dc-source-evidence ol { margin: 8px 0; padding-left: 18px; }
+.dc-source-evidence li { margin-bottom: 8px; }
+.dc-source-evidence li > * { display: block; overflow-wrap: anywhere; }
+.dc-source-evidence p { opacity: 0.7; margin: 8px 0 0; }
+
+.dc-proposal-diff-before, .dc-proposal-diff-after { white-space: pre-wrap; }

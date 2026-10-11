@@ -1,3 +1,4 @@
+import { parseEvidence } from './evidence';
 /**
  * The untrusted-input boundary.
  *
@@ -547,6 +548,8 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
       }
     }
 
+    const nodeEvidence = parseEvidence(candidate.evidence);
+    if (nodeEvidence) node.evidence = nodeEvidence;
     nodes.push(node);
   }
 
@@ -700,6 +703,8 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
     truncatedEdgeAttachments += edgeAttachments.truncated;
     if (edgeAttachments.attachments.length > 0) edge.attachments = edgeAttachments.attachments;
 
+    const edgeEvidence = parseEvidence(candidate.evidence);
+    if (edgeEvidence) edge.evidence = edgeEvidence;
     edges.push(edge);
   }
 

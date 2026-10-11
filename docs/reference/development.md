@@ -25,6 +25,7 @@ Commands and code locations. See [Contributing](../../CONTRIBUTING.md) for setup
 | `npm run desktop:check` | Desktop build, Rust checks and version check |
 | `npm run desktop:rust` | Rust checks; requires the desktop web build |
 | `npm run e2e:desktop` | Desktop browser suite with a fake shell |
+| `npm run e2e:mcp` | Real MCP sidecar to editor round trip; run after `desktop:check` |
 | `npm run agent:schemas` | Regenerate MCP tool schemas |
 | `npm run perf` | Measure diagram loading and memory |
 | `npm run perf:publish` | Update generated performance tables |
@@ -51,7 +52,9 @@ npx playwright show-trace 'test-results/<failed-test>/trace.zip'
 
 Wait for the required UI state rather than adding fixed sleeps. Editor specs use the dev server;
 offline and deployment specs use production builds. Desktop browser specs do not need Rust.
-`desktop:check` builds the web bundle before running Rust checks.
+`desktop:check` builds the web bundle before running Rust checks. For agent changes, also run
+`npm run e2e:mcp` after `desktop:check`; regenerate schemas when their source changes and preview
+the agent gallery when layout changes.
 
 CI splits the editor suite across three jobs per browser, with one worker per job. A passing retry
 still fails CI. Browser jobs use the official Playwright container, with its version selected from

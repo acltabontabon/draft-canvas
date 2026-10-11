@@ -52,7 +52,7 @@ const isNoteLike = (n: DraftNode) => n.type === 'note' || n.type === 'text' || n
 
 /** Reads `{op:"arrange", scope?, direction?, spacing?, connectors?, move?, primaryFlow?}` against the view. */
 export function readArrange(r: Reader, op: Json, at: string, view: DraftDocument, base: LayoutSpec): ArrangeRequest | undefined {
-  const scopeRaw = op.scope === undefined ? undefined : r.object(op.scope, `${at}/scope`);
+  const scopeRaw = op.scope === undefined ? undefined : r.object(op.scope, `${at}/scope`, ['group', 'nodes']);
   let scope: ArrangeRequest['scope'];
   if (scopeRaw) {
     const byId = new Map(view.nodes.map((n) => [n.id, n]));

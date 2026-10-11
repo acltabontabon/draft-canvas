@@ -1,3 +1,4 @@
+import { SourceEvidenceDetails } from './SourceEvidenceDetails';
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { LIMITS } from '../document/limits';
 import { createPortal } from 'react-dom';
@@ -403,6 +404,7 @@ function C4DetailsPanel({ node }: { node: DraftNode }) {
           onKeyDown={stop}
         />
       </label>
+      <SourceEvidenceDetails sources={node.evidence} />
     </div>
   );
 }

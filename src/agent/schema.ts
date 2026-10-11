@@ -13,12 +13,24 @@
 import { ACCENTS, CODE_LANGUAGES, CONNECTOR_KINDS, EDGE_SEMANTICS, OPEN_POINT_KINDS } from '../document/types';
 import { STARTER_IDS } from '../starters/types';
 import { AGENT_LIMITS, NEW_ID } from './input';
+import { SET_FIELDS } from './fields';
+import { outputFor } from './outputs';
 import { ELEMENT_TYPE_NAMES, GROUP_KINDS, NOTE_KIND_NAMES } from './vocabulary';
 
 type Schema = Record<string, unknown>;
 
 const id = (what: string): Schema => ({ type: 'string', pattern: '^[A-Za-z][A-Za-z0-9_.-]{0,63}$', description: `Your id for this ${what}; reuse it to refer to it later.` });
 const text = (max: number, description?: string): Schema => ({ type: 'string', maxLength: max, ...(description ? { description } : {}) });
+
+const evidence: Schema = {
+  type: 'array', maxItems: 8, items: {
+    type: 'object', properties: {
+      path: text(500, 'Repository-relative source path; a reference, never read by Draft Canvas.'),
+      basis: { enum: ['observed', 'inferred'] }, symbol: text(200), commit: text(80),
+      line: { type: 'integer', minimum: 1 }, explanation: text(300),
+    }, required: ['path', 'basis'], additionalProperties: false,
+  },
+};
 
 const attachment: Schema = {
   type: 'object',
@@ -73,12 +85,13 @@ const element = (depth: number): Schema => ({
   type: 'object',
   properties: {
     id: id('element'),
-    type: { enum: ELEMENT_TYPE_NAMES, description: 'What it is. Common: service, api, worker, gateway, external-system, database, cache, queue, topic, stream, person, component.' },
+    type: { anyOf: [{ enum: ELEMENT_TYPE_NAMES }, { type: 'string', maxLength: 64 }], description: 'Unknown names require create_diagram.fallbackType. What it is. Common: service, api, worker, gateway, external-system, database, cache, queue, topic, stream, person, component.' },
     label: text(AGENT_LIMITS.labelLength, 'Its name.'),
     description: text(AGENT_LIMITS.descriptionLength, 'C4 description: its responsibility, in a sentence.'),
     technology: text(AGENT_LIMITS.technologyLength, 'C4 technology, e.g. "Spring Boot", "PostgreSQL 16".'),
     group: { type: 'string', description: 'Id of the group/boundary it sits in.' },
     color: { enum: ACCENTS },
+    evidence: ref('evidence'),
     attachments: { type: 'array', maxItems: AGENT_LIMITS.attachmentsPerElement, items: ref('attachment') },
     ...(depth < AGENT_LIMITS.insideDepth
       ? {
@@ -107,6 +120,7 @@ const relationship: Schema = {
     directed: { type: 'boolean', description: 'false for an undirected line. Default true.' },
     async: { type: 'boolean' },
     condition: text(120, 'A short guard shown under the label.'),
+    evidence: ref('evidence'),
     attachments: { type: 'array', maxItems: AGENT_LIMITS.attachmentsPerElement, items: ref('attachment') },
   },
   required: ['id', 'from', 'to'],
@@ -229,6 +243,7 @@ const room = (depth = 0): Record<string, Schema> => ({
 
 /** What `room()`'s references resolve to — the same object on every tool that takes a room. */
 const roomDefs: Record<string, Schema> = {
+  evidence,
   attachment,
   relationship,
   group,
@@ -264,17 +279,30 @@ const opAdd: Schema = {
   additionalProperties: false,
 };
 
+const nullable = (schema: Schema): Schema => ({ anyOf: [schema, { type: 'null' }] });
+const setProperties: Record<string, Schema> = {
+  label: nullable(text(1000)), text: text(1000), type: { enum: ELEMENT_TYPE_NAMES },
+  description: nullable(text(280)), technology: nullable(text(60)), color: nullable({ enum: ACCENTS }),
+  group: nullable({ type: 'string' }), kind: nullable({ enum: [...new Set([...Object.keys(GROUP_KINDS), ...NOTE_KIND_NAMES, ...CONNECTOR_KINDS])] }),
+  semantic: nullable({ enum: EDGE_SEMANTICS }), directed: { type: 'boolean' }, async: { type: 'boolean' },
+  condition: nullable(text(120)), title: text(100),
+  steps: (flow.properties as Record<string, Schema>).steps!, variantOf: nullable({ type: 'string' }),
+  code: text(4000), language: { enum: CODE_LANGUAGES },
+  about: { anyOf: [{ type: 'string' }, { type: 'array', minItems: 1, maxItems: 40, items: { type: 'string' } }] },
+  near: { type: 'string' }, context: nullable(text(500)), resolved: { type: 'boolean' }, resolution: nullable(text(500)), evidence: nullable(ref('evidence')),
+};
+const setSchema: Schema = {
+  type: 'object', minProperties: 1, additionalProperties: false,
+  properties: Object.fromEntries([...new Set(Object.values(SET_FIELDS).flat())].map((field) => [field, setProperties[field]])),
+};
+
 const opUpdate: Schema = {
   type: 'object',
   description: 'Changes fields of one thing, by id: an element, group, relationship, note, attachment, flow or open point.',
   properties: {
     op: { enum: ['update'] },
     id: { type: 'string' },
-    set: {
-      type: 'object',
-      description:
-        'Fields to change. Elements: label, type, description, technology, color, group. Groups: label, kind, group. Relationships: label, semantic, kind, directed, async, condition. Notes: text, kind, about (move beside an element, or into a group). Attachments (by their id): text, kind, code, language, about (move to another element or relationship). Flows: title, color, steps (steps kept by relationship keep their id and caption; caption: null clears), variantOf (the flow this is a named alternative of; null clears — that flow must not itself be a variant). Open points: kind, context, resolved (true settles, false reopens; never anyone\'s approval), resolution, about. null clears a field.',
-    },
+    set: { ...setSchema, description: 'Fields to change; omitted fields stay. null clears optional fields. Fields unsupported by the target kind are refused.' },
   },
   required: ['op', 'id', 'set'],
   additionalProperties: false,
@@ -325,7 +353,7 @@ const opArrange: Schema = {
 };
 
 /** One op — the same object in `update_diagram` and `submit_proposal`, so the two can't drift. */
-const op: Schema = { oneOf: [opAdd, opUpdate, opRemove, opSetLevel, opArrange] };
+const op: Schema = { oneOf: [opAdd, opUpdate, opRemove, opSetLevel, opArrange, { type: 'object', properties: { op: { enum: ['moveInside'] }, owner: { type: 'string' }, ids: { type: 'array', minItems: 1, maxItems: 300, items: { type: 'string' } } }, required: ['op', 'owner', 'ids'], additionalProperties: false, description: 'Move shapes, internal connectors and complete flows inside owner, preserving IDs. Boundary connections redirect to owner. Mixed-view flows, duplicate overview relationships and self-loops are refused: explicitly revise them first.' }] };
 
 const ops: Schema = {
   type: 'array',
@@ -334,7 +362,7 @@ const ops: Schema = {
   items: op,
 };
 
-export const TOOLS = [
+const TOOL_INPUTS = [
   {
     name: 'get_capabilities',
     title: 'Draft Canvas capabilities',
@@ -376,7 +404,7 @@ export const TOOLS = [
         diagramId: { type: 'string' },
         view: { type: 'object', properties: { inside: { type: 'array', items: { type: 'string' }, maxItems: 3, description: 'Element ids from the top view down to the view to read.' } }, additionalProperties: false },
         focus: { type: 'object', properties: { nodes: { type: 'array', items: { type: 'string' }, maxItems: 200 }, group: { type: 'string' }, flow: { type: 'string' } }, additionalProperties: false },
-        include: { type: 'array', items: { enum: ['geometry', 'attachments', 'suggestions'] } },
+        include: { type: 'array', items: { enum: ['geometry', 'attachments', 'suggestions', 'fullText'] } },
         cursor: { type: 'string' },
         format: {
           enum: ['draft', 'mermaid', 'plantuml', 'c4'],
@@ -388,6 +416,15 @@ export const TOOLS = [
       additionalProperties: false,
     },
     annotations: { title: 'Read a diagram', readOnlyHint: true, openWorldHint: false },
+  },
+  {
+    name: 'read_attachment', title: 'Read full attachment text',
+    description: 'Retrieve a note or code attachment without losing its tail. Returns up to 8192 Unicode characters, nextOffset (null when complete), totalCharacters and hostId. Repeat with the same expectedRevision and nextOffset; a changed revision is refused.',
+    inputSchema: { type: 'object', properties: {
+      diagramId: { type: 'string' }, expectedRevision: { type: 'string' }, attachmentId: { type: 'string' }, offset: { type: 'integer', minimum: 0 },
+      view: { type: 'object', properties: { inside: { type: 'array', maxItems: 3, items: { type: 'string' } } }, additionalProperties: false },
+    }, required: ['diagramId', 'expectedRevision', 'attachmentId'], additionalProperties: false },
+    annotations: { title: 'Read full attachment text', readOnlyHint: true, openWorldHint: false },
   },
   {
     name: 'read_selection',
@@ -436,6 +473,8 @@ export const TOOLS = [
         format: { enum: ['png', 'svg'], description: 'Default png.' },
         scale: { enum: [1, 2, 3], description: 'png only: pixels per canvas unit. Default 1.' },
         theme: { enum: ['light', 'dark'], description: 'Default light.' },
+        previewId: { type: 'string', description: 'Render an ephemeral candidate from preview_diagram. It must still match this session and revision.' },
+        focus: { type: 'object', properties: { nodes: { type: 'array', minItems: 1, maxItems: 200, items: { type: 'string' } }, group: { type: 'string' }, flow: { type: 'string' }, selection: { const: true }, neighbors: { type: 'boolean' } }, additionalProperties: false, description: 'Choose one: nodes, group, flow or current selection. neighbors includes one-hop context.' },
       },
       required: ['diagramId'],
       additionalProperties: false,
@@ -497,13 +536,25 @@ export const TOOLS = [
         },
         scope,
         ops,
+        previewId: { type: 'string', description: 'Apply the exact candidate returned by preview_diagram. Do not combine with ops, layout, scope or onConflict.' },
         layout: layoutBrief,
       },
-      required: ['requestId', 'diagramId', 'expectedRevision', 'ops'],
+      required: ['requestId', 'diagramId', 'expectedRevision'],
+      oneOf: [{ required: ['ops'], not: { required: ['previewId'] } }, { required: ['previewId'], not: { anyOf: ['ops', 'layout', 'scope', 'onConflict'].map((field) => ({ required: [field] })) } }],
       additionalProperties: false,
       $defs: roomDefs,
     },
     annotations: { title: 'Update a diagram', readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+  },
+  {
+    name: 'preview_diagram', title: 'Preview a diagram change',
+    description: 'Prepare an ephemeral candidate without saving, undo, or submitting a proposal. Returns previewId, diff and quality. Inspect it with render_diagram({diagramId, previewId}); revise by preparing another candidate. Apply that exact candidate with update_diagram({requestId, diagramId, expectedRevision, previewId, view?}) before it expires (10 minutes). A changed revision or a different agent session refuses it.',
+    inputSchema: { type: 'object', properties: {
+      diagramId: { type: 'string' }, expectedRevision: { type: 'string' },
+      view: { type: 'object', properties: { inside: { type: 'array', maxItems: 3, items: { type: 'string' } } }, additionalProperties: false },
+      ops, layout: layoutBrief, scope,
+    }, required: ['diagramId', 'expectedRevision', 'ops'], additionalProperties: false, $defs: roomDefs },
+    annotations: { title: 'Preview a diagram change', readOnlyHint: true, openWorldHint: false },
   },
   {
     name: 'submit_proposal',
@@ -515,7 +566,7 @@ export const TOOLS = [
       properties: {
         requestId,
         diagramId: { type: 'string' },
-        expectedRevision: { type: 'string', description: "The revision from your last read or receipt; a newer one means someone else edited it since — this proposal's staleness, not a block." },
+        expectedRevision: { type: 'string', description: "The revision from your last read or receipt; it must still match at submission. Later unrelated edits mark a stored proposal stale without blocking its review." },
         view: { type: 'object', properties: { inside: { type: 'array', items: { type: 'string' }, maxItems: 3 } }, additionalProperties: false },
         scope,
         // The very same op schema update_diagram uses (one object, so the two can't drift); the one
@@ -559,3 +610,14 @@ export const TOOLS = [
     annotations: { title: 'List proposals', readOnlyHint: true, openWorldHint: false },
   },
 ] as const;
+
+/** Success contracts are generated beside input schemas, so clients can validate receipts. */
+export const TOOLS = TOOL_INPUTS.map((tool) => ({
+  ...tool,
+  // Preview and proposal use the update vocabulary already in the tool list. Repeating its prose
+  // in all four copies costs agent context without changing validation.
+  inputSchema: 'submit_proposal' === tool.name || 'preview_diagram' === tool.name
+    ? { ...tool.inputSchema, $defs: Object.fromEntries(Object.entries(roomDefs).map(([key, rule]) => [key, undescribed(rule)])) }
+    : tool.inputSchema,
+  outputSchema: outputFor(tool.name),
+}));

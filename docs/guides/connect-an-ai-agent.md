@@ -81,6 +81,25 @@ doesn't start the app for you, and it says so if the app isn't open.
   element's **Details**.
 - **Start from an Architecture Starter**, renamed and extended.
 
+## Inspect before applying
+
+Ask an agent to “prepare this change, look at the result, and apply it only if it reads clearly.”
+It can prepare a temporary candidate, inspect its image and field diff, and revise it before applying
+that exact candidate as one undo step. Candidates are never saved and expire after ten minutes;
+a change you make meanwhile makes the old candidate inapplicable.
+
+Ask for “just this selection and its immediate neighbours” when a full diagram is too large to
+inspect. An agent can render selected shapes, a boundary or a flow on its own.
+
+For diagrams based on code, ask the agent to cite each important claim with a source path, symbol,
+line or commit and distinguish what it observed from what it inferred. **Source evidence** in
+an element's **Details** or a connector's options shows those references. Draft Canvas does not read
+the repository itself or verify the author's claim.
+
+Ask an agent to move existing detail inside its service when an overview becomes crowded. It keeps
+identities, notes and complete flows. If a flow spans both levels, the agent must explicitly split
+that story first; Draft Canvas refuses to discard its steps automatically.
+
 ## An example
 
 > **You:** Draw this architecture: a web storefront calls the Orders API, which writes to Postgres
@@ -224,3 +243,10 @@ the pasted-config fallback are unit-tested to decode to the exact same server de
 real Cursor install to Draft Canvas has not been run in this environment; treat it as
 configuration-verified, not as a tested connection, until it's been tried against an actual Cursor.
 Windows and Linux are untested for every client in this round, same as before it.
+
+Contract 3 adds `npm run e2e:mcp` (after `npm run desktop:check`): a real stdio MCP client and
+compiled sidecar issue reads, candidate previews, image renders, commits and a semantic proposal
+against the browser editor, then review and Accept it through the UI and verify its fields and undo.
+Only the OS broker and disk are faked in this journey; native access, admission and journaling remain
+covered by Rust tests. The macOS Rust CI lane runs it in Chromium and WebKit. This closes the joined
+sidecar/editor regression gap without claiming a real Cursor connection or Windows GUI acceptance.

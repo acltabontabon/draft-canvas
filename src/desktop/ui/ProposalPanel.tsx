@@ -226,11 +226,11 @@ function ProposalDetail({ proposal, onChanged }: { proposal: Proposal; onChanged
       return { diff: [] as ElementDiffRow[], conflicts: [] as ReturnType<typeof preconditionConflicts>, dryRunProblem: null as string | null, resultFile: null as DraftDocument | null, conflictingIds: undefined as readonly string[] | undefined };
     }
     try {
-      const result = applyUpdate(live, path, proposal.ops, proposal.layout ?? undefined);
+      const result = applyUpdate(live, path, proposal.ops, proposal.layout ?? undefined, proposal.scope ?? undefined);
       return {
         diff: diffForReview(live, result.file, path),
         conflicts: preconditionConflicts(live, path, proposal.preconditions),
-        dryRunProblem: null as string | null,
+        dryRunProblem: result.quality.errors.length ? 'This proposal would leave unreadable content.' : null,
         resultFile: result.file,
         conflictingIds: undefined as readonly string[] | undefined,
       };
@@ -329,7 +329,11 @@ function ProposalDetail({ proposal, onChanged }: { proposal: Proposal; onChanged
       const state = useEditorStore.getState();
       const file = fileOf(state);
       const beforeRevision = state.revision;
-      const result = applyUpdate(file, proposal.path, proposal.ops, proposal.layout ?? undefined);
+      const result = applyUpdate(file, proposal.path, proposal.ops, proposal.layout ?? undefined, proposal.scope ?? undefined);
+      if (result.quality.errors.length) {
+        setError('This proposal would leave unreadable content. Ask the agent to revise it.');
+        return undefined;
+      }
       const freshConflicts = preconditionConflicts(file, proposal.path, proposal.preconditions);
       if (freshConflicts.length > 0) {
         setError('The diagram changed in a way this proposal conflicts with. Ask the agent to revise it.');
@@ -478,7 +482,7 @@ function ProposalDetail({ proposal, onChanged }: { proposal: Proposal; onChanged
             {!dryRunProblem && (
               <ul className="dc-proposal-diff" role="list">
                 {diff.map((row) => (
-                  <li key={`${row.kind}-${row.id}`} className={`dc-proposal-diff-row dc-proposal-diff-${row.change}`}>
+                  <li key={`${row.kind}-${row.id}-${row.path?.join('/') ?? ''}`} className={`dc-proposal-diff-row dc-proposal-diff-${row.change}`}>
                     <span className="dc-proposal-diff-change">{row.change}</span>
                     <span className="dc-proposal-diff-label">{row.label || row.id}</span>
                     {row.fields && (

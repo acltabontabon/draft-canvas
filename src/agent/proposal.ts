@@ -8,12 +8,41 @@
  */
 
 import type { DepthPath } from '../depth/tree';
-import { viewOf } from '../depth/tree';
-import type { DraftDocument, DraftEdge, DraftNode, OpenPoint } from '../document/types';
+import { viewOf, walkGraphs } from '../depth/tree';
+import { AgentError } from './errors';
+import type { Attachment, DraftDocument, DraftEdge, DraftFlow, DraftNode, OpenPoint } from '../document/types';
 import { OPEN_POINT_LABELS } from '../document/openPoints';
 import { applyUpdate, type PatchResult } from './patch';
 
+export interface EntitySnapshot {
+  kind: 'node' | 'edge' | 'flow' | 'open point' | 'view';
+  path: string[];
+  value: Record<string, unknown>;
+}
+
+/** Comparable content includes geometry and nested removals, not just labels. */
+export function snapshotsOf(file: DraftDocument): Record<string, EntitySnapshot> {
+  const out = Object.create(null) as Record<string, EntitySnapshot>;
+  walkGraphs(file, (graph, path) => {
+    out[`@view:${path.join('/')}`] = { kind: 'view', path: [...path], value: { level: ('level' in graph ? graph.level : undefined) ?? null } };
+    for (const node of graph.nodes) {
+      const { inside: _inside, ...own } = node;
+      out[node.id] = { kind: 'node', path: [...path], value: own };
+    }
+    for (const edge of graph.edges) out[edge.id] = { kind: 'edge', path: [...path], value: { ...edge } };
+    for (const flow of graph.flows) out[flow.id] = { kind: 'flow', path: [...path], value: { ...flow } };
+  });
+  for (const point of file.openPoints ?? []) out[point.id] = { kind: 'open point', path: [], value: { ...point } };
+  return out;
+}
+
+function comparable(value: unknown): string {
+  return JSON.stringify(value, (_key, item) => item && typeof item === 'object' && !Array.isArray(item)
+    ? Object.fromEntries(Object.keys(item).sort().map((key) => [key, item[key]])) : item);
+}
+
 export interface PreconditionSnapshot {
+  entities?: Record<string, EntitySnapshot>;
   nodes: Record<string, { label: string; type: string; group?: string }>;
   edges: Record<string, { from: string; to: string; label?: string }>;
 }
@@ -26,8 +55,23 @@ export interface PreparedProposal {
 
 export function prepareProposal(file: DraftDocument, path: DepthPath, rawOps: unknown, rawLayout: unknown, rawScope: unknown): PreparedProposal {
   const result = applyUpdate(file, path, rawOps, rawLayout, rawScope);
+  if (result.quality.errors.length) throw new AgentError('LAYOUT_CONSTRAINED', 'The proposal would leave unreadable content.', { details: { problems: result.quality.errors } });
+  const original = snapshotsOf(file);
+  const proposed = snapshotsOf(result.file);
+  const entities = Object.create(null) as Record<string, EntitySnapshot>;
+  for (const [id, snapshot] of Object.entries(original)) {
+    if (comparable(snapshot) !== comparable(proposed[id])) entities[id] = snapshot;
+  }
+  // Referenced existing elements (an added connector's endpoints, attachment destinations and
+  // flow members) are dependencies even when the patch does not change their own fields.
+  const dependencies = (value: unknown): void => {
+    if (typeof value === 'string' && original[value]) entities[value] = original[value]!;
+    else if (Array.isArray(value)) value.forEach(dependencies);
+    else if (value && typeof value === 'object') for (const [key, field] of Object.entries(value)) if (['id', 'ids', 'from', 'to', 'group', 'parent', 'about', 'near', 'relationship', 'steps', 'owner', 'nodes', 'relationships', 'flows', 'ops', 'set'].includes(key)) dependencies(field);
+  };
+  dependencies(rawOps);
   const before = viewOf(file, path);
-  const preconditions: PreconditionSnapshot = { nodes: {}, edges: {} };
+  const preconditions: PreconditionSnapshot = { nodes: Object.create(null), edges: Object.create(null), entities };
   if (before) {
     const beforeNodes = new Map(before.nodes.map((n) => [n.id, n]));
     const beforeEdges = new Map(before.edges.map((e) => [e.id, e]));
@@ -41,7 +85,9 @@ export function prepareProposal(file: DraftDocument, path: DepthPath, rawOps: un
       if (edge) preconditions.edges[id] = { from: edge.source, to: edge.target, ...(edge.label ? { label: edge.label } : {}) };
     }
   }
-  return { counts: result.counts, advisories: result.advisories, preconditions };
+  const diff = diffForReview(file, result.file, path);
+  const counts = { added: diff.filter((row) => row.change === 'added').length, updated: diff.filter((row) => row.change === 'modified').length, removed: diff.filter((row) => row.change === 'removed').length, ...(result.counts.arranged ? { arranged: result.counts.arranged } : {}) };
+  return { counts, advisories: result.advisories, preconditions };
 }
 
 /**
@@ -51,7 +97,7 @@ export function prepareProposal(file: DraftDocument, path: DepthPath, rawOps: un
  */
 export interface PreconditionConflict {
   id: string;
-  kind: 'node' | 'edge';
+  kind: EntitySnapshot['kind'];
   was: Record<string, unknown>;
   now: Record<string, unknown> | null;
 }
@@ -59,6 +105,15 @@ export interface PreconditionConflict {
 export function preconditionConflicts(file: DraftDocument, path: DepthPath, preconditions: PreconditionSnapshot): PreconditionConflict[] {
   const view = viewOf(file, path);
   const conflicts: PreconditionConflict[] = [];
+  if (preconditions.entities) {
+    const current = snapshotsOf(file);
+    for (const [id, was] of Object.entries(preconditions.entities)) {
+      const now = current[id];
+      if (comparable(was) !== comparable(now)) conflicts.push({ id, kind: was.kind, was: was.value, now: now?.value ?? null });
+    }
+    return conflicts;
+  }
+  // Older persisted proposals keep their original label-only preconditions.
   const nodes = new Map((view?.nodes ?? []).map((n) => [n.id, n]));
   const edges = new Map((view?.edges ?? []).map((e) => [e.id, e]));
   for (const [id, was] of Object.entries(preconditions.nodes)) {
@@ -91,19 +146,43 @@ export interface DiffField {
 }
 
 export interface ElementDiffRow {
-  kind: 'element' | 'group' | 'relationship' | 'open point';
+  path?: string[];
+  kind: 'element' | 'group' | 'relationship' | 'open point' | 'flow' | 'view' | 'attachment';
   id: string;
   change: 'added' | 'modified' | 'removed';
   label: string;
   fields?: DiffField[];
 }
 
+function displayFields(value: Record<string, unknown>): Record<string, string | undefined> {
+  return Object.fromEntries(Object.entries(value).filter(([key]) => !['id', 'inside', 'attachments', 'textOrigin', 'semanticsOrigin'].includes(key)).map(([key, field]) => [
+    key === 'text' ? 'label' : key,
+    field === undefined ? undefined : key === 'evidence' && Array.isArray(field) ? field.map((source) => `${source.basis === 'observed' ? 'Observed' : 'Inferred'}: ${source.path}${source.line ? `:${source.line}` : ''}${source.symbol ? ` (${source.symbol})` : ''}${source.commit ? ` @${source.commit}` : ''}${source.explanation ? ` — ${source.explanation}` : ''}`).join('\n') : typeof field === 'string' ? field : JSON.stringify(field),
+  ]));
+}
+
 function nodeFields(n: DraftNode): Record<string, string | undefined> {
-  return { label: n.text, type: n.type, description: n.description, technology: n.technology, group: n.parentId };
+  return displayFields({ ...n });
 }
 
 function edgeFields(e: DraftEdge): Record<string, string | undefined> {
-  return { label: e.label, semantic: e.semantic, kind: e.kind, condition: e.condition };
+  return displayFields({ ...e });
+}
+
+function flowFields(flow: DraftFlow, view: DraftDocument | undefined): Record<string, string | undefined> {
+  const fields = displayFields({ ...flow });
+  fields.steps = flow.steps.map((step, index) => {
+    const edge = view?.edges.find((edge) => edge.id === step.edgeId);
+    const name = (id: string) => view?.nodes.find((node) => node.id === id)?.text ?? id;
+    const interaction = edge ? `${name(edge.source)} → ${name(edge.target)}${edge.label ? `: ${edge.label}` : ''}` : 'Frame';
+    const highlights = [...(step.extraNodeIds ?? []).map(name), ...(step.extraEdgeIds ?? [])];
+    return `${index + 1}. ${interaction}${step.caption ? ` — ${step.caption}` : ''}${highlights.length ? ` (also highlights ${highlights.join(', ')})` : ''}${step.viewport ? ` (camera ${step.viewport.x}, ${step.viewport.y}, zoom ${step.viewport.zoom})` : ''}`;
+  }).join('\n');
+  return fields;
+}
+
+function attachmentFields(attachment: Attachment): Record<string, string | undefined> {
+  return displayFields({ ...attachment });
 }
 
 function changedFields(before: Record<string, string | undefined>, after: Record<string, string | undefined>): DiffField[] {
@@ -205,7 +284,7 @@ export function looksAlreadyApplied(rawOps: unknown, conflictingIds: readonly st
   });
 }
 
-export function diffForReview(before: DraftDocument, after: DraftDocument, path: DepthPath): ElementDiffRow[] {
+export function diffForReview(before: DraftDocument, after: DraftDocument, path: DepthPath, includeRootMetadata = true): ElementDiffRow[] {
   const beforeView = viewOf(before, path);
   const afterView = viewOf(after, path);
   const rows: ElementDiffRow[] = [];
@@ -241,9 +320,21 @@ export function diffForReview(before: DraftDocument, after: DraftDocument, path:
     if (!afterEdges.has(id)) rows.push({ kind: 'relationship', id, change: 'removed', label: was.label ?? '' });
   }
 
+  const attachmentsIn = (view: DraftDocument | undefined) => new Map((view ? [...view.nodes, ...view.edges] : []).flatMap((host) => (host.attachments ?? []).map((attachment) => [attachment.id, { attachment, hostId: host.id, host: 'source' in host ? host.label ?? host.id : host.text ?? host.id }] as const)));
+  const beforeAttachments = attachmentsIn(beforeView);
+  const afterAttachments = attachmentsIn(afterView);
+  for (const [id, item] of afterAttachments) {
+    const was = beforeAttachments.get(id);
+    const fields = was ? changedFields(attachmentFields(was.attachment), attachmentFields(item.attachment)) : undefined;
+    if (was && was.hostId !== item.hostId) fields?.push({ field: 'about', before: was.host, after: item.host });
+    if (!was || fields?.length) rows.push({ kind: 'attachment', id, change: was ? 'modified' : 'added', label: `${item.host} ▸ ${item.attachment.type === 'code' ? 'Code' : 'Note'}`, fields });
+  }
+  for (const [id, item] of beforeAttachments) if (!afterAttachments.has(id)) rows.push({ kind: 'attachment', id, change: 'removed', label: `${item.host} ▸ ${item.attachment.type === 'code' ? 'Code' : 'Note'}` });
+
   // Open points are root-only, so they are compared on the file. A point is never an element: one a
   // proposal raises, resolves or rewords shows as its own row — resolving one is a change a reviewer
   // accepts knowingly, never a side effect of accepting the architecture.
+  if (includeRootMetadata) {
   const beforePoints = new Map((before.openPoints ?? []).map((p) => [p.id, p]));
   const afterPoints = new Map((after.openPoints ?? []).map((p) => [p.id, p]));
   for (const [id, point] of afterPoints) {
@@ -259,7 +350,41 @@ export function diffForReview(before: DraftDocument, after: DraftDocument, path:
     if (!afterPoints.has(id)) rows.push({ kind: 'open point', id, change: 'removed', label: pointLabel(was) });
   }
 
+  }
+
+  const beforeFlows = new Map((beforeView?.flows ?? []).map((f) => [f.id, f]));
+  const afterFlows = new Map((afterView?.flows ?? []).map((f) => [f.id, f]));
+  for (const [id, flow] of afterFlows) {
+    const was = beforeFlows.get(id);
+    const fields = was ? changedFields(flowFields(was, beforeView), flowFields(flow, afterView)) : undefined;
+    if (!was || fields?.length) rows.push({ kind: 'flow', id, change: was ? 'modified' : 'added', label: flow.title, fields });
+  }
+  for (const [id, flow] of beforeFlows) if (!afterFlows.has(id)) rows.push({ kind: 'flow', id, change: 'removed', label: flow.title });
+  if (beforeView?.level !== afterView?.level) rows.push({ kind: 'view', id: '@level', change: 'modified', label: 'C4 level', fields: [{ field: 'level', before: beforeView?.level, after: afterView?.level }] });
+  for (const id of new Set([...beforeNodes.keys(), ...afterNodes.keys()])) {
+    const node = afterNodes.get(id);
+    const was = beforeNodes.get(id);
+    if (was?.inside !== node?.inside && (was?.inside || node?.inside)) {
+      for (const child of diffForReview(before, after, [...path, id], false)) rows.push({ ...child, path: child.path ?? [...path, id], label: `${node?.text ?? was?.text ?? id} ▸ ${child.label}` });
+    }
+  }
   return rows;
+}
+
+/** MCP previews keep a bounded diagnostic diff. The native review keeps the full field values. */
+export function diffForPreview(before: DraftDocument, after: DraftDocument, path: DepthPath) {
+  const full = diffForReview(before, after, path);
+  const diff: Record<string, unknown>[] = [];
+  let bytes = 0;
+  const shorten = (value: string | undefined) => value === undefined ? undefined : [...value].slice(0, 400).join('');
+  for (const row of full) {
+    const bounded = { ...row, label: [...row.label].slice(0, 200).join(''), fields: row.fields?.map((field) => ({ ...field, before: shorten(field.before), after: shorten(field.after), ...(field.before && [...field.before].length > 400 ? { beforeTruncated: true } : {}), ...(field.after && [...field.after].length > 400 ? { afterTruncated: true } : {}) })) };
+    const size = new TextEncoder().encode(JSON.stringify(bounded)).length;
+    if (diff.length >= 100 || bytes + size > 64 * 1024) break;
+    bytes += size;
+    diff.push(bounded);
+  }
+  return { diff, ...(diff.length < full.length ? { diffDropped: full.length - diff.length } : {}) };
 }
 
 function pointLabel(point: OpenPoint): string {

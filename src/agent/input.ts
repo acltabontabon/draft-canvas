@@ -26,6 +26,9 @@ import { LIMITS } from '../document/limits';
 import { STARTER_IDS, type StarterId } from '../starters/types';
 import { AgentError, Problems } from './errors';
 import { starterFor, starterIds } from './starter';
+import { isEvidence, EVIDENCE_LIMIT } from '../document/evidence';
+import type { SourceEvidence } from '../document/types';
+import { ROOM_FIELDS } from './fields';
 import { GROUP_KINDS, NOTE_KIND_NAMES, resolveType, suggestTypes, type NativeShape } from './vocabulary';
 
 /** What one request may carry. Published through `get_capabilities` and the tool schemas. */
@@ -66,6 +69,7 @@ export interface AttachmentSpec {
 }
 
 export interface NodeSpec {
+  evidence?: SourceEvidence[];
   id: string;
   typeWord: string;
   shape: NativeShape;
@@ -79,6 +83,7 @@ export interface NodeSpec {
 }
 
 export interface RelationshipSpec {
+  evidence?: SourceEvidence[];
   id: string;
   from: string;
   to: string;
@@ -190,8 +195,15 @@ export class Reader {
     this.problems = problems;
   }
 
-  object(value: unknown, path: string): Json | undefined {
-    if (isObject(value)) return value;
+  fields(value: Json, path: string, allowed: readonly string[]): void {
+    for (const key of Object.keys(value)) if (!allowed.includes(key)) this.problems.add('INVALID_INPUT', `${path}/${key}`, 'unknown or unsupported field');
+  }
+
+  object(value: unknown, path: string, allowed?: readonly string[]): Json | undefined {
+    if (isObject(value)) {
+      if (allowed) this.fields(value, path, allowed);
+      return value;
+    }
     this.problems.add('INVALID_INPUT', path, 'must be an object');
     return undefined;
   }
@@ -262,13 +274,20 @@ export class Reader {
   }
 }
 
+export function readEvidence(r: Reader, value: unknown, path: string): SourceEvidence[] | undefined {
+  if (value === undefined) return undefined;
+  const entries = r.array(value, path, EVIDENCE_LIMIT);
+  for (const [index, entry] of entries.entries()) if (!isEvidence(entry)) r.problems.add('INVALID_INPUT', `${path}/${index}`, 'must be a relative source path, observed/inferred basis and bounded optional symbol, commit, line and explanation');
+  return entries.filter(isEvidence).map((entry) => ({ ...entry }));
+}
+
 function readAttachments(r: Reader, value: unknown, path: string): AttachmentSpec[] | undefined {
   const items = r.array(value, path, AGENT_LIMITS.attachmentsPerElement);
   if (items.length === 0) return undefined;
   const out: AttachmentSpec[] = [];
   items.forEach((raw, i) => {
     const at = `${path}/${i}`;
-    const item = r.object(raw, at);
+    const item = r.object(raw, at, ['kind', 'text', 'noteKind', 'language', 'code']);
     if (!item) return;
     const kind = r.oneOf(item.kind, `${at}/kind`, ['note', 'code'] as const) ?? 'note';
     if (kind === 'code') {
@@ -300,7 +319,7 @@ export function readRoom(r: Reader, raw: Json, path: string, ctx: RoomContext): 
   const groups: GroupSpec[] = [];
   r.array(raw.groups, `${path}/groups`, AGENT_LIMITS.groupsPerRequest).forEach((g, i) => {
     const at = `${path}/groups/${i}`;
-    const item = r.object(g, at);
+    const item = r.object(g, at, ['id', 'label', 'kind', 'parent']);
     if (!item) return;
     const id = r.newId(item.id, `${at}/id`, ctx.taken);
     const label = r.text(item.label, `${at}/label`, AGENT_LIMITS.groupLabelLength, { required: true, singleLine: true });
@@ -333,7 +352,7 @@ export function readRoom(r: Reader, raw: Json, path: string, ctx: RoomContext): 
   const nodes: NodeSpec[] = [];
   r.array(raw.nodes, `${path}/nodes`, AGENT_LIMITS.nodesPerRequest).forEach((n, i) => {
     const at = `${path}/nodes/${i}`;
-    const item = r.object(n, at);
+    const item = r.object(n, at, ['id', 'type', 'label', 'description', 'technology', 'group', 'color', 'attachments', 'inside', 'evidence']);
     if (!item) return;
     const id = r.newId(item.id, `${at}/id`, ctx.taken);
     const typeWord = typeof item.type === 'string' ? item.type : '';
@@ -357,11 +376,12 @@ export function readRoom(r: Reader, raw: Json, path: string, ctx: RoomContext): 
     const color = r.oneOf(item.color, `${at}/color`, ACCENTS);
     const group = typeof item.group === 'string' ? item.group : undefined;
     if (group !== undefined && !groupIds.has(group)) r.problems.add('INVALID_REFERENCE', `${at}/group`, `no group "${group}" in this view`);
+    const evidence = readEvidence(r, item.evidence, `${at}/evidence`);
     const attachments = readAttachments(r, item.attachments, `${at}/attachments`);
     let inside: RoomSpec | undefined;
     if (item.inside !== undefined) {
       const insideAt = `${at}/inside`;
-      const insideRaw = r.object(item.inside, insideAt);
+      const insideRaw = r.object(item.inside, insideAt, ROOM_FIELDS);
       const canHold = shape && (shape.type === 'service' || (shape.type === 'component' && shape.componentKind !== 'port'));
       if (insideRaw && !canHold) {
         r.problems.add('UNSUPPORTED', insideAt, 'only a service-like element or a (non-port) component can have an inside view');
@@ -386,6 +406,7 @@ export function readRoom(r: Reader, raw: Json, path: string, ctx: RoomContext): 
         ...(group ? { group } : {}),
         ...(color ? { color } : {}),
         ...(attachments ? { attachments } : {}),
+        ...(evidence?.length ? { evidence } : {}),
         ...(inside ? { inside } : {}),
       });
     }
@@ -396,7 +417,7 @@ export function readRoom(r: Reader, raw: Json, path: string, ctx: RoomContext): 
   const pairs = new Map<string, RelationshipSpec[]>();
   r.array(raw.relationships, `${path}/relationships`, AGENT_LIMITS.relationshipsPerRequest).forEach((e, i) => {
     const at = `${path}/relationships/${i}`;
-    const item = r.object(e, at);
+    const item = r.object(e, at, ['id', 'from', 'to', 'label', 'semantic', 'kind', 'directed', 'async', 'condition', 'attachments', 'evidence']);
     if (!item) return;
     const id = r.newId(item.id, `${at}/id`, ctx.taken);
     const from = typeof item.from === 'string' ? item.from : undefined;
@@ -410,6 +431,7 @@ export function readRoom(r: Reader, raw: Json, path: string, ctx: RoomContext): 
     const directed = r.bool(item.directed, `${at}/directed`);
     const async = r.bool(item.async, `${at}/async`);
     const condition = r.text(item.condition, `${at}/condition`, LIMITS.maxConditionLength, { singleLine: true });
+    const evidence = readEvidence(r, item.evidence, `${at}/evidence`);
     const attachments = readAttachments(r, item.attachments, `${at}/attachments`);
     if (!id || !from || !to || from === to || !elementIds.has(from) || !elementIds.has(to)) return;
     const spec: RelationshipSpec = {
@@ -423,6 +445,7 @@ export function readRoom(r: Reader, raw: Json, path: string, ctx: RoomContext): 
       ...(async !== undefined ? { async } : {}),
       ...(condition ? { condition } : {}),
       ...(attachments ? { attachments } : {}),
+      ...(evidence?.length ? { evidence } : {}),
     };
     const key = `${from}\u0000${to}`;
     const same = pairs.get(key) ?? [];
@@ -441,7 +464,7 @@ export function readRoom(r: Reader, raw: Json, path: string, ctx: RoomContext): 
   const flows: FlowSpec[] = [];
   r.array(raw.flows, `${path}/flows`, AGENT_LIMITS.flowsPerRequest).forEach((f, i) => {
     const at = `${path}/flows/${i}`;
-    const item = r.object(f, at);
+    const item = r.object(f, at, ['id', 'title', 'color', 'variantOf', 'steps']);
     if (!item) return;
     const flow = readFlow(r, item, at, ctx.taken, relationshipIds);
     if (flow) flows.push(flow);
@@ -450,7 +473,7 @@ export function readRoom(r: Reader, raw: Json, path: string, ctx: RoomContext): 
   const notes: NoteSpec[] = [];
   r.array(raw.notes, `${path}/notes`, AGENT_LIMITS.notesPerRequest).forEach((n, i) => {
     const at = `${path}/notes/${i}`;
-    const item = r.object(n, at);
+    const item = r.object(n, at, ['id', 'text', 'kind', 'about', 'near', 'attach']);
     if (!item) return;
     const id = r.newId(item.id, `${at}/id`, ctx.taken);
     const text = r.text(item.text, `${at}/text`, AGENT_LIMITS.noteLength, { required: true });
@@ -593,12 +616,12 @@ function readViewport(r: Reader, value: unknown, path: string): [number, number]
 export function readCreate(raw: unknown): CreateSpec {
   const problems = new Problems();
   const r = new Reader(problems);
-  const body = r.object(raw, '') ?? {};
+  const body = r.object(raw, '', ['requestId', 'title', 'project', 'starter', ...ROOM_FIELDS, 'layout', 'open', 'allowDuplicateTitle', 'fallbackType']) ?? {};
   const title = r.text(body.title, '/title', LIMITS.maxTitleLength, { required: true, singleLine: true }) ?? 'Untitled diagram';
   const taken = new Set<string>();
   let starter: StarterSpec | undefined;
   if (body.starter !== undefined) {
-    const s = r.object(body.starter, '/starter');
+    const s = r.object(body.starter, '/starter', ['id', 'prefix', 'overrides']);
     if (s) {
       const id = r.oneOf(s.id, '/starter/id', STARTER_IDS);
       const prefix = s.prefix === undefined ? '' : typeof s.prefix === 'string' && /^[A-Za-z][A-Za-z0-9_.-]{0,15}$|^$/.test(s.prefix) ? s.prefix : undefined;
@@ -607,7 +630,7 @@ export function readCreate(raw: unknown): CreateSpec {
       const rawOverrides = s.overrides === undefined ? {} : r.object(s.overrides, '/starter/overrides') ?? {};
       for (const [key, value] of Object.entries(rawOverrides)) {
         const at = `/starter/overrides/${key}`;
-        const o = r.object(value, at);
+        const o = r.object(value, at, ['label', 'description', 'technology']);
         if (!o) continue;
         const label = r.text(o.label, `${at}/label`, AGENT_LIMITS.labelLength);
         const description = r.text(o.description, `${at}/description`, AGENT_LIMITS.descriptionLength);

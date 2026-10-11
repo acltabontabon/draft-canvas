@@ -263,6 +263,7 @@ fn proposal_json(proposal: &Proposal, diagram: Option<&scope::Diagram>) -> Value
         "baseRevision": proposal.base_revision,
         "ops": proposal.ops,
         "layout": proposal.layout,
+        "scope": proposal.scope,
         "preconditions": proposal.preconditions,
         "counts": proposal.counts,
         "summary": proposal.summary,
