@@ -82,8 +82,9 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  # The whole journey suite, once per engine the app ships to. Retries stay on so a flaky test is
-  # *identified* rather than merely re-rolled: `--fail-on-flaky-tests` fails the run when a test only
+  # The whole journey suite, split by file across three runners per engine. Keep one worker per
+  # runner: parallel browsers on one CPU compete for frames and make interaction tests less stable.
+  # Retries stay on so a flaky test is *identified*: `--fail-on-flaky-tests` fails when a test only
   # passed on its retry, so a flake is fixed, not tolerated.
   e2e:
     needs: [source, verify]
@@ -92,6 +93,7 @@ jobs:
       fail-fast: false
       matrix:
         browser: [chromium, firefox, webkit]
+        shard: [1, 2, 3]
     env:
       PLAYWRIGHT_BROWSER: ${{ matrix.browser }}
       DC_TEST_BUILT: '1'
@@ -111,20 +113,23 @@ jobs:
           git fetch --no-tags --depth=1 origin "$CONTROL_COMMIT"
           git checkout FETCH_HEAD -- playwright.dist.config.ts playwright.web.config.ts
       - run: npm ci
-      - run: npm ci
-        working-directory: www
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: ${{ needs.verify.outputs.artifact-name }}
       - run: tar -xf verified-web.tar
       - run: npx playwright install --with-deps ${{ matrix.browser }}
-      - run: npm run e2e -- --fail-on-flaky-tests
-      - run: npm run e2e:offline -- --fail-on-flaky-tests
-      - run: npm run e2e:web -- --fail-on-flaky-tests
+      - id: journeys
+        run: npm run e2e -- --shard=${{ matrix.shard }}/3 --fail-on-flaky-tests
+      # These small artifact suites run once per engine, not once per journey shard. They consume
+      # the verified build above; neither needs the site's dependencies or a rebuild.
+      - if: ${{ !cancelled() && steps.journeys.outcome != 'skipped' && matrix.shard == 1 && matrix.browser == 'chromium' }}
+        run: npm run e2e:offline -- --fail-on-flaky-tests
+      - if: ${{ !cancelled() && steps.journeys.outcome != 'skipped' && matrix.shard == 1 }}
+        run: npm run e2e:web -- --fail-on-flaky-tests
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: failure()
         with:
-          name: playwright-report-${{ matrix.browser }}
+          name: playwright-report-${{ matrix.browser }}-${{ matrix.shard }}
           path: |
             playwright-report/
             playwright-report-offline/

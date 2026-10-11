@@ -53,6 +53,9 @@ Wait for the required UI state rather than adding fixed sleeps. Editor specs use
 offline and deployment specs use production builds. Desktop browser specs do not need Rust.
 `desktop:check` builds the web bundle before running Rust checks.
 
+CI splits the editor suite across three jobs per browser, with one worker per job. A passing retry
+still fails CI.
+
 ## Repository map
 
 | Path | Contents |

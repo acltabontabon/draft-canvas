@@ -20,16 +20,17 @@ export default async function warm(config: FullConfig): Promise<void> {
     // About is a lazy chunk too, carrying every release's notes, and the first test to open it on a
     // cold server (Firefox in CI) waited past its own expectation for the dialog.
     const about = page.getByRole('button', { name: 'About Draft Canvas' }).first();
-    if (await about.isVisible({ timeout: 10_000 }).catch(() => false)) {
-      await about.click();
-      await page.getByRole('dialog', { name: 'About' }).waitFor({ state: 'visible', timeout: 120_000 }).catch(() => undefined);
-      await page.keyboard.press('Escape');
-    }
+    // `isVisible` returns immediately even with a timeout: on a cold render it skipped the
+    // warm-up altogether. Wait for each surface and let a broken setup fail here, before tests.
+    await about.waitFor({ state: 'visible', timeout: 120_000 });
+    await about.click();
+    const dialog = page.getByRole('dialog', { name: 'About' });
+    await dialog.waitFor({ state: 'visible', timeout: 120_000 });
+    await page.keyboard.press('Escape');
+    await dialog.waitFor({ state: 'hidden', timeout: 10_000 });
     const newCanvas = page.getByRole('button', { name: 'New canvas' }).first();
-    if (await newCanvas.isVisible({ timeout: 10_000 }).catch(() => false)) {
-      await newCanvas.click();
-      await page.locator('.dc-editor').waitFor({ state: 'visible', timeout: 120_000 }).catch(() => undefined);
-    }
+    await newCanvas.click();
+    await page.locator('.dc-editor').waitFor({ state: 'visible', timeout: 120_000 });
   } finally {
     await browser.close();
   }

@@ -22,8 +22,8 @@ export default defineConfig({
     // Downloads are asserted in the export tests.
     acceptDownloads: true,
   },
-  // Every engine the app ships to. `PLAYWRIGHT_BROWSER=webkit` runs one of them (CI shards the suite
-  // that way); with nothing set, a local run takes all three, slowest last.
+  // Every engine the app ships to. `--project=firefox` or `PLAYWRIGHT_BROWSER=firefox` runs one;
+  // CI also splits each engine by file with `--shard`. A local run takes all three, slowest last.
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
     { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
