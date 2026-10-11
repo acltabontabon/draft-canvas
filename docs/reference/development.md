@@ -23,8 +23,10 @@ Commands and code locations. See [Contributing](../../CONTRIBUTING.md) for setup
 | `npm run desktop:dev` | Desktop app with hot reload |
 | `npm run desktop:build` | Build a desktop installer |
 | `npm run desktop:check` | Desktop build, Rust checks and version check |
+| `npm run desktop:rust` | Rust checks; requires the desktop web build |
 | `npm run e2e:desktop` | Desktop browser suite with a fake shell |
 | `npm run agent:schemas` | Regenerate MCP tool schemas |
+| `npm run perf` | Measure diagram loading and memory |
 | `npm run perf:publish` | Update generated performance tables |
 | `npx tsx e2e/docs-screenshots.ts` | Regenerate guide screenshots |
 | `docker build .` | Build the Docker image |
