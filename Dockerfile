@@ -6,7 +6,7 @@
 # Both base images are pinned by digest as well as tag: a tag can be re-pointed, a digest cannot,
 # so the image that passed CI is the image that ships. Dependabot keeps the digests current; the
 # Node version is the one CI and `.nvmrc` use, so the build here is the build that was tested.
-FROM --platform=$BUILDPLATFORM node:22.14.0-bookworm-slim@sha256:1c18d9ab3af4585870b92e4dbc5cac5a0dc77dd13df1a5905cea89fc720eb05b AS build
+FROM --platform=$BUILDPLATFORM node:26.10.0-bookworm-slim@sha256:662933cf47f013bc8e4beb31a6116448427a82057ba7c42c97e4c5ba766504c2 AS build
 WORKDIR /app
 
 COPY package.json package-lock.json ./
