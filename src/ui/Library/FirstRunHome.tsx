@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef } from 'react';
 import { PRODUCT } from '../../product';
 import type { StarterId } from '../../starters';
 import type { DocumentSession } from '../../store/useDocumentSession';
@@ -34,7 +34,9 @@ export function FirstRunHome({ session, onImport }: { session: DocumentSession; 
     newDocument.current = session.newDocument;
   });
 
-  useEffect(() => {
+  // The page-wide shortcut must be listening when the home screen first paints. A passive
+  // effect left a visible, enabled sheet that could miss an immediate Enter in WebKit.
+  useLayoutEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Enter' || event.repeat || event.defaultPrevented || isImeKeyEvent(event)) return;
       if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
