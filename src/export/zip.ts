@@ -1,12 +1,10 @@
 /**
- * A dependency-free ZIP writer and reader, store-only (no compression).
+ * ZIP export through fflate and a bounded, checksum-verifying store-only reader.
  *
- * Everything Draft Canvas puts in an archive is either already compressed (PNG) or small enough
- * not to matter (SVG, text), so Deflate would buy nothing and cost a dependency or a
- * `CompressionStream` that is not on every platform the editor ships to. Stored entries are the one
- * part of the format every tool reads.
+ * Exports remain store-only so older Draft Canvas versions can restore them. The bounded reader
+ * retains checksum verification and rejects compression before allocating any expanded data.
  *
- * The output is reproducible: timestamps are pinned to the ZIP epoch (1980-01-01 00:00), names are
+ * The output is reproducible: timestamps are pinned to the ZIP epoch (1980-01-01 00:00), non-ASCII names are
  * written as UTF-8 with the language-encoding flag set, and nothing else in the headers depends on
  * the machine that wrote them — the same entries always give the same bytes, which is what lets a
  * test compare an archive byte for byte.
@@ -14,6 +12,7 @@
  * Free of React and of the DOM, like the rest of `export/`'s model-side helpers.
  */
 
+import { Zip, ZipPassThrough } from 'fflate';
 import { LIMITS } from '../document/limits';
 
 export interface ZipEntry {
@@ -33,14 +32,8 @@ const END_OF_CENTRAL_DIRECTORY = 0x06054b50;
 const LOCAL_HEADER_SIZE = 30;
 const CENTRAL_HEADER_SIZE = 46;
 const END_RECORD_SIZE = 22;
-/** ZIP 2.0 — the version every reader understands stored entries at. */
-const VERSION = 20;
-/** Bit 11: the name is UTF-8. Nothing else (no data descriptor, no encryption). */
-const FLAG_UTF8 = 0x0800;
+
 const METHOD_STORE = 0;
-/** DOS date for 1980-01-01, the earliest the format can express; time 00:00 is zero. */
-const EPOCH_DATE = (0 << 9) | (1 << 5) | 1;
-const EPOCH_TIME = 0;
 /** ZIP32 field width; this writer has no reason to grow past it. */
 const MAX_32 = 0xffffffff;
 const MAX_ENTRIES = 0xffff;
@@ -75,82 +68,33 @@ function bytesOf(data: Uint8Array | string): Uint8Array {
 export function zipFiles(entries: readonly ZipEntry[]): Uint8Array<ArrayBuffer> {
   if (entries.length > MAX_ENTRIES) throw new Error(`A ZIP archive holds at most ${MAX_ENTRIES} files.`);
 
-  const prepared = entries.map((entry) => {
-    const name = encoder.encode(entry.name);
-    const data = bytesOf(entry.data);
-    if (name.length > MAX_ENTRIES) throw new Error(`"${entry.name.slice(0, 40)}…" is too long a name for a ZIP entry.`);
-    if (data.length > MAX_32) throw new Error(`"${entry.name}" is too large for a ZIP archive.`);
-    return { name, data, crc: crc32(data) };
-  });
-
-  let localSize = 0;
-  let centralSize = 0;
-  for (const { name, data } of prepared) {
-    localSize += LOCAL_HEADER_SIZE + name.length + data.length;
-    centralSize += CENTRAL_HEADER_SIZE + name.length;
-  }
-  const total = localSize + centralSize + END_RECORD_SIZE;
-  if (localSize > MAX_32 || total > MAX_32) throw new Error('The archive would be too large for the ZIP format.');
-
-  const out = new Uint8Array(total);
-  const view = new DataView(out.buffer);
-  let cursor = 0;
-  const offsets: number[] = [];
-
-  for (const { name, data, crc } of prepared) {
-    offsets.push(cursor);
-    view.setUint32(cursor, LOCAL_HEADER, true);
-    view.setUint16(cursor + 4, VERSION, true);
-    view.setUint16(cursor + 6, FLAG_UTF8, true);
-    view.setUint16(cursor + 8, METHOD_STORE, true);
-    view.setUint16(cursor + 10, EPOCH_TIME, true);
-    view.setUint16(cursor + 12, EPOCH_DATE, true);
-    view.setUint32(cursor + 14, crc, true);
-    view.setUint32(cursor + 18, data.length, true);
-    view.setUint32(cursor + 22, data.length, true);
-    view.setUint16(cursor + 26, name.length, true);
-    view.setUint16(cursor + 28, 0, true);
-    cursor += LOCAL_HEADER_SIZE;
-    out.set(name, cursor);
-    cursor += name.length;
-    out.set(data, cursor);
-    cursor += data.length;
+  const files = entries.map((entry) => ({ name: entry.name, data: bytesOf(entry.data) }));
+  let total = END_RECORD_SIZE;
+  for (const entry of files) {
+    const nameLength = encoder.encode(entry.name).length;
+    if (nameLength > MAX_ENTRIES) throw new Error('ZIP entry name is too long.');
+    if (entry.data.length > MAX_32) throw new Error('ZIP entry is too large.');
+    // The streaming writer appends a 16-byte data descriptor after each stored entry.
+    total += entry.data.length + nameLength * 2 + LOCAL_HEADER_SIZE + CENTRAL_HEADER_SIZE + 16;
+    if (total > MAX_32) throw new Error('The archive would be too large for the ZIP format.');
   }
 
-  const centralStart = cursor;
-  prepared.forEach(({ name, data, crc }, index) => {
-    view.setUint32(cursor, CENTRAL_HEADER, true);
-    view.setUint16(cursor + 4, VERSION, true);
-    view.setUint16(cursor + 6, VERSION, true);
-    view.setUint16(cursor + 8, FLAG_UTF8, true);
-    view.setUint16(cursor + 10, METHOD_STORE, true);
-    view.setUint16(cursor + 12, EPOCH_TIME, true);
-    view.setUint16(cursor + 14, EPOCH_DATE, true);
-    view.setUint32(cursor + 16, crc, true);
-    view.setUint32(cursor + 20, data.length, true);
-    view.setUint32(cursor + 24, data.length, true);
-    view.setUint16(cursor + 28, name.length, true);
-    view.setUint16(cursor + 30, 0, true); // extra field
-    view.setUint16(cursor + 32, 0, true); // comment
-    view.setUint16(cursor + 34, 0, true); // disk number start
-    view.setUint16(cursor + 36, 0, true); // internal attributes
-    view.setUint32(cursor + 38, 0, true); // external attributes
-    view.setUint32(cursor + 42, offsets[index]!, true);
-    cursor += CENTRAL_HEADER_SIZE;
-    out.set(name, cursor);
-    cursor += name.length;
+  const output = new Uint8Array(total);
+  let offset = 0;
+  const zip = new Zip((error, chunk) => {
+    if (error) throw error;
+    output.set(chunk, offset);
+    offset += chunk.length;
   });
-
-  view.setUint32(cursor, END_OF_CENTRAL_DIRECTORY, true);
-  view.setUint16(cursor + 4, 0, true);
-  view.setUint16(cursor + 6, 0, true);
-  view.setUint16(cursor + 8, prepared.length, true);
-  view.setUint16(cursor + 10, prepared.length, true);
-  view.setUint32(cursor + 12, centralSize, true);
-  view.setUint32(cursor + 16, centralStart, true);
-  view.setUint16(cursor + 20, 0, true);
-
-  return out;
+  // Entries, rather than zipSync's object keys, preserve numeric names, duplicates and __proto__.
+  for (const entry of files) {
+    const file = new ZipPassThrough(entry.name);
+    file.mtime = new Date(1980, 0, 1);
+    zip.add(file);
+    file.push(entry.data, true);
+  }
+  zip.end();
+  return output;
 }
 
 /**

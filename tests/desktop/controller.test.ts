@@ -757,7 +757,7 @@ describe('quitting', () => {
   });
 });
 
-describe('coming back to the window', () => {
+describe.each(['window-focused', 'disk-changed'] as const)('disk reconciliation on %s', (eventType) => {
   it('reloads a clean file that changed on disk, and says so', async () => {
     const handle = await openFile();
     const file = h.files.get(handle)!;
@@ -765,7 +765,7 @@ describe('coming back to the window', () => {
     file.version += 1;
     await h.controller.start();
 
-    h.hostEvent({ type: 'window-focused' });
+    h.hostEvent({ type: eventType });
     await h.settle();
 
     expect(h.loads().at(-1)!.text).toBe(file.text);
@@ -779,11 +779,52 @@ describe('coming back to the window', () => {
     file.version += 1;
     await h.controller.start();
 
-    h.hostEvent({ type: 'window-focused' });
+    h.hostEvent({ type: eventType });
     await h.settle();
 
     expect(h.loads()).toHaveLength(1);
     expect(doc()).toMatchObject({ dirty: true, outside: 'changed' });
+  });
+
+  it('keeps an edit made while the changed file is being read', async () => {
+    const handle = await openFile();
+    h.files.get(handle)!.version += 1;
+    await h.controller.start();
+    const open = h.api.openHandle.getMockImplementation()!;
+    let finish!: () => void;
+    h.api.openHandle.mockImplementationOnce(async (...args) => {
+      await new Promise<void>((resolve) => { finish = resolve; });
+      return open(...args);
+    });
+    h.hostEvent({ type: eventType });
+    await h.settle();
+    h.edit(edited('New work'));
+    finish();
+    await h.settle();
+    expect(h.loads()).toHaveLength(1);
+    expect(doc()).toMatchObject({ dirty: true, outside: 'changed' });
+  });
+
+  it('does not reload the previous file after switching to another one', async () => {
+    const handle = await openFile();
+    h.files.get(handle)!.version += 1;
+    await h.controller.start();
+    const open = h.api.openHandle.getMockImplementation()!;
+    let finish!: () => void;
+    h.api.openHandle.mockImplementationOnce(async (...args) => {
+      await new Promise<void>((resolve) => { finish = resolve; });
+      return open(...args);
+    });
+    h.hostEvent({ type: eventType });
+    await h.settle();
+    const other = h.addFile('Other');
+    await h.controller.openHandle(other);
+    await h.settle();
+    finish();
+    await h.settle();
+    expect(h.loads()).toHaveLength(2);
+    expect(h.loads().at(-1)!.text).toBe(h.files.get(other)!.text);
+    expect(doc()).toMatchObject({ name: 'Other', dirty: false });
   });
 
   it('says once when the file has gone', async () => {
@@ -791,9 +832,9 @@ describe('coming back to the window', () => {
     h.files.delete(handle);
     await h.controller.start();
 
-    h.hostEvent({ type: 'window-focused' });
+    h.hostEvent({ type: eventType });
     await h.settle();
-    h.hostEvent({ type: 'window-focused' });
+    h.hostEvent({ type: eventType });
     await h.settle();
 
     expect(doc()).toMatchObject({ outside: 'missing' });
@@ -802,7 +843,7 @@ describe('coming back to the window', () => {
 
   it('asks nothing of the disk while Home is showing a folder', async () => {
     await h.controller.start();
-    h.hostEvent({ type: 'window-focused' });
+    h.hostEvent({ type: eventType });
     await h.settle();
     expect(h.api.checkStamp).not.toHaveBeenCalled();
   });

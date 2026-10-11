@@ -26,6 +26,7 @@ const SMOKE_TIMEOUT: Duration = Duration::from_secs(8);
 pub fn setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
     app.set_menu(realize(app, &app_menu(Platform::current()))?)?;
     create_window(app)?;
+    crate::watch::start(app.handle());
 
     let handle = app.handle().clone();
     let state = handle.state::<AppState>();

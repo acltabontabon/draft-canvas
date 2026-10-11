@@ -18,7 +18,7 @@ use std::path::Path;
 use tauri::ipc::Request;
 use tauri::{AppHandle, Url};
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct OpenedDoc {
     pub handle: Handle,
@@ -29,7 +29,7 @@ pub struct OpenedDoc {
     pub read_only: bool,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct SavedAs {
     pub handle: Handle,
@@ -38,7 +38,7 @@ pub struct SavedAs {
     pub stamp: String,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize)]
+#[derive(Debug, PartialEq, Eq, Serialize, ts_rs::TS)]
 #[serde(tag = "outcome", rename_all = "lowercase")]
 pub enum SaveResult {
     Saved { stamp: String },

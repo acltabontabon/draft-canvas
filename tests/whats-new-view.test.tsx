@@ -67,7 +67,7 @@ describe('AboutDialog — What\'s New', () => {
 
   it('does not render an accordion anywhere — no <details> in the modal', async () => {
     const user = userEvent.setup();
-    const { container } = render(<AboutDialog />);
+    const { baseElement: container } = render(<AboutDialog />);
     await user.click(screen.getByRole('button', { name: /What's New/i }));
     expect(container.querySelectorAll('details')).toHaveLength(0);
   });
@@ -169,7 +169,7 @@ describe('AboutDialog — What\'s New', () => {
 
   it('the modal widens for What\'s New/History/Detail and stays compact for About', async () => {
     const user = userEvent.setup();
-    const { container } = render(<AboutDialog />);
+    const { baseElement: container } = render(<AboutDialog />);
     const panel = () => container.querySelector<HTMLElement>('.dc-modal')!;
     expect(panel().style.width).toBe('380px');
 

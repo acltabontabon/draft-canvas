@@ -46,18 +46,20 @@ impl Default for Limits {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectFile {
     /// Relative to the project, `/`-separated on every OS.
     pub rel_path: String,
     /// The file name without `.draftcanvas`.
     pub name: String,
+    #[ts(type = "number")]
     pub mtime_ms: u64,
+    #[ts(type = "number")]
     pub size: u64,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct Scan {
     pub files: Vec<ProjectFile>,

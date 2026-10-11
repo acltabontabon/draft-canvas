@@ -972,6 +972,10 @@
               "type": "string",
               "maxLength": 120
             },
+            "description": {
+              "type": "string",
+              "maxLength": 280
+            },
             "technology": {
               "type": "string",
               "maxLength": 60
@@ -1096,6 +1100,10 @@
               "type": "string",
               "maxLength": 120
             },
+            "description": {
+              "type": "string",
+              "maxLength": 280
+            },
             "technology": {
               "type": "string",
               "maxLength": 60
@@ -1219,6 +1227,10 @@
             "label": {
               "type": "string",
               "maxLength": 120
+            },
+            "description": {
+              "type": "string",
+              "maxLength": 280
             },
             "technology": {
               "type": "string",
@@ -2090,6 +2102,10 @@
               "type": "string",
               "maxLength": 120
             },
+            "description": {
+              "type": "string",
+              "maxLength": 280
+            },
             "technology": {
               "type": "string",
               "maxLength": 60
@@ -2214,6 +2230,10 @@
               "type": "string",
               "maxLength": 120
             },
+            "description": {
+              "type": "string",
+              "maxLength": 280
+            },
             "technology": {
               "type": "string",
               "maxLength": 60
@@ -2337,6 +2357,10 @@
             "label": {
               "type": "string",
               "maxLength": 120
+            },
+            "description": {
+              "type": "string",
+              "maxLength": 280
             },
             "technology": {
               "type": "string",
@@ -3245,6 +3269,10 @@
               "type": "string",
               "maxLength": 120
             },
+            "description": {
+              "type": "string",
+              "maxLength": 280
+            },
             "technology": {
               "type": "string",
               "maxLength": 60
@@ -3369,6 +3397,10 @@
               "type": "string",
               "maxLength": 120
             },
+            "description": {
+              "type": "string",
+              "maxLength": 280
+            },
             "technology": {
               "type": "string",
               "maxLength": 60
@@ -3492,6 +3524,10 @@
             "label": {
               "type": "string",
               "maxLength": 120
+            },
+            "description": {
+              "type": "string",
+              "maxLength": 280
             },
             "technology": {
               "type": "string",

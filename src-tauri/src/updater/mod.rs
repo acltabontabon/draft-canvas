@@ -46,7 +46,7 @@ pub fn is_offered(current: &Version, remote: &Version) -> bool {
 }
 
 /// What a release is, as far as the page needs to say.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateInfo {
     pub version: String,
@@ -155,7 +155,7 @@ pub trait Publish: Send + Sync {
     fn publish(&self, snapshot: &Snapshot);
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ts_rs::TS)]
 #[serde(
     tag = "phase",
     rename_all = "kebab-case",
@@ -166,6 +166,7 @@ pub enum Phase {
     Idle,
     Checking,
     UpToDate {
+        #[ts(type = "number")]
         checked_ms: u64,
     },
     Available {
@@ -173,8 +174,10 @@ pub enum Phase {
     },
     Downloading {
         info: UpdateInfo,
+        #[ts(type = "number")]
         received: u64,
         /// `None` when the server didn't say: the page shows movement, not a percentage that lies.
+        #[ts(type = "number | null")]
         total: Option<u64>,
     },
     /// Downloaded and verified, in memory.
@@ -191,7 +194,7 @@ pub enum Phase {
     },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ts_rs::TS)]
 #[serde(rename_all = "lowercase")]
 pub enum Stage {
     Check,
@@ -200,7 +203,7 @@ pub enum Stage {
 }
 
 /// The last thing that went wrong, beside the state rather than as one.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct Failure {
     pub stage: Stage,
@@ -211,7 +214,7 @@ pub struct Failure {
 
 /// Everything the page needs, in one piece: sent whole on every change and returned whole from every
 /// command, so nothing has to be pieced together from events missed while the window was hidden.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct Snapshot {
     pub current_version: String,

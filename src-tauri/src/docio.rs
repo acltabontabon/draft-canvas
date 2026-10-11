@@ -1066,3 +1066,30 @@ mod tests {
         assert!(sidecar_read(&to).unwrap().is_none());
     }
 }
+
+#[cfg(test)]
+mod properties {
+    use super::*;
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(40))]
+        #[test]
+        fn atomic_replacements_round_trip_and_stale_stamps_cannot_overwrite(
+            first in proptest::collection::vec(any::<u8>(), 0..4096),
+            second in proptest::collection::vec(any::<u8>(), 0..4096),
+        ) {
+            let dir = tempfile::tempdir().unwrap();
+            let path = dir.path().join("diagram.draftcanvas");
+            let original = create_new_atomic(&path, &first).unwrap();
+            prop_assert_eq!(&fs::read(&path).unwrap(), &first);
+            let current = write_unconditional(&path, &second).unwrap();
+            prop_assert_eq!(&fs::read(&path).unwrap(), &second);
+            prop_assert!(stamp_matches(&path, &current).unwrap());
+            let refused = write_atomic(&path, b"unexpected", Some(if first.len() != second.len() { &original } else { "invalid-stamp" })).unwrap();
+            prop_assert_eq!(refused, WriteOutcome::Conflict);
+            prop_assert!(stamp_matches(&path, &current).unwrap());
+            prop_assert!(!original.is_empty());
+        }
+    }
+}

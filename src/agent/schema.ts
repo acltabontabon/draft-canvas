@@ -54,6 +54,11 @@ function undescribed(schema: Schema): Schema {
   const out: Schema = {};
   for (const [key, value] of Object.entries(schema)) {
     if (key === 'description') continue;
+    // Property names are data: an element's `description` field is not schema prose.
+    if ((key === 'properties' || key === '$defs') && value && typeof value === 'object') {
+      out[key] = Object.fromEntries(Object.entries(value).map(([name, child]) => [name, undescribed(child as Schema)]));
+      continue;
+    }
     out[key] = Array.isArray(value)
       ? value.map((item) => (item && typeof item === 'object' && !Array.isArray(item) ? undescribed(item as Schema) : item))
       : value && typeof value === 'object'

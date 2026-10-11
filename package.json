@@ -64,12 +64,16 @@
     "e2e:desktop": "playwright test --config=playwright.desktop.config.ts",
     "audit:npm": "tsx scripts/dependency-audit.ts npm",
     "audit:rust": "tsx scripts/dependency-audit.ts cargo",
-    "perf:check": "npm run build && npm run perf:interaction -- --skip-build --sizes medium --scenarios pan-drag,drag-single,select-clicks --iterations 3 && npm run perf:lifecycle -- --skip-build --sizes medium --only load,export && tsx benchmark/gate-cli.ts"
+    "perf:check": "npm run build && npm run perf:interaction -- --skip-build --sizes medium --scenarios pan-drag,drag-single,select-clicks --iterations 3 && npm run perf:lifecycle -- --skip-build --sizes medium --only load,export && tsx benchmark/gate-cli.ts",
+    "desktop:bindings": "node scripts/desktop-bindings.mjs",
+    "adoption:compare": "tsx benchmark/adoption/compare.ts"
   },
   "dependencies": {
     "@xyflow/react": "^12.12.0",
+    "fflate": "^0.8.3",
     "idb": "^8.0.3",
     "react": "^19.3.0",
+    "react-aria-components": "^1.22.1",
     "react-dom": "^19.3.0",
     "refractor": "^5.0.0",
     "zustand": "^5.0.15"
@@ -88,7 +92,10 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.1",
     "@vitest/coverage-v8": "^5.0.3",
+    "ajv": "^8.20.0",
+    "elkjs": "^0.12.0",
     "fake-indexeddb": "^6.2.5",
+    "fast-check": "^4.10.2",
     "jsdom": "^30.1.1",
     "mermaid": "^12.0.0",
     "oxlint": "^1.85.0",

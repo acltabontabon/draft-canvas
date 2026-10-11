@@ -88,10 +88,12 @@ describe('nothing on the canvas can reach a network', () => {
         'react-dom',
         'refractor',
         'zustand',
+        'fflate',
+        'react-aria-components',
       ]),
     );
     // A short, auditable dependency list is part of the promise.
-    expect(deps).toHaveLength(6);
+    expect(deps).toHaveLength(8);
     for (const name of deps) {
       expect(name).not.toMatch(/analytics|telemetry|sentry|tracking|posthog|mixpanel|segment/i);
     }
