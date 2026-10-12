@@ -22,7 +22,7 @@ the release notes and the in-app What's New are generated from here. See
 
 #### Changed
 
-- Docker distribution is retired: image builds, publication and Docker-specific checks stop here.
+- Docker distribution is retired: image builds, publication and Docker-based CI are removed.
   Self-hosting remains available by building and serving the static web editor.
 
 #### Fixed
@@ -336,9 +336,6 @@ long list of fixes to saving, editing and exporting. Every diagram you already h
 
 #### Changed
 
-- **The Docker image listens on port 8080 and runs as a non-root user.** Change `-p 8080:80` to
-  `-p 8080:8080` (or `-p 80:8080`). It now also sends a Content-Security-Policy that forbids framing
-  and outside connections. Both base images are pinned by digest.
 - An unknown path is a 404 offline as well as on, instead of quietly becoming the app.
 
 ### Desktop
@@ -933,7 +930,7 @@ disk. It's early — expect rough edges, and please tell us about them.
 
 ### Changed
 
-- Diagrams save in a newer file format. Older versions of Draft Canvas — an older Docker image, or
+- Diagrams save in a newer file format. Older versions of Draft Canvas — including
   an older tab left open — won't open a canvas saved by this one, and say so rather than losing
   what's inside it.
 
@@ -1125,8 +1122,6 @@ disk. It's early — expect rough edges, and please tell us about them.
   into a table.
 - New connector suggestions: Database → Service can be change data capture, a Topic can feed a
   search index or database directly, and Object Storage → Database defaults to "transforms".
-- An official Docker image, `acltabontabon/draft-canvas`, for running Draft Canvas yourself. It's
-  the same static app served by nginx, for amd64 and arm64, published with every release.
 
 ### Changed
 

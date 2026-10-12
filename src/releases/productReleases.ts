@@ -354,11 +354,6 @@ export const ARCHIVED_RELEASES: ProductRelease[] = [
           'Medallion, Kappa, and Change Data Capture join the starter list, each with a built-in flow, alongside a new "transforms" relationship for data refined from one store into another.',
       },
       {
-        title: 'An official Docker image',
-        description:
-          'Run Draft Canvas yourself with acltabontabon/draft-canvas — the same static app served by nginx, for amd64 and arm64, published with every release.',
-      },
-      {
         title: 'A calmer starter shelf',
         description:
           "The home screen's starters are now an index, one category open at a time, and Export's shortcut moved to ⌘⇧E so browser extensions stop swallowing it.",

@@ -43,7 +43,6 @@ jobs:
       desktop: ${{ steps.plan.outputs.desktop }}
       reused: ${{ steps.reuse.outputs.reused }}
       performance: ${{ github.event_name == 'push' && github.ref_type == 'tag' }}
-      playwright-image: ${{ steps.plan.outputs.playwright-image }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -184,10 +183,6 @@ jobs:
     if: needs.source.outputs.full == 'true' && needs.source.outputs.reused != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    container:
-      image: ${{ needs.source.outputs.playwright-image }}
-      # Match GitHub's mounted home/workspace owner; Firefox rejects a root process with this home.
-      options: --user 1001 --init --ipc=host
     strategy:
       fail-fast: false
       matrix:
@@ -209,11 +204,12 @@ jobs:
         env:
           CONTROL_COMMIT: ${{ github.sha }}
         run: |
-          # Container steps use a different Git HOME from checkout's temporary safe-directory config.
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
           git fetch --no-tags --depth=1 origin "$CONTROL_COMMIT"
           git checkout FETCH_HEAD -- playwright.dist.config.ts playwright.web.config.ts
       - run: npm ci
+        timeout-minutes: 5
+      - name: Install the selected browser and system dependencies
+        run: npx playwright install --with-deps ${{ matrix.browser }}
         timeout-minutes: 5
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:

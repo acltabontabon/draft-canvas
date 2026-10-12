@@ -22,10 +22,6 @@ const isDesktop = (path) => /^(?:src|src-tauri)\//.test(path)
 try {
   const revision = process.env.SOURCE_REVISION;
   if (!sha.test(revision ?? '')) throw new Error('An exact source revision is required.');
-  const lock = JSON.parse(git('show', `${revision}:package-lock.json`));
-  const version = lock.packages['node_modules/@playwright/test'].version;
-  if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error('Unsupported Playwright version.');
-
   let full = true;
   let desktop = true;
   // Reusable release verification and manual runs always perform all checks, even for docs tags.
@@ -50,7 +46,7 @@ try {
     }
   }
 
-  appendFileSync(process.env.GITHUB_OUTPUT, `full=${full}\ndesktop=${desktop}\nplaywright-image=mcr.microsoft.com/playwright:v${version}-noble\n`);
+  appendFileSync(process.env.GITHUB_OUTPUT, `full=${full}\ndesktop=${desktop}\n`);
   console.log(`CI scope: ${full ? 'all checks' : 'documentation checks'}`);
 } catch (error) {
   console.error(error.message);

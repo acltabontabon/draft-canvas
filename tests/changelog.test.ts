@@ -355,13 +355,12 @@ describe('the real changelog and release configuration', () => {
 
 
 describe('current installation guidance', () => {
-  it('offers Homebrew for stable desktop releases and removes Docker promotion', () => {
+  it('offers Homebrew for stable desktop releases', () => {
     const command = 'brew install --cask acltabontabon/tap/draft-canvas';
     for (const version of ['1.13.0', '1.13.1']) {
       for (const platform of ['all', 'desktop', 'web'] as const) {
         const body = releaseBody(`v${version}`, read('CHANGELOG.md'), { platform });
         expect(body.includes(command)).toBe(platform !== 'web');
-        expect(body).not.toContain('docker run');
         expect(body).not.toContain('### Run it on your own server');
       }
     }

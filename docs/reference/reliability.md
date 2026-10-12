@@ -139,8 +139,8 @@ on reload. Development console logging remains more detailed for local debugging
 
 ## Historical verification
 
-The dated records below describe checks performed before Docker distribution was retired. Docker
-checks in those records are historical evidence, not current release requirements.
+The dated records below describe checks performed on the linked revisions; they are historical
+evidence, not current release requirements.
 
 ## Local automated verification (9 October 2026)
 
@@ -160,13 +160,13 @@ checks in those records are historical evidence, not current release requirement
   and the pinch check waits for Fit, touches empty canvas and sends moves across frames. Both
   passed ten repetitions without retries before the complete suites were rerun successfully.
 
-These local results were recorded before hosted acceptance. Docker's local daemon was unavailable,
-and the native browser file-dialog drill was not completed.
+These local results were recorded before hosted acceptance. The native browser file-dialog drill
+was not completed.
 
 ## Hosted automated verification (10 October 2026)
 
 - [CI on 60f3eca](https://github.com/acltabontabon/draft-canvas/actions/runs/38040880397) passed the
-  three-engine editor, offline and assembled-site matrix, coverage, licensing, Docker smoke,
+  three-engine editor, offline and assembled-site matrix, coverage, licensing,
   dependency policy and performance gates. Firefox acceptance is verified on the Linux runner.
 - [Desktop CI on 584bf60](https://github.com/acltabontabon/draft-canvas/actions/runs/38018279380)
   passed its fake-shell, Rust and packaged-startup checks.

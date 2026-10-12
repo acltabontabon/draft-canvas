@@ -163,21 +163,12 @@ describe('CI scope from the complete tested changeset', () => {
     expect(plan('pull_request', { pull_request: null }).output).toContain('desktop=true\n');
   });
 
-  it('selects the image from the tested source lockfile', () => {
-    write('package-lock.json', lock('1.64.0'));
-    commit();
-    expect(plan().output).toContain('playwright-image=mcr.microsoft.com/playwright:v1.64.0-noble\n');
-    revision = before;
-    expect(plan().output).toContain('playwright-image=mcr.microsoft.com/playwright:v1.63.0-noble\n');
-  });
-
-  it('fails explicitly for an invalid image version', () => {
-    write('package-lock.json', lock('latest'));
+  it('classifies changes without reading a browser version from the lockfile', () => {
+    rmSync(join(repo, 'package-lock.json'));
     commit();
     const result = plan();
-    expect(result.status).not.toBe(0);
-    expect(result.output).toBe('');
-    expect(result.stderr).toContain('Unsupported Playwright version');
+    expect(result.status).toBe(0);
+    expect(result.output).toBe('full=true\ndesktop=true\n');
   });
 });
 
