@@ -310,9 +310,23 @@ describe('standalone desktop release verification', () => {
     expect(run(desktop, { SHARED: '', RESULTS: JSON.stringify(checks) })).not.toBe(0);
   });
 
+  it('requires timing acceptance for previews and standalone rebuilds', () => {
+    const verify = (result: string) => run(release, {
+      VERIFIED_COMMIT: '', SOURCE_COMMIT: 'a'.repeat(40), CHECKS_RESULT: 'success', VERIFY_RESULT: 'success',
+      PERFORMANCE_RESULT: result, PREVIEW: 'true',
+    });
+    expect(verify('success')).toBe(0);
+    for (const result of ['failure', 'cancelled', 'skipped']) expect(verify(result)).not.toBe(0);
+    expect(release).toContain('needs: [verify, checks, performance]');
+    const performance = readFileSync(new URL('../.github/workflows/performance.yml', import.meta.url), 'utf8');
+    expect(performance).not.toContain('schedule:');
+    expect(performance).toContain('workflow_dispatch:');
+  });
+
   it('requires fresh checks for standalone previews/rebuilds and avoids repeating orchestrated CI', () => {
     const verify = (commit: string, checks: string, source = 'success', revision = commit) => run(release, {
       VERIFIED_COMMIT: commit, SOURCE_COMMIT: revision, CHECKS_RESULT: checks, VERIFY_RESULT: source,
+      PERFORMANCE_RESULT: commit ? 'skipped' : 'success', PREVIEW: 'false',
     });
     expect(verify('', 'success')).toBe(0);
     expect(verify('a'.repeat(40), 'skipped')).toBe(0);

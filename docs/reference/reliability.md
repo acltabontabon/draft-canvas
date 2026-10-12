@@ -10,7 +10,8 @@ signed on macOS and unsigned on Windows. The in-app updater's signature checks r
 [CI](../../.github/workflows/ci.yml) is reusable. It resolves a source ref to one commit, then runs
 lint, tooling typechecks, build, coverage, license checks, the three-engine editor journeys,
 offline and assembled-site checks, desktop browser/native acceptance, dependency audits and
-performance budgets. Shared lint, tooling typechecks and unit coverage run once.
+release performance budgets. Shared lint, tooling typechecks and unit coverage run once.
+Ordinary PRs and pushes to `main` skip timing benchmarks.
 The build artifact records its source commit. Offline and assembled-site browser jobs test its
 compiled files without rebuilding. The editor journeys run against Vite's development server at
 the same source commit; several of those journeys also inspect source modules through that server.
@@ -90,9 +91,9 @@ not a CI-runner calibration or ordinary-laptop validation. The coarse limits pro
 shared runners and detect material regressions; tighten them only from repeatable evidence.
 An idle frame floor over 25 ms fails acceptance as a throttled environment, rather than passing a
 misleading run. Missing, failed, nonnumeric, duplicate or broken measurements fail the gate.
-Larger workloads and long-session measurements run on the dedicated Performance schedule or its
-explicit manual option. Manual Pages and CI verification run the same required gate as a
-release; their inherited manual trigger does not opt them into the extended measurement suite.
+Larger workloads and long-session measurements use the dedicated Performance workflow’s manual
+option. Stable releases, standalone desktop previews and rebuilds require timing acceptance;
+ordinary PRs, pushes to `main` and manual CI verification skip timing benchmarks.
 The coarse frame-time gate compares whole milliseconds: three nominal 60 Hz frames may be recorded
 as 50.1 ms. Raw measurements remain unchanged in the reports; other limits retain their full precision.
 CI pins timing measurements to the `ubuntu-24.04-arm` runner image; browser journeys retain their
@@ -100,7 +101,7 @@ x64 matrix. The previous x64 pool supplied different EPYC generations, moving se
 50 to 67 ms between runs with unchanged selection code and roughly 32 ms input latency. Timing
 limits stay unchanged. Reports retain CPU, OS and browser versions so comparisons can account for
 the measurement environment; the runner label alone is not a guarantee of identical hardware.
-Weekly/manual runs additionally measure larger workloads and long-session behavior; these retain
+Manual runs can additionally measure larger workloads and long-session behavior; these retain
 reports for investigation and do not claim a calibrated memory-leak gate.
 
 ## Dependency triage

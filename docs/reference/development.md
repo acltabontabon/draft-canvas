@@ -63,7 +63,7 @@ runs independently of artifact production; browser checks start when the built a
 The final `verify` job requires all applicable checks, including shared verification, desktop
 acceptance and security. Performance budgets are required for tagged release verification; ordinary
 PR and `main` runs skip benchmarks.
-The standalone Performance workflow still supports manual and weekly measurements.
+The standalone Performance workflow still supports manual measurements.
 
 CI is the only PR/main entry point. Lint, tooling typechecks and the unit suite with coverage run
 once through `shared-checks.yml`; web builds/browser tests and desktop browser/native jobs remain
