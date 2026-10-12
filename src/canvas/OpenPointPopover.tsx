@@ -183,7 +183,7 @@ function OpenPointPopoverBody({ state, closing, listening }: { state: OpenPointP
   };
   const { target, placement } = useOverlayPosition<Placement>(panelRef, 'right', (frame, current) => {
     if (!anchors) return null;
-    const clearances = { ...baseClearances, right: rightClearance(flowPanelOpen, LEFT_CLEARANCE) };
+    const clearances = { ...baseClearances, right: rightClearance(flowPanelOpen, LEFT_CLEARANCE, frame.root.right) };
     const next = interactionActive ? current : resolvePlacement(current, anchors, frame.flowToScreenPosition, frame.size, clearances);
     return {
       placement: next,

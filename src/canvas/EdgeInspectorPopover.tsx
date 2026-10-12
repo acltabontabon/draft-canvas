@@ -268,7 +268,7 @@ function EdgeInspectorBody({ edgeId, closing }: { edgeId: string; closing: boole
       clampedScreenX,
       size.width / 2,
       SCREEN_MARGIN,
-      rightClearance(useUiStore.getState().flowPanelOpen, SCREEN_MARGIN),
+      rightClearance(useUiStore.getState().flowPanelOpen, SCREEN_MARGIN, frame.root.right),
     );
     const labelAt = frame.screenToOverlay({ x: onCanvasX, y: screenLabelPoint.y });
     return {

@@ -17,9 +17,9 @@ function canvasRect(): DOMRect | null {
  * The right-edge clearance a floating canvas overlay needs, in window pixels: whatever is docked
  * beside the canvas, plus the Flows panel when it's open (else `margin`).
  */
-export function rightClearance(flowPanelOpen: boolean, margin: number): number {
-  const rect = canvasRect();
-  const docked = rect && typeof window !== 'undefined' ? Math.max(0, window.innerWidth - rect.right) : 0;
+export function rightClearance(flowPanelOpen: boolean, margin: number, canvasRight?: number): number {
+  const right = canvasRight ?? canvasRect()?.right;
+  const docked = right !== undefined && typeof window !== 'undefined' ? Math.max(0, window.innerWidth - right) : 0;
   return docked + (flowPanelOpen ? FLOW_PANEL_CLEARANCE : margin);
 }
 

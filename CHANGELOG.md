@@ -37,6 +37,7 @@ the release notes and the in-app What's New are generated from here. See
 
 #### Fixed
 
+- Selecting shapes reuses observed canvas bounds when positioning popovers, avoiding repeated synchronous layout reads.
 - Dialogs isolate background content from assistive technology and lock background scrolling.
 - Agent tool schemas accept descriptions on elements inside nested rooms.
 - Small Service, Worker and Component labels stay clear of decorative corner dots.
