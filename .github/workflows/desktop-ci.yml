@@ -1,8 +1,7 @@
 name: Desktop CI
 
 # The desktop app is the web editor in a Tauri window (src-tauri/), so a change to the shared
-# source can break it too: `src/**` is in the filter on purpose. The web app's own CI (ci.yml) is
-# untouched and runs on everything.
+# source can break it too: `src/**` is in the filter on purpose.
 on:
   push:
     branches: [main]
@@ -13,6 +12,9 @@ on:
       - 'e2e/desktop/**'
       - 'scripts/check-desktop-version.mjs'
       - 'scripts/build-sidecar.mjs'
+      - 'scripts/ci-reuse.mjs'
+      - 'scripts/verify-source.mjs'
+      - 'tests/ci-reuse.test.ts'
       - 'playwright.desktop.config.ts'
       - 'package.json'
       - 'package-lock.json'
@@ -29,6 +31,9 @@ on:
       - 'e2e/desktop/**'
       - 'scripts/check-desktop-version.mjs'
       - 'scripts/build-sidecar.mjs'
+      - 'scripts/ci-reuse.mjs'
+      - 'scripts/verify-source.mjs'
+      - 'tests/ci-reuse.test.ts'
       - 'playwright.desktop.config.ts'
       - 'package.json'
       - 'package-lock.json'
@@ -52,9 +57,57 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+    outputs:
+      revision: ${{ steps.source.outputs.revision }}
+      reused: ${{ steps.reuse.outputs.reused }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - id: source
+        env:
+          SOURCE_REF: ${{ inputs.ref }}
+          WORKFLOW_REVISION: ${{ github.sha }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          revision="$(node scripts/verify-source.mjs)"
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
+      - id: reuse
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_REVISION: ${{ steps.source.outputs.revision }}
+          CI_FULL: 'true'
+          FORCE_FULL: ${{ inputs.ref != '' }}
+        run: node scripts/ci-reuse.mjs lookup desktop-ci.yml
+
+      # Record source before checks; it is reusable only after the entire PR run succeeds.
+      - name: Record the tested PR source
+        if: github.event_name == 'pull_request' && inputs.ref == ''
+        env:
+          SOURCE_REVISION: ${{ steps.source.outputs.revision }}
+          CI_FULL: 'true'
+        run: node scripts/ci-reuse.mjs record desktop-ci.yml
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: github.event_name == 'pull_request' && inputs.ref == ''
+        with:
+          name: ci-evidence-desktop-ci.yml-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ci-evidence.json
+          if-no-files-found: error
+          retention-days: 7
+
   # Everything that needs no window: the frontend the desktop app bundles, and that it is the
   # only place Tauri appears.
   frontend:
+    needs: source
+    if: needs.source.outputs.reused != 'true'
     runs-on: ubuntu-latest
     # The tests take about five minutes; the rest is headroom for installing two browsers' system
     # libraries. When the runner's Ubuntu mirror stalls, apt falls back to archive.ubuntu.com one
@@ -63,7 +116,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ inputs.ref || github.sha }}
+          ref: ${{ needs.source.outputs.revision }}
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
@@ -97,6 +150,8 @@ jobs:
   # The Rust side, and a real build of the app on both first-release platforms: compile, package
   # (a .dmg on macOS, an NSIS installer on Windows) and launch the result.
   rust:
+    needs: source
+    if: needs.source.outputs.reused != 'true'
     name: rust (${{ matrix.name }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
@@ -109,7 +164,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ inputs.ref || github.sha }}
+          ref: ${{ needs.source.outputs.revision }}
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:

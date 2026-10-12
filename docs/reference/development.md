@@ -57,15 +57,31 @@ CI splits the editor suite across three jobs per browser, with one worker per jo
 still fails CI. Browser jobs use the official Playwright container, with its version selected from
 that source's lockfile, so they do not install browsers or system packages on each runner. Coverage
 runs independently of artifact production; browser checks start when the built artifact is ready.
-The final `verify` job requires all applicable checks, including coverage, security and performance.
+The final `verify` job requires all applicable checks, including coverage and security. Performance
+budgets are required for tagged release verification; ordinary PR and `main` runs skip benchmarks.
+The standalone Performance workflow still supports manual and weekly measurements.
 
 Pull requests and pushes to `main` that change only `docs/` Markdown/media or `README.md`,
 `CONTRIBUTING.md`, `AGENTS.md`, `CODE_OF_CONDUCT.md` and `SECURITY.md` run workflow validation,
 documentation link/anchor/image checks and the site build. They skip editor builds, coverage, browser
 suites, audits and benchmarks. Everything else (including `CHANGELOG.md`, which feeds the editor)
 runs full CI. Renames include both paths; missing comparison history falls back to full CI. Manual
-runs and reusable callers (including releases) run every check by default. Keep `full-checks: true`
-for release callers. Jobs and dependency installation steps have explicit time limits.
+runs and reusable callers (including releases) run all correctness checks by default. Tagged releases
+also require the performance gate. Keep `full-checks: true` for release callers. Jobs and dependency
+installation steps have explicit time limits.
+
+After a merge to `main`, web and desktop CI can reuse a completed successful PR run from this
+repository. Each PR run records its tested merge revision and scope in a small evidence artifact.
+CI resolves that commit independently and compares its entire Git tree with the landed commit,
+including workflows, tests and lockfiles. The PR must be merged into `main` at that exact revision;
+matching the PR head alone is insufficient. A docs-only result cannot replace full verification.
+Reused runs link to the original verification in the source job summary. Web CI still validates
+workflows and runs applicable security audits because advisories can change without source changes.
+
+Missing or expired evidence, unavailable API/history, failed or unfinished PR runs, changed trees,
+fork PRs and direct pushes use the normal checks described above. Forced pushes, manual runs and
+release callers also use fresh verification; release builds never consume PR artifacts. Evidence
+expires after seven days and is specific to a workflow run attempt.
 
 Reusable CI and historical Pages builds validate alternate sources with `scripts/verify-source.mjs`
 from the workflow's checkout. Selected revisions must belong to the default branch's history before
