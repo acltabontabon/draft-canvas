@@ -118,15 +118,36 @@ jobs:
           fi
           node scripts/update-manifest.mjs check-config
 
-  acceptance:
-    permissions:
-      contents: read
-      actions: read
-      pull-requests: read
+  checks:
     needs: verify
+    # The release orchestrator already ran shared and desktop verification through CI.
+    if: inputs.verified-commit == ''
     uses: ./.github/workflows/desktop-ci.yml
     with:
       ref: ${{ needs.verify.outputs.commit }}
+
+  acceptance:
+    needs: [verify, checks]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require fresh standalone checks or the verified release caller
+        env:
+          VERIFIED_COMMIT: ${{ inputs.verified-commit }}
+          SOURCE_COMMIT: ${{ needs.verify.outputs.commit }}
+          VERIFY_RESULT: ${{ needs.verify.result }}
+          CHECKS_RESULT: ${{ needs.checks.result }}
+        run: |
+          node <<'NODE'
+          if (process.env.VERIFY_RESULT !== 'success') throw new Error('Release source verification failed');
+          const commit = process.env.VERIFIED_COMMIT;
+          if (commit && (!/^[a-f0-9]{40}$/.test(commit) || commit !== process.env.SOURCE_COMMIT)) {
+            throw new Error('Desktop source differs from the verified release commit');
+          }
+          const expected = commit ? 'skipped' : 'success';
+          if (process.env.CHECKS_RESULT !== expected) throw new Error('Desktop acceptance failed');
+          NODE
 
   # A preview's own draft release, for the matrix jobs to upload into so they can't race to create it.
   # A vX.Y.Z draft already exists: release.yml made it after web verification.

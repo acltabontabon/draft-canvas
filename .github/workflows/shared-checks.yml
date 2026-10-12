@@ -1,0 +1,50 @@
+name: Shared checks
+
+# One definition for ordinary CI and standalone desktop release verification.
+on:
+  workflow_call:
+    inputs:
+      ref:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - id: source
+        # Reusable helpers enforce trust themselves before selected code can restore/write caches.
+        env:
+          SOURCE_REF: ${{ inputs.ref }}
+          WORKFLOW_REVISION: ${{ github.sha }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          revision="$(node scripts/verify-source.mjs)"
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ steps.source.outputs.revision }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 22.14.0
+          cache: npm
+      - run: npm ci
+        timeout-minutes: 5
+      # Keep the site's dependencies available to the same unit suite as before.
+      - run: npm ci
+        timeout-minutes: 5
+        working-directory: www
+      - run: npm run lint
+      - run: npm run typecheck:tooling
+      # Unit tests with the existing coverage floor (vite.config.ts).
+      - run: npm run test:coverage
+

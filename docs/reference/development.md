@@ -57,9 +57,22 @@ CI splits the editor suite across three jobs per browser, with one worker per jo
 still fails CI. Browser jobs use the official Playwright container, with its version selected from
 that source's lockfile, so they do not install browsers or system packages on each runner. Coverage
 runs independently of artifact production; browser checks start when the built artifact is ready.
-The final `verify` job requires all applicable checks, including coverage and security. Performance
-budgets are required for tagged release verification; ordinary PR and `main` runs skip benchmarks.
+The final `verify` job requires all applicable checks, including shared verification, desktop
+acceptance and security. Performance budgets are required for tagged release verification; ordinary
+PR and `main` runs skip benchmarks.
 The standalone Performance workflow still supports manual and weekly measurements.
+
+CI is the only PR/main entry point. Lint, tooling typechecks and the unit suite with coverage run
+once through `shared-checks.yml`; web builds/browser tests and desktop browser/native jobs remain
+separate. Desktop frontend checks consume the same-run web
+artifact for the desktop-code isolation check instead of rebuilding it.
+
+Desktop checks run for shared `src/`, Rust, desktop tests/configuration, root dependencies and
+workflow/planner changes. Web-only and documentation changes skip native runners. Missing comparison
+history, manual runs and reusable release callers enable desktop checks. Standalone desktop previews
+and rebuilds call `desktop-ci.yml` with shared verification enabled and build their own web artifact.
+The unified release caller already completed both shared and desktop acceptance, so packaging does
+not repeat them.
 
 Pull requests and pushes to `main` that change only `docs/` Markdown/media or `README.md`,
 `CONTRIBUTING.md`, `AGENTS.md`, `CODE_OF_CONDUCT.md` and `SECURITY.md` run workflow validation,
@@ -70,12 +83,14 @@ runs and reusable callers (including releases) run all correctness checks by def
 also require the performance gate. Keep `full-checks: true` for release callers. Jobs and dependency
 installation steps have explicit time limits.
 
-After a merge to `main`, web and desktop CI can reuse a completed successful PR run from this
+After a merge to `main`, unified CI can reuse a completed successful PR run from this
 repository. Each PR run records its tested merge revision and scope in a small evidence artifact.
 CI resolves that commit independently and compares its entire Git tree with the landed commit,
 including workflows, tests and lockfiles. The PR must be merged into `main` at that exact revision;
 matching the PR head alone is insufficient. A docs-only result cannot replace full verification.
-Reused runs link to the original verification in the source job summary. Web CI still validates
+Evidence also records desktop scope; a run that skipped desktop checks cannot satisfy a landed
+change requiring them.
+Reused runs link to the original verification in the source job summary. CI still validates
 workflows and runs applicable security audits because advisories can change without source changes.
 
 Missing or expired evidence, unavailable API/history, failed or unfinished PR runs, changed trees,
