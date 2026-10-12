@@ -1,7 +1,6 @@
 # Self-hosting Draft Canvas
 
 Draft Canvas's web editor is a static site. It needs no backend, accounts or database server.
-Docker distribution is retired; old images receive no further updates.
 
 ## Build
 

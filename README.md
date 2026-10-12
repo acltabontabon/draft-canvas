@@ -56,9 +56,6 @@ built relative paths. Use HTTPS when hosting for others to enable offline suppor
 its own browser storage; export diagrams before changing hosts. See
 [self-hosting](docs/guides/self-hosting.md) for deployment details.
 
-Docker distribution is retired. Previously published images remain historical artifacts and receive
-no further updates.
-
 For local development, setup and checks, see [Contributing](CONTRIBUTING.md).
 
 ---

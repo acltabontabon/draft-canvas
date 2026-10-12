@@ -54,9 +54,10 @@ offline and deployment specs use production builds. Desktop browser specs do not
 `desktop:check` builds the web bundle before running Rust checks.
 
 CI splits the editor suite across three jobs per browser, with one worker per job. A passing retry
-still fails CI. Browser jobs use the official Playwright container, with its version selected from
-that source's lockfile, so they do not install browsers or system packages on each runner. Coverage
-runs independently of artifact production; browser checks start when the built artifact is ready.
+still fails CI. Browser jobs run directly on hosted Ubuntu runners and install the selected
+browser and system dependencies with the Playwright version from the tested source's lockfile.
+Coverage runs independently of artifact production; browser checks start when the built artifact
+is ready.
 The final `verify` job requires all applicable checks, including shared verification, desktop
 acceptance and security. Performance budgets are required for tagged release verification; ordinary
 PR and `main` runs skip benchmarks.
