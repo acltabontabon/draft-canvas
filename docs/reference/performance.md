@@ -249,7 +249,8 @@ stops with an error if the marker pair is missing.
 
 ## CI
 
-The [`Performance`](../../.github/workflows/performance.yml) GitHub Actions workflow runs the
-`npm run perf:check` on every CI and release verification, and retains the interaction/lifecycle
-JSON reports. Weekly and manual runs also measure larger workloads and long sessions. Missing or
-failed measurements cannot pass. See [the budgets and their limits](reliability.md#performance-acceptance).
+The [`Performance`](../../.github/workflows/performance.yml) GitHub Actions workflow runs
+`npm run perf:check` during tagged release verification and retains the interaction/lifecycle
+JSON reports. Ordinary pull request and `main` CI skip this gate. Weekly and manual runs also
+measure larger workloads and long sessions. Missing or failed measurements cannot pass.
+See [the budgets and their limits](reliability.md#performance-acceptance).

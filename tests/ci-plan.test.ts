@@ -146,12 +146,13 @@ describe('CI scope from the complete tested changeset', () => {
 describe('the final CI verification gate', () => {
   // Execute the gate shipped in the workflow, so moving coverage cannot silently weaken it.
   const gate = workflow.match(/node <<'NODE'\n([\s\S]*?)\n          NODE/)![1]!;
-  const results = (full: boolean) => Object.fromEntries(['source', 'workflows', 'build', 'coverage',
+  const results = (full: boolean, performance = false) => Object.fromEntries(['source', 'workflows', 'build', 'coverage',
     'docs', 'e2e', 'security', 'performance'].map((job) => [job, {
-    result: (job === 'source' || job === 'workflows' || (full ? job !== 'docs' : job === 'docs')) ? 'success' : 'skipped',
+    result: (job === 'performance' ? performance
+      : job === 'source' || job === 'workflows' || (full ? job !== 'docs' : job === 'docs')) ? 'success' : 'skipped',
   }]));
-  const verify = (full: string, checks = results(full === 'true'), reused = 'false') => spawnSync(process.execPath, ['-e', gate], {
-    encoding: 'utf8', env: { ...process.env, FULL: full, REUSED: reused, RESULTS: JSON.stringify(checks) },
+  const verify = (full: string, checks = results(full === 'true'), reused = 'false', performance = 'false') => spawnSync(process.execPath, ['-e', gate], {
+    encoding: 'utf8', env: { ...process.env, FULL: full, REUSED: reused, PERFORMANCE: performance, RESULTS: JSON.stringify(checks) },
   }).status;
 
   it('accepts full verification and intentional documentation skips', () => {
@@ -159,13 +160,26 @@ describe('the final CI verification gate', () => {
     expect(verify('false')).toBe(0);
   });
 
-  it.each(['build', 'coverage', 'e2e', 'security', 'performance', 'workflows'])
+  it.each(['build', 'coverage', 'e2e', 'security', 'workflows'])
   ('rejects a failure, cancellation or unexpected skip in %s', (job) => {
     for (const result of ['failure', 'cancelled', 'skipped']) {
       const checks = results(true);
       checks[job] = { result };
       expect(verify('true', checks)).not.toBe(0);
     }
+  });
+
+  it('requires successful performance checks for tagged releases and permits ordinary CI skips', () => {
+    expect(verify('true', results(true, true), 'false', 'true')).toBe(0);
+    expect(verify('true', results(true))).toBe(0);
+    for (const result of ['failure', 'cancelled', 'skipped']) {
+      const checks = results(true, true);
+      checks.performance = { result };
+      expect(verify('true', checks, 'false', 'true')).not.toBe(0);
+    }
+    expect(verify('true', results(true, true), 'true', 'true')).not.toBe(0);
+    expect(verify('false', results(false, true), 'false', 'true')).not.toBe(0);
+    expect(verify('true', results(true), 'false', '')).not.toBe(0);
   });
 
   it('accepts reuse only with fresh workflow validation and applicable security checks', () => {

@@ -41,6 +41,7 @@ jobs:
       revision: ${{ steps.source.outputs.revision }}
       full: ${{ steps.plan.outputs.full }}
       reused: ${{ steps.reuse.outputs.reused }}
+      performance: ${{ github.event_name == 'push' && github.ref_type == 'tag' }}
       playwright-image: ${{ steps.plan.outputs.playwright-image }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -263,7 +264,8 @@ jobs:
 
   performance:
     needs: source
-    if: needs.source.outputs.full == 'true' && needs.source.outputs.reused != 'true'
+    # Timing budgets gate tagged releases; ordinary PR/main CI verifies correctness.
+    if: needs.source.outputs.performance == 'true' && needs.source.outputs.full == 'true' && needs.source.outputs.reused != 'true'
     uses: ./.github/workflows/performance.yml
     with:
       ref: ${{ needs.source.outputs.revision }}
@@ -279,6 +281,7 @@ jobs:
         env:
           FULL: ${{ needs.source.outputs.full }}
           REUSED: ${{ needs.source.outputs.reused }}
+          PERFORMANCE: ${{ needs.source.outputs.performance }}
           RESULTS: ${{ toJSON(needs) }}
         run: |
           node <<'NODE'
@@ -287,9 +290,15 @@ jobs:
           if (full !== 'true' && full !== 'false') throw new Error('Missing CI scope');
           const reused = process.env.REUSED;
           if (reused !== 'true' && reused !== 'false') throw new Error('Missing CI reuse decision');
+          const performance = process.env.PERFORMANCE;
+          if (performance !== 'true' && performance !== 'false') throw new Error('Missing performance scope');
+          if (performance === 'true' && (full !== 'true' || reused !== 'false')) {
+            throw new Error('Tagged releases require fresh full verification');
+          }
           const required = new Set(['source', 'workflows', ...(full === 'true' ? ['security'] : []),
+            ...(performance === 'true' ? ['performance'] : []),
             ...(reused === 'true' ? [] : full === 'true'
-              ? ['build', 'coverage', 'e2e', 'performance'] : ['docs'])]);
+              ? ['build', 'coverage', 'e2e'] : ['docs'])]);
           for (const [job, { result }] of Object.entries(results)) {
             const expected = required.has(job) ? 'success' : 'skipped';
             if (result !== expected) throw new Error(`${job}: expected ${expected}, got ${result}`);
