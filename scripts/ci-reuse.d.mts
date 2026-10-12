@@ -3,6 +3,7 @@ export function findReusableRun(options: {
   revision: string;
   tree: string;
   full: boolean;
+  desktop?: boolean;
   workflow: string;
   event: { repository: { default_branch: string } };
   api: (path: string) => unknown;

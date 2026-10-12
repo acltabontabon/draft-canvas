@@ -23,7 +23,7 @@ describe('reuse of successful PR verification', () => {
     const run = { id: 100, run_attempt: 1, status: 'completed', conclusion: 'success', event: 'pull_request',
       path: `.github/workflows/${workflow}`, repository: { full_name: repository }, head_sha: head };
     const proof = { version: 1, repository, workflow, runId: 100, attempt: 1, pull: 42,
-      head, base, revision: testedRevision, tree, full: true };
+      head, base, revision: testedRevision, tree, full: true, desktop: true as boolean | undefined };
     const tested = { sha: testedRevision, tree: { sha: tree }, parents: [{ sha: base }, { sha: head }] };
     const evidence = vi.fn(() => proof);
     const api = vi.fn((path: string) => {
@@ -33,7 +33,7 @@ describe('reuse of successful PR verification', () => {
       if (path.endsWith(`/git/commits/${testedRevision}`)) return tested;
       throw new Error(`Unexpected API call: ${path}`);
     });
-    const lookup = (full = true) => findReusableRun({ repository, revision, tree, full, workflow, event, api, evidence });
+    const lookup = (full = true, desktop = false) => findReusableRun({ repository, revision, tree, full, desktop, workflow, event, api, evidence });
     return { pull, run, proof, tested, evidence, api, lookup };
   };
 
@@ -120,6 +120,17 @@ describe('reuse of successful PR verification', () => {
     expect(f.lookup(false)).not.toBeNull();
   });
 
+  it('requires desktop evidence when the landed change needs desktop checks', () => {
+    const f = fixture();
+    expect(f.lookup(true, true)).not.toBeNull();
+    f.proof.desktop = false;
+    expect(f.lookup(true, true)).toBeNull();
+    expect(f.lookup(true, false)).not.toBeNull();
+    f.proof.desktop = undefined;
+    expect(f.lookup(true, true)).toBeNull();
+    expect(f.lookup(true, false)).not.toBeNull();
+  });
+
   it('resolves the recorded commit independently instead of trusting its claimed tree', () => {
     const f = fixture();
     f.tested.tree.sha = '6'.repeat(40);
@@ -187,7 +198,7 @@ describe('CI evidence CLI defaults to fresh checks', () => {
       cwd: repo, encoding: 'utf8',
       env: { ...process.env, GITHUB_EVENT_NAME: eventName, GITHUB_EVENT_PATH: eventPath, GITHUB_OUTPUT: output,
         GITHUB_STEP_SUMMARY: join(root, 'summary'), GITHUB_REPOSITORY: repository, SOURCE_REVISION: commit,
-        CI_FULL: 'true', FORCE_FULL: 'false', GITHUB_RUN_ID: '100', GITHUB_RUN_ATTEMPT: '1', ...env },
+        CI_FULL: 'true', CI_DESKTOP: 'true', FORCE_FULL: 'false', GITHUB_RUN_ID: '100', GITHUB_RUN_ATTEMPT: '1', ...env },
     });
     return { ...result, output: readFileSync(output, 'utf8') };
   };
@@ -241,15 +252,17 @@ describe('CI evidence CLI defaults to fresh checks', () => {
     expect(cli('record', 'pull_request', { pull_request: pullRequest }).status).toBe(0);
     const proof = JSON.parse(readFileSync(join(repo, 'ci-evidence.json'), 'utf8'));
     expect(proof).toMatchObject({ version: 1, repository, workflow: 'ci.yml', runId: 100, attempt: 1,
-      pull: 42, head: prHead, base: original, revision: commit, tree: git('rev-parse', 'HEAD^{tree}'), full: true });
+      pull: 42, head: prHead, base: original, revision: commit, tree: git('rev-parse', 'HEAD^{tree}'), full: true, desktop: true });
   });
 
   it('refuses to record evidence for a checkout other than the tested revision', () => {
     expect(cli('record', 'pull_request', {}, { SOURCE_REVISION: head }).status).not.toBe(0);
     expect(cli('record', 'push').status).not.toBe(0);
+    expect(cli('record', 'pull_request', {}, { CI_DESKTOP: '' }).status).not.toBe(0);
     expect(cli('record', 'pull_request').status).not.toBe(0);
   });
 
+  // This correctness test launches several Git/CLI processes; allow full-suite CPU contention.
   it('reuses real merge-tree evidence through the CLI without downloading or running PR build code', () => {
     const { original, prHead, prTree, tested, pullRequest } = prepareMerge();
     expect(cli('record', 'pull_request', { pull_request: pullRequest }).status).toBe(0);
@@ -295,6 +308,13 @@ if (args[0] === 'run' && args[1] === 'download') {
     expect(result.output).toBe('reused=true\n');
     expect(readFileSync(join(root, 'summary'), 'utf8')).toContain(`/actions/runs/100`);
 
+    fixture.proof.desktop = false;
+    writeFileSync(fixturePath, JSON.stringify(fixture));
+    expect(cli('lookup', 'push', {}, env).output).toBe('reused=false\n');
+    expect(cli('lookup', 'push', {}, { ...env, CI_DESKTOP: 'false' }).output).toBe('reused=true\n');
+    fixture.proof.desktop = true;
+    writeFileSync(fixturePath, JSON.stringify(fixture));
+
     // Squash merges have one parent and a new SHA, but can contain the same tested tree.
     commit = git('commit-tree', prTree, '-p', original, '-m', 'Squashed PR');
     git('checkout', '--detach', commit);
@@ -309,5 +329,5 @@ if (args[0] === 'run' && args[1] === 'download') {
     fixture.revision = commit;
     writeFileSync(fixturePath, JSON.stringify(fixture));
     expect(cli('lookup', 'push', {}, env).output).toBe('reused=false\n');
-  });
+  }, 15_000);
 });

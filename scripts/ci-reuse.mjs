@@ -10,7 +10,7 @@ const git = (...args) => execFileSync('git', args, { encoding: 'utf8', stdio: 'p
 const evidenceName = (workflow, run) => `ci-evidence-${workflow}-${run.id}-${run.run_attempt}`;
 
 // Evidence is data only. Never restore a PR build or execute files downloaded from a PR run.
-export function findReusableRun({ repository, revision, tree, full, workflow, event, api, evidence }) {
+export function findReusableRun({ repository, revision, tree, full, desktop = false, workflow, event, api, evidence }) {
   const pulls = api(`repos/${repository}/commits/${revision}/pulls?per_page=10`);
   for (const associated of pulls) {
     const pull = api(`repos/${repository}/pulls/${associated.number}`);
@@ -28,6 +28,7 @@ export function findReusableRun({ repository, revision, tree, full, workflow, ev
         if (proof.version !== 1 || proof.repository !== repository || proof.workflow !== workflow
           || proof.runId !== run.id || proof.attempt !== run.run_attempt || proof.pull !== pull.number
           || proof.head !== run.head_sha || typeof proof.full !== 'boolean' || (full && !proof.full)
+          || (desktop && proof.desktop !== true)
           || !sha.test(proof.revision ?? '') || !sha.test(proof.base ?? '') || proof.tree !== tree) continue;
         // Resolve the recorded commit independently: a claimed tree or a head-only check is insufficient.
         const tested = api(`repos/${repository}/git/commits/${proof.revision}`);
@@ -45,8 +46,10 @@ export function findReusableRun({ repository, revision, tree, full, workflow, ev
 function record(workflow, event) {
   const revision = process.env.SOURCE_REVISION;
   const full = process.env.CI_FULL;
+  const desktop = process.env.CI_DESKTOP;
   if (process.env.GITHUB_EVENT_NAME !== 'pull_request' || !sha.test(revision ?? '')
-    || git('rev-parse', 'HEAD') !== revision || !['true', 'false'].includes(full)) {
+    || git('rev-parse', 'HEAD') !== revision || !['true', 'false'].includes(full)
+    || (workflow === 'ci.yml' && !['true', 'false'].includes(desktop))) {
     throw new Error('Evidence must describe the PR source actually checked out.');
   }
   // Event base metadata can lag behind the generated merge. Raw headers retain parents even
@@ -68,6 +71,8 @@ function record(workflow, event) {
     revision,
     tree: git('rev-parse', 'HEAD^{tree}'),
     full: full === 'true',
+    // Unified CI evidence must also prove the required desktop jobs ran.
+    ...(workflow === 'ci.yml' ? { desktop: desktop === 'true' } : {}),
   }));
 }
 
@@ -77,6 +82,9 @@ function lookup(workflow, event) {
     || event.ref !== `refs/heads/${event.repository.default_branch}` || event.after !== process.env.SOURCE_REVISION
     || event.forced || event.created || event.deleted || !sha.test(event.before ?? '') || /^0+$/.test(event.before)) return null;
 
+  if (workflow === 'ci.yml' && !['true', 'false'].includes(process.env.CI_DESKTOP)) {
+    throw new Error('An explicit desktop scope is required for CI reuse.');
+  }
   const repository = process.env.GITHUB_REPOSITORY;
   const revision = process.env.SOURCE_REVISION;
   if (!/^[\w.-]+\/[\w.-]+$/.test(repository ?? '') || !sha.test(revision ?? '') || git('rev-parse', 'HEAD') !== revision) {
@@ -91,7 +99,8 @@ function lookup(workflow, event) {
   };
   const api = (path) => JSON.parse(gh('api', path));
   return findReusableRun({
-    repository, revision, tree: git('rev-parse', 'HEAD^{tree}'), full: process.env.CI_FULL === 'true', workflow, event, api,
+    repository, revision, tree: git('rev-parse', 'HEAD^{tree}'), full: process.env.CI_FULL === 'true',
+    desktop: process.env.CI_DESKTOP === 'true', workflow, event, api,
     evidence: (run, name) => {
       const artifacts = api(`repos/${repository}/actions/runs/${run.id}/artifacts?per_page=100`).artifacts
         .filter((artifact) => artifact.name === name && !artifact.expired && artifact.size_in_bytes <= 16_384);

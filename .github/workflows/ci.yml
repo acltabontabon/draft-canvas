@@ -40,6 +40,7 @@ jobs:
     outputs:
       revision: ${{ steps.source.outputs.revision }}
       full: ${{ steps.plan.outputs.full }}
+      desktop: ${{ steps.plan.outputs.desktop }}
       reused: ${{ steps.reuse.outputs.reused }}
       performance: ${{ github.event_name == 'push' && github.ref_type == 'tag' }}
       playwright-image: ${{ steps.plan.outputs.playwright-image }}
@@ -70,6 +71,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           SOURCE_REVISION: ${{ steps.source.outputs.revision }}
           CI_FULL: ${{ steps.plan.outputs.full }}
+          CI_DESKTOP: ${{ steps.plan.outputs.desktop }}
           FORCE_FULL: ${{ github.event_name == 'workflow_dispatch' || inputs.full-checks == true || inputs.ref != '' }}
         run: node scripts/ci-reuse.mjs lookup ci.yml
 
@@ -79,6 +81,7 @@ jobs:
         env:
           SOURCE_REVISION: ${{ steps.source.outputs.revision }}
           CI_FULL: ${{ steps.plan.outputs.full }}
+          CI_DESKTOP: ${{ steps.plan.outputs.desktop }}
         run: node scripts/ci-reuse.mjs record ci.yml
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: github.event_name == 'pull_request' && inputs.ref == ''
@@ -126,8 +129,6 @@ jobs:
       - run: npm ci
         timeout-minutes: 5
         working-directory: www
-      - run: npm run lint
-      - run: npm run typecheck:tooling
       # Builds the editor, the site, and the assembled dist-web/ the deploy publishes.
       - run: npm run build:web
       - run: npm run licenses:check
@@ -144,28 +145,12 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  coverage:
+  shared:
     needs: source
     if: needs.source.outputs.full == 'true' && needs.source.outputs.reused != 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          ref: ${{ needs.source.outputs.revision }}
-          persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
-        with:
-          node-version: 22.14.0
-          cache: npm
-      - run: npm ci
-        timeout-minutes: 5
-      # Keep the site's dependencies available to the same unit suite as before.
-      - run: npm ci
-        timeout-minutes: 5
-        working-directory: www
-      # Unit tests with the existing coverage floor (vite.config.ts).
-      - run: npm run test:coverage
+    uses: ./.github/workflows/shared-checks.yml
+    with:
+      ref: ${{ needs.source.outputs.revision }}
 
   docs:
     needs: source
@@ -255,6 +240,15 @@ jobs:
             playwright-report-web/
           retention-days: 7
 
+  desktop:
+    needs: [source, build]
+    if: needs.source.outputs.desktop == 'true' && needs.source.outputs.reused != 'true'
+    uses: ./.github/workflows/desktop-ci.yml
+    with:
+      ref: ${{ needs.source.outputs.revision }}
+      shared-checks: false
+      web-artifact-name: ${{ needs.build.outputs.artifact-name }}
+
   security:
     needs: source
     if: needs.source.outputs.full == 'true'
@@ -270,9 +264,9 @@ jobs:
     with:
       ref: ${{ needs.source.outputs.revision }}
 
-  # Keep the existing verify check as the final gate, including coverage and every browser shard.
+  # Keep verify as the final gate for shared checks, desktop acceptance and every browser shard.
   verify:
-    needs: [source, workflows, build, coverage, docs, e2e, security, performance]
+    needs: [source, workflows, build, shared, docs, e2e, desktop, security, performance]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -280,6 +274,7 @@ jobs:
       - name: Require every applicable check
         env:
           FULL: ${{ needs.source.outputs.full }}
+          DESKTOP: ${{ needs.source.outputs.desktop }}
           REUSED: ${{ needs.source.outputs.reused }}
           PERFORMANCE: ${{ needs.source.outputs.performance }}
           RESULTS: ${{ toJSON(needs) }}
@@ -288,17 +283,20 @@ jobs:
           const results = JSON.parse(process.env.RESULTS);
           const full = process.env.FULL;
           if (full !== 'true' && full !== 'false') throw new Error('Missing CI scope');
+          const desktop = process.env.DESKTOP;
+          if (desktop !== 'true' && desktop !== 'false') throw new Error('Missing desktop scope');
+          if (desktop === 'true' && full !== 'true') throw new Error('Desktop checks require full CI');
           const reused = process.env.REUSED;
           if (reused !== 'true' && reused !== 'false') throw new Error('Missing CI reuse decision');
           const performance = process.env.PERFORMANCE;
           if (performance !== 'true' && performance !== 'false') throw new Error('Missing performance scope');
-          if (performance === 'true' && (full !== 'true' || reused !== 'false')) {
+          if (performance === 'true' && (full !== 'true' || desktop !== 'true' || reused !== 'false')) {
             throw new Error('Tagged releases require fresh full verification');
           }
           const required = new Set(['source', 'workflows', ...(full === 'true' ? ['security'] : []),
             ...(performance === 'true' ? ['performance'] : []),
             ...(reused === 'true' ? [] : full === 'true'
-              ? ['build', 'coverage', 'e2e'] : ['docs'])]);
+              ? ['build', 'shared', 'e2e', ...(desktop === 'true' ? ['desktop'] : [])] : ['docs'])]);
           for (const [job, { result }] of Object.entries(results)) {
             const expected = required.has(job) ? 'success' : 'skipped';
             if (result !== expected) throw new Error(`${job}: expected ${expected}, got ${result}`);

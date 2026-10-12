@@ -61,9 +61,10 @@ inside a platform section. Older What's New entries in `ARCHIVED_RELEASES` remai
    use `release:notes -- vX.Y.Z --draft` or `release:whats-new -- desktop --draft X.Y.Z` with `npm run`.
 6. Commit and push the release changes, then push the `vX.Y.Z` tag.
 
-CI verifies the release, including performance budgets, before creating a draft. Desktop packaging,
-startup and update-signature checks gate publication; Pages publishes the verified web artifact
-after desktop packaging succeeds.
+CI verifies shared, web and desktop checks, including performance budgets, before creating a draft.
+Standalone desktop previews and rebuilds run shared and desktop verification themselves. Desktop
+packaging, startup and update-signature checks gate publication; Pages publishes the verified web
+artifact after desktop packaging succeeds.
 Homebrew verifies both published macOS installers and updates the cask independently of Pages and
 updater channels. See [Homebrew releases](../guides/desktop.md#homebrew-releases) for credentials and retries.
 The dependencies are in [release.yml](../../.github/workflows/release.yml).

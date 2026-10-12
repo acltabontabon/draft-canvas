@@ -1,72 +1,30 @@
-name: Desktop CI
+name: Desktop checks
 
-# The desktop app is the web editor in a Tauri window (src-tauri/), so a change to the shared
-# source can break it too: `src/**` is in the filter on purpose.
+# Called by CI for desktop-affecting changes and by standalone desktop releases.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'src/**'
-      - 'src-tauri/**'
-      - 'tests/desktop/**'
-      - 'e2e/desktop/**'
-      - 'scripts/check-desktop-version.mjs'
-      - 'scripts/build-sidecar.mjs'
-      - 'scripts/ci-reuse.mjs'
-      - 'scripts/verify-source.mjs'
-      - 'tests/ci-reuse.test.ts'
-      - 'playwright.desktop.config.ts'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'vite.config.ts'
-      - 'tsconfig*.json'
-      - 'index.html'
-      - 'tray.html'
-      - '.github/workflows/desktop-*.yml'
-  pull_request:
-    paths:
-      - 'src/**'
-      - 'src-tauri/**'
-      - 'tests/desktop/**'
-      - 'e2e/desktop/**'
-      - 'scripts/check-desktop-version.mjs'
-      - 'scripts/build-sidecar.mjs'
-      - 'scripts/ci-reuse.mjs'
-      - 'scripts/verify-source.mjs'
-      - 'tests/ci-reuse.test.ts'
-      - 'playwright.desktop.config.ts'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'vite.config.ts'
-      - 'tsconfig*.json'
-      - 'index.html'
-      - 'tray.html'
-      - '.github/workflows/desktop-*.yml'
-  workflow_dispatch:
   workflow_call:
     inputs:
       ref:
+        type: string
+        default: ''
+      shared-checks:
+        description: Run shared verification unless the CI caller already supplies it.
+        type: boolean
+        default: true
+      web-artifact-name:
+        description: Same-run verified web build; standalone callers build their own.
         type: string
         default: ''
 
 permissions:
   contents: read
 
-concurrency:
-  group: desktop-ci-${{ github.workflow }}-${{ github.ref }}-${{ inputs.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
 jobs:
   source:
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    permissions:
-      contents: read
-      actions: read
-      pull-requests: read
     outputs:
       revision: ${{ steps.source.outputs.revision }}
-      reused: ${{ steps.reuse.outputs.reused }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -80,34 +38,18 @@ jobs:
         run: |
           revision="$(node scripts/verify-source.mjs)"
           echo "revision=$revision" >> "$GITHUB_OUTPUT"
-      - id: reuse
-        env:
-          GH_TOKEN: ${{ github.token }}
-          SOURCE_REVISION: ${{ steps.source.outputs.revision }}
-          CI_FULL: 'true'
-          FORCE_FULL: ${{ inputs.ref != '' }}
-        run: node scripts/ci-reuse.mjs lookup desktop-ci.yml
 
-      # Record source before checks; it is reusable only after the entire PR run succeeds.
-      - name: Record the tested PR source
-        if: github.event_name == 'pull_request' && inputs.ref == ''
-        env:
-          SOURCE_REVISION: ${{ steps.source.outputs.revision }}
-          CI_FULL: 'true'
-        run: node scripts/ci-reuse.mjs record desktop-ci.yml
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        if: github.event_name == 'pull_request' && inputs.ref == ''
-        with:
-          name: ci-evidence-desktop-ci.yml-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ci-evidence.json
-          if-no-files-found: error
-          retention-days: 7
+  shared:
+    needs: source
+    if: inputs.shared-checks
+    uses: ./.github/workflows/shared-checks.yml
+    with:
+      ref: ${{ needs.source.outputs.revision }}
 
   # Everything that needs no window: the frontend the desktop app bundles, and that it is the
   # only place Tauri appears.
   frontend:
     needs: source
-    if: needs.source.outputs.reused != 'true'
     runs-on: ubuntu-latest
     # The tests take about five minutes; the rest is headroom for installing two browsers' system
     # libraries. When the runner's Ubuntu mirror stalls, apt falls back to archive.ubuntu.com one
@@ -123,15 +65,19 @@ jobs:
           node-version: 22.14.0
           cache: npm
       - run: npm ci
-      - run: npm run lint
-      - run: npm run typecheck:tooling
-      - run: npm test
       - run: npm run desktop:web
       - run: node scripts/check-desktop-version.mjs
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        if: inputs.web-artifact-name != ''
+        with:
+          name: ${{ inputs.web-artifact-name }}
+      - if: inputs.web-artifact-name != ''
+        run: tar -xf verified-web.tar
+      - if: inputs.web-artifact-name == ''
+        run: npm run build
       # The web build must carry no desktop code at all: it is what everyone else runs.
       - name: The web bundle holds no desktop code
         run: |
-          npm run build
           if grep -rlE "__TAURI|@tauri-apps|host_ready|DesktopController" dist/assets/*.js; then
             echo "::error::The web bundle contains desktop code."
             exit 1
@@ -151,7 +97,6 @@ jobs:
   # (a .dmg on macOS, an NSIS installer on Windows) and launch the result.
   rust:
     needs: source
-    if: needs.source.outputs.reused != 'true'
     name: rust (${{ matrix.name }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
@@ -203,3 +148,24 @@ jobs:
           output="$(${{ matrix.binary }})"
           echo "$output"
           echo "$output" | grep -q DRAFT_CANVAS_SMOKE_OK
+
+  verify:
+    needs: [source, shared, frontend, rust]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require desktop and applicable shared checks
+        env:
+          SHARED: ${{ inputs.shared-checks }}
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          node <<'NODE'
+          const results = JSON.parse(process.env.RESULTS);
+          const shared = process.env.SHARED;
+          if (shared !== 'true' && shared !== 'false') throw new Error('Missing shared verification scope');
+          for (const [job, { result }] of Object.entries(results)) {
+            const expected = job === 'shared' && shared === 'false' ? 'skipped' : 'success';
+            if (result !== expected) throw new Error(`${job}: expected ${expected}, got ${result}`);
+          }
+          NODE

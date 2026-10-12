@@ -9,13 +9,16 @@ signed on macOS and unsigned on Windows. The in-app updater's signature checks r
 
 [CI](../../.github/workflows/ci.yml) is reusable. It resolves a source ref to one commit, then runs
 lint, tooling typechecks, build, coverage, license checks, the three-engine editor journeys,
-offline and assembled-site checks, dependency audits and performance budgets.
+offline and assembled-site checks, desktop browser/native acceptance, dependency audits and
+performance budgets. Shared lint, tooling typechecks and unit coverage run once.
 The build artifact records its source commit. Offline and assembled-site browser jobs test its
 compiled files without rebuilding. The editor journeys run against Vite's development server at
 the same source commit; several of those journeys also inspect source modules through that server.
 
 [Release](../../.github/workflows/release.yml) waits for this workflow before creating a **draft**.
-[Desktop acceptance](../../.github/workflows/desktop-ci.yml) must also pass before desktop packaging.
+[Desktop acceptance](../../.github/workflows/desktop-ci.yml) runs within CI before desktop packaging.
+Standalone desktop previews and rebuilds call it with shared verification enabled; releases from
+the unified orchestrator use the acceptance already completed for the verified commit.
 The release packages are checked for version and updater signatures; the arm64 macOS bundle is
 started, and the Windows installer is installed into a temporary folder and its installed app started.
 The Intel macOS package is cross-compiled: native Intel installation remains a manual acceptance item.
