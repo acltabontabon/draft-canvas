@@ -35,6 +35,7 @@ export interface CallRecord {
   diagramId?: string;
   revision?: string;
   progress: string[];
+  imageBlocks?: number;
 }
 
 /** A minimal MCP client over stdio: initialize, list tools, call tools, collect progress. */
@@ -106,7 +107,7 @@ export class McpSession {
     const started = performance.now();
     const reply = await this.request('tools/call', { name: tool, arguments: full, _meta: { progressToken: token } });
     const ms = Math.round(performance.now() - started);
-    const result = reply.result as { structuredContent?: Json; isError?: boolean } | undefined;
+    const result = reply.result as { structuredContent?: Json; isError?: boolean; content?: { type: string }[] } | undefined;
     const value = result?.structuredContent ?? { protocolError: reply.error };
     const isError = result?.isError === true || !result;
     const error = (value.error ?? {}) as { code?: string };
@@ -121,6 +122,7 @@ export class McpSession {
       ...(typeof value.diagramId === 'string' ? { diagramId: value.diagramId } : {}),
       ...(typeof value.revision === 'string' ? { revision: value.revision } : {}),
       progress: this.progress.get(token) ?? [],
+      imageBlocks: result?.content?.filter((block) => block.type === 'image').length ?? 0,
     };
     this.progress.delete(token);
     this.records.push(record);

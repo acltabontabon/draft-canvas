@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
-import { useReactFlow, useStore, useStoreApi } from '@xyflow/react';
+import { useStore, useStoreApi } from '@xyflow/react';
 
 export interface OverlayPoint {
   x: number;
@@ -52,12 +52,12 @@ export function useOverlayPosition<P extends string>(
 ): { target: HTMLDivElement | null; placement: P } {
   const target = useStore((state) => state.domNode);
   const storeApi = useStoreApi();
-  const { flowToScreenPosition } = useReactFlow();
   const [placement, setPlacement] = useState<P>(initial);
   const placementRef = useRef(placement);
   const placeRef = useRef(place);
   const sizeRef = useRef<OverlaySize>({ width: 0, height: 0 });
   const applyRef = useRef<() => void>(() => {});
+  const rootRef = useRef<{ node: HTMLElement; rect: DOMRect } | null>(null);
   const observerRef = useRef<{ panel: HTMLElement; observer: ResizeObserver } | null>(null);
 
   useLayoutEffect(() => {
@@ -89,10 +89,15 @@ export function useOverlayPosition<P extends string>(
       if (sizeRef.current.width === 0) {
         sizeRef.current = { width: Math.round(panel.offsetWidth), height: Math.round(panel.offsetHeight) };
       }
-      const rootRect = root.getBoundingClientRect();
+      // Selection changes mutate many canvas elements. Reading layout here forced the browser to
+      // restyle them synchronously on every click. The canvas observer keeps its bounds current;
+      // pan/zoom only changes the transform, so conversion needs no further DOM reads.
+      if (rootRef.current?.node !== root) rootRef.current = { node: root, rect: root.getBoundingClientRect() };
+      const rootRect = rootRef.current.rect;
+      const [panX, panY, zoom] = storeApi.getState().transform;
       const result = placeRef.current(
         {
-          flowToScreenPosition,
+          flowToScreenPosition: (point) => ({ x: point.x * zoom + panX + rootRect.left, y: point.y * zoom + panY + rootRect.top }),
           screenToOverlay: (point) => ({ x: point.x - rootRect.left, y: point.y - rootRect.top }),
           size: sizeRef.current,
           root: rootRect,
@@ -127,17 +132,26 @@ export function useOverlayPosition<P extends string>(
   // are without moving the viewport or re-rendering anything here.
   useEffect(() => {
     if (!target || typeof ResizeObserver === 'undefined') return;
-    let first = true;
+    const measure = () => {
+      rootRef.current = { node: target, rect: target.getBoundingClientRect() };
+      applyRef.current();
+    };
     const observer = new ResizeObserver(() => {
-      // The initial callback only reports the size placement already used.
-      if (first) {
-        first = false;
-        return;
-      }
+      const rect = target.getBoundingClientRect();
+      const previous = rootRef.current;
+      if (previous?.node === target && previous.rect.x === rect.x && previous.rect.y === rect.y &&
+        previous.rect.width === rect.width && previous.rect.height === rect.height) return;
+      rootRef.current = { node: target, rect };
       applyRef.current();
     });
     observer.observe(target);
-    return () => observer.disconnect();
+    window.addEventListener('resize', measure);
+    window.addEventListener('scroll', measure, true);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', measure);
+      window.removeEventListener('scroll', measure, true);
+    };
   }, [target]);
 
   useEffect(

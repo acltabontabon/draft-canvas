@@ -1,3 +1,4 @@
+import { SourceEvidenceDetails } from './SourceEvidenceDetails';
 import { memo, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useInternalNode, useStore } from '@xyflow/react';
@@ -267,7 +268,7 @@ function EdgeInspectorBody({ edgeId, closing }: { edgeId: string; closing: boole
       clampedScreenX,
       size.width / 2,
       SCREEN_MARGIN,
-      rightClearance(useUiStore.getState().flowPanelOpen, SCREEN_MARGIN),
+      rightClearance(useUiStore.getState().flowPanelOpen, SCREEN_MARGIN, frame.root.right),
     );
     const labelAt = frame.screenToOverlay({ x: onCanvasX, y: screenLabelPoint.y });
     return {
@@ -1049,6 +1050,7 @@ function ExpandedPanel({
   return (
     <div className="dc-edge-inspector-panel dc-edge-inspector-expanded">
       <RelationshipGuidance edge={edge} capability={capability} />
+      <SourceEvidenceDetails sources={edge.evidence} />
       {isServiceToService ? (
         <ServiceInteractionSection edge={edge} relations={capability?.relations ?? []} />
       ) : (

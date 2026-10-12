@@ -63,6 +63,7 @@ const NODE_KEYS = [
   'componentKind',
   'boundaryPreset',
   'attachments',
+  'evidence',
   'deliveryRole',
   'annotation',
   'textRole',
@@ -91,6 +92,7 @@ const EDGE_KEYS = [
   'routeMode',
   'semanticsOrigin',
   'attachments',
+  'evidence',
   'deliveryAttempts',
 ] as const satisfies KeysOf<DraftEdge>;
 const STEP_KEYS = ['id', 'edgeId', 'extraEdgeIds', 'extraNodeIds', 'viewport', 'caption'] as const satisfies KeysOf<DraftFlowStep>;
@@ -151,6 +153,7 @@ const anchor = orderedIfObject(ANCHOR_KEYS);
 const attachment = orderedIfObject(ATTACHMENT_KEYS);
 const attachments = list(attachment);
 const edge = orderedIfObject(EDGE_KEYS, {
+  evidence: deepSorted,
   details: orderedIfObject(EDGE_DETAILS_KEYS),
   sourceAnchor: anchor,
   targetAnchor: anchor,
@@ -164,7 +167,7 @@ const openPoint = orderedIfObject(OPEN_POINT_KEYS, { targets: list(orderedIfObje
 
 // `node` and `inside` refer to each other: a room holds nodes, and a node may hold a room.
 function node(value: unknown): unknown {
-  return orderedIfObject(NODE_KEYS, { attachments, inside })(value);
+  return orderedIfObject(NODE_KEYS, { attachments, evidence: deepSorted, inside })(value);
 }
 function inside(value: unknown): unknown {
   return orderedIfObject(INSIDE_KEYS, { nodes: list(node), edges, flows, viewport })(value);

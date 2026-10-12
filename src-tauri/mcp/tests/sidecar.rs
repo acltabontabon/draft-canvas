@@ -100,11 +100,13 @@ async fn a_real_client_lists_the_tools_and_round_trips_a_call() {
             "get_capabilities",
             "list_diagrams",
             "read_diagram",
+            "read_attachment",
             "read_selection",
             "get_implementation_context",
             "render_diagram",
             "create_diagram",
             "update_diagram",
+            "preview_diagram",
             "submit_proposal",
             "get_proposal",
             "list_proposals"

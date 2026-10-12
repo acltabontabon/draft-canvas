@@ -76,11 +76,13 @@ const TOOLS: &[&str] = &[
     "get_capabilities",
     "list_diagrams",
     "read_diagram",
+    "read_attachment",
     "read_selection",
     "get_implementation_context",
     "render_diagram",
     "create_diagram",
     "update_diagram",
+    "preview_diagram",
     "submit_proposal",
     "get_proposal",
     "list_proposals",
@@ -157,11 +159,13 @@ pub async fn call(agent: &Agent, tool: &str, args: Value, calls: &CallRegistry) 
     match tool {
         "get_capabilities" => to_page(agent, &app, tool, &args, json!({}), calls).await,
         "list_diagrams" => list(agent, &app, &projects, &args, calls).await,
+        "read_attachment" => read_attachment(agent, &app, &projects, &args, calls).await,
         "read_diagram" => read(agent, &app, &projects, &args, calls).await,
         "read_selection" => read_selection(agent, &app, &projects, &args, calls).await,
         "get_implementation_context" => {
             implementation_context(agent, &app, &projects, &args, calls).await
         }
+        "preview_diagram" => preview(agent, &app, &projects, &args, calls).await,
         "render_diagram" => render(agent, &app, &projects, &args, calls).await,
         "create_diagram" => create(agent, &app, &projects, &args, calls).await,
         "update_diagram" => update(agent, &app, &projects, &args, calls).await,
@@ -464,9 +468,10 @@ async fn to_page(
     app: &AppHandle,
     tool: &str,
     args: &Value,
-    context: Value,
+    mut context: Value,
     calls: &CallRegistry,
 ) -> Result<Value, ToolError> {
+    context["session"] = json!(calls.session);
     let state = app.state::<AppState>();
     let (id, rx) = agent.page.register();
     let sent = state.events.emit(HostEvent::AgentRequest {
@@ -619,6 +624,19 @@ async fn read(
     to_page(agent, app, "read_diagram", args, context, calls).await
 }
 
+async fn read_attachment(
+    agent: &Agent,
+    app: &AppHandle,
+    projects: &[Project],
+    args: &Value,
+    calls: &CallRegistry,
+) -> ToolResult {
+    let id = diagram_id(args)?;
+    let diagram = locate(agent, projects, &id)?;
+    let context = diagram_context(agent, &diagram, true)?;
+    to_page(agent, app, "read_attachment", args, context, calls).await
+}
+
 // ─── read_selection ─────────────────────────────────────────────────────────────────────────────
 
 /// Only the diagram open in Draft Canvas right now has a selection at all; the page refuses
@@ -679,6 +697,19 @@ async fn render(
     let diagram = locate(agent, projects, &id)?;
     let context = diagram_context(agent, &diagram, true)?;
     to_page(agent, app, "render_diagram", args, context, calls).await
+}
+
+async fn preview(
+    agent: &Agent,
+    app: &AppHandle,
+    projects: &[Project],
+    args: &Value,
+    calls: &CallRegistry,
+) -> ToolResult {
+    let id = diagram_id(args)?;
+    let diagram = locate(agent, projects, &id)?;
+    let context = diagram_context(agent, &diagram, true)?;
+    to_page(agent, app, "preview_diagram", args, context, calls).await
 }
 
 // ─── create_diagram ─────────────────────────────────────────────────────────────────────────────
@@ -1051,7 +1082,8 @@ async fn update(
     )?;
     // A diagram that isn't open is changed on disk (the page works the change out from this text, and
     // this module writes it under the stamp read here); an open one through the editor.
-    let context = diagram_context(agent, &diagram, true)?;
+    let mut context = diagram_context(agent, &diagram, true)?;
+    context["session"] = json!(calls.session);
     let stamp_read = context
         .get("stamp")
         .and_then(Value::as_str)
@@ -1356,6 +1388,7 @@ async fn submit_proposal(
             .to_string(),
         ops: composed.get("ops").cloned().unwrap_or_else(|| json!([])),
         layout: composed.get("layout").cloned().filter(|v| !v.is_null()),
+        scope: composed.get("scope").cloned().filter(|v| !v.is_null()),
         counts: composed.get("counts").cloned().unwrap_or_else(|| json!({})),
         preconditions: composed
             .get("preconditions")
@@ -1713,6 +1746,7 @@ mod tests {
             base_revision: "o:1.1".into(),
             ops: json!([{ "op": "update", "id": "a", "set": { "label": "New" } }]),
             layout: None,
+            scope: None,
             counts: json!({"added": 0, "updated": 1, "removed": 0}),
             preconditions: json!({}),
             summary: "Summary".into(),

@@ -31,8 +31,13 @@ the release notes and the in-app What's New are generated from here. See
 
 ### Shared
 
+#### Added
+
+- Elements and relationships can carry source evidence with observed/inferred provenance, visible in Details and connector options.
+
 #### Fixed
 
+- Selecting shapes reuses observed canvas bounds when positioning popovers, avoiding repeated synchronous layout reads.
 - Dialogs isolate background content from assistive technology and lock background scrolling.
 - Agent tool schemas accept descriptions on elements inside nested rooms.
 - Small Service, Worker and Component labels stay clear of decorative corner dots.
@@ -47,6 +52,17 @@ the release notes and the in-app What's New are generated from here. See
 #### Improved
 
 - Open diagrams and listed project folders react to native filesystem notifications, keeping external edits subject to the existing unsaved-work checks.
+
+#### Added
+
+- Agents can prepare temporary diagram candidates, inspect focused images and field diffs, then apply the exact reviewed candidate with revision and session checks.
+- Agents can move existing subgraphs into a service's detail view, preserving identities, notes and complete flows while refusing ambiguous cross-view stories.
+
+#### Fixed
+
+- Proposal review detects concurrent changes to deleted content, attachments, flows and all edited fields, and shows their actual differences before acceptance.
+- Diagram reads paginate relationships, flows and open points independently, report attachment truncation, preserve flow variants and respect their UTF-8 response limit.
+- MCP patches reject unknown fields, consistently clear optional connector fields and publish input/output contracts.
 
 ## [1.13.1] - 2026-10-10
 

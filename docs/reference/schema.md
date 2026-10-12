@@ -9,7 +9,7 @@ this drifts from it, trust the code.
 
 Every `.draftcanvas` file (and everything in IndexedDB's `bodies` store) carries a `version:
 number` and a `format: "draft-canvas"` marker. `CURRENT_VERSION` is declared in
-`src/document/types.ts`, currently **16**. A file missing the marker, or whose `version` isn't a
+`src/document/types.ts`, currently **19**. A file missing the marker, or whose `version` isn't a
 finite integer, is treated as version 1 — the oldest shape the app has ever written.
 
 ## The migration funnel
@@ -38,6 +38,7 @@ v(n+1)-shaped one:
 | v15 → v16 | `migrateAddOpenPoints` | Structural no-op — a v15 file simply has no canvas-level `openPoints` (what the discussion has not settled yet, attached to the shapes and connectors it concerns). Root-only, so not wrapped in `everyRoom`. The version moves for the same reason v13's did: an older build's whitelist would strip the points and, in VS Code, write the stripped file back. |
 | v16 → v17 | `migrateActionsToNotes` | The canvas-level `actions` list (v13–v16, the Takeaways feature) is gone. Each action becomes a note: one anchored to a shape or connector that still exists — at the root or inside any room — becomes a note attachment on it (`Action: …` / `Done: …`); the rest are gathered into one `Actions` note node below the diagram, one ☐/☑ line each, split only past the note text limit. Root-only entry, so not wrapped in `everyRoom`, but it walks rooms itself to resolve anchors. Fresh ids are minted for everything it creates. |
 | v17 → v18 | `migrateReadsWritesLabel` | Adds the `readsWrites` relationship (a service and the store it owns, read and written over one connector — now the Service → Database default). A `writes` connector whose hand-typed label says "reads / writes" (any case or spacing) becomes `readsWrites` with the label cleared, so the caption is the connector's own and reverses correctly; any other label, and any other relationship, is left exactly as it was. Wrapped in `everyRoom`. |
+| v18 → v19 | Optional evidence | Elements and relationships can carry bounded repository-relative source evidence with an observed/inferred basis. The transition is a no-op; older graphs keep their meaning, and evidence is validated independently in every room on import. |
 
 Several of these are deliberate **structural no-ops**: versions where the on-disk shape didn't
 actually need to change, but an entry is still required. `migrateToCurrent` walks the chain from a

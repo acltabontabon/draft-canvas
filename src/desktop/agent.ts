@@ -26,13 +26,17 @@
  * closed, reopened or the app restarts; only a change left unsaved carries the editor's revision.
  */
 
+import { validateToolInput } from '../agent/contract';
+import { renderFocus } from '../agent/focus';
+import { diffForPreview } from '../agent/proposal';
+import { holdPreview, readPreview, clearPreviews } from './agentPreviews';
 import { capabilities } from '../agent/capabilities';
 import { advisoriesReceipt, gate, legibilityReceipt, qualityReceipt } from '../agent/compile';
 import { AgentError, toAgentError } from '../agent/errors';
 import type { JobResult } from '../agent/jobs';
 import { runOffThread, type Progress } from '../agent/offThread';
 import { STAGE_TEXT } from '../agent/progress';
-import { readDiagram, viewPathOf } from '../agent/read';
+import { readAttachment, readDiagram, viewPathOf } from '../agent/read';
 import { buildImplementationContext } from '../agent/context';
 import type { PreparedProposal } from '../agent/proposal';
 import { readSelectionContext } from '../agent/selection';
@@ -151,11 +155,18 @@ function composed(result: JobResult) {
 
 async function run(api: DesktopApi, host: AgentHost, event: Request): Promise<unknown> {
   const { args, context } = event;
+  validateToolInput(event.tool, event.tool !== 'create_diagram' && context.diagramId ? { diagramId: context.diagramId, ...args } : args);
   switch (event.tool) {
     case 'get_capabilities':
       return capabilities(args);
+    case 'read_attachment': {
+      const { file, revision } = await fileFor(host, context);
+      return readAttachment(file, args, revision, context.diagramId ?? '');
+    }
     case 'read_diagram':
       return read(host, args, context);
+    case 'preview_diagram':
+      return preview(host, args, context);
     case 'render_diagram':
       return render(host, args, context);
     case 'read_selection':
@@ -198,7 +209,7 @@ async function run(api: DesktopApi, host: AgentHost, event: Request): Promise<un
  * The diagram a read-only tool asks about, as it stands: the open document (brought in step with
  * its file, and past whatever edit is in flight), or the file's text as the shell read it.
  */
-async function fileFor(host: AgentHost, context: AgentContext): Promise<{ file: DraftDocument; revision: string }> {
+async function fileFor(host: AgentHost, context: AgentContext): Promise<{ file: DraftDocument; revision: string; selection?: { nodes: string[]; edges: string[] }; path?: readonly string[] }> {
   if (context.open) {
     const snapshot = await host.inTurn(async () => {
       await host.syncWithDisk();
@@ -206,7 +217,7 @@ async function fileFor(host: AgentHost, context: AgentContext): Promise<{ file: 
       return host.askEditor({ kind: 'snapshot' });
     });
     if (snapshot.kind !== 'snapshot') throw new AgentError('INTERNAL', 'The editor did not answer.');
-    return { file: snapshot.file, revision: handOut(host, snapshot) };
+    return { file: snapshot.file, revision: handOut(host, snapshot), selection: snapshot.selection, path: snapshot.path };
   }
   if (context.text === undefined || context.stamp === undefined) throw new AgentError('NOT_FOUND', 'That diagram could not be read.');
   const parsed = deserializeDocument(context.text);
@@ -264,18 +275,38 @@ async function render(host: AgentHost, args: Record<string, unknown>, context: A
   const format = oneOf(args.format, ['png', 'svg'] as const, 'png', '/format');
   const theme: ThemeName = oneOf(args.theme, ['light', 'dark'] as const, 'light', '/theme');
   const scale = oneOf(args.scale, RENDER_SCALES, 1, '/scale');
-  const { file, revision } = await fileFor(host, context);
-  const path = viewPathOf(file, args.view);
+  const snapshot = await fileFor(host, context);
+  let { file, revision } = snapshot;
+  let path = viewPathOf(file, args.view);
+  if (args.previewId !== undefined) {
+    const candidate = readPreview(args.previewId, diagramId, context.session ?? '', revision, undefined, file);
+    if (args.view !== undefined && JSON.stringify(path) !== JSON.stringify(candidate.path)) throw new AgentError('INVALID_INPUT', 'The view must match the candidate view.');
+    file = candidate.result.file;
+    path = candidate.path;
+  }
+  let focus = args.focus;
+  if (focus && typeof focus === 'object' && 'selection' in focus) {
+    if ((focus as { selection?: unknown }).selection !== true || !snapshot.selection) throw new AgentError('NOT_ACTIVE', 'Selection rendering needs an open diagram.');
+    if (Object.keys(focus).some((key) => !['selection', 'neighbors'].includes(key))) throw new AgentError('INVALID_INPUT', 'Selection cannot be combined with another focus.');
+    if (args.view === undefined && args.previewId === undefined) path = snapshot.path ?? [];
+    if (JSON.stringify(path) !== JSON.stringify(snapshot.path)) throw new AgentError('INVALID_INPUT', 'The selection belongs to a different view.');
+    const room = viewOf(file, path)!;
+    const nodes = new Set(snapshot.selection.nodes);
+    for (const edge of room.edges) if (snapshot.selection.edges.includes(edge.id)) { nodes.add(edge.source); nodes.add(edge.target); }
+    if (!nodes.size) throw new AgentError('NOT_FOUND', 'Nothing is selected.');
+    focus = { nodes: [...nodes], neighbors: (focus as { neighbors?: unknown }).neighbors };
+  }
   const view = path.length ? viewOf(file, path) : file;
   if (!view) throw new AgentError('NOT_FOUND', 'That view no longer exists.');
 
-  const rendered = renderDocumentSvg(view, { theme, includeBackground: false, idScope: path.length ? `agent-${path.join('.')}` : 'agent' });
-  const base = { diagramId, title: file.metadata.title, revision, ...(path.length ? { view: { path } } : {}) };
+  const only = renderFocus(view, focus);
+  const rendered = renderDocumentSvg(view, { theme, only, ...(focus && typeof focus === 'object' && 'flow' in focus ? { selectedFlowId: String(focus.flow) } : {}), includeBackground: false, idScope: path.length ? `agent-${path.join('.')}` : 'agent' });
+  const base = { diagramId, title: file.metadata.title, revision, ...(args.previewId ? { previewId: args.previewId, provisional: true } : {}), ...(only ? { focus: [...only] } : {}), ...(path.length ? { view: { path } } : {}) };
   const tooLarge = (what: string, hint: string) =>
     new AgentError('LIMIT_EXCEEDED', `${what} Nothing was rendered.`, { hint, details: { width: rendered.width, height: rendered.height, maxBytes: RENDER_MAX_BYTES } });
 
   if (format === 'svg') {
-    if (rendered.svg.length > RENDER_MAX_BYTES) throw tooLarge('The SVG of this view is larger than 8 MB.', 'Render one view at a time (view.inside), or read it with read_diagram instead.');
+    if (new TextEncoder().encode(rendered.svg).length > RENDER_MAX_BYTES) throw tooLarge('The SVG of this view is larger than 8 MB.', 'Render one view at a time (view.inside), or read it with read_diagram instead.');
     return { ...base, format: 'svg', mimeType: 'image/svg+xml', width: rendered.width, height: rendered.height, svg: rendered.svg };
   }
 
@@ -361,6 +392,7 @@ function handOut(host: AgentHost, snapshot: { revision: string; file: DraftDocum
 /** Test seam. */
 export function __resetAgentBases(): void {
   bases.clear();
+  clearPreviews();
 }
 
 /** "The current diagram": its title, revision and the view the person is in — not its contents. */
@@ -417,6 +449,27 @@ function layoutConstrained(result: Extract<JobResult, { kind: 'update' }>) {
   });
 }
 
+/** An agent can inspect a complete candidate without changing the diagram or submitting a proposal. */
+async function preview(host: AgentHost, args: Record<string, unknown>, context: AgentContext) {
+  const { file, revision } = await fileFor(host, context);
+  if (args.expectedRevision !== revision) throw conflict(revision);
+  const path = viewPathOf(file, args.view);
+  const result = await runOffThread({ kind: 'update', file, path, ops: args.ops, layout: args.layout, scope: args.scope });
+  if (result.kind !== 'update') throw new AgentError('INTERNAL', 'The candidate could not be prepared.');
+  const diagramId = context.diagramId ?? '';
+  const previewId = holdPreview({ baseFile: file, diagramId, session: context.session ?? '', revision, path, result });
+  const diff = diffForPreview(file, result.file, path);
+  return { diagramId, revision, previewId, view: { path }, expiresInSeconds: 600, applied: false, canApply: result.problems.length === 0, ...receiptCounts(result), ...diff };
+}
+
+async function candidateOrUpdate(event: Request, file: DraftDocument, path: readonly string[], revision: string, api: DesktopApi) {
+  if (event.args.previewId !== undefined) {
+    if (['ops', 'layout', 'scope', 'onConflict'].some((field) => event.args[field] !== undefined)) throw new AgentError('INVALID_INPUT', 'A candidate commit takes previewId, not replacement ops, layout, scope or rebase.');
+    return readPreview(event.args.previewId, event.context.diagramId ?? '', event.context.session ?? '', revision, path, file).result;
+  }
+  return runOffThread({ kind: 'update', file, path, ops: event.args.ops, layout: event.args.layout, scope: event.args.scope }, progressOf(api, event.id));
+}
+
 /**
  * A change to the open document is made on what its file holds now. Reloaded when it can be; refused
  * when the person's unsaved edits sit on top of an outside change — applying it there would build on a
@@ -469,7 +522,9 @@ async function update(api: DesktopApi, host: AgentHost, event: Request) {
   if (snapshot.busy) throw new AgentError('BUSY', `${snapshot.busy} Nothing changed; try again in a moment with the same requestId.`, { retryable: true });
   const wasClean = host.isClean();
   const accepted = expected === snapshot.revision || (wasClean && expected === fileRevision(open.stamp));
-  const path = viewPathOf(snapshot.file, args.view);
+  const path = args.previewId !== undefined && args.view === undefined
+    ? readPreview(args.previewId, context.diagramId ?? '', context.session ?? '', handOut(host, snapshot)).path
+    : viewPathOf(snapshot.file, args.view);
   let rebased = false;
   if (!accepted) {
     const current = handOut(host, snapshot);
@@ -493,7 +548,7 @@ async function update(api: DesktopApi, host: AgentHost, event: Request) {
   // The person may keep editing meanwhile; the commit below re-checks the revision, so an edit made
   // in the meantime turns this into a conflict rather than being overwritten.
   agentActivity.begin({ id: event.id, tool: 'update_diagram', title: snapshot.file.metadata.title, target: 'open', path });
-  const result = await runOffThread({ kind: 'update', file: snapshot.file, path, ops: args.ops, layout: args.layout, scope: args.scope }, progressOf(api, event.id));
+  const result = await candidateOrUpdate(event, snapshot.file, path, handOut(host, snapshot), api);
   if (result.kind !== 'update') throw new AgentError('INTERNAL', 'The edit could not be worked out.');
   if (result.problems.length) throw layoutConstrained(result);
   const title = result.file.metadata.title;
@@ -548,9 +603,11 @@ async function updateFile(api: DesktopApi, host: AgentHost, event: Request, expe
   const current = fileRevision(context.stamp);
   if (expected !== current) throw conflict(current);
 
-  const path = viewPathOf(parsed.document, args.view);
+  const path = args.previewId !== undefined && args.view === undefined
+    ? readPreview(args.previewId, context.diagramId ?? '', context.session ?? '', current).path
+    : viewPathOf(parsed.document, args.view);
   agentActivity.begin({ id: event.id, tool: 'update_diagram', title: parsed.document.metadata.title, target: 'file', path });
-  const result = await runOffThread({ kind: 'update', file: parsed.document, path, ops: args.ops, layout: args.layout, scope: args.scope }, progressOf(api, event.id));
+  const result = await candidateOrUpdate(event, parsed.document, path, current, api);
   if (result.kind !== 'update') throw new AgentError('INTERNAL', 'The edit could not be worked out.');
   if (result.problems.length) throw layoutConstrained(result);
   const title = result.file.metadata.title;

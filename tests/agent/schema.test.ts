@@ -74,11 +74,13 @@ describe('MCP tool definitions', () => {
       'get_capabilities',
       'list_diagrams',
       'read_diagram',
+      'read_attachment',
       'read_selection',
       'get_implementation_context',
       'render_diagram',
       'create_diagram',
       'update_diagram',
+      'preview_diagram',
       'submit_proposal',
       'get_proposal',
       'list_proposals',
@@ -114,7 +116,7 @@ describe('MCP tool definitions', () => {
   it('describe update_diagram ops as one closed schema per op, shared with submit_proposal', () => {
     const update = tool('update_diagram').inputSchema;
     const variants: Loose[] = update.properties.ops.items.oneOf;
-    expect(variants.map((v) => v.properties.op.enum)).toEqual([['add'], ['update'], ['remove'], ['setLevel'], ['arrange']]);
+    expect(variants.map((v) => v.properties.op.enum)).toEqual([['add'], ['update'], ['remove'], ['setLevel'], ['arrange'], ['moveInside']]);
     for (const variant of variants) {
       expect(variant.additionalProperties).toBe(false);
       expect(variant.required).toContain('op');
@@ -196,29 +198,8 @@ describe('MCP tool definitions', () => {
   });
 
   it('stay compact enough to sit in an agent\'s context', () => {
-    // The tool list goes to the model on every turn, as compact JSON: keep it under ~7.7k tokens
-    // (estimated as characters / 4). Raised from 24k when submit_proposal/get_proposal/list_proposals
-    // were added — a deliberate capability expansion, not drift — with submit_proposal's own `ops`
-    // kept intentionally loose (input.ts validates regardless) rather than repeating update_diagram's
-    // full room schema a second time. Raised again, slightly, when `submit_proposal.layout` was fixed
-    // to reuse the shared `layoutBrief` (it had drifted into a hand-duplicated, narrower copy that
-    // silently dropped `viewport`/`normalizePeerSizes` from a later `update_diagram` addition) —
-    // sharing the object closes that drift permanently, at the cost of its description text appearing
-    // twice in the compiled JSON. Raised a third time for the readability guidance in create_diagram,
-    // group.kind and note.about — the sentences that stop an agent sending a request the layout can
-    // only draw badly (externals grouped for tidiness, notes with no subject, no main path); the full
-    // checklist is behind get_capabilities' `readability` topic rather than here. Raised a fourth
-    // time, by a few hundred characters, for open points — the one new kind of thing an agent can
-    // read and raise (`openPoint` in the add op, and its fields in `set`).
-    // And once more, by a word, for the `implements` relationship — the mirror of `implementedBy`,
-    // so a Hexagonal adapter's dependency on its port can be drawn the way it points.
-    //
-    // Raised from 31.9k to 57k when the ops became one closed schema per op, `submit_proposal.ops`
-    // stopped being loose, and an element's `inside` was typed to the depth limit — three rooms
-    // deep, in each of the three tools that take a room. Written out inline that came to 104k (the
-    // nested rooms are a triangle); defined once per tool under `$defs` and referenced, it is this.
-    // Every byte here is schema a client can validate against, not prose: the descriptions appear
-    // once, on the top-level definitions, and the nested element definitions carry none.
-    expect(JSON.stringify(TOOLS).length).toBeLessThan(57_000);
+    // Typed patches, output contracts and a fourth graph-taking tool add schema, but repeated
+    // proposal/preview vocabulary prose is removed. Keep a measured ceiling on further growth.
+    expect(JSON.stringify(TOOLS).length).toBeLessThan(95_000);
   });
 });

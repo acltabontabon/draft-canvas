@@ -1,3 +1,4 @@
+import { SourceEvidenceDetails } from './SourceEvidenceDetails';
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { LIMITS } from '../document/limits';
 import { createPortal } from 'react-dom';
@@ -292,7 +293,7 @@ function ElementInspectorBody({
     // Read at placement time, not render time: a docked panel changes where the canvas ends
     // after this rendered (see `useOverlayPosition`'s canvas observer) — plus the Flows panel while
     // it's open. See `canvasFrame.ts`.
-    const clearances = { ...baseClearances, right: rightClearance(flowPanelOpen, LEFT_CLEARANCE) };
+    const clearances = { ...baseClearances, right: rightClearance(flowPanelOpen, LEFT_CLEARANCE, frame.root.right) };
     const next = interactionActive
       ? current
       : resolvePlacement(current, anchors, frame.flowToScreenPosition, frame.size, clearances, connectedRects());
@@ -403,6 +404,7 @@ function C4DetailsPanel({ node }: { node: DraftNode }) {
           onKeyDown={stop}
         />
       </label>
+      <SourceEvidenceDetails sources={node.evidence} />
     </div>
   );
 }

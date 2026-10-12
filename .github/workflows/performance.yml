@@ -15,8 +15,6 @@ on:
       extended-measurements:
         type: boolean
         default: false
-  schedule:
-    - cron: '43 2 * * 1'
 
 permissions:
   contents: read
@@ -51,9 +49,8 @@ jobs:
           npm run perf:lifecycle -- --skip-build --sizes medium --only load,export
           npx --no-install tsx .automation/benchmark/gate-cli.ts
       - name: Long-session and larger-workload measurements
-        # A manual Pages/CI caller also has workflow_dispatch as its event. Only the
-        # dedicated Performance run opts into these measurements; reusable verification gates.
-        if: inputs.extended-measurements || (github.workflow == 'Performance' && github.event_name == 'schedule')
+        # Releases run the required gate; manual Performance runs can opt into these measurements.
+        if: inputs.extended-measurements
         run: |
           npm run perf:interaction -- --skip-build --sizes large,stress --out benchmark/results/interaction-stress.json
           npm run perf:lifecycle -- --skip-build --sizes medium,large,stress --out benchmark/results/lifecycle-soak.json

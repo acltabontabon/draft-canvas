@@ -126,8 +126,17 @@ jobs:
     with:
       ref: ${{ needs.verify.outputs.commit }}
 
+  # Stable releases already passed timing budgets in unified CI. Standalone previews and
+  # rebuilds still need the benchmark gate before packaging their tagged source.
+  performance:
+    needs: verify
+    if: needs.verify.outputs.preview == 'true' || inputs.verified-commit == ''
+    uses: ./.github/workflows/performance.yml
+    with:
+      ref: ${{ needs.verify.outputs.commit }}
+
   acceptance:
-    needs: [verify, checks]
+    needs: [verify, checks, performance]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -138,6 +147,8 @@ jobs:
           SOURCE_COMMIT: ${{ needs.verify.outputs.commit }}
           VERIFY_RESULT: ${{ needs.verify.result }}
           CHECKS_RESULT: ${{ needs.checks.result }}
+          PERFORMANCE_RESULT: ${{ needs.performance.result }}
+          PREVIEW: ${{ needs.verify.outputs.preview }}
         run: |
           node <<'NODE'
           if (process.env.VERIFY_RESULT !== 'success') throw new Error('Release source verification failed');
@@ -147,6 +158,8 @@ jobs:
           }
           const expected = commit ? 'skipped' : 'success';
           if (process.env.CHECKS_RESULT !== expected) throw new Error('Desktop acceptance failed');
+          const timing = process.env.PREVIEW === 'true' || !commit ? 'success' : 'skipped';
+          if (process.env.PERFORMANCE_RESULT !== timing) throw new Error('Release performance acceptance failed');
           NODE
 
   # A preview's own draft release, for the matrix jobs to upload into so they can't race to create it.

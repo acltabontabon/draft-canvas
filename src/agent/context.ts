@@ -13,6 +13,7 @@
  * agreed design — flow step order, notes, and boundaries. See its own doc comment below.
  */
 
+import { AgentError } from './errors';
 import { viewOf, type DepthPath } from '../depth/tree';
 import type { DraftDocument, DraftNode } from '../document/types';
 import { nearestElement } from './read';
@@ -114,6 +115,7 @@ export function buildImplementationContext(
   const focusFlowId = typeof focus.flow === 'string' ? focus.flow : undefined;
   const focusNodes = Array.isArray(focus.nodes) ? focus.nodes.filter((id): id is string => typeof id === 'string') : undefined;
 
+  if (focusFlowId && !view.flows.some((f) => f.id === focusFlowId)) throw new AgentError('INVALID_REFERENCE', 'The focused flow does not exist.');
   const flowsToShow = focusFlowId ? view.flows.filter((f) => f.id === focusFlowId) : view.flows;
   const flowsTruncated = !focusFlowId && flowsToShow.length > FLOWS_LIMIT;
   const flows = flowsToShow.slice(0, FLOWS_LIMIT).map((flow) => ({
@@ -169,6 +171,7 @@ export function buildImplementationContext(
   return {
     ...base,
     flows,
+    evidence: [...view.nodes, ...view.edges].filter((item) => inFocus(item.id) && item.evidence?.length).map((item) => ({ id: item.id, sources: item.evidence })),
     ...(notes.length ? { notes } : {}),
     ...(boundaries.length ? { boundaries } : {}),
     ...(flowsTruncated || notesTruncated || boundariesTruncated

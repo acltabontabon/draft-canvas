@@ -46,6 +46,46 @@
       "title": "Draft Canvas capabilities",
       "readOnlyHint": true,
       "openWorldHint": false
+    },
+    "outputSchema": {
+      "type": "object",
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "contract": {
+              "type": "integer"
+            },
+            "starter": {
+              "type": "object"
+            }
+          },
+          "required": []
+        },
+        {
+          "type": "object",
+          "properties": {
+            "error": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code",
+                "message"
+              ]
+            }
+          },
+          "required": [
+            "error"
+          ]
+        }
+      ]
     }
   },
   {
@@ -79,6 +119,54 @@
       "title": "List diagrams",
       "readOnlyHint": true,
       "openWorldHint": false
+    },
+    "outputSchema": {
+      "type": "object",
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "diagrams": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "cursor": {
+              "type": "string"
+            },
+            "complete": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "diagrams"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "error": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code",
+                "message"
+              ]
+            }
+          },
+          "required": [
+            "error"
+          ]
+        }
+      ]
     }
   },
   {
@@ -130,7 +218,8 @@
             "enum": [
               "geometry",
               "attachments",
-              "suggestions"
+              "suggestions",
+              "fullText"
             ]
           }
         },
@@ -156,6 +245,255 @@
       "title": "Read a diagram",
       "readOnlyHint": true,
       "openWorldHint": false
+    },
+    "outputSchema": {
+      "type": "object",
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "diagramId": {
+                  "type": "string"
+                },
+                "revision": {
+                  "type": "string"
+                },
+                "elements": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "relationships": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "flows": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "cursor": {
+                  "type": "string"
+                },
+                "completeness": {
+                  "type": "object",
+                  "properties": {
+                    "elements": {
+                      "type": "boolean"
+                    },
+                    "relationships": {
+                      "type": "boolean"
+                    },
+                    "flows": {
+                      "type": "boolean"
+                    },
+                    "openPoints": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "elements",
+                    "relationships",
+                    "flows",
+                    "openPoints"
+                  ]
+                }
+              },
+              "required": [
+                "diagramId",
+                "revision",
+                "elements",
+                "relationships",
+                "flows",
+                "completeness"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "diagramId": {
+                  "type": "string"
+                },
+                "revision": {
+                  "type": "string"
+                },
+                "format": {
+                  "enum": [
+                    "mermaid",
+                    "plantuml",
+                    "c4"
+                  ]
+                },
+                "source": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "diagramId",
+                "revision",
+                "format",
+                "source"
+              ]
+            }
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "error": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code",
+                "message"
+              ]
+            }
+          },
+          "required": [
+            "error"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "read_attachment",
+    "title": "Read full attachment text",
+    "description": "Retrieve a note or code attachment without losing its tail. Returns up to 8192 Unicode characters, nextOffset (null when complete), totalCharacters and hostId. Repeat with the same expectedRevision and nextOffset; a changed revision is refused.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "diagramId": {
+          "type": "string"
+        },
+        "expectedRevision": {
+          "type": "string"
+        },
+        "attachmentId": {
+          "type": "string"
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "view": {
+          "type": "object",
+          "properties": {
+            "inside": {
+              "type": "array",
+              "maxItems": 3,
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "diagramId",
+        "expectedRevision",
+        "attachmentId"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Read full attachment text",
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "outputSchema": {
+      "type": "object",
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "diagramId": {
+              "type": "string"
+            },
+            "revision": {
+              "type": "string"
+            },
+            "attachmentId": {
+              "type": "string"
+            },
+            "hostId": {
+              "type": "string"
+            },
+            "kind": {
+              "enum": [
+                "note",
+                "code",
+                "text"
+              ]
+            },
+            "text": {
+              "type": "string"
+            },
+            "code": {
+              "type": "string"
+            },
+            "offset": {
+              "type": "integer"
+            },
+            "nextOffset": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "totalCharacters": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "diagramId",
+            "revision",
+            "attachmentId",
+            "hostId",
+            "kind",
+            "offset",
+            "nextOffset",
+            "totalCharacters"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "error": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code",
+                "message"
+              ]
+            }
+          },
+          "required": [
+            "error"
+          ]
+        }
+      ]
     }
   },
   {
@@ -178,6 +516,56 @@
       "title": "Read the current selection",
       "readOnlyHint": true,
       "openWorldHint": false
+    },
+    "outputSchema": {
+      "type": "object",
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "diagramId": {
+              "type": "string"
+            },
+            "revision": {
+              "type": "string"
+            },
+            "selection": {
+              "type": [
+                "object",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "diagramId",
+            "revision",
+            "selection"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "error": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code",
+                "message"
+              ]
+            }
+          },
+          "required": [
+            "error"
+          ]
+        }
+      ]
     }
   },
   {
@@ -230,6 +618,56 @@
       "title": "Read implementation context",
       "readOnlyHint": true,
       "openWorldHint": false
+    },
+    "outputSchema": {
+      "type": "object",
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "diagramId": {
+              "type": "string"
+            },
+            "revision": {
+              "type": "string"
+            },
+            "flows": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            }
+          },
+          "required": [
+            "diagramId",
+            "revision",
+            "flows"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "error": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code",
+                "message"
+              ]
+            }
+          },
+          "required": [
+            "error"
+          ]
+        }
+      ]
     }
   },
   {
@@ -277,6 +715,37 @@
             "dark"
           ],
           "description": "Default light."
+        },
+        "previewId": {
+          "type": "string",
+          "description": "Render an ephemeral candidate from preview_diagram. It must still match this session and revision."
+        },
+        "focus": {
+          "type": "object",
+          "properties": {
+            "nodes": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 200,
+              "items": {
+                "type": "string"
+              }
+            },
+            "group": {
+              "type": "string"
+            },
+            "flow": {
+              "type": "string"
+            },
+            "selection": {
+              "const": true
+            },
+            "neighbors": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false,
+          "description": "Choose one: nodes, group, flow or current selection. neighbors includes one-hop context."
         }
       },
       "required": [
@@ -288,6 +757,74 @@
       "title": "Render a diagram as an image",
       "readOnlyHint": true,
       "openWorldHint": false
+    },
+    "outputSchema": {
+      "type": "object",
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "diagramId": {
+              "type": "string"
+            },
+            "revision": {
+              "type": "string"
+            },
+            "format": {
+              "enum": [
+                "png",
+                "svg"
+              ]
+            },
+            "mimeType": {
+              "type": "string"
+            },
+            "width": {
+              "type": "number"
+            },
+            "height": {
+              "type": "number"
+            },
+            "previewId": {
+              "type": "string"
+            },
+            "provisional": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "diagramId",
+            "revision",
+            "format",
+            "mimeType",
+            "width",
+            "height"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "error": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code",
+                "message"
+              ]
+            }
+          },
+          "required": [
+            "error"
+          ]
+        }
+      ]
     }
   },
   {
@@ -495,6 +1032,47 @@
       ],
       "additionalProperties": false,
       "$defs": {
+        "evidence": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "maxLength": 500,
+                "description": "Repository-relative source path; a reference, never read by Draft Canvas."
+              },
+              "basis": {
+                "enum": [
+                  "observed",
+                  "inferred"
+                ]
+              },
+              "symbol": {
+                "type": "string",
+                "maxLength": 200
+              },
+              "commit": {
+                "type": "string",
+                "maxLength": 80
+              },
+              "line": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "explanation": {
+                "type": "string",
+                "maxLength": 300
+              }
+            },
+            "required": [
+              "path",
+              "basis"
+            ],
+            "additionalProperties": false
+          }
+        },
         "attachment": {
           "type": "object",
           "properties": {
@@ -620,6 +1198,9 @@
               "type": "string",
               "maxLength": 120,
               "description": "A short guard shown under the label."
+            },
+            "evidence": {
+              "$ref": "#/$defs/evidence"
             },
             "attachments": {
               "type": "array",
@@ -802,37 +1383,45 @@
               "description": "Your id for this element; reuse it to refer to it later."
             },
             "type": {
-              "enum": [
-                "service",
-                "api",
-                "worker",
-                "scheduler",
-                "gateway",
-                "external-system",
-                "database",
-                "sql-database",
-                "nosql-database",
-                "cache",
-                "file-system",
-                "object-storage",
-                "search-index",
-                "table",
-                "queue",
-                "topic",
-                "stream",
-                "dead-letter-queue",
-                "person",
-                "user-group",
-                "external-actor",
-                "system-actor",
-                "device",
-                "component",
-                "module",
-                "adapter",
-                "port",
-                "junction"
+              "anyOf": [
+                {
+                  "enum": [
+                    "service",
+                    "api",
+                    "worker",
+                    "scheduler",
+                    "gateway",
+                    "external-system",
+                    "database",
+                    "sql-database",
+                    "nosql-database",
+                    "cache",
+                    "file-system",
+                    "object-storage",
+                    "search-index",
+                    "table",
+                    "queue",
+                    "topic",
+                    "stream",
+                    "dead-letter-queue",
+                    "person",
+                    "user-group",
+                    "external-actor",
+                    "system-actor",
+                    "device",
+                    "component",
+                    "module",
+                    "adapter",
+                    "port",
+                    "junction"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "maxLength": 64
+                }
               ],
-              "description": "What it is. Common: service, api, worker, gateway, external-system, database, cache, queue, topic, stream, person, component."
+              "description": "Unknown names require create_diagram.fallbackType. What it is. Common: service, api, worker, gateway, external-system, database, cache, queue, topic, stream, person, component."
             },
             "label": {
               "type": "string",
@@ -863,6 +1452,9 @@
                 "rose",
                 "green"
               ]
+            },
+            "evidence": {
+              "$ref": "#/$defs/evidence"
             },
             "attachments": {
               "type": "array",
@@ -937,35 +1529,43 @@
               "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}$"
             },
             "type": {
-              "enum": [
-                "service",
-                "api",
-                "worker",
-                "scheduler",
-                "gateway",
-                "external-system",
-                "database",
-                "sql-database",
-                "nosql-database",
-                "cache",
-                "file-system",
-                "object-storage",
-                "search-index",
-                "table",
-                "queue",
-                "topic",
-                "stream",
-                "dead-letter-queue",
-                "person",
-                "user-group",
-                "external-actor",
-                "system-actor",
-                "device",
-                "component",
-                "module",
-                "adapter",
-                "port",
-                "junction"
+              "anyOf": [
+                {
+                  "enum": [
+                    "service",
+                    "api",
+                    "worker",
+                    "scheduler",
+                    "gateway",
+                    "external-system",
+                    "database",
+                    "sql-database",
+                    "nosql-database",
+                    "cache",
+                    "file-system",
+                    "object-storage",
+                    "search-index",
+                    "table",
+                    "queue",
+                    "topic",
+                    "stream",
+                    "dead-letter-queue",
+                    "person",
+                    "user-group",
+                    "external-actor",
+                    "system-actor",
+                    "device",
+                    "component",
+                    "module",
+                    "adapter",
+                    "port",
+                    "junction"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "maxLength": 64
+                }
               ]
             },
             "label": {
@@ -993,6 +1593,9 @@
                 "rose",
                 "green"
               ]
+            },
+            "evidence": {
+              "$ref": "#/$defs/evidence"
             },
             "attachments": {
               "type": "array",
@@ -1065,35 +1668,43 @@
               "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}$"
             },
             "type": {
-              "enum": [
-                "service",
-                "api",
-                "worker",
-                "scheduler",
-                "gateway",
-                "external-system",
-                "database",
-                "sql-database",
-                "nosql-database",
-                "cache",
-                "file-system",
-                "object-storage",
-                "search-index",
-                "table",
-                "queue",
-                "topic",
-                "stream",
-                "dead-letter-queue",
-                "person",
-                "user-group",
-                "external-actor",
-                "system-actor",
-                "device",
-                "component",
-                "module",
-                "adapter",
-                "port",
-                "junction"
+              "anyOf": [
+                {
+                  "enum": [
+                    "service",
+                    "api",
+                    "worker",
+                    "scheduler",
+                    "gateway",
+                    "external-system",
+                    "database",
+                    "sql-database",
+                    "nosql-database",
+                    "cache",
+                    "file-system",
+                    "object-storage",
+                    "search-index",
+                    "table",
+                    "queue",
+                    "topic",
+                    "stream",
+                    "dead-letter-queue",
+                    "person",
+                    "user-group",
+                    "external-actor",
+                    "system-actor",
+                    "device",
+                    "component",
+                    "module",
+                    "adapter",
+                    "port",
+                    "junction"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "maxLength": 64
+                }
               ]
             },
             "label": {
@@ -1121,6 +1732,9 @@
                 "rose",
                 "green"
               ]
+            },
+            "evidence": {
+              "$ref": "#/$defs/evidence"
             },
             "attachments": {
               "type": "array",
@@ -1193,35 +1807,43 @@
               "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}$"
             },
             "type": {
-              "enum": [
-                "service",
-                "api",
-                "worker",
-                "scheduler",
-                "gateway",
-                "external-system",
-                "database",
-                "sql-database",
-                "nosql-database",
-                "cache",
-                "file-system",
-                "object-storage",
-                "search-index",
-                "table",
-                "queue",
-                "topic",
-                "stream",
-                "dead-letter-queue",
-                "person",
-                "user-group",
-                "external-actor",
-                "system-actor",
-                "device",
-                "component",
-                "module",
-                "adapter",
-                "port",
-                "junction"
+              "anyOf": [
+                {
+                  "enum": [
+                    "service",
+                    "api",
+                    "worker",
+                    "scheduler",
+                    "gateway",
+                    "external-system",
+                    "database",
+                    "sql-database",
+                    "nosql-database",
+                    "cache",
+                    "file-system",
+                    "object-storage",
+                    "search-index",
+                    "table",
+                    "queue",
+                    "topic",
+                    "stream",
+                    "dead-letter-queue",
+                    "person",
+                    "user-group",
+                    "external-actor",
+                    "system-actor",
+                    "device",
+                    "component",
+                    "module",
+                    "adapter",
+                    "port",
+                    "junction"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "maxLength": 64
+                }
               ]
             },
             "label": {
@@ -1250,6 +1872,9 @@
                 "green"
               ]
             },
+            "evidence": {
+              "$ref": "#/$defs/evidence"
+            },
             "attachments": {
               "type": "array",
               "maxItems": 4,
@@ -1273,6 +1898,56 @@
       "destructiveHint": false,
       "idempotentHint": true,
       "openWorldHint": false
+    },
+    "outputSchema": {
+      "type": "object",
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "diagramId": {
+              "type": "string"
+            },
+            "revision": {
+              "type": "string"
+            },
+            "created": {
+              "type": "object"
+            },
+            "quality": {
+              "type": "object"
+            }
+          },
+          "required": [
+            "diagramId",
+            "revision",
+            "created"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "error": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code",
+                "message"
+              ]
+            }
+          },
+          "required": [
+            "error"
+          ]
+        }
+      ]
     }
   },
   {
@@ -1458,7 +2133,329 @@
                   },
                   "set": {
                     "type": "object",
-                    "description": "Fields to change. Elements: label, type, description, technology, color, group. Groups: label, kind, group. Relationships: label, semantic, kind, directed, async, condition. Notes: text, kind, about (move beside an element, or into a group). Attachments (by their id): text, kind, code, language, about (move to another element or relationship). Flows: title, color, steps (steps kept by relationship keep their id and caption; caption: null clears), variantOf (the flow this is a named alternative of; null clears — that flow must not itself be a variant). Open points: kind, context, resolved (true settles, false reopens; never anyone's approval), resolution, about. null clears a field."
+                    "minProperties": 1,
+                    "additionalProperties": false,
+                    "properties": {
+                      "label": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 1000
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "type": {
+                        "enum": [
+                          "service",
+                          "api",
+                          "worker",
+                          "scheduler",
+                          "gateway",
+                          "external-system",
+                          "database",
+                          "sql-database",
+                          "nosql-database",
+                          "cache",
+                          "file-system",
+                          "object-storage",
+                          "search-index",
+                          "table",
+                          "queue",
+                          "topic",
+                          "stream",
+                          "dead-letter-queue",
+                          "person",
+                          "user-group",
+                          "external-actor",
+                          "system-actor",
+                          "device",
+                          "component",
+                          "module",
+                          "adapter",
+                          "port",
+                          "junction"
+                        ]
+                      },
+                      "description": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 280
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "technology": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 60
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "color": {
+                        "anyOf": [
+                          {
+                            "enum": [
+                              "neutral",
+                              "teal",
+                              "blue",
+                              "violet",
+                              "amber",
+                              "rose",
+                              "green"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "group": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "evidence": {
+                        "anyOf": [
+                          {
+                            "$ref": "#/$defs/evidence"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "kind": {
+                        "anyOf": [
+                          {
+                            "enum": [
+                              "system",
+                              "domain",
+                              "network",
+                              "deployment",
+                              "group",
+                              "boundary",
+                              "note",
+                              "question",
+                              "warning",
+                              "decision",
+                              "sync",
+                              "async",
+                              "event",
+                              "callback",
+                              "conditional",
+                              "retry",
+                              "failure",
+                              "fallback"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "text": {
+                        "type": "string",
+                        "maxLength": 1000
+                      },
+                      "about": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "array",
+                            "minItems": 1,
+                            "maxItems": 40,
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        ]
+                      },
+                      "near": {
+                        "type": "string"
+                      },
+                      "semantic": {
+                        "anyOf": [
+                          {
+                            "enum": [
+                              "http",
+                              "grpc",
+                              "event",
+                              "command",
+                              "query",
+                              "reads",
+                              "writes",
+                              "readsWrites",
+                              "publishes",
+                              "consumes",
+                              "calls",
+                              "dependsOn",
+                              "uses",
+                              "fansOut",
+                              "deliversTo",
+                              "ingests",
+                              "replicates",
+                              "cdc",
+                              "syncs",
+                              "deadLetters",
+                              "invalidates",
+                              "watches",
+                              "searches",
+                              "indexes",
+                              "routes",
+                              "triggers",
+                              "implementedBy",
+                              "implements",
+                              "compensates",
+                              "transforms"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "directed": {
+                        "type": "boolean"
+                      },
+                      "async": {
+                        "type": "boolean"
+                      },
+                      "condition": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 120
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "title": {
+                        "type": "string",
+                        "maxLength": 100
+                      },
+                      "steps": {
+                        "type": "array",
+                        "maxItems": 60,
+                        "description": "Relationship ids in the order things happen (each at most once per flow), or {relationship, caption}. Only an order the person or the code actually gives — never guessed from the layout.",
+                        "items": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "relationship": {
+                                  "type": "string"
+                                },
+                                "caption": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "maxLength": 120
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "relationship"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "frame": {
+                                  "type": "string",
+                                  "description": "Keeps an existing frame step (as read_diagram returns it)."
+                                }
+                              },
+                              "required": [
+                                "frame"
+                              ],
+                              "additionalProperties": false
+                            }
+                          ]
+                        }
+                      },
+                      "variantOf": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "code": {
+                        "type": "string",
+                        "maxLength": 4000
+                      },
+                      "language": {
+                        "enum": [
+                          "plaintext",
+                          "java",
+                          "javascript",
+                          "typescript",
+                          "json",
+                          "yaml",
+                          "xml",
+                          "sql",
+                          "bash",
+                          "http",
+                          "log"
+                        ]
+                      },
+                      "context": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 500
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "resolved": {
+                        "type": "boolean"
+                      },
+                      "resolution": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 500
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "description": "Fields to change; omitted fields stay. null clears optional fields. Fields unsupported by the target kind are refused."
                   }
                 },
                 "required": [
@@ -1580,9 +2577,41 @@
                   "op"
                 ],
                 "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "enum": [
+                      "moveInside"
+                    ]
+                  },
+                  "owner": {
+                    "type": "string"
+                  },
+                  "ids": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 300,
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "op",
+                  "owner",
+                  "ids"
+                ],
+                "additionalProperties": false,
+                "description": "Move shapes, internal connectors and complete flows inside owner, preserving IDs. Boundary connections redirect to owner. Mixed-view flows, duplicate overview relationships and self-loops are refused: explicitly revise them first."
               }
             ]
           }
+        },
+        "previewId": {
+          "type": "string",
+          "description": "Apply the exact candidate returned by preview_diagram. Do not combine with ops, layout, scope or onConflict."
         },
         "layout": {
           "type": "object",
@@ -1620,11 +2649,92 @@
       "required": [
         "requestId",
         "diagramId",
-        "expectedRevision",
-        "ops"
+        "expectedRevision"
+      ],
+      "oneOf": [
+        {
+          "required": [
+            "ops"
+          ],
+          "not": {
+            "required": [
+              "previewId"
+            ]
+          }
+        },
+        {
+          "required": [
+            "previewId"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "ops"
+                ]
+              },
+              {
+                "required": [
+                  "layout"
+                ]
+              },
+              {
+                "required": [
+                  "scope"
+                ]
+              },
+              {
+                "required": [
+                  "onConflict"
+                ]
+              }
+            ]
+          }
+        }
       ],
       "additionalProperties": false,
       "$defs": {
+        "evidence": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "maxLength": 500,
+                "description": "Repository-relative source path; a reference, never read by Draft Canvas."
+              },
+              "basis": {
+                "enum": [
+                  "observed",
+                  "inferred"
+                ]
+              },
+              "symbol": {
+                "type": "string",
+                "maxLength": 200
+              },
+              "commit": {
+                "type": "string",
+                "maxLength": 80
+              },
+              "line": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "explanation": {
+                "type": "string",
+                "maxLength": 300
+              }
+            },
+            "required": [
+              "path",
+              "basis"
+            ],
+            "additionalProperties": false
+          }
+        },
         "attachment": {
           "type": "object",
           "properties": {
@@ -1750,6 +2860,9 @@
               "type": "string",
               "maxLength": 120,
               "description": "A short guard shown under the label."
+            },
+            "evidence": {
+              "$ref": "#/$defs/evidence"
             },
             "attachments": {
               "type": "array",
@@ -1932,37 +3045,45 @@
               "description": "Your id for this element; reuse it to refer to it later."
             },
             "type": {
-              "enum": [
-                "service",
-                "api",
-                "worker",
-                "scheduler",
-                "gateway",
-                "external-system",
-                "database",
-                "sql-database",
-                "nosql-database",
-                "cache",
-                "file-system",
-                "object-storage",
-                "search-index",
-                "table",
-                "queue",
-                "topic",
-                "stream",
-                "dead-letter-queue",
-                "person",
-                "user-group",
-                "external-actor",
-                "system-actor",
-                "device",
-                "component",
-                "module",
-                "adapter",
-                "port",
-                "junction"
+              "anyOf": [
+                {
+                  "enum": [
+                    "service",
+                    "api",
+                    "worker",
+                    "scheduler",
+                    "gateway",
+                    "external-system",
+                    "database",
+                    "sql-database",
+                    "nosql-database",
+                    "cache",
+                    "file-system",
+                    "object-storage",
+                    "search-index",
+                    "table",
+                    "queue",
+                    "topic",
+                    "stream",
+                    "dead-letter-queue",
+                    "person",
+                    "user-group",
+                    "external-actor",
+                    "system-actor",
+                    "device",
+                    "component",
+                    "module",
+                    "adapter",
+                    "port",
+                    "junction"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "maxLength": 64
+                }
               ],
-              "description": "What it is. Common: service, api, worker, gateway, external-system, database, cache, queue, topic, stream, person, component."
+              "description": "Unknown names require create_diagram.fallbackType. What it is. Common: service, api, worker, gateway, external-system, database, cache, queue, topic, stream, person, component."
             },
             "label": {
               "type": "string",
@@ -1993,6 +3114,9 @@
                 "rose",
                 "green"
               ]
+            },
+            "evidence": {
+              "$ref": "#/$defs/evidence"
             },
             "attachments": {
               "type": "array",
@@ -2067,35 +3191,43 @@
               "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}$"
             },
             "type": {
-              "enum": [
-                "service",
-                "api",
-                "worker",
-                "scheduler",
-                "gateway",
-                "external-system",
-                "database",
-                "sql-database",
-                "nosql-database",
-                "cache",
-                "file-system",
-                "object-storage",
-                "search-index",
-                "table",
-                "queue",
-                "topic",
-                "stream",
-                "dead-letter-queue",
-                "person",
-                "user-group",
-                "external-actor",
-                "system-actor",
-                "device",
-                "component",
-                "module",
-                "adapter",
-                "port",
-                "junction"
+              "anyOf": [
+                {
+                  "enum": [
+                    "service",
+                    "api",
+                    "worker",
+                    "scheduler",
+                    "gateway",
+                    "external-system",
+                    "database",
+                    "sql-database",
+                    "nosql-database",
+                    "cache",
+                    "file-system",
+                    "object-storage",
+                    "search-index",
+                    "table",
+                    "queue",
+                    "topic",
+                    "stream",
+                    "dead-letter-queue",
+                    "person",
+                    "user-group",
+                    "external-actor",
+                    "system-actor",
+                    "device",
+                    "component",
+                    "module",
+                    "adapter",
+                    "port",
+                    "junction"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "maxLength": 64
+                }
               ]
             },
             "label": {
@@ -2123,6 +3255,9 @@
                 "rose",
                 "green"
               ]
+            },
+            "evidence": {
+              "$ref": "#/$defs/evidence"
             },
             "attachments": {
               "type": "array",
@@ -2195,35 +3330,43 @@
               "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}$"
             },
             "type": {
-              "enum": [
-                "service",
-                "api",
-                "worker",
-                "scheduler",
-                "gateway",
-                "external-system",
-                "database",
-                "sql-database",
-                "nosql-database",
-                "cache",
-                "file-system",
-                "object-storage",
-                "search-index",
-                "table",
-                "queue",
-                "topic",
-                "stream",
-                "dead-letter-queue",
-                "person",
-                "user-group",
-                "external-actor",
-                "system-actor",
-                "device",
-                "component",
-                "module",
-                "adapter",
-                "port",
-                "junction"
+              "anyOf": [
+                {
+                  "enum": [
+                    "service",
+                    "api",
+                    "worker",
+                    "scheduler",
+                    "gateway",
+                    "external-system",
+                    "database",
+                    "sql-database",
+                    "nosql-database",
+                    "cache",
+                    "file-system",
+                    "object-storage",
+                    "search-index",
+                    "table",
+                    "queue",
+                    "topic",
+                    "stream",
+                    "dead-letter-queue",
+                    "person",
+                    "user-group",
+                    "external-actor",
+                    "system-actor",
+                    "device",
+                    "component",
+                    "module",
+                    "adapter",
+                    "port",
+                    "junction"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "maxLength": 64
+                }
               ]
             },
             "label": {
@@ -2251,6 +3394,9 @@
                 "rose",
                 "green"
               ]
+            },
+            "evidence": {
+              "$ref": "#/$defs/evidence"
             },
             "attachments": {
               "type": "array",
@@ -2323,35 +3469,43 @@
               "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}$"
             },
             "type": {
-              "enum": [
-                "service",
-                "api",
-                "worker",
-                "scheduler",
-                "gateway",
-                "external-system",
-                "database",
-                "sql-database",
-                "nosql-database",
-                "cache",
-                "file-system",
-                "object-storage",
-                "search-index",
-                "table",
-                "queue",
-                "topic",
-                "stream",
-                "dead-letter-queue",
-                "person",
-                "user-group",
-                "external-actor",
-                "system-actor",
-                "device",
-                "component",
-                "module",
-                "adapter",
-                "port",
-                "junction"
+              "anyOf": [
+                {
+                  "enum": [
+                    "service",
+                    "api",
+                    "worker",
+                    "scheduler",
+                    "gateway",
+                    "external-system",
+                    "database",
+                    "sql-database",
+                    "nosql-database",
+                    "cache",
+                    "file-system",
+                    "object-storage",
+                    "search-index",
+                    "table",
+                    "queue",
+                    "topic",
+                    "stream",
+                    "dead-letter-queue",
+                    "person",
+                    "user-group",
+                    "external-actor",
+                    "system-actor",
+                    "device",
+                    "component",
+                    "module",
+                    "adapter",
+                    "port",
+                    "junction"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "maxLength": 64
+                }
               ]
             },
             "label": {
@@ -2380,6 +3534,9 @@
                 "green"
               ]
             },
+            "evidence": {
+              "$ref": "#/$defs/evidence"
+            },
             "attachments": {
               "type": "array",
               "maxItems": 4,
@@ -2403,6 +3560,1672 @@
       "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": false
+    },
+    "outputSchema": {
+      "type": "object",
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "diagramId": {
+              "type": "string"
+            },
+            "revision": {
+              "type": "string"
+            },
+            "applied": {
+              "type": "boolean"
+            },
+            "persisted": {
+              "type": "boolean"
+            },
+            "state": {
+              "type": "string"
+            },
+            "added": {
+              "type": "integer"
+            },
+            "updated": {
+              "type": "integer"
+            },
+            "removed": {
+              "type": "integer"
+            },
+            "quality": {
+              "type": "object"
+            }
+          },
+          "required": [
+            "diagramId",
+            "revision",
+            "applied"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "error": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code",
+                "message"
+              ]
+            }
+          },
+          "required": [
+            "error"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "preview_diagram",
+    "title": "Preview a diagram change",
+    "description": "Prepare an ephemeral candidate without saving, undo, or submitting a proposal. Returns previewId, diff and quality. Inspect it with render_diagram({diagramId, previewId}); revise by preparing another candidate. Apply that exact candidate with update_diagram({requestId, diagramId, expectedRevision, previewId, view?}) before it expires (10 minutes). A changed revision or a different agent session refuses it.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "diagramId": {
+          "type": "string"
+        },
+        "expectedRevision": {
+          "type": "string"
+        },
+        "view": {
+          "type": "object",
+          "properties": {
+            "inside": {
+              "type": "array",
+              "maxItems": 3,
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "ops": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100,
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "description": "Adds elements, relationships, groups, flows, notes and open points to the view. New elements are placed beside what they connect to; nothing existing moves.",
+                "properties": {
+                  "op": {
+                    "enum": [
+                      "add"
+                    ]
+                  },
+                  "level": {
+                    "enum": [
+                      "context",
+                      "container",
+                      "component"
+                    ],
+                    "description": "C4 level of this view. Leave out for a non-C4 diagram."
+                  },
+                  "nodes": {
+                    "type": "array",
+                    "maxItems": 300,
+                    "items": {
+                      "$ref": "#/$defs/element0"
+                    }
+                  },
+                  "relationships": {
+                    "type": "array",
+                    "maxItems": 600,
+                    "items": {
+                      "$ref": "#/$defs/relationship"
+                    }
+                  },
+                  "groups": {
+                    "type": "array",
+                    "maxItems": 60,
+                    "items": {
+                      "$ref": "#/$defs/group"
+                    }
+                  },
+                  "flows": {
+                    "type": "array",
+                    "maxItems": 20,
+                    "items": {
+                      "$ref": "#/$defs/flow"
+                    }
+                  },
+                  "notes": {
+                    "type": "array",
+                    "maxItems": 60,
+                    "items": {
+                      "$ref": "#/$defs/note"
+                    }
+                  },
+                  "openPoints": {
+                    "type": "array",
+                    "maxItems": 50,
+                    "items": {
+                      "type": "object",
+                      "description": "Something not settled yet, about the ids in about. kind: tentative (working assumption), awaiting (an answer or agreement is needed), parked (put off on purpose). Raise one only when asked.",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}$"
+                        },
+                        "kind": {
+                          "enum": [
+                            "tentative",
+                            "awaiting",
+                            "parked"
+                          ]
+                        },
+                        "context": {
+                          "type": "string",
+                          "maxLength": 500
+                        },
+                        "about": {
+                          "type": "array",
+                          "minItems": 1,
+                          "maxItems": 40,
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "Ids of the elements/relationships it concerns."
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "about"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "op"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "description": "Changes fields of one thing, by id: an element, group, relationship, note, attachment, flow or open point.",
+                "properties": {
+                  "op": {
+                    "enum": [
+                      "update"
+                    ]
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "set": {
+                    "type": "object",
+                    "minProperties": 1,
+                    "additionalProperties": false,
+                    "properties": {
+                      "label": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 1000
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "type": {
+                        "enum": [
+                          "service",
+                          "api",
+                          "worker",
+                          "scheduler",
+                          "gateway",
+                          "external-system",
+                          "database",
+                          "sql-database",
+                          "nosql-database",
+                          "cache",
+                          "file-system",
+                          "object-storage",
+                          "search-index",
+                          "table",
+                          "queue",
+                          "topic",
+                          "stream",
+                          "dead-letter-queue",
+                          "person",
+                          "user-group",
+                          "external-actor",
+                          "system-actor",
+                          "device",
+                          "component",
+                          "module",
+                          "adapter",
+                          "port",
+                          "junction"
+                        ]
+                      },
+                      "description": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 280
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "technology": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 60
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "color": {
+                        "anyOf": [
+                          {
+                            "enum": [
+                              "neutral",
+                              "teal",
+                              "blue",
+                              "violet",
+                              "amber",
+                              "rose",
+                              "green"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "group": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "evidence": {
+                        "anyOf": [
+                          {
+                            "$ref": "#/$defs/evidence"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "kind": {
+                        "anyOf": [
+                          {
+                            "enum": [
+                              "system",
+                              "domain",
+                              "network",
+                              "deployment",
+                              "group",
+                              "boundary",
+                              "note",
+                              "question",
+                              "warning",
+                              "decision",
+                              "sync",
+                              "async",
+                              "event",
+                              "callback",
+                              "conditional",
+                              "retry",
+                              "failure",
+                              "fallback"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "text": {
+                        "type": "string",
+                        "maxLength": 1000
+                      },
+                      "about": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "array",
+                            "minItems": 1,
+                            "maxItems": 40,
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        ]
+                      },
+                      "near": {
+                        "type": "string"
+                      },
+                      "semantic": {
+                        "anyOf": [
+                          {
+                            "enum": [
+                              "http",
+                              "grpc",
+                              "event",
+                              "command",
+                              "query",
+                              "reads",
+                              "writes",
+                              "readsWrites",
+                              "publishes",
+                              "consumes",
+                              "calls",
+                              "dependsOn",
+                              "uses",
+                              "fansOut",
+                              "deliversTo",
+                              "ingests",
+                              "replicates",
+                              "cdc",
+                              "syncs",
+                              "deadLetters",
+                              "invalidates",
+                              "watches",
+                              "searches",
+                              "indexes",
+                              "routes",
+                              "triggers",
+                              "implementedBy",
+                              "implements",
+                              "compensates",
+                              "transforms"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "directed": {
+                        "type": "boolean"
+                      },
+                      "async": {
+                        "type": "boolean"
+                      },
+                      "condition": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 120
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "title": {
+                        "type": "string",
+                        "maxLength": 100
+                      },
+                      "steps": {
+                        "type": "array",
+                        "maxItems": 60,
+                        "description": "Relationship ids in the order things happen (each at most once per flow), or {relationship, caption}. Only an order the person or the code actually gives — never guessed from the layout.",
+                        "items": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "relationship": {
+                                  "type": "string"
+                                },
+                                "caption": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "maxLength": 120
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "relationship"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "frame": {
+                                  "type": "string",
+                                  "description": "Keeps an existing frame step (as read_diagram returns it)."
+                                }
+                              },
+                              "required": [
+                                "frame"
+                              ],
+                              "additionalProperties": false
+                            }
+                          ]
+                        }
+                      },
+                      "variantOf": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "code": {
+                        "type": "string",
+                        "maxLength": 4000
+                      },
+                      "language": {
+                        "enum": [
+                          "plaintext",
+                          "java",
+                          "javascript",
+                          "typescript",
+                          "json",
+                          "yaml",
+                          "xml",
+                          "sql",
+                          "bash",
+                          "http",
+                          "log"
+                        ]
+                      },
+                      "context": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 500
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "resolved": {
+                        "type": "boolean"
+                      },
+                      "resolution": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 500
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "description": "Fields to change; omitted fields stay. null clears optional fields. Fields unsupported by the target kind are refused."
+                  }
+                },
+                "required": [
+                  "op",
+                  "id",
+                  "set"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "description": "Removes things by id: elements (with their connectors), relationships, groups, flows, notes, attachments, open points.",
+                "properties": {
+                  "op": {
+                    "enum": [
+                      "remove"
+                    ]
+                  },
+                  "ids": {
+                    "type": "array",
+                    "maxItems": 200,
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "cascade": {
+                    "type": "boolean",
+                    "description": "Also remove everything inside a group being removed. Without it, a group that still holds elements is refused."
+                  }
+                },
+                "required": [
+                  "op",
+                  "ids"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "description": "Sets the view's C4 level; null makes it a non-C4 view.",
+                "properties": {
+                  "op": {
+                    "enum": [
+                      "setLevel"
+                    ]
+                  },
+                  "level": {
+                    "enum": [
+                      "context",
+                      "container",
+                      "component",
+                      null
+                    ]
+                  }
+                },
+                "required": [
+                  "op",
+                  "level"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "description": "\"Clean up the layout/arrows\": re-lays out the view (or one group, or some elements) in place, keeping every id, note and flow.",
+                "properties": {
+                  "op": {
+                    "enum": [
+                      "arrange"
+                    ]
+                  },
+                  "scope": {
+                    "type": "object",
+                    "description": "What to rearrange — one group (with its contents) or some elements. Default: the whole view.",
+                    "properties": {
+                      "group": {
+                        "type": "string"
+                      },
+                      "nodes": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "maxItems": 300
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "connectors": {
+                    "enum": [
+                      "tidy",
+                      "keep",
+                      "orthogonal"
+                    ],
+                    "description": "tidy (default) drops hand-routing on connectors in scope; keep leaves it; orthogonal also makes them right-angled."
+                  },
+                  "move": {
+                    "type": "boolean",
+                    "description": "false re-anchors connectors in scope without moving or resizing anything — a cheaper cleanup pass. Default true."
+                  },
+                  "direction": {
+                    "enum": [
+                      "right",
+                      "down"
+                    ],
+                    "description": "Default: the way the view already reads (a whole-view arrange turns the other way only when that reads clearly better)."
+                  },
+                  "spacing": {
+                    "enum": [
+                      "compact",
+                      "comfortable",
+                      "spacious"
+                    ]
+                  },
+                  "primaryFlow": {
+                    "type": "string",
+                    "description": "Lay this flow out as the straight main path."
+                  }
+                },
+                "required": [
+                  "op"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "enum": [
+                      "moveInside"
+                    ]
+                  },
+                  "owner": {
+                    "type": "string"
+                  },
+                  "ids": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 300,
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "op",
+                  "owner",
+                  "ids"
+                ],
+                "additionalProperties": false,
+                "description": "Move shapes, internal connectors and complete flows inside owner, preserving IDs. Boundary connections redirect to owner. Mixed-view flows, duplicate overview relationships and self-loops are refused: explicitly revise them first."
+              }
+            ]
+          }
+        },
+        "layout": {
+          "type": "object",
+          "properties": {
+            "direction": {
+              "enum": [
+                "right",
+                "down"
+              ]
+            },
+            "spacing": {
+              "enum": [
+                "compact",
+                "comfortable",
+                "spacious"
+              ]
+            },
+            "normalizePeerSizes": {
+              "type": "boolean",
+              "description": "Give peer shapes (same type/role, parent) one uniform size, bounded against one outlier growing the rest. Default true for a new diagram/block; false for arrange (kept unless asked)."
+            },
+            "viewport": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2,
+              "description": "Intended [width, height] px. Preferred over a layout unreadable there; refused, not shrunk, if none fits."
+            }
+          },
+          "additionalProperties": false
+        },
+        "scope": {
+          "type": "object",
+          "description": "Ids from read_selection; update/remove outside them is refused (OUT_OF_SCOPE).",
+          "properties": {
+            "nodes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 300
+            },
+            "edges": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 300
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "diagramId",
+        "expectedRevision",
+        "ops"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "evidence": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "maxLength": 500
+              },
+              "basis": {
+                "enum": [
+                  "observed",
+                  "inferred"
+                ]
+              },
+              "symbol": {
+                "type": "string",
+                "maxLength": 200
+              },
+              "commit": {
+                "type": "string",
+                "maxLength": 80
+              },
+              "line": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "explanation": {
+                "type": "string",
+                "maxLength": 300
+              }
+            },
+            "required": [
+              "path",
+              "basis"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "attachment": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "enum": [
+                "note",
+                "code"
+              ]
+            },
+            "text": {
+              "type": "string",
+              "maxLength": 1000
+            },
+            "noteKind": {
+              "enum": [
+                "note",
+                "question",
+                "warning",
+                "decision"
+              ]
+            },
+            "language": {
+              "enum": [
+                "plaintext",
+                "java",
+                "javascript",
+                "typescript",
+                "json",
+                "yaml",
+                "xml",
+                "sql",
+                "bash",
+                "http",
+                "log"
+              ]
+            },
+            "code": {
+              "type": "string",
+              "maxLength": 4000
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "additionalProperties": false
+        },
+        "relationship": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}$"
+            },
+            "from": {
+              "type": "string"
+            },
+            "to": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string",
+              "maxLength": 80
+            },
+            "semantic": {
+              "enum": [
+                "http",
+                "grpc",
+                "event",
+                "command",
+                "query",
+                "reads",
+                "writes",
+                "readsWrites",
+                "publishes",
+                "consumes",
+                "calls",
+                "dependsOn",
+                "uses",
+                "fansOut",
+                "deliversTo",
+                "ingests",
+                "replicates",
+                "cdc",
+                "syncs",
+                "deadLetters",
+                "invalidates",
+                "watches",
+                "searches",
+                "indexes",
+                "routes",
+                "triggers",
+                "implementedBy",
+                "implements",
+                "compensates",
+                "transforms"
+              ]
+            },
+            "kind": {
+              "enum": [
+                "sync",
+                "async",
+                "event",
+                "callback",
+                "conditional",
+                "retry",
+                "failure",
+                "fallback"
+              ]
+            },
+            "directed": {
+              "type": "boolean"
+            },
+            "async": {
+              "type": "boolean"
+            },
+            "condition": {
+              "type": "string",
+              "maxLength": 120
+            },
+            "evidence": {
+              "$ref": "#/$defs/evidence"
+            },
+            "attachments": {
+              "type": "array",
+              "maxItems": 4,
+              "items": {
+                "$ref": "#/$defs/attachment"
+              }
+            }
+          },
+          "required": [
+            "id",
+            "from",
+            "to"
+          ],
+          "additionalProperties": false
+        },
+        "group": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}$"
+            },
+            "label": {
+              "type": "string",
+              "maxLength": 80
+            },
+            "kind": {
+              "enum": [
+                "system",
+                "domain",
+                "network",
+                "deployment",
+                "group",
+                "boundary"
+              ]
+            },
+            "parent": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "label"
+          ],
+          "additionalProperties": false
+        },
+        "flow": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}$"
+            },
+            "title": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "color": {
+              "enum": [
+                "neutral",
+                "teal",
+                "blue",
+                "violet",
+                "amber",
+                "rose",
+                "green"
+              ]
+            },
+            "variantOf": {
+              "type": "string"
+            },
+            "steps": {
+              "type": "array",
+              "maxItems": 60,
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "relationship": {
+                        "type": "string"
+                      },
+                      "caption": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 120
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "relationship"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "frame": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "frame"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            }
+          },
+          "required": [
+            "id",
+            "title",
+            "steps"
+          ],
+          "additionalProperties": false
+        },
+        "note": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}$"
+            },
+            "text": {
+              "type": "string",
+              "maxLength": 1000
+            },
+            "kind": {
+              "enum": [
+                "note",
+                "question",
+                "warning",
+                "decision"
+              ]
+            },
+            "about": {
+              "type": "string"
+            },
+            "attach": {
+              "type": "boolean"
+            },
+            "near": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "text"
+          ],
+          "additionalProperties": false
+        },
+        "element0": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}$"
+            },
+            "type": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "service",
+                    "api",
+                    "worker",
+                    "scheduler",
+                    "gateway",
+                    "external-system",
+                    "database",
+                    "sql-database",
+                    "nosql-database",
+                    "cache",
+                    "file-system",
+                    "object-storage",
+                    "search-index",
+                    "table",
+                    "queue",
+                    "topic",
+                    "stream",
+                    "dead-letter-queue",
+                    "person",
+                    "user-group",
+                    "external-actor",
+                    "system-actor",
+                    "device",
+                    "component",
+                    "module",
+                    "adapter",
+                    "port",
+                    "junction"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "maxLength": 64
+                }
+              ]
+            },
+            "label": {
+              "type": "string",
+              "maxLength": 120
+            },
+            "description": {
+              "type": "string",
+              "maxLength": 280
+            },
+            "technology": {
+              "type": "string",
+              "maxLength": 60
+            },
+            "group": {
+              "type": "string"
+            },
+            "color": {
+              "enum": [
+                "neutral",
+                "teal",
+                "blue",
+                "violet",
+                "amber",
+                "rose",
+                "green"
+              ]
+            },
+            "evidence": {
+              "$ref": "#/$defs/evidence"
+            },
+            "attachments": {
+              "type": "array",
+              "maxItems": 4,
+              "items": {
+                "$ref": "#/$defs/attachment"
+              }
+            },
+            "inside": {
+              "type": "object",
+              "properties": {
+                "level": {
+                  "enum": [
+                    "context",
+                    "container",
+                    "component"
+                  ]
+                },
+                "nodes": {
+                  "type": "array",
+                  "maxItems": 300,
+                  "items": {
+                    "$ref": "#/$defs/element1"
+                  }
+                },
+                "relationships": {
+                  "type": "array",
+                  "maxItems": 600,
+                  "items": {
+                    "$ref": "#/$defs/relationship"
+                  }
+                },
+                "groups": {
+                  "type": "array",
+                  "maxItems": 60,
+                  "items": {
+                    "$ref": "#/$defs/group"
+                  }
+                },
+                "flows": {
+                  "type": "array",
+                  "maxItems": 20,
+                  "items": {
+                    "$ref": "#/$defs/flow"
+                  }
+                },
+                "notes": {
+                  "type": "array",
+                  "maxItems": 60,
+                  "items": {
+                    "$ref": "#/$defs/note"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "type",
+            "label"
+          ],
+          "additionalProperties": false
+        },
+        "element1": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}$"
+            },
+            "type": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "service",
+                    "api",
+                    "worker",
+                    "scheduler",
+                    "gateway",
+                    "external-system",
+                    "database",
+                    "sql-database",
+                    "nosql-database",
+                    "cache",
+                    "file-system",
+                    "object-storage",
+                    "search-index",
+                    "table",
+                    "queue",
+                    "topic",
+                    "stream",
+                    "dead-letter-queue",
+                    "person",
+                    "user-group",
+                    "external-actor",
+                    "system-actor",
+                    "device",
+                    "component",
+                    "module",
+                    "adapter",
+                    "port",
+                    "junction"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "maxLength": 64
+                }
+              ]
+            },
+            "label": {
+              "type": "string",
+              "maxLength": 120
+            },
+            "description": {
+              "type": "string",
+              "maxLength": 280
+            },
+            "technology": {
+              "type": "string",
+              "maxLength": 60
+            },
+            "group": {
+              "type": "string"
+            },
+            "color": {
+              "enum": [
+                "neutral",
+                "teal",
+                "blue",
+                "violet",
+                "amber",
+                "rose",
+                "green"
+              ]
+            },
+            "evidence": {
+              "$ref": "#/$defs/evidence"
+            },
+            "attachments": {
+              "type": "array",
+              "maxItems": 4,
+              "items": {
+                "$ref": "#/$defs/attachment"
+              }
+            },
+            "inside": {
+              "type": "object",
+              "properties": {
+                "level": {
+                  "enum": [
+                    "context",
+                    "container",
+                    "component"
+                  ]
+                },
+                "nodes": {
+                  "type": "array",
+                  "maxItems": 300,
+                  "items": {
+                    "$ref": "#/$defs/element2"
+                  }
+                },
+                "relationships": {
+                  "type": "array",
+                  "maxItems": 600,
+                  "items": {
+                    "$ref": "#/$defs/relationship"
+                  }
+                },
+                "groups": {
+                  "type": "array",
+                  "maxItems": 60,
+                  "items": {
+                    "$ref": "#/$defs/group"
+                  }
+                },
+                "flows": {
+                  "type": "array",
+                  "maxItems": 20,
+                  "items": {
+                    "$ref": "#/$defs/flow"
+                  }
+                },
+                "notes": {
+                  "type": "array",
+                  "maxItems": 60,
+                  "items": {
+                    "$ref": "#/$defs/note"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "type",
+            "label"
+          ],
+          "additionalProperties": false
+        },
+        "element2": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}$"
+            },
+            "type": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "service",
+                    "api",
+                    "worker",
+                    "scheduler",
+                    "gateway",
+                    "external-system",
+                    "database",
+                    "sql-database",
+                    "nosql-database",
+                    "cache",
+                    "file-system",
+                    "object-storage",
+                    "search-index",
+                    "table",
+                    "queue",
+                    "topic",
+                    "stream",
+                    "dead-letter-queue",
+                    "person",
+                    "user-group",
+                    "external-actor",
+                    "system-actor",
+                    "device",
+                    "component",
+                    "module",
+                    "adapter",
+                    "port",
+                    "junction"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "maxLength": 64
+                }
+              ]
+            },
+            "label": {
+              "type": "string",
+              "maxLength": 120
+            },
+            "description": {
+              "type": "string",
+              "maxLength": 280
+            },
+            "technology": {
+              "type": "string",
+              "maxLength": 60
+            },
+            "group": {
+              "type": "string"
+            },
+            "color": {
+              "enum": [
+                "neutral",
+                "teal",
+                "blue",
+                "violet",
+                "amber",
+                "rose",
+                "green"
+              ]
+            },
+            "evidence": {
+              "$ref": "#/$defs/evidence"
+            },
+            "attachments": {
+              "type": "array",
+              "maxItems": 4,
+              "items": {
+                "$ref": "#/$defs/attachment"
+              }
+            },
+            "inside": {
+              "type": "object",
+              "properties": {
+                "level": {
+                  "enum": [
+                    "context",
+                    "container",
+                    "component"
+                  ]
+                },
+                "nodes": {
+                  "type": "array",
+                  "maxItems": 300,
+                  "items": {
+                    "$ref": "#/$defs/element3"
+                  }
+                },
+                "relationships": {
+                  "type": "array",
+                  "maxItems": 600,
+                  "items": {
+                    "$ref": "#/$defs/relationship"
+                  }
+                },
+                "groups": {
+                  "type": "array",
+                  "maxItems": 60,
+                  "items": {
+                    "$ref": "#/$defs/group"
+                  }
+                },
+                "flows": {
+                  "type": "array",
+                  "maxItems": 20,
+                  "items": {
+                    "$ref": "#/$defs/flow"
+                  }
+                },
+                "notes": {
+                  "type": "array",
+                  "maxItems": 60,
+                  "items": {
+                    "$ref": "#/$defs/note"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "type",
+            "label"
+          ],
+          "additionalProperties": false
+        },
+        "element3": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}$"
+            },
+            "type": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "service",
+                    "api",
+                    "worker",
+                    "scheduler",
+                    "gateway",
+                    "external-system",
+                    "database",
+                    "sql-database",
+                    "nosql-database",
+                    "cache",
+                    "file-system",
+                    "object-storage",
+                    "search-index",
+                    "table",
+                    "queue",
+                    "topic",
+                    "stream",
+                    "dead-letter-queue",
+                    "person",
+                    "user-group",
+                    "external-actor",
+                    "system-actor",
+                    "device",
+                    "component",
+                    "module",
+                    "adapter",
+                    "port",
+                    "junction"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "maxLength": 64
+                }
+              ]
+            },
+            "label": {
+              "type": "string",
+              "maxLength": 120
+            },
+            "description": {
+              "type": "string",
+              "maxLength": 280
+            },
+            "technology": {
+              "type": "string",
+              "maxLength": 60
+            },
+            "group": {
+              "type": "string"
+            },
+            "color": {
+              "enum": [
+                "neutral",
+                "teal",
+                "blue",
+                "violet",
+                "amber",
+                "rose",
+                "green"
+              ]
+            },
+            "evidence": {
+              "$ref": "#/$defs/evidence"
+            },
+            "attachments": {
+              "type": "array",
+              "maxItems": 4,
+              "items": {
+                "$ref": "#/$defs/attachment"
+              }
+            }
+          },
+          "required": [
+            "id",
+            "type",
+            "label"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "annotations": {
+      "title": "Preview a diagram change",
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "outputSchema": {
+      "type": "object",
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "diagramId": {
+              "type": "string"
+            },
+            "revision": {
+              "type": "string"
+            },
+            "applied": {
+              "type": "boolean"
+            },
+            "persisted": {
+              "type": "boolean"
+            },
+            "state": {
+              "type": "string"
+            },
+            "added": {
+              "type": "integer"
+            },
+            "updated": {
+              "type": "integer"
+            },
+            "removed": {
+              "type": "integer"
+            },
+            "quality": {
+              "type": "object"
+            },
+            "previewId": {
+              "type": "string"
+            },
+            "canApply": {
+              "type": "boolean"
+            },
+            "diff": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "expiresInSeconds": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "diagramId",
+            "revision",
+            "previewId",
+            "canApply",
+            "diff",
+            "expiresInSeconds"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "error": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code",
+                "message"
+              ]
+            }
+          },
+          "required": [
+            "error"
+          ]
+        }
+      ]
     }
   },
   {
@@ -2423,7 +5246,7 @@
         },
         "expectedRevision": {
           "type": "string",
-          "description": "The revision from your last read or receipt; a newer one means someone else edited it since — this proposal's staleness, not a block."
+          "description": "The revision from your last read or receipt; it must still match at submission. Later unrelated edits mark a stored proposal stale without blocking its review."
         },
         "view": {
           "type": "object",
@@ -2575,7 +5398,329 @@
                   },
                   "set": {
                     "type": "object",
-                    "description": "Fields to change. Elements: label, type, description, technology, color, group. Groups: label, kind, group. Relationships: label, semantic, kind, directed, async, condition. Notes: text, kind, about (move beside an element, or into a group). Attachments (by their id): text, kind, code, language, about (move to another element or relationship). Flows: title, color, steps (steps kept by relationship keep their id and caption; caption: null clears), variantOf (the flow this is a named alternative of; null clears — that flow must not itself be a variant). Open points: kind, context, resolved (true settles, false reopens; never anyone's approval), resolution, about. null clears a field."
+                    "minProperties": 1,
+                    "additionalProperties": false,
+                    "properties": {
+                      "label": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 1000
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "type": {
+                        "enum": [
+                          "service",
+                          "api",
+                          "worker",
+                          "scheduler",
+                          "gateway",
+                          "external-system",
+                          "database",
+                          "sql-database",
+                          "nosql-database",
+                          "cache",
+                          "file-system",
+                          "object-storage",
+                          "search-index",
+                          "table",
+                          "queue",
+                          "topic",
+                          "stream",
+                          "dead-letter-queue",
+                          "person",
+                          "user-group",
+                          "external-actor",
+                          "system-actor",
+                          "device",
+                          "component",
+                          "module",
+                          "adapter",
+                          "port",
+                          "junction"
+                        ]
+                      },
+                      "description": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 280
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "technology": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 60
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "color": {
+                        "anyOf": [
+                          {
+                            "enum": [
+                              "neutral",
+                              "teal",
+                              "blue",
+                              "violet",
+                              "amber",
+                              "rose",
+                              "green"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "group": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "evidence": {
+                        "anyOf": [
+                          {
+                            "$ref": "#/$defs/evidence"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "kind": {
+                        "anyOf": [
+                          {
+                            "enum": [
+                              "system",
+                              "domain",
+                              "network",
+                              "deployment",
+                              "group",
+                              "boundary",
+                              "note",
+                              "question",
+                              "warning",
+                              "decision",
+                              "sync",
+                              "async",
+                              "event",
+                              "callback",
+                              "conditional",
+                              "retry",
+                              "failure",
+                              "fallback"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "text": {
+                        "type": "string",
+                        "maxLength": 1000
+                      },
+                      "about": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "array",
+                            "minItems": 1,
+                            "maxItems": 40,
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        ]
+                      },
+                      "near": {
+                        "type": "string"
+                      },
+                      "semantic": {
+                        "anyOf": [
+                          {
+                            "enum": [
+                              "http",
+                              "grpc",
+                              "event",
+                              "command",
+                              "query",
+                              "reads",
+                              "writes",
+                              "readsWrites",
+                              "publishes",
+                              "consumes",
+                              "calls",
+                              "dependsOn",
+                              "uses",
+                              "fansOut",
+                              "deliversTo",
+                              "ingests",
+                              "replicates",
+                              "cdc",
+                              "syncs",
+                              "deadLetters",
+                              "invalidates",
+                              "watches",
+                              "searches",
+                              "indexes",
+                              "routes",
+                              "triggers",
+                              "implementedBy",
+                              "implements",
+                              "compensates",
+                              "transforms"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "directed": {
+                        "type": "boolean"
+                      },
+                      "async": {
+                        "type": "boolean"
+                      },
+                      "condition": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 120
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "title": {
+                        "type": "string",
+                        "maxLength": 100
+                      },
+                      "steps": {
+                        "type": "array",
+                        "maxItems": 60,
+                        "description": "Relationship ids in the order things happen (each at most once per flow), or {relationship, caption}. Only an order the person or the code actually gives — never guessed from the layout.",
+                        "items": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "relationship": {
+                                  "type": "string"
+                                },
+                                "caption": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "maxLength": 120
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "relationship"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "frame": {
+                                  "type": "string",
+                                  "description": "Keeps an existing frame step (as read_diagram returns it)."
+                                }
+                              },
+                              "required": [
+                                "frame"
+                              ],
+                              "additionalProperties": false
+                            }
+                          ]
+                        }
+                      },
+                      "variantOf": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "code": {
+                        "type": "string",
+                        "maxLength": 4000
+                      },
+                      "language": {
+                        "enum": [
+                          "plaintext",
+                          "java",
+                          "javascript",
+                          "typescript",
+                          "json",
+                          "yaml",
+                          "xml",
+                          "sql",
+                          "bash",
+                          "http",
+                          "log"
+                        ]
+                      },
+                      "context": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 500
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "resolved": {
+                        "type": "boolean"
+                      },
+                      "resolution": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 500
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "description": "Fields to change; omitted fields stay. null clears optional fields. Fields unsupported by the target kind are refused."
                   }
                 },
                 "required": [
@@ -2697,6 +5842,34 @@
                   "op"
                 ],
                 "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "enum": [
+                      "moveInside"
+                    ]
+                  },
+                  "owner": {
+                    "type": "string"
+                  },
+                  "ids": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 300,
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "op",
+                  "owner",
+                  "ids"
+                ],
+                "additionalProperties": false,
+                "description": "Move shapes, internal connectors and complete flows inside owner, preserving IDs. Boundary connections redirect to owner. Mixed-view flows, duplicate overview relationships and self-loops are refused: explicitly revise them first."
               }
             ]
           },
@@ -2792,6 +5965,46 @@
       ],
       "additionalProperties": false,
       "$defs": {
+        "evidence": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "maxLength": 500
+              },
+              "basis": {
+                "enum": [
+                  "observed",
+                  "inferred"
+                ]
+              },
+              "symbol": {
+                "type": "string",
+                "maxLength": 200
+              },
+              "commit": {
+                "type": "string",
+                "maxLength": 80
+              },
+              "line": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "explanation": {
+                "type": "string",
+                "maxLength": 300
+              }
+            },
+            "required": [
+              "path",
+              "basis"
+            ],
+            "additionalProperties": false
+          }
+        },
         "attachment": {
           "type": "object",
           "properties": {
@@ -2830,8 +6043,7 @@
             },
             "code": {
               "type": "string",
-              "maxLength": 4000,
-              "description": "Shown as code, never run."
+              "maxLength": 4000
             }
           },
           "required": [
@@ -2844,8 +6056,7 @@
           "properties": {
             "id": {
               "type": "string",
-              "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}$",
-              "description": "Your id for this relationship; reuse it to refer to it later."
+              "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}$"
             },
             "from": {
               "type": "string"
@@ -2855,8 +6066,7 @@
             },
             "label": {
               "type": "string",
-              "maxLength": 80,
-              "description": "What flows or happens, e.g. \"Publishes RepaymentReceived\"."
+              "maxLength": 80
             },
             "semantic": {
               "enum": [
@@ -2890,8 +6100,7 @@
                 "implements",
                 "compensates",
                 "transforms"
-              ],
-              "description": "Optional: inferred from the two element types when left out."
+              ]
             },
             "kind": {
               "enum": [
@@ -2903,20 +6112,20 @@
                 "retry",
                 "failure",
                 "fallback"
-              ],
-              "description": "Optional behaviour: sync, async, event, retry, failure…"
+              ]
             },
             "directed": {
-              "type": "boolean",
-              "description": "false for an undirected line. Default true."
+              "type": "boolean"
             },
             "async": {
               "type": "boolean"
             },
             "condition": {
               "type": "string",
-              "maxLength": 120,
-              "description": "A short guard shown under the label."
+              "maxLength": 120
+            },
+            "evidence": {
+              "$ref": "#/$defs/evidence"
             },
             "attachments": {
               "type": "array",
@@ -2938,8 +6147,7 @@
           "properties": {
             "id": {
               "type": "string",
-              "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}$",
-              "description": "Your id for this group; reuse it to refer to it later."
+              "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}$"
             },
             "label": {
               "type": "string",
@@ -2953,12 +6161,10 @@
                 "deployment",
                 "group",
                 "boundary"
-              ],
-              "description": "\"system\" is a C4 software-system boundary; \"group\" is purely visual. Default \"boundary\". Laid out as one block: never group external systems just to tidy them."
+              ]
             },
             "parent": {
-              "type": "string",
-              "description": "Id of the group it nests in."
+              "type": "string"
             }
           },
           "required": [
@@ -2972,8 +6178,7 @@
           "properties": {
             "id": {
               "type": "string",
-              "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}$",
-              "description": "Your id for this flow; reuse it to refer to it later."
+              "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}$"
             },
             "title": {
               "type": "string",
@@ -2991,13 +6196,11 @@
               ]
             },
             "variantOf": {
-              "type": "string",
-              "description": "Id of the flow this is a named alternative telling of (e.g. a failure path) — that flow itself must not also be a variant."
+              "type": "string"
             },
             "steps": {
               "type": "array",
               "maxItems": 60,
-              "description": "Relationship ids in the order things happen (each at most once per flow), or {relationship, caption}. Only an order the person or the code actually gives — never guessed from the layout.",
               "items": {
                 "anyOf": [
                   {
@@ -3030,8 +6233,7 @@
                     "type": "object",
                     "properties": {
                       "frame": {
-                        "type": "string",
-                        "description": "Keeps an existing frame step (as read_diagram returns it)."
+                        "type": "string"
                       }
                     },
                     "required": [
@@ -3052,12 +6254,10 @@
         },
         "note": {
           "type": "object",
-          "description": "Context, an assumption or a decision — only what helps explain the diagram. Multiline text is fine. Mark an inference from code as an assumption.",
           "properties": {
             "id": {
               "type": "string",
-              "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}$",
-              "description": "Your id for this note; reuse it to refer to it later."
+              "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}$"
             },
             "text": {
               "type": "string",
@@ -3072,16 +6272,13 @@
               ]
             },
             "about": {
-              "type": "string",
-              "description": "Id of the element, relationship or group it is about — always give one, or it goes after the diagram. An element or relationship: attached to it. A group: placed inside the boundary (a member)."
+              "type": "string"
             },
             "attach": {
-              "type": "boolean",
-              "description": "Default true for an element: a native attachment (moves, exports and is removed with it). false: a free note beside it, for a callout meant to be read at a glance."
+              "type": "boolean"
             },
             "near": {
-              "type": "string",
-              "description": "Older name for about."
+              "type": "string"
             }
           },
           "required": [
@@ -3095,60 +6292,62 @@
           "properties": {
             "id": {
               "type": "string",
-              "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}$",
-              "description": "Your id for this element; reuse it to refer to it later."
+              "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}$"
             },
             "type": {
-              "enum": [
-                "service",
-                "api",
-                "worker",
-                "scheduler",
-                "gateway",
-                "external-system",
-                "database",
-                "sql-database",
-                "nosql-database",
-                "cache",
-                "file-system",
-                "object-storage",
-                "search-index",
-                "table",
-                "queue",
-                "topic",
-                "stream",
-                "dead-letter-queue",
-                "person",
-                "user-group",
-                "external-actor",
-                "system-actor",
-                "device",
-                "component",
-                "module",
-                "adapter",
-                "port",
-                "junction"
-              ],
-              "description": "What it is. Common: service, api, worker, gateway, external-system, database, cache, queue, topic, stream, person, component."
+              "anyOf": [
+                {
+                  "enum": [
+                    "service",
+                    "api",
+                    "worker",
+                    "scheduler",
+                    "gateway",
+                    "external-system",
+                    "database",
+                    "sql-database",
+                    "nosql-database",
+                    "cache",
+                    "file-system",
+                    "object-storage",
+                    "search-index",
+                    "table",
+                    "queue",
+                    "topic",
+                    "stream",
+                    "dead-letter-queue",
+                    "person",
+                    "user-group",
+                    "external-actor",
+                    "system-actor",
+                    "device",
+                    "component",
+                    "module",
+                    "adapter",
+                    "port",
+                    "junction"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "maxLength": 64
+                }
+              ]
             },
             "label": {
               "type": "string",
-              "maxLength": 120,
-              "description": "Its name."
+              "maxLength": 120
             },
             "description": {
               "type": "string",
-              "maxLength": 280,
-              "description": "C4 description: its responsibility, in a sentence."
+              "maxLength": 280
             },
             "technology": {
               "type": "string",
-              "maxLength": 60,
-              "description": "C4 technology, e.g. \"Spring Boot\", \"PostgreSQL 16\"."
+              "maxLength": 60
             },
             "group": {
-              "type": "string",
-              "description": "Id of the group/boundary it sits in."
+              "type": "string"
             },
             "color": {
               "enum": [
@@ -3161,6 +6360,9 @@
                 "green"
               ]
             },
+            "evidence": {
+              "$ref": "#/$defs/evidence"
+            },
             "attachments": {
               "type": "array",
               "maxItems": 4,
@@ -3170,15 +6372,13 @@
             },
             "inside": {
               "type": "object",
-              "description": "A drill-down view inside this element (C4: containers inside a system, components inside a container). Same shape as the top level: level, nodes, relationships, groups, flows, notes. Nests at most 3 deep.",
               "properties": {
                 "level": {
                   "enum": [
                     "context",
                     "container",
                     "component"
-                  ],
-                  "description": "C4 level of this view. Leave out for a non-C4 diagram."
+                  ]
                 },
                 "nodes": {
                   "type": "array",
@@ -3234,35 +6434,43 @@
               "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}$"
             },
             "type": {
-              "enum": [
-                "service",
-                "api",
-                "worker",
-                "scheduler",
-                "gateway",
-                "external-system",
-                "database",
-                "sql-database",
-                "nosql-database",
-                "cache",
-                "file-system",
-                "object-storage",
-                "search-index",
-                "table",
-                "queue",
-                "topic",
-                "stream",
-                "dead-letter-queue",
-                "person",
-                "user-group",
-                "external-actor",
-                "system-actor",
-                "device",
-                "component",
-                "module",
-                "adapter",
-                "port",
-                "junction"
+              "anyOf": [
+                {
+                  "enum": [
+                    "service",
+                    "api",
+                    "worker",
+                    "scheduler",
+                    "gateway",
+                    "external-system",
+                    "database",
+                    "sql-database",
+                    "nosql-database",
+                    "cache",
+                    "file-system",
+                    "object-storage",
+                    "search-index",
+                    "table",
+                    "queue",
+                    "topic",
+                    "stream",
+                    "dead-letter-queue",
+                    "person",
+                    "user-group",
+                    "external-actor",
+                    "system-actor",
+                    "device",
+                    "component",
+                    "module",
+                    "adapter",
+                    "port",
+                    "junction"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "maxLength": 64
+                }
               ]
             },
             "label": {
@@ -3290,6 +6498,9 @@
                 "rose",
                 "green"
               ]
+            },
+            "evidence": {
+              "$ref": "#/$defs/evidence"
             },
             "attachments": {
               "type": "array",
@@ -3362,35 +6573,43 @@
               "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}$"
             },
             "type": {
-              "enum": [
-                "service",
-                "api",
-                "worker",
-                "scheduler",
-                "gateway",
-                "external-system",
-                "database",
-                "sql-database",
-                "nosql-database",
-                "cache",
-                "file-system",
-                "object-storage",
-                "search-index",
-                "table",
-                "queue",
-                "topic",
-                "stream",
-                "dead-letter-queue",
-                "person",
-                "user-group",
-                "external-actor",
-                "system-actor",
-                "device",
-                "component",
-                "module",
-                "adapter",
-                "port",
-                "junction"
+              "anyOf": [
+                {
+                  "enum": [
+                    "service",
+                    "api",
+                    "worker",
+                    "scheduler",
+                    "gateway",
+                    "external-system",
+                    "database",
+                    "sql-database",
+                    "nosql-database",
+                    "cache",
+                    "file-system",
+                    "object-storage",
+                    "search-index",
+                    "table",
+                    "queue",
+                    "topic",
+                    "stream",
+                    "dead-letter-queue",
+                    "person",
+                    "user-group",
+                    "external-actor",
+                    "system-actor",
+                    "device",
+                    "component",
+                    "module",
+                    "adapter",
+                    "port",
+                    "junction"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "maxLength": 64
+                }
               ]
             },
             "label": {
@@ -3418,6 +6637,9 @@
                 "rose",
                 "green"
               ]
+            },
+            "evidence": {
+              "$ref": "#/$defs/evidence"
             },
             "attachments": {
               "type": "array",
@@ -3490,35 +6712,43 @@
               "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}$"
             },
             "type": {
-              "enum": [
-                "service",
-                "api",
-                "worker",
-                "scheduler",
-                "gateway",
-                "external-system",
-                "database",
-                "sql-database",
-                "nosql-database",
-                "cache",
-                "file-system",
-                "object-storage",
-                "search-index",
-                "table",
-                "queue",
-                "topic",
-                "stream",
-                "dead-letter-queue",
-                "person",
-                "user-group",
-                "external-actor",
-                "system-actor",
-                "device",
-                "component",
-                "module",
-                "adapter",
-                "port",
-                "junction"
+              "anyOf": [
+                {
+                  "enum": [
+                    "service",
+                    "api",
+                    "worker",
+                    "scheduler",
+                    "gateway",
+                    "external-system",
+                    "database",
+                    "sql-database",
+                    "nosql-database",
+                    "cache",
+                    "file-system",
+                    "object-storage",
+                    "search-index",
+                    "table",
+                    "queue",
+                    "topic",
+                    "stream",
+                    "dead-letter-queue",
+                    "person",
+                    "user-group",
+                    "external-actor",
+                    "system-actor",
+                    "device",
+                    "component",
+                    "module",
+                    "adapter",
+                    "port",
+                    "junction"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "maxLength": 64
+                }
               ]
             },
             "label": {
@@ -3547,6 +6777,9 @@
                 "green"
               ]
             },
+            "evidence": {
+              "$ref": "#/$defs/evidence"
+            },
             "attachments": {
               "type": "array",
               "maxItems": 4,
@@ -3570,6 +6803,48 @@
       "destructiveHint": false,
       "idempotentHint": true,
       "openWorldHint": false
+    },
+    "outputSchema": {
+      "type": "object",
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "proposalId": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "proposalId"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "error": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code",
+                "message"
+              ]
+            }
+          },
+          "required": [
+            "error"
+          ]
+        }
+      ]
     }
   },
   {
@@ -3592,6 +6867,48 @@
       "title": "Read a proposal",
       "readOnlyHint": true,
       "openWorldHint": false
+    },
+    "outputSchema": {
+      "type": "object",
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "proposalId": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "proposalId"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "error": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code",
+                "message"
+              ]
+            }
+          },
+          "required": [
+            "error"
+          ]
+        }
+      ]
     }
   },
   {
@@ -3619,6 +6936,52 @@
       "title": "List proposals",
       "readOnlyHint": true,
       "openWorldHint": false
+    },
+    "outputSchema": {
+      "type": "object",
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "proposals": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "complete": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "proposals",
+            "complete"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "error": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code",
+                "message"
+              ]
+            }
+          },
+          "required": [
+            "error"
+          ]
+        }
+      ]
     }
   }
 ]

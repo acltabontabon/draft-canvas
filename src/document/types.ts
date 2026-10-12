@@ -10,7 +10,7 @@
 export const DRAFT_FORMAT = 'draft-canvas' as const;
 
 /** Bump when the on-disk shape changes, and add a migration in `migrate.ts`. */
-export const CURRENT_VERSION = 18;
+export const CURRENT_VERSION = 19;
 
 export type DraftFormat = typeof DRAFT_FORMAT;
 
@@ -325,6 +325,16 @@ export interface DraftInside {
   level?: ViewLevel;
 }
 
+/** Local source references are evidence supplied by an author, never fetched or treated as instructions. */
+export interface SourceEvidence {
+  path: string;
+  basis: 'observed' | 'inferred';
+  symbol?: string;
+  commit?: string;
+  line?: number;
+  explanation?: string;
+}
+
 export interface DraftNode {
   id: string;
   type: DraftNodeType;
@@ -381,6 +391,7 @@ export interface DraftNode {
   boundaryPreset?: BoundaryPreset;
   /** Supporting detail collapsed into this node. Any node type may host one. */
   attachments?: Attachment[];
+  evidence?: SourceEvidence[];
   /** `queue` nodes only — see `DeliveryRole`. */
   deliveryRole?: DeliveryRole;
   /**
@@ -518,6 +529,7 @@ export interface DraftEdge {
    * unchanged) rather than trying to unify the two for a feature that never wrote `details` anyway.
    */
   attachments?: Attachment[];
+  evidence?: SourceEvidence[];
   /**
    * How many delivery attempts occur before this edge's failure route is taken — only meaningful
    * alongside `semantic: 'deadLetters'`, same convention as `response` being only meaningful

@@ -30,6 +30,7 @@ export interface AgentGhostDiff {
 }
 
 function nodeChanged(before: DraftNode, after: DraftNode): boolean {
+  if (before === after) return false;
   return (
     before.x !== after.x ||
     before.y !== after.y ||
@@ -43,7 +44,19 @@ function nodeChanged(before: DraftNode, after: DraftNode): boolean {
     // "modified" in the text list but nowhere on the canvas ghost.
     before.description !== after.description ||
     before.technology !== after.technology ||
-    before.parentId !== after.parentId
+    before.parentId !== after.parentId ||
+    before.accent !== after.accent ||
+    before.serviceKind !== after.serviceKind ||
+    before.databaseKind !== after.databaseKind ||
+    before.queueKind !== after.queueKind ||
+    before.actorKind !== after.actorKind ||
+    before.componentKind !== after.componentKind ||
+    before.noteKind !== after.noteKind ||
+    before.boundaryPreset !== after.boundaryPreset ||
+    before.code !== after.code ||
+    before.language !== after.language ||
+    JSON.stringify(before.attachments) !== JSON.stringify(after.attachments) ||
+    JSON.stringify(before.evidence) !== JSON.stringify(after.evidence)
   );
 }
 
@@ -52,6 +65,7 @@ function anchorsOf(edge: DraftEdge): string {
 }
 
 function edgeChanged(before: DraftEdge, after: DraftEdge): boolean {
+  if (before === after) return false;
   return (
     before.source !== after.source ||
     before.target !== after.target ||
@@ -59,7 +73,17 @@ function edgeChanged(before: DraftEdge, after: DraftEdge): boolean {
     before.semantic !== after.semantic ||
     before.kind !== after.kind ||
     before.condition !== after.condition ||
-    anchorsOf(before) !== anchorsOf(after)
+    anchorsOf(before) !== anchorsOf(after) ||
+    before.directed !== after.directed ||
+    before.async !== after.async ||
+    before.routing !== after.routing ||
+    before.routeMode !== after.routeMode ||
+    before.accent !== after.accent ||
+    before.hasResponse !== after.hasResponse ||
+    before.response !== after.response ||
+    before.deliveryAttempts !== after.deliveryAttempts ||
+    JSON.stringify(before.attachments) !== JSON.stringify(after.attachments) ||
+    JSON.stringify(before.evidence) !== JSON.stringify(after.evidence)
   );
 }
 

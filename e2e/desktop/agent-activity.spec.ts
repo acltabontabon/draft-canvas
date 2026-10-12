@@ -31,7 +31,7 @@ const PLATFORM = {
 };
 
 async function agentRequest(page: Page, id: number, tool: string, args: unknown, context: unknown = {}) {
-  await page.evaluate(({ id, tool, args, context }) => window.__shell.emit({ type: 'agent-request', id, tool, args, context }), { id, tool, args, context });
+  await page.evaluate(({ id, tool, args, context }) => window.__shell.emit({ type: 'agent-request', id, tool, args, context }), { id, tool, args: (tool === 'create_diagram' || tool === 'update_diagram') ? { requestId: `e2e-${id}`, ...(args as Record<string, unknown>) } : args, context });
 }
 
 const answer = (page: Page, id: number) => page.evaluate((id) => window.__shell.agentResponse(id), id) as Promise<{ ok: boolean; value?: Record<string, unknown>; error?: { code: string } } | undefined>;

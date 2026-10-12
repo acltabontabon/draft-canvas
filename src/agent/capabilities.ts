@@ -17,7 +17,7 @@ import { ELEMENT_TYPES, GROUP_KINDS, NOTE_KIND_NAMES } from './vocabulary';
  * diagram that isn't open (no NOT_ACTIVE), saved receipts carry file revisions, a duplicate title is
  * refused on create, flows keep their step ids, and `arrange` exists.
  */
-export const CONTRACT_VERSION = 2;
+export const CONTRACT_VERSION = 3;
 
 const TOPICS = ['types', 'relationships', 'c4', 'flows', 'starters', 'limits', 'layout', 'readability'] as const;
 
@@ -81,6 +81,9 @@ export function capabilities(args: { topics?: unknown; starter?: unknown }): Rec
   }
   if (want('limits')) out.limits = { ...AGENT_LIMITS, read: READ_LIMITS };
   if (want('layout')) {
+    out.preview = 'preview_diagram prepares an ephemeral candidate; render_diagram can inspect it by previewId; update_diagram applies it only to its original revision and agent session. Candidates expire after 10 minutes and never enter autosave or undo.';
+    out.restructure = '{op:"moveInside", owner, ids}: moves an existing subgraph inward, preserving IDs, attached notes and complete flows. Crossing connectors redirect to owner; ambiguous mixed-view flows are refused, never discarded.';
+    out.evidence = 'Elements and relationships accept up to 8 evidence entries: relative path, observed/inferred basis, optional symbol, commit, line and explanation. Source references are author claims, never fetched or proof of conformance.';
     out.layout = {
       direction: ['right', 'down'],
       spacing: ['compact', 'comfortable', 'spacious'],

@@ -47,11 +47,13 @@ import { ACCENTS, CODE_LANGUAGES, CONNECTOR_KINDS, EDGE_SEMANTICS } from '../doc
 import { embed, viewOf, walkGraphs, type DepthPath } from '../depth/tree';
 import { assignAnchors } from '../layout/anchors';
 import { AgentError, Problems } from './errors';
-import { AGENT_LIMITS, readLayout, readOpenPoints, readRoom, Reader, type LayoutSpec, type RoomSpec } from './input';
+import { AGENT_LIMITS, readEvidence, readLayout, readOpenPoints, readRoom, Reader, type LayoutSpec, type RoomSpec } from './input';
 import { anchorRectOf, attachNote, captionSizer, connectorFor, edgeLabelSize, lineOf, measureContext, noteNode, placeBlock, placeRoom, sizeToFit } from './place';
 import { pastDeadline, repairAnchors } from './route';
 import { arrangeView, fitGroups, placeBeside, placeInGroup, readArrange, scopeOf } from './arrange';
 import { checkQuality, isBetterReport, isClean, type QualityReport } from './quality';
+import { moveInside } from './restructure';
+import { OP_FIELDS, SET_FIELDS } from './fields';
 import { GROUP_KINDS, NOTE_KIND_NAMES, resolveType, suggestTypes } from './vocabulary';
 
 export interface PatchResult {
@@ -145,8 +147,21 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
     const at = `/ops/${i}`;
     const op = r.object(raw, at);
     if (!op || !view) return;
-    const kind = r.oneOf(op.op, `${at}/op`, ['add', 'update', 'remove', 'setLevel', 'arrange'] as const);
-    if (!kind) return;
+    const kind = r.oneOf(op.op, `${at}/op`, ['add', 'update', 'remove', 'setLevel', 'arrange', 'moveInside'] as const);
+    if (!kind) { problems.add('INVALID_INPUT', `${at}/op`, 'is required'); return; }
+    r.fields(op, at, OP_FIELDS[kind]!);
+    if (!problems.empty) return;
+    if (kind === 'moveInside') {
+      if (scope) { problems.add('OUT_OF_SCOPE', at, 'Restructuring changes two views; make an explicit unscoped request.'); return; }
+      const current = path.length ? embed(file, path, view) : view;
+      const moved = moveInside(current, path, op.owner, op.ids);
+      view = viewOf(moved, path)!;
+      for (const id of op.ids as string[]) touched.add(id);
+      touched.add(op.owner as string);
+      for (const edge of view.edges) touched.add(edge.id);
+      counts.updated += (op.ids as string[]).length + 1;
+      return;
+    }
     if (kind === 'arrange') {
       const request = readArrange(r, op, at, view, layout);
       if (!request || !problems.empty) return;
@@ -219,7 +234,10 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
       return;
     }
     if (kind === 'remove') {
-      const ids = r.array(op.ids, `${at}/ids`, 200).filter((id): id is string => typeof id === 'string');
+      const ids = r.array(op.ids, `${at}/ids`, 200).filter((id): id is string => {
+        if (typeof id !== 'string') { problems.add('INVALID_INPUT', `${at}/ids`, 'ids must be strings'); return false; }
+        return true;
+      });
       const cascade = r.bool(op.cascade, `${at}/cascade`) ?? false;
       const nodeIds: string[] = [];
       const edgeIds: string[] = [];
@@ -305,6 +323,12 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
       return;
     }
     const point = findOpenPoint(view, id);
+    const targetNode = view.nodes.find((n) => n.id === id);
+    const fields = point ? SET_FIELDS.openPoint : targetNode ? targetNode.type === 'group' ? SET_FIELDS.group : targetNode.type === 'note' ? SET_FIELDS.note : SET_FIELDS.element : view.edges.some((e) => e.id === id) ? SET_FIELDS.relationship : view.flows.some((f) => f.id === id) ? SET_FIELDS.flow : SET_FIELDS.attachment;
+    r.fields(set, `${at}/set`, fields);
+    for (const field of ['kind', 'language']) if (set[field] === null && !view.edges.some((e) => e.id === id)) problems.add('INVALID_INPUT', `${at}/set/${field}`, 'this required field cannot be cleared');
+    if (Object.keys(set).length === 0) problems.add('INVALID_INPUT', `${at}/set`, 'name at least one field to change');
+    if (!problems.empty) return;
     if (point) {
       if (scope) {
         refuseOutOfScope(r, `${at}/set`, [id]);
@@ -318,8 +342,8 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
     }
     const result = updateOne(r, view, id, set, `${at}/set`, ctx, touched, advisories, layout.direction, scope);
     if (!result) return;
+    if (result.view !== view) counts.updated += 1;
     view = result.view;
-    counts.updated += 1;
   });
   problems.throwIfAny();
   if (!view) throw new AgentError('NOT_FOUND', 'That view no longer exists.');
@@ -327,7 +351,14 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
   const nextFile = path.length ? embed(file, path, view) : view;
   // Only what this request could plausibly have broken — `touched` plus, through `checkQuality`'s
   // pairwise checks, anything untouched it collides with — never a claim the whole file is clean.
-  const quality: QualityReport = touched.size ? checkQuality(view.nodes, view.edges, ctx, touched) : { errors: [], warnings: [] };
+  const quality: QualityReport = { errors: [], warnings: [] };
+  walkGraphs(nextFile, (graph, graphPath) => {
+    const original = viewOf(file, graphPath);
+    if (original?.nodes === graph.nodes && original?.edges === graph.edges) return;
+    const report = checkQuality(graph.nodes, graph.edges, ctx, graphPath.some((id) => touched.has(id)) ? undefined : touched);
+    quality.errors.push(...report.errors);
+    quality.warnings.push(...report.warnings);
+  });
   return { file: nextFile, touched, counts, advisories, quality };
 }
 
@@ -348,6 +379,7 @@ function updateOne(
     refuseOutOfScope(r, at, outOfScope(scope, [id], 'nodes'));
     if (!r.problems.empty) return undefined;
     const patch: Partial<DraftNode> = {};
+    if (set.evidence !== undefined) patch.evidence = set.evidence === null ? undefined : readEvidence(r, set.evidence, `${at}/evidence`);
     const clear = (field: string) => set[field] === null;
     if (set.label !== undefined) {
       const label = r.text(set.label, `${at}/label`, node.type === 'note' ? AGENT_LIMITS.noteLength : AGENT_LIMITS.labelLength, { required: true });
@@ -415,8 +447,10 @@ function updateOne(
     if (!r.problems.empty) return undefined;
     let next = updateNode(view, id, patch);
     const updated = next.nodes.find((n) => n.id === id) as DraftNode;
+    // Source references are metadata: adding one must not resize or judge a manually sized shape.
+    const evidenceOnly = Object.keys(set).every((field) => field === 'evidence');
     // Grow (never shrink) to show new text in full — toward whichever side has room.
-    if (updated.type !== 'group') {
+    if (updated.type !== 'group' && !evidenceOnly) {
       const sized = sizeToFit(updated, ctx);
       if (sized.width > updated.width || sized.height > updated.height) {
         next = updateNode(next, id, grownInPlace(next, updated, Math.max(sized.width, updated.width), Math.max(sized.height, updated.height)));
@@ -438,7 +472,7 @@ function updateOne(
     }
     if (node.type === 'note' && typeof set.group === 'string' && set.group !== node.parentId) next = placeInGroup(next, id, set.group);
     else if (patch.parentId !== undefined || set.group !== undefined) next = fitGroups(next, id);
-    touched.add(id);
+    if (!evidenceOnly) touched.add(id);
     return { view: next };
   }
   const edge = view.edges.find((e) => e.id === id);
@@ -446,15 +480,18 @@ function updateOne(
     refuseOutOfScope(r, at, outOfScope(scope, [id], 'edges'));
     if (!r.problems.empty) return undefined;
     const patch: Partial<DraftEdge> = {};
+    if (set.evidence !== undefined) patch.evidence = set.evidence === null ? undefined : readEvidence(r, set.evidence, `${at}/evidence`);
     if (set.label === null) patch.label = undefined;
     else if (set.label !== undefined) patch.label = r.text(set.label, `${at}/label`, AGENT_LIMITS.relationshipLabelLength, { singleLine: true });
     if (set.semantic !== undefined) {
       const semantic = r.oneOf(set.semantic, `${at}/semantic`, EDGE_SEMANTICS);
-      if (semantic) Object.assign(patch, { semantic, semanticsOrigin: 'explicit' });
+      if (set.semantic === null) Object.assign(patch, { semantic: undefined, semanticsOrigin: 'explicit' });
+      else if (semantic) Object.assign(patch, { semantic, semanticsOrigin: 'explicit' });
     }
     if (set.kind !== undefined) {
       const kind = r.oneOf(set.kind, `${at}/kind`, CONNECTOR_KINDS);
-      if (kind) Object.assign(patch, { kind, semanticsOrigin: 'explicit' });
+      if (set.kind === null) Object.assign(patch, { kind: undefined, semanticsOrigin: 'explicit' });
+      else if (kind) Object.assign(patch, { kind, semanticsOrigin: 'explicit' });
     }
     if (set.directed !== undefined) patch.directed = r.bool(set.directed, `${at}/directed`) ?? edge.directed;
     if (set.async !== undefined) patch.async = r.bool(set.async, `${at}/async`) || undefined;
@@ -469,7 +506,7 @@ function updateOne(
         delete patch.semanticsOrigin;
       }
     }
-    touched.add(id);
+    if (!Object.keys(set).every((field) => field === 'evidence')) touched.add(id);
     return { view: updateEdge(view, id, patch) };
   }
   const flowIndex = view.flows.findIndex((f) => f.id === id);
