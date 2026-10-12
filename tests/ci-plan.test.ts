@@ -279,6 +279,20 @@ describe('standalone desktop release verification', () => {
     expect(desktop).toContain("      - if: inputs.web-artifact-name == ''\n        run: npm run build");
   });
 
+  it('validates the shared helper source before restoring caches or running selected code', () => {
+    const refs = [...shared.matchAll(/          ref: (.+)/g)].map((match) => match[1]);
+    expect(refs).toEqual(['${{ github.sha }}', '${{ steps.source.outputs.revision }}']);
+    expect(shared).toContain('          SOURCE_REF: ${{ inputs.ref }}');
+    expect(shared).toContain('          WORKFLOW_REVISION: ${{ github.sha }}');
+    expect(shared).toContain('          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}');
+    const validate = shared.indexOf('node scripts/verify-source.mjs');
+    const selected = shared.indexOf('ref: ${{ steps.source.outputs.revision }}');
+    expect(validate).toBeGreaterThan(0);
+    expect(selected).toBeGreaterThan(validate);
+    expect(shared.indexOf('uses: actions/setup-node@')).toBeGreaterThan(selected);
+    expect(shared.indexOf('run: npm ci')).toBeGreaterThan(selected);
+  });
+
   it.each(['true', 'false'])('requires all desktop jobs with shared scope %s', (scope) => {
     const checks = { source: { result: 'success' }, shared: { result: scope === 'true' ? 'success' : 'skipped' },
       frontend: { result: 'success' }, rust: { result: 'success' } };

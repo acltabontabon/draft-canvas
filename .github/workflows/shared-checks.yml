@@ -18,7 +18,20 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - id: source
+        # Reusable helpers enforce trust themselves before selected code can restore/write caches.
+        env:
+          SOURCE_REF: ${{ inputs.ref }}
+          WORKFLOW_REVISION: ${{ github.sha }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          revision="$(node scripts/verify-source.mjs)"
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ steps.source.outputs.revision }}
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
