@@ -6,8 +6,8 @@ how orders flow through this service". It reads your code, then hands Draft Canv
 the parts, how they connect, the flows. Draft Canvas lays it out and draws it as an ordinary diagram
 you can edit, move, present and export like one you drew yourself.
 
-The agent never places anything by coordinates, and never touches a file outside the folders you
-allow. Draft Canvas doesn't send your diagrams anywhere. Your agent does send what it reads and
+By default the agent leaves the layout to Draft Canvas; when you want something in an exact spot, it
+can put it there (see below). It never touches a file outside the folders you allow. Draft Canvas doesn't send your diagrams anywhere. Your agent does send what it reads and
 writes to its own AI provider, as it does with your code.
 
 This needs the desktop app, on macOS or Windows. The web app opens the diagrams it makes, but agents
@@ -61,6 +61,11 @@ doesn't start the app for you, and it says so if the app isn't open.
   service", "explain the retry in a note", "add a flow for the normal path" — change the diagram the
   agent made, not a new one, whether or not it is open. The rules:
   - What you arranged by hand stays where you put it. New parts are placed beside what they connect to.
+  - Ask for something to go somewhere exact — "put the cache under the database", "move the
+    external systems to the right", "make the gateway wider" — and the agent places it there: at a
+    position, or beside another shape with a gap and an alignment. A boundary moves with what's in it,
+    a note sitting right beside a shape moves with the shape, and boundaries grow to hold what moved
+    in. Shapes on top of each other are still refused.
   - Each change is **one undo step** (`⌘Z` / `Ctrl+Z`). A change to a diagram that isn't open is
     saved to its file without switching what you're looking at; a notice offers **Show**, and opening
     it then has the change as its undo step.
@@ -82,6 +87,12 @@ doesn't start the app for you, and it says so if the app isn't open.
 - **Adjust connectors** the way the connector inspector does: colour, Stepped / Curved / Straight,
   the reply line of a call with its label, and delivery attempts before a dead-letter route. It can
   also re-point or reverse a connector without losing its place in your flows.
+- **Route connectors by hand**, the way you [bend one](shapes-and-connectors.md#bend-a-connector-by-hand):
+  choose which side each end leaves from and the points the line passes through — "take the retry
+  around the top", "bring the audit line in from below". It reads where every line runs first, so
+  it can move one point rather than redraw the route. You can drag its bends afterwards, and **Reset
+  route** hands a line back to automatic routing. If a line it routed crosses a shape or a caption,
+  it is told so, but the line is kept as asked.
 - **Read a diagram**, including what is inside a shape, a boundary or a flow on its own — or read its
   flows as Mermaid or PlantUML sequence-diagram source, the same text **Export** writes
   (`read_diagram` with `format: "mermaid"` or `"plantuml"`).

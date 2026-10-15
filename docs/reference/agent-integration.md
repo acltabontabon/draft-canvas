@@ -4,7 +4,8 @@ Draft Canvas Desktop can let a coding agent on the same computer — Claude Code
 anything that speaks the [Model Context Protocol](https://modelcontextprotocol.io) — draw and revise diagrams.
 The agent sends a compact semantic graph: elements, relationships, groups, flows, notes. Draft Canvas
 validates it, lays it out, and creates **ordinary, editable native content**, then persists it and
-makes it undoable. The agent never supplies coordinates.
+makes it undoable. Layout is the app's by default; an agent may place an element exactly or route a
+connector by hand where the person wants it ([Exact placement and routing](#exact-placement-and-routing)).
 
 The agent does the reading of a codebase and the inferring. Draft Canvas does validation, layout,
 rendering, persistence and undo. Access is off until a person turns it on, is limited to folders they
@@ -82,7 +83,7 @@ that disagree answer `VERSION_MISMATCH` and point at Settings, which names the r
 There are thirteen tools. Their JSON Schemas live in `src/agent/schema.ts`, and
 `src-tauri/mcp/tools.json` is generated from them by `npm run agent:schemas`. The sidecar compiles
 that file in, and `tests/agent/schema.test.ts` fails if the two drift. The whole tool list is
-96,237 bytes of compact JSON, roughly 24k tokens (estimated as characters / 4), and the test keeps a
+100,345 bytes of compact JSON, roughly 25k tokens (estimated as characters / 4), and the test keeps a
 ceiling on it: the room schemas are written once per tool under `$defs` (a flow's steps among them),
 and `preview_diagram` and `submit_proposal` carry them without their prose. `get_capabilities`
 reports `contract: 3`; everything since is additive within that same contract.
@@ -115,6 +116,10 @@ Notes on `read_diagram`:
   view (`view.empty: true`); naming an element that can't have one is `NOT_FOUND`.
 - `focus` narrows the read by elements, by a group or by a flow. A focused read says `partial: true`
   and lists the relationships that cross the edge of what it returned, naming the other end.
+- `include: ["geometry"]` gives every element, group and note its box (`x`, `y`, `width`, `height`)
+  and every relationship `geometry: {from, to, path, via?}` — the sides its ends use, the points where
+  the drawn line turns (ends included), and the bends it was given by hand. These are the numbers
+  `place` and `route` take.
 - `include` adds `geometry`, `attachments`, `suggestions`, `fullText` or `views` — an outline of every
   inside view in the file (its path, owner, level and size), the Depth map as data. Attachment previews mark truncation; `fullText` includes complete bodies and attachments (focus the read to keep it bounded). For an attachment larger than one read, `read_attachment` retrieves its full text in revision-checked Unicode chunks. `suggestions` returns up to 5 of Draft
   Canvas's own next-step suggestions per element; they are never applied automatically.
@@ -561,7 +566,7 @@ for `update_diagram` — a partial check is never reported as if the rest of the
 for), `errors`/`warnings` counts, `errorsTruncated`/`warningsTruncated` when the listed `problems`/
 `warningProblems` (capped at 10, each with its `kind` and affected `ids`) don't cover all of them.
 
-**Updates never move existing elements, except by `arrange`.** New elements are placed as a block
+**Updates never move existing elements, except by `arrange` or an explicit `set.place`.** New elements are placed as a block
 beside the existing element they connect to most, on its connector line, upstream when they feed it.
 Before refusing, the next-best hosts and the other side are tried; only the new part ever moves. A
 boundary grows to hold new members. When nothing fits, `LAYOUT_CONSTRAINED` carries `suggestedOp` —
@@ -592,10 +597,40 @@ gets, applied in place. `{op:"arrange", scope?, direction?, spacing?, connectors
 
 A "pinned" shape or a "preserve manual routes" request need no dedicated field: leaving a node out of
 `scope.nodes` (or its group out of the scope) keeps it fixed, and `connectors: "keep"` preserves a
-connector's hand routing. Nothing geometric beyond a connector's `routing` style and its two anchors
-is ever persisted, so there is nothing for a reload, resize or move to silently discard — the drawn
-path is always recomputed from the current shapes through the same `routeBetween` function the canvas
-and the exporter call, never a second implementation that could drift from what the person sees.
+connector's hand routing. Beyond a connector's `routing` style and its two anchors, the only geometry
+a connector persists is the bends it was given by hand (`DraftEdge.waypoints`) — and the drawn path
+is always recomputed from the current shapes and those bends through the same `routeBetween` function
+the canvas and the exporter call, never a second implementation that could drift from what the person
+sees.
+
+### Exact placement and routing
+
+The layout is automatic unless the request says otherwise. When the person wants something exactly
+somewhere, an agent can say so, in the view's own px — the numbers `read_diagram` reports with
+`include: ["geometry"]` (`src/agent/placement.ts`, `src/agent/placeExplicit.ts`).
+
+- **`place`** — on an element in `create_diagram` or an `add`, and as `set.place` on any element,
+  group or note: `{x, y}` for its top-left, or `{rightOf | leftOf | above | below: id, gap?, align?}`
+  to sit beside another shape (`gap` defaults to 48; `align` is `start`, `center` (default) or `end`
+  along the other axis), plus `width`/`height`. An `x` or `y` given with a relation wins on its own
+  axis. A size is never smaller than the shape's text needs. Placements that refer to each other are
+  applied in order; a loop is refused. A group moves with everything in it; a free note within 48 px
+  of a moved shape moves with it; a connector whose two ends moved together keeps its bends with them;
+  every boundary above what moved grows to hold it.
+- **`route`** — on a relationship, and as `set.route`: `{from?, to?, via?}`. `from`/`to` are the
+  sides its ends use (`top`, `right`, `bottom`, `left`); `via` is the list of `[x, y]` points it
+  passes through, in order — the same bends a person drags in the editor
+  ([Bend a connector by hand](../guides/shapes-and-connectors.md#bend-a-connector-by-hand)). A
+  stepped line adds the right angles it needs; a bend that lies on a straight run is passed through.
+  `via: []` drops the bends; `set.route: null` hands the connector back to automatic routing,
+  anchored afresh. A connector routed by hand keeps its sides through the anchor repair, and
+  `arrange` with `connectors: "tidy"` (the default) drops hand routes on what it touches.
+- **The gate.** What is given is kept as given. Overlapping shapes, a shape spilling out of its
+  boundary, clipped text and invalid geometry are refused whoever asked for them (`LAYOUT_FAILED` on
+  create, `LAYOUT_CONSTRAINED` on update). A line or caption problem — through a shape, over a shape,
+  two captions overlapping, a line through a caption, two lines on top of each other — on something
+  the request placed or routed itself is listed among the receipt's warnings instead of refused:
+  the agent asked for exactly that, and the receipt says what it costs.
 
 The layout gallery — 21 cases in `tests/fixtures/agent/gallery.ts` — is asserted in
 `tests/agent/gallery.test.ts`:
@@ -671,8 +706,8 @@ as Mermaid and PlantUML sequence diagrams.
   edited, by sending it back. A read writes every step in the form an update takes, so sending the
   steps back unchanged changes nothing.
 - A camera a person pinned on a step (**Pin view**) reads `pinnedView: true`; `pinnedView: false`
-  drops it, so the presentation frames what the step lights again. An agent never pins one: it has no
-  coordinates to pin.
+  drops it, so the presentation frames what the step lights again. An agent never pins one: a camera
+  is the presenter's framing, not the diagram's.
 - A second flow with a title already in the view is refused with `DUPLICATE_FLOW`, naming the one to
   update. Separate paths (normal processing, a retry) are separate flows. A relationship is a step at
   most once per flow.
@@ -703,6 +738,7 @@ relationship takes what the connector inspector sets, on `add` and on `update`, 
 | `lineStyle` | `stepped` (the default), `curved` or `straight`. |
 | `response` | The reply line of a synchronous call — a person or a service calling a service, with no behaviour or `sync`: `true` draws it without a label, a string labels it (`"200 Order"`), `false` or `null` removes it; a read reports it the same way. On any other pairing an `add` leaves it out with an advisory and an `update` refuses it, as the inspector only offers it there. |
 | `deliveryAttempts` | On a dead-letter route (`semantic: "deadLetters"`), how many attempts come before it, 1–50; `null` clears it. |
+| `route` | The sides its ends use and the `[x, y]` points it passes through — see [Exact placement and routing](#exact-placement-and-routing); `null` makes it automatic again. A read reports it under `geometry`. |
 
 `{op:"update", id, set:{from?, to?}}` re-points a relationship in place — the editor's reconnect, or
 its **Reverse direction** when the two ends swap. The id, label, attachments and flow steps stay. A
@@ -969,8 +1005,8 @@ re-arranged in place in 117 ms, too quick for any preview to appear.
   tangled. Split it into views, or build it in steps.
 - **A stored "main" flow, or a note linked to something without being attached.** Neither exists in
   the document model, so neither is claimed.
-- **Pinning a presentation camera, or starting a presentation.** A pinned view is coordinates, which
-  an agent never sends (it can only drop one), and presenting is something a person does in front of
+- **Pinning a presentation camera, or starting a presentation.** A pinned view is the presenter's
+  framing, which an agent can only drop, and presenting is something a person does in front of
   people. The step-number badges' setting (`showSequence`) has no control in the app either, so it
   isn't a field here.
 - **Reordering attachments, and a label's text style.** Attachments keep the order they were added

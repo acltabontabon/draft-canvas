@@ -89,6 +89,9 @@ function ownsThePoint(element: Element, clientX: number, clientY: number): boole
 function overlayPick(overlay: Element, element: Element): EdgePick | null {
   const id = overlay.getAttribute('data-edge-overlay');
   if (!id) return null;
+  // A bend handle sits on the line itself — at the middle of a run, where a click on a connector
+  // usually lands — so a click on it (not a drag) is a click on the line.
+  if (element.closest('.dc-edge-bend')) return { id, part: 'line', tied: [id] };
   const label = element.closest('.dc-edge-label, .dc-edge-step, .dc-edge-meta, .dc-edge-response-label');
   if (!label) return { id, part: 'control', tied: [id] };
   const members = label.getAttribute('data-label-group');

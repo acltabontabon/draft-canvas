@@ -327,6 +327,10 @@ export function buildScene(
     const lineEls = [...primaryEls, ...responseEls];
     const overlayEls = described.overlay.flatMap(emitShape);
     shapeRects(described.overlay, 0, 0, overlayRects);
+    // A bent line can run well clear of every shape — bends dragged above a row, around a group —
+    // and the frame must hold it. A stepped line's elbows line up with its bends and its ends, and a
+    // curve stays within the padding of them, so the bends are the line's outermost points.
+    for (const bend of edge.waypoints ?? []) overlayRects.push({ x: bend.x - 2, y: bend.y - 2, width: 4, height: 4 });
     const groupAttrs = decorateGroupAttrs(decoration);
 
     edgeLines.push(...(groupAttrs ? [el('g', groupAttrs, lineEls)] : lineEls));

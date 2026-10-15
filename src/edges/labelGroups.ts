@@ -205,6 +205,7 @@ function compute(nodes: readonly DraftNode[], edges: readonly DraftEdge[]): Map<
       const lane = lanes.get(edge.id)?.offset ?? 0;
       const drawn = routeBetween(rectOf(source), rectOf(target), edge.routing, {
         anchors: { source: edge.sourceAnchor, target: edge.targetAnchor },
+        waypoints: edge.waypoints,
         lane,
         obstacles: obstaclesForEdge(nodes, edge.source, edge.target),
         spine: plan.spineFor(edge.id),

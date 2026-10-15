@@ -11,7 +11,7 @@ import { levelAdvisories } from '../depth/c4';
 import { walkGraphs } from '../depth/tree';
 import { deserializeDocument, serializeDocument } from '../export/project';
 import { AgentError } from './errors';
-import { readCreate, type CreateSpec, type LayoutSpec } from './input';
+import { readCreate, type CreateSpec, type LayoutSpec, type RoomSpec } from './input';
 import { measureContext, placeRoom, type PlacedRoom } from './place';
 import { silent, type Report } from './progress';
 import { checkFit, isBetterCandidate, isCleanCandidate, checkQuality, renderedBoundsOf, smallestFontPresent, type FitReport, type QualityIssue, type QualityReport } from './quality';
@@ -70,6 +70,7 @@ function composeWithin(raw: unknown, diagramId: string, report: Report): Compose
   let tried = 0;
   // Which note is about which element: a note's subject isn't stored in the file, only used to place it.
   const about = new Map(spec.notes.flatMap((n) => (n.near ? [[n.id, n.near] as const] : [])));
+  const explicit = explicitIds(spec);
   const judge = (layout: LayoutSpec): Candidate => {
     tried += 1;
     report(tried === 1 ? 'arranging' : 'repairing');
@@ -77,7 +78,7 @@ function composeWithin(raw: unknown, diagramId: string, report: Report): Compose
     // Complete — every shape placed, every connector anchored — so a preview can show it as it is.
     // (Once repairing, it stays "repairing": the stage says where the request is, not each step.)
     report(tried === 1 ? 'routing' : 'repairing', { nodes: candidate.nodes, edges: candidate.edges, flows: candidate.flows });
-    const found = qualityOfEveryRoom(candidate, ctx);
+    const found = qualityOfEveryRoom(candidate, ctx, explicit);
     // Only measured against a viewport the request actually gave — otherwise this candidate always
     // "fits", so a request with no `layout.viewport` compares and stops exactly as it always has.
     const fit = layout.viewport ? checkFit(renderedBoundsOf(candidate.nodes, candidate.edges, ctx), smallestFontPresent(candidate.nodes, candidate.edges), layout.viewport) : undefined;
@@ -232,11 +233,25 @@ export function legibilityReceipt(l: Legibility) {
   };
 }
 
-function qualityOfEveryRoom(room: PlacedRoom, ctx: ReturnType<typeof measureContext>): QualityReport {
+/** Every id the request placed or routed itself, in every room — ids are unique file-wide. */
+function explicitIds(room: RoomSpec): Set<string> {
+  const out = new Set<string>();
+  const visit = (r: RoomSpec) => {
+    for (const node of r.nodes) {
+      if (node.place) out.add(node.id);
+      if (node.inside) visit(node.inside);
+    }
+    for (const edge of r.relationships) if (edge.route) out.add(edge.id);
+  };
+  visit(room);
+  return out;
+}
+
+function qualityOfEveryRoom(room: PlacedRoom, ctx: ReturnType<typeof measureContext>, explicit?: ReadonlySet<string>): QualityReport {
   const errors: QualityIssue[] = [];
   const warnings: QualityIssue[] = [];
   const visit = (nodes: PlacedRoom['nodes'], edges: PlacedRoom['edges'], prefix: string) => {
-    const found = checkQuality(nodes, edges, ctx);
+    const found = checkQuality(nodes, edges, ctx, undefined, explicit);
     const tag = (i: QualityIssue) => (prefix ? { ...i, message: `${prefix}${i.message}` } : i);
     errors.push(...found.errors.map(tag));
     warnings.push(...found.warnings.map(tag));

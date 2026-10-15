@@ -10,7 +10,7 @@
  * the same field-by-field answer.
  */
 
-import { ACCENTS, CODE_LANGUAGES, CONNECTOR_KINDS, EDGE_SEMANTICS, OPEN_POINT_KINDS } from '../document/types';
+import { ACCENTS, CODE_LANGUAGES, CONNECTOR_KINDS, EDGE_SEMANTICS, OPEN_POINT_KINDS, SIDES } from '../document/types';
 import { STARTER_IDS } from '../starters/types';
 import { AGENT_LIMITS, NEW_ID } from './input';
 import { SET_FIELDS } from './fields';
@@ -93,6 +93,7 @@ const element = (depth: number): Schema => ({
     color: { enum: ACCENTS },
     evidence: ref('evidence'),
     attachments: { type: 'array', maxItems: AGENT_LIMITS.attachmentsPerElement, items: ref('attachment') },
+    place: ref('place'),
     ...(depth < AGENT_LIMITS.insideDepth
       ? {
           inside: {
@@ -126,6 +127,7 @@ const relationship: Schema = {
     deliveryAttempts: { type: 'integer', minimum: AGENT_LIMITS.deliveryAttempts.min, maximum: AGENT_LIMITS.deliveryAttempts.max, description: 'On a deadLetters route: attempts first.' },
     evidence: ref('evidence'),
     attachments: { type: 'array', maxItems: AGENT_LIMITS.attachmentsPerElement, items: ref('attachment') },
+    route: ref('route'),
   },
   required: ['id', 'from', 'to'],
   additionalProperties: false,
@@ -255,6 +257,24 @@ const openPoint: Schema = {
   additionalProperties: false,
 };
 
+/**
+ * Explicit placement and routing (`placement.ts`), in the view's own px — the same numbers
+ * `read_diagram`'s `include: ["geometry"]` reports. Kept as given; only a broken result is refused.
+ */
+const num = { type: 'number' } as const;
+const place: Schema = {
+  type: 'object',
+  description: 'View px, as read_diagram geometry. x,y: top-left; or rightOf/leftOf/above/below an id, gap (48), align start|center|end; x/y also given wins. width/height: not below its text. Overlaps refused.',
+  properties: { x: num, y: num, rightOf: { type: 'string' }, leftOf: { type: 'string' }, above: { type: 'string' }, below: { type: 'string' }, gap: num, align: { enum: ['start', 'center', 'end'] }, width: num, height: num },
+  additionalProperties: false,
+};
+const route: Schema = {
+  type: 'object',
+  description: 'from/to: sides. via: [x,y] bends in order; stepped adds right angles; [] drops them. null on update: automatic.',
+  properties: { from: { enum: SIDES }, to: { enum: SIDES }, via: { type: 'array', maxItems: 32, items: { type: 'array', items: num, minItems: 2, maxItems: 2 } } },
+  additionalProperties: false,
+};
+
 /** A room's fields (a view: the top level, or an element's `inside`), `depth` rooms below the top. */
 const room = (depth = 0): Record<string, Schema> => ({
   level: { enum: ['context', 'container', 'component'], description: 'C4 level of this view. Leave out for a non-C4 diagram.' },
@@ -268,6 +288,8 @@ const room = (depth = 0): Record<string, Schema> => ({
 /** What `room()`'s references resolve to — the same object on every tool that takes a room. */
 const roomDefs: Record<string, Schema> = {
   evidence,
+  place,
+  route,
   steps,
   attachment,
   relationship,
@@ -319,7 +341,7 @@ const setProperties: Record<string, Schema> = {
   steps: ref('steps'), variantOf: nullable({ type: 'string' }),
   code: text(4000), language: { enum: CODE_LANGUAGES },
   about: { anyOf: [{ type: 'string' }, { type: 'array', minItems: 1, maxItems: 40, items: { type: 'string' } }] },
-  near: { type: 'string' }, context: nullable(text(500)), resolved: { type: 'boolean' }, resolution: nullable(text(500)), evidence: nullable(ref('evidence')),
+  near: { type: 'string' }, place: ref('place'), route: nullable(ref('route')), context: nullable(text(500)), resolved: { type: 'boolean' }, resolution: nullable(text(500)), evidence: nullable(ref('evidence')),
 };
 const setSchema: Schema = {
   type: 'object', minProperties: 1, additionalProperties: false,
@@ -531,7 +553,7 @@ const TOOL_INPUTS = [
     name: 'create_diagram',
     title: 'Create a diagram',
     description:
-      'Creates a NEW diagram file — only for the first diagram of a conversation, or when the person asks for a new or separate one; every follow-up is update_diagram on the diagramId this returns. Send the whole graph in one call, notes and flows included, with no coordinates: sizing, layout and connector routing are automatic and checked for readability. For a clear result list elements in reading order, entry point first; name the main path in layout.primaryFlow; put detail past ~15 elements in an element\'s inside view (get_capabilities readability has the rest). The receipt\'s legibility and advisories say what to change next. Saved into a folder the person enabled; a title that already exists there is refused (DUPLICATE_TITLE) unless allowDuplicateTitle. open: true shows it in Draft Canvas (only when that loses nothing) — pass it when the person wants to see or watch it.',
+      'Creates a NEW diagram file — only for the first diagram of a conversation, or when the person asks for a new or separate one; every follow-up is update_diagram on the diagramId this returns. Send the whole graph in one call, notes and flows included; sizing, layout and connector routing are automatic and checked for readability (an element\'s place or a relationship\'s route sets one exactly). For a clear result list elements in reading order, entry point first; name the main path in layout.primaryFlow; put detail past ~15 elements in an element\'s inside view (get_capabilities readability has the rest). The receipt\'s legibility and advisories say what to change next. Saved into a folder the person enabled; a title that already exists there is refused (DUPLICATE_TITLE) unless allowDuplicateTitle. open: true shows it in Draft Canvas (only when that loses nothing) — pass it when the person wants to see or watch it.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -565,7 +587,7 @@ const TOOL_INPUTS = [
     name: 'update_diagram',
     title: 'Update a diagram',
     description:
-      'Changes an existing diagram in place — every follow-up to a diagram (add, rename, remove, notes, flows, cleanup) goes here, never a new create_diagram. Pass the diagramId and the revision from your last receipt or read; everything not named is kept (ids, positions, notes, flows). Works whether or not the diagram is open: an open one changes on screen as one undo step, a closed one is changed in its file (the person\'s view is never switched). Ops run in order, as one change: {op:"add", nodes?, relationships?, groups?, flows?, notes?, openPoints?}, {op:"update", id, set:{…}} (null clears a field), {op:"remove", ids, cascade?}, {op:"setLevel", level}, {op:"arrange", scope?} — "clean up the layout/arrows": re-lays out the view (or one group) in place, keeping every id, note and flow, {op:"moveInside", owner, ids} / {op:"moveOutside", ids} (one C4 level down / up). New elements are placed beside what they connect to; nothing existing moves except by arrange. If something can\'t fit, the error\'s suggestedOp is the arrange to add. On REVISION_CONFLICT, read again and rebuild the change — never recreate the diagram.',
+      'Changes an existing diagram in place — every follow-up to a diagram (add, rename, remove, notes, flows, cleanup) goes here, never a new create_diagram. Pass the diagramId and the revision from your last receipt or read; everything not named is kept (ids, positions, notes, flows). Works whether or not the diagram is open: an open one changes on screen as one undo step, a closed one is changed in its file (the person\'s view is never switched). Ops run in order, as one change: {op:"add", nodes?, relationships?, groups?, flows?, notes?, openPoints?}, {op:"update", id, set:{…}} (null clears a field), {op:"remove", ids, cascade?}, {op:"setLevel", level}, {op:"arrange", scope?} — "clean up the layout/arrows": re-lays out the view (or one group) in place, keeping every id, note and flow, {op:"moveInside", owner, ids} / {op:"moveOutside", ids} (one C4 level down / up). New elements are placed beside what they connect to; nothing existing moves except by arrange or set.place (set.route bends a connector). If something can\'t fit, the error\'s suggestedOp is the arrange to add. On REVISION_CONFLICT, read again and rebuild the change — never recreate the diagram.',
     inputSchema: {
       type: 'object',
       properties: {

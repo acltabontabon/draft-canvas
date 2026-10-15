@@ -180,11 +180,19 @@ export function isCleanCandidate(candidate: { report: QualityReport; fit?: FitRe
 const contains = (outer: Box, inner: Box) =>
   inner.x >= outer.x && inner.y >= outer.y && inner.x + inner.width <= outer.x + outer.width && inner.y + inner.height <= outer.y + outer.height;
 
+/** The problems a line or caption can have — reported, not refused, on what was placed or routed by
+ *  hand (`checkQuality`'s `explicit`). Overlap, spilling out of a boundary, clipped text and broken
+ *  geometry are refused whoever asked for them. */
+const ROUTE_KINDS: ReadonlySet<QualityIssue['kind']> = new Set(['through-node', 'label-over-node', 'label-collision', 'label-crossed', 'shared-run']);
+
 export function checkQuality(
   nodes: readonly DraftNode[],
   edges: readonly DraftEdge[],
   ctx: DescribeContext,
   focus?: ReadonlySet<string>,
+  /** Ids the request placed or routed itself (`placement.ts`): what it asked for exactly is kept,
+   *  and the receipt says what it costs instead of the request being refused. */
+  explicit?: ReadonlySet<string>,
 ): QualityReport {
   const errors: QualityIssue[] = [];
   const warnings: QualityIssue[] = [];
@@ -290,5 +298,7 @@ export function checkQuality(
       }
     }
   }
-  return { errors, warnings };
+  if (!explicit?.size) return { errors, warnings };
+  const asked = (issue: QualityIssue) => ROUTE_KINDS.has(issue.kind) && issue.ids.some((id) => explicit.has(id));
+  return { errors: errors.filter((issue) => !asked(issue)), warnings: [...warnings, ...errors.filter(asked)] };
 }

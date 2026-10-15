@@ -75,6 +75,8 @@ import { checkQuality, isBetterReport, isClean, type QualityReport } from './qua
 import { moveInside, moveOutside } from './restructure';
 import { OP_FIELDS, SET_FIELDS } from './fields';
 import { GROUP_KINDS, LINE_STYLE_NAMES, LINE_STYLES, NOTE_FORM_NAMES, NOTE_KIND_NAMES, resolveType, suggestTypes } from './vocabulary';
+import { applyRoutes, readPlace, readRoute, type PlaceSpec, type RouteSpec } from './placement';
+import { applyPlaces } from './placeExplicit';
 
 export interface PatchResult {
   file: DraftDocument;
@@ -163,6 +165,9 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
   const scope = readScope(r, rawScope, '/scope', view);
   problems.throwIfAny();
   const touched = new Set<string>();
+  // What this request placed or routed by hand: its line and caption problems are reported, not
+  // refused (`checkQuality`'s `explicit`).
+  const explicit = new Set<string>();
   const counts: PatchResult['counts'] = { added: 0, updated: 0, removed: 0 };
   const advisories: string[] = [];
 
@@ -239,6 +244,13 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
       // the field unset.
       const blockLayout: LayoutSpec = { ...layout, normalizePeerSizes: layout.normalizePeerSizes ?? true };
       view = addToView(view, room, blockLayout, ctx, touched, advisories);
+      // Then what the request placed or routed itself, over where the block was put.
+      const places = new Map(room.nodes.flatMap((n) => (n.place ? [[n.id, n.place] as const] : [])));
+      const routes = new Map(room.relationships.flatMap((e) => (e.route ? [[e.id, e.route] as const] : [])));
+      if (places.size || routes.size) {
+        view = touchedBy(view, applyRoutes(applyPlaces(view, places, ctx, at), routes, at), touched);
+        for (const id of [...places.keys(), ...routes.keys()]) explicit.add(id);
+      }
       // An add may say what level the view is at — the first add into a new inside view usually does.
       if (room.level && room.level !== view.level) {
         view = { ...view, level: room.level };
@@ -376,7 +388,7 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
             ? SET_FIELDS.flow
             : SET_FIELDS.attachment;
     r.fields(set, `${at}/set`, fields);
-    for (const field of ['kind', 'language', 'lineStyle', 'code', 'attach']) if (set[field] === null && !(isEdge && field === 'kind')) problems.add('INVALID_INPUT', `${at}/set/${field}`, 'this required field cannot be cleared');
+    for (const field of ['kind', 'language', 'lineStyle', 'code', 'attach', 'place']) if (set[field] === null && !(isEdge && field === 'kind')) problems.add('INVALID_INPUT', `${at}/set/${field}`, 'this required field cannot be cleared');
     if (Object.keys(set).length === 0) problems.add('INVALID_INPUT', `${at}/set`, 'name at least one field to change');
     if (!problems.empty) return;
     if (point) {
@@ -390,10 +402,28 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
       counts.updated += 1;
       return;
     }
-    const result = updateOne(r, view, id, set, `${at}/set`, ctx, touched, advisories, layout.direction, scope);
-    if (!result) return;
-    if (result.view !== view) counts.updated += 1;
-    view = result.view;
+    // Where it goes and how it runs are applied after its other fields, which may resize it.
+    const { place: rawPlace, route: rawRoute, ...rest } = set;
+    const place = rawPlace !== undefined ? readPlace(r, rawPlace, `${at}/set/place`) : undefined;
+    const route = rawRoute === undefined || rawRoute === null ? rawRoute : readRoute(r, rawRoute, `${at}/set/route`);
+    if (rawPlace !== undefined || rawRoute !== undefined) refuseOutOfScope(r, `${at}/set`, outOfScope(scope, [id], isEdge ? 'edges' : 'nodes'));
+    if (!problems.empty) return;
+    const before = view;
+    if (Object.keys(rest).length) {
+      const result = updateOne(r, view, id, rest, `${at}/set`, ctx, touched, advisories, layout.direction, scope);
+      if (!result) return;
+      view = result.view;
+    }
+    if (place) {
+      view = touchedBy(view, applyPlaces(view, new Map<string, PlaceSpec>([[id, place]]), ctx, `${at}/set/place`), touched);
+      explicit.add(id);
+    }
+    if (route !== undefined) {
+      view = touchedBy(view, route === null ? automaticRoute(view, id, layout.direction, ctx) : applyRoutes(view, new Map<string, RouteSpec>([[id, route]])), touched);
+      touched.add(id);
+      if (route) explicit.add(id);
+    }
+    if (view !== before) counts.updated += 1;
   });
   problems.throwIfAny();
   if (!view) throw new AgentError('NOT_FOUND', 'That view no longer exists.');
@@ -405,7 +435,7 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
   walkGraphs(nextFile, (graph, graphPath) => {
     const original = viewOf(file, graphPath);
     if (original?.nodes === graph.nodes && original?.edges === graph.edges) return;
-    const report = checkQuality(graph.nodes, graph.edges, ctx, graphPath.some((id) => touched.has(id)) ? undefined : touched);
+    const report = checkQuality(graph.nodes, graph.edges, ctx, graphPath.some((id) => touched.has(id)) ? undefined : touched, explicit);
     quality.errors.push(...report.errors);
     quality.warnings.push(...report.warnings);
   });
@@ -499,11 +529,15 @@ function repoint(view: DraftDocument, edge: DraftEdge, ends: { source: string; t
   const moved: DraftEdge = { ...edge, source: ends.source, target: ends.target };
   delete moved.sourceAnchor;
   delete moved.targetAnchor;
+  delete moved.waypoints;
   if (reversed) {
-    // Reversing swaps the anchors with the ends, exactly as `reverseEdge` does.
+    // Reversing swaps the anchors with the ends, exactly as `reverseEdge` does — and keeps the line.
     if (edge.targetAnchor) moved.sourceAnchor = edge.targetAnchor;
     if (edge.sourceAnchor) moved.targetAnchor = edge.sourceAnchor;
+    if (edge.waypoints) moved.waypoints = [...edge.waypoints].reverse();
   } else {
+    // A bent line drawn to the old end would lead the new one the long way round; it routes afresh.
+    if (ends.source === edge.source && ends.target === edge.target && edge.waypoints) moved.waypoints = edge.waypoints;
     if (ends.source === edge.source && edge.sourceAnchor) moved.sourceAnchor = edge.sourceAnchor;
     if (ends.target === edge.target && edge.targetAnchor) moved.targetAnchor = edge.targetAnchor;
   }
@@ -867,8 +901,10 @@ function addToView(
   }
   const spec: RoomSpec = {
     ...room,
-    nodes: room.nodes.map((n) => (n.group && existingIds.has(n.group) ? { ...n, group: undefined } : n)) as RoomSpec['nodes'],
-    relationships: inner,
+    // Explicit placement and routing are applied once the block is in the view (`applyUpdate`): they
+    // may name what was already there.
+    nodes: room.nodes.map(({ place: _place, ...n }) => (n.group && existingIds.has(n.group) ? { ...n, group: undefined } : n)) as RoomSpec['nodes'],
+    relationships: inner.map(({ route: _route, ...e }) => e),
     flows: [],
     notes: [],
   };
@@ -1257,4 +1293,31 @@ function flowStepsFor(r: Reader, raw: unknown, at: string, flow: DraftFlow, know
     if (details(step, stepAt, base, 'highlight')) out.push(base);
   });
   return out;
+}
+
+/** `next`, with every node and connector it changed against `view` marked touched — what moved
+ *  along with an explicit placement (a group's contents, a note beside it) is judged with it. */
+function touchedBy(view: DraftDocument, next: DraftDocument, touched: Set<string>): DraftDocument {
+  if (next === view) return view;
+  const nodes = new Map(view.nodes.map((n) => [n.id, n]));
+  const edges = new Map(view.edges.map((e) => [e.id, e]));
+  for (const node of next.nodes) if (nodes.get(node.id) !== node) touched.add(node.id);
+  for (const edge of next.edges) if (edges.get(edge.id) !== edge) touched.add(edge.id);
+  return next;
+}
+
+/** A hand-routed connector handed back to the layout: no bends, and anchored afresh from where both
+ *  of its shapes are now — what `repoint` does for a moved end. */
+function automaticRoute(view: DraftDocument, id: string, direction: LayoutSpec['direction'], ctx: ReturnType<typeof measureContext>): DraftDocument {
+  const edge = view.edges.find((e) => e.id === id);
+  if (!edge) return view;
+  const fresh: DraftEdge = { ...edge };
+  delete fresh.waypoints;
+  delete fresh.sourceAnchor;
+  delete fresh.targetAnchor;
+  const anchors = assignAnchors([fresh], new Map(view.nodes.map((n) => [n.id, anchorRectOf(n)])), direction).get(id);
+  if (anchors) Object.assign(fresh, anchors);
+  const edges = view.edges.map((e) => (e.id === id ? fresh : e));
+  repairAnchors([fresh], view.nodes, captionSizer(view.nodes, ctx), edges);
+  return { ...view, edges: view.edges.map((e) => (e.id === id ? fresh : e)) };
 }

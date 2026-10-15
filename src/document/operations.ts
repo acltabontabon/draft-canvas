@@ -19,6 +19,7 @@ import type {
   DraftFlowStep,
   DraftInside,
   DraftNode,
+  DraftPoint,
   DraftViewport,
   DraftSettings,
   Side,
@@ -145,6 +146,26 @@ export function updateEdge(
 }
 
 /**
+ * Sets the bends a connector is drawn through (`DraftEdge.waypoints`), or with none clears them and
+ * hands the whole path back to the router. Capped and kept on the canvas like any coordinate; the
+ * same points again is no change, so a click on a bend handle never becomes an undo step.
+ */
+export function setEdgeWaypoints(doc: DraftDocument, id: string, waypoints: readonly DraftPoint[] | undefined): DraftDocument {
+  const next = waypoints?.length
+    ? waypoints.slice(0, LIMITS.maxWaypointsPerEdge).map((point) => ({ x: clampCoord(point.x), y: clampCoord(point.y) }))
+    : undefined;
+  const edge = doc.edges.find((candidate) => candidate.id === id);
+  if (!edge) return doc;
+  const same =
+    edge.waypoints === next ||
+    (edge.waypoints !== undefined &&
+      next !== undefined &&
+      edge.waypoints.length === next.length &&
+      edge.waypoints.every((point, i) => point.x === next[i]!.x && point.y === next[i]!.y));
+  return same ? doc : updateEdge(doc, id, { waypoints: next });
+}
+
+/**
  * Grabbing an existing connector's endpoint and dropping it somewhere else —
  * a new node, or a new side of the same node — is how a user explicitly
  * overrides a previously persisted anchor (see `EdgeAnchor` in `types.ts`).
@@ -221,6 +242,8 @@ export function reverseEdge(doc: DraftDocument, id: string): DraftDocument {
     }
     changed = true;
     const next: DraftEdge = { ...edge, source: edge.target, target: edge.source };
+    // The line keeps its shape; only the direction it is read in turns round.
+    if (edge.waypoints) next.waypoints = [...edge.waypoints].reverse();
     // Absent stays absent — never write an `undefined` own-property a serializer would emit.
     if (edge.targetAnchor) next.sourceAnchor = edge.targetAnchor;
     else delete next.sourceAnchor;
@@ -238,6 +261,7 @@ export function moveNodes(
 ): DraftDocument {
   if (positions.size === 0) return doc;
   let changed = false;
+  const moved = new Map<string, { dx: number; dy: number }>();
   const nodes = doc.nodes.map((node) => {
     const pos = positions.get(node.id);
     if (!pos) return node;
@@ -245,9 +269,34 @@ export function moveNodes(
     const y = clampCoord(pos.y);
     if (x === node.x && y === node.y) return node;
     changed = true;
+    moved.set(node.id, { dx: x - node.x, dy: y - node.y });
     return { ...node, x, y };
   });
-  return changed ? withNodes(doc, nodes) : doc;
+  if (!changed) return doc;
+  return carryWaypoints(withNodes(doc, nodes), moved);
+}
+
+/**
+ * A bent connector whose two shapes both moved by the same amount moves its bends with them — a
+ * selection dragged across the canvas keeps its hand-routed lines. One shape moving on its own, or
+ * two moving apart (align, distribute), leaves the bends where the user put them; the line's ends
+ * still follow their shapes.
+ */
+function carryWaypoints(doc: DraftDocument, moved: ReadonlyMap<string, { dx: number; dy: number }>): DraftDocument {
+  let changed = false;
+  const edges = doc.edges.map((edge) => {
+    if (!edge.waypoints) return edge;
+    const source = moved.get(edge.source);
+    const target = moved.get(edge.target);
+    if (!source || !target || source.dx !== target.dx || source.dy !== target.dy) return edge;
+    changed = true;
+    return { ...edge, waypoints: translatePoints(edge.waypoints, source.dx, source.dy) };
+  });
+  return changed ? withEdges(doc, edges) : doc;
+}
+
+function translatePoints(points: readonly DraftPoint[], dx: number, dy: number): DraftPoint[] {
+  return points.map((point) => ({ x: clampCoord(point.x + dx), y: clampCoord(point.y + dy) }));
 }
 
 /**
@@ -470,6 +519,8 @@ function instantiateFragment(
     if (edge.attachments) {
       next.attachments = edge.attachments.map((a) => ({ ...a, id: createId('a') }));
     }
+    // Its bends land where its shapes do.
+    if (edge.waypoints) next.waypoints = translatePoints(edge.waypoints, offset.x, offset.y);
     return next;
   });
 

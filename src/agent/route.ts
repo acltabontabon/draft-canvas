@@ -16,6 +16,7 @@ import type { DraftEdge, DraftNode, Side } from '../document/types';
 import { routingPlan } from '../edges/bundles';
 import { labelChipBox, labelGroupPlan } from '../edges/labelGroups';
 import { obstaclesForEdge } from '../edges/obstacles';
+import { stepPolyline } from '../edges/waypoints';
 import { anchorsHold, labelChipSide, labelLaneOffset, labelSideAwayFromResponse, laneIndex, responseAwayFor, routeEdge } from '../edges/routing';
 
 export interface Box {
@@ -132,6 +133,29 @@ export interface Drawn {
   ownChip?: boolean;
   /** The Smart Routing trunk it shares, if any: members of one run along it together on purpose. */
   spine?: string;
+}
+
+/**
+ * Where a connector is drawn, for `read_diagram`'s geometry: the side each end uses, and its path as
+ * the points where it turns, ends included (a curved line's are its ends and bends — between them it
+ * curves). The same numbers `route.via` takes back, so an agent can read a line, move a point, and
+ * send it.
+ */
+export function routeGeometry(edge: DraftEdge, nodes: readonly DraftNode[], edges: readonly DraftEdge[]): { from: Side; to: Side; path: [number, number][] } | undefined {
+  const nodeMap = new Map(nodes.map((n) => [n.id, n]));
+  let route;
+  try {
+    route = routeEdge(edge, nodeMap, {
+      obstacles: obstaclesForEdge(nodes, edge.source, edge.target),
+      spine: routingPlan(nodes, edges).spineFor(edge.id),
+      lane: laneIndex(edges).get(edge.id)?.offset ?? 0,
+    });
+  } catch {
+    return undefined;
+  }
+  if (!route) return undefined;
+  const turns = route.points ?? (edge.routing === 'smoothstep' ? stepPolyline(route.d) : [route.source, route.target]);
+  return { from: route.source.side, to: route.target.side, path: turns.map((p) => [Math.round(p.x), Math.round(p.y)]) };
 }
 
 /** Longer than a connector's stub off its shape (20) — two leaving one point share that much. */

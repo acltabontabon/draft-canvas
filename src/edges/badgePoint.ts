@@ -36,8 +36,10 @@ export function badgePoint(route: RoutedEdge, routing: EdgeRouting): { x: number
     return { x: route.branchStart.x + dx * t, y: route.branchStart.y + dy * t };
   }
   if (routing === 'straight') {
-    const dx = route.target.x - route.source.x;
-    const dy = route.target.y - route.source.y;
+    // A bent line's first leg runs to its first bend, not towards the far end.
+    const toward = route.points?.[1] ?? route.target;
+    const dx = toward.x - route.source.x;
+    const dy = toward.y - route.source.y;
     const length = Math.hypot(dx, dy) || 1;
     const t = Math.min(0.4, BADGE_OFFSET / length);
     return { x: route.source.x + dx * t, y: route.source.y + dy * t };

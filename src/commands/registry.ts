@@ -626,7 +626,7 @@ export function canvasCommands(ctx: CommandContext): Command[] {
       run: (inner) => inner.editor.redo(),
     });
   }
-  if (ctx.editor.document.edges.some((edge) => edge.routeMode)) {
+  if (ctx.editor.document.edges.some((edge) => edge.routeMode || edge.waypoints)) {
     commands.push({
       id: 'tidy-connections',
       title: 'Tidy connectors',
@@ -1543,6 +1543,18 @@ export function edgeCommands(ctx: CommandContext, edge: DraftEdge): Command[] {
       hint: edge.routeMode === 'direct' ? 'Let the router bundle this again' : 'Route this one on its own',
       run: (inner) => inner.editor.setEdgeRouteMode(edge.id, edge.routeMode === 'direct' ? undefined : 'direct'),
     },
+    ...(edge.waypoints
+      ? [
+          {
+            id: 'edge-reset-route',
+            title: 'Reset route',
+            group: 'connector' as const,
+            keywords: ['bend', 'bends', 'waypoint', 'smart', 'auto', 'straighten', 'route', 'routing'],
+            hint: 'Remove the bends and route it automatically',
+            run: (inner: CommandContext) => inner.editor.setEdgeWaypoints(edge.id, undefined),
+          },
+        ]
+      : []),
     {
       id: 'edge-reverse',
       title: 'Reverse direction',

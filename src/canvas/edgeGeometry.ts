@@ -54,6 +54,7 @@ export function edgeLabelPoint(
   const lane = laneIndex(document.edges).get(edge.id)?.offset ?? 0;
   const route = routeBetween(sourceRect, targetRect, edge.routing, {
     anchors: { source: edge.sourceAnchor, target: edge.targetAnchor },
+    waypoints: edge.waypoints,
     lane,
     obstacles: interactionActive ? undefined : obstaclesForEdge(document.nodes, edge.source, edge.target),
     spine: routingPlan(document.nodes, document.edges).spineFor(edge.id),

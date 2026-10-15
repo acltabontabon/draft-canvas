@@ -3,12 +3,14 @@ import {
   SIDES,
   type DraftEdge,
   type DraftNode,
+  type DraftPoint,
   type EdgeAnchor,
   type EdgeRouting,
   type Side,
 } from '../document/types';
 import { anchorBandOf, type AnchorBand } from '../document/queueGeometry';
 import { centerOf, clamp } from '../lib/math';
+import { longestRunMidpoint, orthogonalThrough, polylineMidpoint, polylinePath, responseWaypoints, smoothPath } from './waypoints';
 
 /**
  * Edge geometry.
@@ -239,6 +241,12 @@ export interface RoutedEdge {
    * a few pixels off, as a faint double image.
    */
   trunkLabelSide?: Side;
+  /**
+   * The whole polyline of a connector drawn through hand-placed bends (`DraftEdge.waypoints`), ends
+   * included — for a stepped one, with the elbows routing added. Absent for a routed line. What the
+   * bend handles are drawn on, and how a straight connector's arrowhead finds its last leg.
+   */
+  points?: DraftPoint[];
 }
 
 /** The direction of travel arriving at a side's own anchor — the inward-pointing counterpart to
@@ -267,7 +275,8 @@ const INWARD: Record<Side, { x: number; y: number }> = {
 export function endTangent(route: RoutedEdge, routing: EdgeRouting, end: 'source' | 'target'): { x: number; y: number } {
   const anchor = end === 'target' ? route.target : route.source;
   if (routing === 'straight') {
-    const other = end === 'target' ? route.source : route.target;
+    const points = route.points;
+    const other = points && points.length >= 2 ? (end === 'target' ? points[points.length - 2]! : points[1]!) : end === 'target' ? route.source : route.target;
     const dx = anchor.x - other.x;
     const dy = anchor.y - other.y;
     const len = Math.hypot(dx, dy) || 1;
@@ -562,6 +571,21 @@ export interface RouteOptions {
    * a document-level judgement, not a geometry one.
    */
   obstacles?: readonly Rect[];
+  /**
+   * Bends the user placed (`DraftEdge.waypoints`). Present and non-empty, the line runs through
+   * them instead of being routed: no detour, no bundle, and a side with no persisted anchor faces
+   * the nearest bend rather than the far shape.
+   */
+  waypoints?: readonly DraftPoint[];
+}
+
+/**
+ * The reply line's bends for a bent request/response connector: reversed, and moved over by the
+ * gap between the two lines' lanes — see `responseWaypoints`.
+ */
+export function responseWaypointsFor(waypoints: readonly DraftPoint[] | undefined, laneOffset: number): DraftPoint[] | undefined {
+  if (!waypoints?.length) return undefined;
+  return responseWaypoints(waypoints, (responseLaneFor(laneOffset) - laneOffset) * LANE_SPACING);
 }
 
 const isHorizontalSide = (side: Side) => side === 'left' || side === 'right';
@@ -1186,6 +1210,9 @@ export function routeBetween(
   routing: EdgeRouting,
   options?: RouteOptions,
 ): RoutedEdge {
+  // A bent connector's ends face its bends, not each other, so "does this anchor point away from
+  // the other shape" is the wrong question to ask of it.
+  if (options?.waypoints?.length) return routeWith(sourceRect, targetRect, routing, options);
   const anchors = workableAnchors(sourceRect, targetRect, options?.anchors, routing);
   return routeWith(sourceRect, targetRect, routing, anchors === options?.anchors ? options : { ...options, anchors });
 }
@@ -1294,7 +1321,10 @@ function routeWith(
   options?: RouteOptions,
 ): RoutedEdge {
   const anchors = options?.anchors;
-  const { source: sourceSide, target: targetSide } = sidesFor(sourceRect, targetRect, anchors);
+  const waypoints = options?.waypoints?.length ? options.waypoints : undefined;
+  const { source: sourceSide, target: targetSide } = waypoints
+    ? bentSides(sourceRect, targetRect, waypoints, anchors)
+    : sidesFor(sourceRect, targetRect, anchors);
 
   const sourcePoint = anchorPoint(sourceRect, sourceSide, anchors?.source?.offset);
   const targetPoint = anchorPoint(targetRect, targetSide, anchors?.target?.offset);
@@ -1322,6 +1352,7 @@ function routeWith(
   // kink this exists to remove, while connectors the router placed came out straight.
   const deliberate = (anchor: EdgeAnchor | undefined) => anchor !== undefined && anchor.offset !== 0.5;
   const automatic = !deliberate(anchors?.source) && !deliberate(anchors?.target);
+  if (waypoints) return bentRoute(sourceRect, targetRect, routing, from, sourceSide, waypoints, to, targetSide);
   if (isHorizontalSide(sourceSide) && isHorizontalSide(targetSide) && sourceSide !== targetSide) {
     if (Math.abs(from.y - to.y) < LEVEL_SNAP) to.y = from.y;
     else if (automatic) to.y = levelOnto(targetRect, targetSide, from.y, to.y);
@@ -1423,10 +1454,61 @@ function routeWith(
   };
 }
 
+/** Sides for a bent connector: a persisted anchor still wins; otherwise each end leaves from the
+ *  side facing its nearest bend, so moving a shape past its first bend turns the line round. */
+function bentSides(
+  sourceRect: Rect,
+  targetRect: Rect,
+  waypoints: readonly DraftPoint[],
+  anchors?: RouteAnchors,
+): { source: Side; target: Side } {
+  const first = waypoints[0]!;
+  const last = waypoints[waypoints.length - 1]!;
+  return {
+    source: anchors?.source?.side ?? chooseSides(sourceRect, { ...first, width: 0, height: 0 }).source,
+    target: anchors?.target?.side ?? chooseSides({ ...last, width: 0, height: 0 }, targetRect).target,
+  };
+}
+
+/** A connector drawn through the user's bends, in its own routing style. */
+function bentRoute(
+  sourceRect: Rect,
+  targetRect: Rect,
+  routing: EdgeRouting,
+  from: { x: number; y: number },
+  sourceSide: Side,
+  waypoints: readonly DraftPoint[],
+  to: { x: number; y: number },
+  targetSide: Side,
+): RoutedEdge {
+  let points: DraftPoint[];
+  let path: string;
+  let mid: { x: number; y: number };
+  if (routing === 'straight' || routing === 'bezier') {
+    points = [{ x: from.x, y: from.y }, ...waypoints, { x: to.x, y: to.y }];
+    path = routing === 'straight' ? polylinePath(points) : smoothPath(points, sourceSide, targetSide);
+    mid = polylineMidpoint(points);
+  } else {
+    points = orthogonalThrough(from, sourceSide, waypoints, to, targetSide);
+    path = roundedStepPath(points, 10);
+    mid = longestRunMidpoint(points);
+  }
+  const label = placeLabel(path, mid, sourceRect, targetRect, labelSideFor(sourceRect, targetRect, sourceSide, targetSide, mid));
+  return {
+    d: path,
+    labelX: label.x,
+    labelY: label.y,
+    labelSide: label.side,
+    source: { ...from, side: sourceSide },
+    target: { ...to, side: targetSide },
+    points,
+  };
+}
+
 export function routeEdge(
   edge: DraftEdge,
   nodes: Map<string, DraftNode>,
-  options?: Omit<RouteOptions, 'anchors'>,
+  options?: Omit<RouteOptions, 'anchors' | 'waypoints'>,
 ): RoutedEdge | null {
   const source = nodes.get(edge.source);
   const target = nodes.get(edge.target);
@@ -1434,6 +1516,7 @@ export function routeEdge(
   return routeBetween(rectOf(source), rectOf(target), edge.routing, {
     ...options,
     anchors: { source: edge.sourceAnchor, target: edge.targetAnchor },
+    waypoints: edge.waypoints,
   });
 }
 

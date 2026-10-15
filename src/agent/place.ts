@@ -28,6 +28,8 @@ import { AgentError } from './errors';
 import type { AttachmentSpec, FlowSpec, LayoutSpec, NodeSpec, NoteSpec, RelationshipSpec, RoomSpec } from './input';
 import { drawnRoute, repairAnchors, segmentHitsBox } from './route';
 import { GROUP_KINDS, LINE_STYLES } from './vocabulary';
+import { applyRoutes } from './placement';
+import { applyPlaces } from './placeExplicit';
 
 const SPACING_FACTOR = { compact: 0.8, comfortable: 1, spacious: 1.3 } as const;
 /** How wide a connector's caption may grow before it wraps — the canvas's own chip limit. */
@@ -651,7 +653,7 @@ export function placeRoom(room: RoomSpec, layout: LayoutSpec, ctx: DescribeConte
     }
     elements.set(spec.id, node);
   }
-  const edges: DraftEdge[] = [];
+  let edges: DraftEdge[] = [];
   for (const spec of room.relationships) {
     edges.push(connectorFor(spec, elements.get(spec.from)!, elements.get(spec.to)!, advisories));
   }
@@ -682,9 +684,18 @@ export function placeRoom(room: RoomSpec, layout: LayoutSpec, ctx: DescribeConte
 
   const primary = room.flows.find((f) => f.id === (primaryFlow ?? layout.primaryFlow));
   const placed = arrangeParts({ elements, groups: groupNodes, memberNotes, besideNotes, edges, primaryEdges: new Set(primary?.steps.flatMap((s) => (s.relationship ? [s.relationship] : [])) ?? []) }, layout, ctx);
-  const nodes = [...groupNodes.values(), ...elements.values(), ...memberNotes.values(), ...[...besideNotes.values()].flat()];
+  let nodes = [...groupNodes.values(), ...elements.values(), ...memberNotes.values(), ...[...besideNotes.values()].flat()];
   nodes.push(...placeNotes(room, nodes, edges, placed.width, placed.height, layout.direction, ctx));
-  repairAnchors(edges, nodes, captionSizer(nodes, ctx));
+  // What the request placed or routed itself goes where it said, over the layout's choice.
+  const places = new Map(room.nodes.flatMap((n) => (n.place ? [[n.id, n.place] as const] : [])));
+  const routes = new Map(room.relationships.flatMap((e) => (e.route ? [[e.id, e.route] as const] : [])));
+  if (places.size || routes.size) {
+    const view = applyRoutes(applyPlaces({ ...createDocument(), nodes, edges }, places, ctx), routes);
+    nodes = view.nodes;
+    edges = view.edges;
+  }
+  // A connector routed by hand keeps its sides; the repair works around it.
+  repairAnchors(routes.size ? edges.filter((e) => !routes.has(e.id)) : edges, nodes, captionSizer(nodes, ctx), edges);
 
   const flows = linkVariants(room.flows.map(flowFromSpec), room.flows, advisories);
 

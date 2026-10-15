@@ -48,6 +48,7 @@ import { clearPathCache } from '../edges/nearest';
 import { edgeLabelPoint, rectOfInternal, type InternalNode } from './edgeGeometry';
 import { findEdgeDropCandidate } from './edgeDropTarget';
 import { edgeToSelect, pickEdgeAt } from './edgePick';
+import { endsBendDrag } from './bendDrag';
 import { DraftEdgeView } from './DraftEdgeView';
 import { EdgeLabelRoot } from './EdgeLabels';
 import { DraftNodeView } from './DraftNodeView';
@@ -1857,6 +1858,11 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       }
       if (!interactive || event.button !== 0 || useUiStore.getState().armed) return;
       if (isEditableTarget(event.target)) return;
+      // The click that ends dragging a bend is not a click on the connector.
+      if (endsBendDrag()) {
+        event.stopPropagation();
+        return;
+      }
       const pick = edgeAtEvent(event);
       if (!pick || pick.part === 'control') return;
       event.stopPropagation();

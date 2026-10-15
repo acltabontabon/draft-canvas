@@ -48,6 +48,7 @@ import {
   type CodeLanguage,
   type ComponentKind,
   type ConnectorKind,
+  type DraftPoint,
   type DatabaseKind,
   type DeliveryRole,
   type DraftDocument,
@@ -143,6 +144,24 @@ function parseAnchor(value: unknown): EdgeAnchor | undefined {
   const side = oneOfOptional(value.side, SIDES);
   if (!side) return undefined;
   return { side, offset: clamp(finite(value.offset, 0.5), 0, 1) };
+}
+
+/** A connector's bend points: finite numbers kept on the canvas, at most `maxWaypointsPerEdge`.
+ *  An unreadable point is dropped rather than the whole route — the line still passes through the
+ *  rest. Nothing left means no hand route at all. */
+function parseWaypoints(value: unknown): DraftPoint[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const points: DraftPoint[] = [];
+  for (const raw of value) {
+    if (points.length >= LIMITS.maxWaypointsPerEdge) break;
+    if (!isRecord(raw) || typeof raw.x !== 'number' || typeof raw.y !== 'number') continue;
+    if (!Number.isFinite(raw.x) || !Number.isFinite(raw.y)) continue;
+    points.push({
+      x: clamp(raw.x, -LIMITS.maxCoordinate, LIMITS.maxCoordinate),
+      y: clamp(raw.y, -LIMITS.maxCoordinate, LIMITS.maxCoordinate),
+    });
+  }
+  return points.length > 0 ? points : undefined;
 }
 
 /**
@@ -691,6 +710,10 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
     // silently strip the user's choice on every paste.
     const routeMode = oneOfOptional<RouteMode>(candidate.routeMode, ROUTE_MODES);
     if (routeMode) edge.routeMode = routeMode;
+
+    // Carried through copy/paste for the same reason as `routeMode` above.
+    const waypoints = parseWaypoints(candidate.waypoints);
+    if (waypoints) edge.waypoints = waypoints;
 
     const sourceAnchor = parseAnchor(candidate.sourceAnchor);
     if (sourceAnchor) edge.sourceAnchor = sourceAnchor;
