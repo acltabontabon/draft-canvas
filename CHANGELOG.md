@@ -11,81 +11,90 @@ the release notes and the in-app What's New are generated from here. See
 
 ## [Unreleased]
 
-### Desktop
+## [1.14.0] - 2026-10-16
 
-#### Added
+Your agent draws like you do.
 
-- Install Draft Canvas on macOS with `brew install --cask acltabontabon/tap/draft-canvas`.
-  Stable releases verify both macOS installers and automatically update the shared Homebrew tap.
-- Connect Codex to Draft Canvas from **Settings → AI agents** with one click. **Add to Codex** sets
-  up the Codex app, CLI and IDE extension together, and leaves the rest of Codex's settings as they were.
-- **Add to Claude Code** sets up Claude Code with one click too, for every project.
-- Settings shows whether Claude Code and Codex are already set up, and offers **Update** when
-  they still point at a moved or reinstalled copy of Draft Canvas.
-- **Agents can author what you can.** A connected agent can set up a presentation — captions, extra
-  shapes lit with a step, and steps that show just part of the diagram — add code snippets and labels
-  beside or attached to shapes, connectors and boundaries, attach or detach a note, and set a
-  connector's colour, line style, reply line and delivery attempts, or re-point and reverse it without
-  losing its place in your flows.
-- **Agents can look inside.** An agent can draw what's inside an existing service or component, move
-  shapes a level down into it or back up out of it, and list every inside view in a diagram.
-
-#### Fixed
-
-- The Claude Code setup command now adds Draft Canvas for every project, not only the folder it
-  was run in.
-- A failure path an agent created together with its diagram now stays linked to the flow it is a
-  variant of, and a note an agent attached to a starter's shape is no longer lost.
-- An agent's addition to a view now keeps the C4 level it names, and an agent can no longer give a
-  data store or a person an inside view the app can't open.
-
-### Web
-
-#### Changed
-
-- Docker distribution is retired: image builds, publication and Docker-based CI are removed.
-  Self-hosting remains available by building and serving the static web editor.
-
-#### Fixed
-
-- Pressing Enter starts a blank canvas as soon as the home screen appears.
+Connect Codex or Claude Code in one click. Your agent can now set up presentations, add notes and
+code, draw inside a service and cite the code behind each part, then check a change before it lands.
+On a Mac, install with Homebrew.
 
 ### Shared
 
 #### Added
 
-- Elements and relationships can carry source evidence with observed/inferred provenance, visible in Details and connector options.
+- **Agents cite their sources** — shapes and connectors an agent drew from your code can list the
+  files and lines behind them, marked observed or inferred. Open **Source evidence** in Details to
+  check them. <!-- highlight -->
+
+#### Changed
+
+- Selecting and dragging shapes does less work, so large diagrams stay responsive.
 
 #### Fixed
 
-- Selecting shapes reuses observed canvas bounds when positioning popovers, avoiding repeated synchronous layout reads.
-- Dialogs isolate background content from assistive technology and lock background scrolling.
-- Agent tool schemas accept descriptions on elements inside nested rooms.
-- Small Service, Worker and Component labels stay clear of decorative corner dots.
-- Architecture names edit in their drawn label area, keeping glyphs and kind captions visible.
-- Question, Warning and Decision notes keep room for their tag and one body line when resized.
-- Typing into a manually enlarged Note or Text shape no longer shrinks it to the automatic growth limit.
-- Shift-clicking a connector keeps it in a selection of several shapes, including connectors whose other endpoint is unselected.
-- Dragging shapes skips redundant node renders when only their position changes.
-- A connector's label and its reply line's label no longer draw over each other when the connector
-  runs vertically, on the canvas or in exports: each sits on the outer side of its own line.
+- A connector's label and its reply line's label no longer draw over each other on a vertical
+  connector, on the canvas or in exports.
+- Typing into a Note or Text shape you enlarged no longer shrinks it back.
+- Renaming an architecture shape edits the name where it's drawn, keeping the shape's symbol and
+  kind caption in view.
+- Small Service, Worker and Component names stay clear of their corner dots.
+- Question, Warning and Decision notes keep room for their tag and one line of text when resized.
+- Shift-clicking a connector adds it to a selection of several shapes, even when its other end isn't
+  selected.
+- Screen readers stay inside an open dialog, and the page behind it no longer scrolls.
 
 ### Desktop
 
-#### Improved
-
-- Open diagrams and listed project folders react to native filesystem notifications, keeping external edits subject to the existing unsaved-work checks.
-
 #### Added
 
-- Agents can prepare temporary diagram candidates, inspect focused images and field diffs, then apply the exact reviewed candidate with revision and session checks.
-- Agents can move existing subgraphs into a service's detail view, preserving identities, notes and complete flows while refusing ambiguous cross-view stories.
+- **One-click agent setup** — **Add to Codex** and **Add to Claude Code** in **Settings → AI agents**
+  connect Draft Canvas for every project. The Codex app, CLI and IDE extension all pick it up, and the
+  rest of your Codex settings stay as they were. <!-- highlight -->
+- Settings shows whether Claude Code and Codex are already set up, and offers **Update** when they
+  still point at a moved or reinstalled copy of Draft Canvas.
+- **Agents author what you can** — an agent can set up a presentation with captions and steps that
+  show part of the diagram, add notes, code snippets and labels beside or attached to anything, and
+  style, re-point or reverse a connector without losing its place in your flows. <!-- highlight -->
+- **Agents look inside** — an agent can draw what's inside an existing service or component, and move
+  shapes a level down into it or back out, keeping their notes and flows. <!-- highlight -->
+- **Agents check before they change** — an agent can prepare a change, look at the picture and the
+  differences, revise it, then apply exactly what it checked as one undo step. <!-- highlight -->
+- **Install with Homebrew** — on a Mac, run `brew install --cask acltabontabon/tap/draft-canvas`. It
+  picks the build for Apple silicon or Intel, and the app keeps updating itself. <!-- highlight -->
+
+#### Changed
+
+- An open diagram or project folder that changes on disk — after a `git pull`, or an edit in another
+  app — updates straight away, even while Draft Canvas is in the background. A diagram with unsaved
+  edits is still never replaced.
 
 #### Fixed
 
-- Proposal review detects concurrent changes to deleted content, attachments, flows and all edited fields, and shows their actual differences before acceptance.
-- Diagram reads paginate relationships, flows and open points independently, report attachment truncation, preserve flow variants and respect their UTF-8 response limit.
-- MCP patches reject unknown fields, consistently clear optional connector fields and publish input/output contracts.
+- The Claude Code setup command in Settings adds Draft Canvas for every project, not only the folder
+  it was run in.
+- Reviewing an agent's proposal catches every change made to the diagram since it was written,
+  including removed shapes, attachments and flows, and shows the actual before and after values.
+- A failure path an agent creates with its diagram stays linked to the flow it varies, and a note an
+  agent attaches to a starter's shape is kept.
+- An agent's addition to a view keeps the C4 level it names, and an agent can no longer give a data
+  store or a person an inside view the app can't open.
+- Agents can describe shapes inside an inside view and read very large diagrams in full, and are told
+  when a field they send is misspelt instead of having it ignored.
+- An agent adding shapes to two existing boundaries in one step is asked to add them separately,
+  instead of both landing in the first.
+
+### Web
+
+#### Removed
+
+- The Docker image is no longer published. To run Draft Canvas on your own server, build the static
+  web editor and serve it from any web server; see
+  [Self-hosting](https://acltabontabon.com/draft-canvas/docs/self-hosting/).
+
+#### Fixed
+
+- Pressing Enter on the home screen starts a blank canvas as soon as the screen appears.
 
 ## [1.13.1] - 2026-10-10
 
@@ -1994,7 +2003,8 @@ pre-release milestone; this is the one meant for real use.
 - Fully local and private by design — no accounts, no cloud sync, nothing you draw ever leaves
   your device. Documents are encrypted at rest in your browser.
 
-[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.13.1...main
+[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.14.0...main
+[1.14.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.13.1...v1.14.0
 [1.13.1]: https://github.com/acltabontabon/draft-canvas/compare/v1.13.0...v1.13.1
 [1.13.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.12.1...v1.13.0
 [1.12.1]: https://github.com/acltabontabon/draft-canvas/compare/v1.12.0...v1.12.1

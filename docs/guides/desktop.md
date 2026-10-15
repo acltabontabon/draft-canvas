@@ -61,6 +61,11 @@ is complete, so an interrupted save can't leave a half-written diagram. If somet
 since you opened it, Draft Canvas asks before replacing it. If it can't save, it says why in plain words
 (read-only, disk full, no permission) and your work stays on screen.
 
+When something else changes an open diagram on disk — a `git pull`, another editor, an agent — Draft Canvas
+loads the new version straight away, even while it's in the background. If you have unsaved changes, it keeps
+them: the status bar says the file changed, and saving asks before replacing it. Projects on Home pick up
+diagrams added or removed in their folders the same way.
+
 Unsaved changes to a file are also copied to the data folder as you work, so if the app closes before you save,
 Home offers them back the next time. The file itself isn't touched until you save.
 

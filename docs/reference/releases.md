@@ -47,7 +47,7 @@ inside a platform section. Older What's New entries in `ARCHIVED_RELEASES` remai
 
    ```markdown
    [X.Y.Z]: https://github.com/acltabontabon/draft-canvas/compare/vPREVIOUS...vX.Y.Z
-   [Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/vX.Y.Z...HEAD
+   [Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/vX.Y.Z...main
    ```
 
 5. Preview the generated notes and highlights before tagging:
