@@ -12,7 +12,7 @@ use crate::paths::{display_path, sanitize_stem, DOC_EXT};
 use crate::project::{scan, Limits, Scan};
 use crate::state::AppState;
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tauri::ipc::Request;
 use tauri::AppHandle;
 
@@ -75,6 +75,9 @@ fn forget_project(state: &AppState, handle: &str) -> Result<(), AppError> {
         .ok_or_else(AppError::invalid_handle)?
         .to_string();
     state.settings.update(|s| s.forget_project(&path))?;
+    if let Some(watches) = crate::util::lock(&state.watches).as_mut() {
+        watches.remove_under(&root);
+    }
     Ok(())
 }
 
@@ -89,10 +92,16 @@ pub async fn project_scan(app: AppHandle, handle: String) -> Result<Scan, AppErr
         let root = state.project(&handle)?.root;
         let result = scan(&root, &Limits::default())?;
         if let Some(watches) = crate::util::lock(&state.watches).as_mut() {
+            let mut folders: Vec<PathBuf> = Vec::new();
             for file in &result.files {
                 if let Some(parent) = root.join(&file.rel_path).parent() {
-                    watches.add(parent);
+                    if !folders.iter().any(|f| f == parent) {
+                        folders.push(parent.to_path_buf());
+                    }
                 }
+            }
+            for folder in folders.iter().take(crate::watch::SCAN_SHARE) {
+                watches.add(folder);
             }
         }
         Ok(result)

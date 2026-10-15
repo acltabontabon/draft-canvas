@@ -200,10 +200,21 @@ pub fn codex_with_connector(text: &str, sidecar: &Path) -> Result<String, AppErr
         .get_mut(&name)
         .and_then(|item| item.as_table_like_mut())
         .ok_or_else(|| unavailable("Codex’s Draft Canvas entry isn’t a table Draft Canvas can change. Remove it, then try again."))?;
-    entry.insert(
-        "command",
-        toml_edit::value(sidecar.to_string_lossy().as_ref()),
-    );
+    let command = sidecar.to_string_lossy().into_owned();
+    match entry
+        .get_mut("command")
+        .and_then(|item| item.as_value_mut())
+    {
+        // Repointed in place: `insert` would reset the line, losing a comment beside or above it.
+        Some(value) => {
+            let decor = value.decor().clone();
+            *value = toml_edit::Value::from(command);
+            *value.decor_mut() = decor;
+        }
+        None => {
+            entry.insert("command", toml_edit::value(command));
+        }
+    }
     if entry.get("enabled").and_then(|e| e.as_bool()) == Some(false) {
         entry.remove("enabled");
     }
@@ -322,6 +333,16 @@ fn find_claude() -> Option<PathBuf> {
         .or_else(login_shell_claude)
 }
 
+/// This process's PATH with `dir` first, or `None` when there is no folder to add.
+fn path_with(dir: Option<&Path>) -> Option<std::ffi::OsString> {
+    let dir = dir.filter(|d| !d.as_os_str().is_empty())?;
+    let inherited = std::env::var_os("PATH").unwrap_or_default();
+    std::env::join_paths(
+        std::iter::once(dir.to_path_buf()).chain(std::env::split_paths(&inherited)),
+    )
+    .ok()
+}
+
 #[cfg(not(windows))]
 fn login_shell_claude() -> Option<PathBuf> {
     let shell = std::env::var_os("SHELL").filter(|s| !s.is_empty())?;
@@ -409,6 +430,11 @@ fn claude_connect(sidecar: &Path) -> Result<(), AppError> {
     let claude = find_claude().ok_or_else(|| unavailable("Draft Canvas couldn’t find the claude command. Run the command below in a terminal instead."))?;
     let claude_cmd = || {
         let mut command = Command::new(&claude);
+        // An npm install's `claude` is a `#!/usr/bin/env node` script, and an app started from the
+        // Dock has no `node` on its PATH. npm put `node` beside `claude`, so that folder comes first.
+        if let Some(path) = path_with(claude.parent()) {
+            command.env("PATH", path);
+        }
         // Claude Code's own config folder, not wherever this app happens to be started from.
         if let Some(home) = home() {
             command.current_dir(home);
@@ -532,6 +558,32 @@ mod tests {
         assert_eq!(
             state_of(entry_of(&after).as_ref(), Path::new(SIDECAR)),
             SetupState::Ready
+        );
+    }
+
+    #[test]
+    fn claude_runs_with_its_own_folder_first_on_the_path() {
+        let dir = if cfg!(windows) {
+            r"C:\Users\me\AppData\Roaming\npm"
+        } else {
+            "/Users/me/.nvm/versions/node/v22.14.0/bin"
+        };
+        let path = path_with(Some(Path::new(dir))).unwrap();
+        assert_eq!(
+            std::env::split_paths(&path).next().as_deref(),
+            Some(Path::new(dir))
+        );
+        assert!(path_with(None).is_none());
+        assert!(path_with(Some(Path::new(""))).is_none());
+    }
+
+    #[test]
+    fn repointing_keeps_the_comments_on_the_command_line() {
+        let before = "[mcp_servers.draft-canvas]\n# installed by Draft Canvas\ncommand = \"/old/draft-canvas-mcp\" # moved later\ntool_timeout_sec = 150\n";
+        let after = codex_with_connector(before, Path::new(SIDECAR)).unwrap();
+        assert_eq!(
+            after,
+            format!("[mcp_servers.draft-canvas]\n# installed by Draft Canvas\ncommand = \"{SIDECAR}\" # moved later\ntool_timeout_sec = 150\n")
         );
     }
 
