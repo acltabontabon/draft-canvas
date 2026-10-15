@@ -50,10 +50,10 @@ export function setUpDownloads() {
   list.prepend(row);
 
   // The downloads fold away behind one button, so say on the button which one it is about to open
-  // — "Download desktop" alone would make a Mac visitor open it just to find out. Only ever the
-  // platform, never the architecture: the guess above is not good enough to name that, which is
-  // the whole reason both Macs stay listed inside.
-  const label = document.querySelector('.downloads-label');
+  // — "Download desktop" alone would make a Mac visitor open it just to find out. The hero's button
+  // says the same, since it leads here. Only ever the platform, never the architecture: the guess
+  // above is not good enough to name that, which is the whole reason both Macs stay listed inside.
   const platform = row.querySelector('strong')?.textContent?.trim();
-  if (label && platform) label.textContent = `Download for ${platform}`;
+  if (!platform) return;
+  for (const label of document.querySelectorAll('.downloads-label')) label.textContent = `Download for ${platform}`;
 }

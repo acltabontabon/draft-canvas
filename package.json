@@ -29,7 +29,6 @@
     "site:build": "npm --prefix www run build",
     "build:web": "npm run build && npm run site:build && node scripts/assemble-web.mjs",
     "site:preview": "npm run build:web && node scripts/stage-subpath.mjs && node scripts/serve-web.mjs",
-    "site:shots": "node www/scripts/shots.mjs",
     "lint": "oxlint",
     "test": "vitest run",
     "test:watch": "vitest",

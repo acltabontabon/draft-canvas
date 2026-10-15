@@ -31,9 +31,11 @@ exactly as Pages does — because with a relative `base`, a page served at `/dra
 resolve `./assets/*` against the origin root and load nothing at all. A preview that cannot show you
 that is a preview that will let it ship.
 
-The tokens in `www/src/styles.css` are lifted from `src/styles/tokens.css`, and the shapes drawn in
-`www/index.html` follow `src/nodes/describe.ts`: a Port is a dashed outline with a corner tag because
-that is what a Port is. There are no webfonts, for the same reason the app has none.
+The page is a drafting sheet: warm paper and ink in a light theme, the same sheet under a lamp in a
+dark one, with the product's teal accent from `src/styles/tokens.css`. The shapes drawn in
+`www/index.html` follow `src/nodes/describe.ts`: an API carries its socket notch and a Worker its
+second card, because that is what they look like in the editor. There are no webfonts, for the same
+reason the app has none; the headings use the system serif.
 
 ## The build
 
@@ -79,13 +81,14 @@ reads it on the site instead of in a code repository.
 
 | Command | What it regenerates |
 | --- | --- |
-| `npm --prefix www run clips` | The four short demo clips, cut from `docs/media/demo.mp4` with ffmpeg |
-| `npm run site:shots` | The four screenshots the page embeds, in the dark theme |
-| `npm --prefix www run social` | `og-image.png` and the Apple touch icon |
+| `npm --prefix www run art` | The hero's pencil-and-ink drawing, written into `www/index.html` |
+| `npm --prefix www run clips` | The five short demo clips, cut from `docs/media/demo.mp4` with ffmpeg |
+| `npm --prefix www run social` | `og-image.png`, from the hero and the stylesheet, and the Apple touch icon |
 
-All three commit their output, so a deploy needs neither ffmpeg nor a browser download. `site:shots`
-runs `e2e/docs-screenshots.ts` — the same harness that generates the guides' screenshots, in the dark
-palette — rather than a second one that would drift away from it.
+All three commit their output, so a deploy needs neither ffmpeg nor a browser download. The hero is
+seeded, so a re-run draws the same pencil strokes; run `social` after it so the share card matches.
+The reel's one still, `www/public/stills/source-evidence.jpg`, is the 1.14.0 release screenshot
+`docs/media/releases/v1.14.0/source-evidence.png` at 1600×900.
 
 ## Deploying
 

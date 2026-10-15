@@ -11,11 +11,10 @@
  * a name-based kill: this working copy is used by several sessions at once), in a light theme, and
  * a clean browser profile, so the Library it captures holds only what this script drew.
  *
- * The marketing site (`www/`) shows the same real UI in the theme it ships in, so it asks for the
- * same walkthrough in the dark palette and keeps it somewhere else — one harness, two palettes,
- * rather than a second script that would drift:
+ * The same walkthrough can be captured in the dark palette and kept somewhere else — one harness,
+ * two palettes, rather than a second script that would drift:
  *
- *   npm run site:shots          # === npx tsx e2e/docs-screenshots.ts --theme dark --out www/public/shots
+ *   npx tsx e2e/docs-screenshots.ts --theme dark --out <directory>
  *
  * The guides' own set is what you get with no arguments, unchanged.
  */

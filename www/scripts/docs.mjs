@@ -285,9 +285,9 @@ function layout({ page, title, description, body, version, stylesheet, navigatio
     <meta property="og:image" content="${SITE}og-image.png" />
     <link rel="icon" href="${root}favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="${root}icon-180.png" />
-    <meta name="color-scheme" content="dark light" />
-    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0b0d11" />
-    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f6f7f8" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f4f1ea" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0f1012" />
     <link rel="stylesheet" href="${stylesheetHref}" />
   </head>
 
@@ -300,7 +300,7 @@ function layout({ page, title, description, body, version, stylesheet, navigatio
         <span>Draft Canvas</span>
       </a>
       <nav class="masthead-nav" aria-label="Site">
-        <a href="${root}#draw">Features</a>
+        <a href="${root}#features">Features</a>
         <a href="${home}" aria-current="${page.slug ? 'true' : 'page'}">Docs</a>
         <a href="${root}#get">Download</a>
       </nav>

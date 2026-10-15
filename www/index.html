@@ -4,10 +4,10 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Draft Canvas — Draw it so everyone gets it</title>
+    <title>Draft Canvas — Draw software. Explain how it works.</title>
     <meta
       name="description"
-      content="A canvas for developers to sketch software, explain the moving parts, and keep the conversation going. Architecture-aware shapes, C4-style depth, flows you can present. In your browser with no account, or on your desktop."
+      content="A local-first canvas for turning software architecture into a clear visual story. Shapes that know what they are, depth you can step into, flows you can present, and a coding agent that can draw with you. In your browser with no account, or on your desktop."
     />
     <link rel="canonical" href="https://acltabontabon.com/draft-canvas/" />
 
@@ -62,31 +62,31 @@
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Draft Canvas" />
     <meta property="og:url" content="https://acltabontabon.com/draft-canvas/" />
-    <meta property="og:title" content="Draft Canvas — Draw it so everyone gets it" />
+    <meta property="og:title" content="Draft Canvas — Draw software. Explain how it works." />
     <meta
       property="og:description"
-      content="Architecture at meeting speed. Sketch software, explain the moving parts, and keep the conversation going."
+      content="A local-first canvas for turning software architecture into a clear visual story. No account, nothing uploaded."
     />
     <meta property="og:image" content="https://acltabontabon.com/draft-canvas/og-image.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta
       property="og:image:alt"
-      content="Draft Canvas — a checkout API handing work to a payments queue, consumed by a payment service that reads and writes a database."
+      content="Draft Canvas — a pencil sketch of an orders system, inked over: a storefront calls an orders API, which writes to a database and publishes to a queue a fulfilment worker consumes."
     />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Draft Canvas — Draw it so everyone gets it" />
+    <meta name="twitter:title" content="Draft Canvas — Draw software. Explain how it works." />
     <meta
       name="twitter:description"
-      content="Architecture at meeting speed. Sketch software, explain the moving parts, and keep the conversation going."
+      content="A local-first canvas for turning software architecture into a clear visual story. No account, nothing uploaded."
     />
     <meta name="twitter:image" content="https://acltabontabon.com/draft-canvas/og-image.png" />
 
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./icon-180.png" />
-    <meta name="color-scheme" content="dark light" />
-    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0b0d11" />
-    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f6f7f8" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f4f1ea" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0f1012" />
 
     <link rel="stylesheet" href="./src/styles.css" />
   </head>
@@ -104,7 +104,7 @@
         <span>Draft Canvas</span>
       </a>
       <nav class="masthead-nav" aria-label="Site">
-        <a href="#draw">Features</a>
+        <a href="#features">Features</a>
         <a href="./docs/">Docs</a>
         <a href="#get">Download</a>
       </nav>
@@ -132,1249 +132,296 @@
       </aside>
 
       <!-- ================================================================
-           THE TITLE CARD. The reel opens on one of these; so does the page.
+           THE SHEET. A pencil sketch, inked over — what the product does
+           to the diagram a meeting starts with, as the first thing you see.
       ================================================================= -->
       <section class="hero" id="top">
         <div class="hero-words">
-          <a class="rev-flag reveal" href="#agents">
-            <span class="rev-flag-tag">New</span>
-            <span class="rev-flag-text">Your coding agent can draw, in the desktop app</span>
-            <svg class="rev-flag-arrow" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" focusable="false"><path d="M3 8h9M8.5 4.5L12 8l-3.5 3.5" /></svg>
+          <a class="flag" href="#agents">
+            <span class="flag-tag">New</span>
+            <span>Your coding agent draws like you do</span>
+            <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" focusable="false"><path d="M3 8h9M8.5 4.5L12 8l-3.5 3.5" /></svg>
           </a>
-          <p class="overline reveal">Architecture at meeting speed</p>
-          <h1 class="reveal">Draw it<br />so everyone<br /><span class="hero-accent">gets it.</span></h1>
-          <p class="lead reveal">
-            Sketch software. Explain the moving parts. Get back to the conversation.
+          <h1>Draw software. <em>Explain</em> how it&nbsp;works.</h1>
+          <p class="lead">
+            A local-first canvas for turning architecture into a clear story. Sketch the idea, step
+            inside the detail, walk the room through the flow.
           </p>
-          <div class="hero-actions reveal">
+          <div class="hero-actions">
             <a class="button button-primary button-lg" href="./editor/" id="hero-cta">
               <span id="hero-cta-label">Open live editor</span>
               <small id="hero-cta-note">nothing to install</small>
             </a>
-            <a class="button button-lg" href="#get">Download desktop</a>
-          </div>
-          <p class="statusline reveal">
-            <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" focusable="false">
-              <path d="M4.5 7V5a3.5 3.5 0 017 0v2" fill="none" stroke="currentColor" stroke-width="1.4" />
-              <rect x="3" y="7" width="10" height="7" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.4" />
-            </svg>
-            <strong>Saved locally</strong>
-            <span>No account. Your diagrams stay in this browser. Nothing you draw is uploaded.</span>
-          </p>
-        </div>
-
-        <figure class="hero-figure hero-wide" role="img" aria-labelledby="hero-figure-caption">
-          <svg class="scene scene-hero" viewBox="0 0 666 432" aria-hidden="true" focusable="false">
-            <g class="boundary">
-              <text class="t-boundary" x="270" y="254">PAYMENTS</text>
-              <path d="M262 262v18M262 262h18M646 262v18M646 262h-18M262 410v-18M262 410h18M646 410v-18M646 410h-18" />
-            </g>
-
-            <g class="wire async" style="--draw: 1">
-              <path d="M196 83H292" />
-              <path class="head" d="M284 78.5l8 4.5-8 4.5z" />
-            </g>
-            <text class="t-edge" x="244" y="103">sends command to</text>
-
-            <g class="wire async" style="--draw: 2">
-              <path d="M368 111V286" />
-              <circle class="dot" cx="368" cy="198" r="2.5" />
-              <path class="head" d="M363.5 278l4.5 8 4.5-8z" />
-            </g>
-            <text class="t-edge t-edge-side" x="382" y="202">consumed by</text>
-
-            <g class="wire" style="--draw: 3">
-              <path d="M108 128V304" />
-              <path class="head" d="M103.5 296l4.5 8 4.5-8z" />
-            </g>
-            <text class="t-edge t-edge-side" x="122" y="220">reads / writes</text>
-
-            <g class="wire" style="--draw: 4">
-              <path d="M458 331H530" />
-              <path class="head" d="M522 326.5l8 4.5-8 4.5z" />
-            </g>
-            <text class="t-edge" x="494" y="351">reads / writes</text>
-
-            <path class="pulse" d="M196 83h164a8 8 0 018 8v232a8 8 0 008 8h154" />
-
-            <g class="node service" style="--in: 1">
-              <rect class="ghost" x="26" y="46" width="176" height="86" rx="11" />
-              <rect class="body" x="20" y="40" width="176" height="86" rx="11" />
-              <text class="t-name" x="108" y="89">Checkout API</text>
-              <text class="t-kind" x="184" y="117">API</text>
-            </g>
-
-            <g class="node queue" style="--in: 2">
-              <path class="body" d="M318 59h100a26 26 0 010 52H318a26 26 0 010-52z" />
-              <g class="envelopes">
-                <rect x="330" y="77" width="21" height="16" rx="2" /><path d="M330.5 78.5l10 7.5 10-7.5" />
-                <rect x="357" y="77" width="21" height="16" rx="2" /><path d="M357.5 78.5l10 7.5 10-7.5" />
-                <rect x="384" y="77" width="21" height="16" rx="2" /><path d="M384.5 78.5l10 7.5 10-7.5" />
-              </g>
-              <text class="t-name t-below" x="368" y="134">payments</text>
-              <text class="t-kind t-below" x="368" y="150">QUEUE</text>
-            </g>
-
-            <g class="node service" style="--in: 3">
-              <rect class="ghost" x="286" y="292" width="176" height="86" rx="11" />
-              <rect class="body" x="280" y="286" width="176" height="86" rx="11" />
-              <text class="t-name" x="368" y="335">Payment Service</text>
-            </g>
-
-            <g class="node store" style="--in: 4">
-              <path class="body" d="M530 318a46 14 0 0192 0v30a46 14 0 01-92 0z" />
-              <path class="cap" d="M530 318a46 14 0 0092 0" />
-              <text class="t-name t-below" x="576" y="386">Payments DB</text>
-            </g>
-
-            <g class="node store" style="--in: 5">
-              <path class="body" d="M62 318a46 14 0 0192 0v30a46 14 0 01-92 0z" />
-              <path class="cap" d="M62 318a46 14 0 0092 0" />
-              <text class="t-name t-below" x="108" y="386">Orders DB</text>
-            </g>
-
-            <g class="chip" style="--in: 6">
-              <path class="stem" d="M358 180h10" />
-              <rect x="286" y="169" width="66" height="22" rx="11" />
-              <circle cx="300" cy="180" r="3.5" />
-              <text x="323" y="184">note</text>
-            </g>
-          </svg>
-          <figcaption id="hero-figure-caption">
-            A checkout API hands work to a payments queue; a payment service consumes it and reads
-            and writes the payments database, inside a boundary marked <em>Payments</em>. The
-            connectors label themselves — <em>sends command to</em>, <em>consumed by</em>,
-            <em>reads / writes</em> — from what the shapes at each end already are.
-          </figcaption>
-        </figure>
-
-        <!-- The same idea at phone width. Not the wide scene scaled down — that shrinks every
-             caption past legibility — but a shorter chain drawn at a size where the labels are
-             still the size labels should be. -->
-        <figure class="hero-figure hero-narrow" role="img" aria-labelledby="hero-narrow-caption">
-          <svg class="scene scene-hero" viewBox="0 0 300 414" aria-hidden="true" focusable="false">
-            <g class="wire" style="--draw: 1">
-              <path d="M150 88V156" />
-              <path class="head" d="M145.5 148l4.5 8 4.5-8z" />
-            </g>
-            <text class="t-edge t-edge-side" x="164" y="126">calls</text>
-
-            <g class="wire async" style="--draw: 2">
-              <path d="M150 236V300" />
-              <path class="head" d="M145.5 292l4.5 8 4.5-8z" />
-            </g>
-            <text class="t-edge t-edge-side" x="164" y="272">sends command to</text>
-
-            <g class="node service" style="--in: 1">
-              <rect class="ghost" x="68" y="16" width="176" height="78" rx="11" />
-              <rect class="body" x="62" y="10" width="176" height="78" rx="11" />
-              <text class="t-name" x="150" y="55">Checkout API</text>
-              <text class="t-kind" x="226" y="79">API</text>
-            </g>
-
-            <g class="node service" style="--in: 2">
-              <rect class="ghost" x="68" y="164" width="176" height="78" rx="11" />
-              <rect class="body" x="62" y="158" width="176" height="78" rx="11" />
-              <text class="t-name" x="150" y="203">Payment Service</text>
-            </g>
-
-            <g class="node queue" style="--in: 3">
-              <path class="body" d="M86 300h128a26 26 0 010 52H86a26 26 0 010-52z" />
-              <g class="envelopes">
-                <rect x="112" y="318" width="21" height="16" rx="2" /><path d="M112.5 319.5l10 7.5 10-7.5" />
-                <rect x="139" y="318" width="21" height="16" rx="2" /><path d="M139.5 319.5l10 7.5 10-7.5" />
-                <rect x="166" y="318" width="21" height="16" rx="2" /><path d="M166.5 319.5l10 7.5 10-7.5" />
-              </g>
-              <text class="t-name t-below" x="150" y="376">payments</text>
-              <text class="t-kind t-below" x="150" y="393">QUEUE</text>
-            </g>
-
-            <g class="chip" style="--in: 4">
-              <path class="stem" d="M118 268h32" />
-              <rect x="42" y="257" width="66" height="22" rx="11" />
-              <circle cx="56" cy="268" r="3.5" />
-              <text x="79" y="272">note</text>
-            </g>
-          </svg>
-          <figcaption id="hero-narrow-caption">
-            A checkout API calls a payment service, which hands work to a queue named
-            <em>payments</em>. The connectors label themselves — <em>calls</em>,
-            <em>sends command to</em> — from what the shapes at each end already are, and a note is
-            pinned to the one that needed explaining.
-          </figcaption>
-        </figure>
-      </section>
-
-      <!-- The drawing sheet's title block: who, when, where, in one strip. -->
-      <section class="titleblock reveal" aria-label="What Draft Canvas is for">
-        <div><p class="overline">Who</p><p>Developers explaining software to other people.</p></div>
-        <div><p class="overline">When</p><p>The meeting that suddenly needs a diagram.</p></div>
-        <div><p class="overline">Where</p><p>A browser tab, or a desktop window.</p></div>
-      </section>
-
-      <!-- ================================================================
-           THE REEL, cut short. Real footage of the real editor, nothing staged.
-      ================================================================= -->
-      <section class="demo" id="demo" aria-labelledby="demo-title">
-        <div class="demo-head reveal">
-          <p class="overline">Real footage, nothing staged</p>
-          <h2 id="demo-title">Watch it happen.</h2>
-        </div>
-
-        <div class="demo-tabs reveal" role="tablist" aria-label="Demo clips">
-          <button class="demo-tab" role="tab" type="button" id="tab-draw" aria-controls="demo-panel" aria-selected="true" data-clip="draw">
-            <span class="demo-tab-n">01</span><span class="demo-tab-name">Draw it yourself</span>
-          </button>
-          <button class="demo-tab" role="tab" type="button" id="tab-compose" aria-controls="demo-panel" aria-selected="false" tabindex="-1" data-clip="compose">
-            <span class="demo-tab-n">02</span><span class="demo-tab-name">Start composed</span>
-          </button>
-          <button class="demo-tab" role="tab" type="button" id="tab-present" aria-controls="demo-panel" aria-selected="false" tabindex="-1" data-clip="present">
-            <span class="demo-tab-n">03</span><span class="demo-tab-name">Walk them through it</span>
-          </button>
-          <button class="demo-tab" role="tab" type="button" id="tab-inside" aria-controls="demo-panel" aria-selected="false" tabindex="-1" data-clip="inside">
-            <span class="demo-tab-n">04</span><span class="demo-tab-name">Look inside</span>
-          </button>
-          <button class="demo-tab" role="tab" type="button" id="tab-io" aria-controls="demo-panel" aria-selected="false" tabindex="-1" data-clip="io">
-            <span class="demo-tab-n">05</span><span class="demo-tab-name">In and out</span>
-          </button>
-        </div>
-
-        <div class="demo-stage reveal" id="demo-panel" role="tabpanel" aria-labelledby="tab-draw">
-          <div class="bezel">
-            <video
-              id="demo-video"
-              width="1280"
-              height="720"
-              poster="./clips/draw.jpg"
-              playsinline
-              muted
-              loop
-              controls
-              preload="none"
-            ></video>
-          </div>
-          <p class="demo-caption" id="demo-caption">
-            Press a letter, the shape lands. Drag from its edge and it offers what usually comes next;
-            <kbd>Tab</kbd> takes it.
-          </p>
-        </div>
-
-      </section>
-
-      <!-- ================================================================
-           01 — drawing: shapes that know what they are, and the next move
-      ================================================================= -->
-      <section class="chapter" id="draw" aria-labelledby="draw-title">
-        <header class="slate reveal">
-          <span class="numeral" aria-hidden="true">01</span>
-          <p class="overline">Chapter 01 of 06</p>
-          <h2 id="draw-title">Shapes that know what they are</h2>
-          <p class="sub">One key per shape. The captions write themselves.</p>
-        </header>
-
-        <div class="chapter-body">
-          <div class="prose reveal">
-            <p>
-              Connect a service to a queue and the line says <em>sends command to</em>. Connect it to
-              a database and it says <em>reads / writes</em>. You talk about the system; Draft Canvas
-              handles the captions.
-            </p>
-            <p>
-              Press <kbd>]</kbd> and it offers the next move in ghost: a worker on that queue, already
-              wired. <kbd>Tab</kbd> keeps it. Ignore it and it&rsquo;s gone.
-            </p>
-            <p class="callout">
-              <strong>A lookup table, not a model.</strong> No inference, no network. The same shape
-              offers the same move every time.
-            </p>
-            <p class="keys">
-              <kbd>S</kbd><span>service</span>
-              <kbd>Q</kbd><span>queue</span>
-              <kbd>D</kbd><span>data store</span>
-              <kbd>⌘K</kbd><span>the rest</span>
-            </p>
-          </div>
-
-          <figure class="chapter-figure reveal" role="img" aria-labelledby="shapes-caption">
-            <svg class="scene scene-shapes" viewBox="0 0 560 420" aria-hidden="true" focusable="false">
-              <g class="node service" style="--in: 1">
-                <rect class="ghost" x="46" y="42" width="180" height="88" rx="11" />
-                <rect class="body" x="40" y="36" width="180" height="88" rx="11" />
-                <text class="t-name" x="130" y="85">Fulfilment</text>
-                <text class="t-kind" x="206" y="113">WORKER</text>
-                <g class="anchors">
-                  <circle cx="85" cy="36" r="3" /><circle cx="130" cy="36" r="3" /><circle cx="175" cy="36" r="3" />
-                  <circle cx="85" cy="124" r="3" /><circle cx="130" cy="124" r="3" /><circle cx="175" cy="124" r="3" />
-                  <circle cx="40" cy="58" r="3" /><circle cx="40" cy="80" r="3" /><circle cx="40" cy="102" r="3" />
-                  <circle cx="220" cy="58" r="3" /><circle cx="220" cy="80" r="3" /><circle cx="220" cy="102" r="3" />
-                </g>
-              </g>
-              <text class="t-spec" x="40" y="152">SERVICE</text>
-              <text class="t-spec-sub" x="40" y="170">api · worker · gateway</text>
-              <text class="t-spec-sub" x="40" y="186">scheduler · external</text>
-
-              <g class="node queue" style="--in: 2">
-                <path class="body" d="M348 54h84a26 26 0 010 52h-84a26 26 0 010-52z" />
-                <g class="envelopes">
-                  <rect x="356" y="72" width="21" height="16" rx="2" /><path d="M356.5 73.5l10 7.5 10-7.5" />
-                  <rect x="383" y="72" width="21" height="16" rx="2" /><path d="M383.5 73.5l10 7.5 10-7.5" />
-                  <rect x="410" y="72" width="21" height="16" rx="2" /><path d="M410.5 73.5l10 7.5 10-7.5" />
-                </g>
-                <text class="t-name t-below" x="390" y="128">order.placed</text>
-              </g>
-              <text class="t-spec" x="330" y="152">QUEUE</text>
-              <text class="t-spec-sub" x="330" y="170">queue · topic · stream</text>
-
-              <g class="node store" style="--in: 3">
-                <path class="body" d="M84 250a46 14 0 0192 0v34a46 14 0 01-92 0z" />
-                <path class="cap" d="M84 250a46 14 0 0092 0" />
-                <text class="t-name t-below" x="130" y="322">Orders</text>
-              </g>
-              <text class="t-spec" x="40" y="352">DATA STORE</text>
-              <text class="t-spec-sub" x="40" y="370">sql · nosql · cache · table</text>
-              <text class="t-spec-sub" x="40" y="386">object storage · search index</text>
-
-              <g class="node component" style="--in: 4">
-                <rect class="body port" x="330" y="246" width="164" height="72" rx="8" />
-                <text class="t-name" x="412" y="284">PaymentPort</text>
-                <text class="t-kind" x="482" y="308">PORT</text>
-              </g>
-              <text class="t-spec" x="330" y="352">COMPONENT</text>
-              <text class="t-spec-sub" x="330" y="370">module · adapter · port</text>
-              <text class="t-spec-sub" x="330" y="386">plus actors, boundaries, notes</text>
-
-              <g class="wire async" style="--draw: 1"><path d="M220 80H322" /><path class="head" d="M314 75.5l8 4.5-8 4.5z" /></g>
-              <text class="t-edge" x="271" y="100">sends command to</text>
-            </svg>
-            <figcaption id="shapes-caption">
-              Four of the ten shapes, drawn as Draft Canvas draws them, with the kinds each can take.
-              Point at the worker to see the twelve places a connector can leave from.
-            </figcaption>
-          </figure>
-        </div>
-      </section>
-
-      <!-- ================================================================
-           02 — starters
-      ================================================================= -->
-      <section class="chapter chapter-wide" id="compose" aria-labelledby="compose-title">
-        <header class="slate reveal">
-          <span class="numeral" aria-hidden="true">02</span>
-          <p class="overline">Chapter 02 of 06</p>
-          <h2 id="compose-title">Or start composed</h2>
-          <p class="sub">A whole architecture, a name away</p>
-        </header>
-
-        <div class="prose prose-centred reveal">
-          <p>
-            Type a pattern into <kbd>⌘K</kbd>. It lands laid out and wired, with flows ready to
-            present. Then it&rsquo;s just shapes &mdash; delete what you don&rsquo;t need.
-          </p>
-        </div>
-
-        <ul class="starters reveal" aria-label="Some of the architecture starters">
-          <li>
-            <svg viewBox="0 0 132 84" aria-hidden="true" focusable="false">
-              <rect class="g-node" x="6" y="34" width="26" height="15" rx="3" />
-              <path class="g-wire" d="M32 41h20" /><rect class="g-node g-accent" x="52" y="34" width="26" height="15" rx="7" />
-              <path class="g-wire" d="M78 41h10l6-24h12M78 41h22M78 41h10l6 24h12" />
-              <rect class="g-node" x="100" y="10" width="26" height="14" rx="3" />
-              <rect class="g-node" x="100" y="34" width="26" height="14" rx="3" />
-              <rect class="g-node" x="100" y="58" width="26" height="14" rx="3" />
-            </svg>
-            <p class="s-name">Event-Driven</p><p class="s-cat">Architecture</p>
-          </li>
-          <li>
-            <svg viewBox="0 0 132 84" aria-hidden="true" focusable="false">
-              <path class="g-hex" d="M66 14l30 14v28l-30 14-30-14V28z" />
-              <rect class="g-node g-accent" x="52" y="34" width="28" height="15" rx="3" />
-              <rect class="g-node" x="28" y="20" width="16" height="10" rx="2" />
-              <rect class="g-node" x="88" y="20" width="16" height="10" rx="2" />
-              <rect class="g-node" x="28" y="54" width="16" height="10" rx="2" />
-              <rect class="g-node" x="88" y="54" width="16" height="10" rx="2" />
-            </svg>
-            <p class="s-name">Hexagonal</p><p class="s-cat">Architecture</p>
-          </li>
-          <li>
-            <svg viewBox="0 0 132 84" aria-hidden="true" focusable="false">
-              <rect class="g-node" x="52" y="4" width="28" height="14" rx="3" />
-              <path class="g-wire" d="M60 18L26 30M72 18l34 12" />
-              <rect class="g-node g-accent" x="8" y="30" width="30" height="15" rx="3" />
-              <rect class="g-node" x="94" y="30" width="30" height="15" rx="3" />
-              <path class="g-wire" d="M23 45v14M109 45v14M38 37h56" />
-              <ellipse class="g-store" cx="23" cy="66" rx="14" ry="6" />
-              <ellipse class="g-store" cx="109" cy="66" rx="14" ry="6" />
-            </svg>
-            <p class="s-name">CQRS</p><p class="s-cat">Architecture</p>
-          </li>
-          <li>
-            <svg viewBox="0 0 132 84" aria-hidden="true" focusable="false">
-              <rect class="g-node g-accent" x="52" y="8" width="28" height="15" rx="3" />
-              <path class="g-wire" d="M60 23L22 38M72 23l38 15M66 23v15" />
-              <rect class="g-node" x="6" y="38" width="30" height="14" rx="3" />
-              <rect class="g-node" x="52" y="38" width="28" height="14" rx="3" />
-              <rect class="g-node" x="96" y="38" width="30" height="14" rx="3" />
-              <path class="g-wire g-dash" d="M21 52v14h90V52" />
-            </svg>
-            <p class="s-name">Saga</p><p class="s-cat">Pattern</p>
-          </li>
-          <li>
-            <svg viewBox="0 0 132 84" aria-hidden="true" focusable="false">
-              <rect class="g-node" x="6" y="20" width="28" height="15" rx="3" />
-              <path class="g-wire" d="M34 28h14" />
-              <rect class="g-node g-accent" x="48" y="20" width="30" height="15" rx="2" />
-              <path class="g-wire g-dash" d="M63 35v18h20" />
-              <rect class="g-node" x="83" y="46" width="26" height="14" rx="7" />
-            </svg>
-            <p class="s-name">Transactional Outbox</p><p class="s-cat">Pattern</p>
-          </li>
-        </ul>
-        <p class="starters-more reveal">
-          Plus Monolith, Microservices, Modular Monolith, Backend for Frontend, Medallion, Kappa,
-          Change Data Capture and both Sagas.
-        </p>
-      </section>
-
-      <!-- ================================================================
-           03 — flows and presentation
-      ================================================================= -->
-      <section class="chapter" id="present" aria-labelledby="present-title">
-        <header class="slate reveal">
-          <span class="numeral" aria-hidden="true">03</span>
-          <p class="overline">Chapter 03 of 06</p>
-          <h2 id="present-title">Walk the room through it</h2>
-          <p class="sub">One step at a time</p>
-        </header>
-
-        <div class="chapter-body">
-          <div class="prose reveal">
-            <p>
-              Group the connectors that tell one story into a flow, then present it step by step.
-              Everything else dims but stays in view.
-            </p>
-            <p>
-              Notes and code pinned to a step show up on that step. Anything still undecided becomes
-              an open point you pick up next meeting.
-            </p>
-          </div>
-
-          <figure class="chapter-figure reveal">
-            <div class="bezel">
-              <img
-                src="./shots/presenting.png"
-                alt="The editor in presentation mode: one connector of a flow is highlighted with its step number, the rest of the diagram is dimmed, and a bar at the bottom shows the current step and its caption."
-                width="2400"
-                height="1280"
-                loading="lazy"
-                decoding="async"
-              />
-            </div>
-            <figcaption>The active step in full contrast; the rest stays visible, but quiet.</figcaption>
-          </figure>
-        </div>
-      </section>
-
-      <!-- ================================================================
-           04 — depth
-      ================================================================= -->
-      <section class="chapter chapter-flip" id="depth" aria-labelledby="depth-title">
-        <header class="slate reveal">
-          <span class="numeral" aria-hidden="true">04</span>
-          <p class="overline">Chapter 04 of 06</p>
-          <h2 id="depth-title">Look inside</h2>
-          <p class="sub">C4 depth, on one canvas</p>
-        </header>
-
-        <div class="chapter-body">
-          <div class="prose reveal">
-            <p>
-              Keep the overview small. <kbd>⌘↓</kbd> steps into a shape to draw what&rsquo;s inside it;
-              <kbd>⌘↑</kbd> steps back out. The depth map shows where you are.
-            </p>
-            <p class="callout">
-              <strong>It knows C4. It never grades you.</strong> No validator, no score, no red
-              underlines.
-            </p>
-          </div>
-
-          <figure class="chapter-figure reveal">
-            <div class="bezel">
-              <img
-                src="./shots/depth-map.png"
-                alt="The editor inside a shape: the depth map in the top left shows &#39;Shop overview&#39; above &#39;Shop — you are here&#39;, and the canvas below holds a Shop API writing to an Orders DB."
-                width="2400"
-                height="1280"
-                loading="lazy"
-                decoding="async"
-              />
-            </div>
-            <figcaption>One level down, inside <em>Shop</em>.</figcaption>
-          </figure>
-        </div>
-      </section>
-
-      <!-- ================================================================
-           05 — export
-      ================================================================= -->
-      <section class="chapter chapter-wide" id="export" aria-labelledby="export-title">
-        <header class="slate reveal">
-          <span class="numeral" aria-hidden="true">05</span>
-          <p class="overline">Chapter 05 of 06</p>
-          <h2 id="export-title">Throwaway, but exportable</h2>
-          <p class="sub">Out to wherever the conversation goes</p>
-        </header>
-
-        <div class="chapter-body chapter-body-split">
-          <div class="prose reveal">
-            <p>
-              Most meeting diagrams deserve the bin. The rest should leave cleanly &mdash; into a pull
-              request, a doc, a ticket.
-            </p>
-            <p>
-              A <code>.draftcanvas</code> file is plain JSON with stable bytes. It diffs. It reviews.
-              It belongs in the repo.
-            </p>
-          </div>
-
-          <ul class="formats reveal">
-            <li><span class="fmt">.draftcanvas</span><span class="fmt-d">The editable file. Diffable JSON.</span></li>
-            <li><span class="fmt">.dcenc</span><span class="fmt-d">The same, behind a passphrase.</span></li>
-            <li><span class="fmt">PNG · SVG</span><span class="fmt-d">The picture. An SVG still opens as the diagram.</span></li>
-            <li><span class="fmt">Source</span><span class="fmt-d">Mermaid, PlantUML, C4, Structurizr, draw.io.</span></li>
-            <li><span class="fmt">Link</span><span class="fmt-d">The whole diagram in the URL. Nothing uploaded.</span></li>
-          </ul>
-        </div>
-
-          <figure class="chapter-figure chapter-figure-full reveal">
-            <div class="bezel">
-              <img
-                src="./shots/export-document.png"
-                alt="The Draft Canvas export dialog, with Document, Image and Source modes, a live preview tile of the file, Copy share link, and a single Export button."
-                width="1280"
-                height="760"
-                loading="lazy"
-                decoding="async"
-              />
-            </div>
-            <figcaption>One dialog, one button.</figcaption>
-          </figure>
-      </section>
-
-      <!-- ================================================================
-           06 — AI agents over MCP, in the desktop app.
-
-           Told the way a drawing sheet records a change: the agent's proposal arrives in pencil,
-           inside a revision cloud, and is inked only when someone accepts it. That is what the
-           product does: an agent's change is drawn faintly over the diagram until it is applied,
-           and a proposal is not applied until you press Accept. The request on the left carries no
-           coordinates, because the real one carries none either.
-
-           Everything rests in the "in review" state without scripting or under reduced motion; with
-           both, main.js adds `.play` once the stage is on screen and the sequence runs once.
-      ================================================================= -->
-      <section class="chapter chapter-rev" id="agents" aria-labelledby="agents-title">
-        <header class="slate reveal">
-          <span class="numeral" aria-hidden="true">06</span>
-          <p class="overline">Chapter 06 of 06 &middot; desktop app</p>
-          <h2 id="agents-title">Your agent sketches in pencil. You ink&nbsp;it.</h2>
-          <p class="sub">Claude Code, Codex and Cursor draw over MCP</p>
-        </header>
-
-        <div class="rev-stage reveal" id="rev-stage">
-          <figure class="rev-term" aria-labelledby="rev-term-caption">
-            <p class="rev-term-bar"><span>~/shop</span><span>coding agent</span></p>
-            <div class="rev-lines">
-              <p class="l l-you" style="--t: 0.2"><span class="p">&rsaquo;</span><span class="say">Draw how checkout works in this repo.</span></p>
-              <p class="l l-tool" style="--t: 1.2"><span class="p">&#9210;</span><span><b>create_diagram</b> &middot; Checkout, 5 parts, 4 relationships</span></p>
-              <p class="l l-you" style="--t: 2.9"><span class="p">&rsaquo;</span><span class="say">Failed charges have nowhere to land. Propose a fix &mdash; don&rsquo;t apply it.</span></p>
-              <div class="l l-tool l-call" style="--t: 4.1">
-                <p><span class="p">&#9210;</span><span><b>submit_proposal</b></span></p>
-                <span class="rev-handoff" aria-hidden="true"><i>MCP</i></span>
-              </div>
-              <pre class="l l-json" style="--t: 4.4"><code>{ "op": "add",
-  "nodes": [{
-    "id": "dlq",
-    "type": "dead-letter-queue",
-    "label": "payments-dlq" }],
-  "relationships": [{
-    "from": "payments",
-    "to": "dlq",
-    "label": "after 5 attempts" }] }</code></pre>
-              <p class="l l-margin" style="--t: 5"><span>No <code>x</code>, no <code>y</code>. Where it goes is Draft&nbsp;Canvas&rsquo;s call.</span></p>
-              <p class="l l-tool" style="--t: 7.3"><span class="p">&#9210;</span><span>Proposal ready &middot; waiting for your review</span></p>
-            </div>
-            <figcaption id="rev-term-caption" class="visually-hidden">
-              A conversation with a coding agent. Asked to draw how checkout works, it creates a
-              diagram; asked to propose a fix for failed charges without applying it, it submits a
-              proposal that adds a dead-letter queue. The request names the parts and how they
-              connect, and carries no coordinates.
-            </figcaption>
-          </figure>
-
-          <figure class="rev-sheet chapter-figure" aria-labelledby="rev-sheet-caption">
-            <svg class="scene scene-rev" viewBox="0 0 760 452" aria-hidden="true" focusable="false">
-              <defs>
-                <!-- Graphite: a little grain on the edge of every pencil stroke. -->
-                <filter id="rev-grain" x="-4%" y="-4%" width="108%" height="108%">
-                  <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="11" result="grain" />
-                  <feDisplacementMap in="SourceGraphic" in2="grain" scale="1.8" xChannelSelector="R" yChannelSelector="G" />
-                </filter>
-                <pattern id="rev-hatch" patternUnits="userSpaceOnUse" width="5" height="5" patternTransform="rotate(45)">
-                  <path d="M0 0v5" />
-                </pattern>
-              </defs>
-
-              <!-- Revision 1: what the agent drew and was applied. Ink. -->
-              <g class="rev-base">
-                <g class="rev-boundary">
-                  <rect class="outline" x="12" y="12" width="736" height="428" rx="10" />
-                  <rect class="plate" x="19" y="19" width="20" height="20" rx="6" />
-                  <rect class="mark" x="23.75" y="24.25" width="10.5" height="9.5" rx="2" />
-                  <path class="mark" d="M23.75 27.5H34.25" />
-                  <text class="t-title" x="48" y="34">Checkout</text>
-                  <text class="t-caption" x="120" y="34">SYSTEM</text>
-                </g>
-
-                <g class="wire async" style="--draw: 1">
-                  <path d="M216 130H298" /><circle class="dot" cx="257" cy="130" r="2.5" />
-                  <path class="head" d="M298 125.5l8 4.5-8 4.5z" />
-                </g>
-                <text class="t-edge" x="261" y="152">publishes to</text>
-
-                <g class="wire async" style="--draw: 2">
-                  <path d="M458 130H540" /><circle class="dot" cx="499" cy="130" r="2.5" />
-                  <path class="head" d="M540 125.5l8 4.5-8 4.5z" />
-                </g>
-                <text class="t-edge" x="503" y="152">consumed by</text>
-
-                <g class="wire" style="--draw: 3">
-                  <path d="M126 180V268" /><path class="head" d="M121.5 268l4.5 8 4.5-8z" />
-                </g>
-                <text class="t-edge t-edge-side" x="138" y="232">writes to</text>
-
-                <g class="wire" style="--draw: 4">
-                  <path d="M638 180V268" /><path class="head" d="M633.5 268l4.5 8 4.5-8z" />
-                </g>
-                <text class="t-edge t-edge-side" x="650" y="232">writes to</text>
-
-                <g class="node service" style="--in: 1">
-                  <rect class="body" x="36" y="80" width="180" height="100" rx="11" />
-                  <text class="t-name" x="126" y="116">Checkout API</text>
-                  <text class="t-tech" x="126" y="136">[Node.js]</text>
-                  <text class="t-desc" x="126" y="154">Takes the order.</text>
-                  <text class="t-kind" x="204" y="171">API</text>
-                </g>
-
-                <g class="node queue" style="--in: 2">
-                  <path class="body" d="M332 104h100a26 26 0 010 52H332a26 26 0 010-52z" />
-                  <g class="envelopes">
-                    <rect x="347" y="122" width="21" height="16" rx="2" /><path d="M347.5 123.5l10 7.5 10-7.5" />
-                    <rect x="374" y="122" width="21" height="16" rx="2" /><path d="M374.5 123.5l10 7.5 10-7.5" />
-                    <rect x="401" y="122" width="21" height="16" rx="2" /><path d="M401.5 123.5l10 7.5 10-7.5" />
-                  </g>
-                  <text class="t-name t-below" x="382" y="180">payments</text>
-                  <text class="t-kind t-below" x="382" y="196">QUEUE</text>
-                </g>
-
-                <g class="node service" style="--in: 3">
-                  <rect class="ghost" x="554" y="86" width="180" height="100" rx="11" />
-                  <rect class="body" x="548" y="80" width="180" height="100" rx="11" />
-                  <text class="t-name" x="638" y="116">Payment Worker</text>
-                  <text class="t-tech" x="638" y="136">[Go]</text>
-                  <text class="t-desc" x="638" y="154">Charges each order once.</text>
-                  <text class="t-kind" x="716" y="171">WORKER</text>
-                </g>
-
-                <g class="node store" style="--in: 4">
-                  <path class="body" d="M80 290a46 14 0 0192 0v34a46 14 0 01-92 0z" />
-                  <path class="cap" d="M80 290a46 14 0 0092 0" />
-                  <text class="t-name t-below" x="126" y="362">Orders DB</text>
-                  <text class="t-kind t-below" x="126" y="378">SQL</text>
-                </g>
-
-                <g class="node store" style="--in: 5">
-                  <path class="body" d="M592 290a46 14 0 0192 0v34a46 14 0 01-92 0z" />
-                  <path class="cap" d="M592 290a46 14 0 0092 0" />
-                  <text class="t-name t-below" x="638" y="362">Payments DB</text>
-                  <text class="t-kind t-below" x="638" y="378">SQL</text>
-                </g>
-              </g>
-
-              <!-- Revision 2, as the agent proposed it: pencil, until someone inks it. The same
-                   dead-letter queue the real renderer draws — a slightly dimmed tube, one envelope
-                   that made it and a dashed one that didn't — sketched, hatched and retraced the way
-                   the Sketch personality retraces its outlines. -->
-              <g class="rev-pencil" filter="url(#rev-grain)">
-                <path class="pl hatch" pathLength="1" d="M332 292h100a26 26 0 010 52H332a26 26 0 010-52z" style="--at: 5" />
-                <path class="pl retrace" pathLength="1" d="M333 293.5h99a25 25 0 011 50.5H331.5a26.5 26 0 01.5-51z" style="--at: 5.35" />
-                <path class="pl" pathLength="1" d="M361.5 311.5h17v13h-17zM362 312.5l8.5 6 8.5-6" style="--at: 5.6" />
-                <path class="pl" pathLength="1" d="M385.5 311.5h17v13h-17zM386 312.5l8.5 6 8.5-6" style="--at: 5.75" />
-                <path class="pl" pathLength="1" d="M382 204V284" style="--at: 5.3" />
-                <path class="pl-head" d="M377.5 284l4.5 8 4.5-8z" style="--at: 5.7" />
-                <path class="pl" pathLength="1" d="M338 248h44" style="--at: 5.85" />
-                <rect class="pl" pathLength="1" x="272" y="237" width="66" height="22" rx="11" style="--at: 5.9" />
-                <text class="pt t-name t-below" x="382" y="368" style="--at: 6">payments-dlq</text>
-                <text class="pt t-kind t-below" x="382" y="384" style="--at: 6.05">DLQ</text>
-                <text class="pt t-edge t-edge-side" x="394" y="252" style="--at: 6.1">after 5 attempts</text>
-                <text class="pt t-chip" x="305" y="252" style="--at: 6.15">note</text>
-              </g>
-
-              <!-- The revision cloud and its delta tag: how a drawing marks what changed. -->
-              <g class="rev-cloud">
-                <path class="cloud" pathLength="1" d="M252.0 216.0A12.6 12.6 0 0 1 276.8 216.0A15.2 15.2 0 0 1 301.6 216.0A13.4 13.4 0 0 1 326.4 216.0A13.2 13.2 0 0 1 351.2 216.0A14.6 14.6 0 0 1 376.0 216.0A14.1 14.1 0 0 1 400.8 216.0A13.5 13.5 0 0 1 425.6 216.0A14.7 14.7 0 0 1 450.4 216.0A14.7 14.7 0 0 1 475.2 216.0A14.1 14.1 0 0 1 500.0 216.0A13.5 13.5 0 0 1 500.0 239.0A13.3 13.3 0 0 1 500.0 262.0A13.8 13.8 0 0 1 500.0 285.0A12.3 12.3 0 0 1 500.0 308.0A12.7 12.7 0 0 1 500.0 331.0A13.5 13.5 0 0 1 500.0 354.0A13.5 13.5 0 0 1 500.0 377.0A11.9 11.9 0 0 1 500.0 400.0A14.5 14.5 0 0 1 475.2 400.0A13.9 13.9 0 0 1 450.4 400.0A15.2 15.2 0 0 1 425.6 400.0A14.9 14.9 0 0 1 400.8 400.0A13.0 13.0 0 0 1 376.0 400.0A14.0 14.0 0 0 1 351.2 400.0A15.2 15.2 0 0 1 326.4 400.0A14.5 14.5 0 0 1 301.6 400.0A14.4 14.4 0 0 1 276.8 400.0A14.2 14.2 0 0 1 252.0 400.0A14.0 14.0 0 0 1 252.0 377.0A14.0 14.0 0 0 1 252.0 354.0A12.7 12.7 0 0 1 252.0 331.0A12.6 12.6 0 0 1 252.0 308.0A13.8 13.8 0 0 1 252.0 285.0A12.6 12.6 0 0 1 252.0 262.0A12.1 12.1 0 0 1 252.0 239.0A12.5 12.5 0 0 1 252.0 216.0Z" />
-                <g class="delta">
-                  <path d="M513 190l14 24h-28z" />
-                  <text x="513" y="210">2</text>
-                </g>
-              </g>
-
-              <!-- Revision 2, inked: the same parts as the renderer draws them once accepted. -->
-              <g class="rev-inked">
-                <g class="wire async">
-                  <path d="M382 204V284" /><path class="head" d="M377.5 284l4.5 8 4.5-8z" />
-                </g>
-                <text class="t-edge t-edge-side" x="394" y="252">after 5 attempts</text>
-                <g class="chip">
-                  <path class="stem" d="M338 248h44" />
-                  <rect x="272" y="237" width="66" height="22" rx="11" />
-                  <circle cx="286" cy="248" r="3.5" />
-                  <text x="309" y="252">note</text>
-                </g>
-                <g class="node queue dlq">
-                  <path class="body" d="M332 292h100a26 26 0 010 52H332a26 26 0 010-52z" />
-                  <g class="envelopes">
-                    <rect x="361.5" y="311.5" width="17" height="13" rx="2" /><path d="M362 312.5l8.5 6 8.5-6" />
-                    <rect class="dashed" x="385.5" y="311.5" width="17" height="13" rx="2" /><path class="dashed" d="M386 312.5l8.5 6 8.5-6" />
-                  </g>
-                  <text class="t-name t-below" x="382" y="368">payments-dlq</text>
-                  <text class="t-kind t-below" x="382" y="384">DLQ</text>
-                </g>
-              </g>
-
-              <!-- The review button over the diagram, as the desktop app shows it. -->
-              <g class="rev-pill">
-                <rect x="566" y="20" width="170" height="24" rx="12" />
-                <circle cx="581" cy="32" r="3.5" />
-                <text class="wait" x="658" y="36">1 proposal to review</text>
-                <text class="done" x="658" y="36">Accepted &middot; one undo step</text>
-              </g>
-
-              <!-- Whoever is reviewing. Only ever seen while the sequence plays. -->
-              <g class="rev-cursor">
-                <path d="M0 0v17l4.6-4.3 3 7 3-1.3-3-6.8h6.2z" />
-              </g>
-            </svg>
-
-            <table class="rev-table">
-              <caption class="visually-hidden">Revisions of the Checkout diagram</caption>
-              <thead>
-                <tr><th scope="col">Rev</th><th scope="col">What changed</th><th scope="col">By</th><th scope="col">State</th></tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>&Delta;1</td><td>Checkout, drawn from the repository</td><td>agent</td><td>inked</td>
-                </tr>
-                <tr class="rev-row-now">
-                  <td>&Delta;2</td><td>Dead-letter queue after <em>payments</em>, and why</td><td>agent</td>
-                  <td><span class="st st-review">in review</span><span class="st st-inked">inked by you</span></td>
-                </tr>
-              </tbody>
-            </table>
-
-            <figcaption id="rev-sheet-caption">
-              A Checkout system, as the agent drew it: an API publishing to a <em>payments</em> queue, a
-              payment worker consuming it, each writing to its own database, with the technology each
-              one runs on under its name. The agent&rsquo;s proposal &mdash; a dead-letter queue after
-              five failed attempts, with a note saying why &mdash; waits in pencil inside a revision
-              cloud until someone accepts it.
-            </figcaption>
-          </figure>
-
-          <button class="rev-replay" id="rev-replay" type="button" hidden>
-            <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" focusable="false">
-              <path d="M13 8a5 5 0 11-1.5-3.6M13 2.5v3h-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
-            Replay the revision
-          </button>
-        </div>
-
-        <div class="chapter-body chapter-body-split rev-words">
-          <div class="prose reveal">
-            <p>
-              Ask your agent to draw how orders move through the repo. It describes the parts and how
-              they connect &mdash; <strong>never a coordinate</strong> &mdash; and Draft Canvas lays it
-              out as an ordinary diagram.
-            </p>
-            <p>
-              Follow-ups edit the same diagram, one undo step each. Or ask for a proposal: nothing is
-              inked until you press <em>Accept</em>.
-            </p>
-          </div>
-          <div class="prose reveal">
-            <p class="callout">
-              <strong>Off until you turn it on.</strong> Only in the folders you pick. Draft Canvas
-              sends your diagrams nowhere.
-            </p>
-          </div>
-        </div>
-
-        <div class="rev-cta reveal">
-          <p class="rev-cta-actions">
-            <a class="button button-primary button-lg" href="#desktop">
-              <span>Get the desktop app</span>
-              <small>macOS and Windows</small>
+            <a class="button button-lg" href="#get">
+              <span class="downloads-label">Download desktop</span>
+              <small>macOS · Windows</small>
             </a>
-            <a class="button button-lg" href="./docs/connect-an-ai-agent/">Connect an agent</a>
-          </p>
+          </div>
+          <p class="hero-fine">Free and open source <span aria-hidden="true">·</span> No account <span aria-hidden="true">·</span> Nothing you draw is uploaded</p>
         </div>
-      </section>
 
-      <!-- ================================================================
-           Why it exists, drawn: a meeting's scribble, routed the way the canvas routes a fan-in,
-           landing as the picture everyone shares. The three numbered marks are the three trades
-           in docs/reference/architecture.md, and the list under the drawing names them.
-
-           The pencil strokes are generated (seeded, so every build draws the same ones). The sheet
-           follows the product's silhouettes and captions, like every other scene on the page. It
-           rests fully drawn without scripting or under reduced motion.
-      ================================================================= -->
-      <section class="manifesto" aria-labelledby="manifesto-title">
-        <header class="art-head reveal">
-          <p class="overline">Why it exists</p>
-          <h2 id="manifesto-title">Every meeting starts as a scribble.</h2>
-          <p class="sub">Draft Canvas turns it into the one picture everyone shares.</p>
-        </header>
-
-        <figure class="art art-wide reveal" role="img" aria-labelledby="art-caption">
-          <svg class="scene scene-art" viewBox="0 0 1160 476" aria-hidden="true" focusable="false">
-          <defs>
-            <filter id="art-grain-w" x="-4%" y="-4%" width="108%" height="108%">
-              <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="4" result="grain" />
-              <feDisplacementMap in="SourceGraphic" in2="grain" scale="2.2" xChannelSelector="R" yChannelSelector="G" />
-            </filter>
-            <linearGradient id="art-route-w" gradientUnits="userSpaceOnUse" x1="352" y1="0" x2="560" y2="0">
-              <stop class="stop-pencil" offset="0" />
-              <stop class="stop-ink" offset="1" />
-            </linearGradient>
-          </defs>
-
-          <text class="art-cap art-cap-pencil" x="52" y="40">WHAT THE MEETING SAID</text>
-          <text class="art-cap art-cap-ink" x="702" y="40">WHAT EVERYONE SAW</text>
-
-          <g class="scribble" filter="url(#art-grain-w)">
-          <path class="" d="M45.7 71.5Q114.4 72.4 183 74.9" pathLength="1" style="--i: 0" />
-          <path class="" d="M177.6 73Q178.5 104.6 175.5 136.1" pathLength="1" style="--i: 1" />
-          <path class="" d="M178.4 132.2Q113.3 131.2 48.3 131.8" pathLength="1" style="--i: 2" />
-          <path class="" d="M52.2 136.1Q49.3 101 50.5 65.9" pathLength="1" style="--i: 3" />
-          <path class="sk-2" d="M49 73.7Q112.4 73.9 176 76.4" pathLength="1" style="--i: 4" />
-          <path class="sk-2" d="M172 73.8Q172.6 104.8 173.9 135.7" pathLength="1" style="--i: 5" />
-          <path class="sk-2" d="M176.9 130.7Q112.9 130 48.9 133.7" pathLength="1" style="--i: 6" />
-          <path class="sk-2" d="M54.8 136.9Q54.7 102.3 54.3 67.6" pathLength="1" style="--i: 7" />
-          <path class="" d="M232 57.6Q301.9 60.4 371.8 59" pathLength="1" style="--i: 9" />
-          <path class="" d="M369.3 56Q370.4 88.9 368.6 121.9" pathLength="1" style="--i: 10" />
-          <path class="" d="M372.7 120Q301.4 119.3 230.2 119.5" pathLength="1" style="--i: 11" />
-          <path class="" d="M235.1 121.4Q237.4 88.5 237.7 55.5" pathLength="1" style="--i: 12" />
-          <path class="" d="M76 251Q149.5 250.1 223 249.4" pathLength="1" style="--i: 14" />
-          <path class="" d="M219.3 246.7Q214.6 281.8 216.1 316.7" pathLength="1" style="--i: 15" />
-          <path class="" d="M219.2 314.8Q147.4 313.6 75.7 315.2" pathLength="1" style="--i: 16" />
-          <path class="" d="M79.8 320Q79.4 283.4 78.5 246.8" pathLength="1" style="--i: 17" />
-          <path class="sk-2" d="M75.7 251.6Q148.4 252.6 221.2 254.3" pathLength="1" style="--i: 18" />
-          <path class="sk-2" d="M217.9 251.1Q215.9 284.3 218.2 317.4" pathLength="1" style="--i: 19" />
-          <path class="sk-2" d="M222.3 312.8Q148.8 314.1 75.4 314.1" pathLength="1" style="--i: 20" />
-          <path class="sk-2" d="M79.3 318.3Q79.8 282.3 77.4 246.4" pathLength="1" style="--i: 21" />
-          <path class="sk-x" d="M79.2 254.8Q147.3 288.6 218.5 312.1" pathLength="1" style="--i: 23" />
-          <path class="sk-x" d="M215 252.6Q145.4 280.8 78.2 311.7" pathLength="1" style="--i: 24" />
-          <path class="" d="M297.9 266Q309.7 265.8 315.2 266.9Q320.8 268 326.7 268.5Q332.7 269.1 336.9 271.5Q341.1 274 344.2 276.8Q347.3 279.6 351.3 282.1Q355.4 284.7 356.3 288Q357.2 291.4 357.7 294.8Q358.2 298.1 357.1 301.4Q356 304.8 354.5 308.1Q352.9 311.5 349.4 314.4Q346 317.2 340.2 318.5Q334.5 319.9 329.4 321.3Q324.4 322.8 319.1 323.9Q313.8 325 308.1 325.5Q302.3 326 296.7 325.2Q291 324.4 285.1 323.8Q279.1 323.1 274.3 321Q269.5 318.9 266.3 316Q263 313.1 259.4 310.3Q255.7 307.5 255.7 304Q255.8 300.5 255 297.2Q254.2 293.9 254.1 290.4Q254.1 286.9 257.1 283.9Q260.1 280.8 263.3 278Q266.6 275.1 271.8 273.4Q277 271.7 281.5 269.3Q286 267 291.8 266Q297.7 265 303.7 265Q309.8 265 315.1 266.9Q320.4 268.7 325.7 269.8Q331 270.8 336.5 272.1L342.1 273.4" pathLength="1" style="--i: 26" />
-          <path class="" d="M177.2 97.3Q199.9 71.9 236 88" pathLength="1" style="--i: 28" />
-          <path class="" d="M236 88L229 79.5M236 88L225 87.9" pathLength="1" style="--i: 29" />
-          <path class="" d="M108.7 133.8Q96.7 197.2 130 248" pathLength="1" style="--i: 30" />
-          <path class="" d="M130 248L129.4 237M130 248L121 241.7" pathLength="1" style="--i: 31" />
-          <path class="" d="M300.9 120.6Q327.7 191.5 294 262" pathLength="1" style="--i: 32" />
-          <path class="" d="M294 262L302.3 254.8M294 262L294 251" pathLength="1" style="--i: 33" />
-          <path class="" d="M215.8 268.1Q225.6 287.4 252 290" pathLength="1" style="--i: 34" />
-          <path class="" d="M252 290L242.3 284.8M252 290L241.8 294.2" pathLength="1" style="--i: 35" />
-          <path class="sk-2" d="M230.9 392.8Q225 399.7 211.2 399.1Q197.4 398.4 192.8 391.1Q188.1 383.8 190 384Q191.8 384.2 196.5 383Q201.1 381.8 212.9 391.8Q224.7 401.7 230.1 401.2Q235.5 400.7 231 399.8Q226.6 398.9 218.1 393.7Q209.6 388.6 196.6 388.1Q183.6 387.5 184.7 392.9Q185.7 398.3 191.2 401.6Q196.6 404.8 213.4 399.6Q230.1 394.4 232.8 391.4Q235.4 388.5 232.2 382.5Q228.9 376.5 218.5 383.5Q208.1 390.6 194.7 399.3Q181.3 407.9 185 404.6Q188.6 401.3 198.1 393.1Q207.6 384.9 220.5 379.7Q233.5 374.6 239 379.8Q244.5 385 238.9 391.5Q233.3 398 213.8 402.1Q194.3 406.2 187.5 400.1Q180.8 394 180 386.4Q179.3 378.8 191.8 378.5Q204.4 378.2 224.8 390.4Q245.3 402.5 245.7 408.1Q246 413.7 245 410.6Q244 407.6 225.5 396.4Q206.9 385.1 190.3 380.5Q173.7 375.9 177.4 385.8Q181.1 395.7 185.5 399.9Q189.8 404.1 216.2 403.1Q242.7 402 248.5 395.4Q254.4 388.7 245.6 379.7Q236.7 370.6 216.4 374.4Q196.1 378.1 185.9 384.2Q175.8 390.3 173.5 402.4Q171.2 414.5 194.5 403.5Q217.8 392.4 233.8 383.3Q249.8 374.1 253.9 374.1Q258 374 245.2 386.4Q232.4 398.8 208.1 407.6Q183.8 416.3 171.2 409.9Q158.7 403.6 168.5 390Q178.4 376.5 183.3 373.7Q188.2 370.9 220.7 379.6Q253.2 388.2 258.7 397.6Q264.2 407 252.5 410.9Q240.8 414.7 206.4 396.7Q172.1 378.6 168.3 373.4Q164.5 368.2 165 374.8L165.5 381.3" pathLength="1" style="--i: 36" />
-          <text class="sk-t" x="114" y="109" transform="rotate(-2 114 109)" style="--i: 8">checkout?</text>
-          <text class="sk-t" x="302" y="94" transform="rotate(1.5 302 94)" style="--i: 13">kafka? sqs?</text>
-          <text class="sk-t" x="148" y="287" transform="rotate(-1 148 287)" style="--i: 22">worker</text>
-          <text class="sk-t" x="150" y="342" transform="rotate(-3 150 342)" style="--i: 25">workers ×3 ??</text>
-          <text class="sk-t" x="306" y="301" style="--i: 27">DB</text>
-          <text class="sk-t" x="282" y="404" transform="rotate(-4 282 404)" style="--i: 37">retries?</text>
-          <text class="sk-t sk-q" x="366" y="196" transform="rotate(8 366 196)" style="--i: 38">?</text>
-          <text class="sk-t sk-small" x="36" y="196" transform="rotate(-6 36 196)" style="--i: 39">who owns this</text>
-          </g>
-
-          <g class="route" stroke="url(#art-route-w)">
-          <path d="M380 92H520Q540 92 540 112V235" pathLength="1" style="--i: 0" />
-          <path d="M392 196H520Q540 196 540 216V235" pathLength="1" style="--i: 1" />
-          <path d="M368 296H520Q540 296 540 276V235" pathLength="1" style="--i: 2" />
-          <path d="M352 404H520Q540 404 540 384V235" pathLength="1" style="--i: 3" />
-          </g>
-          <g class="trunk">
-            <circle class="junction" cx="540" cy="235" r="4" />
-            <path d="M540 235H686" />
-            <path class="head" d="M678 230.5l8 4.5-8 4.5z" />
-          </g>
-
-          <g class="sheet">
-            <g class="boundary">
-              <path d="M694 60v18M694 60h18M1140 60v18M1140 60h-18M694 420v-18M694 420h18M1140 420v-18M1140 420h-18" />
+        <!-- Generated by www/scripts/hero-art.mjs, which rewrites everything between the markers.
+             Every ink silhouette follows src/nodes/describe.ts: the API's socket notch, the Worker's
+             second card, the plane behind a shape that has an inside view. -->
+        <figure class="hero-art hero-art-wide" role="img" aria-labelledby="art-caption">
+          <!-- art:wide -->
+          <svg class="art art-wide" viewBox="0 0 760 520" aria-hidden="true" focusable="false">
+            <defs>
+              <filter id="graphite-wide" x="-2%" y="-2%" width="104%" height="104%">
+                <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="49" result="grain"/>
+                <feDisplacementMap in="SourceGraphic" in2="grain" scale="1.6" xChannelSelector="R" yChannelSelector="G"/>
+              </filter>
+            </defs>
+            <g class="reg"><path d="M4 10h12M10 4v12"/><path d="M744 10h12M750 4v12"/><path d="M4 510h12M10 504v12"/><path d="M744 510h12M750 504v12"/></g>
+            <g class="guides"><path d="M0 114H760" pathLength="1" style="--d:0.1"/><path d="M0 341H760" pathLength="1" style="--d:0.2"/><path d="M104 30V470" pathLength="1" style="--d:0.3"/><path d="M380 30V470" pathLength="1" style="--d:0.3"/><path d="M600 30V470" pathLength="1" style="--d:0.4"/></g>
+            <g class="pencil" filter="url(#graphite-wide)"><path d="M20.2 79.2Q102.9 76.9 185.6 78.8" pathLength="1" style="--d:0.35"/><path d="M182.8 75.7Q182.5 113.9 184.3 152.1" pathLength="1" style="--d:0.42"/><path d="M188 148.8Q104.3 147.5 20.6 149.4" pathLength="1" style="--d:0.49"/><path d="M25.1 155.4Q23.9 115.2 23.6 74.9" pathLength="1" style="--d:0.56"/><path d="M34.4 77.4Q99.1 78.4 163.9 79.5" pathLength="1" style="--d:0.63"/><path d="M21.8 86.9Q23.2 114.7 25.7 142.5" pathLength="1" style="--d:0.7"/><path d="M290 78.1Q380.9 75.8 471.9 78.7" pathLength="1" style="--d:0.51"/><path d="M469.1 75.4Q469.3 113.4 466.9 151.5" pathLength="1" style="--d:0.58"/><path d="M469.6 151.1Q379.6 150.6 289.5 150" pathLength="1" style="--d:0.65"/><path d="M292.3 155.5Q291.4 115.1 293.2 74.8" pathLength="1" style="--d:0.72"/><path d="M304.4 80Q363 79.8 421.6 78" pathLength="1" style="--d:0.79"/><path d="M293.2 86.7Q293.7 116.1 293.3 145.5" pathLength="1" style="--d:0.86"/><path d="M570.4 99.2Q635.9 100.9 701.4 98.5" pathLength="1" style="--d:0.67"/><path d="M700.3 129.2Q635.7 129.6 571.2 129.9" pathLength="1" style="--d:0.74"/><path d="M573.9 129.9C573.3 129.9 571.1 130 569.9 129.6C568.7 129.2 567.9 128.4 566.8 127.6C565.8 126.7 564.3 125.7 563.5 124.6C562.7 123.5 562.3 122.2 561.8 120.9C561.3 119.6 560.9 118.2 560.6 116.9C560.4 115.5 560.3 114.3 560.4 112.8C560.4 111.4 560.5 109.6 560.8 108.2C561.2 106.9 561.8 105.9 562.6 104.7C563.3 103.6 564.4 102.1 565.4 101.1C566.3 100.2 567.2 99.4 568.4 98.9C569.5 98.4 571.2 98.4 572.4 98.3C573.7 98.1 575.4 98.1 575.9 98.1" pathLength="1" style="--d:0.81"/><path d="M696.6 129.8C695.6 129.6 692.4 129.8 690.6 128.8C688.8 127.9 687.1 126 685.7 124.2C684.3 122.4 682.8 120.2 682.3 118C681.8 115.7 682.4 113 682.8 110.6C683.2 108.2 683.5 105.4 684.7 103.5C686 101.6 688.3 100.1 690.3 99.2C692.2 98.2 694.3 97.6 696.4 97.8C698.5 97.9 700.9 98.9 702.9 100.1C704.9 101.3 707.2 102.9 708.5 104.9C709.8 106.9 710.6 109.7 710.7 112.1C710.9 114.6 710.4 117.1 709.6 119.4C708.7 121.7 707.4 124.3 705.8 126C704.2 127.8 702.2 129.6 700.1 130.1C698 130.7 694.3 129.6 693.2 129.5" pathLength="1" style="--d:0.88"/><path d="M395.4 306.4C397.6 306.7 404.7 307.6 408.5 308.3C412.2 309.1 414.8 309.9 417.7 311C420.7 312 424.4 313.5 426.1 314.8C427.7 316 427.8 317.4 427.7 318.7C427.7 320 427 321.6 425.9 322.8C424.7 324 423.4 325 420.9 325.9C418.5 326.9 414.9 327.8 411.2 328.5C407.5 329.3 403.2 330 398.8 330.4C394.4 330.8 389.6 331 384.8 331C380 331.1 374.5 331 369.8 330.7C365.1 330.3 361 329.8 356.8 329C352.6 328.3 348.1 327.1 344.6 326.1C341 325.2 337.8 324.2 335.5 323.1C333.2 322 331.4 320.9 330.9 319.5C330.4 318.1 331.5 316.4 332.3 315C333.1 313.6 333.8 312.4 335.7 311.3C337.5 310.1 340.3 308.9 343.4 308C346.6 307 350.6 306.1 354.9 305.6C359.1 305.2 364.1 305.5 368.9 305.3C373.7 305.1 378.8 304.3 383.6 304.5C388.5 304.7 393.2 305.7 397.9 306.4C402.6 307.1 409.5 308.2 411.8 308.6" pathLength="1" style="--d:0.83"/><path d="M332.8 315.8Q333.9 341.2 332.4 366.6" pathLength="1" style="--d:0.9"/><path d="M428.7 315.5Q428.4 340.7 428 365.9" pathLength="1" style="--d:0.97"/><path d="M428 363.7C427.8 364.3 427.6 366.1 426.5 367.3C425.4 368.4 423.6 369.5 421.4 370.4C419.3 371.4 416.5 372.2 413.6 372.9C410.7 373.7 407.7 374.3 404.2 374.9C400.7 375.5 396.5 376.2 392.5 376.5C388.5 376.9 384.3 377 380.2 377C376.1 377 371.8 376.7 367.7 376.5C363.6 376.2 359.3 375.8 355.6 375.3C352 374.7 348.6 374.1 345.7 373.3C342.9 372.6 340.6 371.7 338.6 370.7C336.6 369.7 334.8 368.4 333.8 367.3C332.7 366.1 332.5 364.4 332.3 363.8" pathLength="1" style="--d:1.04"/><path d="M549.8 300.1Q631.9 301.3 713.9 300.7" pathLength="1" style="--d:0.99"/><path d="M711.7 296.3Q712.3 337 711.3 377.8" pathLength="1" style="--d:1.06"/><path d="M715 372.5Q630.5 372.8 546 371.1" pathLength="1" style="--d:1.13"/><path d="M553 376.9Q552.2 336.9 552.1 296.9" pathLength="1" style="--d:1.2"/><path d="M710.4 307.7Q714.9 310.7 720.1 312.7" pathLength="1" style="--d:1.27"/><path d="M717.6 309.8Q718.2 344.9 718.7 380" pathLength="1" style="--d:1.34"/><path d="M721.1 377Q640 378.4 559 378.6" pathLength="1" style="--d:1.41"/><path d="M29.6 299.6Q134.8 301 240 300.6" pathLength="1" style="--d:1.15"/><path d="M236.5 297.1Q235.1 343.1 236.1 389.1" pathLength="1" style="--d:1.22"/><path d="M240.4 383.3Q136.8 383.5 33.2 384.3" pathLength="1" style="--d:1.29"/><path d="M35.2 386Q36.7 341.9 37.2 297.9" pathLength="1" style="--d:1.36"/><path d="M50.4 301.3Q129.1 301.5 207.8 301.7" pathLength="1" style="--d:1.43"/><path d="M35.7 309.8Q37.6 336.3 37 362.8" pathLength="1" style="--d:1.5"/><path d="M181.4 116.6Q237.9 119.2 294.5 118" pathLength="1" style="--d:1.31"/><path d="M284.7 120.6L292.6 116.3L284.7 112" pathLength="1" style="--d:1.43"/><path d="M377.5 146.9Q375.9 227.8 377.1 308.8" pathLength="1" style="--d:1.41"/><path d="M373.9 296.9L377.8 305L381.7 296.9" pathLength="1" style="--d:1.53"/><path d="M465.2 112.7Q514.6 112.4 563.9 111" pathLength="1" style="--d:1.51"/><path d="M552.4 117.1L560.6 113.3L552.4 109.5" pathLength="1" style="--d:1.63"/><path d="M603.4 128Q605.5 215.6 603.6 303.2" pathLength="1" style="--d:1.61"/><path d="M599 291.6L603.1 299.6L607.3 291.6" pathLength="1" style="--d:1.73"/><path d="M272.6 142.3C278.3 136.2 294.5 117.8 306.7 106C318.9 94.1 329.8 79.9 345.6 71.2C361.3 62.4 383.1 59.6 401.2 53.4C419.3 47.1 435.4 37.2 454.2 33.4C473 29.7 494.2 30.2 514.1 30.8C534 31.5 554.9 32.7 573.4 37.2C592 41.7 608 50.4 625.3 57.9C642.7 65.4 662.7 72 677.5 82.1C692.4 92.2 702 106.4 714.4 118.4C726.9 130.4 744.1 140.1 752.1 154C760.2 168 759.1 186.6 762.9 202.1C766.6 217.6 773.7 231.8 774.6 247C775.6 262.1 773.5 278 768.5 293.1C763.4 308.1 753.3 323.2 744.5 337.2C735.7 351.2 727.7 365.3 715.8 377.3C704 389.4 688.5 399.6 673.4 409.5C658.3 419.3 642.7 429.9 625 436.7C607.4 443.5 586.9 447.7 567.3 450.4C547.6 453.1 526.8 453.5 507.2 452.9C487.5 452.2 468.8 449.4 449.4 446.4C429.9 443.5 409 440.8 390.5 435.1C371.9 429.4 353 422.2 338 412C322.9 401.8 312 386.6 300 373.8C287.9 361.1 275.5 349.1 265.6 335.4C255.7 321.7 246.1 306.7 240.8 291.6C235.4 276.6 232.6 260.7 233.3 245.1C234.1 229.5 241.2 213.7 245.1 198.1C249.1 182.4 250.1 166 257 151.4C263.8 136.7 273.3 122 286.1 110.1C298.9 98.3 325.8 85.1 333.8 80.1" pathLength="1" style="--d:1.71"/><g class="scribble"><path d="M72 108.3C72.5 109.3 73.7 114 74.9 114.2C76.1 114.4 78 109.2 79.2 109.3C80.4 109.3 80.8 114.7 81.9 114.6C83.1 114.6 85 108.8 86.2 108.8C87.5 108.8 88.3 114.4 89.3 114.6C90.4 114.8 91.6 110 92.6 110C93.7 110.1 94.5 115 95.6 114.7C96.7 114.4 98.7 109.4 99.3 108.4" pathLength="1" style="--d:0.6"/><path d="M111.3 114.7C111.8 113.8 113.5 108.9 114.7 108.9C115.9 108.9 117.1 114.6 118.5 114.7C119.8 114.9 121.4 109.7 122.6 109.7C123.7 109.8 124.3 115.3 125.2 115.2C126.1 115.1 126.8 109.1 127.9 109.1C129 109 130.7 115 132 114.9C133.3 114.7 134.9 109.3 135.4 108.2" pathLength="1" style="--d:0.6"/><path d="M348 108C348.5 109.2 349.7 114.9 350.7 115.2C351.7 115.5 352.8 109.8 354.1 109.7C355.4 109.6 357.3 114.9 358.5 114.9C359.7 114.9 360.1 109.6 361.2 109.5C362.4 109.4 364 114.3 365.3 114.3C366.5 114.3 367.7 109.2 368.7 109.3C369.8 109.4 370.8 114.9 371.7 115C372.7 115.1 373.7 110.2 374.6 110.1C375.5 109.9 376.9 113.4 377.3 114" pathLength="1" style="--d:0.76"/><path d="M388.3 109.1C389 110 391.2 114.8 392.4 114.7C393.5 114.6 394.2 108.5 395.3 108.5C396.3 108.4 397.6 114.5 398.8 114.4C400 114.3 401.3 107.8 402.5 107.9C403.7 107.9 405 114.4 406.1 114.8C407.2 115.2 407.8 110.2 408.9 110.2C410 110.1 411.4 114.6 412.7 114.3C414 114 416.2 109.2 416.9 108.2" pathLength="1" style="--d:0.76"/><path d="M615 147.2C615.6 148.2 617.2 152.8 618.4 152.9C619.6 153 620.7 148.2 622 148.1C623.3 148 624.9 152.2 626.1 152.1C627.4 152 628.4 147.4 629.5 147.5C630.6 147.6 631.5 152.5 632.6 152.6C633.7 152.7 635 148.1 636.2 148C637.4 147.9 638.7 152.2 639.9 152C641.1 151.9 642.3 147.1 643.5 147.1C644.7 147.1 645.6 152 646.8 152.2C648.1 152.3 650.2 148.7 650.8 148" pathLength="1" style="--d:0.92"/><path d="M352 400.4C352.5 401.2 353.8 405.6 355.1 405.2C356.3 404.8 358 397.9 359.4 397.9C360.9 397.9 362.4 404.7 363.6 405C364.8 405.4 365.4 399.9 366.6 399.9C367.7 399.8 369.2 404.8 370.4 404.6C371.7 404.5 372.7 398.9 374 398.9C375.4 398.9 376.9 404.6 378.4 404.5C379.8 404.4 381.4 398.3 382.7 398.4C384.1 398.5 385.1 405 386.4 405.1C387.6 405.2 389.1 399.2 390.3 399.2C391.4 399.2 392 404.7 393 404.8C393.9 405 394.9 400 396 400C397.1 399.9 398.5 404.9 399.6 404.5C400.7 404.2 401.6 397.8 402.6 397.9C403.6 398 405 403.8 405.5 405" pathLength="1" style="--d:1.08"/><path d="M601 326.9C601.7 327.8 604.1 332.2 605.3 332.3C606.5 332.4 607 327.5 608.2 327.5C609.4 327.6 611.4 332.7 612.5 332.7C613.7 332.6 614.1 327.4 615.2 327.3C616.2 327.2 617.8 332.1 618.9 332.2C620.1 332.3 621 328.1 622.2 328.1C623.4 328.1 624.9 332.3 626.2 332.1C627.5 331.8 629.4 327.4 630 326.4" pathLength="1" style="--d:1.24"/><path d="M641.6 332.5C642.1 331.4 643.2 325.8 644.4 325.9C645.5 325.9 647.4 332.3 648.6 332.7C649.7 333.1 650.2 328.4 651.3 328.3C652.4 328.2 653.8 332.6 655.2 332.2C656.5 331.8 658.7 327 659.3 325.9" pathLength="1" style="--d:1.24"/><path d="M45 333.2C45.6 334 47.5 338.6 48.5 338.4C49.5 338.2 50.2 331.9 51.1 332C52 332.1 52.8 339 53.8 339C54.7 339.1 55.8 332.3 56.8 332.4C57.9 332.4 58.8 339 60 339.1C61.3 339.3 62.8 333.2 64.1 333.1C65.5 333 66.9 338.3 68.2 338.5C69.5 338.7 70.8 334.4 72 334.4C73.1 334.4 74.1 338.9 75 338.5C76 338.1 76.8 331.8 77.7 331.9C78.6 331.9 79.4 338.7 80.3 339C81.3 339.3 82.2 333.7 83.3 333.7C84.4 333.7 85.7 339.1 86.9 338.9C88.2 338.7 89.6 332.6 90.9 332.6C92.1 332.6 93.2 338.8 94.5 338.8C95.9 338.9 97.6 332.7 98.9 332.8C100.2 332.8 101.1 339.3 102.4 339.1C103.6 339 105.1 331.8 106.3 331.8C107.5 331.8 108.5 338.7 109.6 339.1C110.7 339.6 111.8 334.5 112.9 334.5C114 334.5 115.1 339.2 116.4 339C117.7 338.9 119.6 333.6 120.8 333.5C122.1 333.3 123.5 337.4 124 338.2" pathLength="1" style="--d:1.4"/><path d="M135.9 333.4C136.6 334.2 138.8 338.3 140 338.4C141.3 338.6 142.2 334.1 143.4 334.1C144.7 334.1 146.4 338.4 147.6 338.4C148.7 338.4 149.4 334.2 150.3 334.1C151.3 334.1 152.2 338.2 153.2 338C154.3 337.8 155.4 332.9 156.6 333C157.8 333 159.4 338.5 160.6 338.4C161.8 338.4 162.6 332.5 163.8 332.5C165.1 332.6 166.7 338.7 168 338.9C169.4 339.1 170.8 334.1 172 334C173.3 333.8 174.3 338.4 175.5 338.2C176.8 338.1 178.1 333 179.5 333.2C180.9 333.3 182.4 339.3 183.8 339.1C185.2 339 186.6 332.3 188 332.3C189.4 332.3 191.6 337.9 192.3 339" pathLength="1" style="--d:1.4"/><path d="M50 346.8C50.6 347.6 52.2 351.6 53.4 351.6C54.6 351.5 56.1 346.6 57.4 346.7C58.8 346.7 60.2 351.7 61.5 351.8C62.8 352 64 347.5 65.2 347.4C66.4 347.4 67.4 351.8 68.5 351.5C69.5 351.1 70.5 345.1 71.5 345.2C72.4 345.3 73.2 352 74.1 352C74.9 352 75.7 345 76.7 344.9C77.7 344.8 78.9 350.9 80.1 351.2C81.2 351.5 82.6 346.4 83.7 346.5C84.8 346.6 85.6 351.9 86.6 351.9C87.5 351.8 88.2 346.3 89.3 346.3C90.5 346.3 92.6 351.6 93.7 351.7C94.9 351.8 95.4 347 96.3 347C97.2 346.9 98.1 351.4 99.1 351.4C100.1 351.4 101.2 346.7 102.4 346.8C103.6 346.9 105.3 352.1 106.4 352C107.5 351.9 108 346.4 109.1 346.3C110.2 346.2 112 351.4 113.3 351.6C114.5 351.8 115.5 347.6 116.5 347.6C117.4 347.6 118.2 351.8 119.1 351.6C120 351.5 121.3 347.6 121.8 346.8" pathLength="1" style="--d:1.48"/><path d="M132.6 351.9C133.3 351.1 135.5 347 136.8 347C138.2 347 139.3 352.3 140.4 351.9C141.6 351.5 142.8 344.9 143.8 344.9C144.8 344.8 145.6 351.5 146.6 351.5C147.6 351.6 148.5 345.1 149.8 345.1C151 345.2 152.7 352 154.1 352C155.4 352 156.6 345.3 157.7 345.2C158.8 345.1 159.5 351.4 160.7 351.3C161.8 351.2 163.4 344.6 164.5 344.7C165.6 344.8 166.4 351.4 167.4 351.9C168.4 352.3 169.5 347.6 170.5 347.5C171.6 347.4 172.7 351.6 173.7 351.2C174.7 350.8 175.4 345.1 176.6 345C177.8 345 179.6 350.7 180.8 351.1C182 351.5 182.7 347.1 183.7 347.2C184.8 347.3 186.6 351.1 187.1 351.9" pathLength="1" style="--d:1.48"/><path d="M90 360.1C90.7 360.9 93 365.2 94.2 364.9C95.5 364.5 96.5 357.9 97.6 357.9C98.6 357.9 99.2 364.4 100.3 364.7C101.4 365 102.9 359.5 104.1 359.5C105.4 359.5 106.4 364.5 107.7 364.7C109 364.9 110.7 360.5 111.8 360.6C113 360.6 113.4 365.2 114.6 365.1C115.8 365 117.6 360.3 118.8 360.1C120.1 359.9 120.7 364.1 122 364C123.2 363.9 125.1 359.4 126.3 359.4C127.4 359.5 128 364.4 129 364.3C129.9 364.3 130.8 359 132 359.1C133.3 359.2 134.9 365.1 136.3 365.1C137.8 365 139.5 358.9 140.7 358.7C141.9 358.6 142.5 364.2 143.5 364.2C144.5 364.1 145.7 358.1 146.7 358.2C147.7 358.3 149 363.8 149.4 364.9" pathLength="1" style="--d:1.56"/></g></g>
+            <g class="ink">
+              <g class="bnd" style="--d:3.1"><path d="M268 72V56H284M728 56H744V72M744 412V428H728M284 428H268V412"/><text class="t-bnd" x="268" y="46">ORDERS<tspan class="t-bnd-kind" dx="8">SYSTEM</tspan></text></g>
+              <g class="wire w-h" style="--d:2.9"><path class="w-line" d="M184 114L292 114" pathLength="1"/><path class="w-head" d="M284 118.5L292 114L284 109.5Z"/><text class="t-edge" x="238" y="104" text-anchor="middle">calls</text></g>
+              <g class="wire w-v" style="--d:3"><path class="w-line" d="M380 150L380 305" pathLength="1"/><path class="w-head" d="M375.5 297L380 305L384.5 297Z"/><text class="t-edge" x="392" y="240" text-anchor="start">writes to</text></g>
+              <g class="wire w-h async" style="--d:3.2"><path class="w-line" d="M468 114L560 114" pathLength="1"/><path class="w-head" d="M552 118.5L560 114L552 109.5Z"/><text class="t-edge" x="514" y="104" text-anchor="middle">publishes to</text></g>
+              <g class="wire w-v async" style="--d:3.4"><path class="w-line" d="M600 130L600 300" pathLength="1"/><path class="w-head" d="M595.5 292L600 300L604.5 292Z"/><text class="t-edge" x="588" y="240" text-anchor="end">consumed by</text></g>
+              <g class="node n-service" style="--d:1.9"><path class="n-fill" d="M32 78H176Q184 78 184 86V142Q184 150 176 150H32Q24 150 24 142V86Q24 78 32 78Z"/><path class="n-cap" d="M32 78H176Q184 78 184 86V82H24V86Q24 78 32 78Z"/><path class="n-line" d="M32 78H176Q184 78 184 86V142Q184 150 176 150H32Q24 150 24 142V86Q24 78 32 78Z" pathLength="1"/><g class="dots"><circle cx="172" cy="91" r="1.7"/><circle cx="167" cy="91" r="1.7"/><circle cx="162" cy="91" r="1.7"/></g><text class="t-name" x="104" y="116" text-anchor="middle">Storefront</text><text class="t-tech" x="104" y="133" text-anchor="middle">[Next.js]</text></g>
+              <g class="node n-api" style="--d:2.1"><path class="plane" d="M306 84H466Q474 84 474 92V148Q474 156 466 156H306Q298 156 298 148V92Q298 84 306 84Z"/><path class="n-fill" d="M300 78H460Q468 78 468 86V142Q468 150 460 150H300Q292 150 292 142V126.2H297Q300 126.2 300 123.2V104.8Q300 101.8 297 101.8H292V86Q292 78 300 78Z"/><path class="n-cap" d="M300 78H460Q468 78 468 86V82H292V86Q292 78 300 78Z"/><path class="n-line" d="M300 78H460Q468 78 468 86V142Q468 150 460 150H300Q292 150 292 142V126.2H297Q300 126.2 300 123.2V104.8Q300 101.8 297 101.8H292V86Q292 78 300 78Z" pathLength="1"/><text class="t-kind" x="461" y="143" text-anchor="end">API</text><text class="t-name" x="384" y="116" text-anchor="middle">Orders API</text><text class="t-tech" x="384" y="133" text-anchor="middle">[TypeScript]</text></g>
+              <g class="node n-tube" style="--d:2.2"><path class="n-fill" d="M574 98H696A14 16 0 0 1 696 130H574A14 16 0 0 1 574 98Z"/><path class="n-line" d="M574 98H696A14 16 0 0 1 696 130H574A14 16 0 0 1 574 98Z" pathLength="1"/><path class="n-line" d="M696 98A14 16 0 0 0 696 130" pathLength="1"/><g class="glyph"><path d="M596.5 107.5h17v13h-17zM596.5 107.5L605 115.3L613.5 107.5"/><path d="M619.5 107.5h17v13h-17zM619.5 107.5L628 115.3L636.5 107.5"/><path d="M642.5 107.5h17v13h-17zM642.5 107.5L651 115.3L659.5 107.5"/></g><text class="t-name" x="635" y="152" text-anchor="middle">orders</text><text class="t-kind" x="635" y="168" text-anchor="middle">QUEUE</text></g>
+              <g class="node n-store" style="--d:2.3"><path class="n-fill" d="M332 318A48 13 0 0 1 428 318V364A48 13 0 0 1 332 364Z"/><path class="n-line" d="M332 318A48 13 0 0 1 428 318V364A48 13 0 0 1 332 364Z" pathLength="1"/><path class="n-line" d="M332 318A48 13 0 0 0 428 318" pathLength="1"/><text class="t-name" x="380" y="404" text-anchor="middle">Orders DB</text></g>
+              <g class="node n-worker" style="--d:2.5"><path class="n-fill" d="M566 306H710Q718 306 718 314V370Q718 378 710 378H566Q558 378 558 370V314Q558 306 566 306Z"/><path class="n-line n-back" d="M566 306H710Q718 306 718 314V370Q718 378 710 378H566Q558 378 558 370V314Q558 306 566 306Z" pathLength="1"/><path class="n-fill" d="M560 300H704Q712 300 712 308V364Q712 372 704 372H560Q552 372 552 364V308Q552 300 560 300Z"/><path class="n-cap" d="M560 300H704Q712 300 712 308V304H552V308Q552 300 560 300Z"/><path class="n-line" d="M560 300H704Q712 300 712 308V364Q712 372 704 372H560Q552 372 552 364V308Q552 300 560 300Z" pathLength="1"/><g class="dots"><circle cx="700" cy="313" r="1.7"/><circle cx="695" cy="313" r="1.7"/></g><text class="t-kind" x="704" y="365" text-anchor="end">WORKER</text><text class="t-name" x="632" y="334" text-anchor="middle">Fulfilment</text><text class="t-tech" x="632" y="351" text-anchor="middle">[Go]</text></g>
+              <g class="node n-note" style="--d:2.6"><path class="n-fill note-fill" d="M42 300H230Q236 300 236 306V378Q236 384 230 384H42Q36 384 36 378V306Q36 300 42 300Z"/><path class="n-line note-line" d="M42 300H230Q236 300 236 306V378Q236 384 230 384H42Q36 384 36 378V306Q36 300 42 300Z" pathLength="1"/><text class="t-tag" x="48" y="320">DECISION</text><text class="t-note" x="48" y="340">Charge before saving: no</text><text class="t-note" x="48" y="356">unpaid order reaches the</text><text class="t-note" x="48" y="372">database.</text><path class="leader" d="M236 341H330"/></g>
             </g>
-
-            <g class="wire async" style="--draw: 1"><path d="M834 145H950" /><path class="head" d="M942 140.5l8 4.5-8 4.5z" /></g>
-            <text class="t-edge" x="892" y="133">sends command to</text>
-            <g class="wire async" style="--draw: 2"><path d="M1076 171V270" /><path class="head" d="M1071.5 262l4.5 8 4.5-8z" /></g>
-            <text class="t-edge t-edge-end" x="1064" y="238">consumed by</text>
-            <g class="wire" style="--draw: 3"><path d="M950 305H836" /><path class="head" d="M844 300.5l-8 4.5 8 4.5z" /></g>
-            <text class="t-edge" x="893" y="330">writes to</text>
-
-            <path class="pulse" d="M834 145H1076V305H836" pathLength="1" />
-
-            <g class="node service" style="--in: 1">
-              <rect class="ghost" x="710" y="116" width="130" height="70" rx="11" />
-              <rect class="body" x="704" y="110" width="130" height="70" rx="11" />
-              <text class="t-name" x="769" y="150">Orders API</text>
-              <text class="t-kind" x="822" y="171">API</text>
-            </g>
-            <g class="node queue" style="--in: 2">
-              <path class="body" d="M976 119h100a26 26 0 010 52H976a26 26 0 010-52z" />
-              <g class="envelopes">
-                <rect x="990" y="137" width="21" height="16" rx="2" /><path d="M990.5 138.5l10 7.5 10-7.5" />
-                <rect x="1016" y="137" width="21" height="16" rx="2" /><path d="M1016.5 138.5l10 7.5 10-7.5" />
-                <rect x="1042" y="137" width="21" height="16" rx="2" /><path d="M1042.5 138.5l10 7.5 10-7.5" />
-              </g>
-              <text class="t-name t-below" x="1012" y="196">orders</text>
-            </g>
-            <g class="node service" style="--in: 3">
-              <rect class="ghost" x="956" y="276" width="152" height="70" rx="11" />
-              <rect class="body" x="950" y="270" width="152" height="70" rx="11" />
-              <text class="t-name" x="1026" y="310">Fulfilment</text>
-              <text class="t-kind" x="1090" y="331">WORKER</text>
-            </g>
-            <g class="node store" style="--in: 4">
-              <path class="body" d="M744 284a46 14 0 0192 0v34a46 14 0 01-92 0z" />
-              <path class="cap" d="M744 284a46 14 0 0092 0" />
-              <text class="t-name t-below" x="790" y="356">Orders DB</text>
-            </g>
-
-            <g class="steps">
-              <g style="--s: 1"><circle cx="892" cy="145" r="9" /><text x="892" y="149">1</text></g>
-              <g style="--s: 2"><circle cx="1076" cy="214" r="9" /><text x="1076" y="218">2</text></g>
-              <g style="--s: 3"><circle cx="893" cy="305" r="9" /><text x="893" y="309">3</text></g>
-            </g>
-
-            <g class="chip" style="--in: 6">
-              <path class="stem" d="M1088 104v15" />
-              <rect x="1046" y="82" width="84" height="22" rx="11" />
-              <circle cx="1060" cy="93" r="3.5" />
-              <text x="1093" y="97">retries ×5</text>
-            </g>
-
-            <g class="file">
-              <path class="file-body" d="M1012 420h104l10 10v22h-114z" />
-              <path class="file-fold" d="M1116 420v10h10" />
-              <text x="1067" y="446">.draftcanvas</text>
-            </g>
-          </g>
-
-          <g class="marks">
-            <g class="art-mark" style="--m: 1"><circle cx="30" cy="36" r="11" /><text x="30" y="40">1</text></g>
-            <g class="art-mark" style="--m: 2"><circle cx="562" cy="206" r="11" /><text x="562" y="210">2</text></g>
-            <g class="art-mark" style="--m: 3"><circle cx="990" cy="441" r="11" /><text x="990" y="445">3</text></g>
-          </g>
+            <g class="flow"><path class="pulse" d="M184 114L292 114" pathLength="1" style="--s:1"/><path class="pulse" d="M380 150L380 305" pathLength="1" style="--s:2"/><path class="pulse" d="M468 114L560 114" pathLength="1" style="--s:3"/><path class="pulse" d="M600 130L600 300" pathLength="1" style="--s:4"/><g class="step" style="--s:1"><circle cx="204" cy="114" r="8"/><text x="204" y="117.6" text-anchor="middle">1</text></g><g class="step" style="--s:2"><circle cx="380" cy="172" r="8"/><text x="380" y="175.6" text-anchor="middle">2</text></g><g class="step" style="--s:3"><circle cx="500" cy="114" r="8"/><text x="500" y="117.6" text-anchor="middle">3</text></g><g class="step" style="--s:4"><circle cx="600" cy="196" r="8"/><text x="600" y="199.6" text-anchor="middle">4</text></g></g>
+            <g class="tb"><path d="M520 452h224v48h-224zM520 476h224M632 476v24"/><text x="530" y="468">CHECKOUT · PLACE AN ORDER</text><text x="530" y="492">FLOW · 4 STEPS</text><text x="642" y="492">SHEET 1 OF 1</text></g>
           </svg>
+          <!-- /art:wide -->
         </figure>
-        <figure class="art art-narrow reveal" role="img" aria-labelledby="art-caption">
-          <svg class="scene scene-art" viewBox="0 0 320 760" aria-hidden="true" focusable="false">
-          <defs>
-            <filter id="art-grain-n" x="-4%" y="-4%" width="108%" height="108%">
-              <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="4" result="grain" />
-              <feDisplacementMap in="SourceGraphic" in2="grain" scale="2.2" xChannelSelector="R" yChannelSelector="G" />
-            </filter>
-            <linearGradient id="art-route-n" gradientUnits="userSpaceOnUse" x1="0" y1="196" x2="0" y2="330">
-              <stop class="stop-pencil" offset="0" />
-              <stop class="stop-ink" offset="1" />
-            </linearGradient>
-          </defs>
-
-          <text class="art-cap art-cap-pencil" x="40" y="18">WHAT THE MEETING SAID</text>
-
-          <g class="scribble" filter="url(#art-grain-n)">
-          <path class="" d="M27.7 35.2Q88.3 33.4 148.9 36.9" pathLength="1" style="--i: 0" />
-          <path class="" d="M144.2 35.7Q147.8 62.9 146 90.3" pathLength="1" style="--i: 1" />
-          <path class="" d="M149.3 88Q90.3 88.7 31.4 89.1" pathLength="1" style="--i: 2" />
-          <path class="" d="M35.6 91.1Q36.1 61.5 31.1 32.3" pathLength="1" style="--i: 3" />
-          <path class="sk-2" d="M32.3 37Q89.3 39 146.3 37.5" pathLength="1" style="--i: 4" />
-          <path class="sk-2" d="M141.2 32Q140.5 59.2 143.8 86.6" pathLength="1" style="--i: 5" />
-          <path class="sk-2" d="M147.3 84.8Q90.8 85.6 34.1 87.7" pathLength="1" style="--i: 6" />
-          <path class="sk-2" d="M35.6 90.8Q37.6 62 35.2 33.3" pathLength="1" style="--i: 7" />
-          <path class="" d="M170.5 31.8Q231.4 27.4 292.2 29" pathLength="1" style="--i: 9" />
-          <path class="" d="M286.7 25.7Q285.6 56.5 288.9 87.5" pathLength="1" style="--i: 10" />
-          <path class="" d="M293.8 84Q231.2 81.2 168.7 82.7" pathLength="1" style="--i: 11" />
-          <path class="" d="M173.7 86.4Q178.1 57.4 176.8 28.5" pathLength="1" style="--i: 12" />
-          <path class="" d="M45.7 143.2Q108.5 141.7 171.4 142.7" pathLength="1" style="--i: 14" />
-          <path class="" d="M168 139.6Q166.5 171.5 168 203.3" pathLength="1" style="--i: 15" />
-          <path class="" d="M172.4 199.4Q110.9 201 49.4 198.5" pathLength="1" style="--i: 16" />
-          <path class="" d="M51.2 202.5Q53.9 171.2 50.6 139.9" pathLength="1" style="--i: 17" />
-          <path class="sk-x" d="M51.9 144.3Q108 175.3 164.4 195.4" pathLength="1" style="--i: 19" />
-          <path class="sk-x" d="M166.3 143.1Q110.2 168.4 54 194.7" pathLength="1" style="--i: 20" />
-          <path class="" d="M235.3 145.1Q245.4 145.5 250.6 146.1Q255.8 146.8 259.8 148.7Q263.8 150.7 267.8 152.7Q271.9 154.7 273.2 157.6Q274.6 160.6 275.6 163.4Q276.5 166.2 277.9 169.1Q279.3 172 277.2 174.8Q275.2 177.6 273.2 180.2Q271.3 182.8 268.6 185.3Q265.9 187.8 261.3 189.2Q256.8 190.6 252.5 192Q248.2 193.5 243.4 194Q238.5 194.6 233.5 195.4Q228.5 196.1 223.1 196Q217.7 196 213.5 194.1Q209.3 192.2 204.2 191.1Q199.2 189.9 197.4 187Q195.5 184 191.4 182Q187.3 179.9 187.5 176.8Q187.7 173.7 188 170.9Q188.3 168.1 187.2 165Q186.2 162 189.1 159.5Q192.1 156.9 195.7 154.9Q199.4 152.9 202.9 150.8Q206.4 148.7 210.5 146.9Q214.7 145 219.8 144.1Q224.9 143.2 230.2 143.9Q235.4 144.5 240.6 144.8Q245.7 145 249.9 146.7Q254.2 148.4 258.7 149.7Q263.3 151 265.7 153.5L268.2 156.1" pathLength="1" style="--i: 21" />
-          <path class="" d="M144.8 62Q156.7 51.2 176 58" pathLength="1" style="--i: 23" />
-          <path class="" d="M176 58L168.4 50M176 58L165 58.8" pathLength="1" style="--i: 24" />
-          <path class="" d="M90.4 91.3Q76.4 122.7 104 140" pathLength="1" style="--i: 25" />
-          <path class="" d="M104 140L98.4 130.5M104 140L93.2 138" pathLength="1" style="--i: 26" />
-          <path class="" d="M232.9 85.1Q253.6 111 234 142" pathLength="1" style="--i: 27" />
-          <path class="" d="M234 142L243 135.7M234 142L236 131.2" pathLength="1" style="--i: 28" />
-          <path class="sk-2" d="M161.5 238.4Q160 237.6 154.1 239.1Q148.2 240.7 140 234.1Q131.9 227.5 134.9 226Q137.8 224.6 144.6 228.4Q151.4 232.3 157.6 235.5Q163.9 238.6 168 238.1Q172.1 237.6 168 237.5Q163.9 237.4 157.4 230.3Q151 223.1 141.1 222.6Q131.1 222 128.1 224.2Q125.2 226.3 131.4 232Q137.6 237.6 150.9 238.4Q164.1 239.3 169 230.4Q173.9 221.6 164.5 225Q155 228.4 152.3 227.3Q149.6 226.3 138.9 235.4Q128.2 244.5 124.3 243.1Q120.3 241.6 136.7 236.5Q153.2 231.3 156.6 227.8Q160 224.3 167.3 226.3Q174.5 228.3 174.1 230.9Q173.6 233.5 153.1 236.2Q132.6 238.8 127.5 235.4Q122.5 232 123.6 225.4Q124.8 218.8 140.3 219.9Q155.8 221 165.2 231.5Q174.7 242 179.5 243.9Q184.3 245.8 177.3 244.7Q170.3 243.6 161.9 237.6Q153.5 231.6 138.5 226.1Q123.6 220.5 123.6 222.8Q123.7 225 140.4 236.5Q157.2 247.9 163.5 244.4Q169.8 240.9 174.5 230.9Q179.1 220.9 173.7 221.9Q168.4 222.9 153.3 223.1Q138.2 223.4 128.8 229Q119.5 234.7 120.8 241.4Q122.1 248.1 125.9 246.2Q129.7 244.2 156.3 231.4Q183 218.6 187.6 217.2Q192.2 215.9 177.2 225.7Q162.3 235.4 141.8 239.8Q121.3 244.1 118.3 245.9Q115.3 247.6 116.1 235.8Q116.9 223.9 135.4 219.6Q153.8 215.3 171.6 223.2Q189.3 231.1 192 236Q194.7 241 176.5 243.4Q158.3 245.9 143.6 235Q128.8 224.1 117.9 218.2Q107 212.3 115.4 218L123.8 223.7" pathLength="1" style="--i: 29" />
-          <text class="sk-t" x="89" y="67" transform="rotate(-2 89 67)" style="--i: 8">checkout?</text>
-          <text class="sk-t" x="232" y="62" transform="rotate(1.5 232 62)" style="--i: 13">kafka? sqs?</text>
-          <text class="sk-t" x="110" y="174" transform="rotate(-1 110 174)" style="--i: 18">worker</text>
-          <text class="sk-t" x="232" y="175" style="--i: 22">DB</text>
-          <text class="sk-t" x="250" y="238" transform="rotate(-4 250 238)" style="--i: 30">retries?</text>
-          </g>
-
-          <g class="route" stroke="url(#art-route-n)">
-          <path d="M104 202V292Q104 300 112 300H152Q160 300 160 308V330" pathLength="1" style="--i: 0" />
-          <path d="M128 252V292Q128 300 136 300H152Q160 300 160 308V330" pathLength="1" style="--i: 1" />
-          <path d="M232 200V292Q232 300 224 300H168Q160 300 160 308V330" pathLength="1" style="--i: 2" />
-          <path d="M262 246V292Q262 300 254 300H168Q160 300 160 308V330" pathLength="1" style="--i: 3" />
-          </g>
-          <g class="trunk">
-            <circle class="junction" cx="160" cy="308" r="4" />
-            <path d="M160 330V354" />
-            <path class="head" d="M155.5 346l4.5 8 4.5-8z" />
-          </g>
-
-          <text class="art-cap art-cap-ink" x="34" y="384">WHAT EVERYONE SAW</text>
-
-          <g class="sheet">
-            <g class="boundary">
-              <path d="M24 362v18M24 362h18M296 362v18M296 362h-18M24 720v-18M24 720h18M296 720v-18M296 720h-18" />
+        <figure class="hero-art hero-art-narrow" role="img" aria-labelledby="art-caption">
+          <!-- art:narrow -->
+          <svg class="art art-narrow" viewBox="0 0 340 500" aria-hidden="true" focusable="false">
+            <defs>
+              <filter id="graphite-narrow" x="-2%" y="-2%" width="104%" height="104%">
+                <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="80" result="grain"/>
+                <feDisplacementMap in="SourceGraphic" in2="grain" scale="1.6" xChannelSelector="R" yChannelSelector="G"/>
+              </filter>
+            </defs>
+            <g class="reg"><path d="M2 8h12M8 2v12"/><path d="M326 8h12M332 2v12"/><path d="M2 492h12M8 486v12"/><path d="M326 492h12M332 486v12"/></g>
+            <g class="guides"><path d="M170 16V430" pathLength="1" style="--d:0.1"/><path d="M132 16V430" pathLength="1" style="--d:0.2"/><path d="M0 76H340" pathLength="1" style="--d:0.3"/><path d="M0 366H340" pathLength="1" style="--d:0.3"/></g>
+            <g class="pencil" filter="url(#graphite-narrow)"><path d="M78 42Q169.2 42.3 260.4 42.8" pathLength="1" style="--d:0.35"/><path d="M257.9 37.3Q257.6 77.9 257.7 118.6" pathLength="1" style="--d:0.42"/><path d="M259.8 112.8Q169.3 112.8 78.8 115.1" pathLength="1" style="--d:0.49"/><path d="M82.9 117Q83.2 78.3 82.6 39.7" pathLength="1" style="--d:0.56"/><path d="M94.4 39.4Q156 40.7 217.6 41.7" pathLength="1" style="--d:0.63"/><path d="M104.8 194.2Q169.6 193.3 234.3 193.7" pathLength="1" style="--d:0.51"/><path d="M235.5 226.4Q169.5 227.6 103.6 225.9" pathLength="1" style="--d:0.58"/><path d="M108.8 226.2C108.2 226.1 106.4 225.8 105.2 225.4C104 224.9 102.5 224.1 101.5 223.4C100.5 222.7 99.8 222.2 99 221.2C98.2 220.2 97.4 218.6 96.7 217.2C96 215.8 95.2 214.4 94.9 212.9C94.6 211.5 94.6 209.9 94.8 208.5C95 207.2 95.7 206.1 96.1 204.8C96.5 203.5 96.7 201.8 97.4 200.6C98.2 199.4 99.4 198.4 100.4 197.5C101.4 196.6 102.3 195.7 103.4 195.1C104.5 194.5 105.9 194 107.1 193.8C108.4 193.6 110.5 193.9 111.2 194" pathLength="1" style="--d:0.65"/><path d="M233.9 225.8C232.7 225.7 229.2 226.4 227.1 225.7C225 225 222.7 223.4 221.2 221.7C219.7 220 218.8 217.9 218 215.5C217.3 213 216.6 209.8 216.9 207.2C217.2 204.7 218.6 202 219.9 200.1C221.1 198.2 222.5 196.9 224.4 195.8C226.2 194.7 228.7 193.4 231 193.5C233.3 193.5 236.3 195.1 238.3 196.4C240.3 197.6 241.9 198.8 243 200.8C244.2 202.8 244.9 205.9 245.1 208.5C245.3 211.1 245 213.8 244.2 216.2C243.4 218.6 242 221.4 240.3 223C238.7 224.7 236.5 225.7 234.3 226.2C232.1 226.6 228.2 225.8 227 225.7" pathLength="1" style="--d:0.72"/><path d="M82 325.6Q167.4 324.6 252.7 325" pathLength="1" style="--d:0.67"/><path d="M247.6 324.2Q248.7 362.5 246.9 400.8" pathLength="1" style="--d:0.74"/><path d="M253.4 398.3Q167.4 400.6 81.4 399.2" pathLength="1" style="--d:0.81"/><path d="M88.5 400.5Q89.5 360.5 87.5 320.5" pathLength="1" style="--d:0.88"/><path d="M98.8 323.7Q150.3 326.2 201.9 327" pathLength="1" style="--d:0.95"/><path d="M87.2 334.3Q86.5 357.7 89 381" pathLength="1" style="--d:1.02"/><path d="M246.4 332.6Q251.3 335 255.7 338.2" pathLength="1" style="--d:1.09"/><path d="M255.1 334.2Q256.5 370.7 254.8 407.3" pathLength="1" style="--d:1.16"/><path d="M255.5 403.5Q175.6 403.2 95.7 404.4" pathLength="1" style="--d:1.23"/><path d="M173.6 111.4Q174 154.5 171.2 197.6" pathLength="1" style="--d:0.83"/><path d="M167.6 186.6L171.3 194.7L175.1 186.6" pathLength="1" style="--d:0.95"/><path d="M128.6 222.1Q127.5 275.3 128.7 328.5" pathLength="1" style="--d:0.93"/><path d="M124.9 318.1L128.7 326.2L132.6 318.1" pathLength="1" style="--d:1.05"/><path d="M44.2 126.5C46.7 119.4 52.6 96 59.1 83.7C65.6 71.3 74.6 61.4 83.4 52.6C92.2 43.8 102.3 38 111.9 31.1C121.5 24.1 131 15.8 141.1 10.9C151.2 6.1 161.9 1.9 172.5 2C183.2 2 194.8 6 205 11C215.2 16.1 224.6 25.1 233.8 32.5C243 39.8 251.8 46 260.3 55.1C268.9 64.2 277.8 74.8 285.1 87.1C292.4 99.4 299.9 114.1 304 128.9C308.1 143.7 308.2 160.3 309.8 175.9C311.5 191.5 313.7 206.9 313.7 222.5C313.7 238.2 312.1 254.4 309.7 269.9C307.4 285.5 304.2 301.4 299.8 315.8C295.3 330.2 289.2 343.6 283 356.4C276.8 369.1 270.4 381.9 262.5 392.4C254.5 402.9 245 411.2 235.4 419.2C225.7 427.2 214.9 435.8 204.4 440.6C193.9 445.4 183.1 448.3 172.5 448C161.9 447.8 151.4 442.8 140.7 439.3C130.1 435.7 118.8 432.9 108.4 426.7C98.1 420.6 87.4 412.3 78.8 402.4C70.2 392.4 63.1 379.6 56.8 366.8C50.6 354 45.9 340 41.3 325.4C36.7 310.8 32.7 294.6 29.3 279.2C25.8 263.8 20.9 248.8 20.5 233C20.1 217.1 24.6 200.4 26.8 184.1C29 167.9 29.5 150.4 33.7 135.5C37.9 120.5 45.4 107.2 52 94.5C58.5 81.7 69.6 65.1 73.1 59.2" pathLength="1" style="--d:1.03"/><g class="scribble"><path d="M138 72.6C138.5 73.5 139.6 77.9 140.9 78C142.1 78.1 143.8 73 145.2 73.1C146.7 73.1 148 78.2 149.4 78.3C150.8 78.5 152.2 74 153.7 74.1C155.1 74.2 156.6 79.4 157.8 79.1C159.1 78.8 159.9 72.4 161.1 72.3C162.3 72.3 163.9 78.9 165 78.9C166.2 78.9 166.8 72.5 167.9 72.5C169.1 72.4 170.7 78.3 171.9 78.6C173 78.9 173.7 74.3 174.7 74.4C175.7 74.5 177.3 78.2 177.8 79" pathLength="1" style="--d:0.6"/><path d="M188.1 72.8C188.5 73.8 189.7 79 190.8 79.1C191.8 79.1 193.1 73 194.3 72.9C195.6 72.9 197 79 198.3 78.9C199.7 78.9 201 72.7 202.4 72.7C203.8 72.7 205.3 78.7 206.5 78.9C207.7 79.1 209.3 74.7 209.8 73.9" pathLength="1" style="--d:0.6"/><path d="M150 242.9C150.7 243.9 153.1 248.7 154.3 248.8C155.5 248.9 156.1 243.5 157.2 243.5C158.4 243.4 159.9 248.8 161.2 248.6C162.4 248.3 163.6 242.1 164.6 242.1C165.7 242.1 166.4 248.3 167.5 248.6C168.5 248.9 169.8 243.8 171.1 243.9C172.4 243.9 174.2 248.8 175.4 248.8C176.5 248.8 177.3 243.8 178.3 243.7C179.3 243.6 180.4 248.4 181.6 248.3C182.8 248.3 184.3 243.2 185.5 243.4C186.6 243.5 188.1 248.1 188.7 249.1" pathLength="1" style="--d:0.76"/><path d="M137 354.3C137.5 355 138.7 358.3 139.7 358.3C140.8 358.4 141.9 354.6 143.1 354.5C144.2 354.5 145.4 358.5 146.5 358.1C147.6 357.6 148.5 351.7 149.6 351.8C150.7 351.9 152 358.4 153.1 358.7C154.2 358.9 155.2 353.3 156.3 353.2C157.4 353.2 158.5 358.5 159.6 358.4C160.7 358.3 161.6 352.6 162.9 352.8C164.1 352.9 165.8 359.2 167 359C168.2 358.9 169.7 353.1 170.3 352" pathLength="1" style="--d:0.92"/><path d="M179.4 358.9C180 358 181.9 353.5 183 353.5C184.1 353.5 185.1 358.7 186.1 358.8C187.1 358.9 187.7 354.1 188.8 354.1C189.9 354.1 191.8 359 193 358.9C194.3 358.8 195.7 354.5 196.3 353.6" pathLength="1" style="--d:0.92"/></g></g>
+            <g class="ink">
+              <g class="bnd" style="--d:2.7"><path d="M52 46V30H68M272 30H288V46M288 402V418H272M68 418H52V402"/><text class="t-bnd" x="52" y="20">ORDERS<tspan class="t-bnd-kind" dx="8">SYSTEM</tspan></text></g>
+              <g class="wire w-v async" style="--d:2"><path class="w-line" d="M170 114L170 194" pathLength="1"/><path class="w-head" d="M165.5 186L170 194L174.5 186Z"/><text class="t-edge" x="182" y="160" text-anchor="start">publishes to</text></g>
+              <g class="wire w-v async" style="--d:2.2"><path class="w-line" d="M132 226L132 326" pathLength="1"/><path class="w-head" d="M127.5 318L132 326L136.5 318Z"/><text class="t-edge" x="120" y="290" text-anchor="end">consumed by</text></g>
+              <g class="node n-api" style="--d:1.5"><path class="plane" d="M96 48H256Q264 48 264 56V112Q264 120 256 120H96Q88 120 88 112V56Q88 48 96 48Z"/><path class="n-fill" d="M90 42H250Q258 42 258 50V106Q258 114 250 114H90Q82 114 82 106V90.2H87Q90 90.2 90 87.2V68.8Q90 65.8 87 65.8H82V50Q82 42 90 42Z"/><path class="n-cap" d="M90 42H250Q258 42 258 50V46H82V50Q82 42 90 42Z"/><path class="n-line" d="M90 42H250Q258 42 258 50V106Q258 114 250 114H90Q82 114 82 106V90.2H87Q90 90.2 90 87.2V68.8Q90 65.8 87 65.8H82V50Q82 42 90 42Z" pathLength="1"/><text class="t-kind" x="251" y="107" text-anchor="end">API</text><text class="t-name" x="174" y="80" text-anchor="middle">Orders API</text><text class="t-tech" x="174" y="97" text-anchor="middle">[TypeScript]</text></g>
+              <g class="node n-tube" style="--d:1.6"><path class="n-fill" d="M109 194H231A14 16 0 0 1 231 226H109A14 16 0 0 1 109 194Z"/><path class="n-line" d="M109 194H231A14 16 0 0 1 231 226H109A14 16 0 0 1 109 194Z" pathLength="1"/><path class="n-line" d="M231 194A14 16 0 0 0 231 226" pathLength="1"/><g class="glyph"><path d="M131.5 203.5h17v13h-17zM131.5 203.5L140 211.3L148.5 203.5"/><path d="M154.5 203.5h17v13h-17zM154.5 203.5L163 211.3L171.5 203.5"/><path d="M177.5 203.5h17v13h-17zM177.5 203.5L186 211.3L194.5 203.5"/></g><text class="t-name" x="170" y="248" text-anchor="middle">orders</text><text class="t-kind" x="170" y="264" text-anchor="middle">QUEUE</text></g>
+              <g class="node n-worker" style="--d:1.8"><path class="n-fill" d="M102 332H246Q254 332 254 340V396Q254 404 246 404H102Q94 404 94 396V340Q94 332 102 332Z"/><path class="n-line n-back" d="M102 332H246Q254 332 254 340V396Q254 404 246 404H102Q94 404 94 396V340Q94 332 102 332Z" pathLength="1"/><path class="n-fill" d="M96 326H240Q248 326 248 334V390Q248 398 240 398H96Q88 398 88 390V334Q88 326 96 326Z"/><path class="n-cap" d="M96 326H240Q248 326 248 334V330H88V334Q88 326 96 326Z"/><path class="n-line" d="M96 326H240Q248 326 248 334V390Q248 398 240 398H96Q88 398 88 390V334Q88 326 96 326Z" pathLength="1"/><g class="dots"><circle cx="236" cy="339" r="1.7"/><circle cx="231" cy="339" r="1.7"/></g><text class="t-kind" x="240" y="391" text-anchor="end">WORKER</text><text class="t-name" x="168" y="360" text-anchor="middle">Fulfilment</text><text class="t-tech" x="168" y="377" text-anchor="middle">[Go]</text></g>
+              
             </g>
-
-            <g class="wire async" style="--draw: 1"><path d="M160 466V516" /><path class="head" d="M155.5 508l4.5 8 4.5-8z" /></g>
-            <text class="t-edge t-edge-side" x="176" y="495">sends command to</text>
-            <g class="wire async" style="--draw: 2"><path d="M160 568V614" /><path class="head" d="M155.5 606l4.5 8 4.5-8z" /></g>
-            <text class="t-edge t-edge-side" x="176" y="595">consumed by</text>
-
-            <path class="pulse" d="M160 466V614" pathLength="1" />
-
-            <g class="node service" style="--in: 1">
-              <rect class="ghost" x="96" y="410" width="128" height="56" rx="11" />
-              <rect class="body" x="90" y="404" width="128" height="56" rx="11" />
-              <text class="t-name" x="154" y="438">Orders API</text>
-            </g>
-            <g class="node queue" style="--in: 2">
-              <path class="body" d="M126 516h68a26 26 0 010 52h-68a26 26 0 010-52z" />
-              <g class="envelopes">
-                <rect x="123" y="534" width="21" height="16" rx="2" /><path d="M123.5 535.5l10 7.5 10-7.5" />
-                <rect x="149" y="534" width="21" height="16" rx="2" /><path d="M149.5 535.5l10 7.5 10-7.5" />
-                <rect x="175" y="534" width="21" height="16" rx="2" /><path d="M175.5 535.5l10 7.5 10-7.5" />
-              </g>
-            </g>
-            <g class="node service" style="--in: 3">
-              <rect class="ghost" x="96" y="620" width="128" height="56" rx="11" />
-              <rect class="body" x="90" y="614" width="128" height="56" rx="11" />
-              <text class="t-name" x="154" y="648">Fulfilment</text>
-            </g>
-
-            <g class="steps">
-              <g style="--s: 1"><circle cx="160" cy="488" r="9" /><text x="160" y="492">1</text></g>
-              <g style="--s: 2"><circle cx="160" cy="590" r="9" /><text x="160" y="594">2</text></g>
-            </g>
-
-            <g class="chip" style="--in: 6">
-              <path class="stem" d="M88 542h12" />
-              <rect x="6" y="531" width="82" height="22" rx="11" />
-              <circle cx="20" cy="542" r="3.5" />
-              <text x="52" y="546">retries ×5</text>
-            </g>
-
-            <g class="file">
-              <path class="file-body" d="M106 720h98l10 10v22H106z" />
-              <path class="file-fold" d="M204 720v10h10" />
-              <text x="158" y="746">.draftcanvas</text>
-            </g>
-          </g>
-
-          <g class="marks">
-            <g class="art-mark" style="--m: 1"><circle cx="20" cy="14" r="11" /><text x="20" y="18">1</text></g>
-            <g class="art-mark" style="--m: 2"><circle cx="186" cy="308" r="11" /><text x="186" y="312">2</text></g>
-            <g class="art-mark" style="--m: 3"><circle cx="84" cy="741" r="11" /><text x="84" y="745">3</text></g>
-          </g>
+            <g class="flow"><path class="pulse" d="M170 114L170 194" pathLength="1" style="--s:1"/><path class="pulse" d="M132 226L132 326" pathLength="1" style="--s:2"/><g class="step" style="--s:1"><circle cx="170" cy="136" r="8"/><text x="170" y="139.6" text-anchor="middle">1</text></g><g class="step" style="--s:2"><circle cx="132" cy="252" r="8"/><text x="132" y="255.6" text-anchor="middle">2</text></g></g>
+            <g class="tb"><path d="M52 440h236v48h-236zM52 464h236M170 464v24"/><text x="62" y="456">CHECKOUT · PLACE AN ORDER</text><text x="62" y="480">FLOW · 2 STEPS</text><text x="180" y="480">SHEET 1 OF 1</text></g>
           </svg>
+          <!-- /art:narrow -->
         </figure>
         <p class="visually-hidden" id="art-caption">
-          On the left, a pencil scribble from a meeting: boxes labelled checkout?, kafka? sqs? and a
-          crossed-out worker, a DB, and retries? Its lines are routed into one connector that arrives
-          at a clean diagram: Orders API sends command to an orders queue, consumed by a Fulfilment
-          worker that writes to Orders DB, with a note saying retries ×5 and a .draftcanvas file
-          tab at the bottom.
+          A pencil sketch of an orders system, inked over as you watch. A storefront calls an orders
+          API, which writes to an orders database and publishes to a queue; a fulfilment worker
+          consumes it. A decision note on the database reads: charge before saving. The four
+          connectors are numbered as the steps of one flow.
         </p>
+      </section>
 
-        <ul class="trades">
-          <li class="reveal">
-            <span class="trade-a"><span class="trade-n" aria-hidden="true">1</span>speed</span>
-            <span class="trade-edge">
-              <span class="trade-edge-word">over</span>
-              <svg class="trade-wire" viewBox="0 0 180 22" aria-hidden="true" focusable="false">
-                <path d="M2 11h170" /><path class="head" d="M168 6.5l9 4.5-9 4.5z" />
-              </svg>
-            </span>
+      <!-- ================================================================
+           THE REEL. Six things it does, one frame to watch them in.
+           Real footage of the real editor, nothing staged.
+      ================================================================= -->
+      <section class="features" id="features" aria-labelledby="features-title">
+        <header class="section-head reveal">
+          <p class="overline">What it does</p>
+          <h2 id="features-title">From a sketch to a story.</h2>
+        </header>
+
+        <div class="reel reveal">
+          <div class="reel-tabs" role="tablist" aria-label="Features" aria-orientation="vertical">
+            <button class="reel-tab" role="tab" type="button" id="draw" aria-controls="reel-stage" aria-selected="true"
+              data-video="./clips/draw.mp4" data-poster="./clips/draw.jpg"
+              data-caption="Press a letter and the shape lands. Drag from its edge for what usually comes next.">
+              <span class="reel-n">01</span>
+              <span class="reel-title">Draw with meaning</span>
+              <span class="reel-text">Services, queues and stores that know what they are. Connectors caption themselves; <kbd>Tab</kbd> takes the next move.</span>
+            </button>
+            <button class="reel-tab" role="tab" type="button" id="compose" aria-controls="reel-stage" aria-selected="false" tabindex="-1"
+              data-video="./clips/compose.mp4" data-poster="./clips/compose.jpg"
+              data-caption="A whole CQRS architecture from the palette — laid out, wired, flows included.">
+              <span class="reel-n">02</span>
+              <span class="reel-title">Start from a pattern</span>
+              <span class="reel-text">Ask <kbd>⌘K</kbd> for CQRS, a Saga or Event-Driven. It lands laid out, wired and ready to present.</span>
+            </button>
+            <button class="reel-tab" role="tab" type="button" id="present" aria-controls="reel-stage" aria-selected="false" tabindex="-1"
+              data-video="./clips/present.mp4" data-poster="./clips/present.jpg"
+              data-caption="A flow, one step at a time. Each step brings its own notes; the rest dims.">
+              <span class="reel-n">03</span>
+              <span class="reel-title">Walk the room through it</span>
+              <span class="reel-text">Present a flow step by step. Notes and code arrive on their step, and everything else waits.</span>
+            </button>
+            <button class="reel-tab" role="tab" type="button" id="inside" aria-controls="reel-stage" aria-selected="false" tabindex="-1"
+              data-video="./clips/inside.mp4" data-poster="./clips/inside.jpg"
+              data-caption="One level down, inside a service — and back out again.">
+              <span class="reel-n">04</span>
+              <span class="reel-title">Look inside</span>
+              <span class="reel-text"><kbd>⌘↓</kbd> steps into a shape for the detail the overview shouldn&rsquo;t carry. C4 depth on one canvas.</span>
+            </button>
+            <button class="reel-tab" role="tab" type="button" id="export" aria-controls="reel-stage" aria-selected="false" tabindex="-1"
+              data-video="./clips/io.mp4" data-poster="./clips/io.jpg"
+              data-caption="A Mermaid flowchart pasted in, sent back out as C4-PlantUML.">
+              <span class="reel-n">05</span>
+              <span class="reel-title">Take it with you</span>
+              <span class="reel-text">Paste Mermaid in. Send it out as an image, C4-PlantUML, Structurizr, draw.io or a link — nothing uploaded.</span>
+            </button>
+            <button class="reel-tab" role="tab" type="button" id="agents" aria-controls="reel-stage" aria-selected="false" tabindex="-1"
+              data-still="./stills/source-evidence.jpg"
+              data-caption="An agent's diagram, with the files and lines behind each part.">
+              <span class="reel-n">06</span>
+              <span class="reel-title">Draw with your agent</span>
+              <span class="reel-text">Claude Code, Codex and Cursor draw over MCP in the desktop app — and cite the code behind every part.</span>
+            </button>
+          </div>
+
+          <figure class="reel-stage" id="reel-stage" role="tabpanel" aria-labelledby="draw">
+            <div class="frame">
+              <div class="screen">
+                <!-- Without the script this is an ordinary player on the first clip; nothing is
+                     downloaded until someone presses play. main.js takes the controls away and runs
+                     the reel instead. -->
+                <video id="reel-video" src="./clips/draw.mp4" poster="./clips/draw.jpg" muted playsinline preload="none" controls width="1280" height="720"></video>
+                <img id="reel-still" alt="" width="1600" height="900" hidden />
+              </div>
+              <button class="reel-toggle" id="reel-toggle" type="button" hidden aria-label="Pause the reel">
+                <svg class="i-pause" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" focusable="false"><path d="M5 3.5v9M11 3.5v9" /></svg>
+                <svg class="i-play" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" focusable="false"><path d="M5 3.2l7.5 4.8L5 12.8z" /></svg>
+              </button>
+            </div>
+            <figcaption>
+              <span class="fig-n" id="reel-fig">Fig. 01</span>
+              <span id="reel-caption">Press a letter and the shape lands. Drag from its edge for what usually comes next.</span>
+            </figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- ================================================================
+           THE THREE TRADES, from docs/reference/architecture.md, drawn the
+           way the canvas draws a relationship: the hinge word is the
+           connector's caption, and the one concession is dashed.
+      ================================================================= -->
+      <section class="trades" aria-labelledby="trades-title">
+        <h2 class="overline reveal" id="trades-title">Three opinions, held on purpose</h2>
+        <ul class="trade-list">
+          <li class="trade reveal">
+            <span class="trade-a">Speed</span>
+            <span class="trade-wire"><span class="trade-cap">over</span></span>
             <span class="trade-b">completeness</span>
           </li>
-          <li class="reveal">
-            <span class="trade-a"><span class="trade-n" aria-hidden="true">2</span>opinion</span>
-            <span class="trade-edge">
-              <span class="trade-edge-word">over</span>
-              <svg class="trade-wire" viewBox="0 0 180 22" aria-hidden="true" focusable="false">
-                <path d="M2 11h170" /><path class="head" d="M168 6.5l9 4.5-9 4.5z" />
-              </svg>
-            </span>
+          <li class="trade reveal">
+            <span class="trade-a">Opinion</span>
+            <span class="trade-wire"><span class="trade-cap">over</span></span>
             <span class="trade-b">configurability</span>
           </li>
-          <li class="reveal">
-            <span class="trade-a"><span class="trade-n" aria-hidden="true">3</span>throwaway</span>
-            <span class="trade-edge">
-              <span class="trade-edge-word">but</span>
-              <svg class="trade-wire" viewBox="0 0 180 22" aria-hidden="true" focusable="false">
-                <path class="dash" d="M2 11h170" /><path class="head" d="M168 6.5l9 4.5-9 4.5z" />
-              </svg>
-            </span>
+          <li class="trade trade-dashed reveal">
+            <span class="trade-a">Throwaway</span>
+            <span class="trade-wire"><span class="trade-cap">but</span></span>
             <span class="trade-b">exportable</span>
           </li>
         </ul>
+        <p class="trades-note reveal">
+          For the diagram a meeting needs in the next thirty seconds — and the one worth keeping
+          after it.
+        </p>
       </section>
 
       <!-- ================================================================
-           THE DOWNLOADS. Two places it runs, and what each one actually does.
+           GET IT. Two doors into the same editor, and the file that walks
+           between them.
       ================================================================= -->
       <section class="get" id="get" aria-labelledby="get-title">
-        <header class="slate reveal">
-          <p class="overline">Free, open source, Apache 2.0</p>
-          <h2 id="get-title">Use it where you work</h2>
-          <p class="sub">Two doors into the same editor</p>
+        <header class="section-head reveal">
+          <p class="overline">Free and open source · Apache 2.0</p>
+          <h2 id="get-title">Open a tab. <em>Or a window of its own.</em></h2>
         </header>
 
-        <div class="dists">
-          <div class="dist-doors">
-            <article class="dist dist-lead reveal" id="web">
-              <p class="dist-kicker">01 · Browser</p>
-              <h3>Open a tab and draw</h3>
-              <p>
-                No account, no sign-up. Diagrams are saved in this browser's own storage, on this
-                device, and the page keeps working once it has loaded with the network off.
-              </p>
-              <p class="dist-act">
-                <a class="button button-primary" href="./editor/">Open live editor</a>
-              </p>
-              <p class="dist-fine">Clearing site data clears them — export what you want to keep.</p>
-            </article>
+        <div class="doors reveal">
+          <article class="door" id="web">
+            <p class="door-kicker">In your browser</p>
+            <h3>Nothing to install</h3>
+            <ul class="door-facts">
+              <li>No account, no sign-up.</li>
+              <li>Saved in this browser, on this device.</li>
+              <li>Keeps working offline once it has loaded.</li>
+            </ul>
+            <div class="door-act">
+              <a class="button button-primary" href="./editor/">Open live editor</a>
+            </div>
+            <p class="door-fine">Clearing site data clears your diagrams — export the ones you want to keep.</p>
+          </article>
 
-            <!-- The seam between the two doors, drawn as what crosses it: the file. Nothing syncs, so
-                 the connector is the export-and-open a person does by hand, in both directions. -->
-            <p class="dist-seam" aria-label="A diagram moves between them as a .draftcanvas file">
-              <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" focusable="false"><path d="M2.5 5.5h10M10 3l2.5 2.5L10 8M13.5 10.5h-10M6 8l-2.5 2.5L6 13" /></svg>
-              <span>.draftcanvas</span>
-            </p>
+          <!-- The seam between the two doors, drawn as what crosses it: the file. Nothing syncs, so
+               the connector is the export-and-open a person does by hand, in both directions. -->
+          <p class="seam" aria-label="A diagram moves between them as a .draftcanvas file">
+            <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" focusable="false"><path d="M2.5 5.5h10M10 3l2.5 2.5L10 8M13.5 10.5h-10M6 8l-2.5 2.5L6 13" /></svg>
+            <span>.draftcanvas</span>
+          </p>
 
-            <article class="dist reveal" id="desktop">
-              <p class="dist-kicker">02 · Desktop</p>
-              <h3>A window of its own</h3>
-              <p>
-                Your diagrams as ordinary <code>.draftcanvas</code> files on disk, one per diagram and
-                folders as projects, with a Quick Draft from the menu bar or system tray. It updates
-                itself, and opens with no network at all.
-              </p>
-              <div class="dist-act">
-                <details class="downloads" id="downloads">
-                  <summary class="button downloads-summary">
-                    <span class="downloads-label">Download desktop</span>
-                    <svg class="downloads-caret" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-                      <path d="M4 6.5l4 4 4-4" />
-                    </svg>
-                  </summary>
-                  <ul class="targets" id="targets">
-                    <li>
-                      <a data-slug="macos-arm64" href="https://github.com/acltabontabon/draft-canvas/releases/download/v__VERSION__/Draft-Canvas___VERSION___macOS_arm64.dmg">
-                        <strong>macOS</strong><span>Apple silicon · .dmg</span>
-                      </a>
-                    </li>
-                    <li>
-                      <a data-slug="macos-x64" href="https://github.com/acltabontabon/draft-canvas/releases/download/v__VERSION__/Draft-Canvas___VERSION___macOS_x64.dmg">
-                        <strong>macOS</strong><span>Intel · .dmg</span>
-                      </a>
-                    </li>
-                    <li>
-                      <a data-slug="windows-x64" href="https://github.com/acltabontabon/draft-canvas/releases/download/v__VERSION__/Draft-Canvas___VERSION___Windows_x64.exe">
-                        <strong>Windows</strong><span>x64 · installer</span>
-                      </a>
-                    </li>
-                  </ul>
-                </details>
-              </div>
-              <p class="dist-fine">Or install on macOS with Homebrew:</p>
-              <code class="dist-cmd">brew install --cask acltabontabon/tap/draft-canvas</code>
-              <p class="dist-fine dist-meta">
-                <span>v__VERSION__ · stable</span>
-                <a href="https://github.com/acltabontabon/draft-canvas/releases">All releases</a>
-              </p>
-            </article>
-          </div>
-
-          <!-- Not a third door: the browser editor, served from somewhere you choose. -->
-          <div class="dist-host reveal">
-            <p class="dist-kicker">Or run the browser editor yourself</p>
-            <p>
-              Build the static web editor and serve it on your own network.
-              <a href="./docs/self-hosting/">Self-hosting guide</a>
-            </p>
-            <code class="dist-cmd">npm ci &amp;&amp; npm run build</code>
-          </div>
+          <article class="door" id="desktop">
+            <p class="door-kicker">On your desktop</p>
+            <h3>A window of its own</h3>
+            <ul class="door-facts">
+              <li>Diagrams as plain files on disk, folders as projects.</li>
+              <li>A Quick Draft from the menu bar or system tray.</li>
+              <li>Connect Claude Code, Codex or Cursor in one click.</li>
+            </ul>
+            <div class="door-act">
+              <details class="downloads" id="downloads">
+                <summary class="button downloads-summary">
+                  <span class="downloads-label">Download desktop</span>
+                  <svg class="downloads-caret" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                    <path d="M4 6.5l4 4 4-4" />
+                  </svg>
+                </summary>
+                <ul class="targets" id="targets">
+                  <li>
+                    <a data-slug="macos-arm64" href="https://github.com/acltabontabon/draft-canvas/releases/download/v__VERSION__/Draft-Canvas___VERSION___macOS_arm64.dmg">
+                      <strong>macOS</strong><span>Apple silicon · .dmg</span>
+                    </a>
+                  </li>
+                  <li>
+                    <a data-slug="macos-x64" href="https://github.com/acltabontabon/draft-canvas/releases/download/v__VERSION__/Draft-Canvas___VERSION___macOS_x64.dmg">
+                      <strong>macOS</strong><span>Intel · .dmg</span>
+                    </a>
+                  </li>
+                  <li>
+                    <a data-slug="windows-x64" href="https://github.com/acltabontabon/draft-canvas/releases/download/v__VERSION__/Draft-Canvas___VERSION___Windows_x64.exe">
+                      <strong>Windows</strong><span>x64 · installer</span>
+                    </a>
+                  </li>
+                </ul>
+              </details>
+              <span class="door-version">v__VERSION__ <a href="https://github.com/acltabontabon/draft-canvas/releases">All releases</a></span>
+            </div>
+            <p class="door-fine">Or on a Mac, with Homebrew:</p>
+            <code class="door-cmd">brew install --cask acltabontabon/tap/draft-canvas</code>
+          </article>
         </div>
 
-        <p class="dist-note">
-          <strong>Desktop installers aren&rsquo;t code-signed yet.</strong> macOS and Windows warn you
-          the first time &mdash; <a href="./docs/desktop/#installing">here&rsquo;s how to get past it</a>.
-        </p>
-
-        <aside class="local reveal">
-          <h3>Local-first, exactly</h3>
-          <div class="local-grid">
-            <p>
-              <strong>In the browser,</strong> diagrams live in this browser&rsquo;s storage. Need one
-              protected at rest? Export it as <code>.dcenc</code>.
-            </p>
-            <p>
-              <strong>On the desktop,</strong> the file on disk is the storage: plain JSON you can
-              move, diff and back up.
-            </p>
-            <p>
-              <strong>No network calls of its own.</strong> A test fails the build on any, and the
-              page&rsquo;s security policy forbids them. <a href="./docs/privacy/">What&rsquo;s stored, in detail</a>.
-            </p>
-          </div>
-        </aside>
-      </section>
-
-      <!-- ================================================================
-           THE INVITATION.
-      ================================================================= -->
-      <section class="closing reveal" aria-labelledby="closing-title">
-        <svg class="closing-wire" viewBox="0 0 260 56" aria-hidden="true" focusable="false">
-          <path d="M6 28h34" />
-          <rect x="40" y="13" width="56" height="30" rx="7" />
-          <path class="dash" d="M96 28h30" /><path class="head" d="M119 23.5l8 4.5-8 4.5z" />
-          <path d="M126 12h34a16 16 0 010 32h-34a16 16 0 010-32z" />
-          <path class="dash" d="M176 28h30" /><path class="head" d="M199 23.5l8 4.5-8 4.5z" />
-          <rect x="206" y="13" width="48" height="30" rx="7" />
-        </svg>
-        <h2 id="closing-title">Go on &mdash; draw something.</h2>
-        <p>The next meeting will need a diagram. Be ready in four seconds.</p>
-        <p class="closing-actions">
-          <a class="button button-primary button-lg" href="./editor/">Open live editor</a>
-          <a class="button button-lg" href="#get">Download desktop</a>
-        </p>
+        <ul class="fine-print reveal">
+          <li>
+            <strong>Installers aren&rsquo;t code-signed yet.</strong> macOS and Windows warn you the
+            first time — <a href="./docs/desktop/#installing">here&rsquo;s how to get past it</a>.
+          </li>
+          <li>
+            <strong>No network calls of its own.</strong> A test fails the build on any.
+            <a href="./docs/privacy/">What&rsquo;s stored, in detail</a>.
+          </li>
+          <li>
+            <strong>Prefer your own server?</strong> Build the web editor and serve it anywhere.
+            <a href="./docs/self-hosting/">Self-hosting</a>.
+          </li>
+        </ul>
       </section>
     </main>
 

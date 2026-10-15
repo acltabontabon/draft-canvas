@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "art": "node scripts/hero-art.mjs",
     "clips": "node scripts/clips.mjs",
     "social": "node scripts/social-card.mjs"
   },

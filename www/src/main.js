@@ -1,11 +1,12 @@
 /**
  * The site's behaviour, all of it optional.
  *
- * Every section reads, and every link works, with this file blocked: the reveal animation only
- * removes an opacity, the demo tabs fall back to one clip with its own controls, the download rows
- * are real links in the HTML before anything here runs, and the notice for returning visitors is
- * the only thing that is not in the markup at all — because it should not be shown to someone
- * arriving for the first time.
+ * Every section reads, and every link works, with this file blocked: the hero draws itself in CSS,
+ * the reveal only hides what it is about to show (and only when scripting is on, see styles.css),
+ * the reel falls back to an ordinary player on its first clip with all six features listed beside
+ * it, the download rows are real links in the HTML before anything here runs, and the notice for
+ * returning visitors is the only thing that is not in the markup at all — because it should not be
+ * shown to someone arriving for the first time.
  */
 
 import { setUpDownloads } from './downloads.js';
@@ -43,11 +44,11 @@ function setUpReveal() {
    * The safety net, and the reason this is not just the observer.
    *
    * An IntersectionObserver only samples at frame boundaries, so anything the viewport crosses
-   * *entirely* within one frame never reports as intersecting — a jump to `#export`, an End key,
-   * a restored scroll position on reload. The element would then sit at opacity 0 for as long as
-   * the page is open, which is a section of the page silently missing rather than a missing
-   * animation. This sweeps up anything the viewport has already passed, and takes itself off the
-   * moment there is nothing left to reveal.
+   * *entirely* within one frame never reports as intersecting — a jump to `#get`, an End key, a
+   * restored scroll position on reload. The element would then sit at opacity 0 for as long as the
+   * page is open, which is a section of the page silently missing rather than a missing animation.
+   * This sweeps up anything the viewport has already passed, and takes itself off the moment there
+   * is nothing left to reveal.
    */
   let queued = false;
   const sweep = () => {
@@ -69,107 +70,6 @@ function setUpReveal() {
   onScroll();
 }
 
-/* ── The spine ──────────────────────────────────────────────────────────────────────────── */
-
-const SVG_NS = 'http://www.w3.org/2000/svg';
-
-function svgEl(name, attributes) {
-  const node = document.createElementNS(SVG_NS, name);
-  for (const [key, value] of Object.entries(attributes)) node.setAttribute(key, String(value));
-  return node;
-}
-
-/**
- * The connector that makes six sections one canvas.
- *
- * A routed line down the left margin with a stub and a junction at every chapter, built from where
- * the chapters actually are rather than from numbers written down here — so it stays right when a
- * paragraph grows, the window changes width, or a section is added. It draws in as you scroll, and
- * each junction lights when you reach it.
- *
- * Only at widths that have a margin to put it in. It is decoration, so it carries no meaning that
- * is not already in the headings, and it is hidden from assistive technology entirely.
- */
-function setUpSpine() {
-  const main = document.getElementById('main');
-  const wide = window.matchMedia('(min-width: 1240px)');
-  if (!main) return;
-
-  let svg = null;
-  let drawn = null;
-  let junctions = [];
-  let span = { origin: 0, top: 0, bottom: 0 };
-
-  function teardown() {
-    svg?.remove();
-    svg = null;
-    drawn = null;
-    junctions = [];
-  }
-
-  function build() {
-    teardown();
-    if (!wide.matches) return;
-
-    const mainTop = main.getBoundingClientRect().top + window.scrollY;
-    const slates = [...main.querySelectorAll('.chapter .slate, .get .slate')];
-    const stops = slates.map((slate) => Math.round(slate.getBoundingClientRect().top + window.scrollY - mainTop + 38));
-    if (stops.length < 2) return;
-
-    const top = stops[0] - 72;
-    const bottom = stops[stops.length - 1] + 150;
-    const height = main.offsetHeight;
-
-    svg = svgEl('svg', { class: 'spine', width: 44, height, viewBox: `0 0 44 ${height}`, 'aria-hidden': 'true', focusable: 'false' });
-    const route = `M22 ${top}V${bottom}`;
-    svg.append(svgEl('path', { class: 'track', d: route }));
-    for (const y of stops) svg.append(svgEl('path', { class: 'track', d: `M22 ${y}h8` }));
-
-    drawn = svgEl('path', { class: 'drawn', d: route });
-    drawn.style.strokeDasharray = String(bottom - top);
-    svg.append(drawn);
-
-    junctions = stops.map((y) => {
-      const dot = svgEl('circle', { class: 'junction', cx: 35, cy: y, r: 5 });
-      svg.append(dot);
-      return { dot, y };
-    });
-
-    svg.append(svgEl('path', { class: 'head', d: `M17.5 ${bottom - 9}h9l-4.5 9z` }));
-    main.prepend(svg);
-    span = { origin: mainTop, top: mainTop + top, bottom: mainTop + bottom };
-    update();
-  }
-
-  function update() {
-    if (!drawn) return;
-    // Two thirds down the viewport: the line arrives at a chapter at about the moment you start
-    // reading it, rather than after you already have.
-    const here = window.scrollY + window.innerHeight * 0.66;
-    const total = span.bottom - span.top;
-    const progress = Math.min(1, Math.max(0, (here - span.top) / total));
-    drawn.style.strokeDashoffset = String(total * (1 - progress));
-    for (const { dot, y } of junctions) {
-      dot.classList.toggle('passed', here >= span.origin + y);
-    }
-  }
-
-  let queued = false;
-  const onScroll = () => {
-    if (queued) return;
-    queued = true;
-    requestAnimationFrame(() => {
-      queued = false;
-      update();
-    });
-  };
-
-  build();
-  window.addEventListener('scroll', onScroll, { passive: true });
-  if ('ResizeObserver' in window) new ResizeObserver(build).observe(main);
-  wide.addEventListener?.('change', build);
-}
-
 /* ── Masthead ───────────────────────────────────────────────────────────────────────────── */
 
 function setUpMasthead() {
@@ -182,126 +82,173 @@ function setUpMasthead() {
   window.addEventListener('scroll', onScroll, { passive: true });
 }
 
-/* ── The demo ───────────────────────────────────────────────────────────────────────────── */
+/* ── The reel ───────────────────────────────────────────────────────────────────────────── */
 
-const CAPTIONS = {
-  draw: 'Press a letter, the shape lands. Drag from its edge and it offers what usually comes next; <kbd>Tab</kbd> takes it.',
-  compose: 'Ask the palette for a pattern. A whole CQRS architecture lands laid out, wired, and ready to present.',
-  present: 'A flow, one step at a time. Each step brings its own notes and code; the rest dims.',
-  inside: '<kbd>⌘↓</kbd> steps inside a shape, for the detail the overview shouldn&rsquo;t carry.',
-  io: 'Paste a Mermaid flowchart and it lands laid out. Send it back out as C4-PlantUML, Structurizr or a link.',
-};
-
-function setUpDemo() {
-  const tabs = [...document.querySelectorAll('.demo-tab')];
-  const video = document.getElementById('demo-video');
-  const caption = document.getElementById('demo-caption');
-  const panel = document.getElementById('demo-panel');
-  if (!tabs.length || !video) return;
-
-  let loaded = false;
-
-  /** Swapping `src` on a <video> that has never loaded is free; on one that has, it is one request
-   *  for a file of a few hundred kilobytes. Either way nothing is fetched until this is called. */
-  function load(clip, { play }) {
-    video.poster = `./clips/${clip}.jpg`;
-    video.src = `./clips/${clip}.mp4`;
-    loaded = true;
-    if (!play) return;
-    // Autoplay can be refused — a data-saver setting, a browser policy, a user preference. The
-    // poster and the controls are already on screen, so a refusal needs no handling beyond not
-    // throwing.
-    video.play().catch(() => {});
-  }
-
-  function select(tab, { focus = true } = {}) {
-    for (const other of tabs) {
-      const chosen = other === tab;
-      other.setAttribute('aria-selected', String(chosen));
-      other.tabIndex = chosen ? 0 : -1;
-    }
-    panel?.setAttribute('aria-labelledby', tab.id);
-    if (caption) caption.innerHTML = CAPTIONS[tab.dataset.clip] ?? '';
-    load(tab.dataset.clip, { play: !reduceMotion.matches });
-    if (focus) tab.focus();
-  }
-
-  for (const tab of tabs) {
-    tab.addEventListener('click', () => select(tab, { focus: false }));
-    tab.addEventListener('keydown', (event) => {
-      const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
-      if (!step) return;
-      event.preventDefault();
-      select(tabs[(tabs.indexOf(tab) + step + tabs.length) % tabs.length]);
-    });
-  }
-
-  // Nothing is downloaded until the demo is actually on screen, and on a connection the visitor has
-  // asked to go easy on, not even then — they get the poster and a play button like anyone who
-  // would rather decide for themselves.
-  const thrifty = navigator.connection?.saveData === true;
-  if (!('IntersectionObserver' in window)) {
-    load('draw', { play: false });
-    return;
-  }
-
-  const observer = new IntersectionObserver(
-    (entries) => {
-      for (const entry of entries) {
-        if (!entry.isIntersecting || loaded) continue;
-        load('draw', { play: !reduceMotion.matches && !thrifty });
-        observer.disconnect();
-      }
-    },
-    { threshold: 0.25 },
-  );
-  observer.observe(video);
-}
-
-/* ── The revision ───────────────────────────────────────────────────────────────────────── */
+/** How long the one still in the reel stays up, against clips that run eight to twenty seconds. */
+const STILL_MS = 7000;
 
 /**
- * Plays the agent chapter's exchange once, when enough of it is on screen to be watched — the
- * request typed, the diagram drawn, the proposal pencilled in and clouded, then accepted and inked.
+ * Six features, one frame. Each clip plays to its end and hands over to the next, and the hairline
+ * above the chosen feature fills as it goes — a reel you can watch without touching, or step through
+ * by choosing a feature.
  *
- * Without this, or with motion unwelcome, the stage simply rests on the proposal waiting for review,
- * which is the frame that says the most. Replay restarts it by taking the class off and putting it
- * back on the next frame, after a reflow, so every animation starts again from its first keyframe.
+ * It only runs while it is on screen and the tab is visible, nothing is downloaded until it has been
+ * on screen at all, and it never starts on its own for someone who has asked for less motion or less
+ * data: they get the poster, the list, and a play button. The button is always there, because
+ * anything that moves by itself for more than a few seconds has to be stoppable.
  */
-function setUpRevision() {
-  const stage = document.getElementById('rev-stage');
-  const replay = document.getElementById('rev-replay');
-  if (!stage || reduceMotion.matches || !('IntersectionObserver' in window)) return;
+function setUpReel() {
+  const tabs = [...document.querySelectorAll('.reel-tab')];
+  const stage = document.getElementById('reel-stage');
+  const video = document.getElementById('reel-video');
+  const still = document.getElementById('reel-still');
+  const caption = document.getElementById('reel-caption');
+  const figure = document.getElementById('reel-fig');
+  const toggle = document.getElementById('reel-toggle');
+  if (!tabs.length || !stage || !video || !still || !toggle) return;
 
-  // Armed now, held on its first frame, so the finished picture never shows and then resets.
-  stage.classList.add('play');
+  video.controls = false;
+  toggle.hidden = false;
 
-  const play = () => {
-    stage.classList.remove('play', 'running');
-    void stage.offsetWidth;
-    stage.classList.add('play', 'running');
-  };
+  let current = 0;
+  let running = !reduceMotion.matches && navigator.connection?.saveData !== true;
+  let onScreen = !('IntersectionObserver' in window);
+  let stillElapsed = 0;
+  let lastTick = 0;
+  let frame = 0;
 
-  // Most of it in view — or, where it is stacked taller than the window, most of the window full of
-  // it. A ratio alone never arrives on a short screen, and the stage would wait on its first frame.
-  const observer = new IntersectionObserver(
-    (entries) => {
-      const seen = entries.some(
-        (entry) =>
-          entry.isIntersecting &&
-          (entry.intersectionRatio >= 0.45 || entry.intersectionRect.height >= (entry.rootBounds?.height ?? window.innerHeight) * 0.6),
-      );
-      if (!seen) return;
-      observer.disconnect();
-      stage.classList.add('running');
-    },
-    { threshold: Array.from({ length: 21 }, (_, step) => step / 20) },
-  );
-  observer.observe(stage);
+  const isStill = (tab) => 'still' in tab.dataset;
+  const live = () => running && onScreen && !document.hidden;
 
-  if (replay) {
-    replay.hidden = false;
-    replay.addEventListener('click', play);
+  function tick(now) {
+    const tab = tabs[current];
+    let progress = 0;
+    if (isStill(tab)) {
+      stillElapsed += now - lastTick;
+      progress = stillElapsed / STILL_MS;
+      if (progress >= 1) {
+        show(current + 1);
+        return;
+      }
+    } else if (video.duration) {
+      progress = video.currentTime / video.duration;
+    }
+    lastTick = now;
+    tab.style.setProperty('--p', String(Math.min(1, progress)));
+    frame = requestAnimationFrame(tick);
+  }
+
+  function sync() {
+    if (!isStill(tabs[current])) {
+      // Autoplay can be refused — a browser policy, a power setting. The poster is already up, and
+      // the toggle still works, so a refusal needs nothing beyond not throwing.
+      if (live()) video.play().catch(() => {});
+      else video.pause();
+    }
+    toggle.dataset.state = running ? 'playing' : 'paused';
+    toggle.setAttribute('aria-label', running ? 'Pause the reel' : 'Play the reel');
+    cancelAnimationFrame(frame);
+    if (live()) {
+      lastTick = performance.now();
+      frame = requestAnimationFrame(tick);
+    }
+  }
+
+  function show(index, { focus = false } = {}) {
+    current = (index + tabs.length) % tabs.length;
+    const tab = tabs[current];
+    tabs.forEach((other, position) => {
+      const chosen = position === current;
+      other.setAttribute('aria-selected', String(chosen));
+      other.tabIndex = chosen ? 0 : -1;
+      other.style.removeProperty('--p');
+    });
+    // Running, the playhead starts empty; held, the chosen feature's hairline is simply drawn.
+    if (running) tab.style.setProperty('--p', '0');
+    stage.setAttribute('aria-labelledby', tab.id);
+    if (caption) caption.textContent = tab.dataset.caption ?? '';
+    if (figure) figure.textContent = `Fig. ${String(current + 1).padStart(2, '0')}`;
+    stillElapsed = 0;
+
+    if (isStill(tab)) {
+      video.pause();
+      video.hidden = true;
+      if (still.getAttribute('src') !== tab.dataset.still) still.src = tab.dataset.still;
+      still.alt = tab.dataset.caption ?? '';
+      still.hidden = false;
+    } else {
+      still.hidden = true;
+      video.hidden = false;
+      if (video.getAttribute('src') !== tab.dataset.video) {
+        video.poster = tab.dataset.poster ?? '';
+        video.src = tab.dataset.video;
+      } else if (video.readyState > 0) {
+        video.currentTime = 0;
+      }
+    }
+    if (focus) tab.focus();
+    sync();
+  }
+
+  video.addEventListener('ended', () => {
+    if (running) show(current + 1);
+  });
+
+  tabs.forEach((tab, position) => {
+    tab.addEventListener('click', () => show(position));
+    tab.addEventListener('keydown', (event) => {
+      const step = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[event.key];
+      const to = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : step ? position + step : null;
+      if (to === null) return;
+      event.preventDefault();
+      show(to, { focus: true });
+    });
+  });
+
+  toggle.addEventListener('click', () => {
+    running = !running;
+    if (running) tabs[current].style.setProperty('--p', String(isStill(tabs[current]) ? stillElapsed / STILL_MS : 0));
+    sync();
+  });
+
+  document.addEventListener('visibilitychange', sync);
+
+  // `#export`, `#agents` and the rest are the features' own addresses: arriving at one, or following
+  // a link to one, opens it. The browser would scroll the tab itself to the top of the window and
+  // leave the frame showing it above the fold, so the whole reel is brought into view instead.
+  const reel = stage.closest('.reel') ?? stage;
+  const fromHash = () => tabs.findIndex((tab) => `#${tab.id}` === window.location.hash);
+  const opened = (smooth) =>
+    reel.scrollIntoView({
+      // Centred where it fits with room to spare; on a phone, where it is stacked taller than the
+      // window, from the top, so the frame comes first.
+      block: reel.offsetHeight < window.innerHeight - 140 ? 'center' : 'start',
+      behavior: smooth && !reduceMotion.matches ? 'smooth' : 'auto',
+    });
+  window.addEventListener('hashchange', () => {
+    const index = fromHash();
+    if (index < 0) return;
+    show(index);
+    opened(true);
+  });
+
+  if ('IntersectionObserver' in window) {
+    new IntersectionObserver(
+      (entries) => {
+        onScreen = entries.some((entry) => entry.isIntersecting);
+        sync();
+      },
+      { threshold: 0.35 },
+    ).observe(stage);
+  }
+
+  const arrivedAt = fromHash();
+  show(Math.max(0, arrivedAt));
+  if (arrivedAt >= 0) {
+    // After the browser's own jump to the fragment, which it makes once the page has loaded.
+    const settle = () => requestAnimationFrame(() => opened(false));
+    if (document.readyState === 'complete') settle();
+    else window.addEventListener('load', settle, { once: true });
   }
 }
 
@@ -410,10 +357,8 @@ async function setUpReturningVisitor() {
 /* ── Go ─────────────────────────────────────────────────────────────────────────────────── */
 
 setUpReveal();
-setUpSpine();
 setUpMasthead();
-setUpDemo();
-setUpRevision();
+setUpReel();
 setUpDownloads();
 void retireFormerWorker();
 void setUpReturningVisitor();
