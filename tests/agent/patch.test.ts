@@ -149,8 +149,11 @@ describe('notes and flows through update_diagram', () => {
     expect(note.x >= sys.x && note.y >= sys.y && note.x + note.width <= sys.x + sys.width && note.y + note.height <= sys.y + sys.height).toBe(true);
   });
 
-  it('refuses to attach a note to a boundary, and says so with the fix', () => {
-    const error = refusal(() => applyUpdate(base(), [], [{ op: 'add', notes: [{ id: 'x', text: 'y', about: 'sys', attach: true }] }], undefined));
+  it('attaches a note to a boundary itself with attach: true (its Add Note), and refuses a label there with the fix', () => {
+    const { file: next } = applyUpdate(base(), [], [{ op: 'add', notes: [{ id: 'x', text: 'y', about: 'sys', attach: true }] }], undefined);
+    expect(next.nodes.find((n) => n.id === 'sys')!.attachments?.[0]).toMatchObject({ id: 'x', type: 'note', text: 'y' });
+    expect(next.nodes.some((n) => n.id === 'x')).toBe(false);
+    const error = refusal(() => applyUpdate(base(), [], [{ op: 'add', notes: [{ id: 'x', kind: 'label', text: 'y', about: 'sys', attach: true }] }], undefined));
     expect(error.code).toBe('UNSUPPORTED');
     expect(error.message).toContain('leave attach out');
   });
@@ -194,7 +197,7 @@ describe('notes and flows through update_diagram', () => {
     const flow = file.flows[0]!;
     file.flows[0] = { ...flow, steps: [{ id: 'f.frame', viewport: { x: 0, y: 0, zoom: 1 } }, ...flow.steps] };
     const read = readDiagram(file, {}, 'f:1', 'd').flows as { steps: unknown[] }[];
-    expect(read[0]!.steps[0]).toEqual({ frame: 'f.frame' });
+    expect(read[0]!.steps[0]).toEqual({ frame: 'f.frame', pinnedView: true });
     const next = applyUpdate(file, [], [{ op: 'update', id: 'f', set: { steps: read[0]!.steps } }], undefined).file.flows[0]!;
     expect(next.steps).toEqual(file.flows[0]!.steps);
   });

@@ -15,6 +15,7 @@ import type {
   DatabaseKind,
   DraftNode,
   DraftNodeType,
+  EdgeRouting,
   QueueKind,
   ServiceKind,
 } from '../document/types';
@@ -188,3 +189,20 @@ export function groupKindOf(preset: BoundaryPreset | undefined): string {
 }
 
 export const NOTE_KIND_NAMES = ['note', 'question', 'warning', 'decision'] as const;
+
+/**
+ * What a note in a request may be, as reads report it: one of the note kinds, a code snippet
+ * (`code`, the editor's Code card) or a plain label (`label`, the editor's Text element). All three
+ * attach to what they are about, or stand on the canvas, exactly as the editor's cards do.
+ */
+export const NOTE_FORM_NAMES = [...NOTE_KIND_NAMES, 'code', 'label'] as const;
+export type NoteFormName = (typeof NOTE_FORM_NAMES)[number];
+
+/** A connector's line, by the names the inspector shows (Stepped, Curved, Straight). */
+export const LINE_STYLES = { stepped: 'smoothstep', curved: 'bezier', straight: 'straight' } as const satisfies Record<string, EdgeRouting>;
+export type LineStyleName = keyof typeof LINE_STYLES;
+export const LINE_STYLE_NAMES = Object.keys(LINE_STYLES) as LineStyleName[];
+
+export function lineStyleOf(routing: EdgeRouting): LineStyleName {
+  return (Object.entries(LINE_STYLES) as [LineStyleName, EdgeRouting][]).find(([, native]) => native === routing)?.[0] ?? 'stepped';
+}

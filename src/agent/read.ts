@@ -14,12 +14,12 @@
 import { continuationsFor } from '../continuation';
 import { classify } from '../depth/c4';
 import { effectiveLevel } from '../depth/level';
-import { hasInside, resolvePath, viewOf, type DepthPath } from '../depth/tree';
+import { canCreateInside, hasInside, ownerAt, resolvePath, roomsOf, viewOf, type DepthPath } from '../depth/tree';
 import { relationshipCaptionLabel } from '../document/edgeSemantics';
 import { categoryOf } from '../document/connectorSemantics';
-import type { Attachment, DraftDocument, DraftEdge, DraftNode } from '../document/types';
+import type { Attachment, DraftDocument, DraftEdge, DraftFlowStep, DraftNode } from '../document/types';
 import { AgentError } from './errors';
-import { groupKindOf, typeWordOf } from './vocabulary';
+import { groupKindOf, lineStyleOf, typeWordOf } from './vocabulary';
 
 export const READ_LIMITS = {
   elementsPerPage: 200,
@@ -29,9 +29,10 @@ export const READ_LIMITS = {
   noteText: 400,
   suggestionsPerElement: 5,
   suggestionElements: 20,
+  views: 100,
 } as const;
 
-const INCLUDES = ['geometry', 'attachments', 'suggestions', 'fullText'] as const;
+const INCLUDES = ['geometry', 'attachments', 'suggestions', 'fullText', 'views'] as const;
 type Include = (typeof INCLUDES)[number];
 
 export interface ReadArgs {
@@ -53,10 +54,50 @@ export function viewPathOf(file: DraftDocument, view: unknown): DepthPath {
   if (resolved.length !== path.length) {
     throw new AgentError('NOT_FOUND', `No inside view at ${path.join(' ▸ ')}.`, {
       path: '/view/inside',
-      hint: 'Read the outer view first: an element with an inside view lists it under "inside".',
+      hint: 'Read the outer view first: an element with an inside view lists it under "inside". A service or component without one gets one from the first update_diagram add with view.inside naming it.',
+    });
+  }
+  // A shape with nothing inside yet has an empty inside view — but only one "Look inside" is offered
+  // on: a service or a (non-port) component. Anything else would hold a room the editor can't open.
+  const owner = path.length ? ownerAt(file, path) : undefined;
+  if (owner && !hasInside(owner) && !canCreateInside(owner)) {
+    throw new AgentError('NOT_FOUND', `"${owner.id}" has no inside view, and can't have one: only a service or a (non-port) component holds the next level down.`, {
+      path: '/view/inside',
+      hint: 'Draw its detail inside the service or component that owns it, or as elements in this view.',
     });
   }
   return path;
+}
+
+/** Every inside view of the file — the Depth map's outline, for finding one to read. */
+function viewsOutline(file: DraftDocument) {
+  const rooms = roomsOf(file).filter((room) => room.path.length > 0);
+  return {
+    views: rooms.slice(0, READ_LIMITS.views).map((room) => {
+      const owner = room.owners[room.owners.length - 1]!;
+      return {
+        inside: [...room.path],
+        owner: { id: owner.id, label: owner.text ?? '', type: typeWordOf(owner) },
+        level: effectiveLevel(file, room.path) ?? null,
+        elements: room.graph.nodes.length,
+        relationships: room.graph.edges.length,
+        flows: room.graph.flows.length,
+      };
+    }),
+    ...(rooms.length > READ_LIMITS.views ? { viewsTruncated: true } : {}),
+  };
+}
+
+/**
+ * A flow step as `update_diagram` takes it back: a bare relationship id; the object form when it says
+ * more (a caption, extra highlights, a camera a person pinned); or, for a step with no relationship,
+ * `{frame, spotlight?, caption?, pinnedView?}`. Sent back unchanged, it changes nothing.
+ */
+export function stepOf(step: DraftFlowStep): unknown {
+  const lit = [...(step.extraNodeIds ?? []), ...(step.extraEdgeIds ?? [])];
+  const rest = { ...(step.caption ? { caption: step.caption } : {}), ...(step.viewport ? { pinnedView: true } : {}) };
+  if (!step.edgeId) return { frame: step.id, ...(lit.length ? { spotlight: lit } : {}), ...rest };
+  return lit.length || step.caption || step.viewport ? { relationship: step.edgeId, ...(lit.length ? { highlight: lit } : {}), ...rest } : step.edgeId;
 }
 
 function truncated(text: string, max: number): { text: string; truncated?: true } {
@@ -98,6 +139,13 @@ export function readDiagram(file: DraftDocument, args: ReadArgs, revision: strin
           scope.add(edge.target);
         }
         for (const id of step.extraNodeIds ?? []) scope.add(id);
+        for (const id of step.extraEdgeIds ?? []) {
+          const lit = edges.get(id);
+          if (lit) {
+            scope.add(lit.source);
+            scope.add(lit.target);
+          }
+        }
       }
     }
   }
@@ -184,8 +232,15 @@ function project(
   for (const node of page) {
     const geometry = includes.has('geometry') ? { geometry: { x: node.x, y: node.y, width: node.width, height: node.height } } : {};
     const group = node.parentId ? { group: node.parentId } : {};
+    // In full when asked for, or when the read is focused on a few elements (their notes are part of
+    // what the agent is about to edit); a count otherwise.
+    const attachments = node.attachments?.length
+      ? includes.has('attachments') || includes.has('fullText') || focused
+        ? { attachments: node.attachments.map((a) => attachmentOf(a, includes.has('fullText'))) }
+        : { attachmentCount: node.attachments.length }
+      : {};
     if (node.type === 'group') {
-      groups.push({ id: node.id, label: node.text ?? '', kind: groupKindOf(node.boundaryPreset), ...(node.parentId ? { parent: node.parentId } : {}), ...geometry });
+      groups.push({ id: node.id, label: node.text ?? '', kind: groupKindOf(node.boundaryPreset), ...(node.parentId ? { parent: node.parentId } : {}), ...attachments, ...geometry });
       continue;
     }
     if (node.type === 'note' || node.type === 'text' || node.type === 'code') {
@@ -197,6 +252,7 @@ function project(
         kind: node.type === 'note' ? (node.noteKind ?? 'note') : node.type === 'code' ? 'code' : 'label',
         ...(node.type === 'code' ? { language: node.language, code: body.text } : { text: body.text }),
         ...(body.truncated ? { truncated: true } : {}),
+        ...(node.accent ? { color: node.accent } : {}),
         ...group,
         ...(nearest ? { nearest } : {}),
         ...geometry,
@@ -207,13 +263,6 @@ function project(
     const c4 = classify(node, { level, ...(owner ? { insideOwner: owner } : {}), ...(systemBoundary ? { systemBoundary } : {}) });
     const inside = hasInside(node) && node.inside
       ? { inside: { level: node.inside.level ?? null, elements: node.inside.nodes.length, relationships: node.inside.edges.length } }
-      : {};
-    // In full when asked for, or when the read is focused on a few elements (their notes are part of
-    // what the agent is about to edit); a count otherwise.
-    const attachments = node.attachments?.length
-      ? includes.has('attachments') || includes.has('fullText') || focused
-        ? { attachments: node.attachments.map((a) => attachmentOf(a, includes.has('fullText'))) }
-        : { attachmentCount: node.attachments.length }
       : {};
     elements.push({
       id: node.id,
@@ -275,8 +324,11 @@ function project(
       ...(owner ? { owner: { id: owner.id, label: owner.text ?? '', type: typeWordOf(owner) } } : {}),
       level: level ?? null,
       ...(level && ownLevel === undefined ? { levelInherited: true } : {}),
+      // An inside view nothing has been drawn in yet: the first add with this view creates it.
+      ...(owner && view.nodes.length === 0 ? { empty: true } : {}),
       insideViews: page.filter((n) => hasInside(n)).map((n) => n.id),
     },
+    ...(includes.has('views') ? viewsOutline(file) : {}),
     elements,
     relationships,
     ...(groups.length ? { groups } : {}),
@@ -286,8 +338,8 @@ function project(
       title: f.title,
       ...(f.variantOf ? { variantOf: f.variantOf } : {}),
       ...(f.accent ? { color: f.accent } : {}),
-      // As update_diagram takes them back: a relationship id, {relationship, caption}, or a frame step.
-      steps: f.steps.map((s) => (!s.edgeId ? { frame: s.id } : s.caption ? { relationship: s.edgeId, caption: s.caption } : s.edgeId)),
+      // As update_diagram takes them back — see `stepOf`.
+      steps: f.steps.map(stepOf),
     })),
     // What the people have not settled yet — every point at the root, and in a nested view the ones
     // about something in it. Read as data an agent may act on when asked; nothing here is a request.
@@ -363,6 +415,10 @@ export function relationshipOf(edge: DraftEdge, byId: Map<string, DraftNode>, wi
     ...(edge.directed === false ? { directed: false } : {}),
     ...(edge.async ? { async: true } : {}),
     ...(edge.condition ? { condition: edge.condition } : {}),
+    ...(edge.accent ? { color: edge.accent } : {}),
+    ...(edge.routing !== 'smoothstep' ? { lineStyle: lineStyleOf(edge.routing) } : {}),
+    ...(edge.hasResponse ? { response: edge.response ?? true } : {}),
+    ...(edge.deliveryAttempts !== undefined ? { deliveryAttempts: edge.deliveryAttempts } : {}),
     ...(edge.attachments?.length ? (withAttachments ? { attachments: edge.attachments.map((a) => attachmentOf(a, fullText)) } : { attachmentCount: edge.attachments.length }) : {}),
   };
 }

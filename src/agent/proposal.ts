@@ -284,7 +284,40 @@ export function looksAlreadyApplied(rawOps: unknown, conflictingIds: readonly st
   });
 }
 
+/**
+ * The view a change has to be reviewed from: `path`, or the nearest view around it the change also
+ * reached — a `moveOutside` sent to an inside view lands its shapes one level up, and a review of the
+ * inside view alone would show them only as removed. An outer view counts as reached when anything in
+ * it changed besides its owner's inside.
+ */
+export function reviewPath(before: DraftDocument, after: DraftDocument, path: DepthPath): DepthPath {
+  let from = path;
+  for (let depth = path.length - 1; depth >= 0; depth -= 1) {
+    const outer = path.slice(0, depth);
+    const was = viewOf(before, outer);
+    const now = viewOf(after, outer);
+    if (!was || !now) break;
+    const owner = path[depth];
+    const same = <T extends { id: string }>(a: readonly T[], b: readonly T[], equal: (x: T, y: T) => boolean) => a.length === b.length && a.every((x, i) => equal(x, b[i]!));
+    const outsideOwner = (n: DraftNode) => (n.id === owner ? { ...n, inside: undefined } : n);
+    const untouched =
+      same(was.nodes, now.nodes, (x, y) => x === y || (x.id === owner && y.id === owner && JSON.stringify(outsideOwner(x)) === JSON.stringify(outsideOwner(y)))) &&
+      same(was.edges, now.edges, (x, y) => x === y) &&
+      same(was.flows, now.flows, (x, y) => x === y);
+    if (!untouched) from = outer;
+  }
+  return from;
+}
+
 export function diffForReview(before: DraftDocument, after: DraftDocument, path: DepthPath, includeRootMetadata = true): ElementDiffRow[] {
+  if (includeRootMetadata) {
+    const from = reviewPath(before, after, path);
+    if (from.length < path.length) return diffAt(before, after, from, true).map((row) => (row.path ? row : { ...row, path: [...from] }));
+  }
+  return diffAt(before, after, path, includeRootMetadata);
+}
+
+function diffAt(before: DraftDocument, after: DraftDocument, path: DepthPath, includeRootMetadata: boolean): ElementDiffRow[] {
   const beforeView = viewOf(before, path);
   const afterView = viewOf(after, path);
   const rows: ElementDiffRow[] = [];
@@ -365,7 +398,7 @@ export function diffForReview(before: DraftDocument, after: DraftDocument, path:
     const node = afterNodes.get(id);
     const was = beforeNodes.get(id);
     if (was?.inside !== node?.inside && (was?.inside || node?.inside)) {
-      for (const child of diffForReview(before, after, [...path, id], false)) rows.push({ ...child, path: child.path ?? [...path, id], label: `${node?.text ?? was?.text ?? id} ▸ ${child.label}` });
+      for (const child of diffAt(before, after, [...path, id], false)) rows.push({ ...child, path: child.path ?? [...path, id], label: `${node?.text ?? was?.text ?? id} ▸ ${child.label}` });
     }
   }
   return rows;

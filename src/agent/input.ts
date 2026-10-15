@@ -14,6 +14,7 @@ import {
   CONNECTOR_KINDS,
   EDGE_SEMANTICS,
   type Accent,
+  type AttachableType,
   type CodeLanguage,
   type ConnectorKind,
   type EdgeSemantic,
@@ -29,7 +30,7 @@ import { starterFor, starterIds } from './starter';
 import { isEvidence, EVIDENCE_LIMIT } from '../document/evidence';
 import type { SourceEvidence } from '../document/types';
 import { ROOM_FIELDS } from './fields';
-import { GROUP_KINDS, NOTE_KIND_NAMES, resolveType, suggestTypes, type NativeShape } from './vocabulary';
+import { GROUP_KINDS, LINE_STYLE_NAMES, NOTE_FORM_NAMES, NOTE_KIND_NAMES, resolveType, suggestTypes, type LineStyleName, type NativeShape } from './vocabulary';
 
 /** What one request may carry. Published through `get_capabilities` and the tool schemas. */
 export const AGENT_LIMITS = {
@@ -54,6 +55,11 @@ export const AGENT_LIMITS = {
   codeLength: 4_000,
   flowTitleLength: LIMITS.maxFlowTitleLength,
   captionLength: 120,
+  /** Extra elements, and extra relationships, one flow step may light (each, not together). */
+  highlightsPerStep: LIMITS.maxExtraMembersPerStep,
+  responseLength: LIMITS.maxResponseLength,
+  /** `deliveryAttempts` is a whole number in this range — the inspector's own stepper bounds. */
+  deliveryAttempts: { min: 1, max: 50 },
   insideDepth: LIMITS.maxInsideDepth,
 } as const;
 
@@ -93,6 +99,11 @@ export interface RelationshipSpec {
   directed?: boolean;
   async?: boolean;
   condition?: string;
+  color?: Accent;
+  lineStyle?: LineStyleName;
+  /** The reply line of a synchronous call: `true` draws it unlabelled, a string labels it. */
+  response?: string | true;
+  deliveryAttempts?: number;
   attachments?: AttachmentSpec[];
 }
 
@@ -110,7 +121,20 @@ export interface FlowSpec {
   /** The flow this is a named alternative telling of (e.g. a failure path) — see `setFlowVariantOf`
    *  for the hub-and-spoke rule this must still pass once the whole room has been read. */
   variantOf?: string;
-  steps: { relationship: string; caption?: string }[];
+  steps: StepSpec[];
+}
+
+/**
+ * One step of a new flow. A relationship step plays that connector and may light more with it
+ * (`extraNodeIds`/`extraEdgeIds`, the Flows panel's "+ Selection"). A spotlight step has no
+ * relationship: it lights just its extras — an overview, a boundary, a starting state — and the
+ * presentation frames them, as it does any step whose connector is gone.
+ */
+export interface StepSpec {
+  relationship?: string;
+  caption?: string;
+  extraNodeIds?: string[];
+  extraEdgeIds?: string[];
 }
 
 /**
@@ -122,8 +146,14 @@ export interface FlowSpec {
  */
 export interface NoteSpec {
   id: string;
+  /** The card it is in the editor: a note, a code snippet (`code` + `language`) or a Text label. */
+  type: AttachableType;
+  /** A note's or a label's words; empty for a code snippet. */
   text: string;
+  /** Note kind; `note` for a snippet or a label, which have none. */
   kind: NoteKind;
+  code?: string;
+  language?: CodeLanguage;
   near?: string;
   group?: string;
   attachTo?: { kind: 'node' | 'edge'; id: string };
@@ -221,7 +251,7 @@ export class Reader {
     return value;
   }
 
-  text(value: unknown, path: string, max: number, options: { required?: boolean; singleLine?: boolean } = {}): string | undefined {
+  text(value: unknown, path: string, max: number, options: { required?: boolean; singleLine?: boolean; code?: boolean } = {}): string | undefined {
     if (value === undefined || value === null) {
       if (options.required) this.problems.add('INVALID_INPUT', path, 'is required');
       return undefined;
@@ -234,7 +264,8 @@ export class Reader {
     // oxlint-disable-next-line no-control-regex -- matching them is the point
     let text = value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
     if (options.singleLine) text = text.replace(/\s+/g, ' ');
-    text = text.trim();
+    // Code keeps its first line's indentation: only blank lines before it and whitespace after go.
+    text = options.code ? text.replace(/^(?:[ \t]*\r?\n)+/, '').trimEnd() : text.trim();
     if (!text) {
       if (options.required) this.problems.add('INVALID_INPUT', path, 'must not be empty');
       return undefined;
@@ -291,7 +322,7 @@ function readAttachments(r: Reader, value: unknown, path: string): AttachmentSpe
     if (!item) return;
     const kind = r.oneOf(item.kind, `${at}/kind`, ['note', 'code'] as const) ?? 'note';
     if (kind === 'code') {
-      const code = r.text(item.code, `${at}/code`, AGENT_LIMITS.codeLength, { required: true });
+      const code = r.text(item.code, `${at}/code`, AGENT_LIMITS.codeLength, { required: true, code: true });
       const language = r.oneOf(item.language, `${at}/language`, CODE_LANGUAGES) ?? 'plaintext';
       if (code !== undefined) out.push({ kind, code, language });
     } else {
@@ -306,8 +337,9 @@ function readAttachments(r: Reader, value: unknown, path: string): AttachmentSpe
 export interface RoomContext {
   /** Every id already in use in the file, and every one this request has claimed so far. */
   taken: Set<string>;
-  /** Elements, groups and relationships already in the room being edited (updates only). */
-  existing?: { elements: Set<string>; groups: Set<string>; relationships: Set<string> };
+  /** Elements, groups and relationships already in the room being edited (updates only), and its
+   *  flows (each with the flow it is a variant of, if any). */
+  existing?: { elements: Set<string>; groups: Set<string>; relationships: Set<string>; flows?: ReadonlyMap<string, string | undefined> };
   depth: number;
   fallbackType?: NativeShape;
 }
@@ -417,7 +449,7 @@ export function readRoom(r: Reader, raw: Json, path: string, ctx: RoomContext): 
   const pairs = new Map<string, RelationshipSpec[]>();
   r.array(raw.relationships, `${path}/relationships`, AGENT_LIMITS.relationshipsPerRequest).forEach((e, i) => {
     const at = `${path}/relationships/${i}`;
-    const item = r.object(e, at, ['id', 'from', 'to', 'label', 'semantic', 'kind', 'directed', 'async', 'condition', 'attachments', 'evidence']);
+    const item = r.object(e, at, ['id', 'from', 'to', 'label', 'semantic', 'kind', 'directed', 'async', 'condition', 'color', 'lineStyle', 'response', 'deliveryAttempts', 'attachments', 'evidence']);
     if (!item) return;
     const id = r.newId(item.id, `${at}/id`, ctx.taken);
     const from = typeof item.from === 'string' ? item.from : undefined;
@@ -431,6 +463,10 @@ export function readRoom(r: Reader, raw: Json, path: string, ctx: RoomContext): 
     const directed = r.bool(item.directed, `${at}/directed`);
     const async = r.bool(item.async, `${at}/async`);
     const condition = r.text(item.condition, `${at}/condition`, LIMITS.maxConditionLength, { singleLine: true });
+    const color = r.oneOf(item.color, `${at}/color`, ACCENTS);
+    const lineStyle = r.oneOf(item.lineStyle, `${at}/lineStyle`, LINE_STYLE_NAMES);
+    const response = readResponse(r, item.response, `${at}/response`);
+    const deliveryAttempts = readDeliveryAttempts(r, item.deliveryAttempts, `${at}/deliveryAttempts`);
     const evidence = readEvidence(r, item.evidence, `${at}/evidence`);
     const attachments = readAttachments(r, item.attachments, `${at}/attachments`);
     if (!id || !from || !to || from === to || !elementIds.has(from) || !elementIds.has(to)) return;
@@ -444,6 +480,10 @@ export function readRoom(r: Reader, raw: Json, path: string, ctx: RoomContext): 
       ...(directed !== undefined ? { directed } : {}),
       ...(async !== undefined ? { async } : {}),
       ...(condition ? { condition } : {}),
+      ...(color ? { color } : {}),
+      ...(lineStyle ? { lineStyle } : {}),
+      ...(response !== undefined && response !== null ? { response } : {}),
+      ...(deliveryAttempts !== undefined && deliveryAttempts !== null ? { deliveryAttempts } : {}),
       ...(attachments ? { attachments } : {}),
       ...(evidence?.length ? { evidence } : {}),
     };
@@ -461,43 +501,76 @@ export function readRoom(r: Reader, raw: Json, path: string, ctx: RoomContext): 
   });
 
   const relationshipIds = new Set([...relationships.map((e) => e.id), ...(ctx.existing?.relationships ?? [])]);
+  // What a step may light beyond its own relationship: elements and boundaries, and relationships.
+  const lightable = { nodeIds: new Set([...elementIds, ...groupIds]), relationshipIds };
   const flows: FlowSpec[] = [];
   r.array(raw.flows, `${path}/flows`, AGENT_LIMITS.flowsPerRequest).forEach((f, i) => {
     const at = `${path}/flows/${i}`;
     const item = r.object(f, at, ['id', 'title', 'color', 'variantOf', 'steps']);
     if (!item) return;
-    const flow = readFlow(r, item, at, ctx.taken, relationshipIds);
+    const flow = readFlow(r, item, at, ctx.taken, lightable);
     if (flow) flows.push(flow);
+  });
+  // A variant must name a flow that exists — here or already in the view. Which of two conflicting
+  // links in one batch survives is left to `setFlowVariantOf`'s hub-and-spoke rule, applied in order.
+  const flowIds = new Set([...flows.map((f) => f.id), ...(ctx.existing?.flows?.keys() ?? [])]);
+  flows.forEach((f, i) => {
+    if (f.variantOf !== undefined && (f.variantOf === f.id || !flowIds.has(f.variantOf))) {
+      r.problems.add('INVALID_REFERENCE', `${path}/flows/${i}/variantOf`, `no other flow "${f.variantOf}" in this view`);
+    }
   });
 
   const notes: NoteSpec[] = [];
   r.array(raw.notes, `${path}/notes`, AGENT_LIMITS.notesPerRequest).forEach((n, i) => {
     const at = `${path}/notes/${i}`;
-    const item = r.object(n, at, ['id', 'text', 'kind', 'about', 'near', 'attach']);
+    const item = r.object(n, at, ['id', 'text', 'kind', 'code', 'language', 'about', 'near', 'attach']);
     if (!item) return;
     const id = r.newId(item.id, `${at}/id`, ctx.taken);
-    const text = r.text(item.text, `${at}/text`, AGENT_LIMITS.noteLength, { required: true });
-    const kind = r.oneOf(item.kind, `${at}/kind`, NOTE_KIND_NAMES) ?? 'note';
-    const relation = readNoteRelation(r, item, at, { elementIds, groupIds, relationshipIds });
-    if (id && text && relation) notes.push({ id, text, kind, ...relation });
+    const body = readNoteBody(r, item, at);
+    const relation = readNoteRelation(r, item, at, { elementIds, groupIds, relationshipIds }, body?.type ?? 'note');
+    if (id && body && relation) notes.push({ id, ...body, ...relation });
   });
 
   return { ...(level ? { level } : {}), nodes, relationships, groups, flows, notes };
 }
 
 /**
+ * What a note is (`kind`): one of the note kinds with its `text`, a code snippet (`code` and an
+ * optional `language`, shown as code and never run) or a plain label (`text`). `undefined` when the
+ * request is wrong (a problem is recorded).
+ */
+export function readNoteBody(r: Reader, item: Json, at: string): Pick<NoteSpec, 'type' | 'text' | 'kind' | 'code' | 'language'> | undefined {
+  const form = r.oneOf(item.kind, `${at}/kind`, NOTE_FORM_NAMES) ?? 'note';
+  if (form === 'code') {
+    if (item.text !== undefined) r.problems.add('INVALID_INPUT', `${at}/text`, 'a code snippet has code, not text; say what it shows in a note beside it');
+    const code = r.text(item.code, `${at}/code`, AGENT_LIMITS.codeLength, { required: true, code: true });
+    const language = r.oneOf(item.language, `${at}/language`, CODE_LANGUAGES) ?? 'plaintext';
+    return code === undefined || item.text !== undefined ? undefined : { type: 'code', text: '', kind: 'note', code, language };
+  }
+  for (const field of ['code', 'language'] as const) {
+    if (item[field] !== undefined) r.problems.add('INVALID_INPUT', `${at}/${field}`, 'only a note of kind "code" has code');
+  }
+  const text = r.text(item.text, `${at}/text`, AGENT_LIMITS.noteLength, { required: true });
+  if (text === undefined || item.code !== undefined || item.language !== undefined) return undefined;
+  return form === 'label' ? { type: 'text', text, kind: 'note' } : { type: 'note', text, kind: form };
+}
+
+/**
  * What a note is about (`about`, or the older `near`) and whether it is attached (`attach`), as the
- * model can hold it: attached to an element or relationship, a member of a group, or placed beside
- * an element. A note about an element attaches unless `attach: false` asks for it beside — attached,
- * the link is stored and the note moves, exports and goes with its host; beside, only its position
- * says what it is about. A relationship has no "beside", so a note about one is always attached.
- * `undefined` when the request is wrong (a problem is recorded).
+ * model can hold it: attached to an element, relationship or boundary, a member of a group, or placed
+ * beside an element. A note about an element attaches unless `attach: false` asks for it beside —
+ * attached, the link is stored and the note moves, exports and goes with its host; beside, only its
+ * position says what it is about. A relationship has no "beside", so a note about one is always
+ * attached. A note about a boundary heads it as a member, unless `attach: true` folds it onto the
+ * boundary as a chip — the boundary's own Add Note / Add Code. Labels follow the editor's drag rule:
+ * they fold onto elements only. `undefined` when the request is wrong (a problem is recorded).
  */
 export function readNoteRelation(
   r: Reader,
   item: Json,
   at: string,
   known: { elementIds: ReadonlySet<string>; groupIds: ReadonlySet<string>; relationshipIds: ReadonlySet<string> },
+  type: AttachableType = 'note',
 ): Pick<NoteSpec, 'near' | 'group' | 'attachTo'> | undefined {
   const field = item.about !== undefined ? 'about' : 'near';
   const about = typeof item[field] === 'string' ? (item[field] as string) : undefined;
@@ -507,39 +580,107 @@ export function readNoteRelation(
   }
   const attach = r.bool(item.attach, `${at}/attach`);
   if (about === undefined) {
-    if (attach) r.problems.add('INVALID_INPUT', `${at}/attach`, 'needs about: the element or relationship to attach the note to');
+    if (attach) r.problems.add('INVALID_INPUT', `${at}/attach`, 'needs about: the element, relationship or boundary to attach it to');
     return attach ? undefined : {};
   }
-  if (known.relationshipIds.has(about)) return { attachTo: { kind: 'edge', id: about } };
-  if (known.groupIds.has(about)) {
-    if (attach) {
-      r.problems.add('UNSUPPORTED', `${at}/attach`, `a note attaches to an element or a relationship, not a boundary; leave attach out to place it inside "${about}"`);
+  if (known.relationshipIds.has(about)) {
+    if (type === 'text') {
+      r.problems.add('UNSUPPORTED', `${at}/about`, `a label can't attach to a relationship; put the words in the relationship's label, or make this a note`);
       return undefined;
     }
-    return { group: about };
+    return { attachTo: { kind: 'edge', id: about } };
+  }
+  if (known.groupIds.has(about)) {
+    if (!attach) return { group: about };
+    if (type === 'text') {
+      r.problems.add('UNSUPPORTED', `${at}/attach`, `a label can't attach to a boundary; leave attach out to place it inside "${about}"`);
+      return undefined;
+    }
+    return { attachTo: { kind: 'node', id: about } };
   }
   if (known.elementIds.has(about)) return attach === false ? { near: about } : { attachTo: { kind: 'node', id: about } };
   r.problems.add('INVALID_REFERENCE', `${at}/${field}`, `no element, group or relationship "${about}" in this view`);
   return undefined;
 }
 
-export function readFlow(r: Reader, item: Json, at: string, taken: Set<string> | null, relationshipIds: Set<string>): FlowSpec | undefined {
+/** What a flow step may light, by id: elements and boundaries (`nodeIds`), and relationships. */
+export interface Lightable {
+  nodeIds: ReadonlySet<string>;
+  relationshipIds: ReadonlySet<string>;
+}
+
+/**
+ * A step's extra highlights (`highlight` on a relationship step, `spotlight` on a spotlight step):
+ * one list of ids, split into the extra elements and the extra relationships the step lights.
+ * Repeats are folded; the step's own relationship is refused (it is lit already).
+ */
+export function readHighlight(r: Reader, value: unknown, at: string, known: Lightable, own?: string): { nodes: string[]; edges: string[] } | undefined {
+  if (!Array.isArray(value)) {
+    r.problems.add('INVALID_INPUT', at, 'must be a list of element, boundary or relationship ids');
+    return undefined;
+  }
+  const nodes: string[] = [];
+  const edges: string[] = [];
+  let ok = true;
+  value.forEach((id, k) => {
+    if (typeof id !== 'string') {
+      r.problems.add('INVALID_INPUT', `${at}/${k}`, 'must be an id');
+      ok = false;
+    } else if (id === own) {
+      r.problems.add('INVALID_INPUT', `${at}/${k}`, `"${id}" is this step's own relationship, lit already`);
+      ok = false;
+    } else if (known.nodeIds.has(id)) {
+      if (!nodes.includes(id)) nodes.push(id);
+    } else if (known.relationshipIds.has(id)) {
+      if (!edges.includes(id)) edges.push(id);
+    } else {
+      r.problems.add('INVALID_REFERENCE', `${at}/${k}`, `no element, boundary or relationship "${id}" in this view`);
+      ok = false;
+    }
+  });
+  const cap = AGENT_LIMITS.highlightsPerStep;
+  if (nodes.length > cap || edges.length > cap) {
+    r.problems.add('LIMIT_EXCEEDED', at, `a step lights at most ${cap} extra elements and ${cap} extra relationships`);
+    ok = false;
+  }
+  return ok ? { nodes, edges } : undefined;
+}
+
+export function readFlow(r: Reader, item: Json, at: string, taken: Set<string> | null, known: Lightable): FlowSpec | undefined {
   const id = taken ? r.newId(item.id, `${at}/id`, taken) : typeof item.id === 'string' ? item.id : undefined;
   const title = r.text(item.title, `${at}/title`, AGENT_LIMITS.flowTitleLength, { required: true, singleLine: true });
   const color = r.oneOf(item.color, `${at}/color`, ACCENTS);
-  // Hub-and-spoke enforcement itself happens once the whole room is assembled (`setFlowVariantOf`
-  // needs to see every flow's final id and existing links); here it's only read through as a string.
+  // Checked against the batch and the view once the whole room is read (`readRoom`); hub-and-spoke
+  // itself is `setFlowVariantOf`'s, applied as the flows are linked.
   const variantOf = typeof item.variantOf === 'string' ? item.variantOf : undefined;
-  const steps: FlowSpec['steps'] = [];
+  if (item.variantOf !== undefined && variantOf === undefined) r.problems.add('INVALID_INPUT', `${at}/variantOf`, 'must be a flow id');
+  const steps: StepSpec[] = [];
   const seen = new Set<string>();
   r.array(item.steps, `${at}/steps`, AGENT_LIMITS.stepsPerFlow).forEach((s, j) => {
     const stepAt = `${at}/steps/${j}`;
     // A bare relationship id is a step too — the common case, kept short.
     const step = typeof s === 'string' ? { relationship: s } : r.object(s, stepAt);
     if (!step) return;
+    if (step.frame !== undefined) {
+      r.problems.add('INVALID_INPUT', `${stepAt}/frame`, 'a new flow has no frame steps to keep; light elements without a relationship with {spotlight: [ids]}');
+      return;
+    }
+    if (step.spotlight !== undefined || step.relationship === undefined) {
+      r.fields(step, stepAt, ['spotlight', 'caption']);
+      if (step.spotlight === undefined) {
+        r.problems.add('INVALID_INPUT', `${stepAt}/relationship`, 'is required (or spotlight: the ids a step lights without a relationship)');
+        return;
+      }
+      const lit = readHighlight(r, step.spotlight, `${stepAt}/spotlight`, known);
+      if (lit && lit.nodes.length + lit.edges.length === 0) r.problems.add('INVALID_INPUT', `${stepAt}/spotlight`, 'needs at least one id');
+      const caption = r.text(step.caption, `${stepAt}/caption`, AGENT_LIMITS.captionLength, { singleLine: true });
+      if (lit && lit.nodes.length + lit.edges.length > 0) steps.push({ ...extrasOf(lit), ...(caption ? { caption } : {}) });
+      return;
+    }
+    r.fields(step, stepAt, ['relationship', 'caption', 'highlight']);
     const relationship = typeof step.relationship === 'string' ? step.relationship : undefined;
-    if (!relationship || !relationshipIds.has(relationship)) {
-      r.problems.add('INVALID_REFERENCE', `${stepAt}/relationship`, relationship ? `no relationship "${relationship}" in this view` : 'is required');
+    if (!relationship || !known.relationshipIds.has(relationship)) {
+      r.problems.add('INVALID_REFERENCE', `${stepAt}/relationship`, relationship ? `no relationship "${relationship}" in this view` : 'must be a relationship id');
       return;
     }
     if (seen.has(relationship)) {
@@ -549,10 +690,40 @@ export function readFlow(r: Reader, item: Json, at: string, taken: Set<string> |
     }
     seen.add(relationship);
     const caption = r.text(step.caption, `${stepAt}/caption`, AGENT_LIMITS.captionLength, { singleLine: true });
-    steps.push({ relationship, ...(caption ? { caption } : {}) });
+    const lit = step.highlight === undefined ? undefined : readHighlight(r, step.highlight, `${stepAt}/highlight`, known, relationship);
+    steps.push({ relationship, ...(caption ? { caption } : {}), ...(lit ? extrasOf(lit) : {}) });
   });
   if (!id || !title) return undefined;
   return { id, title, ...(color ? { color } : {}), ...(variantOf ? { variantOf } : {}), steps };
+}
+
+/** A step's extras as the document stores them — absent rather than empty. */
+export function extrasOf(lit: { nodes: string[]; edges: string[] }): Pick<StepSpec, 'extraNodeIds' | 'extraEdgeIds'> {
+  return { ...(lit.nodes.length ? { extraNodeIds: lit.nodes } : {}), ...(lit.edges.length ? { extraEdgeIds: lit.edges } : {}) };
+}
+
+/**
+ * A synchronous call's reply line: `true` draws it unlabelled, text labels it ("200 Order"), and
+ * `false` (or `null`, on an update) takes it away — returned as `null`. Whether the pairing is a
+ * synchronous call is checked where both ends are known.
+ */
+export function readResponse(r: Reader, value: unknown, at: string): string | true | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || value === false) return null;
+  if (value === true) return true;
+  return r.text(value, at, AGENT_LIMITS.responseLength, { singleLine: true, required: true });
+}
+
+/** How many delivery attempts come before a dead-letter route is taken; `null` clears it. */
+export function readDeliveryAttempts(r: Reader, value: unknown, at: string): number | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  const { min, max } = AGENT_LIMITS.deliveryAttempts;
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < min || value > max) {
+    r.problems.add('INVALID_INPUT', at, `must be a whole number from ${min} to ${max}`);
+    return undefined;
+  }
+  return value;
 }
 
 /**

@@ -22,11 +22,22 @@ the release notes and the in-app What's New are generated from here. See
 - **Add to Claude Code** sets up Claude Code with one click too, for every project.
 - Settings shows whether Claude Code and Codex are already set up, and offers **Update** when
   they still point at a moved or reinstalled copy of Draft Canvas.
+- **Agents can author what you can.** A connected agent can set up a presentation — captions, extra
+  shapes lit with a step, and steps that show just part of the diagram — add code snippets and labels
+  beside or attached to shapes, connectors and boundaries, attach or detach a note, and set a
+  connector's colour, line style, reply line and delivery attempts, or re-point and reverse it without
+  losing its place in your flows.
+- **Agents can look inside.** An agent can draw what's inside an existing service or component, move
+  shapes a level down into it or back up out of it, and list every inside view in a diagram.
 
 #### Fixed
 
 - The Claude Code setup command now adds Draft Canvas for every project, not only the folder it
   was run in.
+- A failure path an agent created together with its diagram now stays linked to the flow it is a
+  variant of, and a note an agent attached to a starter's shape is no longer lost.
+- An agent's addition to a view now keeps the C4 level it names, and an agent can no longer give a
+  data store or a person an inside view the app can't open.
 
 ### Web
 

@@ -70,9 +70,18 @@ doesn't start the app for you, and it says so if the app isn't open.
   - Shapes that play the same role — a row of actors, a row of external systems — come out one
     consistent size automatically, without an unusually long description enlarging the rest of them.
   - If two diagrams have the name you mention, the agent asks you which.
-- **Add notes and flows.** A note can sit beside a shape, inside a boundary, or be attached to a shape
-  or connector so it moves with it. Flows walk through the connectors that are already there, and
-  play in presentation mode.
+- **Add notes, code snippets and labels.** Each can sit beside a shape or inside a boundary, or be
+  attached to a shape, a connector or a boundary so it moves with it — and the agent can attach a
+  loose one, or take one off again, the way you would drag it. Code keeps its language and
+  indentation.
+- **Set up a presentation.** Flows walk through the connectors that are already there and play in
+  presentation mode. The agent writes what each step says, lights extra shapes with a step (as
+  **+ Selection** does), and can open on a step that shows just a part of the diagram — "start with the
+  whole Orders system, then follow the order". Pinning a camera on a step stays yours; the agent can
+  only clear one. Presenting is yours too.
+- **Adjust connectors** the way the connector inspector does: colour, Stepped / Curved / Straight,
+  the reply line of a call with its label, and delivery attempts before a dead-letter route. It can
+  also re-point or reverse a connector without losing its place in your flows.
 - **Read a diagram**, including what is inside a shape, a boundary or a flow on its own — or read its
   flows as Mermaid or PlantUML sequence-diagram source, the same text **Export** writes
   (`read_diagram` with `format: "mermaid"` or `"plantuml"`).
@@ -95,7 +104,9 @@ doesn't start the app for you, and it says so if the app isn't open.
   was placed" — switchable against the normal flow without leaving presentation (`Shift+F`).
 - **Use C4.** Describe systems at context, container and component level, with a technology and a
   one-line description on each element; they appear under its name. You can edit both in the
-  element's **Details**.
+  element's **Details**. The agent can draw what's inside an existing service or component — "show
+  the components inside the Orders API" — the same view **Look inside** opens, and move shapes a
+  level down into one or back up out of it.
 - **Start from an Architecture Starter**, renamed and extended.
 
 ## Inspect before applying

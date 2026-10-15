@@ -26,12 +26,15 @@ import {
   setOpenPointResolution,
 } from '../document/openPoints';
 import { OPEN_POINT_KINDS } from '../document/types';
-import { inferRelationship, isEligibleForReinference } from '../document/connectorSemantics';
-import { createFlow, setFlowVariantOf } from '../document/flow';
+import { inferRelationship, isEligibleForReinference, isSyncPairing, resolveTransparentCategory } from '../document/connectorSemantics';
+import { createAttachment } from '../document/factory';
+import { setFlowVariantOf } from '../document/flow';
 import {
   attachToEdge,
   attachToNode,
   descendantsOf,
+  detachFromEdge,
+  detachFromNode,
   hasAttachmentRoom,
   removeAttachment,
   removeEdgeAttachment,
@@ -41,20 +44,37 @@ import {
   updateEdgeAttachment,
   updateNode,
 } from '../document/operations';
+import { reinferIfEligible } from '../document/reinfer';
 import { freeOriginFor } from '../document/geometry';
-import type { Accent, Attachment, DraftDocument, DraftEdge, DraftFlow, DraftFlowStep, DraftNode } from '../document/types';
+import { DEFAULTS } from '../document/limits';
+import type { Accent, AttachableType, Attachment, DraftDocument, DraftEdge, DraftFlow, DraftFlowStep, DraftNode } from '../document/types';
 import { ACCENTS, CODE_LANGUAGES, CONNECTOR_KINDS, EDGE_SEMANTICS } from '../document/types';
 import { embed, viewOf, walkGraphs, type DepthPath } from '../depth/tree';
 import { assignAnchors } from '../layout/anchors';
+import { naturalCodeSize, naturalTextSize } from '../nodes/describe';
 import { AgentError, Problems } from './errors';
-import { AGENT_LIMITS, readEvidence, readLayout, readOpenPoints, readRoom, Reader, type LayoutSpec, type RoomSpec } from './input';
-import { anchorRectOf, attachNote, captionSizer, connectorFor, edgeLabelSize, lineOf, measureContext, noteNode, placeBlock, placeRoom, sizeToFit } from './place';
+import {
+  AGENT_LIMITS,
+  extrasOf,
+  readDeliveryAttempts,
+  readEvidence,
+  readHighlight,
+  readLayout,
+  readOpenPoints,
+  readResponse,
+  readRoom,
+  Reader,
+  type LayoutSpec,
+  type Lightable,
+  type RoomSpec,
+} from './input';
+import { anchorRectOf, attachNote, captionSizer, connectorFor, edgeLabelSize, flowFromSpec, lineOf, measureContext, noteNode, placeBlock, placeRoom, sizeToFit } from './place';
 import { pastDeadline, repairAnchors } from './route';
 import { arrangeView, fitGroups, placeBeside, placeInGroup, readArrange, scopeOf } from './arrange';
 import { checkQuality, isBetterReport, isClean, type QualityReport } from './quality';
-import { moveInside } from './restructure';
+import { moveInside, moveOutside } from './restructure';
 import { OP_FIELDS, SET_FIELDS } from './fields';
-import { GROUP_KINDS, NOTE_KIND_NAMES, resolveType, suggestTypes } from './vocabulary';
+import { GROUP_KINDS, LINE_STYLE_NAMES, LINE_STYLES, NOTE_FORM_NAMES, NOTE_KIND_NAMES, resolveType, suggestTypes } from './vocabulary';
 
 export interface PatchResult {
   file: DraftDocument;
@@ -135,6 +155,9 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
 
   const ctx = measureContext();
   const taken = idsInFile(file);
+  // The file the view is written back into: the original, until a `moveOutside` changes the view
+  // around this one too.
+  let base = file;
   let view = viewOf(file, path);
   if (!view) throw new AgentError('NOT_FOUND', 'That view no longer exists.');
   const scope = readScope(r, rawScope, '/scope', view);
@@ -147,19 +170,31 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
     const at = `/ops/${i}`;
     const op = r.object(raw, at);
     if (!op || !view) return;
-    const kind = r.oneOf(op.op, `${at}/op`, ['add', 'update', 'remove', 'setLevel', 'arrange', 'moveInside'] as const);
+    const kind = r.oneOf(op.op, `${at}/op`, ['add', 'update', 'remove', 'setLevel', 'arrange', 'moveInside', 'moveOutside'] as const);
     if (!kind) { problems.add('INVALID_INPUT', `${at}/op`, 'is required'); return; }
     r.fields(op, at, OP_FIELDS[kind]!);
     if (!problems.empty) return;
     if (kind === 'moveInside') {
       if (scope) { problems.add('OUT_OF_SCOPE', at, 'Restructuring changes two views; make an explicit unscoped request.'); return; }
-      const current = path.length ? embed(file, path, view) : view;
+      const current = path.length ? embed(base, path, view) : view;
       const moved = moveInside(current, path, op.owner, op.ids);
       view = viewOf(moved, path)!;
       for (const id of op.ids as string[]) touched.add(id);
       touched.add(op.owner as string);
       for (const edge of view.edges) touched.add(edge.id);
       counts.updated += (op.ids as string[]).length + 1;
+      return;
+    }
+    if (kind === 'moveOutside') {
+      if (scope) { problems.add('OUT_OF_SCOPE', at, 'Restructuring changes two views; make an explicit unscoped request.'); return; }
+      const current = path.length ? embed(base, path, view) : view;
+      const moved = moveOutside(current, path, op.ids, ctx, layout.direction);
+      // The shapes land in the view around this one, so the whole file carries the change.
+      base = moved.file;
+      view = viewOf(base, path)!;
+      advisories.push(...moved.advisories);
+      for (const id of moved.touched) touched.add(id);
+      counts.updated += (op.ids as string[]).length;
       return;
     }
     if (kind === 'arrange') {
@@ -186,6 +221,7 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
         elements: new Set(view.nodes.filter((n) => n.type !== 'group' && n.type !== 'note' && n.type !== 'text' && n.type !== 'code').map((n) => n.id)),
         groups: new Set(view.nodes.filter((n) => n.type === 'group').map((n) => n.id)),
         relationships: new Set(view.edges.map((e) => e.id)),
+        flows: new Map(view.flows.map((f) => [f.id, f.variantOf])),
       };
       const room = readRoom(r, op, at, { taken, depth: path.length, existing });
       const anchorable = new Set([...existing.elements, ...existing.relationships, ...room.nodes.map((n) => n.id), ...room.relationships.map((e) => e.id)]);
@@ -203,6 +239,11 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
       // the field unset.
       const blockLayout: LayoutSpec = { ...layout, normalizePeerSizes: layout.normalizePeerSizes ?? true };
       view = addToView(view, room, blockLayout, ctx, touched, advisories);
+      // An add may say what level the view is at — the first add into a new inside view usually does.
+      if (room.level && room.level !== view.level) {
+        view = { ...view, level: room.level };
+        counts.updated += 1;
+      }
       // Root-only, but kept *on the view* (`viewOf` hands every room the file's list, and `embed`
       // carries it home) so `removeElements` below can prune what a later op deletes.
       for (const spec of newPoints) {
@@ -324,9 +365,18 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
     }
     const point = findOpenPoint(view, id);
     const targetNode = view.nodes.find((n) => n.id === id);
-    const fields = point ? SET_FIELDS.openPoint : targetNode ? targetNode.type === 'group' ? SET_FIELDS.group : targetNode.type === 'note' ? SET_FIELDS.note : SET_FIELDS.element : view.edges.some((e) => e.id === id) ? SET_FIELDS.relationship : view.flows.some((f) => f.id === id) ? SET_FIELDS.flow : SET_FIELDS.attachment;
+    const isEdge = view.edges.some((e) => e.id === id);
+    const fields = point
+      ? SET_FIELDS.openPoint
+      : targetNode
+        ? SET_FIELDS[NODE_FIELDS[targetNode.type] ?? 'element']
+        : isEdge
+          ? SET_FIELDS.relationship
+          : view.flows.some((f) => f.id === id)
+            ? SET_FIELDS.flow
+            : SET_FIELDS.attachment;
     r.fields(set, `${at}/set`, fields);
-    for (const field of ['kind', 'language']) if (set[field] === null && !view.edges.some((e) => e.id === id)) problems.add('INVALID_INPUT', `${at}/set/${field}`, 'this required field cannot be cleared');
+    for (const field of ['kind', 'language', 'lineStyle', 'code', 'attach']) if (set[field] === null && !(isEdge && field === 'kind')) problems.add('INVALID_INPUT', `${at}/set/${field}`, 'this required field cannot be cleared');
     if (Object.keys(set).length === 0) problems.add('INVALID_INPUT', `${at}/set`, 'name at least one field to change');
     if (!problems.empty) return;
     if (point) {
@@ -348,7 +398,7 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
   problems.throwIfAny();
   if (!view) throw new AgentError('NOT_FOUND', 'That view no longer exists.');
 
-  const nextFile = path.length ? embed(file, path, view) : view;
+  const nextFile = path.length ? embed(base, path, view) : view;
   // Only what this request could plausibly have broken — `touched` plus, through `checkQuality`'s
   // pairwise checks, anything untouched it collides with — never a claim the whole file is clean.
   const quality: QualityReport = { errors: [], warnings: [] };
@@ -361,6 +411,114 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
   });
   return { file: nextFile, touched, counts, advisories, quality };
 }
+
+/** What a flow step may light in a view: its elements and boundaries, and its relationships. */
+function lightableIn(view: DraftDocument): Lightable {
+  return { nodeIds: new Set(view.nodes.filter((n) => !isCard(n)).map((n) => n.id)), relationshipIds: new Set(view.edges.map((e) => e.id)) };
+}
+
+const CARD_NAMES: Record<AttachableType, string> = { note: 'note', code: 'code snippet', text: 'label' };
+
+/** A card's `kind` as reads report it: its note kind, `code` or `label`. */
+function formOf(card: { type: string; noteKind?: string }): string {
+  return card.type === 'code' ? 'code' : card.type === 'text' ? 'label' : (card.noteKind ?? 'note');
+}
+
+/**
+ * The host a card may fold onto, by the editor's own rules: any element; a relationship, for a note
+ * or a code snippet (not a label); a boundary, for a note or a code snippet (its Add Note / Add
+ * Code). Never another card. A host that is full is refused, never trimmed.
+ */
+function attachmentHost(r: Reader, view: DraftDocument, about: unknown, at: string, type: AttachableType): { kind: 'node' | 'edge'; id: string } | undefined {
+  if (typeof about !== 'string') {
+    r.problems.add('INVALID_INPUT', at, 'is required with attach: the element, relationship or boundary to attach it to');
+    return undefined;
+  }
+  const node = view.nodes.find((n) => n.id === about);
+  const edge = node ? undefined : view.edges.find((e) => e.id === about);
+  if ((!node && !edge) || (node && isCard(node))) {
+    r.problems.add('INVALID_REFERENCE', at, `no element, relationship or boundary "${about}" to attach it to`);
+    return undefined;
+  }
+  if (type === 'text' && (edge || node?.type === 'group')) {
+    r.problems.add('UNSUPPORTED', at, `a label attaches to an element only; "${about}" is a ${edge ? 'relationship' : 'boundary'}`);
+    return undefined;
+  }
+  const kind = node ? 'node' : 'edge';
+  if (!hasAttachmentRoom((node ?? edge)!, kind)) {
+    r.problems.add('LIMIT_EXCEEDED', at, `"${about}" can't hold another attachment`);
+    return undefined;
+  }
+  return { kind, id: about };
+}
+
+/**
+ * A relationship's new ends (`from`, `to`), checked by the rules a new one is: elements of this view,
+ * never itself, one per direction between two elements plus a compensation twin. `undefined` when
+ * neither end changes.
+ */
+function readEnds(r: Reader, view: DraftDocument, edge: DraftEdge, set: Json, at: string, semantic: DraftEdge['semantic']): { source: string; target: string } | undefined {
+  if (set.from === undefined && set.to === undefined) return undefined;
+  const end = (field: 'from' | 'to', current: string): string | undefined => {
+    const value = set[field];
+    if (value === undefined) return current;
+    const node = typeof value === 'string' ? view.nodes.find((n) => n.id === value) : undefined;
+    if (!node || node.type === 'group' || isCard(node)) {
+      r.problems.add('INVALID_REFERENCE', `${at}/${field}`, `no element "${String(value)}" in this view`);
+      return undefined;
+    }
+    return node.id;
+  };
+  const source = end('from', edge.source);
+  const target = end('to', edge.target);
+  if (!source || !target) return undefined;
+  if (source === edge.source && target === edge.target) return undefined;
+  if (source === target) {
+    r.problems.add('UNSUPPORTED', at, 'a relationship from an element to itself is not supported');
+    return undefined;
+  }
+  const same = view.edges.filter((e) => e.id !== edge.id && e.source === source && e.target === target);
+  if (same.length >= 2 || (same.length === 1 && semantic !== 'compensates' && same[0]?.semantic !== 'compensates')) {
+    r.problems.add('UNSUPPORTED', at, `"${same[0]!.id}" already runs from "${source}" to "${target}"; only a compensation (semantic "compensates") may share its direction`);
+    return undefined;
+  }
+  return { source, target };
+}
+
+/**
+ * A relationship re-pointed in place — the editor's reconnect, or its reverse when the ends swap: the
+ * id, label, flows and attachments stay; an inferred meaning is inferred again for what it now
+ * connects (`reinferIfEligible`); a moved end is anchored afresh, an unmoved one keeps its anchor.
+ */
+function repoint(view: DraftDocument, edge: DraftEdge, ends: { source: string; target: string }, direction: LayoutSpec['direction'], ctx: ReturnType<typeof measureContext>): DraftDocument {
+  const reversed = ends.source === edge.target && ends.target === edge.source;
+  const moved: DraftEdge = { ...edge, source: ends.source, target: ends.target };
+  delete moved.sourceAnchor;
+  delete moved.targetAnchor;
+  if (reversed) {
+    // Reversing swaps the anchors with the ends, exactly as `reverseEdge` does.
+    if (edge.targetAnchor) moved.sourceAnchor = edge.targetAnchor;
+    if (edge.sourceAnchor) moved.targetAnchor = edge.sourceAnchor;
+  } else {
+    if (ends.source === edge.source && edge.sourceAnchor) moved.sourceAnchor = edge.sourceAnchor;
+    if (ends.target === edge.target && edge.targetAnchor) moved.targetAnchor = edge.targetAnchor;
+  }
+  let next = reinferIfEligible({ ...view, edges: view.edges.map((e) => (e.id === edge.id ? moved : e)) }, edge.id, view);
+  if (reversed) return next;
+  const fresh = { ...(next.edges.find((e) => e.id === edge.id) as DraftEdge) };
+  const anchors = assignAnchors([fresh], new Map(next.nodes.map((n) => [n.id, anchorRectOf(n)])), direction).get(fresh.id);
+  if (anchors && ends.source !== edge.source) fresh.sourceAnchor = anchors.sourceAnchor;
+  if (anchors && ends.target !== edge.target) fresh.targetAnchor = anchors.targetAnchor;
+  const edges = next.edges.map((e) => (e.id === fresh.id ? fresh : e));
+  repairAnchors([fresh], next.nodes, captionSizer(next.nodes, ctx), edges);
+  next = { ...next, edges: next.edges.map((e) => (e.id === fresh.id ? fresh : e)) };
+  return next;
+}
+
+/** Which `SET_FIELDS` a node of each type takes: a card's own fields, or an element's. */
+const NODE_FIELDS: Partial<Record<DraftNode['type'], keyof typeof SET_FIELDS>> = { group: 'group', note: 'note', code: 'code', text: 'label' };
+
+const isCard = (node: DraftNode) => node.type === 'note' || node.type === 'code' || node.type === 'text';
 
 function updateOne(
   r: Reader,
@@ -378,16 +536,25 @@ function updateOne(
   if (node) {
     refuseOutOfScope(r, at, outOfScope(scope, [id], 'nodes'));
     if (!r.problems.empty) return undefined;
+    const card = isCard(node);
     const patch: Partial<DraftNode> = {};
     if (set.evidence !== undefined) patch.evidence = set.evidence === null ? undefined : readEvidence(r, set.evidence, `${at}/evidence`);
     const clear = (field: string) => set[field] === null;
-    if (set.label !== undefined) {
-      const label = r.text(set.label, `${at}/label`, node.type === 'note' ? AGENT_LIMITS.noteLength : AGENT_LIMITS.labelLength, { required: true });
-      if (label) Object.assign(patch, { text: label, textOrigin: 'explicit' });
+    // A note's or a label's words come as text (or label); an element's or a boundary's name as label.
+    const textField = set.text !== undefined ? 'text' : set.label !== undefined ? 'label' : undefined;
+    if (textField) {
+      const text = r.text(set[textField], `${at}/${textField}`, card ? AGENT_LIMITS.noteLength : AGENT_LIMITS.labelLength, { required: true });
+      if (text) Object.assign(patch, { text, textOrigin: 'explicit' });
     }
-    if (set.text !== undefined && node.type === 'note') {
-      const text = r.text(set.text, `${at}/text`, AGENT_LIMITS.noteLength, { required: true });
-      if (text) patch.text = text;
+    if (node.type === 'code') {
+      if (set.code !== undefined) {
+        const code = r.text(set.code, `${at}/code`, AGENT_LIMITS.codeLength, { required: true, code: true });
+        if (code !== undefined) patch.code = code;
+      }
+      if (set.language !== undefined) {
+        const language = r.oneOf(set.language, `${at}/language`, CODE_LANGUAGES);
+        if (language) patch.language = language;
+      }
     }
     if (clear('description')) patch.description = undefined;
     else if (set.description !== undefined) patch.description = r.text(set.description, `${at}/description`, AGENT_LIMITS.descriptionLength);
@@ -414,17 +581,51 @@ function updateOne(
       const kind = r.oneOf(set.kind, `${at}/kind`, Object.keys(GROUP_KINDS) as (keyof typeof GROUP_KINDS)[]);
       if (kind) patch.boundaryPreset = GROUP_KINDS[kind]?.preset;
     }
-    if (set.kind !== undefined && node.type === 'note') {
-      const kind = r.oneOf(set.kind, `${at}/kind`, NOTE_KIND_NAMES);
-      if (kind) patch.noteKind = kind;
+    if (set.kind !== undefined && card) {
+      const form = r.oneOf(set.kind, `${at}/kind`, NOTE_FORM_NAMES);
+      if (form && node.type === 'note' && (NOTE_KIND_NAMES as readonly string[]).includes(form)) patch.noteKind = form as (typeof NOTE_KIND_NAMES)[number];
+      else if (form && form !== formOf(node)) {
+        r.problems.add('UNSUPPORTED', `${at}/kind`, `a ${CARD_NAMES[node.type as AttachableType]} can't become a ${form === 'code' ? 'code snippet' : form === 'label' ? 'label' : 'note'}; remove it and add a new note of kind "${form}"`);
+      }
     }
-    // A free note moved beside another element (placement only), or into a boundary (membership).
-    const beside = node.type === 'note' ? (set.near ?? set.about) : undefined;
+    // A free card folded onto an element, relationship or boundary — the editor's drag-to-attach,
+    // keeping the card's id so it is still the same note to the next request.
+    if (card && set.attach === true) {
+      if (set.group !== undefined) r.problems.add('INVALID_INPUT', `${at}/group`, 'an attachment rides on its host; leave group out, or leave attach out to move it into the boundary');
+      if (!r.problems.empty) return undefined;
+      const host = attachmentHost(r, view, set.about ?? set.near, `${at}/${set.near !== undefined ? 'near' : 'about'}`, node.type as AttachableType);
+      if (!host) return undefined;
+      if (node.attachments?.length) r.problems.add('UNSUPPORTED', `${at}/attach`, `"${id}" carries attachments of its own; remove them first`);
+      const lines = view.edges.filter((e) => e.source === id || e.target === id).map((e) => e.id);
+      if (lines.length) r.problems.add('UNSUPPORTED', `${at}/attach`, `"${id}" has connectors (${lines.map((l) => `"${l}"`).join(', ')}) that would go with it; remove them first`);
+      if (host.kind === 'edge' && lines.includes(host.id)) r.problems.add('INVALID_REFERENCE', `${at}/about`, `"${host.id}" is one of "${id}"'s own connectors`);
+      if (!r.problems.empty) return undefined;
+      const folded = { ...node, ...patch } as DraftNode;
+      const attachment = createAttachment({
+        id,
+        type: node.type as AttachableType,
+        ...(folded.text !== undefined && node.type !== 'code' ? { text: folded.text } : {}),
+        ...(folded.accent ? { accent: folded.accent } : {}),
+        ...(folded.noteKind ? { noteKind: folded.noteKind } : {}),
+        ...(folded.language ? { language: folded.language } : {}),
+        ...(folded.code !== undefined ? { code: folded.code } : {}),
+        width: folded.width,
+        height: folded.height,
+      });
+      // The editor's own order: the card goes (with anything that pointed at it), then folds in.
+      const without = removeElements(view, [id]);
+      const next = host.kind === 'node' ? attachToNode(without, host.id, attachment) : attachToEdge(without, host.id, attachment);
+      if (node.parentId) touched.add(node.parentId);
+      touched.add(host.id);
+      return { view: next };
+    }
+    // A free card moved beside another element (placement only), or into a boundary (membership).
+    const beside = card ? (set.near ?? set.about) : undefined;
     let besideHost: DraftNode | undefined;
     if (beside !== undefined) {
       const target = typeof beside === 'string' ? view.nodes.find((n) => n.id === beside && n.id !== id) : undefined;
       if (target?.type === 'group') set = { ...set, group: target.id };
-      else if (target && target.type !== 'note') besideHost = target;
+      else if (target && !isCard(target)) besideHost = target;
       else r.problems.add('INVALID_REFERENCE', `${at}/${set.near !== undefined ? 'near' : 'about'}`, `no element or group "${String(beside)}" in this view`);
     }
     if (set.group !== undefined) {
@@ -449,9 +650,15 @@ function updateOne(
     const updated = next.nodes.find((n) => n.id === id) as DraftNode;
     // Source references are metadata: adding one must not resize or judge a manually sized shape.
     const evidenceOnly = Object.keys(set).every((field) => field === 'evidence');
-    // Grow (never shrink) to show new text in full — toward whichever side has room.
+    // Grow (never shrink) to show new text in full — toward whichever side has room. A code card and a
+    // label grow to their content the way a paste sizes a new card; neither ever shrinks.
     if (updated.type !== 'group' && !evidenceOnly) {
-      const sized = sizeToFit(updated, ctx);
+      const sized =
+        updated.type === 'code'
+          ? patch.code !== undefined ? naturalCodeSize(updated.code ?? '', ctx) : updated
+          : updated.type === 'text'
+            ? patch.text !== undefined ? naturalTextSize(updated, updated.text ?? '', ctx, { width: 40, height: DEFAULTS.textHeight }) : updated
+            : sizeToFit(updated, ctx);
       if (sized.width > updated.width || sized.height > updated.height) {
         next = updateNode(next, id, grownInPlace(next, updated, Math.max(sized.width, updated.width), Math.max(sized.height, updated.height)));
       }
@@ -470,7 +677,7 @@ function updateOne(
       if (moved) next = moved;
       else r.problems.add('LAYOUT_CONSTRAINED', `${at}/near`, `there is no free space beside "${besideHost.id}" for this note; nothing else is moved to make some`);
     }
-    if (node.type === 'note' && typeof set.group === 'string' && set.group !== node.parentId) next = placeInGroup(next, id, set.group);
+    if (card && typeof set.group === 'string' && set.group !== node.parentId) next = placeInGroup(next, id, set.group);
     else if (patch.parentId !== undefined || set.group !== undefined) next = fitGroups(next, id);
     if (!evidenceOnly) touched.add(id);
     return { view: next };
@@ -497,17 +704,52 @@ function updateOne(
     if (set.async !== undefined) patch.async = r.bool(set.async, `${at}/async`) || undefined;
     if (set.condition === null) patch.condition = undefined;
     else if (set.condition !== undefined) patch.condition = r.text(set.condition, `${at}/condition`, 120, { singleLine: true });
+    if (set.color === null) patch.accent = undefined;
+    else if (set.color !== undefined) {
+      const accent = r.oneOf<Accent>(set.color, `${at}/color`, ACCENTS);
+      if (accent) patch.accent = accent;
+    }
+    if (set.lineStyle !== undefined) {
+      const style = r.oneOf(set.lineStyle, `${at}/lineStyle`, LINE_STYLE_NAMES);
+      if (style) patch.routing = LINE_STYLES[style];
+    }
+    const response = readResponse(r, set.response, `${at}/response`);
+    const attempts = readDeliveryAttempts(r, set.deliveryAttempts, `${at}/deliveryAttempts`);
+    const ends = readEnds(r, view, edge, set, at, patch.semantic ?? edge.semantic);
     if (!r.problems.empty) return undefined;
+    // Re-pointed first, as the editor's reconnect is: what the relationship now connects decides what
+    // its inferred meaning is, and whether a reply line or delivery attempts belong on it.
+    const next = ends ? repoint(view, edge, ends, direction, ctx) : view;
+    const current = next.edges.find((e) => e.id === id) as DraftEdge;
+    const byId = new Map(next.nodes.map((n) => [n.id, n]));
     if (patch.semantic) {
-      const byId = new Map(view.nodes.map((n) => [n.id, n]));
-      const probe = connectorFor({ id, from: edge.source, to: edge.target, semantic: patch.semantic }, byId.get(edge.source) as DraftNode, byId.get(edge.target) as DraftNode, advisories);
+      const probe = connectorFor({ id, from: current.source, to: current.target, semantic: patch.semantic }, byId.get(current.source) as DraftNode, byId.get(current.target) as DraftNode, advisories);
       if (probe.semantic !== patch.semantic) {
-        patch.semantic = edge.semantic;
+        patch.semantic = current.semantic;
         delete patch.semanticsOrigin;
       }
     }
+    // The reply line of a synchronous call — the inspector's "Show response path" and its label.
+    if (response === null) Object.assign(patch, { hasResponse: undefined, response: undefined, semanticsOrigin: 'explicit' });
+    else if (response !== undefined) {
+      const kind = 'kind' in patch ? patch.kind : current.kind;
+      const sync = isSyncPairing(resolveTransparentCategory(next, current.source, 'source'), resolveTransparentCategory(next, current.target, 'target')) && (kind === undefined || kind === 'sync');
+      if (!sync && !current.hasResponse) {
+        r.problems.add('UNSUPPORTED', `${at}/response`, 'a reply line belongs to a synchronous call: a person or a service calling a service, with no behaviour or "sync"');
+      } else {
+        if (!current.hasResponse) Object.assign(patch, { hasResponse: true, semanticsOrigin: 'explicit' });
+        patch.response = response === true ? undefined : response;
+      }
+    }
+    if (attempts === null) patch.deliveryAttempts = undefined;
+    else if (attempts !== undefined) {
+      const semantic = 'semantic' in patch ? patch.semantic : current.semantic;
+      if (semantic !== 'deadLetters') r.problems.add('UNSUPPORTED', `${at}/deliveryAttempts`, 'delivery attempts belong to a dead-letter route (semantic "deadLetters")');
+      else patch.deliveryAttempts = attempts;
+    }
+    if (!r.problems.empty) return undefined;
     if (!Object.keys(set).every((field) => field === 'evidence')) touched.add(id);
-    return { view: updateEdge(view, id, patch) };
+    return { view: updateEdge(next, id, patch) };
   }
   const flowIndex = view.flows.findIndex((f) => f.id === id);
   if (flowIndex >= 0) {
@@ -532,7 +774,7 @@ function updateOne(
     // Steps are only rebuilt when given — and even then each keeps its id, its extra highlights and
     // its camera when its relationship is still there, so a small edit never resets a flow's details.
     if (set.steps !== undefined) {
-      const steps = flowStepsFor(r, set.steps, `${at}/steps`, existing, new Set(view.edges.map((e) => e.id)));
+      const steps = flowStepsFor(r, set.steps, `${at}/steps`, existing, lightableIn(view));
       if (steps) flow.steps = steps;
     }
     if (set.variantOf === null) delete flow.variantOf;
@@ -557,7 +799,7 @@ function updateOne(
   if (attached) {
     refuseOutOfScope(r, at, outOfScope(scope, [attached.hostId], attached.kind === 'node' ? 'nodes' : 'edges'));
     if (!r.problems.empty) return undefined;
-    return updateAttachmentOp(r, view, attached, set, at, touched);
+    return updateAttachmentOp(r, view, attached, set, at, touched, direction);
   }
   r.problems.add('INVALID_REFERENCE', at.replace(/\/set$/, '/id'), `nothing with id "${id}" in this view`);
   return undefined;
@@ -732,14 +974,13 @@ function addToView(
 
   // Flows (they may use new and existing connectors alike). variantOf is linked in a second pass,
   // once every flow in this batch has been added — its target may be another flow added right here.
+  next = { ...next, flows: [...next.flows, ...room.flows.map(flowFromSpec)] };
   for (const f of room.flows) {
-    const flow = createFlow({ id: f.id, title: f.title });
-    if (f.color) flow.accent = f.color;
-    flow.steps = f.steps.map((s, i) => ({ id: `${f.id}.s${i + 1}`, edgeId: s.relationship, ...(s.caption ? { caption: s.caption } : {}) }));
-    next = { ...next, flows: [...next.flows, flow] };
-  }
-  for (const f of room.flows) {
-    if (f.variantOf) next = setFlowVariantOf(next, f.id, f.variantOf);
+    if (!f.variantOf) continue;
+    next = setFlowVariantOf(next, f.id, f.variantOf);
+    if (next.flows.find((flow) => flow.id === f.id)?.variantOf !== f.variantOf) {
+      advisories.push(`Flow "${f.id}" was not linked as a variant of "${f.variantOf}": variants are one level deep — a variant's base can't be a variant itself, and a flow with variants can't become one.`);
+    }
   }
   for (const id of [...newIds, ...room.relationships.map((e) => e.id)]) touched.add(id);
   return next;
@@ -810,7 +1051,8 @@ function findAttachment(view: DraftDocument, id: string): FoundAttachment | unde
 }
 
 /**
- * An attachment's text, kind or code changed, or moved to another element or connector (`about`) —
+ * An attachment's words, kind or code changed; moved to another element, relationship or boundary
+ * (`about`); or taken off its host as a free card (`attach: false`, the editor's Detach) — always
  * with its id, so it is still the same note to the next request.
  */
 function updateAttachmentOp(
@@ -820,6 +1062,7 @@ function updateAttachmentOp(
   set: Json,
   at: string,
   touched: Set<string>,
+  direction: LayoutSpec['direction'],
 ): { view: DraftDocument } | undefined {
   const { attachment, hostId, kind } = found;
   const patch: Partial<Omit<Attachment, 'id'>> = {};
@@ -831,17 +1074,17 @@ function updateAttachmentOp(
     if (text) patch.text = text;
   }
   if (set.kind !== undefined) {
-    if (isCode) r.problems.add('UNSUPPORTED', `${at}/kind`, 'a code attachment has no note kind');
-    else {
-      const noteKind = r.oneOf(set.kind, `${at}/kind`, NOTE_KIND_NAMES);
-      if (noteKind) patch.noteKind = noteKind;
+    const form = r.oneOf(set.kind, `${at}/kind`, NOTE_FORM_NAMES);
+    if (form && attachment.type === 'note' && (NOTE_KIND_NAMES as readonly string[]).includes(form)) patch.noteKind = form as (typeof NOTE_KIND_NAMES)[number];
+    else if (form && form !== formOf(attachment)) {
+      r.problems.add('UNSUPPORTED', `${at}/kind`, `a ${CARD_NAMES[attachment.type]} attachment can't become a ${form === 'code' ? 'code snippet' : form === 'label' ? 'label' : 'note'}; remove it and add a new note of kind "${form}"`);
     }
   }
   if (set.code !== undefined || set.language !== undefined) {
     if (!isCode) r.problems.add('UNSUPPORTED', `${at}/code`, 'only a code attachment has code');
     else {
       if (set.code !== undefined) {
-        const code = r.text(set.code, `${at}/code`, AGENT_LIMITS.codeLength, { required: true });
+        const code = r.text(set.code, `${at}/code`, AGENT_LIMITS.codeLength, { required: true, code: true });
         if (code !== undefined) patch.code = code;
       }
       if (set.language !== undefined) {
@@ -850,33 +1093,68 @@ function updateAttachmentOp(
       }
     }
   }
+  const detach = r.bool(set.attach, `${at}/attach`) === false;
   let move: { kind: 'node' | 'edge'; id: string } | undefined;
-  if (set.about !== undefined && set.about !== hostId) {
-    const about = typeof set.about === 'string' ? set.about : undefined;
-    const node = about ? view.nodes.find((n) => n.id === about && n.type !== 'group' && n.type !== 'note' && n.type !== 'text' && n.type !== 'code') : undefined;
-    const edge = about ? view.edges.find((e) => e.id === about) : undefined;
-    if (!node && !edge) r.problems.add('INVALID_REFERENCE', `${at}/about`, `no element or relationship "${String(set.about)}" to attach it to`);
-    else if (!hasAttachmentRoom((node ?? edge)!, node ? 'node' : 'edge')) r.problems.add('LIMIT_EXCEEDED', `${at}/about`, `"${about}" can't hold another attachment`);
-    else move = { kind: node ? 'node' : 'edge', id: about! };
+  let landing: DraftNode | undefined;
+  if (detach && set.about !== undefined) {
+    // Where the free card lands: beside an element, or inside a boundary.
+    landing = typeof set.about === 'string' ? view.nodes.find((n) => n.id === set.about && !isCard(n)) : undefined;
+    if (!landing) r.problems.add('INVALID_REFERENCE', `${at}/about`, `no element or boundary "${String(set.about)}" to put it beside or in`);
+  } else if (set.about !== undefined && set.about !== hostId) {
+    move = attachmentHost(r, view, set.about, `${at}/about`, attachment.type);
   }
   if (!r.problems.empty) return undefined;
   let next = kind === 'node' ? updateAttachment(view, hostId, attachment.id, patch) : updateEdgeAttachment(view, hostId, attachment.id, patch);
+  touched.add(hostId);
+  if (detach) {
+    const result = kind === 'node' ? detachFromNode(next, hostId, attachment.id) : detachFromEdge(next, hostId, attachment.id);
+    const extracted = result.extractedNode;
+    if (!extracted) {
+      r.problems.add('INVALID_INPUT', `${at}/attach`, `"${attachment.id}" can't be taken off "${hostId}"`);
+      return undefined;
+    }
+    // The card keeps the attachment's id: it is the same note, now on the canvas.
+    next = { ...result.doc, nodes: result.doc.nodes.map((n) => (n.id === extracted.id ? { ...n, id: attachment.id } : n)) };
+    if (landing?.type === 'group') next = placeInGroup(next, attachment.id, landing.id);
+    else {
+      const edge = kind === 'edge' ? next.edges.find((e) => e.id === hostId) : undefined;
+      const besides = landing ? [landing] : edge ? [edge.source, edge.target].flatMap((end) => next.nodes.filter((n) => n.id === end)) : next.nodes.filter((n) => n.id === hostId);
+      let placed: DraftDocument | undefined;
+      for (const host of besides) if (!placed) placed = placeBeside(next, attachment.id, host, direction);
+      if (placed) next = placed;
+      else {
+        const card = next.nodes.find((n) => n.id === attachment.id)!;
+        const free = freeOriginFor({ ...next, nodes: next.nodes.filter((n) => n.id !== card.id) }, card);
+        next = updateNode(next, card.id, { x: Math.round(free.x), y: Math.round(free.y) });
+      }
+    }
+    touched.add(attachment.id);
+    return { view: next };
+  }
   if (move) {
     const current = findAttachment(next, attachment.id)!.attachment;
     next = kind === 'node' ? removeAttachment(next, hostId, attachment.id) : removeEdgeAttachment(next, hostId, attachment.id);
     next = move.kind === 'node' ? attachToNode(next, move.id, current) : attachToEdge(next, move.id, current);
     touched.add(move.id);
   }
-  touched.add(hostId);
   return { view: next };
 }
 
 /**
- * A flow's new step list, read against the steps it has. A step whose relationship was already a
- * step keeps that step — its id, extra highlights and camera — and its caption unless one is given
- * (`caption: null` clears it). `{frame: <step id>}` keeps a frame step (one with no relationship).
+ * A flow's new step list, read against the steps it has, in the forms `read_diagram` writes:
+ *
+ * - a relationship id, or `{relationship, caption?, highlight?, pinnedView?}`: a step whose
+ *   relationship was already a step keeps that step — its id, extra highlights, camera and caption —
+ *   unless the field says otherwise (`caption: null` clears it, `highlight` replaces the extras and
+ *   `null` clears them);
+ * - `{frame: <step id>, caption?, spotlight?, pinnedView?}`: keeps a step with no relationship, with
+ *   the same field rules (`spotlight` is that step's extras);
+ * - `{spotlight: [ids], caption?}`: a new step with no relationship, lighting just those.
+ *
+ * `pinnedView: false` drops a camera a person pinned on the step (the Flows panel's Pin view), so the
+ * presentation frames what it lights again; `true` only keeps one — a view is pinned in the app.
  */
-function flowStepsFor(r: Reader, raw: unknown, at: string, flow: DraftFlow, relationshipIds: ReadonlySet<string>): DraftFlowStep[] | undefined {
+function flowStepsFor(r: Reader, raw: unknown, at: string, flow: DraftFlow, known: Lightable): DraftFlowStep[] | undefined {
   const items = r.array(raw, at, AGENT_LIMITS.stepsPerFlow);
   if (!Array.isArray(raw)) return undefined;
   const unused = [...flow.steps];
@@ -891,22 +1169,71 @@ function flowStepsFor(r: Reader, raw: unknown, at: string, flow: DraftFlow, rela
     usedIds.add(id);
     return id;
   };
+  /** `caption`, the extras (`field`) and `pinnedView` applied to `base`; false when refused. */
+  const details = (step: Json, stepAt: string, base: DraftFlowStep, field: 'highlight' | 'spotlight'): boolean => {
+    if (step.caption === null) delete base.caption;
+    else if (step.caption !== undefined) {
+      const caption = r.text(step.caption, `${stepAt}/caption`, AGENT_LIMITS.captionLength, { singleLine: true });
+      if (caption) base.caption = caption;
+    }
+    if (step[field] === null) {
+      delete base.extraNodeIds;
+      delete base.extraEdgeIds;
+    } else if (step[field] !== undefined) {
+      const lit = readHighlight(r, step[field], `${stepAt}/${field}`, known, base.edgeId);
+      if (!lit) return false;
+      delete base.extraNodeIds;
+      delete base.extraEdgeIds;
+      Object.assign(base, extrasOf(lit));
+    }
+    if (step.pinnedView !== undefined) {
+      const pinned = r.bool(step.pinnedView, `${stepAt}/pinnedView`);
+      if (pinned === false) delete base.viewport;
+      else if (pinned && !base.viewport) {
+        r.problems.add('INVALID_INPUT', `${stepAt}/pinnedView`, 'only a person pins a camera view, in the app; leave pinnedView out (the presentation frames what the step lights)');
+        return false;
+      }
+    }
+    return true;
+  };
   items.forEach((item, j) => {
     const stepAt = `${at}/${j}`;
     const step = typeof item === 'string' ? { relationship: item } : r.object(item, stepAt);
     if (!step) return;
-    if (typeof step.frame === 'string') {
-      const frame = unused.find((s) => s.id === step.frame && !s.edgeId);
-      if (!frame) r.problems.add('INVALID_REFERENCE', `${stepAt}/frame`, `no frame step "${step.frame}" in this flow`);
-      else {
+    if (step.frame !== undefined || step.spotlight !== undefined || step.relationship === undefined) {
+      r.fields(step, stepAt, ['frame', 'spotlight', 'caption', 'pinnedView']);
+      let base: DraftFlowStep;
+      if (step.frame !== undefined) {
+        const frame = typeof step.frame === 'string' ? unused.find((s) => s.id === step.frame && !s.edgeId) : undefined;
+        if (!frame) {
+          r.problems.add('INVALID_REFERENCE', `${stepAt}/frame`, `no frame step "${String(step.frame)}" in this flow`);
+          return;
+        }
         unused.splice(unused.indexOf(frame), 1);
-        out.push(frame);
+        base = { ...frame };
+      } else if (step.spotlight === undefined) {
+        r.problems.add('INVALID_INPUT', `${stepAt}/relationship`, 'is required (or spotlight: the ids a step lights without a relationship)');
+        return;
+      } else {
+        if (step.pinnedView === true) {
+          r.problems.add('INVALID_INPUT', `${stepAt}/pinnedView`, 'only a person pins a camera view, in the app; leave pinnedView out');
+          return;
+        }
+        base = { id: newId() };
       }
+      if (!details(step, stepAt, base, 'spotlight')) return;
+      // A step that lights nothing is skipped by the presentation; refuse it rather than store it.
+      if (!base.extraNodeIds?.length && !base.extraEdgeIds?.length && !base.viewport) {
+        r.problems.add('INVALID_INPUT', `${stepAt}/spotlight`, 'a step without a relationship needs at least one id to light');
+        return;
+      }
+      out.push(base);
       return;
     }
+    r.fields(step, stepAt, ['relationship', 'caption', 'highlight', 'pinnedView']);
     const relationship = typeof step.relationship === 'string' ? step.relationship : undefined;
-    if (!relationship || !relationshipIds.has(relationship)) {
-      r.problems.add('INVALID_REFERENCE', `${stepAt}/relationship`, relationship ? `no relationship "${relationship}" in this view` : 'is required');
+    if (!relationship || !known.relationshipIds.has(relationship)) {
+      r.problems.add('INVALID_REFERENCE', `${stepAt}/relationship`, relationship ? `no relationship "${relationship}" in this view` : 'must be a relationship id');
       return;
     }
     if (seen.has(relationship)) {
@@ -917,12 +1244,7 @@ function flowStepsFor(r: Reader, raw: unknown, at: string, flow: DraftFlow, rela
     const kept = unused.find((s) => s.edgeId === relationship);
     if (kept) unused.splice(unused.indexOf(kept), 1);
     const base: DraftFlowStep = kept ? { ...kept } : { id: newId(), edgeId: relationship };
-    if (step.caption === null) delete base.caption;
-    else if (step.caption !== undefined) {
-      const caption = r.text(step.caption, `${stepAt}/caption`, AGENT_LIMITS.captionLength, { singleLine: true });
-      if (caption) base.caption = caption;
-    }
-    out.push(base);
+    if (details(step, stepAt, base, 'highlight')) out.push(base);
   });
   return out;
 }

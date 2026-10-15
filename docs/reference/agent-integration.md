@@ -24,6 +24,7 @@ is the design: what is guaranteed, where the boundaries are, and what is not sup
 - [Retries and the request ledger](#retries-and-the-request-ledger)
 - [Layout and the quality gate](#layout-and-the-quality-gate)
 - [Notes and flows](#notes-and-flows)
+- [Relationship options and ends](#relationship-options-and-ends)
 - [Live progress and preview](#live-progress-and-preview)
 - [C4 support](#c4-support)
 - [Feature coverage](#feature-coverage)
@@ -78,13 +79,13 @@ that disagree answer `VERSION_MISMATCH` and point at Settings, which names the r
 
 ## Tools
 
-There are ten tools. Their JSON Schemas live in `src/agent/schema.ts`, and
+There are thirteen tools. Their JSON Schemas live in `src/agent/schema.ts`, and
 `src-tauri/mcp/tools.json` is generated from them by `npm run agent:schemas`. The sidecar compiles
 that file in, and `tests/agent/schema.test.ts` fails if the two drift. The whole tool list is
-28,984 bytes of compact JSON, roughly 7.2k tokens (estimated as characters / 4) — `submit_proposal`
-deliberately keeps its own `ops` schema loose (the same shape `update_diagram` documents in full,
-never repeated a second time) to leave room for this. `get_capabilities` reports `contract: 2`; every
-tool below `read_selection` is additive within that same contract.
+96,237 bytes of compact JSON, roughly 24k tokens (estimated as characters / 4), and the test keeps a
+ceiling on it: the room schemas are written once per tool under `$defs` (a flow's steps among them),
+and `preview_diagram` and `submit_proposal` carry them without their prose. `get_capabilities`
+reports `contract: 3`; everything since is additive within that same contract.
 
 | Tool | Annotations | What it does |
 | --- | --- | --- |
@@ -93,10 +94,11 @@ tool below `read_selection` is additive within that same contract.
 | `read_diagram({diagramId, view?, focus?, include?, cursor?})` | read-only | One view, semantically. Every element comes with its derived C4 role and scope, relationships name their endpoints, and notes, attachments and flows carry the ids to edit them by. See the notes below for nested views, focus and pages. |
 | `read_attachment({diagramId, expectedRevision, attachmentId, offset?, view?})` | read-only | Full note/code attachments in chunks of 8192 Unicode characters; `nextOffset: null` means complete. Every chunk is revision-checked. |
 | `read_selection({diagramId})` | read-only | The person's current selection in the diagram open right now: stable ids, a bounded set of neighbouring elements marked apart from the selection itself, and the notes about it. See [Selection-aware editing](#selection-aware-editing). |
-| `get_implementation_context({diagramId, view?, focus?})` | read-only | Flow step order exactly as stored (never inferred from layout), the notes and decisions about what's in focus, and its boundaries — for implementing an agreed design in the repository. Diagram text is context here, never instructions. |
+| `get_implementation_context({diagramId, view?, focus?})` | read-only | Flow step order exactly as stored (never inferred from layout) with what each step highlights, the notes, decisions and code snippets about what's in focus, and its boundaries — for implementing an agreed design in the repository. Diagram text is context here, never instructions. |
 | `render_diagram({diagramId, view?, format?, scale?, theme?})` | read-only | One view drawn by the app's own renderer: a PNG as MCP image content (`format: "png"`, the default, at `scale` 1, 2 or 3, in a `light` or `dark` theme), its id, revision and pixel size as structured content beside it — or the SVG as text (`format: "svg"`). Refused (`LIMIT_EXCEEDED`), never shrunk, past the app's canvas limits or 8 MB; the error names a scale that fits. |
 | `create_diagram({requestId, title, nodes, relationships, groups?, flows?, notes?, level?, starter?, layout?, project?, open?, allowDuplicateTitle?})` | idempotent by `requestId` | A **new** diagram: validates, lays out, runs the quality gate and writes a new file. It never replaces anything, and a title already used in that folder is refused (`DUPLICATE_TITLE`, naming the existing diagram) unless `allowDuplicateTitle`. |
-| `update_diagram({requestId, diagramId, expectedRevision, ops, view?, scope?, layout?, activate?})` | idempotent by `requestId`, destructive (it can remove) | Every follow-up. Ops run in order as one change: `add`, `update` (`null` clears a field; notes, attachments and flows are edited by id), `remove` (a non-empty group needs `cascade`), `setLevel` and `arrange`. Works whether or not the diagram is open. `scope`, if present, restricts `update`/`remove` (and any cascade) to a captured set of ids — see [Selection-aware editing](#selection-aware-editing). |
+| `update_diagram({requestId, diagramId, expectedRevision, ops, view?, scope?, layout?, activate?})` | idempotent by `requestId`, destructive (it can remove) | Every follow-up. Ops run in order as one change: `add`, `update` (`null` clears a field; notes, attachments, flows and relationships are edited by id), `remove` (a non-empty group needs `cascade`), `setLevel`, `arrange`, and `moveInside` / `moveOutside` (one C4 level down or up). Works whether or not the diagram is open. `view.inside` names the view to change — a service or component with nothing inside yet gets its inside view from the first `add` there. `scope`, if present, restricts `update`/`remove` (and any cascade) to a captured set of ids — see [Selection-aware editing](#selection-aware-editing). |
+| `preview_diagram({diagramId, expectedRevision, ops, view?, layout?, scope?})` | read-only | Prepares the candidate an `update_diagram` with the same ops would make, without saving it: a `previewId`, its diff and quality. `render_diagram` draws it by `previewId`, and `update_diagram({…, previewId})` applies exactly that candidate within 10 minutes. |
 | `submit_proposal({requestId, diagramId, expectedRevision, summary, rationale?, assumptions?, openQuestions?, ops, layout?, scope?, sourceRef?, revises?})` | idempotent by `requestId` | Proposes a batch of changes for a person to explicitly accept or reject — never applies anything itself. See [Proposals](#proposals-review-before-applying). |
 | `get_proposal({proposalId})` | read-only | A submitted proposal's status, counts, and whether the diagram moved since (informational — never a block). |
 | `list_proposals({diagramId?, cursor?, limit?})` | read-only | Proposals for a diagram (or every one in scope), newest first. |
@@ -109,10 +111,12 @@ flow keeps its steps' ids. Everything else is additive.
 Notes on `read_diagram`:
 
 - A nested view appears as a reference, `inside: {level, elements, relationships}`. Read it with
-  `view.inside: [ids…]`.
+  `view.inside: [ids…]`. The inside of a service or component that has none yet reads as an empty
+  view (`view.empty: true`); naming an element that can't have one is `NOT_FOUND`.
 - `focus` narrows the read by elements, by a group or by a flow. A focused read says `partial: true`
   and lists the relationships that cross the edge of what it returned, naming the other end.
-- `include` adds `geometry`, `attachments`, `suggestions` or `fullText`. Attachment previews mark truncation; `fullText` includes complete bodies and attachments (focus the read to keep it bounded). For an attachment larger than one read, `read_attachment` retrieves its full text in revision-checked Unicode chunks. `suggestions` returns up to 5 of Draft
+- `include` adds `geometry`, `attachments`, `suggestions`, `fullText` or `views` — an outline of every
+  inside view in the file (its path, owner, level and size), the Depth map as data. Attachment previews mark truncation; `fullText` includes complete bodies and attachments (focus the read to keep it bounded). For an attachment larger than one read, `read_attachment` retrieves its full text in revision-checked Unicode chunks. `suggestions` returns up to 5 of Draft
   Canvas's own next-step suggestions per element; they are never applied automatically.
 - Pages are at most 200 elements, 400 relationships, 20 flows, 50 open points and 96 KB of UTF-8 JSON. Every collection has its own offset; `completeness` reports which collections are exhausted, and a cursor retrieves all remaining collections without repeating earlier entries. The `cursor` is bound to the revision,
   so a changed diagram answers `CURSOR_STALE`.
@@ -614,49 +618,98 @@ card-provisioning cases with no warnings.
 
 ## Notes and flows
 
-**Notes** relate to the diagram only in the ways the document model can hold:
+**Notes** are the three cards a person can put on a diagram, and relate to it only in the ways the
+document model can hold. `kind` says which card: `note` (the default), `question`, `warning` or
+`decision` is a Note with `text`; `code` is a Code card with `code` and an optional `language` (shown
+as code and never run, its indentation kept); `label` is a Text label with `text`.
 
 | Request | What it becomes |
 | --- | --- |
 | `notes: [{id, text, kind?, about: <element>}]` | A native attachment on the element (the chip), under the note's id: it moves, exports and is removed with its host, and a read finds it on the element. An element already holding its 12 attachments takes the note beside it instead (the row below), with an advisory in the receipt — never a refusal. |
-| `about: <element>, attach: false` | A free note laid out with the element, as one box: just before it across the flow (above, reading right; to its left, reading down), inside the element's boundary, with that side of the element kept free of connectors — for a callout meant to be read at a glance. Placement only: nothing records the link. Reads report a derived `nearest` element, labelled as placement. |
-| `about: <relationship>` | Always an attachment on the connector: a line has no "beside". |
+| `about: <element>, attach: false` | A free card laid out with the element, as one box: just before it across the flow (above, reading right; to its left, reading down), inside the element's boundary, with that side of the element kept free of connectors — for a callout meant to be read at a glance. Placement only: nothing records the link. Reads report a derived `nearest` element, labelled as placement. |
+| `about: <relationship>` | Always an attachment on the connector: a line has no "beside". A label can't attach to one (the editor's own rule); put the words in the relationship's label. |
 | `about: <group>` | A member of the boundary, placed at its head, under its title; the boundary grows to hold it. |
-| no `about` | A free note in a column after the diagram (a row below it, reading down), and an advisory asking for an `about`. |
+| `about: <group>, attach: true` | An attachment on the boundary itself — the boundary's own **Add Note** / **Add Code**. Not for a label. |
+| no `about` | A free card in a column after the diagram (a row below it, reading down), and an advisory asking for an `about`. |
 
-Text may be multiline; `kind` is `note`, `question`, `warning` or `decision`. The instructions ask
-agents to add only notes that explain something, and to mark an inference from code as an assumption.
-Edits are by id: `{op:"update", id, set:{text?, kind?, about?}}` edits or moves a free note (beside
-another element, or into a group) or an attachment (to another element or relationship), and
-`{op:"remove", ids:[id]}` removes either. Turning a free note into an attachment, or back, is a remove
-and an add. A focused read includes the attachments of the focused elements in full.
+A free code card is sized to show its snippet the way a paste sizes one; a label is as wide as its
+words, up to a wrap. Text may be multiline. The instructions ask agents to add only notes that
+explain something, and to mark an inference from code as an assumption.
+
+Edits are by id. `{op:"update", id, set:{…}}` edits a free card's words (`text`), note kind, code and
+`language`, colour, or moves it (`about`: beside another element, or into a group), and edits or moves
+an attachment (`about`: to another element, relationship or boundary). A card never changes what it
+is: a note can't become a snippet, or the other way round (refused, with the fix). `set.attach`
+converts between the two, keeping the id, as the editor's drag-to-attach and **Detach** do:
+
+- `{attach: true, about}` folds a free card onto that host. A card with connectors of its own is
+  refused (they would go with it), and so is a full host.
+- `{attach: false}` takes an attachment off as a free card beside its host (beside one end of a
+  relationship), or beside or inside `about` when that names an element or a boundary.
+
+`{op:"remove", ids:[id]}` removes either. A focused read includes the attachments of the focused
+elements (and boundaries) in full; `read_selection` and `get_implementation_context` list the code
+snippets about what is in focus beside its notes — attached ones as structure, a free card by the
+element it sits nearest, said so.
 
 **Flows** are named, ordered walks over relationships that already exist — adding one never adds
-shapes. They show in the Flows panel, play in presentation mode and export as Mermaid and PlantUML
-sequence diagrams.
+shapes. They are the presentation: they show in the Flows panel, play in presentation mode and export
+as Mermaid and PlantUML sequence diagrams.
 
 - One call can create a diagram with its flows (`layout.primaryFlow` lays one out as the straight main
   path). A flow is only built from an order the person or the code gives; the instructions say never
   to infer one from the layout or the graph, and to ask when it is unclear.
+- A step is a relationship id, or `{relationship, caption?, highlight?}`: the caption is what the
+  presentation says at that step, and `highlight` lights more elements, boundaries or relationships
+  with it — the Flows panel's **+ Selection**. `{spotlight: [ids], caption?}` is a step with no
+  relationship that lights just those ids, which the presentation frames — an overview to open with, a
+  boundary, the starting state. A step that would light nothing is refused.
 - `{op:"update", id, set:{title}}` renames a flow and leaves its steps alone. With `set.steps`, a step
-  whose relationship is still there keeps its id, its caption (unless `caption: null`), its extra
-  highlights and its camera; frame steps come back from a read as `{frame: <stepId>}` and are kept by
-  sending them back.
+  whose relationship is still there keeps its id, caption, highlights and camera unless the step says
+  otherwise: `caption: null` and `highlight: null` clear, `highlight: [ids]` replaces. A step with no
+  relationship comes back from a read as `{frame: <stepId>, spotlight?, caption?}` and is kept, or
+  edited, by sending it back. A read writes every step in the form an update takes, so sending the
+  steps back unchanged changes nothing.
+- A camera a person pinned on a step (**Pin view**) reads `pinnedView: true`; `pinnedView: false`
+  drops it, so the presentation frames what the step lights again. An agent never pins one: it has no
+  coordinates to pin.
 - A second flow with a title already in the view is refused with `DUPLICATE_FLOW`, naming the one to
   update. Separate paths (normal processing, a retry) are separate flows. A relationship is a step at
   most once per flow.
 - There is **no stored default or "main" flow**: naming a flow "Main flow" gives it no special
-  behaviour. Presenting picks the selected flow, or the only one.
+  behaviour. Presenting picks the selected flow, or the only one. Presenting itself — when, and how
+  fast — is the person's, in the app.
 - A flow may name another as `variantOf` — "Payment — failure path" naming "Payment"'s id — for a
   named alternative telling of the same scenario (a discussion of what happens if a step fails, built
   from existing elements and relationships rather than a simulation). Strictly hub-and-spoke: the
   flow named by `variantOf` must not itself carry one, which rules out chains and cycles without
   needing to walk one; setting `variantOf` to a flow that is already a variant is refused
-  (`INVALID_REFERENCE`). Deleting the base flow clears the link on its variant rather than leaving it
-  dangling. In the Flows panel and presentation's flow picker, a variant is listed right under its
-  base; switching between the two mid-presentation (`Shift+F`, or the picker) lands on the step
-  sharing a connector with the one being left, matched by the connector itself and never by step
-  index, falling back to the first step only when no shared connector exists in the target.
+  (`INVALID_REFERENCE`). Within one `create_diagram` or `add`, links are made in request order and
+  one that would chain is left out with an advisory; a `variantOf` naming no flow is refused. Deleting
+  the base flow clears the link on its variant rather than leaving it dangling. In the Flows panel and
+  presentation's flow picker, a variant is listed right under its base; switching between the two
+  mid-presentation (`Shift+F`, or the picker) lands on the step sharing a connector with the one
+  being left, matched by the connector itself and never by step index, falling back to the first step
+  only when no shared connector exists in the target.
+
+## Relationship options and ends
+
+Besides its label, meaning (`semantic`), behaviour (`kind`), direction, dashes and condition, a
+relationship takes what the connector inspector sets, on `add` and on `update`, and reads them back:
+
+| Field | What it is |
+| --- | --- |
+| `color` | One of the accents, as on an element; `null` clears it. |
+| `lineStyle` | `stepped` (the default), `curved` or `straight`. |
+| `response` | The reply line of a synchronous call — a person or a service calling a service, with no behaviour or `sync`: `true` draws it without a label, a string labels it (`"200 Order"`), `false` or `null` removes it; a read reports it the same way. On any other pairing an `add` leaves it out with an advisory and an `update` refuses it, as the inspector only offers it there. |
+| `deliveryAttempts` | On a dead-letter route (`semantic: "deadLetters"`), how many attempts come before it, 1–50; `null` clears it. |
+
+`{op:"update", id, set:{from?, to?}}` re-points a relationship in place — the editor's reconnect, or
+its **Reverse direction** when the two ends swap. The id, label, attachments and flow steps stay. A
+meaning that was inferred is inferred again for what the relationship now connects, and a chosen one
+is kept (`reinferIfEligible`, shared with the editor); a moved end is anchored afresh. The rules of a
+new relationship hold: no self-loops, and one per direction between two elements plus a compensation
+twin.
 
 ## Live progress and preview
 
@@ -702,6 +755,23 @@ C4 is native, not a layer on top:
 
 - **Levels** are the levels of Draft Canvas's rooms (`document.level`, `DraftNode.inside.level`). A
   drill-down is the room inside an element, at most 3 deep.
+- **Looking inside.** Only a service or a (non-port) component has an inside view — where the editor
+  offers **Look inside**. An element can be created with its inside (`inside: {…}`), and one that has
+  none yet gets it from the first `update_diagram` `add` sent with `view.inside` naming it; that add's
+  `level` sets the new view's level. Any other element named in `view.inside` is `NOT_FOUND`, and
+  says why. `read_diagram` with `include: ["views"]` outlines every inside view in the file.
+- **Moving between levels.** `{op:"moveInside", owner, ids}` moves shapes one level down, into
+  `owner`; `{op:"moveOutside", ids}`, sent with `view.inside`, moves shapes one level up and sets them
+  beside the owner, keeping their arrangement and moving nothing already there. They join the
+  boundary the owner is in (a component lifted out of a container stays in its system), which grows
+  to hold them; when it can't grow without running into a neighbour, they go just outside it and an
+  advisory says how to bring them in. Both keep every id,
+  attachment and the connectors among the moved shapes. A connector across the levels meets the owner
+  — the way the outer view draws everything inside it — and an inferred meaning is inferred again for
+  it. A flow moves only when it is told entirely with what moves; one split across the levels, or two
+  connectors that would merge, is refused rather than trimmed. An inside view emptied this way is
+  gone, as one emptied by hand is. A proposal or preview of either is reviewed from the outer view, so
+  the shapes show as moved, not deleted.
 - **Text.** Schema v15 adds `description` (≤ 280 characters) and `technology` (≤ 60) to services,
   data stores, queues, actors and components. The canvas draws them under the name, and the inspector
   edits them (**Details**).
@@ -740,14 +810,15 @@ view, or a data store at context level.
 | Services, data stores, queues, actors, components, ports, junctions (29 type words, mapped to native type + kind) | ✓ | ✓ add, update (label, type, description, technology, colour, group), remove | ✓ |
 | Relationships: label, semantic, behaviour, direction, async, condition | ✓ semantics from the capability matrix unless an offered one is named | ✓ | ✓ |
 | Boundaries (six kinds, nested) | ✓ | ✓ add, rename, move members in, remove (`cascade`) | ✓ |
-| C4 levels, description, technology, drill-down views | ✓ | ✓ `setLevel`, `view` targets a nested view | ✓ with derived role and scope |
-| Flows (ordered steps over relationships, captions, colour, frame steps, named variants) | ✓ | ✓ add, rename, recolour, revise steps (step ids kept), link/unlink as a variant, remove | ✓ with frame steps |
-| Notes (note, question, warning, decision): beside an element, inside a boundary, or attached | ✓ | ✓ add, edit text and kind, move, remove | ✓ with a derived `nearest` |
-| Attachments: note and code chips on elements and relationships | ✓ | ✓ add, edit, move to another host, remove — by id | ✓ with `include: ["attachments"]`, or in full in a focused read |
+| C4 levels, description, technology, drill-down views | ✓ | ✓ `setLevel`, `view` targets a nested view (the first `add` creates one), `moveInside` / `moveOutside` | ✓ with derived role and scope, and an outline of every inside view |
+| Relationship options: colour, line style, reply line, delivery attempts | ✓ | ✓ set and clear; re-point or reverse in place (`from`, `to`) | ✓ |
+| Flows: the presentation — ordered steps over relationships, captions, highlights, spotlight steps with no relationship, colour, named variants | ✓ | ✓ add, rename, recolour, revise steps (ids kept), highlight and spotlight, drop a pinned camera, link/unlink as a variant, remove | ✓ in the form an update takes back |
+| Notes (note, question, warning, decision), code snippets and labels: beside an element, inside a boundary, or attached | ✓ | ✓ add, edit words, kind, code, language and colour, move, attach and detach (id kept), remove | ✓ with a derived `nearest` |
+| Attachments: note, code and label chips on elements; note and code chips on relationships and boundaries | ✓ | ✓ add, edit, move to another host, take off as a free card, remove — by id | ✓ with `include: ["attachments"]`, or in full in a focused read |
 | Open points (what the people have not settled: tentative / awaiting / parked, about one or more elements) | — (raised on an existing diagram, not at creation) | ✓ `add` op `openPoints`, `update` (kind, context, resolved, resolution, about), `remove` — explicit fields only, never inferred from a label's wording; accepting a proposal never resolves one | ✓ at the root, and in a nested view the ones about something in it |
 | Architecture Starters, with overrides and extra elements | ✓ `starter: {id, prefix?, overrides?}` | — (a starter is only a starting point) | ✓ as ordinary elements |
 | Next-step suggestions | — | — | ✓ `include: ["suggestions"]`, never applied |
-| Presentation, sequence diagrams, exports (PNG, SVG, Mermaid, PlantUML, draw.io, `.draftcanvas`) | not tools: the diagram is native, so the person presents and exports it from the app | | |
+| Presenting, sequence diagrams, exports (PNG, SVG, Mermaid, PlantUML, draw.io, `.draftcanvas`) | not tools: the diagram is native, so the person presents (the flows an agent authored) and exports it from the app | | |
 | `arrange` (re-lay-out existing content in place) | — | ✓ the view, a boundary or some elements | — |
 
 ## Limits
@@ -759,11 +830,13 @@ with a JSON pointer to it.
 | --- | --- |
 | elements / relationships / groups | 300 / 600 / 60 |
 | flows / steps per flow | 20 / 60 |
+| extra elements / extra relationships one step lights | 40 / 40 |
 | notes / open points / ops | 60 / 50 / 100 |
 | attachments per element | 4 |
 | label / relationship label / group label | 120 / 80 / 80 characters |
 | description / technology | 280 / 60 characters |
 | note / code | 1,000 / 4,000 characters |
+| reply-line label / delivery attempts | 120 characters / 1–50 |
 | drill-down depth | 3 |
 | bridge frame | 4 MiB; at most 4 calls in flight per connection |
 
@@ -896,6 +969,12 @@ re-arranged in place in 117 ms, too quick for any preview to appear.
   tangled. Split it into views, or build it in steps.
 - **A stored "main" flow, or a note linked to something without being attached.** Neither exists in
   the document model, so neither is claimed.
+- **Pinning a presentation camera, or starting a presentation.** A pinned view is coordinates, which
+  an agent never sends (it can only drop one), and presenting is something a person does in front of
+  people. The step-number badges' setting (`showSequence`) has no control in the app either, so it
+  isn't a field here.
+- **Reordering attachments, and a label's text style.** Attachments keep the order they were added
+  in, and a label is plain body text; both are a person's finishing touches in the inspector.
 - **Exports as files.** The diagram is native, so the person presents and exports it from the app.
   An agent can *look* at a view (`render_diagram`, an image or SVG of what the person sees) and read
   the flows as sequence source (`read_diagram` with `format`), but nothing writes an export file for it.

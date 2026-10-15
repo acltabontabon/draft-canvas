@@ -13,7 +13,7 @@ import { classify } from '../depth/c4';
 import { effectiveLevel } from '../depth/level';
 import { viewOf, type DepthPath } from '../depth/tree';
 import type { DraftDocument } from '../document/types';
-import { collectNotes } from './context';
+import { collectNotes, collectSnippets } from './context';
 import { relationshipOf } from './read';
 import { typeWordOf } from './vocabulary';
 
@@ -84,6 +84,7 @@ export function readSelectionContext(file: DraftDocument, path: DepthPath, selec
   }
 
   const { notes, truncated: notesTruncated } = collectNotes(view, { aboutIds: new Set([...selectedNodes, ...selectedEdges]) });
+  const { snippets, truncated: snippetsTruncated } = collectSnippets(view, { aboutIds: new Set([...selectedNodes, ...selectedEdges]) });
 
   return {
     ...base,
@@ -92,6 +93,7 @@ export function readSelectionContext(file: DraftDocument, path: DepthPath, selec
     relationships,
     ...(groups.length ? { groups } : {}),
     ...(notes.length ? { notes } : {}),
-    ...(notesTruncated || neighborsTruncated ? { truncated: { ...(notesTruncated ? { notes: true } : {}), ...(neighborsTruncated ? { neighbors: true } : {}) } } : {}),
+    ...(snippets.length ? { snippets } : {}),
+    ...(notesTruncated || snippetsTruncated || neighborsTruncated ? { truncated: { ...(notesTruncated ? { notes: true } : {}), ...(snippetsTruncated ? { snippets: true } : {}), ...(neighborsTruncated ? { neighbors: true } : {}) } } : {}),
   };
 }
