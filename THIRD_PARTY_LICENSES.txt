@@ -8191,7 +8191,7 @@ for the license to code that was sourced from the once_cell project.
 
 (no licence file in the package; see its registry page)
 
-### rustls 0.23.45 — Apache-2.0 OR ISC OR MIT
+### rustls 0.23.46 — Apache-2.0 OR ISC OR MIT
 
 (no licence file in the package; see its registry page)
 
