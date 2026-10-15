@@ -525,6 +525,86 @@
   display: none;
 }
 
+/*
+ * A selected connector's bend handles (`EdgeBendHandles.tsx`). A stepped connector's run handle is a
+ * short bar lying along its run — it reads as "this part slides sideways", and its cursor says which
+ * way. A bend is a square, so it never reads as an endpoint's round dot; the fainter one between two
+ * points adds a bend. All of them keep a hit ring wider than they are drawn.
+ */
+.dc-edge-bend {
+  --dc-hit: clamp(12px, calc(18px / var(--dc-zoom, 1)), 28px);
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--dc-canvas);
+  border: 1.5px solid var(--dc-selection);
+  touch-action: none;
+  pointer-events: all;
+  cursor: move;
+}
+
+.dc-edge-bend::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--dc-hit);
+  height: var(--dc-hit);
+  translate: -50% -50%;
+}
+
+.dc-edge-bend[data-kind='run'] {
+  border-radius: 3px;
+  background: var(--dc-selection);
+  border-color: var(--dc-canvas);
+}
+
+/* Held near one size on screen across the usual zoom range, like the hit rings: the layer they sit
+   in scales with the canvas, and a bar a few pixels long at 50% is a speck. */
+.dc-edge-bend[data-kind='run'] {
+  --dc-bar-long: clamp(16px, calc(16px / var(--dc-zoom, 1)), 30px);
+  --dc-bar-short: clamp(6px, calc(6px / var(--dc-zoom, 1)), 10px);
+}
+
+.dc-edge-bend[data-kind='run'][data-level='true'] {
+  width: var(--dc-bar-long);
+  height: var(--dc-bar-short);
+  cursor: row-resize;
+}
+
+.dc-edge-bend[data-kind='run'][data-level='false'] {
+  width: var(--dc-bar-short);
+  height: var(--dc-bar-long);
+  cursor: col-resize;
+}
+
+.dc-edge-bend[data-kind='add'] {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border-color: color-mix(in srgb, var(--dc-selection) 55%, transparent);
+  cursor: copy;
+}
+
+.dc-edge-bend:hover {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--dc-selection) 25%, transparent);
+}
+
+.dc-edge-bend[data-kind='add']:hover {
+  border-color: var(--dc-selection);
+}
+
+@media (pointer: coarse) {
+  .dc-edge-bend {
+    --dc-hit: clamp(32px, calc(32px / var(--dc-zoom, 1)), 64px);
+  }
+}
+
+.dc-editor[data-mode='present'] .dc-edge-bend {
+  display: none;
+}
+
 /* Connector labels, attachment chips and endpoint handles read over the diagram, not under it —
    over *every* node: React Flow stacks each node at its own `z` (+1000 while selected), and `z`
    is kept within ±10 000 on load, so a small value here lost to any node brought forward a few

@@ -11,6 +11,15 @@ the release notes and the in-app What's New are generated from here. See
 
 ## [Unreleased]
 
+### Shared
+
+#### Added
+
+- **Bend connectors by hand** — select a connector and drag its line into place: a stepped
+  connector's runs slide and stay square, and a straight or curved one takes bends you add, move or
+  double-click away. Bends follow when you move the shapes together. Right-click and choose **Reset
+  route** to go back to automatic routing. <!-- highlight -->
+
 ## [1.14.0] - 2026-10-16
 
 Your agent draws like you do.

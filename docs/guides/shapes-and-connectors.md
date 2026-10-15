@@ -52,6 +52,24 @@ To change it, click the connector. Its popover lists only the relationships that
 two shapes, with the current one marked. Nothing stops you drawing something unusual on purpose: a
 pairing the matrix has an opinion about shows a small ▲ and still offers *depends on*.
 
+## Bend a connector by hand
+
+Connectors route themselves, and re-route as you move shapes. When a line doesn't go where you want
+— it crowds a label, takes the long way round, or an agent drew it somewhere awkward — select it and
+drag it into place:
+
+- A **Stepped** connector shows a small bar on each straight run. Drag one sideways to move that run;
+  the runs either side stretch to follow, so the line stays square. A run snaps level with the ends
+  and with the line's other runs, which is how a jog comes back out.
+- A **Straight** or **Curved** connector shows a square on each bend and a faint dot between any two
+  points. Drag a dot to add a bend, drag a square to move it, and double-click a square to remove it.
+
+The ends still follow their shapes. Move both shapes together and the bends come along; move one and
+the line re-squares itself to meet it. Each drag is one undo step.
+
+To hand a connector back to automatic routing, right-click it and choose **Reset route**. **Tidy
+connectors** in the command palette (`⌘K`) does the same for every connector at once.
+
 ## Sync, async and the reply
 
 Between two Services, the popover's **Interaction** section chooses the protocol (**HTTP** or a

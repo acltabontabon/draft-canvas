@@ -39,7 +39,7 @@ export function moveInside(file: DraftDocument, path: DepthPath, ownerId: unknow
     const source = ids.has(edge.source) ? owner.id : edge.source;
     const target = ids.has(edge.target) ? owner.id : edge.target;
     if (source === target) throw new AgentError('UNSUPPORTED', `Relationship "${edge.id}" would become a self-loop at the overview. Edit it explicitly before moving its shapes.`);
-    return { ...edge, source, target, sourceAnchor: undefined, targetAnchor: undefined, routing: 'smoothstep' as const };
+    return { ...edge, source, target, sourceAnchor: undefined, targetAnchor: undefined, waypoints: undefined, routing: 'smoothstep' as const };
   });
   const pairs = new Set<string>();
   for (const edge of outerEdges) {
@@ -65,7 +65,9 @@ export function moveInside(file: DraftDocument, path: DepthPath, ownerId: unknow
   // its new end, as `moveOutside`'s does.
   for (const edge of outerEdges) if (edge !== view.edges.find((e) => e.id === edge.id)) outer = reinferIfEligible(outer, edge.id, view);
   const without = path.length ? embed(file, path, outer) : outer;
-  return embed(without, childPath, { ...inside, nodes: [...inside.nodes, ...movedNodes], edges: [...inside.edges, ...innerEdges], flows: [...inside.flows, ...innerFlows] });
+  // Bends travel with their shapes, by the same amount.
+  const movedEdges = innerEdges.map((edge) => carriedBends(edge, origin.x - minX, origin.y - minY));
+  return embed(without, childPath, { ...inside, nodes: [...inside.nodes, ...movedNodes], edges: [...inside.edges, ...movedEdges], flows: [...inside.flows, ...innerFlows] });
 }
 
 /**
@@ -115,6 +117,8 @@ export function moveOutside(
     const moved: DraftEdge = { ...edge, source: ids.has(edge.source) ? edge.source : owner.id, target: ids.has(edge.target) ? edge.target : owner.id, routing: 'smoothstep' };
     delete moved.sourceAnchor;
     delete moved.targetAnchor;
+    // Bends drawn to the shape left behind lead nowhere now.
+    delete moved.waypoints;
     return moved;
   });
   const pairs = new Set(parent.edges.map((e) => `${e.source}|${e.target}|${e.semantic === 'compensates' ? 'compensation' : 'normal'}`));
@@ -149,7 +153,8 @@ export function moveOutside(
       }
       return placed;
     });
-    let next: DraftDocument = { ...around, nodes: [...around.nodes, ...movedNodes], edges: [...around.edges, ...innerEdges, ...redirected], flows: [...around.flows, ...movedFlows] };
+    const movedEdges = innerEdges.map((edge) => carriedBends(edge, origin.x - minX, origin.y - minY));
+    let next: DraftDocument = { ...around, nodes: [...around.nodes, ...movedNodes], edges: [...around.edges, ...movedEdges, ...redirected], flows: [...around.flows, ...movedFlows] };
     if (into) for (const node of movedNodes.filter((n) => n.parentId === into)) next = fitGroups(next, node.id);
     // A connector whose end changed is a re-pointed connector: its inferred meaning follows its new
     // end, and it is anchored from where both shapes are now.
@@ -185,4 +190,10 @@ export function moveOutside(
     ? [`The shapes moved out of "${owner.id}" were placed outside boundary "${group}", which had no room for them; arrange the outer view, then set their group to "${group}" to bring them in.`]
     : [];
   return { file: parentPath.length ? embed(emptied, parentPath, next) : next, touched, advisories };
+}
+
+/** A connector moved between views with both its shapes: its bends shift as the shapes did. */
+function carriedBends(edge: DraftEdge, dx: number, dy: number): DraftEdge {
+  if (!edge.waypoints) return edge;
+  return { ...edge, waypoints: edge.waypoints.map((p) => ({ x: Math.round(p.x + dx), y: Math.round(p.y + dy) })) };
 }

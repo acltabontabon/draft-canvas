@@ -90,6 +90,7 @@ const EDGE_KEYS = [
   'sourceAnchor',
   'targetAnchor',
   'routeMode',
+  'waypoints',
   'semanticsOrigin',
   'attachments',
   'evidence',

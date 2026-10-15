@@ -341,7 +341,11 @@ function grown(node: DraftNode, ctx: DescribeContext): DraftNode {
 
 function restyled(edge: DraftEdge, connectors: ArrangeRequest['connectors']): DraftEdge {
   const next: DraftEdge = { ...edge };
-  if (connectors !== 'keep') delete next.routeMode;
+  // Bends drawn for the old layout would drag every line back to where its shapes used to be.
+  if (connectors !== 'keep') {
+    delete next.routeMode;
+    delete next.waypoints;
+  }
   if (connectors === 'orthogonal') next.routing = 'smoothstep';
   return next;
 }

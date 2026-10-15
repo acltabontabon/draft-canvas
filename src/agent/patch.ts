@@ -499,11 +499,15 @@ function repoint(view: DraftDocument, edge: DraftEdge, ends: { source: string; t
   const moved: DraftEdge = { ...edge, source: ends.source, target: ends.target };
   delete moved.sourceAnchor;
   delete moved.targetAnchor;
+  delete moved.waypoints;
   if (reversed) {
-    // Reversing swaps the anchors with the ends, exactly as `reverseEdge` does.
+    // Reversing swaps the anchors with the ends, exactly as `reverseEdge` does — and keeps the line.
     if (edge.targetAnchor) moved.sourceAnchor = edge.targetAnchor;
     if (edge.sourceAnchor) moved.targetAnchor = edge.sourceAnchor;
+    if (edge.waypoints) moved.waypoints = [...edge.waypoints].reverse();
   } else {
+    // A bent line drawn to the old end would lead the new one the long way round; it routes afresh.
+    if (ends.source === edge.source && ends.target === edge.target && edge.waypoints) moved.waypoints = edge.waypoints;
     if (ends.source === edge.source && edge.sourceAnchor) moved.sourceAnchor = edge.sourceAnchor;
     if (ends.target === edge.target && edge.targetAnchor) moved.targetAnchor = edge.targetAnchor;
   }
