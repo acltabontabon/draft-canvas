@@ -612,6 +612,22 @@ export function responseAwayFor(hasResponse: boolean | undefined, laneOffset: nu
 }
 
 /**
+ * The side a connector's label chip takes once its reply line is accounted for: the side facing
+ * away from it. `labelSideFor` knows nothing of the reply line, and its default (`right`/`top`)
+ * is where a positive `responseLaneFor` lane pushes it on a vertical line — so on a vertical
+ * connector the label chip sat over the reply line, the reply chip (`OPPOSITE_SIDE` of the label,
+ * see `DraftEdgeView.tsx`) sat over the request line, and the two collided in the gap between
+ * them. With the label facing away, the reply chip lands on the outer side of its own line.
+ *
+ * With a reply line (`responseAwayFor`) this is the caption's own rule, `labelSideAwayFromResponse`.
+ * Without one a chip keeps `labelSideFor`'s side, where a caption always drops under a horizontal
+ * line — so the chip can't simply share that function.
+ */
+export function labelChipSide(side: Side, responseAway: number): Side {
+  return responseAway ? labelSideAwayFromResponse(side, responseAway) : side;
+}
+
+/**
  * How far the reply trunk sits beyond the request trunk.
  *
  * A constant, not a share of the corridor: this is lane spacing, and lane

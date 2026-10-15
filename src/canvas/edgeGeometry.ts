@@ -10,7 +10,7 @@ import type { DraftEdge, DraftNode, DraftNodeType, Side } from '../document/type
 import { routingPlan } from '../edges/bundles';
 import { labelGroupPlan } from '../edges/labelGroups';
 import { obstaclesForEdge } from '../edges/obstacles';
-import { labelLaneOffset, laneIndex, routeBetween, type Rect } from '../edges/routing';
+import { labelChipSide, labelLaneOffset, laneIndex, responseAwayFor, routeBetween, type Rect } from '../edges/routing';
 import { clamp } from '../lib/math';
 
 export type InternalNode = NonNullable<ReturnType<typeof useInternalNode>>;
@@ -63,7 +63,8 @@ export function edgeLabelPoint(
   const shared = interactionActive ? undefined : labelGroupPlan(document.nodes, document.edges).groupFor(edge.id);
   if (shared) return { x: shared.x, y: shared.y, side: shared.side };
   const labelNudge = labelLaneOffset(route.source.side, route.target.side, lane);
-  return { x: route.labelX + labelNudge.x, y: route.labelY + labelNudge.y, side: route.labelSide };
+  const side = labelChipSide(route.labelSide, responseAwayFor(edge.hasResponse, lane));
+  return { x: route.labelX + labelNudge.x, y: route.labelY + labelNudge.y, side };
 }
 
 

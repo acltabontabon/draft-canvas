@@ -16,7 +16,7 @@ import type { DraftEdge, DraftNode, Side } from '../document/types';
 import { routingPlan } from '../edges/bundles';
 import { labelChipBox, labelGroupPlan } from '../edges/labelGroups';
 import { obstaclesForEdge } from '../edges/obstacles';
-import { anchorsHold, labelLaneOffset, labelSideAwayFromResponse, laneIndex, responseAwayFor, routeEdge } from '../edges/routing';
+import { anchorsHold, labelChipSide, labelLaneOffset, labelSideAwayFromResponse, laneIndex, responseAwayFor, routeEdge } from '../edges/routing';
 
 export interface Box {
   x: number;
@@ -201,8 +201,11 @@ export function drawnRoute(edge: DraftEdge, nodes: readonly DraftNode[], edges: 
     } else {
       const lane = laneIndex(edges).get(edge.id)?.offset ?? 0;
       const nudge = labelLaneOffset(route.source.side, route.target.side, lane);
-      if (edge.label) chip = labelChipBox(route.labelSide, route.labelX + nudge.x, route.labelY + nudge.y, size.width, size.height);
-      else {
+      if (edge.label) {
+        // The side the renderers draw it on: away from the reply line, when there is one.
+        const side = labelChipSide(route.labelSide, responseAwayFor(edge.hasResponse, lane));
+        chip = labelChipBox(side, route.labelX + nudge.x, route.labelY + nudge.y, size.width, size.height);
+      } else {
         // A relationship caption (no label of its own) is drawn by `captionAnchor`, not as a chip: on a
         // shared trunk's one point when it collapses there, under a horizontal line whichever side a
         // chip would have taken, and off whichever side a request/response pair's reply line takes —

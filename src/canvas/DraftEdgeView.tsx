@@ -12,6 +12,7 @@ import {
   RESPONSE_SEED_SUFFIX,
   arrowSeed,
   endTangent,
+  labelChipSide,
   labelLaneOffset,
   laneIndex,
   rectOf,
@@ -486,7 +487,12 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const labelNudge = labelLaneOffset(route.source.side, route.target.side, laneOffset);
   const labelX = route.labelX + labelNudge.x;
   const labelY = route.labelY + labelNudge.y;
-  const attachmentFlipBelow = attachmentRowBelowsSourceOrTarget(labelX, labelY, sourceRect, targetRect, captionSideOf(edge, route.labelSide));
+  // Everything that sits beside the label point takes the side away from the reply line, so the
+  // reply's own chip has the outer side of its line to itself — see `labelChipSide`.
+  // Mirrors `edges/describe.ts`.
+  const responseAway = responseAwayFor(edge.hasResponse, laneOffset);
+  const labelSide = labelChipSide(route.labelSide, responseAway);
+  const attachmentFlipBelow = attachmentRowBelowsSourceOrTarget(labelX, labelY, sourceRect, targetRect, captionSideOf(edge, labelSide));
 
   const hasLabel = Boolean(edge.label);
   // In a label group, the leader draws the one label at the group's point — along its own live line
@@ -499,7 +505,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       ? (pointAlong(route.d, sharedLabel!.distance) ?? sharedLabel!)
       : sharedLabel!
     : null;
-  const chipSide = sharedAt ? sharedLabel!.side : route.labelSide;
+  const chipSide = sharedAt ? sharedLabel!.side : labelSide;
   const chipX = sharedAt ? sharedAt.x : labelX;
   const chipY = sharedAt ? sharedAt.y : labelY;
   const labelLayout = edge.label ? layoutEdgeLabel(edge.label) : null;
@@ -560,11 +566,11 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
         lineHeight: FONTS.connectorCaption.size * LINE_HEIGHTS.label,
         maxLines: 1,
       });
-      const caption = captionAnchorRect(route.labelSide, captionAt.x, captionAt.y, layout, responseAwayFor(edge.hasResponse, laneOffset));
+      const caption = captionAnchorRect(route.labelSide, captionAt.x, captionAt.y, layout, responseAway);
       const left = caption.align === 'start' ? caption.x : caption.align === 'end' ? caption.x - layout.width : caption.x - layout.width / 2;
       occupied = { left, top: caption.y, width: layout.width, height: layout.height };
     }
-    return edgeMarkerCenter({ x: labelX, y: labelY }, route.labelSide, occupied);
+    return edgeMarkerCenter({ x: labelX, y: labelY }, labelSide, occupied);
   })();
 
   // Only the drawn stroke wobbles — every geometry value above (`route`,
@@ -871,7 +877,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
           landing on top of the response line's own label — see its own doc comment. */}
       {!hasLabel && !badgeOverCaption && edge.semantic && (() => {
         const captionSide = captionCollapsed ? (route.trunkLabelSide ?? route.labelSide) : route.labelSide;
-        const caption = captionAnchor(captionSide, captionAt.x, captionAt.y, responseAwayFor(edge.hasResponse, laneOffset));
+        const caption = captionAnchor(captionSide, captionAt.x, captionAt.y, responseAway);
         const label = relationshipCaptionLabel(edge.semantic, {
           hasResponse: edge.hasResponse,
           deliveryAttempts: edge.deliveryAttempts,
@@ -1041,7 +1047,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
             data-active={isActiveStep ? 'true' : undefined}
             data-lens-dimmed={lensDimmed ? 'true' : undefined}
             style={{
-              transform: conditionTransform(route.labelSide, labelX, labelY),
+              transform: conditionTransform(labelSide, labelX, labelY),
             }}
           >
             <span
@@ -1086,7 +1092,9 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
             primary's, so it never stacks on the label/condition/step/attachment cluster above,
             and forced to `OPPOSITE_SIDE` of the request label so "request above / response
             below" (or the left/right equivalent) holds regardless of what each independently-
-            computed route's own `labelSide` happens to agree on. Compact by default, revealed on
+            computed route's own `labelSide` happens to agree on. The request label already faces
+            away from this line (`labelChipSide`), so the opposite side is this line's
+            outer side, clear of the request line and its chip. Compact by default, revealed on
             hover/selection via `canvas.css`, not a new piece of React state. */}
         {edge.response && (
           <div
@@ -1098,7 +1106,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
             data-active={isActiveStep ? 'true' : undefined}
             data-lens-dimmed={lensDimmed ? 'true' : undefined}
             style={{
-              transform: labelChipTransform(OPPOSITE_SIDE[route.labelSide], responseLabelX, responseLabelY),
+              transform: labelChipTransform(OPPOSITE_SIDE[labelSide], responseLabelX, responseLabelY),
             }}
           >
             <span className="dc-edge-label-line" title={responseLayout?.truncated ? edge.response : undefined}>
