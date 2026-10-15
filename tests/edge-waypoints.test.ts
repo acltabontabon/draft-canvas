@@ -21,6 +21,7 @@ import {
   stepPolyline,
 } from '../src/edges/waypoints';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
+import { renderDocumentSvg } from '../src/render/svg/document';
 
 const orthogonal = (points: readonly DraftPoint[]) =>
   points.every((p, i) => i === 0 || p.x === points[i - 1]!.x || p.y === points[i - 1]!.y);
@@ -198,6 +199,13 @@ describe('bends in the document', () => {
   it('reverses bends with the connector', () => {
     const { doc, edge } = bent();
     expect(reverseEdge(doc, edge.id).edges[0]!.waypoints).toEqual([{ x: 250, y: 120 }, { x: 250, y: -40 }]);
+  });
+
+  it('widens an export to hold bends that run clear of every shape', () => {
+    const { doc, edge } = bent();
+    const plain = renderDocumentSvg(setEdgeWaypoints(doc, edge.id, undefined));
+    const high = renderDocumentSvg(setEdgeWaypoints(doc, edge.id, [{ x: 250, y: -300 }]));
+    expect(high.height).toBeGreaterThan(plain.height + 200);
   });
 
   it('survives a save and load, and drops unreadable points', () => {

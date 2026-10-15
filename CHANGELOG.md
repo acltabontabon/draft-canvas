@@ -19,6 +19,9 @@ the release notes and the in-app What's New are generated from here. See
   connector's runs slide and stay square, and a straight or curved one takes bends you add, move or
   double-click away. Bends follow when you move the shapes together. Right-click and choose **Reset
   route** to go back to automatic routing. <!-- highlight -->
+- **Agents can place and route exactly** — ask your agent to put a shape somewhere specific, or beside
+  another one, or to take a connector a particular way, and it does: it reads where everything is
+  drawn and moves just what you asked. Shapes on top of each other are still refused.
 
 ## [1.14.0] - 2026-10-16
 
