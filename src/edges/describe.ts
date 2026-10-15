@@ -17,7 +17,9 @@ import {
   captionAnchor as captionBaseline,
   endTangent,
   labelLaneOffset,
+  labelSideAwayFromResponse,
   rectOf,
+  responseAwayFor,
   responseLaneFor,
   responseSpineFor,
   routeBetween,
@@ -123,16 +125,9 @@ export function captionAnchor(
   responseAway = 0,
 ): { x: number; y: number; align: TextAlign } {
   const height = layout.height;
-  if (side === 'right') {
-    return responseAway > 0
-      ? { x: x - LABEL_LINE_GAP, y: y - height / 2, align: 'end' }
-      : { x: x + LABEL_LINE_GAP, y: y - height / 2, align: 'start' };
-  }
-  if (side === 'left') {
-    return responseAway < 0
-      ? { x: x + LABEL_LINE_GAP, y: y - height / 2, align: 'start' }
-      : { x: x - LABEL_LINE_GAP, y: y - height / 2, align: 'end' };
-  }
+  const at = labelSideAwayFromResponse(side, responseAway);
+  if (at === 'right') return { x: x + LABEL_LINE_GAP, y: y - height / 2, align: 'start' };
+  if (at === 'left') return { x: x - LABEL_LINE_GAP, y: y - height / 2, align: 'end' };
   const baseline = captionBaseline(side, x, y, responseAway).y;
   return { x, y: baseline - baselineOf(layout, 0), align: 'middle' };
 }
@@ -403,7 +398,7 @@ export function describeEdge(
         target: targetCategory,
       });
       const text = isUnusual ? `▲ ${label}` : label;
-      const captionResponseAway = edge.hasResponse ? Math.sign(responseLaneFor(ctx.lane ?? 0)) : 0;
+      const captionResponseAway = responseAwayFor(edge.hasResponse, ctx.lane ?? 0);
       // A bundle's members all share one relationship, so repeating its
       // caption down every branch is pure noise — the exact "calls / calls /
       // calls / calls / calls" column this feature exists to remove. Every

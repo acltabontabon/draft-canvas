@@ -15,6 +15,7 @@ import {
   labelLaneOffset,
   laneIndex,
   rectOf,
+  responseAwayFor,
   responseLaneFor,
   responseSpineFor,
   routeBetween,
@@ -559,7 +560,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
         lineHeight: FONTS.connectorCaption.size * LINE_HEIGHTS.label,
         maxLines: 1,
       });
-      const caption = captionAnchorRect(route.labelSide, captionAt.x, captionAt.y, layout, edge.hasResponse ? Math.sign(responseLaneFor(laneOffset)) : 0);
+      const caption = captionAnchorRect(route.labelSide, captionAt.x, captionAt.y, layout, responseAwayFor(edge.hasResponse, laneOffset));
       const left = caption.align === 'start' ? caption.x : caption.align === 'end' ? caption.x - layout.width : caption.x - layout.width / 2;
       occupied = { left, top: caption.y, width: layout.width, height: layout.height };
     }
@@ -605,7 +606,6 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // line rather than a whole new routing system. `responseRoute.target` therefore lands on the
   // *original source* node — that's what makes its `markerEnd` correctly point back at A; don't
   // "fix" the apparent reversal. See `responseLaneFor`'s own doc comment in `edges/routing.ts`.
-  const responseLane = responseLaneFor(laneOffset);
   const responseRoute = routes.response;
   const responseDrawnPath = responseRoute
     ? roughenPath(responseRoute.d, `${seed}${RESPONSE_SEED_SUFFIX}`, profile.outline, profile.bow)
@@ -871,7 +871,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
           landing on top of the response line's own label — see its own doc comment. */}
       {!hasLabel && !badgeOverCaption && edge.semantic && (() => {
         const captionSide = captionCollapsed ? (route.trunkLabelSide ?? route.labelSide) : route.labelSide;
-        const caption = captionAnchor(captionSide, captionAt.x, captionAt.y, edge.hasResponse ? Math.sign(responseLane) : 0);
+        const caption = captionAnchor(captionSide, captionAt.x, captionAt.y, responseAwayFor(edge.hasResponse, laneOffset));
         const label = relationshipCaptionLabel(edge.semantic, {
           hasResponse: edge.hasResponse,
           deliveryAttempts: edge.deliveryAttempts,

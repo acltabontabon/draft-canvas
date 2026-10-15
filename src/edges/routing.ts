@@ -605,6 +605,12 @@ export function responseLaneFor(laneOffset: number): number {
   return laneOffset + Math.sign(laneOffset || 1) * RESPONSE_LANE_DELTA;
 }
 
+/** The signed side of a connector's own response line, or `0` without one: `captionAnchor`'s
+ *  `responseAway`. A single connector (`laneOffset === 0`) with a reply still has a side. */
+export function responseAwayFor(hasResponse: boolean | undefined, laneOffset: number): number {
+  return hasResponse ? Math.sign(responseLaneFor(laneOffset)) : 0;
+}
+
 /**
  * How far the reply trunk sits beyond the request trunk.
  *
@@ -1491,16 +1497,21 @@ export function captionAnchor(
   y: number,
   responseAway = 0,
 ): { x: number; y: number; textAnchor: 'start' | 'middle' | 'end'; dominantBaseline?: 'middle' } {
-  if (side === 'right') {
-    return responseAway > 0
-      ? { x: x - LABEL_LINE_GAP, y, textAnchor: 'end', dominantBaseline: 'middle' }
-      : { x: x + LABEL_LINE_GAP, y, textAnchor: 'start', dominantBaseline: 'middle' };
-  }
-  if (side === 'left') {
-    return responseAway < 0
-      ? { x: x + LABEL_LINE_GAP, y, textAnchor: 'start', dominantBaseline: 'middle' }
-      : { x: x - LABEL_LINE_GAP, y, textAnchor: 'end', dominantBaseline: 'middle' };
-  }
-  return responseAway > 0 ? { x, y: y - 14, textAnchor: 'middle' } : { x, y: y + 14, textAnchor: 'middle' };
+  const at = labelSideAwayFromResponse(side, responseAway);
+  if (at === 'right') return { x: x + LABEL_LINE_GAP, y, textAnchor: 'start', dominantBaseline: 'middle' };
+  if (at === 'left') return { x: x - LABEL_LINE_GAP, y, textAnchor: 'end', dominantBaseline: 'middle' };
+  return at === 'top' ? { x, y: y - 14, textAnchor: 'middle' } : { x, y: y + 14, textAnchor: 'middle' };
+}
+
+/**
+ * The side of its line a relationship caption lands on, given the side a label chip would take
+ * there: beside a vertical line on that side, under a horizontal one, and moved off whichever side
+ * `responseAway` (see `captionAnchor`) puts the reply line. The canvas, the exporter and the agent's
+ * legibility check (`agent/route.ts`) all place the caption by this.
+ */
+export function labelSideAwayFromResponse(side: Side, responseAway: number): Side {
+  if (side === 'right') return responseAway > 0 ? 'left' : 'right';
+  if (side === 'left') return responseAway < 0 ? 'right' : 'left';
+  return responseAway > 0 ? 'top' : 'bottom';
 }
 

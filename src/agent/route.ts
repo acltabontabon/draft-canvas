@@ -16,7 +16,7 @@ import type { DraftEdge, DraftNode, Side } from '../document/types';
 import { routingPlan } from '../edges/bundles';
 import { labelChipBox, labelGroupPlan } from '../edges/labelGroups';
 import { obstaclesForEdge } from '../edges/obstacles';
-import { anchorsHold, labelLaneOffset, laneIndex, routeEdge } from '../edges/routing';
+import { anchorsHold, labelLaneOffset, labelSideAwayFromResponse, laneIndex, responseAwayFor, routeEdge } from '../edges/routing';
 
 export interface Box {
   x: number;
@@ -204,14 +204,15 @@ export function drawnRoute(edge: DraftEdge, nodes: readonly DraftNode[], edges: 
       if (edge.label) chip = labelChipBox(route.labelSide, route.labelX + nudge.x, route.labelY + nudge.y, size.width, size.height);
       else {
         // A relationship caption (no label of its own) is drawn by `captionAnchor`, not as a chip: on a
-        // shared trunk's one point when it collapses there, and under a horizontal line whichever side
-        // a chip would have taken — only a request/response pair's reply line moves it above.
+        // shared trunk's one point when it collapses there, under a horizontal line whichever side a
+        // chip would have taken, and off whichever side a request/response pair's reply line takes —
+        // which a single connector's reply has too (`responseAwayFor`), so this asks the same helpers.
         const at = route.trunkLabel ?? { x: route.labelX + nudge.x, y: route.labelY + nudge.y };
-        const side = route.trunkLabel ? (route.trunkLabelSide ?? route.labelSide) : route.labelSide;
+        const chipSide = route.trunkLabel ? (route.trunkLabelSide ?? route.labelSide) : route.labelSide;
+        const side = labelSideAwayFromResponse(chipSide, responseAwayFor(edge.hasResponse, lane));
         if (side === 'left' || side === 'right') chip = labelChipBox(side, at.x, at.y, size.width, size.height);
         else {
-          const above = Boolean(edge.hasResponse) && lane > 0;
-          const baseline = above ? at.y - CAPTION_DROP : at.y + CAPTION_DROP;
+          const baseline = side === 'top' ? at.y - CAPTION_DROP : at.y + CAPTION_DROP;
           chip = { x: at.x - size.width / 2, y: baseline - CAPTION_RISE - (size.height - CAPTION_TEXT) / 2, width: size.width, height: size.height };
         }
       }
