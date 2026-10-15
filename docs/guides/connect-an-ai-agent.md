@@ -33,6 +33,11 @@ can't reach it.
      included, stays as it was, and a file with a mistake in it is left alone. The entry also gives
      tools 150 seconds instead of Codex's default 60, so a large layout isn't cut off. Start a new
      Codex chat afterwards. **Set it up by hand instead** shows the same entry to paste.
+
+     ![Settings, Connect an agent, with Codex chosen: an Add to Codex button above a line saying it adds Draft Canvas to Codex's MCP servers in ~/.codex/config.toml.](../media/guides/agent-setup-codex.png)
+
+     ![After clicking: a check mark and "Set up in ~/.codex/config.toml. Start a new Codex chat to use it.", with the by-hand config.toml entry expanded below.](../media/guides/agent-setup-codex-done.png)
+
    - **Cursor**: click **Add to Cursor** — it opens Cursor and adds Draft Canvas to its MCP
      configuration for you. If nothing opens (no `cursor://` links registered, or you'd rather add it
      to a project's own configuration first), use **Copy the config instead** and paste it into
