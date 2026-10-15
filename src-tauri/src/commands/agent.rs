@@ -2,6 +2,7 @@
 
 use super::projects::project_info;
 use super::run_blocking;
+use crate::agent::clients::{self, Client, ClientSetup};
 use crate::agent::proposals::{Proposal, ProposalStatus};
 use crate::agent::scope::{self, enabled_projects};
 use crate::agent::{broker, sidecar_path, sidecar_warning, Agent, AgentStatus, BackgroundSupport};
@@ -226,6 +227,40 @@ pub async fn agent_configure(app: AppHandle, patch: AgentPatch) -> Result<AgentS
         configure(state, &agent, patch)?;
         state.events.emit(HostEvent::AgentChanged);
         Ok(settings_of(state, &agent))
+    })
+    .await
+}
+
+/// The connector this app ships, if a client's configuration may be pointed at it now.
+fn connectable_sidecar() -> Result<PathBuf, AppError> {
+    let path = sidecar_path().ok_or_else(|| {
+        AppError::new(
+            ErrorKind::NotFound,
+            "This build of Draft Canvas doesn’t include the agent connector.",
+        )
+    })?;
+    if let Some(warning) = sidecar_warning(&path) {
+        return Err(AppError::new(ErrorKind::InvalidPath, warning));
+    }
+    Ok(path)
+}
+
+/// Whether Codex and Claude Code already launch this app's connector (`agent/clients.rs`). Asked
+/// when Settings shows the setup, not with every status refresh: finding `claude` can start a shell.
+#[tauri::command]
+pub async fn agent_clients(app: AppHandle) -> Result<Vec<ClientSetup>, AppError> {
+    run_blocking(&app, |_, _| match sidecar_path() {
+        Some(path) => Ok(clients::status(&path)),
+        None => Ok(Vec::new()),
+    })
+    .await
+}
+
+/// Adds Draft Canvas to `client`'s MCP configuration, or points an existing entry at this app.
+#[tauri::command]
+pub async fn agent_connect_client(app: AppHandle, client: Client) -> Result<ClientSetup, AppError> {
+    run_blocking(&app, move |_, _| {
+        clients::connect(client, &connectable_sidecar()?)
     })
     .await
 }

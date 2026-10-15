@@ -4,6 +4,8 @@ import { serializeDocument } from '../../src/export/project';
 import type { CommandMessage, ToHostMessage } from '../../src/host/embeddedHost';
 import {
   DesktopError,
+  type AgentClient,
+  type AgentClientSetup,
   type AgentSettings,
   type DesktopApi,
   type DocState,
@@ -306,6 +308,8 @@ export function createHarness() {
     agentRespond: vi.fn(async (id: number, outcome: unknown) => void agent.responses.set(id, outcome)),
     agentStatus: vi.fn(async () => agent.settings),
     agentConfigure: vi.fn(async () => agent.settings),
+    agentClients: vi.fn(async () => [] as AgentClientSetup[]),
+    agentConnectClient: vi.fn(async (client: AgentClient): Promise<AgentClientSetup> => ({ client, state: 'ready', automatic: true, location: null, configuredCommand: null })),
     agentProposalList: vi.fn(async (diagramId?: string) => {
       const all = [...agent.proposals.values()].filter((p) => diagramId === undefined || p.diagramId === diagramId);
       return all.sort((a, b) => b.updatedAt - a.updatedAt);

@@ -661,7 +661,7 @@ test('Settings → AI agents is off until turned on, and each folder is allowed 
   await expect(platform).not.toBeChecked();
   await expect(settings.getByRole('status').filter({ hasText: 'Restart Draft Canvas so agents can reach it while its window is hidden.' })).toBeVisible();
   // The connector's path, ready to paste into an agent's setup — never the secret.
-  await expect(settings.getByText('claude mcp add draft-canvas -- "/Applications/Draft Canvas.app/Contents/MacOS/draft-canvas-mcp"')).toBeVisible();
+  await expect(settings.getByText('claude mcp add --scope user draft-canvas -- "/Applications/Draft Canvas.app/Contents/MacOS/draft-canvas-mcp"')).toBeVisible();
 
   const patches = await page.evaluate(() =>
     window.__shell
@@ -723,10 +723,22 @@ test('Settings moves between pages by keyboard, shows one agent setup at a time,
   await expect(folders.getByRole('checkbox', { name: /platform-tools/ })).not.toHaveAccessibleDescription(/reachable/);
 
   // One client's setup at a time.
-  const command = settings.getByText(/^claude mcp add draft-canvas/);
+  const command = settings.getByText(/^claude mcp add --scope user draft-canvas/);
   await expect(command).toBeVisible();
   await expect(settings.getByText(/"mcpServers"/)).toHaveCount(0);
   // The segmented control's radios are visually hidden; its label is what a pointer presses.
+  await settings.getByRole('radio', { name: 'Codex' }).check({ force: true });
+  await expect(command).toHaveCount(0);
+  // Codex is set up by the shell itself; the by-hand entry stays tucked away until asked for.
+  const toml = settings.getByText(/\[mcp_servers\.draft-canvas\]/);
+  await expect(toml).toBeHidden();
+  await settings.getByRole('button', { name: 'Add to Codex' }).click();
+  await expect(settings.getByRole('status').filter({ hasText: 'Set up in ~/.codex/config.toml. Start a new Codex chat to use it.' })).toBeVisible();
+  await expect(settings.getByRole('button', { name: 'Add to Codex' })).toHaveCount(0);
+  const connects = await page.evaluate(() => window.__shell.calls().filter((call) => call.command === 'agent_connect_client').map((call) => call.args));
+  expect(connects).toEqual([{ client: 'codex' }]);
+  await settings.getByRole('button', { name: 'Set it up by hand instead' }).click();
+  await expect(toml).toBeVisible();
   await settings.getByRole('radio', { name: 'Cursor' }).check({ force: true });
   await expect(command).toHaveCount(0);
   await expect(settings.getByRole('link', { name: 'Add to Cursor' })).toHaveAttribute('href', /^cursor:\/\/anysphere\.cursor-deeplink\/mcp\/install/);

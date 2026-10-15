@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { AgentProject, AgentSettings } from '../../src/desktop/api';
-import { claudeCodeCommand, connectionSummary, folderRows } from '../../src/desktop/ui/settings/agentModel';
+import type { AgentClientSetup, AgentProject, AgentSettings } from '../../src/desktop/api';
+import { claudeCodeCommand, clientLine, codexConfigToml, connectionSummary, folderRows } from '../../src/desktop/ui/settings/agentModel';
 
 const AGENT: AgentSettings = {
   enabled: true,
@@ -86,7 +86,44 @@ describe('folderRows', () => {
 });
 
 describe('claudeCodeCommand', () => {
-  it('quotes a path with spaces', () => {
-    expect(claudeCodeCommand(AGENT.sidecarPath!)).toBe('claude mcp add draft-canvas -- "/Applications/Draft Canvas.app/Contents/MacOS/draft-canvas-mcp"');
+  it('adds the server for every project, quoting a path with spaces', () => {
+    expect(claudeCodeCommand(AGENT.sidecarPath!)).toBe('claude mcp add --scope user draft-canvas -- "/Applications/Draft Canvas.app/Contents/MacOS/draft-canvas-mcp"');
+  });
+});
+
+describe('codexConfigToml', () => {
+  it('is the table Add to Codex writes, with Windows backslashes escaped for TOML', () => {
+    expect(codexConfigToml(AGENT.sidecarPath!)).toBe(
+      '[mcp_servers.draft-canvas]\ncommand = "/Applications/Draft Canvas.app/Contents/MacOS/draft-canvas-mcp"\ntool_timeout_sec = 150\n',
+    );
+    expect(codexConfigToml('C:\\Program Files\\Draft Canvas\\draft-canvas-mcp.exe')).toContain('command = "C:\\\\Program Files\\\\Draft Canvas\\\\draft-canvas-mcp.exe"');
+  });
+});
+
+describe('clientLine', () => {
+  const setup = (patch: Partial<AgentClientSetup>): AgentClientSetup => ({
+    client: 'codex',
+    state: 'not-set-up',
+    automatic: true,
+    location: '~/.codex/config.toml',
+    configuredCommand: null,
+    ...patch,
+  });
+
+  it('offers to add, update, or says it is done', () => {
+    expect(clientLine(setup({}))?.action).toBe('Add to Codex');
+    expect(clientLine(setup({ client: 'claude-code' }))?.action).toBe('Add to Claude Code');
+    const outdated = clientLine(setup({ state: 'outdated', configuredCommand: '/old/draft-canvas-mcp' }));
+    expect(outdated).toMatchObject({ action: 'Update Codex', tone: 'warn' });
+    expect(outdated?.text).toContain('/old/draft-canvas-mcp');
+    expect(clientLine(setup({ state: 'ready' }))).toEqual({
+      action: null,
+      text: 'Set up in ~/.codex/config.toml. Start a new Codex chat to use it.',
+      tone: 'on',
+    });
+  });
+
+  it('says nothing before the shell has answered', () => {
+    expect(clientLine(undefined)).toBeNull();
   });
 });

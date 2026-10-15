@@ -33,9 +33,18 @@ fn local_data_dir() -> Option<PathBuf> {
     std::env::var_os("HOME").map(|home| PathBuf::from(home).join("Library/Application Support"))
 }
 
+/// Some agents (Codex among them) start MCP servers with only a short allowlist of environment
+/// variables; without `LOCALAPPDATA`, its default location is worked out from the profile folder.
 #[cfg(windows)]
 fn local_data_dir() -> Option<PathBuf> {
-    std::env::var_os("LOCALAPPDATA").map(PathBuf::from)
+    std::env::var_os("LOCALAPPDATA")
+        .filter(|d| !d.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| {
+            std::env::var_os("USERPROFILE")
+                .filter(|d| !d.is_empty())
+                .map(|p| PathBuf::from(p).join("AppData").join("Local"))
+        })
 }
 
 #[cfg(all(unix, not(target_os = "macos")))]
