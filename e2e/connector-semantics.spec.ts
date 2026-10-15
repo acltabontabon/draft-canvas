@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { connect, connectAndOpen, create, newCanvas, nextFrames } from './canvas';
+import { clickEdge, connect, connectAndOpen, create, newCanvas, nextFrames } from './canvas';
 
 /**
  * The contextual connector toolbar — see `document/connectorSemantics.ts`'s
@@ -383,8 +383,9 @@ test.describe('Junction connector', () => {
     await page.keyboard.press('Escape');
     await connect(page, 1, 2);
 
-    // Select the Junction → Database leg specifically.
-    await page.locator('.dc-edge').nth(1).click();
+    // Select the Junction → Database leg specifically. Clicked on its line rather than the middle of
+    // its box: the connector just drawn is selected, so a bend handle sits there.
+    await clickEdge(page, page.locator('.dc-edge').nth(1).locator('.dc-edge-line'));
     await expect(inspectorSelect(page, 'Interaction type')).toHaveText('Reads / writes');
     // `service>database`'s capability has no behaviour options of its own, so the picker
     // collapses to a badge instead of an open `InspectorSelect` — same as a direct connection.

@@ -5,6 +5,7 @@ import { flattenPath, type RoutedEdge } from '../edges/routing';
 import { bendsOf, isLevel, simplifyPolyline, slideSegment, stepPolyline } from '../edges/waypoints';
 import { useEditorStore } from '../store/editorStore';
 import { useUiStore } from '../store/uiStore';
+import { markBendDragEnded } from './bendDrag';
 
 /** A drag's bends, drawn before they are committed. `waypoints` absent: the drag has straightened
  *  the line out, and it is being drawn by the router again. */
@@ -186,6 +187,7 @@ export function EdgeBendHandles({
     const current = gesture.current;
     if (!current || event.pointerId !== current.pointerId) return;
     const bends = current.started ? bendsAt(current, event.clientX, event.clientY).bends : null;
+    if (current.started) markBendDragEnded();
     end();
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
     if (bends !== null) useEditorStore.getState().setEdgeWaypoints(edgeId, bends);
