@@ -15,7 +15,7 @@ import type { DescribeContext } from '../nodes/describe';
 import { GUTTER } from '../starters/compose';
 import { AgentError } from './errors';
 import type { CreateSpec, LayoutSpec } from './input';
-import { anchorRectOf, captionSizer, connectorFor, edgeLabelSize, lineOf, placeBlock, placeRoom, sizeToFit, type PlacedRoom } from './place';
+import { anchorRectOf, attachNote, captionSizer, connectorFor, edgeLabelSize, flowFromSpec, lineOf, linkVariants, placeBlock, placeRoom, sizeToFit, type PlacedRoom } from './place';
 import { repairAnchors } from './route';
 
 export function starterFor(id: string): ArchitectureStarter {
@@ -75,11 +75,16 @@ export function buildFromStarter(spec: CreateSpec, layout: LayoutSpec, ctx: Desc
   // Anything the agent adds beside the starter: arranged on its own, then set to the side of it in
   // the reading direction, and connected to the starter's shapes.
   const starterIdSet = new Set(nodes.map((n) => n.id));
+  const starterEdgeIds = new Set(edges.map((e) => e.id));
   const extras = spec.nodes;
-  if (extras.length || spec.groups.length || spec.notes.length) {
+  // A note attached to one of the starter's own shapes or connectors rides on it; it is not part of
+  // the block laid out beside the starter (where its host is nowhere to be found).
+  const onStarter = (note: CreateSpec['notes'][number]) => !!note.attachTo && (starterIdSet.has(note.attachTo.id) || starterEdgeIds.has(note.attachTo.id));
+  const ownNotes = spec.notes.filter((note) => !onStarter(note));
+  if (extras.length || spec.groups.length || ownNotes.length) {
     const own = new Set([...extras.map((n) => n.id)]);
     const inner = spec.relationships.filter((r) => own.has(r.from) && own.has(r.to));
-    const room = placeRoom({ ...spec, relationships: inner, flows: [] }, layout, ctx);
+    const room = placeRoom({ ...spec, relationships: inner, flows: [], notes: ownNotes }, layout, ctx);
     advisories.push(...room.advisories);
     const minX = Math.min(...room.nodes.map((n) => n.x));
     const minY = Math.min(...room.nodes.map((n) => n.y));
@@ -127,10 +132,15 @@ export function buildFromStarter(spec: CreateSpec, layout: LayoutSpec, ctx: Desc
   }
   repairAnchors(crossEdges, nodes, captionSizer(nodes, ctx), [...edges, ...crossEdges]);
   edges.push(...crossEdges);
-
-  const flows = [...built.flows];
-  for (const f of spec.flows) {
-    flows.push({ id: f.id, title: f.title, ...(f.color ? { accent: f.color } : {}), steps: f.steps.map((s, i) => ({ id: `${f.id}.s${i + 1}`, edgeId: s.relationship, ...(s.caption ? { caption: s.caption } : {}) })) });
+  for (const note of spec.notes.filter(onStarter)) {
+    const target = note.attachTo!;
+    const at = target.kind === 'node' ? nodes.findIndex((n) => n.id === target.id) : edges.findIndex((e) => e.id === target.id);
+    const host = target.kind === 'node' ? { ...nodes[at]! } : { ...edges[at]! };
+    attachNote(host, target.kind, note);
+    if (target.kind === 'node') nodes[at] = host as DraftNode;
+    else edges[at] = host as DraftEdge;
   }
+
+  const flows = linkVariants([...built.flows, ...spec.flows.map(flowFromSpec)], spec.flows, advisories);
   return { nodes, edges, flows, ...(spec.level ? { level: spec.level } : {}), advisories };
 }

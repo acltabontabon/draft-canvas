@@ -10,7 +10,7 @@ import { AgentError } from './errors';
 import { AGENT_LIMITS } from './input';
 import { READ_LIMITS } from './read';
 import { starterIds } from './starter';
-import { ELEMENT_TYPES, GROUP_KINDS, NOTE_KIND_NAMES } from './vocabulary';
+import { ELEMENT_TYPES, GROUP_KINDS, LINE_STYLE_NAMES, NOTE_KIND_NAMES } from './vocabulary';
 
 /**
  * Bumped when the tools' contract changes incompatibly; additions keep it. 2: an update reaches a
@@ -19,7 +19,7 @@ import { ELEMENT_TYPES, GROUP_KINDS, NOTE_KIND_NAMES } from './vocabulary';
  */
 export const CONTRACT_VERSION = 3;
 
-const TOPICS = ['types', 'relationships', 'c4', 'flows', 'starters', 'limits', 'layout', 'readability'] as const;
+const TOPICS = ['types', 'relationships', 'c4', 'flows', 'notes', 'starters', 'limits', 'layout', 'readability'] as const;
 
 export function capabilities(args: { topics?: unknown; starter?: unknown }): Record<string, unknown> {
   if (typeof args.starter === 'string') {
@@ -51,6 +51,13 @@ export function capabilities(args: { topics?: unknown; starter?: unknown }): Rec
       semantics: EDGE_SEMANTICS,
       kinds: CONNECTOR_KINDS,
       rule: 'Leave semantic out to infer it from the two element types (as the editor does). A semantic the pairing does not offer is replaced by the inferred one, with an advisory. One relationship per direction between two elements, plus a "compensates" twin. No self-loops.',
+      options: {
+        color: 'One of the accents, like an element.',
+        lineStyle: `${LINE_STYLE_NAMES.join(', ')} (stepped is the default).`,
+        response: 'The reply line of a synchronous call — a person or a service calling a service, behaviour none or "sync": true draws it without a label, a string labels it ("200 Order"), false or null removes it. Reads report it the same way.',
+        deliveryAttempts: 'On a dead-letter route (semantic "deadLetters"): how many attempts come first, 1–50.',
+      },
+      repoint: 'update set.from / set.to re-points a relationship in place (swap them to reverse it): its id, label, flows and attachments stay, and an inferred meaning is inferred again for what it now connects.',
     };
   }
   if (want('c4')) {
@@ -58,6 +65,8 @@ export function capabilities(args: { topics?: unknown; starter?: unknown }): Rec
       levels: LEVEL_HINTS,
       fields: 'element.description and element.technology are native C4 fields, drawn on the shape. group kind "system" is a software-system boundary.',
       views: 'A view is the top level or the inside of an element (element.inside), nested up to 3 deep: context → container → component. The focal system of a container view is the element whose inside it is.',
+      lookInside: 'Only a service-like element or a (non-port) component has an inside view. To draw one for an element that has none yet, update_diagram with view.inside [its id] and an add op (level optional, e.g. "component"): the first add creates it. read_diagram with view.inside reads one (an empty one says empty: true); include ["views"] outlines every inside view in the file.',
+      restructure: '{op:"moveInside", owner, ids} moves shapes one level down into owner; {op:"moveOutside", ids}, sent with view.inside, moves shapes one level up beside the owner, into the owner\'s boundary when it has room. Both keep ids; a connector across the levels meets the owner.',
       roles: 'Reads return c4.role (person, software-system, container, component, unspecified) and c4.scope (internal, external, unspecified), derived from type and level — never stored, and "unspecified" rather than a guess.',
       notSupported: 'No landscape, deployment, dynamic or code views; no relationship technology field (use semantic and label); no shared elements across views.',
     };
@@ -69,11 +78,17 @@ export function capabilities(args: { topics?: unknown; starter?: unknown }): Rec
       several: 'Separate paths (normal processing, a retry, a compensation) are separate flows. One title per view: update an existing flow instead of adding a second one with its name.',
       default: 'There is no stored default or "main" flow. layout.primaryFlow only lays that flow out as the straight main path; presenting picks the selected flow, or the only one.',
       edits: 'update set.steps keeps each step whose relationship stays (its id, caption, highlights and camera); set.title alone leaves steps untouched.',
+      presentation: 'A flow is the presentation. Each step plays its relationship with its caption; highlight lights more elements, boundaries or relationships with it (the Flows panel\'s "+ Selection"); {spotlight: [ids], caption} is a step with no relationship that frames just those — an overview to open with, a boundary, a starting state. Steps read back as update_diagram takes them; a step a person pinned a camera on reads pinnedView: true, and pinnedView: false drops it. Presenting itself (and its pacing) is the person\'s, in the app.',
+      variants: 'variantOf names the flow this one is an alternative telling of (a failure path). One level deep: a link that would chain is left out, with an advisory.',
     };
+  }
+  if (want('flows') || want('notes')) {
     out.notes = {
-      attached: 'about = an element or a relationship (the default): a native attachment that moves, exports and is removed with its host; edit or remove it by the note id. A full element takes it beside instead, with an advisory.',
-      beside: 'about = an element with attach: false: a free note laid out with it, just before it across the flow and inside its boundary — for a callout meant to be read at a glance (placement only — nothing records the link).',
-      inside: 'about = a group: a member of the boundary, at its head.',
+      kinds: `${NOTE_KIND_NAMES.join(', ')}; or "code" — a code snippet (code + language, shown as code and never run, indentation kept) — or "label", a plain Text label.`,
+      attached: 'about = an element or a relationship (the default): a native attachment that moves, exports and is removed with its host; edit or remove it by the note id. A full element takes it beside instead, with an advisory. A label attaches to elements only.',
+      beside: 'about = an element with attach: false: a free card laid out with it, just before it across the flow and inside its boundary — for a callout meant to be read at a glance (placement only — nothing records the link).',
+      inside: 'about = a group: a member of the boundary, at its head. With attach: true, a note or snippet attaches to the boundary itself instead.',
+      convert: 'update set.attach: true with about folds a free note, snippet or label onto that host; set.attach: false takes an attachment off as a free card (beside its host, or beside/inside about). The id stays either way.',
     };
   }
   if (want('starters')) {

@@ -2278,6 +2278,29 @@ export function naturalNoteHeight(
   return Math.min(NOTE_AUTO_MAX_HEIGHT, needed);
 }
 
+/** How wide a Text element made from a sentence grows before it wraps instead. */
+const TEXT_AUTO_MAX_WIDTH = 320;
+
+/**
+ * The box a Text element needs to show all of `text` with its own font: one line up to
+ * `TEXT_AUTO_MAX_WIDTH`, wrapped below that. `freeText` draws as many lines as the height holds, so
+ * the height is exactly the lines it lays out. Never smaller than `min`.
+ */
+export function naturalTextSize(
+  node: Pick<DraftNode, 'textRole' | 'annotation' | 'textBold' | 'textItalic'>,
+  text: string,
+  ctx: Pick<DescribeContext, 'measurer'>,
+  min: { width: number; height: number },
+): { width: number; height: number } {
+  const font = fontForTextNode(node);
+  const lineHeight = font.size * LINE_HEIGHTS.body;
+  const layout = layoutText(text, { font, maxWidth: TEXT_AUTO_MAX_WIDTH, lineHeight, measurer: ctx.measurer });
+  return {
+    width: Math.max(min.width, Math.min(TEXT_AUTO_MAX_WIDTH, Math.ceil(layout.width) + 4)),
+    height: Math.max(min.height, Math.ceil(layout.lines.length * lineHeight)),
+  };
+}
+
 function note(node: DraftNode, ctx: DescribeContext): Shape[] {
   const kind = node.noteKind ?? 'note';
   const palette = accentOf(ctx.theme, node.accent ?? NOTE_ACCENTS[kind]);

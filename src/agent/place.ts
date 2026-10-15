@@ -6,10 +6,11 @@
  * from a diagram someone drew and arranged by hand.
  */
 
-import { capabilityFor, categoryOf, inferRelationship } from '../document/connectorSemantics';
+import { capabilityFor, categoryOf, inferRelationship, isSyncPairing } from '../document/connectorSemantics';
 import { relationshipCaptionLabel } from '../document/edgeSemantics';
 import { createAttachment, createDocument, createEdge, createNode } from '../document/factory';
-import { createFlow } from '../document/flow';
+import { createFlow, setFlowVariantOf } from '../document/flow';
+import { DEFAULTS } from '../document/limits';
 import type { Attachment, DraftDocument, DraftEdge, DraftFlow, DraftFlowStep, DraftNode, DraftNodeType, Side, ViewLevel } from '../document/types';
 import { hasAttachmentRoom } from '../document/operations';
 import { anchorBandOf } from '../document/queueGeometry';
@@ -17,16 +18,16 @@ import { roomOf } from '../depth/tree';
 import { layoutGraph, LayoutError, type Direction, type LayoutEdge } from '../layout/layered';
 import { assignAnchors, MIN_LABELLED_FAN, type AnchorRect } from '../layout/anchors';
 import { compatibilityKey } from '../edges/bundles';
-import { describeContext, naturalArchitectureSize, naturalNoteHeight, type DescribeContext } from '../nodes/describe';
+import { describeContext, naturalArchitectureSize, naturalCodeSize, naturalNoteHeight, naturalTextSize, type DescribeContext } from '../nodes/describe';
 import { FONTS, LINE_HEIGHTS } from '../render/text/fonts';
 import { layoutText } from '../render/text/layout';
 import { getMeasurer } from '../render/text/measure';
 import { LIGHT } from '../render/theme/tokens';
 import { BAND, BOUNDARY_HEADER, BOUNDARY_HEADER_TITLE_ONLY, BOUNDARY_PAD, GUTTER } from '../starters/compose';
 import { AgentError } from './errors';
-import type { AttachmentSpec, LayoutSpec, NodeSpec, NoteSpec, RelationshipSpec, RoomSpec } from './input';
+import type { AttachmentSpec, FlowSpec, LayoutSpec, NodeSpec, NoteSpec, RelationshipSpec, RoomSpec } from './input';
 import { drawnRoute, repairAnchors, segmentHitsBox } from './route';
-import { GROUP_KINDS } from './vocabulary';
+import { GROUP_KINDS, LINE_STYLES } from './vocabulary';
 
 const SPACING_FACTOR = { compact: 0.8, comfortable: 1, spacious: 1.3 } as const;
 /** How wide a connector's caption may grow before it wraps — the canvas's own chip limit. */
@@ -60,7 +61,7 @@ export function attachmentsOf(specs: AttachmentSpec[] | undefined) {
   return (specs ?? []).map((a) =>
     createAttachment(
       a.kind === 'code'
-        ? { type: 'code', code: a.code ?? '', language: a.language ?? 'plaintext' }
+        ? { type: 'code', code: a.code ?? '', language: a.language ?? 'plaintext', ...naturalCodeSize(a.code ?? '', measureContext()) }
         : { type: 'note', text: a.text ?? '', noteKind: a.noteKind ?? 'note' },
     ),
   );
@@ -244,7 +245,22 @@ export function connectorFor(spec: RelationshipSpec, source: DraftNode, target: 
     ...(kind ? { kind } : {}),
     ...(spec.async ?? inferred?.async ? { async: true } : {}),
     ...(origin ? { semanticsOrigin: origin } : {}),
+    ...(spec.color ? { accent: spec.color } : {}),
+    ...(spec.lineStyle ? { routing: LINE_STYLES[spec.lineStyle] } : {}),
   });
+  if (spec.response !== undefined) {
+    // The inspector's own gate: a reply line belongs to a synchronous call.
+    if (isSyncPairing(categoryOf(source), categoryOf(target)) && (edge.kind === undefined || edge.kind === 'sync')) {
+      edge.hasResponse = true;
+      if (typeof spec.response === 'string') edge.response = spec.response;
+    } else {
+      advisories.push(`${spec.id}: a reply line is only drawn on a synchronous call (a person or service calling a service); left out.`);
+    }
+  }
+  if (spec.deliveryAttempts !== undefined) {
+    if (edge.semantic === 'deadLetters') edge.deliveryAttempts = spec.deliveryAttempts;
+    else advisories.push(`${spec.id}: delivery attempts belong to a dead-letter route (semantic "deadLetters"); left out.`);
+  }
   const attachments = attachmentsOf(spec.attachments);
   if (attachments.length) edge.attachments = attachments;
   if (spec.evidence?.length) edge.evidence = spec.evidence;
@@ -649,11 +665,13 @@ export function placeRoom(room: RoomSpec, layout: LayoutSpec, ctx: DescribeConte
   for (const spec of room.notes) {
     if (spec.attachTo) {
       const target = spec.attachTo;
-      const host = target.kind === 'node' ? elements.get(target.id) : edges.find((e) => e.id === target.id);
+      const host = target.kind === 'node' ? (elements.get(target.id) ?? groupNodes.get(target.id)) : edges.find((e) => e.id === target.id);
       if (host && !hasAttachmentRoom(host, target.kind) && target.kind === 'node') {
-        // A full element never refuses the note: it goes beside the element instead, and the receipt says so.
-        advisories.push(`"${spec.id}" was placed beside "${host.id}" instead of attached: it already holds ${host.attachments?.length ?? 0} attachments.`);
-        beside(spec, target.id);
+        // A full host never refuses the note: it goes beside the element (or heads the boundary)
+        // instead, and the receipt says so.
+        advisories.push(`"${spec.id}" was placed ${groupNodes.has(host.id) ? 'inside' : 'beside'} "${host.id}" instead of attached: it already holds ${host.attachments?.length ?? 0} attachments.`);
+        if (groupNodes.has(host.id)) memberNotes.set(spec.id, noteNode({ ...spec, group: host.id }, ctx));
+        else beside(spec, target.id);
       } else attachNote(host, target.kind, spec);
     } else if (spec.group) {
       memberNotes.set(spec.id, noteNode(spec, ctx));
@@ -663,20 +681,45 @@ export function placeRoom(room: RoomSpec, layout: LayoutSpec, ctx: DescribeConte
   }
 
   const primary = room.flows.find((f) => f.id === (primaryFlow ?? layout.primaryFlow));
-  const placed = arrangeParts({ elements, groups: groupNodes, memberNotes, besideNotes, edges, primaryEdges: new Set(primary?.steps.map((s) => s.relationship) ?? []) }, layout, ctx);
+  const placed = arrangeParts({ elements, groups: groupNodes, memberNotes, besideNotes, edges, primaryEdges: new Set(primary?.steps.flatMap((s) => (s.relationship ? [s.relationship] : [])) ?? []) }, layout, ctx);
   const nodes = [...groupNodes.values(), ...elements.values(), ...memberNotes.values(), ...[...besideNotes.values()].flat()];
   nodes.push(...placeNotes(room, nodes, edges, placed.width, placed.height, layout.direction, ctx));
   repairAnchors(edges, nodes, captionSizer(nodes, ctx));
 
-  const flows = room.flows.map((spec) => {
-    const flow = createFlow({ id: spec.id, title: spec.title });
-    if (spec.color) flow.accent = spec.color;
-    // Step ids follow from the flow's, so the same request always writes the same file.
-    flow.steps = spec.steps.map((s, i): DraftFlowStep => ({ id: `${spec.id}.s${i + 1}`, edgeId: s.relationship, ...(s.caption ? { caption: s.caption } : {}) }));
-    return flow;
-  });
+  const flows = linkVariants(room.flows.map(flowFromSpec), room.flows, advisories);
 
   return { nodes, edges, flows, ...(room.level ? { level: room.level } : {}), advisories };
+}
+
+/** A native flow for a spec. Step ids follow from the flow's, so the same request always writes the same file. */
+export function flowFromSpec(spec: FlowSpec): DraftFlow {
+  const flow = createFlow({ id: spec.id, title: spec.title });
+  if (spec.color) flow.accent = spec.color;
+  flow.steps = spec.steps.map((s, i): DraftFlowStep => ({
+    id: `${spec.id}.s${i + 1}`,
+    ...(s.relationship ? { edgeId: s.relationship } : {}),
+    ...(s.extraNodeIds ? { extraNodeIds: [...s.extraNodeIds] } : {}),
+    ...(s.extraEdgeIds ? { extraEdgeIds: [...s.extraEdgeIds] } : {}),
+    ...(s.caption ? { caption: s.caption } : {}),
+  }));
+  return flow;
+}
+
+/**
+ * `flows` with each spec's `variantOf` linked, in request order, by the editor's own hub-and-spoke
+ * rule (`setFlowVariantOf`): a variant's base is never itself a variant. A link that rule refuses is
+ * left out and said so in the receipt, never dropped quietly.
+ */
+export function linkVariants(flows: DraftFlow[], specs: readonly FlowSpec[], advisories: string[]): DraftFlow[] {
+  let doc: DraftDocument = { ...createDocument(), flows };
+  for (const spec of specs) {
+    if (!spec.variantOf) continue;
+    doc = setFlowVariantOf(doc, spec.id, spec.variantOf);
+    if (doc.flows.find((f) => f.id === spec.id)?.variantOf !== spec.variantOf) {
+      advisories.push(`Flow "${spec.id}" was not linked as a variant of "${spec.variantOf}": variants are one level deep — a variant's base can't be a variant itself, and a flow with variants can't become one.`);
+    }
+  }
+  return doc.flows;
 }
 
 /** Clear space kept around a placed block. */
@@ -751,9 +794,31 @@ export function placeBlock(
   return undefined;
 }
 
-/** A free note for a spec, at its natural height — inside its boundary when it names one. */
+/**
+ * A free card for a spec — a note at its natural height, a code card big enough for its snippet (as a
+ * paste makes one), a label as wide as its words — inside its boundary when it names one.
+ */
 export function noteNode(spec: NoteSpec, ctx: DescribeContext): DraftNode {
-  return sizeToFit(createNode({ id: spec.id, type: 'note', x: 0, y: 0, text: spec.text, noteKind: spec.kind, ...(spec.group ? { parentId: spec.group } : {}) }), ctx);
+  const parent = spec.group ? { parentId: spec.group } : {};
+  if (spec.type === 'code') {
+    const code = spec.code ?? '';
+    return createNode({ id: spec.id, type: 'code', x: 0, y: 0, code, language: spec.language ?? 'plaintext', ...naturalCodeSize(code, ctx), ...parent });
+  }
+  if (spec.type === 'text') {
+    const node = createNode({ id: spec.id, type: 'text', x: 0, y: 0, text: spec.text, ...parent });
+    return { ...node, ...naturalTextSize(node, spec.text, ctx, { width: 40, height: DEFAULTS.textHeight }) };
+  }
+  return sizeToFit(createNode({ id: spec.id, type: 'note', x: 0, y: 0, text: spec.text, noteKind: spec.kind, ...parent }), ctx);
+}
+
+/** The attachment a spec folds into, under the spec's own id — sized as the card it detaches to. */
+export function attachmentFor(spec: NoteSpec, ctx: DescribeContext): Attachment {
+  if (spec.type === 'code') {
+    const code = spec.code ?? '';
+    return createAttachment({ id: spec.id, type: 'code', code, language: spec.language ?? 'plaintext', ...naturalCodeSize(code, ctx) });
+  }
+  if (spec.type === 'text') return createAttachment({ id: spec.id, type: 'text', text: spec.text });
+  return createAttachment({ id: spec.id, type: 'note', text: spec.text, noteKind: spec.kind });
 }
 
 /**
@@ -768,7 +833,7 @@ export function attachNote(host: { id: string; attachments?: Attachment[] } | un
       details: { id: spec.id },
     });
   }
-  host.attachments = [...(host.attachments ?? []), createAttachment({ id: spec.id, type: 'note', text: spec.text, noteKind: spec.kind })];
+  host.attachments = [...(host.attachments ?? []), attachmentFor(spec, measureContext())];
 }
 
 /** Notes beside what they're about when they say (placed clear of shapes and connectors, the way

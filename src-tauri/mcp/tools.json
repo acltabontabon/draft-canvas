@@ -14,6 +14,7 @@
               "relationships",
               "c4",
               "flows",
+              "notes",
               "starters",
               "limits",
               "layout",
@@ -219,9 +220,11 @@
               "geometry",
               "attachments",
               "suggestions",
-              "fullText"
+              "fullText",
+              "views"
             ]
-          }
+          },
+          "description": "views: an outline of every inside view in the file (path, owner, level, size) — the Depth map."
         },
         "cursor": {
           "type": "string"
@@ -1073,6 +1076,144 @@
             "additionalProperties": false
           }
         },
+        "steps": {
+          "type": "array",
+          "maxItems": 60,
+          "description": "The presentation, step by step: relationship ids in the order things happen (each at most once per flow), or {relationship, caption?, highlight?}; {spotlight: [ids], caption?} is a step with no relationship (an overview, a boundary, a starting state). Only an order the person or the code actually gives — never guessed from the layout.",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "relationship": {
+                    "type": "string"
+                  },
+                  "caption": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 120
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "What happens at this step, shown while presenting. null clears it."
+                  },
+                  "highlight": {
+                    "anyOf": [
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 80,
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "More element, boundary or relationship ids lit with this step. null clears them."
+                  },
+                  "pinnedView": {
+                    "type": "boolean",
+                    "description": "false drops a camera a person pinned on the step, so the presentation frames what it lights again."
+                  }
+                },
+                "required": [
+                  "relationship"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "spotlight": {
+                    "anyOf": [
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 80,
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "The element, boundary or relationship ids this step lights, with no relationship of its own."
+                  },
+                  "caption": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 120
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "What happens at this step, shown while presenting. null clears it."
+                  }
+                },
+                "required": [
+                  "spotlight"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "frame": {
+                    "type": "string",
+                    "description": "Keeps an existing step with no relationship (as read_diagram returns it)."
+                  },
+                  "spotlight": {
+                    "anyOf": [
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 80,
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Replaces what it lights."
+                  },
+                  "caption": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 120
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "What happens at this step, shown while presenting. null clears it."
+                  },
+                  "pinnedView": {
+                    "type": "boolean",
+                    "description": "false drops a camera a person pinned on the step, so the presentation frames what it lights again."
+                  }
+                },
+                "required": [
+                  "frame"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          }
+        },
         "attachment": {
           "type": "object",
           "properties": {
@@ -1199,6 +1340,43 @@
               "maxLength": 120,
               "description": "A short guard shown under the label."
             },
+            "color": {
+              "enum": [
+                "neutral",
+                "teal",
+                "blue",
+                "violet",
+                "amber",
+                "rose",
+                "green"
+              ]
+            },
+            "lineStyle": {
+              "enum": [
+                "stepped",
+                "curved",
+                "straight"
+              ],
+              "description": "stepped (default), curved or straight."
+            },
+            "response": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 120
+                },
+                {
+                  "type": "boolean"
+                }
+              ],
+              "description": "A synchronous call's reply line: true (unlabelled), or its label (\"200 Order\")."
+            },
+            "deliveryAttempts": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "description": "On a deadLetters route: attempts first."
+            },
             "evidence": {
               "$ref": "#/$defs/evidence"
             },
@@ -1279,52 +1457,7 @@
               "description": "Id of the flow this is a named alternative telling of (e.g. a failure path) — that flow itself must not also be a variant."
             },
             "steps": {
-              "type": "array",
-              "maxItems": 60,
-              "description": "Relationship ids in the order things happen (each at most once per flow), or {relationship, caption}. Only an order the person or the code actually gives — never guessed from the layout.",
-              "items": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "relationship": {
-                        "type": "string"
-                      },
-                      "caption": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "maxLength": 120
-                          },
-                          {
-                            "type": "null"
-                          }
-                        ]
-                      }
-                    },
-                    "required": [
-                      "relationship"
-                    ],
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "frame": {
-                        "type": "string",
-                        "description": "Keeps an existing frame step (as read_diagram returns it)."
-                      }
-                    },
-                    "required": [
-                      "frame"
-                    ],
-                    "additionalProperties": false
-                  }
-                ]
-              }
+              "$ref": "#/$defs/steps"
             }
           },
           "required": [
@@ -1336,7 +1469,7 @@
         },
         "note": {
           "type": "object",
-          "description": "Context, an assumption or a decision — only what helps explain the diagram. Multiline text is fine. Mark an inference from code as an assumption.",
+          "description": "Context, an assumption or a decision — only what helps explain the diagram. Multiline text is fine. Mark an inference from code as an assumption. kind \"code\" is a code snippet (code + language, shown as code, never run); kind \"label\" is a plain Text label.",
           "properties": {
             "id": {
               "type": "string",
@@ -1345,23 +1478,48 @@
             },
             "text": {
               "type": "string",
-              "maxLength": 1000
+              "maxLength": 1000,
+              "description": "The words; not for kind \"code\"."
             },
             "kind": {
               "enum": [
                 "note",
                 "question",
                 "warning",
-                "decision"
-              ]
+                "decision",
+                "code",
+                "label"
+              ],
+              "description": "note (default), question, warning, decision — or code, or label."
+            },
+            "code": {
+              "type": "string",
+              "maxLength": 4000,
+              "description": "kind \"code\" only. Indentation is kept."
+            },
+            "language": {
+              "enum": [
+                "plaintext",
+                "java",
+                "javascript",
+                "typescript",
+                "json",
+                "yaml",
+                "xml",
+                "sql",
+                "bash",
+                "http",
+                "log"
+              ],
+              "description": "kind \"code\" only. Default plaintext."
             },
             "about": {
               "type": "string",
-              "description": "Id of the element, relationship or group it is about — always give one, or it goes after the diagram. An element or relationship: attached to it. A group: placed inside the boundary (a member)."
+              "description": "Id of the element, relationship or group it is about — always give one, or it goes after the diagram. An element or relationship: attached to it. A group: placed inside the boundary (a member), or with attach: true attached to the boundary (not a label)."
             },
             "attach": {
               "type": "boolean",
-              "description": "Default true for an element: a native attachment (moves, exports and is removed with it). false: a free note beside it, for a callout meant to be read at a glance."
+              "description": "Default true for an element: a native attachment (moves, exports and is removed with it). false: a free card beside it, for a callout meant to be read at a glance. true about a group: attached to the boundary."
             },
             "near": {
               "type": "string",
@@ -1369,8 +1527,7 @@
             }
           },
           "required": [
-            "id",
-            "text"
+            "id"
           ],
           "additionalProperties": false
         },
@@ -1953,7 +2110,7 @@
   {
     "name": "update_diagram",
     "title": "Update a diagram",
-    "description": "Changes an existing diagram in place — every follow-up to a diagram (add, rename, remove, notes, flows, cleanup) goes here, never a new create_diagram. Pass the diagramId and the revision from your last receipt or read; everything not named is kept (ids, positions, notes, flows). Works whether or not the diagram is open: an open one changes on screen as one undo step, a closed one is changed in its file (the person's view is never switched). Ops run in order, as one change: {op:\"add\", nodes?, relationships?, groups?, flows?, notes?, openPoints?}, {op:\"update\", id, set:{…}} (null clears a field), {op:\"remove\", ids, cascade?}, {op:\"setLevel\", level}, {op:\"arrange\", scope?} — \"clean up the layout/arrows\": re-lays out the view (or one group) in place, keeping every id, note and flow. New elements are placed beside what they connect to; nothing existing moves except by arrange. If something can't fit, the error's suggestedOp is the arrange to add. On REVISION_CONFLICT, read again and rebuild the change — never recreate the diagram.",
+    "description": "Changes an existing diagram in place — every follow-up to a diagram (add, rename, remove, notes, flows, cleanup) goes here, never a new create_diagram. Pass the diagramId and the revision from your last receipt or read; everything not named is kept (ids, positions, notes, flows). Works whether or not the diagram is open: an open one changes on screen as one undo step, a closed one is changed in its file (the person's view is never switched). Ops run in order, as one change: {op:\"add\", nodes?, relationships?, groups?, flows?, notes?, openPoints?}, {op:\"update\", id, set:{…}} (null clears a field), {op:\"remove\", ids, cascade?}, {op:\"setLevel\", level}, {op:\"arrange\", scope?} — \"clean up the layout/arrows\": re-lays out the view (or one group) in place, keeping every id, note and flow, {op:\"moveInside\", owner, ids} / {op:\"moveOutside\", ids} (one C4 level down / up). New elements are placed beside what they connect to; nothing existing moves except by arrange. If something can't fit, the error's suggestedOp is the arrange to add. On REVISION_CONFLICT, read again and rebuild the change — never recreate the diagram.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1978,7 +2135,8 @@
               "items": {
                 "type": "string"
               },
-              "maxItems": 3
+              "maxItems": 3,
+              "description": "Element ids from the top view down to the view to change. A service or component with nothing inside yet gets its inside view (the next C4 level) from the first add here."
             }
           },
           "additionalProperties": false
@@ -2253,6 +2411,8 @@
                               "question",
                               "warning",
                               "decision",
+                              "code",
+                              "label",
                               "sync",
                               "async",
                               "event",
@@ -2289,6 +2449,29 @@
                       },
                       "near": {
                         "type": "string"
+                      },
+                      "attach": {
+                        "type": "boolean",
+                        "description": "true folds a free note onto about; false takes an attachment off as a free note. Id kept."
+                      },
+                      "code": {
+                        "type": "string",
+                        "maxLength": 4000
+                      },
+                      "language": {
+                        "enum": [
+                          "plaintext",
+                          "java",
+                          "javascript",
+                          "typescript",
+                          "json",
+                          "yaml",
+                          "xml",
+                          "sql",
+                          "bash",
+                          "http",
+                          "log"
+                        ]
                       },
                       "semantic": {
                         "anyOf": [
@@ -2348,57 +2531,52 @@
                           }
                         ]
                       },
+                      "lineStyle": {
+                        "enum": [
+                          "stepped",
+                          "curved",
+                          "straight"
+                        ]
+                      },
+                      "response": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 120
+                          },
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "deliveryAttempts": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 50
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "from": {
+                        "type": "string",
+                        "description": "Re-points a relationship (swap with to to reverse it), keeping its id and flows."
+                      },
+                      "to": {
+                        "type": "string"
+                      },
                       "title": {
                         "type": "string",
                         "maxLength": 100
                       },
                       "steps": {
-                        "type": "array",
-                        "maxItems": 60,
-                        "description": "Relationship ids in the order things happen (each at most once per flow), or {relationship, caption}. Only an order the person or the code actually gives — never guessed from the layout.",
-                        "items": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "object",
-                              "properties": {
-                                "relationship": {
-                                  "type": "string"
-                                },
-                                "caption": {
-                                  "anyOf": [
-                                    {
-                                      "type": "string",
-                                      "maxLength": 120
-                                    },
-                                    {
-                                      "type": "null"
-                                    }
-                                  ]
-                                }
-                              },
-                              "required": [
-                                "relationship"
-                              ],
-                              "additionalProperties": false
-                            },
-                            {
-                              "type": "object",
-                              "properties": {
-                                "frame": {
-                                  "type": "string",
-                                  "description": "Keeps an existing frame step (as read_diagram returns it)."
-                                }
-                              },
-                              "required": [
-                                "frame"
-                              ],
-                              "additionalProperties": false
-                            }
-                          ]
-                        }
+                        "$ref": "#/$defs/steps"
                       },
                       "variantOf": {
                         "anyOf": [
@@ -2408,25 +2586,6 @@
                           {
                             "type": "null"
                           }
-                        ]
-                      },
-                      "code": {
-                        "type": "string",
-                        "maxLength": 4000
-                      },
-                      "language": {
-                        "enum": [
-                          "plaintext",
-                          "java",
-                          "javascript",
-                          "typescript",
-                          "json",
-                          "yaml",
-                          "xml",
-                          "sql",
-                          "bash",
-                          "http",
-                          "log"
                         ]
                       },
                       "context": {
@@ -2604,7 +2763,31 @@
                   "ids"
                 ],
                 "additionalProperties": false,
-                "description": "Move shapes, internal connectors and complete flows inside owner, preserving IDs. Boundary connections redirect to owner. Mixed-view flows, duplicate overview relationships and self-loops are refused: explicitly revise them first."
+                "description": "Move shapes, internal connectors and complete flows inside owner (one C4 level down), preserving IDs. Boundary connections redirect to owner. Mixed-view flows, duplicate overview relationships and self-loops are refused: explicitly revise them first."
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "enum": [
+                      "moveOutside"
+                    ]
+                  },
+                  "ids": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 300,
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "op",
+                  "ids"
+                ],
+                "additionalProperties": false,
+                "description": "In an inside view: move shapes, with the connectors and flows told only with them, one C4 level up beside the owner, preserving IDs. A connector to a shape left inside meets the owner."
               }
             ]
           }
@@ -2735,6 +2918,144 @@
             "additionalProperties": false
           }
         },
+        "steps": {
+          "type": "array",
+          "maxItems": 60,
+          "description": "The presentation, step by step: relationship ids in the order things happen (each at most once per flow), or {relationship, caption?, highlight?}; {spotlight: [ids], caption?} is a step with no relationship (an overview, a boundary, a starting state). Only an order the person or the code actually gives — never guessed from the layout.",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "relationship": {
+                    "type": "string"
+                  },
+                  "caption": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 120
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "What happens at this step, shown while presenting. null clears it."
+                  },
+                  "highlight": {
+                    "anyOf": [
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 80,
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "More element, boundary or relationship ids lit with this step. null clears them."
+                  },
+                  "pinnedView": {
+                    "type": "boolean",
+                    "description": "false drops a camera a person pinned on the step, so the presentation frames what it lights again."
+                  }
+                },
+                "required": [
+                  "relationship"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "spotlight": {
+                    "anyOf": [
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 80,
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "The element, boundary or relationship ids this step lights, with no relationship of its own."
+                  },
+                  "caption": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 120
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "What happens at this step, shown while presenting. null clears it."
+                  }
+                },
+                "required": [
+                  "spotlight"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "frame": {
+                    "type": "string",
+                    "description": "Keeps an existing step with no relationship (as read_diagram returns it)."
+                  },
+                  "spotlight": {
+                    "anyOf": [
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 80,
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Replaces what it lights."
+                  },
+                  "caption": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 120
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "What happens at this step, shown while presenting. null clears it."
+                  },
+                  "pinnedView": {
+                    "type": "boolean",
+                    "description": "false drops a camera a person pinned on the step, so the presentation frames what it lights again."
+                  }
+                },
+                "required": [
+                  "frame"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          }
+        },
         "attachment": {
           "type": "object",
           "properties": {
@@ -2861,6 +3182,43 @@
               "maxLength": 120,
               "description": "A short guard shown under the label."
             },
+            "color": {
+              "enum": [
+                "neutral",
+                "teal",
+                "blue",
+                "violet",
+                "amber",
+                "rose",
+                "green"
+              ]
+            },
+            "lineStyle": {
+              "enum": [
+                "stepped",
+                "curved",
+                "straight"
+              ],
+              "description": "stepped (default), curved or straight."
+            },
+            "response": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 120
+                },
+                {
+                  "type": "boolean"
+                }
+              ],
+              "description": "A synchronous call's reply line: true (unlabelled), or its label (\"200 Order\")."
+            },
+            "deliveryAttempts": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "description": "On a deadLetters route: attempts first."
+            },
             "evidence": {
               "$ref": "#/$defs/evidence"
             },
@@ -2941,52 +3299,7 @@
               "description": "Id of the flow this is a named alternative telling of (e.g. a failure path) — that flow itself must not also be a variant."
             },
             "steps": {
-              "type": "array",
-              "maxItems": 60,
-              "description": "Relationship ids in the order things happen (each at most once per flow), or {relationship, caption}. Only an order the person or the code actually gives — never guessed from the layout.",
-              "items": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "relationship": {
-                        "type": "string"
-                      },
-                      "caption": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "maxLength": 120
-                          },
-                          {
-                            "type": "null"
-                          }
-                        ]
-                      }
-                    },
-                    "required": [
-                      "relationship"
-                    ],
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "frame": {
-                        "type": "string",
-                        "description": "Keeps an existing frame step (as read_diagram returns it)."
-                      }
-                    },
-                    "required": [
-                      "frame"
-                    ],
-                    "additionalProperties": false
-                  }
-                ]
-              }
+              "$ref": "#/$defs/steps"
             }
           },
           "required": [
@@ -2998,7 +3311,7 @@
         },
         "note": {
           "type": "object",
-          "description": "Context, an assumption or a decision — only what helps explain the diagram. Multiline text is fine. Mark an inference from code as an assumption.",
+          "description": "Context, an assumption or a decision — only what helps explain the diagram. Multiline text is fine. Mark an inference from code as an assumption. kind \"code\" is a code snippet (code + language, shown as code, never run); kind \"label\" is a plain Text label.",
           "properties": {
             "id": {
               "type": "string",
@@ -3007,23 +3320,48 @@
             },
             "text": {
               "type": "string",
-              "maxLength": 1000
+              "maxLength": 1000,
+              "description": "The words; not for kind \"code\"."
             },
             "kind": {
               "enum": [
                 "note",
                 "question",
                 "warning",
-                "decision"
-              ]
+                "decision",
+                "code",
+                "label"
+              ],
+              "description": "note (default), question, warning, decision — or code, or label."
+            },
+            "code": {
+              "type": "string",
+              "maxLength": 4000,
+              "description": "kind \"code\" only. Indentation is kept."
+            },
+            "language": {
+              "enum": [
+                "plaintext",
+                "java",
+                "javascript",
+                "typescript",
+                "json",
+                "yaml",
+                "xml",
+                "sql",
+                "bash",
+                "http",
+                "log"
+              ],
+              "description": "kind \"code\" only. Default plaintext."
             },
             "about": {
               "type": "string",
-              "description": "Id of the element, relationship or group it is about — always give one, or it goes after the diagram. An element or relationship: attached to it. A group: placed inside the boundary (a member)."
+              "description": "Id of the element, relationship or group it is about — always give one, or it goes after the diagram. An element or relationship: attached to it. A group: placed inside the boundary (a member), or with attach: true attached to the boundary (not a label)."
             },
             "attach": {
               "type": "boolean",
-              "description": "Default true for an element: a native attachment (moves, exports and is removed with it). false: a free note beside it, for a callout meant to be read at a glance."
+              "description": "Default true for an element: a native attachment (moves, exports and is removed with it). false: a free card beside it, for a callout meant to be read at a glance. true about a group: attached to the boundary."
             },
             "near": {
               "type": "string",
@@ -3031,8 +3369,7 @@
             }
           },
           "required": [
-            "id",
-            "text"
+            "id"
           ],
           "additionalProperties": false
         },
@@ -3890,6 +4227,8 @@
                               "question",
                               "warning",
                               "decision",
+                              "code",
+                              "label",
                               "sync",
                               "async",
                               "event",
@@ -3926,6 +4265,29 @@
                       },
                       "near": {
                         "type": "string"
+                      },
+                      "attach": {
+                        "type": "boolean",
+                        "description": "true folds a free note onto about; false takes an attachment off as a free note. Id kept."
+                      },
+                      "code": {
+                        "type": "string",
+                        "maxLength": 4000
+                      },
+                      "language": {
+                        "enum": [
+                          "plaintext",
+                          "java",
+                          "javascript",
+                          "typescript",
+                          "json",
+                          "yaml",
+                          "xml",
+                          "sql",
+                          "bash",
+                          "http",
+                          "log"
+                        ]
                       },
                       "semantic": {
                         "anyOf": [
@@ -3985,57 +4347,52 @@
                           }
                         ]
                       },
+                      "lineStyle": {
+                        "enum": [
+                          "stepped",
+                          "curved",
+                          "straight"
+                        ]
+                      },
+                      "response": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 120
+                          },
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "deliveryAttempts": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 50
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "from": {
+                        "type": "string",
+                        "description": "Re-points a relationship (swap with to to reverse it), keeping its id and flows."
+                      },
+                      "to": {
+                        "type": "string"
+                      },
                       "title": {
                         "type": "string",
                         "maxLength": 100
                       },
                       "steps": {
-                        "type": "array",
-                        "maxItems": 60,
-                        "description": "Relationship ids in the order things happen (each at most once per flow), or {relationship, caption}. Only an order the person or the code actually gives — never guessed from the layout.",
-                        "items": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "object",
-                              "properties": {
-                                "relationship": {
-                                  "type": "string"
-                                },
-                                "caption": {
-                                  "anyOf": [
-                                    {
-                                      "type": "string",
-                                      "maxLength": 120
-                                    },
-                                    {
-                                      "type": "null"
-                                    }
-                                  ]
-                                }
-                              },
-                              "required": [
-                                "relationship"
-                              ],
-                              "additionalProperties": false
-                            },
-                            {
-                              "type": "object",
-                              "properties": {
-                                "frame": {
-                                  "type": "string",
-                                  "description": "Keeps an existing frame step (as read_diagram returns it)."
-                                }
-                              },
-                              "required": [
-                                "frame"
-                              ],
-                              "additionalProperties": false
-                            }
-                          ]
-                        }
+                        "$ref": "#/$defs/steps"
                       },
                       "variantOf": {
                         "anyOf": [
@@ -4045,25 +4402,6 @@
                           {
                             "type": "null"
                           }
-                        ]
-                      },
-                      "code": {
-                        "type": "string",
-                        "maxLength": 4000
-                      },
-                      "language": {
-                        "enum": [
-                          "plaintext",
-                          "java",
-                          "javascript",
-                          "typescript",
-                          "json",
-                          "yaml",
-                          "xml",
-                          "sql",
-                          "bash",
-                          "http",
-                          "log"
                         ]
                       },
                       "context": {
@@ -4241,7 +4579,31 @@
                   "ids"
                 ],
                 "additionalProperties": false,
-                "description": "Move shapes, internal connectors and complete flows inside owner, preserving IDs. Boundary connections redirect to owner. Mixed-view flows, duplicate overview relationships and self-loops are refused: explicitly revise them first."
+                "description": "Move shapes, internal connectors and complete flows inside owner (one C4 level down), preserving IDs. Boundary connections redirect to owner. Mixed-view flows, duplicate overview relationships and self-loops are refused: explicitly revise them first."
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "enum": [
+                      "moveOutside"
+                    ]
+                  },
+                  "ids": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 300,
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "op",
+                  "ids"
+                ],
+                "additionalProperties": false,
+                "description": "In an inside view: move shapes, with the connectors and flows told only with them, one C4 level up beside the owner, preserving IDs. A connector to a shape left inside meets the owner."
               }
             ]
           }
@@ -4345,6 +4707,134 @@
               "basis"
             ],
             "additionalProperties": false
+          }
+        },
+        "steps": {
+          "type": "array",
+          "maxItems": 60,
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "relationship": {
+                    "type": "string"
+                  },
+                  "caption": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 120
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "highlight": {
+                    "anyOf": [
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 80,
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "pinnedView": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "relationship"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "spotlight": {
+                    "anyOf": [
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 80,
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "caption": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 120
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "spotlight"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "frame": {
+                    "type": "string"
+                  },
+                  "spotlight": {
+                    "anyOf": [
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 80,
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "caption": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 120
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "pinnedView": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "frame"
+                ],
+                "additionalProperties": false
+              }
+            ]
           }
         },
         "attachment": {
@@ -4466,6 +4956,40 @@
               "type": "string",
               "maxLength": 120
             },
+            "color": {
+              "enum": [
+                "neutral",
+                "teal",
+                "blue",
+                "violet",
+                "amber",
+                "rose",
+                "green"
+              ]
+            },
+            "lineStyle": {
+              "enum": [
+                "stepped",
+                "curved",
+                "straight"
+              ]
+            },
+            "response": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 120
+                },
+                {
+                  "type": "boolean"
+                }
+              ]
+            },
+            "deliveryAttempts": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            },
             "evidence": {
               "$ref": "#/$defs/evidence"
             },
@@ -4541,50 +5065,7 @@
               "type": "string"
             },
             "steps": {
-              "type": "array",
-              "maxItems": 60,
-              "items": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "relationship": {
-                        "type": "string"
-                      },
-                      "caption": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "maxLength": 120
-                          },
-                          {
-                            "type": "null"
-                          }
-                        ]
-                      }
-                    },
-                    "required": [
-                      "relationship"
-                    ],
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "frame": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "frame"
-                    ],
-                    "additionalProperties": false
-                  }
-                ]
-              }
+              "$ref": "#/$defs/steps"
             }
           },
           "required": [
@@ -4610,7 +5091,28 @@
                 "note",
                 "question",
                 "warning",
-                "decision"
+                "decision",
+                "code",
+                "label"
+              ]
+            },
+            "code": {
+              "type": "string",
+              "maxLength": 4000
+            },
+            "language": {
+              "enum": [
+                "plaintext",
+                "java",
+                "javascript",
+                "typescript",
+                "json",
+                "yaml",
+                "xml",
+                "sql",
+                "bash",
+                "http",
+                "log"
               ]
             },
             "about": {
@@ -4624,8 +5126,7 @@
             }
           },
           "required": [
-            "id",
-            "text"
+            "id"
           ],
           "additionalProperties": false
         },
@@ -5518,6 +6019,8 @@
                               "question",
                               "warning",
                               "decision",
+                              "code",
+                              "label",
                               "sync",
                               "async",
                               "event",
@@ -5554,6 +6057,29 @@
                       },
                       "near": {
                         "type": "string"
+                      },
+                      "attach": {
+                        "type": "boolean",
+                        "description": "true folds a free note onto about; false takes an attachment off as a free note. Id kept."
+                      },
+                      "code": {
+                        "type": "string",
+                        "maxLength": 4000
+                      },
+                      "language": {
+                        "enum": [
+                          "plaintext",
+                          "java",
+                          "javascript",
+                          "typescript",
+                          "json",
+                          "yaml",
+                          "xml",
+                          "sql",
+                          "bash",
+                          "http",
+                          "log"
+                        ]
                       },
                       "semantic": {
                         "anyOf": [
@@ -5613,57 +6139,52 @@
                           }
                         ]
                       },
+                      "lineStyle": {
+                        "enum": [
+                          "stepped",
+                          "curved",
+                          "straight"
+                        ]
+                      },
+                      "response": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 120
+                          },
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "deliveryAttempts": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 50
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "from": {
+                        "type": "string",
+                        "description": "Re-points a relationship (swap with to to reverse it), keeping its id and flows."
+                      },
+                      "to": {
+                        "type": "string"
+                      },
                       "title": {
                         "type": "string",
                         "maxLength": 100
                       },
                       "steps": {
-                        "type": "array",
-                        "maxItems": 60,
-                        "description": "Relationship ids in the order things happen (each at most once per flow), or {relationship, caption}. Only an order the person or the code actually gives — never guessed from the layout.",
-                        "items": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "object",
-                              "properties": {
-                                "relationship": {
-                                  "type": "string"
-                                },
-                                "caption": {
-                                  "anyOf": [
-                                    {
-                                      "type": "string",
-                                      "maxLength": 120
-                                    },
-                                    {
-                                      "type": "null"
-                                    }
-                                  ]
-                                }
-                              },
-                              "required": [
-                                "relationship"
-                              ],
-                              "additionalProperties": false
-                            },
-                            {
-                              "type": "object",
-                              "properties": {
-                                "frame": {
-                                  "type": "string",
-                                  "description": "Keeps an existing frame step (as read_diagram returns it)."
-                                }
-                              },
-                              "required": [
-                                "frame"
-                              ],
-                              "additionalProperties": false
-                            }
-                          ]
-                        }
+                        "$ref": "#/$defs/steps"
                       },
                       "variantOf": {
                         "anyOf": [
@@ -5673,25 +6194,6 @@
                           {
                             "type": "null"
                           }
-                        ]
-                      },
-                      "code": {
-                        "type": "string",
-                        "maxLength": 4000
-                      },
-                      "language": {
-                        "enum": [
-                          "plaintext",
-                          "java",
-                          "javascript",
-                          "typescript",
-                          "json",
-                          "yaml",
-                          "xml",
-                          "sql",
-                          "bash",
-                          "http",
-                          "log"
                         ]
                       },
                       "context": {
@@ -5869,7 +6371,31 @@
                   "ids"
                 ],
                 "additionalProperties": false,
-                "description": "Move shapes, internal connectors and complete flows inside owner, preserving IDs. Boundary connections redirect to owner. Mixed-view flows, duplicate overview relationships and self-loops are refused: explicitly revise them first."
+                "description": "Move shapes, internal connectors and complete flows inside owner (one C4 level down), preserving IDs. Boundary connections redirect to owner. Mixed-view flows, duplicate overview relationships and self-loops are refused: explicitly revise them first."
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "enum": [
+                      "moveOutside"
+                    ]
+                  },
+                  "ids": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 300,
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "op",
+                  "ids"
+                ],
+                "additionalProperties": false,
+                "description": "In an inside view: move shapes, with the connectors and flows told only with them, one C4 level up beside the owner, preserving IDs. A connector to a shape left inside meets the owner."
               }
             ]
           },
@@ -6005,6 +6531,134 @@
             "additionalProperties": false
           }
         },
+        "steps": {
+          "type": "array",
+          "maxItems": 60,
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "relationship": {
+                    "type": "string"
+                  },
+                  "caption": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 120
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "highlight": {
+                    "anyOf": [
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 80,
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "pinnedView": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "relationship"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "spotlight": {
+                    "anyOf": [
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 80,
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "caption": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 120
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "spotlight"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "frame": {
+                    "type": "string"
+                  },
+                  "spotlight": {
+                    "anyOf": [
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 80,
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "caption": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 120
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "pinnedView": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "frame"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          }
+        },
         "attachment": {
           "type": "object",
           "properties": {
@@ -6124,6 +6778,40 @@
               "type": "string",
               "maxLength": 120
             },
+            "color": {
+              "enum": [
+                "neutral",
+                "teal",
+                "blue",
+                "violet",
+                "amber",
+                "rose",
+                "green"
+              ]
+            },
+            "lineStyle": {
+              "enum": [
+                "stepped",
+                "curved",
+                "straight"
+              ]
+            },
+            "response": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 120
+                },
+                {
+                  "type": "boolean"
+                }
+              ]
+            },
+            "deliveryAttempts": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            },
             "evidence": {
               "$ref": "#/$defs/evidence"
             },
@@ -6199,50 +6887,7 @@
               "type": "string"
             },
             "steps": {
-              "type": "array",
-              "maxItems": 60,
-              "items": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "relationship": {
-                        "type": "string"
-                      },
-                      "caption": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "maxLength": 120
-                          },
-                          {
-                            "type": "null"
-                          }
-                        ]
-                      }
-                    },
-                    "required": [
-                      "relationship"
-                    ],
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "frame": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "frame"
-                    ],
-                    "additionalProperties": false
-                  }
-                ]
-              }
+              "$ref": "#/$defs/steps"
             }
           },
           "required": [
@@ -6268,7 +6913,28 @@
                 "note",
                 "question",
                 "warning",
-                "decision"
+                "decision",
+                "code",
+                "label"
+              ]
+            },
+            "code": {
+              "type": "string",
+              "maxLength": 4000
+            },
+            "language": {
+              "enum": [
+                "plaintext",
+                "java",
+                "javascript",
+                "typescript",
+                "json",
+                "yaml",
+                "xml",
+                "sql",
+                "bash",
+                "http",
+                "log"
               ]
             },
             "about": {
@@ -6282,8 +6948,7 @@
             }
           },
           "required": [
-            "id",
-            "text"
+            "id"
           ],
           "additionalProperties": false
         },

@@ -15,7 +15,7 @@ import { STARTER_IDS } from '../starters/types';
 import { AGENT_LIMITS, NEW_ID } from './input';
 import { SET_FIELDS } from './fields';
 import { outputFor } from './outputs';
-import { ELEMENT_TYPE_NAMES, GROUP_KINDS, NOTE_KIND_NAMES } from './vocabulary';
+import { ELEMENT_TYPE_NAMES, GROUP_KINDS, LINE_STYLE_NAMES, NOTE_FORM_NAMES, NOTE_KIND_NAMES } from './vocabulary';
 
 type Schema = Record<string, unknown>;
 
@@ -120,6 +120,10 @@ const relationship: Schema = {
     directed: { type: 'boolean', description: 'false for an undirected line. Default true.' },
     async: { type: 'boolean' },
     condition: text(120, 'A short guard shown under the label.'),
+    color: { enum: ACCENTS },
+    lineStyle: { enum: LINE_STYLE_NAMES, description: 'stepped (default), curved or straight.' },
+    response: { anyOf: [text(AGENT_LIMITS.responseLength), { type: 'boolean' }], description: 'A synchronous call\'s reply line: true (unlabelled), or its label ("200 Order").' },
+    deliveryAttempts: { type: 'integer', minimum: AGENT_LIMITS.deliveryAttempts.min, maximum: AGENT_LIMITS.deliveryAttempts.max, description: 'On a deadLetters route: attempts first.' },
     evidence: ref('evidence'),
     attachments: { type: 'array', maxItems: AGENT_LIMITS.attachmentsPerElement, items: ref('attachment') },
   },
@@ -139,6 +143,35 @@ const group: Schema = {
   additionalProperties: false,
 };
 
+const caption = { anyOf: [text(AGENT_LIMITS.captionLength), { type: 'null' }], description: 'What happens at this step, shown while presenting. null clears it.' };
+const lit = (description: string): Schema => ({ anyOf: [{ type: 'array', minItems: 1, maxItems: AGENT_LIMITS.highlightsPerStep * 2, items: { type: 'string' } }, { type: 'null' }], description });
+const pinnedView = { type: 'boolean', description: 'false drops a camera a person pinned on the step, so the presentation frames what it lights again.' };
+
+/** A flow's steps: one definition, referenced from a new flow and from an update's `set.steps`. */
+const steps: Schema = {
+      type: 'array',
+      maxItems: AGENT_LIMITS.stepsPerFlow,
+      description: 'The presentation, step by step: relationship ids in the order things happen (each at most once per flow), or {relationship, caption?, highlight?}; {spotlight: [ids], caption?} is a step with no relationship (an overview, a boundary, a starting state). Only an order the person or the code actually gives — never guessed from the layout.',
+      items: {
+        anyOf: [
+          { type: 'string' },
+          {
+            type: 'object',
+            properties: { relationship: { type: 'string' }, caption, highlight: lit('More element, boundary or relationship ids lit with this step. null clears them.'), pinnedView },
+            required: ['relationship'],
+            additionalProperties: false,
+          },
+          { type: 'object', properties: { spotlight: lit('The element, boundary or relationship ids this step lights, with no relationship of its own.'), caption }, required: ['spotlight'], additionalProperties: false },
+          {
+            type: 'object',
+            properties: { frame: { type: 'string', description: 'Keeps an existing step with no relationship (as read_diagram returns it).' }, spotlight: lit('Replaces what it lights.'), caption, pinnedView },
+            required: ['frame'],
+            additionalProperties: false,
+          },
+        ],
+      },
+};
+
 const flow: Schema = {
   type: 'object',
   properties: {
@@ -146,18 +179,7 @@ const flow: Schema = {
     title: text(AGENT_LIMITS.flowTitleLength),
     color: { enum: ACCENTS },
     variantOf: { type: 'string', description: 'Id of the flow this is a named alternative telling of (e.g. a failure path) — that flow itself must not also be a variant.' },
-    steps: {
-      type: 'array',
-      maxItems: AGENT_LIMITS.stepsPerFlow,
-      description: 'Relationship ids in the order things happen (each at most once per flow), or {relationship, caption}. Only an order the person or the code actually gives — never guessed from the layout.',
-      items: {
-        anyOf: [
-          { type: 'string' },
-          { type: 'object', properties: { relationship: { type: 'string' }, caption: { anyOf: [text(AGENT_LIMITS.captionLength), { type: 'null' }] } }, required: ['relationship'], additionalProperties: false },
-          { type: 'object', properties: { frame: { type: 'string', description: 'Keeps an existing frame step (as read_diagram returns it).' } }, required: ['frame'], additionalProperties: false },
-        ],
-      },
-    },
+    steps: ref('steps'),
   },
   required: ['id', 'title', 'steps'],
   additionalProperties: false,
@@ -165,20 +187,22 @@ const flow: Schema = {
 
 const note: Schema = {
   type: 'object',
-  description: 'Context, an assumption or a decision — only what helps explain the diagram. Multiline text is fine. Mark an inference from code as an assumption.',
+  description: 'Context, an assumption or a decision — only what helps explain the diagram. Multiline text is fine. Mark an inference from code as an assumption. kind "code" is a code snippet (code + language, shown as code, never run); kind "label" is a plain Text label.',
   properties: {
     id: id('note'),
-    text: text(AGENT_LIMITS.noteLength),
-    kind: { enum: NOTE_KIND_NAMES },
+    text: text(AGENT_LIMITS.noteLength, 'The words; not for kind "code".'),
+    kind: { enum: NOTE_FORM_NAMES, description: 'note (default), question, warning, decision — or code, or label.' },
+    code: text(AGENT_LIMITS.codeLength, 'kind "code" only. Indentation is kept.'),
+    language: { enum: CODE_LANGUAGES, description: 'kind "code" only. Default plaintext.' },
     about: {
       type: 'string',
       description:
-        'Id of the element, relationship or group it is about — always give one, or it goes after the diagram. An element or relationship: attached to it. A group: placed inside the boundary (a member).',
+        'Id of the element, relationship or group it is about — always give one, or it goes after the diagram. An element or relationship: attached to it. A group: placed inside the boundary (a member), or with attach: true attached to the boundary (not a label).',
     },
-    attach: { type: 'boolean', description: 'Default true for an element: a native attachment (moves, exports and is removed with it). false: a free note beside it, for a callout meant to be read at a glance.' },
+    attach: { type: 'boolean', description: 'Default true for an element: a native attachment (moves, exports and is removed with it). false: a free card beside it, for a callout meant to be read at a glance. true about a group: attached to the boundary.' },
     near: { type: 'string', description: 'Older name for about.' },
   },
-  required: ['id', 'text'],
+  required: ['id'],
   additionalProperties: false,
 };
 
@@ -244,6 +268,7 @@ const room = (depth = 0): Record<string, Schema> => ({
 /** What `room()`'s references resolve to — the same object on every tool that takes a room. */
 const roomDefs: Record<string, Schema> = {
   evidence,
+  steps,
   attachment,
   relationship,
   group,
@@ -283,10 +308,15 @@ const nullable = (schema: Schema): Schema => ({ anyOf: [schema, { type: 'null' }
 const setProperties: Record<string, Schema> = {
   label: nullable(text(1000)), text: text(1000), type: { enum: ELEMENT_TYPE_NAMES },
   description: nullable(text(280)), technology: nullable(text(60)), color: nullable({ enum: ACCENTS }),
-  group: nullable({ type: 'string' }), kind: nullable({ enum: [...new Set([...Object.keys(GROUP_KINDS), ...NOTE_KIND_NAMES, ...CONNECTOR_KINDS])] }),
+  group: nullable({ type: 'string' }), kind: nullable({ enum: [...new Set([...Object.keys(GROUP_KINDS), ...NOTE_FORM_NAMES, ...CONNECTOR_KINDS])] }),
   semantic: nullable({ enum: EDGE_SEMANTICS }), directed: { type: 'boolean' }, async: { type: 'boolean' },
   condition: nullable(text(120)), title: text(100),
-  steps: (flow.properties as Record<string, Schema>).steps!, variantOf: nullable({ type: 'string' }),
+  attach: { type: 'boolean', description: 'true folds a free note onto about; false takes an attachment off as a free note. Id kept.' },
+  lineStyle: { enum: LINE_STYLE_NAMES }, response: { anyOf: [text(AGENT_LIMITS.responseLength), { type: 'boolean' }, { type: 'null' }] },
+  deliveryAttempts: nullable({ type: 'integer', minimum: AGENT_LIMITS.deliveryAttempts.min, maximum: AGENT_LIMITS.deliveryAttempts.max }),
+  from: { type: 'string', description: 'Re-points a relationship (swap with to to reverse it), keeping its id and flows.' },
+  to: { type: 'string' },
+  steps: ref('steps'), variantOf: nullable({ type: 'string' }),
   code: text(4000), language: { enum: CODE_LANGUAGES },
   about: { anyOf: [{ type: 'string' }, { type: 'array', minItems: 1, maxItems: 40, items: { type: 'string' } }] },
   near: { type: 'string' }, context: nullable(text(500)), resolved: { type: 'boolean' }, resolution: nullable(text(500)), evidence: nullable(ref('evidence')),
@@ -352,8 +382,24 @@ const opArrange: Schema = {
   additionalProperties: false,
 };
 
+const opMoveInside: Schema = {
+  type: 'object',
+  properties: { op: { enum: ['moveInside'] }, owner: { type: 'string' }, ids: { type: 'array', minItems: 1, maxItems: 300, items: { type: 'string' } } },
+  required: ['op', 'owner', 'ids'],
+  additionalProperties: false,
+  description: 'Move shapes, internal connectors and complete flows inside owner (one C4 level down), preserving IDs. Boundary connections redirect to owner. Mixed-view flows, duplicate overview relationships and self-loops are refused: explicitly revise them first.',
+};
+
+const opMoveOutside: Schema = {
+  type: 'object',
+  properties: { op: { enum: ['moveOutside'] }, ids: { type: 'array', minItems: 1, maxItems: 300, items: { type: 'string' } } },
+  required: ['op', 'ids'],
+  additionalProperties: false,
+  description: 'In an inside view: move shapes, with the connectors and flows told only with them, one C4 level up beside the owner, preserving IDs. A connector to a shape left inside meets the owner.',
+};
+
 /** One op — the same object in `update_diagram` and `submit_proposal`, so the two can't drift. */
-const op: Schema = { oneOf: [opAdd, opUpdate, opRemove, opSetLevel, opArrange, { type: 'object', properties: { op: { enum: ['moveInside'] }, owner: { type: 'string' }, ids: { type: 'array', minItems: 1, maxItems: 300, items: { type: 'string' } } }, required: ['op', 'owner', 'ids'], additionalProperties: false, description: 'Move shapes, internal connectors and complete flows inside owner, preserving IDs. Boundary connections redirect to owner. Mixed-view flows, duplicate overview relationships and self-loops are refused: explicitly revise them first.' }] };
+const op: Schema = { oneOf: [opAdd, opUpdate, opRemove, opSetLevel, opArrange, opMoveInside, opMoveOutside] };
 
 const ops: Schema = {
   type: 'array',
@@ -370,7 +416,7 @@ const TOOL_INPUTS = [
     inputSchema: {
       type: 'object',
       properties: {
-        topics: { type: 'array', items: { enum: ['types', 'relationships', 'c4', 'flows', 'starters', 'limits', 'layout', 'readability'] } },
+        topics: { type: 'array', items: { enum: ['types', 'relationships', 'c4', 'flows', 'notes', 'starters', 'limits', 'layout', 'readability'] } },
         starter: { enum: STARTER_IDS, description: 'Describe one starter: its element keys and flows.' },
       },
       additionalProperties: false,
@@ -404,7 +450,7 @@ const TOOL_INPUTS = [
         diagramId: { type: 'string' },
         view: { type: 'object', properties: { inside: { type: 'array', items: { type: 'string' }, maxItems: 3, description: 'Element ids from the top view down to the view to read.' } }, additionalProperties: false },
         focus: { type: 'object', properties: { nodes: { type: 'array', items: { type: 'string' }, maxItems: 200 }, group: { type: 'string' }, flow: { type: 'string' } }, additionalProperties: false },
-        include: { type: 'array', items: { enum: ['geometry', 'attachments', 'suggestions', 'fullText'] } },
+        include: { type: 'array', items: { enum: ['geometry', 'attachments', 'suggestions', 'fullText', 'views'] }, description: 'views: an outline of every inside view in the file (path, owner, level, size) — the Depth map.' },
         cursor: { type: 'string' },
         format: {
           enum: ['draft', 'mermaid', 'plantuml', 'c4'],
@@ -519,14 +565,14 @@ const TOOL_INPUTS = [
     name: 'update_diagram',
     title: 'Update a diagram',
     description:
-      'Changes an existing diagram in place — every follow-up to a diagram (add, rename, remove, notes, flows, cleanup) goes here, never a new create_diagram. Pass the diagramId and the revision from your last receipt or read; everything not named is kept (ids, positions, notes, flows). Works whether or not the diagram is open: an open one changes on screen as one undo step, a closed one is changed in its file (the person\'s view is never switched). Ops run in order, as one change: {op:"add", nodes?, relationships?, groups?, flows?, notes?, openPoints?}, {op:"update", id, set:{…}} (null clears a field), {op:"remove", ids, cascade?}, {op:"setLevel", level}, {op:"arrange", scope?} — "clean up the layout/arrows": re-lays out the view (or one group) in place, keeping every id, note and flow. New elements are placed beside what they connect to; nothing existing moves except by arrange. If something can\'t fit, the error\'s suggestedOp is the arrange to add. On REVISION_CONFLICT, read again and rebuild the change — never recreate the diagram.',
+      'Changes an existing diagram in place — every follow-up to a diagram (add, rename, remove, notes, flows, cleanup) goes here, never a new create_diagram. Pass the diagramId and the revision from your last receipt or read; everything not named is kept (ids, positions, notes, flows). Works whether or not the diagram is open: an open one changes on screen as one undo step, a closed one is changed in its file (the person\'s view is never switched). Ops run in order, as one change: {op:"add", nodes?, relationships?, groups?, flows?, notes?, openPoints?}, {op:"update", id, set:{…}} (null clears a field), {op:"remove", ids, cascade?}, {op:"setLevel", level}, {op:"arrange", scope?} — "clean up the layout/arrows": re-lays out the view (or one group) in place, keeping every id, note and flow, {op:"moveInside", owner, ids} / {op:"moveOutside", ids} (one C4 level down / up). New elements are placed beside what they connect to; nothing existing moves except by arrange. If something can\'t fit, the error\'s suggestedOp is the arrange to add. On REVISION_CONFLICT, read again and rebuild the change — never recreate the diagram.',
     inputSchema: {
       type: 'object',
       properties: {
         requestId,
         diagramId: { type: 'string' },
         expectedRevision: { type: 'string', description: 'The revision from your last read or receipt; a newer one means someone else edited it.' },
-        view: { type: 'object', properties: { inside: { type: 'array', items: { type: 'string' }, maxItems: 3 } }, additionalProperties: false },
+        view: { type: 'object', properties: { inside: { type: 'array', items: { type: 'string' }, maxItems: 3, description: 'Element ids from the top view down to the view to change. A service or component with nothing inside yet gets its inside view (the next C4 level) from the first add here.' } }, additionalProperties: false },
         activate: { type: 'boolean', description: 'Also open the diagram on screen first (refused if what is open has unsaved changes). Not needed to change it.' },
         onConflict: {
           type: 'string',

@@ -116,7 +116,7 @@ describe('MCP tool definitions', () => {
   it('describe update_diagram ops as one closed schema per op, shared with submit_proposal', () => {
     const update = tool('update_diagram').inputSchema;
     const variants: Loose[] = update.properties.ops.items.oneOf;
-    expect(variants.map((v) => v.properties.op.enum)).toEqual([['add'], ['update'], ['remove'], ['setLevel'], ['arrange'], ['moveInside']]);
+    expect(variants.map((v) => v.properties.op.enum)).toEqual([['add'], ['update'], ['remove'], ['setLevel'], ['arrange'], ['moveInside'], ['moveOutside']]);
     for (const variant of variants) {
       expect(variant.additionalProperties).toBe(false);
       expect(variant.required).toContain('op');
@@ -199,7 +199,9 @@ describe('MCP tool definitions', () => {
 
   it('stay compact enough to sit in an agent\'s context', () => {
     // Typed patches, output contracts and a fourth graph-taking tool add schema, but repeated
-    // proposal/preview vocabulary prose is removed. Keep a measured ceiling on further growth.
-    expect(JSON.stringify(TOOLS).length).toBeLessThan(95_000);
+    // proposal/preview vocabulary prose is removed. Presentation steps (highlight, spotlight), code
+    // and label notes, connector options and moveOutside added ~9 KB on 87 KB, with the step schema
+    // shared through $defs. Keep a measured ceiling on further growth.
+    expect(JSON.stringify(TOOLS).length).toBeLessThan(98_000);
   });
 });

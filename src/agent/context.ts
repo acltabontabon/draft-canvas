@@ -20,6 +20,9 @@ import { nearestElement } from './read';
 import { groupKindOf } from './vocabulary';
 
 export const NOTES_LIMIT = 100;
+export const SNIPPETS_LIMIT = 20;
+/** All the code one read carries, across its snippets — the rest is read with read_attachment. */
+const SNIPPET_CHARACTERS = 32_000;
 
 export interface NoteRef {
   id: string;
@@ -74,6 +77,50 @@ export function collectNotes(view: DraftDocument, options: CollectNotesOptions =
   return { notes, truncated };
 }
 
+export interface SnippetRef {
+  id: string;
+  language: string;
+  code: string;
+  /** Cut short to keep the read bounded; read_attachment returns an attached one in full. */
+  truncated?: true;
+  provenance: 'attached' | 'nearest';
+  about?: string;
+}
+
+/**
+ * Code snippets relevant to a view or a scope — the same rules as `collectNotes`: an attached one is
+ * about its host (structure), a free code card about the element it sits nearest (proximity, said so).
+ */
+export function collectSnippets(view: DraftDocument, options: CollectNotesOptions = {}): { snippets: SnippetRef[]; truncated: boolean } {
+  const { aboutIds } = options;
+  const snippets: SnippetRef[] = [];
+  let truncated = false;
+  let budget = SNIPPET_CHARACTERS;
+  const want = (id: string) => !aboutIds || aboutIds.has(id);
+  const push = (ref: Omit<SnippetRef, 'code' | 'truncated'>, code: string) => {
+    if (snippets.length >= SNIPPETS_LIMIT || budget <= 0) {
+      truncated = true;
+      return;
+    }
+    const chars = [...code];
+    const kept = chars.slice(0, budget);
+    budget -= kept.length;
+    snippets.push({ ...ref, code: kept.join(''), ...(kept.length < chars.length ? { truncated: true as const } : {}) });
+  };
+  for (const host of [...view.nodes, ...view.edges]) {
+    if (!want(host.id)) continue;
+    for (const a of host.attachments ?? []) {
+      if (a.type === 'code') push({ id: a.id, language: a.language ?? 'plaintext', provenance: 'attached', about: host.id }, a.code ?? '');
+    }
+  }
+  for (const card of view.nodes.filter((n) => n.type === 'code')) {
+    const nearest = nearestElement(card, view.nodes);
+    if (aboutIds && (!nearest || !aboutIds.has(nearest))) continue;
+    push({ id: card.id, language: card.language ?? 'plaintext', provenance: 'nearest', ...(nearest ? { about: nearest } : {}) }, card.code ?? '');
+  }
+  return { snippets, truncated };
+}
+
 /**
  * `get_implementation_context`: flow step order exactly as stored (never inferred from screen
  * position), the notes/decisions about what's in focus, and the boundaries around it — a focused
@@ -88,6 +135,8 @@ export interface FlowStepContext {
   label?: string;
   caption?: string;
   frame?: true;
+  /** What the step lights besides its relationship — or, on a frame, all it lights. */
+  highlight?: string[];
 }
 
 export interface BoundaryContext {
@@ -124,13 +173,16 @@ export function buildImplementationContext(
     // Order is the array's own position — the one thing a flow's steps carry that nothing about
     // layout, geometry or graph traversal could recover if this were inferred instead of read.
     steps: flow.steps.map((step, i): FlowStepContext => {
-      if (!step.edgeId) return { order: i, frame: true, ...(step.caption ? { caption: step.caption } : {}) };
+      const lit = [...(step.extraNodeIds ?? []), ...(step.extraEdgeIds ?? [])];
+      const highlight = lit.length ? { highlight: lit } : {};
+      if (!step.edgeId) return { order: i, frame: true, ...(step.caption ? { caption: step.caption } : {}), ...highlight };
       const edge = byEdgeId.get(step.edgeId);
       return {
         order: i,
         edgeId: step.edgeId,
         ...(edge ? { from: edge.source, to: edge.target, ...(edge.label ? { label: edge.label } : {}) } : {}),
         ...(step.caption ? { caption: step.caption } : {}),
+        ...highlight,
       };
     }),
   }));
@@ -157,6 +209,7 @@ export function buildImplementationContext(
   }
 
   const { notes, truncated: notesTruncated } = collectNotes(view, { aboutIds });
+  const { snippets, truncated: snippetsTruncated } = collectSnippets(view, { aboutIds });
 
   const inFocus = (id: string) => !aboutIds || aboutIds.has(id);
   const groups = view.nodes.filter((n) => n.type === 'group' && (inFocus(n.id) || view.nodes.some((m) => m.parentId === n.id && inFocus(m.id))));
@@ -173,9 +226,10 @@ export function buildImplementationContext(
     flows,
     evidence: [...view.nodes, ...view.edges].filter((item) => inFocus(item.id) && item.evidence?.length).map((item) => ({ id: item.id, sources: item.evidence })),
     ...(notes.length ? { notes } : {}),
+    ...(snippets.length ? { snippets } : {}),
     ...(boundaries.length ? { boundaries } : {}),
-    ...(flowsTruncated || notesTruncated || boundariesTruncated
-      ? { truncated: { ...(flowsTruncated ? { flows: true } : {}), ...(notesTruncated ? { notes: true } : {}), ...(boundariesTruncated ? { boundaries: true } : {}) } }
+    ...(flowsTruncated || notesTruncated || snippetsTruncated || boundariesTruncated
+      ? { truncated: { ...(flowsTruncated ? { flows: true } : {}), ...(notesTruncated ? { notes: true } : {}), ...(snippetsTruncated ? { snippets: true } : {}), ...(boundariesTruncated ? { boundaries: true } : {}) } }
       : {}),
   };
 }
