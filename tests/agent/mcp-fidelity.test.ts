@@ -223,6 +223,61 @@ describe('MCP fidelity regressions', () => {
     expect(parsed.ok && parsed.repairs).toEqual([]);
   });
 
+  it('moves shapes inward beside detail already there, not on top of it', () => {
+    const file = build({
+      nodes: [
+        { id: 'core', type: 'service', label: 'Orders', inside: { nodes: [{ id: 'r', type: 'component', label: 'Routes' }, { id: 'v', type: 'component', label: 'Validation' }], relationships: [{ id: 'rv', from: 'r', to: 'v' }] } },
+        { id: 'api', type: 'api', label: 'API' },
+        { id: 'db', type: 'database', label: 'DB' },
+      ],
+      relationships: [{ id: 'w', from: 'api', to: 'db' }],
+    });
+    const next = applyUpdate(file, [], [{ op: 'moveInside', owner: 'core', ids: ['db'] }], undefined);
+    expect(next.quality.errors).toEqual([]);
+    const inside = viewOf(next.file, ['core'])!;
+    const db = inside.nodes.find((n) => n.id === 'db')!;
+    for (const other of inside.nodes.filter((n) => n.id !== 'db')) {
+      const apart = db.x >= other.x + other.width || other.x >= db.x + db.width || db.y >= other.y + other.height || other.y >= db.y + db.height;
+      expect(apart, `db overlaps ${other.id}`).toBe(true);
+    }
+  });
+
+  it('re-infers a connector moveInside re-points at the owner, as moveOutside does', () => {
+    const file = build({
+      nodes: [{ id: 'core', type: 'service', label: 'Orders' }, { id: 'api', type: 'api', label: 'API' }, { id: 'db', type: 'database', label: 'DB' }],
+      relationships: [{ id: 'r', from: 'api', to: 'db' }],
+    });
+    const fresh = build({ nodes: [{ id: 'core', type: 'service', label: 'Orders' }, { id: 'api', type: 'api', label: 'API' }], relationships: [{ id: 'r', from: 'api', to: 'core' }] });
+    const next = applyUpdate(file, [], [{ op: 'moveInside', owner: 'core', ids: ['db'] }], undefined).file;
+    const edge = next.edges.find((e) => e.id === 'r')!;
+    expect(edge).toMatchObject({ source: 'api', target: 'core' });
+    expect(edge.semantic).toBe(fresh.edges[0]!.semantic);
+    expect(edge.semantic).not.toBe(file.edges[0]!.semantic);
+  });
+
+  it('sends back a step a person lit a note with, unchanged', () => {
+    const file = base();
+    file.nodes.push(createNode({ id: 'n1', type: 'note', text: 'Why it waits', x: 0, y: 200 }));
+    file.flows = [{ id: 'f', title: 'Save', steps: [{ id: 's', edgeId: 'r', extraNodeIds: ['n1'] }] }];
+    const next = applyUpdate(file, [], [{ op: 'update', id: 'f', set: { steps: [{ relationship: 'r', caption: 'Saved', highlight: ['n1'] }] } }], undefined).file;
+    expect(next.flows[0]?.steps[0]).toMatchObject({ edgeId: 'r', caption: 'Saved', extraNodeIds: ['n1'] });
+  });
+
+  it('refuses one add into two existing boundaries instead of putting both in the first', () => {
+    const file = build({
+      groups: [{ id: 'g1', label: 'Orders', kind: 'boundary' }, { id: 'g2', label: 'Billing', kind: 'boundary' }],
+      nodes: [{ id: 'a', type: 'service', label: 'A', group: 'g1' }, { id: 'b', type: 'service', label: 'B', group: 'g2' }],
+      relationships: [{ id: 'ab', from: 'a', to: 'b' }],
+    });
+    const add = (nodes: unknown[]) => applyUpdate(file, [], [{ op: 'add', nodes }], undefined);
+    expect(() => add([{ id: 'x', type: 'worker', label: 'X', group: 'g1' }, { id: 'y', type: 'worker', label: 'Y', group: 'g2' }])).toThrow(/one existing boundary/);
+    expect(add([{ id: 'x', type: 'worker', label: 'X', group: 'g1' }]).file.nodes.find((n) => n.id === 'x')?.parentId).toBe('g1');
+  });
+
+  it('refuses a cursor that is not an object instead of crashing', () => {
+    for (const cursor of ['null', '1', '"text"']) expect(() => read(base(), { cursor })).toThrow(/not a diagram cursor/);
+  });
+
   it('refuses a mixed-view story instead of discarding or guessing flow steps', () => {
     const file = build({ nodes: [{ id: 'system', type: 'service', label: 'Orders' }, { id: 'client', type: 'service', label: 'Client' }, { id: 'api', type: 'api', label: 'API' }, { id: 'db', type: 'database', label: 'DB' }], relationships: [{ id: 'entry', from: 'client', to: 'api' }, { id: 'r', from: 'api', to: 'db' }], flows: [{ id: 'f', title: 'Order', steps: ['entry', 'r'] }] });
     expect(() => applyUpdate(file, [], [{ op: 'moveInside', owner: 'system', ids: ['api', 'db'] }], undefined)).toThrow(/split that story/);

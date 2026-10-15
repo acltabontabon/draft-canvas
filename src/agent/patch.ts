@@ -412,9 +412,13 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
   return { file: nextFile, touched, counts, advisories, quality };
 }
 
-/** What a flow step may light in a view: its elements and boundaries, and its relationships. */
+/**
+ * What a flow step may light in a view: anything the Flows panel's "+ Selection" can add — its
+ * elements, boundaries and cards — and its relationships. Narrower, a step a person lit a note with
+ * couldn't be sent back unchanged.
+ */
 function lightableIn(view: DraftDocument): Lightable {
-  return { nodeIds: new Set(view.nodes.filter((n) => !isCard(n)).map((n) => n.id)), relationshipIds: new Set(view.edges.map((e) => e.id)) };
+  return { nodeIds: new Set(view.nodes.map((n) => n.id)), relationshipIds: new Set(view.edges.map((e) => e.id)) };
 }
 
 const CARD_NAMES: Record<AttachableType, string> = { note: 'note', code: 'code snippet', text: 'label' };
@@ -855,6 +859,12 @@ function addToView(
   // New elements that belong to an existing boundary are laid out as its (virtual) contents.
   const intoExisting = room.nodes.filter((n) => n.group && existingIds.has(n.group));
   const hostGroup = intoExisting[0]?.group;
+  // One add places its new elements as one block, so into one existing boundary at most. Elements
+  // naming a second one used to land silently in the first.
+  const boundaries = [...new Set(intoExisting.map((n) => n.group))];
+  if (boundaries.length > 1) {
+    throw new AgentError('UNSUPPORTED', `One add op can place new elements into one existing boundary, not ${boundaries.length} (${boundaries.map((g) => `"${g}"`).join(', ')}). Use one add op per boundary; they can go in the same request.`);
+  }
   const spec: RoomSpec = {
     ...room,
     nodes: room.nodes.map((n) => (n.group && existingIds.has(n.group) ? { ...n, group: undefined } : n)) as RoomSpec['nodes'],

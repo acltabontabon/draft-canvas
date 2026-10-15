@@ -199,6 +199,7 @@ function cursorOffsets(cursor: unknown, revision: string, path: DepthPath, signa
   let payload: { revision?: unknown; path?: unknown; signature?: unknown; offsets?: unknown };
   try { payload = JSON.parse(decodeURIComponent(String(cursor))); }
   catch { throw new AgentError('INVALID_INPUT', 'That cursor is not a diagram cursor.', { path: '/cursor' }); }
+  if (!payload || typeof payload !== 'object') throw new AgentError('INVALID_INPUT', 'That cursor is not a diagram cursor.', { path: '/cursor' });
   if (payload.revision !== revision || JSON.stringify(payload.path) !== JSON.stringify(path) || payload.signature !== signature) {
     throw new AgentError('CURSOR_STALE', 'The revision, view or read options changed since that page was read.', { hint: 'Read again from the start with the same focus and include options.', details: { revision } });
   }

@@ -49,8 +49,21 @@ export function moveInside(file: DraftDocument, path: DepthPath, ownerId: unknow
   }
   const childPath = [...path, owner.id];
   const inside = viewOf(file, childPath)!;
-  const movedNodes = view.nodes.filter((n) => ids.has(n.id)).map((n) => n.parentId && !ids.has(n.parentId) ? { ...n, parentId: undefined } : n);
-  const outer = { ...view, nodes: view.nodes.filter((n) => !ids.has(n.id)), edges: outerEdges, flows: view.flows.filter((f) => !flowIds.has(f.id)) };
+  // The moved shapes keep their arrangement. Into an empty inside view they keep their coordinates;
+  // beside detail already there, they are set clear of it as one block, or they would land on it.
+  const moving = view.nodes.filter((n) => ids.has(n.id));
+  const minX = Math.min(...moving.map((n) => n.x));
+  const minY = Math.min(...moving.map((n) => n.y));
+  const size = { width: Math.max(...moving.map((n) => n.x + n.width)) - minX, height: Math.max(...moving.map((n) => n.y + n.height)) - minY };
+  const origin = inside.nodes.length ? freeOriginFor(inside, size) : { x: minX, y: minY };
+  const movedNodes = moving.map((n) => {
+    const placed = { ...n, x: Math.round(n.x - minX + origin.x), y: Math.round(n.y - minY + origin.y) };
+    return placed.parentId && !ids.has(placed.parentId) ? { ...placed, parentId: undefined } : placed;
+  });
+  let outer: DraftDocument = { ...view, nodes: view.nodes.filter((n) => !ids.has(n.id)), edges: outerEdges, flows: view.flows.filter((f) => !flowIds.has(f.id)) };
+  // A connector whose end is now the owner is a re-pointed connector: its inferred meaning follows
+  // its new end, as `moveOutside`'s does.
+  for (const edge of outerEdges) if (edge !== view.edges.find((e) => e.id === edge.id)) outer = reinferIfEligible(outer, edge.id, view);
   const without = path.length ? embed(file, path, outer) : outer;
   return embed(without, childPath, { ...inside, nodes: [...inside.nodes, ...movedNodes], edges: [...inside.edges, ...innerEdges], flows: [...inside.flows, ...innerFlows] });
 }
