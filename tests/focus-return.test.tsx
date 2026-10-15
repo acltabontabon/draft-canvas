@@ -1,5 +1,6 @@
 import { render } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
+import { Modal } from '../src/ui/common/Modal';
 import { handOffFocus, useFocusReturn } from '../src/ui/common/useFocusReturn';
 
 function Dialog() {
@@ -56,5 +57,38 @@ describe('useFocusReturn', () => {
     unmount();
 
     expect(document.activeElement).toBe(other);
+  });
+});
+
+describe('Modal', () => {
+  const frame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+
+  it('returns focus to whatever opened the palette when a dialog run from it closes', async () => {
+    const opener = document.createElement('button');
+    const paletteInput = document.createElement('input');
+    document.body.append(opener, paletteInput);
+    paletteInput.focus();
+    handOffFocus(paletteInput, opener);
+
+    // The palette closes in the same render the command's dialog opens.
+    const { unmount } = render(<Modal title="Export" onClose={() => {}}>body</Modal>);
+    paletteInput.remove();
+    unmount();
+    await frame();
+
+    expect(document.activeElement).toBe(opener);
+  });
+
+  it('returns focus to the control that opened it', async () => {
+    const opener = document.createElement('button');
+    document.body.append(opener);
+    opener.focus();
+
+    const { unmount } = render(<Modal title="Settings" onClose={() => {}}>body</Modal>);
+    expect(document.activeElement).not.toBe(opener);
+    unmount();
+    await frame();
+
+    expect(document.activeElement).toBe(opener);
   });
 });

@@ -3,8 +3,9 @@ import { useEffect, useRef } from 'react';
 /**
  * Captures whatever element has real DOM focus the moment `active` becomes true, and restores
  * focus to it — if it's still attached to the document — the moment `active` goes back to false
- * or the calling component unmounts, whichever comes first. Shared by `Modal`, `CommandPalette` and
- * `ClipboardPermissionDialog` so the dialogs can't drift on this behavior: closing any of them must
+ * or the calling component unmounts, whichever comes first. Shared by `CommandPalette` and
+ * `ClipboardPermissionDialog` (`Modal` reads `focusReturnTarget` itself, alongside React Aria's own
+ * restore) so the dialogs can't drift on this behavior: closing any of them must
  * hand focus back to whatever opened it, not drop it to `<body>`. `active` may be a constant `true`
  * for a component that only mounts while open, or a reactive flag on one that stays mounted.
  *

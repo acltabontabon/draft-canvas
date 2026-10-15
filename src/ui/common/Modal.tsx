@@ -4,6 +4,7 @@ import { Button } from './Button';
 import { Icon } from './Icon';
 import { isImeKeyEvent } from '../../lib/isEditableTarget';
 import { trapTab } from './focusTrap';
+import { focusReturnTarget } from './useFocusReturn';
 
 interface ModalProps {
   title: string;
@@ -34,6 +35,22 @@ const openModals = new Set<number>();
 export function Modal({ title, onClose, children, footer, width = 460, className, onBack, backLabel }: ModalProps) {
   const panel = useRef<HTMLDivElement>(null);
   const [order] = useState(() => (modalSequence += 1));
+
+  // React Aria hands focus back to whatever had it when the dialog rendered. For a command run from
+  // the palette that's the palette's input, gone by the time the dialog closes, and focus fell to
+  // `<body>`; the opener the palette handed over (`handOffFocus`) takes it instead. Read during
+  // render, before the dialog's own focus lands, and restored a frame after closing: React Aria
+  // lifts the app root's `inert` in a later cleanup, and focusing into an inert tree silently fails.
+  const [returnTo] = useState(focusReturnTarget);
+  useEffect(
+    () => () => {
+      requestAnimationFrame(() => {
+        const active = document.activeElement;
+        if (returnTo?.isConnected && (!active || active === document.body)) returnTo.focus();
+      });
+    },
+    [returnTo],
+  );
 
   // Layout effects, this one and the key listener below: a dialog has to be listening before it is
   // first painted. After paint, a loaded machine showed the dialog a frame before it heard Escape,
