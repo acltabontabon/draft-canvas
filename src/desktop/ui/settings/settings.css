@@ -441,7 +441,7 @@
   gap: 8px 14px;
 }
 
-.dc-prefs-inline a.dc-button {
+.dc-prefs-inline .dc-button {
   height: 30px;
   padding: 0 12px;
   text-decoration: none;

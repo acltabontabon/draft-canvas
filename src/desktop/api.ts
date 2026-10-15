@@ -141,6 +141,22 @@ export interface AgentProject {
   within?: Handle | null;
 }
 
+/** A coding agent Settings can set up with one click (`src-tauri/src/agent/clients.rs`). */
+export type AgentClient = 'codex' | 'claude-code';
+
+/** Where one agent's MCP configuration stands. */
+export interface AgentClientSetup {
+  client: AgentClient;
+  /** `outdated`: it launches another copy of the connector (a moved or older app), or is turned off. */
+  state: 'not-set-up' | 'ready' | 'outdated';
+  /** Whether the shell can do the setup itself; false for Claude Code when `claude` can't be found. */
+  automatic: boolean;
+  /** The configuration file, written for a person. */
+  location: string | null;
+  /** What an outdated entry launches instead. */
+  configuredCommand: string | null;
+}
+
 export interface AgentPatch {
   enabled?: boolean;
   project?: { handle: Handle; agent: boolean };
@@ -281,6 +297,10 @@ export interface DesktopApi {
   agentRespond(id: number, outcome: unknown): Promise<void>;
   agentStatus(): Promise<AgentSettings>;
   agentConfigure(patch: AgentPatch): Promise<AgentSettings>;
+  /** Whether Codex and Claude Code launch this app's connector. Empty without a connector. */
+  agentClients(): Promise<AgentClientSetup[]>;
+  /** Adds Draft Canvas to an agent's MCP configuration, or repoints the entry already there. */
+  agentConnectClient(client: AgentClient): Promise<AgentClientSetup>;
 
   // Proposal review (native UI only — see `agent/proposals.rs`; never reachable from the MCP bridge)
   agentProposalList(diagramId?: string): Promise<Proposal[]>;

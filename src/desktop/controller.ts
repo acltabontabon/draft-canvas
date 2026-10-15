@@ -12,6 +12,8 @@ import type { StarterId } from '../starters';
 import { loadStarters } from '../starters/load';
 import {
   DesktopError,
+  type AgentClient,
+  type AgentClientSetup,
   type AgentPatch,
   type Proposal,
   type ProposalAction,
@@ -1437,6 +1439,29 @@ export class DesktopController {
       logDiagnostic(error, { operation: 'desktop-agent-configure' });
       this.ui.notify(`Couldn’t change agent access: ${describe(error)}`);
       return false;
+    }
+  }
+
+  /** Where Codex's and Claude Code's setup stand. Asked when Settings shows it, not store-backed:
+   *  finding Claude Code's CLI can start a shell, so it isn't part of every status refresh. */
+  async agentClients(): Promise<AgentClientSetup[]> {
+    try {
+      return await this.api.agentClients();
+    } catch (error) {
+      logDiagnostic(error, { operation: 'desktop-agent-clients' });
+      return [];
+    }
+  }
+
+  /** Adds Draft Canvas to an agent's MCP configuration. Null when it couldn't (and the person has
+   *  been told why). */
+  async connectAgentClient(client: AgentClient): Promise<AgentClientSetup | null> {
+    try {
+      return await this.api.agentConnectClient(client);
+    } catch (error) {
+      logDiagnostic(error, { operation: 'desktop-agent-connect-client' });
+      this.ui.notify(describe(error));
+      return null;
     }
   }
 

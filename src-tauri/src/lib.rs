@@ -93,6 +93,8 @@ pub fn run() {
             commands::agent::agent_respond,
             commands::agent::agent_status,
             commands::agent::agent_configure,
+            commands::agent::agent_clients,
+            commands::agent::agent_connect_client,
             commands::agent::agent_proposal_list,
             commands::agent::agent_proposal_get,
             commands::agent::agent_proposal_begin_accept,

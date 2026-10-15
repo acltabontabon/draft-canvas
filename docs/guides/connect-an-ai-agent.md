@@ -1,7 +1,7 @@
 # Connect an AI agent
 
-Draft Canvas Desktop can let a coding agent on your computer — Claude Code, Cursor, or any other
-agent that speaks MCP (the Model Context Protocol) — draw diagrams for you. Ask your agent to "draw
+Draft Canvas Desktop can let a coding agent on your computer — Claude Code, Codex, Cursor, or any
+other agent that speaks MCP (the Model Context Protocol) — draw diagrams for you. Ask your agent to "draw
 how orders flow through this service". It reads your code, then hands Draft Canvas a description:
 the parts, how they connect, the flows. Draft Canvas lays it out and draws it as an ordinary diagram
 you can edit, move, present and export like one you drew yourself.
@@ -23,13 +23,25 @@ can't reach it.
    Canvas. Agents can list, read, create and change diagrams only in the folders you tick — and in
    everything inside them, so a ticked folder already covers the folders listed under it.
 4. Under **Connect an agent**, pick your agent and follow its setup:
-   - **Claude Code**: run the copied command, for example
-     `claude mcp add draft-canvas -- "/Applications/Draft Canvas.app/Contents/MacOS/draft-canvas-mcp"`.
+   - **Claude Code**: click **Add to Claude Code**. Draft Canvas runs Claude Code's own
+     `claude mcp add --scope user` for you, so every project can use it. If Draft Canvas can't find
+     the `claude` command, it shows the command to run in a terminal instead, for example
+     `claude mcp add --scope user draft-canvas -- "/Applications/Draft Canvas.app/Contents/MacOS/draft-canvas-mcp"`.
+   - **Codex**: click **Add to Codex**. Draft Canvas adds a `draft-canvas` server to Codex's
+     `config.toml` (`~/.codex/config.toml`, or the folder `CODEX_HOME` names), which the Codex app,
+     CLI and IDE extension all read. Only that entry changes; the rest of the file, comments
+     included, stays as it was, and a file with a mistake in it is left alone. The entry also gives
+     tools 150 seconds instead of Codex's default 60, so a large layout isn't cut off. Start a new
+     Codex chat afterwards. **Set it up by hand instead** shows the same entry to paste.
    - **Cursor**: click **Add to Cursor** — it opens Cursor and adds Draft Canvas to its MCP
      configuration for you. If nothing opens (no `cursor://` links registered, or you'd rather add it
      to a project's own configuration first), use **Copy the config instead** and paste it into
      `~/.cursor/mcp.json`, or a project's `.cursor/mcp.json`.
    - **Other MCP clients**: add the copied `mcpServers` entry to the agent's MCP configuration.
+
+   For Claude Code and Codex, Settings also says when the agent is already set up, or is set up for
+   a different copy of Draft Canvas (after moving or reinstalling the app) — then the button reads
+   **Update** and points it at this one.
 
 Draft Canvas must be running while the agent works: the connector talks to the running app. It
 doesn't start the app for you, and it says so if the app isn't open.
@@ -197,7 +209,10 @@ changed in that case.
   elements) are hard to lay out cleanly. Ask for the diagram in steps, or as an overview with the
   detail drawn inside its shapes.
 - **The agent's connector is a different version.** Point the agent at the connector inside the Draft
-  Canvas you are running: copy the setup from Settings again after updating the app.
+  Canvas you are running: for Claude Code and Codex, click **Update** under **Connect an agent**; for
+  other agents, copy the setup from Settings again.
+- **Claude Code only finds Draft Canvas in one folder.** An older setup command added it to the
+  folder the terminal was in. Click **Add to Claude Code** to add it for every project.
 
 ## For agent authors
 
@@ -242,7 +257,12 @@ the pasted-config fallback are unit-tested to decode to the exact same server de
 `cursor://` URL and `~/.cursor/mcp.json` shape match Cursor's own published format — but connecting a
 real Cursor install to Draft Canvas has not been run in this environment; treat it as
 configuration-verified, not as a tested connection, until it's been tried against an actual Cursor.
-Windows and Linux are untested for every client in this round, same as before it.
+Codex's and Claude Code's one-click setup is verified against the real tools on macOS, each in a
+throwaway configuration folder: the Codex CLI bundled with the ChatGPT app (0.162) reads the entry
+Draft Canvas writes, including its tool timeout, and a copy of a real, populated `config.toml` comes
+back unchanged apart from the new table; `claude mcp add --scope user` writes the user-scope entry
+Settings reads back. A full Codex conversation drawing a diagram has not been run in this
+environment. Windows and Linux are untested for every client, as before.
 
 Contract 3 adds `npm run e2e:mcp` (after `npm run desktop:check`): a real stdio MCP client and
 compiled sidecar issue reads, candidate previews, image renders, commits and a semantic proposal

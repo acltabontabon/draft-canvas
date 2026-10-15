@@ -50,6 +50,8 @@ const COMMANDS: &[&str] = &[
     "agent_respond",
     "agent_status",
     "agent_configure",
+    "agent_clients",
+    "agent_connect_client",
     "agent_proposal_list",
     "agent_proposal_get",
     "agent_proposal_begin_accept",

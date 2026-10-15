@@ -17,6 +17,16 @@ the release notes and the in-app What's New are generated from here. See
 
 - Install Draft Canvas on macOS with `brew install --cask acltabontabon/tap/draft-canvas`.
   Stable releases verify both macOS installers and automatically update the shared Homebrew tap.
+- Connect Codex to Draft Canvas from **Settings → AI agents** with one click. **Add to Codex** sets
+  up the Codex app, CLI and IDE extension together, and leaves the rest of Codex's settings as they were.
+- **Add to Claude Code** sets up Claude Code with one click too, for every project.
+- Settings shows whether Claude Code and Codex are already set up, and offers **Update** when
+  they still point at a moved or reinstalled copy of Draft Canvas.
+
+#### Fixed
+
+- The Claude Code setup command now adds Draft Canvas for every project, not only the folder it
+  was run in.
 
 ### Web
 

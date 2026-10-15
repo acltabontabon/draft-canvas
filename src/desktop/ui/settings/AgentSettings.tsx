@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Button } from '../../../ui/common/Button';
 import { Icon } from '../../../ui/common/Icon';
 import { SegmentedControl } from '../../../ui/common/SegmentedControl';
-import type { AgentSettings as AgentState } from '../../api';
+import type { AgentClient, AgentClientSetup, AgentSettings as AgentState } from '../../api';
 import { useDesktopController, useDesktopState } from '../../useDesktop';
-import { claudeCodeCommand, connectionSummary, cursorDeeplink, folderRows, genericConfigJson } from './agentModel';
+import { claudeCodeCommand, clientLine, codexConfigToml, connectionSummary, cursorDeeplink, folderRows, genericConfigJson } from './agentModel';
 import { ChoiceRow, CopyField, Disclosure, SettingRow, SettingsPage, SettingsSection } from './layout';
 
 type Platform = 'macos' | 'windows' | 'linux' | null;
@@ -25,7 +25,7 @@ export function AgentSettings() {
   }, [controller]);
 
   return (
-    <SettingsPage title="AI agents" lead="Let a coding agent such as Claude Code create and edit diagrams in folders you choose.">
+    <SettingsPage title="AI agents" lead="Let a coding agent such as Claude Code or Codex create and edit diagrams in folders you choose.">
       <SettingsSection title="Access" busy={!agent}>
         <ChoiceRow
           type="checkbox"
@@ -110,18 +110,32 @@ function Folders({ agent }: { agent: AgentState }) {
   );
 }
 
-type Client = 'claude-code' | 'cursor' | 'other';
+type Client = AgentClient | 'cursor' | 'other';
 
 const CLIENTS: { value: Client; label: string }[] = [
   { value: 'claude-code', label: 'Claude Code' },
+  { value: 'codex', label: 'Codex' },
   { value: 'cursor', label: 'Cursor' },
   { value: 'other', label: 'Other MCP clients' },
 ];
 
 /** How to point an agent at the connector — one client at a time, never every setup at once. */
 function Connect({ agent, platform }: { agent: AgentState; platform: Platform }) {
+  const controller = useDesktopController();
   const [client, setClient] = useState<Client>('claude-code');
+  const [setups, setSetups] = useState<AgentClientSetup[]>([]);
   const sidecarPath = agent.sidecarPath;
+  useEffect(() => {
+    if (!sidecarPath) return;
+    let live = true;
+    void controller.agentClients().then((found) => live && setSetups(found));
+    return () => {
+      live = false;
+    };
+  }, [controller, sidecarPath]);
+  const setupOf = (which: AgentClient) => setups.find((setup) => setup.client === which);
+  const connected = (setup: AgentClientSetup) => setSetups((all) => [...all.filter((s) => s.client !== setup.client), setup]);
+
   return (
     <SettingsSection title="Connect an agent" description="Draft Canvas needs to be running while the agent works.">
       {!sidecarPath ? (
@@ -137,10 +151,16 @@ function Connect({ agent, platform }: { agent: AgentState; platform: Platform })
           <SegmentedControl name="agent-client" legend="Agent to connect" value={client} options={CLIENTS} onChange={setClient} />
           <div className="dc-prefs-client">
             {client === 'claude-code' && (
-              <>
+              <OneClick setup={setupOf('claude-code')} blocked={!!agent.sidecarWarning} onConnected={connected}>
                 <p className="dc-prefs-step">Run this once in a terminal:</p>
                 <CopyField label="Terminal command" value={claudeCodeCommand(sidecarPath)} />
-              </>
+              </OneClick>
+            )}
+            {client === 'codex' && (
+              <OneClick setup={setupOf('codex')} blocked={!!agent.sidecarWarning} onConnected={connected}>
+                <p className="dc-prefs-step">Paste into {setupOf('codex')?.location ?? (platform === 'windows' ? '.codex\\config.toml in your user folder' : '~/.codex/config.toml')}:</p>
+                <CopyField label="Codex MCP config" value={codexConfigToml(sidecarPath)} multiline />
+              </OneClick>
             )}
             {client === 'cursor' && (
               <>
@@ -171,6 +191,52 @@ function Connect({ agent, platform }: { agent: AgentState; platform: Platform })
         </>
       )}
     </SettingsSection>
+  );
+}
+
+/**
+ * The button that writes an agent's setup for the person (`agent/clients.rs`), what it found there,
+ * and — tucked away — the manual setup (`children`). The manual setup is all there is while the
+ * shell is still looking, or when it can't do it (Claude Code without its CLI where it can be found).
+ */
+function OneClick({
+  setup,
+  blocked,
+  onConnected,
+  children,
+}: {
+  setup: AgentClientSetup | undefined;
+  blocked: boolean;
+  onConnected: (setup: AgentClientSetup) => void;
+  children: ReactNode;
+}) {
+  const controller = useDesktopController();
+  const [busy, setBusy] = useState(false);
+  const line = clientLine(setup);
+  if (!setup || !line || (!setup.automatic && setup.state !== 'ready')) return <>{children}</>;
+  const connect = async () => {
+    setBusy(true);
+    const after = await controller.connectAgentClient(setup.client);
+    setBusy(false);
+    if (after) onConnected(after);
+  };
+  return (
+    <>
+      {line.action ? (
+        <div className="dc-prefs-inline">
+          <Button variant="solid" disabled={busy || blocked} onClick={() => void connect()}>
+            {busy ? 'Setting up…' : line.action}
+          </Button>
+          <span className="dc-prefs-description">{line.text}</span>
+        </div>
+      ) : (
+        <p className="dc-prefs-note" data-tone="on" role="status">
+          <Icon name="check" size={13} />
+          <span>{line.text}</span>
+        </p>
+      )}
+      <Disclosure summary="Set it up by hand instead">{children}</Disclosure>
+    </>
   );
 }
 

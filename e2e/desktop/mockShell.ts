@@ -107,6 +107,11 @@ export async function installMockShell(page: Page): Promise<void> {
       }),
     });
     let agentSettings: Record<string, unknown> = { enabled: false, listening: false, connections: 0, sidecarPath: '/Applications/Draft Canvas.app/Contents/MacOS/draft-canvas-mcp', sidecarWarning: null, background: 'restart-needed', projects: [] };
+    // Claude Code without its CLI where the shell looks (so its manual command shows), Codex not yet set up.
+    const agentClients = new Map<string, Record<string, unknown>>([
+      ['claude-code', { client: 'claude-code', state: 'not-set-up', automatic: false, location: '~/.claude.json', configuredCommand: null }],
+      ['codex', { client: 'codex', state: 'not-set-up', automatic: true, location: '~/.codex/config.toml', configuredCommand: null }],
+    ]);
     const proposals = new Map<string, Record<string, unknown>>();
     let settings: Record<string, unknown> = { closeBehavior: 'ask', autoCheckUpdates: true };
     let events: ChannelLike | null = null;
@@ -337,6 +342,12 @@ export async function installMockShell(page: Page): Promise<void> {
         if (args.patch.project) agentFolders.set(args.patch.project.handle, args.patch.project.agent);
         if (args.patch.rotate) agentSettings = { ...agentSettings, connections: 0 };
         return agentView();
+      },
+      agent_clients: () => [...agentClients.values()],
+      agent_connect_client: (args: { client: string }) => {
+        const setup = { ...agentClients.get(args.client)!, state: 'ready', configuredCommand: agentSettings.sidecarPath };
+        agentClients.set(args.client, setup);
+        return setup;
       },
       // Proposal review — the mock's rules mirror `proposals.rs`/`commands/agent.rs` closely enough
       // for a browser-driven test of the review panel: idempotent resolve, wrong-stage refusal, and

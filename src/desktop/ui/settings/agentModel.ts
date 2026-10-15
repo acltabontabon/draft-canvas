@@ -1,4 +1,4 @@
-import type { AgentProject, AgentSettings } from '../../api';
+import type { AgentClient, AgentClientSetup, AgentProject, AgentSettings } from '../../api';
 
 /**
  * What Settings → AI agents says, worked out without React so it can be tested on its own: the
@@ -104,6 +104,51 @@ export function cursorDeeplink(sidecarPath: string): string {
   return `cursor://anysphere.cursor-deeplink/mcp/install?name=draft-canvas&config=${encoded}`;
 }
 
+/** User scope, so every project sees it: `claude mcp add` alone adds it to the folder the terminal
+ *  happens to be in, and nowhere else. */
 export function claudeCodeCommand(sidecarPath: string): string {
-  return `claude mcp add draft-canvas -- ${JSON.stringify(sidecarPath)}`;
+  return `claude mcp add --scope user draft-canvas -- ${JSON.stringify(sidecarPath)}`;
+}
+
+/** Matches `CODEX_TOOL_TIMEOUT_SECS` in `src-tauri/src/agent/clients.rs`: Codex's default 60 s
+ *  would cut off a long layout before the connector's own two-minute answer arrives. */
+export const CODEX_TOOL_TIMEOUT_SECS = 150;
+
+/** What "Add to Codex" writes, for pasting by hand. A JSON string is a valid TOML basic string. */
+export function codexConfigToml(sidecarPath: string): string {
+  return `[mcp_servers.draft-canvas]\ncommand = ${JSON.stringify(sidecarPath)}\ntool_timeout_sec = ${CODEX_TOOL_TIMEOUT_SECS}\n`;
+}
+
+const CLIENT_NAMES: Record<AgentClient, string> = { codex: 'Codex', 'claude-code': 'Claude Code' };
+
+export interface ClientLine {
+  /** The button's label, or null when there's nothing left to do. */
+  action: string | null;
+  /** Where the setup stands, in a sentence. */
+  text: string;
+  tone: 'on' | 'warn' | null;
+}
+
+/** What Settings says beside the one-click setup for `setup.client`. */
+export function clientLine(setup: AgentClientSetup | undefined): ClientLine | null {
+  if (!setup) return null;
+  const name = CLIENT_NAMES[setup.client];
+  const where = setup.location ? ` in ${setup.location}` : '';
+  const restart = setup.client === 'codex' ? 'Start a new Codex chat to use it.' : 'Start a new Claude Code session to use it.';
+  if (setup.state === 'ready') return { action: null, text: `Set up${where}. ${restart}`, tone: 'on' };
+  if (setup.state === 'outdated') {
+    return {
+      action: `Update ${name}`,
+      text: `${name} is set up for a different copy of Draft Canvas${setup.configuredCommand ? ` (${setup.configuredCommand})` : ''}, or has it turned off.`,
+      tone: 'warn',
+    };
+  }
+  return {
+    action: `Add to ${name}`,
+    text:
+      setup.client === 'codex'
+        ? `Adds Draft Canvas to Codex’s MCP servers${where} — the Codex app, CLI and IDE extension all use it.`
+        : `Runs claude mcp add for you, so every project can use Draft Canvas.`,
+    tone: null,
+  };
 }
