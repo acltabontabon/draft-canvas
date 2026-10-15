@@ -399,7 +399,7 @@ function computePlan(nodes: readonly DraftNode[], edges: readonly DraftEdge[]): 
   for (const edge of edges) {
     // A connector the user has taken manual control of is left exactly alone —
     // "auto until touched".
-    if (edge.routeMode === 'direct') continue;
+    if (edge.routeMode === 'direct' || edge.waypoints) continue;
     // Only the orthogonal style has a straight shared run to share.
     if (edge.routing !== 'smoothstep') continue;
     // A parallel sibling already nudges this edge's hub anchor off the shared

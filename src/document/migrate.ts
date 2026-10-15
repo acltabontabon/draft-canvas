@@ -501,6 +501,17 @@ function everyRoom(migration: Migration): Migration {
 }
 
 /**
+ * v20 lets a connector carry the bend points the user dragged it through (`DraftEdge.waypoints`).
+ * Structurally a no-op: a v19 connector has none, and a connector without them is routed exactly
+ * as before. The version moves for v13's reason: a v19 build's whitelist would silently strip the
+ * points and, where every edit saves straight back to disk, write the straightened file over the
+ * original.
+ */
+function migrateAddWaypoints(doc: Record<string, unknown>): Record<string, unknown> {
+  return doc;
+}
+
+/**
  * `MIGRATIONS[n]` upgrades a version-`n` document to version `n + 1`.
  */
 const MIGRATIONS: Record<number, Migration> = {
@@ -523,6 +534,7 @@ const MIGRATIONS: Record<number, Migration> = {
   17: everyRoom(migrateReadsWritesLabel),
   // Evidence is optional on every element/relationship; old graphs already mean exactly the same.
   18: (document) => document,
+  19: migrateAddWaypoints,
 };
 
 export class UnsupportedVersionError extends Error {

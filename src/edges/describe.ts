@@ -22,6 +22,7 @@ import {
   rectOf,
   responseAwayFor,
   responseLaneFor,
+  responseWaypointsFor,
   responseSpineFor,
   routeBetween,
   routeEdge,
@@ -273,6 +274,7 @@ export function describeEdge(
       const responseLane = responseLaneFor(ctx.lane ?? 0);
       const responseRoute = routeBetween(rectOf(targetNode), rectOf(sourceNode), edge.routing, {
         anchors: { source: edge.targetAnchor, target: edge.sourceAnchor },
+        waypoints: responseWaypointsFor(edge.waypoints, ctx.lane ?? 0),
         lane: responseLane,
         obstacles,
         spine: responseSpineFor(ctx.spine),

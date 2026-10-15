@@ -24,6 +24,7 @@ import {
   laneIndex,
   rectOf,
   responseLaneFor,
+  responseWaypointsFor,
   responseSpineFor,
   routeBetween,
   type Rect,
@@ -233,7 +234,7 @@ function linesOf(nodes: readonly DraftNode[], edges: readonly DraftEdge[], obsta
         edge.target,
         rectKey(sourceRect),
         rectKey(targetRect),
-        JSON.stringify([edge.sourceAnchor, edge.targetAnchor, spine]),
+        JSON.stringify([edge.sourceAnchor, edge.targetAnchor, spine, edge.waypoints]),
         edge.routing,
         lane,
         edge.hasResponse ? 1 : 0,
@@ -253,6 +254,7 @@ function linesOf(nodes: readonly DraftNode[], edges: readonly DraftEdge[], obsta
 
     const route = routeBetween(sourceRect, targetRect, edge.routing, {
       anchors: { source: edge.sourceAnchor, target: edge.targetAnchor },
+      waypoints: edge.waypoints,
       lane,
       obstacles,
       spine,
@@ -281,6 +283,7 @@ function linesOf(nodes: readonly DraftNode[], edges: readonly DraftEdge[], obsta
     if (edge.hasResponse) {
       const responseRoute = routeBetween(targetRect, sourceRect, edge.routing, {
         anchors: { source: edge.targetAnchor, target: edge.sourceAnchor },
+        waypoints: responseWaypointsFor(edge.waypoints, lane),
         lane: responseLaneFor(lane),
         obstacles,
         spine: responseSpineFor(spine),

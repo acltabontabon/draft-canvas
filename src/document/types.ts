@@ -10,7 +10,7 @@
 export const DRAFT_FORMAT = 'draft-canvas' as const;
 
 /** Bump when the on-disk shape changes, and add a migration in `migrate.ts`. */
-export const CURRENT_VERSION = 19;
+export const CURRENT_VERSION = 20;
 
 export type DraftFormat = typeof DRAFT_FORMAT;
 
@@ -431,6 +431,12 @@ export interface EdgeDetails {
   code: string;
 }
 
+/** A point in a room's coordinates — a connector's bend point (`DraftEdge.waypoints`). */
+export interface DraftPoint {
+  x: number;
+  y: number;
+}
+
 export interface DraftEdge {
   id: string;
   source: string;
@@ -509,6 +515,15 @@ export interface DraftEdge {
    * connector is still a smoothstep/bezier/straight one.
    */
   routeMode?: RouteMode;
+  /**
+   * Bend points the user dragged this connector through, in the same room coordinates as its
+   * nodes, ordered from source to target. Absent means the router draws the whole path, exactly
+   * as before this field existed; present, the line is drawn through these points in the
+   * connector's own `routing` style (a stepped connector stays orthogonal, inserting the elbows
+   * it needs), and only the two ends still follow their shapes. Moving both ends together moves
+   * the points with them; "Reset route" clears it. Never set by inference or layout.
+   */
+  waypoints?: DraftPoint[];
   /**
    * Whether `semantic`/`kind` were set by `connectorSemantics.ts`'s inference
    * or chosen by the user. Absent means "never explicitly chosen" — the same

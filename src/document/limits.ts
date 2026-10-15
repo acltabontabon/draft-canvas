@@ -47,6 +47,8 @@ export const LIMITS = {
   maxOpenPointContextLength: 500,
   /** One point may be about this many shapes and connectors at once — a whole boundary's worth. */
   maxOpenPointTargets: 40,
+  /** Bend points on one connector — a hand-routed line needs a handful; more is a scribble. */
+  maxWaypointsPerEdge: 32,
   maxConditionLength: 120,
   maxResponseLength: 120,
   /**

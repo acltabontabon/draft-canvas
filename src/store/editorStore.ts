@@ -71,6 +71,7 @@ import {
   setViewport,
   touch,
   updateAttachment as updateAttachmentOp,
+  setEdgeWaypoints as setEdgeWaypointsOp,
   updateEdge,
   updateEdgeAttachment as updateEdgeAttachmentOp,
   updateNode,
@@ -136,6 +137,7 @@ import type {
   DraftFlow,
   DraftMetadata,
   DraftNode,
+  DraftPoint,
   ConnectorKind,
   DatabaseKind,
   DraftSettings,
@@ -465,6 +467,9 @@ export interface EditorStore {
   /** Takes one connector's routing out of the router's hands, or hands it back
    *  — see `DraftEdge.routeMode`. */
   setEdgeRouteMode: (id: string, mode: RouteMode | undefined) => void;
+  /** Draws a connector through the bends the user dragged it to, or with none hands its whole path
+   *  back to the router — see `DraftEdge.waypoints`. One undo step per drag. */
+  setEdgeWaypoints: (id: string, waypoints: readonly DraftPoint[] | undefined) => void;
   /** Hands every manually-routed connector back to Smart Routing, in one undo
    *  step. Never moves a node, and never touches an anchor. */
   tidyConnections: () => void;
@@ -1864,6 +1869,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     );
   },
 
+  setEdgeWaypoints(id, waypoints) {
+    get().apply(waypoints?.length ? 'Bend connector' : 'Reset route', (doc) => setEdgeWaypointsOp(doc, id, waypoints));
+  },
+
   tidyConnections() {
     const state = get();
     // Deliberately the *only* thing this clears. An anchor is where the user
@@ -1871,10 +1880,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // that routing never moves one — so "Tidy connectors" stays safe to run
     // without first checking what it will do. Everything else Smart Routing
     // would tidy is derived per render and needs nothing persisted to undo.
-    const manual = state.document.edges.filter((edge) => edge.routeMode);
+    // Bends the user dragged in go too — they are the most manual routing there is.
+    const manual = state.document.edges.filter((edge) => edge.routeMode || edge.waypoints);
     if (manual.length === 0) return;
     state.apply('Tidy connectors', (doc) =>
-      manual.reduce((next, edge) => updateEdge(next, edge.id, { routeMode: undefined }), doc),
+      manual.reduce((next, edge) => updateEdge(next, edge.id, { routeMode: undefined, waypoints: undefined }), doc),
     );
   },
 

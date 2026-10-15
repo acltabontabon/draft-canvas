@@ -13,6 +13,15 @@ the release notes and the in-app What's New are generated from here. See
 
 ### Shared
 
+#### Added
+
+- **Bend connectors by hand** — select a connector and drag its line into place: a stepped
+  connector's runs slide and stay square, and a straight or curved one takes bends you add, move or
+  double-click away. Bends follow when you move the shapes together. Right-click and choose **Reset
+  route** to go back to automatic routing. <!-- highlight -->
+
+#### Changed
+
 - About is redrawn as a drawing sheet with a title block for the version, release notes and author,
   and the diagnostic report reads like the rest of the app.
 

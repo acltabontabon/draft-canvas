@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { LIMITS } from '../document/limits';
 import { useInternalNode, useReactFlow, type EdgeProps } from '@xyflow/react';
 import { useShallow } from 'zustand/react/shallow';
-import type { DraftNode } from '../document/types';
+import type { DraftNode, DraftPoint } from '../document/types';
 import { capabilityFor, categoryOf, type NodeCategory } from '../document/connectorSemantics';
 import { edgeTierInPlayback, findFlow, lensEdgeTier, stepIndexOf, type ExplainTier } from '../document/flow';
 import { stepContextOf } from '../presentation/stepContext';
@@ -19,6 +19,7 @@ import {
   responseAwayFor,
   responseLaneFor,
   responseSpineFor,
+  responseWaypointsFor,
   routeBetween,
   snappedAnchorForDrop,
   strokeSeed,
@@ -57,6 +58,8 @@ import { FONTS, cssFont } from '../render/text/fonts';
 import { Lru } from '../lib/lru';
 import { pointInBox } from '../lib/math';
 import { isImeKeyEvent } from '../lib/isEditableTarget';
+import { EdgeBendHandles, type BendPreview } from './EdgeBendHandles';
+import { translateWaypoints } from '../edges/waypoints';
 
 const NO_OBSTACLES: readonly Rect[] = [];
 
@@ -289,6 +292,12 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
         })
       : null,
   );
+  // Where the two shapes sit in the document, as one primitive — set against React Flow's live
+  // positions, it says whether a gesture is carrying both ends (and so this connector's bends) along.
+  // The node objects themselves, so nothing is allocated per store update — and only a bent
+  // connector asks at all.
+  const committedSource = useEditorStore((state) => (edge?.waypoints ? selectNode(state.document, edge.source) : undefined));
+  const committedTarget = useEditorStore((state) => (edge?.waypoints ? selectNode(state.document, edge.target) : undefined));
   const sourceType = useEditorStore((state) => selectNode(state.document, edge?.source ?? '')?.type);
   const targetType = useEditorStore((state) => selectNode(state.document, edge?.target ?? '')?.type);
   const attachTarget = useUiStore((state) => state.attachArmedEdgeTarget === id);
@@ -332,6 +341,13 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // rendered element for smoothness, commit to the document only at the end"
   // pattern node dragging already uses (see the module doc comment above).
   const [dragOverride, setDragOverride] = useState<DragOverride | null>(null);
+  // The bends while one is being dragged — local for the same reason as `dragOverride`.
+  const [bendPreview, setBendPreview] = useState<BendPreview | null>(null);
+  // Bend handles belong to the one connector being worked on: with a whole selection, every line
+  // sprouting bars would bury the diagram under them.
+  const soleSelection = useEditorStore(
+    (state) => state.selection.nodes.length === 0 && state.selection.edges.length === 1 && state.selection.edges[0] === id,
+  );
 
   // Same transient-id hook `DraftNodeView` uses for `Enter` — no ref-based
   // imperative API exists into this memoized component either.
@@ -439,6 +455,12 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const effectiveTargetRect = dragOverride?.endpoint === 'target' ? pointRect(dragOverride.point) : targetRect;
   // Same rule as a moving endpoint node: a pointer-tracked end reroutes every frame, refine on drop.
   const routeObstacles = dragOverride ? NO_OBSTACLES : obstacles;
+  // The bends this frame draws through: a drag's preview, else the stored ones — carried along live
+  // while a gesture moves both shapes by the same amount, the way the commit will move them
+  // (`moveNodes`), so a bent connector moves with its shapes instead of jumping on the drop.
+  const waypoints = bendPreview
+    ? bendPreview.waypoints
+    : carriedWaypoints(edge.waypoints, committedSource, committedTarget, sourceNode, targetNode);
 
   // Every input the two routes read, as one key: a connector re-renders for selection, lens,
   // playback, and hover far more often than its geometry actually moves.
@@ -453,6 +475,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
     dragOverride?.endpoint,
     spine,
     routeObstacles,
+    waypoints,
   ]);
   const routes = ROUTES.getOrCreate(routeKey, computeRoutes);
   function computeRoutes(): EdgeRoutes {
@@ -461,6 +484,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
         source: dragOverride?.endpoint === 'source' ? undefined : edge!.sourceAnchor,
         target: dragOverride?.endpoint === 'target' ? undefined : edge!.targetAnchor,
       },
+      waypoints,
       lane: laneOffset,
       obstacles: routeObstacles,
       // An endpoint being dragged is on its way out of this bundle — keeping it
@@ -474,6 +498,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
             source: dragOverride?.endpoint === 'target' ? undefined : edge!.targetAnchor,
             target: dragOverride?.endpoint === 'source' ? undefined : edge!.sourceAnchor,
           },
+          waypoints: responseWaypointsFor(waypoints, laneOffset),
           lane: responseLaneFor(laneOffset),
           obstacles: routeObstacles,
           spine: dragOverride ? undefined : responseSpineFor(spine),
@@ -943,6 +968,11 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
             />
           </>
         )}
+        {/* Bend handles, beside the endpoint ones and for the same pointer-priority reason. Hidden
+            while an end is being re-pointed: the line they sit on is then a preview. */}
+        {selected && soleSelection && mode !== 'present' && !dragOverride && (
+          <EdgeBendHandles edgeId={edge.id} routing={edge.routing} route={route} waypoints={waypoints} onPreview={setBendPreview} />
+        )}
 
         {(hasLabel || editing) && !hidesOwnLabel && (
           <div
@@ -1349,6 +1379,29 @@ function EdgeEndpointHandle({
     />
   );
 }
+
+/**
+ * Stored bends, moved by however far a live gesture has carried both of the connector's shapes —
+ * only when both moved by the same amount. One shape moving on its own leaves the bends where the
+ * user put them, as the commit does too.
+ */
+function carriedWaypoints(
+  waypoints: DraftPoint[] | undefined,
+  committedSource: DraftNode | undefined,
+  committedTarget: DraftNode | undefined,
+  sourceNode: InternalNodeLike,
+  targetNode: InternalNodeLike,
+): DraftPoint[] | undefined {
+  if (!waypoints || !committedSource || !committedTarget) return waypoints;
+  const source = sourceNode.internals.positionAbsolute;
+  const target = targetNode.internals.positionAbsolute;
+  const dx = source.x - committedSource.x;
+  const dy = source.y - committedSource.y;
+  if ((dx === 0 && dy === 0) || target.x - committedTarget.x !== dx || target.y - committedTarget.y !== dy) return waypoints;
+  return translateWaypoints(waypoints, dx, dy);
+}
+
+type InternalNodeLike = { internals: { positionAbsolute: { x: number; y: number } } };
 
 /** The flow being presented, if any. */
 function playingFlowOf(state: EditorStore) {
