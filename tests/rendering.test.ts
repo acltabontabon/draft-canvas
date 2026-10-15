@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createAttachment, createDocument, createEdge, createNode, minSizeFor } from '../src/document/factory';
 import { addEdges, addNodes } from '../src/document/operations';
 import { addFlow, addStepToFlow, createFlow } from '../src/document/flow';
-import { ACCENTS, BOUNDARY_PRESETS, NODE_TYPES } from '../src/document/types';
+import { ACCENTS, BOUNDARY_PRESETS, EDGE_ROUTINGS, NODE_TYPES, type EdgeRouting } from '../src/document/types';
 import { describeContext, describeNode } from '../src/nodes/describe';
 import type { Shape } from '../src/render/displayList';
 import { renderDocumentSvg } from '../src/render/svg/document';
@@ -559,6 +559,45 @@ describe('SVG export — request/response connectors', () => {
     // (`route.labelX`) — the response line drifts to its positive (right) side, so the caption
     // must land to the left of it, not past it.
     expect(Number(caption!.getAttribute('x'))).toBeLessThan(route.labelX);
+  });
+
+  /**
+   * The typed-label counterpart of the caption test above. The request chip took `labelSideFor`'s
+   * default side — the side the reply line drifts to — and the reply chip took the opposite side of
+   * its own line, so on a vertical connector both chips faced into the gap between the two lines
+   * and "200 Charged" was drawn over "Charges". The stepped route only missed by luck — its two
+   * label points happen to sit a little apart along the line — so straight and curved lines,
+   * whose chips sat side by side, are checked too.
+   */
+  function chipsOf(target: { x: number; y: number }, routing: EdgeRouting) {
+    const api = createNode({ type: 'service', serviceKind: 'api', x: 0, y: 0, text: 'API' });
+    const pay = createNode({ type: 'service', serviceKind: 'external', x: target.x, y: target.y, text: 'Payments' });
+    const edge = { ...createEdge({ source: api.id, target: pay.id, label: 'Charges', routing }), hasResponse: true, response: '200 Charged' };
+    const { svg } = renderDocumentSvg(addEdges(addNodes(createDocument('Charges'), [api, pay]), [edge]));
+    const chip = (text: string) => {
+      const rect = [...parseSvg(svg).querySelectorAll('text')].find((t) => t.textContent === text)?.previousElementSibling;
+      expect(rect?.tagName).toBe('rect');
+      const [x, y, w, h] = ['x', 'y', 'width', 'height'].map((name) => Number(rect!.getAttribute(name)));
+      return { x: x!, y: y!, w: w!, h: h! };
+    };
+    return { request: chip('Charges'), response: chip('200 Charged') };
+  }
+
+  const intersects = (a: { x: number; y: number; w: number; h: number }, b: typeof a) =>
+    a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+
+  it.each(EDGE_ROUTINGS)('keeps a vertical %s connector\'s label chip and reply chip apart', (routing) => {
+    const { request, response } = chipsOf({ x: 0, y: 320 }, routing);
+    expect(intersects(request, response)).toBe(false);
+    // The reply line runs to the right of the request line, so the request words read on the left
+    // and the reply words on the far right — each on the outer side of its own line.
+    expect(request.x + request.w).toBeLessThan(response.x);
+  });
+
+  it.each(EDGE_ROUTINGS)('keeps a horizontal %s connector\'s label chip above and its reply chip below', (routing) => {
+    const { request, response } = chipsOf({ x: 360, y: 0 }, routing);
+    expect(intersects(request, response)).toBe(false);
+    expect(request.y + request.h).toBeLessThan(response.y);
   });
 
   /**

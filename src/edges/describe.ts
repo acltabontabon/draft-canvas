@@ -16,6 +16,7 @@ import {
   arrowSeed,
   captionAnchor as captionBaseline,
   endTangent,
+  labelChipSide,
   labelLaneOffset,
   labelSideAwayFromResponse,
   rectOf,
@@ -189,6 +190,10 @@ export function describeEdge(
   const labelNudge = labelLaneOffset(route.source.side, route.target.side, ctx.lane ?? 0);
   const labelX = route.labelX + labelNudge.x;
   const labelY = route.labelY + labelNudge.y;
+  // Everything that sits beside the label point takes the side away from the reply line, so the
+  // reply's own chip has the outer side of its line to itself — see `labelChipSide`.
+  const responseAway = responseAwayFor(edge.hasResponse, ctx.lane ?? 0);
+  const labelSide = labelChipSide(route.labelSide, responseAway);
 
   const color = resolveEdgeColor(edge, nodes.get(edge.source), ctx.theme);
 
@@ -313,7 +318,7 @@ export function describeEdge(
         // `DraftEdgeView.tsx`: that helper's extra clearance is for separating two different
         // *real* edges' label chips, not for spacing a response label off its own already
         // well-separated (`RESPONSE_LANE_DELTA`) line.
-        const responseLabelSide = OPPOSITE_SIDE[route.labelSide];
+        const responseLabelSide = OPPOSITE_SIDE[labelSide];
         const responseLabelX = responseRoute.labelX;
         const responseLabelY = responseRoute.labelY;
         const responseLayout = layoutEdgeResponse(edge.response, ctx.measurer);
@@ -398,7 +403,6 @@ export function describeEdge(
         target: targetCategory,
       });
       const text = isUnusual ? `▲ ${label}` : label;
-      const captionResponseAway = responseAwayFor(edge.hasResponse, ctx.lane ?? 0);
       // A bundle's members all share one relationship, so repeating its
       // caption down every branch is pure noise — the exact "calls / calls /
       // calls / calls / calls" column this feature exists to remove. Every
@@ -422,7 +426,7 @@ export function describeEdge(
           measurer: ctx.measurer,
         });
         const captionSide = collapsed ? (route.trunkLabelSide ?? route.labelSide) : route.labelSide;
-        const caption = captionAnchor(captionSide, captionAt.x, captionAt.y, captionLayout, captionResponseAway);
+        const caption = captionAnchor(captionSide, captionAt.x, captionAt.y, captionLayout, responseAway);
         overlay.push({
           t: 'text',
           x: caption.x,
@@ -479,7 +483,7 @@ export function describeEdge(
     const stepWidth = hasStep ? BADGE_RADIUS * 2 + LABEL_GAP : 0;
     const w = layout.width + stepWidth + LABEL_PADDING_X * 2;
     const h = Math.max(layout.height, hasStep ? BADGE_RADIUS * 2 : 0) + LABEL_PADDING_Y * 2;
-    const chip = ctx.sharedLabel ?? { side: route.labelSide, x: labelX, y: labelY };
+    const chip = ctx.sharedLabel ?? { side: labelSide, x: labelX, y: labelY };
     const { left, top } = labelChipRect(chip.side, chip.x, chip.y, w, h);
     const centerY = top + h / 2;
     // A shared label is drawn once, so only the member drawing it has a chip to sit beside.
@@ -584,7 +588,7 @@ export function describeEdge(
     });
     const w = layout.width + CONDITION_PADDING_X * 2;
     const h = layout.height + CONDITION_PADDING_Y * 2;
-    const { left, top } = conditionChipRect(route.labelSide, labelX, labelY, w, h);
+    const { left, top } = conditionChipRect(labelSide, labelX, labelY, w, h);
     overlay.push(
       {
         t: 'rect',
@@ -611,7 +615,7 @@ export function describeEdge(
   // The open-point tab, last so it paints over the chip it sits beside — the same picture the
   // canvas draws (`canvas/OpenPointMarker.tsx`), from the same `describeMarker`.
   if (ctx.openPoints?.length) {
-    const center = edgeMarkerCenter({ x: labelX, y: labelY }, route.labelSide, markerOccupied);
+    const center = edgeMarkerCenter({ x: labelX, y: labelY }, labelSide, markerOccupied);
     overlay.push({
       t: 'group',
       translate: { x: center.x - MARKER_SIZE / 2, y: center.y - MARKER_SIZE / 2 },
@@ -624,7 +628,7 @@ export function describeEdge(
     const source = nodes.get(edge.source);
     const target = nodes.get(edge.target);
     if (source && target) {
-      const below = attachmentRowBelowsSourceOrTarget(labelX, labelY, rectOf(source), rectOf(target), captionSideOf(edge, route.labelSide));
+      const below = attachmentRowBelowsSourceOrTarget(labelX, labelY, rectOf(source), rectOf(target), captionSideOf(edge, labelSide));
       overlay.push(...describeAttachmentChips(edge.attachments, labelX, labelY, below, { theme: ctx.theme, measurer: ctx.measurer }));
     }
   }

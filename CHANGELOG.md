@@ -67,6 +67,8 @@ the release notes and the in-app What's New are generated from here. See
 - Typing into a manually enlarged Note or Text shape no longer shrinks it to the automatic growth limit.
 - Shift-clicking a connector keeps it in a selection of several shapes, including connectors whose other endpoint is unselected.
 - Dragging shapes skips redundant node renders when only their position changes.
+- A connector's label and its reply line's label no longer draw over each other when the connector
+  runs vertically, on the canvas or in exports: each sits on the outer side of its own line.
 
 ### Desktop
 
