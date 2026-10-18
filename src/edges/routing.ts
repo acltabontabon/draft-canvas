@@ -11,6 +11,7 @@ import {
 import { anchorBandOf, type AnchorBand } from '../document/queueGeometry';
 import { centerOf, clamp } from '../lib/math';
 import { longestRunMidpoint, orthogonalThrough, polylineMidpoint, polylinePath, responseWaypoints, smoothPath } from './waypoints';
+import { edgeLabelSize, LABEL_PADDING_X, LABEL_PADDING_Y } from './labelLayout';
 
 /**
  * Edge geometry.
@@ -549,6 +550,8 @@ export interface EdgeSpine {
 
 export interface RouteOptions {
   anchors?: RouteAnchors;
+  /** A custom label's real chip bounds. Geometry-only callers leave this out. */
+  label?: { width: number; height: number; away?: number };
   /**
    * The shared trunk this edge travels along, when `edges/bundles.ts` grouped
    * it into one. Absent — by far the common case — routes exactly as it always
@@ -789,30 +792,32 @@ export function detourAround(
 ): Detour | null {
   if (obstacles.length === 0) return null;
 
-  if (isHorizontalSide(sourceSide) && isHorizontalSide(targetSide)) {
-    const minX = Math.min(from.x, to.x);
-    const maxX = Math.max(from.x, to.x);
-    const y = (from.y + to.y) / 2;
-    const blocking = obstacles.filter(
-      (o) => o.x < maxX && o.x + o.width > minX && o.y < y + OBSTACLE_BAND && o.y + o.height > y - OBSTACLE_BAND,
-    );
-    if (blocking.length === 0) return null;
-    const top = Math.min(...blocking.map((o) => o.y)) - OBSTACLE_MARGIN;
-    const bottom = Math.max(...blocking.map((o) => o.y + o.height)) + OBSTACLE_MARGIN;
-    return { detourY: Math.abs(top - y) <= Math.abs(bottom - y) ? top : bottom };
-  }
+  const horizontal = isHorizontalSide(sourceSide) && isHorizontalSide(targetSide);
+  const vertical = isVerticalSide(sourceSide) && isVerticalSide(targetSide);
+  if (!horizontal && !vertical) return null;
+  const min = horizontal ? Math.min(from.x, to.x) : Math.min(from.y, to.y);
+  const max = horizontal ? Math.max(from.x, to.x) : Math.max(from.y, to.y);
+  const middle = horizontal ? (from.y + to.y) / 2 : (from.x + to.x) / 2;
+  const nearby = obstacles.filter((o) => horizontal
+    ? o.x < max && o.x + o.width > min
+    : o.y < max && o.y + o.height > min);
+  const low = (o: Rect) => horizontal ? o.y : o.x;
+  const high = (o: Rect) => horizontal ? o.y + o.height : o.x + o.width;
+  if (!nearby.some((o) => low(o) < middle + OBSTACLE_BAND && high(o) > middle - OBSTACLE_BAND)) return null;
 
-  if (isVerticalSide(sourceSide) && isVerticalSide(targetSide)) {
-    const minY = Math.min(from.y, to.y);
-    const maxY = Math.max(from.y, to.y);
-    const x = (from.x + to.x) / 2;
-    const blocking = obstacles.filter(
-      (o) => o.y < maxY && o.y + o.height > minY && o.x < x + OBSTACLE_BAND && o.x + o.width > x - OBSTACLE_BAND,
-    );
-    if (blocking.length === 0) return null;
-    const left = Math.min(...blocking.map((o) => o.x)) - OBSTACLE_MARGIN;
-    const right = Math.max(...blocking.map((o) => o.x + o.width)) + OBSTACLE_MARGIN;
-    return { detourX: Math.abs(left - x) <= Math.abs(right - x) ? left : right };
+  // A detour that clears the original corridor can cut through a second shape above it.
+  // Try nearby obstacle boundaries in distance order, validating the endpoint legs too. Bound
+  // the work on dense diagrams, with the outermost corridors retained as final candidates.
+  const coordinates = [...new Set(nearby.flatMap((o) => [low(o) - OBSTACLE_MARGIN, high(o) + OBSTACLE_MARGIN]))];
+  coordinates.sort((a, b) => Math.abs(a - middle) - Math.abs(b - middle) || a - b);
+  const candidates = [...new Set([...coordinates.slice(0, 32), Math.min(...coordinates), Math.max(...coordinates)])];
+  candidates.sort((a, b) => Math.abs(a - middle) - Math.abs(b - middle) || a - b);
+  for (const coordinate of candidates) {
+    const detour = horizontal ? { detourY: coordinate } : { detourX: coordinate };
+    const points = flattenPath(buildDetourPath(from, to, sourceSide, targetSide, detour).d);
+    if (obstacles.every((o) => !points.some((point, i) => i > 0 && segmentEntersRect(points[i - 1]!, point, o)))) {
+      return detour;
+    }
   }
 
   return null;
@@ -864,6 +869,25 @@ const DETOUR_LEG = 20;
 const sideDirX = (side: Side) => (side === 'right' ? 1 : side === 'left' ? -1 : 0);
 const sideDirY = (side: Side) => (side === 'bottom' ? 1 : side === 'top' ? -1 : 0);
 
+function detourPoints(
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  sourceSide: Side,
+  targetSide: Side,
+  detour: Detour,
+): { x: number; y: number }[] {
+  if (detour.detourY !== undefined) {
+    const x1 = from.x + DETOUR_LEG * sideDirX(sourceSide);
+    const x2 = to.x + DETOUR_LEG * sideDirX(targetSide);
+    const y = detour.detourY;
+    return [from, { x: x1, y: from.y }, { x: x1, y }, { x: x2, y }, { x: x2, y: to.y }, to];
+  }
+  const y1 = from.y + DETOUR_LEG * sideDirY(sourceSide);
+  const y2 = to.y + DETOUR_LEG * sideDirY(targetSide);
+  const x = detour.detourX!;
+  return [from, { x: from.x, y: y1 }, { x, y: y1 }, { x, y: y2 }, { x: to.x, y: y2 }, to];
+}
+
 /** Builds the detour waypoints and the resulting path/label position. */
 function buildDetourPath(
   from: { x: number; y: number },
@@ -872,27 +896,10 @@ function buildDetourPath(
   targetSide: Side,
   detour: Detour,
 ): { d: string; labelX: number; labelY: number } {
-  let points: { x: number; y: number }[];
-  let labelX: number;
-  let labelY: number;
-
-  if (detour.detourY !== undefined) {
-    const x1 = from.x + DETOUR_LEG * sideDirX(sourceSide);
-    const x2 = to.x + DETOUR_LEG * sideDirX(targetSide);
-    const y = detour.detourY;
-    points = [from, { x: x1, y: from.y }, { x: x1, y }, { x: x2, y }, { x: x2, y: to.y }, to];
-    labelX = (x1 + x2) / 2;
-    labelY = y;
-  } else {
-    const y1 = from.y + DETOUR_LEG * sideDirY(sourceSide);
-    const y2 = to.y + DETOUR_LEG * sideDirY(targetSide);
-    const x = detour.detourX!;
-    points = [from, { x: from.x, y: y1 }, { x, y: y1 }, { x, y: y2 }, { x: to.x, y: y2 }, to];
-    labelX = x;
-    labelY = (y1 + y2) / 2;
-  }
-
-  return { d: roundedStepPath(points, 10), labelX, labelY };
+  const points = detourPoints(from, to, sourceSide, targetSide, detour);
+  const a = points[2]!;
+  const b = points[3]!;
+  return { d: roundedStepPath(points, 10), labelX: (a.x + b.x) / 2, labelY: (a.y + b.y) / 2 };
 }
 
 /**
@@ -1270,6 +1277,54 @@ export function responseLabelAnchor(
   return { x: at.x, y: at.y, side };
 }
 
+function clearLabel(
+  d: string,
+  initial: { x: number; y: number; side: Side },
+  size: NonNullable<RouteOptions['label']>,
+  sourceRect: Rect,
+  targetRect: Rect,
+  obstacles: readonly Rect[],
+  lane: number,
+  sourceSide: Side,
+  targetSide: Side,
+): { x: number; y: number; side: Side } {
+  const nudge = labelLaneOffset(sourceSide, targetSide, lane);
+  const occupied = [sourceRect, targetRect, ...obstacles];
+  const clear = (point: { x: number; y: number; side: Side }, nodes: readonly Rect[] = occupied) => {
+    const side = labelChipSide(point.side, size.away ?? 0);
+    const x = point.x + nudge.x;
+    const y = point.y + nudge.y;
+    const left = side === 'right' ? x + LABEL_LINE_GAP - LABEL_PADDING_X : side === 'left' ? x - LABEL_LINE_GAP + LABEL_PADDING_X - size.width : x - size.width / 2;
+    const top = side === 'bottom' ? y + LABEL_LINE_GAP - LABEL_PADDING_Y : side === 'top' ? y - LABEL_LINE_GAP + LABEL_PADDING_Y - size.height : y - size.height / 2;
+    return nodes.every((o) => left + size.width + 2 <= o.x || left - 2 >= o.x + o.width || top + size.height + 2 <= o.y || top - 2 >= o.y + o.height);
+  };
+  // Keep established endpoint placement unless an unrelated shape actually covers the label.
+  if (clear(initial, obstacles)) return initial;
+  const opposite: Record<Side, Side> = { top: 'bottom', bottom: 'top', left: 'right', right: 'left' };
+  const flipped = { ...initial, side: opposite[initial.side] };
+  if (clear(flipped)) return flipped;
+  const vertices = flattenPath(d);
+  const candidates: { x: number; y: number; side: Side }[] = [];
+  for (let i = 1; i < vertices.length; i += 1) {
+    const a = vertices[i - 1]!;
+    const b = vertices[i]!;
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const length = Math.hypot(dx, dy);
+    if (length < LABEL_BEND_CLEARANCE * 2) continue;
+    const horizontal = Math.abs(dx) >= Math.abs(dy);
+    const side: Side = horizontal ? 'top' : 'right';
+    // Bounded samples keep crowded diagrams predictable; never place the anchor on a bend.
+    for (const fraction of [0.5, 0.25, 0.75, 0.125, 0.875]) {
+      const t = clamp(fraction, LABEL_BEND_CLEARANCE / length, 1 - LABEL_BEND_CLEARANCE / length);
+      const point = { x: a.x + dx * t, y: a.y + dy * t, side };
+      candidates.push(point, { ...point, side: opposite[side] });
+    }
+  }
+  candidates.sort((a, b) => Math.hypot(a.x - initial.x, a.y - initial.y) - Math.hypot(b.x - initial.x, b.y - initial.y));
+  return candidates.find((point) => clear(point)) ?? initial;
+}
+
 /**
  * Routes between two node rectangles, honouring a persisted anchor for
  * whichever endpoint has one and falling back to `chooseSides`'s nearest-side
@@ -1286,9 +1341,12 @@ export function routeBetween(
 ): RoutedEdge {
   // A bent connector's ends face its bends, not each other, so "does this anchor point away from
   // the other shape" is the wrong question to ask of it.
-  if (options?.waypoints?.length) return routeWith(sourceRect, targetRect, routing, options);
-  const anchors = workableAnchors(sourceRect, targetRect, options?.anchors, routing);
-  return routeWith(sourceRect, targetRect, routing, anchors === options?.anchors ? options : { ...options, anchors });
+  const anchors = options?.waypoints?.length ? options.anchors : workableAnchors(sourceRect, targetRect, options?.anchors, routing);
+  const route = routeWith(sourceRect, targetRect, routing, anchors === options?.anchors ? options : { ...options, anchors });
+  if (!options?.label) return route;
+  const label = clearLabel(route.d, { x: route.labelX, y: route.labelY, side: route.labelSide }, options.label,
+    sourceRect, targetRect, options.obstacles ?? [], options.lane ?? 0, route.source.side, route.target.side);
+  return { ...route, labelX: label.x, labelY: label.y, labelSide: label.side };
 }
 
 /**
@@ -1589,6 +1647,7 @@ export function routeEdge(
   if (!source || !target) return null;
   return routeBetween(rectOf(source), rectOf(target), edge.routing, {
     ...options,
+    label: edge.label ? { ...edgeLabelSize(edge.label), away: responseAwayFor(edge.hasResponse, options?.lane ?? 0), ...options?.label } : options?.label,
     anchors: { source: edge.sourceAnchor, target: edge.targetAnchor },
     waypoints: edge.waypoints,
   });

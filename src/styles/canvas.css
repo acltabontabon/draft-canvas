@@ -305,10 +305,10 @@
   translate: calc(-50% + var(--dc-out)) calc(-50% + var(--dc-out));
 }
 
-/* A repoint endpoint sits where a connector meets a node, with no "outward" to push toward — it
-   stays centred, with a smaller cap. */
+/* A repoint endpoint stays centred. Keep its hit ring in screen pixels even at minimum zoom;
+   a cap in flow units made it smaller than 8px when viewing a whole diagram. */
 .dc-edge-endpoint {
-  --dc-hit: clamp(9px, calc(16px / var(--dc-zoom, 1)), 24px);
+  --dc-hit: max(9px, calc(20px / var(--dc-zoom, 1)));
 }
 
 /* A finger is wider than a pointer: on a touch screen every hit ring is at least 32 screen pixels
@@ -321,6 +321,10 @@
   .dc-resize-handle,
   .dc-edge-endpoint {
     --dc-hit: clamp(32px, calc(32px / var(--dc-zoom, 1)), 64px);
+  }
+
+  .dc-edge-endpoint {
+    --dc-hit: max(32px, calc(32px / var(--dc-zoom, 1)));
   }
 }
 

@@ -550,6 +550,14 @@ export function defaultsToResponse(source: NodeCategory, target: NodeCategory): 
   return resolved(source) === 'service' && resolved(target) === 'service';
 }
 
+/** Service-call controls resolve junctions the same way in the inspector and commands. */
+export function isServiceInteraction(graph: GraphLike, edge: DraftEdge): boolean {
+  return defaultsToResponse(
+    resolveTransparentCategory(graph, edge.source, 'source'),
+    resolveTransparentCategory(graph, edge.target, 'target'),
+  );
+}
+
 /**
  * Which side of an edge a Junction is being resolved as — see
  * `resolveTransparentCategory`. `'source'` looks at what feeds the Junction

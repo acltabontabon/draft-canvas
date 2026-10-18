@@ -719,8 +719,8 @@ const SERVICE_MODE_OPTIONS: InspectorSelectOption[] = [
  * → `edge.async: true` side effect (see its own comment in `editorStore.ts`) is exactly right
  * for the generic kind picker, where "async" and "dashed line" are meant to read as one thing,
  * but wrong here: a request line's solid/dashed styling is a Style concern, not what Sync/Async
- * means for a service call. This section updates `kind` directly via `updateEdgeById` instead,
- * so the primary line never dashes just because Async was chosen.
+ * means for a service call. The shared interaction-mode action is also used by the context menu
+ * and palette, preserving the same stroke and response visibility rule from every entry point.
  */
 function ServiceInteractionSection({ edge, relations }: { edge: DraftEdge; relations: readonly EdgeSemantic[] }) {
   // Generic Call ('calls') is the fallback reading for anything outside {http, calls} too —
@@ -779,21 +779,7 @@ function ServiceInteractionSection({ edge, relations }: { edge: DraftEdge; relat
             value={edge.kind ?? 'sync'}
             options={modeOptions}
             ariaLabel="Interaction mode"
-            onChange={(value) => {
-              const nowAsync = value === 'async';
-              useEditorStore.getState().updateEdgeById(
-                edge.id,
-                {
-                  kind: nowAsync ? 'async' : undefined,
-                  // An async interaction doesn't pretend to share a synchronous response —
-                  // turning the line's own response off (never `edge.response`'s text: the
-                  // user's typed value survives, ready the moment they switch back to Sync).
-                  hasResponse: nowAsync ? undefined : edge.hasResponse,
-                  semanticsOrigin: 'explicit',
-                },
-                'Set interaction mode',
-              );
-            }}
+            onChange={(value) => useEditorStore.getState().setEdgeInteractionMode(edge.id, value === 'async' ? 'async' : 'sync')}
           />
         </div>
         {canAddCompensation && (

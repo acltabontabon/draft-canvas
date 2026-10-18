@@ -27,6 +27,12 @@ export function layoutEdgeLabel(text: string, measurer?: TextMeasurer): TextLayo
   });
 }
 
+/** Measured chip bounds, including the same padding used by both renderers. */
+export function edgeLabelSize(text: string): { width: number; height: number } {
+  const layout = layoutEdgeLabel(text);
+  return { width: layout.width + LABEL_PADDING_X * 2, height: layout.height + LABEL_PADDING_Y * 2 };
+}
+
 /** The quieter reply label: one line, same width. */
 export function layoutEdgeResponse(text: string, measurer?: TextMeasurer): TextLayout {
   return layoutText(text, {

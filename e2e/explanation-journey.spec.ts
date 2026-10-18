@@ -3,6 +3,8 @@ import { expect, test, type Page } from '@playwright/test';
 async function example(page: Page) {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/');
+  // The lazy starter grid recentres this button; wait before starting the pointer click.
+  await expect(page.getByRole('group', { name: 'Starters' })).toBeVisible();
   await page.getByRole('button', { name: 'Try an example', exact: true }).click();
   await expect(page.getByLabel('Diagram title')).toHaveValue('Order processing');
   await expect(page.locator('.dc-node')).toHaveCount(4);

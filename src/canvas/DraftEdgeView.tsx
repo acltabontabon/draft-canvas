@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { LIMITS } from '../document/limits';
+import { reconnectProblem } from '../document/reconnect';
 import { useInternalNode, useReactFlow, type EdgeProps } from '@xyflow/react';
 import { useShallow } from 'zustand/react/shallow';
 import type { DraftNode, DraftPoint } from '../document/types';
@@ -30,7 +31,7 @@ import {
 } from '../edges/routing';
 import { routingPlan } from '../edges/bundles';
 import { labelGroupPlan, labelLeader, pointAlong } from '../edges/labelGroups';
-import { LABEL_PADDING_X, LABEL_PADDING_Y, layoutEdgeLabel, layoutEdgeResponse } from '../edges/labelLayout';
+import { LABEL_PADDING_X, LABEL_PADDING_Y, edgeLabelSize, layoutEdgeLabel, layoutEdgeResponse } from '../edges/labelLayout';
 import { RESPONSE_DASH, dashForEdge, markerVariantForEdge, resolveEdgeColor } from '../edges/kindStyle';
 import { EdgeLabels } from './EdgeLabels';
 import { ATTACHMENT_ROW_GAP, attachmentRowBelowsSourceOrTarget, captionSideOf, rectOfInternal } from './edgeGeometry';
@@ -464,6 +465,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
     effectiveSourceRect,
     effectiveTargetRect,
     edge.routing,
+    edge.label,
     edge.sourceAnchor,
     edge.targetAnchor,
     edge.hasResponse,
@@ -482,6 +484,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       },
       waypoints,
       lane: laneOffset,
+      label: edge!.label ? { ...edgeLabelSize(edge!.label), away: responseAwayFor(edge!.hasResponse, laneOffset) } : undefined,
       obstacles: routeObstacles,
       // An endpoint being dragged is on its way out of this bundle — keeping it
       // on the trunk would rubber-band it back to a group it is leaving.
@@ -1303,7 +1306,10 @@ function EdgeEndpointHandle({
       }
       const point = screenToFlowPosition({ x: event.clientX, y: event.clientY });
       onDrag({ endpoint, point });
-      const node = findDropNode(point);
+      const candidate = findDropNode(point);
+      const document = useEditorStore.getState().document;
+      const edge = document.edges.find((item) => item.id === edgeId);
+      const node = candidate && edge && !reconnectProblem(document, edge, endpoint, candidate.id) ? candidate : undefined;
       const hoverId = node?.id ?? null;
       if (hoverId !== lastHover.current) {
         lastHover.current = hoverId;
@@ -1318,7 +1324,7 @@ function EdgeEndpointHandle({
       const anchor = node ? snappedAnchorForDrop(rectOf(node), point) : undefined;
       useUiStore.getState().setArmedAnchor(anchor && node ? { nodeId: node.id, ...anchor } : null);
     },
-    [endpoint, findDropNode, onDrag, screenToFlowPosition],
+    [edgeId, endpoint, findDropNode, onDrag, screenToFlowPosition],
   );
 
   const onPointerUp = useCallback(

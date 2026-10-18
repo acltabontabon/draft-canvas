@@ -10,6 +10,7 @@ import type { DraftEdge, DraftNode, DraftNodeType, Side } from '../document/type
 import { routingPlan } from '../edges/bundles';
 import { labelGroupPlan } from '../edges/labelGroups';
 import { obstaclesForEdge } from '../edges/obstacles';
+import { edgeLabelSize } from '../edges/labelLayout';
 import { labelChipSide, labelLaneOffset, laneIndex, responseAwayFor, routeBetween, type Rect } from '../edges/routing';
 import { clamp } from '../lib/math';
 
@@ -56,6 +57,7 @@ export function edgeLabelPoint(
     anchors: { source: edge.sourceAnchor, target: edge.targetAnchor },
     waypoints: edge.waypoints,
     lane,
+    label: edge.label ? { ...edgeLabelSize(edge.label), away: responseAwayFor(edge.hasResponse, lane) } : undefined,
     obstacles: interactionActive ? undefined : obstaclesForEdge(document.nodes, edge.source, edge.target),
     spine: routingPlan(document.nodes, document.edges).spineFor(edge.id),
   });

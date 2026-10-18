@@ -76,6 +76,11 @@ most likely relationship for that pair, reading in the direction of the arrow: `
 Hold `Shift` while clicking shapes or connectors to add them to or remove them from the selection.
 A connector can be selected alongside shapes without selecting both of its endpoints.
 
+Drag a selected connector's endpoint to change the shape it connects to or the side it attaches to.
+An endpoint stays easy to grab when zoomed out. If that pair is already connected, Draft Canvas
+keeps the original connection and shows **Already connected to that shape.** Press `Escape` during
+the drag to cancel it.
+
 To change it, click the connector. Its popover lists only the relationships that make sense for those
 two shapes, with the current one marked. Nothing stops you drawing something unusual on purpose: a
 pairing the matrix has an opinion about shows a small ▲ and still offers *depends on*.
@@ -104,8 +109,9 @@ Between two Services, the popover's **Interaction** section chooses the protocol
 **Generic Call**) and the mode:
 
 - **Sync** draws a solid line: the caller waits.
-- **Async** draws a dashed line with a break mark: the caller carries on. Right-click a connector and
-  choose **Make asynchronous** to toggle the same thing without opening the popover.
+- **Async** adds a break mark: the caller carries on. The request line keeps its existing stroke
+  style. Right-click a service connector and choose **Make asynchronous** or **Make synchronous**
+  to change the same mode without opening the popover.
 
 Turn **Response** on to draw the reply coming back along the same connector, with its own text
 (`200 OK`, `order accepted`). **Guess** fills in a sensible status for the protocol. An asynchronous
