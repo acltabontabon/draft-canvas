@@ -108,6 +108,10 @@ The reasoning behind these rules is in [Architecture](docs/reference/architectur
   The worker must load without `document` or `window`; preserve worker-safe dependencies.
 - Tool schemas come from `src/agent/schema.ts`. Regenerate `src-tauri/mcp/tools.json` with
   `npm run agent:schemas` when schemas change.
+- `skills/draft-canvas/` is compiled into the desktop app (`src-tauri/src/agent/skill.rs` lists every
+  file) and installed into agents' skill folders. Any change to it needs a new `metadata.version` in
+  its `SKILL.md` and a new entry in `PUBLISHED` there, so installed copies are replaced. Its checker
+  restates the app's vocabulary; `tests/agent-skill.test.ts` keeps the two equal.
 
 ## Architecture
 

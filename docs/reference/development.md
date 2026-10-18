@@ -120,6 +120,7 @@ their code runs. This keeps manual runs from executing unmerged code in the defa
 | `src/desktop/` | Desktop screens, controller and Tauri adapter |
 | `src-tauri/` | Native Rust shell |
 | `src-tauri/mcp/` | Bundled MCP connector |
+| `skills/draft-canvas/` | Agent skill the desktop app installs for Claude Code, Codex and Cursor |
 | `www/` | Separate landing-page project and lockfile |
 | `tests/` | Unit and integration tests |
 | `e2e/` | Browser specs; `e2e/desktop/` uses a fake shell |

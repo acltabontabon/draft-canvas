@@ -55,6 +55,15 @@ the release notes and the in-app What's New are generated from here. See
 
 ### Desktop
 
+#### Added
+
+- **Draw a repository with your agent** — install the Draft Canvas skill for Claude Code, Codex or
+  Cursor from Settings → AI agents, then ask your agent to "draw this repository in Draft Canvas". It
+  surveys the code in one pass and draws the system at C4 levels you can look inside, with the main
+  request path and its failure paths as flows to present, notes on the decisions it found, and the
+  source files behind each shape. The skill updates with Draft Canvas and never overwrites one
+  you've edited. <!-- highlight -->
+
 #### Fixed
 
 - Removed unused legacy ZIP extraction support from the updater, eliminating three RustSec

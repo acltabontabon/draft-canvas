@@ -2,6 +2,7 @@ import { Channel, invoke } from '@tauri-apps/api/core';
 import {
   DesktopError,
   type AgentClientSetup,
+  type AgentSkillSetup,
   type AgentSettings,
   type AppErrorKind,
   type DesktopApi,
@@ -117,6 +118,9 @@ export function createTauriApi(): DesktopApi {
     agentConfigure: (patch) => call<AgentSettings>('agent_configure', { patch }),
     agentClients: () => call<AgentClientSetup[]>('agent_clients'),
     agentConnectClient: (client) => call<AgentClientSetup>('agent_connect_client', { client }),
+    agentSkills: () => call<AgentSkillSetup[]>('agent_skills'),
+    agentInstallSkill: (target) => call<AgentSkillSetup>('agent_install_skill', { target }),
+    agentRemoveSkill: (target) => call<AgentSkillSetup>('agent_remove_skill', { target }),
     agentProposalList: (diagramId) => call<Proposal[]>('agent_proposal_list', { diagramId }),
     agentProposalGet: (id) => call<Proposal | null>('agent_proposal_get', { id }),
     agentProposalBeginAccept: (id, version, diagramId, path) => call<ProposalAction>('agent_proposal_begin_accept', { id, version, diagramId, path }),

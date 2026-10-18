@@ -112,6 +112,11 @@ export async function installMockShell(page: Page): Promise<void> {
       ['claude-code', { client: 'claude-code', state: 'not-set-up', automatic: false, location: '~/.claude.json', configuredCommand: null }],
       ['codex', { client: 'codex', state: 'not-set-up', automatic: true, location: '~/.codex/config.toml', configuredCommand: null }],
     ]);
+    // The agent skill installed nowhere yet; install and remove flip it as `agent/skill.rs` would.
+    const skillAt = (target: string) => (target === 'claude-code' ? '~/.claude/skills/draft-canvas' : '~/.agents/skills/draft-canvas');
+    const agentSkills = new Map<string, Record<string, unknown>>(
+      ['claude-code', 'agents'].map((target) => [target, { target, state: 'not-installed', location: skillAt(target), installedVersion: null, bundledVersion: '1', backup: null }]),
+    );
     const proposals = new Map<string, Record<string, unknown>>();
     let settings: Record<string, unknown> = { closeBehavior: 'ask', autoCheckUpdates: true };
     let events: ChannelLike | null = null;
@@ -347,6 +352,17 @@ export async function installMockShell(page: Page): Promise<void> {
       agent_connect_client: (args: { client: string }) => {
         const setup = { ...agentClients.get(args.client)!, state: 'ready', configuredCommand: agentSettings.sidecarPath };
         agentClients.set(args.client, setup);
+        return setup;
+      },
+      agent_skills: () => [...agentSkills.values()],
+      agent_install_skill: (args: { target: string }) => {
+        const setup = { ...agentSkills.get(args.target)!, state: 'ready', installedVersion: '1', backup: null };
+        agentSkills.set(args.target, setup);
+        return setup;
+      },
+      agent_remove_skill: (args: { target: string }) => {
+        const setup = { ...agentSkills.get(args.target)!, state: 'not-installed', installedVersion: null, backup: null };
+        agentSkills.set(args.target, setup);
         return setup;
       },
       // Proposal review — the mock's rules mirror `proposals.rs`/`commands/agent.rs` closely enough

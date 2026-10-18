@@ -157,6 +157,24 @@ export interface AgentClientSetup {
   configuredCommand: string | null;
 }
 
+/** Where an agent skill is installed for every project (`src-tauri/src/agent/skill.rs`):
+ *  `claude-code` is `~/.claude/skills`; `agents` is `~/.agents/skills`, which Codex and Cursor read. */
+export type AgentSkillTarget = 'claude-code' | 'agents';
+
+/** Where the Draft Canvas agent skill stands in one target. */
+export interface AgentSkillSetup {
+  target: AgentSkillTarget;
+  /** `outdated`: an older copy this app wrote, untouched (replaced at launch). `modified`: changed
+   *  since, or put there by someone else (left alone). `newer`: written by a newer Draft Canvas. */
+  state: 'not-installed' | 'ready' | 'outdated' | 'modified' | 'newer';
+  /** The skill's folder, written for a person. */
+  location: string | null;
+  installedVersion: string | null;
+  bundledVersion: string;
+  /** Where an edited copy was kept by the last install or removal. */
+  backup: string | null;
+}
+
 export interface AgentPatch {
   enabled?: boolean;
   project?: { handle: Handle; agent: boolean };
@@ -301,6 +319,11 @@ export interface DesktopApi {
   agentClients(): Promise<AgentClientSetup[]>;
   /** Adds Draft Canvas to an agent's MCP configuration, or repoints the entry already there. */
   agentConnectClient(client: AgentClient): Promise<AgentClientSetup>;
+  /** Where the agent skill stands in each place agents read skills from. */
+  agentSkills(): Promise<AgentSkillSetup[]>;
+  /** Installs (or updates, or replaces) the agent skill; an edited copy is kept as a backup. */
+  agentInstallSkill(target: AgentSkillTarget): Promise<AgentSkillSetup>;
+  agentRemoveSkill(target: AgentSkillTarget): Promise<AgentSkillSetup>;
 
   // Proposal review (native UI only — see `agent/proposals.rs`; never reachable from the MCP bridge)
   agentProposalList(diagramId?: string): Promise<Proposal[]>;

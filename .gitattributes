@@ -1,0 +1,3 @@
+# The agent skill is compiled into the desktop app and installed byte for byte; its hash is pinned in
+# src-tauri/src/agent/skill.rs. A Windows checkout must not turn its line endings into CRLF.
+skills/** text eol=lf

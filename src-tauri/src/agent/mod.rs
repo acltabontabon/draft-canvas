@@ -19,6 +19,7 @@ pub mod page;
 pub mod proposals;
 pub mod scope;
 pub mod session;
+pub mod skill;
 
 use crate::util::{lock, now_ms};
 use ledger::Ledger;

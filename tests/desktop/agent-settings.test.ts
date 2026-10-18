@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { AgentClientSetup, AgentProject, AgentSettings } from '../../src/desktop/api';
-import { claudeCodeCommand, clientLine, codexConfigToml, connectionSummary, folderRows } from '../../src/desktop/ui/settings/agentModel';
+import type { AgentClientSetup, AgentProject, AgentSettings, AgentSkillSetup } from '../../src/desktop/api';
+import { claudeCodeCommand, clientLine, codexConfigToml, connectionSummary, folderRows, skillLine, skillTargetOf } from '../../src/desktop/ui/settings/agentModel';
 
 const AGENT: AgentSettings = {
   enabled: true,
@@ -125,5 +125,53 @@ describe('clientLine', () => {
 
   it('says nothing before the shell has answered', () => {
     expect(clientLine(undefined)).toBeNull();
+  });
+});
+
+describe('skillLine', () => {
+  const skill = (patch: Partial<AgentSkillSetup>): AgentSkillSetup => ({
+    target: 'claude-code',
+    state: 'not-installed',
+    location: '~/.claude/skills/draft-canvas',
+    installedVersion: null,
+    bundledVersion: '2',
+    backup: null,
+    ...patch,
+  });
+
+  it('installs for Claude Code in its own folder, and for Codex, Cursor and others in the shared one', () => {
+    expect(skillTargetOf('claude-code')).toBe('claude-code');
+    expect(skillTargetOf('codex')).toBe('agents');
+    expect(skillTargetOf('cursor')).toBe('agents');
+    expect(skillTargetOf('other')).toBe('agents');
+    const line = skillLine(skill({}));
+    expect(line).toMatchObject({ action: 'Install skill', removable: false });
+    expect(line?.text).toContain('Installs in ~/.claude/skills for every project.');
+    expect(skillLine(skill({ target: 'agents', location: '~/.agents/skills/draft-canvas' }))?.text).toContain('Teaches Codex and Cursor');
+  });
+
+  it('says the skill updates with the app, and never offers to touch a newer copy', () => {
+    expect(skillLine(skill({ state: 'ready', installedVersion: '2' }))).toEqual({
+      action: null,
+      text: 'Skill installed in ~/.claude/skills/draft-canvas. It updates when Draft Canvas does.',
+      tone: 'on',
+      removable: true,
+    });
+    expect(skillLine(skill({ state: 'outdated', installedVersion: '1' }))).toMatchObject({ action: 'Update skill', tone: 'warn' });
+    expect(skillLine(skill({ state: 'newer', installedVersion: '3' }))).toMatchObject({ action: null, removable: false });
+    expect(skillLine(skill({ state: 'newer', installedVersion: '3' }))?.text).toContain('(3)');
+  });
+
+  it('leaves an edited copy alone until asked, and says where it was kept', () => {
+    const edited = skillLine(skill({ state: 'modified' }));
+    expect(edited).toMatchObject({ action: 'Replace skill', tone: 'warn', removable: true });
+    expect(edited?.text).toContain('keeps your copy as a backup');
+    expect(skillLine(skill({ state: 'ready', backup: '~/Library/Application Support/x/draft-canvas-1' }))?.text).toContain(
+      'Your edited copy is in ~/Library/Application Support/x/draft-canvas-1.',
+    );
+  });
+
+  it('says nothing before the shell has answered', () => {
+    expect(skillLine(undefined)).toBeNull();
   });
 });

@@ -5,6 +5,8 @@
  * rendered in the real editor, light and dark, by `e2e/agent-gallery.ts` for a person to look at.
  */
 
+import skillExample from '../../../skills/draft-canvas/references/example-create.json';
+
 type Json = Record<string, unknown>;
 
 export interface GalleryCreate {
@@ -622,6 +624,15 @@ export const GALLERY: GalleryCase[] = [
         { op: 'arrange' },
       ],
     },
+  },
+  {
+    // The request the Draft Canvas agent skill teaches by example (`skills/draft-canvas/`): a C4
+    // container view with a component view inside, a captioned main flow and its failure variant,
+    // notes of every kind, a code snippet and evidence. Agents copy its shape, so it must draw cleanly.
+    id: '24-skill-example',
+    title: 'The agent skill’s example: containers, an inside view, flows, notes and evidence',
+    kind: 'create',
+    request: skillExample as Json,
   },
 ];
 

@@ -14,6 +14,8 @@ import {
   DesktopError,
   type AgentClient,
   type AgentClientSetup,
+  type AgentSkillSetup,
+  type AgentSkillTarget,
   type AgentPatch,
   type Proposal,
   type ProposalAction,
@@ -1460,6 +1462,37 @@ export class DesktopController {
       return await this.api.agentConnectClient(client);
     } catch (error) {
       logDiagnostic(error, { operation: 'desktop-agent-connect-client' });
+      this.ui.notify(describe(error));
+      return null;
+    }
+  }
+
+  /** Where the agent skill stands for Claude Code and for Codex/Cursor. Asked when Settings shows it. */
+  async agentSkills(): Promise<AgentSkillSetup[]> {
+    try {
+      return await this.api.agentSkills();
+    } catch (error) {
+      logDiagnostic(error, { operation: 'desktop-agent-skills' });
+      return [];
+    }
+  }
+
+  /** Installs, updates or replaces the agent skill. Null when it couldn't (and the person has been told why). */
+  async installAgentSkill(target: AgentSkillTarget): Promise<AgentSkillSetup | null> {
+    try {
+      return await this.api.agentInstallSkill(target);
+    } catch (error) {
+      logDiagnostic(error, { operation: 'desktop-agent-install-skill' });
+      this.ui.notify(describe(error));
+      return null;
+    }
+  }
+
+  async removeAgentSkill(target: AgentSkillTarget): Promise<AgentSkillSetup | null> {
+    try {
+      return await this.api.agentRemoveSkill(target);
+    } catch (error) {
+      logDiagnostic(error, { operation: 'desktop-agent-remove-skill' });
       this.ui.notify(describe(error));
       return null;
     }

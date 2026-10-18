@@ -791,3 +791,31 @@ test('Settings → Support previews a diagnostic report and saves the reviewed b
   await page.keyboard.press('Escape');
   await expect(settings).toHaveCount(0);
 });
+
+test('Settings installs the agent skill where the chosen agent reads skills, and takes it out again', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'New Quick Draft' })).toBeVisible();
+  const settings = await openSettings(page, 'AI agents');
+  await settings.getByRole('switch', { name: 'Allow agent access' }).check();
+  const installs = () => page.evaluate(() => window.__shell.calls().filter((call) => call.command === 'agent_install_skill').map((call) => call.args));
+
+  // Claude Code reads its own folder.
+  await expect(settings.getByText(/Teaches Claude Code to draw a repository well/)).toBeVisible();
+  await settings.getByRole('button', { name: 'Install skill' }).click();
+  await expect(settings.getByRole('status').filter({ hasText: 'Skill installed in ~/.claude/skills/draft-canvas.' })).toBeVisible();
+  expect(await installs()).toEqual([{ target: 'claude-code' }]);
+
+  // Codex and Cursor share ~/.agents/skills: installed from one, it shows as installed in the other.
+  await settings.getByRole('radio', { name: 'Codex' }).check({ force: true });
+  await expect(settings.getByText(/Teaches Codex and Cursor to draw a repository well/)).toBeVisible();
+  await settings.getByRole('button', { name: 'Install skill' }).click();
+  await expect(settings.getByRole('status').filter({ hasText: 'Skill installed in ~/.agents/skills/draft-canvas.' })).toBeVisible();
+  expect(await installs()).toEqual([{ target: 'claude-code' }, { target: 'agents' }]);
+  await settings.getByRole('radio', { name: 'Cursor' }).check({ force: true });
+  await expect(settings.getByRole('status').filter({ hasText: 'Skill installed in ~/.agents/skills/draft-canvas.' })).toBeVisible();
+
+  await settings.getByRole('button', { name: 'Remove skill' }).click();
+  await expect(settings.getByRole('button', { name: 'Install skill' })).toBeVisible();
+  const removes = await page.evaluate(() => window.__shell.calls().filter((call) => call.command === 'agent_remove_skill').map((call) => call.args));
+  expect(removes).toEqual([{ target: 'agents' }]);
+});
