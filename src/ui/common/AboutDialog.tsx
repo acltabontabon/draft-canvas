@@ -13,7 +13,7 @@ import {
   type ProductReleaseHighlight,
 } from '../../releases/productReleases';
 import { useUiStore } from '../../store/uiStore';
-import { Icon } from './Icon';
+import { Icon, type IconName } from './Icon';
 import { Modal } from './Modal';
 
 /**
@@ -32,6 +32,14 @@ function Mark() {
     </svg>
   );
 }
+
+const AUTHOR_LINKS: { label: string; href: string; icon: IconName; external: boolean }[] = [
+  { label: 'Documentation', href: PRODUCT.links.docs, icon: 'help', external: true },
+  { label: 'GitHub', href: PRODUCT.links.github, icon: 'github', external: true },
+  { label: 'LinkedIn', href: PRODUCT.links.linkedin, icon: 'linkedin', external: true },
+  { label: 'Personal site', href: PRODUCT.links.website, icon: 'globe', external: true },
+  { label: 'Email', href: `mailto:${PRODUCT.links.email}`, icon: 'mail', external: false },
+];
 
 function ReleaseHighlights({ highlights }: { highlights: ProductReleaseHighlight[] }) {
   return (
@@ -266,7 +274,7 @@ function AboutDialogBody() {
   return (
     <Modal
       title={modalTitle}
-      width={isWide ? 600 : 380}
+      width={isWide ? 600 : 400}
       onClose={() => setOpen(false)}
       className={isWide ? 'dc-modal-about dc-modal-wide' : 'dc-modal-about'}
       onBack={onBack}
@@ -274,138 +282,134 @@ function AboutDialogBody() {
     >
       {view.kind === 'about' && (
         <div className="dc-about dc-view-enter">
-          <div className="dc-about-brand">
-            <Mark />
-            <h3 className="dc-about-name" ref={headingRef} tabIndex={-1}>
-              {PRODUCT.name}
-            </h3>
+          {/* A drawing sheet with its title block along the bottom edge — the product on the sheet,
+              the record of who drew which revision in the block. One frame, hairline cells. */}
+          <div className="dc-about-sheet">
+            <div className="dc-about-drawing">
+              <div className="dc-about-brand">
+                <Mark />
+                <h3 className="dc-about-name" ref={headingRef} tabIndex={-1}>
+                  {PRODUCT.name}
+                </h3>
+              </div>
+              <p className="dc-about-tagline">{PRODUCT.tagline}</p>
+              <p className="dc-about-sub">{PRODUCT.pitch}</p>
+            </div>
+
+            <dl className="dc-about-block">
+              <div className="dc-about-cell">
+                <dt>Version</dt>
+                <dd className="dc-about-version" aria-label={`Version ${PRODUCT.version}`}>
+                  v{PRODUCT.version}
+                </dd>
+              </div>
+              <div className="dc-about-cell">
+                <dt>{updateReady ? 'Update ready' : 'Release notes'}</dt>
+                <dd>
+                  {updateReady ? (
+                    <button
+                      type="button"
+                      className="dc-about-version-action dc-about-version-action--update"
+                      onClick={activateUpdate}
+                      title="Saves your work, then reloads this tab with the new version"
+                    >
+                      Reload to update ↑
+                    </button>
+                  ) : (
+                    <button type="button" className="dc-about-version-action" onClick={openWhatsNew}>
+                      {unread && <span className="dc-release-dot" aria-hidden="true" />}
+                      {/* One text run, so the flex gap spaces only the dot — not the label and the arrow. */}
+                      <span>
+                        What's New{unread && <span className="dc-sr-only"> — new</span>}
+                        {'\u00a0→'}
+                      </span>
+                    </button>
+                  )}
+                </dd>
+              </div>
+              {hostKind() === 'desktop' && (
+                <div className="dc-about-cell dc-about-cell--wide">
+                  <dt>Privacy</dt>
+                  <dd className="dc-about-cell-note">
+                    Your diagrams never leave this computer. The app only goes online to look for updates (you can turn
+                    that off in Settings) and to download one when you ask.
+                  </dd>
+                </div>
+              )}
+              <div className="dc-about-cell dc-about-cell--wide">
+                <dt>Drawn by</dt>
+                <dd className="dc-about-signature">
+                  <strong>{PRODUCT.author}</strong>
+                  <span className="dc-about-links">
+                    {AUTHOR_LINKS.map((link) => (
+                      <a
+                        key={link.label}
+                        className="dc-about-link"
+                        href={link.href}
+                        {...(link.external ? { target: '_blank', rel: 'noreferrer' } : {})}
+                        aria-label={link.external ? `${link.label} (opens in a new tab)` : link.label}
+                        title={link.label}
+                      >
+                        <Icon name={link.icon} size={15} />
+                      </a>
+                    ))}
+                  </span>
+                </dd>
+              </div>
+            </dl>
           </div>
 
-          <p className="dc-about-tagline">{PRODUCT.tagline}</p>
-          <p className="dc-about-sub">{PRODUCT.pitch}</p>
-          {hostKind() === 'desktop' && (
-            <p className="dc-about-sub">
-              Your diagrams stay on this computer: nothing you draw is sent anywhere. The app only goes online to look for
-              updates (you can turn that off in Settings) and to download one when you ask.
-            </p>
-          )}
-
-          <div className="dc-about-version-row">
-            <span className="dc-about-version" aria-label={`Version ${PRODUCT.version}`}>
-              v{PRODUCT.version}
-            </span>
-            {updateReady ? (
+          <div className="dc-about-footer">
+            <a
+              className="dc-about-footnote"
+              href={PRODUCT.links.kofi}
+              target="_blank"
+              rel="noreferrer"
+              title="If Draft Canvas helped, you can optionally support its development."
+              aria-label="Buy the builder a coffee on Ko-fi (opens in a new tab)"
+            >
+              ☕ Buy the builder a coffee ↗
+            </a>
+            <span className="dc-about-footer-end">
+              {/* Relative, so it resolves wherever the build is served from — and inside the desktop bundle. */}
+              <a className="dc-about-footnote" href="./THIRD_PARTY_LICENSES.txt" target="_blank" rel="noreferrer">
+                Licences
+              </a>
               <button
                 type="button"
-                className="dc-about-version-action dc-about-version-action--update"
-                onClick={activateUpdate}
-                title="Saves your work, then reloads this tab with the new version"
+                className="dc-about-footnote"
+                onClick={() => {
+                  setReport(diagnosticReport());
+                  setView({ kind: 'diagnostics' });
+                }}
               >
-                Reload to update ↑
+                Diagnostic report…
               </button>
-            ) : (
-              <button type="button" className="dc-about-version-action" onClick={openWhatsNew}>
-                {unread && <span className="dc-release-dot" aria-hidden="true" />}
-                {/* One text run, so the flex gap spaces only the dot — not the label and the arrow. */}
-                <span>
-                  What's New{unread && <span className="dc-sr-only"> — new</span>}
-                  {'\u00a0→'}
-                </span>
-              </button>
-            )}
-          </div>
-
-          <div className="dc-about-signature">
-            <span>
-              Built by <strong>{PRODUCT.author}</strong>
-              {' · '}
-              {/* Relative, so it resolves wherever the build is served from — and inside the desktop bundle. */}
-              <a className="dc-about-licenses" href="./THIRD_PARTY_LICENSES.txt" target="_blank" rel="noreferrer">
-                Third-party licences
-              </a>
             </span>
-            <div className="dc-about-links">
-              <a
-                className="dc-about-link"
-                href={PRODUCT.links.docs}
-                target="_blank"
-                rel="noreferrer"
-                aria-label="Documentation (opens in a new tab)"
-                title="Documentation"
-              >
-                <Icon name="help" size={15} />
-              </a>
-              <a
-                className="dc-about-link"
-                href={PRODUCT.links.github}
-                target="_blank"
-                rel="noreferrer"
-                aria-label="GitHub (opens in a new tab)"
-                title="GitHub"
-              >
-                <Icon name="github" size={15} />
-              </a>
-              <a
-                className="dc-about-link"
-                href={PRODUCT.links.linkedin}
-                target="_blank"
-                rel="noreferrer"
-                aria-label="LinkedIn (opens in a new tab)"
-                title="LinkedIn"
-              >
-                <Icon name="linkedin" size={15} />
-              </a>
-              <a
-                className="dc-about-link"
-                href={PRODUCT.links.website}
-                target="_blank"
-                rel="noreferrer"
-                aria-label="Personal site (opens in a new tab)"
-                title="Personal site"
-              >
-                <Icon name="globe" size={15} />
-              </a>
-              <a
-                className="dc-about-link"
-                href={`mailto:${PRODUCT.links.email}`}
-                aria-label="Email"
-                title="Email"
-              >
-                <Icon name="mail" size={15} />
-              </a>
-            </div>
           </div>
-
-          <a
-            className="dc-about-support"
-            href={PRODUCT.links.kofi}
-            target="_blank"
-            rel="noreferrer"
-            title="If Draft Canvas helped, you can optionally support its development."
-            aria-label="Buy the builder a coffee on Ko-fi (opens in a new tab)"
-          >
-            ☕ Buy the builder a coffee ↗
-          </a>
-          <button type="button" className="dc-about-version-action" onClick={() => {
-            setReport(diagnosticReport());
-            setView({ kind: 'diagnostics' });
-          }}>
-            Diagnostic report…
-          </button>
         </div>
       )}
 
       {view.kind === 'diagnostics' && (
         <div className="dc-about dc-view-enter">
-          <h3 ref={headingRef} tabIndex={-1}>Recent failures</h3>
-          <p>A local report of recent failures in this session. It excludes diagram content, file paths, identifiers and error messages. Review it before sharing.</p>
+          <h3 className="dc-about-view-title" ref={headingRef} tabIndex={-1}>
+            Recent failures
+          </h3>
+          <p className="dc-about-sub">
+            A local report of recent failures in this session. It excludes diagram content, file paths, identifiers and
+            error messages. Review it before sharing.
+          </p>
           <textarea aria-label="Diagnostic report contents" readOnly value={report} rows={12} className="dc-diagnostics-preview" />
-          <button type="button" className="dc-about-version-action" onClick={() => {
-            void downloadText(report, 'draft-canvas-diagnostics.json', 'application/json').catch((error: unknown) => {
-              if ((error instanceof Error || error instanceof DOMException) && error.name === 'AbortError') return;
-              notify('The diagnostic report could not be saved.', 'error');
-            });
-          }}>
+          <button
+            type="button"
+            className="dc-button dc-button-solid dc-diagnostics-download"
+            onClick={() => {
+              void downloadText(report, 'draft-canvas-diagnostics.json', 'application/json').catch((error: unknown) => {
+                if ((error instanceof Error || error instanceof DOMException) && error.name === 'AbortError') return;
+                notify('The diagnostic report could not be saved.', 'error');
+              });
+            }}
+          >
             Download report
           </button>
         </div>
