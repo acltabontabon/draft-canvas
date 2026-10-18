@@ -21,29 +21,130 @@ import re
 import subprocess
 import sys
 from collections import Counter, defaultdict
-from typing import Dict, Iterable, List, Optional, Tuple
+from collections.abc import Iterable
 
 SKIP_DIRS = {
-    '.git', '.hg', '.svn', 'node_modules', 'bower_components', 'vendor', 'dist', 'build', 'out', 'target',
-    '.next', '.nuxt', '.svelte-kit', '.output', '.venv', 'venv', 'env', '__pycache__', '.tox', '.mypy_cache',
-    '.pytest_cache', '.ruff_cache', 'coverage', '.gradle', '.idea', '.vscode', 'Pods', 'DerivedData',
-    '.terraform', '.serverless', '.turbo', '.cache', '.parcel-cache', 'tmp', 'logs', '.github', '.gitlab',
-    '.circleci', '.husky', '.yarn', '.pnpm-store', 'site-packages', '.dart_tool', '.angular', 'storybook-static',
+    '.git',
+    '.hg',
+    '.svn',
+    'node_modules',
+    'bower_components',
+    'vendor',
+    'dist',
+    'build',
+    'out',
+    'target',
+    '.next',
+    '.nuxt',
+    '.svelte-kit',
+    '.output',
+    '.venv',
+    'venv',
+    'env',
+    '__pycache__',
+    '.tox',
+    '.mypy_cache',
+    '.pytest_cache',
+    '.ruff_cache',
+    'coverage',
+    '.gradle',
+    '.idea',
+    '.vscode',
+    'Pods',
+    'DerivedData',
+    '.terraform',
+    '.serverless',
+    '.turbo',
+    '.cache',
+    '.parcel-cache',
+    'tmp',
+    'logs',
+    '.github',
+    '.gitlab',
+    '.circleci',
+    '.husky',
+    '.yarn',
+    '.pnpm-store',
+    'site-packages',
+    '.dart_tool',
+    '.angular',
+    'storybook-static',
 }
-COMMITTED_SKIP_DIRS = {'node_modules', 'bower_components', 'vendor', 'site-packages', 'Pods', '.yarn', '.github', '.gitlab',
-                       '.circleci', '.husky', 'third_party', 'third-party', '.terraform'}
+COMMITTED_SKIP_DIRS = {
+    'node_modules',
+    'bower_components',
+    'vendor',
+    'site-packages',
+    'Pods',
+    '.yarn',
+    '.github',
+    '.gitlab',
+    '.circleci',
+    '.husky',
+    'third_party',
+    'third-party',
+    '.terraform',
+}
 # Units under these folders are examples, tests or docs, not the system's own deployables.
-NON_UNIT_DIRS = {'test', 'tests', '__tests__', 'e2e', 'fixtures', 'testdata', 'mocks', '__mocks__', 'examples',
-                 'example', 'samples', 'sample', 'docs', 'benchmark', 'benchmarks', 'spec', 'playground'}
+NON_UNIT_DIRS = {
+    'test',
+    'tests',
+    '__tests__',
+    'e2e',
+    'fixtures',
+    'testdata',
+    'mocks',
+    '__mocks__',
+    'examples',
+    'example',
+    'samples',
+    'sample',
+    'docs',
+    'benchmark',
+    'benchmarks',
+    'spec',
+    'playground',
+}
 
 LANGUAGES = {
-    '.ts': 'TypeScript', '.tsx': 'TypeScript', '.mts': 'TypeScript', '.cts': 'TypeScript',
-    '.js': 'JavaScript', '.jsx': 'JavaScript', '.mjs': 'JavaScript', '.cjs': 'JavaScript',
-    '.py': 'Python', '.go': 'Go', '.java': 'Java', '.kt': 'Kotlin', '.kts': 'Kotlin', '.scala': 'Scala',
-    '.rs': 'Rust', '.rb': 'Ruby', '.php': 'PHP', '.cs': 'C#', '.fs': 'F#', '.swift': 'Swift', '.m': 'Objective-C',
-    '.dart': 'Dart', '.ex': 'Elixir', '.exs': 'Elixir', '.erl': 'Erlang', '.clj': 'Clojure', '.c': 'C',
-    '.cc': 'C++', '.cpp': 'C++', '.h': 'C/C++', '.hpp': 'C++', '.vue': 'Vue', '.svelte': 'Svelte',
-    '.sql': 'SQL', '.tf': 'Terraform', '.proto': 'Protobuf', '.graphql': 'GraphQL', '.gql': 'GraphQL',
+    '.ts': 'TypeScript',
+    '.tsx': 'TypeScript',
+    '.mts': 'TypeScript',
+    '.cts': 'TypeScript',
+    '.js': 'JavaScript',
+    '.jsx': 'JavaScript',
+    '.mjs': 'JavaScript',
+    '.cjs': 'JavaScript',
+    '.py': 'Python',
+    '.go': 'Go',
+    '.java': 'Java',
+    '.kt': 'Kotlin',
+    '.kts': 'Kotlin',
+    '.scala': 'Scala',
+    '.rs': 'Rust',
+    '.rb': 'Ruby',
+    '.php': 'PHP',
+    '.cs': 'C#',
+    '.fs': 'F#',
+    '.swift': 'Swift',
+    '.m': 'Objective-C',
+    '.dart': 'Dart',
+    '.ex': 'Elixir',
+    '.exs': 'Elixir',
+    '.erl': 'Erlang',
+    '.clj': 'Clojure',
+    '.c': 'C',
+    '.cc': 'C++',
+    '.cpp': 'C++',
+    '.h': 'C/C++',
+    '.hpp': 'C++',
+    '.vue': 'Vue',
+    '.svelte': 'Svelte',
+    '.sql': 'SQL',
+    '.tf': 'Terraform',
+    '.proto': 'Protobuf',
+    '.graphql': 'GraphQL',
+    '.gql': 'GraphQL',
 }
 CODE_EXTS = {e for e, lang in LANGUAGES.items() if lang not in {'SQL', 'Terraform', 'Protobuf', 'GraphQL'}}
 MAX_READ = 512 * 1024
@@ -52,7 +153,7 @@ MAX_READ = 512 * 1024
 #
 # Each signal: (regex fully matching the lowercase dependency/image name, key). Keys index KNOWN.
 
-KNOWN: Dict[str, Tuple[str, str, str]] = {
+KNOWN: dict[str, tuple[str, str, str]] = {
     # key: (display name, Draft Canvas type, category)
     'postgres': ('PostgreSQL', 'sql-database', 'store'),
     'mysql': ('MySQL', 'sql-database', 'store'),
@@ -144,22 +245,37 @@ KNOWN: Dict[str, Tuple[str, str, str]] = {
     'caddy': ('Caddy', 'gateway', 'edge'),
 }
 
-DEP_SIGNALS: List[Tuple[str, str]] = [
-    (r'pg|postgres|pg-promise|psycopg2?(-binary)?|psycopg(\[.*\])?|asyncpg|org\.postgresql:postgresql|github\.com/lib/pq|github\.com/jackc/pgx(/v\d)?|npgsql.*|@neondatabase/serverless|@vercel/postgres|pgx|tokio-postgres|postgresql', 'postgres'),
-    (r'mysql2?|pymysql|mysqlclient|mysql-connector.*|aiomysql|github\.com/go-sql-driver/mysql|com\.mysql:.*|mysql:mysql-connector-java|mariadb', 'mysql'),
+DEP_SIGNALS: list[tuple[str, str]] = [
+    (
+        r'pg|postgres|pg-promise|psycopg2?(-binary)?|psycopg(\[.*\])?|asyncpg|org\.postgresql:postgresql|github\.com/lib/pq|github\.com/jackc/pgx(/v\d)?|npgsql.*|@neondatabase/serverless|@vercel/postgres|pgx|tokio-postgres|postgresql',
+        'postgres',
+    ),
+    (
+        r'mysql2?|pymysql|mysqlclient|mysql-connector.*|aiomysql|github\.com/go-sql-driver/mysql|com\.mysql:.*|mysql:mysql-connector-java|mariadb',
+        'mysql',
+    ),
     (r'sqlite3|better-sqlite3|rusqlite|github\.com/mattn/go-sqlite3|aiosqlite|@libsql/client', 'sqlite'),
     (r'mssql|tedious|pyodbc|microsoft\.data\.sqlclient|com\.microsoft\.sqlserver:.*', 'mssql'),
     (r'oracledb|cx_oracle|com\.oracle\.database\.jdbc:.*', 'oracle'),
     (r'@clickhouse/client|clickhouse-driver|clickhouse-connect', 'clickhouse'),
-    (r'mongodb|mongoose|pymongo|motor|mongoengine|go\.mongodb\.org/mongo-driver|org\.springframework\.boot:spring-boot-starter-data-mongodb|mongodb\.driver|mongoid', 'mongodb'),
+    (
+        r'mongodb|mongoose|pymongo|motor|mongoengine|go\.mongodb\.org/mongo-driver|org\.springframework\.boot:spring-boot-starter-data-mongodb|mongodb\.driver|mongoid',
+        'mongodb',
+    ),
     (r'@aws-sdk/client-dynamodb|@aws-sdk/lib-dynamodb|dynamoose|pynamodb|aws-sdk-dynamodb|software\.amazon\.awssdk:dynamodb.*', 'dynamodb'),
     (r'cassandra-driver|github\.com/gocql/gocql|com\.datastax\.oss:.*', 'cassandra'),
     (r'@google-cloud/firestore|google-cloud-firestore', 'firestore'),
     (r'@azure/cosmos|azure-cosmos', 'cosmosdb'),
     (r'neo4j(-driver)?|github\.com/neo4j/.*', 'neo4j'),
-    (r'redis|ioredis|redis-py|github\.com/(go-redis|redis)/.*|redis\.clients:jedis|io\.lettuce:.*|org\.springframework\.boot:spring-boot-starter-data-redis|stackexchange\.redis|@upstash/redis|aioredis', 'redis'),
+    (
+        r'redis|ioredis|redis-py|github\.com/(go-redis|redis)/.*|redis\.clients:jedis|io\.lettuce:.*|org\.springframework\.boot:spring-boot-starter-data-redis|stackexchange\.redis|@upstash/redis|aioredis',
+        'redis',
+    ),
     (r'memcached|pymemcache|memjs|pylibmc', 'memcached'),
-    (r'@elastic/elasticsearch|elasticsearch(\[.*\])?|elasticsearch-dsl|github\.com/(olivere|elastic)/.*|org\.springframework\.boot:spring-boot-starter-data-elasticsearch|co\.elastic\.clients:.*', 'elasticsearch'),
+    (
+        r'@elastic/elasticsearch|elasticsearch(\[.*\])?|elasticsearch-dsl|github\.com/(olivere|elastic)/.*|org\.springframework\.boot:spring-boot-starter-data-elasticsearch|co\.elastic\.clients:.*',
+        'elasticsearch',
+    ),
     (r'@opensearch-project/opensearch|opensearch-py', 'opensearch'),
     (r'meilisearch', 'meilisearch'),
     (r'typesense', 'typesense'),
@@ -170,11 +286,20 @@ DEP_SIGNALS: List[Tuple[str, str]] = [
     (r'@google-cloud/storage|google-cloud-storage', 'gcs'),
     (r'@azure/storage-blob|azure-storage-blob', 'azureblob'),
     (r'minio', 'minio'),
-    (r'kafkajs|node-rdkafka|@confluentinc/kafka-javascript|confluent-kafka|kafka-python|aiokafka|github\.com/segmentio/kafka-go|github\.com/confluentinc/confluent-kafka-go.*|github\.com/(ibm|shopify)/sarama|org\.springframework\.kafka:spring-kafka|org\.apache\.kafka:kafka-clients|rdkafka|faust(-streaming)?', 'kafka'),
+    (
+        r'kafkajs|node-rdkafka|@confluentinc/kafka-javascript|confluent-kafka|kafka-python|aiokafka|github\.com/segmentio/kafka-go|github\.com/confluentinc/confluent-kafka-go.*|github\.com/(ibm|shopify)/sarama|org\.springframework\.kafka:spring-kafka|org\.apache\.kafka:kafka-clients|rdkafka|faust(-streaming)?',
+        'kafka',
+    ),
     (r'@aws-sdk/client-kinesis|amazon-kinesis-client', 'kinesis'),
     (r'nats(\.ws)?|nats-py|github\.com/nats-io/nats\.go', 'nats'),
-    (r'amqplib|amqp-connection-manager|pika|aio-pika|kombu|github\.com/streadway/amqp|github\.com/rabbitmq/amqp091-go|org\.springframework\.boot:spring-boot-starter-amqp|rabbitmq\.client|bunny|php-amqplib/php-amqplib', 'rabbitmq'),
-    (r'@aws-sdk/client-sqs|sqs-consumer|sqs-producer|aws-sdk-sqs|software\.amazon\.awssdk:sqs|io\.awspring\.cloud:spring-cloud-aws-starter-sqs', 'sqs'),
+    (
+        r'amqplib|amqp-connection-manager|pika|aio-pika|kombu|github\.com/streadway/amqp|github\.com/rabbitmq/amqp091-go|org\.springframework\.boot:spring-boot-starter-amqp|rabbitmq\.client|bunny|php-amqplib/php-amqplib',
+        'rabbitmq',
+    ),
+    (
+        r'@aws-sdk/client-sqs|sqs-consumer|sqs-producer|aws-sdk-sqs|software\.amazon\.awssdk:sqs|io\.awspring\.cloud:spring-cloud-aws-starter-sqs',
+        'sqs',
+    ),
     (r'@aws-sdk/client-sns|software\.amazon\.awssdk:sns', 'sns'),
     (r'@aws-sdk/client-eventbridge', 'eventbridge'),
     (r'@google-cloud/pubsub|google-cloud-pubsub|cloud\.google\.com/go/pubsub', 'pubsub'),
@@ -196,7 +321,10 @@ DEP_SIGNALS: List[Tuple[str, str]] = [
     (r'mailgun(\.js)?|mailgun-js', 'mailgun'),
     (r'resend', 'resend'),
     (r'@aws-sdk/client-sesv?2?|software\.amazon\.awssdk:sesv?2?', 'ses'),
-    (r'nodemailer|django-anymail|actionmailer|spring-boot-starter-mail|org\.springframework\.boot:spring-boot-starter-mail|lettre|gomail', 'smtp'),
+    (
+        r'nodemailer|django-anymail|actionmailer|spring-boot-starter-mail|org\.springframework\.boot:spring-boot-starter-mail|lettre|gomail',
+        'smtp',
+    ),
     (r'auth0|@auth0/.*|auth0-python', 'auth0'),
     (r'@okta/.*|okta', 'okta'),
     (r'@clerk/.*', 'clerk'),
@@ -226,64 +354,153 @@ DEP_SIGNALS: List[Tuple[str, str]] = [
     (r'prom-client|prometheus[-_]client|github\.com/prometheus/client_golang', 'prometheus'),
 ]
 
-FRAMEWORKS: List[Tuple[str, str, str]] = [
+FRAMEWORKS: list[tuple[str, str, str]] = [
     # (regex, name, role) — role: web (UI), api, worker, cli, mobile, desktop, rpc
-    (r'next', 'Next.js', 'web'), (r'nuxt', 'Nuxt', 'web'), (r'@remix-run/.*', 'Remix', 'web'),
-    (r'@sveltejs/kit', 'SvelteKit', 'web'), (r'astro', 'Astro', 'web'), (r'@angular/core', 'Angular', 'web'),
-    (r'vue', 'Vue', 'web'), (r'react-dom', 'React', 'web'), (r'svelte', 'Svelte', 'web'), (r'solid-js', 'Solid', 'web'),
-    (r'react-native|expo', 'React Native', 'mobile'), (r'electron', 'Electron', 'desktop'), (r'@tauri-apps/api', 'Tauri', 'desktop'),
-    (r'express', 'Express', 'api'), (r'fastify', 'Fastify', 'api'), (r'koa', 'Koa', 'api'), (r'@hapi/hapi', 'hapi', 'api'),
-    (r'@nestjs/core', 'NestJS', 'api'), (r'hono', 'Hono', 'api'), (r'@trpc/server', 'tRPC', 'api'),
+    (r'next', 'Next.js', 'web'),
+    (r'nuxt', 'Nuxt', 'web'),
+    (r'@remix-run/.*', 'Remix', 'web'),
+    (r'@sveltejs/kit', 'SvelteKit', 'web'),
+    (r'astro', 'Astro', 'web'),
+    (r'@angular/core', 'Angular', 'web'),
+    (r'vue', 'Vue', 'web'),
+    (r'react-dom', 'React', 'web'),
+    (r'svelte', 'Svelte', 'web'),
+    (r'solid-js', 'Solid', 'web'),
+    (r'react-native|expo', 'React Native', 'mobile'),
+    (r'electron', 'Electron', 'desktop'),
+    (r'@tauri-apps/api', 'Tauri', 'desktop'),
+    (r'express', 'Express', 'api'),
+    (r'fastify', 'Fastify', 'api'),
+    (r'koa', 'Koa', 'api'),
+    (r'@hapi/hapi', 'hapi', 'api'),
+    (r'@nestjs/core', 'NestJS', 'api'),
+    (r'hono', 'Hono', 'api'),
+    (r'@trpc/server', 'tRPC', 'api'),
     (r'@apollo/server|apollo-server(-express)?|graphql-yoga|mercurius', 'GraphQL server', 'api'),
-    (r'django', 'Django', 'api'), (r'djangorestframework', 'Django REST framework', 'api'), (r'flask', 'Flask', 'api'),
-    (r'fastapi', 'FastAPI', 'api'), (r'starlette', 'Starlette', 'api'), (r'aiohttp', 'aiohttp', 'api'), (r'tornado', 'Tornado', 'api'),
-    (r'sanic', 'Sanic', 'api'), (r'litestar', 'Litestar', 'api'),
+    (r'django', 'Django', 'api'),
+    (r'djangorestframework', 'Django REST framework', 'api'),
+    (r'flask', 'Flask', 'api'),
+    (r'fastapi', 'FastAPI', 'api'),
+    (r'starlette', 'Starlette', 'api'),
+    (r'aiohttp', 'aiohttp', 'api'),
+    (r'tornado', 'Tornado', 'api'),
+    (r'sanic', 'Sanic', 'api'),
+    (r'litestar', 'Litestar', 'api'),
     (r'org\.springframework\.boot:spring-boot-starter-web(flux)?', 'Spring Boot', 'api'),
-    (r'io\.quarkus:.*', 'Quarkus', 'api'), (r'io\.micronaut:.*', 'Micronaut', 'api'), (r'io\.ktor:.*', 'Ktor', 'api'),
-    (r'github\.com/gin-gonic/gin', 'Gin', 'api'), (r'github\.com/labstack/echo(/v\d)?', 'Echo', 'api'),
-    (r'github\.com/gofiber/fiber(/v\d)?', 'Fiber', 'api'), (r'github\.com/go-chi/chi(/v\d)?', 'chi', 'api'),
-    (r'github\.com/gorilla/mux', 'gorilla/mux', 'api'), (r'actix-web', 'Actix Web', 'api'), (r'axum', 'Axum', 'api'),
-    (r'rocket', 'Rocket', 'api'), (r'warp', 'warp', 'api'), (r'rails|railties', 'Rails', 'api'), (r'sinatra', 'Sinatra', 'api'),
-    (r'laravel/framework', 'Laravel', 'api'), (r'symfony/framework-bundle', 'Symfony', 'api'), (r'phoenix', 'Phoenix', 'api'),
+    (r'io\.quarkus:.*', 'Quarkus', 'api'),
+    (r'io\.micronaut:.*', 'Micronaut', 'api'),
+    (r'io\.ktor:.*', 'Ktor', 'api'),
+    (r'github\.com/gin-gonic/gin', 'Gin', 'api'),
+    (r'github\.com/labstack/echo(/v\d)?', 'Echo', 'api'),
+    (r'github\.com/gofiber/fiber(/v\d)?', 'Fiber', 'api'),
+    (r'github\.com/go-chi/chi(/v\d)?', 'chi', 'api'),
+    (r'github\.com/gorilla/mux', 'gorilla/mux', 'api'),
+    (r'actix-web', 'Actix Web', 'api'),
+    (r'axum', 'Axum', 'api'),
+    (r'rocket', 'Rocket', 'api'),
+    (r'warp', 'warp', 'api'),
+    (r'rails|railties', 'Rails', 'api'),
+    (r'sinatra', 'Sinatra', 'api'),
+    (r'laravel/framework', 'Laravel', 'api'),
+    (r'symfony/framework-bundle', 'Symfony', 'api'),
+    (r'phoenix', 'Phoenix', 'api'),
     (r'microsoft\.aspnetcore.*', 'ASP.NET Core', 'api'),
     (r'@grpc/grpc-js|grpcio|google\.golang\.org/grpc|io\.grpc:.*|tonic|grpc\.aspnetcore', 'gRPC', 'rpc'),
     (r'commander|yargs|oclif|@oclif/core|click|typer|github\.com/spf13/cobra|github\.com/urfave/cli(/v\d)?|clap', 'CLI', 'cli'),
-    (r'node-cron|cron|apscheduler|celery-beat|django-celery-beat|github\.com/robfig/cron(/v\d)?|quartz|org\.quartz-scheduler:quartz', 'scheduler library', 'scheduler'),
+    (
+        r'node-cron|cron|apscheduler|celery-beat|django-celery-beat|github\.com/robfig/cron(/v\d)?|quartz|org\.quartz-scheduler:quartz',
+        'scheduler library',
+        'scheduler',
+    ),
 ]
 
-IMAGE_SIGNALS: List[Tuple[str, str]] = [
-    (r'(.*/)?postgres(ql)?|(.*/)?postgis.*|timescale/.*|supabase/postgres', 'postgres'), (r'(.*/)?mysql|(.*/)?mariadb', 'mysql'),
-    (r'(.*/)?mongo(db)?', 'mongodb'), (r'(.*/)?redis(-stack)?|(.*/)?valkey|(.*/)?dragonfly.*|bitnami/redis', 'redis'),
-    (r'(.*/)?memcached', 'memcached'), (r'(.*/)?rabbitmq', 'rabbitmq'),
+IMAGE_SIGNALS: list[tuple[str, str]] = [
+    (r'(.*/)?postgres(ql)?|(.*/)?postgis.*|timescale/.*|supabase/postgres', 'postgres'),
+    (r'(.*/)?mysql|(.*/)?mariadb', 'mysql'),
+    (r'(.*/)?mongo(db)?', 'mongodb'),
+    (r'(.*/)?redis(-stack)?|(.*/)?valkey|(.*/)?dragonfly.*|bitnami/redis', 'redis'),
+    (r'(.*/)?memcached', 'memcached'),
+    (r'(.*/)?rabbitmq', 'rabbitmq'),
     (r'confluentinc/cp-kafka|bitnami/kafka|apache/kafka|wurstmeister/kafka|redpandadata/redpanda|vectorized/redpanda|(.*/)?kafka', 'kafka'),
-    (r'(.*/)?elasticsearch|docker\.elastic\.co/elasticsearch/elasticsearch', 'elasticsearch'), (r'opensearchproject/opensearch', 'opensearch'),
-    (r'(.*/)?minio', 'minio'), (r'getmeili/meilisearch', 'meilisearch'), (r'(.*/)?nats', 'nats'), (r'(.*/)?cassandra', 'cassandra'),
-    (r'(.*/)?neo4j', 'neo4j'), (r'clickhouse/clickhouse-server|yandex/clickhouse-server', 'clickhouse'),
-    (r'(.*/)?nginx|nginxinc/.*', 'nginx'), (r'(.*/)?traefik', 'traefik'), (r'envoyproxy/envoy.*', 'envoy'), (r'(.*/)?kong', 'kong'),
-    (r'(.*/)?haproxy', 'haproxy'), (r'(.*/)?caddy', 'caddy'), (r'(.*/)?keycloak|quay\.io/keycloak/keycloak', 'keycloak'),
-    (r'temporalio/.*', 'temporal'), (r'mailhog/mailhog|axllent/mailpit|(.*/)?maildev', 'smtp'),
-    (r'(.*/)?prometheus|prom/prometheus', 'prometheus'), (r'grafana/.*', 'grafana'), (r'jaegertracing/.*', 'jaeger'),
+    (r'(.*/)?elasticsearch|docker\.elastic\.co/elasticsearch/elasticsearch', 'elasticsearch'),
+    (r'opensearchproject/opensearch', 'opensearch'),
+    (r'(.*/)?minio', 'minio'),
+    (r'getmeili/meilisearch', 'meilisearch'),
+    (r'(.*/)?nats', 'nats'),
+    (r'(.*/)?cassandra', 'cassandra'),
+    (r'(.*/)?neo4j', 'neo4j'),
+    (r'clickhouse/clickhouse-server|yandex/clickhouse-server', 'clickhouse'),
+    (r'(.*/)?nginx|nginxinc/.*', 'nginx'),
+    (r'(.*/)?traefik', 'traefik'),
+    (r'envoyproxy/envoy.*', 'envoy'),
+    (r'(.*/)?kong', 'kong'),
+    (r'(.*/)?haproxy', 'haproxy'),
+    (r'(.*/)?caddy', 'caddy'),
+    (r'(.*/)?keycloak|quay\.io/keycloak/keycloak', 'keycloak'),
+    (r'temporalio/.*', 'temporal'),
+    (r'mailhog/mailhog|axllent/mailpit|(.*/)?maildev', 'smtp'),
+    (r'(.*/)?prometheus|prom/prometheus', 'prometheus'),
+    (r'grafana/.*', 'grafana'),
+    (r'jaegertracing/.*', 'jaeger'),
     (r'localstack/localstack', 'localstack'),
 ]
 
-ENV_SIGNALS: List[Tuple[str, str]] = [
-    (r'.*(POSTGRES|PG_|PGHOST|PGDATABASE).*', 'postgres'), (r'.*MYSQL.*', 'mysql'), (r'.*MONGO.*', 'mongodb'),
-    (r'.*REDIS.*', 'redis'), (r'.*MEMCACHE.*', 'memcached'), (r'.*(ELASTIC|ES_URL|ES_HOST).*', 'elasticsearch'),
-    (r'.*OPENSEARCH.*', 'opensearch'), (r'.*KAFKA.*', 'kafka'), (r'.*(RABBIT|AMQP).*', 'rabbitmq'), (r'.*SQS.*', 'sqs'),
-    (r'.*SNS.*', 'sns'), (r'.*(S3_|_S3|BUCKET).*', 's3'), (r'.*STRIPE.*', 'stripe'), (r'.*TWILIO.*', 'twilio'),
-    (r'.*SENDGRID.*', 'sendgrid'), (r'.*POSTMARK.*', 'postmark'), (r'.*MAILGUN.*', 'mailgun'), (r'.*RESEND.*', 'resend'),
-    (r'.*SMTP.*', 'smtp'), (r'.*AUTH0.*', 'auth0'), (r'.*OKTA.*', 'okta'), (r'.*CLERK.*', 'clerk'), (r'.*COGNITO.*', 'cognito'),
-    (r'.*KEYCLOAK.*', 'keycloak'), (r'.*SUPABASE.*', 'supabase'), (r'.*FIREBASE.*', 'firebase'), (r'.*OPENAI.*', 'openai'),
-    (r'.*ANTHROPIC.*', 'anthropic'), (r'.*(GEMINI|GOOGLE_AI).*', 'gemini'), (r'.*SEGMENT.*', 'segment'),
-    (r'.*SENTRY.*', 'sentry'), (r'.*(DATADOG|DD_API|DD_AGENT).*', 'datadog'), (r'.*NEW_RELIC.*', 'newrelic'),
-    (r'.*OTEL_.*', 'opentelemetry'), (r'.*ALGOLIA.*', 'algolia'), (r'.*SLACK.*', 'slack'), (r'.*PLAID.*', 'plaid'),
-    (r'.*PAYPAL.*', 'paypal'), (r'.*BRAINTREE.*', 'braintree'), (r'.*ADYEN.*', 'adyen'), (r'.*SHOPIFY.*', 'shopify'),
-    (r'.*HUBSPOT.*', 'hubspot'), (r'.*SALESFORCE.*', 'salesforce'), (r'.*PINECONE.*', 'pinecone'), (r'.*QDRANT.*', 'qdrant'),
-    (r'.*NATS.*', 'nats'), (r'.*TEMPORAL.*', 'temporal'), (r'.*KINESIS.*', 'kinesis'), (r'.*PUBSUB.*', 'pubsub'),
-    (r'.*SERVICE_?BUS.*', 'servicebus'), (r'.*MQTT.*', 'mqtt'), (r'.*CLICKHOUSE.*', 'clickhouse'),
+ENV_SIGNALS: list[tuple[str, str]] = [
+    (r'.*(POSTGRES|PG_|PGHOST|PGDATABASE).*', 'postgres'),
+    (r'.*MYSQL.*', 'mysql'),
+    (r'.*MONGO.*', 'mongodb'),
+    (r'.*REDIS.*', 'redis'),
+    (r'.*MEMCACHE.*', 'memcached'),
+    (r'.*(ELASTIC|ES_URL|ES_HOST).*', 'elasticsearch'),
+    (r'.*OPENSEARCH.*', 'opensearch'),
+    (r'.*KAFKA.*', 'kafka'),
+    (r'.*(RABBIT|AMQP).*', 'rabbitmq'),
+    (r'.*SQS.*', 'sqs'),
+    (r'.*SNS.*', 'sns'),
+    (r'.*(S3_|_S3|BUCKET).*', 's3'),
+    (r'.*STRIPE.*', 'stripe'),
+    (r'.*TWILIO.*', 'twilio'),
+    (r'.*SENDGRID.*', 'sendgrid'),
+    (r'.*POSTMARK.*', 'postmark'),
+    (r'.*MAILGUN.*', 'mailgun'),
+    (r'.*RESEND.*', 'resend'),
+    (r'.*SMTP.*', 'smtp'),
+    (r'.*AUTH0.*', 'auth0'),
+    (r'.*OKTA.*', 'okta'),
+    (r'.*CLERK.*', 'clerk'),
+    (r'.*COGNITO.*', 'cognito'),
+    (r'.*KEYCLOAK.*', 'keycloak'),
+    (r'.*SUPABASE.*', 'supabase'),
+    (r'.*FIREBASE.*', 'firebase'),
+    (r'.*OPENAI.*', 'openai'),
+    (r'.*ANTHROPIC.*', 'anthropic'),
+    (r'.*(GEMINI|GOOGLE_AI).*', 'gemini'),
+    (r'.*SEGMENT.*', 'segment'),
+    (r'.*SENTRY.*', 'sentry'),
+    (r'.*(DATADOG|DD_API|DD_AGENT).*', 'datadog'),
+    (r'.*NEW_RELIC.*', 'newrelic'),
+    (r'.*OTEL_.*', 'opentelemetry'),
+    (r'.*ALGOLIA.*', 'algolia'),
+    (r'.*SLACK.*', 'slack'),
+    (r'.*PLAID.*', 'plaid'),
+    (r'.*PAYPAL.*', 'paypal'),
+    (r'.*BRAINTREE.*', 'braintree'),
+    (r'.*ADYEN.*', 'adyen'),
+    (r'.*SHOPIFY.*', 'shopify'),
+    (r'.*HUBSPOT.*', 'hubspot'),
+    (r'.*SALESFORCE.*', 'salesforce'),
+    (r'.*PINECONE.*', 'pinecone'),
+    (r'.*QDRANT.*', 'qdrant'),
+    (r'.*NATS.*', 'nats'),
+    (r'.*TEMPORAL.*', 'temporal'),
+    (r'.*KINESIS.*', 'kinesis'),
+    (r'.*PUBSUB.*', 'pubsub'),
+    (r'.*SERVICE_?BUS.*', 'servicebus'),
+    (r'.*MQTT.*', 'mqtt'),
+    (r'.*CLICKHOUSE.*', 'clickhouse'),
 ]
 
-TF_SIGNALS: List[Tuple[str, str]] = [
+TF_SIGNALS: list[tuple[str, str]] = [
     (r'aws_db_instance|aws_rds_cluster|google_sql_database_instance|azurerm_(postgresql|mysql|mssql)_.*', 'sql-database'),
     (r'aws_dynamodb_table|google_firestore_database|google_bigtable_instance|azurerm_cosmosdb_account', 'nosql-database'),
     (r'aws_elasticache_.*|google_redis_instance|azurerm_redis_cache|aws_memorydb_cluster', 'cache'),
@@ -293,13 +510,19 @@ TF_SIGNALS: List[Tuple[str, str]] = [
     (r'aws_sns_topic|google_pubsub_topic|aws_cloudwatch_event_bus|azurerm_servicebus_topic|azurerm_eventgrid_topic', 'topic'),
     (r'aws_kinesis_stream|aws_msk_cluster|confluent_kafka_topic|azurerm_eventhub', 'stream'),
     (r'aws_lambda_function|google_cloudfunctions2?_function|azurerm_(linux_|windows_)?function_app', 'worker'),
-    (r'aws_ecs_service|aws_apprunner_service|google_cloud_run_(v2_)?service|azurerm_container_app|aws_elastic_beanstalk_environment|kubernetes_deployment', 'service'),
-    (r'aws_api_gateway_rest_api|aws_apigatewayv2_api|aws_lb|aws_alb|aws_cloudfront_distribution|google_compute_url_map|azurerm_application_gateway|azurerm_api_management', 'gateway'),
+    (
+        r'aws_ecs_service|aws_apprunner_service|google_cloud_run_(v2_)?service|azurerm_container_app|aws_elastic_beanstalk_environment|kubernetes_deployment',
+        'service',
+    ),
+    (
+        r'aws_api_gateway_rest_api|aws_apigatewayv2_api|aws_lb|aws_alb|aws_cloudfront_distribution|google_compute_url_map|azurerm_application_gateway|azurerm_api_management',
+        'gateway',
+    ),
     (r'aws_cloudwatch_event_rule|aws_scheduler_schedule|google_cloud_scheduler_job', 'scheduler'),
     (r'aws_cognito_user_pool', 'external-system'),
 ]
 
-ROUTE_PATTERNS: List[Tuple[str, re.Pattern]] = [
+ROUTE_PATTERNS: list[tuple[str, re.Pattern]] = [
     ('js', re.compile(r'\b(?:app|router|server|api|routes|r|fastify|hono)\.(get|post|put|patch|delete|all)\(\s*[\'"`]([^\'"`]+)')),
     ('nest', re.compile(r'@(Get|Post|Put|Patch|Delete)\(\s*[\'"]?([^\'")]*)')),
     ('py', re.compile(r'@\w+(?:\.\w+)?\.(get|post|put|patch|delete|route|api_route)\(\s*[rf]?[\'"]([^\'"]+)')),
@@ -311,7 +534,7 @@ ROUTE_PATTERNS: List[Tuple[str, re.Pattern]] = [
     ('laravel', re.compile(r'Route::(get|post|put|patch|delete|resource)\(\s*[\'"]([^\'"]+)')),
 ]
 
-MESSAGE_PATTERNS: List[Tuple[str, re.Pattern]] = [
+MESSAGE_PATTERNS: list[tuple[str, re.Pattern]] = [
     ('publish', re.compile(r'\.send\(\s*\{\s*topic\s*:\s*[\'"`]([^\'"`]+)')),
     ('publish', re.compile(r'\b(?:producer|kafka_producer|publisher)\.(?:produce|send|publish)\(\s*[\'"]([^\'"]+)')),
     ('publish', re.compile(r'kafkaTemplate\.send\(\s*"([^"]+)"')),
@@ -323,10 +546,16 @@ MESSAGE_PATTERNS: List[Tuple[str, re.Pattern]] = [
     ('publish', re.compile(r'basic_publish\([^)]*routing_key\s*=\s*[\'"]([^\'"]+)')),
     ('name', re.compile(r'\b(?:Exchange|Queue|Topic|Stream|Subject|Channel)Name\(\s*"([^"]+)"')),
     ('queue', re.compile(r'\.(?:QueueDeclare|ExchangeDeclare|QueueBind|DeclareQueue|DeclareExchange)\(\s*(?:ctx,\s*)?"([^"]+)"')),
-    ('name', re.compile(r'\b(?:topic|queue|exchange|stream|channel)(?:Name|_name|Url|_url|Arn|_arn|Id)?\s*[:=]\s*[\'"`]([A-Za-z][A-Za-z0-9._:/-]{2,80})[\'"`]', re.I)),
+    (
+        'name',
+        re.compile(
+            r'\b(?:topic|queue|exchange|stream|channel)(?:Name|_name|Url|_url|Arn|_arn|Id)?\s*[:=]\s*[\'"`]([A-Za-z][A-Za-z0-9._:/-]{2,80})[\'"`]',
+            re.I,
+        ),
+    ),
 ]
 
-SCHEDULE_PATTERNS: List[re.Pattern] = [
+SCHEDULE_PATTERNS: list[re.Pattern] = [
     re.compile(r'@Scheduled\([^)]*(?:cron\s*=\s*"([^"]+)"|fixed(?:Rate|Delay)\s*=\s*(\w+))'),
     re.compile(r'\bcron\.schedule\(\s*[\'"`]([^\'"`]+)'),
     re.compile(r'\bcrontab\(([^)]*)\)'),
@@ -355,29 +584,41 @@ DOC_NAMES = re.compile(
 )
 
 
-def fullmatch_key(name: str, signals: List[Tuple[str, str]]) -> Optional[str]:
+def compiled(table: list[tuple[str, str]]) -> list[tuple[re.Pattern, str]]:
+    return [(re.compile(pattern), key) for pattern, key in table]
+
+
+DEP_SIGNALS, IMAGE_SIGNALS, ENV_SIGNALS, TF_SIGNALS = (compiled(t) for t in (DEP_SIGNALS, IMAGE_SIGNALS, ENV_SIGNALS, TF_SIGNALS))
+FRAMEWORKS = [(re.compile(pattern), name, role) for pattern, name, role in FRAMEWORKS]
+
+
+def match_key(name: str, signals: list[tuple[re.Pattern, str]]) -> str | None:
+    """The key of the first signal whose pattern matches all of `name`."""
     for pattern, key in signals:
-        if re.fullmatch(pattern, name):
+        if pattern.fullmatch(name):
             return key
     return None
 
 
 # --- Files -------------------------------------------------------------------------------------
 
-def list_files(root: str, max_files: int) -> Tuple[List[str], bool]:
+
+def list_files(root: str, max_files: int) -> tuple[list[str], bool]:
     """Repository-relative paths, git's view when available; True when the list was cut short."""
-    files: List[str] = []
+    files: list[str] = []
     from_git = False
     try:
         out = subprocess.run(
             ['git', '-C', root, 'ls-files', '-co', '--exclude-standard', '-z'],
-            capture_output=True, timeout=30, check=True,
+            capture_output=True,
+            timeout=30,
+            check=True,
         ).stdout.decode('utf-8', 'replace')
         files = [f for f in out.split('\0') if f]
         from_git = True
     except (OSError, subprocess.SubprocessError):
         for dirpath, dirnames, filenames in os.walk(root):
-            dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS and not d.startswith('.') or d in {'.env'}]
+            dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS and not d.startswith('.')]
             rel_dir = os.path.relpath(dirpath, root)
             for name in filenames:
                 files.append(name if rel_dir == '.' else os.path.join(rel_dir, name).replace(os.sep, '/'))
@@ -397,7 +638,7 @@ def list_files(root: str, max_files: int) -> Tuple[List[str], bool]:
     return kept[:max_files], truncated
 
 
-def read_text(root: str, rel: str) -> Optional[str]:
+def read_text(root: str, rel: str) -> str | None:
     path = os.path.join(root, rel)
     try:
         if os.path.islink(path) or os.path.getsize(path) > MAX_READ:
@@ -411,10 +652,14 @@ def read_text(root: str, rel: str) -> Optional[str]:
     return data.decode('utf-8', 'replace')
 
 
-def git_commit(root: str) -> Optional[str]:
+def git_commit(root: str) -> str | None:
     try:
-        return subprocess.run(['git', '-C', root, 'rev-parse', '--short', 'HEAD'], capture_output=True, timeout=10,
-                              check=True).stdout.decode().strip() or None
+        return (
+            subprocess.run(['git', '-C', root, 'rev-parse', '--short', 'HEAD'], capture_output=True, timeout=10, check=True)
+            .stdout.decode()
+            .strip()
+            or None
+        )
     except (OSError, subprocess.SubprocessError):
         return None
 
@@ -433,14 +678,14 @@ def section(text: str, header: str) -> str:
     return m.group(1) if m else ''
 
 
-def parse_manifest(rel: str, text: str) -> Optional[dict]:
+def parse_manifest(rel: str, text: str) -> dict | None:
     """{name, language, deps, workspace_root, entry_hint} — or None for a file that names no unit."""
     base = rel.rsplit('/', 1)[-1]
-    deps: List[str] = []
+    deps: list[str] = []
     name = None
     lang = None
     workspace_root = False
-    scripts: Dict[str, str] = {}
+    scripts: dict[str, str] = {}
     if base == 'package.json' or base.startswith('deno.json'):
         try:
             data = json.loads(text)
@@ -455,7 +700,8 @@ def parse_manifest(rel: str, text: str) -> Optional[dict]:
         dev = list(data['devDependencies'].keys()) if isinstance(data.get('devDependencies'), dict) else []
         # Frameworks often sit in devDependencies of a front end (vite, react…); keep them for role only.
         deps.extend('dev:' + d for d in dev)
-        workspace_root = bool(data.get('workspaces')) or os.path.basename(os.path.dirname(rel) or '.') == '.' and bool(data.get('private')) and not (data.get('dependencies'))
+        # A monorepo's root: it declares workspaces, or is a private top-level package with no dependencies.
+        workspace_root = bool(data.get('workspaces')) or ('/' not in rel and bool(data.get('private')) and not data.get('dependencies'))
         scripts = data.get('scripts') if isinstance(data.get('scripts'), dict) else {}
         lang = 'TypeScript/JavaScript'
     elif base == 'pyproject.toml':
@@ -474,8 +720,8 @@ def parse_manifest(rel: str, text: str) -> Optional[dict]:
         lang = 'Python'
         if '-dev' in base or '-test' in base or 'dev' in base.split('.')[0][12:]:
             return None
-        for line in text.splitlines():
-            line = line.strip()
+        for raw in text.splitlines():
+            line = raw.strip()
             if line and not line.startswith(('#', '-')):
                 deps.append(re.split(r'[<>=!~;\s\[]', line, maxsplit=1)[0])
     elif base == 'Pipfile':
@@ -543,16 +789,17 @@ def parse_manifest(rel: str, text: str) -> Optional[dict]:
         deps.extend(re.findall(r'\{:([a-z0-9_]+),', text))
     # `fastapi[standard]`, `psycopg[binary]`: the extras don't change what the dependency is.
     clean = [re.sub(r'\[.*?\]', '', d).strip().lower() for d in deps if d]
-    return {'name': name, 'language': lang, 'deps': [d for d in clean if d], 'workspace_root': workspace_root,
-            'scripts': scripts}
+    return {'name': name, 'language': lang, 'deps': [d for d in clean if d], 'workspace_root': workspace_root, 'scripts': scripts}
 
 
 # --- Compose, Kubernetes, Terraform, serverless ------------------------------------------------
 
-def parse_compose(text: str) -> Dict[str, dict]:
+
+def parse_compose(text: str) -> dict[str, dict]:
     """services → {image, build, ports, depends_on, env} without a YAML library (PyYAML when present)."""
     try:
         import yaml  # type: ignore
+
         data = yaml.safe_load(text)
         out = {}
         for name, svc in ((data or {}).get('services') or {}).items():
@@ -571,7 +818,7 @@ def parse_compose(text: str) -> Dict[str, dict]:
         return out
     except Exception:  # noqa: BLE001 — no PyYAML, or a file it can't read: fall back to the line reader
         pass
-    services: Dict[str, dict] = {}
+    services: dict[str, dict] = {}
     lines = text.splitlines()
     in_services = False
     svc_indent = None
@@ -607,9 +854,7 @@ def parse_compose(text: str) -> Dict[str, dict]:
             child_indent = None
             if key == 'image':
                 svc['image'] = value
-            elif key == 'build' and value:
-                svc['build'] = value
-            elif key == 'context' and svc['build'] is None:
+            elif (key == 'build' and value) or (key == 'context' and svc['build'] is None):
                 svc['build'] = value
             elif key in ('depends_on', 'ports', 'environment') and value.startswith('['):
                 items = [v.strip().strip('\'"') for v in value.strip('[]').split(',') if v.strip()]
@@ -630,10 +875,12 @@ def parse_compose(text: str) -> Dict[str, dict]:
     return services
 
 
-K8S_KIND = re.compile(r'^kind:\s*(Deployment|StatefulSet|DaemonSet|CronJob|Job|Service|Ingress|HTTPRoute|Gateway|KafkaTopic|Rollout|KnativeService)\s*$', re.M)
+K8S_KIND = re.compile(
+    r'^kind:\s*(Deployment|StatefulSet|DaemonSet|CronJob|Job|Service|Ingress|HTTPRoute|Gateway|KafkaTopic|Rollout|KnativeService)\s*$', re.M
+)
 
 
-def parse_k8s(text: str) -> List[Tuple[str, str, Optional[str]]]:
+def parse_k8s(text: str) -> list[tuple[str, str, str | None]]:
     out = []
     for doc in re.split(r'^---\s*$', text, flags=re.M):
         kind = K8S_KIND.search(doc)
@@ -642,21 +889,27 @@ def parse_k8s(text: str) -> List[Tuple[str, str, Optional[str]]]:
         name = re.search(r'^metadata:\s*\n(?:\s+.*\n)*?\s+name:\s*[\'"]?([^\s\'"]+)', doc, re.M)
         image = re.search(r'^\s+image:\s*[\'"]?([^\s\'"]+)', doc, re.M)
         schedule = re.search(r'^\s+schedule:\s*[\'"]?([^\'"\n]+)', doc, re.M)
-        out.append((kind.group(1), name.group(1) if name else '?', (image.group(1) if image else None) or (schedule.group(1).strip() if schedule else None)))
+        out.append(
+            (
+                kind.group(1),
+                name.group(1) if name else '?',
+                (image.group(1) if image else None) or (schedule.group(1).strip() if schedule else None),
+            )
+        )
     return out
 
 
-def parse_terraform(text: str) -> List[Tuple[str, str]]:
+def parse_terraform(text: str) -> list[tuple[str, str]]:
     return re.findall(r'^\s*resource\s+"([a-z0-9_]+)"\s+"([A-Za-z0-9_-]+)"', text, re.M)
 
 
-def parse_serverless(text: str) -> List[Tuple[str, List[str]]]:
+def parse_serverless(text: str) -> list[tuple[str, list[str]]]:
     """functions with their event kinds, from serverless.yml (line reader) or SAM template.yaml."""
     out = []
     block = re.search(r'^functions:\s*$(.*?)(?=^\S|\Z)', text, re.M | re.S)
     if block:
         current = None
-        events: List[str] = []
+        events: list[str] = []
         for line in block.group(1).splitlines():
             m = re.match(r'^  ([A-Za-z0-9_-]+):\s*$', line)
             if m:
@@ -676,32 +929,41 @@ def parse_serverless(text: str) -> List[Tuple[str, List[str]]]:
 
 # --- The survey --------------------------------------------------------------------------------
 
+
 class Survey:
     def __init__(self, root: str):
         self.root = root
-        self.units: Dict[str, dict] = {}
-        self.ignored_units: List[str] = []
-        self.signals: Dict[str, dict] = {}
-        self.compose: Dict[str, Dict[str, dict]] = {}
-        self.k8s: List[dict] = []
-        self.terraform: List[dict] = []
-        self.serverless: List[dict] = []
-        self.dockerfiles: List[dict] = []
-        self.routes: Dict[str, List[dict]] = defaultdict(list)
+        self.units: dict[str, dict] = {}
+        self.ignored_units: list[str] = []
+        self.signals: dict[str, dict] = {}
+        self.compose: dict[str, dict[str, dict]] = {}
+        self.k8s: list[dict] = []
+        self.terraform: list[dict] = []
+        self.serverless: list[dict] = []
+        self.dockerfiles: list[dict] = []
+        self.routes: dict[str, list[dict]] = defaultdict(list)
         self.route_counts: Counter = Counter()
         self.route_files: Counter = Counter()
-        self.messages: List[dict] = []
-        self.schedules: List[dict] = []
-        self.contracts: List[dict] = []
-        self.docs: List[str] = []
-        self.doc_sizes: Dict[str, int] = {}
-        self.exchange_kinds: List[dict] = []
-        self.nomad: List[dict] = []
-        self.diagrams: List[str] = []
-        self.entries: Dict[str, List[str]] = defaultdict(list)
-        self.env_names: Dict[str, set] = defaultdict(set)
+        self.messages: list[dict] = []
+        self.schedules: list[dict] = []
+        self.contracts: list[dict] = []
+        self.docs: list[str] = []
+        self.doc_sizes: dict[str, int] = {}
+        self.exchange_kinds: list[dict] = []
+        self.nomad: list[dict] = []
+        self.diagrams: list[str] = []
+        self.entries: dict[str, list[str]] = defaultdict(list)
+        self.env_names: dict[str, set] = defaultdict(set)
         self.languages: Counter = Counter()
         self.message_files: Counter = Counter()
+        self.code_capped = False
+
+    def add_route(self, unit: str, rel: str | None, method: str, path: str, at: str) -> None:
+        self.route_counts[unit] += 1
+        if rel:
+            self.route_files[rel] += 1
+        if len(self.routes[unit]) < 10:
+            self.routes[unit].append({'method': method, 'path': path, 'at': at})
 
     def unit_of(self, rel: str) -> str:
         best = ''
@@ -713,33 +975,105 @@ class Survey:
     def note_signal(self, key: str, where: str):
         if key not in KNOWN:
             if key == 'localstack':
-                self.signals.setdefault('localstack', {'name': 'LocalStack (AWS emulation in dev)', 'type': '-', 'category': 'dev', 'where': set()})['where'].add(where)
+                self.signals.setdefault(
+                    'localstack', {'name': 'LocalStack (AWS emulation in dev)', 'type': '-', 'category': 'dev', 'where': set()}
+                )['where'].add(where)
             return
         name, typ, cat = KNOWN[key]
         entry = self.signals.setdefault(key, {'name': name, 'type': typ, 'category': cat, 'where': set()})
         entry['where'].add(where)
 
 
+#: How many source files are read for routes, messaging and settings; past it the survey says so.
+MAX_CODE_FILES = 6000
+
+COMPOSE_FILE = re.compile(r'(^|/)(docker-)?compose[\w.-]*\.ya?ml$', re.I)
+TEST_FILE = re.compile(r'(\.|_)(test|spec)\.\w+$|_test\.go$|Test\.(java|kt)$')
+WORKLOAD_KIND = re.compile(r'^kind:\s*(Deployment|StatefulSet|DaemonSet|CronJob|Job|Rollout)\s*$', re.M)
+K8S_NAME = re.compile(r'^metadata:\s*\n(?:\s+.*\n)*?\s+name:\s*[\'"]?([^\s\'"]+)', re.M)
+FILE_ROUTES = re.compile(r'(^|/)(app|pages)/(.*?)(/route|/page)?\.(ts|tsx|js|jsx)$')
+#: Committed environment templates (.env.example, .env.sample…): names only. A real .env is never read.
+ENV_TEMPLATE = re.compile(r'(^|/)\.env\.(example|sample|template|dist|defaults)$', re.I)
+
+
+def in_non_unit_dir(rel: str) -> bool:
+    return any(part in NON_UNIT_DIRS for part in rel.split('/')[:-1])
+
+
 def survey(root: str, max_files: int) -> dict:
     files, truncated = list_files(root, max_files)
     s = Survey(root)
-
-    # Units first, so every later finding can be attributed to the nearest one.
-    manifests = [f for f in files if MANIFESTS.search(f)]
-    for rel in sorted(manifests, key=lambda p: p.count('/')):
-        text = read_text(root, rel)
-        if text is None:
+    collect_units(s, files)
+    code_read = 0
+    for rel in files:
+        lang = LANGUAGES.get(os.path.splitext(rel)[1].lower())
+        if lang:
+            s.languages[lang] += 1
+        note_layout(s, rel)
+        if scan_config(s, rel):
             continue
-        info = parse_manifest(rel, text)
+        if is_code(rel):
+            if code_read >= MAX_CODE_FILES:
+                s.code_capped = True
+                continue
+            text = read_text(root, rel)
+            if text:
+                code_read += 1
+                scan_code(s, rel, s.unit_of(rel), text, os.path.splitext(rel)[1].lower())
+    scan_file_routes(s, files)
+    for origin, names in sorted(s.env_names.items()):
+        where = origin_file(s, origin)
+        for env in sorted(names):
+            key = match_key(env, ENV_SIGNALS)
+            if key:
+                s.note_signal(key, f'env {env} in {where}' if where else f'env {env}')
+    for unit in s.units.values():
+        for dep in unit['deps']:
+            key = None if dep.startswith('dev:') else match_key(dep, DEP_SIGNALS)
+            if key:
+                s.note_signal(key, f'{unit["path"]} (dep {dep})')
+    return render_data(s, files, truncated)
+
+
+def origin_file(s: Survey, origin: str) -> str | None:
+    """The file a group of setting names was read from, for citing it: a template, a compose file or
+    manifest naming the service, a program's main file, or a unit's manifest."""
+    if origin.startswith('compose:'):
+        name = origin.split(':', 1)[1]
+        found = next((file for file, services in s.compose.items() if name in services), None)
+        return found or next((k['file'] for k in s.k8s if k['name'] == name), None)
+    if origin.startswith('program:'):
+        program = origin.split(':', 1)[1]
+        return next((e for entries in s.entries.values() for e in entries if e.endswith(f'cmd/{program}/main.go')), None)
+    if origin in s.units:
+        return s.units[origin]['manifests'][0] if s.units[origin]['manifests'] else None
+    return origin if origin and origin != '(root)' else None
+
+
+def collect_units(s: Survey, files: list[str]) -> None:
+    """One unit per folder holding a manifest, shallowest first, so later findings attribute to the
+    nearest one."""
+    for rel in sorted((f for f in files if MANIFESTS.search(f)), key=lambda p: p.count('/')):
+        text = read_text(s.root, rel)
+        info = parse_manifest(rel, text) if text is not None else None
         if not info:
             continue
         unit_dir = rel.rsplit('/', 1)[0] if '/' in rel else ''
-        parts = set(unit_dir.split('/')) if unit_dir else set()
-        if parts & NON_UNIT_DIRS:
+        if in_non_unit_dir(rel):
             s.ignored_units.append(unit_dir)
             continue
-        unit = s.units.setdefault(unit_dir, {'path': unit_dir or '.', 'name': None, 'languages': set(), 'deps': set(),
-                                             'manifests': [], 'workspace_root': False, 'scripts': {}})
+        unit = s.units.setdefault(
+            unit_dir,
+            {
+                'path': unit_dir or '.',
+                'name': None,
+                'languages': set(),
+                'deps': set(),
+                'manifests': [],
+                'workspace_root': False,
+                'scripts': {},
+            },
+        )
         unit['name'] = unit['name'] or info['name']
         if info['language']:
             unit['languages'].add(info['language'])
@@ -748,207 +1082,251 @@ def survey(root: str, max_files: int) -> dict:
         unit['workspace_root'] = unit['workspace_root'] or info['workspace_root']
         unit['scripts'].update(info['scripts'] or {})
 
-    code_seen = 0
-    for rel in files:
-        ext = os.path.splitext(rel)[1].lower()
-        base = rel.rsplit('/', 1)[-1]
-        lang = LANGUAGES.get(ext)
-        if lang:
-            s.languages[lang] += 1
-        lower = rel.lower()
-        if rel.endswith('.draftcanvas'):
-            if not any(p in NON_UNIT_DIRS for p in rel.split('/')[:-1]):
-                s.diagrams.append(rel)
-            continue
-        if DOC_NAMES.search(rel) and rel.count('/') <= 4:
-            try:
-                size = os.path.getsize(os.path.join(root, rel))
-            except OSError:
-                size = 0
-            # A placeholder README ("TBD") is no reason to spend a read.
-            if size >= 120:
-                s.docs.append(rel)
-                s.doc_sizes[rel] = size
+
+def note_layout(s: Survey, rel: str) -> None:
+    """Diagrams, docs and entry points: where to look, not what the system is."""
+    if rel.endswith('.draftcanvas'):
+        if not in_non_unit_dir(rel):
+            s.diagrams.append(rel)
+        return
+    if DOC_NAMES.search(rel) and rel.count('/') <= 4:
+        try:
+            size = os.path.getsize(os.path.join(s.root, rel))
+        except OSError:
+            size = 0
+        # A placeholder README ("TBD") is no reason to spend a read.
+        if size >= 120:
+            s.docs.append(rel)
+            s.doc_sizes[rel] = size
+    if ENTRY_NAMES.search(rel) and not in_non_unit_dir(rel):
         unit = s.unit_of(rel)
-        if ENTRY_NAMES.search(rel) and not any(p in NON_UNIT_DIRS for p in rel.split('/')[:-1]):
-            inner = rel[len(unit) + 1:] if unit not in ('', '(root)') else rel
-            # An entry point sits at the unit's top, in src/ or app/, or under cmd/ or bin/ — an index.ts
-            # deep in the tree is a barrel file, not where the program starts.
-            if inner.count('/') <= 1 or re.match(r'(src|app|cmd|bin|lib)/[^/]+(/main\.go)?$', inner) or inner.startswith('config/'):
-                s.entries[unit].append(rel)
+        inner = rel[len(unit) + 1 :] if unit not in ('', '(root)') else rel
+        # An entry point sits at the unit's top, in src/ or app/, or under cmd/ or bin/ — an index.ts
+        # deep in the tree is a barrel file, not where the program starts.
+        if inner.count('/') <= 1 or re.match(r'(src|app|cmd|bin|lib)/[^/]+(/main\.go)?$', inner) or inner.startswith('config/'):
+            s.entries[unit].append(rel)
 
-        if base == 'Dockerfile' or base.startswith('Dockerfile.') or base.endswith('.Dockerfile'):
-            text = read_text(root, rel) or ''
-            froms = re.findall(r'^\s*FROM\s+(?:--platform=\S+\s+)?(\S+)', text, re.M | re.I)
-            ports = re.findall(r'^\s*EXPOSE\s+(.+)$', text, re.M | re.I)
-            s.dockerfiles.append({'path': rel, 'unit': unit, 'from': froms[-1] if froms else None, 'expose': ' '.join(ports).split()})
-            continue
-        if re.search(r'(^|/)(docker-)?compose[\w.-]*\.ya?ml$', lower):
-            text = read_text(root, rel)
-            if text:
-                services = parse_compose(text)
-                if services:
-                    s.compose[rel] = services
-                    for name, svc in services.items():
-                        image = (svc.get('image') or '').split(':', 1)[0].lower()
-                        key = fullmatch_key(image, IMAGE_SIGNALS) if image else None
-                        if key:
-                            s.note_signal(key, f'{rel}:{name}')
-                        for env in svc.get('env') or []:
-                            s.env_names[f'compose:{name}'].add(env)
-            continue
-        if ext in ('.yaml', '.yml'):
-            text = read_text(root, rel)
-            if not text:
-                continue
-            if base in ('serverless.yml', 'serverless.yaml') or 'AWS::Serverless::Function' in text:
-                for name, events in parse_serverless(text):
-                    s.serverless.append({'file': rel, 'function': name, 'events': events})
-                continue
-            if re.search(r'^\s*(openapi|swagger):\s*[\'"]?\d', text, re.M):
-                paths = len(re.findall(r'^  /[^\s:]*:\s*$', text, re.M))
-                s.contracts.append({'kind': 'OpenAPI', 'path': rel, 'detail': f'{paths} paths'})
-                continue
-            if re.search(r'^asyncapi:\s', text, re.M):
-                channels = re.findall(r'^  ([A-Za-z0-9._/{}-]+):\s*$', (re.search(r'^channels:\s*$(.*?)(?=^\S|\Z)', text, re.M | re.S) or re.match('', '')).group(1) or '', re.M)
-                s.contracts.append({'kind': 'AsyncAPI', 'path': rel, 'detail': ', '.join(channels[:8])})
-                continue
-            if 'apiVersion:' in text and 'kind:' in text:
-                for kind, name, extra in parse_k8s(text):
-                    if '{{' in name:
-                        continue  # a Helm template; the rendered manifests or the chart say the same
-                    s.k8s.append({'file': rel, 'kind': kind, 'name': name, 'detail': extra})
-                    if extra and kind in ('Deployment', 'StatefulSet'):
-                        key = fullmatch_key(extra.split(':', 1)[0].lower(), IMAGE_SIGNALS)
-                        if key:
-                            s.note_signal(key, f'{rel}:{name}')
-                # Environment names per workload, so CART_SERVICE_ADDR in the frontend's Deployment
-                # reads as frontend → cartservice.
-                for doc in re.split(r'^---\s*$', text, flags=re.M):
-                    if not re.search(r'^kind:\s*(Deployment|StatefulSet|DaemonSet|CronJob|Job|Rollout)\s*$', doc, re.M):
-                        continue
-                    owner = re.search(r'^metadata:\s*\n(?:\s+.*\n)*?\s+name:\s*[\'"]?([^\s\'"]+)', doc, re.M)
-                    if not owner or '{{' in owner.group(1):
-                        continue
-                    for env in re.findall(r'-\s*name:\s*([A-Z][A-Z0-9_]{2,})\s*$', doc, re.M):
-                        s.env_names[f'compose:{owner.group(1)}'].add(env)
-            if base == 'Chart.yaml':
-                m = re.search(r'^name:\s*(\S+)', text, re.M)
-                s.k8s.append({'file': rel, 'kind': 'HelmChart', 'name': m.group(1) if m else '?', 'detail': None})
-            continue
-        if lower.endswith(('.nomad', '.nomad.hcl')) or (ext == '.hcl' and re.search(r'^\s*job\s+"', read_text(root, rel) or '', re.M)):
-            text = read_text(root, rel) or ''
-            job = re.search(r'^\s*job\s+"([^"]+)"', text, re.M)
-            for task, body in re.findall(r'^\s*task\s+"([^"]+)"\s*\{(.*?)^\s*\}', text, re.M | re.S):
-                image = re.search(r'image\s*=\s*"([^"]+)"', body)
-                s.nomad.append({'file': rel, 'job': job.group(1) if job else '?', 'task': task, 'image': image.group(1) if image else None})
-                if image:
-                    key = fullmatch_key(image.group(1).split(':', 1)[0].lower(), IMAGE_SIGNALS)
-                    if key:
-                        s.note_signal(key, f'{rel}:{task}')
-            if not re.search(r'^\s*task\s+"', text, re.M) and job:
-                s.nomad.append({'file': rel, 'job': job.group(1), 'task': None, 'image': None})
-            continue
-        if ext == '.tf':
-            text = read_text(root, rel) or ''
-            for rtype, rname in parse_terraform(text):
-                typ = fullmatch_key(rtype, TF_SIGNALS)
-                if typ:
-                    s.terraform.append({'file': rel, 'resource': rtype, 'name': rname, 'type': typ})
-            continue
-        if ext == '.proto':
-            text = read_text(root, rel) or ''
-            # grpc-gateway / Google API annotations: the HTTP routes a gateway exposes for these RPCs.
-            unit = s.unit_of(rel)
-            for m in re.finditer(r'\b(get|post|put|patch|delete)\s*:\s*"([^"]+)"', text):
-                s.route_counts[unit] += 1
-                s.route_files[rel] += 1
-                if len(s.routes[unit]) < 10:
-                    s.routes[unit].append({'method': m.group(1).upper(), 'path': m.group(2), 'at': f'{rel}:{text.count(chr(10), 0, m.start()) + 1}'})
-            for svc, body in re.findall(r'service\s+(\w+)\s*\{(.*?)\n\}', text, re.S):
-                rpcs = re.findall(r'rpc\s+(\w+)', body)
-                s.contracts.append({'kind': 'gRPC', 'path': rel, 'detail': f'{svc}: ' + ', '.join(rpcs[:8]) + (' …' if len(rpcs) > 8 else '')})
-            continue
-        if ext in ('.graphql', '.gql'):
-            text = read_text(root, rel) or ''
-            ops = re.findall(r'type\s+(Query|Mutation|Subscription)\s*\{', text)
-            if ops:
-                s.contracts.append({'kind': 'GraphQL', 'path': rel, 'detail': ', '.join(sorted(set(ops)))})
-            continue
-        if re.search(r'(^|/)\.env(\.[\w-]+)?$', rel) and not rel.endswith(('.env', '.env.local', '.env.production', '.env.development')):
-            # Only the committed templates (.env.example, .env.sample, .env.template): names, never values.
-            text = read_text(root, rel) or ''
-            for env in re.findall(r'^\s*(?:export\s+)?([A-Z][A-Z0-9_]{2,})\s*=', text, re.M):
-                s.env_names[f'{rel}'].add(env)
-            continue
 
-        if ext not in CODE_EXTS or code_seen > 6000:
-            continue
-        if any(p in NON_UNIT_DIRS for p in rel.split('/')[:-1]) or re.search(r'(\.|_)(test|spec)\.\w+$|_test\.go$|Test\.(java|kt)$', base) \
-                or TOOLING_FILE.search(base):
-            continue
-        text = read_text(root, rel)
-        if not text:
-            continue
-        code_seen += 1
-        scan_code(s, rel, unit, text, ext)
+def scan_config(s: Survey, rel: str) -> bool:
+    """Reads `rel` if it is configuration (a Dockerfile, compose, Kubernetes, Nomad, Terraform,
+    contracts, an environment template). True when it was, so it isn't read again as code."""
+    base = rel.rsplit('/', 1)[-1]
+    lower = rel.lower()
+    ext = os.path.splitext(lower)[1]
+    if base == 'Dockerfile' or base.startswith('Dockerfile.') or base.endswith('.Dockerfile'):
+        scan_dockerfile(s, rel)
+    elif COMPOSE_FILE.search(lower):
+        scan_compose(s, rel)
+    elif ext in ('.yaml', '.yml'):
+        scan_yaml(s, rel)
+    elif lower.endswith(('.nomad', '.nomad.hcl')):
+        scan_nomad(s, rel, read_text(s.root, rel) or '')
+    elif ext == '.hcl':
+        text = read_text(s.root, rel) or ''
+        if re.search(r'^\s*job\s+"', text, re.M):
+            scan_nomad(s, rel, text)
+    elif ext == '.tf':
+        for rtype, rname in parse_terraform(read_text(s.root, rel) or ''):
+            typ = match_key(rtype, TF_SIGNALS)
+            if typ:
+                s.terraform.append({'file': rel, 'resource': rtype, 'name': rname, 'type': typ})
+    elif ext == '.proto':
+        scan_proto(s, rel)
+    elif ext in ('.graphql', '.gql'):
+        ops = re.findall(r'type\s+(Query|Mutation|Subscription)\s*\{', read_text(s.root, rel) or '')
+        if ops:
+            s.contracts.append({'kind': 'GraphQL', 'path': rel, 'detail': ', '.join(sorted(set(ops)))})
+    elif ENV_TEMPLATE.search(rel):
+        for env in re.findall(r'^\s*(?:export\s+)?([A-Z][A-Z0-9_]{2,})\s*=', read_text(s.root, rel) or '', re.M):
+            s.env_names[rel].add(env)
+    else:
+        return False
+    return True
 
-    # Next.js / file-system routing.
+
+def is_code(rel: str) -> bool:
+    base = rel.rsplit('/', 1)[-1]
+    return (
+        os.path.splitext(base)[1].lower() in CODE_EXTS
+        and not in_non_unit_dir(rel)
+        and not TEST_FILE.search(base)
+        and not TOOLING_FILE.search(base)
+    )
+
+
+def scan_dockerfile(s: Survey, rel: str) -> None:
+    text = read_text(s.root, rel) or ''
+    froms = re.findall(r'^\s*FROM\s+(?:--platform=\S+\s+)?(\S+)', text, re.M | re.I)
+    ports = re.findall(r'^\s*EXPOSE\s+(.+)$', text, re.M | re.I)
+    s.dockerfiles.append({'path': rel, 'unit': s.unit_of(rel), 'from': froms[-1] if froms else None, 'expose': ' '.join(ports).split()})
+
+
+def scan_compose(s: Survey, rel: str) -> None:
+    services = parse_compose(read_text(s.root, rel) or '')
+    if not services:
+        return
+    s.compose[rel] = services
+    for name, svc in services.items():
+        image = (svc.get('image') or '').split(':', 1)[0].lower()
+        key = match_key(image, IMAGE_SIGNALS) if image else None
+        if key:
+            s.note_signal(key, f'{rel}:{name}')
+        for env in svc.get('env') or []:
+            s.env_names[f'compose:{name}'].add(env)
+
+
+def scan_yaml(s: Survey, rel: str) -> None:
+    text = read_text(s.root, rel)
+    if not text:
+        return
+    base = rel.rsplit('/', 1)[-1]
+    if base in ('serverless.yml', 'serverless.yaml') or 'AWS::Serverless::Function' in text:
+        s.serverless.extend({'file': rel, 'function': name, 'events': events} for name, events in parse_serverless(text))
+        return
+    if re.search(r'^\s*(openapi|swagger):\s*[\'"]?\d', text, re.M):
+        paths = len(re.findall(r'^  /[^\s:]*:\s*$', text, re.M))
+        s.contracts.append({'kind': 'OpenAPI', 'path': rel, 'detail': f'{paths} paths'})
+        return
+    if re.search(r'^asyncapi:\s', text, re.M):
+        block = re.search(r'^channels:\s*$(.*?)(?=^\S|\Z)', text, re.M | re.S)
+        channels = re.findall(r'^  ([A-Za-z0-9._/{}-]+):\s*$', block.group(1), re.M) if block else []
+        s.contracts.append({'kind': 'AsyncAPI', 'path': rel, 'detail': ', '.join(channels[:8])})
+        return
+    if 'apiVersion:' in text and 'kind:' in text:
+        scan_k8s(s, rel, text)
+    if base == 'Chart.yaml':
+        m = re.search(r'^name:\s*(\S+)', text, re.M)
+        s.k8s.append({'file': rel, 'kind': 'HelmChart', 'name': m.group(1) if m else '?', 'detail': None})
+
+
+def scan_k8s(s: Survey, rel: str, text: str) -> None:
+    for kind, name, extra in parse_k8s(text):
+        if '{{' in name:
+            continue  # a Helm template; the rendered manifests or the chart say the same
+        s.k8s.append({'file': rel, 'kind': kind, 'name': name, 'detail': extra})
+        if extra and kind in ('Deployment', 'StatefulSet'):
+            key = match_key(extra.split(':', 1)[0].lower(), IMAGE_SIGNALS)
+            if key:
+                s.note_signal(key, f'{rel}:{name}')
+    # Environment names per workload, so CART_SERVICE_ADDR in the frontend's Deployment reads as
+    # frontend → cartservice.
+    for doc in re.split(r'^---\s*$', text, flags=re.M):
+        owner = K8S_NAME.search(doc) if WORKLOAD_KIND.search(doc) else None
+        if owner and '{{' not in owner.group(1):
+            s.env_names[f'compose:{owner.group(1)}'].update(re.findall(r'-\s*name:\s*([A-Z][A-Z0-9_]{2,})\s*$', doc, re.M))
+
+
+def scan_nomad(s: Survey, rel: str, text: str) -> None:
+    job = re.search(r'^\s*job\s+"([^"]+)"', text, re.M)
+    tasks = re.findall(r'^\s*task\s+"([^"]+)"\s*\{(.*?)^\s*\}', text, re.M | re.S)
+    for task, body in tasks:
+        image = re.search(r'image\s*=\s*"([^"]+)"', body)
+        s.nomad.append({'file': rel, 'job': job.group(1) if job else '?', 'task': task, 'image': image.group(1) if image else None})
+        key = match_key(image.group(1).split(':', 1)[0].lower(), IMAGE_SIGNALS) if image else None
+        if key:
+            s.note_signal(key, f'{rel}:{task}')
+    if job and not tasks:
+        s.nomad.append({'file': rel, 'job': job.group(1), 'task': None, 'image': None})
+
+
+def scan_proto(s: Survey, rel: str) -> None:
+    text = read_text(s.root, rel) or ''
+    unit = s.unit_of(rel)
+    # grpc-gateway / Google API annotations: the HTTP routes a gateway exposes for these RPCs.
+    for m in re.finditer(r'\b(get|post|put|patch|delete)\s*:\s*"([^"]+)"', text):
+        s.add_route(unit, rel, m.group(1).upper(), m.group(2), f'{rel}:{line_of(text, m.start())}')
+    for svc, body in re.findall(r'service\s+(\w+)\s*\{(.*?)\n\}', text, re.S):
+        rpcs = re.findall(r'rpc\s+(\w+)', body)
+        s.contracts.append({'kind': 'gRPC', 'path': rel, 'detail': f'{svc}: ' + ', '.join(rpcs[:8]) + (' …' if len(rpcs) > 8 else '')})
+
+
+def scan_file_routes(s: Survey, files: list[str]) -> None:
+    """Next.js-style routing, where the file's path is the route."""
     for rel in files:
-        m = re.search(r'(^|/)(app|pages)/(.*?)(/route|/page)?\.(ts|tsx|js|jsx)$', rel)
+        m = FILE_ROUTES.search(rel)
         if m and (m.group(4) == '/route' or '/api/' in '/' + m.group(3) + '/'):
-            unit = s.unit_of(rel)
             path = '/' + re.sub(r'(^|/)(index|route)$', '', m.group(3)).replace('(', '').replace(')', '')
-            s.route_counts[unit] += 1
-            if len(s.routes[unit]) < 8:
-                s.routes[unit].append({'method': 'ANY', 'path': path, 'at': rel})
-
-    for name, env_set in list(s.env_names.items()):
-        for env in env_set:
-            key = fullmatch_key(env, ENV_SIGNALS)
-            if key:
-                s.note_signal(key, f'env {env}')
-
-    for path, unit in s.units.items():
-        for dep in unit['deps']:
-            if dep.startswith('dev:'):
-                continue
-            key = fullmatch_key(dep, DEP_SIGNALS)
-            if key:
-                s.note_signal(key, f'{unit["path"]} (dep {dep})')
-        # boto3 is every AWS service at once: name the ones the code reaches.
-    return render_data(s, files, truncated)
+            s.add_route(s.unit_of(rel), None, 'ANY', path, rel)
 
 
-def scan_code(s: Survey, rel: str, unit: str, text: str, ext: str):
-    lines = None
+def line_of(text: str, pos: int) -> int:
+    return text.count('\n', 0, pos) + 1
+
+
+JS_EXTS = ('.ts', '.js', '.mjs', '.cjs', '.mts', '.tsx', '.jsx')
+#: Which route patterns apply to which files: (pattern kind, applies to (rel, ext, text)).
+ROUTE_APPLIES = {
+    'js': lambda rel, ext, text: ext in JS_EXTS,
+    'nest': lambda rel, ext, text: '@Controller' in text,
+    'py': lambda rel, ext, text: ext == '.py',
+    'django': lambda rel, ext, text: rel.endswith('urls.py'),
+    'spring': lambda rel, ext, text: ext in ('.java', '.kt'),
+    'go': lambda rel, ext, text: ext == '.go',
+    'rails': lambda rel, ext, text: rel.endswith('routes.rb'),
+    'dotnet': lambda rel, ext, text: ext == '.cs',
+    'laravel': lambda rel, ext, text: ext == '.php',
+}
+AWS_JS_CLIENTS = {
+    'S3': 's3',
+    'SQS': 'sqs',
+    'SNS': 'sns',
+    'DynamoDB': 'dynamodb',
+    'Kinesis': 'kinesis',
+    'SES': 'ses',
+    'EventBridge': 'eventbridge',
+}
+AWS_PY_CLIENTS = {
+    's3': 's3',
+    'sqs': 'sqs',
+    'sns': 'sns',
+    'dynamodb': 'dynamodb',
+    'kinesis': 'kinesis',
+    'ses': 'ses',
+    'sesv2': 'ses',
+    'events': 'eventbridge',
+    'cognito-idp': 'cognito',
+}
+ADDRESS_NAME = re.compile(r'["\']([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*_(?:ADDR|ADDRESS|URL|URI|HOST|ENDPOINT))["\']')
+
+
+def scan_code(s: Survey, rel: str, unit: str, text: str, ext: str) -> None:
     # One module can build several programs (Go's cmd/<name>/main.go): code under cmd/<name>/ speaks
     # for that program, not for the module as a whole.
     program = re.search(r'(?:^|/)cmd/([^/]+)/', rel)
     owner = program.group(1) if program else unit
     env_key = f'program:{program.group(1)}' if program else unit
+    scan_routes(s, rel, unit, text, ext)
+    if any(word in text for word in ('topic', 'Topic', 'queue', 'Queue', 'publish', 'subscribe', 'Listener', 'exchange', 'stream')):
+        scan_messaging(s, rel, owner, text)
+    scan_exchange_kinds(s, rel, text)
+    if any(word in text for word in ('cron', 'Cron', 'Scheduled', 'schedule', 'crontab', 'repeat')):
+        for pattern in SCHEDULE_PATTERNS:
+            for m in pattern.finditer(text):
+                if len(s.schedules) >= 30:
+                    break
+                expr = next((g for g in m.groups() if g), m.group(0))
+                s.schedules.append({'expr': expr.strip()[:60], 'unit': unit, 'at': f'{rel}:{line_of(text, m.start())}'})
+    for m in ENV_IN_CODE.finditer(text):
+        name = next((g for g in m.groups() if g), None)
+        if name:
+            s.env_names[env_key].add(name)
+    # Address-shaped names read through a project's own helper (mustMapEnv(&x, "CART_SERVICE_ADDR")).
+    s.env_names[env_key].update(ADDRESS_NAME.findall(text))
+    # boto3 and the v2 JavaScript SDK reach every AWS service through one dependency: name the ones used.
+    if ext == '.py' and 'boto3' in text:
+        for client in re.findall(r'\.(?:client|resource)\(\s*[\'"]([a-z0-9-]+)[\'"]', text):
+            if client in AWS_PY_CLIENTS:
+                s.note_signal(AWS_PY_CLIENTS[client], f'{rel} (boto3 {client})')
+    if ext in JS_EXTS and ("from 'aws-sdk'" in text or "require('aws-sdk')" in text):
+        for client in re.findall(r'new\s+(?:AWS\.)?(S3|SQS|SNS|DynamoDB|Kinesis|SES|EventBridge)\(', text):
+            s.note_signal(AWS_JS_CLIENTS[client], f'{rel} (aws-sdk {client})')
 
-    def line_of(pos: int) -> int:
-        return text.count('\n', 0, pos) + 1
 
+def scan_routes(s: Survey, rel: str, unit: str, text: str, ext: str) -> None:
     for kind, pattern in ROUTE_PATTERNS:
-        if kind == 'django' and not rel.endswith('urls.py'):
+        if not ROUTE_APPLIES[kind](rel, ext, text):
             continue
-        if kind == 'rails' and not rel.endswith('routes.rb'):
-            continue
-        if kind == 'nest' and '@Controller' not in text:
-            continue
-        if kind == 'go' and ext != '.go':
-            continue
-        if kind == 'js' and ext not in ('.ts', '.js', '.mjs', '.cjs', '.mts', '.tsx', '.jsx'):
-            continue
-        if kind == 'py' and ext != '.py':
-            continue
-        if kind == 'spring' and ext not in ('.java', '.kt'):
-            continue
-        flags = re.M if kind == 'rails' else 0
-        regex = re.compile(pattern.pattern, flags) if flags else pattern
-        for m in regex.finditer(text):
+        for m in pattern.finditer(text):
             groups = [g for g in m.groups() if g is not None]
             if len(groups) < 2:
                 continue
@@ -960,84 +1338,58 @@ def scan_code(s: Survey, rel: str, unit: str, text: str, ext: str):
             if kind == 'nest':
                 prefix = re.search(r'@Controller\(\s*[\'"]?([^\'")]*)', text)
                 path = '/' + '/'.join(p.strip('/') for p in ((prefix.group(1) if prefix else ''), path) if p.strip('/'))
-            s.route_counts[unit] += 1
-            s.route_files[rel] += 1
-            if len(s.routes[unit]) < 10:
-                s.routes[unit].append({'method': method.replace('MAPPING', '').replace('HANDLEFUNC', 'ANY').replace('HANDLE', 'ANY'), 'path': path, 'at': f'{rel}:{line_of(m.start())}'})
+            method = {'HANDLEFUNC': 'ANY', 'HANDLE': 'ANY', 'REQUEST': 'ANY'}.get(method, method)
+            s.add_route(unit, rel, method, path, f'{rel}:{line_of(text, m.start())}')
 
-    if any(word in text for word in ('topic', 'Topic', 'queue', 'Queue', 'publish', 'subscribe', 'Listener', 'exchange', 'stream')):
-        for kind, pattern in MESSAGE_PATTERNS:
-            for m in pattern.finditer(text):
-                name = next((g for g in m.groups() if g), None)
-                if not name or name.startswith(('http', '/', '.')) or ' ' in name:
-                    continue
-                # The catch-all `topic = "…"` pattern only trusts names shaped like real channel names
-                # (orders.placed, billing-queue, arn:…), never a type word such as "queue" or "Topic".
-                if kind == 'name' and not re.fullmatch(r'(arn:.*|[a-z0-9]+(?:[._:/-][a-z0-9{}]+)+)', name):
-                    continue
-                side = kind
-                if kind in ('name', 'queue'):
-                    # Which side of the channel this code is on, from the words just before the name.
-                    # The nearest word wins: a publisher and a consumer are often configured lines apart.
-                    before = text[max(0, m.start() - 160):m.start()].lower()
-                    consume = max((x.end() for x in re.finditer(r'consum|subscri|listen|receiv|handler', before)), default=-1)
-                    publish = max((x.end() for x in re.finditer(r'publish|produc|send|emit', before)), default=-1)
-                    side = 'declare' if consume == publish == -1 else 'consume' if consume > publish else 'publish'
-                s.message_files[rel] += 1
-                if len(s.messages) < 60:
-                    s.messages.append({'kind': side, 'name': name, 'unit': owner, 'at': f'{rel}:{line_of(m.start())}'})
 
-    # RabbitMQ exchange types decide queue (direct, one consumer each) versus topic (fanout/topic).
+def scan_messaging(s: Survey, rel: str, owner: str, text: str) -> None:
+    for kind, pattern in MESSAGE_PATTERNS:
+        for m in pattern.finditer(text):
+            name = next((g for g in m.groups() if g), None)
+            if not name or name.startswith(('http', '/', '.')) or ' ' in name:
+                continue
+            # The catch-all `topic = "…"` pattern only trusts names shaped like real channel names
+            # (orders.placed, billing-queue, arn:…), never a type word such as "queue" or "Topic".
+            if kind == 'name' and not re.fullmatch(r'(arn:.*|[a-z0-9]+(?:[._:/-][a-z0-9{}]+)+)', name):
+                continue
+            side = kind
+            if kind in ('name', 'queue'):
+                # Which side of the channel this code is on, from the words just before the name. The
+                # nearest word wins: a publisher and a consumer are often configured lines apart.
+                before = text[max(0, m.start() - 160) : m.start()].lower()
+                consume = max((x.end() for x in re.finditer(r'consum|subscri|listen|receiv|handler', before)), default=-1)
+                publish = max((x.end() for x in re.finditer(r'publish|produc|send|emit', before)), default=-1)
+                side = 'declare' if consume == publish == -1 else 'consume' if consume > publish else 'publish'
+            s.message_files[rel] += 1
+            if len(s.messages) < 60:
+                s.messages.append({'kind': side, 'name': name, 'unit': owner, 'at': f'{rel}:{line_of(text, m.start())}'})
+
+
+def scan_exchange_kinds(s: Survey, rel: str, text: str) -> None:
+    # RabbitMQ exchange types decide queue (direct: one consumer each) versus topic (fanout, topic).
     if 'xchange' in text:
-        for i, line in enumerate(text.splitlines(), 1):
+        for number, line in enumerate(text.splitlines(), 1):
             if 'xchange' in line or 'ExchangeType' in line:
                 for kind in re.findall(r'[\'"](fanout|direct|topic|headers)[\'"]', line):
                     if len(s.exchange_kinds) < 12:
-                        s.exchange_kinds.append({'kind': kind, 'at': f'{rel}:{i}'})
-
-    if any(word in text for word in ('cron', 'Cron', 'Scheduled', 'schedule', 'crontab', 'repeat')):
-        for pattern in SCHEDULE_PATTERNS:
-            for m in pattern.finditer(text):
-                expr = next((g for g in m.groups() if g), m.group(0))
-                if len(s.schedules) < 30:
-                    s.schedules.append({'expr': expr.strip()[:60], 'unit': unit, 'at': f'{rel}:{line_of(m.start())}'})
-
-    for m in ENV_IN_CODE.finditer(text):
-        name = next((g for g in m.groups() if g), None)
-        if name:
-            s.env_names[env_key].add(name)
-    # Address-shaped names read through a project's own helper (mustMapEnv(&x, "CART_SERVICE_ADDR")).
-    for name in re.findall(r'["\']([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*_(?:ADDR|ADDRESS|URL|URI|HOST|ENDPOINT))["\']', text):
-        s.env_names[env_key].add(name)
-
-    if ext == '.py' and ('boto3' in text or 'aioboto3' in text):
-        for svc in re.findall(r'\.(?:client|resource)\(\s*[\'"]([a-z0-9-]+)[\'"]', text):
-            key = {'s3': 's3', 'sqs': 'sqs', 'sns': 'sns', 'dynamodb': 'dynamodb', 'kinesis': 'kinesis', 'ses': 'ses', 'sesv2': 'ses',
-                   'events': 'eventbridge', 'cognito-idp': 'cognito'}.get(svc)
-            if key:
-                s.note_signal(key, f'{rel} (boto3 {svc})')
-    if ext in ('.ts', '.js', '.mjs') and "from 'aws-sdk'" in text or "require('aws-sdk')" in text:
-        for svc in re.findall(r'new\s+(?:AWS\.)?(S3|SQS|SNS|DynamoDB|Kinesis|SES|EventBridge)\(', text):
-            s.note_signal({'S3': 's3', 'SQS': 'sqs', 'SNS': 'sns', 'DynamoDB': 'dynamodb', 'Kinesis': 'kinesis', 'SES': 'ses',
-                           'EventBridge': 'eventbridge'}[svc], f'{rel} (aws-sdk {svc})')
-    del lines
+                        s.exchange_kinds.append({'kind': kind, 'at': f'{rel}:{number}'})
 
 
-def unit_role(unit: dict, routes: int, has_docker: bool, entries: List[str]) -> Tuple[str, List[str]]:
+def unit_role(unit: dict, routes: int, has_docker: bool, entries: list[str]) -> tuple[str, list[str]]:
     """A suggested element type for the unit, and the frameworks behind the guess."""
     found = []
     roles = Counter()
-    for dep in unit['deps']:
+    for dep in sorted(unit['deps']):
         clean = dep[4:] if dep.startswith('dev:') else dep
         for pattern, name, role in FRAMEWORKS:
-            if re.fullmatch(pattern, clean):
+            if pattern.fullmatch(clean):
                 if dep.startswith('dev:') and role not in ('web', 'mobile', 'desktop'):
                     continue
                 if name not in found:
                     found.append(name)
                 roles[role] += 1
     deps = {d for d in unit['deps'] if not d.startswith('dev:')}
-    worker = any(fullmatch_key(d, DEP_SIGNALS) in ('celery', 'sidekiq', 'rq', 'bullmq', 'kafka', 'sqs', 'rabbitmq', 'temporal') for d in deps)
+    worker = any(match_key(d, DEP_SIGNALS) in ('celery', 'sidekiq', 'rq', 'bullmq', 'kafka', 'sqs', 'rabbitmq', 'temporal') for d in deps)
     if unit['workspace_root']:
         return 'workspace root (not drawn)', found
     if roles['mobile']:
@@ -1059,7 +1411,7 @@ def unit_role(unit: dict, routes: int, has_docker: bool, entries: List[str]) -> 
     return 'service', found
 
 
-def render_data(s: Survey, files: List[str], truncated: bool) -> dict:
+def render_data(s: Survey, files: list[str], truncated: bool) -> dict:
     docker_units = Counter(d['unit'] for d in s.dockerfiles)
     units = []
     for path, unit in sorted(s.units.items(), key=lambda kv: kv[0]):
@@ -1067,28 +1419,40 @@ def render_data(s: Survey, files: List[str], truncated: bool) -> dict:
         routes = s.route_counts.get(key, 0) + (s.route_counts.get('(root)', 0) if path == '' else 0)
         entries = s.entries.get(key, [])[:4]
         role, frameworks = unit_role(unit, routes, docker_units.get(key, 0) > 0, entries)
-        units.append({
-            'path': unit['path'], 'name': unit['name'] or (os.path.basename(path) if path else os.path.basename(os.path.abspath(s.root))),
-            'languages': sorted(unit['languages']), 'suggested_type': role, 'frameworks': frameworks,
-            'entry_points': entries,
-            'binaries': sorted({m.group(1) for e in s.entries.get(key, []) for m in [re.search(r'(?:^|/)cmd/([^/]+)/main\.go$', e)] if m}),
-            'dockerfiles': [d['path'] for d in s.dockerfiles if d['unit'] == key],
-            'exposes': sorted({p for d in s.dockerfiles if d['unit'] == key for p in d['expose']}),
-            'routes': routes, 'route_sample': s.routes.get(key, []),
-            'start_scripts': {k: v for k, v in unit['scripts'].items() if k in ('start', 'serve', 'dev', 'worker')},
-            'manifests': unit['manifests'],
-        })
+        units.append(
+            {
+                'path': unit['path'],
+                'name': unit['name'] or (os.path.basename(path) if path else os.path.basename(os.path.abspath(s.root))),
+                'languages': sorted(unit['languages']),
+                'suggested_type': role,
+                'frameworks': frameworks,
+                'entry_points': entries,
+                'binaries': sorted(
+                    {m.group(1) for e in s.entries.get(key, []) for m in [re.search(r'(?:^|/)cmd/([^/]+)/main\.go$', e)] if m}
+                ),
+                'dockerfiles': [d['path'] for d in s.dockerfiles if d['unit'] == key],
+                'exposes': sorted({p for d in s.dockerfiles if d['unit'] == key for p in d['expose']}),
+                'routes': routes,
+                'route_sample': s.routes.get(key, []),
+                'start_scripts': {k: v for k, v in unit['scripts'].items() if k in ('start', 'serve', 'dev', 'worker')},
+                'manifests': unit['manifests'],
+            }
+        )
 
     links = likely_links(s, units)
 
     signals = []
     for key, sig in sorted(s.signals.items(), key=lambda kv: (kv[1]['category'], kv[1]['name'])):
-        signals.append({'key': key, 'name': sig['name'], 'type': sig['type'], 'category': sig['category'], 'evidence': sorted(sig['where'])[:6]})
+        signals.append(
+            {'key': key, 'name': sig['name'], 'type': sig['type'], 'category': sig['category'], 'evidence': sorted(sig['where'])[:6]}
+        )
 
-    read_next: List[Tuple[int, str, str]] = []
+    read_next: list[tuple[int, str, str]] = []
+
     def add(score: int, path: str, why: str):
         if path not in {p for _, p, _ in read_next}:
             read_next.append((score, path, why))
+
     for d in s.docs:
         low = d.lower()
         if re.search(r'adr|decision|architecture|design', low):
@@ -1102,8 +1466,10 @@ def render_data(s: Survey, files: List[str], truncated: bool) -> dict:
     for c in s.contracts[:6]:
         add(80, c['path'], f'{c["kind"]} contract')
     for unit in units:
-        programs = [e for e in s.entries.get('' if unit['path'] == '.' else unit['path'], []) if re.search(r'(?:^|/)cmd/[^/]+/main\.go$', e)]
-        for e in (programs[:8] if len(programs) > 1 else unit['entry_points'][:2]):
+        programs = [
+            e for e in s.entries.get('' if unit['path'] == '.' else unit['path'], []) if re.search(r'(?:^|/)cmd/[^/]+/main\.go$', e)
+        ]
+        for e in programs[:8] if len(programs) > 1 else unit['entry_points'][:2]:
             add(85, e, f'entry point of {re.search(r"cmd/([^/]+)/", e).group(1) if len(programs) > 1 else unit["name"]}')
     for rel, n in s.route_files.most_common(6):
         add(75 + min(n, 10), rel, f'{n} route handlers')
@@ -1121,6 +1487,7 @@ def render_data(s: Survey, files: List[str], truncated: bool) -> dict:
         'commit': git_commit(s.root),
         'files_scanned': len(files),
         'truncated': truncated,
+        'code_files_capped': s.code_capped,
         'languages': [{'language': k, 'files': v} for k, v in s.languages.most_common(8)],
         'units': units,
         'ignored_units': s.ignored_units[:20],
@@ -1143,16 +1510,21 @@ def render_data(s: Survey, files: List[str], truncated: bool) -> dict:
 
 
 # Test runners, local admin UIs and mail catchers: real services in compose, not part of the system.
-DEV_SERVICE = re.compile(r'(playwright|cypress|selenium|e2e|tests?|adminer|pgadmin|phpmyadmin|mailpit|mailhog|maildev|localstack'
-                         r'|redis-?commander|kafka-?ui|kafdrop|portainer|prometheus|grafana|jaeger|zipkin|otel|loadgen.*|locust)', re.I)
-TOOLING_FILE = re.compile(r'^(playwright|vitest|jest|cypress|karma|webpack|rollup|babel|eslint|prettier|tailwind|postcss)\.config\.\w+$|^vite\.config\.\w+$')
+DEV_SERVICE = re.compile(
+    r'(playwright|cypress|selenium|e2e|tests?|adminer|pgadmin|phpmyadmin|mailpit|mailhog|maildev|localstack'
+    r'|redis-?commander|kafka-?ui|kafdrop|portainer|prometheus|grafana|jaeger|zipkin|otel|loadgen.*|locust)',
+    re.I,
+)
+TOOLING_FILE = re.compile(
+    r'^(playwright|vitest|jest|cypress|karma|webpack|rollup|babel|eslint|prettier|tailwind|postcss)\.config\.\w+$|^vite\.config\.\w+$'
+)
 
 
 def is_dev_service(name: str, svc: dict) -> bool:
     return bool(DEV_SERVICE.fullmatch(name) or DEV_SERVICE.search((svc.get('image') or '').split(':', 1)[0].rsplit('/', 1)[-1]))
 
 
-def unique(items: List[dict], key) -> List[dict]:
+def unique(items: list[dict], key) -> list[dict]:
     seen = set()
     out = []
     for item in items:
@@ -1163,8 +1535,31 @@ def unique(items: List[dict], key) -> List[dict]:
     return out
 
 
-ENV_NOISE = {'ADDR', 'ADDRESS', 'URL', 'URI', 'HOST', 'HOSTNAME', 'PORT', 'ENDPOINT', 'BASE', 'API', 'GRPC', 'HTTP', 'HTTPS',
-             'SERVICE', 'SVC', 'CLIENT', 'TARGET', 'SERVER', 'DSN', 'CONN', 'CONNECTION', 'STRING', 'NAME'}
+ENV_NOISE = {
+    'ADDR',
+    'ADDRESS',
+    'URL',
+    'URI',
+    'HOST',
+    'HOSTNAME',
+    'PORT',
+    'ENDPOINT',
+    'BASE',
+    'API',
+    'GRPC',
+    'HTTP',
+    'HTTPS',
+    'SERVICE',
+    'SVC',
+    'CLIENT',
+    'TARGET',
+    'SERVER',
+    'DSN',
+    'CONN',
+    'CONNECTION',
+    'STRING',
+    'NAME',
+}
 
 
 def stem(name: str) -> str:
@@ -1175,10 +1570,19 @@ def stem(name: str) -> str:
     return re.sub(r'(service|svc|api|server)$', '', joined) or joined
 
 
-def likely_links(s: Survey, units: List[dict]) -> List[dict]:
-    """Unit → unit (or → store) connections the configuration already states: an environment variable
-    naming another unit (CART_SERVICE_ADDR in the frontend), and compose's depends_on."""
-    targets: Dict[str, str] = {}
+def drawn_signal(s: Survey, key: str | None) -> str | None:
+    """The display name of a detected store, broker or provider that becomes an element of its own."""
+    found = s.signals.get(key) if key else None
+    if not found or found['type'] in ('-', 'worker') or found['category'] not in ('store', 'messaging', 'external', 'edge'):
+        return None
+    return found['name']
+
+
+def likely_links(s: Survey, units: list[dict]) -> list[dict]:
+    """Connections the configuration already states: an environment variable naming another unit
+    (CART_SERVICE_ADDR in the frontend) or a store, broker or provider (REDIS_ADDR), a unit's driver or
+    SDK dependency (pg, stripe), and compose's depends_on."""
+    targets: dict[str, str] = {}
     for u in units:
         if u['suggested_type'].startswith(('workspace', 'library')):
             continue
@@ -1187,29 +1591,45 @@ def likely_links(s: Survey, units: List[dict]) -> List[dict]:
                 targets.setdefault(stem(candidate), u['name'])
         for b in u['binaries']:
             targets.setdefault(stem(b), b)
+    runs: dict[str, str | None] = {}
     for services in s.compose.values():
-        for name in services:
+        for name, svc in services.items():
             targets.setdefault(stem(name), name)
-    out: Dict[Tuple[str, str], dict] = {}
+            image = (svc.get('image') or '').split(':', 1)[0].lower()
+            runs[name] = runs.get(name) or (match_key(image, IMAGE_SIGNALS) if image else None)
+    out: dict[tuple[str, str], dict] = {}
 
     def add(src: str, dst: str, via: str):
         if src and dst and src != dst:
-            out.setdefault((src, dst), {'from': src, 'to': dst, 'via': []})['via'].append(via)
+            entry = out.setdefault((src, dst), {'from': src, 'to': dst, 'via': []})
+            if via not in entry['via']:
+                entry['via'].append(via)
 
     # A module that builds several programs speaks through each program, never as one unit: its shared
     # code's settings belong to whichever program reads them, which a survey can't tell.
     by_path = {('' if u['path'] == '.' else u['path']): u['name'] for u in units if len(u['binaries']) <= 1}
-    for key, names in s.env_names.items():
+    for key, names in sorted(s.env_names.items()):
         if key.startswith(('compose:', 'program:')):
             source = key.split(':', 1)[1]
         elif key in by_path:
             source = by_path[key]
         else:
             continue
-        for env in names:
-            target = targets.get(stem(env))
-            if target:
+        for env in sorted(names):
+            signal = match_key(env, ENV_SIGNALS)
+            target = targets.get(stem(env)) or drawn_signal(s, signal)
+            # A compose service running Postgres reads POSTGRES_DB about itself, not about a store.
+            if target and not (signal and runs.get(source) == signal):
                 add(source, target, f'env {env}')
+    # A driver or SDK in a unit's own dependencies: that unit talks to the store or provider.
+    for u in units:
+        if len(u['binaries']) > 1 or u['suggested_type'].startswith(('workspace', 'library')):
+            continue
+        raw = s.units.get('' if u['path'] == '.' else u['path'], {}).get('deps', set())
+        for dep in sorted(d for d in raw if not d.startswith('dev:')):
+            target = drawn_signal(s, match_key(dep, DEP_SIGNALS))
+            if target:
+                add(u['name'], target, f'dep {dep}')
     dev = set()
     for file, services in s.compose.items():
         for name, svc in services.items():
@@ -1218,10 +1638,11 @@ def likely_links(s: Survey, units: List[dict]) -> List[dict]:
                 continue
             for dep in svc.get('depends_on') or []:
                 add(name, dep, f'depends_on ({file})')
-    return sorted((l for l in out.values() if l['from'] not in dev and l['to'] not in dev), key=lambda l: (l['from'], l['to']))[:60]
+    kept = (link for link in out.values() if link['from'] not in dev and link['to'] not in dev)
+    return sorted(kept, key=lambda link: (link['from'], link['to']))[:60]
 
 
-def dedupe_messages(messages: List[dict]) -> List[dict]:
+def dedupe_messages(messages: list[dict]) -> list[dict]:
     seen = {}
     for m in messages:
         key = (m['kind'], m['name'], m['unit'], m['at'].rsplit(':', 1)[0])
@@ -1232,16 +1653,19 @@ def dedupe_messages(messages: List[dict]) -> List[dict]:
 
 # --- Output ------------------------------------------------------------------------------------
 
+
 def render_text(d: dict) -> str:
-    out: List[str] = []
+    out: list[str] = []
     w = out.append
     head = f'# Repository survey: {d["repository"]}'
     if d['commit']:
         head += f'  (commit {d["commit"]})'
     w(head)
-    total = sum(l['files'] for l in d['languages']) or 1
-    langs = ', '.join(f'{l["language"]} {round(100 * l["files"] / total)}%' for l in d['languages'][:6])
+    total = sum(lang['files'] for lang in d['languages']) or 1
+    langs = ', '.join(f'{lang["language"]} {round(100 * lang["files"] / total)}%' for lang in d['languages'][:6])
     w(f'{d["files_scanned"]} files{" (cut short — scan a sub-folder for more)" if d["truncated"] else ""} · {langs or "no source files"}')
+    if d['code_files_capped']:
+        w(f'Only the first {MAX_CODE_FILES} source files were read for routes and messaging — survey a sub-folder for the rest.')
     w('Everything below is a candidate: confirm it in code before drawing it.')
 
     units = [u for u in d['units'] if not u['suggested_type'].startswith('workspace root')]
@@ -1271,7 +1695,7 @@ def render_text(d: dict) -> str:
         w(f'  (left out as tests/examples/docs: {", ".join(d["ignored_units"][:6])}{" …" if len(d["ignored_units"]) > 6 else ""})')
 
     if d['compose']:
-        shown: List[Tuple[str, set]] = []
+        shown: list[tuple[str, set]] = []
         for file, services in sorted(d['compose'].items(), key=lambda kv: -len(kv[1])):
             base = next((f for f, names in shown if set(services) <= names), None)
             if base:
@@ -1298,7 +1722,7 @@ def render_text(d: dict) -> str:
 
     if d['kubernetes'] or d['terraform'] or d['serverless'] or d['nomad']:
         w('\n## Infrastructure as code')
-        by_kind: Dict[str, List[str]] = defaultdict(list)
+        by_kind: dict[str, list[str]] = defaultdict(list)
         for k in d['kubernetes']:
             detail = k['detail'] if k['detail'] and k['kind'] in ('CronJob', 'Job') else None
             by_kind[k['kind']].append(k['name'] + (f' ({detail})' if detail else ''))
@@ -1307,7 +1731,12 @@ def render_text(d: dict) -> str:
         for t in d['terraform'][:30]:
             w(f'- terraform {t["resource"]}.{t["name"]} → {t["type"]} — {t["file"]}')
         for n in d['nomad'][:20]:
-            w(f'- nomad job {n["job"]}' + (f' task {n["task"]}' if n['task'] else '') + (f' ({n["image"]})' if n['image'] else '') + f' — {n["file"]}')
+            w(
+                f'- nomad job {n["job"]}'
+                + (f' task {n["task"]}' if n['task'] else '')
+                + (f' ({n["image"]})' if n['image'] else '')
+                + f' — {n["file"]}'
+            )
         for f in d['serverless'][:20]:
             w(f'- function {f["function"]}' + (f' on {", ".join(f["events"])}' if f['events'] else '') + f' — {f["file"]}')
 
@@ -1372,12 +1801,17 @@ def render_text(d: dict) -> str:
     return '\n'.join(out)
 
 
-def main(argv: Optional[Iterable[str]] = None) -> int:
+def main(argv: Iterable[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     parser.add_argument('root', nargs='?', default='.', help='repository (or sub-folder) to survey')
     parser.add_argument('--json', action='store_true', help='print the full survey as JSON')
     parser.add_argument('--max-files', type=int, default=40000)
     args = parser.parse_args(list(argv) if argv is not None else None)
+    # A console that can't encode a dash or an arrow (Windows' cp1252, a C locale) gets a stand-in
+    # character rather than a crash halfway through the survey.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, 'reconfigure'):
+            stream.reconfigure(errors='replace')
     if not os.path.isdir(args.root):
         print(f'Not a folder: {args.root}', file=sys.stderr)
         return 2

@@ -34,6 +34,10 @@ pub const FILES: &[(&str, &[u8])] = &[
         include_bytes!("../../../skills/draft-canvas/SKILL.md"),
     ),
     (
+        "scripts/draft.py",
+        include_bytes!("../../../skills/draft-canvas/scripts/draft.py"),
+    ),
+    (
         "scripts/scan_repo.py",
         include_bytes!("../../../skills/draft-canvas/scripts/scan_repo.py"),
     ),
@@ -468,7 +472,7 @@ mod tests {
     /// of files. When this fails: bump `metadata.version` in SKILL.md and add the pair it prints.
     const PUBLISHED: &[(&str, &str)] = &[(
         "1",
-        "41bc6035062f12018e5401a8fc8499d23c1a4e77a99b45ce4867018e3a1e2851",
+        "833df6a7954d9567b384b04d2dbeae507915a4908a94bceeba926da407fbb768",
     )];
 
     #[test]

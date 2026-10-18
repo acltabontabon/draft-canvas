@@ -1,0 +1,13 @@
+# Python in this repository: the agent skill's scripts and their tests. Standard library only, so the
+# floor is the oldest Python they promise to run on.
+include = ["skills/**/*.py", "tests/skill/**/*.py"]
+line-length = 140
+target-version = "py39"
+
+[lint]
+select = ["E", "F", "W", "B", "UP", "SIM", "RUF", "BLE", "PERF", "PLW", "PLE", "C4", "ISC"]
+# Long lines are wrapped by the formatter where it can; prose punctuation (–, ’, ›) is intended.
+ignore = ["E501", "RUF001", "RUF002", "RUF003", "SIM108", "PLW0603", "PLW2901"]
+
+[format]
+quote-style = "single"

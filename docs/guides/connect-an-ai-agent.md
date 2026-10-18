@@ -63,11 +63,13 @@ your agent in a repository and ask:
 
 With the skill, the agent:
 
-1. **Surveys the repository in one pass** with the skill's scanner: deployable units and their
-   frameworks, docker-compose, Kubernetes and Terraform services, the databases, brokers and external
-   services the dependencies and configuration name, HTTP routes, queue and topic names, API contracts,
-   architecture notes and ADRs, and which services call which. Environment variable *values* are never
-   read. It then reads only the files that matter.
+1. **Drafts the diagram in one command.** The skill's script surveys the repository in one pass —
+   deployable units and their frameworks; docker-compose, Kubernetes, Nomad and Terraform services; the
+   databases, brokers and external services the dependencies and configuration name; HTTP routes;
+   queue and topic names; API contracts; architecture notes and ADRs; and which services call which —
+   and writes a first request from it, with a placeholder wherever only the code can say. Environment
+   variable *values* are never read. The agent then reads only the files that matter, and the request
+   isn't accepted until every placeholder is filled.
 2. **Picks the C4 levels.** A small system is one container view; a larger one opens on a context
    view with its containers one level down. The services with real logic get a component view
    inside, so you can [look inside](depth.md) them.

@@ -18,30 +18,137 @@ import os
 import re
 import sys
 import uuid
-from typing import Dict, List, Optional, Set
 
 ID = re.compile(r'^[A-Za-z][A-Za-z0-9_.-]{0,63}$')
 TYPES = {
-    'service', 'api', 'worker', 'scheduler', 'gateway', 'external-system', 'database', 'sql-database', 'nosql-database',
-    'cache', 'file-system', 'object-storage', 'search-index', 'table', 'queue', 'topic', 'stream', 'dead-letter-queue',
-    'person', 'user-group', 'external-actor', 'system-actor', 'device', 'component', 'module', 'adapter', 'port', 'junction',
+    'service',
+    'api',
+    'worker',
+    'scheduler',
+    'gateway',
+    'external-system',
+    'database',
+    'sql-database',
+    'nosql-database',
+    'cache',
+    'file-system',
+    'object-storage',
+    'search-index',
+    'table',
+    'queue',
+    'topic',
+    'stream',
+    'dead-letter-queue',
+    'person',
+    'user-group',
+    'external-actor',
+    'system-actor',
+    'device',
+    'component',
+    'module',
+    'adapter',
+    'port',
+    'junction',
 }
 ALIASES = {
-    'microservice', 'application', 'app', 'backend', 'web-app', 'frontend', 'spa', 'lambda', 'function', 'consumer', 'job',
-    'cron', 'load-balancer', 'api-gateway', 'external', 'external-service', 'software-system', 'system', 'db', 'datastore',
-    'data-store', 'sql', 'postgres', 'mysql', 'nosql', 'document-store', 'redis', 's3', 'bucket', 'elasticsearch',
-    'message-queue', 'sqs', 'sns', 'kafka-topic', 'kafka', 'event-stream', 'dlq', 'user', 'actor', 'human', 'team', 'third-party',
+    'microservice',
+    'application',
+    'app',
+    'backend',
+    'web-app',
+    'frontend',
+    'spa',
+    'lambda',
+    'function',
+    'consumer',
+    'job',
+    'cron',
+    'load-balancer',
+    'api-gateway',
+    'external',
+    'external-service',
+    'software-system',
+    'system',
+    'db',
+    'datastore',
+    'data-store',
+    'sql',
+    'postgres',
+    'mysql',
+    'nosql',
+    'document-store',
+    'redis',
+    's3',
+    'bucket',
+    'elasticsearch',
+    'message-queue',
+    'sqs',
+    'sns',
+    'kafka-topic',
+    'kafka',
+    'event-stream',
+    'dlq',
+    'user',
+    'actor',
+    'human',
+    'team',
+    'third-party',
 }
-CAN_HAVE_INSIDE = {'service', 'api', 'worker', 'scheduler', 'gateway', 'external-system', 'component', 'module', 'adapter',
-                   'microservice', 'application', 'app', 'backend', 'web-app', 'frontend', 'spa', 'software-system', 'system'}
+CAN_HAVE_INSIDE = {
+    'service',
+    'api',
+    'worker',
+    'scheduler',
+    'gateway',
+    'external-system',
+    'component',
+    'module',
+    'adapter',
+    'microservice',
+    'application',
+    'app',
+    'backend',
+    'web-app',
+    'frontend',
+    'spa',
+    'software-system',
+    'system',
+}
 PEOPLE = {'person', 'user-group', 'external-actor', 'system-actor', 'device', 'user', 'actor', 'human', 'team', 'third-party'}
 EXTERNAL = {'external-system', 'external', 'external-service', 'external-actor', 'third-party'}
 ENTRY = PEOPLE | {'gateway', 'load-balancer', 'api-gateway', 'frontend', 'spa', 'web-app', 'scheduler', 'cron', 'job'}
 NO_FIELDS = PEOPLE | {'junction'}
 SEMANTICS = {
-    'http', 'grpc', 'event', 'command', 'query', 'reads', 'writes', 'readsWrites', 'publishes', 'consumes', 'calls', 'dependsOn',
-    'uses', 'fansOut', 'deliversTo', 'ingests', 'replicates', 'cdc', 'syncs', 'deadLetters', 'invalidates', 'watches',
-    'searches', 'indexes', 'routes', 'triggers', 'implementedBy', 'implements', 'compensates', 'transforms',
+    'http',
+    'grpc',
+    'event',
+    'command',
+    'query',
+    'reads',
+    'writes',
+    'readsWrites',
+    'publishes',
+    'consumes',
+    'calls',
+    'dependsOn',
+    'uses',
+    'fansOut',
+    'deliversTo',
+    'ingests',
+    'replicates',
+    'cdc',
+    'syncs',
+    'deadLetters',
+    'invalidates',
+    'watches',
+    'searches',
+    'indexes',
+    'routes',
+    'triggers',
+    'implementedBy',
+    'implements',
+    'compensates',
+    'transforms',
 }
 KINDS = {'sync', 'async', 'event', 'callback', 'conditional', 'retry', 'failure', 'fallback'}
 COLORS = {'neutral', 'teal', 'blue', 'violet', 'amber', 'rose', 'green'}
@@ -51,18 +158,38 @@ LANGUAGES = {'plaintext', 'java', 'javascript', 'typescript', 'json', 'yaml', 'x
 LEVELS = {'context', 'container', 'component'}
 
 # Hard limits (the app refuses past these) and soft ones (past these it still draws, but reads worse).
-MAX = {'label': 120, 'description': 280, 'technology': 60, 'relLabel': 80, 'condition': 120, 'response': 120,
-       'noteText': 1000, 'code': 4000, 'flowTitle': 100, 'caption': 120, 'groupLabel': 80, 'title': 200}
+MAX = {
+    'label': 120,
+    'description': 280,
+    'technology': 60,
+    'relLabel': 80,
+    'condition': 120,
+    'response': 120,
+    'noteText': 1000,
+    'code': 4000,
+    'flowTitle': 100,
+    'caption': 120,
+    'groupLabel': 80,
+    'title': 200,
+}
 # viewElements and boundaryMembers are the app's own advisory thresholds (CROWDED_VIEW and
 # CROWDED_BOUNDARY in src/agent/advice.ts); tests/agent-skill.test.ts keeps them equal.
-SOFT = {'label': 32, 'description': 120, 'relLabel': 40, 'caption': 90, 'viewElements': 15, 'boundaryMembers': 8,
-        'notesPerView': 10, 'codeLines': 15}
+SOFT = {
+    'label': 32,
+    'description': 120,
+    'relLabel': 40,
+    'caption': 90,
+    'viewElements': 15,
+    'boundaryMembers': 8,
+    'notesPerView': 10,
+    'codeLines': 15,
+}
 
 
 class Report:
     def __init__(self):
-        self.errors: List[str] = []
-        self.warnings: List[str] = []
+        self.errors: list[str] = []
+        self.warnings: list[str] = []
 
     def error(self, where: str, message: str):
         self.errors.append(f'ERROR {where}: {message}')
@@ -78,11 +205,11 @@ class View:
         self.path = path
         self.body = body
         self.depth = depth
-        self.nodes: List[dict] = [n for n in body.get('nodes') or [] if isinstance(n, dict)]
-        self.rels: List[dict] = [r for r in body.get('relationships') or [] if isinstance(r, dict)]
-        self.groups: List[dict] = [g for g in body.get('groups') or [] if isinstance(g, dict)]
-        self.flows: List[dict] = [f for f in body.get('flows') or [] if isinstance(f, dict)]
-        self.notes: List[dict] = [n for n in body.get('notes') or [] if isinstance(n, dict)]
+        self.nodes: list[dict] = [n for n in body.get('nodes') or [] if isinstance(n, dict)]
+        self.rels: list[dict] = [r for r in body.get('relationships') or [] if isinstance(r, dict)]
+        self.groups: list[dict] = [g for g in body.get('groups') or [] if isinstance(g, dict)]
+        self.flows: list[dict] = [f for f in body.get('flows') or [] if isinstance(f, dict)]
+        self.notes: list[dict] = [n for n in body.get('notes') or [] if isinstance(n, dict)]
         self.node_ids = {n.get('id') for n in self.nodes}
         self.rel_ids = {r.get('id') for r in self.rels}
         self.group_ids = {g.get('id') for g in self.groups}
@@ -94,7 +221,7 @@ def text_len(value) -> int:
     return len(value) if isinstance(value, str) else 0
 
 
-def check(request: dict, repo: Optional[str]) -> Report:
+def check(request: dict, repo: str | None) -> Report:
     r = Report()
     if not isinstance(request, dict):
         r.error('request', 'must be a JSON object (the create_diagram arguments)')
@@ -110,8 +237,8 @@ def check(request: dict, repo: Optional[str]) -> Report:
     if 'starter' in request:
         r.warn('starter', 'a starter request is checked only partly here; its own elements come from the app')
 
-    views: List[View] = []
-    seen_ids: Dict[str, str] = {}
+    views: list[View] = []
+    seen_ids: dict[str, str] = {}
 
     def collect(path: str, body: dict, depth: int):
         view = View(path, body, depth)
@@ -125,16 +252,27 @@ def check(request: dict, repo: Optional[str]) -> Report:
                     collect(f'{path} › {n.get("id")}', inside, depth + 1)
 
     collect('top', request, 0)
+    for where, value in placeholders(request):
+        r.error(where, f'still a placeholder ({value[:60]!r}) — replace it with what the code shows, or remove the item')
 
     for view in views:
-        for kind, items in (('element', view.nodes), ('relationship', view.rels), ('group', view.groups), ('flow', view.flows), ('note', view.notes)):
+        for kind, items in (
+            ('element', view.nodes),
+            ('relationship', view.rels),
+            ('group', view.groups),
+            ('flow', view.flows),
+            ('note', view.notes),
+        ):
             for item in items:
                 ident = item.get('id')
                 if not isinstance(ident, str) or not ID.match(ident):
                     r.error(f'{view.path} {kind}', f'id {ident!r} must start with a letter and use letters, digits, _ . - (≤ 64)')
                     continue
                 if ident in seen_ids:
-                    r.error(f'{view.path} {kind} {ident}', f'id already used by a {seen_ids[ident]} — ids are unique across the whole file, inside views included')
+                    r.error(
+                        f'{view.path} {kind} {ident}',
+                        f'id already used by a {seen_ids[ident]} — ids are unique across the whole file, inside views included',
+                    )
                 seen_ids[ident] = kind
 
     primary = (request.get('layout') or {}).get('primaryFlow') if isinstance(request.get('layout'), dict) else None
@@ -149,24 +287,27 @@ def check(request: dict, repo: Optional[str]) -> Report:
     return r
 
 
-ALL_NODE_IDS: Set[str] = set()
+ALL_NODE_IDS: set[str] = set()
 
 
-def check_view(view: View, r: Report, repo: Optional[str], request: dict, is_top: bool, primary: Optional[str]):
+def check_view(view: View, r: Report, repo: str | None, request: dict, is_top: bool, primary: str | None):
     p = view.path
     level = view.body.get('level')
     if not is_top and level is not None and level not in LEVELS:
         r.error(f'{p}.level', f'"{level}" is not one of {sorted(LEVELS)}')
     countable = [n for n in view.nodes if n.get('type') != 'junction']
     if len(countable) > 25:
-        r.warn(p, f'{len(countable)} elements — move a part\'s detail into its inside view (aim for 7–15 per view)')
+        r.warn(p, f"{len(countable)} elements — move a part's detail into its inside view (aim for 7–15 per view)")
     elif len(countable) > SOFT['viewElements']:
         r.warn(p, f'{len(countable)} elements — past about 15 a view gets hard to read; consider an inside view')
     if is_top and not view.nodes and 'starter' not in request:
         r.error(p, 'no elements')
     if is_top and 0 < len(countable) < 3 and any(isinstance(n.get('inside'), dict) for n in view.nodes):
-        r.warn(p, f'the opening view has only {len(countable)} elements — a context view earns its place with the people and '
-                  'external systems around the system; with none, open on the container view instead')
+        r.warn(
+            p,
+            f'the opening view has only {len(countable)} elements — a context view earns its place with the people and '
+            'external systems around the system; with none, open on the container view instead',
+        )
 
     missing_desc, missing_tech, missing_evidence = [], [], []
     for n in view.nodes:
@@ -207,7 +348,9 @@ def check_view(view: View, r: Report, repo: Optional[str], request: dict, is_top
         if n.get('color') is not None and n['color'] not in COLORS:
             r.error(f'{p} element {nid}', f'color "{n["color"]}" is not one of {sorted(COLORS)}')
         if isinstance(n.get('inside'), dict) and isinstance(typ, str) and typ not in CAN_HAVE_INSIDE:
-            r.error(f'{p} element {nid}', f'a {typ} has no inside view — only services, APIs, workers, gateways and (non-port) components do')
+            r.error(
+                f'{p} element {nid}', f'a {typ} has no inside view — only services, APIs, workers, gateways and (non-port) components do'
+            )
         if isinstance(n.get('inside'), dict) and typ in EXTERNAL:
             r.warn(f'{p} element {nid}', 'an inside view of an external system — you rarely know its insides; check this is yours')
         check_attachments(n, f'{p} element {nid}', r)
@@ -226,10 +369,13 @@ def check_view(view: View, r: Report, repo: Optional[str], request: dict, is_top
     if view.nodes:
         first = view.nodes[0]
         if str(first.get('type')) not in ENTRY and any(str(n.get('type')) in ENTRY for n in view.nodes):
-            r.warn(p, f'the first element is "{first.get("id")}" — list the entry point (a person, client or gateway) first: the layout reads in input order')
+            r.warn(
+                p,
+                f'the first element is "{first.get("id")}" — list the entry point (a person, client or gateway) first: the layout reads in input order',
+            )
 
     # Groups.
-    members: Dict[str, List[dict]] = {g.get('id'): [] for g in view.groups}
+    members: dict[str, list[dict]] = {g.get('id'): [] for g in view.groups}
     for n in view.nodes:
         if n.get('group') in members:
             members[n['group']].append(n)
@@ -250,7 +396,10 @@ def check_view(view: View, r: Report, repo: Optional[str], request: dict, is_top
         elif len(inner) == 1 and not nested:
             r.warn(f'{p} group {gid}', 'has one member — a boundary around one shape adds a box, not meaning')
         if len(inner) > SOFT['boundaryMembers']:
-            r.warn(f'{p} group {gid}', f'holds {len(inner)} elements — past {SOFT["boundaryMembers"]}, draw the system as one element in a context view with these inside it')
+            r.warn(
+                f'{p} group {gid}',
+                f'holds {len(inner)} elements — past {SOFT["boundaryMembers"]}, draw the system as one element in a context view with these inside it',
+            )
         if inner and all(str(m.get('type')) in EXTERNAL for m in inner):
             r.warn(f'{p} group {gid}', 'groups only external systems — leave externals ungrouped so each sits beside its caller')
         if g.get('kind') == 'system':
@@ -260,8 +409,8 @@ def check_view(view: View, r: Report, repo: Optional[str], request: dict, is_top
 
     # Relationships.
     type_of = {n.get('id'): n.get('type') for n in view.nodes}
-    pairs: Dict[tuple, str] = {}
-    connected: Set[str] = set()
+    pairs: dict[tuple, str] = {}
+    connected: set[str] = set()
     unlabelled = []
     for rel in view.rels:
         rid = rel.get('id')
@@ -292,8 +441,11 @@ def check_view(view: View, r: Report, repo: Optional[str], request: dict, is_top
         elif rel.get('semantic') is not None:
             offered = offered_between(type_of.get(src), type_of.get(dst))
             if offered and rel['semantic'] not in offered:
-                r.warn(f'{p} relationship {rid}', f'Draft Canvas doesn\'t offer "{rel["semantic"]}" from {type_of.get(src)} to {type_of.get(dst)} '
-                       f'and would use "{offered[0]}" instead — choose one of {", ".join(offered)}, or leave semantic out')
+                r.warn(
+                    f'{p} relationship {rid}',
+                    f'Draft Canvas doesn\'t offer "{rel["semantic"]}" from {type_of.get(src)} to {type_of.get(dst)} '
+                    f'and would use "{offered[0]}" instead — choose one of {", ".join(offered)}, or leave semantic out',
+                )
         if rel.get('kind') is not None and rel['kind'] not in KINDS:
             r.error(f'{p} relationship {rid}', f'kind "{rel["kind"]}" is not one of {sorted(KINDS)}')
         if rel.get('color') is not None and rel['color'] not in COLORS:
@@ -337,9 +489,9 @@ def check_view(view: View, r: Report, repo: Optional[str], request: dict, is_top
         if not isinstance(steps, list) or not steps:
             r.error(f'{p} flow {fid}', 'needs at least one step')
             continue
-        used: Set[str] = set()
+        used: set[str] = set()
         uncaptioned = 0
-        visited: Set[str] = set()
+        visited: set[str] = set()
         for i, step in enumerate(steps, 1):
             where = f'{p} flow {fid} step {i}'
             if isinstance(step, str):
@@ -379,7 +531,10 @@ def check_view(view: View, r: Report, repo: Optional[str], request: dict, is_top
                 r.warn(where, f'"{rid}" starts nowhere the flow has been yet — check the order follows the code')
             visited.update(x for x in (rel.get('from'), rel.get('to')) if x)
         if uncaptioned:
-            r.warn(f'{p} flow {fid}', f'{uncaptioned} step(s) without a caption — say what happens at each step; it is what the presentation shows')
+            r.warn(
+                f'{p} flow {fid}',
+                f'{uncaptioned} step(s) without a caption — say what happens at each step; it is what the presentation shows',
+            )
         if not any(isinstance(s, dict) and 'spotlight' in s for s in steps) and flow.get('variantOf') is None and is_top:
             r.warn(f'{p} flow {fid}', 'no opening {spotlight, caption} step — an overview first sets the scene when presenting')
 
@@ -404,7 +559,10 @@ def check_view(view: View, r: Report, repo: Optional[str], request: dict, is_top
             elif len(code) > MAX['code']:
                 r.error(where, f'code longer than {MAX["code"]}')
             elif code.count('\n') + 1 > SOFT['codeLines']:
-                r.warn(where, f'{code.count(chr(10)) + 1} lines of code — a snippet of ≤ 15 lines reads on the canvas; trim to the part that matters')
+                r.warn(
+                    where,
+                    f'{code.count(chr(10)) + 1} lines of code — a snippet of ≤ 15 lines reads on the canvas; trim to the part that matters',
+                )
             if note.get('language') is not None and note['language'] not in LANGUAGES:
                 r.error(where, f'language "{note["language"]}" is not one of {sorted(LANGUAGES)}')
         else:
@@ -415,6 +573,28 @@ def check_view(view: View, r: Report, repo: Optional[str], request: dict, is_top
                 r.error(where, f'text longer than {MAX["noteText"]}')
         if kind == 'label' and about in view.rel_ids:
             r.error(where, 'a label attaches to elements only')
+
+
+#: Fields a person reads on the canvas. `code` is not among them: a snippet may quote a real TODO.
+PROSE_FIELDS = {'title', 'label', 'description', 'technology', 'text', 'caption', 'condition', 'response'}
+PLACEHOLDER = re.compile(r'^\s*(TODO|FIXME|TBD|XXX)\b', re.I)
+
+
+def placeholders(value: object, path: str = 'request') -> list[tuple[str, str]]:
+    """Every prose field still holding a `TODO:` marker (as draft.py leaves them), by where it is."""
+    found: list[tuple[str, str]] = []
+    if isinstance(value, dict):
+        label = value.get('id', '')
+        for key, item in value.items():
+            where = f'{path} {label}'.strip() if label else path
+            if key in PROSE_FIELDS and isinstance(item, str) and PLACEHOLDER.search(item):
+                found.append((f'{where}.{key}', item))
+            elif isinstance(item, (dict, list)):
+                found.extend(placeholders(item, f'{where}.{key}' if not label else where))
+    elif isinstance(value, list):
+        for item in value:
+            found.extend(placeholders(item, path))
+    return found
 
 
 def check_attachments(item: dict, where: str, r: Report):
@@ -433,7 +613,7 @@ def check_attachments(item: dict, where: str, r: Report):
             r.error(where, 'a note attachment needs text')
 
 
-def check_evidence(item: dict, where: str, r: Report, repo: Optional[str]):
+def check_evidence(item: dict, where: str, r: Report, repo: str | None):
     evidence = item.get('evidence')
     if evidence is None:
         return
@@ -479,7 +659,7 @@ def load_pairings() -> dict:
 PAIRINGS = load_pairings()
 
 
-def offered_between(source_type: Optional[str], target_type: Optional[str]) -> List[str]:
+def offered_between(source_type: str | None, target_type: str | None) -> list[str]:
     """The meanings Draft Canvas offers from one element type to another; empty when it has no opinion."""
     categories = PAIRINGS.get('categories', {})
     source, target = categories.get(source_type or ''), categories.get(target_type or '')
@@ -488,7 +668,7 @@ def offered_between(source_type: Optional[str], target_type: Optional[str]) -> L
     return PAIRINGS.get('offered', {}).get(f'{source}>{target}', [])
 
 
-def fmt(ids: List) -> str:
+def fmt(ids: list) -> str:
     shown = ', '.join(str(i) for i in ids[:6])
     return shown + (f' and {len(ids) - 6} more' if len(ids) > 6 else '')
 
@@ -499,7 +679,11 @@ def main() -> int:
     parser.add_argument('--repo', help='repository root, to check that evidence paths exist')
     args = parser.parse_args()
     try:
-        raw = sys.stdin.read() if args.request == '-' else open(args.request, encoding='utf-8').read()
+        if args.request == '-':
+            raw = sys.stdin.read()
+        else:
+            with open(args.request, encoding='utf-8') as fh:
+                raw = fh.read()
         request = json.loads(raw)
     except (OSError, ValueError) as error:
         print(f'Could not read the request: {error}', file=sys.stderr)
@@ -509,8 +693,16 @@ def main() -> int:
         print(line)
     if isinstance(request, dict) and not request.get('requestId'):
         print(f'NOTE  requestId: missing — use "{uuid.uuid4()}"')
-    print(f'{len(report.errors)} error(s), {len(report.warnings)} warning(s)'
-          + (' — ready to send.' if not report.errors and not report.warnings else ' — fix the errors before sending.' if report.errors else ''))
+    print(
+        f'{len(report.errors)} error(s), {len(report.warnings)} warning(s)'
+        + (
+            ' — ready to send.'
+            if not report.errors and not report.warnings
+            else ' — fix the errors before sending.'
+            if report.errors
+            else ''
+        )
+    )
     return 1 if report.errors else 0
 
 
