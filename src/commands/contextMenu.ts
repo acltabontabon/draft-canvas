@@ -137,7 +137,7 @@ function edgeMenu(commands: Command[]): ContextMenuEntry[] {
     // stage-command rule above. `pick` silently drops whichever is absent —
     // "Convert to junction" only exists while this connector is actually
     // drawn through a shared trunk.
-    pick(commands, ['edge-route-direct', 'edge-convert-to-junction']),
+    pick(commands, ['edge-reset-route', 'edge-route-direct', 'edge-convert-to-junction']),
     pick(commands, ['attach-note', 'attach-code', 'open-point-add']),
     pick(commands, ['spotlight']),
     pick(commands, ['delete']),

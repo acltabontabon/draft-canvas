@@ -20,6 +20,7 @@ import { categoryOf } from '../document/connectorSemantics';
 import type { Attachment, DraftDocument, DraftEdge, DraftFlowStep, DraftNode } from '../document/types';
 import { AgentError } from './errors';
 import { groupKindOf, lineStyleOf, typeWordOf } from './vocabulary';
+import { routeGeometry } from './route';
 
 export const READ_LIMITS = {
   elementsPerPage: 200,
@@ -289,7 +290,12 @@ function project(
   for (const edge of edgePage) {
     const s = inPage.has(edge.source);
     const t = inPage.has(edge.target);
-    relationships.push(relationshipOf(edge, byId, includes.has('attachments') || includes.has('fullText') || focused, includes.has('fullText')));
+    const geometry = includes.has('geometry') ? routeGeometry(edge, view.nodes, view.edges) : undefined;
+    relationships.push({
+      ...relationshipOf(edge, byId, includes.has('attachments') || includes.has('fullText') || focused, includes.has('fullText')),
+      // Its sides and the points where it turns, as drawn; `via` are the bends it was given by hand.
+      ...(geometry ? { geometry: { ...geometry, ...(edge.waypoints ? { via: edge.waypoints.map((p) => [p.x, p.y]) } : {}) } } : {}),
+    });
     for (const [end, here] of [[edge.source, s], [edge.target, t]] as const) {
       if (here) continue;
       const node = byId.get(end);

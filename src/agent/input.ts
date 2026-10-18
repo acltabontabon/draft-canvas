@@ -30,6 +30,7 @@ import { starterFor, starterIds } from './starter';
 import { isEvidence, EVIDENCE_LIMIT } from '../document/evidence';
 import type { SourceEvidence } from '../document/types';
 import { ROOM_FIELDS } from './fields';
+import { readPlace, readRoute, type PlaceSpec, type RouteSpec } from './placement';
 import { GROUP_KINDS, LINE_STYLE_NAMES, NOTE_FORM_NAMES, NOTE_KIND_NAMES, resolveType, suggestTypes, type LineStyleName, type NativeShape } from './vocabulary';
 
 /** What one request may carry. Published through `get_capabilities` and the tool schemas. */
@@ -86,6 +87,8 @@ export interface NodeSpec {
   color?: Accent;
   attachments?: AttachmentSpec[];
   inside?: RoomSpec;
+  /** Where it goes, when the request says — see `placement.ts`. */
+  place?: PlaceSpec;
 }
 
 export interface RelationshipSpec {
@@ -105,6 +108,8 @@ export interface RelationshipSpec {
   response?: string | true;
   deliveryAttempts?: number;
   attachments?: AttachmentSpec[];
+  /** Its sides and bends, when the request says — see `placement.ts`. */
+  route?: RouteSpec;
 }
 
 export interface GroupSpec {
@@ -384,7 +389,7 @@ export function readRoom(r: Reader, raw: Json, path: string, ctx: RoomContext): 
   const nodes: NodeSpec[] = [];
   r.array(raw.nodes, `${path}/nodes`, AGENT_LIMITS.nodesPerRequest).forEach((n, i) => {
     const at = `${path}/nodes/${i}`;
-    const item = r.object(n, at, ['id', 'type', 'label', 'description', 'technology', 'group', 'color', 'attachments', 'inside', 'evidence']);
+    const item = r.object(n, at, ['id', 'type', 'label', 'description', 'technology', 'group', 'color', 'attachments', 'inside', 'evidence', 'place']);
     if (!item) return;
     const id = r.newId(item.id, `${at}/id`, ctx.taken);
     const typeWord = typeof item.type === 'string' ? item.type : '';
@@ -410,6 +415,7 @@ export function readRoom(r: Reader, raw: Json, path: string, ctx: RoomContext): 
     if (group !== undefined && !groupIds.has(group)) r.problems.add('INVALID_REFERENCE', `${at}/group`, `no group "${group}" in this view`);
     const evidence = readEvidence(r, item.evidence, `${at}/evidence`);
     const attachments = readAttachments(r, item.attachments, `${at}/attachments`);
+    const place = item.place !== undefined ? readPlace(r, item.place, `${at}/place`) : undefined;
     let inside: RoomSpec | undefined;
     if (item.inside !== undefined) {
       const insideAt = `${at}/inside`;
@@ -440,6 +446,7 @@ export function readRoom(r: Reader, raw: Json, path: string, ctx: RoomContext): 
         ...(attachments ? { attachments } : {}),
         ...(evidence?.length ? { evidence } : {}),
         ...(inside ? { inside } : {}),
+        ...(place ? { place } : {}),
       });
     }
   });
@@ -449,7 +456,7 @@ export function readRoom(r: Reader, raw: Json, path: string, ctx: RoomContext): 
   const pairs = new Map<string, RelationshipSpec[]>();
   r.array(raw.relationships, `${path}/relationships`, AGENT_LIMITS.relationshipsPerRequest).forEach((e, i) => {
     const at = `${path}/relationships/${i}`;
-    const item = r.object(e, at, ['id', 'from', 'to', 'label', 'semantic', 'kind', 'directed', 'async', 'condition', 'color', 'lineStyle', 'response', 'deliveryAttempts', 'attachments', 'evidence']);
+    const item = r.object(e, at, ['id', 'from', 'to', 'label', 'semantic', 'kind', 'directed', 'async', 'condition', 'color', 'lineStyle', 'response', 'deliveryAttempts', 'attachments', 'evidence', 'route']);
     if (!item) return;
     const id = r.newId(item.id, `${at}/id`, ctx.taken);
     const from = typeof item.from === 'string' ? item.from : undefined;
@@ -469,6 +476,7 @@ export function readRoom(r: Reader, raw: Json, path: string, ctx: RoomContext): 
     const deliveryAttempts = readDeliveryAttempts(r, item.deliveryAttempts, `${at}/deliveryAttempts`);
     const evidence = readEvidence(r, item.evidence, `${at}/evidence`);
     const attachments = readAttachments(r, item.attachments, `${at}/attachments`);
+    const route = item.route !== undefined ? readRoute(r, item.route, `${at}/route`) : undefined;
     if (!id || !from || !to || from === to || !elementIds.has(from) || !elementIds.has(to)) return;
     const spec: RelationshipSpec = {
       id,
@@ -486,6 +494,7 @@ export function readRoom(r: Reader, raw: Json, path: string, ctx: RoomContext): 
       ...(deliveryAttempts !== undefined && deliveryAttempts !== null ? { deliveryAttempts } : {}),
       ...(attachments ? { attachments } : {}),
       ...(evidence?.length ? { evidence } : {}),
+      ...(route ? { route } : {}),
     };
     const key = `${from}\u0000${to}`;
     const same = pairs.get(key) ?? [];

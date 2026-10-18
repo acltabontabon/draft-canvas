@@ -13,8 +13,27 @@ the release notes and the in-app What's New are generated from here. See
 
 ### Shared
 
+#### Added
+
+- **Bend connectors by hand** — select a connector and drag its line into place: a stepped
+  connector's runs slide and stay square, and a straight or curved one takes bends you add, move or
+  double-click away. Bends follow when you move the shapes together. Right-click and choose **Reset
+  route** to go back to automatic routing. <!-- highlight -->
+- **Agents can place and route exactly** — ask your agent to put a shape somewhere specific, or beside
+  another one, or to take a connector a particular way, and it does: it reads where everything is
+  drawn and moves just what you asked. Shapes on top of each other are still refused.
+
+#### Changed
+
 - About is redrawn as a drawing sheet with a title block for the version, release notes and author,
   and the diagnostic report reads like the rest of the app.
+
+### Desktop
+
+#### Fixed
+
+- Removed unused legacy ZIP extraction support from the updater, eliminating three RustSec
+  vulnerabilities in its ZIP dependency. Signed Windows and macOS update formats are unchanged.
 
 ## [1.14.0] - 2026-10-16
 

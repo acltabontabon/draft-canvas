@@ -201,7 +201,8 @@ describe('MCP tool definitions', () => {
     // Typed patches, output contracts and a fourth graph-taking tool add schema, but repeated
     // proposal/preview vocabulary prose is removed. Presentation steps (highlight, spotlight), code
     // and label notes, connector options and moveOutside added ~9 KB on 87 KB, with the step schema
-    // shared through $defs. Keep a measured ceiling on further growth.
-    expect(JSON.stringify(TOOLS).length).toBeLessThan(98_000);
+    // shared through $defs. Explicit placement and routing (place, route) added ~4 KB, both shared
+    // through $defs too. Keep a measured ceiling on further growth.
+    expect(JSON.stringify(TOOLS).length).toBeLessThan(101_000);
   });
 });

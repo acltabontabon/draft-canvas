@@ -833,7 +833,7 @@
   {
     "name": "create_diagram",
     "title": "Create a diagram",
-    "description": "Creates a NEW diagram file — only for the first diagram of a conversation, or when the person asks for a new or separate one; every follow-up is update_diagram on the diagramId this returns. Send the whole graph in one call, notes and flows included, with no coordinates: sizing, layout and connector routing are automatic and checked for readability. For a clear result list elements in reading order, entry point first; name the main path in layout.primaryFlow; put detail past ~15 elements in an element's inside view (get_capabilities readability has the rest). The receipt's legibility and advisories say what to change next. Saved into a folder the person enabled; a title that already exists there is refused (DUPLICATE_TITLE) unless allowDuplicateTitle. open: true shows it in Draft Canvas (only when that loses nothing) — pass it when the person wants to see or watch it.",
+    "description": "Creates a NEW diagram file — only for the first diagram of a conversation, or when the person asks for a new or separate one; every follow-up is update_diagram on the diagramId this returns. Send the whole graph in one call, notes and flows included; sizing, layout and connector routing are automatic and checked for readability (an element's place or a relationship's route sets one exactly). For a clear result list elements in reading order, entry point first; name the main path in layout.primaryFlow; put detail past ~15 elements in an element's inside view (get_capabilities readability has the rest). The receipt's legibility and advisories say what to change next. Saved into a folder the person enabled; a title that already exists there is refused (DUPLICATE_TITLE) unless allowDuplicateTitle. open: true shows it in Draft Canvas (only when that loses nothing) — pass it when the person wants to see or watch it.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1075,6 +1075,82 @@
             ],
             "additionalProperties": false
           }
+        },
+        "place": {
+          "type": "object",
+          "description": "View px, as read_diagram geometry. x,y: top-left; or rightOf/leftOf/above/below an id, gap (48), align start|center|end; x/y also given wins. width/height: not below its text. Overlaps refused.",
+          "properties": {
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            },
+            "rightOf": {
+              "type": "string"
+            },
+            "leftOf": {
+              "type": "string"
+            },
+            "above": {
+              "type": "string"
+            },
+            "below": {
+              "type": "string"
+            },
+            "gap": {
+              "type": "number"
+            },
+            "align": {
+              "enum": [
+                "start",
+                "center",
+                "end"
+              ]
+            },
+            "width": {
+              "type": "number"
+            },
+            "height": {
+              "type": "number"
+            }
+          },
+          "additionalProperties": false
+        },
+        "route": {
+          "type": "object",
+          "description": "from/to: sides. via: [x,y] bends in order; stepped adds right angles; [] drops them. null on update: automatic.",
+          "properties": {
+            "from": {
+              "enum": [
+                "top",
+                "right",
+                "bottom",
+                "left"
+              ]
+            },
+            "to": {
+              "enum": [
+                "top",
+                "right",
+                "bottom",
+                "left"
+              ]
+            },
+            "via": {
+              "type": "array",
+              "maxItems": 32,
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              }
+            }
+          },
+          "additionalProperties": false
         },
         "steps": {
           "type": "array",
@@ -1386,6 +1462,9 @@
               "items": {
                 "$ref": "#/$defs/attachment"
               }
+            },
+            "route": {
+              "$ref": "#/$defs/route"
             }
           },
           "required": [
@@ -1620,6 +1699,9 @@
                 "$ref": "#/$defs/attachment"
               }
             },
+            "place": {
+              "$ref": "#/$defs/place"
+            },
             "inside": {
               "type": "object",
               "description": "A drill-down view inside this element (C4: containers inside a system, components inside a container). Same shape as the top level: level, nodes, relationships, groups, flows, notes. Nests at most 3 deep.",
@@ -1761,6 +1843,9 @@
                 "$ref": "#/$defs/attachment"
               }
             },
+            "place": {
+              "$ref": "#/$defs/place"
+            },
             "inside": {
               "type": "object",
               "properties": {
@@ -1900,6 +1985,9 @@
                 "$ref": "#/$defs/attachment"
               }
             },
+            "place": {
+              "$ref": "#/$defs/place"
+            },
             "inside": {
               "type": "object",
               "properties": {
@@ -2038,6 +2126,9 @@
               "items": {
                 "$ref": "#/$defs/attachment"
               }
+            },
+            "place": {
+              "$ref": "#/$defs/place"
             }
           },
           "required": [
@@ -2110,7 +2201,7 @@
   {
     "name": "update_diagram",
     "title": "Update a diagram",
-    "description": "Changes an existing diagram in place — every follow-up to a diagram (add, rename, remove, notes, flows, cleanup) goes here, never a new create_diagram. Pass the diagramId and the revision from your last receipt or read; everything not named is kept (ids, positions, notes, flows). Works whether or not the diagram is open: an open one changes on screen as one undo step, a closed one is changed in its file (the person's view is never switched). Ops run in order, as one change: {op:\"add\", nodes?, relationships?, groups?, flows?, notes?, openPoints?}, {op:\"update\", id, set:{…}} (null clears a field), {op:\"remove\", ids, cascade?}, {op:\"setLevel\", level}, {op:\"arrange\", scope?} — \"clean up the layout/arrows\": re-lays out the view (or one group) in place, keeping every id, note and flow, {op:\"moveInside\", owner, ids} / {op:\"moveOutside\", ids} (one C4 level down / up). New elements are placed beside what they connect to; nothing existing moves except by arrange. If something can't fit, the error's suggestedOp is the arrange to add. On REVISION_CONFLICT, read again and rebuild the change — never recreate the diagram.",
+    "description": "Changes an existing diagram in place — every follow-up to a diagram (add, rename, remove, notes, flows, cleanup) goes here, never a new create_diagram. Pass the diagramId and the revision from your last receipt or read; everything not named is kept (ids, positions, notes, flows). Works whether or not the diagram is open: an open one changes on screen as one undo step, a closed one is changed in its file (the person's view is never switched). Ops run in order, as one change: {op:\"add\", nodes?, relationships?, groups?, flows?, notes?, openPoints?}, {op:\"update\", id, set:{…}} (null clears a field), {op:\"remove\", ids, cascade?}, {op:\"setLevel\", level}, {op:\"arrange\", scope?} — \"clean up the layout/arrows\": re-lays out the view (or one group) in place, keeping every id, note and flow, {op:\"moveInside\", owner, ids} / {op:\"moveOutside\", ids} (one C4 level down / up). New elements are placed beside what they connect to; nothing existing moves except by arrange or set.place (set.route bends a connector). If something can't fit, the error's suggestedOp is the arrange to add. On REVISION_CONFLICT, read again and rebuild the change — never recreate the diagram.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -2397,6 +2488,9 @@
                           }
                         ]
                       },
+                      "place": {
+                        "$ref": "#/$defs/place"
+                      },
                       "kind": {
                         "anyOf": [
                           {
@@ -2570,6 +2664,16 @@
                       },
                       "to": {
                         "type": "string"
+                      },
+                      "route": {
+                        "anyOf": [
+                          {
+                            "$ref": "#/$defs/route"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
                       },
                       "title": {
                         "type": "string",
@@ -2918,6 +3022,82 @@
             "additionalProperties": false
           }
         },
+        "place": {
+          "type": "object",
+          "description": "View px, as read_diagram geometry. x,y: top-left; or rightOf/leftOf/above/below an id, gap (48), align start|center|end; x/y also given wins. width/height: not below its text. Overlaps refused.",
+          "properties": {
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            },
+            "rightOf": {
+              "type": "string"
+            },
+            "leftOf": {
+              "type": "string"
+            },
+            "above": {
+              "type": "string"
+            },
+            "below": {
+              "type": "string"
+            },
+            "gap": {
+              "type": "number"
+            },
+            "align": {
+              "enum": [
+                "start",
+                "center",
+                "end"
+              ]
+            },
+            "width": {
+              "type": "number"
+            },
+            "height": {
+              "type": "number"
+            }
+          },
+          "additionalProperties": false
+        },
+        "route": {
+          "type": "object",
+          "description": "from/to: sides. via: [x,y] bends in order; stepped adds right angles; [] drops them. null on update: automatic.",
+          "properties": {
+            "from": {
+              "enum": [
+                "top",
+                "right",
+                "bottom",
+                "left"
+              ]
+            },
+            "to": {
+              "enum": [
+                "top",
+                "right",
+                "bottom",
+                "left"
+              ]
+            },
+            "via": {
+              "type": "array",
+              "maxItems": 32,
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              }
+            }
+          },
+          "additionalProperties": false
+        },
         "steps": {
           "type": "array",
           "maxItems": 60,
@@ -3228,6 +3408,9 @@
               "items": {
                 "$ref": "#/$defs/attachment"
               }
+            },
+            "route": {
+              "$ref": "#/$defs/route"
             }
           },
           "required": [
@@ -3462,6 +3645,9 @@
                 "$ref": "#/$defs/attachment"
               }
             },
+            "place": {
+              "$ref": "#/$defs/place"
+            },
             "inside": {
               "type": "object",
               "description": "A drill-down view inside this element (C4: containers inside a system, components inside a container). Same shape as the top level: level, nodes, relationships, groups, flows, notes. Nests at most 3 deep.",
@@ -3603,6 +3789,9 @@
                 "$ref": "#/$defs/attachment"
               }
             },
+            "place": {
+              "$ref": "#/$defs/place"
+            },
             "inside": {
               "type": "object",
               "properties": {
@@ -3742,6 +3931,9 @@
                 "$ref": "#/$defs/attachment"
               }
             },
+            "place": {
+              "$ref": "#/$defs/place"
+            },
             "inside": {
               "type": "object",
               "properties": {
@@ -3880,6 +4072,9 @@
               "items": {
                 "$ref": "#/$defs/attachment"
               }
+            },
+            "place": {
+              "$ref": "#/$defs/place"
             }
           },
           "required": [
@@ -4213,6 +4408,9 @@
                           }
                         ]
                       },
+                      "place": {
+                        "$ref": "#/$defs/place"
+                      },
                       "kind": {
                         "anyOf": [
                           {
@@ -4386,6 +4584,16 @@
                       },
                       "to": {
                         "type": "string"
+                      },
+                      "route": {
+                        "anyOf": [
+                          {
+                            "$ref": "#/$defs/route"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
                       },
                       "title": {
                         "type": "string",
@@ -4709,6 +4917,80 @@
             "additionalProperties": false
           }
         },
+        "place": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            },
+            "rightOf": {
+              "type": "string"
+            },
+            "leftOf": {
+              "type": "string"
+            },
+            "above": {
+              "type": "string"
+            },
+            "below": {
+              "type": "string"
+            },
+            "gap": {
+              "type": "number"
+            },
+            "align": {
+              "enum": [
+                "start",
+                "center",
+                "end"
+              ]
+            },
+            "width": {
+              "type": "number"
+            },
+            "height": {
+              "type": "number"
+            }
+          },
+          "additionalProperties": false
+        },
+        "route": {
+          "type": "object",
+          "properties": {
+            "from": {
+              "enum": [
+                "top",
+                "right",
+                "bottom",
+                "left"
+              ]
+            },
+            "to": {
+              "enum": [
+                "top",
+                "right",
+                "bottom",
+                "left"
+              ]
+            },
+            "via": {
+              "type": "array",
+              "maxItems": 32,
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              }
+            }
+          },
+          "additionalProperties": false
+        },
         "steps": {
           "type": "array",
           "maxItems": 60,
@@ -4999,6 +5281,9 @@
               "items": {
                 "$ref": "#/$defs/attachment"
               }
+            },
+            "route": {
+              "$ref": "#/$defs/route"
             }
           },
           "required": [
@@ -5213,6 +5498,9 @@
                 "$ref": "#/$defs/attachment"
               }
             },
+            "place": {
+              "$ref": "#/$defs/place"
+            },
             "inside": {
               "type": "object",
               "properties": {
@@ -5351,6 +5639,9 @@
               "items": {
                 "$ref": "#/$defs/attachment"
               }
+            },
+            "place": {
+              "$ref": "#/$defs/place"
             },
             "inside": {
               "type": "object",
@@ -5491,6 +5782,9 @@
                 "$ref": "#/$defs/attachment"
               }
             },
+            "place": {
+              "$ref": "#/$defs/place"
+            },
             "inside": {
               "type": "object",
               "properties": {
@@ -5629,6 +5923,9 @@
               "items": {
                 "$ref": "#/$defs/attachment"
               }
+            },
+            "place": {
+              "$ref": "#/$defs/place"
             }
           },
           "required": [
@@ -6005,6 +6302,9 @@
                           }
                         ]
                       },
+                      "place": {
+                        "$ref": "#/$defs/place"
+                      },
                       "kind": {
                         "anyOf": [
                           {
@@ -6178,6 +6478,16 @@
                       },
                       "to": {
                         "type": "string"
+                      },
+                      "route": {
+                        "anyOf": [
+                          {
+                            "$ref": "#/$defs/route"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
                       },
                       "title": {
                         "type": "string",
@@ -6531,6 +6841,80 @@
             "additionalProperties": false
           }
         },
+        "place": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            },
+            "rightOf": {
+              "type": "string"
+            },
+            "leftOf": {
+              "type": "string"
+            },
+            "above": {
+              "type": "string"
+            },
+            "below": {
+              "type": "string"
+            },
+            "gap": {
+              "type": "number"
+            },
+            "align": {
+              "enum": [
+                "start",
+                "center",
+                "end"
+              ]
+            },
+            "width": {
+              "type": "number"
+            },
+            "height": {
+              "type": "number"
+            }
+          },
+          "additionalProperties": false
+        },
+        "route": {
+          "type": "object",
+          "properties": {
+            "from": {
+              "enum": [
+                "top",
+                "right",
+                "bottom",
+                "left"
+              ]
+            },
+            "to": {
+              "enum": [
+                "top",
+                "right",
+                "bottom",
+                "left"
+              ]
+            },
+            "via": {
+              "type": "array",
+              "maxItems": 32,
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              }
+            }
+          },
+          "additionalProperties": false
+        },
         "steps": {
           "type": "array",
           "maxItems": 60,
@@ -6821,6 +7205,9 @@
               "items": {
                 "$ref": "#/$defs/attachment"
               }
+            },
+            "route": {
+              "$ref": "#/$defs/route"
             }
           },
           "required": [
@@ -7035,6 +7422,9 @@
                 "$ref": "#/$defs/attachment"
               }
             },
+            "place": {
+              "$ref": "#/$defs/place"
+            },
             "inside": {
               "type": "object",
               "properties": {
@@ -7173,6 +7563,9 @@
               "items": {
                 "$ref": "#/$defs/attachment"
               }
+            },
+            "place": {
+              "$ref": "#/$defs/place"
             },
             "inside": {
               "type": "object",
@@ -7313,6 +7706,9 @@
                 "$ref": "#/$defs/attachment"
               }
             },
+            "place": {
+              "$ref": "#/$defs/place"
+            },
             "inside": {
               "type": "object",
               "properties": {
@@ -7451,6 +7847,9 @@
               "items": {
                 "$ref": "#/$defs/attachment"
               }
+            },
+            "place": {
+              "$ref": "#/$defs/place"
             }
           },
           "required": [

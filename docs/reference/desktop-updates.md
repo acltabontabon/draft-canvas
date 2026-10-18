@@ -41,6 +41,10 @@ launch ──15 s──▶ look ──(daily)──▶ look …
 | a prerelease (`-alpha.1`, `-beta.2` — any suffix) | `alpha.json`  | the newest release of any kind: a newer alpha, or the release it led up to |
 | a release                 | `stable.json` | newer releases only, never a prerelease                       |
 
+Windows updates use the signed NSIS `.exe` directly, and macOS updates use `.app.tar.gz`. The
+updater's optional legacy `zip` feature is disabled: neither format needs it, and it would pull in
+vulnerable ZIP extraction code. Keep `rustls-tls` and `system-proxy` enabled.
+
 ## Versions
 
 The desktop app ships in every Draft Canvas release: tag `vX.Y.Z`, where `X.Y.Z` is `package.json`'s — one
