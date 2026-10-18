@@ -38,6 +38,7 @@ Guides and reference for using and developing Draft Canvas.
 | [Semantics](reference/semantics.md) | Connector rules and suggestions |
 | [Document schema](reference/schema.md) | File format, validation and migrations |
 | [Library adoption](reference/library-adoption.md) | Desktop types, notifications and comparison harnesses |
+| [Third-party acknowledgements](reference/third-party.md) | Project credits, license notices and asset attribution |
 | [Privacy](reference/privacy.md) | What is stored and what leaves the device |
 | [Security](../SECURITY.md) | Threat model and reporting concerns |
 | [Performance](reference/performance.md) | Benchmarks and results |
