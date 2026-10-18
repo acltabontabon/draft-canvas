@@ -9,6 +9,9 @@ test('web saving uses local autosave and portable export/import even when native
   });
   await page.goto('/');
   await expect(page.getByRole('button', { name: 'Open file…', exact: true })).toHaveCount(0);
+  // The lazy starter grid recentres the home screen when it arrives. Wait for that layout
+  // before clicking: Firefox can otherwise lose the click between pointer-down and pointer-up.
+  await expect(page.getByRole('group', { name: 'Starters' })).toBeVisible();
   await page.getByRole('button', { name: 'Try an example', exact: true }).click();
   await page.getByLabel('Diagram title').fill('Portable export');
   await page.getByLabel('Diagram title').blur();
