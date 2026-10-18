@@ -26,7 +26,7 @@
  */
 import type { DraftEdge, DraftNode } from '../document/types';
 import { routingPlan } from './bundles';
-import { LABEL_PADDING_X, LABEL_PADDING_Y, layoutEdgeLabel } from './labelLayout';
+import { LABEL_PADDING_X, LABEL_PADDING_Y, edgeLabelSize, layoutEdgeLabel } from './labelLayout';
 import { distanceToPolyline, type Point } from './nearest';
 import { obstaclesForEdge } from './obstacles';
 import {
@@ -207,6 +207,7 @@ function compute(nodes: readonly DraftNode[], edges: readonly DraftEdge[]): Map<
         anchors: { source: edge.sourceAnchor, target: edge.targetAnchor },
         waypoints: edge.waypoints,
         lane,
+        label: edge.label ? edgeLabelSize(edge.label) : undefined,
         obstacles: obstaclesForEdge(nodes, edge.source, edge.target),
         spine: plan.spineFor(edge.id),
       });

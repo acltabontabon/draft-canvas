@@ -1,8 +1,7 @@
 import { create } from 'zustand';
+import { reconnectProblem } from '../document/reconnect';
 import { decodeClipboard, encodeClipboard } from '../document/clipboardCodec';
-// Only used for the one-off "pasted/duplicated content was capped" toast (`notify`) — paste and
-// duplicate are the only place a document-size limit can be hit from a trusted, in-app action
-// rather than at import, and there's no other place in the app that already surfaces that.
+// UI feedback for document limits and rejected reconnects stays outside document operations.
 import { PRESENTATION_AT_REST, useUiStore } from './uiStore';
 import { edgeIndex, nodeIndex } from './selectors';
 import {
@@ -125,6 +124,7 @@ import { cleanText, cleanTextFields } from '../document/sanitize';
 import {
   capabilityFor,
   categoryOf,
+  isServiceInteraction,
   inferRelationship,
 } from '../document/connectorSemantics';
 import { inferRelationshipThroughJunctions, reinferIfEligible } from '../document/reinfer';
@@ -492,6 +492,7 @@ export interface EditorStore {
    *  already appears to branch, and re-points that bundle's members through
    *  it — the deliberate step from automatic routing to explicit control. */
   convertBundleToJunction: (edgeId: string) => void;
+  setEdgeInteractionMode: (id: string, mode: 'sync' | 'async') => void;
   toggleEdgeAsync: (id: string) => void;
   /** Sets (or clears) a connector's flow-behaviour kind — see `ConnectorKind`. */
   setEdgeKind: (id: string, kind: ConnectorKind | undefined) => void;
@@ -1578,6 +1579,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   reconnectEdge(id, endpoint, newNodeId, newSide, newOffset = 0.5) {
+    const state = get();
+    const edge = state.document.edges.find((item) => item.id === id);
+    if (edge && reconnectProblem(state.document, edge, endpoint, newNodeId) === 'duplicate') {
+      useUiStore.getState().notify('Already connected to that shape.');
+      return;
+    }
     get().apply('Reconnect', (doc) => {
       const reconnected = reconnectEdgeOp(doc, id, endpoint, newNodeId, newSide, newOffset);
       // A refused reconnect (onto the other endpoint, or a vanished node) must stay a no-op:
@@ -1858,6 +1865,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   setEdgeHasResponse(id, hasResponse) {
+    const state = get();
+    const edge = state.document.edges.find((item) => item.id === id);
+    if (hasResponse && edge?.kind === 'async' && isServiceInteraction(state.document, edge)) return;
     get().apply('Toggle response', (doc) =>
       updateEdge(doc, id, { hasResponse: hasResponse || undefined, semanticsOrigin: 'explicit' }),
     );
@@ -2064,10 +2074,24 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     );
   },
 
+  setEdgeInteractionMode(id, mode) {
+    const edge = get().document.edges.find((item) => item.id === id);
+    if (!edge) return;
+    get().apply('Set interaction mode', (doc) => updateEdge(doc, id, {
+      kind: mode === 'async' ? 'async' : undefined,
+      hasResponse: mode === 'async' ? undefined : edge.hasResponse,
+      semanticsOrigin: 'explicit',
+    }));
+  },
+
   toggleEdgeAsync(id) {
     const state = get();
     const edge = state.document.edges.find((e) => e.id === id);
     if (!edge) return;
+    if (isServiceInteraction(state.document, edge)) {
+      state.setEdgeInteractionMode(id, edge.kind === 'async' ? 'sync' : 'async');
+      return;
+    }
     state.apply('Toggle async', (doc) => updateEdge(doc, id, { async: edge.async ? undefined : true }));
   },
 

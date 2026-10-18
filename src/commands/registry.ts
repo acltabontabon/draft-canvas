@@ -1,7 +1,8 @@
 import { PRODUCT } from '../product';
 import { openLink } from '../host/openLink';
 import { ALL_PRESETS, DEV_PRESETS, type Preset } from '../canvas/presets';
-import { capabilityFor, categoryOf, edgeRelationLabel } from '../document/connectorSemantics';
+import { reconnectProblem } from '../document/reconnect';
+import { capabilityFor, categoryOf, edgeRelationLabel, isServiceInteraction } from '../document/connectorSemantics';
 import { relationLabel } from '../document/edgeSemantics';
 import { createAttachment, defaultSizeFor, displayNameFor } from '../document/factory';
 import { stepIndexOf } from '../document/flow';
@@ -1441,6 +1442,8 @@ function isBundled(ctx: CommandContext, edge: DraftEdge): boolean {
 
 export function edgeCommands(ctx: CommandContext, edge: DraftEdge): Command[] {
   const doc = ctx.editor.document;
+  const serviceCall = isServiceInteraction(doc, edge);
+  const asyncMode = serviceCall ? edge.kind === 'async' : edge.async;
   const semanticTitle = edgeRelationLabel(doc, edge) ?? 'Plain';
   // What this pairing usually means leads the list, in the arrow's own wording; every other
   // relationship follows, so nothing unusual is ever out of reach.
@@ -1522,19 +1525,19 @@ export function edgeCommands(ctx: CommandContext, edge: DraftEdge): Command[] {
     },
     {
       id: 'edge-async',
-      title: edge.async ? 'Make synchronous' : 'Make asynchronous',
+      title: asyncMode ? 'Make synchronous' : 'Make asynchronous',
       group: 'connector',
-      keywords: ['async', 'sync', 'dashed', 'solid', 'toggle'],
-      hint: edge.async ? 'Solid line' : 'Dashed line',
+      keywords: serviceCall ? ['async', 'sync', 'interaction', 'mode'] : ['async', 'sync', 'dashed', 'solid', 'toggle'],
+      hint: serviceCall ? 'Interaction mode' : edge.async ? 'Solid line' : 'Dashed line',
       run: (inner) => inner.editor.toggleEdgeAsync(edge.id),
     },
-    {
+    ...(!serviceCall || !asyncMode ? [{
       id: 'edge-response',
       title: edge.hasResponse ? 'Remove response line' : 'Add response line',
-      group: 'connector',
+      group: 'connector' as const,
       keywords: ['reply', 'return', 'request response', '200'],
-      run: (inner) => inner.editor.setEdgeHasResponse(edge.id, !edge.hasResponse),
-    },
+      run: (inner: CommandContext) => inner.editor.setEdgeHasResponse(edge.id, !edge.hasResponse),
+    }] : []),
     {
       id: 'edge-route-direct',
       title: edge.routeMode === 'direct' ? 'Use smart routing' : 'Use direct routing',
@@ -1570,7 +1573,7 @@ export function edgeCommands(ctx: CommandContext, edge: DraftEdge): Command[] {
       keywords: ['move start', 'from', 'origin', 'retarget'],
       run: (inner) => ({
         prompt: 'Source',
-        options: nodeOptions(endpointCandidates(inner, [edge.source, edge.target]), 'reconnect-source', (node, deep) =>
+        options: nodeOptions(endpointCandidates(inner, [edge.source, edge.target]).filter((node) => !reconnectProblem(inner.editor.document, edge, 'source', node.id)), 'reconnect-source', (node, deep) =>
           deep.editor.reconnectEdge(edge.id, 'source', node.id, undefined),
         ),
       }),
@@ -1582,7 +1585,7 @@ export function edgeCommands(ctx: CommandContext, edge: DraftEdge): Command[] {
       keywords: ['move end', 'to', 'destination', 'retarget'],
       run: (inner) => ({
         prompt: 'Target',
-        options: nodeOptions(endpointCandidates(inner, [edge.source, edge.target]), 'reconnect-target', (node, deep) =>
+        options: nodeOptions(endpointCandidates(inner, [edge.source, edge.target]).filter((node) => !reconnectProblem(inner.editor.document, edge, 'target', node.id)), 'reconnect-target', (node, deep) =>
           deep.editor.reconnectEdge(edge.id, 'target', node.id, undefined),
         ),
       }),

@@ -13,6 +13,7 @@
  * whose crossings didn't change.
  */
 import type { DraftEdge, DraftNode } from '../document/types';
+import { edgeLabelSize } from './labelLayout';
 import { routingPlan } from './bundles';
 import { dashForEdge } from './kindStyle';
 import { obstaclesForEdge } from './obstacles';
@@ -23,6 +24,7 @@ import {
   labelLaneOffset,
   laneIndex,
   rectOf,
+  responseAwayFor,
   responseLaneFor,
   responseWaypointsFor,
   responseSpineFor,
@@ -236,6 +238,7 @@ function linesOf(nodes: readonly DraftNode[], edges: readonly DraftEdge[], obsta
         rectKey(targetRect),
         JSON.stringify([edge.sourceAnchor, edge.targetAnchor, spine, edge.waypoints]),
         edge.routing,
+        edge.label,
         lane,
         edge.hasResponse ? 1 : 0,
         edge.kind,
@@ -256,6 +259,7 @@ function linesOf(nodes: readonly DraftNode[], edges: readonly DraftEdge[], obsta
       anchors: { source: edge.sourceAnchor, target: edge.targetAnchor },
       waypoints: edge.waypoints,
       lane,
+      label: edge.label ? { ...edgeLabelSize(edge.label), away: responseAwayFor(edge.hasResponse, lane) } : undefined,
       obstacles,
       spine,
     });

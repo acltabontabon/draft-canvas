@@ -7,9 +7,8 @@ import type { DraftNode } from '../document/types';
 import { rectOf, type Rect } from './routing';
 
 const OBSTACLE_CELL = 512;
-/** Well past `detourAround`'s own 10px band: an obstacle can only bend a connector if it overlaps
- *  the box between its two endpoints, so anything further out can never change the route. */
-const OBSTACLE_REACH = 32;
+/** Include the full reach of a wrapped label, not just the stroke's corridor. */
+const OBSTACLE_REACH = 256;
 const NO_RECTS: readonly Rect[] = [];
 
 interface ObstacleGrid {
@@ -56,9 +55,8 @@ function gridFor(nodes: readonly DraftNode[]): ObstacleGrid {
 
 /**
  * The obstacles that could bend the connector between `sourceId` and `targetId` — every
- * non-boundary node other than its endpoints overlapping the box the two span. Routing with this
- * subset draws exactly what routing with every node draws (see `detourAround`), which is what keeps
- * the canvas and the exporter tracing the same path.
+ * non-boundary node other than its endpoints near the box the two span, including room for label
+ * placement beside the line. The canvas and exporter use the same scoped set.
  *
  * Built for a per-connector store subscription: the grid and results are cached per `nodes` array
  * and each rect per node object, so under `useShallow` a connector re-renders only when a node

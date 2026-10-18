@@ -34,6 +34,11 @@ the release notes and the in-app What's New are generated from here. See
 
 #### Fixed
 
+- Connector detours check the whole path against nearby shapes, and custom labels flip or slide
+  along their connector to stay clear of nearby shapes in the editor and exports.
+- Service connectors use the same Sync/Async behavior in the inspector, context menu and commands.
+- Reconnecting onto an already connected shape explains why it was refused, and connector endpoints
+  stay easier to grab when zoomed out.
 - Response labels stay beside their request labels when moving shapes changes which bend of a
   connector is longest, on the canvas and in exports.
 - Turning off a connector's response line or switching it to Async no longer leaves its response

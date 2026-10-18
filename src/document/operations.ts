@@ -4,6 +4,7 @@
  * identity, which is what lets the canvas memoize per node and lets the history
  * stack keep whole snapshots cheaply.
  */
+import { reconnectProblem } from './reconnect';
 import { createId } from './ids';
 import { pruneOpenPoints } from './openPoints';
 import { defaultSizeFor } from './factory';
@@ -187,32 +188,18 @@ export function reconnectEdge(
   newSide: Side | undefined,
   newOffset = 0.5,
 ): DraftDocument {
-  // Mirrors `addEdges`' own guard: a reconnect racing a concurrent delete of the node being
-  // dropped onto (or handed a stale id from any other caller) must never leave the edge pointing
-  // at a node that no longer exists.
-  if (!doc.nodes.some((node) => node.id === newNodeId)) return doc;
+  // A stale target or a refused duplicate must leave the original document by identity.
+  const current = doc.edges.find((edge) => edge.id === id);
+  if (!current || reconnectProblem(doc, current, endpoint, newNodeId)) return doc;
   const anchor = newSide ? { side: newSide, offset: newOffset } : undefined;
   let changed = false;
   const edges = doc.edges.map((edge) => {
     if (edge.id !== id) return edge;
-    // Mirrors `connect()`'s own source === target guard: moving one endpoint onto the other,
-    // untouched one would leave a self-loop routing/hit-testing never expects.
-    const otherEndpoint = endpoint === 'source' ? edge.target : edge.source;
-    if (newNodeId === otherEndpoint) return edge;
     const anchorKey = endpoint === 'source' ? 'sourceAnchor' : 'targetAnchor';
     // Dropped back on the handle it came from: nothing moved, so no undo step.
     const previousAnchor = edge[anchorKey];
     const sameNode = (endpoint === 'source' ? edge.source : edge.target) === newNodeId;
     if (sameNode && previousAnchor?.side === anchor?.side && previousAnchor?.offset === anchor?.offset) return edge;
-    // Mirrors `connect()`'s duplicate guard: moving an end onto a pair another connector already
-    // joins would stack two identical arrows. Re-siding on the same node keeps the pair it already
-    // had, so it is never refused — a twin that was already there (Saga – Orchestration ships a
-    // command and a compensation between the same two nodes) must not pin this one's anchor.
-    const source = endpoint === 'source' ? newNodeId : edge.source;
-    const target = endpoint === 'target' ? newNodeId : edge.target;
-    if (!sameNode && doc.edges.some((other) => other.id !== id && other.source === source && other.target === target)) {
-      return edge;
-    }
     changed = true;
     const next: DraftEdge =
       endpoint === 'source' ? { ...edge, source: newNodeId } : { ...edge, target: newNodeId };
