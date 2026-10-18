@@ -44,6 +44,15 @@ export function LibraryBrand() {
           hasUnreadNotes && <span className="dc-new-dot" aria-hidden="true" />
         )}
       </span>
+      <button
+        type="button"
+        className="dc-brand-about"
+        onClick={() => useUiStore.getState().setDiagnosticsOpen(true)}
+        aria-label="Troubleshooting"
+        title="Troubleshooting"
+      >
+        <Icon name="help" size={14} />
+      </button>
     </div>
   );
 }

@@ -30,7 +30,8 @@ the release notes and the in-app What's New are generated from here. See
 #### Changed
 
 - About is redrawn as a drawing sheet with a title block for the version, release notes and author,
-  and the diagnostic report reads like the rest of the app.
+  with a quiet Licences link. Diagnostic reports move to **Settings → Support** on desktop and
+  **Troubleshooting** on the web home screen or **More → Diagnostic report…** in the web editor.
 - Right-click menus are shorter and tidier. Each one names what it acts on, empty canvas lays the
   shapes out in a grid with Undo, Fit to view and Tidy up layout beside them, and a multi-selection
   aligns from one row of icons. Shortcuts read as plain hints, and the shape or connector popover no

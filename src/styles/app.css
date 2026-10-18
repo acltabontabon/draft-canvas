@@ -5042,6 +5042,15 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   letter-spacing: -0.01em;
 }
 
+.dc-diagnostics {
+  display: flex;
+  flex-direction: column;
+}
+
+.dc-diagnostics > p {
+  margin: 0;
+}
+
 .dc-diagnostics-preview {
   width: 100%;
   box-sizing: border-box;
@@ -5485,11 +5494,6 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   gap: 6px 16px;
   width: 100%;
   margin-top: 14px;
-}
-
-.dc-about-footer-end {
-  display: flex;
-  gap: 14px;
 }
 
 .dc-about-footnote {

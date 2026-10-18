@@ -92,7 +92,8 @@ Keep portable backups of diagrams you want to retain.
 
 ## Optional local diagnostic report
 
-**Diagnostic report…** in About previews up to twenty recent failure categories, timestamps,
+Open **Troubleshooting** on the web home screen, **More → Diagnostic report…** in the web editor,
+or **Settings → Support** on desktop to preview up to twenty recent failure categories, timestamps,
 versions and optional element counts. It excludes raw errors, stacks, diagram content, identifiers,
 URLs and file paths. The report stays in memory until reload; downloading saves a local JSON file
 and never uploads it. See [Local diagnostic reports](reliability.md#local-diagnostic-reports).

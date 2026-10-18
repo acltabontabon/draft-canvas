@@ -260,7 +260,8 @@ browser has granted persistent storage. A partial backup keeps readable diagrams
 could not be read; it does not count as a complete backup. Keep an earlier backup until the problem
 is resolved. Browser persistence does not protect against clearing site data or losing the device.
 
-For a problem report, open About → **Diagnostic report…**, review the displayed JSON, and choose
+For a problem report, open **Troubleshooting** on the web home screen, **More → Diagnostic report…**
+in the web editor, or **Settings → Support** on desktop. Review the displayed JSON and choose
 **Download report**. It includes recent failure categories and versions, excluding diagram content
 and file paths. It is never sent automatically. Saving and recovery limits are explained in
 [reliability](../reference/reliability.md#recovery-guarantees-and-limits).

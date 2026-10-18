@@ -256,6 +256,7 @@ export interface UiStore {
   fitRequestId: number;
   exportOpen: boolean;
   aboutOpen: boolean;
+  diagnosticsOpen: boolean;
   /** Canvas Settings — background image and personality preset. */
   settingsOpen: boolean;
   /**
@@ -512,6 +513,7 @@ export interface UiStore {
   setExportOpen: (open: boolean) => void;
   setReadOnly: (readOnly: UiStore['readOnly']) => void;
   setAboutOpen: (open: boolean) => void;
+  setDiagnosticsOpen: (open: boolean) => void;
   setSettingsOpen: (open: boolean) => void;
   setQuickConnect: (state: QuickConnectState | null) => void;
   setContextMenu: (state: ContextMenuState | null) => void;
@@ -635,6 +637,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   fitRequestId: 0,
   exportOpen: false,
   aboutOpen: false,
+  diagnosticsOpen: false,
   settingsOpen: false,
   readOnly: null,
   toasts: [],
@@ -695,6 +698,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   setExportOpen: (exportOpen) => set({ exportOpen, ...(!exportOpen ? { shareFromHere: false } : {}) }),
   setReadOnly: (readOnly) => set({ readOnly }),
   setAboutOpen: (aboutOpen) => set({ aboutOpen }),
+  setDiagnosticsOpen: (diagnosticsOpen) => set({ diagnosticsOpen }),
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
   setQuickConnect: (quickConnect) => set({ quickConnect }),
   setContextMenu: (contextMenu) => set({ contextMenu }),

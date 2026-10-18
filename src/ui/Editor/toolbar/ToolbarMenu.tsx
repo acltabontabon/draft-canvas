@@ -41,7 +41,7 @@ const RIGHT_CLEARANCE = 8;
 const GAP = 6;
 
 /**
- * The toolbar's overflow menu — Canvas settings, Documentation, Keyboard shortcuts, About.
+ * The toolbar's overflow menu — Canvas settings, documentation, shortcuts, About and web diagnostics.
  *
  * Structurally modelled on `canvas/ContextMenu.tsx` rather than extracted into a shared generic
  * Menu, following the precedent `MoveToProjectMenu` set: the two menus want the same keyboard and
