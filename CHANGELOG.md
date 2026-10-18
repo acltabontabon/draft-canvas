@@ -30,8 +30,9 @@ the release notes and the in-app What's New are generated from here. See
 #### Changed
 
 - About becomes an open composition with expressive typography, a small diagram sketch and quiet
-  author credits and Licences link. Diagnostic reports move to **Settings → Support** on desktop and
-  **Troubleshooting** on the web home screen or **More → Diagnostic report…** in the web editor.
+  author credits, with Licences tucked into the link icons. Diagnostic reports move to
+  **Settings → Support** on desktop, **Troubleshooting** on the web home screen or
+  **More → Diagnostic report…** in the web editor.
 - Right-click menus are shorter and tidier. Each one names what it acts on, empty canvas lays the
   shapes out in a grid with Undo, Fit to view and Tidy up layout beside them, and a multi-selection
   aligns from one row of icons. Shortcuts read as plain hints, and the shape or connector popover no

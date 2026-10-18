@@ -5544,61 +5544,6 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   }
 }
 
-/* ------------------------------------------------------------- support -- */
-
-/* A compact colophon keeps the human gesture and the legal footnote together. */
-.dc-about-footer {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  margin-top: 16px;
-}
-
-.dc-about-footnote {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 24px;
-  padding: 2px 0;
-  border: none;
-  background: none;
-  font: inherit;
-  font-size: 11px;
-  line-height: 18px;
-  color: var(--dc-text-faint);
-  text-decoration: none;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: color 90ms ease;
-}
-
-.dc-about-coffee > svg {
-  color: var(--dc-selection);
-  flex-shrink: 0;
-}
-
-.dc-about-footnote-arrow {
-  font-size: 10px;
-}
-
-.dc-about-footer-separator {
-  color: var(--dc-text-faint);
-  font-size: 11px;
-}
-
-.dc-about-footnote:hover,
-.dc-about-footnote:focus-visible {
-  color: var(--dc-selection);
-}
-
-.dc-about-footnote:focus-visible {
-  outline: 2px solid var(--dc-selection);
-  outline-offset: 2px;
-  border-radius: var(--dc-radius-sm);
-}
-
 /* --------------------------------------------------------- error boundary -- */
 
 .dc-error-boundary {

@@ -46,12 +46,14 @@ function MarginSketch() {
   );
 }
 
-const AUTHOR_LINKS: { label: string; href: string; icon: IconName; external: boolean }[] = [
+const CREDIT_LINKS: { label: string; href: string; icon: IconName; external: boolean }[] = [
   { label: 'Documentation', href: PRODUCT.links.docs, icon: 'help', external: true },
   { label: 'GitHub', href: PRODUCT.links.github, icon: 'github', external: true },
   { label: 'LinkedIn', href: PRODUCT.links.linkedin, icon: 'linkedin', external: true },
   { label: 'Personal site', href: PRODUCT.links.website, icon: 'globe', external: true },
   { label: 'Email', href: `mailto:${PRODUCT.links.email}`, icon: 'mail', external: false },
+  // Relative, so the bundled notices also resolve inside the desktop app.
+  { label: 'Licences', href: './THIRD_PARTY_LICENSES.txt', icon: 'file', external: true },
 ];
 
 function ReleaseHighlights({ highlights }: { highlights: ProductReleaseHighlight[] }) {
@@ -342,7 +344,7 @@ function AboutDialogBody() {
               <strong>{PRODUCT.author}</strong>
             </div>
             <div className="dc-about-links">
-              {AUTHOR_LINKS.map((link) => (
+              {CREDIT_LINKS.map((link) => (
                 <a
                   key={link.label}
                   className="dc-about-link"
@@ -355,26 +357,6 @@ function AboutDialogBody() {
                 </a>
               ))}
             </div>
-          </div>
-
-          <div className="dc-about-footer">
-            <a
-              className="dc-about-footnote dc-about-coffee"
-              href={PRODUCT.links.kofi}
-              target="_blank"
-              rel="noreferrer"
-              title="If Draft Canvas helped, you can optionally support its development."
-              aria-label="Coffee for the maker on Ko-fi (opens in a new tab)"
-            >
-              <Icon name="coffee" size={15} />
-              <span>Coffee for the maker</span>
-              <span className="dc-about-footnote-arrow" aria-hidden="true">↗</span>
-            </a>
-            <span className="dc-about-footer-separator" aria-hidden="true">·</span>
-            {/* Relative, so it also resolves inside the desktop bundle. */}
-            <a className="dc-about-footnote" href="./THIRD_PARTY_LICENSES.txt" target="_blank" rel="noreferrer">
-              Licences
-            </a>
           </div>
         </div>
       )}
