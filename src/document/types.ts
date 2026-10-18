@@ -354,7 +354,8 @@ export interface DraftNode {
    */
   description?: string;
   /**
-   * What it is built with ("Spring Boot", "PostgreSQL 16") — the C4 "[technology]" line.
+   * What it is built with ("Spring Boot", "PostgreSQL 16") — displayed as a recognized technology
+   * logo or a generic technology mark. The full value is retained for details and source exports.
    * Architecture shapes only (`C4_TEXT_TYPES`). Not a kind: it never changes the silhouette or the
    * connector semantics, which follow `serviceKind`/`databaseKind`/… exactly as before.
    */

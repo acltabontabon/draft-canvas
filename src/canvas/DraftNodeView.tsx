@@ -42,6 +42,8 @@ import { unresolvedOpenPointsFor } from '../document/openPoints';
 import { nodeMarkerOrigin } from '../openPoints/marker';
 import { isImeKeyEvent } from '../lib/isEditableTarget';
 import { count } from '../lib/plural';
+import { TechnologyDetails } from './TechnologyDetails';
+import { nodeTechnologyIcon } from '../nodes/technology';
 import { presentationScope, toggledReveal } from '../presentation/presentationAttachments';
 
 /**
@@ -592,6 +594,10 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
       <SvgSurface className="dc-node-surface" width={effectiveWidth} height={effectiveHeight}>
         {shapes}
       </SvgSurface>
+
+      {!editing && !capsule && liveNode && nodeTechnologyIcon(liveNode) && (
+        <TechnologyDetails key={`${node.id}:${node.technology}`} node={liveNode} />
+      )}
 
       {/* Standing in for everything above while the card is being carried — `canvas.css` hides the
           surface and the chrome under `[data-drag-capsule]`, so this is all that shows. */}

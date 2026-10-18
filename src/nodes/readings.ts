@@ -79,7 +79,7 @@ export function kindReading(node: DraftNode): string {
 
 /** "Orders API, service" — a shape's name and kind, as its `aria-label` says it. */
 export function nodeReading(node: DraftNode): string {
-  return `${displayNameFor(node)}, ${kindReading(node)}`;
+  return `${displayNameFor(node)}, ${kindReading(node)}${node.technology ? `, ${node.technology}` : ''}`;
 }
 
 type NodeLookup = (id: string) => DraftNode | undefined;

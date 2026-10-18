@@ -6,13 +6,26 @@
 import { describe, expect, it } from 'vitest';
 import { compose } from '../../src/agent/compile';
 import { measureContext } from '../../src/agent/place';
-import { checkFit, checkQuality, isBetterCandidate, isBetterReport, isClean, isCleanCandidate, type QualityReport } from '../../src/agent/quality';
+import { checkFit, checkQuality, isBetterCandidate, isBetterReport, isClean, isCleanCandidate, renderedBoundsOf, smallestFontPresent, type QualityReport } from '../../src/agent/quality';
+import { createNode } from '../../src/document/factory';
+import { describeContext } from '../../src/nodes/describe';
+import { LIGHT } from '../../src/render/theme/tokens';
 import { deserializeDocument } from '../../src/export/project';
 import type { DraftNode } from '../../src/document/types';
 
 const report = (errors: number, warnings: number): QualityReport => ({
   errors: Array.from({ length: errors }, (_, i) => ({ kind: 'overlap' as const, ids: [`e${i}`], message: '' })),
   warnings: Array.from({ length: warnings }, (_, i) => ({ kind: 'jog' as const, ids: [`w${i}`], message: '' })),
+});
+
+describe('technology logo readability', () => {
+  it('counts the logo extent, without counting the text line it replaced', () => {
+    const node = createNode({ type: 'service', x: 50, y: 50, text: 'Orders', technology: 'PostgreSQL 16' });
+    expect(smallestFontPresent([node], [])).toBe(14);
+    expect(smallestFontPresent([{ ...node, technology: 'Internal engine' }], [])).toBe(14);
+    expect(smallestFontPresent([{ ...node, description: 'Stores orders.' }], [])).toBe(11);
+    expect(renderedBoundsOf([node], [], describeContext(LIGHT))).toEqual({ width: node.width + 25, height: node.height });
+  });
 });
 
 describe('isBetterReport', () => {
@@ -73,11 +86,14 @@ describe('the create_diagram repair ladder', () => {
       title: 'Repayment events fan-out',
       layout: { spacing: 'spacious', normalizePeerSizes: false },
       nodes: [
-        { id: 'parser', type: 'service', label: 'Batch Parser', technology: 'Spring Batch' },
-        { id: 'sns', type: 'topic', label: 'Repayment Events', technology: 'Amazon SNS' },
-        { id: 'q1', type: 'queue', label: 'Posting Queue', technology: 'SQS' },
-        { id: 'q2', type: 'queue', label: 'Audit Queue', technology: 'SQS' },
-        { id: 'q3', type: 'queue', label: 'Notification Queue', technology: 'SQS' },
+        // These descriptions retain the fixture's one-line caption geometry now that technology
+        // itself is a logo. Without them the initial arrangement is already clean and stops
+        // exercising the warning-driven repair that this regression test protects.
+        { id: 'parser', type: 'service', label: 'Batch Parser', technology: 'Spring Batch', description: 'Spring Batch' },
+        { id: 'sns', type: 'topic', label: 'Repayment Events', technology: 'Amazon SNS', description: 'Amazon SNS' },
+        { id: 'q1', type: 'queue', label: 'Posting Queue', technology: 'SQS', description: 'SQS' },
+        { id: 'q2', type: 'queue', label: 'Audit Queue', technology: 'SQS', description: 'SQS' },
+        { id: 'q3', type: 'queue', label: 'Notification Queue', technology: 'SQS', description: 'SQS' },
         { id: 'posting', type: 'worker', label: 'Repayment Posting' },
         { id: 'audit', type: 'worker', label: 'Audit Writer' },
         { id: 'notify', type: 'worker', label: 'Borrower Notifier' },

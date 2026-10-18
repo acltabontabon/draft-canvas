@@ -7,6 +7,34 @@ means, showing the reply, and marking the failure path.
 
 Shortcuts are written for a Mac. On Windows and Linux, read `⌘` as `Ctrl`.
 
+## Technology and description
+
+Select an architecture shape and open **Details** to set **Technology** and **Description**.
+As you type, matching names appear with their Simple Icons. Choose a suggestion with the pointer,
+or use the arrow keys and Enter. Escape closes suggestions; Enter without a matching suggestion
+or leaving the field keeps your custom value. A version you have already typed is preserved when
+you choose a matching name: **Postgres 16** becomes **PostgreSQL 16**.
+
+![The Technology field suggests PostgreSQL with its elephant icon while the user types Postgres.](../media/guides/technology-suggestions.png)
+
+Every nonempty technology appears as a small, unframed icon beside the shape's upper-right corner;
+for a Data Store, it sits beside the symbol. Recognized names use their brand logo; custom names
+and mixed stacks such as **Node.js / React** use a neutral chip. Click the icon, or focus it and
+press Enter, to read the complete technology and version. The name, kind and description stay
+visible. Clear the Technology field to remove the icon.
+
+![A PostgreSQL elephant beside Orders and a generic technology chip beside Internal worker.](../media/guides/technology-generic.png)
+
+The bundled catalog includes PostgreSQL (also **Postgres**), MySQL, MariaDB, MongoDB, Redis, SQLite,
+Node.js, Python, Spring Boot, .NET, RabbitMQ, Apache Kafka, React, NGINX, Docker, Kubernetes, Go and
+TypeScript. Names are case-insensitive, and a trailing version such as **PostgreSQL 16** is recognized.
+Suggestions advertise only this bundled catalog; free text is always allowed.
+
+Brand logos come from [Simple Icons](https://github.com/simple-icons/simple-icons). All icons are
+bundled with the app and work offline on the canvas and in image exports. The full technology
+remains in saved files and architecture source exports. Technology never changes a shape's kind
+or its relationships.
+
 ## Pick the right kind
 
 Every architecture shape has a **kind**, one step sharper than the shape. Select a shape and choose it

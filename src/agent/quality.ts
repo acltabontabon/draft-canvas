@@ -16,6 +16,7 @@
 
 import type { DraftEdge, DraftNode } from '../document/types';
 import { naturalArchitectureSize, type DescribeContext } from '../nodes/describe';
+import { nodeTechnologyIcon, technologyMarkBounds } from '../nodes/technology';
 import { isC4Element } from '../depth/c4';
 import { TEXT_SIZES } from '../render/text/fonts';
 import { captionSizer } from './place';
@@ -108,7 +109,7 @@ export function smallestFontPresent(nodes: readonly DraftNode[], edges: readonly
     if (node.type === 'note' || node.type === 'text' || node.type === 'code') consider(TEXT_SIZES.noteBody);
     if (isC4Element(node)) {
       if (node.description) consider(TEXT_SIZES.nodeDescription);
-      if (node.technology) consider(TEXT_SIZES.nodeTechnology);
+      if (node.technology && !nodeTechnologyIcon(node)) consider(TEXT_SIZES.nodeTechnology);
     }
   }
   for (const edge of edges) {
@@ -134,6 +135,8 @@ export function renderedBoundsOf(nodes: readonly DraftNode[], edges: readonly Dr
   for (const node of nodes) {
     grow(node.x, node.y);
     grow(node.x + node.width, node.y + node.height);
+    const mark = technologyMarkBounds(node);
+    if (mark) grow(node.x + mark.x + mark.width, node.y + mark.y + mark.height);
   }
   const caption = captionSizer(nodes, ctx);
   for (const edge of edges) {
