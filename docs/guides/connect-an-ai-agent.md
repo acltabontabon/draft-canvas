@@ -322,6 +322,9 @@ the app accepts:
   the app's canvas limits or 8 MB.
 - A receipt lists at most ten advisories on a create and five on an update; when more were found,
   `advisoriesDropped` says how many were left out.
+- A create receipt's `legibility` (crossings, detours, connectors through boundaries) is the top
+  view's, with every inside view's under `legibility.views`, each named by its `view` path; advice
+  about an inside view starts `Inside <path>:`. An update receipt reports the view it changed.
 
 For how it works — the protocol, the guarantees about retries, what is and isn't supported — see
 [Agent integration](../reference/agent-integration.md).

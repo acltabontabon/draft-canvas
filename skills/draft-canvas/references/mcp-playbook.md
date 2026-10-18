@@ -28,7 +28,9 @@ A create or update answers with:
 - `revision` — pass it as `expectedRevision` next time.
 - `quality` — `errors` (refused unless `allowDegraded`) and `warnings` such as a connector that jogs
   sideways. A warning is worth a look, not always a change.
-- `legibility` — `crossings`, plus connectors that detour or cut through a boundary they're not in.
+- `legibility` — `crossings`, plus connectors that detour or cut through a boundary they're not in:
+  the top view's at the top level, and every inside view's under `views`, each with its `view` path.
+  Advice about an inside view starts "Inside <path>:".
 - `advisories` — sentences naming what in the request to change, often with the exact ops. At most
   ten on a create, five on an update; `advisoriesDropped` counts the rest.
 

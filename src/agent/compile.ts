@@ -68,8 +68,7 @@ function composeWithin(raw: unknown, diagramId: string, report: Report): Compose
   let best: Candidate | undefined;
   let outOfTime = false;
   let tried = 0;
-  // Which note is about which element: a note's subject isn't stored in the file, only used to place it.
-  const about = new Map(spec.notes.flatMap((n) => (n.near ? [[n.id, n.near] as const] : [])));
+  const about = aboutOf(spec);
   const explicit = explicitIds(spec);
   const judge = (layout: LayoutSpec): Candidate => {
     tried += 1;
@@ -129,9 +128,18 @@ function composeWithin(raw: unknown, diagramId: string, report: Report): Compose
   }
 
   const document = assemble(spec, placed, diagramId);
+  // Every inside view measured as the top one is: a container view one level down that crosses itself
+  // is as much the agent's to fix as the top, and without its numbers it could only find out by
+  // rendering each view and looking.
+  const insides = insideLegibility(spec, placed);
   // What the request itself could change for a clearer diagram comes first: it is the advice the agent
-  // can act on in this same turn (see `advice.ts`).
-  const advice = [...(spec.starter ? [] : adviceFor(spec, legibility, used.primaryFlow)), ...levelAdvisories(document.nodes, document.level), ...placed.advisories];
+  // can act on in this same turn (see `advice.ts`). An inside view's advice says which view it is about.
+  const advice = [
+    ...(spec.starter ? [] : adviceFor(spec, legibility, used.primaryFlow)),
+    ...(spec.starter ? [] : insides.flatMap(({ path, room, legibility: l }) => adviceFor(room, l).map((a) => `Inside ${path.join(' ▸ ')}: ${a}`))),
+    ...levelAdvisories(document.nodes, document.level),
+    ...placed.advisories,
+  ];
   const text = gate(document);
   const counts = countAll(document);
   return {
@@ -142,7 +150,10 @@ function composeWithin(raw: unknown, diagramId: string, report: Report): Compose
       layout: { direction: used.direction, spacing: used.spacing },
       ...(issues.length || (fit && !fit.readable) ? { degraded: true } : {}),
       quality: qualityReceipt('whole-diagram', found),
-      legibility: legibilityReceipt(legibility),
+      legibility: {
+        ...legibilityReceipt(legibility),
+        ...(insides.length ? { views: insides.map(({ path, legibility: l }) => ({ view: path, ...legibilityReceipt(l) })) } : {}),
+      },
       ...(fit ? { fit } : {}),
       ...advisoriesReceipt(advice, 10),
     },
@@ -231,6 +242,27 @@ export function legibilityReceipt(l: Legibility) {
     ...(l.farNotes.length ? { farNotes: l.farNotes.slice(0, 10) } : {}),
     fill: l.fill,
   };
+}
+
+/** Which note is about which element, for one room: a note's subject isn't stored, only used to place it. */
+function aboutOf(room: RoomSpec): Map<string, string> {
+  return new Map(room.notes.flatMap((n) => (n.near ? [[n.id, n.near] as const] : [])));
+}
+
+/** The legibility of every inside view, depth first, by the element ids leading down to it. */
+function insideLegibility(spec: RoomSpec, placed: PlacedRoom): { path: string[]; room: RoomSpec; legibility: Legibility }[] {
+  const out: { path: string[]; room: RoomSpec; legibility: Legibility }[] = [];
+  const visit = (room: RoomSpec, nodes: readonly DraftNode[], path: string[]) => {
+    for (const node of nodes) {
+      const inner = node.inside && room.nodes.find((n) => n.id === node.id)?.inside;
+      if (!node.inside || !inner) continue;
+      const here = [...path, node.id];
+      out.push({ path: here, room: inner, legibility: legibilityOf(node.inside.nodes, node.inside.edges, aboutOf(inner)) });
+      visit(inner, node.inside.nodes, here);
+    }
+  };
+  visit(spec, placed.nodes, []);
+  return out;
 }
 
 /** Every id the request placed or routed itself, in every room — ids are unique file-wide. */

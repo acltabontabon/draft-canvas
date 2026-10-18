@@ -29,6 +29,8 @@ the release notes and the in-app What's New are generated from here. See
 
 #### Changed
 
+- When an agent draws a diagram with views inside its shapes, it is told how readable each of those
+  views came out too, not only the top one, so it can tidy every level before handing it over.
 - About becomes an open composition with expressive typography, a small diagram sketch and quiet
   author credits, with Licences tucked into the link icons. Diagnostic reports move to
   **Settings → Support** on desktop, **Troubleshooting** on the web home screen or

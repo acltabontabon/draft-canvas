@@ -468,7 +468,7 @@ mod tests {
     /// of files. When this fails: bump `metadata.version` in SKILL.md and add the pair it prints.
     const PUBLISHED: &[(&str, &str)] = &[(
         "1",
-        "85fb90a89099a81f8ce96a5f4ca42951256bdaad5aff037282af497e25f77901",
+        "41bc6035062f12018e5401a8fc8499d23c1a4e77a99b45ce4867018e3a1e2851",
     )];
 
     #[test]

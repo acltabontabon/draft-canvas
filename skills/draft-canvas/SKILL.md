@@ -136,8 +136,9 @@ The receipt is the app's own review:
 
 - **`advisories`** name what to change, often with the exact `update_diagram` ops. Apply the ones that
   make sense in one `update_diagram` call.
-- **`legibility`** lists crossings and connectors that detour or cut through a boundary — **for the
-  top view only**; inside views are judged by rendering them. A crossing usually means a store every
+- **`legibility`** lists crossings and connectors that detour or cut through a boundary — the top
+  view's at its top level, each inside view's under `legibility.views` (with its `view` path). A
+  crossing usually means a store every
   service writes to (draw one per owner when they own separate schemas), an external grouped away
   from its only caller, or a boundary grouping things that aren't one unit. A report-back loop
   (workers → status queue → dispatcher) is a real cycle: keep it and give it its own flow.
