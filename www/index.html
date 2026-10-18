@@ -305,79 +305,62 @@
         </div>
       </section>
 
-      <!-- ================================================================
-           THE THREE TRADES, from docs/reference/architecture.md, drawn the
-           way the canvas draws a relationship: the hinge word is the
-           connector's caption, and the one concession is dashed.
-      ================================================================= -->
-      <section class="trades" aria-labelledby="trades-title">
-        <h2 class="overline reveal" id="trades-title">Three opinions, held on purpose</h2>
-        <ul class="trade-list">
-          <li class="trade reveal">
-            <span class="trade-a">Speed</span>
-            <span class="trade-wire"><span class="trade-cap">over</span></span>
-            <span class="trade-b">completeness</span>
-          </li>
-          <li class="trade reveal">
-            <span class="trade-a">Opinion</span>
-            <span class="trade-wire"><span class="trade-cap">over</span></span>
-            <span class="trade-b">configurability</span>
-          </li>
-          <li class="trade trade-dashed reveal">
-            <span class="trade-a">Throwaway</span>
-            <span class="trade-wire"><span class="trade-cap">but</span></span>
-            <span class="trade-b">exportable</span>
-          </li>
-        </ul>
-        <p class="trades-note reveal">
-          For the diagram a meeting needs in the next thirty seconds — and the one worth keeping
-          after it.
-        </p>
-      </section>
-
-      <!-- ================================================================
-           GET IT. Two doors into the same editor, and the file that walks
-           between them.
-      ================================================================= -->
+      <!-- An open drafting sheet, continuous with the paper and ink above. -->
       <section class="get" id="get" aria-labelledby="get-title">
-        <header class="section-head reveal">
-          <p class="overline">Free and open source · Apache 2.0</p>
-          <h2 id="get-title">Open a tab. <em>Or a window of its own.</em></h2>
-        </header>
+        <div class="get-sheet">
+          <figure class="get-drawing" role="img" aria-labelledby="get-drawing-caption">
+            <svg class="get-art-wide" viewBox="0 0 1100 470" aria-hidden="true" focusable="false">
+              <g class="draft-guides">
+                <path d="M0 20H26M13 7V33M1074 20H1100M1087 7V33M0 450H26M13 437V463M1074 450H1100M1087 437V463" />
+                <path d="M13 75V395M1087 75V395" stroke-dasharray="2 8" />
+              </g>
+              <g class="draft-rough">
+                <path d="M48 102L173 96L178 170L52 177Z" />
+                <path d="M46 105Q99 98 176 99M174 97Q175 136 180 173M177 171L49 179M51 175L47 103" />
+                <path d="M72 126Q96 119 118 124M72 139Q112 131 152 136M74 151L125 147" />
+                <path d="M108 177C107 208 143 218 164 205S166 172 149 181S145 228 187 231" />
+                <text x="47" y="76" transform="rotate(-4 47 76)">what if...</text>
+              </g>
+              <g class="draft-clear">
+                <rect x="925" y="226" width="108" height="54" rx="5" />
+                <path d="M933 232H1040V286H933" opacity=".35" />
+                <path d="M979 280V316Q979 326 969 326H921M979 316Q979 326 989 326H1040" />
+                <rect x="890" y="326" width="60" height="40" rx="4" />
+                <rect x="1010" y="326" width="60" height="40" rx="4" />
+                <path d="M963 251H995M908 346H932M1028 346H1052" />
+                <text x="939" y="400" transform="rotate(3 939 400)">oh, I see.</text>
+              </g>
+              <path class="draft-flourish" d="M158 344C202 304 249 314 235 342S167 370 189 346S273 337 307 352" />
+              <path class="draft-flourish" d="M297 343L309 353L295 357" />
+            </svg>
+            <svg class="get-art-narrow" viewBox="0 0 340 135" aria-hidden="true" focusable="false">
+              <g class="draft-rough">
+                <path d="M18 33L96 29L100 82L21 87ZM20 36L98 32M97 30L102 84M22 83L19 35" />
+                <path d="M33 48L65 45M34 59L81 56M35 70L71 67" />
+                <text x="18" y="18">what if...</text>
+              </g>
+              <path class="draft-flourish" d="M102 62C133 42 164 49 158 69S124 84 137 68S186 59 206 64M197 58L207 64L197 70" />
+              <g class="draft-clear">
+                <rect x="220" y="31" width="72" height="44" rx="4" />
+                <path d="M225 35H297V80H225M239 53H273M256 75V94H234M256 94H301" />
+                <rect x="220" y="94" width="28" height="20" rx="3" />
+                <rect x="287" y="94" width="28" height="20" rx="3" />
+                <text x="226" y="133">oh, I see.</text>
+              </g>
+            </svg>
+            <figcaption class="visually-hidden" id="get-drawing-caption">A rough note marked “what if…” becomes a connected diagram marked “oh, I see.”</figcaption>
+          </figure>
 
-        <div class="doors reveal">
-          <article class="door" id="web">
-            <p class="door-kicker">In your browser</p>
-            <h3>Nothing to install</h3>
-            <ul class="door-facts">
-              <li>No account, no sign-up.</li>
-              <li>Saved in this browser, on this device.</li>
-              <li>Keeps working offline once it has loaded.</li>
-            </ul>
-            <div class="door-act">
-              <a class="button button-primary" href="./editor/">Open live editor</a>
-            </div>
-            <p class="door-fine">Clearing site data clears your diagrams — export the ones you want to keep.</p>
-          </article>
+          <div class="get-heading reveal">
+            <p class="overline">A little space to think</p>
+            <h2 id="get-title"><span>Big ideas.</span><em>Rough drafts.</em></h2>
+            <p class="get-lead">You don&rsquo;t need the whole picture to start.<br />Just a thought worth drawing out.</p>
+          </div>
 
-          <!-- The seam between the two doors, drawn as what crosses it: the file. Nothing syncs, so
-               the connector is the export-and-open a person does by hand, in both directions. -->
-          <p class="seam" aria-label="A diagram moves between them as a .draftcanvas file">
-            <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" focusable="false"><path d="M2.5 5.5h10M10 3l2.5 2.5L10 8M13.5 10.5h-10M6 8l-2.5 2.5L6 13" /></svg>
-            <span>.draftcanvas</span>
-          </p>
-
-          <article class="door" id="desktop">
-            <p class="door-kicker">On your desktop</p>
-            <h3>A window of its own</h3>
-            <ul class="door-facts">
-              <li>Diagrams as plain files on disk, folders as projects.</li>
-              <li>A Quick Draft from the menu bar or system tray.</li>
-              <li>Connect Claude Code, Codex or Cursor in one click.</li>
-            </ul>
-            <div class="door-act">
+          <div class="get-desktop reveal" id="desktop">
+            <div class="get-download">
               <details class="downloads" id="downloads">
-                <summary class="button downloads-summary">
+                <summary class="button button-primary downloads-summary">
                   <span class="downloads-label">Download desktop</span>
                   <svg class="downloads-caret" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
                     <path d="M4 6.5l4 4 4-4" />
@@ -401,27 +384,27 @@
                   </li>
                 </ul>
               </details>
-              <span class="door-version">v__VERSION__ <a href="https://github.com/acltabontabon/draft-canvas/releases">All releases</a></span>
+              <p class="get-version">macOS &amp; Windows <span aria-hidden="true">·</span> v__VERSION__</p>
             </div>
-            <p class="door-fine">Or on a Mac, with Homebrew:</p>
-            <code class="door-cmd">brew install --cask acltabontabon/tap/draft-canvas</code>
-          </article>
-        </div>
+          </div>
 
-        <ul class="fine-print reveal">
-          <li>
-            <strong>Installers aren&rsquo;t code-signed yet.</strong> macOS and Windows warn you the
-            first time — <a href="./docs/desktop/#installing">here&rsquo;s how to get past it</a>.
-          </li>
-          <li>
-            <strong>No network calls of its own.</strong> A test fails the build on any.
-            <a href="./docs/privacy/">What&rsquo;s stored, in detail</a>.
-          </li>
-          <li>
-            <strong>Prefer your own server?</strong> Build the web editor and serve it anywhere.
-            <a href="./docs/self-hosting/">Self-hosting</a>.
-          </li>
-        </ul>
+          <details class="install-notes reveal">
+            <summary>Installation notes</summary>
+            <div class="install-notes-body">
+              <p><strong>First install?</strong> Installers aren&rsquo;t code-signed yet. macOS and Windows
+                show a warning — <a href="./docs/desktop/#installing">here&rsquo;s how to open the app</a>.
+                See <a href="https://github.com/acltabontabon/draft-canvas/releases">all releases</a>.</p>
+              <div>
+                <p><strong>On a Mac with Homebrew</strong></p>
+                <code class="install-command">brew install --cask acltabontabon/tap/draft-canvas</code>
+              </div>
+              <p id="web"><strong>Prefer a tab?</strong> The browser editor needs no account and works offline once loaded.
+                Diagrams stay in this browser; export the ones you want to keep before clearing site data.
+                Move between browser and desktop with a <code>.draftcanvas</code> file.
+                <a href="./docs/privacy/">Privacy details</a> · <a href="./docs/self-hosting/">Self-hosting</a>.</p>
+            </div>
+          </details>
+        </div>
       </section>
     </main>
 
@@ -432,15 +415,11 @@
           <rect x="15" y="18" width="11" height="7" rx="2" fill="none" stroke="var(--ink-ghost)" stroke-width="2" />
           <path d="M11.5 15.5v3.5h4" fill="none" stroke="currentColor" stroke-width="1.6" />
         </svg>
-        <p><strong>Draft Canvas</strong> <span>__VERSION__ · Apache 2.0</span></p>
+        <p><strong>Draft Canvas</strong> <span>Free &amp; open source · Apache 2.0</span></p>
       </div>
       <nav class="footer-links" aria-label="Elsewhere">
         <a href="https://github.com/acltabontabon/draft-canvas">Source</a>
         <a href="./docs/">Docs</a>
-        <a href="https://github.com/acltabontabon/draft-canvas/blob/main/CHANGELOG.md">Changelog</a>
-        <a href="https://github.com/acltabontabon/draft-canvas/releases">Releases</a>
-        <a href="./docs/self-hosting/">Self-hosting</a>
-        <a href="https://acltabontabon.com/">acltabontabon.com</a>
       </nav>
     </footer>
 

@@ -51,6 +51,11 @@ the release notes and the in-app What's New are generated from here. See
 - Removed unused legacy ZIP extraction support from the updater, eliminating three RustSec
   vulnerabilities in its ZIP dependency. Signed Windows and macOS update formats are unchanged.
 
+### Web
+
+- The marketing site closes with an illustrated drafting sheet, a focused desktop download and a
+  simpler footer.
+
 ## [1.14.0] - 2026-10-16
 
 Your agent draws like you do.

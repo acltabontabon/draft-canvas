@@ -193,8 +193,7 @@ p {
 
 /* Every small technical label on the page — the same treatment the product gives a node's kind
    caption, and a drawing gives its annotations. */
-.overline,
-.door-kicker {
+.overline {
   font-family: var(--mono);
   font-size: 0.72rem;
   font-weight: 400;
@@ -339,7 +338,7 @@ code {
 }
 
 /* Three short links fit beside the button down to a large phone; below that the page is one column
-   you scroll anyway, and Docs and Download are both in the footer. */
+   you scroll anyway, and Docs and Download are both in the masthead. */
 @media (max-width: 600px) {
   .masthead-nav { display: none; }
   .masthead-cta { margin-left: auto; }
@@ -1000,231 +999,183 @@ main > .moved {
   color: var(--ink-soft);
 }
 
-/* ── The three trades ────────────────────────────────────────────────────────────────────── */
+/* ── The final sheet ────────────────────────────────────────────────────────────────────── */
 
-.trades {
-  padding-block: clamp(56px, 9vh, 104px);
+.get {
+  padding-block: clamp(64px, 8vw, 112px) 48px;
+}
+
+.get-sheet {
+  position: relative;
+  padding-top: 64px;
+  border-top: 1px solid var(--rule);
+}
+
+.get-heading {
+  position: relative;
+  max-width: 800px;
+  margin-inline: auto;
   text-align: center;
 }
 
-.trade-list {
-  display: grid;
-  gap: clamp(6px, 1.4vh, 16px);
-  max-width: 1040px;
-  margin: clamp(26px, 4vh, 40px) auto 0;
-  padding: 0;
-  list-style: none;
+.get-heading .overline {
+  font-size: 0.68rem;
 }
 
-.trade {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) clamp(84px, 13vw, 176px) minmax(0, 1fr);
-  align-items: center;
-  gap: clamp(14px, 2vw, 28px);
+.get-heading h2 {
+  margin-top: 32px;
   font-family: var(--serif);
-  font-size: clamp(1.9rem, 4.4vw, 3.9rem);
-  line-height: 1.12;
-  letter-spacing: -0.022em;
+  font-size: clamp(4.2rem, 8.5vw, 7.2rem);
+  font-weight: 400;
+  line-height: 1.02;
+  letter-spacing: -0.045em;
 }
 
-.trade-a {
-  text-align: right;
-  font-style: italic;
+.get-heading h2 span,
+.get-heading h2 em {
+  display: block;
+}
+
+.get-heading h2 span { margin-right: 72px; }
+
+.get-heading h2 em {
+  position: relative;
+  width: fit-content;
+  margin: 0 auto;
+  padding-left: 64px;
+  font-weight: 400;
   color: var(--accent-ink);
 }
 
-.trade-b {
-  text-align: left;
+/* An imperfect second stroke gives the words the same pencil-and-ink finish as the hero. */
+.get-heading h2 em::after {
+  content: '';
+  position: absolute;
+  left: 62px;
+  right: -8px;
+  bottom: -12px;
+  height: 13px;
+  border-top: 1px solid var(--accent-line);
+  border-radius: 50%;
+  transform: rotate(-2deg);
+}
+
+.get-lead {
+  margin: 36px 0 0;
   color: var(--ink-soft);
+  font-size: clamp(0.95rem, 1.5vw, 1.08rem);
+  line-height: 1.7;
 }
 
-/* A relationship, drawn the way the canvas draws one: the hinge word is the connector's caption,
-   and the one trade that is a concession rather than a preference is dashed. */
-.trade-wire {
-  position: relative;
+.get-drawing {
+  position: absolute;
+  inset: 28px 0 auto;
+  margin: 0;
+  pointer-events: none;
+}
+
+.get-drawing > svg {
   display: block;
-  height: 12px;
+  width: 100%;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
-.trade-wire::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 6px;
-  top: 5px;
-  height: 1.5px;
-  background: var(--edge);
-  transform-origin: left center;
+.get-drawing > .get-art-narrow { display: none; }
+
+.draft-guides {
+  stroke: var(--guide);
+  stroke-width: 1;
 }
 
-.trade-dashed .trade-wire::before {
-  background: repeating-linear-gradient(90deg, var(--edge) 0 6px, transparent 6px 11px);
+.draft-rough {
+  stroke: var(--graphite);
+  stroke-width: 1.2;
 }
 
-.trade-wire::after {
-  content: '';
-  position: absolute;
-  right: 0;
-  top: 1.5px;
-  width: 9px;
-  height: 9px;
-  background: var(--edge);
-  clip-path: polygon(0 0, 100% 50%, 0 100%);
+.draft-clear {
+  stroke: var(--accent-ink);
+  stroke-width: 1.35;
 }
 
-.trade-cap {
-  position: absolute;
-  left: 50%;
-  bottom: 14px;
-  transform: translateX(-50%);
+.get-drawing text {
+  stroke: none;
+  fill: var(--ink-faint);
+  font-family: var(--serif);
+  font-size: 21px;
+  font-style: italic;
+}
+
+.draft-flourish {
+  stroke: var(--accent-line);
+  stroke-width: 1.5;
+}
+
+.get-desktop {
+  position: relative;
+  width: fit-content;
+  max-width: 100%;
+  margin: 32px auto 0;
+  scroll-margin-top: 100px;
+}
+
+.get-download .downloads-summary {
+  width: 100%;
+  min-width: 230px;
+  min-height: 52px;
+  justify-content: space-between;
+  padding-inline: 24px;
+  border-radius: 5px;
+}
+
+.get-version {
+  margin: 12px 0 0;
+  color: var(--ink-faint);
   font-family: var(--mono);
-  font-size: 0.7rem;
-  font-style: normal;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
-}
-
-.trades-note {
-  max-width: 34em;
-  margin: clamp(28px, 4.5vh, 44px) auto 0;
-  font-size: 1rem;
-  color: var(--ink-faint);
-}
-
-/* ── Get it ──────────────────────────────────────────────────────────────────────────────── */
-
-.get {
-  padding-block: clamp(56px, 9vh, 104px) clamp(56px, 8vh, 88px);
-}
-
-.section-head.center {
+  font-size: 0.68rem;
   text-align: center;
 }
 
-.doors {
+.get-version span { margin-inline: 3px; }
+
+.install-notes {
   position: relative;
+  margin-top: 22px;
+  font-size: 0.78rem;
+  color: var(--ink-faint);
+}
+
+.install-notes > summary {
+  width: fit-content;
+  margin-inline: auto;
+  padding-block: 8px;
+  cursor: pointer;
+  text-underline-offset: 4px;
+}
+
+.install-notes > summary:hover { text-decoration: underline; }
+
+.install-notes-body {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  border-top: 1px solid var(--ink-ghost);
-  border-bottom: 1px solid var(--rule);
+  gap: 16px 40px;
+  margin-top: 20px;
+  padding-block: 24px;
+  border-top: 1px solid var(--rule);
+  line-height: 1.7;
 }
 
-.door {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  padding: clamp(28px, 3.5vw, 44px) clamp(28px, 4vw, 56px) clamp(28px, 3.5vw, 40px) 0;
-}
+.install-notes-body > :last-child { grid-column: 1 / -1; }
+.install-notes-body p { margin: 0; }
+.install-notes-body strong { color: var(--ink-soft); }
 
-.door + .seam + .door {
-  padding-left: clamp(28px, 4vw, 56px);
-  padding-right: 0;
-  border-left: 1px solid var(--rule);
-}
-
-.door h3 {
-  margin: 10px 0 0;
-  font-family: var(--serif);
-  font-size: clamp(1.6rem, 2.4vw, 2.05rem);
-  font-weight: 400;
-  letter-spacing: -0.015em;
-}
-
-.door-facts {
-  margin: 18px 0 0;
-  padding: 0;
-  list-style: none;
-  color: var(--ink-soft);
-  font-size: 0.98rem;
-}
-
-.door-facts li {
-  position: relative;
-  padding: 4px 0 4px 24px;
-}
-
-/* A short connector stub for a bullet: the page's one mark for "and this, too". */
-.door-facts li::before {
-  content: '';
-  position: absolute;
-  left: 2px;
-  top: calc(4px + 0.8em);
-  width: 12px;
-  height: 1.5px;
-  background: var(--ink-ghost);
-}
-
-.door-act {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 12px 18px;
-  padding-top: 26px;
-}
-
-.door-version {
-  align-self: center;
-  font-family: var(--mono);
-  font-size: 0.74rem;
-  color: var(--ink-faint);
-}
-
-.door-version a {
-  margin-left: 8px;
-  font-family: var(--sans);
-  font-size: 0.84rem;
-  color: var(--ink-soft);
-}
-
-.door-fine {
-  margin: 16px 0 0;
-  font-size: 0.85rem;
-  color: var(--ink-faint);
-}
-
-.door-cmd {
+.install-command {
   display: block;
-  width: fit-content;
-  max-width: 100%;
   margin-top: 8px;
-  padding: 7px 11px;
-  overflow-x: auto;
-  font-size: 0.8rem;
-  white-space: nowrap;
-  color: var(--ink);
-  background: var(--paper-2);
-  border: 1px solid var(--rule);
-  border-radius: 7px;
-}
-
-/* The file crossing the seam: a connector label sitting where the divider meets the rule above,
-   as a caption sits on a junction on the canvas — clear of either door's words. */
-.seam {
-  position: absolute;
-  left: 50%;
-  top: 0;
-  z-index: 1;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  margin: 0;
-  padding: 4px 11px;
-  font-family: var(--mono);
-  font-size: 0.74rem;
+  overflow-wrap: anywhere;
   color: var(--ink-soft);
-  background: var(--paper);
-  border: 1px solid var(--rule-strong);
-  border-radius: 999px;
-  transform: translate(-50%, -50%);
-}
-
-.seam svg {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.4;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+  font-size: 0.72rem;
 }
 
 .downloads {
@@ -1279,6 +1230,7 @@ main > .moved {
   gap: 2px 14px;
   min-width: 15rem;
   padding: 9px 13px;
+  color: var(--ink);
   background: var(--paper-2);
   border: 1px solid var(--rule-strong);
   border-radius: 8px;
@@ -1305,23 +1257,6 @@ main > .moved {
 
 .targets [aria-current='true'] {
   border-color: var(--accent-line);
-}
-
-.fine-print {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 18px clamp(24px, 3vw, 48px);
-  margin: 26px 0 0;
-  padding: 0;
-  list-style: none;
-  font-size: 0.86rem;
-  line-height: 1.55;
-  color: var(--ink-faint);
-}
-
-.fine-print strong {
-  font-weight: 600;
-  color: var(--ink-soft);
 }
 
 /* ── Footer ──────────────────────────────────────────────────────────────────────────────── */
@@ -1796,26 +1731,6 @@ main > .moved {
       opacity: 1;
       transform: none;
     }
-
-    .trade.reveal .trade-wire::before {
-      transform: scaleX(0);
-      transition: transform 0.7s 0.25s var(--ease);
-    }
-
-    .trade.reveal .trade-wire::after,
-    .trade.reveal .trade-cap {
-      opacity: 0;
-      transition: opacity 0.4s 0.8s var(--ease);
-    }
-
-    .trade.reveal.shown .trade-wire::before {
-      transform: none;
-    }
-
-    .trade.reveal.shown .trade-wire::after,
-    .trade.reveal.shown .trade-cap {
-      opacity: 1;
-    }
   }
 
   /*
@@ -1944,7 +1859,6 @@ main > .moved {
 
 @media (max-width: 1080px) {
   .reel { grid-template-columns: minmax(230px, 0.8fr) minmax(0, 1.5fr); }
-  .fine-print { grid-template-columns: 1fr 1fr; }
 }
 
 @media (max-width: 900px) {
@@ -1971,27 +1885,23 @@ main > .moved {
   .hero-art-wide { display: none; }
   .hero-art-narrow { display: block; width: 100%; max-width: 380px; margin-inline: auto; }
 
-  .doors { grid-template-columns: 1fr; }
-  .door,
-  .door + .seam + .door {
-    padding: 30px 0;
-    border-left: 0;
-  }
-  .door + .seam + .door { border-top: 1px solid var(--rule); }
-  /* Stacked, there is no seam to sit on; the section's own words say nothing syncs. */
-  .seam { display: none; }
-
-  .trade {
-    grid-template-columns: 1fr;
-    gap: 2px;
-    font-size: clamp(1.7rem, 8.6vw, 2.4rem);
-  }
-  .trade-a,
-  .trade-b { text-align: center; }
-  .trade-wire { width: 88px; margin: 22px auto 6px; }
-  .trade + .trade { margin-top: 18px; }
-
-  .fine-print { grid-template-columns: 1fr; }
+  .get { padding-top: 52px; }
+  .get-sheet { display: flex; flex-direction: column; padding-top: 44px; }
+  .get-heading h2 { font-size: clamp(3.2rem, 11.8vw, 4.7rem); }
+  .get-heading h2 span { margin-right: 24px; }
+  .get-heading h2 em { padding-left: 12px; }
+  .get-heading h2 em::after { left: 12px; right: 0; }
+  .get-heading { order: 0; }
+  .get-drawing { position: static; order: 1; width: 100%; max-width: 340px; margin: 28px auto 0; }
+  .get-drawing .get-art-wide { display: none; }
+  .get-drawing > .get-art-narrow { display: block; }
+  .get-drawing text { font-size: 16px; }
+  .get-desktop { order: 2; margin-top: 28px; }
+  .install-notes { order: 3; width: 100%; }
+  .install-notes-body { grid-template-columns: 1fr; }
+  .targets a { min-width: 0; }
+  .footer-brand p { display: flex; flex-direction: column; gap: 2px; }
+  .footer-brand span { margin-left: 0; font-size: 0.7rem; }
   .moved { padding: 22px 46px 20px 20px; }
   .footer-links { margin-left: 0; }
 }
