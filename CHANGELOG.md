@@ -31,6 +31,13 @@ the release notes and the in-app What's New are generated from here. See
 
 - About is redrawn as a drawing sheet with a title block for the version, release notes and author,
   and the diagnostic report reads like the rest of the app.
+- Right-click menus are shorter and tidier. Each one names what it acts on, empty canvas lays the
+  shapes out in a grid with Undo, Fit to view and Tidy up layout beside them, and a multi-selection
+  aligns from one row of icons. Shortcuts read as plain hints, and the shape or connector popover no
+  longer opens underneath the menu or an open point you are raising.
+- Clicking a shape shows one slim row: its colour, its kind and its own actions, such as **Add
+  consumer** or **Look inside**. **Edit details…**, **Spotlight**, **Duplicate**, **Delete** and the
+  full right-click menu are under **⋯**. An automatic colour shows as a small colour wheel.
 
 #### Fixed
 

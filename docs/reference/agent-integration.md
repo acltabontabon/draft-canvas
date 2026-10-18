@@ -811,7 +811,8 @@ C4 is native, not a layer on top:
 - **Text.** Schema v15 adds `description` (≤ 280 characters) and `technology` (≤ 60) to services,
   data stores, queues, actors and components. The canvas draws the description under the name and
   technology as a corner icon (a Simple Icons logo for recognized names, a generic chip otherwise).
-  The full technology stays in the file and source exports; the inspector edits both (**Details**).
+  The full technology stays in the file and source exports; the inspector edits both
+  (**⋯** › **Edit details…**).
 - **Boundaries** are `group` nodes with a kind: `system`, `domain`, `network`, `deployment`, `group` or
   `boundary`. Membership is the explicit `parentId`, never geometry.
 - **Relationship technology** goes in the label (for example, "Makes API calls [JSON/HTTPS]") plus the

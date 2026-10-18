@@ -13,7 +13,7 @@ test.describe('context menu — empty canvas', () => {
 
     await page.locator('.react-flow__pane').click({ button: 'right', position: { x: 400, y: 300 } });
     await expect(menu(page)).toBeVisible();
-    for (const title of ['Add Text', 'Add Note', 'Add Code', 'Add Boundary', 'Add Service', 'Add Data Store', 'Add Queue', 'Add Actor', 'Add Junction']) {
+    for (const title of ['Text', 'Note', 'Code', 'Boundary', 'Service', 'Data Store', 'Queue', 'Actor', 'Junction']) {
       await expect(menuItem(page, title)).toBeVisible();
     }
     // Paste is always offered (the OS clipboard is only checked once clicked); Select all is
@@ -52,10 +52,10 @@ test.describe('context menu — empty canvas', () => {
     await expect(menu(page)).toBeHidden();
   });
 
-  test('Add Boundary creates a group node roughly centered on the click point', async ({ page }) => {
+  test('Boundary in the shape grid creates a group node roughly centered on the click point', async ({ page }) => {
     await newCanvas(page, 'Context menu add boundary');
     await page.locator('.react-flow__pane').click({ button: 'right', position: { x: 400, y: 300 } });
-    await menuItem(page, 'Add Boundary').click();
+    await menuItem(page, 'Boundary').click();
     await expect(menu(page)).toBeHidden();
     await expect(page.locator('.dc-node[data-type="group"]')).toHaveCount(1);
     await expect(page.locator('.dc-node[data-type="group"][data-selected="true"]')).toHaveCount(1);
@@ -136,8 +136,12 @@ test.describe('context menu — a single node', () => {
 
     await page.locator('.dc-node').first().click({ button: 'right' });
     await expect(page.locator('.dc-node[data-selected="true"]')).toHaveCount(1);
-    for (const title of ['Edit text', 'Add Note', 'Add Code', 'Duplicate', 'Copy', 'Cut', 'Bring to front', 'Bring forward', 'Send backward', 'Send to back', 'Spotlight selection', 'Delete']) {
+    for (const title of ['Edit text', 'Attach note', 'Attach code', 'Duplicate', 'Copy', 'Bring to front', 'Send to back', 'Spotlight', 'Delete']) {
       await expect(menuItem(page, title)).toBeVisible();
+    }
+    // Cut and the one-step z-order pair stay in ⌘K and on their shortcuts.
+    for (const title of ['Cut', 'Bring forward', 'Send backward']) {
+      await expect(menuItem(page, title)).toHaveCount(0);
     }
   });
 
@@ -145,7 +149,7 @@ test.describe('context menu — a single node', () => {
     await newCanvas(page, 'Context menu add note');
     await create(page, 'Service', { x: 400, y: 300 });
     await page.locator('.dc-node').first().click({ button: 'right' });
-    await menuItem(page, 'Add Note').click();
+    await menuItem(page, 'Attach note').click();
     await expect(menu(page)).toBeHidden();
     await expect(page.locator('.dc-attachment-chip')).toHaveCount(1);
     await expect(page.locator('.dc-attachment-card[data-pinned="true"]')).toBeVisible();
@@ -244,7 +248,7 @@ test.describe('context menu — an edge', () => {
     const mid = await edgeMidpoint(page);
     await page.mouse.click(mid.x, mid.y, { button: 'right' });
     await expect(page.locator('.dc-edge[data-selected="true"]')).toHaveCount(1);
-    for (const title of ['Edit label', 'Reverse direction', 'Add Note', 'Add Code', 'Spotlight selection', 'Delete connector']) {
+    for (const title of ['Edit label', 'Reverse direction', 'Attach note', 'Attach code', 'Spotlight', 'Delete']) {
       await expect(menuItem(page, title)).toBeVisible();
     }
     // Stage-returning commands never appear in a context menu — see the "stage-command rule".
@@ -318,7 +322,7 @@ test.describe('context menu — a boundary', () => {
     // Click in the boundary's own empty padding, clear of its contained nodes.
     const boundary = page.locator('.dc-node[data-type="group"]');
     await boundary.click({ button: 'right', position: { x: 8, y: 8 } });
-    for (const title of ['Edit caption', 'Add Note', 'Add Code', 'Duplicate', 'Copy', 'Cut', 'Bring to front', 'Ungroup', 'Delete']) {
+    for (const title of ['Edit caption', 'Attach note', 'Attach code', 'Duplicate', 'Copy', 'Bring to front', 'Ungroup', 'Delete']) {
       await expect(menuItem(page, title)).toBeVisible();
     }
     await expect(menuItem(page, 'Select Contents')).toBeVisible();
@@ -415,10 +419,12 @@ test.describe('context menu — multi-selection contents and commands', () => {
       return { x: screenPoint.x, y: screenPoint.y };
     });
     await page.mouse.click(mid.x, mid.y, { button: 'right' });
-    await expect(menuItem(page, 'Spotlight selection')).toBeVisible();
-    await expect(menuItem(page, 'Delete selection')).toBeVisible();
+    // The header counts what the menu acts on, so the rows themselves stay short.
+    await expect(menu(page).locator('.dc-context-menu-header')).toHaveText('2 elements');
+    await expect(menuItem(page, 'Spotlight')).toBeVisible();
+    await expect(menuItem(page, 'Delete')).toBeVisible();
     // …plus one shared open point about both connectors, which any selection may raise.
-    await expect(menuItem(page, 'Add open point for 2 elements…')).toBeVisible();
+    await expect(menuItem(page, 'Add open point…')).toBeVisible();
     await expect(menu(page).getByRole('menuitem')).toHaveCount(3);
   });
 
@@ -447,12 +453,13 @@ test.describe('context menu — keyboard-only operation', () => {
     await expect(menu(page)).toBeVisible();
     await expect(menuItem(page, 'Edit text')).toBeVisible();
 
-    // The node menu reads Edit text, Look inside, Arrange selection, Add Note, Add Code.
+    // Opened from the keyboard, the first row starts highlighted; the menu reads Edit text,
+    // Look inside, Attach note, Attach code.
+    await expect(menu(page).locator('[data-highlighted="true"]')).toContainText('Edit text');
     await page.keyboard.press('ArrowDown');
     await page.keyboard.press('ArrowDown');
     await page.keyboard.press('ArrowDown');
-    await page.keyboard.press('ArrowDown');
-    await expect(menu(page).locator('[data-highlighted="true"]')).toHaveText('Add Code');
+    await expect(menu(page).locator('[data-highlighted="true"]')).toHaveText('Attach code');
     await page.keyboard.press('Enter');
     await expect(menu(page)).toBeHidden();
     await expect(page.locator('.dc-attachment-chip[data-kind="code"]')).toHaveCount(1);
@@ -483,7 +490,7 @@ test.describe('context menu — keyboard-only operation', () => {
     await node.click();
     const before = await page.locator('.react-flow__node').first().evaluate((el) => (el as HTMLElement).style.transform);
 
-    await page.getByRole('button', { name: /^More/ }).click();
+    await page.getByRole('button', { name: 'More', exact: true }).click();
     await expect(page.locator('.dc-toolbar-menu')).toBeVisible();
     await page.keyboard.press('ArrowDown');
     await page.keyboard.press('ArrowDown');
@@ -571,7 +578,7 @@ test.describe('context menu — cross-cutting hardening', () => {
     await newCanvas(page, 'Context menu native attachment');
     await create(page, 'Service', { x: 400, y: 300 });
     await page.locator('.dc-node').first().click({ button: 'right' });
-    await menuItem(page, 'Add Note').click();
+    await menuItem(page, 'Attach note').click();
     await page.getByRole('button', { name: 'Edit attached detail' }).click();
     const textarea = page.locator('.dc-attachment-card textarea');
     await expect(textarea).toBeFocused();
@@ -653,5 +660,24 @@ test.describe('context menu — after a box selection', () => {
     await page.locator('.dc-node').first().dblclick();
     await expect(page.locator('textarea.dc-node-editor')).toBeVisible();
     await page.keyboard.press('Escape');
+  });
+});
+
+test.describe('context menu — one surface at a time', () => {
+  test('a right-click on a shape opens the menu alone: no inspector underneath, no row highlighted', async ({ page }) => {
+    await newCanvas(page, 'Context menu alone');
+    await create(page, 'Queue', { x: 400, y: 300 });
+    await page.keyboard.press('Escape');
+    await page.locator('.react-flow__pane').click({ position: { x: 100, y: 500 } });
+
+    await page.locator('.dc-node').first().click({ button: 'right' });
+    await expect(menu(page)).toBeVisible();
+    await expect(menu(page).locator('.dc-context-menu-header')).toContainText('Queue');
+    await expect(page.locator('.dc-element-inspector')).toHaveCount(0);
+    await expect(menu(page).locator('[data-highlighted="true"]')).toHaveCount(0);
+
+    // Closing the menu gives the selected shape its inspector back.
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.dc-element-inspector')).toBeVisible();
   });
 });

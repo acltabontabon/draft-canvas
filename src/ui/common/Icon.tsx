@@ -60,6 +60,16 @@ const PATHS = {
   overview: 'M4 9V4h5 M15 4h5v5 M20 15v5h-5 M9 20H4v-5',
   // Presentation's pointer: a ring with a point at its centre.
   pointer: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z M12 12h.01',
+  // Arranging a multi-selection: a guide line and the two shapes lined up against it, or the
+  // outer pair a middle shape is spaced between. Unlike `alignLeft` and friends (text alignment).
+  shapesLeft: 'M4 3v18 M8 6h11v4H8z M8 14h7v4H8z',
+  shapesCenterX: 'M12 3v18 M6 6h12v4H6z M8 14h8v4H8z',
+  shapesRight: 'M20 3v18 M5 6h11v4H5z M9 14h7v4H9z',
+  shapesTop: 'M3 4h18 M6 8h4v11H6z M14 8h4v7h-4z',
+  shapesCenterY: 'M3 12h18 M6 6h4v12H6z M14 8h4v8h-4z',
+  shapesBottom: 'M3 20h18 M6 5h4v11H6z M14 9h4v7h-4z',
+  distributeX: 'M3 4v16 M21 4v16 M10 7h4v10h-4z',
+  distributeY: 'M4 3h16 M4 21h16 M7 10h10v4H7z',
 } as const;
 
 export type IconName = keyof typeof PATHS;

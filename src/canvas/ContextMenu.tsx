@@ -1,7 +1,10 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useToolbarHeight } from './useToolbarHeight';
-import type { ContextMenuEntry } from '../commands/contextMenu';
+import { menuItemsOf, type AlignIcon, type ContextMenuEntry } from '../commands/contextMenu';
 import type { Command } from '../commands/types';
+import { Icon, type IconName } from '../ui/common/Icon';
+import { isEditableTarget } from '../lib/isEditableTarget';
+import { plainShortcut } from '../lib/platform';
 import {
   anchorsForRect,
   placementTransform,
@@ -13,6 +16,8 @@ export interface ContextMenuProps {
   /** Screen coordinates — fixed for the life of the menu, same reasoning as `QuickConnectMenu`. */
   screenPosition: { x: number; y: number };
   entries: ContextMenuEntry[];
+  /** Opened from the keyboard: start on the first row. A right-click starts with none highlighted. */
+  viaKeyboard?: boolean;
   onSelect: (command: Command) => void;
   onDismiss: () => void;
 }
@@ -30,10 +35,16 @@ const LEFT_CLEARANCE = 12;
 const RIGHT_CLEARANCE = 12;
 const GAP = 2;
 
-function firstCommandIndex(entries: ContextMenuEntry[]): number {
-  const index = entries.findIndex((entry) => entry.type === 'command');
-  return index === -1 ? 0 : index;
-}
+const ALIGN_GLYPHS: Record<AlignIcon, IconName> = {
+  'align-left': 'shapesLeft',
+  'align-center-x': 'shapesCenterX',
+  'align-right': 'shapesRight',
+  'align-top': 'shapesTop',
+  'align-center-y': 'shapesCenterY',
+  'align-bottom': 'shapesBottom',
+  'distribute-x': 'distributeX',
+  'distribute-y': 'distributeY',
+};
 
 /**
  * The right-click context menu's rendering/dismissal shell — deliberately free of any domain
@@ -45,9 +56,10 @@ function firstCommandIndex(entries: ContextMenuEntry[]): number {
  * Structurally modeled on `QuickConnectMenu.tsx` (same point-anchored placement recipe, same
  * capture-phase Escape, same one-tick-deferred outside-pointerdown dismissal so the opening
  * right-click doesn't immediately close it) with keyboard navigation added on top, since a menu with
- * several rows needs it in a way a short preset list didn't.
+ * several rows needs it in a way a short preset list didn't. Arrow keys walk every runnable item in
+ * order — a grid's cells and an icon row's buttons included — and Left/Right also move along a row.
  */
-export function ContextMenu({ screenPosition, entries, onSelect, onDismiss }: ContextMenuProps) {
+export function ContextMenu({ screenPosition, entries, viaKeyboard = false, onSelect, onDismiss }: ContextMenuProps) {
   const panel = useRef<HTMLDivElement>(null);
 
   const [measuredSize, setMeasuredSize] = useState({ width: 0, height: 0 });
@@ -76,24 +88,44 @@ export function ContextMenu({ screenPosition, entries, onSelect, onDismiss }: Co
     };
   }, [returnFocusTo]);
 
-  const itemIndices = useMemo(
-    () => entries.reduce<number[]>((acc, entry, index) => (entry.type === 'command' ? [...acc, index] : acc), []),
-    [entries],
-  );
-  const [highlight, setHighlight] = useState(() => firstCommandIndex(entries));
-  const highlightRef = useRef(highlight);
-  highlightRef.current = highlight;
-  const entriesRef = useRef(entries);
-  entriesRef.current = entries;
-
-  // Keep the highlight on a real row if the list changes shape underneath it (e.g. an attachment
-  // cap is reached while the menu happens to still be open).
-  useEffect(() => {
-    if (entries[highlightRef.current]?.type !== 'command') setHighlight(firstCommandIndex(entries));
+  const items = useMemo(() => menuItemsOf(entries), [entries]);
+  /** Which runnable items sit in a grid or icon row, where Left/Right move between neighbours. */
+  const inRow = useMemo(() => {
+    const indices = new Set<number>();
+    let index = 0;
+    for (const entry of entries) {
+      if (entry.type === 'command') index += 1;
+      else if (entry.type === 'grid' || entry.type === 'icons') for (const _ of entry.items) indices.add(index++);
+    }
+    return indices;
   }, [entries]);
 
+  // -1: nothing highlighted yet. A pointer-opened menu waits for the pointer or an arrow key.
+  const [highlight, setHighlight] = useState(() => (viaKeyboard && items.length > 0 ? 0 : -1));
+  // A row answers only a press that began inside the menu. A long-press opens the menu under the
+  // finger, and on a short screen it can land over the point being held — the click the lift
+  // produces must not pick whichever row ended up there.
+  const pressedInside = useRef(false);
+  const highlightRef = useRef(highlight);
+  highlightRef.current = highlight;
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+
+  // Keep the highlight on a real item if the list changes shape underneath it (e.g. an attachment
+  // cap is reached while the menu happens to still be open).
   useEffect(() => {
+    if (highlightRef.current >= items.length) setHighlight(items.length > 0 ? items.length - 1 : -1);
+  }, [items]);
+
+  useEffect(() => {
+    const last = items.length - 1;
     const onKeyDown = (event: KeyboardEvent) => {
+      const at = highlightRef.current;
+      // While it's open the menu owns bare keys, as the toolbar's More menu does: an arrow would
+      // otherwise also nudge the selection behind it, a letter drop a shape, Backspace delete it.
+      // The editor already stands down for its own right-click menu; a menu opened from a popover's
+      // ⋯ has no such flag to check. ⌘ chords still reach the editor.
+      if (!event.metaKey && !event.ctrlKey && !isEditableTarget(event.target)) event.stopPropagation();
       switch (event.key) {
         case 'Escape':
           event.stopPropagation();
@@ -107,24 +139,24 @@ export function ContextMenu({ screenPosition, entries, onSelect, onDismiss }: Co
           onDismiss();
           return;
         case 'Home':
-        case 'End': {
+        case 'End':
           event.preventDefault();
-          const edge = event.key === 'Home' ? itemIndices[0] : itemIndices[itemIndices.length - 1];
-          if (edge !== undefined) setHighlight(edge);
+          if (last >= 0) setHighlight(event.key === 'Home' ? 0 : last);
           return;
-        }
-        case 'ArrowDown': {
+        case 'ArrowDown':
           event.preventDefault();
-          const at = itemIndices.indexOf(highlightRef.current);
-          const next = itemIndices[Math.min(itemIndices.length - 1, at + 1)];
-          if (next !== undefined) setHighlight(next);
+          if (last >= 0) setHighlight(at < 0 ? 0 : Math.min(last, at + 1));
           return;
-        }
-        case 'ArrowUp': {
+        case 'ArrowUp':
           event.preventDefault();
-          const at = itemIndices.indexOf(highlightRef.current);
-          const previous = itemIndices[Math.max(0, at - 1)];
-          if (previous !== undefined) setHighlight(previous);
+          if (last >= 0) setHighlight(at < 0 ? last : Math.max(0, at - 1));
+          return;
+        case 'ArrowRight':
+        case 'ArrowLeft': {
+          if (!inRow.has(at)) return;
+          event.preventDefault();
+          const next = at + (event.key === 'ArrowRight' ? 1 : -1);
+          if (inRow.has(next)) setHighlight(next);
           return;
         }
         case 'Enter':
@@ -133,8 +165,8 @@ export function ContextMenu({ screenPosition, entries, onSelect, onDismiss }: Co
           // Choosing clears the menu state straight away, so by the time this key bubbles to the
           // editor its "a menu is open" guard is gone and Enter would also open the label editor.
           event.stopPropagation();
-          const entry = entriesRef.current[highlightRef.current];
-          if (entry?.type === 'command') onSelect(entry.command);
+          const item = itemsRef.current[at];
+          if (item) onSelect(item.command);
           return;
         }
         default:
@@ -159,7 +191,7 @@ export function ContextMenu({ screenPosition, entries, onSelect, onDismiss }: Co
       window.removeEventListener('pointerdown', onPointerDown);
       window.clearTimeout(id);
     };
-  }, [itemIndices, onDismiss, onSelect]);
+  }, [items, inRow, onDismiss, onSelect]);
 
   // The toolbar wraps to two rows on a narrow window, and isn't there at all while presenting — so
   // its real height, with `TOP_CLEARANCE` only until it's been measured (same as the inspectors).
@@ -170,10 +202,10 @@ export function ContextMenu({ screenPosition, entries, onSelect, onDismiss }: Co
   const placement = resolvePlacement('below', anchors, identity, measuredSize, clearances);
   const transform = placementTransform(placement, anchors, measuredSize, clearances, identity, identity);
 
-  const activeId = entries[highlight]?.type === 'command' ? `dc-context-menu-item-${highlight}` : undefined;
-  // A long menu (a multi-selection's) can be taller than a short window. Capped to the room between
-  // the toolbar and the bottom clearance it scrolls instead, so its last rows — Delete among them —
-  // stay reachable; no resize can invalidate this, since a resize closes the menu.
+  const activeId = highlight >= 0 && highlight < items.length ? `dc-context-menu-item-${highlight}` : undefined;
+  // A long menu can be taller than a short window. Capped to the room between the toolbar and the
+  // bottom clearance it scrolls instead, so its last rows — Delete among them — stay reachable; no
+  // resize can invalidate this, since a resize closes the menu.
   const maxHeight = Math.max(0, window.innerHeight - toolbarClearance - BOTTOM_CLEARANCE);
 
   // The keyboard can move the highlight onto a row scrolled out of view.
@@ -182,45 +214,95 @@ export function ContextMenu({ screenPosition, entries, onSelect, onDismiss }: Co
     panel.current?.querySelector(`#${activeId}`)?.scrollIntoView?.({ block: 'nearest' });
   }, [activeId]);
 
+  const header = entries.find((entry) => entry.type === 'header');
+  let itemIndex = 0;
+  const itemProps = (command: Command) => {
+    const index = itemIndex++;
+    return {
+      id: `dc-context-menu-item-${index}`,
+      type: 'button' as const,
+      role: 'menuitem',
+      'aria-keyshortcuts': command.shortcut,
+      'data-highlighted': index === highlight ? 'true' : undefined,
+      onPointerMove: () => {
+        if (highlightRef.current !== index) setHighlight(index);
+      },
+      onClick: () => {
+        if (pressedInside.current) onSelect(command);
+      },
+    };
+  };
+
   return (
     <div
       ref={panel}
       className="dc-context-menu"
       role="menu"
-      aria-label="Context menu"
+      aria-label={header ? `${header.title} options` : 'Context menu'}
       aria-activedescendant={activeId}
       tabIndex={-1}
       style={{ transform, maxHeight }}
+      onPointerDown={() => {
+        pressedInside.current = true;
+      }}
+      onPointerLeave={() => setHighlight(-1)}
     >
-      {entries.map((entry, index) =>
-        entry.type === 'separator' ? (
-          <div key={`sep-${index}`} className="dc-context-menu-separator" role="separator" />
-        ) : (
-          <button
-            key={entry.command.id}
-            id={`dc-context-menu-item-${index}`}
-            type="button"
-            role="menuitem"
-            aria-keyshortcuts={entry.command.shortcut}
-            className="dc-context-menu-item"
-            data-highlighted={index === highlight ? 'true' : undefined}
-            data-destructive={entry.command.id === 'delete' ? 'true' : undefined}
-            onPointerMove={() => {
-              if (highlightRef.current !== index) setHighlight(index);
-            }}
-            onClick={() => onSelect(entry.command)}
-          >
-            <span className="dc-context-menu-title">{entry.command.title}</span>
-            {entry.command.shortcut && (
-              <span className="dc-context-menu-kbd" aria-hidden="true">
-                {entry.command.shortcut.split(' ').map((key, i) => (
-                  <kbd key={`${key}-${i}`}>{key}</kbd>
+      {entries.map((entry, entryIndex) => {
+        switch (entry.type) {
+          case 'separator':
+            return <div key={`sep-${entryIndex}`} className="dc-context-menu-separator" role="separator" />;
+          case 'header':
+            return (
+              <div key="header" className="dc-context-menu-header" role="presentation">
+                <span className="dc-context-menu-header-title">{entry.title}</span>
+                {entry.caption && <span className="dc-context-menu-header-caption"> · {entry.caption}</span>}
+              </div>
+            );
+          case 'grid':
+            return (
+              <div key={`grid-${entryIndex}`} role="group" aria-label={entry.label}>
+                <div className="dc-context-menu-label" aria-hidden="true">
+                  {entry.label}
+                </div>
+                <div className="dc-context-menu-grid">
+                  {entry.items.map((item) => (
+                    <button key={item.command.id} {...itemProps(item.command)} className="dc-context-menu-item">
+                      <span className="dc-context-menu-title">{item.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          case 'icons':
+            return (
+              <div key={`icons-${entryIndex}`} className="dc-context-menu-icons" role="group" aria-label={entry.label}>
+                {entry.items.map((item) => (
+                  <button key={item.command.id} {...itemProps(item.command)} className="dc-context-menu-icon" aria-label={item.label} title={item.label}>
+                    <Icon name={ALIGN_GLYPHS[item.icon]} />
+                  </button>
                 ))}
-              </span>
-            )}
-          </button>
-        ),
-      )}
+              </div>
+            );
+          case 'command':
+            return (
+              <button
+                key={entry.command.id}
+                {...itemProps(entry.command)}
+                className="dc-context-menu-item"
+                data-destructive={entry.command.id === 'delete' ? 'true' : undefined}
+              >
+                <span className="dc-context-menu-title">{entry.label}</span>
+                {entry.command.shortcut && (
+                  <span className="dc-context-menu-shortcut" aria-hidden="true">
+                    {plainShortcut(entry.command.shortcut)}
+                  </span>
+                )}
+              </button>
+            );
+          default:
+            return null;
+        }
+      })}
     </div>
   );
 }

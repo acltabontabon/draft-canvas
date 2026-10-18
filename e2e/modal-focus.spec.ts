@@ -9,7 +9,7 @@ import { newCanvas } from './canvas';
  */
 
 async function openShortcutSheet(page: Page) {
-  await page.getByRole('button', { name: /^More/ }).click();
+  await page.getByRole('button', { name: 'More', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Keyboard shortcuts' }).click();
 }
 
@@ -26,7 +26,7 @@ test.describe('Modal focus behavior', () => {
 
   test('closing the keyboard shortcuts sheet returns focus to whatever opened it', async ({ page }) => {
     await newCanvas(page, 'Modal focus return');
-    const trigger = page.getByRole('button', { name: /^More/ });
+    const trigger = page.getByRole('button', { name: 'More', exact: true });
     await openShortcutSheet(page);
     await expect(page.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeVisible();
 

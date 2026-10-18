@@ -4,10 +4,12 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState, type KeyboardE
 import { LIMITS } from '../document/limits';
 import { createPortal } from 'react-dom';
 import { useInternalNode, useReactFlow, useStore } from '@xyflow/react';
-import { primaryCommandsFor } from '../commands/registry';
+import { nodeCommands, primaryCommandsFor } from '../commands/registry';
+import { menuLabelOf, type ContextMenuEntry } from '../commands/contextMenu';
+import { ContextMenu } from './ContextMenu';
 import { DepthGlyph } from './DepthGlyph';
 import { usePersonality } from '../ui/personality/usePersonality';
-import type { CommandContext } from '../commands/types';
+import type { Command, CommandContext } from '../commands/types';
 import {
   ACCENTS,
   BOUNDARY_PRESETS,
@@ -351,6 +353,17 @@ function ElementInspectorBody({
   );
 }
 
+const autoSwatchCache = new WeakMap<object, string>();
+function autoSwatch(theme: ReturnType<typeof useThemeValue>): string {
+  let swatch = autoSwatchCache.get(theme.accents);
+  if (!swatch) {
+    const chips = ACCENTS.filter((accent) => accent !== 'neutral').map((accent) => theme.accents[accent].chip);
+    swatch = `conic-gradient(${chips.map((chip, index) => `${chip} ${(index * 100) / chips.length}% ${((index + 1) * 100) / chips.length}%`).join(', ')})`;
+    autoSwatchCache.set(theme.accents, swatch);
+  }
+  return swatch;
+}
+
 /** The one panel open under the row at a time: colours, text style, or an architecture shape's C4 details. */
 type ElementPanel = 'color' | 'typography' | 'details';
 
@@ -522,37 +535,63 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
     }
   })();
 
+  // The ⋯ menu: what the row leaves out, one click away. Owned by this element — selecting another
+  // one closes it, as it closes an open panel.
+  const [more, setMore] = useState<{ nodeId: string; x: number; y: number; viaKeyboard: boolean } | null>(null);
+  const moreOpen = more?.nodeId === node.id;
+  const moreButton = useRef<HTMLButtonElement>(null);
+
+  const moreEntries = (): ContextMenuEntry[] => {
+    const commands = nodeCommands(buildCommandContext(), node);
+    const pick = (ids: string[]) =>
+      ids.map((id) => commands.find((command) => command.id === id)).filter((command): command is Command => command !== undefined);
+    const own = (id: string, title: string, run: () => void, shortcut?: string): Command => ({ id, title, group: 'selection', shortcut, run });
+    const details = C4_TYPES.has(node.type) ? [own('element-details', 'Edit details…', () => setOpenPanel('details'))] : [];
+    const moreActions = own(
+      'element-more-actions',
+      'More actions…',
+      () => {
+        // The full right-click menu, opened where this one was — it replaces the popover while it's up.
+        const box = moreButton.current?.getBoundingClientRect();
+        useUiStore.getState().setContextMenu({
+          target: { kind: 'node', id: node.id },
+          screenPosition: box ? { x: box.left + box.width / 2, y: box.bottom } : { x: 0, y: 0 },
+          flowPosition: { x: node.x + node.width / 2, y: node.y + node.height / 2 },
+          viaKeyboard: more?.viaKeyboard ?? false,
+        });
+      },
+      'Shift F10',
+    );
+    const groups = [[...details, ...pick(['spotlight'])], [...pick(['duplicate']), moreActions], pick(['delete'])];
+    return groups
+      .filter((group) => group.length > 0)
+      .flatMap((group, index) => [
+        ...(index > 0 ? [{ type: 'separator' as const }] : []),
+        ...group.map((command) => ({ type: 'command' as const, command, label: menuLabelOf(command) })),
+      ]);
+  };
+
   return (
     <>
-      {primaryCommands.length > 0 && (
-        <div className="dc-popover-row dc-popover-primary">
-          {primaryCommands.map((command) => (
-            <Button
-              key={command.id}
-              variant="quiet"
-              className="dc-popover-action"
-              // An "Add …" continuation leads with a plus glyph; a toggle-off or dissolve doesn't.
-              data-adds={command.id.startsWith('add-') ? 'true' : undefined}
-              title={QUICK_ACTION_HINTS[command.id] ?? command.hint ?? command.title}
-              onClick={() => command.run(buildCommandContext())}
-            >
-              {/* The same depth glyph the shape itself carries, so the mark on the canvas and the
-                  command that follows it are learned as one thing. */}
-              {command.id === 'look-inside' && <DepthGlyph className="dc-popover-glyph" preset={personality} seedId={node.id} />}
-              {command.title}
-            </Button>
-          ))}
-        </div>
-      )}
-      <div className="dc-popover-row dc-popover-config">
+      {/* One row: what the element is (colour, kind), then what can grow from it, then ⋯ for the
+          rest. Pressing any other control here closes an open ⋯ menu, since the popover keeps
+          its presses from reaching the menu's own click-away. */}
+      <div
+        className="dc-popover-row dc-popover-config"
+        onPointerDownCapture={(event) => {
+          if (moreOpen && !moreButton.current?.contains(event.target as Node)) setMore(null);
+        }}
+      >
         <button
           type="button"
           className="dc-inspector-color-swatch"
           data-auto={currentAccentChip ? undefined : 'true'}
           aria-label="Element colour"
           aria-expanded={openPanel === 'color'}
-          title="Change colour"
-          style={currentAccentChip ? { background: currentAccentChip } : undefined}
+          title={currentAccentChip ? 'Change colour' : 'Colour: automatic. Change colour'}
+          // Automatic colour is a wheel of the palette's own chips, so it reads as "picks for you"
+          // rather than as an empty slot waiting to be filled.
+          style={{ background: currentAccentChip ?? autoSwatch(theme) }}
           onClick={() => setOpenPanel(openPanel === 'color' ? null : 'color')}
         />
         {node.type === 'text' && (
@@ -578,34 +617,62 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
             layout={typeControl.layout}
           />
         )}
-        {C4_TYPES.has(node.type) && (
+        {primaryCommands.length > 0 && <span className="dc-popover-divider" aria-hidden="true" />}
+        {primaryCommands.map((command) => (
           <Button
+            key={command.id}
             variant="quiet"
-            active={openPanel === 'details'}
-            aria-expanded={openPanel === 'details'}
-            title="Technology and description (C4)"
-            onClick={() => setOpenPanel(openPanel === 'details' ? null : 'details')}
+            className="dc-popover-action"
+            // An "Add …" continuation leads with a plus glyph; a toggle-off or dissolve doesn't.
+            data-adds={command.id.startsWith('add-') ? 'true' : undefined}
+            title={QUICK_ACTION_HINTS[command.id] ?? command.hint ?? command.title}
+            onClick={() => command.run(buildCommandContext())}
           >
-            Details
+            {/* The same depth glyph the shape itself carries, so the mark on the canvas and the
+                command that follows it are learned as one thing. */}
+            {command.id === 'look-inside' && <DepthGlyph className="dc-popover-glyph" preset={personality} seedId={node.id} />}
+            {menuLabelOf(command)}
           </Button>
-        )}
+        ))}
         <span className="dc-popover-divider" aria-hidden="true" />
         <Button
+          ref={moreButton}
+          icon="more"
           variant="quiet"
-          title="Fade everything else, to focus on this while explaining (Esc to exit)"
-          onClick={() => useEditorStore.getState().enterFocus([node.id], [])}
-        >
-          Focus
-        </Button>
-        <Button
-          icon="trash"
-          variant="quiet"
-          className="dc-popover-delete"
-          aria-label="Delete selection"
-          title="Delete (Backspace)"
-          onClick={() => useEditorStore.getState().deleteSelection()}
+          className="dc-popover-more"
+          aria-label="More options"
+          aria-haspopup="menu"
+          aria-expanded={moreOpen}
+          active={moreOpen}
+          title="More options"
+          onClick={(event) => {
+            if (moreOpen) {
+              setMore(null);
+              return;
+            }
+            const box = event.currentTarget.getBoundingClientRect();
+            // `detail` is 0 for a click made with Enter or Space: start that menu on its first row.
+            setMore({ nodeId: node.id, x: box.left + box.width / 2, y: box.bottom, viaKeyboard: event.detail === 0 });
+          }}
         />
       </div>
+      {moreOpen &&
+        more &&
+        // To the page itself: the popover is placed by a transform, which would otherwise become
+        // the fixed-position menu's containing block.
+        createPortal(
+          <ContextMenu
+            screenPosition={{ x: more.x, y: more.y }}
+            entries={moreEntries()}
+            viaKeyboard={more.viaKeyboard}
+            onSelect={(command) => {
+              setMore(null);
+              command.run(buildCommandContext());
+            }}
+            onDismiss={() => setMore(null)}
+          />,
+          window.document.body,
+        )}
 
       {openPanel === 'color' && (
         <div className="dc-popover-panel dc-swatches">

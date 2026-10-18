@@ -112,7 +112,7 @@ test.describe('touch', () => {
     await hold(page, browserName, { x: 40, y: 860 }, 700);
     const menu = page.locator('.dc-context-menu');
     await expect(menu).toBeVisible();
-    await expect(menu.getByRole('menuitem', { name: 'Add Service' })).toBeVisible();
+    await expect(menu.getByRole('menuitem', { name: 'Service', exact: true })).toBeVisible();
   });
 
   test('two fingers moving apart zoom the canvas in', async ({ page, browserName }) => {

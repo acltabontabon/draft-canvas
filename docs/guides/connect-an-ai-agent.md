@@ -114,10 +114,10 @@ doesn't start the app for you, and it says so if the app isn't open.
   already there — "using the payment flow, show what happens if the charge times out after the order
   was placed" — switchable against the normal flow without leaving presentation (`Shift+F`).
 - **Use C4.** Describe systems at context, container and component level, with a technology and a
-  one-line description on each element; they appear under its name. You can edit both in the
-  element's **Details**. The agent can draw what's inside an existing service or component — "show
-  the components inside the Orders API" — the same view **Look inside** opens, and move shapes a
-  level down into one or back up out of it.
+  one-line description on each element; they appear under its name. You can edit both from
+  **Edit details…** in the element's **⋯** menu. The agent can draw what's inside an existing
+  service or component — "show the components inside the Orders API" — the same view **Look
+  inside** opens, and move shapes a level down into one or back up out of it.
 - **Start from an Architecture Starter**, renamed and extended.
 
 ## Inspect before applying
@@ -132,7 +132,7 @@ inspect. An agent can render selected shapes, a boundary or a flow on its own.
 
 For diagrams based on code, ask the agent to cite each important claim with a source path, symbol,
 line or commit and distinguish what it observed from what it inferred. **Source evidence** in
-an element's **Details** or a connector's options shows those references. Draft Canvas does not read
+an element's details (**⋯** › **Edit details…**) or a connector's options shows those references. Draft Canvas does not read
 the repository itself or verify the author's claim.
 
 Ask an agent to move existing detail inside its service when an overview becomes crowded. It keeps

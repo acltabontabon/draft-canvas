@@ -88,7 +88,8 @@ test('real MCP sidecar: inspect a candidate, commit, submit a semantic proposal,
   const { client } = connection;
   try {
     await page.locator('.react-flow__node[data-id="api"]').click();
-    await page.getByRole('button', { name: 'Details', exact: true }).click();
+    await page.locator('.dc-element-inspector').getByRole('button', { name: 'More options' }).click();
+    await page.getByRole('menuitem', { name: 'Edit details…' }).click();
     await page.locator('.dc-source-evidence summary').click();
     await expect(page.locator('.dc-source-evidence')).toContainText('src/orders.ts:42');
     await expect(page.locator('.dc-source-evidence')).toContainText('Observed');
