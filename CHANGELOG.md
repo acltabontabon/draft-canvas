@@ -28,6 +28,13 @@ the release notes and the in-app What's New are generated from here. See
 - About is redrawn as a drawing sheet with a title block for the version, release notes and author,
   and the diagnostic report reads like the rest of the app.
 
+#### Fixed
+
+- Response labels stay beside their request labels when moving shapes changes which bend of a
+  connector is longest, on the canvas and in exports.
+- Turning off a connector's response line or switching it to Async no longer leaves its response
+  label stranded elsewhere on the canvas.
+
 ### Desktop
 
 #### Fixed

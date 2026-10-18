@@ -18,6 +18,7 @@ import {
   rectOf,
   responseAwayFor,
   responseLaneFor,
+  responseLabelAnchor,
   responseSpineFor,
   responseWaypointsFor,
   routeBetween,
@@ -66,6 +67,7 @@ const NO_OBSTACLES: readonly Rect[] = [];
 interface EdgeRoutes {
   request: ReturnType<typeof routeBetween>;
   response: ReturnType<typeof routeBetween> | null;
+  responseLabel: ReturnType<typeof responseLabelAnchor> | null;
 }
 
 /** Routing is pure in its inputs, so results are shared by key across every connector. Room for
@@ -88,12 +90,6 @@ interface DragOverride {
 function pointRect(point: { x: number; y: number }): Rect {
   return { x: point.x, y: point.y, width: 0, height: 0 };
 }
-
-/** The side a request/response connector's reply label is forced to, relative to the request
- *  label's own side — guarantees "request above / response below" (or the left/right
- *  equivalent) across every routing mode, rather than leaving it to incidental agreement between
- *  the two independently-computed (source/target-swapped) routes' own `labelSide`. */
-const OPPOSITE_SIDE: Record<Side, Side> = { top: 'bottom', bottom: 'top', left: 'right', right: 'left' };
 
 /**
  * Anchors the label chip to whichever side of the line `labelSide` picked, instead of centering
@@ -504,7 +500,10 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
           spine: dragOverride ? undefined : responseSpineFor(spine),
         })
       : null;
-    return { request, response };
+    const responseLabel = response
+      ? responseLabelAnchor(request, response, effectiveSourceRect, effectiveTargetRect, laneOffset)
+      : null;
+    return { request, response, responseLabel };
   }
   const route = routes.request;
   // A label chip is far taller than the line's own lane nudge — extra
@@ -651,16 +650,11 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
         'open',
       )
     : null;
-  // Deliberately *not* `labelLaneOffset` here: that helper adds real-sibling-edge label
-  // clearance on top of an already-lane-nudged line, for when a 10px line gap isn't enough
-  // room for two separate edges' full-height label chips to avoid stacking. The response
-  // route's own path is already comfortably separated from the request line by
-  // `RESPONSE_LANE_DELTA`, so its label only needs the same small perpendicular clearance the
-  // request label gets from its own line (`labelChipTransform`'s `LABEL_LINE_GAP`) — stacking
-  // the sibling nudge on top of that pushed the response label tens of pixels further away
-  // than the line it's meant to sit right against.
-  const responseLabelX = responseRoute ? responseRoute.labelX : 0;
-  const responseLabelY = responseRoute ? responseRoute.labelY : 0;
+  // Deliberately not labelLaneOffset: its extra clearance is for real sibling edges. Stacking
+  // that nudge on top of the response lane used to push the response label tens of pixels
+  // further away than the line it sits against. This paired anchor is cached with the routes
+  // and shared with edges/describe.ts.
+  const responseLabel = routes.responseLabel;
   // Compact by default; the response's own half of a two-phase presentation pulse also counts as
   // "useful to see right now", same as hover/selection.
   const responseRevealed = selected || hovering || pulseTarget === 'response';
@@ -1117,16 +1111,9 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
           </div>
         )}
 
-        {/* The reply half of a request/response connector — anchored to the response route's own
-            label point (already offset from the primary by `RESPONSE_LANE_DELTA`), not the
-            primary's, so it never stacks on the label/condition/step/attachment cluster above,
-            and forced to `OPPOSITE_SIDE` of the request label so "request above / response
-            below" (or the left/right equivalent) holds regardless of what each independently-
-            computed route's own `labelSide` happens to agree on. The request label already faces
-            away from this line (`labelChipSide`), so the opposite side is this line's
-            outer side, clear of the request line and its chip. Compact by default, revealed on
-            hover/selection via `canvas.css`, not a new piece of React state. */}
-        {edge.response && (
+        {/* The reply's own path and local direction anchor its label, paired with the request
+            via responseLabelAnchor. Retained text stays hidden while the reply is off. */}
+        {responseLabel && edge.response && (
           <div
             className="dc-edge-response-label"
             data-revealed={responseRevealed ? 'true' : undefined}
@@ -1136,7 +1123,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
             data-active={isActiveStep ? 'true' : undefined}
             data-lens-dimmed={lensDimmed ? 'true' : undefined}
             style={{
-              transform: labelChipTransform(OPPOSITE_SIDE[labelSide], responseLabelX, responseLabelY),
+              transform: labelChipTransform(responseLabel.side, responseLabel.x, responseLabel.y),
             }}
           >
             <span className="dc-edge-label-line" title={responseLayout?.truncated ? edge.response : undefined}>

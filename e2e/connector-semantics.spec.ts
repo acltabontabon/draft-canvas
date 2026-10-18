@@ -199,6 +199,31 @@ test.describe('contextual connector toolbar', () => {
     await expect(page.locator('.dc-edge-label')).toHaveText('POST Customers');
   });
 
+  test('Response keeps its label beside the reply line when toggled off and back on', async ({ page }) => {
+    await newCanvas(page, 'Response label toggle');
+    await create(page, 'Service', { x: 300, y: 200 });
+    await create(page, 'Service', { x: 600, y: 200 });
+    await connectAndOpen(page, 0, 1);
+
+    const toggle = page.getByRole('button', { name: 'Response line', exact: true });
+    const label = page.locator('.dc-edge-response-label');
+    await toggle.click();
+    await page.getByRole('textbox', { name: 'Response', exact: true }).fill('Customer found');
+    await page.getByRole('textbox', { name: 'Response', exact: true }).blur();
+    await expect(label).toHaveText('Customer found');
+    const position = await label.getAttribute('style');
+
+    // The text is retained for reuse. With no reply route it must not become an orphan at (0, 0).
+    await toggle.click();
+    await expect(page.locator('.dc-edge-response-line')).toHaveCount(0);
+    await expect(label).toHaveCount(0);
+
+    await toggle.click();
+    await expect(page.locator('.dc-edge-response-line')).toHaveCount(1);
+    await expect(label).toHaveText('Customer found');
+    await expect(label).toHaveAttribute('style', position!);
+  });
+
   test('Service → Service: Async hides Response and never dashes the primary request line', async ({ page }) => {
     await newCanvas(page, 'Service to service async');
     await create(page, 'Service', { x: 300, y: 200 });
@@ -211,11 +236,15 @@ test.describe('contextual connector toolbar', () => {
     await expect(responseToggle).toHaveText('Off');
     await responseToggle.click();
     await expect(responseToggle).toHaveText('On');
+    await page.getByRole('textbox', { name: 'Response', exact: true }).fill('OK');
+    await page.getByRole('textbox', { name: 'Response', exact: true }).blur();
+    await expect(page.locator('.dc-edge-response-label')).toHaveText('OK');
     await expect(page.locator('.dc-edge-async-marker')).toHaveCount(0);
 
     await chooseInspectorOption(page, 'Interaction mode', 'Async');
     await expect(page.getByTitle('Draw a quieter reply line back to the caller')).toHaveCount(0);
     await expect(page.locator('.dc-edge-response-line')).toHaveCount(0);
+    await expect(page.locator('.dc-edge-response-label')).toHaveCount(0);
     // The bug this section exists to fix: choosing Async is a semantic choice, not a line style —
     // the primary request line must stay solid. The connector still needs *some* way to read as
     // async at a glance, though — the small "//" marker on the line itself.
