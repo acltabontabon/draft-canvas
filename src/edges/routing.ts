@@ -639,9 +639,9 @@ export function responseAwayFor(hasResponse: boolean | undefined, laneOffset: nu
  * The side a connector's label chip takes once its reply line is accounted for: the side facing
  * away from it. `labelSideFor` knows nothing of the reply line, and its default (`right`/`top`)
  * is where a positive `responseLaneFor` lane pushes it on a vertical line — so on a vertical
- * connector the label chip sat over the reply line, the reply chip (`OPPOSITE_SIDE` of the label,
- * see `DraftEdgeView.tsx`) sat over the request line, and the two collided in the gap between
- * them. With the label facing away, the reply chip lands on the outer side of its own line.
+ * connector the label chip sat over the reply line, the reply chip sat over the request line,
+ * and the two collided in the gap between them. With the label facing away, the reply chip
+ * lands on the outer side of its own line.
  *
  * With a reply line (`responseAwayFor`) this is the caption's own rule, `labelSideAwayFromResponse`.
  * Without one a chip keeps `labelSideFor`'s side, where a caption always drops under a horizontal
@@ -1196,6 +1196,80 @@ export function placeLabel(
   return { x, y, side: collides ? 'left' : 'right' };
 }
 
+const OPPOSITE_LABEL_SIDE: Record<Side, Side> = { top: 'bottom', bottom: 'top', left: 'right', right: 'left' };
+
+/** Project onto a straight run parallel to the request's label run. Ignore short endpoint stubs
+ *  and sampled corners: choosing the nearest bend can switch legs while the path barely moves. */
+function pairedResponsePoint(request: RoutedEdge, response: RoutedEdge): { x: number; y: number } | undefined {
+  const vertices = flattenPath(response.d);
+  const horizontal = isVerticalSide(request.labelSide);
+  let best: { x: number; y: number } | undefined;
+  let bestDistance = Infinity;
+  for (let i = 1; i < vertices.length; i += 1) {
+    const a = vertices[i - 1]!;
+    const b = vertices[i]!;
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const length = Math.hypot(dx, dy);
+    if (!a.corner || !b.corner || length === 0) continue;
+    if ((i === 1 || i === vertices.length - 1) && length <= DETOUR_LEG) continue;
+    const nearDiagonal = Math.abs(Math.abs(dx) - Math.abs(dy)) < 0.3 * length;
+    if (!nearDiagonal && (Math.abs(dx) > Math.abs(dy)) !== horizontal) continue;
+    const projected = ((request.labelX - a.x) * dx + (request.labelY - a.y) * dy) / length;
+    const along = length >= LABEL_BEND_CLEARANCE * 2
+      ? clamp(projected, LABEL_BEND_CLEARANCE, length - LABEL_BEND_CLEARANCE)
+      : length / 2;
+    const x = a.x + (dx / length) * along;
+    const y = a.y + (dy / length) * along;
+    const distance = (x - request.labelX) ** 2 + (y - request.labelY) ** 2;
+    if (distance < bestDistance - 1e-6) {
+      best = { x, y };
+      bestDistance = distance;
+    }
+  }
+  return best;
+}
+
+/**
+ * Keep a reply's words paired with the request's, on the reply path itself. Independently picking
+ * the two routes' longest runs lets a one-pixel move switch only the reply to another leg of an L.
+ * Forcing the request's label side there then puts its words along that leg, through the arrow.
+ *
+ * Project onto the reply's matching straight run, clear of bends and short endpoint stubs. A
+ * curve already has a stable label point, and a bundle labels its private branch, so keep those
+ * points. In every case the chip uses its own run's orientation and faces away from the request.
+ */
+export function responseLabelAnchor(
+  request: RoutedEdge,
+  response: RoutedEdge,
+  sourceRect: Rect,
+  targetRect: Rect,
+  lane = 0,
+): { x: number; y: number; side: Side } {
+  const paired = response.trunkLabel ? undefined : pairedResponsePoint(request, response);
+  const at = paired
+    ? { ...paired, side: request.labelSide }
+    : { x: response.labelX, y: response.labelY, side: response.labelSide };
+  const horizontal = isVerticalSide(at.side);
+  const delta = horizontal ? at.y - request.labelY : at.x - request.labelX;
+  const requestSide = labelChipSide(request.labelSide, responseAwayFor(true, lane));
+  let side = at.side;
+  if (Math.abs(delta) > 0.01) {
+    side = horizontal ? (delta > 0 ? 'bottom' : 'top') : (delta > 0 ? 'right' : 'left');
+  } else if (isVerticalSide(requestSide) === horizontal) {
+    side = OPPOSITE_LABEL_SIDE[requestSide];
+  }
+
+  // A nearby endpoint can overhang the chosen side. Keep the same node clearance as placeLabel.
+  const blocked = (candidate: Side) => {
+    const x = at.x + (candidate === 'right' ? LABEL_LINE_GAP : candidate === 'left' ? -LABEL_LINE_GAP : 0);
+    const y = at.y + (candidate === 'bottom' ? LABEL_LINE_GAP : candidate === 'top' ? -LABEL_LINE_GAP : 0);
+    return [sourceRect, targetRect].some((rect) => x > rect.x && x < rect.x + rect.width && y > rect.y && y < rect.y + rect.height);
+  };
+  if (blocked(side) && !blocked(OPPOSITE_LABEL_SIDE[side])) side = OPPOSITE_LABEL_SIDE[side];
+  return { x: at.x, y: at.y, side };
+}
+
 /**
  * Routes between two node rectangles, honouring a persisted anchor for
  * whichever endpoint has one and falling back to `chooseSides`'s nearest-side
@@ -1583,8 +1657,8 @@ export function handleIdForAnchor(anchor: EdgeAnchor | undefined): string | unde
  *
  * `responseAway` carries the *signed* direction of this connector's own response line (the sign
  * of `responseLaneFor(laneOffset)` — see `edges/routing.ts`), or `0` when there is none
- * (`!edge.hasResponse`). The response's own label sits at `OPPOSITE_SIDE[side]` (see
- * `labelChipTransform`), so a caption whose default direction happens to match the response
+ * (`!edge.hasResponse`). The response's own label faces away from the request (see
+ * `responseLabelAnchor`), so a caption whose default direction happens to match the response
  * line's own side would land right next to (or on top of) it — flipping to the opposite direction
  * whenever the signs agree keeps the caption clear regardless of orientation, instead of the
  * single hardcoded `side === 'top'` case this used to be scoped to (which left every vertical

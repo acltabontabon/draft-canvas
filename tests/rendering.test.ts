@@ -526,6 +526,14 @@ describe('SVG export — request/response connectors', () => {
     expect(svg).not.toContain('200 Customer');
   });
 
+  it('hides retained response text when the reply line is off', () => {
+    const doc = responseFixture('200 Customer');
+    doc.edges[0]!.hasResponse = false;
+    const { svg } = renderDocumentSvg(doc);
+    expect([...parseSvg(svg).querySelectorAll('path[marker-end]')]).toHaveLength(1);
+    expect(svg).not.toContain('200 Customer');
+  });
+
   it('positions the response label away from the primary label, not stacked on it', () => {
     const { svg } = renderDocumentSvg(responseFixture('200 Customer'));
     const texts = [...parseSvg(svg).querySelectorAll('text')];

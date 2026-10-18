@@ -22,6 +22,7 @@ import {
   rectOf,
   responseAwayFor,
   responseLaneFor,
+  responseLabelAnchor,
   responseWaypointsFor,
   responseSpineFor,
   routeBetween,
@@ -87,10 +88,6 @@ const CONDITION_PADDING_X = 6;
 const CONDITION_PADDING_Y = 2;
 /** How far below the label chip a condition chip sits, in canvas units. */
 const CONDITION_OFFSET_Y = 18;
-
-/** Mirrors `OPPOSITE_SIDE` in `DraftEdgeView.tsx` — forces a request/response connector's reply
- *  label to the geometric opposite of the request label's own side. */
-const OPPOSITE_SIDE: Record<Side, Side> = { top: 'bottom', bottom: 'top', left: 'right', right: 'left' };
 
 /**
  * The label chip's top-left corner, anchored to whichever side of the line `route.labelSide`
@@ -316,17 +313,13 @@ export function describeEdge(
       // A textless response line (auto-defaulted, nothing typed yet) draws only the line above —
       // no label chip, same as the live renderer.
       if (edge.response) {
-        // Deliberately *not* `labelLaneOffset` here — see the matching comment in
-        // `DraftEdgeView.tsx`: that helper's extra clearance is for separating two different
-        // *real* edges' label chips, not for spacing a response label off its own already
-        // well-separated (`RESPONSE_LANE_DELTA`) line.
-        const responseLabelSide = OPPOSITE_SIDE[labelSide];
-        const responseLabelX = responseRoute.labelX;
-        const responseLabelY = responseRoute.labelY;
+        // Share the live canvas's paired anchor, not an independent longest-run midpoint or
+        // the real-sibling label nudge, which would separate these words from their own arrow.
+        const responseLabel = responseLabelAnchor(route, responseRoute, rectOf(sourceNode), rectOf(targetNode), ctx.lane);
         const responseLayout = layoutEdgeResponse(edge.response, ctx.measurer);
         const w = responseLayout.width + LABEL_PADDING_X * 2;
         const h = responseLayout.height + LABEL_PADDING_Y * 2;
-        const { left, top } = labelChipRect(responseLabelSide, responseLabelX, responseLabelY, w, h);
+        const { left, top } = labelChipRect(responseLabel.side, responseLabel.x, responseLabel.y, w, h);
         overlay.push(
           {
             t: 'rect',
