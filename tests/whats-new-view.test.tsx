@@ -171,7 +171,7 @@ describe('AboutDialog — What\'s New', () => {
     const user = userEvent.setup();
     const { baseElement: container } = render(<AboutDialog />);
     const panel = () => container.querySelector<HTMLElement>('.dc-modal')!;
-    expect(panel().style.width).toBe('400px');
+    expect(panel().style.width).toBe('480px');
 
     await user.click(screen.getByRole('button', { name: /What's New/i }));
     expect(panel().style.width).toBe('600px');

@@ -31,6 +31,21 @@ function Mark() {
   );
 }
 
+/** A loose thought finding its way into a diagram, drawn in the margin rather than behind the copy. */
+function MarginSketch() {
+  return (
+    <svg className="dc-about-sketch" viewBox="0 0 120 180" fill="none" aria-hidden="true" focusable="false">
+      <path className="dc-about-sketch-thought" d="M28 15c-17 6-19 27-2 32 18 6 31-17 17-25-12-7-27 10-17 24 8 11 29 7 34 21" />
+      <path className="dc-about-sketch-line" d="M59 64c3 5 3 10 3 16m0 27v11c0 6 4 9 10 9h9m-5-4 5 4-5 4" />
+      <path className="dc-about-sketch-node" d="m44 80 37-1 1 27-38 1z" />
+      <path className="dc-about-sketch-node" d="m82 114 27 1-1 26-28-1z" />
+      <path className="dc-about-sketch-guide" d="M16 96h15m-8-7v15m37 46v15m-7-7h14" />
+      <circle className="dc-about-sketch-end" cx="94" cy="157" r="2" />
+      <path className="dc-about-sketch-guide" d="M94 142v9" />
+    </svg>
+  );
+}
+
 const AUTHOR_LINKS: { label: string; href: string; icon: IconName; external: boolean }[] = [
   { label: 'Documentation', href: PRODUCT.links.docs, icon: 'help', external: true },
   { label: 'GitHub', href: PRODUCT.links.github, icon: 'github', external: true },
@@ -269,89 +284,77 @@ function AboutDialogBody() {
   return (
     <Modal
       title={modalTitle}
-      width={isWide ? 600 : 400}
+      width={isWide ? 600 : 480}
       onClose={() => setOpen(false)}
-      className={isWide ? 'dc-modal-about dc-modal-wide' : 'dc-modal-about'}
+      className={isWide ? 'dc-modal-about dc-modal-wide' : 'dc-modal-about dc-modal-about-identity'}
       onBack={onBack}
       backLabel={backLabel}
     >
       {view.kind === 'about' && (
         <div className="dc-about dc-view-enter">
-          {/* A drawing sheet with its title block along the bottom edge — the product on the sheet,
-              the record of who drew which revision in the block. One frame, hairline cells. */}
-          <div className="dc-about-sheet">
-            <div className="dc-about-drawing">
-              <div className="dc-about-brand">
-                <Mark />
-                <h3 className="dc-about-name" ref={headingRef} tabIndex={-1}>
-                  {PRODUCT.name}
-                </h3>
-              </div>
-              <p className="dc-about-tagline">{PRODUCT.tagline}</p>
-              <p className="dc-about-sub">{PRODUCT.pitch}</p>
+          <div className="dc-about-intro">
+            <MarginSketch />
+            <div className="dc-about-brand">
+              <Mark />
+              <h3 className="dc-about-name" ref={headingRef} tabIndex={-1}>
+                {PRODUCT.name}
+              </h3>
             </div>
+            <p className="dc-about-tagline">{PRODUCT.tagline}</p>
+            <p className="dc-about-sub">{PRODUCT.pitch}</p>
+          </div>
 
-            <dl className="dc-about-block">
-              <div className="dc-about-cell">
-                <dt>Version</dt>
-                <dd className="dc-about-version" aria-label={`Version ${PRODUCT.version}`}>
-                  v{PRODUCT.version}
-                </dd>
-              </div>
-              <div className="dc-about-cell">
-                <dt>{updateReady ? 'Update ready' : 'Release notes'}</dt>
-                <dd>
-                  {updateReady ? (
-                    <button
-                      type="button"
-                      className="dc-about-version-action dc-about-version-action--update"
-                      onClick={activateUpdate}
-                      title="Saves your work, then reloads this tab with the new version"
-                    >
-                      Reload to update ↑
-                    </button>
-                  ) : (
-                    <button type="button" className="dc-about-version-action" onClick={openWhatsNew}>
-                      {unread && <span className="dc-release-dot" aria-hidden="true" />}
-                      {/* One text run, so the flex gap spaces only the dot — not the label and the arrow. */}
-                      <span>
-                        What's New{unread && <span className="dc-sr-only"> — new</span>}
-                        {'\u00a0→'}
-                      </span>
-                    </button>
-                  )}
-                </dd>
-              </div>
-              {hostKind() === 'desktop' && (
-                <div className="dc-about-cell dc-about-cell--wide">
-                  <dt>Privacy</dt>
-                  <dd className="dc-about-cell-note">
-                    Your diagrams never leave this computer. The app only goes online to look for updates (you can turn
-                    that off in Settings) and to download one when you ask.
-                  </dd>
-                </div>
-              )}
-              <div className="dc-about-cell dc-about-cell--wide">
-                <dt>Drawn by</dt>
-                <dd className="dc-about-signature">
-                  <strong>{PRODUCT.author}</strong>
-                  <span className="dc-about-links">
-                    {AUTHOR_LINKS.map((link) => (
-                      <a
-                        key={link.label}
-                        className="dc-about-link"
-                        href={link.href}
-                        {...(link.external ? { target: '_blank', rel: 'noreferrer' } : {})}
-                        aria-label={link.external ? `${link.label} (opens in a new tab)` : link.label}
-                        title={link.label}
-                      >
-                        <Icon name={link.icon} size={15} />
-                      </a>
-                    ))}
-                  </span>
-                </dd>
-              </div>
-            </dl>
+          <div className="dc-about-release">
+            <span className="dc-about-version" aria-label={`Version ${PRODUCT.version}`}>
+              v{PRODUCT.version}
+            </span>
+            <span className="dc-about-release-separator" aria-hidden="true">/</span>
+            {updateReady ? (
+              <button
+                type="button"
+                className="dc-about-version-action dc-about-version-action--update"
+                onClick={activateUpdate}
+                title="Saves your work, then reloads this tab with the new version"
+              >
+                Reload to update ↑
+              </button>
+            ) : (
+              <button type="button" className="dc-about-version-action" onClick={openWhatsNew}>
+                {unread && <span className="dc-release-dot" aria-hidden="true" />}
+                <span>
+                  What's New{unread && <span className="dc-sr-only"> — new</span>}
+                  {'\u00a0→'}
+                </span>
+              </button>
+            )}
+          </div>
+
+          {hostKind() === 'desktop' && (
+            <p className="dc-about-privacy">
+              Your diagrams never leave this computer. The app only goes online to look for updates (you can turn
+              that off in Settings) and to download one when you ask.
+            </p>
+          )}
+
+          <div className="dc-about-colophon">
+            <div className="dc-about-signature">
+              <span className="dc-about-credit">Drawn by</span>
+              <strong>{PRODUCT.author}</strong>
+            </div>
+            <div className="dc-about-links">
+              {AUTHOR_LINKS.map((link) => (
+                <a
+                  key={link.label}
+                  className="dc-about-link"
+                  href={link.href}
+                  {...(link.external ? { target: '_blank', rel: 'noreferrer' } : {})}
+                  aria-label={link.external ? `${link.label} (opens in a new tab)` : link.label}
+                  title={link.label}
+                >
+                  <Icon name={link.icon} size={15} />
+                </a>
+              ))}
+            </div>
           </div>
 
           <div className="dc-about-footer">
@@ -363,7 +366,7 @@ function AboutDialogBody() {
               title="If Draft Canvas helped, you can optionally support its development."
               aria-label="Buy the builder a coffee on Ko-fi (opens in a new tab)"
             >
-              ☕ Buy the builder a coffee ↗
+              Buy the builder a coffee ↗
             </a>
             {/* Relative, so it also resolves inside the desktop bundle. */}
             <a className="dc-about-footnote" href="./THIRD_PARTY_LICENSES.txt" target="_blank" rel="noreferrer">

@@ -4316,7 +4316,7 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 }
 
 /* What's New / Release History / Release Detail read better with more horizontal room than the
-   compact identity card About is — a proper document measure instead of a tall, narrow list. */
+   compact About composition is — a proper document measure instead of a tall, narrow list. */
 .dc-modal-wide {
   max-height: min(720px, calc(100vh - 64px));
   max-height: min(720px, calc(100dvh - 64px));
@@ -4980,21 +4980,55 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   text-align: left;
 }
 
-/* The drawing sheet: one hairline frame, the product drawn on dot-grid paper above and the title
-   block along the bottom edge, as on a printed engineering sheet. */
-.dc-about-sheet {
-  --dc-about-dot: color-mix(in srgb, var(--dc-text-faint) 26%, transparent);
-  align-self: stretch;
-  border: 1px solid var(--dc-border-strong);
-  border-radius: var(--dc-radius);
-  overflow: hidden;
+/* One open composition: the illustration stays in its own margin, so it never competes with
+   the words. Native serif type brings a little editorial warmth without loading a webfont. */
+.dc-modal-about-identity .dc-modal-header {
+  border-bottom: none;
 }
 
-.dc-about-drawing {
-  padding: 22px 20px 20px;
-  background-image: radial-gradient(circle, var(--dc-about-dot) 0.8px, transparent 1.2px);
-  background-size: 14px 14px;
-  background-position: 7px 7px;
+.dc-modal-about-identity .dc-modal-body {
+  padding: 16px 28px 24px;
+}
+
+.dc-about-intro {
+  position: relative;
+  width: 100%;
+  padding-top: 4px;
+}
+
+.dc-about-sketch {
+  position: absolute;
+  top: 38px;
+  right: -8px;
+  width: 104px;
+  height: 156px;
+  pointer-events: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.dc-about-sketch-thought {
+  stroke: var(--dc-text-faint);
+  stroke-width: 1;
+  opacity: 0.45;
+}
+
+.dc-about-sketch-line,
+.dc-about-sketch-node {
+  stroke: var(--dc-selection);
+  stroke-width: 1.5;
+  opacity: 0.65;
+}
+
+.dc-about-sketch-guide {
+  stroke: var(--dc-text-faint);
+  stroke-width: 1;
+  opacity: 0.3;
+}
+
+.dc-about-sketch-end {
+  fill: var(--dc-selection);
+  opacity: 0.65;
 }
 
 .dc-about-brand {
@@ -5004,8 +5038,8 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 }
 
 .dc-about-mark {
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   flex-shrink: 0;
 }
 
@@ -5028,11 +5062,35 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   letter-spacing: -0.01em;
 }
 
+/* A reading target after Back, not a control; keep focus without framing the product name. */
+.dc-about-name:focus {
+  outline: none;
+}
+
 .dc-about .dc-about-tagline {
-  margin: 14px 0 0;
-  font-size: 14.5px;
-  font-weight: 600;
+  max-width: 17ch;
+  margin: 26px 96px 0 0;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 32px;
+  font-weight: 400;
+  line-height: 1.15;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
   color: var(--dc-text);
+}
+
+.dc-about .dc-about-intro .dc-about-sub {
+  max-width: 36ch;
+  margin-top: 18px;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.dc-about .dc-about-privacy {
+  margin: 18px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--dc-text-muted);
 }
 
 .dc-about-view-title {
@@ -5083,55 +5141,24 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   color: var(--dc-text-muted);
 }
 
-/* Title-block cells share hairlines by sitting on a border-coloured grid with a 1px gap. The
-   release cell holds exactly one action — an update to install when there is one, What's New
-   otherwise. Never both at once. */
-.dc-about-block {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1px;
-  margin: 0;
-  border-top: 1px solid var(--dc-border-strong);
-  background: var(--dc-border);
-}
-
-.dc-about-cell {
-  min-width: 0;
-  padding: 8px 12px 9px;
-  background: var(--dc-surface);
-}
-
-.dc-about-cell--wide {
-  grid-column: 1 / -1;
-}
-
-.dc-about-cell dt {
-  margin: 0 0 3px;
-  font-size: 9.5px;
-  font-weight: 600;
-  line-height: 14px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--dc-text-faint);
-}
-
-.dc-about-cell dd {
-  margin: 0;
-  font-size: 12.5px;
-  line-height: 20px;
-  color: var(--dc-text);
-}
-
-.dc-about-cell .dc-about-cell-note {
+.dc-about-release {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 22px;
   font-size: 12px;
-  line-height: 1.5;
+  line-height: 20px;
+}
+
+.dc-about-version {
+  font-family: var(--dc-mono);
+  font-size: 11px;
   color: var(--dc-text-muted);
 }
 
-.dc-about-cell .dc-about-version {
-  font-family: var(--dc-mono);
-  font-size: 12px;
-  letter-spacing: 0.01em;
+.dc-about-release-separator {
+  color: var(--dc-border-strong);
 }
 
 .dc-about-version-action {
@@ -5425,17 +5452,52 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   pointer-events: none;
 }
 
-.dc-about-cell .dc-about-signature {
+.dc-about-colophon {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
-  gap: 4px 12px;
+  gap: 12px 16px;
+  width: 100%;
+  margin-top: 28px;
+  padding-top: 18px;
+  border-top: 1px solid var(--dc-border);
+}
+
+.dc-about-signature {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.dc-about-credit {
+  font-family: var(--dc-mono);
+  font-size: 10px;
+  color: var(--dc-text-faint);
 }
 
 .dc-about-signature strong {
+  font-size: 13px;
+  font-weight: 550;
   color: var(--dc-text);
-  font-weight: 600;
+}
+
+@media (max-width: 420px) {
+  .dc-modal-about-identity .dc-modal-body {
+    padding-right: 22px;
+    padding-left: 22px;
+  }
+
+  .dc-about .dc-about-tagline {
+    margin-right: 78px;
+    font-size: 28px;
+  }
+
+  .dc-about-sketch {
+    right: -12px;
+    width: 78px;
+    height: 117px;
+  }
 }
 
 .dc-about-links {
@@ -5493,7 +5555,7 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   justify-content: space-between;
   gap: 6px 16px;
   width: 100%;
-  margin-top: 14px;
+  margin-top: 22px;
 }
 
 .dc-about-footnote {
