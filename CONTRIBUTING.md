@@ -54,6 +54,10 @@ or drawing styles when affected.
 
 ## Submitting a change
 
+When adding or updating a dependency, copied source or asset, follow the
+[third-party attribution guidance](docs/reference/third-party.md#maintaining-attributions).
+Include credits and required notices in the same PR as the integration.
+
 1. Discuss schema changes, new concepts or other large changes in an issue before writing code.
 2. Fork, branch and make one focused change.
 3. Follow the checks above and fix relevant failures.

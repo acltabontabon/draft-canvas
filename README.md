@@ -58,6 +58,18 @@ its own browser storage; export diagrams before changing hosts. See
 
 For local development, setup and checks, see [Contributing](CONTRIBUTING.md).
 
+## Acknowledgements
+
+Draft Canvas builds on the work of open-source contributors, including
+[React](https://github.com/react/react), [React Flow](https://github.com/xyflow/xyflow),
+[Tauri](https://github.com/tauri-apps/tauri) and [Simple Icons](https://github.com/simple-icons/simple-icons).
+See the [third-party acknowledgements](docs/reference/third-party.md) for app, desktop and tooling
+credits, including brand assets and attribution guidance.
+
+Third-party components retain their own licenses. The generated
+[third-party license notices](THIRD_PARTY_LICENSES.txt) ship with the web and desktop apps and are
+available through **About → Licences**.
+
 ---
 
 <div align="center">
