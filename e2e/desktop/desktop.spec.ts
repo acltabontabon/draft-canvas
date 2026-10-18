@@ -612,7 +612,7 @@ test('an update is offered quietly, and nothing happens to it until it is asked 
 });
 
 /** Opens Settings the way the menu does, on the page named. */
-async function openSettings(page: Page, category?: 'General' | 'AI agents' | 'Updates') {
+async function openSettings(page: Page, category?: 'General' | 'AI agents' | 'Updates' | 'Support') {
   await page.evaluate(() => window.__shell.emit({ type: 'menu', command: 'settings' }));
   const settings = page.getByRole('dialog', { name: 'Settings' });
   if (category) await settings.getByRole('tab', { name: category }).click();
@@ -703,7 +703,7 @@ test('Settings moves between pages by keyboard, shows one agent setup at a time,
   await expect(agents).toHaveAttribute('aria-selected', 'true');
   await expect(settings.getByRole('tabpanel', { name: 'AI agents' })).toBeVisible();
   await page.keyboard.press('End');
-  await expect(settings.getByRole('tab', { name: 'Updates' })).toHaveAttribute('aria-selected', 'true');
+  await expect(settings.getByRole('tab', { name: 'Support' })).toHaveAttribute('aria-selected', 'true');
   await page.keyboard.press('ArrowDown');
   await expect(general).toHaveAttribute('aria-selected', 'true');
   await agents.click();
@@ -777,3 +777,17 @@ test('Settings moves between pages by keyboard, shows one agent setup at a time,
   await expect(settings.getByRole('tab', { name: 'AI agents' })).toHaveAttribute('aria-selected', 'true');
 });
 
+test('Settings → Support previews a diagnostic report and saves the reviewed bytes', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'New Quick Draft' })).toBeVisible();
+  const settings = await openSettings(page, 'Support');
+  const preview = settings.getByRole('textbox', { name: 'Diagnostic report contents' });
+  const report = await preview.inputValue();
+  expect(JSON.parse(report)).toMatchObject({ format: 1, events: [] });
+  await settings.getByRole('button', { name: 'Download report' }).click();
+  await expect.poll(() => page.evaluate(() => window.__shell.exports())).toEqual([
+    { name: 'draft-canvas-diagnostics.json', text: report },
+  ]);
+  await page.keyboard.press('Escape');
+  await expect(settings).toHaveCount(0);
+});

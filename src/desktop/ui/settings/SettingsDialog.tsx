@@ -7,6 +7,7 @@ import { RenameFileDialog } from '../RenameFileDialog';
 import { UpdatePanel } from '../Updates';
 import { AgentSettings } from './AgentSettings';
 import { GeneralSettings } from './GeneralSettings';
+import { SupportSettings } from './SupportSettings';
 import { UpdateSettings } from './UpdateSettings';
 import '../desktop.css';
 import './settings.css';
@@ -57,6 +58,7 @@ const CATEGORIES: readonly [Category, ...Category[]] = [
   { id: 'general', label: 'General', icon: 'sliders', Page: GeneralSettings },
   { id: 'agents', label: 'AI agents', icon: 'agent', Page: AgentSettings },
   { id: 'updates', label: 'Updates', icon: 'refresh', Page: UpdateSettings },
+  { id: 'support', label: 'Support', icon: 'help', Page: SupportSettings },
 ];
 
 const KEY_STEP: Record<string, number> = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 };

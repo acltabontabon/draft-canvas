@@ -130,8 +130,9 @@ reports. This triage is not a claim that Linux desktop is supported or cleared f
 
 ## Local diagnostic reports
 
-About → **Diagnostic report…** previews a report before **Download report**. It contains the app
-and document schema versions, timestamps and up to twenty recent failures with an operation category,
+Open **Troubleshooting** on the web home screen, **More → Diagnostic report…** in the web editor,
+or **Settings → Support** on desktop to preview a report before choosing **Download report**.
+It contains the app and document schema versions, timestamps and up to twenty recent failures with an operation category,
 error category and optional element counts. It contains no document ids, names, labels, paths, URLs,
 stacks or raw error messages. Unrecognized operations and error types become generic categories.
 Nothing is uploaded; the record exists only in memory until the person downloads it and disappears

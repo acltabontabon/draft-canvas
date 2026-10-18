@@ -140,6 +140,12 @@ and doesn't look through your disk for diagrams. It only ever touches the files 
 own data folder. The one thing it asks the network is whether there's a newer version (below), and it can be
 turned off.
 
+## Diagnostic reports
+
+Open **Settings → Support** to review a local diagnostic report and choose **Download report**.
+It includes recent failure categories and timestamps, without diagram content, file paths, identifiers
+or error messages. Nothing is sent automatically. Licences remain available in **About → Licences**.
+
 ## Updates
 
 Draft Canvas looks for a newer version shortly after it starts and once a day after that. That's all it does

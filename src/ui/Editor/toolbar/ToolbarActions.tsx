@@ -19,7 +19,7 @@ interface ToolbarActionsProps {
  * Everything you do to the workspace, in three weights.
  *
  * History and utilities are quiet icons; Flows and Present carry words because they are modes you
- * enter, not commands you fire. The four app-level utilities behind `More` are the ones you touch
+ * enter, not commands you fire. The app-level utilities behind `More` are the ones you touch
  * once a session — folding them up is what stops the right edge reading as an icon train, and the
  * trigger inherits their badges so nothing gets quietly buried.
  */
@@ -95,6 +95,16 @@ export function ToolbarActions({ onPresent, onExport }: ToolbarActionsProps) {
         setAboutOpen(true);
       },
     },
+    ...(!__DESKTOP__ ? [
+      {
+        id: 'diagnostics',
+        label: 'Diagnostic report…',
+        onSelect: () => {
+          closeMenu();
+          useUiStore.getState().setDiagnosticsOpen(true);
+        },
+      },
+    ] : []),
     // The two document-wide edits, after the app-level utilities so the rows above keep their
     // places under the keyboard. Both are palette commands too: each row only names the store
     // action the command names.

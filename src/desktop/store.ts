@@ -11,7 +11,7 @@ export type RenameTarget =
   | { kind: 'project'; project: Handle; relPath: string; name: string };
 
 /** The pages of Settings, in rail order (see `settings/SettingsDialog.tsx`). */
-export type SettingsCategory = 'general' | 'agents' | 'updates';
+export type SettingsCategory = 'general' | 'agents' | 'updates' | 'support';
 
 /** What the open document is, for the status bar, the window title and Home. */
 export type DesktopDoc =

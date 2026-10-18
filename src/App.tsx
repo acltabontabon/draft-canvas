@@ -8,6 +8,7 @@ import { PanelBoundary } from './ui/common/PanelBoundary';
 import { retryableLazy } from './ui/common/retryableLazy';
 import { loadFailureNotice } from './lib/staleChunk';
 import { Toasts } from './ui/common/Toasts';
+import { DiagnosticsDialog } from './ui/common/DiagnosticsDialog';
 import { LiveAnnouncer } from './ui/common/LiveAnnouncer';
 import { ThemeProvider } from './ui/theme/ThemeProvider';
 import { PersonalityProvider } from './ui/personality/PersonalityProvider';
@@ -134,6 +135,7 @@ function Shell() {
       <Toasts />
       <LiveAnnouncer />
       <LazyAboutDialog />
+      {!__DESKTOP__ && <DiagnosticsDialog />}
       {DesktopSettingsChunk && hostKind() === 'desktop' && (
         <Suspense fallback={null}>
           <DesktopSettingsChunk.Component />
