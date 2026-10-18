@@ -96,6 +96,9 @@ export interface ContextMenuState {
   target: ContextMenuTarget;
   screenPosition: { x: number; y: number };
   flowPosition: { x: number; y: number };
+  /** Opened with Shift+F10 or the menu key: the first row starts highlighted so arrows and Enter
+   *  work at once. A right-click starts with nothing highlighted, as a native menu does. */
+  viaKeyboard?: boolean;
 }
 
 /**

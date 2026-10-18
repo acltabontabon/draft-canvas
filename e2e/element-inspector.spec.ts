@@ -43,13 +43,34 @@ test.describe('element inspector popover', () => {
     await page.getByRole('option', { name: 'External' }).click();
     await expect(page.locator('.dc-node').first()).toContainText('EXTERNAL');
 
-    // Focus.
-    await page.getByRole('button', { name: 'Focus', exact: true }).click();
+    // One row: colour, kind and the shape's own actions; everything else is behind ⋯.
+    const inspector = page.locator('.dc-element-inspector');
+    const more = inspector.getByRole('button', { name: 'More options' });
+    const moreMenu = page.getByRole('menu');
+
+    // Spotlight, from ⋯.
+    await more.click();
+    await moreMenu.getByRole('menuitem', { name: 'Spotlight' }).click();
     await expect(page.locator('.dc-canvas[data-focus="on"]')).toBeVisible();
     await page.keyboard.press('Escape');
+    await page.keyboard.press('Escape');
 
-    // Delete is directly in the row — no "More options" step.
-    await page.getByRole('button', { name: 'Delete selection' }).click();
+    // While ⋯ is open it owns bare keys: an arrow moves its highlight, never the shape behind it.
+    await page.locator('.dc-node').first().click();
+    const placed = await page.locator('.dc-node').first().boundingBox();
+    await more.click();
+    await page.keyboard.press('ArrowDown');
+    expect(await page.locator('.dc-node').first().boundingBox()).toEqual(placed);
+
+    // More actions… swaps ⋯ for the shape's full right-click menu.
+    await moreMenu.getByRole('menuitem', { name: 'More actions…' }).click();
+    await expect(page.locator('.dc-context-menu-header')).toContainText('Service');
+    await expect(inspector).toHaveCount(0);
+    await page.keyboard.press('Escape');
+
+    // Delete, from ⋯.
+    await more.click();
+    await moreMenu.getByRole('menuitem', { name: 'Delete' }).click();
     await expect(page.locator('.dc-node')).toHaveCount(0);
   });
 
@@ -57,7 +78,8 @@ test.describe('element inspector popover', () => {
     await newCanvas(page, 'Details undo');
     await create(page, 'Service', { x: 400, y: 300 });
     await page.locator('.dc-node').first().click();
-    await page.locator('.dc-element-inspector').getByRole('button', { name: 'Details', exact: true }).click();
+    await page.locator('.dc-element-inspector').getByRole('button', { name: 'More options' }).click();
+    await page.getByRole('menuitem', { name: 'Edit details…' }).click();
     const technology = page.getByLabel('Technology');
     await technology.fill('Go');
     await technology.press('Enter');

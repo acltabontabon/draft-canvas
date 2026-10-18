@@ -853,8 +853,10 @@ test.describe('editing', () => {
     // of its children) rather than "select all", which would also pick up
     // Database/Note individually and reparent them straight to the outer
     // boundary instead of leaving them nested inside the inner one.
+    // Its bottom corner: the Service's popover sits above the Service and can reach over the top one.
     await page.locator('.dc-node[data-type="service"]').click();
-    await inner.click({ modifiers: ['Shift'], position: { x: 8, y: 8 } });
+    const innerBox = (await inner.boundingBox())!;
+    await inner.click({ modifiers: ['Shift'], position: { x: 8, y: innerBox.height - 8 } });
     await expect(page.locator('.dc-inspector')).toContainText('2 elements');
     await page.getByRole('button', { name: 'Group', exact: true }).click();
     const groups = page.locator('.dc-node[data-type="group"]');

@@ -1732,9 +1732,9 @@
   border-left-color: transparent;
 }
 
-/* A row of controls. The primary row (shape-native continuations — Add Consumer, Add DLQ, Add Data
-   Store, …) sits above the configuration row (colour · kind · Focus · Delete), separated by a rule,
-   so what the element can *become* reads apart from what it *is*. */
+/* A row of controls. A shape's popover is one row — what it is (colour, kind), a hairline, what can
+   grow from it (Add consumer, Add DLQ, …), then ⋯ for the rest. A panel opened from the row
+   (colours, text style, C4 details) sits under it, separated by a rule. */
 .dc-popover-row {
   display: flex;
   align-items: center;
@@ -1765,20 +1765,20 @@
 
 /* Primary actions read as actions: full text colour, a little more room, and — for an "Add …"
    continuation — a leading plus so the row scans as "what can grow from here." */
-.dc-popover-primary .dc-popover-action {
+.dc-popover-action {
   color: var(--dc-text);
   font-weight: 500;
 }
 
-.dc-popover-primary .dc-popover-action[data-adds='true']::before {
+.dc-popover-action[data-adds='true']::before {
   content: '+';
   margin-right: 1px;
   color: var(--dc-text-faint);
   font-weight: 600;
 }
 
-.dc-popover-primary .dc-popover-action:hover::before,
-.dc-popover-primary .dc-popover-action:focus-visible::before {
+.dc-popover-action:hover::before,
+.dc-popover-action:focus-visible::before {
   color: var(--dc-selection);
 }
 
@@ -1795,12 +1795,17 @@
   flex: none;
 }
 
-/* Delete is the one destructive control in the popover: quiet until pointed at, then unmistakably
-   danger-coloured — never a permanently red button that shouts from every selection. */
-.dc-popover-delete:hover:not(:disabled),
-.dc-popover-delete:focus-visible {
-  background: color-mix(in srgb, var(--dc-danger) 16%, transparent);
-  color: var(--dc-danger);
+/* One row holds a shape's kind and up to three actions, so it may run wider than a connector's. */
+.dc-element-inspector {
+  max-width: 480px;
+}
+
+/* The 24-unit dots are dust at 16px: drawn heavier, like the toolbar's own More, so ⋯ reads as a
+   control rather than a smudge at the end of the row. */
+.dc-popover-more svg[data-icon='more'] {
+  width: 18px;
+  height: 18px;
+  stroke-width: 3;
 }
 
 .dc-popover-panel {
@@ -2025,10 +2030,26 @@
   pointer-events: none;
 }
 
-/* The configuration row's kind picker takes the remaining width but never less than a readable
-   label; the swatch and the two actions keep their own size. */
+/* The kind picker sizes to its label, and in a shape's one-row popover reads as text with a
+   chevron — its border shows on hover or focus — so the row is a line of words, not a form. */
 .dc-popover-config .dc-inspector-select {
-  min-width: 96px;
+  flex: none;
+}
+
+.dc-element-inspector .dc-inspector-select-button {
+  justify-content: flex-start;
+  gap: 8px;
+  height: var(--dc-popover-control);
+  min-height: var(--dc-popover-control);
+  border-color: transparent;
+  background: transparent;
+}
+
+.dc-element-inspector .dc-inspector-select-button:hover,
+.dc-element-inspector .dc-inspector-select-button:focus-visible,
+.dc-element-inspector .dc-inspector-select-button[aria-expanded='true'] {
+  border-color: var(--dc-border);
+  background: var(--dc-surface-raised);
 }
 
 /*
@@ -2448,6 +2469,12 @@
   background: transparent;
 }
 
+/* A shape's automatic colour is drawn as a wheel of the palette (inline, from the theme) and needs
+   no dashed outline to say so. */
+.dc-element-inspector .dc-inspector-color-swatch[data-auto='true'] {
+  border-color: transparent;
+}
+
 .dc-edge-inspector-membership-list {
   margin: 0;
   padding: 0;
@@ -2526,8 +2553,8 @@
   z-index: var(--dc-z-menu);
   display: flex;
   flex-direction: column;
-  min-width: 176px;
-  max-width: 260px;
+  min-width: 196px;
+  max-width: 280px;
   /* max-height is set inline from the window's height (ContextMenu.tsx) */
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -2575,6 +2602,74 @@
   flex: none;
   display: inline-flex;
   gap: 3px;
+}
+
+/* The context menu's shortcuts are a hint to read past, not key caps: faint plain text. The
+   toolbar's overflow menu keeps its `<kbd>` chips. */
+.dc-context-menu-shortcut {
+  flex: none;
+  font-size: 11.5px;
+  letter-spacing: 0.02em;
+  color: var(--dc-text-faint);
+}
+
+/* Names what the menu acts on. Not a row: no hover, no highlight, never focused. */
+.dc-context-menu-header {
+  padding: 6px 10px 4px;
+  font-size: 11px;
+  color: var(--dc-text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dc-context-menu-header-title {
+  font-weight: 600;
+  color: var(--dc-text-muted);
+}
+
+.dc-context-menu-label {
+  padding: 6px 10px 2px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dc-text-faint);
+}
+
+.dc-context-menu-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 2px;
+}
+
+.dc-context-menu-grid .dc-context-menu-item {
+  padding: 6px 8px 6px 10px;
+}
+
+.dc-context-menu-icons {
+  display: flex;
+  gap: 2px;
+  padding: 2px 0;
+}
+
+.dc-context-menu-icon {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  min-width: 26px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dc-radius-sm);
+  background: none;
+  color: var(--dc-text-muted);
+  cursor: pointer;
+}
+
+.dc-context-menu-icon[data-highlighted='true'] {
+  background: var(--dc-selection-soft);
+  color: var(--dc-text);
 }
 
 /* The toolbar's overflow menu reuses the context menu's shell wholesale and adds only what a

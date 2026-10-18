@@ -480,7 +480,7 @@ function flowCommands(ctx: CommandContext): Command[] {
   return commands;
 }
 
-function viewCommands(ctx: CommandContext): Command[] {
+export function viewCommands(ctx: CommandContext): Command[] {
   const commands: Command[] = [
     {
       id: 'fit',

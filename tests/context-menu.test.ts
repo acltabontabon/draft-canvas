@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { contextMenuCommandsFor, type ContextMenuEntry } from '../src/commands/contextMenu';
+import { plainShortcut } from '../src/lib/platform';
+import { contextMenuCommandsFor, menuItemsOf, type ContextMenuEntry } from '../src/commands/contextMenu';
 import type { CommandContext } from '../src/commands/types';
 import { createDocument } from '../src/document/factory';
 import { stubContext } from './commandStubs';
@@ -23,33 +24,53 @@ function reset() {
   useUiStore.setState({ commandPaletteOpen: false, contextMenu: null });
 }
 
-const ids = (entries: ContextMenuEntry[]) =>
-  entries.filter((entry): entry is Extract<ContextMenuEntry, { type: 'command' }> => entry.type === 'command').map((entry) => entry.command.id);
+/** Every runnable item's id, grid cells and icon buttons included. */
+const idsOf = (entries: ContextMenuEntry[]) => menuItemsOf(entries).map((item) => item.command.id);
+
+/** The menu's shape: a row per command id, `sep`, `header`, and one token per grid or icon row. */
+const layout = (entries: ContextMenuEntry[]) =>
+  entries.map((entry) => (entry.type === 'command' ? entry.command.id : entry.type === 'separator' ? 'sep' : entry.type));
+
+const itemFor = (entries: ContextMenuEntry[], id: string) => menuItemsOf(entries).find((item) => item.command.id === id)!;
 
 const pane = (ctx: CommandContext, position = { x: 0, y: 0 }) => contextMenuCommandsFor(ctx, { kind: 'pane' }, position);
 
 describe('contextMenuCommandsFor — empty canvas', () => {
   beforeEach(reset);
 
-  it('offers every shape preset, including Boundary, in ALL_PRESETS order', () => {
-    const list = ids(pane(stubContext()));
+  it('offers every shape preset, including Boundary, architecture shapes first', () => {
+    const list = idsOf(pane(stubContext()));
     expect(list).toEqual([
       'paste',
-      'add-text',
-      'add-note',
-      'add-code',
-      'add-boundary',
       'add-service',
       'add-database',
       'add-queue',
       'add-actor',
-      'add-ellipse',
       'add-component',
+      'add-boundary',
+      'add-note',
+      'add-code',
+      'add-text',
+      'add-ellipse',
+      'fit',
     ]);
   });
 
+  it('labels the shape grid by shape alone — the grid is already headed "Add here"', () => {
+    const grid = pane(stubContext()).find((entry) => entry.type === 'grid')!;
+    expect(grid.label).toBe('Add here');
+    expect(grid.items.map((item) => item.label).slice(0, 3)).toEqual(['Service', 'Data Store', 'Queue']);
+  });
+
+  it('offers Undo and Tidy up layout once there is something to undo and arrange', () => {
+    useEditorStore.getState().addNode({ type: 'service', x: 0, y: 0 });
+    const entries = pane(stubContext());
+    expect(idsOf(entries)).toEqual(expect.arrayContaining(['undo', 'select-all', 'fit', 'arrange']));
+    expect(itemFor(entries, 'arrange').label).toBe('Tidy up layout');
+  });
+
   it('still offers Paste when the in-app clipboard is empty, since the OS clipboard may hold something', () => {
-    expect(ids(pane(stubContext()))).toContain('paste');
+    expect(idsOf(pane(stubContext()))).toContain('paste');
   });
 
   it('includes Paste, with the ⌘V shortcut hint, once something is copied', () => {
@@ -57,35 +78,30 @@ describe('contextMenuCommandsFor — empty canvas', () => {
     useEditorStore.getState().setSelection({ nodes: [useEditorStore.getState().document.nodes[0]!.id], edges: [] });
     useEditorStore.getState().copySelection();
     const entries = pane(stubContext());
-    expect(ids(entries)).toContain('paste');
-    const paste = entries.find((e): e is Extract<ContextMenuEntry, { type: 'command' }> => e.type === 'command' && e.command.id === 'paste');
+    expect(idsOf(entries)).toContain('paste');
+    const paste = itemFor(entries, 'paste');
     expect(paste?.command.shortcut).toMatch(/V$/);
   });
 
   it('hides Select All on an empty document, shows it once a node exists', () => {
-    expect(ids(pane(stubContext()))).not.toContain('select-all');
+    expect(idsOf(pane(stubContext()))).not.toContain('select-all');
     useEditorStore.getState().addNode({ type: 'note', x: 0, y: 0, text: 'x' });
-    expect(ids(pane(stubContext()))).toContain('select-all');
+    expect(idsOf(pane(stubContext()))).toContain('select-all');
   });
 
-  it('groups Add commands into one separator-delimited block, with Paste before and Select All after', () => {
+  it('puts the shapes in one grid between Paste/Undo and Select all/Fit to view', () => {
     useEditorStore.getState().addNode({ type: 'note', x: 0, y: 0, text: 'x' });
     useEditorStore.getState().setSelection({ nodes: [useEditorStore.getState().document.nodes[0]!.id], edges: [] });
     useEditorStore.getState().copySelection();
     const entries = pane(stubContext());
-    const types = entries.map((entry) => (entry.type === 'separator' ? 'sep' : entry.command.id));
-    expect(types[0]).toBe('paste');
-    expect(types[1]).toBe('sep');
-    expect(types.at(-1)).toBe('select-all');
-    expect(types.at(-2)).toBe('sep');
-    // Exactly two separators: one after Paste, one before Select All.
-    expect(types.filter((t) => t === 'sep')).toHaveLength(2);
+    // Paste and Undo, the shapes, then selection and view.
+    expect(layout(entries)).toEqual(['paste', 'undo', 'sep', 'grid', 'sep', 'select-all', 'fit']);
   });
 
   it('an Add command creates the node centered on the exact clicked position, not the tracked pointer', () => {
     const ctx = stubContext();
     const entries = pane(ctx, { x: 300, y: 450 });
-    const addService = entries.find((e): e is Extract<ContextMenuEntry, { type: 'command' }> => e.type === 'command' && e.command.id === 'add-service')!;
+    const addService = itemFor(entries, 'add-service');
     addService.command.run(ctx);
     const node = useEditorStore.getState().document.nodes[0]!;
     expect(node.type).toBe('service');
@@ -98,7 +114,7 @@ describe('contextMenuCommandsFor — empty canvas', () => {
   it('Add Boundary creates a group-type node with the default boundary size', () => {
     const ctx = stubContext();
     const entries = pane(ctx, { x: 10, y: 10 });
-    const addBoundary = entries.find((e): e is Extract<ContextMenuEntry, { type: 'command' }> => e.type === 'command' && e.command.id === 'add-boundary')!;
+    const addBoundary = itemFor(entries, 'add-boundary');
     addBoundary.command.run(ctx);
     const node = useEditorStore.getState().document.nodes[0]!;
     expect(node.type).toBe('group');
@@ -116,7 +132,7 @@ describe('contextMenuCommandsFor — empty canvas', () => {
 
     const ctx = stubContext();
     const entries = pane(ctx, { x: 900, y: 900 });
-    const paste = entries.find((e): e is Extract<ContextMenuEntry, { type: 'command' }> => e.type === 'command' && e.command.id === 'paste')!;
+    const paste = itemFor(entries, 'paste');
     paste.command.run(ctx);
     // `run` fires an async clipboard sync before the actual paste — flush the microtask queue
     // (jsdom has no real Clipboard API, so the sync itself resolves as a fast no-op).
@@ -155,8 +171,9 @@ describe('contextMenuCommandsFor — a regular node', () => {
     state.connect(api.id, db.id);
     state.connect(api.id, q.id);
     const entries = nodeMenu(api.id);
-    const types = entries.map((e) => (e.type === 'separator' ? 'sep' : e.command.id));
+    const types = layout(entries);
     expect(types).toEqual([
+      'header',
       'edit-text',
       // A Service can always be looked inside, whether or not anything is in there yet.
       'look-inside',
@@ -165,19 +182,17 @@ describe('contextMenuCommandsFor — a regular node', () => {
       'attach-code',
       'open-point-add',
       'sep',
+      // Cut and the one-step z-order pair are left to ⌘K and their shortcuts.
       'duplicate',
       'copy',
-      'cut',
-      'sep',
       'bring-to-front',
-      'bring-forward',
-      'send-backward',
       'send-to-back',
       'sep',
       'spotlight',
       'sep',
       'delete',
     ]);
+    expect(entries[0]).toEqual({ type: 'header', title: 'API', caption: 'Service' });
     // Neither is offered: both would return a `CommandStage` (the stage-command rule) —
     // `connect-to` always would, `flow-start-here` would here since there are 2 outgoing edges.
     expect(types).not.toContain('connect-to');
@@ -189,7 +204,7 @@ describe('contextMenuCommandsFor — a regular node', () => {
     const api = state.addNode({ type: 'service', x: 0, y: 0, text: 'API' });
     const db = state.addNode({ type: 'database', x: 200, y: 0, text: 'DB' });
     state.connect(api.id, db.id);
-    const ids = nodeMenu(api.id).filter((e) => e.type === 'command').map((e) => e.command.id);
+    const ids = idsOf(nodeMenu(api.id));
     expect(ids).toContain('flow-start-here');
   });
 
@@ -199,50 +214,49 @@ describe('contextMenuCommandsFor — a regular node', () => {
     for (let i = 0; i < 12; i += 1) {
       state.attachToNode(api.id, { id: `a${i}`, type: 'note' });
     }
-    const ids = nodeMenu(api.id).filter((e) => e.type === 'command').map((e) => e.command.id);
+    const ids = idsOf(nodeMenu(api.id));
     expect(ids).not.toContain('attach-note');
     expect(ids).not.toContain('attach-code');
   });
 
   it('offers Edit text for a Queue, which can be named like any other node', () => {
     const queue = useEditorStore.getState().addNode({ type: 'queue', x: 0, y: 0 });
-    const ids = nodeMenu(queue.id).filter((e) => e.type === 'command').map((e) => e.command.id);
+    const ids = idsOf(nodeMenu(queue.id));
     expect(ids).toContain('edit-text');
   });
 
-  it('a plain Queue gets Add Consumer and Add DLQ grouped right after Add Note/Add Code', () => {
+  it('a plain Queue gets Add consumer and Add DLQ right after Edit text, before the attachments', () => {
     const queue = useEditorStore.getState().addNode({ type: 'queue', x: 0, y: 0 });
     const entries = nodeMenu(queue.id);
-    const types = entries.map((e) => (e.type === 'separator' ? 'sep' : e.command.id));
+    const types = layout(entries);
     expect(types).toEqual([
+      'header',
       'edit-text',
-      'arrange-selection',
+      'sep',
+      'add-consumer',
+      'add-dead-letter-queue',
       'sep',
       'attach-note',
       'attach-code',
       'open-point-add',
       'sep',
-      'add-consumer',
-      'add-dead-letter-queue',
-      'sep',
       'duplicate',
       'copy',
-      'cut',
-      'sep',
       'bring-to-front',
-      'bring-forward',
-      'send-backward',
       'send-to-back',
       'sep',
       'spotlight',
       'sep',
       'delete',
     ]);
+    expect(itemFor(entries, 'add-consumer').label).toBe('Add consumer');
+    expect(itemFor(entries, 'attach-note').label).toBe('Attach note');
+    expect(itemFor(entries, 'spotlight').label).toBe('Spotlight');
   });
 
   it('a Topic gets neither reliability command, and no orphaned separator', () => {
     const topic = useEditorStore.getState().addNode({ type: 'queue', queueKind: 'topic', x: 0, y: 0 });
-    const ids = nodeMenu(topic.id).filter((e) => e.type === 'command').map((e) => e.command.id);
+    const ids = idsOf(nodeMenu(topic.id));
     expect(ids).not.toContain('add-consumer');
     expect(ids).not.toContain('add-dead-letter-queue');
     expect(ids).not.toContain('remove-dead-letter-queue');
@@ -255,15 +269,13 @@ describe('contextMenuCommandsFor — a junction', () => {
   it('is deliberately smaller than a regular node: no Add Note/Add Code, no single-step z-order', () => {
     const junction = useEditorStore.getState().addNode({ type: 'ellipse', x: 0, y: 0 });
     const entries = contextMenuCommandsFor(stubContext(), { kind: 'node', id: junction.id }, { x: 0, y: 0 });
-    const types = entries.map((e) => (e.type === 'separator' ? 'sep' : e.command.id));
+    const types = layout(entries);
     expect(types).toEqual([
+      'header',
       'edit-text',
-      'arrange-selection',
       'sep',
       'duplicate',
       'copy',
-      'cut',
-      'sep',
       'bring-to-front',
       'send-to-back',
       'sep',
@@ -285,14 +297,14 @@ describe('contextMenuCommandsFor — an edge', () => {
     const db = state.addNode({ type: 'database', x: 200, y: 0 });
     const edge = state.connect(api.id, db.id)!;
     const entries = edgeMenu(edge.id);
-    const types = entries.map((e) => (e.type === 'separator' ? 'sep' : e.command.id));
+    const types = layout(entries);
     expect(types).toEqual([
+      'header',
       'edit-text',
       'sep',
       'edge-reverse',
       'edge-async',
       'edge-response',
-      'sep',
       'edge-route-direct',
       'sep',
       'attach-note',
@@ -316,7 +328,7 @@ describe('contextMenuCommandsFor — an edge', () => {
       const target = state.addNode({ type: 'service', x: 700, y: i * 220, text: `T${i}` });
       return state.connect(hub.id, target.id)!;
     });
-    const types = edgeMenu(edges[0]!.id).map((e) => (e.type === 'separator' ? 'sep' : e.command.id));
+    const types = layout(edgeMenu(edges[0]!.id));
     expect(types).toContain('edge-convert-to-junction');
   });
 
@@ -328,7 +340,7 @@ describe('contextMenuCommandsFor — an edge', () => {
     for (let i = 0; i < 4; i += 1) {
       state.attachToEdge(edge.id, { id: `a${i}`, type: 'note' });
     }
-    const ids = edgeMenu(edge.id).filter((e) => e.type === 'command').map((e) => e.command.id);
+    const ids = idsOf(edgeMenu(edge.id));
     expect(ids).not.toContain('attach-note');
     expect(ids).not.toContain('attach-code');
   });
@@ -345,8 +357,9 @@ describe('contextMenuCommandsFor — a boundary', () => {
 
   it('hides Select Contents on an empty boundary', () => {
     const boundary = useEditorStore.getState().addNode({ type: 'group', x: 0, y: 0, width: 400, height: 300 });
-    const types = boundaryMenu(boundary.id).map((e) => (e.type === 'separator' ? 'sep' : e.command.id));
+    const types = layout(boundaryMenu(boundary.id));
     expect(types).toEqual([
+      'header',
       'edit-text',
       'sep',
       'attach-note',
@@ -355,17 +368,12 @@ describe('contextMenuCommandsFor — a boundary', () => {
       'sep',
       'duplicate',
       'copy',
-      'cut',
-      'sep',
       'bring-to-front',
-      'bring-forward',
-      'send-backward',
       'send-to-back',
       'sep',
       'spotlight',
       'sep',
       'ungroup',
-      'sep',
       'delete',
     ]);
   });
@@ -379,9 +387,7 @@ describe('contextMenuCommandsFor — a boundary', () => {
     const internalEdge = state.connect(service.id, db.id)!;
 
     const entries = boundaryMenu(outer.id);
-    const selectContents = entries.find(
-      (e): e is Extract<ContextMenuEntry, { type: 'command' }> => e.type === 'command' && e.command.id === 'select-contents',
-    )!;
+    const selectContents = itemFor(entries, 'select-contents');
     expect(selectContents.command.hint).toBe('3 elements');
 
     const ctx = stubContext();
@@ -406,7 +412,7 @@ describe('contextMenuCommandsFor — a multi-selection', () => {
     const a = state.addNode({ type: 'service', x: 0, y: 0 });
     const b = state.addNode({ type: 'service', x: 300, y: 0 });
     state.setSelection({ nodes: [a.id, b.id], edges: [] });
-    let ids = selectionMenu().filter((e) => e.type === 'command').map((e) => e.command.id);
+    let ids = idsOf(selectionMenu());
     expect(ids).toContain('align-left');
     expect(ids).not.toContain('distribute-x');
     // Only the two z-order extremes here, never the single-step pair — see `selectionMenu`'s comment.
@@ -415,7 +421,10 @@ describe('contextMenuCommandsFor — a multi-selection', () => {
 
     const c = state.addNode({ type: 'service', x: 600, y: 0 });
     state.setSelection({ nodes: [a.id, b.id, c.id], edges: [] });
-    ids = selectionMenu().filter((e) => e.type === 'command').map((e) => e.command.id);
+    ids = idsOf(selectionMenu());
+    // Align and distribute share one row of icons under a header that counts the selection.
+    expect(selectionMenu()[0]).toEqual({ type: 'header', title: '3 elements' });
+    expect(selectionMenu().find((entry) => entry.type === 'icons')?.items).toHaveLength(8);
     expect(ids).toContain('align-left');
     expect(ids).toContain('distribute-x');
   });
@@ -428,9 +437,9 @@ describe('contextMenuCommandsFor — a multi-selection', () => {
     const e1 = state.connect(a.id, b.id)!;
     const e2 = state.connect(a.id, c.id)!;
     state.setSelection({ nodes: [], edges: [e1.id, e2.id] });
-    const types = selectionMenu().map((e) => (e.type === 'separator' ? 'sep' : e.command.id));
+    const types = layout(selectionMenu());
     // …plus one shared open point about both connectors, which any selection may raise.
-    expect(types).toEqual(['open-point-add', 'sep', 'spotlight', 'sep', 'delete']);
+    expect(types).toEqual(['header', 'open-point-add', 'sep', 'spotlight', 'sep', 'delete']);
   });
 
   it('Group → Ungroup round-trips via the menu', () => {
@@ -439,9 +448,7 @@ describe('contextMenuCommandsFor — a multi-selection', () => {
     const b = state.addNode({ type: 'service', x: 300, y: 0 });
     state.setSelection({ nodes: [a.id, b.id], edges: [] });
     const ctx = stubContext();
-    const group = selectionMenu().find(
-      (e): e is Extract<ContextMenuEntry, { type: 'command' }> => e.type === 'command' && e.command.id === 'group',
-    )!;
+    const group = itemFor(selectionMenu(), 'group');
     group.command.run(ctx);
     const boundary = useEditorStore.getState().document.nodes.find((n) => n.type === 'group')!;
     expect(boundary).toBeDefined();
@@ -452,9 +459,7 @@ describe('contextMenuCommandsFor — a multi-selection', () => {
     // A single selected boundary goes through the node menu, not the multi-selection one — reuses
     // the identical `ungroup` command either way.
     const nodeEntries = contextMenuCommandsFor(ungroupCtx, { kind: 'node', id: boundary.id }, { x: 0, y: 0 });
-    const ungroup = nodeEntries.find(
-      (e): e is Extract<ContextMenuEntry, { type: 'command' }> => e.type === 'command' && e.command.id === 'ungroup',
-    )!;
+    const ungroup = itemFor(nodeEntries, 'ungroup');
     ungroup.command.run(ungroupCtx);
     expect(useEditorStore.getState().document.nodes.some((n) => n.type === 'group')).toBe(false);
   });
@@ -463,5 +468,18 @@ describe('contextMenuCommandsFor — a multi-selection', () => {
     useEditorStore.getState().addNode({ type: 'service', x: 0, y: 0 });
     useEditorStore.getState().setSelection({ nodes: [useEditorStore.getState().document.nodes[0]!.id], edges: [] });
     expect(selectionMenu()).toEqual([]);
+  });
+});
+
+describe('plainShortcut', () => {
+  it('runs Mac symbols together', () => {
+    expect(plainShortcut('⌘ D', true)).toBe('⌘D');
+    expect(plainShortcut('Shift 1', true)).toBe('⇧1');
+    expect(plainShortcut('Backspace', true)).toBe('⌫');
+  });
+
+  it('spells keys out with + elsewhere', () => {
+    expect(plainShortcut('Ctrl Shift Z', false)).toBe('Ctrl+Shift+Z');
+    expect(plainShortcut('Backspace', false)).toBe('Backspace');
   });
 });

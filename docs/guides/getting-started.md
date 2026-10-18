@@ -68,7 +68,7 @@ Notes are for what the boxes don't say: why the queue is there, or a decision th
 
 ![The queue now carries a small chip in its top corner, marking the attached note.](../media/guides/note-docked.png)
 
-Or right-click a shape and choose **Add Note**, which creates one already attached.
+Or right-click a shape and choose **Attach note**, which creates one already attached.
 
 ## Draw a boundary
 

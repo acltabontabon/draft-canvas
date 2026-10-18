@@ -576,6 +576,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
             <ContextMenu
               screenPosition={contextMenu.screenPosition}
               entries={contextMenuEntries}
+              viaKeyboard={contextMenu.viaKeyboard ?? false}
               onSelect={runContextMenuCommand}
               onDismiss={dismissContextMenu}
             />
@@ -584,8 +585,10 @@ function EditorScreen({ session }: { session: DocumentSession }) {
           {/* In every mode: while presenting it opens read-only, so a presenter can show what is still
               open here without any editing surface appearing over the story. */}
           <OpenPointPopover />
-          {!presenting && !tracing && <EdgeInspectorPopover />}
-          {!presenting && !tracing && <ElementInspectorPopover buildCommandContext={buildCommandContext} />}
+          {/* A right-click selects what it lands on, which would also raise that element's inspector
+              right under the menu — one floating surface at a time. */}
+          {!presenting && !tracing && !contextMenu && <EdgeInspectorPopover />}
+          {!presenting && !tracing && !contextMenu && <ElementInspectorPopover buildCommandContext={buildCommandContext} />}
           {!presenting && !tracing && <ExampleBanner onPresent={onPresent} />}
           <FlowTraceBar />
           <PresentationCalloutLayer />
@@ -784,6 +787,7 @@ export function useKeyboard({
       target,
       screenPosition: flowToScreenPosition(flowPoint),
       flowPosition: flowPoint,
+      viaKeyboard: true,
     });
   }, [flowToScreenPosition, screenToFlowPosition]);
 
