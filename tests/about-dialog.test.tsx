@@ -22,7 +22,7 @@ describe('AboutDialog support link', () => {
 
   it('shows a Ko-fi link, opened externally, with no click needed to reveal it', () => {
     render(<AboutDialog />);
-    const link = screen.getByRole('link', { name: /Buy the builder a coffee/i });
+    const link = screen.getByRole('link', { name: /Coffee for the maker/i });
     expect(link).toHaveAttribute('href', PRODUCT.links.kofi);
     expect(link).toHaveAttribute('target', '_blank');
     expect(link).toHaveAttribute('rel', 'noreferrer');

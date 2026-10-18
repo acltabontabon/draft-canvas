@@ -359,15 +359,18 @@ function AboutDialogBody() {
 
           <div className="dc-about-footer">
             <a
-              className="dc-about-footnote"
+              className="dc-about-footnote dc-about-coffee"
               href={PRODUCT.links.kofi}
               target="_blank"
               rel="noreferrer"
               title="If Draft Canvas helped, you can optionally support its development."
-              aria-label="Buy the builder a coffee on Ko-fi (opens in a new tab)"
+              aria-label="Coffee for the maker on Ko-fi (opens in a new tab)"
             >
-              Buy the builder a coffee ↗
+              <Icon name="coffee" size={15} />
+              <span>Coffee for the maker</span>
+              <span className="dc-about-footnote-arrow" aria-hidden="true">↗</span>
             </a>
+            <span className="dc-about-footer-separator" aria-hidden="true">·</span>
             {/* Relative, so it also resolves inside the desktop bundle. */}
             <a className="dc-about-footnote" href="./THIRD_PARTY_LICENSES.txt" target="_blank" rel="noreferrer">
               Licences

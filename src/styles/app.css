@@ -5546,30 +5546,46 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 
 /* ------------------------------------------------------------- support -- */
 
-/* Small human footnotes, not a section — the Ko-fi link on the left, housekeeping on the right,
-   all one quiet caption style. No expand/collapse, no pitch: the restraint is the point. */
+/* A compact colophon keeps the human gesture and the legal footnote together. */
 .dc-about-footer {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 6px 16px;
+  gap: 10px;
   width: 100%;
-  margin-top: 22px;
+  margin-top: 16px;
 }
 
 .dc-about-footnote {
-  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 2px 0;
   border: none;
   background: none;
   font: inherit;
-  font-size: 12px;
+  font-size: 11px;
   line-height: 18px;
   color: var(--dc-text-faint);
   text-decoration: none;
   white-space: nowrap;
   cursor: pointer;
   transition: color 90ms ease;
+}
+
+.dc-about-coffee > svg {
+  color: var(--dc-selection);
+  flex-shrink: 0;
+}
+
+.dc-about-footnote-arrow {
+  font-size: 10px;
+}
+
+.dc-about-footer-separator {
+  color: var(--dc-text-faint);
+  font-size: 11px;
 }
 
 .dc-about-footnote:hover,
