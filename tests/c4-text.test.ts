@@ -89,13 +89,14 @@ describe('C4 text on the canvas', () => {
   });
 
   for (const type of ['service', 'database', 'queue', 'actor', 'component'] as const) {
-    it(`draws name, [technology] and description on a ${type}, once the shape is its natural size`, () => {
-      const node = createNode({ type, x: 0, y: 0, text: 'Orders', technology: 'PostgreSQL', description: 'Every order, append-only.' });
+    it(`draws name, description and a generic technology mark on a ${type}`, () => {
+      const node = createNode({ type, x: 0, y: 0, text: 'Orders', technology: 'Custom SQL engine', description: 'Every order, append-only.' });
       const natural = naturalArchitectureSize(node, ctx);
       expect(natural.fits).toBe(true);
       const drawn = texts({ ...node, width: natural.width, height: natural.height }).join('').replace(/\s+/g, '');
       expect(drawn).toContain('Orders');
-      expect(drawn).toContain('[PostgreSQL]');
+      expect(drawn).not.toContain('[CustomSQLengine]');
+      expect(describeNode(node, ctx).shapes).toContainEqual(expect.objectContaining({ t: 'group', title: 'Custom SQL engine' }));
       expect(drawn).toContain('Everyorder,append-only.');
     });
   }
@@ -105,7 +106,7 @@ describe('C4 text on the canvas', () => {
     const sized = { ...node, ...naturalArchitectureSize(node, ctx) };
     const doc = { ...createDocument('C4'), nodes: [sized] };
     const { svg } = renderDocumentSvg(doc, { theme: 'light' } as never);
-    expect(svg).toContain('[Kotlin]');
+    expect(svg).toContain('<title>Kotlin</title>');
     expect(svg).toContain('Takes orders.');
   });
 });
@@ -128,10 +129,10 @@ describe('C4 text grows a shape only when growing shows it', () => {
     expect(edit(queue, { technology: 'RabbitMQ' })).toMatchObject({ width: queue.width, height: queue.height });
   });
 
-  it('grows wide enough to show a long technology in full', () => {
+  it('keeps a long custom technology in details without growing the shape', () => {
     const service = createNode({ type: 'service', x: 0, y: 0, text: 'Orders API' });
     const long = edit(service, { technology: 'Spring Boot 3 on Kubernetes with Istio and Envoy sidecars' });
-    expect(long.width).toBeGreaterThan(service.width);
+    expect(long).toMatchObject({ width: service.width, height: service.height, technology: 'Spring Boot 3 on Kubernetes with Istio and Envoy sidecars' });
     const texts = describeNode(long, describeContext(LIGHT)).shapes.filter((s) => s.t === 'text');
     expect(texts.every((s) => !s.layout.truncated)).toBe(true);
   });

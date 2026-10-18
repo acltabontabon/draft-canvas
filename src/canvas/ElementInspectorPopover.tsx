@@ -1,4 +1,5 @@
 import { SourceEvidenceDetails } from './SourceEvidenceDetails';
+import { TechnologyInput } from './TechnologyInput';
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { LIMITS } from '../document/limits';
 import { createPortal } from 'react-dom';
@@ -215,7 +216,7 @@ function ElementInspectorBody({
       if (event.key !== 'Escape' || isImeKeyEvent(event)) return;
       // An open type/role dropdown closes first (its own handler), and so does anything stacked
       // above the canvas — same as `EdgeInspectorPopover`'s membership checklist.
-      if (window.document.querySelector('.dc-inspector-select-menu') || overlayAboveCanvasIsOpen()) return;
+      if (window.document.querySelector('.dc-inspector-select-menu, .dc-technology-suggestions') || overlayAboveCanvasIsOpen()) return;
       event.stopPropagation();
       setOpenPanel(null);
     };
@@ -369,25 +370,7 @@ function C4DetailsPanel({ node }: { node: DraftNode }) {
   const stop = (event: ReactKeyboardEvent<HTMLElement>) => event.stopPropagation();
   return (
     <div className="dc-popover-panel dc-c4-panel">
-      <label className="dc-c4-field">
-        <span>Technology</span>
-        <input
-          key={node.technology ?? ''}
-          dir="auto"
-          className="dc-inspector-control"
-          defaultValue={node.technology ?? ''}
-          maxLength={LIMITS.maxTechnologyLength}
-          placeholder="Spring Boot, PostgreSQL…"
-          spellCheck={false}
-          onBlur={(event) => {
-            if (event.currentTarget.value.trim() !== (node.technology ?? '')) commit({ technology: event.currentTarget.value });
-          }}
-          onKeyDown={(event) => {
-            stop(event);
-            if (event.key === 'Enter' && !isImeKeyEvent(event)) event.currentTarget.blur();
-          }}
-        />
-      </label>
+      <TechnologyInput key={node.technology ?? ''} value={node.technology ?? ''} onCommit={(technology) => commit({ technology })} />
       <label className="dc-c4-field">
         <span>Description</span>
         <textarea

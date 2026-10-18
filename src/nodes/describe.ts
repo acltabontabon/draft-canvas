@@ -24,6 +24,7 @@ import { baselineOf, fitLabel, layoutText, type TextLayout } from '../render/tex
 import { getMeasurer, type TextMeasurer } from '../render/text/measure';
 import type { PersonalityPreset } from '../ui/personality/usePersonality';
 import { clamp } from '../lib/math';
+import { nodeTechnologyIcon, technologyMarkBounds, TECHNOLOGY_MARK_SIZE } from './technology';
 
 /**
  * Turns a node from the document model into a display list.
@@ -350,7 +351,20 @@ function pinnedCaption(
 }
 
 export function describeNode(node: DraftNode, ctx: DescribeContext): DisplayList {
-  const shapes = shapesFor(node, ctx);
+  const icon = nodeTechnologyIcon(node);
+  // This is a display projection only: the full technology (and its version) stays in the file,
+  // inspector and source exports. Unrecognized or mixed stacks use the neutral technology mark.
+  const shapes = shapesFor(icon ? { ...node, technology: undefined } : node, ctx);
+  const mark = technologyMarkBounds(node);
+  if (icon && mark) {
+    shapes.push({
+      t: 'group',
+      title: node.technology,
+      translate: { x: mark.x, y: mark.y },
+      scale: TECHNOLOGY_MARK_SIZE / 24,
+      children: [{ t: 'path', d: icon.path, fill: ctx.theme.textMuted }],
+    });
+  }
   return { width: node.width, height: node.height, shapes };
 }
 
@@ -2982,7 +2996,7 @@ export function naturalArchitectureSize(
 function captionVerdict(shapes: Shape[], node: DraftNode, maxNameLines: number): { fits: boolean; nameComfortable: boolean } {
   let fits = true;
   let nameComfortable = true;
-  let technology = !node.technology;
+  let technology = !node.technology || Boolean(nodeTechnologyIcon(node));
   let description = !node.description;
   const visit = (shape: Shape) => {
     if (shape.t === 'group') {

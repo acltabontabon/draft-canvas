@@ -90,10 +90,11 @@ describe('nothing on the canvas can reach a network', () => {
         'zustand',
         'fflate',
         'react-aria-components',
+        'simple-icons',
       ]),
     );
     // A short, auditable dependency list is part of the promise.
-    expect(deps).toHaveLength(8);
+    expect(deps).toHaveLength(9);
     for (const name of deps) {
       expect(name).not.toMatch(/analytics|telemetry|sentry|tracking|posthog|mixpanel|segment/i);
     }

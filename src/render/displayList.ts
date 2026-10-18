@@ -106,6 +106,8 @@ export interface CodeShape {
 export interface GroupShape {
   t: 'group';
   children: Shape[];
+  /** Native SVG description, for a visual whose identifying text is intentionally not drawn. */
+  title?: string;
   clip?: { x: number; y: number; w: number; h: number; r?: number };
   opacity?: number;
   /** Applied after `scale`: a point `p` in the group lands at `scale * p + translate`. */

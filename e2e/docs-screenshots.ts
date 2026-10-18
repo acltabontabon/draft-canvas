@@ -15,6 +15,7 @@
  * two palettes, rather than a second script that would drift:
  *
  *   npx tsx e2e/docs-screenshots.ts --theme dark --out <directory>
+ *   npx tsx e2e/docs-screenshots.ts --technology-only
  *
  * The guides' own set is what you get with no arguments, unchanged.
  */
@@ -180,6 +181,35 @@ async function palette(page: Page, query: string) {
   await expect(page.getByRole('dialog')).toBeHidden();
 }
 
+async function technologyScreenshots(page: Page) {
+  await page.getByRole('button', { name: 'New canvas' }).first().click();
+  await expect(page.locator('.dc-editor')).toBeVisible();
+  const title = page.getByLabel('Diagram title');
+  await title.fill('Technology at a glance');
+  await title.blur();
+  await drop(page, 'd', { x: 420, y: 310 }, 'Orders');
+  await page.getByRole('button', { name: 'Details', exact: true }).click();
+  const technology = page.getByRole('combobox', { name: 'Technology', exact: true });
+  await technology.fill('Postgres');
+  await expect(page.getByRole('option', { name: 'PostgreSQL', exact: true })).toBeVisible();
+  await shot(page, 'technology-suggestions');
+  await page.getByRole('option', { name: 'PostgreSQL', exact: true }).click();
+  await page.locator(CANVAS).click({ position: { x: 12, y: 12 } });
+
+  await drop(page, 's', { x: 720, y: 310 }, 'Internal worker');
+  await page.getByRole('button', { name: 'Details', exact: true }).click();
+  await technology.fill('Private runtime');
+  await technology.press('Enter');
+  await page.locator(CANVAS).click({ position: { x: 12, y: 12 } });
+  const generic = page.getByRole('button', { name: 'Technology: Private runtime', exact: true });
+  await generic.click();
+  await expect(page.locator('.dc-technology-detail:visible')).toHaveText('Private runtime');
+  await generic.press('Escape');
+  await page.locator(CANVAS).click({ position: { x: 12, y: 12 } });
+  await page.mouse.move(80, 80);
+  await shot(page, 'technology-generic');
+}
+
 async function main() {
   mkdirSync(OUT, { recursive: true });
   log(`${THEME} theme -> ${OUT}`);
@@ -194,6 +224,11 @@ async function main() {
     });
     const page = await context.newPage();
     await page.goto(URL);
+
+    if (process.argv.includes('--technology-only')) {
+      await technologyScreenshots(page);
+      return;
+    }
 
     // ── Getting started ────────────────────────────────────────────────────────────────────
     log('getting started');
@@ -375,6 +410,7 @@ async function main() {
       await expect(page.getByRole('button', { name: 'New canvas' }).first()).toBeVisible();
     }
 
+    await technologyScreenshots(page);
     await context.close();
   } finally {
     await browser.close();

@@ -191,11 +191,13 @@ export function emitShape(shape: Shape): SvgEl[] {
       return emitCode(shape);
     case 'group': {
       const children = shape.children.flatMap(emitShape);
+      if (shape.title) children.unshift(el('title', undefined, undefined, shape.title));
       const attrs: Record<string, string | number | undefined> = {};
       if (shape.opacity !== undefined) attrs.opacity = shape.opacity;
       const transforms: string[] = [];
       if (shape.translate) transforms.push(`translate(${n(shape.translate.x)} ${n(shape.translate.y)})`);
-      if (shape.scale !== undefined && shape.scale !== 1) transforms.push(`scale(${n(shape.scale)})`);
+      // Keep ratios exact: rounding 16/24 to .67 would push a technology path past its bounds.
+      if (shape.scale !== undefined && shape.scale !== 1) transforms.push(`scale(${shape.scale})`);
       if (transforms.length > 0) attrs.transform = transforms.join(' ');
 
       if (!shape.clip) return [el('g', attrs, children)];

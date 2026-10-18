@@ -1,6 +1,7 @@
 import { describeEdge } from '../../edges/describe';
 import { obstaclesForEdge } from '../../edges/obstacles';
 import { describeNode, describeContext } from '../../nodes/describe';
+import { technologyMarkBounds } from '../../nodes/technology';
 import { findFlow, stepIndexOf } from '../../document/flow';
 import { boundsOf } from '../../document/operations';
 import type { BackgroundFit, DraftDocument, DraftEdge, DraftFlow, DraftNode, OpenPoint } from '../../document/types';
@@ -355,6 +356,10 @@ export function buildScene(
     if (node.type === 'group') backdropEls.push(group);
     else nodeEls.push(group);
     nodeEntries.push({ node, els });
+    // A Quiet corner mark sits outside the silhouette. Include it even when exporting with no
+    // padding, without expanding the document's node boxes or its routing obstacles.
+    const technologyMark = technologyMarkBounds(node);
+    if (technologyMark) overlayRects.push({ ...technologyMark, x: node.x + technologyMark.x, y: node.y + technologyMark.y });
 
     // The "<> 2" badge a shape with attachments carries above its corner on the canvas.
     const badge = describeAttachmentBadge(node, { theme: nodeCtx.theme, measurer: nodeCtx.measurer });

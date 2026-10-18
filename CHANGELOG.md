@@ -23,6 +23,10 @@ the release notes and the in-app What's New are generated from here. See
   another one, or to take a connector a particular way, and it does: it reads where everything is
   drawn and moves just what you asked. Shapes on top of each other are still refused.
 
+- **Technology at a glance** — the Technology field suggests matching names with their Simple Icons.
+  Shapes show small, unframed corner logos, or a generic chip for custom technologies. Click a logo
+  for the full technology and version; image exports include the same icons offline. <!-- highlight -->
+
 #### Changed
 
 - About is redrawn as a drawing sheet with a title block for the version, release notes and author,

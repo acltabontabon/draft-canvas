@@ -76,6 +76,7 @@
     "react-aria-components": "^1.22.1",
     "react-dom": "^19.3.0",
     "refractor": "^5.0.0",
+    "simple-icons": "16.35.0",
     "zustand": "^5.0.15"
   },
   "devDependencies": {

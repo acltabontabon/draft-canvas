@@ -69,6 +69,47 @@
   pointer-events: none;
 }
 
+/* The technology path is in the shared SVG. This transparent target makes the original text
+   available by pointer or keyboard without adding a second visible badge. */
+.dc-technology-target {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.dc-technology-target:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 2px;
+}
+
+.dc-technology-detail {
+  position: absolute;
+  right: 0;
+  z-index: 10;
+  width: max-content;
+  max-width: 220px;
+  padding: 5px 8px;
+  border: 1px solid var(--dc-border-strong);
+  border-radius: 4px;
+  background: var(--dc-surface-raised);
+  color: var(--dc-text);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+@media (pointer: coarse) {
+  .dc-technology-target::after {
+    content: '';
+    position: absolute;
+    inset: -10px;
+  }
+}
+
 /* The selection ring is chrome, so it lives here rather than in the display
    list — which is precisely why it never appears in an exported image. */
 .dc-node[data-selected='true']::after {
@@ -1787,6 +1828,69 @@
   min-height: 52px;
   font: inherit;
   color: var(--dc-text);
+}
+
+.dc-technology-input {
+  position: relative;
+}
+
+.dc-technology-input .dc-inspector-control {
+  width: 100%;
+  padding-inline-start: 30px;
+}
+
+.dc-technology-input-icon {
+  position: absolute;
+  inset-inline-start: 8px;
+  top: 50%;
+  display: flex;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.dc-technology-suggestions {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 4;
+  margin: 0;
+  padding: 4px;
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid var(--dc-border-strong);
+  border-radius: var(--dc-radius-sm);
+  background: var(--dc-surface-raised);
+  box-shadow: var(--dc-shadow-panel);
+  color: var(--dc-text);
+}
+
+.dc-technology-suggestions[data-above='true'] {
+  top: auto;
+  bottom: calc(100% + 4px);
+}
+
+.dc-technology-suggestions li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 5px 7px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.dc-technology-suggestions li[aria-selected='true'] {
+  background: var(--dc-selection-soft);
+}
+
+.dc-technology-suggestions svg {
+  flex: none;
+  color: var(--dc-text-muted);
+}
+
+.dc-technology-custom {
+  font-size: 11px;
 }
 
 /* Text's Bold/Italic/Alignment panel — same compact control scale the row above it already uses,
