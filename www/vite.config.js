@@ -108,7 +108,6 @@ function documentation() {
       const { files, media } = renderDocs({
         ...paths,
         stylesheet: stylesheets[0].fileName,
-        version: appVersion,
         policy: policyFor,
       });
       for (const [fileName, source] of Object.entries(files)) {
@@ -132,7 +131,7 @@ function documentation() {
           return;
         }
         try {
-          const { files } = renderDocs({ ...paths, stylesheet: '/src/styles.css', version: appVersion });
+          const { files } = renderDocs({ ...paths, stylesheet: '/src/styles.css' });
           const page = files[`${path.slice(1)}index.html`];
           if (!page) return next();
           response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(page);

@@ -138,7 +138,7 @@ function rootOf(page) {
  * Returns the pages as { 'docs/<slug>/index.html': html } and the media they use as
  * { 'docs/media/...': absolute path on disk }.
  */
-export function renderDocs({ docsDir, repoDir, stylesheet, version, policy = () => '' }) {
+export function renderDocs({ docsDir, repoDir, stylesheet, policy = () => '' }) {
   const pages = collect(docsDir);
   const navigation = navigationOf(pages);
   const order = navigation.flatMap((group) => group.items);
@@ -218,7 +218,6 @@ export function renderDocs({ docsDir, repoDir, stylesheet, version, policy = () 
       title,
       description,
       body,
-      version,
       stylesheet,
       navigation,
       contents: page.anchors.filter((a) => a.depth === 2),
@@ -261,7 +260,7 @@ ${group.items
     .join('\n          ');
 }
 
-function layout({ page, title, description, body, version, stylesheet, navigation, contents, previous, next }) {
+function layout({ page, title, description, body, stylesheet, navigation, contents, previous, next }) {
   const root = rootOf(page);
   const home = page.slug ? '../' : './';
   const url = `${SITE}docs/${page.slug ? `${page.slug}/` : ''}`;
@@ -351,15 +350,11 @@ ${contents.map((a) => `          <li><a href="#${a.id}">${escape(a.text)}</a></l
     <footer class="footer">
       <div class="footer-brand">
         ${mark(22)}
-        <p><strong>Draft Canvas</strong> <span>${escape(version)} · Apache 2.0</span></p>
+        <p><strong>Draft Canvas</strong> <span>Free &amp; open source · Apache 2.0</span></p>
       </div>
       <nav class="footer-links" aria-label="Elsewhere">
         <a href="https://github.com/acltabontabon/draft-canvas">Source</a>
         <a href="${home}">Docs</a>
-        <a href="https://github.com/acltabontabon/draft-canvas/blob/main/CHANGELOG.md">Changelog</a>
-        <a href="https://github.com/acltabontabon/draft-canvas/releases">Releases</a>
-        <a href="${home}self-hosting/">Self-hosting</a>
-        <a href="https://acltabontabon.com/">acltabontabon.com</a>
       </nav>
     </footer>
   </body>
