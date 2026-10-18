@@ -28,6 +28,13 @@ the release notes and the in-app What's New are generated from here. See
 - About is redrawn as a drawing sheet with a title block for the version, release notes and author,
   and the diagnostic report reads like the rest of the app.
 
+### Desktop
+
+#### Fixed
+
+- Removed unused legacy ZIP extraction support from the updater, eliminating three RustSec
+  vulnerabilities in its ZIP dependency. Signed Windows and macOS update formats are unchanged.
+
 ## [1.14.0] - 2026-10-16
 
 Your agent draws like you do.

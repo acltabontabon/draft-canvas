@@ -29,7 +29,9 @@ tauri-plugin-dialog = "2.7"
 tauri-plugin-window-state = "2.4"
 tauri-plugin-opener = "2.5"
 # The official updater, driven from Rust only (`src/updater/`); the page gets no updater permission.
-tauri-plugin-updater = "2.12"
+# Releases use raw NSIS .exe updates on Windows; legacy ZIP extraction is unused and pulls in
+# vulnerable zip 4.x. macOS .app.tar.gz support does not depend on the optional zip feature.
+tauri-plugin-updater = { version = "2.12", default-features = false, features = ["rustls-tls", "system-proxy"] }
 semver = "1"
 tokio = { version = "1", features = ["sync", "time", "net", "io-util", "macros"] }
 serde = { version = "1", features = ["derive"] }
