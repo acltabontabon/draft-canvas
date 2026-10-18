@@ -9,9 +9,9 @@ Shortcuts are written for a Mac. On Windows and Linux, read `⌘` as `Ctrl`.
 
 ## Technology and description
 
-Select an architecture shape and open **Details** to set **Technology** and **Description**.
-As you type, matching names appear with their Simple Icons. Choose a suggestion with the pointer,
-or use the arrow keys and Enter. Escape closes suggestions; Enter without a matching suggestion
+Select an architecture shape and choose **⋯** › **Edit details…** to set **Technology** and
+**Description**. As you type, matching names appear with their Simple Icons. Choose a suggestion
+with the pointer, or use the arrow keys and Enter. Escape closes suggestions; Enter without a matching suggestion
 or leaving the field keeps your custom value. A version you have already typed is preserved when
 you choose a matching name: **Postgres 16** becomes **PostgreSQL 16**.
 

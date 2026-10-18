@@ -62,7 +62,8 @@ test('Technology typeahead supports pointer, keyboard, generic fallback and clea
   });
   const node = page.locator('.react-flow__node[data-id="orders"]');
   await node.click();
-  await page.getByRole('button', { name: 'Details', exact: true }).click();
+  await page.locator('.dc-element-inspector').getByRole('button', { name: 'More options' }).click();
+  await page.getByRole('menuitem', { name: 'Edit details…' }).click();
   const field = page.getByRole('combobox', { name: 'Technology', exact: true });
   await field.fill('post 16');
   const option = page.getByRole('option', { name: 'PostgreSQL 16', exact: true });
@@ -88,7 +89,8 @@ test('Technology typeahead supports pointer, keyboard, generic fallback and clea
   await expect(page.locator('.dc-technology-detail:visible')).toHaveText('Private runtime');
   // Clicking outside the inspector closes Details; reopen it to clear the saved technology.
   await node.click();
-  await page.getByRole('button', { name: 'Details', exact: true }).click();
+  await page.locator('.dc-element-inspector').getByRole('button', { name: 'More options' }).click();
+  await page.getByRole('menuitem', { name: 'Edit details…' }).click();
   await field.fill('');
   await field.press('Tab');
   await expect(node.locator('.dc-technology-target')).toHaveCount(0);

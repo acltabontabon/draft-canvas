@@ -169,6 +169,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
   const setQuickConnect = useUiStore((state) => state.setQuickConnect);
   const reconnecting = useUiStore((state) => state.reconnectDragActive);
   const contextMenu = useUiStore((state) => state.contextMenu);
+  const openPointPopoverOpen = useUiStore((state) => state.openPointPopover !== null);
   const setContextMenu = useUiStore((state) => state.setContextMenu);
   // Memoized so `QuickConnectMenu`/`ContextMenu`'s own listener-cleanup effects (keyed on
   // `onDismiss`) don't tear down and re-register on every unrelated `EditorScreen` re-render
@@ -586,9 +587,12 @@ function EditorScreen({ session }: { session: DocumentSession }) {
               open here without any editing surface appearing over the story. */}
           <OpenPointPopover />
           {/* A right-click selects what it lands on, which would also raise that element's inspector
-              right under the menu — one floating surface at a time. */}
-          {!presenting && !tracing && !contextMenu && <EdgeInspectorPopover />}
-          {!presenting && !tracing && !contextMenu && <ElementInspectorPopover buildCommandContext={buildCommandContext} />}
+              right under the menu; an open point's popover sits beside the same element — one
+              floating surface at a time. */}
+          {!presenting && !tracing && !contextMenu && !openPointPopoverOpen && <EdgeInspectorPopover />}
+          {!presenting && !tracing && !contextMenu && !openPointPopoverOpen && (
+            <ElementInspectorPopover buildCommandContext={buildCommandContext} />
+          )}
           {!presenting && !tracing && <ExampleBanner onPresent={onPresent} />}
           <FlowTraceBar />
           <PresentationCalloutLayer />

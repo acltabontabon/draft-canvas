@@ -188,7 +188,8 @@ async function technologyScreenshots(page: Page) {
   await title.fill('Technology at a glance');
   await title.blur();
   await drop(page, 'd', { x: 420, y: 310 }, 'Orders');
-  await page.getByRole('button', { name: 'Details', exact: true }).click();
+  await page.locator('.dc-element-inspector').getByRole('button', { name: 'More options' }).click();
+  await page.getByRole('menuitem', { name: 'Edit details…' }).click();
   const technology = page.getByRole('combobox', { name: 'Technology', exact: true });
   await technology.fill('Postgres');
   await expect(page.getByRole('option', { name: 'PostgreSQL', exact: true })).toBeVisible();
@@ -197,7 +198,8 @@ async function technologyScreenshots(page: Page) {
   await page.locator(CANVAS).click({ position: { x: 12, y: 12 } });
 
   await drop(page, 's', { x: 720, y: 310 }, 'Internal worker');
-  await page.getByRole('button', { name: 'Details', exact: true }).click();
+  await page.locator('.dc-element-inspector').getByRole('button', { name: 'More options' }).click();
+  await page.getByRole('menuitem', { name: 'Edit details…' }).click();
   await technology.fill('Private runtime');
   await technology.press('Enter');
   await page.locator(CANVAS).click({ position: { x: 12, y: 12 } });
