@@ -9,9 +9,11 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 from types import ModuleType
 
@@ -46,8 +48,11 @@ def write_tree(root: Path, files: dict[str, str | bytes]) -> Path:
 
 def git_init(root: Path) -> None:
     env = {**os.environ, 'GIT_CONFIG_GLOBAL': os.devnull, 'GIT_CONFIG_SYSTEM': os.devnull}
+    # No background maintenance: a commit of a few thousand files can start a detached `git maintenance` that is
+    # still writing inside `.git` when the test's folder is deleted ("Directory not empty: '.git'").
+    quiet = ['-c', 'gc.auto=0', '-c', 'maintenance.auto=false']
     for args in (['init', '-q'], ['add', '-A'], ['-c', 'user.email=t@example.com', '-c', 'user.name=t', 'commit', '-q', '-m', 'x']):
-        subprocess.run(['git', '-C', str(root), *args], check=True, env=env, capture_output=True)
+        subprocess.run(['git', *quiet, '-C', str(root), *args], check=True, env=env, capture_output=True)
 
 
 def run_script(name: str, *args: str, env: dict[str, str] | None = None, isolated: bool = True) -> subprocess.CompletedProcess[str]:
@@ -84,7 +89,14 @@ class TempRepo:
 
     def __exit__(self, *exc: object) -> None:
         assert self._dir
-        self._dir.cleanup()
+        # A process that was still finishing in the folder can make one removal fail; try again, then let go.
+        for attempt in range(5):
+            try:
+                self._dir.cleanup()
+                return
+            except OSError:
+                time.sleep(0.2 * (attempt + 1))
+        shutil.rmtree(self._dir.name, ignore_errors=True)
 
 
 def example_request() -> dict:
