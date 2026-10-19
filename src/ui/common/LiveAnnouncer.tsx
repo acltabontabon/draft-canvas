@@ -23,10 +23,10 @@ export function LiveAnnouncer() {
 
   return (
     <>
-      <div className="dc-sr-only" role="status" aria-live="polite" aria-atomic="true" data-dc-announcer="polite">
+      <div className="dc-sr-only" role="status" aria-live="polite" aria-atomic="true" data-dc-announcer="polite" data-live-announcer="true">
         {polite && <span key={polite.seq}>{polite.text}</span>}
       </div>
-      <div className="dc-sr-only" role="alert" aria-live="assertive" aria-atomic="true" data-dc-announcer="assertive">
+      <div className="dc-sr-only" role="alert" aria-live="assertive" aria-atomic="true" data-dc-announcer="assertive" data-live-announcer="true">
         {assertive && <span key={assertive.seq}>{assertive.text}</span>}
       </div>
     </>

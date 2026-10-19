@@ -1,6 +1,6 @@
 //! Opening, saving and exporting documents, and the background image that sits beside one.
 
-use super::raw::raw_request;
+use super::raw::{raw_request, raw_request_up_to, MAX_EXPORT_BYTES};
 use super::{last_dir, recents_changed, remember_dir, remember_file, run_blocking};
 use crate::dialogs::{self, FileFilter};
 use crate::docio::{
@@ -248,10 +248,9 @@ fn rename_file_now(
     // is the one that swaps it in for whatever session was using the old one.
     let new_handle = state.grant_file(&target)?;
     let new_grant = state.file(&new_handle)?;
-    if let Some(sidecar) = docio::sidecar_read(&grant.path).unwrap_or(None) {
-        let _ = docio::sidecar_write(&new_grant.path, sidecar.mime, &sidecar.bytes);
-        let _ = docio::sidecar_remove(&grant.path);
-    }
+    // Best effort, like the rename itself has already happened: a background that could not follow the
+    // file is left where it was rather than failing a rename that succeeded.
+    let _ = docio::sidecar_move(&grant.path, &new_grant.path);
     state
         .recents
         .rename(&grant.path, &new_grant.path, &new_grant.name)?;
@@ -312,7 +311,7 @@ struct ExportMeta {
 /// permission: the page names only a suggested file name, never a place.
 #[tauri::command]
 pub async fn export_file(app: AppHandle, request: Request<'_>) -> Result<bool, AppError> {
-    let (meta, bytes) = raw_request::<ExportMeta>(&request)?;
+    let (meta, bytes) = raw_request_up_to::<ExportMeta>(&request, MAX_EXPORT_BYTES)?;
     let bytes = bytes.to_vec();
     run_blocking(&app, move |app, state| {
         let Some(path) = dialogs::save_file(app, last_dir(state), &meta.name, &meta.filters) else {

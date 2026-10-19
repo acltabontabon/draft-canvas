@@ -91,7 +91,7 @@ function describePng(width: number, height: number, scale: PngScale): string {
 
 /** What the Copy toast says: the clipboard took it, or a file went out instead and why. */
 function describeCopy(what: string, result: CopyResult): string {
-  return result.copied ? `${what} copied.` : `${what} downloaded — this browser can't copy it to the clipboard.`;
+  return result.copied ? `${what} copied.` : `${what} downloaded — ${__DESKTOP__ ? 'the clipboard isn’t available here' : 'this browser can’t copy it to the clipboard'}.`;
 }
 
 /**
@@ -405,10 +405,10 @@ export function ExportDialog() {
         <div className="dc-export-footer">
           <span
             className="dc-export-footer-note"
-            title="Nothing about this diagram leaves your browser during export."
+            title={`Nothing about this diagram leaves ${__DESKTOP__ ? 'this computer' : 'your browser'} during export.`}
           >
             <Icon name="lock" size={13} />
-            Generated locally in your browser.
+            Generated locally on your device.
           </span>
           <span className="dc-export-footer-actions">
             {copy && (

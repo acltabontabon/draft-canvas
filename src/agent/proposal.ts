@@ -145,6 +145,9 @@ export interface DiffField {
   after?: string;
 }
 
+/** Placement and routing: what an arrange or a nudge changes, and no agent chose. */
+const GEOMETRY_FIELDS: ReadonlySet<string> = new Set(['x', 'y', 'width', 'height', 'z', 'sourceAnchor', 'targetAnchor', 'routeMode', 'waypoints']);
+
 export interface ElementDiffRow {
   path?: string[];
   kind: 'element' | 'group' | 'relationship' | 'open point' | 'flow' | 'view' | 'attachment';
@@ -406,7 +409,19 @@ function diffAt(before: DraftDocument, after: DraftDocument, path: DepthPath, in
 
 /** MCP previews keep a bounded diagnostic diff. The native review keeps the full field values. */
 export function diffForPreview(before: DraftDocument, after: DraftDocument, path: DepthPath) {
-  const full = diffForReview(before, after, path);
+  // Where things sit is the app's, not the agent's (it never sends coordinates), and an `arrange`
+  // preview would otherwise list every shape and connector it touched: tens of KB of numbers that
+  // say nothing the render doesn't show better. Geometry-only changes are counted instead.
+  let moved = 0;
+  let rerouted = 0;
+  const full: ElementDiffRow[] = [];
+  for (const row of diffForReview(before, after, path)) {
+    const meaningful = row.change === 'modified' ? row.fields?.filter((field) => !GEOMETRY_FIELDS.has(field.field)) : undefined;
+    if (meaningful && !meaningful.length) {
+      if (row.kind === 'relationship') rerouted += 1;
+      else moved += 1;
+    } else full.push(meaningful ? { ...row, fields: meaningful } : row);
+  }
   const diff: Record<string, unknown>[] = [];
   let bytes = 0;
   const shorten = (value: string | undefined) => value === undefined ? undefined : [...value].slice(0, 400).join('');
@@ -417,7 +432,11 @@ export function diffForPreview(before: DraftDocument, after: DraftDocument, path
     bytes += size;
     diff.push(bounded);
   }
-  return { diff, ...(diff.length < full.length ? { diffDropped: full.length - diff.length } : {}) };
+  return {
+    diff,
+    ...(diff.length < full.length ? { diffDropped: full.length - diff.length } : {}),
+    ...(moved || rerouted ? { layoutChanges: { ...(moved ? { moved } : {}), ...(rerouted ? { rerouted } : {}) } } : {}),
+  };
 }
 
 function pointLabel(point: OpenPoint): string {

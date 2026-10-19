@@ -6,7 +6,7 @@ use crate::errors::{AppError, Subject, Verb};
 use crate::paths::{doc_stem, has_doc_ext};
 use serde::Serialize;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, UNIX_EPOCH};
 
 /// Directories that are never worth walking: dependencies and build output would swamp the list and
@@ -88,7 +88,7 @@ pub fn scan(root: &Path, limits: &Limits) -> Result<Scan, AppError> {
             let Ok(entry) = entry else { continue };
             visited += 1;
             if visited > limits.max_entries || started.elapsed() >= limits.max_duration {
-                mark_truncated(&mut truncated_dirs, &rel);
+                mark_cut_off(&mut truncated_dirs, &rel, &pending);
                 break 'walk;
             }
             let os_name = entry.file_name();
@@ -123,7 +123,7 @@ pub fn scan(root: &Path, limits: &Limits) -> Result<Scan, AppError> {
                 pending.push((entry.path(), child_rel, depth + 1));
             } else if kind.is_file() && has_doc_ext(Path::new(name)) {
                 if files.len() >= limits.max_results {
-                    mark_truncated(&mut truncated_dirs, &rel);
+                    mark_cut_off(&mut truncated_dirs, &rel, &pending);
                     break 'walk;
                 }
                 let Ok(meta) = entry.metadata() else { continue };
@@ -152,6 +152,23 @@ pub fn scan(root: &Path, limits: &Limits) -> Result<Scan, AppError> {
         files,
         truncated_dirs,
     })
+}
+
+/// The walk stopped inside `rel`: that folder, every folder still waiting to be read, and all of their
+/// parents (the root is `""`) are incomplete. Marking only the folder it stopped in left the root
+/// looking complete, so the browser showed no warning where most of the project was missing.
+fn mark_cut_off(truncated_dirs: &mut Vec<String>, rel: &str, pending: &[(PathBuf, String, usize)]) {
+    for rel in std::iter::once(rel).chain(pending.iter().map(|(_, rel, _)| rel.as_str())) {
+        let mut at = rel;
+        loop {
+            mark_truncated(truncated_dirs, at);
+            match at.rfind('/') {
+                Some(slash) => at = &at[..slash],
+                None if !at.is_empty() => at = "",
+                None => break,
+            }
+        }
+    }
 }
 
 fn mark_truncated(truncated_dirs: &mut Vec<String>, rel: &str) {
@@ -364,6 +381,32 @@ mod tests {
         )
         .unwrap();
         assert_eq!(scan.truncated_dirs, [""]);
+    }
+
+    #[test]
+    fn a_cut_off_walk_marks_every_folder_it_had_not_reached_and_their_parents() {
+        let dir = tempdir().unwrap();
+        for folder in ["a", "b/inner", "c"] {
+            for i in 0..4 {
+                touch(dir.path(), &format!("{folder}/n{i}.txt"));
+            }
+        }
+        let scan = scan(
+            dir.path(),
+            &Limits {
+                max_entries: 6,
+                ..Limits::default()
+            },
+        )
+        .unwrap();
+        let marked: std::collections::BTreeSet<&str> =
+            scan.truncated_dirs.iter().map(String::as_str).collect();
+        assert!(
+            marked.contains(""),
+            "the root is incomplete too: {marked:?}"
+        );
+        // Whichever folders were still waiting are named, not just the one it stopped in.
+        assert!(marked.len() >= 3, "{marked:?}");
     }
 
     #[test]

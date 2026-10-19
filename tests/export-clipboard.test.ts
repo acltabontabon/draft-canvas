@@ -6,7 +6,10 @@ const downloadText = vi.fn(async () => {});
 const downloadBlob = vi.fn(async () => {});
 vi.mock('../src/export/download', () => ({ downloadText, downloadBlob }));
 
-const { copySource, copySvg } = await import('../src/export/clipboard');
+const renderPngBlob = vi.fn(async () => new Blob(['png'], { type: 'image/png' }));
+vi.mock('../src/export/image', async (original) => ({ ...(await original<typeof import('../src/export/image')>()), renderPngBlob }));
+
+const { copyImage, copySource, copySvg } = await import('../src/export/clipboard');
 
 /**
  * Copy is the file export pointed at the clipboard. Where the browser has no clipboard to write —
@@ -81,5 +84,39 @@ describe('copySvg', () => {
     expect(svg).toContain('<metadata id="draftcanvas">');
     await copySvg(document);
     expect(writeText.mock.calls[1]![0]).not.toContain('<metadata');
+  });
+});
+
+describe('copyImage', () => {
+  const originalItem = (globalThis as { ClipboardItem?: unknown }).ClipboardItem;
+  afterEach(() => {
+    (globalThis as { ClipboardItem?: unknown }).ClipboardItem = originalItem;
+  });
+
+  it('starts the clipboard write before the picture has finished rendering, handing it the pending picture', async () => {
+    const items: Record<string, unknown>[] = [];
+    (globalThis as { ClipboardItem?: unknown }).ClipboardItem = class {
+      constructor(data: Record<string, unknown>) {
+        items.push(data);
+      }
+    };
+    let release!: (blob: Blob) => void;
+    renderPngBlob.mockImplementationOnce(() => new Promise<Blob>((resolve) => { release = resolve; }));
+    const write = vi.fn(async () => {});
+    setClipboard({ write });
+    const copying = copyImage(fixture());
+    // Nothing has rendered yet, and the write has already begun with the promise of the picture.
+    expect(write).toHaveBeenCalledOnce();
+    expect(items[0]!['image/png']).toBeInstanceOf(Promise);
+    release(new Blob(['png'], { type: 'image/png' }));
+    expect(await copying).toEqual({ copied: true });
+    expect(downloadBlob).not.toHaveBeenCalled();
+  });
+
+  it('downloads the rendered picture when the clipboard refuses it', async () => {
+    (globalThis as { ClipboardItem?: unknown }).ClipboardItem = class {};
+    setClipboard({ write: vi.fn(async () => { throw new Error('denied'); }) });
+    expect(await copyImage(fixture())).toEqual({ copied: false, downloaded: true });
+    expect(downloadBlob).toHaveBeenCalledOnce();
   });
 });

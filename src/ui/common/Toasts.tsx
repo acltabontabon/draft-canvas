@@ -36,6 +36,9 @@ export function Toasts() {
     <div
       ref={root}
       className="dc-toasts"
+      // Outside a modal's inert zone: React Aria marks everything else inert while one is open, which
+      // silenced these announcements and let a click on a toast fall through to the backdrop.
+      data-react-aria-top-layer="true"
       aria-live={interrupting ? 'assertive' : 'polite'}
       onPointerEnter={() => {
         hovered.current = true;

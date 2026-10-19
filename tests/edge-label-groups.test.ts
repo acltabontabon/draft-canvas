@@ -154,6 +154,17 @@ describe('a shared label in an export', () => {
   });
 });
 
+describe('reusing the plan', () => {
+  it('keeps the groups when only a name changes, and rebuilds them when a shape moves', () => {
+    const { nodes, edges } = branches([40, 560]);
+    const before = labelGroupPlan(nodes, edges);
+    const renamed = nodes.map((node, i) => (i === 1 ? { ...node, text: 'Renamed' } : node));
+    expect(labelGroupPlan(renamed, edges)).toBe(before);
+    const moved = nodes.map((node, i) => (i === 1 ? { ...node, y: node.y + 400 } : node));
+    expect(labelGroupPlan(moved, edges)).not.toBe(before);
+  });
+});
+
 /** Where an edge's route first turns, along x — the far end of the run out of the source. */
 function sharedRunEnd(nodes: DraftNode[], edge: DraftEdge): number {
   const byId = new Map(nodes.map((node) => [node.id, node]));

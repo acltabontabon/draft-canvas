@@ -15,9 +15,9 @@ import { buildSequenceModel, toMermaid, toPlantUml } from '../sequence';
 import { downloadText } from './download';
 import { fileNameFor } from './project';
 import { collectRooms, roomTitleFor } from './rooms';
+import { MERMAID_EXTENSION, PLANTUML_EXTENSION } from './source/formats';
 
-export const MERMAID_EXTENSION = '.mmd';
-export const PLANTUML_EXTENSION = '.puml';
+export { MERMAID_EXTENSION, PLANTUML_EXTENSION } from './source/formats';
 const SEQUENCE_MIME = 'text/plain';
 
 export type SequenceFormat = 'mermaid' | 'plantuml';

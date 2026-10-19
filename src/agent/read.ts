@@ -152,7 +152,7 @@ export function readDiagram(file: DraftDocument, args: ReadArgs, revision: strin
   }
 
   const all = view.nodes.filter((n) => !scope || scope.has(n.id));
-  const signature = JSON.stringify({ diagramId, focus: args.focus ? { nodes: Array.isArray(args.focus.nodes) ? [...new Set(args.focus.nodes)].sort() : null, group: args.focus.group ?? null, flow: args.focus.flow ?? null } : null, include: [...includes].sort() });
+  const signature = fingerprint(JSON.stringify({ diagramId, focus: args.focus ? { nodes: Array.isArray(args.focus.nodes) ? [...new Set(args.focus.nodes)].sort() : null, group: args.focus.group ?? null, flow: args.focus.flow ?? null } : null, include: [...includes].sort() }));
   const offsets = cursorOffsets(args.cursor, revision, path, signature);
   const sizes = [READ_LIMITS.elementsPerPage, READ_LIMITS.relationshipsPerPage, READ_LIMITS.flows, 50];
   // Every collection has its own offset. Reducing elements alone cannot bound a response full of flows.
@@ -193,6 +193,25 @@ function ancestorsOf(node: DraftNode, byId: Map<string, DraftNode>): Set<string>
     at = byId.get(at)?.parentId;
   }
   return out;
+}
+
+/**
+ * A short fingerprint of a read's focus and options, which a page cursor carries in place of the options
+ * themselves: a focus of 200 ids made a cursor of about 5 KB (JSON inside JSON, percent-encoded) that
+ * went out to the agent and came back with every page. A collision only lets a cursor from a different
+ * focus of the same diagram revision through, which then reads from its offsets.
+ */
+function fingerprint(text: string): string {
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  for (let i = 0; i < text.length; i += 1) {
+    const code = text.charCodeAt(i);
+    h1 = Math.imul(h1 ^ code, 2654435761);
+    h2 = Math.imul(h2 ^ code, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
 }
 
 function cursorOffsets(cursor: unknown, revision: string, path: DepthPath, signature: string): number[] {
@@ -274,7 +293,8 @@ function project(
       ...(node.description ? { description: node.description } : {}),
       ...(node.technology ? { technology: node.technology } : {}),
       ...group,
-      ...(c4 ? { c4 } : {}),
+      // "No role, no scope" is what every element says before a level is set: not worth ~80 bytes each.
+      ...(c4 && (c4.role !== 'unspecified' || c4.scope !== 'unspecified') ? { c4 } : {}),
       ...inside,
       ...attachments,
       ...geometry,

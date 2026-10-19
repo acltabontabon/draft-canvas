@@ -1091,16 +1091,21 @@ function restoreSnapshot(
   },
 ): void {
   const state = get();
-  const path = resolvePath(restored.file, restored.path);
-  const view = (path.length > 0 ? viewOf(restored.file, path) : restored.file) ?? restored.file;
-  const inside = view !== restored.file;
+  // An undo is a change to what is stored, so it is stamped like one. The snapshot's own stamp is the
+  // older one it was taken at: a reload right after Ctrl+Z then judged the stashed (undone) copy older
+  // than the autosaved edit (`openDocument`) and brought the undone edit back, and the Library's
+  // "edited" time ran backwards.
+  const file = touch(restored.file);
+  const path = resolvePath(file, restored.path);
+  const view = (path.length > 0 ? viewOf(file, path) : file) ?? file;
+  const inside = view !== file;
   const moved = pathKey(inside ? path : ROOT_PATH) !== pathKey(state.path);
   const cleared = moved ? resetViewSession() : undefined;
   set((s) => ({
     history: restored.history,
     document: view,
     path: inside ? path : ROOT_PATH,
-    outer: inside ? restored.file : null,
+    outer: inside ? file : null,
     revision: s.revision + 1,
     // The camera belongs to the room it was panned in. Every other move between rooms folds it
     // into the room being left and starts the next one clean; undo has to do the same, or the
@@ -2252,6 +2257,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   applyExternalClipboardText(text) {
     if (!text) return false;
+    // Our own copy comes straight back on the next paste: it has already been decoded and validated,
+    // so a large one isn't parsed again on every ⌘V.
+    if (text === lastSystemClipboardText && get().clipboard) return true;
     const fragment = decodeClipboard(text);
     if (!fragment || fragment.nodes.length === 0) return false;
     // A repeat paste of unchanged text is still a real paste (still returns `true`) — this

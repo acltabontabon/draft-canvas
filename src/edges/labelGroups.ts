@@ -28,6 +28,7 @@ import type { DraftEdge, DraftNode } from '../document/types';
 import { routingPlan } from './bundles';
 import { LABEL_PADDING_X, LABEL_PADDING_Y, edgeLabelSize, layoutEdgeLabel } from './labelLayout';
 import { distanceToPolyline, type Point } from './nearest';
+import { sameNodeGeometry } from './sameGeometry';
 import { obstaclesForEdge } from './obstacles';
 import {
   LABEL_BEND_CLEARANCE,
@@ -361,14 +362,26 @@ function planOf(groups: Map<string, LabelGroup>): LabelGroupPlan {
   return { groupFor: (edgeId) => groups.get(edgeId) };
 }
 
+let lastBuilt: { nodes: readonly DraftNode[]; edges: readonly DraftEdge[]; plan: LabelGroupPlan } | null = null;
+
+function planOfGroups(nodes: readonly DraftNode[], edges: readonly DraftEdge[]): LabelGroupPlan {
+  const groups = intern(compute(nodes, edges));
+  lastGroups = groups;
+  return planOf(groups);
+}
+
 /** Which connectors share one label, for the whole document (or an export's subset of it). */
 export function labelGroupPlan(nodes: readonly DraftNode[], edges: readonly DraftEdge[]): LabelGroupPlan {
   const byNodes = cache.get(nodes);
   const cached = byNodes?.get(edges);
   if (cached) return cached;
-  const groups = intern(compute(nodes, edges));
-  lastGroups = groups;
-  const plan = planOf(groups);
+  // A rename or a colour makes a new `nodes` array, and by identity a new plan, for groups that depend
+  // only on where shapes are and what kind they are — the same rule `routingPlan` reuses its plan by.
+  // Without it every keystroke in a label re-routed the members of every shared label.
+  const previous = lastBuilt;
+  const reused = previous && previous.edges === edges && sameNodeGeometry(previous.nodes, nodes);
+  const plan = reused ? previous.plan : planOfGroups(nodes, edges);
+  lastBuilt = { nodes, edges, plan };
   if (byNodes) byNodes.set(edges, plan);
   else cache.set(nodes, new WeakMap([[edges, plan]]));
   return plan;

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { compose } from '../../src/agent/compile';
 import { AgentError } from '../../src/agent/errors';
 import { applyUpdate } from '../../src/agent/patch';
-import { diffForReview, looksAlreadyApplied, preconditionConflicts, prepareProposal } from '../../src/agent/proposal';
+import { diffForPreview, diffForReview, looksAlreadyApplied, preconditionConflicts, prepareProposal } from '../../src/agent/proposal';
 import { createNode } from '../../src/document/factory';
 import { deserializeDocument } from '../../src/export/project';
 import type { DraftDocument } from '../../src/document/types';
@@ -203,3 +203,31 @@ describe('diffForReview', () => {
     expect(byId.has('uw')).toBe(false);
   });
 });
+
+describe('diffForPreview', () => {
+  it('counts what only moved or re-anchored instead of listing every coordinate', () => {
+    const before = base();
+    const moved = {
+      ...before,
+      nodes: before.nodes.map((node, i) => (i === 0 ? { ...node, x: node.x + 200, y: node.y + 40 } : node)),
+    };
+    const preview = diffForPreview(before, moved, []);
+    expect(preview.diff).toEqual([]);
+    expect(preview.layoutChanges).toEqual({ moved: 1 });
+    // The native review still shows the full field values.
+    expect(diffForReview(before, moved, []).some((row) => row.fields?.some((field) => field.field === 'x'))).toBe(true);
+  });
+
+  it('keeps a row for a meaningful change and drops only its coordinates', () => {
+    const before = base();
+    const edited = {
+      ...before,
+      nodes: before.nodes.map((node, i) => (i === 0 ? { ...node, x: node.x + 10, text: 'Renamed' } : node)),
+    };
+    const { diff, layoutChanges } = diffForPreview(before, edited, []);
+    expect(layoutChanges).toBeUndefined();
+    expect(diff).toHaveLength(1);
+    expect((diff[0] as { fields: { field: string }[] }).fields.map((field) => field.field)).toEqual(['label']);
+  });
+});
+

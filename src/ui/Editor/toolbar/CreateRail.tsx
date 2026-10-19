@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useUiStore } from '../../../store/uiStore';
 import { DEV_PRESETS, PRESETS, SELECT_TOOLTIP, tooltipContentFor, type Preset } from '../../../canvas/presets';
+import { prefersReducedMotion } from '../../../lib/motion';
 import { Button } from '../../common/Button';
 import { Tooltip } from '../../common/Tooltip';
 
@@ -63,7 +64,7 @@ export function CreateRail() {
   const page = (direction: 1 | -1) => {
     const rail = railRef.current;
     if (!rail) return;
-    rail.scrollBy({ left: direction * rail.clientWidth * 0.8, behavior: 'smooth' });
+    rail.scrollBy({ left: direction * rail.clientWidth * 0.8, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
   };
 
   // One tab stop for the whole rail, per the ARIA toolbar pattern: eleven separate stops made

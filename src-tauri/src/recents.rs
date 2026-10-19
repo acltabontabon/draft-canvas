@@ -61,7 +61,14 @@ impl Recents {
     /// rewritten only when something was.
     pub fn list(&self) -> Result<Listing, AppError> {
         let _held = lock(&self.guard);
-        let mut items = self.load();
+        // Unreadable right now (a share that dropped): show nothing this time and touch nothing, so the
+        // list is still there when the file can be read again.
+        let Ok(mut items) = self.load() else {
+            return Ok(Listing {
+                items: Vec::new(),
+                pruned: false,
+            });
+        };
         let before = items.len();
         items.retain(still_exists);
         let pruned = items.len() != before;
@@ -84,7 +91,7 @@ impl Recents {
             return Ok(());
         };
         let _held = lock(&self.guard);
-        let mut items = self.load();
+        let mut items = self.load()?;
         items.retain(|e| e.path != path);
         items.insert(
             0,
@@ -106,7 +113,7 @@ impl Recents {
             return Ok(());
         };
         let _held = lock(&self.guard);
-        let mut items = self.load();
+        let mut items = self.load()?;
         let mut changed = false;
         for entry in &mut items {
             if Path::new(&entry.path) == old_path {
@@ -123,7 +130,7 @@ impl Recents {
 
     pub fn remove(&self, path: &Path) -> Result<(), AppError> {
         let _held = lock(&self.guard);
-        let mut items = self.load();
+        let mut items = self.load()?;
         let before = items.len();
         items.retain(|e| Path::new(&e.path) != path);
         if items.len() != before {
@@ -137,16 +144,17 @@ impl Recents {
         self.store(&[])
     }
 
-    /// A missing file is an empty list. One that can't be read or understood is set aside as
-    /// `recents.json.bad` (so nothing is lost) and replaced by an empty list, rather than failing every
-    /// command that touches Recent.
-    fn load(&self) -> Vec<RecentEntry> {
+    /// A missing file is an empty list. One that can't be understood is set aside as `recents.json.bad`
+    /// (so nothing is lost) and replaced by an empty list, rather than failing every command that
+    /// touches Recent. One that can't be *read* (a share that dropped, a sharing violation) is an error,
+    /// not an empty list: the next write would otherwise replace the real list with it.
+    fn load(&self) -> Result<Vec<RecentEntry>, AppError> {
         let bytes = match fs::read(&self.file) {
             Ok(bytes) => bytes,
-            Err(e) if e.kind() == io::ErrorKind::NotFound => return Vec::new(),
-            Err(_) => return self.set_aside(),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(e) => return Err(AppError::from_io(&e, Verb::Open, Subject::Preferences)),
         };
-        match serde_json::from_slice::<RecentsFile>(&bytes) {
+        Ok(match serde_json::from_slice::<RecentsFile>(&bytes) {
             Ok(file) if file.v == VERSION => {
                 let mut items = file.items;
                 items.sort_by_key(|e| std::cmp::Reverse(e.last_opened_ms));
@@ -154,7 +162,7 @@ impl Recents {
                 items
             }
             _ => self.set_aside(),
-        }
+        })
     }
 
     fn set_aside(&self) -> Vec<RecentEntry> {
@@ -222,6 +230,20 @@ mod tests {
             .into_iter()
             .map(|e| e.name)
             .collect()
+    }
+
+    #[test]
+    fn a_list_that_cannot_be_read_is_left_alone_and_never_saved_over() {
+        let fx = fixture();
+        std::fs::create_dir_all(fx.root.join("config").join("recents.json")).unwrap();
+        let listing = fx.recents.list().unwrap();
+        assert!(listing.items.is_empty() && !listing.pruned);
+        assert!(fx
+            .recents
+            .add(RecentKind::File, &fx.root.join("a.draftcanvas"), "a", 1)
+            .is_err());
+        assert!(fx.root.join("config").join("recents.json").is_dir());
+        assert!(!fx.root.join("config").join("recents.json.bad").exists());
     }
 
     #[test]

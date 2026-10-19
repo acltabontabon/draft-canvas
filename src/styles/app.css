@@ -941,11 +941,6 @@ kbd {
   color: var(--dc-text-muted);
 }
 
-.dc-home-import-ext {
-  font-family: var(--dc-mono);
-  font-size: 11.5px;
-}
-
 /* ---- selection chrome (shared by the sheet and the starters) ------------ */
 
 .dc-chrome {

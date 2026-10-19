@@ -26,7 +26,7 @@ descriptions themselves are the contract; this is the working knowledge around t
 A create or update answers with:
 
 - `revision` — pass it as `expectedRevision` next time.
-- `quality` — `errors` (refused unless `allowDegraded`) and `warnings` such as a connector that jogs
+- `quality` — `errors` (a create is refused unless `allowDegraded`; an update with errors is refused) and `warnings` such as a connector that jogs
   sideways. A warning is worth a look, not always a change.
 - `legibility` — `crossings`, plus connectors that detour or cut through a boundary they're not in:
   the top view's at the top level, and every inside view's under `views`, each with its `view` path.
@@ -100,8 +100,9 @@ relationship.
 | `LAYOUT_CONSTRAINED` | A new element didn't fit beside its neighbours | Add the `suggestedOp` (an arrange) to the same update |
 | `REVISION_CONFLICT` | The person edited meanwhile | `read_diagram`, rebuild the change on the new revision; or `onConflict: "rebase"` when your change doesn't touch what they edited |
 | `LIMIT_EXCEEDED` | Too much in one request | Split it into a create plus updates |
-| `OUT_OF_SCOPE` | Folder not enabled, or outside the selection scope | Tell the person which folder to tick in Settings → AI agents |
-| `BUSY`, `DOCUMENT_BUSY` | The app is applying another change | Retry the same request (same `requestId`) shortly |
+| `OUT_OF_SCOPE` | Folder not enabled, or an id outside the `scope` you passed | Folder: tell the person which one to tick in Settings → AI agents. Scope: pass only ids from `read_selection`, or leave `scope` out |
+| `BUSY` | The app is applying another change | Retry the same request (same `requestId`) shortly |
+| `DOCUMENT_BUSY` | The person has unsaved or recovered changes to that diagram, or the file changed on disk under them | Don't retry. Ask them to save or discard, then `read_diagram` and rebuild the change |
 | `NOT_FOUND` | No such diagram or view | `list_diagrams` again |
 
 Never answer a failed update by creating a new diagram.

@@ -470,10 +470,16 @@ mod tests {
     /// carried different files under one version would each take the other's copy for "outdated"
     /// and replace it on every launch; a new entry for every change keeps "version N" meaning one set
     /// of files. When this fails: bump `metadata.version` in SKILL.md and add the pair it prints.
-    const PUBLISHED: &[(&str, &str)] = &[(
-        "1",
-        "833df6a7954d9567b384b04d2dbeae507915a4908a94bceeba926da407fbb768",
-    )];
+    const PUBLISHED: &[(&str, &str)] = &[
+        (
+            "1",
+            "833df6a7954d9567b384b04d2dbeae507915a4908a94bceeba926da407fbb768",
+        ),
+        (
+            "2",
+            "5dfcf6a6bffad74ba6a6f95df83eaaec46142279ff741f17d1a6d8e7d15c2cd3",
+        ),
+    ];
 
     #[test]
     fn a_changed_skill_has_a_new_version() {

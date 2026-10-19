@@ -118,6 +118,9 @@ impl Ledger {
     pub fn begin(&self, key: &str, fingerprint: &str) -> Begin {
         match self.entries.get(key) {
             None => Begin::Fresh,
+            // Refused before anything changed, so a corrected request may reuse the id: the agent
+            // that fixes an INVALID_INPUT and resends shouldn't be told its id is spent.
+            Some(entry) if entry.stage == Stage::Failed => Begin::Fresh,
             Some(entry) if entry.fingerprint != fingerprint => Begin::Mismatch,
             Some(entry) => match entry.stage {
                 Stage::Failed => Begin::Fresh,
@@ -280,6 +283,8 @@ mod tests {
         let mut ledger = Ledger::open(dir.path(), 1).unwrap();
         ledger.record(entry("k", Stage::Failed, 1)).unwrap();
         assert_eq!(ledger.begin("k", "fp"), Begin::Fresh);
+        // Including with the corrections the agent made after the refusal.
+        assert_eq!(ledger.begin("k", "corrected"), Begin::Fresh);
     }
 
     #[test]

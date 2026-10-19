@@ -102,7 +102,7 @@ export function Modal({ title, onClose, children, footer, width = 460, className
   }, [onClose, order]);
 
   return (
-    <ModalOverlay isOpen isKeyboardDismissDisabled isDismissable onOpenChange={(open) => { if (!open) onClose(); }} className="dc-modal-backdrop">
+    <ModalOverlay isOpen isKeyboardDismissDisabled isDismissable shouldCloseOnInteractOutside={(element) => !element.closest('.dc-toasts')} onOpenChange={(open) => { if (!open) onClose(); }} className="dc-modal-backdrop">
       <AriaModal>
         <Dialog
           ref={panel}

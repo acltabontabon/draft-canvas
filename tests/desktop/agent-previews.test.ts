@@ -37,4 +37,11 @@ describe('ephemeral MCP candidates', () => {
     clearPreviews();
     expect(() => readPreview(id, 'd_one', 's_one', 'f:one')).toThrow();
   });
+
+  it('keeps a candidate usable when the person only pans or zooms', () => {
+    const held = candidate();
+    const id = holdPreview(held);
+    const panned = { ...held.baseFile, viewport: { x: 340, y: -120, zoom: 0.6 } };
+    expect(readPreview(id, 'd_one', 's_one', 'f:one', [], panned).result).toBe(held.result);
+  });
 });

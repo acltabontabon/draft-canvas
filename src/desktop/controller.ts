@@ -1225,6 +1225,9 @@ export class DesktopController {
    */
   private async onQuitRequested(reason: 'quit' | 'update'): Promise<void> {
     try {
+      // At once, before the flush and the recovery copy: those can outlast the shell's first timeout,
+      // and a page it hears nothing from is taken for a hung one and quit without its Save prompt.
+      await this.api.quitAck('working');
       await this.flushApp();
       const session = this.session;
       if (session.kind === 'none') return void (await this.api.quitAck('ready'));
@@ -1264,7 +1267,7 @@ export class DesktopController {
       return;
     }
     try {
-      await this.syncWithDisk();
+      await this.syncWithDisk(false);
     } catch (error) {
       logDiagnostic(error, { operation: 'desktop-check-stamp' });
     }
@@ -1277,18 +1280,28 @@ export class DesktopController {
    * is in the background, so waiting for focus handed them the copy from before a `git pull`, and
    * their edits then landed on it.
    */
-  private async syncWithDisk(): Promise<'unchanged' | 'reloaded' | 'changed' | 'missing'> {
+  private async syncWithDisk(settleFirst = true): Promise<'unchanged' | 'reloaded' | 'changed' | 'missing'> {
     const session = this.session;
     if (session.kind !== 'file' || this.saving) return 'unchanged';
     // What the page has typed but not yet posted counts: judged without it, `dirty` could still read
-    // false and a reload would replace an edit that was on screen.
-    await this.flushApp();
-    if (this.session !== session || this.saving) return 'unchanged';
+    // false and a reload would replace an edit that was on screen. An agent asking wants it settled
+    // before it reads.
+    if (settleFirst) {
+      await this.flushApp();
+      if (this.session !== session || this.saving) return 'unchanged';
+    }
     const stamp = session.stamp;
     const seq = this.seq;
     const current = () => this.session === session && this.seq === seq && session.stamp === stamp && !this.saving;
     const check = await this.api.checkStamp(session.handle, stamp);
     if (!current() || check === 'unchanged') return 'unchanged';
+    // Disk events and window focus ask with `settleFirst` off: they run for the echo of our own save and
+    // for any file touched in a watched folder, and settling blurs the field the person is typing in —
+    // mid-word, with the next key a canvas shortcut. Only a file that really changed needs it.
+    if (!settleFirst) {
+      await this.flushApp();
+      if (!current()) return 'unchanged';
+    }
     if (check === 'changed' && !this.dirty) {
       // A notification can arrive while the person is typing or switching files. Re-check after
       // each async read/cleanup, including edits still waiting in the renderer's fields.

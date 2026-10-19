@@ -219,7 +219,7 @@ export type ProposalAction =
   | { ok: false; code: 'PROPOSAL_CHANGED'; proposal: Proposal }
   | { ok: false; code: 'ALREADY_RESOLVED'; status: Proposal['status'] };
 
-export type QuitDecision = 'ready' | 'prompting' | 'cancel';
+export type QuitDecision = 'working' | 'ready' | 'prompting' | 'cancel';
 
 export interface FileFilter {
   name: string;

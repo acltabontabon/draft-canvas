@@ -92,10 +92,10 @@ export function FirstRunHome({ session, onImport }: { session: DocumentSession; 
               </span>
             </button>
             <Button variant="quiet" icon="upload" className="dc-home-import" onClick={onImport} aria-describedby={importHintId}>
-              Import <span className="dc-home-import-ext">.draftcanvas</span>
+              Import a file
             </Button>
             <span id={importHintId} className="dc-sr-only">
-              Opens a .draftcanvas or .json file exported from Draft Canvas, or a secure .dcenc export.
+              Opens a .draftcanvas, .json or secure .dcenc file exported from Draft Canvas, an editable PNG or SVG export, or a Mermaid flowchart (.mmd, .mermaid or .md).
             </span>
           </div>
 

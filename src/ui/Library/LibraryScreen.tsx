@@ -9,7 +9,7 @@ import { useUiStore } from '../../store/uiStore';
 import type { DocumentSession } from '../../store/useDocumentSession';
 import { Button } from '../common/Button';
 import { Icon } from '../common/Icon';
-import { Modal } from '../common/Modal';
+import { Modal } from '../common/LazyModal';
 import { FirstRunHome } from './FirstRunHome';
 import { relativeTime } from '../../lib/relativeTime';
 import { Fingerprint } from './Fingerprint';

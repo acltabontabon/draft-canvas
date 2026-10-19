@@ -11,6 +11,57 @@ the release notes and the in-app What's New are generated from here. See
 
 ## [Unreleased]
 
+### Shared
+
+#### Fixed
+
+- A library backup of any size now restores; one over 24 MB could be written but never read back.
+- Dropping a file onto an open canvas no longer carries that canvas's unsaved or conflicted state
+  over to the one it opens, and the size warning now measures the file as it is written.
+- Undoing and then reloading quickly no longer brings the undone edit back.
+- Toast messages are announced to screen readers and can be clicked while a dialog is open.
+- Pasting a very long Mermaid line no longer freezes the tab, and an out-of-range character code no
+  longer makes an import silently do nothing.
+- Dragging several shapes at once keeps the bends of the connectors between them steady, and long
+  drags no longer slow the connectors that follow.
+- The Find and replace shortcut (⌘⌥F) is recognised where Option changes the letter typed, "Reload to update"
+  works in a second tab, and reduced motion is respected when paging the shape rail.
+- Deleting a project keeps keyboard focus in the sidebar.
+- Copy as image starts the copy inside your click, which Safari requires.
+- Typing in a label on a busy canvas no longer rebuilds every shared connector label, and dragging a
+  connector's end or bend no longer leaves stale arcs on it.
+
+#### Changed
+
+- Opening the editor loads less up front: exporters and the Mermaid reader arrive when used, and the
+  Library's dialogs load with the first one you open.
+
+### Desktop
+
+#### Fixed
+
+- Switching back to Draft Canvas, or another app touching a file in a watched folder, no longer
+  drops you out of the text field you are typing in.
+- Renaming a file only by capitalisation no longer deletes its background image.
+- Quitting from the tray with unsaved changes asks about them instead of quitting, even if the
+  window was asleep.
+- A settings or Recent file that is briefly unreadable (a roaming profile's share) is left alone
+  instead of being replaced by defaults, and saving catches an outside edit even when the file kept
+  its size and timestamp. A partly failed save on Windows no longer deletes the only copy.
+- Large exports (a 100-megapixel PNG, an SVG with its background) no longer hit the document size
+  limit, and a project too big to scan in full says so on every folder it is missing from.
+- Draft Canvas does less in the background when other apps change files in watched folders, and
+  starts faster with many projects.
+
+#### Changed
+
+- Agents get a smaller tool list (about a third less to read each session), clearer messages when a
+  request has a typo in it, and shorter diagram reads. A preview of a layout change reports how many
+  shapes moved instead of listing every coordinate, and panning no longer invalidates a preview.
+- The draft-canvas skill's checker accepts every shape name the app does.
+- An agent no longer gets a "not found" for a diagram it just created in a very large folder, and
+  long focused reads give shorter page cursors.
+
 ## [1.15.0] - 2026-10-19
 
 Shape connectors by hand, and let your agent draw the whole repository.

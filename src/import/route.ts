@@ -10,8 +10,7 @@
 import type { NormalizeResult } from '../document/validate';
 import { deserializeDocument, readImportText, readProjectFile } from '../export/project';
 import { looksLikeSecureExport } from '../export/secureProject';
-import { readEditableImage } from './editableImage';
-import { looksLikeMermaid } from './mermaid/parse';
+import { looksLikeMermaid } from './mermaid/sniff';
 
 export type RoutedImport =
   /** An encrypted export: it needs a passphrase, which only the Library's prompt can ask for. */
@@ -36,6 +35,8 @@ export async function routeImportFile(file: File): Promise<RoutedImport> {
   if (await looksLikeSecureExport(file)) return { kind: 'secure' };
   const extension = extensionOf(file.name);
   if (extension === 'svg' || extension === 'png' || file.type === 'image/svg+xml' || file.type === 'image/png') {
+    // Loaded when a picture is actually imported: the PNG and SVG readers aren't needed to open a document.
+    const { readEditableImage } = await import('./editableImage');
     const result = await readEditableImage(file);
     return { kind: 'document', result: result ?? { ok: false, error: `${file.name} is a picture, not an editable export: Draft Canvas reads the diagram an SVG or PNG it exported itself carries.` } };
   }

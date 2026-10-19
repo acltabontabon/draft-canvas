@@ -55,10 +55,20 @@ function warnIfNearFileLimit(module: EditorStoreModule, notify: (message: string
   lastSizeCheck = now;
   const file = module.fileOf(module.useEditorStore.getState());
   if (sizeWarnedFor === file.metadata.id) return;
-  // UTF-16 length is a lower bound on the UTF-8 bytes, which is the right side to err on for a warning.
-  const bytes = JSON.stringify(file).length;
-  if (bytes < LIMITS.maxFileBytes * 0.8) return;
-  sizeWarnedFor = file.metadata.id;
+  // The file is written indented (about 1.7x the compact size), and it is the written file that has to
+  // open again: measuring the compact text let a canvas past the limit save with no warning at all.
+  // So only a canvas that could be near it pays for the real serialization.
+  if (JSON.stringify(file).length < LIMITS.maxFileBytes * 0.4) return;
+  void import('../export/project').then(({ serializeDocument }) => {
+    // UTF-16 length is a lower bound on the UTF-8 bytes, which is the right side to err on for a warning.
+    const bytes = serializeDocument(file).length;
+    if (bytes < LIMITS.maxFileBytes * 0.8 || sizeWarnedFor === file.metadata.id) return;
+    sizeWarnedFor = file.metadata.id;
+    warnSize(bytes, notify);
+  });
+}
+
+function warnSize(bytes: number, notify: (message: string, tone?: 'info' | 'error') => void): void {
   const mb = (bytes / 1024 / 1024).toFixed(1);
   notify(
     bytes >= LIMITS.maxFileBytes
@@ -321,10 +331,34 @@ export function useDocumentSession(): DocumentSession {
     setLibrary(await repository.list());
   }, [repository]);
 
+  /**
+   * Whether the canvas on screen may be replaced by another. `closeDocument` has always asked; the
+   * paths that swap one canvas for another directly (a file dropped on the open canvas, a link to
+   * another diagram) did not, and the one autosave controller carries its pending edits, failed save
+   * and unresolved cross-tab conflict across the swap: the new canvas inherited the old one's
+   * conflict (so none of its edits were saved) or took its place in the queue of unsaved work.
+   */
+  const mayLeaveCurrent = useCallback(
+    async (nextId: string | null): Promise<boolean> => {
+      if (sharedRef.current || openIdRef.current === null || openIdRef.current === nextId) return true;
+      if ((await autosave.current?.flush()) ?? true) return true;
+      const conflict = editorStoreModule?.useEditorStore.getState().save.conflict;
+      notify(
+        conflict
+          ? 'Choose which copy to keep in the status bar before opening another canvas.'
+          : 'Your latest changes could not be saved to this browser. Export the diagram to keep a copy before opening another.',
+        'error',
+      );
+      return false;
+    },
+    [notify],
+  );
+
   const openDocument = useCallback(
     async (id: string) => {
       if (!repository) return;
       const request = (navigation.current += 1);
+      if (!(await mayLeaveCurrent(id)) || request !== navigation.current) return;
       let loaded: DraftDocument | null;
       try {
         loaded = await repository.load(id);
@@ -387,7 +421,7 @@ export function useDocumentSession(): DocumentSession {
       }
       setOpenId(loaded.metadata.id);
     },
-    [leaveShared, notify, refreshLibrary, repository, setOpenId],
+    [leaveShared, mayLeaveCurrent, notify, refreshLibrary, repository, setOpenId],
   );
 
   const openShared = useCallback(
@@ -448,6 +482,7 @@ export function useDocumentSession(): DocumentSession {
     async (incoming: DraftDocument, options?: { fresh?: boolean }) => {
       if (!repository) return;
       const request = (navigation.current += 1);
+      if (!(await mayLeaveCurrent(null)) || request !== navigation.current) return;
       // A `projectId` from a document authored in a different browser
       // profile (or whose project was deleted here) would make the canvas
       // invisible in the Library — excluded from Unorganized, with no
@@ -488,7 +523,7 @@ export function useDocumentSession(): DocumentSession {
         notify('Could not save that diagram — local storage may be full or unavailable.', 'error');
       }
     },
-    [leaveShared, notify, projects, refreshLibrary, repository, setOpenId],
+    [leaveShared, mayLeaveCurrent, notify, projects, refreshLibrary, repository, setOpenId],
   );
 
   const makeEditableCopy = useCallback(async () => {
