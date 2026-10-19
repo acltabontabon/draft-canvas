@@ -388,6 +388,17 @@ export function withDeadline<T>(deadline: number, work: () => T): T {
 /** Whether the request's time is up (see `withDeadline`). */
 export const pastDeadline = () => performance.now() > activeDeadline;
 
+function skewed(edge: Pick<DraftEdge, 'sourceAnchor' | 'targetAnchor'>, points: readonly Point[]): boolean {
+  const from = edge.sourceAnchor?.side;
+  const to = edge.targetAnchor?.side;
+  const start = points[0];
+  const end = points[points.length - 1];
+  if (!start || !end) return false;
+  if ((from === 'left' && to === 'right') || (from === 'right' && to === 'left')) return Math.abs(start.y - end.y) > 1;
+  if ((from === 'top' && to === 'bottom') || (from === 'bottom' && to === 'top')) return Math.abs(start.x - end.x) > 1;
+  return false;
+}
+
 /**
  * Re-anchors, in place, every edge in `targets` whose drawn route or caption runs over a shape or
  * another caption, judged among `all` edges (fan-out spines and lanes depend on the neighbours).
@@ -415,8 +426,12 @@ export function repairAnchors(
    * Re-anchors `mover` until every connector in `clean` is drawn without a problem — the first such
    * anchoring, cheapest first — or puts it back and says it couldn't.
    */
-  const tryMove = (mover: DraftEdge, clean: readonly DraftEdge[], why: RouteProblem['kind']): boolean => {
+  const tryMove = (mover: DraftEdge, clean: readonly DraftEdge[], why: RouteProblem['kind'] | 'tidiness'): boolean => {
     const original = { sourceAnchor: mover.sourceAnchor, targetAnchor: mover.targetAnchor };
+    const occupied = (id: string, side: Side | undefined) => edges.some((e) => e.id !== mover.id && (
+      (e.source === id && e.sourceAnchor?.side === side) || (e.target === id && e.targetAnchor?.side === side)
+    ));
+    if (why === 'tidiness' && (occupied(mover.source, original.sourceAnchor?.side) || occupied(mover.target, original.targetAnchor?.side))) return false;
     // Crossing a boundary is the mildest problem: fixing a worse one may leave a line crossing one
     // (the best of those is kept in case nothing clears everything), and neither case is worth a
     // detour much longer than the route it would replace.
@@ -455,6 +470,10 @@ export function repairAnchors(
     let fixed = false;
     for (const candidate of [...firsts, ...rest].slice(0, MAX_CHECKS)) {
       if (performance.now() > deadline) break;
+      if (why === 'tidiness' && (occupied(mover.source, candidate.source?.side) || occupied(mover.target, candidate.target?.side))) continue;
+      // A readable but skewed connector can often lose an elbow simply by meeting the adjacent
+      // side. Keep the current anchors unless the saving is substantial, not a pixel-level tie.
+      if (why === 'tidiness' && candidate.cost >= originalCost - BEND_COST / 2) continue;
       if (why === 'through-boundary' && candidate.cost > originalCost + BOUNDARY_DETOUR) continue;
       if (fallback && candidate.cost > fallback.cost + BOUNDARY_DETOUR) break;
       edge.sourceAnchor = candidate.source;
@@ -466,6 +485,15 @@ export function repairAnchors(
       const local = next.filter((e) => hood.has(e.source) || hood.has(e.target));
       const fresh = new Map(othersOf(nodes, local, caption, undefined, byId).filter((o) => neighbours.has(o.id)).map((o) => [o.id, o]));
       const others = [...drawn.values()].map((o) => fresh.get(o.id) ?? o);
+      if (why === 'tidiness' && clean.some((e) => {
+        const before = drawn.get(e.id);
+        const after = fresh.get(e.id);
+        if (!before || !after) return true;
+        const beforeAnchors = e.id === mover.id ? original : e;
+        if (!skewed(beforeAnchors, before.points) && skewed(e, after.points)) return true;
+        // Saving an elbow on this connector must not put one on an already-straight neighbour.
+        return routeCost(after.points) > routeCost(before.points) - (e.id === mover.id ? BEND_COST / 2 : -1);
+      })) continue;
       const problems = clean.map((e) => routeProblem(moving.get(e.id) ?? e, nodes, local, caption, others, byId));
       if (problems.every((p) => !p)) {
         fixed = true;
@@ -473,7 +501,7 @@ export function repairAnchors(
         drawn = new Map(others.map((o) => [o.id, o]));
         break;
       }
-      if (!fallback && why !== 'through-boundary' && problems.every((p) => !p || p.kind === 'through-boundary')) {
+      if (!fallback && why !== 'through-boundary' && why !== 'tidiness' && problems.every((p) => !p || p.kind === 'through-boundary')) {
         fallback = { source: candidate.source, target: candidate.target, next, others, cost: candidate.cost };
       }
     }
@@ -491,7 +519,18 @@ export function repairAnchors(
   for (const edge of targets) {
     if (performance.now() > deadline) return;
     const problem = routeProblem(edge, nodes, edges, caption, [...drawn.values()], byId);
-    if (!problem) continue;
+    if (!problem) {
+      // Hard readability checks do not flag a needless elbow. Tidy only automatic routes, and
+      // require the already-readable neighbours to remain readable when their shared routing moves.
+      const route = drawn.get(edge.id);
+      if (edge.waypoints?.length || edge.routeMode === 'direct' || !route || bendsOf(route.points) < 2) continue;
+      const touching = edges.filter((e) => e.source === edge.source || e.target === edge.source || e.source === edge.target || e.target === edge.target);
+      const plan = routingPlan(nodes, edges);
+      if (touching.some((e) => plan.spineFor(e.id))) continue;
+      const clean = touching.filter((e) => !routeProblem(e, nodes, edges, caption, [...drawn.values()], byId));
+      tryMove(edge, clean, 'tidiness');
+      continue;
+    }
     // Trouble between two connectors (a line through the other's caption, the two on top of each
     // other): moving the *other* one first often keeps this one straight — cheaper than sending a
     // straight connector on a detour around its neighbour's line.

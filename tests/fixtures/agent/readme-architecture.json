@@ -1,0 +1,723 @@
+{
+  "title": "Draft Canvas architecture \u2014 README prompt",
+  "level": "container",
+  "layout": {
+    "primaryFlow": "t.edit"
+  },
+  "nodes": [
+    {
+      "id": "author",
+      "type": "person",
+      "label": "Diagram author",
+      "description": "Sketches, explores and presents software architecture."
+    },
+    {
+      "id": "web",
+      "type": "service",
+      "label": "Web editor",
+      "description": "Runs the local-first diagram editor in the browser.",
+      "technology": "React, TypeScript",
+      "group": "browser",
+      "inside": {
+        "level": "component",
+        "nodes": [
+          {
+            "id": "w.commands",
+            "type": "component",
+            "label": "UI and commands",
+            "description": "Turns canvas gestures and commands into editor actions.",
+            "technology": "React, TypeScript"
+          },
+          {
+            "id": "w.store",
+            "type": "component",
+            "label": "Editor state and history",
+            "description": "Applies edits and records undo steps for the whole file.",
+            "technology": "Zustand"
+          },
+          {
+            "id": "w.model",
+            "type": "module",
+            "label": "Document operations",
+            "description": "Transforms serializable diagrams without UI dependencies.",
+            "technology": "TypeScript"
+          },
+          {
+            "id": "w.render",
+            "type": "component",
+            "label": "Shared rendering",
+            "description": "Describes shapes and routes for canvas and SVG export.",
+            "technology": "Display lists, SVG"
+          },
+          {
+            "id": "w.export",
+            "type": "component",
+            "label": "Image and source export",
+            "description": "Exports the current document into portable formats.",
+            "technology": "TypeScript"
+          },
+          {
+            "id": "w.autosave",
+            "type": "component",
+            "label": "Autosave",
+            "description": "Coalesces edits and keeps failed writes queued.",
+            "technology": "TypeScript",
+            "group": "w.persistence"
+          },
+          {
+            "id": "w.repo",
+            "type": "adapter",
+            "label": "Browser repository",
+            "description": "Writes diagram summaries and bodies in one transaction.",
+            "technology": "idb",
+            "group": "w.persistence"
+          },
+          {
+            "id": "w.db",
+            "type": "nosql-database",
+            "label": "Browser diagrams",
+            "description": "Stores diagrams locally in the browser profile.",
+            "technology": "IndexedDB",
+            "group": "w.persistence"
+          }
+        ],
+        "groups": [
+          {
+            "id": "w.persistence",
+            "kind": "domain",
+            "label": "Browser persistence"
+          }
+        ],
+        "relationships": [
+          {
+            "id": "w.r-action",
+            "from": "w.commands",
+            "to": "w.store",
+            "label": "Runs editor action",
+            "kind": "sync"
+          },
+          {
+            "id": "w.r-transform",
+            "from": "w.store",
+            "to": "w.model",
+            "label": "Transforms document",
+            "kind": "sync"
+          },
+          {
+            "id": "w.r-render",
+            "from": "w.store",
+            "to": "w.render",
+            "label": "Supplies document state",
+            "kind": "sync"
+          },
+          {
+            "id": "w.r-export",
+            "from": "w.render",
+            "to": "w.export",
+            "label": "Supplies shared visuals",
+            "kind": "sync"
+          },
+          {
+            "id": "w.r-schedule",
+            "from": "w.store",
+            "to": "w.autosave",
+            "label": "Schedules changed document",
+            "kind": "async"
+          },
+          {
+            "id": "w.r-save",
+            "from": "w.autosave",
+            "to": "w.repo",
+            "label": "Saves pending edits",
+            "kind": "async"
+          },
+          {
+            "id": "w.r-write",
+            "from": "w.repo",
+            "to": "w.db",
+            "label": "Writes summary and body",
+            "kind": "async"
+          },
+          {
+            "id": "w.r-fail",
+            "from": "w.repo",
+            "to": "w.autosave",
+            "label": "Reports save conflict",
+            "kind": "failure"
+          }
+        ],
+        "flows": [
+          {
+            "id": "w.edit",
+            "title": "Edit and autosave",
+            "color": "teal",
+            "steps": [
+              {
+                "spotlight": [
+                  "w.commands"
+                ],
+                "caption": "Edit and autosave."
+              },
+              {
+                "relationship": "w.r-action",
+                "caption": "A gesture or command calls an existing editor action."
+              },
+              {
+                "relationship": "w.r-transform",
+                "caption": "Pure operations produce the next document; history records the edit."
+              },
+              {
+                "relationship": "w.r-render",
+                "caption": "The canvas renders the new state using shared shape descriptions."
+              },
+              {
+                "relationship": "w.r-schedule",
+                "caption": "The document session queues the changed file for autosave."
+              },
+              {
+                "relationship": "w.r-save",
+                "caption": "After the quiet period, autosave submits the pending document."
+              },
+              {
+                "relationship": "w.r-write",
+                "caption": "Summary and body are written in one IndexedDB transaction."
+              }
+            ]
+          },
+          {
+            "id": "w.conflict",
+            "title": "Another tab changed the diagram",
+            "color": "rose",
+            "steps": [
+              {
+                "spotlight": [
+                  "w.autosave",
+                  "w.repo"
+                ],
+                "caption": "Another tab changed the diagram."
+              },
+              {
+                "relationship": "w.r-save",
+                "caption": "Autosave tries to write against the document it previously loaded."
+              },
+              {
+                "relationship": "w.r-fail",
+                "caption": "The content stamp differs; the transaction aborts and saving pauses."
+              }
+            ],
+            "variantOf": "w.edit"
+          }
+        ],
+        "notes": [
+          {
+            "id": "w.n-conflict",
+            "kind": "decision",
+            "about": "w.persistence",
+            "attach": true,
+            "text": "Compare content stamps before replacing saved work. A conflict pauses saving until the user chooses a copy; the in-memory document remains exportable."
+          },
+          {
+            "id": "w.n-code",
+            "kind": "code",
+            "about": "w.repo",
+            "attach": true,
+            "language": "typescript",
+            "code": "      const conflict = conflictIn(before);\n      if (conflict) {\n        tx.abort();\n        await Promise.allSettled([first, tx.done]);\n        if (cameraOnly) return;\n        throw new DocumentConflictError(conflict);"
+          },
+          {
+            "id": "w.n-render",
+            "kind": "decision",
+            "about": "w.render",
+            "attach": true,
+            "text": "Canvas and exported images share node descriptions and text layout. There is no separate visual interpretation for each node type."
+          }
+        ]
+      }
+    },
+    {
+      "id": "idb",
+      "type": "nosql-database",
+      "label": "Browser library",
+      "description": "Stores browser diagrams locally without an editor backend.",
+      "technology": "IndexedDB",
+      "group": "browser"
+    },
+    {
+      "id": "agent",
+      "type": "external-actor",
+      "label": "Coding agent",
+      "description": "Reads a repository and calls Draft Canvas MCP tools.",
+      "technology": "MCP client"
+    },
+    {
+      "id": "mcp",
+      "type": "service",
+      "label": "MCP connector",
+      "description": "Forwards stdio tool calls to the running desktop app.",
+      "technology": "Rust, rmcp",
+      "group": "desktop"
+    },
+    {
+      "id": "app",
+      "type": "service",
+      "label": "Desktop app",
+      "description": "Hosts the shared editor and controls native file and agent access.",
+      "technology": "Tauri 2, React",
+      "group": "desktop",
+      "inside": {
+        "level": "component",
+        "nodes": [
+          {
+            "id": "d.broker",
+            "type": "component",
+            "label": "Native agent broker",
+            "description": "Checks allowed folders and dispatches admitted tool calls.",
+            "technology": "Rust, Tauri",
+            "group": "d.native"
+          },
+          {
+            "id": "d.handler",
+            "type": "component",
+            "label": "Agent request handler",
+            "description": "Validates requests and coordinates work with the open editor.",
+            "technology": "TypeScript",
+            "group": "d.webview"
+          },
+          {
+            "id": "d.worker",
+            "type": "component",
+            "label": "Diagram worker",
+            "description": "Builds, lays out and checks candidate diagrams off the UI thread.",
+            "technology": "Web Worker",
+            "group": "d.webview"
+          },
+          {
+            "id": "d.guard",
+            "type": "component",
+            "label": "Commit gate",
+            "description": "Refuses cancelled or timed-out changes before they land.",
+            "technology": "Rust",
+            "group": "d.native"
+          },
+          {
+            "id": "d.files",
+            "type": "adapter",
+            "label": "Native file writes",
+            "description": "Writes new diagrams and checks stamps before replacing existing files.",
+            "technology": "Rust",
+            "group": "d.native"
+          },
+          {
+            "id": "d.disk",
+            "type": "file-system",
+            "label": "Diagram files",
+            "description": "Keeps editable .draftcanvas files in allowed project folders.",
+            "technology": "Local filesystem"
+          },
+          {
+            "id": "d.editor",
+            "type": "adapter",
+            "label": "Editor commit bridge",
+            "description": "Checks revisions and commits open-file changes as one undo step.",
+            "technology": "TypeScript",
+            "group": "d.webview"
+          },
+          {
+            "id": "d.errors",
+            "type": "module",
+            "label": "Error responses",
+            "description": "Returns structured conflict and cancellation errors to the caller.",
+            "technology": "TypeScript",
+            "group": "d.webview"
+          }
+        ],
+        "groups": [
+          {
+            "id": "d.native",
+            "kind": "deployment",
+            "label": "Native shell"
+          },
+          {
+            "id": "d.webview",
+            "kind": "deployment",
+            "label": "Editor webview and worker"
+          }
+        ],
+        "relationships": [
+          {
+            "id": "d.r-dispatch",
+            "from": "d.broker",
+            "to": "d.handler",
+            "label": "Dispatches tool request",
+            "kind": "async"
+          },
+          {
+            "id": "d.r-compose",
+            "from": "d.handler",
+            "to": "d.worker",
+            "label": "Builds candidate diagram",
+            "kind": "async"
+          },
+          {
+            "id": "d.r-admit",
+            "from": "d.handler",
+            "to": "d.guard",
+            "label": "Checks commit admission",
+            "kind": "sync"
+          },
+          {
+            "id": "d.r-save",
+            "from": "d.broker",
+            "to": "d.files",
+            "label": "Persists accepted result",
+            "kind": "sync"
+          },
+          {
+            "id": "d.r-write",
+            "from": "d.files",
+            "to": "d.disk",
+            "label": "Writes diagram file",
+            "kind": "sync"
+          },
+          {
+            "id": "d.r-editor",
+            "from": "d.handler",
+            "to": "d.editor",
+            "label": "Commits open-file update",
+            "kind": "sync"
+          },
+          {
+            "id": "d.r-refuse",
+            "from": "d.editor",
+            "to": "d.errors",
+            "label": "Refuses stale revision",
+            "kind": "failure"
+          },
+          {
+            "id": "d.r-cancel",
+            "from": "d.handler",
+            "to": "d.errors",
+            "label": "Reports cancelled request",
+            "kind": "failure"
+          }
+        ],
+        "flows": [
+          {
+            "id": "d.create",
+            "title": "Create a diagram through MCP",
+            "color": "teal",
+            "steps": [
+              {
+                "spotlight": [
+                  "d.broker"
+                ],
+                "caption": "Create a diagram through MCP."
+              },
+              {
+                "relationship": "d.r-dispatch",
+                "caption": "The native broker sends the checked request to the page."
+              },
+              {
+                "relationship": "d.r-compose",
+                "caption": "The worker composes and checks the diagram before anything is saved."
+              },
+              {
+                "relationship": "d.r-admit",
+                "caption": "The page checks the native gate before returning its result."
+              },
+              {
+                "relationship": "d.r-save",
+                "caption": "The broker receives the completed result and persists it."
+              },
+              {
+                "relationship": "d.r-write",
+                "caption": "A new editable diagram is written in an allowed project folder."
+              }
+            ]
+          },
+          {
+            "id": "d.update",
+            "title": "Update the open diagram",
+            "color": "blue",
+            "steps": [
+              {
+                "spotlight": [
+                  "d.broker"
+                ],
+                "caption": "Update the open diagram."
+              },
+              {
+                "relationship": "d.r-dispatch",
+                "caption": "The page receives an update request for the existing diagram."
+              },
+              {
+                "relationship": "d.r-admit",
+                "caption": "The request must still be admitted before it can commit."
+              },
+              {
+                "relationship": "d.r-editor",
+                "caption": "The bridge checks the expected revision and applies one undo step."
+              }
+            ]
+          },
+          {
+            "id": "d.stale",
+            "title": "Refuse a conflicting update",
+            "color": "rose",
+            "steps": [
+              {
+                "spotlight": [
+                  "d.broker"
+                ],
+                "caption": "Refuse a conflicting update."
+              },
+              {
+                "relationship": "d.r-dispatch",
+                "caption": "The page receives an update prepared against an older revision."
+              },
+              {
+                "relationship": "d.r-admit",
+                "caption": "The request passes admission but must still match the editor revision."
+              },
+              {
+                "relationship": "d.r-editor",
+                "caption": "The bridge compares the requested revision with the current one."
+              },
+              {
+                "relationship": "d.r-refuse",
+                "caption": "The revision differs; the existing diagram is left untouched."
+              }
+            ],
+            "variantOf": "d.update"
+          },
+          {
+            "id": "d.cancelled",
+            "title": "Cancel before commit",
+            "color": "amber",
+            "steps": [
+              {
+                "spotlight": [
+                  "d.broker"
+                ],
+                "caption": "Cancel before commit."
+              },
+              {
+                "relationship": "d.r-dispatch",
+                "caption": "The page begins working on a diagram request."
+              },
+              {
+                "relationship": "d.r-compose",
+                "caption": "The worker prepares the candidate while cancellation remains possible."
+              },
+              {
+                "relationship": "d.r-admit",
+                "caption": "The gate sees that the request was cancelled or timed out."
+              },
+              {
+                "relationship": "d.r-cancel",
+                "caption": "The handler returns CANCELLED; the candidate is not committed."
+              }
+            ],
+            "variantOf": "d.create"
+          }
+        ],
+        "notes": [
+          {
+            "id": "d.n-policy",
+            "kind": "decision",
+            "about": "d.native",
+            "attach": true,
+            "text": "The native shell owns folder permissions, request limits, cancellation and the replay ledger. Diagram content, layout and readability checks belong to the page."
+          },
+          {
+            "id": "d.n-code",
+            "kind": "code",
+            "about": "d.editor",
+            "attach": true,
+            "language": "typescript",
+            "code": "  const revision = currentRevision();\n  if (request.expectedRevision !== revision) return { kind: 'refused', code: 'REVISION_CONFLICT', revision };\n  const busy = busyReason();\n  if (busy) return { kind: 'refused', code: 'BUSY', revision, reason: busy };\n  const applied = state.applyToFile(request.label, () => request.file);"
+          },
+          {
+            "id": "d.n-worker",
+            "kind": "warning",
+            "about": "d.worker",
+            "attach": true,
+            "text": "Heavy requests normally use a worker. If worker text measurement is unavailable, the page runs the job after yielding; a large request may still affect responsiveness."
+          }
+        ]
+      }
+    },
+    {
+      "id": "files",
+      "type": "file-system",
+      "label": "Project diagrams",
+      "description": "Stores editable diagram files and desktop recovery copies.",
+      "technology": ".draftcanvas files"
+    },
+    {
+      "id": "site",
+      "type": "service",
+      "label": "Product website",
+      "description": "Introduces Draft Canvas and links to the editor and downloads.",
+      "technology": "HTML, CSS, JavaScript"
+    }
+  ],
+  "groups": [
+    {
+      "id": "browser",
+      "kind": "deployment",
+      "label": "Browser on your device"
+    },
+    {
+      "id": "desktop",
+      "kind": "deployment",
+      "label": "Desktop on your device"
+    }
+  ],
+  "relationships": [
+    {
+      "id": "t.r-edit",
+      "from": "author",
+      "to": "web",
+      "label": "Edits and presents diagrams",
+      "kind": "sync"
+    },
+    {
+      "id": "t.r-local",
+      "from": "web",
+      "to": "idb",
+      "label": "Saves browser diagrams",
+      "kind": "async"
+    },
+    {
+      "id": "t.r-desktop",
+      "from": "author",
+      "to": "app",
+      "label": "Edits local diagram files",
+      "kind": "sync"
+    },
+    {
+      "id": "t.r-call",
+      "from": "agent",
+      "to": "mcp",
+      "label": "Calls diagram tools",
+      "kind": "sync"
+    },
+    {
+      "id": "t.r-forward",
+      "from": "mcp",
+      "to": "app",
+      "label": "Forwards over local bridge",
+      "kind": "sync"
+    },
+    {
+      "id": "t.r-file",
+      "from": "app",
+      "to": "files",
+      "label": "Saves files and recovery",
+      "kind": "async"
+    },
+    {
+      "id": "t.r-visit",
+      "from": "author",
+      "to": "site",
+      "label": "Explores the product",
+      "kind": "sync"
+    },
+    {
+      "id": "t.r-open",
+      "from": "site",
+      "to": "web",
+      "label": "Links to web editor",
+      "kind": "sync"
+    }
+  ],
+  "flows": [
+    {
+      "id": "t.edit",
+      "title": "Edit and save in the browser",
+      "color": "teal",
+      "steps": [
+        {
+          "spotlight": [
+            "author",
+            "web"
+          ],
+          "caption": "Edit and save in the browser."
+        },
+        {
+          "relationship": "t.r-edit",
+          "caption": "The author edits a diagram in the browser."
+        },
+        {
+          "relationship": "t.r-local",
+          "caption": "Changes autosave to the local browser library."
+        }
+      ]
+    },
+    {
+      "id": "t.agent",
+      "title": "Draw a repository through MCP",
+      "color": "blue",
+      "steps": [
+        {
+          "spotlight": [
+            "agent",
+            "mcp"
+          ],
+          "caption": "Draw a repository through MCP."
+        },
+        {
+          "relationship": "t.r-call",
+          "caption": "The coding agent sends a semantic diagram request over MCP stdio."
+        },
+        {
+          "relationship": "t.r-forward",
+          "caption": "The connector forwards it to the running desktop app."
+        },
+        {
+          "relationship": "t.r-file",
+          "caption": "The app checks, lays out and saves the diagram in an allowed folder."
+        }
+      ]
+    },
+    {
+      "id": "t.desktop",
+      "title": "Edit a desktop file",
+      "color": "violet",
+      "steps": [
+        {
+          "spotlight": [
+            "author",
+            "app"
+          ],
+          "caption": "Edit a desktop file."
+        },
+        {
+          "relationship": "t.r-desktop",
+          "caption": "The author edits the same React editor inside the Tauri desktop app."
+        },
+        {
+          "relationship": "t.r-file",
+          "caption": "The shell saves the diagram and keeps recovery for unsaved work."
+        }
+      ]
+    }
+  ],
+  "notes": [
+    {
+      "id": "t.n-local",
+      "kind": "decision",
+      "about": "browser",
+      "attach": true,
+      "text": "The editor has no backend, accounts or diagram network calls. Browser documents use IndexedDB; desktop documents use ordinary local files."
+    },
+    {
+      "id": "t.n-question",
+      "kind": "question",
+      "about": "files",
+      "attach": true,
+      "text": "What backup policy should users follow for local diagram files? This repository defines local saving and recovery, but no managed remote backup service."
+    }
+  ]
+}

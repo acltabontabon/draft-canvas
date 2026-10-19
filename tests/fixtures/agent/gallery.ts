@@ -6,6 +6,7 @@
  */
 
 import skillExample from '../../../skills/draft-canvas/references/example-create.json';
+import readmeArchitecture from './readme-architecture.json';
 
 type Json = Record<string, unknown>;
 
@@ -633,6 +634,14 @@ export const GALLERY: GalleryCase[] = [
     title: 'The agent skill’s example: containers, an inside view, flows, notes and evidence',
     kind: 'create',
     request: skillExample as Json,
+  },
+  {
+    // The exact README prompt applied to this repository: the overview was clean, but its desktop
+    // component view inherited a root flow id and crossed itself until it was arranged by hand.
+    id: '25-readme-architecture',
+    title: 'Repository architecture with independently arranged component views',
+    kind: 'create',
+    request: readmeArchitecture as Json,
   },
 ];
 

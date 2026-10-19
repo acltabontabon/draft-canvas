@@ -504,10 +504,17 @@ shared point of a trunk.
 
 The repair is bounded:
 
+- **Inside views.** Each look-inside view is planned once around its first non-variant flow that has
+  connector steps. It compares its own layout candidates; the overview's flow id and viewport do not
+  carry into it. An explicitly requested direction is still respected in every view.
 - **Order.** Connectors are re-anchored — the other connector first when two meet — cheapest drawn
   route first, trying each pair of sides before variations of one, with at most 24 fully drawn
   candidates each. Then roomier spacing is tried; then the other reading direction, unless the
   caller chose one; then all of that again with balanced placement.
+- **Unnecessary bends.** A readable automatic connector can use a shorter route when it saves at
+  least half an elbow's route cost. Its old and new sides must be unshared, and the change must keep
+  readable neighbours clear without lengthening their routes or introducing a skew. Shared trunks
+  and hand-routed connectors keep their existing routes.
 - **Best kept.** Candidates are compared errors first — a candidate with fewer errors always wins,
   however many stray warnings the other avoided — and only once errors are tied does the warning
   count decide it; the best one is what is used, never simply the last one tried. With no clean

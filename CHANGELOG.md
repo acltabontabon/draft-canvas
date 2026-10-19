@@ -11,6 +11,19 @@ the release notes and the in-app What's New are generated from here. See
 
 ## [Unreleased]
 
+### Desktop
+
+#### Improved
+
+- Agent-generated diagrams arrange look-inside views around their own flows and choose a clearer
+  reading direction automatically, reducing crossings without a manual layout pass.
+
+### Shared
+
+#### Improved
+
+- Automatic connector cleanup removes unnecessary bends where it can keep neighbouring routes clear.
+
 ## [1.15.1] - 2026-10-19
 
 Safer saves, steadier typing.
