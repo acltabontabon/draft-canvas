@@ -89,14 +89,14 @@ class TempRepo:
 
     def __exit__(self, *exc: object) -> None:
         assert self._dir
-        # A process that was still finishing in the folder can make one removal fail; try again, then let go.
-        for attempt in range(5):
-            try:
+        # A process that was still finishing in the folder can make one removal fail: sweep again, then let go.
+        name = self._dir.name
+        for _ in range(5):
+            shutil.rmtree(name, ignore_errors=True)
+            if not os.path.exists(name):
                 self._dir.cleanup()
                 return
-            except OSError:
-                time.sleep(0.2 * (attempt + 1))
-        shutil.rmtree(self._dir.name, ignore_errors=True)
+            time.sleep(0.2)
 
 
 def example_request() -> dict:
