@@ -60,6 +60,28 @@ describe('stepped lines through bends', () => {
     expect(points[1]!.y).toBe(30);
   });
 
+  it('stays exactly square when a shape side falls between the whole-unit bends', () => {
+    // Bug: an anchor at y 157.25 beside a stored bend at y 157 drew a diagonal into the first corner.
+    const bends = [
+      { x: 577, y: 157 },
+      { x: 577, y: 279 },
+      { x: 662, y: 279 },
+      { x: 662, y: 190 },
+    ];
+    const points = orthogonalThrough({ x: 472, y: 157.25 }, 'right', bends, { x: 682, y: 190.25 }, 'left');
+    expect(orthogonal(points)).toBe(true);
+    expect(points[0]).toEqual({ x: 472, y: 157.25 });
+    expect(points[points.length - 1]).toEqual({ x: 682, y: 190.25 });
+    const route = routeBetween(
+      { x: 312, y: 90.5, width: 160, height: 89 },
+      { x: 682, y: 157, width: 160, height: 133 },
+      'smoothstep',
+      { anchors: { source: { side: 'right', offset: 0.75 }, target: { side: 'left', offset: 0.25 } }, waypoints: bends },
+    );
+    expect(route.d).not.toMatch(/L577 147/);
+    expect(orthogonal(route.points!)).toBe(true);
+  });
+
   it('reads the corners back off a drawn stepped path', () => {
     const route = routeBetween(A, B, 'smoothstep');
     const corners = stepPolyline(route.d);

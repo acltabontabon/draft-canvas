@@ -127,7 +127,34 @@ export function orthogonalThrough(
   const first = waypoints[0] ?? to;
   const last = waypoints[waypoints.length - 1] ?? from;
   const run = [from, stubFor(from, sourceSide, first), ...waypoints, stubFor(to, targetSide, last), to];
-  return simplifyPolyline(orthogonalize(run));
+  return squareUp(simplifyPolyline(orthogonalize(run)));
+}
+
+/**
+ * Makes every run that `near` calls level or plumb exactly so, keeping both ends where the shapes put
+ * them. Stored bends are whole units but a shape's side can fall between them (an anchor at y 157.25),
+ * and the rounded-corner drawing compares exactly: a quarter-unit slant read as a turn and drew a
+ * diagonal into the first bend.
+ */
+function squareUp(points: readonly Point[]): Point[] {
+  const out = points.map((p) => ({ ...p }));
+  const last = out.length - 1;
+  for (let i = 1; i < last; i += 1) {
+    const a = out[i - 1]!;
+    const b = out[i]!;
+    if (near(a.y, b.y)) b.y = a.y;
+    else if (near(a.x, b.x)) b.x = a.x;
+  }
+  // The target end is fixed too: carry its line back onto the run that meets it.
+  for (let i = last - 1; i > 0; i -= 1) {
+    const a = out[i]!;
+    const b = out[i + 1]!;
+    if (a.x === b.x || a.y === b.y) break;
+    if (near(a.y, b.y)) a.y = b.y;
+    else if (near(a.x, b.x)) a.x = b.x;
+    else break;
+  }
+  return out;
 }
 
 /**

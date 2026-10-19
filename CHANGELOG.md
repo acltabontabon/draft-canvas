@@ -11,70 +11,70 @@ the release notes and the in-app What's New are generated from here. See
 
 ## [Unreleased]
 
+## [1.15.0] - 2026-10-19
+
+Shape connectors by hand, and let your agent draw the whole repository.
+
+Drag any connector into the path you want, see each shape's technology at a glance, and ask your
+agent to draw a repository at C4 levels you can look inside. Menus and the shape toolbar are simpler
+too.
+
 ### Shared
 
 #### Added
 
-- **Bend connectors by hand** — select a connector and drag its line into place: a stepped
-  connector's runs slide and stay square, and a straight or curved one takes bends you add, move or
-  double-click away. Bends follow when you move the shapes together. Right-click and choose **Reset
-  route** to go back to automatic routing. <!-- highlight -->
-- **Agents can place and route exactly** — ask your agent to put a shape somewhere specific, or beside
-  another one, or to take a connector a particular way, and it does: it reads where everything is
-  drawn and moves just what you asked. Shapes on top of each other are still refused.
-
-- **Technology at a glance** — the Technology field suggests matching names with their Simple Icons.
-  Shapes show small, unframed corner logos, or a generic chip for custom technologies. Click a logo
-  for the full technology and version; image exports include the same icons offline. <!-- highlight -->
+- **Bend connectors by hand** — select a connector and drag its line into place. A stepped
+  connector's runs slide and stay square; a straight or curved one takes bends you add, move or
+  double-click away. Bends follow when you move the shapes together, and **Reset route** in the
+  right-click menu goes back to automatic routing. <!-- highlight -->
+- **Technology at a glance** — the Technology field suggests matching names with their logos.
+  Shapes show a small corner logo, or a generic chip for a custom technology; click it for the full
+  name and version. Image exports include the same icons, offline. <!-- highlight -->
 
 #### Changed
 
-- When an agent draws a diagram with views inside its shapes, it is told how readable each of those
-  views came out too, not only the top one, so it can tidy every level before handing it over.
-- About becomes an open composition with expressive typography, a small diagram sketch and quiet
-  author credits, with Licences tucked into the link icons. Diagnostic reports move to
-  **Settings → Support** on desktop, **Troubleshooting** on the web home screen or
-  **More → Diagnostic report…** in the web editor.
-- Right-click menus are shorter and tidier. Each one names what it acts on, empty canvas lays the
-  shapes out in a grid with Undo, Fit to view and Tidy up layout beside them, and a multi-selection
-  aligns from one row of icons. Shortcuts read as plain hints, and the shape or connector popover no
-  longer opens underneath the menu or an open point you are raising.
-- Clicking a shape shows one slim row: its colour, its kind and its own actions, such as **Add
-  consumer** or **Look inside**. **Edit details…**, **Spotlight**, **Duplicate**, **Delete** and the
-  full right-click menu are under **⋯**. An automatic colour shows as a small colour wheel.
+- **One slim toolbar for shapes** — clicking a shape shows its colour, its kind and its own actions,
+  such as **Add consumer** or **Look inside**. **Edit details…**, **Spotlight**, **Duplicate**,
+  **Delete** and the full menu are under **⋯**. <!-- highlight -->
+- Right-click menus are shorter and name what they act on. The empty canvas offers a grid layout,
+  Undo, Fit to view and Tidy up layout; a multi-selection aligns from one row of icons.
+- About is redrawn with a small diagram sketch and author credits, with Licences behind its link
+  icons. Diagnostic reports move to **Settings → Support** on desktop, and to **Troubleshooting** on
+  the web home screen or **More → Diagnostic report…** in the web editor.
 
 #### Fixed
 
-- Connector detours check the whole path against nearby shapes, and custom labels flip or slide
-  along their connector to stay clear of nearby shapes in the editor and exports.
-- Service connectors use the same Sync/Async behavior in the inspector, context menu and commands.
-- Reconnecting onto an already connected shape explains why it was refused, and connector endpoints
-  stay easier to grab when zoomed out.
-- Response labels stay beside their request labels when moving shapes changes which bend of a
-  connector is longest, on the canvas and in exports.
-- Turning off a connector's response line or switching it to Async no longer leaves its response
-  label stranded elsewhere on the canvas.
+- Connectors that detour around a shape check their whole path, and custom labels flip or slide
+  along their connector to stay clear of nearby shapes, on the canvas and in exports.
+- Response labels stay beside their request labels as you move shapes, and turning off a response
+  line or switching a connector to Async no longer leaves its label behind.
+- Sync and Async behave the same from the inspector, the right-click menu and commands.
+- Reconnecting onto a shape that's already connected says why it was refused, and connector ends
+  are easier to grab when zoomed out.
 
 ### Desktop
 
 #### Added
 
 - **Draw a repository with your agent** — install the Draft Canvas skill for Claude Code, Codex or
-  Cursor from Settings → AI agents, then ask your agent to "draw this repository in Draft Canvas". It
-  surveys the code in one pass and draws the system at C4 levels you can look inside, with the main
-  request path and its failure paths as flows to present, notes on the decisions it found, and the
-  source files behind each shape. The skill updates with Draft Canvas and never overwrites one
+  Cursor from **Settings → AI agents**, then ask your agent to "draw this repository in Draft
+  Canvas". It surveys the code in one pass and draws the system at C4 levels you can look inside,
+  with the main request path and its failure paths as flows, notes on the decisions it found, and
+  the source files behind each shape. The skill updates with Draft Canvas and never overwrites one
   you've edited. <!-- highlight -->
+- **Agents place and route exactly** — ask your agent to put a shape somewhere specific or beside
+  another, or to take a connector a particular way. It moves just what you asked, and still refuses
+  to stack shapes on top of each other.
+
+#### Changed
+
+- An agent drawing views inside shapes is told how readable every level came out, not only the top
+  one, so it can tidy each before handing the diagram over.
 
 #### Fixed
 
-- Removed unused legacy ZIP extraction support from the updater, eliminating three RustSec
-  vulnerabilities in its ZIP dependency. Signed Windows and macOS update formats are unchanged.
-
-### Web
-
-- The marketing site closes with an illustrated drafting sheet, a focused desktop download and a
-  simpler footer.
+- The updater no longer carries unused ZIP extraction code, removing three RustSec advisories in
+  that dependency. Signed update formats are unchanged.
 
 ## [1.14.0] - 2026-10-16
 
@@ -2068,7 +2068,8 @@ pre-release milestone; this is the one meant for real use.
 - Fully local and private by design — no accounts, no cloud sync, nothing you draw ever leaves
   your device. Documents are encrypted at rest in your browser.
 
-[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.14.0...main
+[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.15.0...main
+[1.15.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.14.0...v1.15.0
 [1.14.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.13.1...v1.14.0
 [1.13.1]: https://github.com/acltabontabon/draft-canvas/compare/v1.13.0...v1.13.1
 [1.13.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.12.1...v1.13.0
