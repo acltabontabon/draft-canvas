@@ -2,8 +2,10 @@ import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from
 import { LIMITS } from '../document/limits';
 import { isImeKeyEvent } from '../lib/isEditableTarget';
 import { GENERIC_TECHNOLOGY_ICON, technologyIcon, technologySuggestions, type TechnologyIcon } from '../nodes/technology';
+import { useTechnologyIcon } from './useTechnologyIcon';
 
-function Icon({ icon }: { icon: TechnologyIcon }) {
+function Icon({ icon: candidate }: { icon: TechnologyIcon }) {
+  const icon = useTechnologyIcon(candidate.slug) ?? GENERIC_TECHNOLOGY_ICON;
   return <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d={icon.path} fill="currentColor" /></svg>;
 }
 

@@ -123,7 +123,7 @@ describe('Intentional Roughness — developer-preset silhouettes stay recognisab
     expect(describeNode(service, clean).shapes[0]!.t).toBe('rect');
     expect(describeNode(service, sketch).shapes[0]!.t).toBe('path');
 
-    const actor = createNode({ type: 'actor', id: 'act1', x: 0, y: 0, width: 96, height: 96, text: 'X' });
+    const actor = createNode({ type: 'actor', actorFrame: 'framed', id: 'act1', x: 0, y: 0, width: 96, height: 96, text: 'X' });
     expect(describeNode(actor, clean).shapes[0]!.t).toBe('rect');
     expect(describeNode(actor, sketch).shapes[0]!.t).toBe('path');
   });

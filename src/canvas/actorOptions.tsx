@@ -1,4 +1,4 @@
-import { ACTOR_KINDS } from '../document/types';
+import { ACTOR_FRAMES, ACTOR_KINDS } from '../document/types';
 import { ACTOR_KIND_OPTION_LABELS } from '../ui/Editor/nodeKindLabels';
 import { shapeVariantOptions } from './shapeVariantOptions';
 
@@ -11,5 +11,12 @@ export const ACTOR_ICON_OPTIONS = shapeVariantOptions(
   'actor',
   ACTOR_KINDS,
   ACTOR_KIND_OPTION_LABELS,
-  (kind) => ({ actorKind: kind }),
+  (kind) => ({ actorKind: kind, actorFrame: 'borderless' }),
+);
+
+export const ACTOR_FRAME_OPTIONS = shapeVariantOptions(
+  'actor',
+  ACTOR_FRAMES,
+  { borderless: 'Borderless', framed: 'Framed' },
+  (frame) => ({ actorFrame: frame }),
 );

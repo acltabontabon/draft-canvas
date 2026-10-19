@@ -1,13 +1,17 @@
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { createDocument, createNode } from '../src/document/factory';
 import { describeContext, describeNode, naturalArchitectureSize } from '../src/nodes/describe';
 import { nodeReading } from '../src/nodes/readings';
-import { GENERIC_TECHNOLOGY_ICON, nodeTechnologyIcon, technologyIcon, technologyMarkBounds, technologySuggestions } from '../src/nodes/technology';
+import { GENERIC_TECHNOLOGY_ICON, loadTechnologyIcon, nodeTechnologyIcon, technologyIcon, technologyMarkBounds, technologySuggestions } from '../src/nodes/technology';
 import { dataStoreGlyphBounds } from '../src/document/dataStoreGeometry';
 import { DARK, LIGHT } from '../src/render/theme/tokens';
 import { renderDocumentSvg } from '../src/render/svg/document';
 import { emitDisplayList } from '../src/render/svg/emit';
 import { serialize } from '../src/render/svg/element';
+
+beforeAll(async () => {
+  await Promise.all(['PostgreSQL', 'Rust', 'Node.js', 'Redis'].map(loadTechnologyIcon));
+});
 
 describe('bundled technology recognition', () => {
   it.each([
@@ -17,6 +21,12 @@ describe('bundled technology recognition', () => {
     ['.NET 8', 'dotnet'], ['MySQL 8.4', 'mysql'], ['MariaDB', 'mariadb'], ['MongoDB', 'mongodb'],
     ['SQLite', 'sqlite'], ['Python', 'python'], ['React', 'react'], ['NGINX', 'nginx'],
     ['Docker', 'docker'], ['K8s', 'kubernetes'], ['Go 1.23', 'go'], ['TypeScript', 'typescript'],
+    ['Rust', 'rust'], [' rust v1.90 ', 'rust'], ['JavaScript', 'javascript'], ['JS', 'javascript'],
+    ['C++ 23', 'cplusplus'], ['Kotlin', 'kotlin'], ['Bun', 'bun'], ['Deno', 'deno'],
+    ['Next.js 16', 'nextdotjs'], ['Nuxt.js', 'nuxt'], ['Rails', 'rubyonrails'], ['Fast API', 'fastapi'],
+    ['Elasticsearch', 'elasticsearch'], ['DuckDB', 'duckdb'], ['Supabase', 'supabase'],
+    ['Terraform', 'terraform'], ['Grafana', 'grafana'], ['OTel', 'opentelemetry'],
+    ['GCP', 'googlecloud'], ['Cloudflare', 'cloudflare'], ['Vercel', 'vercel'],
   ])('recognizes %s without changing its text', (value, slug) => {
     expect(technologyIcon(value)?.slug).toBe(slug);
   });
@@ -30,11 +40,17 @@ describe('bundled technology recognition', () => {
   });
 
   it('suggests only matching brands, without duplicates, preserving versions', () => {
-    expect(technologySuggestions('post 16').map((suggestion) => suggestion.value)).toEqual(['PostgreSQL 16']);
-    expect(technologySuggestions('mongo').map((suggestion) => suggestion.value)).toEqual(['MongoDB']);
+    expect(technologySuggestions('post 16')[0]!.value).toBe('PostgreSQL 16');
+    expect(technologySuggestions('mongo')[0]!.value).toBe('MongoDB');
     expect(technologySuggestions('InternalDB')).toEqual([]);
     expect(technologySuggestions('Node.js / React')).toEqual([]);
     expect(technologySuggestions('')).toHaveLength(6);
+    expect(technologySuggestions('rus 1.90')[0]!.value).toBe('Rust 1.90');
+    expect(technologySuggestions('nextjs').map((suggestion) => suggestion.value)).toEqual(['Next.js']);
+    expect(technologySuggestions('otel')[0]!.value).toBe('OpenTelemetry');
+    const frameworks = technologySuggestions('react');
+    expect(frameworks[0]!.icon.slug).toBe('react');
+    expect(new Set(frameworks.map((suggestion) => suggestion.icon.slug)).size).toBe(frameworks.length);
   });
 });
 
@@ -61,6 +77,14 @@ describe('Quiet corner rendering', () => {
   it('does not grow a service merely to fit a recognized technology', () => {
     const node = createNode({ type: 'service', x: 0, y: 0, text: 'Orders', technology: 'PostgreSQL 16' });
     expect(naturalArchitectureSize(node, describeContext(LIGHT))).toMatchObject({ width: node.width, height: node.height, fits: true });
+  });
+
+  it('exports the bundled Rust path and version without any external image', () => {
+    const node = createNode({ type: 'service', x: 0, y: 0, technology: 'Rust 1.90' });
+    const { svg } = renderDocumentSvg({ ...createDocument('Rust'), nodes: [node] });
+    expect(svg).toContain(technologyIcon('Rust')!.path);
+    expect(svg).toContain('<title>Rust 1.90</title>');
+    expect(svg).not.toMatch(/<image|(?:href|src)="https?:/);
   });
 
   it('uses the same generic path on canvas and export, preserving all custom text in details', () => {

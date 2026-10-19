@@ -1,6 +1,6 @@
 import { describeEdge } from '../../edges/describe';
 import { obstaclesForEdge } from '../../edges/obstacles';
-import { describeNode, describeContext } from '../../nodes/describe';
+import { describeNode, describeContext, type DescribeContext } from '../../nodes/describe';
 import { technologyMarkBounds } from '../../nodes/technology';
 import { findFlow, stepIndexOf } from '../../document/flow';
 import { boundsOf } from '../../document/operations';
@@ -241,7 +241,7 @@ function applyPulse(lineEls: SvgEl[], pulsePhase: number): void {
  */
 export function buildScene(
   document: DraftDocument,
-  nodeCtx: { theme: Theme; measurer: ReturnType<typeof getMeasurer>; preset: PersonalityPreset },
+  nodeCtx: DescribeContext,
   edgeCtx: {
     theme: Theme;
     measurer: ReturnType<typeof getMeasurer>;
@@ -407,7 +407,7 @@ export function renderDocumentSvg(
   // Every id in this export carries what it is of (see `ids.ts`): two diagrams on one page keep
   // their own shadows and arrowheads, and the same export is still the same bytes.
   beginIdScope(`${options.idScope ?? 'export'}-${document.metadata.id}`);
-  const nodeCtx = { theme, measurer, preset };
+  const nodeCtx = describeContext(theme, preset);
   const edgeCtx = { theme, measurer, showSequence: document.settings.showSequence, preset };
   const selectedFlow = options.selectedFlowId ? findFlow(document, options.selectedFlowId) : undefined;
 

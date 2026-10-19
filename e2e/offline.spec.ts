@@ -1,4 +1,6 @@
 import { expect, test } from '@playwright/test';
+import { siVuedotjs } from 'simple-icons';
+import { create } from './canvas';
 
 /**
  * The core promise: after Draft Canvas has loaded once, it keeps
@@ -35,6 +37,20 @@ test.describe('offline availability', () => {
     // the reload comes straight back to it — the editor chunk from the cache, the diagram from
     // IndexedDB, which never depended on the network.
     await expect(page.getByLabel('Diagram title')).toHaveValue('Offline Test');
+    // This artwork has never been used in the page. Its lazy chunk must already be available
+    // from the app-shell cache, even when it is first requested after going offline.
+    await create(page, 'Service', { x: 400, y: 300 });
+    const node = page.locator('.dc-node').first();
+    await node.click();
+    await page.locator('.dc-element-inspector').getByRole('button', { name: 'More options' }).click();
+    await page.getByRole('menuitem', { name: 'Edit details…' }).click();
+    const technology = page.getByRole('combobox', { name: 'Technology', exact: true });
+    await technology.fill('vuejs');
+    await page.getByRole('option', { name: 'Vue.js', exact: true }).click();
+    await expect.poll(() => node.locator('.dc-node-surface path').evaluateAll(
+      (paths, expected) => paths.some((path) => path.getAttribute('d') === expected), siVuedotjs.path,
+    )).toBe(true);
+    await page.keyboard.press('Escape');
     // Export is a separate chunk again, fetched on demand — it must come from the cache too.
     await page.keyboard.press('ControlOrMeta+e');
     await expect(page.getByRole('dialog', { name: /export/i })).toBeVisible();

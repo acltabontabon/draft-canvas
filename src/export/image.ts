@@ -10,6 +10,7 @@ import { renderDocumentSvg, type ExportOptions } from '../render/svg/document';
 import { themeFor } from '../render/theme/tokens';
 import { resolveExportBackground } from './background';
 import { withDocumentChunk, withDocumentMetadata } from './editable';
+import { loadTechnologyIcons } from '../nodes/technology';
 
 export interface ImageExportOptions extends ExportOptions {
   /**
@@ -25,12 +26,14 @@ export interface PngExportOptions extends ImageExportOptions {
 }
 
 export async function renderSvgText(document: DraftDocument, options: ImageExportOptions = {}): Promise<string> {
+  await loadTechnologyIcons(document.nodes);
   const background = await resolveExportBackground(document, options.includeBackground !== false);
   const { svg } = renderDocumentSvg(document, { ...options, background });
   return options.editable ? withDocumentMetadata(svg, options.editable) : svg;
 }
 
 export async function renderPngBlob(document: DraftDocument, options: PngExportOptions = {}): Promise<Blob> {
+  await loadTechnologyIcons(document.nodes);
   const background = await resolveExportBackground(document, options.includeBackground !== false);
   const rendered = renderDocumentSvg(document, { ...options, background });
   const blob = await rasterizeSvg(rendered.svg, {

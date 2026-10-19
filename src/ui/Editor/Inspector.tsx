@@ -3,6 +3,7 @@ import { BOUNDARY_PRESETS, CODE_LANGUAGES, ACCENTS, NOTE_KINDS } from '../../doc
 import type {
   Accent,
   ActorKind,
+  ActorFrame,
   BoundaryPreset,
   CodeLanguage,
   ComponentKind,
@@ -12,7 +13,7 @@ import type {
   ServiceKind,
 } from '../../document/types';
 import type { AlignEdge } from '../../document/operations';
-import { ACTOR_ICON_OPTIONS } from '../../canvas/actorOptions';
+import { ACTOR_FRAME_OPTIONS, ACTOR_ICON_OPTIONS } from '../../canvas/actorOptions';
 import { COMPONENT_ICON_OPTIONS } from '../../canvas/componentOptions';
 import { DATABASE_ICON_OPTIONS } from '../../canvas/dataStoreOptions';
 import { InspectorSelect } from '../../canvas/InspectorSelect';
@@ -233,6 +234,16 @@ export function Inspector() {
             options={ACTOR_ICON_OPTIONS}
             onChange={(value) =>
               useEditorStore.getState().updateNodeById(onlyNode.id, { actorKind: value as ActorKind }, 'Change actor type')
+            }
+            preferredDirection="up"
+          />
+          <InspectorSelect
+            className="dc-inspector-toolbar-select"
+            ariaLabel="Actor frame"
+            value={onlyNode.actorFrame ?? 'framed'}
+            options={ACTOR_FRAME_OPTIONS}
+            onChange={(value) =>
+              useEditorStore.getState().updateNodeById(onlyNode.id, { actorFrame: value as ActorFrame }, 'Change actor frame')
             }
             preferredDirection="up"
           />

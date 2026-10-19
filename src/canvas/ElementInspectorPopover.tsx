@@ -20,6 +20,7 @@ import {
   TEXT_ROLES,
   type Accent,
   type ActorKind,
+  type ActorFrame,
   type BoundaryPreset,
   type CodeLanguage,
   type ComponentKind,
@@ -47,7 +48,7 @@ import {
   TEXT_ROLE_OPTION_LABELS,
 } from '../ui/Editor/nodeKindLabels';
 import { shapeVariantOptions } from './shapeVariantOptions';
-import { ACTOR_ICON_OPTIONS } from './actorOptions';
+import { ACTOR_FRAME_OPTIONS, ACTOR_ICON_OPTIONS } from './actorOptions';
 import { COMPONENT_ICON_OPTIONS } from './componentOptions';
 import { DATABASE_ICON_OPTIONS } from './dataStoreOptions';
 import { rightClearance } from './canvasFrame';
@@ -615,6 +616,18 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
             preferredDirection={menuDirection}
             getAvoidRect={getMenuAvoidRect}
             layout={typeControl.layout}
+          />
+        )}
+        {node.type === 'actor' && (
+          <InspectorSelect
+            ariaLabel="Actor frame"
+            value={node.actorFrame ?? 'framed'}
+            options={ACTOR_FRAME_OPTIONS}
+            onChange={(value) =>
+              useEditorStore.getState().updateNodeById(node.id, { actorFrame: value as ActorFrame }, 'Change actor frame')
+            }
+            preferredDirection={menuDirection}
+            getAvoidRect={getMenuAvoidRect}
           />
         )}
         {primaryCommands.length > 0 && <span className="dc-popover-divider" aria-hidden="true" />}

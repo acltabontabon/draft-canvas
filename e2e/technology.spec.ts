@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { newCanvas } from './canvas';
+import { siVuedotjs } from 'simple-icons';
 
 test('Quiet corner logos keep full branded and custom details across edits and undo', async ({ page }) => {
   await newCanvas(page, 'Technology logos');
@@ -80,6 +81,25 @@ test('Technology typeahead supports pointer, keyboard, generic fallback and clea
   await expect(field).toHaveValue('RabbitMQ');
   await expect(node.getByRole('button', { name: 'Technology: RabbitMQ' })).toBeVisible();
 
+  await field.fill('rus 1.90');
+  const rust = page.getByRole('option', { name: 'Rust 1.90', exact: true });
+  await expect(rust.locator('svg path')).toHaveCount(1);
+  await field.press('ArrowDown');
+  await field.press('ArrowUp');
+  await field.press('Enter');
+  await expect(node.getByRole('button', { name: 'Technology: Rust 1.90' })).toBeVisible();
+
+  await field.fill('nextjs');
+  await page.getByRole('option', { name: 'Next.js', exact: true }).click();
+  await expect(node.getByRole('button', { name: 'Technology: Next.js' })).toBeVisible();
+
+  await field.fill('vuejs');
+  await page.getByRole('option', { name: 'Vue.js', exact: true }).click();
+  await expect(node.getByRole('button', { name: 'Technology: Vue.js' })).toBeVisible();
+  await expect.poll(() => node.locator('.dc-node-surface path').evaluateAll(
+    (paths, expected) => paths.some((path) => path.getAttribute('d') === expected), siVuedotjs.path,
+  )).toBe(true);
+
   await field.fill('Private runtime');
   await expect(page.locator('.dc-technology-custom')).toContainText('generic icon');
   await field.press('Enter');
@@ -94,4 +114,37 @@ test('Technology typeahead supports pointer, keyboard, generic fallback and clea
   await field.fill('');
   await field.press('Tab');
   await expect(node.locator('.dc-technology-target')).toHaveCount(0);
+});
+
+test('artwork loads only when used, without document edits or external requests', async ({ page }) => {
+  const artwork: string[] = [];
+  const external: string[] = [];
+  page.on('request', (request) => {
+    const url = new URL(request.url());
+    if (/\/technologyCatalog\/[^/]+\.json$/.test(url.pathname) && !url.pathname.endsWith('/index.json')) artwork.push(url.pathname);
+    if (url.protocol.startsWith('http') && url.hostname !== 'localhost') external.push(request.url());
+  });
+  await newCanvas(page, 'Lazy icon artwork');
+  expect(artwork).toEqual([]);
+  const before = await page.evaluate(async () => {
+    const { createNode } = await import('/src/document/factory.ts');
+    const { useEditorStore } = await import('/src/store/editorStore.ts');
+    const store = useEditorStore.getState();
+    store.setDocument({ ...store.document, nodes: [createNode({ id: 'vue', type: 'service', x: 300, y: 250, technology: 'Vue.js' })], edges: [] }, { resetHistory: true });
+    const state = useEditorStore.getState();
+    return { revision: state.revision, history: state.history.past.length, nodes: state.document.nodes };
+  });
+  const node = page.locator('.react-flow__node[data-id="vue"]');
+  await expect.poll(() => node.locator('.dc-node-surface path').evaluateAll(
+    (paths, expected) => paths.some((path) => path.getAttribute('d') === expected), siVuedotjs.path,
+  )).toBe(true);
+  expect(artwork).toHaveLength(1);
+  expect(artwork[0]).toMatch(/\/v\.json$/);
+  const after = await page.evaluate(async () => {
+    const { useEditorStore } = await import('/src/store/editorStore.ts');
+    const state = useEditorStore.getState();
+    return { revision: state.revision, history: state.history.past.length, nodes: state.document.nodes };
+  });
+  expect(after).toEqual(before);
+  expect(external).toEqual([]);
 });

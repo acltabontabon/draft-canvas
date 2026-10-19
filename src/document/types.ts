@@ -163,6 +163,9 @@ export type DeliveryRole = (typeof DELIVERY_ROLES)[number];
 export const ACTOR_KINDS = ['human', 'system', 'device', 'group', 'thirdParty'] as const;
 export type ActorKind = (typeof ACTOR_KINDS)[number];
 
+export const ACTOR_FRAMES = ['borderless', 'framed'] as const;
+export type ActorFrame = (typeof ACTOR_FRAMES)[number];
+
 /**
  * A logical architectural building block that lives *inside* a larger deployment or boundary —
  * the deliberate counterpart to `Service`, which is Draft Canvas's deployable/runtime role.
@@ -386,6 +389,8 @@ export interface DraftNode {
   queueKind?: QueueKind;
   /** `actor` nodes only. */
   actorKind?: ActorKind;
+  /** Actor appearance only. Absent keeps the frame used by older saved diagrams. */
+  actorFrame?: ActorFrame;
   /** `component` nodes only. */
   componentKind?: ComponentKind;
   /** `group` nodes only. */

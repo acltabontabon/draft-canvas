@@ -122,3 +122,10 @@ export and only when the image is at most `LIMITS.maxEmbeddedBackgroundBytes`. I
 the file in transit: import stores the bytes in the image store and drops the field, so no saved
 document ever holds it, and validation drops anything that isn't a well-formed image data URI of
 that size. Being optional, it needed no version bump.
+
+Actors may carry `actorFrame: 'borderless' | 'framed'`. New actors explicitly use `borderless`;
+an absent field preserves the framed appearance of existing diagrams. Validation drops invalid
+values and strips the field from other node types. This optional appearance setting changes no
+dimensions, routing or semantics, so it needs no version bump; older builds ignore it and render
+the actor with a frame. `tests/actor-frame.test.ts` covers validation and round-tripping, including
+actors inside rooms.

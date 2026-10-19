@@ -27,6 +27,8 @@ Commands and code locations. See [Contributing](../../CONTRIBUTING.md) for setup
 | `npm run e2e:desktop` | Desktop browser suite with a fake shell |
 | `npm run e2e:mcp` | Real MCP sidecar to editor round trip; run after `desktop:check` |
 | `npm run agent:schemas` | Regenerate MCP tool schemas |
+| `npm run icons:generate` | Regenerate the full technology index, lazy artwork groups and logo notices |
+| `npm run icons:check` | Verify the generated icon assets match the pinned Simple Icons package |
 | `npm run perf` | Measure diagram loading and memory |
 | `npm run perf:publish` | Update generated performance tables |
 | `npx tsx e2e/docs-screenshots.ts` | Regenerate guide screenshots |

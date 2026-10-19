@@ -60,6 +60,7 @@ const NODE_KEYS = [
   'databaseKind',
   'queueKind',
   'actorKind',
+  'actorFrame',
   'componentKind',
   'boundaryPreset',
   'attachments',

@@ -50,6 +50,7 @@ function nodeChanged(before: DraftNode, after: DraftNode): boolean {
     before.databaseKind !== after.databaseKind ||
     before.queueKind !== after.queueKind ||
     before.actorKind !== after.actorKind ||
+    before.actorFrame !== after.actorFrame ||
     before.componentKind !== after.componentKind ||
     before.noteKind !== after.noteKind ||
     before.boundaryPreset !== after.boundaryPreset ||
