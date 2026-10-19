@@ -633,7 +633,7 @@ export function arrangeParts(parts: RoomParts, layout: LayoutSpec, ctx: Describe
 }
 
 /** Lays out one room (and, recursively, every inside view it declares). */
-export function placeRoom(room: RoomSpec, layout: LayoutSpec, ctx: DescribeContext, primaryFlow?: string): PlacedRoom {
+export function placeRoom(room: RoomSpec, layout: LayoutSpec, ctx: DescribeContext, primaryFlow?: string, insideRooms?: ReadonlyMap<RoomSpec, PlacedRoom>): PlacedRoom {
   const advisories: string[] = [];
   const groupNodes = new Map<string, DraftNode>();
   for (const g of room.groups) {
@@ -646,7 +646,7 @@ export function placeRoom(room: RoomSpec, layout: LayoutSpec, ctx: DescribeConte
   for (const spec of room.nodes) {
     const node = elementFor(spec, ctx, spec.group);
     if (spec.inside) {
-      const inner = placeRoom(spec.inside, layout, ctx);
+      const inner = insideRooms?.get(spec.inside) ?? placeRoom(spec.inside, layout, ctx, undefined, insideRooms);
       advisories.push(...inner.advisories.map((a) => `${spec.id} ▸ ${a}`));
       const inside = roomOf({ nodes: inner.nodes, edges: inner.edges, flows: inner.flows, viewport: { x: 0, y: 0, zoom: 1 }, ...(inner.level ? { level: inner.level } : {}) });
       if (inside) node.inside = inside;
