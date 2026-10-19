@@ -132,7 +132,7 @@ system-tray icon, and the icon's menu is deliberately short:
 Closing the window hides it rather than quitting, so the next Quick Draft is instant and a connected agent
 keeps its app. The first time, Draft Canvas
 tells you where it went and asks whether that's what you want; **Settings** changes it later. **Quit** (from the
-menu, `⌘Q`) really quits. Logging out or shutting down never waits on Draft Canvas: anything unsaved is already
+menu, `⌘Q`) really quits, and asks first when a file has unsaved changes, even from the tray. Logging out or shutting down never waits on Draft Canvas: anything unsaved is already
 kept.
 
 While hidden, Draft Canvas does nothing. It doesn't watch your keyboard, mouse, screen, meetings or other apps,

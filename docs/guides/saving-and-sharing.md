@@ -38,7 +38,7 @@ your local diagram up to date while you work.
   site data for this site deletes them. There is no recovery: Draft Canvas has no server, so it has no copy.
   **Back up** on the Library screen writes every diagram to one `draft-canvas-backup-<date>.zip` — a
   plain `.draftcanvas` file per diagram, plus `projects.json` with your project folders — and
-  **Restore…** reads one back. Restoring never overwrites: a diagram whose id is already in the
+  **Restore…** reads one back, whatever its total size (each diagram still has the 24 MB file limit). Restoring never overwrites: a diagram whose id is already in the
   Library arrives as a copy, so an old backup can be restored over a Library that has moved on.
   When the browser hasn't promised to keep your data and no backup has been made for a week, the
   footnote under the list says so and offers one.
