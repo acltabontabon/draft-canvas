@@ -29,7 +29,11 @@ import { backOut, lookInside } from '../ui/Editor/depthNavigation';
 import { inheritedLevel, LEVEL_HINTS, LEVEL_LABELS } from '../depth/level';
 import { fileOf, fileWithLiveViewport, ownsData, viewLevel } from '../store/editorStore';
 import { pointer, type UiStore } from '../store/uiStore';
-import { copyImage, copySource, copySvg, SOURCE_FORMAT_INFO, SOURCE_FORMATS, type CopyResult } from '../export';
+import { SOURCE_FORMAT_INFO, SOURCE_FORMATS } from '../export/source/formats';
+import type { CopyResult } from '../export/clipboard';
+
+// The exporters (rasterizer, Structurizr, draw.io, sequence engine) load when a copy command runs, not with the editor.
+const clipboard = () => import('../export/clipboard');
 import { readEditableImagePreference } from '../ui/Editor/exportPreferences';
 import { systemTheme } from '../ui/theme/systemTheme';
 import { hostKind } from '../host/hostInfo';
@@ -552,7 +556,7 @@ export function viewCommands(ctx: CommandContext): Command[] {
  */
 function copyExportCommands(): Command[] {
   const announce = (ui: UiStore, what: string) => (result: CopyResult) =>
-    ui.notify(result.copied ? `${what} copied.` : `${what} downloaded — this browser can't copy it to the clipboard.`);
+    ui.notify(result.copied ? `${what} copied.` : `${what} downloaded — ${__DESKTOP__ ? 'the clipboard isn’t available here' : 'this browser can’t copy it to the clipboard'}.`);
   const fail = (ui: UiStore, what: string) => (error: unknown) =>
     ui.notify(error instanceof Error ? `${what} failed: ${error.message}` : `${what} failed.`, 'error');
   const editable = (inner: CommandContext, format: 'svg' | 'png') =>
@@ -564,7 +568,8 @@ function copyExportCommands(): Command[] {
       group: 'canvas',
       keywords: ['png', 'clipboard', 'picture', 'screenshot', 'paste'],
       run: (inner) => {
-        void copyImage(inner.editor.document, { theme: systemTheme(), editable: editable(inner, 'png') })
+        void clipboard()
+          .then(({ copyImage }) => copyImage(inner.editor.document, { theme: systemTheme(), editable: editable(inner, 'png') }))
           .then(announce(inner.ui, 'Image'))
           .catch(fail(inner.ui, 'Copy as image'));
       },
@@ -575,7 +580,8 @@ function copyExportCommands(): Command[] {
       group: 'canvas',
       keywords: ['svg', 'clipboard', 'vector', 'markup', 'readme'],
       run: (inner) => {
-        void copySvg(inner.editor.document, { theme: systemTheme(), editable: editable(inner, 'svg') })
+        void clipboard()
+          .then(({ copySvg }) => copySvg(inner.editor.document, { theme: systemTheme(), editable: editable(inner, 'svg') }))
           .then(announce(inner.ui, 'SVG'))
           .catch(fail(inner.ui, 'Copy as SVG'));
       },
@@ -596,7 +602,8 @@ function copyExportCommands(): Command[] {
             title: info.label,
             hint: info.family === 'sequence' ? 'Sequence diagram from your Flows' : `Architecture · ${info.extension}`,
             run: (inner: CommandContext) => {
-              void copySource(inner.editor.document, format)
+              void clipboard()
+                .then(({ copySource }) => copySource(inner.editor.document, format))
                 .then(announce(inner.ui, `${info.label} source`))
                 .catch(fail(inner.ui, 'Copy source'));
             },

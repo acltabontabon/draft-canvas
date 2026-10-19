@@ -17,10 +17,10 @@ export type CopyResult = { copied: true } | { copied: false; downloaded: true };
 const COPIED: CopyResult = { copied: true };
 const DOWNLOADED: CopyResult = { copied: false, downloaded: true };
 
-async function writeImage(blob: Blob): Promise<boolean> {
+async function writeImage(png: Blob | Promise<Blob>): Promise<boolean> {
   if (typeof ClipboardItem === 'undefined' || typeof navigator === 'undefined' || typeof navigator.clipboard?.write !== 'function') return false;
   try {
-    await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]);
     return true;
   } catch {
     return false;
@@ -62,9 +62,12 @@ function legacyWriteText(text: string): boolean {
 
 /** The PNG the Image panel would download, on the clipboard — or downloaded when it cannot be. */
 export async function copyImage(document: DraftDocument, options: PngExportOptions = {}): Promise<CopyResult> {
-  const blob = await renderPngBlob(document, options);
-  if (await writeImage(blob)) return COPIED;
-  await downloadBlob(blob, fileNameFor(document.metadata.title, '.png'));
+  // The write starts now, with the picture still rendering: Safari honours a clipboard write only when
+  // it begins inside the click that asked for it, and rasterising a large canvas outlasts that. The
+  // clipboard item takes the pending picture and waits for it itself.
+  const rendering = renderPngBlob(document, options);
+  if (await writeImage(rendering)) return COPIED;
+  await downloadBlob(await rendering, fileNameFor(document.metadata.title, '.png'));
   return DOWNLOADED;
 }
 

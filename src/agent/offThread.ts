@@ -92,7 +92,21 @@ const onPage = async (job: Job, progress?: (progress: Progress) => void): Promis
   return runJob(job, performance.now() + SOFT_BUDGET_MS, (stage, candidate) => progress?.({ seq: (seq += 1), stage, ...(candidate ? { candidate } : {}) }));
 };
 
-export async function runOffThread(job: Job, progress?: (progress: Progress) => void): Promise<JobResult> {
+/**
+ * The worker runs one job at a time, so requests take turns here. Posting them all at once started
+ * every request's hard-limit timer while it only waited in the worker's queue: a request that had
+ * run for a moment could "time out", terminate the worker under the job that was really running,
+ * and blame its size.
+ */
+let turn: Promise<unknown> = Promise.resolve();
+
+export function runOffThread(job: Job, progress?: (progress: Progress) => void): Promise<JobResult> {
+  const run = turn.then(() => runNow(job, progress));
+  turn = run.catch(() => undefined);
+  return run;
+}
+
+async function runNow(job: Job, progress?: (progress: Progress) => void): Promise<JobResult> {
   const thread = startWorker();
   if (!thread) return onPage(job, progress);
   const id = nextId++;
@@ -117,7 +131,7 @@ export async function runOffThread(job: Job, progress?: (progress: Progress) => 
       hint: 'Send fewer elements per request — build the diagram in steps, or split it into views with inside.',
     });
   }
-  if ('stopped' in reply) return runOffThread(job, progress);
+  if ('stopped' in reply) return runNow(job, progress);
   if ('unsupported' in reply) {
     workerUnusable = true;
     stopWorker('unusable');

@@ -233,6 +233,14 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // the plan, but every bundled connector's geometry has genuinely changed by
   // then anyway.
   const spine = useEditorStore((state) => routingPlan(state.document.nodes, state.document.edges).spineFor(id));
+  // The live pointer position while this edge's own endpoint is being dragged — local state, not the
+  // shared store, so only this one edge re-renders per pointer-move frame. Exactly the same "stream to
+  // the rendered element for smoothness, commit to the document only at the end" pattern node dragging
+  // already uses (see the module doc comment above). Declared up here because the crossings below depend
+  // on whether a drag is under way.
+  const [dragOverride, setDragOverride] = useState<DragOverride | null>(null);
+  // The bends while one is being dragged — local for the same reason as `dragOverride`.
+  const [bendPreview, setBendPreview] = useState<BendPreview | null>(null);
   // Obstacle avoidance only ever looks at nodes overlapping the box between this connector's own
   // endpoints (see `obstaclesForEdge`), each as a rect that keeps its identity while its node is
   // untouched — so under `useShallow` a commit elsewhere on the canvas re-renders nothing here.
@@ -260,7 +268,10 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // connector's endpoint moving, and — the quiet one — this connector merely detouring around a
   // node that is moving, which reroutes it live while the plan still holds its committed route.
   // `withoutNodes` having shortened the obstacle list is exactly that third case, already measured.
-  const routeUnsettled = endpointMoving || obstacles.length !== nearbyObstacles.length;
+  // Its own reconnect or bend drag too: the line is being reshaped every frame while the plan still holds
+  // the committed one, so arcs over crossings it no longer has would hang in empty space until the drop.
+  const reshaping = dragOverride !== null || bendPreview !== null;
+  const routeUnsettled = endpointMoving || reshaping || obstacles.length !== nearbyObstacles.length;
   // `withoutMoving` hands back a fresh array whenever it drops *some* of the crossings — the very
   // case of a connector hopping over two others when a shape on just one of them is picked up.
   // zustand 5 re-reads a selector to check it is stable, so an unguarded fresh array is an
@@ -332,14 +343,6 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
     [id],
   );
 
-  // The live pointer position while this edge's own endpoint is being
-  // dragged — local state, not the shared store, so only this one edge
-  // re-renders per pointer-move frame. Exactly the same "stream to the
-  // rendered element for smoothness, commit to the document only at the end"
-  // pattern node dragging already uses (see the module doc comment above).
-  const [dragOverride, setDragOverride] = useState<DragOverride | null>(null);
-  // The bends while one is being dragged — local for the same reason as `dragOverride`.
-  const [bendPreview, setBendPreview] = useState<BendPreview | null>(null);
   // Bend handles belong to the one connector being worked on: with a whole selection, every line
   // sprouting bars would bury the diagram under them.
   const soleSelection = useEditorStore(
@@ -475,7 +478,12 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
     routeObstacles,
     waypoints,
   ]);
-  const routes = ROUTES.getOrCreate(routeKey, computeRoutes);
+  // Every frame of a drag, resize, reconnect or bend has a key no later frame repeats: filed in the
+  // shared cache (10,000 routes) a few long drags of a busy hub pushed out the routes of connectors
+  // still on screen, and the next canvas-wide render routed them all again. Those frames are computed
+  // and dropped; the settled route goes to the shared cache once the gesture ends.
+  const transient = routeUnsettled;
+  const routes = transient ? computeRoutes() : ROUTES.getOrCreate(routeKey, computeRoutes);
   function computeRoutes(): EdgeRoutes {
     const request = routeBetween(effectiveSourceRect, effectiveTargetRect, edge!.routing, {
       anchors: {
@@ -1388,9 +1396,12 @@ function carriedWaypoints(
   if (!waypoints || !committedSource || !committedTarget) return waypoints;
   const source = sourceNode.internals.positionAbsolute;
   const target = targetNode.internals.positionAbsolute;
-  const dx = source.x - committedSource.x;
-  const dy = source.y - committedSource.y;
-  if ((dx === 0 && dy === 0) || target.x - committedTarget.x !== dx || target.y - committedTarget.y !== dy) return waypoints;
+  // Whole units, as the commit rounds them: React Flow places each dragged node at pointer minus its own
+  // grab offset in flow coordinates, so two shapes moved by the same amount differ in the last bits at
+  // most zooms. Compared exactly, the bends snapped back on about one frame in four of a multi-drag.
+  const dx = Math.round(source.x) - committedSource.x;
+  const dy = Math.round(source.y) - committedSource.y;
+  if ((dx === 0 && dy === 0) || Math.round(target.x) - committedTarget.x !== dx || Math.round(target.y) - committedTarget.y !== dy) return waypoints;
   return translateWaypoints(waypoints, dx, dy);
 }
 

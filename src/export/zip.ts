@@ -118,7 +118,10 @@ export function unzipFiles(bytes: Uint8Array): UnzippedEntry[] {
 
   const entries: UnzippedEntry[] = [];
   let cursor = centralStart;
-  let budget = LIMITS.maxFileBytes;
+  // Stored entries can't legitimately add up to more than the archive holds, so entries that
+  // overlap (one blob listed many times) exhaust this and a real backup of any size doesn't. A
+  // fixed total here once made a library backup that had written fine impossible to restore.
+  let budget = bytes.length;
   for (let index = 0; index < count; index += 1) {
     if (cursor + CENTRAL_HEADER_SIZE > end || view.getUint32(cursor, true) !== CENTRAL_HEADER) {
       throw new Error('Not a ZIP archive: a central directory entry is malformed.');
@@ -138,10 +141,9 @@ export function unzipFiles(bytes: Uint8Array): UnzippedEntry[] {
       throw new Error(`"${name}" is compressed (method ${method}); Draft Canvas reads only stored ZIP entries.`);
     }
     if (compressedSize !== size) throw new Error(`"${name}" declares two different sizes for a stored entry.`);
+    if (size > LIMITS.maxFileBytes) throw new Error(`"${name}" is larger than ${LIMITS.maxFileBytes / 1024 / 1024} MB.`);
     budget -= size;
-    if (budget < 0) {
-      throw new Error(`The archive unpacks to more than ${LIMITS.maxFileBytes / 1024 / 1024} MB.`);
-    }
+    if (budget < 0) throw new Error('The archive unpacks to more than it holds: its entries overlap.');
 
     if (localOffset + LOCAL_HEADER_SIZE > centralStart || view.getUint32(localOffset, true) !== LOCAL_HEADER) {
       throw new Error(`"${name}" points at a missing local header.`);

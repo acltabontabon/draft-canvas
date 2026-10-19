@@ -378,3 +378,21 @@ describe('unsupportedNotice', () => {
     expect(unsupportedNotice(['a', 'b', 'c', 'd', 'e', 'f'])).toBe("Imported — 6 things Mermaid said that Draft Canvas doesn't draw: a, b, c, d, and 2 more.");
   });
 });
+
+describe('hostile text', () => {
+  it('reads a numeric entity past Unicode as written instead of throwing', () => {
+    const result = parsed('flowchart TD\n  A[#9999999;] --> B[Fine]');
+    expect(result.create.nodes.map((n) => n.label)).toContain('#9999999;');
+  });
+
+  it('decodes &#65; to its character, not a stray ampersand', () => {
+    const result = parsed('flowchart TD\n  A["&#65;pi"] --> B');
+    expect(result.create.nodes.map((n) => n.label)).toContain('Api');
+  });
+
+  it('does not backtrack for seconds on a long run of spaces after an opening arrow', () => {
+    const started = performance.now();
+    parseMermaidFlowchart(`flowchart TD\n  A -- x${' '.repeat(60_000)}y`);
+    expect(performance.now() - started).toBeLessThan(500);
+  });
+});

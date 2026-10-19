@@ -347,7 +347,7 @@ def check_view(view: View, r: Report, repo: str | None, request: dict, is_top: b
             r.error(f'{p} element {nid}', f'group "{n["group"]}" is not a group of this view')
         if n.get('color') is not None and n['color'] not in COLORS:
             r.error(f'{p} element {nid}', f'color "{n["color"]}" is not one of {sorted(COLORS)}')
-        if isinstance(n.get('inside'), dict) and isinstance(typ, str) and typ not in CAN_HAVE_INSIDE:
+        if isinstance(n.get('inside'), dict) and isinstance(typ, str) and not can_hold_inside(typ):
             r.error(
                 f'{p} element {nid}', f'a {typ} has no inside view — only services, APIs, workers, gateways and (non-port) components do'
             )
@@ -659,10 +659,22 @@ def load_pairings() -> dict:
 PAIRINGS = load_pairings()
 
 
+def normalized_type(word: str | None) -> str:
+    """A type word the way the app reads it: case and spaces or underscores don't matter."""
+    return re.sub(r'[\s_]+', '-', (word or '').strip().lower())
+
+
+def can_hold_inside(word: str) -> bool:
+    """Whether the app accepts an inside view on this type (pairings.json says; the fallback list is for a missing file)."""
+    key = normalized_type(word)
+    known = PAIRINGS.get('holdsInside')
+    return key in known if known and key in PAIRINGS.get('categories', {}) else key in CAN_HAVE_INSIDE
+
+
 def offered_between(source_type: str | None, target_type: str | None) -> list[str]:
     """The meanings Draft Canvas offers from one element type to another; empty when it has no opinion."""
     categories = PAIRINGS.get('categories', {})
-    source, target = categories.get(source_type or ''), categories.get(target_type or '')
+    source, target = categories.get(normalized_type(source_type)), categories.get(normalized_type(target_type))
     if not source or not target:
         return []
     return PAIRINGS.get('offered', {}).get(f'{source}>{target}', [])

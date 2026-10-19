@@ -165,7 +165,7 @@ describe('the controller and the updater', () => {
     expect(h.asked[0]!.title).toBe('Save the changes to payments.draftcanvas before updating?');
     expect(h.asked[0]!.message).toMatch(/restarts to finish the update/);
     // Cancel keeps working, and a copy of the changes is kept either way.
-    expect(h.api.quitAck.mock.calls.map(([decision]) => decision)).toEqual(['prompting', 'cancel']);
+    expect(h.api.quitAck.mock.calls.map(([decision]) => decision)).toEqual(['working', 'prompting', 'cancel']);
     expect(h.recovery.size).toBe(1);
   });
 

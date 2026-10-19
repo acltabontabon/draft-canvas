@@ -8,7 +8,7 @@
 import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { TOOLS } from '../src/agent/schema';
-import { ELEMENT_TYPE_NAMES, resolveType } from '../src/agent/vocabulary';
+import { ELEMENT_TYPE_ALIASES, ELEMENT_TYPE_NAMES, resolveType } from '../src/agent/vocabulary';
 import { capabilityFor, categoryOf, type NodeCategory } from '../src/document/connectorSemantics';
 
 export function toolsJson(): string {
@@ -22,9 +22,14 @@ export function toolsJson(): string {
  */
 export function skillPairingsJson(): string {
   const categories: Record<string, NodeCategory> = {};
-  for (const word of ELEMENT_TYPE_NAMES) {
+  // The words `resolveType` accepts (the enum's and its aliases), and which of them may hold an inside
+  // view — the same rule `input.ts` applies, so the checker never refuses what the app accepts.
+  const holdsInside: string[] = [];
+  for (const word of [...ELEMENT_TYPE_NAMES, ...ELEMENT_TYPE_ALIASES]) {
     const shape = resolveType(word);
-    if (shape) categories[word] = categoryOf(shape);
+    if (!shape) continue;
+    categories[word] = categoryOf(shape);
+    if (shape.type === 'service' || (shape.type === 'component' && shape.componentKind !== 'port')) holdsInside.push(word);
   }
   const distinct = [...new Set(Object.values(categories))].sort();
   const offered: Record<string, string[]> = {};
@@ -34,7 +39,7 @@ export function skillPairingsJson(): string {
       if (relations?.length) offered[`${source}>${target}`] = [...relations];
     }
   }
-  return `${JSON.stringify({ generatedBy: 'npm run agent:schemas', categories, offered }, null, 1)}\n`;
+  return `${JSON.stringify({ generatedBy: 'npm run agent:schemas', categories, holdsInside, offered }, null, 1)}\n`;
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

@@ -26,7 +26,23 @@ pub struct ProjectInfo {
 
 /// The project as the page sees it, without the side effects of opening it.
 pub(crate) fn project_info(state: &AppState, root: &Path) -> Result<ProjectInfo, AppError> {
-    let handle = state.grant_project(root)?;
+    project_info_with(state, root, true)
+}
+
+/// `project_info` for a list of projects: none of them is watched until it is scanned.
+pub(crate) fn project_info_unwatched(
+    state: &AppState,
+    root: &Path,
+) -> Result<ProjectInfo, AppError> {
+    project_info_with(state, root, false)
+}
+
+fn project_info_with(state: &AppState, root: &Path, watch: bool) -> Result<ProjectInfo, AppError> {
+    let handle = if watch {
+        state.grant_project(root)?
+    } else {
+        state.grant_project_unwatched(root)?
+    };
     let grant = state.project(&handle)?;
     Ok(ProjectInfo {
         handle,
@@ -100,9 +116,15 @@ pub async fn project_scan(app: AppHandle, handle: String) -> Result<Scan, AppErr
                     }
                 }
             }
-            for folder in folders.iter().take(crate::watch::SCAN_SHARE) {
-                watches.add(folder);
-            }
+            // The root too: it was not watched when the list was handed out. One batch, one restart.
+            watches.add_all(
+                std::iter::once(root.as_path()).chain(
+                    folders
+                        .iter()
+                        .take(crate::watch::SCAN_SHARE)
+                        .map(PathBuf::as_path),
+                ),
+            );
         }
         Ok(result)
     })

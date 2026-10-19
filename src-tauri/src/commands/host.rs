@@ -1,6 +1,6 @@
 //! Lifecycle, settings and dialogs: how the page and the shell find each other.
 
-use super::projects::{project_info, ProjectInfo};
+use super::projects::{project_info_unwatched, ProjectInfo};
 use super::run_blocking;
 use crate::dialogs;
 use crate::errors::AppError;
@@ -35,7 +35,7 @@ pub(crate) fn projects(state: &AppState) -> Vec<ProjectInfo> {
         .get()
         .projects
         .iter()
-        .filter_map(|project| project_info(state, Path::new(&project.path)).ok())
+        .filter_map(|project| project_info_unwatched(state, Path::new(&project.path)).ok())
         .collect()
 }
 

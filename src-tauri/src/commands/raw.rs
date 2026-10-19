@@ -9,6 +9,9 @@ use tauri::ipc::{InvokeBody, Request};
 
 /// A document tops out at 24 MiB; this is the ceiling on what is even looked at.
 pub const MAX_BODY_BYTES: usize = 25 * 1024 * 1024;
+/// What an export may carry: a PNG up to 100 megapixels, or an SVG with a 16 MB background embedded —
+/// not a document, and not bound by a document's limit. It is written to a file the person chose.
+pub const MAX_EXPORT_BYTES: usize = 512 * 1024 * 1024;
 const META_HEADER: &str = "x-meta";
 
 /// The arguments from the `x-meta` header and the raw bytes of the body.
@@ -18,20 +21,36 @@ pub fn raw_request<'a, M: DeserializeOwned>(
     parse_raw(request.body(), request.headers())
 }
 
+/// `raw_request` for a body that is not a document (an export), up to `limit` bytes.
+pub fn raw_request_up_to<'a, M: DeserializeOwned>(
+    request: &'a Request<'_>,
+    limit: usize,
+) -> Result<(M, &'a [u8]), AppError> {
+    parse_raw_up_to(request.body(), request.headers(), limit)
+}
+
 /// `raw_request` without the Tauri wrapper, so the parsing can be tested on its own.
 pub fn parse_raw<'a, M: DeserializeOwned>(
     body: &'a InvokeBody,
     headers: &HeaderMap,
 ) -> Result<(M, &'a [u8]), AppError> {
+    parse_raw_up_to(body, headers, MAX_BODY_BYTES)
+}
+
+pub fn parse_raw_up_to<'a, M: DeserializeOwned>(
+    body: &'a InvokeBody,
+    headers: &HeaderMap,
+    limit: usize,
+) -> Result<(M, &'a [u8]), AppError> {
     let InvokeBody::Raw(bytes) = body else {
         return Err(AppError::bad_request("expected a binary body"));
     };
-    if bytes.len() > MAX_BODY_BYTES {
+    if bytes.len() > limit {
         return Err(AppError::new(
             ErrorKind::TooLarge,
             format!(
                 "That is too large for Draft Canvas to handle (the limit is {} MB).",
-                MAX_BODY_BYTES / (1024 * 1024)
+                limit / (1024 * 1024)
             ),
         ));
     }
@@ -204,6 +223,19 @@ mod tests {
         let err = parse_raw::<Meta>(&over, &headers(&header)).err().unwrap();
         assert_eq!(err.kind, ErrorKind::TooLarge);
         assert!(err.message.contains("25 MB"));
+    }
+
+    #[test]
+    fn an_export_may_be_larger_than_a_document_but_not_without_end() {
+        let header = encoded(json!({"handle": "h"}));
+        let big = InvokeBody::Raw(vec![0; MAX_BODY_BYTES + 1]);
+        assert!(parse_raw::<Meta>(&big, &headers(&header)).is_err());
+        assert!(parse_raw_up_to::<Meta>(&big, &headers(&header), MAX_EXPORT_BYTES).is_ok());
+        let over = InvokeBody::Raw(vec![0; 2048]);
+        let err = parse_raw_up_to::<Meta>(&over, &headers(&header), 1024)
+            .err()
+            .unwrap();
+        assert_eq!(err.kind, ErrorKind::TooLarge);
     }
 
     #[test]

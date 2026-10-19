@@ -3,7 +3,7 @@ import { useEditorStore } from '../../../store/editorStore';
 import { useUiStore } from '../../../store/uiStore';
 import { PRODUCT } from '../../../product';
 import { openLink } from '../../../host/openLink';
-import { applicableReleases, hasUnreadRelease } from '../../../releases/productReleases';
+import { useUnreadReleaseNotes } from '../../common/useUnreadReleaseNotes';
 import { Button } from '../../common/Button';
 import { Tooltip } from '../../common/Tooltip';
 import { FindReplaceHost } from '../FindReplaceDialog';
@@ -34,8 +34,8 @@ export function ToolbarActions({ onPresent, onExport }: ToolbarActionsProps) {
     state.selectedFlowId ? state.document.flows.find((flow) => flow.id === state.selectedFlowId)?.title : undefined,
   );
   const updateReady = useUiStore((state) => state.updateReady);
-  const lastSeenProductRelease = useUiStore((state) => state.lastSeenProductRelease);
-  const hasUnreadNotes = hasUnreadRelease(lastSeenProductRelease, applicableReleases(PRODUCT.version));
+  // The notes themselves load only once the app has moved past the version last seen.
+  const hasUnreadNotes = useUnreadReleaseNotes();
   const setCommandPaletteOpen = useUiStore((state) => state.setCommandPaletteOpen);
   const undo = useEditorStore((state) => state.undo);
   const redo = useEditorStore((state) => state.redo);

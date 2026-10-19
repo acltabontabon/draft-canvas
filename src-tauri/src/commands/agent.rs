@@ -1,6 +1,6 @@
 //! The page's side of the agent bridge (`agent/`): answering requests, and the Settings controls.
 
-use super::projects::project_info;
+use super::projects::project_info_unwatched;
 use super::run_blocking;
 use crate::agent::clients::{self, Client, ClientSetup};
 use crate::agent::proposals::{Proposal, ProposalStatus};
@@ -98,7 +98,7 @@ fn settings_of(state: &AppState, agent: &Agent) -> AgentSettings {
         .projects
         .iter()
         .filter_map(|p| {
-            let info = project_info(state, Path::new(&p.path)).ok()?;
+            let info = project_info_unwatched(state, Path::new(&p.path)).ok()?;
             let root = state.project(&info.handle).ok()?.root;
             Some((
                 AgentProject {

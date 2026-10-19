@@ -13,7 +13,7 @@ import { useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
 import type { DocumentSession } from '../../store/useDocumentSession';
 
-export { looksLikeMermaid } from '../../import/mermaid/parse';
+export { looksLikeMermaid } from '../../import/mermaid/sniff';
 
 /** Lays a flowchart out and adds it to the current room, selected. Resolves to whether anything landed. */
 export async function insertMermaidText(text: string): Promise<boolean> {

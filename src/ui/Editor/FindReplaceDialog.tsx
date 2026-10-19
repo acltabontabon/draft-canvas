@@ -119,9 +119,11 @@ export function FindReplaceHost() {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       // ⌘⌥F on a Mac — ⌘H is the OS's "Hide" and never reaches the page — and Ctrl+H elsewhere.
+      // `code` as well as `key`: with Option held, macOS types another character (⌥F is "ƒ"), and WebKit —
+      // Safari and the desktop app's webview — reports that instead of "f".
       const key = event.key.toLowerCase();
-      const mac = event.metaKey && event.altKey && !event.ctrlKey && key === 'f';
-      const other = event.ctrlKey && !event.metaKey && !event.altKey && key === 'h';
+      const mac = event.metaKey && event.altKey && !event.ctrlKey && (key === 'f' || event.code === 'KeyF');
+      const other = event.ctrlKey && !event.metaKey && !event.altKey && (key === 'h' || event.code === 'KeyH');
       if (!mac && !other) return;
       if (isImeKeyEvent(event)) return;
       if (useEditorStore.getState().mode === 'present') return;

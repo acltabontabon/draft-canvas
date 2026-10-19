@@ -146,14 +146,25 @@ impl SettingsStore {
 
     pub fn get(&self) -> Settings {
         let mut cache = lock(&self.cache);
-        cache.get_or_insert_with(|| self.load()).clone()
+        if cache.is_none() {
+            // Unreadable right now: defaults for this call, and not remembered, so the real settings
+            // are read again as soon as the file can be.
+            match self.load() {
+                Ok(settings) => *cache = Some(settings),
+                Err(_) => return Settings::default(),
+            }
+        }
+        cache.clone().unwrap_or_default()
     }
 
     /// Applies `change` to the settings and writes the result back, all under one lock. If the write
     /// fails the in-memory settings are left as they were.
     pub fn update(&self, change: impl FnOnce(&mut Settings)) -> Result<Settings, AppError> {
         let mut cache = lock(&self.cache);
-        let mut settings = cache.clone().unwrap_or_else(|| self.load());
+        let mut settings = match cache.clone() {
+            Some(settings) => settings,
+            None => self.load()?,
+        };
         change(&mut settings);
         self.store(&settings)?;
         *cache = Some(settings.clone());
@@ -171,18 +182,20 @@ impl SettingsStore {
         })
     }
 
-    /// Same recovery rule as Recent: unreadable or unrecognised settings are kept as `settings.json.bad`
-    /// and the defaults apply, so a damaged file can't stop the app from starting.
-    fn load(&self) -> Settings {
+    /// Same recovery rule as Recent: unrecognised settings are kept as `settings.json.bad` and the
+    /// defaults apply, so a damaged file can't stop the app from starting. A file that can't be read at
+    /// all is an error and is left where it is — saving over it would replace the project list and each
+    /// folder's agent permissions with defaults.
+    fn load(&self) -> Result<Settings, AppError> {
         let bytes = match fs::read(&self.file) {
             Ok(bytes) => bytes,
-            Err(e) if e.kind() == io::ErrorKind::NotFound => return Settings::default(),
-            Err(_) => return self.set_aside(),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(Settings::default()),
+            Err(e) => return Err(AppError::from_io(&e, Verb::Open, Subject::Preferences)),
         };
-        match serde_json::from_slice::<Settings>(&bytes) {
+        Ok(match serde_json::from_slice::<Settings>(&bytes) {
             Ok(settings) if settings.v == VERSION => settings.migrate(),
             _ => self.set_aside(),
-        }
+        })
     }
 
     fn set_aside(&self) -> Settings {
@@ -215,6 +228,18 @@ mod tests {
         assert_eq!(store.get(), Settings::default());
         assert_eq!(store.get().close_behavior, CloseBehavior::Ask);
         assert!(store.get().projects.is_empty() && store.get().last_dir.is_none());
+    }
+
+    #[test]
+    fn a_file_that_cannot_be_read_is_left_alone_and_never_saved_over() {
+        let dir = tempdir().unwrap();
+        // A directory where the file should be: reading it fails, and it is not NotFound.
+        std::fs::create_dir(dir.path().join("settings.json")).unwrap();
+        let store = SettingsStore::new(dir.path());
+        assert_eq!(store.get(), Settings::default());
+        assert!(store.update(|s| s.last_dir = Some("/x".into())).is_err());
+        assert!(dir.path().join("settings.json").is_dir());
+        assert!(!dir.path().join("settings.json.bad").exists());
     }
 
     #[test]

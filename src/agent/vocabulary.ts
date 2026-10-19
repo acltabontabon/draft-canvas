@@ -110,6 +110,9 @@ const ALIASES: Record<string, string> = {
 
 export const ELEMENT_TYPE_NAMES = Object.keys(ELEMENT_TYPES);
 
+/** Other words an agent may use for a type; `resolveType` accepts them, the schema's enum does not list them. */
+export const ELEMENT_TYPE_ALIASES: readonly string[] = Object.keys(ALIASES);
+
 export function resolveType(word: string): NativeShape | undefined {
   const key = word.trim().toLowerCase().replace(/[\s_]+/g, '-');
   const direct = ELEMENT_TYPES[key] ?? ELEMENT_TYPES[ALIASES[key] ?? ''];

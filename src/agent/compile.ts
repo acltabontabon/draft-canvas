@@ -181,10 +181,11 @@ export function qualityReceipt(scope: 'whole-diagram' | 'touched', report: Quali
   return {
     scope,
     errors: report.errors.length,
-    errorsTruncated: report.errors.length > cap,
+    // Only when true: "false" on every receipt said nothing the counts did not.
+    ...(report.errors.length > cap ? { errorsTruncated: true } : {}),
     ...(report.errors.length ? { problems: report.errors.slice(0, cap).map((i) => ({ kind: i.kind, ids: i.ids, message: i.message })) } : {}),
     warnings: report.warnings.length,
-    warningsTruncated: report.warnings.length > cap,
+    ...(report.warnings.length > cap ? { warningsTruncated: true } : {}),
     ...(report.warnings.length ? { warningProblems: report.warnings.slice(0, cap).map((i) => ({ kind: i.kind, ids: i.ids, message: i.message })) } : {}),
   };
 }

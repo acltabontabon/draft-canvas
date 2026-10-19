@@ -6,13 +6,14 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { TOOLS } from '../../src/agent/schema';
+import { FULL_TOOLS, TOOLS } from '../../src/agent/schema';
 
 const toolsJson = () => readFileSync(join(process.cwd(), 'src-tauri/mcp/tools.json'), 'utf8');
 
 // oxlint-disable-next-line typescript/no-explicit-any -- a JSON Schema node, walked by key below
 type Loose = Record<string, any>;
 const tool = (name: string): Loose => TOOLS.find((t) => t.name === name) as unknown as Loose;
+const fullTool = (name: string): Loose => FULL_TOOLS.find((t) => t.name === name) as unknown as Loose;
 
 /**
  * Just enough JSON Schema to hold a request against the published shape — the keywords these schemas
@@ -121,10 +122,27 @@ describe('MCP tool definitions', () => {
       expect(variant.additionalProperties).toBe(false);
       expect(variant.required).toContain('op');
     }
-    // One object, so a field added to an op for update_diagram can never be missing from a proposal.
-    expect(tool('submit_proposal').inputSchema.properties.ops.items).toBe(update.properties.ops.items);
-    expect(tool('submit_proposal').inputSchema.properties.ops.minItems).toBeUndefined();
+    // One object, so a field added to an op for update_diagram can never be missing from a proposal
+    // (the app validates previews and proposals against these full schemas).
+    expect(fullTool('submit_proposal').inputSchema.properties.ops.items).toBe(fullTool('update_diagram').inputSchema.properties.ops.items);
+    expect(fullTool('preview_diagram').inputSchema.properties.ops.items).toBe(fullTool('update_diagram').inputSchema.properties.ops.items);
+    expect(fullTool('submit_proposal').inputSchema.properties.ops.minItems).toBeUndefined();
     expect(update.properties.ops.minItems).toBe(1);
+  });
+
+  it('list previews and proposals without a second copy of the ops and room definitions', () => {
+    // MCP tools cannot share $defs, so a copy costs ~17 KB per tool on every turn; update_diagram
+    // carries the shapes and the app still validates against them.
+    for (const name of ['preview_diagram', 'submit_proposal']) {
+      const published = tool(name).inputSchema;
+      expect(published.$defs, name).toBeUndefined();
+      expect(published.properties.ops.items).toEqual({ type: 'object' });
+      expect(published.properties.ops.description).toMatch(/update_diagram/);
+      expect(refsIn(published), name).toEqual([]);
+      expect(fullTool(name).inputSchema.$defs, name).toBeDefined();
+    }
+    expect(tool('preview_diagram').inputSchema.properties.ops.minItems).toBe(1);
+    expect(tool('submit_proposal').inputSchema.properties.ops.minItems).toBeUndefined();
   });
 
   it('refuses, in every op, a field that belongs to another op or to no op', () => {
@@ -160,7 +178,7 @@ describe('MCP tool definitions', () => {
 
   it('type an element\'s inside view to the depth limit, through local $defs that all resolve', () => {
     for (const name of ['create_diagram', 'update_diagram', 'submit_proposal']) {
-      const root = tool(name).inputSchema;
+      const root = fullTool(name).inputSchema;
       const defs = root.$defs as Record<string, Loose>;
       const element = (depth: number): Loose => defs[`element${depth}`] ?? expect.fail(`no element${depth} in ${name}'s $defs`);
       expect(element(0).properties.inside.properties.nodes.items).toEqual({ $ref: '#/$defs/element1' });
@@ -203,6 +221,6 @@ describe('MCP tool definitions', () => {
     // and label notes, connector options and moveOutside added ~9 KB on 87 KB, with the step schema
     // shared through $defs. Explicit placement and routing (place, route) added ~4 KB, both shared
     // through $defs too. Keep a measured ceiling on further growth.
-    expect(JSON.stringify(TOOLS).length).toBeLessThan(101_000);
+    expect(JSON.stringify(TOOLS).length).toBeLessThan(67_000);
   });
 });

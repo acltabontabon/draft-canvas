@@ -311,6 +311,7 @@ function hump(a: Point, b: Point, normal: Point): string {
  *  changes. Keyed on the plan's own identity-stable crossing array, so a document that hasn't
  *  changed hits the cache on the first lookup. */
 const bridged = new WeakMap<readonly Crossing[], Map<string, string>>();
+const MAX_BRIDGED_PER_PLAN = 16;
 
 /**
  * Returns `d` with a small arc drawn over each of `crossings` that lands on it.
@@ -325,6 +326,9 @@ export function bridgePath(d: string, crossings: readonly Crossing[]): string {
   const hit = cache.get(d);
   if (hit !== undefined) return hit;
   const built = buildBridged(d, crossings);
+  // A connector being dragged offers a new `d` every frame; the crossing array it hangs from lives as
+  // long as the plan does (undo history keeps plans), so an unbounded map grew by a string per frame.
+  if (cache.size >= MAX_BRIDGED_PER_PLAN) cache.clear();
   cache.set(d, built);
   return built;
 }

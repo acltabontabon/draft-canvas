@@ -31,6 +31,7 @@ export function initServiceWorker(
   if (!('serviceWorker' in navigator)) return null;
 
   let requestedHere = false;
+  let registered: ServiceWorkerRegistration | undefined;
   try {
     const updateSW = registerSW({
       immediate: false,
@@ -43,12 +44,16 @@ export function initServiceWorker(
       },
       onRegisteredSW: (_url, registration) => {
         if (!registration) return;
+        registered = registration;
         setInterval(() => void registration.update().catch(() => {}), UPDATE_CHECK_MS);
       },
     });
     const reload = () => {
       requestedHere = true;
-      void updateSW(true);
+      // Another tab may have applied the update already: no worker is waiting, so asking one to take
+      // over would answer nothing and the button would do nothing. The new build is active; just reload.
+      if (registered && !registered.waiting) window.location.reload();
+      else void updateSW(true);
     };
     return () => {
       void beforeReload()

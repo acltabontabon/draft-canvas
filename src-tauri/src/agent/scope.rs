@@ -126,10 +126,14 @@ impl DiagramIndex {
     /// read: every agent call starts here, and holding it for a whole walk of a large folder made every
     /// other call — and the proposal panel — wait on it one at a time.
     pub fn listing(&self, projects: &[Project]) -> Listing {
+        self.listing_within(projects, &Limits::default())
+    }
+
+    fn listing_within(&self, projects: &[Project], limits: &Limits) -> Listing {
         let mut out = Vec::new();
         let mut incomplete = Vec::new();
         for project in projects {
-            let Ok(found) = scan(&project.root, &Limits::default()) else {
+            let Ok(found) = scan(&project.root, limits) else {
                 incomplete.push(project.name.clone());
                 continue;
             };
@@ -187,21 +191,91 @@ impl DiagramIndex {
     /// The one diagram with this id in scope. Two files carrying the same id (a copied file) are
     /// ambiguous, and said to be, rather than one chosen silently.
     pub fn find(&self, projects: &[Project], id: &str) -> Result<Diagram, Lookup> {
-        let listing = self.listing(projects);
+        self.find_within(projects, id, &Limits::default())
+    }
+
+    fn find_within(
+        &self,
+        projects: &[Project],
+        id: &str,
+        limits: &Limits,
+    ) -> Result<Diagram, Lookup> {
+        let listing = self.listing_within(projects, limits);
         let mut matches: Vec<Diagram> = listing
             .diagrams
             .into_iter()
             .filter(|d| d.diagram_id == id)
             .collect();
         match matches.len() {
-            0 => Err(Lookup::NotFound {
-                incomplete: listing.incomplete,
-            }),
+            0 => match self.remembered(projects, &listing.incomplete, id) {
+                Some(diagram) => Ok(diagram),
+                None => Err(Lookup::NotFound {
+                    incomplete: listing.incomplete,
+                }),
+            },
             1 => Ok(matches.remove(0)),
             _ => Err(Lookup::Ambiguous(
                 matches.into_iter().map(|d| d.path).collect(),
             )),
         }
+    }
+}
+
+impl DiagramIndex {
+    /// A diagram this index has seen before, found again by its remembered path when the walk could not
+    /// reach it. A walk of a large folder stops at its entry or time cap, and how far it got varied from
+    /// call to call, so an agent's `update_diagram` on a diagram it had just created failed with
+    /// NOT_FOUND now and then. Only projects whose walk was cut short are asked, the file is read
+    /// again to check it still holds that id, and exactly one remembered path may claim it.
+    fn remembered(&self, projects: &[Project], incomplete: &[String], id: &str) -> Option<Diagram> {
+        if incomplete.is_empty() {
+            return None;
+        }
+        let paths: Vec<PathBuf> = lock(&self.known)
+            .iter()
+            .filter(|(_, known)| known.id.as_deref() == Some(id))
+            .map(|(path, _)| path.clone())
+            .collect();
+        let mut found = None;
+        for path in paths {
+            let Some(project) = projects
+                .iter()
+                .find(|p| incomplete.contains(&p.name) && path.starts_with(&p.root))
+            else {
+                continue;
+            };
+            let Some(read) = read_document(&path).ok() else {
+                continue;
+            };
+            let Some((read_id, title)) = identity_of(&read.text) else {
+                continue;
+            };
+            if read_id != id {
+                continue;
+            }
+            let rel = path.strip_prefix(&project.root).ok()?;
+            let rel_path = rel
+                .components()
+                .map(|c| c.as_os_str().to_string_lossy().into_owned())
+                .collect::<Vec<_>>()
+                .join("/");
+            if found.is_some() {
+                return None; // two remembered files claim it: ambiguity is for a full walk to report
+            }
+            found = Some(Diagram {
+                diagram_id: read_id,
+                title: if title.is_empty() {
+                    rel_path.clone()
+                } else {
+                    title
+                },
+                project: project.name.clone(),
+                path: rel_path,
+                revision: file_revision_of_stamp(&read.stamp).unwrap_or_default(),
+                absolute: path.clone(),
+            });
+        }
+        found
     }
 }
 
@@ -231,6 +305,43 @@ mod tests {
         format!(
             r#"{{"format":"draft-canvas","version":15,"metadata":{{"id":"{id}","title":"{title}"}},"nodes":[],"edges":[]}}"#
         )
+    }
+
+    #[test]
+    fn a_diagram_the_walk_cannot_reach_is_still_found_by_where_it_was_seen() {
+        let dir = tempdir().unwrap();
+        let root = dunce::canonicalize(dir.path()).unwrap();
+        fs::create_dir_all(root.join("z")).unwrap();
+        fs::write(root.join("z/a.draftcanvas"), diagram("d_a", "Alpha")).unwrap();
+        for i in 0..12 {
+            fs::write(root.join(format!("n{i}.txt")), "x").unwrap();
+        }
+        let projects = vec![Project {
+            root: root.clone(),
+            name: "P".into(),
+        }];
+        let index = DiagramIndex::default();
+        assert!(
+            index.find(&projects, "d_a").is_ok(),
+            "seen while the walk could finish"
+        );
+
+        let short = Limits {
+            max_entries: 5,
+            ..Limits::default()
+        };
+        let found = index.find_within(&projects, "d_a", &short).unwrap();
+        assert_eq!(found.path, "z/a.draftcanvas");
+        // An id never seen stays not-found, and says the walk was cut short.
+        assert_eq!(
+            index.find_within(&projects, "d_never", &short).unwrap_err(),
+            Lookup::NotFound {
+                incomplete: vec!["P".into()]
+            }
+        );
+        // A remembered file that no longer holds the id is not returned.
+        fs::write(root.join("z/a.draftcanvas"), diagram("d_other", "Other")).unwrap();
+        assert!(index.find_within(&projects, "d_a", &short).is_err());
     }
 
     #[test]

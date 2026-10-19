@@ -224,6 +224,14 @@ impl AppState {
         Ok(lock(&self.grants).insert_project(canonical))
     }
 
+    /// A project's handle without watching its folder. The list at launch hands out up to fifty of
+    /// these before the window shows, and every watch is a restart of the native event stream on macOS;
+    /// a project is watched, in one batch with its diagram folders, when it is scanned.
+    pub fn grant_project_unwatched(&self, path: &Path) -> Result<Handle, AppError> {
+        let canonical = validate_folder(path)?;
+        Ok(lock(&self.grants).insert_project(canonical))
+    }
+
     pub fn file(&self, handle: &str) -> Result<FileGrant, AppError> {
         lock(&self.grants).file(handle)
     }

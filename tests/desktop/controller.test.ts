@@ -703,6 +703,13 @@ describe('quitting', () => {
     expect(h.api.quitAck).toHaveBeenCalledWith('ready');
   });
 
+  it('says it is working before it flushes, so a slow flush is not taken for a hung page', async () => {
+    await h.controller.start();
+    h.hostEvent({ type: 'quit-requested' });
+    await h.settle();
+    expect(h.api.quitAck.mock.calls[0]?.[0]).toBe('working');
+  });
+
   it('never asks about a Quick Draft, and keeps it', async () => {
     await h.controller.newQuickDraft();
     await h.settle();
@@ -727,7 +734,7 @@ describe('quitting', () => {
     await h.settle();
 
     expect(h.recovery.size).toBe(1);
-    expect(h.api.quitAck.mock.calls.map(([decision]) => decision)).toEqual(['prompting', 'cancel']);
+    expect(h.api.quitAck.mock.calls.map(([decision]) => decision)).toEqual(['working', 'prompting', 'cancel']);
   });
 
   it('saves and then quits when told to save', async () => {
@@ -740,7 +747,7 @@ describe('quitting', () => {
     await h.settle();
 
     expect(h.files.get(handle)!.text).toBe(edited());
-    expect(h.api.quitAck.mock.calls.map(([decision]) => decision)).toEqual(['prompting', 'ready']);
+    expect(h.api.quitAck.mock.calls.map(([decision]) => decision)).toEqual(['working', 'prompting', 'ready']);
   });
 
   it('quits, dropping the changes and their copy, when told not to save', async () => {
@@ -753,7 +760,7 @@ describe('quitting', () => {
     await h.settle();
 
     expect(h.recovery.size).toBe(0);
-    expect(h.api.quitAck.mock.calls.map(([decision]) => decision)).toEqual(['prompting', 'ready']);
+    expect(h.api.quitAck.mock.calls.map(([decision]) => decision)).toEqual(['working', 'prompting', 'ready']);
   });
 });
 

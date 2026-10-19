@@ -99,6 +99,10 @@ const CAPSULE_NUDGE_MAX_PX = 10;
 
 /** Stable empty array, so `sameGuides` keeps short-circuiting rather than seeing a new `[]`. */
 const NO_GUIDES: Guide[] = [];
+// Module-level: a fresh array per render defeats React Flow's memo and made its pan/zoom and key-press
+// effects rebind their listeners on every drag frame (`CanvasBody` re-renders with each one).
+const PAN_WITH_MIDDLE_BUTTON = [1];
+const MULTI_SELECT_KEYS = ['Meta', 'Shift', 'Control'];
 
 /** Ties the capsule that was under the cursor to the chip it just became: the new chip plays the
  *  same one-shot arrival the accepted-continuation nodes do, and the marker expires on its own. */
@@ -2025,10 +2029,10 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
         // Button 1 (middle-mouse-drag) still pans; button 2 (right) is freed for the context menu —
         // see `onPaneContextMenu`'s own comment for why React Flow's `Pane` would otherwise swallow
         // the native `contextmenu` event before it ever reaches that handler.
-        panOnDrag={interactive ? [1] : true}
+        panOnDrag={interactive ? PAN_WITH_MIDDLE_BUTTON : true}
         zoomOnDoubleClick={false}
         deleteKeyCode={null}
-        multiSelectionKeyCode={['Meta', 'Shift', 'Control']}
+        multiSelectionKeyCode={MULTI_SELECT_KEYS}
         // A marquee is already a plain drag on empty canvas (`selectionOnDrag`). React Flow's own
         // selection key — Shift, the same key as adding to the selection — also turned a Shift-press
         // *on* a connector or shape into the start of a marquee, which swallowed Shift-click.

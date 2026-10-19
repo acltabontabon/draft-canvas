@@ -22,11 +22,19 @@ pub enum Purpose {
 /// A page that never answers (hung, or its window is hidden and suspended) must not keep the app alive.
 const ACK_TIMEOUT: Duration = Duration::from_millis(1_500);
 
+/// What a page that said it is working on it (settling a field, writing its recovery copy), or that
+/// holds unsaved work, gets on top of `ACK_TIMEOUT` before it is given up on. The first answer waits on
+/// a flush and several fsyncs, which can run past the first timeout; quitting then lost the Save prompt.
+const WORKING_GRACE: Duration = Duration::from_millis(10_000);
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum QuitDecision {
     /// Nothing left to save: go ahead.
     Ready,
+    /// The page has the request and is settling its work first; it will answer again. Said at once, so
+    /// a slow flush isn't taken for a hung page.
+    Working,
     /// The page is showing a question to the person; wait as long as that takes.
     Prompting,
     /// The person chose to keep working.
@@ -46,6 +54,8 @@ enum Phase {
 pub enum Step {
     /// Tell the page (and start the timer for this ask).
     Ask(u64),
+    /// The ask is still open and worth waiting for: give it `WORKING_GRACE` more.
+    Extend(u64),
     /// Go: exit, or for an update, install.
     Exit,
     /// The person chose to keep working.
@@ -58,6 +68,10 @@ pub struct QuitMachine {
     phase: Phase,
     asks: u64,
     purpose: Purpose,
+    /// The page has said it is working on the current ask.
+    working: bool,
+    /// The current ask has already had its extra time.
+    extended: bool,
 }
 
 impl Default for QuitMachine {
@@ -66,6 +80,8 @@ impl Default for QuitMachine {
             phase: Phase::Idle,
             asks: 0,
             purpose: Purpose::Quit,
+            working: false,
+            extended: false,
         }
     }
 }
@@ -90,6 +106,8 @@ impl QuitMachine {
                     return self.exit();
                 }
                 self.asks += 1;
+                self.working = false;
+                self.extended = false;
                 self.phase = Phase::Waiting(self.asks);
                 Step::Ask(self.asks)
             }
@@ -99,6 +117,10 @@ impl QuitMachine {
     pub fn ack(&mut self, decision: QuitDecision) -> Step {
         match (self.phase, decision) {
             (Phase::Waiting(_) | Phase::Prompting, QuitDecision::Ready) => self.exit(),
+            (Phase::Waiting(_), QuitDecision::Working) => {
+                self.working = true;
+                Step::Nothing
+            }
             (Phase::Waiting(_), QuitDecision::Prompting) => {
                 self.phase = Phase::Prompting;
                 Step::Nothing
@@ -117,9 +139,19 @@ impl QuitMachine {
         self.purpose = Purpose::Quit;
     }
 
-    pub fn timed_out(&mut self, ask: u64) -> Step {
+    /// The ask's timer ran out. A page that is working on it, or whose open file has unsaved changes
+    /// (a window hidden in the tray may be suspended and not have run yet), gets one more allowance
+    /// before it is given up on; a hung page must still not keep the app alive.
+    pub fn timed_out(&mut self, ask: u64, unsaved: bool) -> Step {
         match self.phase {
-            Phase::Waiting(current) if current == ask => self.exit(),
+            Phase::Waiting(current) if current == ask => {
+                if !self.extended && (self.working || unsaved) {
+                    self.extended = true;
+                    Step::Extend(ask)
+                } else {
+                    self.exit()
+                }
+            }
             _ => Step::Nothing,
         }
     }
@@ -175,6 +207,23 @@ pub fn quit_now(app: &AppHandle) {
     apply(app, step);
 }
 
+/// Whether the open file has changes the page has not saved, as the page last reported it.
+fn unsaved_work(app: &AppHandle) -> bool {
+    app.state::<std::sync::Arc<crate::agent::Agent>>()
+        .active()
+        .is_some_and(|doc| doc.dirty)
+}
+
+fn wait_for(app: &AppHandle, ask: u64, wait: Duration) {
+    let app = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(wait);
+        let unsaved = unsaved_work(&app);
+        let step = lock(&app.state::<AppState>().quit).timed_out(ask, unsaved);
+        apply(&app, step);
+    });
+}
+
 fn apply(app: &AppHandle, step: Step) {
     let state = app.state::<AppState>();
     let purpose = lock(&state.quit).purpose();
@@ -202,12 +251,14 @@ fn apply(app: &AppHandle, step: Step) {
                 apply(app, step);
                 return;
             }
-            let app = app.clone();
-            std::thread::spawn(move || {
-                std::thread::sleep(ACK_TIMEOUT);
-                let step = lock(&app.state::<AppState>().quit).timed_out(ask);
-                apply(&app, step);
-            });
+            wait_for(app, ask, ACK_TIMEOUT);
+        }
+        Step::Extend(ask) => {
+            // A suspended window only runs again once it is shown; with unsaved work it should be.
+            if unsaved_work(app) {
+                crate::window::show_main(app);
+            }
+            wait_for(app, ask, WORKING_GRACE);
         }
     }
 }
@@ -236,8 +287,44 @@ mod tests {
     fn a_page_that_never_answers_is_quit_when_the_timer_fires() {
         let mut m = QuitMachine::default();
         assert_eq!(m.request(true, Purpose::Quit), Step::Ask(1));
-        assert_eq!(m.timed_out(1), Step::Exit);
+        assert_eq!(m.timed_out(1, false), Step::Exit);
         assert!(m.is_quitting());
+    }
+
+    #[test]
+    fn a_page_that_is_working_gets_one_more_allowance_and_then_no_more() {
+        let mut m = QuitMachine::default();
+        assert_eq!(m.request(true, Purpose::Quit), Step::Ask(1));
+        assert_eq!(m.ack(QuitDecision::Working), Step::Nothing);
+        assert_eq!(m.timed_out(1, false), Step::Extend(1));
+        // Still working after the extra time: a hung page doesn't keep the app alive.
+        assert_eq!(m.timed_out(1, false), Step::Exit);
+    }
+
+    #[test]
+    fn unsaved_work_in_a_window_that_has_not_answered_also_earns_the_allowance() {
+        let mut m = QuitMachine::default();
+        m.request(true, Purpose::Quit);
+        assert_eq!(m.timed_out(1, true), Step::Extend(1));
+        // Answering during it still works, and so does the Save prompt.
+        assert_eq!(m.ack(QuitDecision::Prompting), Step::Nothing);
+        assert_eq!(m.timed_out(1, true), Step::Nothing);
+        assert!(!m.is_quitting());
+    }
+
+    #[test]
+    fn a_new_ask_starts_with_a_fresh_allowance() {
+        let mut m = QuitMachine::default();
+        m.request(true, Purpose::Quit);
+        m.ack(QuitDecision::Working);
+        assert_eq!(m.timed_out(1, false), Step::Extend(1));
+        m.ack(QuitDecision::Cancel);
+        assert_eq!(m.request(true, Purpose::Quit), Step::Ask(2));
+        assert_eq!(
+            m.timed_out(2, false),
+            Step::Exit,
+            "not working yet, nothing unsaved"
+        );
     }
 
     #[test]
@@ -245,7 +332,7 @@ mod tests {
         let mut m = QuitMachine::default();
         m.request(true, Purpose::Quit);
         assert_eq!(m.ack(QuitDecision::Prompting), Step::Nothing);
-        assert_eq!(m.timed_out(1), Step::Nothing);
+        assert_eq!(m.timed_out(1, false), Step::Nothing);
         assert!(!m.is_quitting());
         assert_eq!(m.ack(QuitDecision::Ready), Step::Exit);
     }
@@ -256,9 +343,9 @@ mod tests {
         assert_eq!(m.request(true, Purpose::Quit), Step::Ask(1));
         assert_eq!(m.ack(QuitDecision::Cancel), Step::Cancelled);
         assert_eq!(m.request(true, Purpose::Quit), Step::Ask(2));
-        assert_eq!(m.timed_out(1), Step::Nothing);
+        assert_eq!(m.timed_out(1, false), Step::Nothing);
         assert!(!m.is_quitting());
-        assert_eq!(m.timed_out(2), Step::Exit);
+        assert_eq!(m.timed_out(2, false), Step::Exit);
     }
 
     #[test]
@@ -308,7 +395,7 @@ mod tests {
         assert_eq!(m.ack(QuitDecision::Ready), Step::Nothing);
         assert_eq!(m.ack(QuitDecision::Prompting), Step::Nothing);
         assert_eq!(m.ack(QuitDecision::Cancel), Step::Nothing);
-        assert_eq!(m.timed_out(1), Step::Nothing);
+        assert_eq!(m.timed_out(1, false), Step::Nothing);
         assert!(!m.is_quitting());
         assert_eq!(m.quit_now(), Step::Exit);
         assert!(m.is_quitting());
@@ -327,6 +414,7 @@ mod tests {
             ("ready", QuitDecision::Ready),
             ("prompting", QuitDecision::Prompting),
             ("cancel", QuitDecision::Cancel),
+            ("working", QuitDecision::Working),
         ] {
             let got: QuitDecision = serde_json::from_value(serde_json::json!(text)).unwrap();
             assert_eq!(got, want);

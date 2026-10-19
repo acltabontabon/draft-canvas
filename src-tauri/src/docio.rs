@@ -79,9 +79,11 @@ fn sha256_hex(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 
-/// Whether the file on disk is still the one `expected` describes. Modification time and size are
-/// compared first; when they differ the content is hashed and only the hash decides, so a cloud-sync
-/// client touching the mtime is not mistaken for someone else's edit.
+/// Whether the file on disk is still the one `expected` describes. The content is hashed and only the
+/// hash decides, so a cloud-sync client touching the mtime is not mistaken for someone else's edit —
+/// and an outside edit that kept the same length within the disk's timestamp resolution (1-2 s on
+/// exFAT, HFS+ and SMB) is not mistaken for no edit, which let a save silently overwrite it. Only a
+/// save pays for this (tens of milliseconds at the 24 MB cap); focus uses `check_stamp`.
 pub fn stamp_matches(path: &Path, expected: &str) -> io::Result<bool> {
     let Some(expected) = Stamp::parse(expected) else {
         return Ok(false);
@@ -93,9 +95,6 @@ pub fn stamp_matches(path: &Path, expected: &str) -> io::Result<bool> {
     };
     if !meta.is_file() {
         return Ok(false);
-    }
-    if mtime_ns(&meta) == expected.mtime_ns && meta.len() == expected.size {
-        return Ok(true);
     }
     if meta.len() > MAX_DOC_BYTES {
         return Ok(false);
@@ -351,7 +350,14 @@ fn replace_contents(target: &Path, bytes: &[u8], kind: Kind, clobber: bool) -> i
     match &result {
         Ok(()) => sync_dir(dir),
         Err(_) => {
-            let _ = fs::remove_file(&temp);
+            // The temp file holds the only copy of the new contents when the swap took the old file away
+            // and then failed (Windows can do that part-way through a replace). Keep it, named as it
+            // is: nothing sweeps it, so it stays beside the document for the person to find, and the
+            // error reaches the page, which still holds the edits and keeps its recovery copy.
+            let target_gone = existing.is_some() && fs::symlink_metadata(target).is_err();
+            if !target_gone {
+                let _ = fs::remove_file(&temp);
+            }
         }
     }
     result
@@ -435,6 +441,10 @@ fn install(temp: &Path, target: &Path, existing: bool, clobber: bool) -> io::Res
     const RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(50);
     const ERROR_SHARING_VIOLATION: i32 = 32;
     const ERROR_LOCK_VIOLATION: i32 = 33;
+    // ReplaceFileW failed part-way: the replaced file is gone or renamed and the new contents sit in
+    // the temp file under its own name.
+    const ERROR_UNABLE_TO_MOVE_REPLACEMENT: i32 = 1176;
+    const ERROR_UNABLE_TO_MOVE_REPLACEMENT_2: i32 = 1177;
 
     let wide = |p: &Path| -> Vec<u16> { p.as_os_str().encode_wide().chain(Some(0)).collect() };
     let (temp_w, target_w) = (wide(temp), wide(target));
@@ -465,6 +475,28 @@ fn install(temp: &Path, target: &Path, existing: bool, clobber: bool) -> io::Res
             return Ok(());
         }
         let err = io::Error::last_os_error();
+        if existing
+            && matches!(
+                err.raw_os_error(),
+                Some(ERROR_UNABLE_TO_MOVE_REPLACEMENT | ERROR_UNABLE_TO_MOVE_REPLACEMENT_2)
+            )
+        {
+            // Finish the job by moving the temp file into place, rather than report a failure with the
+            // document missing from its path.
+            // SAFETY: as above.
+            let moved = unsafe {
+                MoveFileExW(
+                    temp_w.as_ptr(),
+                    target_w.as_ptr(),
+                    MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+                )
+            };
+            return if moved != 0 {
+                Ok(())
+            } else {
+                Err(io::Error::last_os_error())
+            };
+        }
         let busy = matches!(
             err.raw_os_error(),
             Some(ERROR_SHARING_VIOLATION | ERROR_LOCK_VIOLATION)
@@ -559,6 +591,29 @@ pub fn sidecar_write(doc: &Path, mime: &str, bytes: &[u8]) -> Result<(), AppErro
 pub fn sidecar_remove(doc: &Path) -> Result<(), AppError> {
     for (_, ext) in SIDECAR_TYPES {
         remove_if_present(&sidecar_path(doc, ext))?;
+    }
+    Ok(())
+}
+
+/// Rename keeps the background: the image (if any) moves beside the renamed document. The old image
+/// is removed only once the new one is written, and never when it is the very file just written — on
+/// a case-insensitive disk (the macOS and Windows defaults) renaming `plan` to `Plan` names the same
+/// sidecar, and deleting "the old one" deleted the only copy.
+pub fn sidecar_move(from: &Path, to: &Path) -> Result<(), AppError> {
+    let Some(sidecar) = sidecar_read(from)? else {
+        return Ok(());
+    };
+    sidecar_write(to, sidecar.mime, &sidecar.bytes)?;
+    for (_, ext) in SIDECAR_TYPES {
+        let old = sidecar_path(from, ext);
+        let new = sidecar_path(to, ext);
+        let same = match (fs::canonicalize(&old), fs::canonicalize(&new)) {
+            (Ok(a), Ok(b)) => a == b,
+            _ => old == new,
+        };
+        if !same {
+            remove_if_present(&old)?;
+        }
     }
     Ok(())
 }
@@ -772,6 +827,29 @@ mod tests {
             assert!(!stamp_matches(&path, bad).unwrap(), "{bad}");
             assert_eq!(check_stamp(&path, bad), StampCheck::Changed, "{bad}");
         }
+    }
+
+    #[test]
+    fn a_save_catches_an_outside_edit_that_kept_the_length_and_the_timestamp() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("a.draftcanvas");
+        fs::write(&path, "abcd").unwrap();
+        let read = read_document(&path).unwrap();
+        let before = fs::metadata(&path).unwrap().modified().unwrap();
+        fs::write(&path, "abXd").unwrap();
+        fs::File::options()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_modified(before)
+            .unwrap();
+        // Same size, same mtime: only the content differs.
+        assert_eq!(check_stamp(&path, &read.stamp), StampCheck::Unchanged);
+        assert_eq!(
+            write_atomic(&path, b"mine", Some(&read.stamp)).unwrap(),
+            WriteOutcome::Conflict
+        );
+        assert_eq!(fs::read_to_string(&path).unwrap(), "abXd");
     }
 
     #[test]
@@ -1012,6 +1090,22 @@ mod tests {
         sidecar_remove(&doc).unwrap();
         assert!(sidecar_read(&doc).unwrap().is_none());
         sidecar_remove(&doc).unwrap();
+    }
+
+    #[test]
+    fn a_background_follows_a_renamed_document_and_survives_a_rename_to_the_same_name() {
+        let dir = tempdir().unwrap();
+        let old = dir.path().join("plan.draftcanvas");
+        let new = dir.path().join("Plan2.draftcanvas");
+        sidecar_write(&old, "image/png", b"png-bytes").unwrap();
+
+        sidecar_move(&old, &new).unwrap();
+        assert!(!dir.path().join("plan.draftcanvas.background.png").exists());
+        assert_eq!(sidecar_read(&new).unwrap().unwrap().bytes, b"png-bytes");
+
+        // The same entry under two spellings (a case-only rename on macOS or Windows): never deleted.
+        sidecar_move(&new, &new).unwrap();
+        assert_eq!(sidecar_read(&new).unwrap().unwrap().bytes, b"png-bytes");
     }
 
     #[test]

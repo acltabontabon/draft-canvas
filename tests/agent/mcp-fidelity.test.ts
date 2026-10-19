@@ -68,6 +68,18 @@ describe('MCP fidelity regressions', () => {
     expect(second.cursor).toBeUndefined();
   });
 
+  it('keeps a page cursor short however many ids the read was focused on, and still refuses it for another focus', () => {
+    const file = createDocument();
+    file.nodes = Array.from({ length: 220 }, (_, i) => node(`service-with-a-long-name-${i}`, i * 500));
+    for (let i = 0; i < 219; i += 1) for (const j of [1, 2, 3]) if (i + j < 220) file.edges.push(createEdge({ id: `e${i}_${j}`, source: `service-with-a-long-name-${i}`, target: `service-with-a-long-name-${i + j}` }));
+    const focus = { nodes: file.nodes.map((n) => n.id).slice(0, 200) };
+    const first = read(file, { focus });
+    expect(first.cursor).toBeDefined();
+    expect(first.cursor!.length).toBeLessThan(400);
+    expect(() => read(file, { focus: { nodes: focus.nodes.slice(1) }, cursor: first.cursor })).toThrow(/changed since/);
+    expect(read(file, { focus, cursor: first.cursor }).relationships.length).toBeGreaterThanOrEqual(0);
+  });
+
   it('paginates every flow and returns variant relationships and colours', () => {
     const file = base();
     file.flows = Array.from({ length: 21 }, (_, i) => ({ id: `f${i}`, title: `F${i}`, accent: 'rose', ...(i === 20 ? { variantOf: 'f0' } : {}), steps: [{ id: `s${i}`, edgeId: 'r' }] }));

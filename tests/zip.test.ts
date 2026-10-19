@@ -152,7 +152,17 @@ describe('zipFiles / unzipFiles', () => {
     const absurd = LIMITS.maxFileBytes + 1;
     view.setUint32(centralStart + 20, absurd, true);
     view.setUint32(centralStart + 24, absurd, true);
-    expect(() => unzipFiles(archive)).toThrow(/more than 24 MB/);
+    expect(() => unzipFiles(archive)).toThrow(/larger than 24 MB/);
+  });
+
+  it('reads back an archive whose entries together pass the single-document limit', () => {
+    // A library backup is many documents: each is bounded, the sum is not. A fixed total once made a
+    // backup that had saved without complaint impossible to restore.
+    const chunk = 'x'.repeat(Math.floor(LIMITS.maxFileBytes / 2.5));
+    const archive = zipFiles([1, 2, 3].map((n) => ({ name: `d${n}.txt`, data: chunk })));
+    const entries = unzipFiles(archive);
+    expect(entries.map((entry) => entry.name)).toEqual(['d1.txt', 'd2.txt', 'd3.txt']);
+    expect(entries.every((entry) => entry.data.length === chunk.length)).toBe(true);
   });
 
   it('refuses bytes that are not an archive, and a corrupted entry', () => {

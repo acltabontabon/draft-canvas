@@ -4,7 +4,7 @@ import type { DocumentSession } from '../../store/useDocumentSession';
 import type { LibraryView } from './libraryFilter';
 import { Button } from '../common/Button';
 import { Icon } from '../common/Icon';
-import { Modal } from '../common/Modal';
+import { Modal } from '../common/LazyModal';
 import { isImeKeyEvent } from '../../lib/isEditableTarget';
 
 interface ProjectSidebarProps {
@@ -152,8 +152,16 @@ export function ProjectSidebar({ session, library, view, onViewChange }: Project
                 variant="danger"
                 icon="trash"
                 onClick={() => {
-                  void session.deleteProject(deleting.id);
-                  if (view.kind === 'project' && view.projectId === deleting.id) {
+                  const deleted = deleting.id;
+                  void session.deleteProject(deleted).then(() =>
+                    // The dialog hands focus back to the project's own button, which the delete removes:
+                    // land on the sidebar's first row instead of dropping to the page's top.
+                    requestAnimationFrame(() => {
+                      if (window.document.activeElement !== window.document.body) return;
+                      window.document.querySelector<HTMLElement>('.dc-library-sidebar .dc-sidebar-row')?.focus();
+                    }),
+                  );
+                  if (view.kind === 'project' && view.projectId === deleted) {
                     onViewChange({ kind: 'recent' });
                   }
                   setDeleting(null);

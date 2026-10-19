@@ -13,6 +13,10 @@
  * carry, so a hostile 10k-node file is refused in one pass rather than laid out for a minute.
  */
 
+import { FRONT_MATTER, HEADER, MERMAID_TEXT_LIMIT, stripFrontMatter, unfence } from './sniff';
+
+export { looksLikeMermaid, unfence } from './sniff';
+
 export interface MermaidElement {
   id: string;
   type: 'service' | 'database' | 'queue' | 'person' | 'junction';
@@ -56,7 +60,7 @@ export const MERMAID_LIMITS = {
   relationshipLabelLength: 80,
   groupLabelLength: 80,
   /** Text past this is not a flowchart anyone drew by hand; refused before any line is read. */
-  textLength: 512 * 1024,
+  textLength: MERMAID_TEXT_LIMIT,
 } as const;
 
 const DIRECTIONS: Record<string, { direction: 'right' | 'down'; note?: string }> = {
@@ -67,9 +71,6 @@ const DIRECTIONS: Record<string, { direction: 'right' | 'down'; note?: string }>
   BT: { direction: 'down', note: 'direction BT (drawn top to bottom)' },
 };
 
-const HEADER = /^(?:flowchart|graph)(?:\s+(TD|TB|LR|RL|BT))?\s*$/i;
-const FENCE = /```\s*mermaid[^\n]*\n([\s\S]*?)```/i;
-const FRONT_MATTER = /^\s*---\s*\n([\s\S]*?)\n---\s*\n/;
 const ID = /^[\p{L}\p{N}_][\p{L}\p{N}_.]*/u;
 
 /** Lines that style, link or script the drawing — Mermaid's, not the diagram's. */
@@ -109,6 +110,7 @@ const SHAPES: { open: string; close: string; type: MermaidElement['type'] }[] = 
 ];
 
 // `A -- text --> B` and `A -. text .-> B` and `A == text ==> B`: an opener, words, a closer.
+const TEXT_ARROW_SPAN = 600;
 const TEXT_ARROW = /^\s*(<)?(x|o)?(--|-\.|==)\s+(.+?)\s+(-{2,}|\.+-|={2,})(>|x|o)?(?=\s|$|\|)/;
 // `-->`, `---`, `-.->`, `==>`, `--x`, `--o`, `<-->`, `~~~` and every longer spelling of each.
 const PLAIN_ARROW = /^\s*(<)?(x|o)?(-{2,}|={2,}|-\.+-|~{3,})(>|x|o)?(?=\s|$|\||[\p{L}\p{N}_("[{>])/u;
@@ -137,33 +139,6 @@ class Unsupported {
   add(item: string) {
     if (!this.items.includes(item)) this.items.push(item);
   }
-}
-
-/** The flowchart inside a Markdown document, when the text is one; else the text itself. */
-export function unfence(text: string): string {
-  const fenced = FENCE.exec(text);
-  return fenced ? fenced[1]! : text;
-}
-
-/** Whether text reads as a Mermaid flowchart — cheap enough for every paste. */
-export function looksLikeMermaid(text: string): boolean {
-  if (typeof text !== 'string' || text.length === 0 || text.length > MERMAID_LIMITS.textLength) return false;
-  const body = stripFrontMatter(unfence(text));
-  for (const line of body.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (trimmed === '' || trimmed.startsWith('%%')) continue;
-    return HEADER.test(firstStatement(trimmed));
-  }
-  return false;
-}
-
-function stripFrontMatter(text: string): string {
-  return text.replace(FRONT_MATTER, '');
-}
-
-function firstStatement(line: string): string {
-  const semicolon = line.indexOf(';');
-  return semicolon === -1 ? line : line.slice(0, semicolon);
 }
 
 /** Splits a line on `;` outside quotes and brackets — `graph LR; A-->B;` is three statements. */
@@ -197,6 +172,12 @@ function stripComment(line: string): string {
   return line;
 }
 
+/** A numeric entity as its character; one past Unicode (`#9999999;`) is left as written, not a crash. */
+function codePoint(entity: string, code: string): string {
+  const value = Number(code);
+  return value <= 0x10ffff ? String.fromCodePoint(value) : entity;
+}
+
 function decodeEntities(text: string): string {
   return text
     .replace(/#quot;/g, '"')
@@ -204,8 +185,9 @@ function decodeEntities(text: string): string {
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
-    .replace(/#(\d+);/g, (_, code: string) => String.fromCodePoint(Number(code)))
-    .replace(/&#(\d+);/g, (_, code: string) => String.fromCodePoint(Number(code)));
+    // `&#65;` before `#65;`: the other way round the shorter pattern ate the entity's tail and left a stray `&`.
+    .replace(/&#(\d+);/g, codePoint)
+    .replace(/#(\d+);/g, codePoint);
 }
 
 /** Label text as the diagram shows it: quotes and backticks off, `<br>` a line break, other tags gone. */
@@ -310,7 +292,10 @@ interface Arrow {
 function readArrow(text: string, unsupported: Unsupported): { arrow: Arrow; rest: string } | null {
   let label: string | undefined;
   let rest = text;
-  let match = TEXT_ARROW.exec(rest);
+  // The lazy `.+?` between two `\s+` backtracks quadratically on a long run of spaces with no closing
+  // arrow (1.5 s at 40k, minutes at the 512 KB cap). A label is capped at 120 characters, so the opener
+  // and closer of a real text arrow are always within the first few hundred.
+  let match = TEXT_ARROW.exec(rest.length > TEXT_ARROW_SPAN ? rest.slice(0, TEXT_ARROW_SPAN) : rest);
   let body: string;
   let head: string | undefined;
   let tail: string | undefined;

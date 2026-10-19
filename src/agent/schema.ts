@@ -328,7 +328,7 @@ const opAdd: Schema = {
 
 const nullable = (schema: Schema): Schema => ({ anyOf: [schema, { type: 'null' }] });
 const setProperties: Record<string, Schema> = {
-  label: nullable(text(1000)), text: text(1000), type: { enum: ELEMENT_TYPE_NAMES },
+  label: nullable(text(1000)), text: text(1000), type: { anyOf: [{ enum: ELEMENT_TYPE_NAMES }, { type: 'string', maxLength: 64 }] },
   description: nullable(text(280)), technology: nullable(text(60)), color: nullable({ enum: ACCENTS }),
   group: nullable({ type: 'string' }), kind: nullable({ enum: [...new Set([...Object.keys(GROUP_KINDS), ...NOTE_FORM_NAMES, ...CONNECTOR_KINDS])] }),
   semantic: nullable({ enum: EDGE_SEMANTICS }), directed: { type: 'boolean' }, async: { type: 'boolean' },
@@ -679,13 +679,34 @@ const TOOL_INPUTS = [
   },
 ] as const;
 
-/** Success contracts are generated beside input schemas, so clients can validate receipts. */
-export const TOOLS = TOOL_INPUTS.map((tool) => ({
+/**
+ * Every tool with its complete input schema and success contract. The app validates requests against
+ * these (`contract.ts`), so a preview or proposal is checked field by field exactly like an update.
+ */
+export const FULL_TOOLS = TOOL_INPUTS.map((tool) => ({
   ...tool,
-  // Preview and proposal use the update vocabulary already in the tool list. Repeating its prose
-  // in all four copies costs agent context without changing validation.
-  inputSchema: 'submit_proposal' === tool.name || 'preview_diagram' === tool.name
-    ? { ...tool.inputSchema, $defs: Object.fromEntries(Object.entries(roomDefs).map(([key, rule]) => [key, undescribed(rule)])) }
-    : tool.inputSchema,
   outputSchema: outputFor(tool.name),
 }));
+
+/**
+ * `ops` as preview_diagram and submit_proposal publish it. MCP tools cannot share definitions, so
+ * the full op schema (about 17 KB with its room definitions) would be sent to the model again in
+ * each of them, on every turn; update_diagram, already in the same tool list, carries it. The app
+ * still validates against the full schema, and its errors name the field that is wrong.
+ */
+const sameOpsAsUpdate = (description: string, minItems?: number): Schema => ({
+  type: 'array', ...(minItems ? { minItems } : {}), maxItems: AGENT_LIMITS.opsPerRequest, items: { type: 'object' }, description,
+});
+
+const PUBLISHED_OPS: Record<string, Schema> = {
+  preview_diagram: sameOpsAsUpdate("Exactly the ops update_diagram takes (same shapes, same order of effect).", 1),
+  submit_proposal: sameOpsAsUpdate("Exactly the ops update_diagram takes. Empty means no architectural impact."),
+};
+
+/** What the server lists: the full schemas, except that previews and proposals point at update's ops. */
+export const TOOLS = FULL_TOOLS.map((tool) => {
+  const slimOps = PUBLISHED_OPS[tool.name];
+  if (!slimOps) return tool;
+  const { $defs: _defs, properties, ...rest } = tool.inputSchema as unknown as { $defs: unknown; properties: Record<string, Schema> } & Schema;
+  return { ...tool, inputSchema: { ...rest, properties: { ...properties, ops: slimOps } } } as unknown as typeof tool;
+});
