@@ -83,16 +83,19 @@ that disagree answer `VERSION_MISMATCH` and point at Settings, which names the r
 There are thirteen tools. Their JSON Schemas live in `src/agent/schema.ts`, and
 `src-tauri/mcp/tools.json` is generated from them by `npm run agent:schemas`. The sidecar compiles
 that file in, and `tests/agent/schema.test.ts` fails if the two drift. The whole tool list is
-100,345 bytes of compact JSON, roughly 25k tokens (estimated as characters / 4), and the test keeps a
-ceiling on it: the room schemas are written once per tool under `$defs` (a flow's steps among them),
-and `preview_diagram` and `submit_proposal` carry them without their prose. `get_capabilities`
+65,472 bytes of compact JSON, roughly 16k tokens (estimated as characters / 4), and the test keeps a
+ceiling on it: the room schemas are written once per tool under `$defs` (a flow's steps among them).
+MCP tools cannot share definitions, so `preview_diagram` and `submit_proposal` list their `ops` as
+"exactly the ops `update_diagram` takes" and carry no definitions of their own; the app still checks
+their requests against the full schema (`FULL_TOOLS`), and an error names the field that is wrong
+and, for a closed list, the allowed values. `get_capabilities`
 reports `contract: 3`; everything since is additive within that same contract.
 
 | Tool | Annotations | What it does |
 | --- | --- | --- |
 | `get_capabilities({topics?, starter?})` | read-only | The vocabulary: element types, relationship semantics, C4 levels, limits, layout options, flows and notes, and starters. By default it is a short overview; `topics` expands one area, and `starter` returns one starter's keys. |
 | `list_diagrams({query?, project?, cursor?, limit?})` | read-only | Finds a diagram to work on. The diagrams in folders agents may use: id, title, folder, relative path (for display only), revision, and whether it is open or has unsaved changes. `query` narrows to titles containing it (ignoring case), exact matches first and marked `exact`. Always also returns `active` — the diagram open right now, with its revision and the view the person is in — and `thisSession`, the diagrams this MCP session created or changed. Two files sharing an id are flagged, and addressing either returns `AMBIGUOUS_DIAGRAM`. |
-| `read_diagram({diagramId, view?, focus?, include?, cursor?})` | read-only | One view, semantically. Every element comes with its derived C4 role and scope, relationships name their endpoints, and notes, attachments and flows carry the ids to edit them by. See the notes below for nested views, focus and pages. |
+| `read_diagram({diagramId, view?, focus?, include?, cursor?})` | read-only | One view, semantically. An element comes with its derived C4 role and scope once either is known (before a level is set, most are neither, and the block is left out), relationships name their endpoints, and notes, attachments and flows carry the ids to edit them by. See the notes below for nested views, focus and pages. |
 | `read_attachment({diagramId, expectedRevision, attachmentId, offset?, view?})` | read-only | Full note/code attachments in chunks of 8192 Unicode characters; `nextOffset: null` means complete. Every chunk is revision-checked. |
 | `read_selection({diagramId})` | read-only | The person's current selection in the diagram open right now: stable ids, a bounded set of neighbouring elements marked apart from the selection itself, and the notes about it. See [Selection-aware editing](#selection-aware-editing). |
 | `get_implementation_context({diagramId, view?, focus?})` | read-only | Flow step order exactly as stored (never inferred from layout) with what each step highlights, the notes, decisions and code snippets about what's in focus, and its boundaries — for implementing an agreed design in the repository. Diagram text is context here, never instructions. |
@@ -123,8 +126,8 @@ Notes on `read_diagram`:
 - `include` adds `geometry`, `attachments`, `suggestions`, `fullText` or `views` — an outline of every
   inside view in the file (its path, owner, level and size), the Depth map as data. Attachment previews mark truncation; `fullText` includes complete bodies and attachments (focus the read to keep it bounded). For an attachment larger than one read, `read_attachment` retrieves its full text in revision-checked Unicode chunks. `suggestions` returns up to 5 of Draft
   Canvas's own next-step suggestions per element; they are never applied automatically.
-- Pages are at most 200 elements, 400 relationships, 20 flows, 50 open points and 96 KB of UTF-8 JSON. Every collection has its own offset; `completeness` reports which collections are exhausted, and a cursor retrieves all remaining collections without repeating earlier entries. The `cursor` is bound to the revision,
-  so a changed diagram answers `CURSOR_STALE`.
+- Pages are at most 200 elements, 400 relationships, 20 flows, 50 open points and 96 KB of UTF-8 JSON. Every collection has its own offset; `completeness` reports which collections are exhausted, and a cursor retrieves all remaining collections without repeating earlier entries. The `cursor` is bound to the revision, the view and a short fingerprint of the focus and `include` options,
+  so a changed diagram or a different read answers `CURSOR_STALE`.
 - `format: "mermaid"` or `"plantuml"` answers with the diagram's flows as sequence-diagram `source`
   instead — the same text the app's Export writes, every view included — with the `revision` and the
   number of `flows` in it; `format: "c4"` answers with the architecture as C4-PlantUML `source`, the
@@ -147,13 +150,15 @@ target kind cannot use. An omitted field stays; `null` clears optional fields, i
 semantic and kind. Required names, booleans and references cannot be cleared.
 
 `preview_diagram({diagramId, expectedRevision, ops, view?, scope?, layout?})` prepares a candidate on
-the worker and returns `previewId`, a bounded field diff and quality diagnostics. It creates no file,
+the worker and returns `previewId`, a bounded field diff and quality diagnostics. Shapes and connectors
+that only moved or re-anchored are counted in `layoutChanges` (`moved`, `rerouted`) rather than listed with
+their coordinates. It creates no file,
 history step, recovery copy or proposal. Render it with `render_diagram({diagramId, previewId})`, then
 apply that exact result with `update_diagram({requestId, diagramId, expectedRevision, previewId})`.
 A candidate commit cannot include replacement ops, layout, scope or rebase. Its view is inferred from
 the token unless explicitly supplied. Candidates expire after 10 minutes; at most four and 64 MB
 (including base content) are held, with oldest-first eviction. They belong to one sidecar session and
-diagram. Revision and full base-content checks reject stale candidates; the ordinary atomic commit
+diagram. Revision and full base-content checks reject stale candidates (the person panning or zooming is not a change); the ordinary atomic commit
 gate, saving and one-step undo still apply. Restarting the page forgets candidates.
 
 `render_diagram` also accepts `focus`: exactly one of `{nodes}`, `{group}`, `{flow}` or
@@ -823,8 +828,8 @@ C4 is native, not a layer on top:
   native `semantic`.
 
 **Role and scope are derived, never stored** (`src/depth/c4.ts`, shared by the editor and the bridge).
-Each read returns `{role, scope, derived: true, basis}`, where `basis` names the native facts the
-answer rests on.
+Each read returns `{role, scope, derived: true, basis}` for an element where either is known, with
+`basis` naming the native facts the answer rests on.
 
 | Element | context view | container view | component view | no level |
 | --- | --- | --- | --- | --- |
