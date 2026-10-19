@@ -1,0 +1,388 @@
+{
+ "requestId": "6f1c7a52-3a0e-4c7b-9d2e-5b8a1e4f0c11",
+ "title": "Storefront",
+ "level": "context",
+ "open": true,
+ "layout": {"primaryFlow": "glance"},
+ "nodes": [
+  {"id": "shopper", "type": "person", "label": "Shopper", "description": "Browses the catalogue and buys online."},
+  {
+   "id": "storefront",
+   "type": "service",
+   "label": "Storefront",
+   "description": "Lets shoppers browse the catalogue and buy online.",
+   "evidence": [{"path": "deploy/docker-compose.yml", "basis": "observed"}],
+   "inside": {
+    "level": "container",
+    "nodes": [
+     {
+      "id": "c.shopper",
+      "type": "person",
+      "label": "Shopper",
+      "description": "Browses the catalogue and buys online."
+     },
+     {
+      "id": "web",
+      "type": "service",
+      "label": "Storefront Web",
+      "technology": "Next.js 15",
+      "description": "Renders the shop and runs checkout in the browser.",
+      "evidence": [{"path": "apps/web/app/checkout/page.tsx", "basis": "observed", "symbol": "CheckoutPage"}]
+     },
+     {
+      "id": "catalog",
+      "type": "api",
+      "label": "Catalog API",
+      "technology": "Go, chi",
+      "description": "Serves products, prices and stock levels.",
+      "evidence": [{"path": "services/catalog/cmd/catalog/main.go", "basis": "observed", "line": 41}]
+     },
+     {
+      "id": "cache",
+      "type": "cache",
+      "label": "Catalog Cache",
+      "technology": "Redis 7",
+      "description": "Keeps product pages warm for ten minutes.",
+      "evidence": [{"path": "services/catalog/internal/store/cache.go", "basis": "observed", "symbol": "ProductCache"}]
+     },
+     {
+      "id": "orders",
+      "type": "api",
+      "label": "Orders API",
+      "technology": "Node.js, Fastify",
+      "description": "Takes orders and records them with their events.",
+      "evidence": [{"path": "services/orders/src/server.ts", "basis": "observed", "line": 12}],
+      "inside": {
+       "level": "component",
+       "nodes": [
+        {
+         "id": "o.routes",
+         "type": "component",
+         "label": "Orders Routes",
+         "technology": "Fastify routes",
+         "description": "Validates the request body and answers 201.",
+         "evidence": [{"path": "services/orders/src/routes/orders.ts", "basis": "observed", "line": 18, "symbol": "postOrder"}]
+        },
+        {
+         "id": "o.checkout",
+         "type": "component",
+         "label": "Checkout Service",
+         "technology": "TypeScript",
+         "description": "Prices the cart and places the order.",
+         "evidence": [{"path": "services/orders/src/checkout/placeOrder.ts", "basis": "observed", "symbol": "placeOrder"}]
+        },
+        {
+         "id": "o.pricing",
+         "type": "adapter",
+         "label": "Catalog Client",
+         "technology": "undici",
+         "description": "Fetches current prices for each line.",
+         "evidence": [{"path": "services/orders/src/clients/catalog.ts", "basis": "observed", "symbol": "CatalogClient"}]
+        },
+        {
+         "id": "o.catalog",
+         "type": "api",
+         "label": "Catalog API",
+         "technology": "Go, chi",
+         "description": "Serves products, prices and stock levels.",
+         "evidence": [{"path": "services/orders/src/clients/catalog.ts", "basis": "observed", "symbol": "CATALOG_URL"}]
+        },
+        {
+         "id": "o.repo",
+         "type": "adapter",
+         "label": "Order Repository",
+         "technology": "Prisma",
+         "description": "Writes the order and its outbox row together.",
+         "evidence": [{"path": "services/orders/src/db/orderRepository.ts", "basis": "observed", "symbol": "saveWithOutbox"}]
+        },
+        {
+         "id": "o.db",
+         "type": "sql-database",
+         "label": "Orders DB",
+         "technology": "PostgreSQL 16",
+         "description": "Orders, order lines and the outbox table.",
+         "evidence": [{"path": "services/orders/prisma/schema.prisma", "basis": "observed"}]
+        },
+        {
+         "id": "o.relay",
+         "type": "component",
+         "label": "Outbox Relay",
+         "technology": "TypeScript",
+         "description": "Publishes unsent outbox rows every second.",
+         "evidence": [{"path": "services/orders/src/outbox/relay.ts", "basis": "observed", "symbol": "relayOutbox"}]
+        },
+        {
+         "id": "o.events",
+         "type": "stream",
+         "label": "order-events",
+         "technology": "Kafka",
+         "description": "Every change to an order, in order.",
+         "evidence": [{"path": "services/orders/src/outbox/relay.ts", "basis": "observed", "symbol": "TOPIC"}]
+        }
+       ],
+       "relationships": [
+        {"id": "c1", "from": "o.routes", "to": "o.checkout", "label": "Places order", "semantic": "uses"},
+        {"id": "c2", "from": "o.checkout", "to": "o.pricing", "label": "Prices each line", "semantic": "uses"},
+        {
+         "id": "c3",
+         "from": "o.pricing",
+         "to": "o.catalog",
+         "label": "GET /products",
+         "semantic": "http",
+         "kind": "sync"
+        },
+        {"id": "c4", "from": "o.checkout", "to": "o.repo", "label": "Saves order", "semantic": "uses"},
+        {"id": "c5", "from": "o.repo", "to": "o.db", "label": "Writes order + outbox", "semantic": "writes"},
+        {"id": "c6", "from": "o.db", "to": "o.relay", "label": "Unsent outbox rows", "semantic": "reads"},
+        {
+         "id": "c7",
+         "from": "o.relay",
+         "to": "o.events",
+         "label": "Publishes OrderPlaced",
+         "semantic": "publishes",
+         "kind": "event"
+        }
+       ],
+       "flows": [
+        {
+         "id": "place",
+         "title": "Place an order",
+         "color": "teal",
+         "steps": [
+          {"relationship": "c1", "caption": "The route validates the cart and hands it to checkout."},
+          {"relationship": "c2", "caption": "Checkout asks the catalog client for today's prices."},
+          {"relationship": "c3", "caption": "One GET per order, not per line: prices come back in a batch."},
+          {"relationship": "c4", "caption": "The priced order goes to the repository."},
+          {"relationship": "c5", "caption": "Order and outbox row commit in one transaction."},
+          {"relationship": "c6", "caption": "Every second the relay reads the rows not yet sent."},
+          {"relationship": "c7", "caption": "OrderPlaced is published; the row is marked sent."}
+         ]
+        }
+       ],
+       "notes": [
+        {
+         "id": "o.n-batch",
+         "kind": "decision",
+         "about": "c3",
+         "text": "Prices are fetched in one batch call so a 40-line cart costs one round trip."
+        }
+       ]
+      }
+     },
+     {
+      "id": "ordersdb",
+      "type": "sql-database",
+      "label": "Orders DB",
+      "technology": "PostgreSQL 16",
+      "description": "Orders, order lines and the outbox table.",
+      "evidence": [{"path": "services/orders/prisma/schema.prisma", "basis": "observed"}]
+     },
+     {
+      "id": "events",
+      "type": "stream",
+      "label": "order-events",
+      "technology": "Kafka",
+      "description": "Every change to an order, in order.",
+      "evidence": [{"path": "deploy/docker-compose.yml", "basis": "observed", "symbol": "kafka"}]
+     },
+     {
+      "id": "billing",
+      "type": "worker",
+      "label": "Billing Worker",
+      "technology": "Node.js, kafkajs",
+      "description": "Charges the customer for each placed order.",
+      "evidence": [{"path": "services/billing/src/consumer.ts", "basis": "observed", "symbol": "onOrderPlaced"}]
+     },
+     {
+      "id": "dlq",
+      "type": "dead-letter-queue",
+      "label": "Billing DLQ",
+      "technology": "Kafka",
+      "description": "Charges that failed every retry, for support to replay.",
+      "evidence": [{"path": "services/billing/src/retry.ts", "basis": "observed", "symbol": "MAX_ATTEMPTS"}]
+     },
+     {
+      "id": "notify",
+      "type": "worker",
+      "label": "Notification Worker",
+      "technology": "Node.js, kafkajs",
+      "description": "Emails the order confirmation.",
+      "evidence": [{"path": "services/notify/src/consumer.ts", "basis": "observed", "symbol": "onOrderPlaced"}]
+     },
+     {
+      "id": "c.stripe",
+      "type": "external-system",
+      "label": "Stripe",
+      "technology": "Stripe API",
+      "description": "Takes card payments.",
+      "evidence": [{"path": "services/billing/src/charge.ts", "basis": "observed", "symbol": "chargeOrder"}]
+     },
+     {
+      "id": "c.sendgrid",
+      "type": "external-system",
+      "label": "SendGrid",
+      "technology": "SendGrid API",
+      "description": "Delivers transactional email.",
+      "evidence": [{"path": "services/notify/src/mailer.ts", "basis": "observed", "symbol": "sendConfirmation"}]
+     }
+    ],
+    "relationships": [
+     {"id": "r1", "from": "c.shopper", "to": "web", "label": "Shops and checks out"},
+     {"id": "r2", "from": "web", "to": "catalog", "label": "Fetches products", "semantic": "http", "kind": "sync"},
+     {"id": "r3", "from": "catalog", "to": "cache", "label": "Caches products", "semantic": "readsWrites"},
+     {
+      "id": "r4",
+      "from": "web",
+      "to": "orders",
+      "label": "Places order",
+      "semantic": "http",
+      "kind": "sync",
+      "response": "201 Order",
+      "evidence": [{"path": "apps/web/lib/api.ts", "basis": "observed", "symbol": "placeOrder"}]
+     },
+     {"id": "r5", "from": "orders", "to": "ordersdb", "label": "Writes order + outbox", "semantic": "writes"},
+     {
+      "id": "r6",
+      "from": "orders",
+      "to": "events",
+      "label": "Publishes OrderPlaced",
+      "semantic": "publishes",
+      "kind": "event"
+     },
+     {"id": "r7", "from": "events", "to": "billing", "label": "OrderPlaced", "semantic": "consumes", "kind": "event"},
+     {"id": "r8", "from": "billing", "to": "c.stripe", "label": "Charges card", "semantic": "http", "kind": "sync"},
+     {
+      "id": "r9",
+      "from": "billing",
+      "to": "dlq",
+      "label": "Parks failed charges",
+      "semantic": "deadLetters",
+      "deliveryAttempts": 5,
+      "evidence": [{"path": "services/billing/src/retry.ts", "basis": "observed", "symbol": "MAX_ATTEMPTS"}]
+     },
+     {"id": "r10", "from": "events", "to": "notify", "label": "OrderPlaced", "semantic": "consumes", "kind": "event"},
+     {
+      "id": "r11",
+      "from": "notify",
+      "to": "c.sendgrid",
+      "label": "Sends confirmation",
+      "semantic": "http",
+      "kind": "sync"
+     }
+    ],
+    "flows": [
+     {
+      "id": "checkout",
+      "title": "Checkout",
+      "color": "teal",
+      "steps": [
+       {
+        "spotlight": ["c.shopper", "web", "orders"],
+        "caption": "Checkout is one HTTP call; everything after it is asynchronous."
+       },
+       {"relationship": "r1", "caption": "The shopper confirms the cart in the storefront."},
+       {"relationship": "r4", "caption": "The storefront posts the cart; Orders API answers 201."},
+       {"relationship": "r5", "caption": "The order and its outbox row commit together."},
+       {"relationship": "r6", "caption": "The outbox relay publishes OrderPlaced to Kafka."},
+       {"relationship": "r7", "caption": "Billing picks up OrderPlaced."},
+       {"relationship": "r8", "caption": "Billing charges the card through Stripe, idempotently."},
+       {"relationship": "r10", "caption": "In parallel, notifications pick up the same event."},
+       {"relationship": "r11", "caption": "The confirmation email goes out through SendGrid."}
+      ]
+     },
+     {
+      "id": "declined",
+      "title": "Card declined",
+      "color": "rose",
+      "variantOf": "checkout",
+      "steps": [
+       {"spotlight": ["billing", "dlq"], "caption": "What happens when Stripe keeps declining a charge."},
+       {"relationship": "r7", "caption": "Billing picks up OrderPlaced."},
+       {"relationship": "r8", "caption": "Stripe declines; billing retries with backoff."},
+       {"relationship": "r9", "caption": "After the fifth attempt the event is parked for support."}
+      ]
+     }
+    ],
+    "notes": [
+     {
+      "id": "n-outbox",
+      "kind": "decision",
+      "about": "r5",
+      "text": "Transactional outbox: an order and its OrderPlaced event commit together, so no event is lost or sent for a rolled-back order."
+     },
+     {
+      "id": "n-idempotent",
+      "kind": "code",
+      "about": "r8",
+      "language": "typescript",
+      "code": "await stripe.paymentIntents.create(\n  { amount: order.total, currency: order.currency },\n  { idempotencyKey: `order-${order.id}` },\n);"
+     },
+     {
+      "id": "n-email",
+      "kind": "question",
+      "about": "notify",
+      "text": "The confirmation is sent on OrderPlaced, before billing succeeds. Is an email for a declined card intended?"
+     },
+     {
+      "id": "n-stale",
+      "kind": "warning",
+      "about": "cache",
+      "text": "Prices stay cached for ten minutes, so a price change can show stale for that long."
+     }
+    ]
+   }
+  },
+  {
+   "id": "stripe",
+   "type": "external-system",
+   "label": "Stripe",
+   "technology": "Stripe API",
+   "description": "Takes card payments.",
+   "evidence": [{"path": "services/billing/src/charge.ts", "basis": "observed", "symbol": "chargeOrder"}]
+  },
+  {
+   "id": "sendgrid",
+   "type": "external-system",
+   "label": "SendGrid",
+   "technology": "SendGrid API",
+   "description": "Delivers transactional email.",
+   "evidence": [{"path": "services/notify/src/mailer.ts", "basis": "observed", "symbol": "sendConfirmation"}]
+  }
+ ],
+ "relationships": [
+  {"id": "k1", "from": "shopper", "to": "storefront", "label": "Shops and checks out"},
+  {"id": "k2", "from": "storefront", "to": "stripe", "label": "Charges cards", "semantic": "http", "kind": "sync"},
+  {
+   "id": "k3",
+   "from": "storefront",
+   "to": "sendgrid",
+   "label": "Sends order email",
+   "semantic": "http",
+   "kind": "sync"
+  }
+ ],
+ "flows": [
+  {
+   "id": "glance",
+   "title": "Checkout at a glance",
+   "color": "teal",
+   "steps": [
+    {
+     "spotlight": ["shopper", "storefront"],
+     "caption": "One system, two providers. Look inside Storefront for how an order moves."
+    },
+    {"relationship": "k1", "caption": "A shopper checks out in the storefront."},
+    {"relationship": "k2", "caption": "The card is charged through Stripe."},
+    {"relationship": "k3", "caption": "The confirmation goes out through SendGrid."}
+   ]
+  }
+ ],
+ "notes": [
+  {
+   "id": "n-scope",
+   "kind": "note",
+   "about": "storefront",
+   "text": "Five deployables, one database, one Kafka topic. Look inside for the containers; Orders API has its components inside too."
+  }
+ ]
+}

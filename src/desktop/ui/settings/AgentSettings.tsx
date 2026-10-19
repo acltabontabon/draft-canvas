@@ -2,9 +2,19 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Button } from '../../../ui/common/Button';
 import { Icon } from '../../../ui/common/Icon';
 import { SegmentedControl } from '../../../ui/common/SegmentedControl';
-import type { AgentClient, AgentClientSetup, AgentSettings as AgentState } from '../../api';
+import type { AgentClient, AgentClientSetup, AgentSettings as AgentState, AgentSkillSetup, AgentSkillTarget } from '../../api';
 import { useDesktopController, useDesktopState } from '../../useDesktop';
-import { claudeCodeCommand, clientLine, codexConfigToml, connectionSummary, cursorDeeplink, folderRows, genericConfigJson } from './agentModel';
+import {
+  claudeCodeCommand,
+  clientLine,
+  codexConfigToml,
+  connectionSummary,
+  cursorDeeplink,
+  folderRows,
+  genericConfigJson,
+  skillLine,
+  skillTargetOf,
+} from './agentModel';
 import { ChoiceRow, CopyField, Disclosure, SettingRow, SettingsPage, SettingsSection } from './layout';
 
 type Platform = 'macos' | 'windows' | 'linux' | null;
@@ -135,6 +145,17 @@ function Connect({ agent, platform }: { agent: AgentState; platform: Platform })
   }, [controller, sidecarPath]);
   const setupOf = (which: AgentClient) => setups.find((setup) => setup.client === which);
   const connected = (setup: AgentClientSetup) => setSetups((all) => [...all.filter((s) => s.client !== setup.client), setup]);
+  const [skills, setSkills] = useState<AgentSkillSetup[]>([]);
+  useEffect(() => {
+    if (!sidecarPath) return;
+    let live = true;
+    void controller.agentSkills().then((found) => live && setSkills(found));
+    return () => {
+      live = false;
+    };
+  }, [controller, sidecarPath]);
+  const skillOf = (target: AgentSkillTarget) => skills.find((skill) => skill.target === target);
+  const skillChanged = (setup: AgentSkillSetup) => setSkills((all) => [...all.filter((s) => s.target !== setup.target), setup]);
 
   return (
     <SettingsSection title="Connect an agent" description="Draft Canvas needs to be running while the agent works.">
@@ -188,6 +209,7 @@ function Connect({ agent, platform }: { agent: AgentState; platform: Platform })
               </>
             )}
           </div>
+          <SkillStep setup={skillOf(skillTargetOf(client))} onChanged={skillChanged} />
         </>
       )}
     </SettingsSection>
@@ -237,6 +259,50 @@ function OneClick({
       )}
       <Disclosure summary="Set it up by hand instead">{children}</Disclosure>
     </>
+  );
+}
+
+/**
+ * The agent skill (`agent/skill.rs`): what teaches the agent to draw a repository well, installed in
+ * the folder the chosen agent reads skills from. Below the connector's setup because it only helps an
+ * agent that can reach Draft Canvas. An edited copy is never replaced without the person asking, and
+ * then kept as a backup.
+ */
+function SkillStep({ setup, onChanged }: { setup: AgentSkillSetup | undefined; onChanged: (setup: AgentSkillSetup) => void }) {
+  const controller = useDesktopController();
+  const [busy, setBusy] = useState<'install' | 'remove' | null>(null);
+  const line = skillLine(setup);
+  if (!setup || !line) return null;
+  const run = async (what: 'install' | 'remove') => {
+    setBusy(what);
+    const after = what === 'install' ? await controller.installAgentSkill(setup.target) : await controller.removeAgentSkill(setup.target);
+    setBusy(null);
+    if (after) onChanged(after);
+  };
+  return (
+    <div className="dc-prefs-skill">
+      <p className="dc-prefs-step">Agent skill</p>
+      {line.action ? (
+        <div className="dc-prefs-inline">
+          <Button variant="solid" disabled={busy !== null} onClick={() => void run('install')}>
+            {busy === 'install' ? 'Installing…' : line.action}
+          </Button>
+          <span className="dc-prefs-description" data-tone={line.tone ?? undefined}>
+            {line.text}
+          </span>
+        </div>
+      ) : (
+        <p className="dc-prefs-note" data-tone={line.tone ?? 'on'} role="status">
+          <Icon name="check" size={13} />
+          <span>{line.text}</span>
+        </p>
+      )}
+      {line.removable && (
+        <Button className="dc-prefs-outline dc-prefs-skill-remove" disabled={busy !== null} onClick={() => void run('remove')}>
+          {busy === 'remove' ? 'Removing…' : 'Remove skill'}
+        </Button>
+      )}
+    </div>
   );
 }
 

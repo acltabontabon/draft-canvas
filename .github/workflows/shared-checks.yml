@@ -44,6 +44,12 @@ jobs:
         timeout-minutes: 5
         working-directory: www
       - run: npm run lint
+      # The agent skill's Python scripts and their tests (ruff.toml). Pinned, so a new ruff rule
+      # never fails an unrelated change.
+      - name: Lint Python
+        run: |
+          pipx run ruff==0.17.1 check
+          pipx run ruff==0.17.1 format --check
       - run: npm run typecheck:tooling
       # Unit tests with the existing coverage floor (vite.config.ts).
       - run: npm run test:coverage

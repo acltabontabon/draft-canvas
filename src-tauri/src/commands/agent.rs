@@ -5,6 +5,7 @@ use super::run_blocking;
 use crate::agent::clients::{self, Client, ClientSetup};
 use crate::agent::proposals::{Proposal, ProposalStatus};
 use crate::agent::scope::{self, enabled_projects};
+use crate::agent::skill::{self, SkillSetup, SkillTarget};
 use crate::agent::{broker, sidecar_path, sidecar_warning, Agent, AgentStatus, BackgroundSupport};
 use crate::errors::{AppError, ErrorKind};
 use crate::state::{AppState, HostEvent};
@@ -263,6 +264,61 @@ pub async fn agent_connect_client(app: AppHandle, client: Client) -> Result<Clie
         clients::connect(client, &connectable_sidecar()?)
     })
     .await
+}
+
+/// Where an edited skill is kept when Settings replaces or removes it: the app's own folder, never
+/// beside the skill, where an agent would load it as a second one.
+fn skill_backups(app: &AppHandle) -> Result<PathBuf, AppError> {
+    app.path()
+        .app_local_data_dir()
+        .map(|dir| dir.join("skill-backups"))
+        .map_err(|_| {
+            AppError::new(
+                ErrorKind::NotFound,
+                "Draft Canvas couldn’t find its data folder.",
+            )
+        })
+}
+
+/// Where the Draft Canvas agent skill stands for each place agents read skills from (`agent/skill.rs`).
+#[tauri::command]
+pub async fn agent_skills(app: AppHandle) -> Result<Vec<SkillSetup>, AppError> {
+    run_blocking(&app, |_, _| {
+        Ok(skill::TARGETS.iter().map(|t| skill::status(*t)).collect())
+    })
+    .await
+}
+
+/// Installs this app's skill for `target`, replacing what is there (an edited copy is kept aside).
+#[tauri::command]
+pub async fn agent_install_skill(
+    app: AppHandle,
+    target: SkillTarget,
+) -> Result<SkillSetup, AppError> {
+    run_blocking(&app, move |app, _| {
+        skill::install(target, &skill_backups(app)?)
+    })
+    .await
+}
+
+/// Takes the skill out of `target`'s folder (an edited copy is kept aside).
+#[tauri::command]
+pub async fn agent_remove_skill(
+    app: AppHandle,
+    target: SkillTarget,
+) -> Result<SkillSetup, AppError> {
+    run_blocking(&app, move |app, _| {
+        skill::remove(target, &skill_backups(app)?)
+    })
+    .await
+}
+
+/// At launch: a skill this app installed earlier, and nobody changed, is brought up to the version
+/// this app carries. Off the main thread; it only touches the skills folders.
+pub fn refresh_skills(app: &AppHandle) {
+    if let Ok(backups) = skill_backups(app) {
+        tauri::async_runtime::spawn_blocking(move || skill::refresh(&backups));
+    }
 }
 
 // ─── Proposal review (native UI only — never reachable from the MCP bridge; see `agent/broker.rs`) ──

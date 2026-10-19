@@ -541,8 +541,12 @@ Between candidates the quality gate rates the same, legibility decides (with eac
 one crossing). When the caller left `layout.direction` out and a clean candidate came early, the other
 direction is laid out too; it replaces the default only when it costs at most 80% as much and saves at
 least 25 points, so a diagram doesn't flip over a few pixels of connector. The create receipt carries
-`legibility: {crossings, detours?, throughBoundaries?, farNotes?, fill}`, with the connector and note
-ids listed (up to 10 each); an update receipt carries the same for the whole edited view.
+`legibility: {crossings, detours?, throughBoundaries?, farNotes?, fill, views?}`, with the connector and
+note ids listed (up to 10 each). The top-level numbers are the top view's; `views` holds the same for
+every inside view, depth first, each with `view`, the element ids leading down to it
+(`["storefront", "orders"]`), so a C4 container view one level down that crosses itself is reported
+without the agent having to render it. The advice below runs for each inside view too, prefixed
+`Inside storefront ▸ orders:`. An update receipt carries the same numbers for the view it changed.
 
 **Advice** (`src/agent/advice.ts`). Some mess comes from the request itself, and the layout can't
 undo it. The create receipt's `advisories` start with what to change, naming ids and, where there is

@@ -56,3 +56,6 @@ playwright-report-desktop
 
 # Dependency scan reports are local/CI artifacts, never user documents.
 audit-results/
+
+# Python bytecode, from running the agent skill's scripts and their tests.
+__pycache__/

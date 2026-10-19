@@ -47,9 +47,72 @@ can't reach it.
    For Claude Code and Codex, Settings also says when the agent is already set up, or is set up for
    a different copy of Draft Canvas (after moving or reinstalling the app) — then the button reads
    **Update** and points it at this one.
+5. Under **Agent skill**, click **Install skill** to teach the agent to
+   [draw a whole repository](#draw-a-repository) well. It's optional; the agent can draw without it.
 
 Draft Canvas must be running while the agent works: the connector talks to the running app. It
 doesn't start the app for you, and it says so if the app isn't open.
+
+## Draw a repository
+
+The **Draft Canvas skill** teaches your agent how to turn a codebase into a diagram worth
+presenting, not a pile of boxes. Install it from **Settings → AI agents → Agent skill**, then open
+your agent in a repository and ask:
+
+> Draw the architecture of this repository in Draft Canvas.
+
+With the skill, the agent:
+
+1. **Drafts the diagram in one command.** The skill's script surveys the repository in one pass —
+   deployable units and their frameworks; docker-compose, Kubernetes, Nomad and Terraform services; the
+   databases, brokers and external services the dependencies and configuration name; HTTP routes;
+   queue and topic names; API contracts; architecture notes and ADRs; and which services call which —
+   and writes a first request from it, with a placeholder wherever only the code can say. Environment
+   variable *values* are never read. The agent then reads only the files that matter, and the request
+   isn't accepted until every placeholder is filled.
+2. **Picks the C4 levels.** A small system is one container view; a larger one opens on a context
+   view with its containers one level down. The services with real logic get a component view
+   inside, so you can [look inside](depth.md) them.
+3. **Draws the main request path as a flow**, in the order the code runs it, with a caption on
+   every step, plus a separate flow for each failure path the code has (a retry and dead-letter
+   queue, a compensation). Present them as they are.
+4. **Adds what a reader needs**: decisions it found (an outbox, idempotency keys), warnings,
+   questions it couldn't answer from the code, short code snippets, and the source files behind each
+   shape under **Source evidence** in **Details**.
+5. **Checks the request before sending it**, reads Draft Canvas's own readability review and looks at
+   the rendered diagram before telling you it's done.
+
+Ask again later — "the code changed, refresh the diagram" — and it updates the same diagram in
+place, keeping your arrangement, notes and flows.
+
+![The container view of the skill's example, a storefront: Shopper to Storefront Web to Orders API, which writes to Orders DB with a decision chip and publishes OrderPlaced to the order-events stream; Billing and Notification workers consume it and call Stripe and SendGrid, with a dashed failure line to a Billing DLQ.](../media/guides/agent-skill-example.png)
+
+### Where the skill lives
+
+| Agent | Folder | Read by |
+| --- | --- | --- |
+| Claude Code | `~/.claude/skills/draft-canvas` | Claude Code (and Cursor) |
+| Codex, Cursor, other agents | `~/.agents/skills/draft-canvas` | Codex and Cursor |
+
+Both are folders every project on your computer sees. Choose the agent in **Connect an agent** to see
+and install its copy; Codex and Cursor share one. Start a new agent session after installing.
+
+![Settings, Connect an agent, with Codex chosen: below Add to Codex, an Agent skill heading with an Install skill button that teaches Codex and Cursor to draw a repository well and installs in ~/.agents/skills.](../media/guides/agent-skill-install.png)
+
+![After clicking: a check mark and "Skill installed in ~/.agents/skills/draft-canvas. It updates when Draft Canvas does.", with a Remove skill button below.](../media/guides/agent-skill-installed.png)
+
+### Updates
+
+The skill is built into Draft Canvas and updates with it — it is never downloaded on its own. When
+an update to Draft Canvas brings a newer skill, the copy it installed is replaced the next time it
+starts, whole, so nothing stale is left behind. A small `.draft-canvas-skill.json` it writes beside
+the skill tells it whether a copy is exactly what it installed:
+
+- **You edited the skill** — Draft Canvas leaves it alone, and Settings says so. **Replace skill**
+  installs this version and keeps your edited copy in Draft Canvas's own data folder (never in the
+  skills folder, where the agent would load both).
+- **A newer Draft Canvas installed it** — it's left as it is; an older app never downgrades it.
+- **Remove skill** takes it out again; an edited copy is kept, as on a replace.
 
 ## What the agent can do
 
@@ -261,6 +324,9 @@ the app accepts:
   the app's canvas limits or 8 MB.
 - A receipt lists at most ten advisories on a create and five on an update; when more were found,
   `advisoriesDropped` says how many were left out.
+- A create receipt's `legibility` (crossings, detours, connectors through boundaries) is the top
+  view's, with every inside view's under `legibility.views`, each named by its `view` path; advice
+  about an inside view starts `Inside <path>:`. An update receipt reports the view it changed.
 
 For how it works — the protocol, the guarantees about retries, what is and isn't supported — see
 [Agent integration](../reference/agent-integration.md).
@@ -290,6 +356,14 @@ Draft Canvas writes, including its tool timeout, and a copy of a real, populated
 back unchanged apart from the new table; `claude mcp add --scope user` writes the user-scope entry
 Settings reads back. A full Codex conversation drawing a diagram has not been run in this
 environment. Windows and Linux are untested for every client, as before.
+
+The agent skill's installer is covered by Rust tests against real folders (a fresh install, an
+untouched older copy replaced whole, an edited copy kept as a backup, a newer copy left alone,
+removal), and the Settings flow by a browser test against the mocked shell. Its example request is
+part of the layout gallery, held to the same readability checks as every other case. Following the
+skill end to end was tried on open-source repositories with the skill's own scripts and the app's
+layout pipeline; a full Claude Code, Codex or Cursor conversation through a running Draft Canvas has
+not been run in this environment.
 
 Contract 3 adds `npm run e2e:mcp` (after `npm run desktop:check`): a real stdio MCP client and
 compiled sidecar issue reads, candidate previews, image renders, commits and a semantic proposal

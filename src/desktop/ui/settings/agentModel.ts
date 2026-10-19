@@ -1,4 +1,4 @@
-import type { AgentClient, AgentClientSetup, AgentProject, AgentSettings } from '../../api';
+import type { AgentClient, AgentClientSetup, AgentProject, AgentSettings, AgentSkillSetup, AgentSkillTarget } from '../../api';
 
 /**
  * What Settings → AI agents says, worked out without React so it can be tested on its own: the
@@ -151,4 +151,62 @@ export function clientLine(setup: AgentClientSetup | undefined): ClientLine | nu
         : `Runs claude mcp add for you, so every project can use Draft Canvas.`,
     tone: null,
   };
+}
+
+/** Which skills folder a client in Settings reads: Claude Code its own; Codex, Cursor and other agents
+ *  the shared `~/.agents/skills` (`src-tauri/src/agent/skill.rs`). */
+export function skillTargetOf(client: AgentClient | 'cursor' | 'other'): AgentSkillTarget {
+  return client === 'claude-code' ? 'claude-code' : 'agents';
+}
+
+const SKILL_READERS: Record<AgentSkillTarget, string> = { 'claude-code': 'Claude Code', agents: 'Codex and Cursor' };
+
+export interface SkillLine {
+  /** The main button's label, or null when there's nothing to do. */
+  action: string | null;
+  text: string;
+  tone: 'on' | 'warn' | null;
+  /** Whether a quiet Remove is offered beside it. */
+  removable: boolean;
+}
+
+/** What Settings says about the agent skill in one target. The skill only helps an agent that can
+ *  reach Draft Canvas, so it sits under the connector's setup, as the second half of connecting. */
+export function skillLine(setup: AgentSkillSetup | undefined): SkillLine | null {
+  if (!setup) return null;
+  const readers = SKILL_READERS[setup.target];
+  const where = setup.location ?? (setup.target === 'claude-code' ? '~/.claude/skills' : '~/.agents/skills');
+  const kept = setup.backup ? ` Your edited copy is in ${setup.backup}.` : '';
+  switch (setup.state) {
+    case 'not-installed':
+      return {
+        action: 'Install skill',
+        text: `Teaches ${readers} to draw a repository well — C4 levels, flows to present, notes and source evidence. Installs in ${where.replace(/[/\\]draft-canvas$/, '')} for every project.`,
+        tone: null,
+        removable: false,
+      };
+    case 'ready':
+      return { action: null, text: `Skill installed in ${where}. It updates when Draft Canvas does.${kept}`, tone: 'on', removable: true };
+    case 'outdated':
+      return {
+        action: 'Update skill',
+        text: `The skill in ${where} is from an earlier Draft Canvas. It’s replaced the next time Draft Canvas starts, or now.`,
+        tone: 'warn',
+        removable: true,
+      };
+    case 'modified':
+      return {
+        action: 'Replace skill',
+        text: `The skill in ${where} has been changed, so Draft Canvas leaves it alone. Replacing it keeps your copy as a backup.`,
+        tone: 'warn',
+        removable: true,
+      };
+    case 'newer':
+      return {
+        action: null,
+        text: `A newer version of the skill${setup.installedVersion ? ` (${setup.installedVersion})` : ''} is in ${where}, from a newer Draft Canvas.`,
+        tone: 'on',
+        removable: false,
+      };
+  }
 }

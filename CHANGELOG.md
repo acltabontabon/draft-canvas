@@ -29,6 +29,8 @@ the release notes and the in-app What's New are generated from here. See
 
 #### Changed
 
+- When an agent draws a diagram with views inside its shapes, it is told how readable each of those
+  views came out too, not only the top one, so it can tidy every level before handing it over.
 - About becomes an open composition with expressive typography, a small diagram sketch and quiet
   author credits, with Licences tucked into the link icons. Diagnostic reports move to
   **Settings → Support** on desktop, **Troubleshooting** on the web home screen or
@@ -54,6 +56,15 @@ the release notes and the in-app What's New are generated from here. See
   label stranded elsewhere on the canvas.
 
 ### Desktop
+
+#### Added
+
+- **Draw a repository with your agent** — install the Draft Canvas skill for Claude Code, Codex or
+  Cursor from Settings → AI agents, then ask your agent to "draw this repository in Draft Canvas". It
+  surveys the code in one pass and draws the system at C4 levels you can look inside, with the main
+  request path and its failure paths as flows to present, notes on the decisions it found, and the
+  source files behind each shape. The skill updates with Draft Canvas and never overwrites one
+  you've edited. <!-- highlight -->
 
 #### Fixed
 

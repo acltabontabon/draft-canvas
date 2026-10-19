@@ -44,6 +44,8 @@ pub fn setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
     }
     // Returns at once; the first look for an update is well after the window is up.
     crate::updater::start(&handle);
+    // An agent skill this app installed before is brought up to the version this app carries.
+    crate::commands::agent::refresh_skills(&handle);
 
     #[cfg(not(target_os = "macos"))]
     {

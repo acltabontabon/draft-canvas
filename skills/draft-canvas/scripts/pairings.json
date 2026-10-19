@@ -1,0 +1,1014 @@
+{
+ "generatedBy": "npm run agent:schemas",
+ "categories": {
+  "service": "service",
+  "api": "service",
+  "worker": "worker",
+  "scheduler": "scheduler",
+  "gateway": "gateway",
+  "external-system": "external",
+  "database": "database",
+  "sql-database": "database",
+  "nosql-database": "database",
+  "cache": "cache",
+  "file-system": "fileSystem",
+  "object-storage": "objectStorage",
+  "search-index": "searchIndex",
+  "table": "database",
+  "queue": "queue",
+  "topic": "topic",
+  "stream": "stream",
+  "dead-letter-queue": "deadLetter",
+  "person": "actor",
+  "user-group": "actor",
+  "external-actor": "actor",
+  "system-actor": "actor",
+  "device": "actor",
+  "component": "component",
+  "module": "component",
+  "adapter": "component",
+  "port": "port",
+  "junction": "junction"
+ },
+ "offered": {
+  "actor>component": [
+   "calls",
+   "http",
+   "command",
+   "query"
+  ],
+  "actor>external": [
+   "calls",
+   "http",
+   "command",
+   "query"
+  ],
+  "actor>gateway": [
+   "calls",
+   "http",
+   "command",
+   "query"
+  ],
+  "actor>scheduler": [
+   "calls",
+   "http",
+   "command",
+   "query"
+  ],
+  "actor>service": [
+   "calls",
+   "http",
+   "command",
+   "query"
+  ],
+  "actor>worker": [
+   "calls",
+   "http",
+   "command",
+   "query"
+  ],
+  "cache>component": [
+   "reads"
+  ],
+  "cache>external": [
+   "reads"
+  ],
+  "cache>gateway": [
+   "reads"
+  ],
+  "cache>scheduler": [
+   "reads"
+  ],
+  "cache>service": [
+   "reads"
+  ],
+  "cache>worker": [
+   "reads"
+  ],
+  "component>cache": [
+   "reads",
+   "writes",
+   "readsWrites",
+   "invalidates",
+   "dependsOn"
+  ],
+  "component>component": [
+   "uses",
+   "dependsOn",
+   "calls"
+  ],
+  "component>database": [
+   "readsWrites",
+   "writes",
+   "reads",
+   "query",
+   "dependsOn"
+  ],
+  "component>deadLetter": [
+   "deadLetters",
+   "publishes"
+  ],
+  "component>external": [
+   "calls",
+   "http",
+   "grpc",
+   "command",
+   "event",
+   "compensates",
+   "dependsOn"
+  ],
+  "component>fileSystem": [
+   "reads",
+   "writes",
+   "readsWrites",
+   "watches",
+   "dependsOn"
+  ],
+  "component>gateway": [
+   "calls",
+   "http",
+   "grpc",
+   "command",
+   "query",
+   "event",
+   "compensates",
+   "dependsOn"
+  ],
+  "component>objectStorage": [
+   "reads",
+   "writes",
+   "readsWrites",
+   "dependsOn"
+  ],
+  "component>port": [
+   "uses",
+   "calls",
+   "implements",
+   "dependsOn"
+  ],
+  "component>queue": [
+   "command",
+   "publishes",
+   "consumes",
+   "event",
+   "dependsOn"
+  ],
+  "component>scheduler": [
+   "calls",
+   "http",
+   "grpc",
+   "command",
+   "query",
+   "event",
+   "compensates",
+   "dependsOn"
+  ],
+  "component>searchIndex": [
+   "searches",
+   "indexes",
+   "dependsOn"
+  ],
+  "component>service": [
+   "calls",
+   "http",
+   "grpc",
+   "command",
+   "query",
+   "event",
+   "compensates",
+   "dependsOn"
+  ],
+  "component>stream": [
+   "publishes",
+   "consumes",
+   "event",
+   "dependsOn"
+  ],
+  "component>topic": [
+   "publishes",
+   "event",
+   "dependsOn"
+  ],
+  "component>worker": [
+   "calls",
+   "http",
+   "grpc",
+   "command",
+   "query",
+   "event",
+   "compensates",
+   "dependsOn"
+  ],
+  "database>component": [
+   "reads",
+   "query",
+   "cdc"
+  ],
+  "database>database": [
+   "ingests",
+   "replicates",
+   "cdc",
+   "syncs",
+   "transforms"
+  ],
+  "database>external": [
+   "reads",
+   "query",
+   "cdc"
+  ],
+  "database>gateway": [
+   "reads",
+   "query",
+   "cdc"
+  ],
+  "database>scheduler": [
+   "reads",
+   "query",
+   "cdc"
+  ],
+  "database>service": [
+   "reads",
+   "query",
+   "cdc"
+  ],
+  "database>worker": [
+   "reads",
+   "query",
+   "cdc"
+  ],
+  "deadLetter>component": [
+   "consumes",
+   "deliversTo",
+   "command",
+   "event"
+  ],
+  "deadLetter>external": [
+   "consumes",
+   "deliversTo",
+   "command",
+   "event"
+  ],
+  "deadLetter>gateway": [
+   "consumes",
+   "deliversTo",
+   "command",
+   "event"
+  ],
+  "deadLetter>scheduler": [
+   "consumes",
+   "deliversTo",
+   "command",
+   "event"
+  ],
+  "deadLetter>service": [
+   "consumes",
+   "deliversTo",
+   "command",
+   "event"
+  ],
+  "deadLetter>stream": [
+   "dependsOn",
+   "event"
+  ],
+  "deadLetter>topic": [
+   "dependsOn",
+   "event"
+  ],
+  "deadLetter>worker": [
+   "consumes",
+   "deliversTo",
+   "command",
+   "event"
+  ],
+  "external>cache": [
+   "reads",
+   "writes",
+   "readsWrites",
+   "invalidates",
+   "dependsOn"
+  ],
+  "external>component": [
+   "calls",
+   "http",
+   "grpc",
+   "command",
+   "query",
+   "event",
+   "compensates",
+   "dependsOn"
+  ],
+  "external>database": [
+   "readsWrites",
+   "writes",
+   "reads",
+   "query",
+   "dependsOn"
+  ],
+  "external>deadLetter": [
+   "deadLetters",
+   "publishes"
+  ],
+  "external>external": [
+   "calls",
+   "http",
+   "grpc",
+   "command",
+   "event",
+   "compensates",
+   "dependsOn"
+  ],
+  "external>fileSystem": [
+   "reads",
+   "writes",
+   "readsWrites",
+   "watches",
+   "dependsOn"
+  ],
+  "external>gateway": [
+   "calls",
+   "http",
+   "grpc",
+   "command",
+   "query",
+   "event",
+   "compensates",
+   "dependsOn"
+  ],
+  "external>objectStorage": [
+   "reads",
+   "writes",
+   "readsWrites",
+   "dependsOn"
+  ],
+  "external>port": [
+   "calls",
+   "implements",
+   "dependsOn"
+  ],
+  "external>queue": [
+   "command",
+   "publishes",
+   "consumes",
+   "event",
+   "dependsOn"
+  ],
+  "external>scheduler": [
+   "calls",
+   "http",
+   "grpc",
+   "command",
+   "query",
+   "event",
+   "compensates",
+   "dependsOn"
+  ],
+  "external>searchIndex": [
+   "searches",
+   "indexes",
+   "dependsOn"
+  ],
+  "external>service": [
+   "calls",
+   "http",
+   "grpc",
+   "command",
+   "query",
+   "event",
+   "compensates",
+   "dependsOn"
+  ],
+  "external>stream": [
+   "publishes",
+   "consumes",
+   "event",
+   "dependsOn"
+  ],
+  "external>topic": [
+   "publishes",
+   "event",
+   "dependsOn"
+  ],
+  "external>worker": [
+   "calls",
+   "http",
+   "grpc",
+   "command",
+   "query",
+   "event",
+   "compensates",
+   "dependsOn"
+  ],
+  "fileSystem>component": [
+   "reads"
+  ],
+  "fileSystem>external": [
+   "reads"
+  ],
+  "fileSystem>gateway": [
+   "reads"
+  ],
+  "fileSystem>scheduler": [
+   "reads"
+  ],
+  "fileSystem>service": [
+   "reads"
+  ],
+  "fileSystem>worker": [
+   "reads"
+  ],
+  "gateway>cache": [
+   "dependsOn",
+   "writes",
+   "reads",
+   "invalidates"
+  ],
+  "gateway>component": [
+   "routes",
+   "calls",
+   "dependsOn"
+  ],
+  "gateway>database": [
+   "dependsOn",
+   "writes",
+   "reads",
+   "query"
+  ],
+  "gateway>deadLetter": [
+   "deadLetters",
+   "publishes"
+  ],
+  "gateway>external": [
+   "calls",
+   "http",
+   "grpc",
+   "command",
+   "event",
+   "compensates",
+   "dependsOn"
+  ],
+  "gateway>fileSystem": [
+   "dependsOn",
+   "reads",
+   "writes",
+   "watches"
+  ],
+  "gateway>gateway": [
+   "routes",
+   "calls",
+   "dependsOn"
+  ],
+  "gateway>objectStorage": [
+   "dependsOn",
+   "reads",
+   "writes"
+  ],
+  "gateway>port": [
+   "calls",
+   "implements",
+   "dependsOn"
+  ],
+  "gateway>queue": [
+   "command",
+   "publishes",
+   "consumes",
+   "event",
+   "dependsOn"
+  ],
+  "gateway>scheduler": [
+   "routes",
+   "calls",
+   "dependsOn"
+  ],
+  "gateway>searchIndex": [
+   "dependsOn",
+   "searches",
+   "indexes"
+  ],
+  "gateway>service": [
+   "routes",
+   "calls",
+   "dependsOn"
+  ],
+  "gateway>stream": [
+   "publishes",
+   "consumes",
+   "event",
+   "dependsOn"
+  ],
+  "gateway>topic": [
+   "publishes",
+   "event",
+   "dependsOn"
+  ],
+  "gateway>worker": [
+   "routes",
+   "calls",
+   "dependsOn"
+  ],
+  "objectStorage>component": [
+   "reads"
+  ],
+  "objectStorage>database": [
+   "transforms",
+   "ingests"
+  ],
+  "objectStorage>deadLetter": [
+   "publishes",
+   "event"
+  ],
+  "objectStorage>external": [
+   "reads"
+  ],
+  "objectStorage>gateway": [
+   "reads"
+  ],
+  "objectStorage>queue": [
+   "publishes",
+   "event"
+  ],
+  "objectStorage>scheduler": [
+   "reads"
+  ],
+  "objectStorage>service": [
+   "reads"
+  ],
+  "objectStorage>stream": [
+   "publishes",
+   "event"
+  ],
+  "objectStorage>topic": [
+   "publishes",
+   "event"
+  ],
+  "objectStorage>worker": [
+   "reads"
+  ],
+  "port>component": [
+   "implementedBy"
+  ],
+  "port>database": [
+   "dependsOn"
+  ],
+  "port>external": [
+   "implementedBy"
+  ],
+  "port>gateway": [
+   "implementedBy"
+  ],
+  "port>scheduler": [
+   "implementedBy"
+  ],
+  "port>service": [
+   "implementedBy"
+  ],
+  "port>worker": [
+   "implementedBy"
+  ],
+  "queue>component": [
+   "consumes",
+   "deliversTo",
+   "command",
+   "event"
+  ],
+  "queue>deadLetter": [
+   "deadLetters"
+  ],
+  "queue>external": [
+   "consumes",
+   "deliversTo",
+   "command",
+   "event"
+  ],
+  "queue>gateway": [
+   "consumes",
+   "deliversTo",
+   "command",
+   "event"
+  ],
+  "queue>scheduler": [
+   "consumes",
+   "deliversTo",
+   "command",
+   "event"
+  ],
+  "queue>service": [
+   "consumes",
+   "deliversTo",
+   "command",
+   "event"
+  ],
+  "queue>stream": [
+   "dependsOn",
+   "event"
+  ],
+  "queue>topic": [
+   "dependsOn",
+   "event"
+  ],
+  "queue>worker": [
+   "consumes",
+   "deliversTo",
+   "command",
+   "event"
+  ],
+  "scheduler>cache": [
+   "reads",
+   "writes",
+   "readsWrites",
+   "invalidates",
+   "dependsOn"
+  ],
+  "scheduler>component": [
+   "triggers",
+   "calls",
+   "dependsOn"
+  ],
+  "scheduler>database": [
+   "readsWrites",
+   "writes",
+   "reads",
+   "query",
+   "dependsOn"
+  ],
+  "scheduler>deadLetter": [
+   "deadLetters",
+   "publishes"
+  ],
+  "scheduler>external": [
+   "calls",
+   "http",
+   "grpc",
+   "command",
+   "event",
+   "compensates",
+   "dependsOn"
+  ],
+  "scheduler>fileSystem": [
+   "reads",
+   "writes",
+   "readsWrites",
+   "watches",
+   "dependsOn"
+  ],
+  "scheduler>gateway": [
+   "triggers",
+   "calls",
+   "dependsOn"
+  ],
+  "scheduler>objectStorage": [
+   "reads",
+   "writes",
+   "readsWrites",
+   "dependsOn"
+  ],
+  "scheduler>port": [
+   "calls",
+   "implements",
+   "dependsOn"
+  ],
+  "scheduler>queue": [
+   "command",
+   "publishes",
+   "consumes",
+   "event",
+   "dependsOn"
+  ],
+  "scheduler>scheduler": [
+   "triggers",
+   "calls",
+   "dependsOn"
+  ],
+  "scheduler>searchIndex": [
+   "searches",
+   "indexes",
+   "dependsOn"
+  ],
+  "scheduler>service": [
+   "triggers",
+   "calls",
+   "dependsOn"
+  ],
+  "scheduler>stream": [
+   "publishes",
+   "consumes",
+   "event",
+   "dependsOn"
+  ],
+  "scheduler>topic": [
+   "publishes",
+   "event",
+   "dependsOn"
+  ],
+  "scheduler>worker": [
+   "triggers",
+   "calls",
+   "dependsOn"
+  ],
+  "service>cache": [
+   "reads",
+   "writes",
+   "readsWrites",
+   "invalidates",
+   "dependsOn"
+  ],
+  "service>component": [
+   "calls",
+   "http",
+   "grpc",
+   "command",
+   "query",
+   "event",
+   "compensates",
+   "dependsOn"
+  ],
+  "service>database": [
+   "readsWrites",
+   "writes",
+   "reads",
+   "query",
+   "dependsOn"
+  ],
+  "service>deadLetter": [
+   "deadLetters",
+   "publishes"
+  ],
+  "service>external": [
+   "calls",
+   "http",
+   "grpc",
+   "command",
+   "event",
+   "compensates",
+   "dependsOn"
+  ],
+  "service>fileSystem": [
+   "reads",
+   "writes",
+   "readsWrites",
+   "watches",
+   "dependsOn"
+  ],
+  "service>gateway": [
+   "calls",
+   "http",
+   "grpc",
+   "command",
+   "query",
+   "event",
+   "compensates",
+   "dependsOn"
+  ],
+  "service>objectStorage": [
+   "reads",
+   "writes",
+   "readsWrites",
+   "dependsOn"
+  ],
+  "service>port": [
+   "calls",
+   "implements",
+   "dependsOn"
+  ],
+  "service>queue": [
+   "command",
+   "publishes",
+   "consumes",
+   "event",
+   "dependsOn"
+  ],
+  "service>scheduler": [
+   "calls",
+   "http",
+   "grpc",
+   "command",
+   "query",
+   "event",
+   "compensates",
+   "dependsOn"
+  ],
+  "service>searchIndex": [
+   "searches",
+   "indexes",
+   "dependsOn"
+  ],
+  "service>service": [
+   "calls",
+   "http",
+   "grpc",
+   "command",
+   "query",
+   "event",
+   "compensates",
+   "dependsOn"
+  ],
+  "service>stream": [
+   "publishes",
+   "consumes",
+   "event",
+   "dependsOn"
+  ],
+  "service>topic": [
+   "publishes",
+   "event",
+   "dependsOn"
+  ],
+  "service>worker": [
+   "calls",
+   "http",
+   "grpc",
+   "command",
+   "query",
+   "event",
+   "compensates",
+   "dependsOn"
+  ],
+  "stream>component": [
+   "consumes",
+   "event"
+  ],
+  "stream>database": [
+   "ingests"
+  ],
+  "stream>deadLetter": [
+   "dependsOn"
+  ],
+  "stream>external": [
+   "consumes",
+   "event"
+  ],
+  "stream>gateway": [
+   "consumes",
+   "event"
+  ],
+  "stream>queue": [
+   "fansOut",
+   "deliversTo"
+  ],
+  "stream>scheduler": [
+   "consumes",
+   "event"
+  ],
+  "stream>searchIndex": [
+   "indexes",
+   "ingests"
+  ],
+  "stream>service": [
+   "consumes",
+   "event"
+  ],
+  "stream>worker": [
+   "consumes",
+   "event"
+  ],
+  "topic>component": [
+   "deliversTo"
+  ],
+  "topic>database": [
+   "ingests"
+  ],
+  "topic>deadLetter": [
+   "dependsOn"
+  ],
+  "topic>external": [
+   "deliversTo"
+  ],
+  "topic>gateway": [
+   "deliversTo"
+  ],
+  "topic>queue": [
+   "fansOut",
+   "deliversTo"
+  ],
+  "topic>scheduler": [
+   "deliversTo"
+  ],
+  "topic>searchIndex": [
+   "indexes",
+   "ingests"
+  ],
+  "topic>service": [
+   "deliversTo"
+  ],
+  "topic>worker": [
+   "deliversTo"
+  ],
+  "worker>cache": [
+   "reads",
+   "writes",
+   "readsWrites",
+   "invalidates",
+   "dependsOn"
+  ],
+  "worker>component": [
+   "calls",
+   "http",
+   "grpc",
+   "command",
+   "query",
+   "event",
+   "compensates",
+   "dependsOn"
+  ],
+  "worker>database": [
+   "readsWrites",
+   "writes",
+   "reads",
+   "query",
+   "dependsOn"
+  ],
+  "worker>deadLetter": [
+   "deadLetters",
+   "publishes"
+  ],
+  "worker>external": [
+   "calls",
+   "http",
+   "grpc",
+   "command",
+   "event",
+   "compensates",
+   "dependsOn"
+  ],
+  "worker>fileSystem": [
+   "reads",
+   "writes",
+   "readsWrites",
+   "watches",
+   "dependsOn"
+  ],
+  "worker>gateway": [
+   "calls",
+   "http",
+   "grpc",
+   "command",
+   "query",
+   "event",
+   "compensates",
+   "dependsOn"
+  ],
+  "worker>objectStorage": [
+   "reads",
+   "writes",
+   "readsWrites",
+   "dependsOn"
+  ],
+  "worker>port": [
+   "calls",
+   "implements",
+   "dependsOn"
+  ],
+  "worker>queue": [
+   "command",
+   "publishes",
+   "consumes",
+   "event",
+   "dependsOn"
+  ],
+  "worker>scheduler": [
+   "calls",
+   "http",
+   "grpc",
+   "command",
+   "query",
+   "event",
+   "compensates",
+   "dependsOn"
+  ],
+  "worker>searchIndex": [
+   "searches",
+   "indexes",
+   "dependsOn"
+  ],
+  "worker>service": [
+   "calls",
+   "http",
+   "grpc",
+   "command",
+   "query",
+   "event",
+   "compensates",
+   "dependsOn"
+  ],
+  "worker>stream": [
+   "publishes",
+   "consumes",
+   "event",
+   "dependsOn"
+  ],
+  "worker>topic": [
+   "publishes",
+   "event",
+   "dependsOn"
+  ],
+  "worker>worker": [
+   "calls",
+   "http",
+   "grpc",
+   "command",
+   "query",
+   "event",
+   "compensates",
+   "dependsOn"
+  ]
+ }
+}

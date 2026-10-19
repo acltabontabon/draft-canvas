@@ -6,6 +6,8 @@ import {
   DesktopError,
   type AgentClient,
   type AgentClientSetup,
+  type AgentSkillSetup,
+  type AgentSkillTarget,
   type AgentSettings,
   type DesktopApi,
   type DocState,
@@ -310,6 +312,9 @@ export function createHarness() {
     agentConfigure: vi.fn(async () => agent.settings),
     agentClients: vi.fn(async () => [] as AgentClientSetup[]),
     agentConnectClient: vi.fn(async (client: AgentClient): Promise<AgentClientSetup> => ({ client, state: 'ready', automatic: true, location: null, configuredCommand: null })),
+    agentSkills: vi.fn(async () => [] as AgentSkillSetup[]),
+    agentInstallSkill: vi.fn(async (target: AgentSkillTarget): Promise<AgentSkillSetup> => ({ target, state: 'ready', location: null, installedVersion: '1', bundledVersion: '1', backup: null })),
+    agentRemoveSkill: vi.fn(async (target: AgentSkillTarget): Promise<AgentSkillSetup> => ({ target, state: 'not-installed', location: null, installedVersion: null, bundledVersion: '1', backup: null })),
     agentProposalList: vi.fn(async (diagramId?: string) => {
       const all = [...agent.proposals.values()].filter((p) => diagramId === undefined || p.diagramId === diagramId);
       return all.sort((a, b) => b.updatedAt - a.updatedAt);
