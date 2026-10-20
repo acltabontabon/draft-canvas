@@ -13,7 +13,7 @@ the release notes and the in-app What's New are generated from here. See
 
 ### Desktop
 
-#### Improved
+#### Changed
 
 - Agent-generated diagrams arrange look-inside views around their own flows and choose a clearer
   reading direction automatically, reducing crossings without a manual layout pass.
@@ -45,7 +45,7 @@ the release notes and the in-app What's New are generated from here. See
 
 ### Shared
 
-#### Improved
+#### Changed
 
 - New Actors use a borderless symbol and label, with a Framed option in their bar. Existing diagrams
   keep their frames, and both styles carry through to image exports.
@@ -66,7 +66,7 @@ the release notes and the in-app What's New are generated from here. See
 
 ### Web
 
-#### Improved
+#### Changed
 
 - Home has its own sketchbook layout: an editorial heading beside a Quick Draft paper card, with
   example and import actions below it. The compact diagram and project shelf keeps the gallery's
