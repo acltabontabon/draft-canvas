@@ -34,7 +34,7 @@ test('looking around in one tab does not make the other tab conflict on its next
 
   const two = await context.newPage();
   await two.goto('/');
-  await two.locator('.dc-library-item', { hasText: 'Two tabs' }).click();
+  await two.getByRole('button', { name: 'Open Two tabs', exact: true }).click();
   await two.waitForSelector('.dc-editor');
   await expect(two.locator('.dc-save')).toContainText('Saved locally');
 
