@@ -43,6 +43,11 @@ the release notes and the in-app What's New are generated from here. See
 - The bundled agent skill stops its fallback survey at the file limit, validates portable source
   evidence paths, and checks source files without loading them whole into memory.
 
+#### Security
+
+- Updated certificate validation and bundled trust roots to address RUSTSEC-2026-0382 and
+  RUSTSEC-2026-0383, which could allow certificate chains through distrusted emSign intermediates.
+
 ### Shared
 
 #### Changed
