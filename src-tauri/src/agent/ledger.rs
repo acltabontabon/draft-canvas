@@ -174,6 +174,16 @@ impl Ledger {
                 Stage::Pending | Stage::Committing => age <= UNRESOLVED_RETENTION_MS,
             }
         });
+        // Most appends stay below the cap; avoid cloning every retained key on those transitions.
+        if self
+            .entries
+            .values()
+            .filter(|e| matches!(e.stage, Stage::Committed | Stage::Failed))
+            .count()
+            <= RESOLVED_CAP
+        {
+            return;
+        }
         let mut resolved: Vec<(u64, String)> = self
             .entries
             .values()

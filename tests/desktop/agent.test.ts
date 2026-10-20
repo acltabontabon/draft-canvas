@@ -121,6 +121,23 @@ describe('agent requests on desktop', () => {
     expect(out.error?.code).toBe('DOCUMENT_BUSY');
   });
 
+  it('reports NOT_ACTIVE for a closed selection target without reading another diagram', async () => {
+    await openOrders();
+    useEditorStore.getState().setSelection({ nodes: ['api'], edges: [] });
+    const closed = h.addFile('Other', diagramText().replaceAll('d_orders000001', 'd_other000001'));
+    const out = await request('read_selection', { diagramId: 'd_other000001' }, { handle: closed, open: false, diagramId: 'd_other000001' });
+    expect(out.ok).toBe(false);
+    expect(out.error?.code).toBe('NOT_ACTIVE');
+  });
+
+  it('reads the selection from a formerly closed target that has since been opened', async () => {
+    const handle = await openOrders();
+    useEditorStore.getState().setSelection({ nodes: ['api'], edges: [] });
+    const out = await request('read_selection', { diagramId: 'd_orders000001' }, { handle, open: false, diagramId: 'd_orders000001' });
+    expect(out.ok).toBe(true);
+    expect(out.value?.selection).toMatchObject({ nodes: ['api'], edges: [] });
+  });
+
   it('reads live unsaved content if a formerly closed target has since been opened', async () => {
     const handle = await openOrders();
     const original = h.files.get(handle)!.text;

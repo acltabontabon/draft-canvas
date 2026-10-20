@@ -214,9 +214,13 @@ async function fileFor(host: AgentHost, context: AgentContext): Promise<{ file: 
   return host.inTurn(() => fileForInTurn(host, context));
 }
 
+function targetIsOpen(host: AgentHost, context: AgentContext): boolean {
+  return context.handle ? host.openFile()?.handle === context.handle : context.open === true;
+}
+
 /** Check identity inside the controller turn: the shell's open flag may predate a queued Open. */
 async function fileForInTurn(host: AgentHost, context: AgentContext): Promise<{ file: DraftDocument; revision: string; selection?: { nodes: string[]; edges: string[] }; path?: readonly string[] }> {
-  const open = context.handle ? host.openFile()?.handle === context.handle : context.open;
+  const open = targetIsOpen(host, context);
   if (context.open && !open) {
     throw new AgentError('DOCUMENT_BUSY', 'The open diagram changed while this request was waiting. Read the target diagram again.', { retryable: true });
   }
@@ -355,9 +359,15 @@ async function implementationContext(host: AgentHost, args: Record<string, unkno
 
 /** Only the open diagram has a selection; never borrow the selection from a different document. */
 async function readSelection(host: AgentHost, context: AgentContext) {
-  const snapshot = await fileFor(host, context);
-  if (!snapshot.selection || !snapshot.path) throw new AgentError('NOT_ACTIVE', 'That diagram is not open, so nothing is selected.', { hint: 'Ask the person to open it and select what to change, or read the whole view with read_diagram.' });
-  return readSelectionContext(snapshot.file, snapshot.path, snapshot.selection, snapshot.revision, context.diagramId ?? '');
+  return host.inTurn(async () => {
+    // The broker sends no file text for selection reads. Check activity before the file fallback,
+    // while still allowing a target opened since dispatch to supply its current selection.
+    if (context.open || targetIsOpen(host, context)) {
+      const snapshot = await fileForInTurn(host, context);
+      if (snapshot.selection && snapshot.path) return readSelectionContext(snapshot.file, snapshot.path, snapshot.selection, snapshot.revision, context.diagramId ?? '');
+    }
+    throw new AgentError('NOT_ACTIVE', 'That diagram is not open, so nothing is selected.', { hint: 'Ask the person to open it and select what to change, or read the whole view with read_diagram.' });
+  });
 }
 
 /**
