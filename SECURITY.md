@@ -49,9 +49,14 @@ Update signatures are verified against the public key built into the app. Instal
 code-signed or notarized; check downloads against the release's `SHA256SUMS.txt` and build attestation.
 See [Desktop updates](docs/reference/desktop-updates.md) for signing and key lifecycle.
 
-Agent access is off by default. Its connector uses a user-only local socket or named pipe, not a
-network port. Connections authenticate with a random token that is not logged or exposed to the
-editor page. Folder permissions are checked on every call and retry, and input is validated.
+Agent access is off by default and granted per project folder. Its connector uses a user-only local
+socket or named pipe, not a network port. Connections authenticate with a random token that is not
+logged or exposed to the editor page; **Disconnect agents** replaces it and ends open connections.
+Folder permissions are checked on every call and retry, and input is validated like an imported file.
+Diagrams reachable through overlapping folders are refused as ambiguous, and queued reads stay bound
+to the diagram they targeted. The request history that makes retries safe is bounded and expires.
+**Add to Codex** and **Add to Claude Code** only add the connector entry to that agent's own
+configuration; installing the bundled skill copies files into the agent's skill folder.
 Your agent may send diagram content to its own AI provider; that provider is outside Draft Canvas's
 control. See [Agent security](docs/reference/agent-integration.md#security).
 
