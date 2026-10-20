@@ -55,10 +55,9 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: false
       # The editor half is only ever a release. A site-only push (pages-site.yml) or a run on demand
-      # from a branch would otherwise build main's unreleased editor into /draft-canvas/editor/ —
-      # the page installed VS Code extensions load — and stamp the site's download links with a
-      # package.json version that has no installers yet. So off a tag, check out the newest stable
-      # vX.Y.Z and lay this commit's www/ (and the script that assembles it) over it.
+      # from a branch would otherwise build main's unreleased editor into /draft-canvas/editor/
+      # and stamp the site's download links with a package.json version that has no installers yet.
+      # So off a tag, check out the newest stable vX.Y.Z and lay this commit's www/ (and the script that assembles it) over it.
       - name: Build the editor from the latest release
         if: github.ref_type != 'tag' || inputs.release-tag != ''
         env:

@@ -98,8 +98,8 @@ function anchorsOf(markdown) {
 
 /**
  * The sidebar: the guides and reference documents docs/index.md lists in its tables, in its order
- * and under its own names for them. A published page the index only mentions in passing (the VS Code
- * notice) is still a page, just not a destination in the sidebar.
+ * and under its own names for them. A published page the index only mentions in passing is still a
+ * page, just not a destination in the sidebar.
  */
 function navigationOf(pages) {
   const index = pages.get('index.md');

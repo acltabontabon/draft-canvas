@@ -596,7 +596,7 @@ test.describe('editing', () => {
   test('a native copy or cut event carries the selected shapes, for hosts that refuse the Clipboard API', async ({ page, browserName }) => {
     // Firefox empties a script-made copy event's clipboardData; the handler itself is engine-neutral.
     test.skip(browserName === 'firefox', 'Firefox protects the clipboard data of synthetic copy events');
-    // VS Code's webview refuses `navigator.clipboard`, so there ⌘C/⌘X reach the app as the Edit
+    // An embedded webview can refuse `navigator.clipboard`, so there ⌘C/⌘X reach the app as the Edit
     // menu's native copy/cut. Their event's own `clipboardData` is the one writable clipboard, and
     // what another diagram (another webview) pastes from.
     await newCanvas(page, 'Native copy event');

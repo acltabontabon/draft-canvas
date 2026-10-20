@@ -18,7 +18,7 @@ const ROOT = join(import.meta.dirname, '..');
 function markdownFiles(dir: string): string[] {
   const out: string[] = [];
   for (const entry of readdirSync(dir)) {
-    // Dot-directories are tooling (`.git`, `.vscode-test` holds a downloaded copy of VS Code) —
+    // Dot-directories are tooling (`.git`) —
     // except `.github`, whose issue and PR templates are Markdown a reader lands on.
     // `target` is cargo's build output (src-tauri/), `gen` the schemas Tauri regenerates there.
     if (['node_modules', 'dist', 'dist-desktop', 'target', 'gen', 'test-results', 'playwright-report'].includes(entry)) continue;

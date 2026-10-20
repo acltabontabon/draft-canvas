@@ -35,86 +35,49 @@ async function goToStep(page: Page, step: number) {
 }
 
 /**
- * The boxes of every given locator once they've all simultaneously come to rest. A callout
- * tracks the same camera transform as the canvas element it's beside, in lockstep — but the
- * callout is written straight to the DOM on every store update while the canvas repaints through
- * React, so under load one can read as "settled" a frame or two before the other catches up.
- * Polling them together, and only accepting a frame where neither moved, is what actually proves
- * the camera (or entrance animation) has finished — settling either one alone doesn't.
- *
- * First the two things that move them are waited out by name — the camera (a per-frame d3
- * transition on the viewport, so a transform that holds across rendered frames and a quiet
- * interval has finished) and any animation or transition still running under the elements
- * themselves — and then the boxes are sampled a rendered frame apart, twice over, so the frame React needs to catch
- * the callout up with the canvas is what separates the samples rather than a guessed interval.
+ * Wait for the actual camera transition and entrance animations, then sample all boxes together.
+ * Callouts follow the camera straight through the DOM while canvas nodes follow through React,
+ * so one stationary element alone cannot prove the pair has caught up.
  */
 async function settledBoxes(locators: readonly Locator[]): Promise<Box[]> {
   const page = locators[0]!.page();
-  // Frame-based observation needs the active test page. Keep observing inside the browser:
-  // restarting probes through expect.poll can miss the still window under load. A quiet
-  // interval plus two frames avoids requiring six fast frames from a throttled WebKit runner,
-  // while still outlasting the one-frame delay before a camera transition starts.
   await page.bringToFront();
-  const camera = await page.evaluate(() => new Promise<{ settled: boolean; transform: string }>((resolve) => {
-    const viewport = document.querySelector<HTMLElement>('.react-flow__viewport');
-    if (!viewport) return resolve({ settled: false, transform: 'missing viewport' });
-    let transform = viewport.style.transform;
-    let stillFrames = 0;
-    let stillSince = performance.now();
-    let frame = 0;
-    const finish = (settled: boolean) => {
-      clearTimeout(deadline);
-      cancelAnimationFrame(frame);
-      resolve({ settled, transform });
-    };
-    const deadline = window.setTimeout(() => finish(false), 5000);
-    const observe = () => {
-      const next = viewport.style.transform;
-      if (next === transform) stillFrames += 1;
-      else {
-        stillFrames = 0;
-        stillSince = performance.now();
-      }
-      transform = next;
-      if (stillFrames >= 2 && performance.now() - stillSince >= 100) finish(true);
-      else frame = requestAnimationFrame(observe);
-    };
-    frame = requestAnimationFrame(observe);
-  }));
-  expect(camera.settled, `the camera has come to rest (${camera.transform})`).toBe(true);
-  for (const locator of locators) {
-    await expect
-      .poll(() => locator.evaluate((el) => el.getAnimations({ subtree: true }).filter((animation) => animation.playState === 'running').length), {
-        message: 'nothing under the element is still animating',
-      })
-      .toBe(0);
-  }
-  const nextFrame = () => page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
-  let previous: Box[] | null = null;
+  let previous: { transform: string; boxes: Box[] } | null = null;
   let stableRuns = 0;
-  for (let i = 0; i < 120; i++) {
+  await expect.poll(async () => {
+    const camera = await page.locator('.react-flow__renderer').evaluate((renderer) => {
+      // React Flow's XYPanZoom schedules d3 transitions on this renderer. Their removal proves
+      // completion even when WebKit delays idle animation frames; a quiet transform alone can
+      // also be a transition that has not received its first tick yet.
+      const transitions = (renderer as HTMLElement & { __transition?: Record<string, unknown> }).__transition;
+      const viewport = renderer.querySelector<HTMLElement>('.react-flow__viewport');
+      return { moving: Object.keys(transitions ?? {}).length > 0, transform: viewport?.style.transform };
+    });
+    const animations = await Promise.all(locators.map((locator) =>
+      locator.evaluate((el) => el.getAnimations({ subtree: true }).some((animation) => animation.playState === 'running')),
+    ));
     const boxes = await Promise.all(locators.map((locator) => locator.boundingBox()));
-    if (boxes.every((box) => box !== null)) {
-      const current = boxes as Box[];
-      const stable =
-        previous !== null &&
-        current.every(
-          (box, index) =>
-            Math.abs(previous![index]!.x - box.x) < 0.5 &&
-            Math.abs(previous![index]!.y - box.y) < 0.5 &&
-            previous![index]!.width === box.width,
-        );
-      // Two still comparisons in a row: one could straddle the frame before a move's first tick.
-      stableRuns = stable ? stableRuns + 1 : 0;
-      if (stableRuns >= 2) return current;
-      previous = current;
-    } else {
+    if (camera.moving || camera.transform === undefined || animations.some(Boolean) || boxes.some((box) => box === null)) {
       previous = null;
       stableRuns = 0;
+      return false;
     }
-    await nextFrame();
-  }
-  throw new Error('boxes never settled together');
+    const current = boxes as Box[];
+    const stable = previous !== null && previous.transform === camera.transform && current.every((box, index) =>
+      Math.abs(previous!.boxes[index]!.x - box.x) < 0.5 &&
+      Math.abs(previous!.boxes[index]!.y - box.y) < 0.5 &&
+      previous!.boxes[index]!.width === box.width &&
+      previous!.boxes[index]!.height === box.height,
+    );
+    stableRuns = stable ? stableRuns + 1 : 0;
+    previous = { transform: camera.transform, boxes: current };
+    return stableRuns >= 2;
+  }, {
+    message: 'the camera and callout boxes have come to rest together',
+    intervals: [100],
+    timeout: 10_000,
+  }).toBe(true);
+  return previous!.boxes;
 }
 
 /** The callout's card once the camera and its entrance have both come to rest. */
@@ -182,6 +145,20 @@ test.describe('Presentation callouts', () => {
     await page.keyboard.press('ArrowLeft');
     await expect(callout).toHaveCount(1);
     await expect(callout).toContainText('Published only after');
+  });
+
+  test('settled callouts can be measured without more animation frames', async ({ page }) => {
+    await presentSubmitCommand(page);
+    await goToStep(page, 5);
+    const locators = [
+      page.locator('.dc-callout-card'),
+      page.locator('.dc-attachment-chip-row').filter({ hasText: 'Note' }),
+    ];
+    const resting = await settledBoxes(locators);
+    // Reproduce an idle WebKit page withholding further frame callbacks. Measurement must
+    // observe the completed transition and geometry, without asking that idle page to animate.
+    await page.evaluate(() => { window.requestAnimationFrame = () => 0; });
+    expect(await settledBoxes(locators)).toEqual(resting);
   });
 
   test('a node introduces itself when the flow first reaches it, and code reads as code', async ({ page }) => {

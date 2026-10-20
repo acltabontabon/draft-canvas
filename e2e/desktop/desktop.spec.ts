@@ -10,6 +10,8 @@ import { chooseWorkFile } from './explorer';
  */
 
 const CANVAS = '.react-flow__pane';
+// The inked inline-block can separate the final period in the heading's accessible name.
+const HOME_HEADLINE = /^It starts with a thought\s*\.$/;
 
 test.beforeEach(async ({ page }) => {
   await installMockShell(page);
@@ -444,7 +446,7 @@ test('what is unsaved is kept, and offered back from Home', async ({ page }) => 
   await expect(page.getByRole('tab', { name: 'Drafts' })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('tab')).toHaveText(['Drafts', 'Projects']);
   await expect(page.locator('.dc-desk')).toHaveAttribute('data-mode', 'returning');
-  await expect(page.getByRole('heading', { name: 'It starts with a thought.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: HOME_HEADLINE })).toBeVisible();
   const tile = page.getByRole('button', { name: 'Open Quick Draft, a draft not saved to a file' });
   await expect(tile).toHaveAttribute('data-thumbnail', 'drawn');
   // A Quick Draft is not asked about on the way out.
@@ -492,7 +494,7 @@ test('removing the last recent selects Drafts, then discarding the last draft se
   await expect(page.getByRole('tab')).toHaveCount(0);
   await expect(page.getByRole('group', { name: 'Projects', exact: true })).toBeVisible();
   await expect(page.locator('.dc-desk')).toHaveAttribute('data-mode', 'first');
-  await expect(page.getByRole('heading', { name: 'It starts with a thought.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: HOME_HEADLINE })).toBeVisible();
 });
 
 test('the row is walked and opened from the keyboard', async ({ page }) => {
@@ -518,7 +520,7 @@ test('the row is walked and opened from the keyboard', async ({ page }) => {
 test('a first run keeps the full welcome', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('.dc-desk')).toHaveAttribute('data-mode', 'first');
-  await expect(page.getByRole('heading', { name: 'It starts with a thought.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: HOME_HEADLINE })).toBeVisible();
   await expect(page.getByText('No title needed. Just begin.')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Open file…' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Try an example' })).toBeVisible();

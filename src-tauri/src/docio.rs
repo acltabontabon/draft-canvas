@@ -14,7 +14,7 @@ pub const MAX_DOC_BYTES: u64 = 24 * 1024 * 1024;
 pub const MAX_SIDECAR_BYTES: u64 = 16 * 1024 * 1024;
 
 /// A background image lives next to its document as `<file>.draftcanvas.background.<ext>`, the same
-/// convention the VS Code extension uses, so a folder opens identically in either.
+/// convention the web editor's Import and Export use.
 const SIDECAR_TYPES: [(&str, &str); 4] = [
     ("image/png", "png"),
     ("image/jpeg", "jpg"),

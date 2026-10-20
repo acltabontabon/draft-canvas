@@ -4,8 +4,7 @@ import { expect, test } from '@playwright/test';
  * What has to be true of the published artifact, at the path it is actually published under.
  *
  * These are all failures that a root-served preview cannot see: an asset URL wrong by one
- * directory, a service worker whose scope swallows the landing page, a released VS Code extension
- * whose frame stops reaching the editor, or the marketing stylesheet turning up in the app. They
+ * directory, a service worker whose scope swallows the landing page, or the marketing stylesheet turning up in the app. They
  * are about behaviour and structure — deliberately not about the copy on the page, which is
  * rewritten often and is not what a test should be pinning down.
  */
@@ -62,15 +61,6 @@ test("the editor's service worker is scoped to the editor, and never to the land
       '/draft-canvas/editor/',
     );
   }
-});
-
-test('a retired VS Code extension still reaches a page that says so', async ({ page }) => {
-  // Every published extension up to 0.1.6 loads this exact URL into its webview frame; the landing
-  // page forwards it to the editor, which shows the retirement notice rather than the Library.
-  await page.goto(`${SITE}?host=vscode`);
-  await expect(page).toHaveURL(/\/draft-canvas\/editor\/\?host=vscode$/);
-  await expect(page.getByRole('heading', { name: /has been retired/ })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Download the desktop app' })).toBeVisible();
 });
 
 test('an ordinary anchor stays on the landing page', async ({ page }) => {

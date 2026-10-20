@@ -1,8 +1,8 @@
 import type { ToHostMessage } from './embeddedHost';
 
 /**
- * The line between the app and whatever owns its file: today the desktop shell, in this same page
- * (once also a VS Code webview across a frame, before that extension was retired). `useHostDocument`
+ * The line between the app and whatever owns its file: today the desktop shell, in this same page.
+ * `useHostDocument`
  * speaks only this, so what the app says to a host — and what a host may say back — does not depend
  * on which one is on the other end.
  */
