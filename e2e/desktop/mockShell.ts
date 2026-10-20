@@ -35,8 +35,11 @@ export interface ShellHandle {
     recents?: { name: string; text: string; ago: number }[];
     drafts?: { title: string; text: string; ago: number }[];
     /** Project folders on the list, most recent first: each diagram by its path in the folder. */
+    /** Folders on disk that have not been linked as projects. */
+    explorer?: { name: string; path: string; diagrams: { path: string; text: string; ago: number }[] }[];
     projects?: { name: string; path?: string; diagrams: { path: string; text: string; ago: number }[] }[];
   }): void;
+  failNextExplorer(message: string): void;
   /** What the next folder dialog picks: a project by name (from `seed`), or `null` to cancel. */
   nextFolder(name: string | null): void;
   /** Something the shell tells the app on its own: a menu pick, a file the OS opened. */
@@ -178,6 +181,49 @@ export async function installMockShell(page: Page): Promise<void> {
     };
     const toFront = (handle: string) => void (listedProjects = [handle, ...listedProjects.filter((known) => known !== handle)]);
 
+    const createdFolders = new Set<string>();
+    const explorerSessions = new Set<string>();
+    const explorerPaths = new Map<string, string>();
+    const explorerTokens = new Map<string, string>();
+    let explorerFailure: string | null = null;
+    const explorerLocation = (path: string) => {
+      let handle = explorerTokens.get(path);
+      if (!handle) { handle = `b_${++handles}`; explorerTokens.set(path, handle); explorerPaths.set(handle, path); }
+      return { handle, name: path === '~' ? 'Home' : path.split('/').at(-1)!, displayPath: path };
+    };
+    const explorerTree = () => {
+      const tree = new Map<string, { kind: 'folder' | 'file'; text?: string; mtimeMs: number }>();
+      const add = (path: string, entry: { kind: 'folder' | 'file'; text?: string; mtimeMs: number }) => {
+        tree.set(path, entry);
+        let parent = path.slice(0, path.lastIndexOf('/'));
+        while (parent) { if (!tree.has(parent)) tree.set(parent, { kind: 'folder', mtimeMs: 0 }); parent = parent.slice(0, parent.lastIndexOf('/')); }
+      };
+      for (const path of ['~', '~/Documents', '~/Downloads', '~/Desktop']) add(path, { kind: 'folder', mtimeMs: 0 });
+      for (const path of createdFolders) add(path, { kind: 'folder', mtimeMs: Date.now() });
+      for (const project of folders.values()) {
+        add(project.info.displayPath, { kind: 'folder', mtimeMs: 0 });
+        for (const [relPath, file] of project.files) add(`${project.info.displayPath}/${relPath}`, { kind: 'file', ...file });
+      }
+      for (const file of files.values()) add(file.displayPath, { kind: 'file', text: file.text, mtimeMs: Date.now() });
+      return tree;
+    };
+    const explorerPath = (session: string, handle: string) => {
+      const path = explorerPaths.get(handle);
+      if (!explorerSessions.has(session) || !path) throw { kind: 'InvalidHandle', message: 'Reopen the explorer.' };
+      return path;
+    };
+    const explorerList = (session: string, handle: string, showHidden: boolean, query: string, offset: number) => {
+      const path = explorerPath(session, handle);
+      if (explorerFailure) { const message = explorerFailure; explorerFailure = null; throw { kind: 'PermissionDenied', message }; }
+      const tree = explorerTree();
+      const entries = [...tree].filter(([item]) => item.startsWith(`${path}/`) && !item.slice(path.length + 1).includes('/'))
+        .map(([item, entry]) => ({ ...explorerLocation(item), kind: entry.kind, modifiedMs: entry.mtimeMs, size: entry.text?.length ?? null }))
+        .filter((item) => (showHidden || !item.name.startsWith('.')) && item.name.toLowerCase().includes(query.trim().toLowerCase()))
+        .sort((a, b) => Number(a.kind !== 'folder') - Number(b.kind !== 'folder') || a.name.localeCompare(b.name));
+      const crumbs = path.split('/').map((_, index, parts) => explorerLocation(parts.slice(0, index + 1).join('/')));
+      return { location: explorerLocation(path), breadcrumbs: crumbs, entries: entries.slice(offset, offset + 200), total: entries.length, nextOffset: offset + 200 < entries.length ? offset + 200 : null, truncated: false };
+    };
+
     // Each handler names the arguments it reads; `never` lets them all live in one table.
     const commands: Record<string, (args: never, options?: unknown) => unknown> = {
       host_ready: (args: { onEvent: ChannelLike }) => {
@@ -265,6 +311,74 @@ export async function installMockShell(page: Page): Promise<void> {
       sidecar_remove: (args: { handle: string }) => void sidecars.delete(args.handle),
       peek_document: (args: { handle: string }) => files.get(args.handle)?.text ?? null,
       project_peek: (args: { projectHandle: string; relPath: string }) => folders.get(args.projectHandle)?.files.get(args.relPath)?.text ?? null,
+      explorer_open: (args: { startIn?: { projectHandle: string; relPath: string } }) => {
+        const session = `x_${++handles}`;
+        explorerSessions.add(session);
+        const places = ['~', '~/Desktop', '~/Documents', '~/Downloads'].map((path) => ({ location: explorerLocation(path), project: false }));
+        places.push(...listedProjects.map((handle) => ({ location: explorerLocation(folder(handle).info.displayPath), project: true })));
+        const startPath = args?.startIn ? `${folder(args.startIn.projectHandle).info.displayPath}${args.startIn.relPath ? '/' + args.startIn.relPath : ''}` : '~';
+        return { session, places, directory: explorerList(session, explorerLocation(startPath).handle, false, '', 0) };
+      },
+      explorer_list: (args: { session: string; handle: string; showHidden: boolean; query: string; offset: number }) => explorerList(args.session, args.handle, args.showHidden, args.query, args.offset),
+      explorer_save_file: (bytes: unknown, options: unknown) => {
+        const args = meta(options) as { session: string; handle: string; name: string; expectedStamp?: string; copySidecarFrom?: string };
+        const parent = explorerPath(args.session, args.handle);
+        if (explorerFailure) { const message = explorerFailure; explorerFailure = null; throw { kind: 'PermissionDenied', message }; }
+        const name = args.name.trim().replace(/\.draftcanvas$/i, '');
+        if (!name || /[/\\:*?"<>|\x00-\x1f]/.test(name)) throw { kind: 'InvalidPath', message: 'Choose a file name without slashes or special characters.' };
+        const path = `${parent}/${name}.draftcanvas`;
+        let match = [...files].find(([, file]) => file.displayPath === path);
+        const tree = explorerTree();
+        if (tree.get(path)?.kind === 'folder') throw { kind: 'AlreadyExists', message: 'That name belongs to a folder. Choose another file name.' };
+        if (!match && tree.get(path)?.kind === 'file') {
+          const handle = addFile(name, tree.get(path)!.text!);
+          files.get(handle)!.displayPath = path;
+          match = [handle, files.get(handle)!];
+        }
+        if (match && args.expectedStamp !== stamp(match[1])) return { outcome: 'exists', name: `${name}.draftcanvas`, stamp: stamp(match[1]) };
+        const handle = match?.[0] ?? addFile(name, decode(bytes));
+        const file = files.get(handle)!;
+        file.displayPath = path;
+        file.text = decode(bytes);
+        if (match) file.version += 1;
+        if (args.copySidecarFrom && sidecars.has(args.copySidecarFrom)) sidecars.set(handle, sidecars.get(args.copySidecarFrom)!);
+        // Mirror the write into every linked or unlinked folder on the mock disk.
+        for (const project of folders.values()) if (path.startsWith(`${project.info.displayPath}/`)) project.files.set(path.slice(project.info.displayPath.length + 1), { text: file.text, mtimeMs: Date.now() });
+        touch(handle, file);
+        return { outcome: 'saved', saved: { handle, name, displayPath: path, stamp: stamp(file) } };
+      },
+      explorer_create_folder: (args: { session: string; handle: string; name: string }) => {
+        const parent = explorerPath(args.session, args.handle);
+        if (explorerFailure) { const message = explorerFailure; explorerFailure = null; throw { kind: 'PermissionDenied', message }; }
+        const name = args.name.trim();
+        if (!name || name === '.' || name === '..' || /[/\\:*?"<>|\x00-\x1f]/.test(name) || name.endsWith('.')) throw { kind: 'InvalidPath', message: 'Use a folder name without slashes or special characters.' };
+        const path = `${parent}/${name}`;
+        if (explorerTree().has(path)) throw { kind: 'AlreadyExists', message: 'An item with that name already exists. Choose another folder name.' };
+        createdFolders.add(path);
+        return explorerLocation(path);
+      },
+      explorer_peek: (args: { session: string; handle: string }) => explorerTree().get(explorerPath(args.session, args.handle))?.text ?? null,
+      explorer_add_project: (args: { session: string; handle: string }) => {
+        const path = explorerPath(args.session, args.handle);
+        let project = [...folders.values()].find((item) => item.info.displayPath === path);
+        if (!project) {
+          const handle = `p_${++handles}`;
+          project = { info: { handle, name: explorerLocation(path).name, displayPath: path }, files: new Map([...explorerTree()].filter(([item, entry]) => item.startsWith(`${path}/`) && entry.kind === 'file').map(([item, entry]) => [item.slice(path.length + 1), { text: entry.text!, mtimeMs: entry.mtimeMs }])) };
+          folders.set(handle, project);
+        }
+        toFront(project.info.handle);
+        return project.info;
+      },
+      explorer_open_file: (args: { session: string; handle: string }) => {
+        const path = explorerPath(args.session, args.handle);
+        const text = explorerTree().get(path)?.text;
+        if (text === undefined) throw { kind: 'NotFound', message: 'That diagram is no longer there.' };
+        const handle = [...files].find(([, file]) => file.displayPath === path)?.[0] ?? addFile(stemOf(path), text);
+        files.get(handle)!.displayPath = path;
+        touch(handle, files.get(handle)!);
+        return opened(handle, files.get(handle)!);
+      },
+      explorer_close: (args: { session: string }) => void explorerSessions.delete(args.session),
       pick_project: () => {
         if (!pickedFolder) return null;
         toFront(pickedFolder);
@@ -432,14 +546,14 @@ export async function installMockShell(page: Page): Promise<void> {
         agentSettings = { ...agentSettings, ...patch };
         emit({ type: 'agent-changed' });
       },
-      seed: ({ recents: seeded = [], drafts = [], projects = [] }) => {
-        for (const project of projects) {
+      seed: ({ recents: seeded = [], drafts = [], projects = [], explorer = [] }) => {
+        for (const project of [...projects, ...explorer]) {
           const handle = `p_${(handles += 1)}`;
           folders.set(handle, {
-            info: { handle, name: project.name, displayPath: `~/work/${project.path ?? project.name}` },
+            info: { handle, name: project.name, displayPath: project.path?.startsWith('~/') ? project.path : `~/work/${project.path ?? project.name}` },
             files: new Map(project.diagrams.map((diagram) => [diagram.path, { text: diagram.text, mtimeMs: Date.now() - diagram.ago }])),
           });
-          listedProjects.push(handle);
+          if (projects.includes(project)) listedProjects.push(handle);
         }
         for (const item of seeded) {
           const handle = addFile(item.name, item.text);
@@ -454,6 +568,7 @@ export async function installMockShell(page: Page): Promise<void> {
           });
         });
       },
+      failNextExplorer: (message) => { explorerFailure = message; },
       nextFolder: (name) => {
         pickedFolder = name === null ? null : ([...folders.values()].find((project) => project.info.name === name)?.info.handle ?? null);
       },

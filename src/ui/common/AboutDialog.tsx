@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { formatReleaseDate, formatReleaseDateCompact } from '../../lib/date';
 import { versionKind } from '../../lib/semver';
-import { hostKind } from '../../host/hostInfo';
 import { PRODUCT } from '../../product';
 import {
   applicableReleases,
@@ -330,13 +329,6 @@ function AboutDialogBody() {
               </button>
             )}
           </div>
-
-          {hostKind() === 'desktop' && (
-            <p className="dc-about-privacy">
-              Your diagrams never leave this computer. The app only goes online to look for updates (you can turn
-              that off in Settings) and to download one when you ask.
-            </p>
-          )}
 
           <div className="dc-about-colophon">
             <div className="dc-about-signature">

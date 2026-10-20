@@ -1,14 +1,12 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createEdge, createNode } from '../src/document/factory';
 import { libraryShapeOf } from '../src/document/shape';
-import type { DraftSummary, Project } from '../src/document/types';
+import type { DraftSummary } from '../src/document/types';
 import { useUiStore } from '../src/store/uiStore';
 import type { DocumentSession } from '../src/store/useDocumentSession';
 import { LibraryScreen } from '../src/ui/Library/LibraryScreen';
-import { PRIMARY_STARTERS } from '../src/starters';
-import { loadStarters } from '../src/starters/load';
 
 /**
  * The home screen has to work in every shape a workspace can be in — brand
@@ -36,7 +34,7 @@ function stubSession(overrides: Partial<DocumentSession> = {}): DocumentSession 
     openId: null,
     projects: [],
     refreshProjects: async () => {},
-    createProject: async () => undefined,
+    createProject: vi.fn(async () => undefined),
     renameProject: async () => {},
     deleteProject: async () => {},
     moveDocumentToProject: async () => {},
@@ -58,131 +56,88 @@ const shaped = (): DraftSummary => {
   });
 };
 
-const project: Project = { id: 'p1', name: 'Payments', createdAt: 1, updatedAt: 1 };
 
 beforeEach(() => {
   useUiStore.setState({
     librarySearchQuery: '',
+    libraryBrowsing: true,
     libraryView: { kind: 'recent' },
     librarySort: 'updatedAt',
     moveMenuOpenFor: null,
   });
 });
 
-describe('LibraryScreen — first run', () => {
-  // The catalog is its own chunk (`starters/load`); loaded once up front, the way a warm cache
-  // hands it over, so each render below has its tiles on the first frame.
-  beforeAll(async () => {
-    await loadStarters();
-  });
+describe('LibraryScreen — Home', () => {
+  beforeEach(() => useUiStore.setState({ libraryBrowsing: false }));
 
-  it('shows the starters once the catalog arrives', async () => {
-    render(<LibraryScreen session={stubSession()} />);
-    expect(await screen.findByRole('button', { name: 'Start from Monolith' })).toBeInTheDocument();
-  });
-
-  it('offers the primary starters and none of the library a first run has nothing to fill', () => {
-    const session = stubSession();
-    const { container } = render(<LibraryScreen session={session} />);
-
-    expect(screen.queryByRole('heading', { name: 'Recently edited' })).not.toBeInTheDocument();
-    expect(screen.queryByText('Nothing here yet.')).not.toBeInTheDocument();
-    expect(screen.queryByRole('searchbox', { name: 'Search diagrams' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('navigation', { name: 'Diagram views' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'About Draft Canvas' })).toBeInTheDocument();
-    // Still exactly one file input, whatever state the screen is in.
+  it('keeps the web sketchbook, separator and project invitation without empty navigation or search', () => {
+    const { container } = render(<LibraryScreen session={stubSession()} />);
+    expect(screen.getByRole('heading', { name: /A little space.*A clearer picture/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Try an example' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'New project' })).toBeInTheDocument();
+    expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Find a diagram' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Starters' })).not.toBeInTheDocument();
+    expect(container.querySelector('.dc-home-shelf-head')).not.toBeNull();
     expect(container.querySelectorAll('input[type="file"]')).toHaveLength(1);
-    // One flat row of the five, in the catalog's order; no categories, no browser behind it.
-    const group = screen.getByRole('group', { name: 'Starters' });
-    expect(within(group).queryAllByRole('tab')).toHaveLength(0);
-    expect(within(group).getAllByRole('button').map((button) => button.getAttribute('aria-label'))).toEqual(
-      PRIMARY_STARTERS.map((starter) => `Start from ${starter.name}`),
-    );
-    expect(PRIMARY_STARTERS.map((starter) => starter.id)).toEqual(['monolith', 'microservices', 'event-driven', 'hexagonal', 'cqrs']);
-    // The rest are a name away in the palette, and said to be.
-    expect(screen.getByText(/More architectures and patterns are in the command palette/)).toBeInTheDocument();
   });
 
-  it('seeds a canvas from a starter, from the keyboard', async () => {
+  it('starts a blank canvas on Enter and ignores held, modified, or focused Enter', async () => {
     const session = stubSession();
     render(<LibraryScreen session={session} />);
-
-    screen.getByRole('button', { name: 'Start from Hexagonal' }).focus();
-    await userEvent.keyboard('{Enter}');
-    expect(session.newDocument).toHaveBeenCalledWith(undefined, 'hexagonal');
-  });
-
-  it('keeps exactly one button each for the names the rest of the app relies on', () => {
-    render(<LibraryScreen session={stubSession()} />);
-    expect(screen.getAllByRole('button', { name: /new canvas/i })).toHaveLength(1);
-    expect(screen.getAllByRole('button', { name: /import/i })).toHaveLength(1);
-    // Only the starters live inside the starter group — nothing else may join it.
-    const group = screen.getByRole('group', { name: 'Starters' });
-    expect(within(group).getAllByRole('button')).toHaveLength(PRIMARY_STARTERS.length);
-  });
-
-  it('starts a blank canvas on Enter when nothing on the page has focus', async () => {
-    const session = stubSession();
-    render(<LibraryScreen session={session} />);
-
-    await userEvent.keyboard('{Enter}');
-    expect(session.newDocument).toHaveBeenCalledTimes(1);
-    expect(session.newDocument).toHaveBeenCalledWith();
-  });
-
-  it('ignores a held Enter, a modified one, and one aimed at something that has focus', () => {
-    const session = stubSession();
-    render(<LibraryScreen session={session} />);
-
     fireEvent.keyDown(document.body, { key: 'Enter', repeat: true });
     fireEvent.keyDown(document.body, { key: 'Enter', metaKey: true });
     fireEvent.keyDown(screen.getByRole('button', { name: 'About Draft Canvas' }), { key: 'Enter' });
     expect(session.newDocument).not.toHaveBeenCalled();
+    await userEvent.keyboard('{Enter}');
+    expect(session.newDocument).toHaveBeenCalledWith();
   });
 
-  it('walks from the blank canvas into the starters and back with the arrow keys', async () => {
-    render(<LibraryScreen session={stubSession()} />);
-    const sheet = screen.getByRole('button', { name: 'New canvas' });
-
-    sheet.focus();
-    await userEvent.keyboard('{ArrowRight}');
-    expect(screen.getByRole('button', { name: 'Start from Monolith' })).toHaveFocus();
-    await userEvent.keyboard('{ArrowRight}');
-    expect(screen.getByRole('button', { name: 'Start from Microservices' })).toHaveFocus();
-    await userEvent.keyboard('{End}');
-    expect(screen.getByRole('button', { name: 'Start from CQRS' })).toHaveFocus();
-    await userEvent.keyboard('{ArrowRight}');
-    expect(screen.getByRole('button', { name: 'Start from CQRS' })).toHaveFocus();
-    await userEvent.keyboard('{Home}{ArrowLeft}');
-    expect(sheet).toHaveFocus();
+  it('starts the retained example directly', async () => {
+    const session = stubSession();
+    render(<LibraryScreen session={session} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Try an example' }));
+    expect(session.newDocument).toHaveBeenCalledWith(undefined, 'order-processing');
   });
 
-  it('names what a starter is to a screen reader without a tooltip', () => {
-    render(<LibraryScreen session={stubSession()} />);
-    const hexagonal = screen.getByRole('button', { name: 'Start from Hexagonal' });
-    expect(hexagonal).not.toHaveAttribute('title');
-    expect(hexagonal).toHaveAccessibleDescription(/owns its ports/);
+  it('shows views and search with the first draft, hides them with the last, and walks the shelf', async () => {
+    const { rerender } = render(<LibraryScreen session={stubSession()} />);
+    rerender(<LibraryScreen session={stubSession({ library: [shaped()] })} />);
+    expect(screen.getAllByRole('tab').map(tab => tab.textContent)).toEqual(['Drafts', 'Recent', 'Projects']);
+    screen.getByRole('button', { name: 'New canvas' }).focus();
+    await userEvent.keyboard('{ArrowDown}');
+    expect(screen.getByRole('tab', { name: 'Drafts' })).toHaveFocus();
+    await userEvent.keyboard('{ArrowRight}{ArrowDown}');
+    expect(screen.getByRole('button', { name: 'Open Checkout' })).toHaveFocus();
+    rerender(<LibraryScreen session={stubSession()} />);
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Find a diagram' })).not.toBeInTheDocument();
   });
 
-  it('draws each starter from its own topology', () => {
-    const { container } = render(<LibraryScreen session={stubSession()} />);
-    const tiles = container.querySelectorAll('.dc-starter');
-    expect(tiles).toHaveLength(PRIMARY_STARTERS.length);
-    for (const tile of tiles) {
-      expect(tile.querySelector('svg.dc-starter-glyph .dc-starter-edge-line')).not.toBeNull();
-    }
+  it('opens the complete gallery from View all and returns to Home', async () => {
+    render(<LibraryScreen session={stubSession({ library: [shaped()] })} />);
+    await userEvent.click(screen.getByRole('button', { name: /View all/ }));
+    expect(screen.getByRole('searchbox', { name: 'Search diagrams' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Home' }));
+    expect(screen.getByRole('button', { name: 'Open Checkout' })).toBeInTheDocument();
   });
 
-  it('keeps the library when a project exists without canvases', () => {
-    render(<LibraryScreen session={stubSession({ projects: [project] })} />);
-    expect(screen.getByRole('navigation', { name: 'Diagram views' })).toBeInTheDocument();
-    expect(screen.getByText('Nothing here yet.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Start from Hexagonal' })).toBeInTheDocument();
+  it('creates a browser project from the empty invitation', async () => {
+    const session = stubSession();
+    render(<LibraryScreen session={session} />);
+    screen.getByRole('button', { name: 'New canvas' }).focus();
+    await userEvent.keyboard('{ArrowDown}');
+    expect(screen.getByRole('button', { name: 'New project' })).toHaveFocus();
+    await userEvent.keyboard('{Enter}');
+    const dialog = await screen.findByRole('dialog', { name: 'New project' });
+    await userEvent.type(within(dialog).getByRole('textbox'), 'Payments');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Create' }));
+    expect(session.createProject).toHaveBeenCalledWith('Payments');
   });
 });
 
-describe('LibraryScreen — rows', () => {
-  it('draws a fingerprint for a summary with a shape, and an empty frame without one', () => {
+describe('LibraryScreen — gallery', () => {
+  it('draws a topology preview for a summary with a shape, and an empty frame without one', () => {
     const session = stubSession({ library: [shaped(), summary('Blank')] });
     const { container } = render(<LibraryScreen session={session} />);
 
@@ -190,7 +145,7 @@ describe('LibraryScreen — rows', () => {
     expect(rows).toHaveLength(2);
     expect(rows[0]!.querySelector('.dc-fingerprint-service')).not.toBeNull();
     expect(rows[0]!.querySelector('.dc-fingerprint-database')).not.toBeNull();
-    expect(rows[0]!.querySelector('.dc-fingerprint-edge')).not.toBeNull();
+    expect(rows[0]!.querySelector('.dc-starter-edge-line')).not.toBeNull();
     expect(rows[1]!.querySelector('.dc-fingerprint-empty')).not.toBeNull();
   });
 

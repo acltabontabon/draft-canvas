@@ -2,11 +2,12 @@ import { expect, test } from '@playwright/test';
 
 test('a diagnostic report is previewed locally and the downloaded bytes match the preview', async ({ page }) => {
   await page.goto('/');
-  // The loading header is replaced once storage opens; wait before giving its trigger focus.
+  await expect(page.getByRole('button', { name: 'Troubleshooting' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'New canvas', exact: true })).toBeVisible();
-  const trigger = page.getByRole('button', { name: 'Troubleshooting' });
-  // Give the dialog a keyboard focus target to restore on every platform, including Safari.
-  await trigger.press('Enter');
+  await page.getByRole('button', { name: 'New canvas', exact: true }).click();
+  const trigger = page.getByRole('button', { name: /^More/ });
+  await trigger.click();
+  await page.getByRole('menuitem', { name: 'Diagnostic report…' }).click();
   const preview = page.getByRole('textbox', { name: 'Diagnostic report contents' });
   await expect(preview).toBeVisible();
   const text = await preview.inputValue();

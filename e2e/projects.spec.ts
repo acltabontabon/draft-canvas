@@ -1,3 +1,4 @@
+import { openGallery } from './library';
 import { expect, test, type Page } from '@playwright/test';
 
 /**
@@ -15,6 +16,7 @@ async function newCanvas(page: Page, title: string) {
   await titleField.blur();
   await expect(page.locator('.dc-save')).toContainText('Saved locally');
   await page.getByRole('button', { name: 'Back to your diagrams' }).click();
+  await openGallery(page);
 }
 
 /** The sidebar's clickable project row itself — distinct from its hover-revealed

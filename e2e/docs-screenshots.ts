@@ -1,3 +1,4 @@
+import { openGallery } from './library';
 /**
  * Regenerates the screenshots the user guides in `docs/guides/` embed (`docs/media/guides/*.png`).
  *
@@ -234,6 +235,9 @@ async function main() {
 
     // ── Getting started ────────────────────────────────────────────────────────────────────
     log('getting started');
+    await page.setViewportSize({ width: VIEWPORT.width, height: 900 });
+    await shot(page, 'home');
+    await page.setViewportSize(VIEWPORT);
     await page.getByRole('button', { name: 'New canvas' }).first().click();
     await expect(page.locator('.dc-editor')).toBeVisible();
     const title = page.getByLabel('Diagram title');
@@ -353,6 +357,7 @@ async function main() {
     // ── Depth ──────────────────────────────────────────────────────────────────────────────
     log('depth');
     await page.getByRole('button', { name: /Back to your diagrams/ }).click();
+    await openGallery(page);
     await page.getByRole('button', { name: 'New canvas' }).first().click();
     await expect(page.locator('.dc-editor')).toBeVisible();
     const title2 = page.getByLabel('Diagram title');
@@ -390,6 +395,7 @@ async function main() {
     // ── The Library ────────────────────────────────────────────────────────────────────────
     log('library');
     await page.getByRole('button', { name: /Back to your diagrams/ }).click();
+    await openGallery(page);
     await expect(page.getByText('Order processing')).toBeVisible();
     await shot(page, 'library');
 
@@ -409,6 +415,7 @@ async function main() {
       await palette(page, 'Fit to view');
       await shot(page, `example-${id}`, await box(page.locator(CANVAS)));
       await page.getByRole('button', { name: /Back to your diagrams/ }).click();
+      await openGallery(page);
       await expect(page.getByRole('button', { name: 'New canvas' }).first()).toBeVisible();
     }
 

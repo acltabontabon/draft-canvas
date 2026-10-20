@@ -1,0 +1,191 @@
+.dc-web-home .dc-home-inner {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding-top: 24px;
+  padding-bottom: 28px;
+}
+
+.dc-web-scene {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 48px;
+  width: min(960px, 100%);
+  margin: clamp(48px, 9vh, 88px) auto 50px;
+}
+
+.dc-web-eyebrow {
+  margin: 0 0 22px;
+  color: var(--dc-text-muted);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+}
+
+.dc-web-intro h2 {
+  margin: 0;
+  font-family: 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Georgia, serif;
+  font-size: clamp(36px, 4vw, 52px);
+  font-weight: 400;
+  line-height: 1.16;
+  letter-spacing: -.045em;
+  text-wrap: balance;
+}
+
+.dc-web-subtitle {
+  max-width: 270px;
+  margin: 22px 0 0;
+  color: var(--dc-text-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.dc-web-workbench {
+  position: relative;
+  isolation: isolate;
+  min-width: 0;
+  padding: 20px 0;
+}
+
+.dc-web-workbench::before {
+  content: '';
+  position: absolute;
+  inset: -12px;
+  z-index: -1;
+  background-image: radial-gradient(circle, var(--dc-gallery-dot) 1px, transparent 1px);
+  background-size: 18px 18px;
+  mask-image: radial-gradient(ellipse, #000 35%, transparent 72%);
+  pointer-events: none;
+}
+
+.dc-web-start {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 190px;
+  padding: 24px 28px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--dc-library-action);
+  color: var(--dc-library-on-action);
+  box-shadow: 6px 7px 0 var(--dc-selection-soft);
+  font: inherit;
+  text-align: left;
+  transform: rotate(-1.5deg);
+  cursor: pointer;
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+
+/* The folded corner makes the starting card a sheet, in the same paper vocabulary as the shelf. */
+.dc-web-start::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 32px;
+  height: 32px;
+  border-bottom-left-radius: 6px;
+  background: color-mix(in srgb, var(--dc-library-on-action) 12%, transparent);
+  clip-path: polygon(0 0, 100% 100%, 0 100%);
+}
+
+.dc-web-start:hover {
+  transform: rotate(0deg) translateY(-2px);
+  box-shadow: 6px 9px 0 var(--dc-selection-soft);
+}
+
+.dc-web-start:focus-visible,
+.dc-web-alternatives .dc-button:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 5px;
+}
+
+.dc-web-start-mark {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  margin-bottom: 26px;
+  border: 1px solid color-mix(in srgb, var(--dc-library-on-action) 35%, transparent);
+  border-radius: 50%;
+}
+
+.dc-web-start-name {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  font-size: 21px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.dc-web-start-hint {
+  margin-top: 7px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.dc-web-alternatives {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.dc-web-alternatives .dc-button {
+  height: auto;
+  min-height: 44px;
+  padding: 10px;
+  border: 1px solid var(--dc-border);
+  border-radius: 6px;
+  background: var(--dc-canvas);
+  color: var(--dc-text);
+  font-size: 12px;
+}
+
+.dc-web-alternatives .dc-button:hover {
+  border-color: var(--dc-border-strong);
+  background: var(--dc-surface);
+}
+
+@media (max-width: 720px) {
+  .dc-web-scene {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+    max-width: 460px;
+    margin-top: 44px;
+    margin-bottom: 34px;
+  }
+
+  .dc-web-intro h2 {
+    font-size: clamp(36px, 7vw, 46px);
+  }
+
+  .dc-web-subtitle {
+    max-width: none;
+    margin-top: 16px;
+  }
+
+  .dc-web-workbench {
+    padding: 10px 0;
+  }
+
+  .dc-web-start {
+    min-height: 170px;
+    padding: 22px 24px;
+  }
+
+  .dc-web-start-mark {
+    margin-bottom: 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-web-start {
+    transition: none;
+  }
+}

@@ -32,6 +32,25 @@ replacing it. Uninstalling the cask leaves diagrams, Quick Drafts and recovery d
 **Quick Draft** button. It opens a blank canvas at once: there is no name to pick, no folder to choose, nothing
 to set up.
 
+Home arranges **Quick Draft**, **Try an example**, **Open file…**, and **Connect an agent…** as a
+small diagram. Your drafts, recent files, and projects sit just below it. **Try an example** opens a ready-made
+diagram as a Quick Draft.
+
+*Desktop Home*
+
+![Desktop Home: Quick Draft connected to Try an example, Open file, and Connect an agent, with Add project below the separator.](../media/guides/desktop-home.png)
+
+Home keeps a compact shelf of diagram previews. **Projects** remains available before you add a
+project. The tab bar appears only when there are multiple views; a single view shows its content
+directly, keeping the separator above it. **Drafts** appears when at least one draft exists and disappears when the last draft is
+saved or discarded. **Recent** appears only while there is at least one recent file; removing the
+last file or clearing the list hides the tab. Blank drafts show a quiet paper preview until you
+draw on them. Choose **Projects** → **Add project…** to link a folder.
+
+Choose **View all** beside the tabs, or the search button at the top right, to open the gallery. Its larger previews
+show each diagram's structure. Search spans the selected view; **Everything** includes drafts,
+recent files, and every registered project.
+
 A Quick Draft has no file yet. Until you save it, Draft Canvas keeps a working copy in its own data folder,
 so closing the window, quitting, or a crash doesn't lose it. It shows up under **Drafts** on Home until you:
 
@@ -45,12 +64,17 @@ A Quick Draft you never drew on leaves nothing behind. One you did is never dele
 
 A diagram is a `.draftcanvas` file, like any other file on your computer.
 
-- **Open** (`⌘O`), drag a file onto the window, pick one from **Recent**, or double-click it in Finder or
-  Explorer. If Draft Canvas is already running, the file opens in the running app.
+- **Open** (`⌘O`) uses the same in-app explorer as Add project. Browse folders, select a diagram to
+  preview it, then choose **Open diagram** (or double-click it). You can also drag a file onto the
+  window, pick one from **Recent**, or double-click it in Finder or Explorer. If Draft Canvas is
+  already running, the file opens in the running app.
 - **Save** (`⌘S`) writes the file. Draft Canvas never saves a file you chose behind your back: the status bar says
   *Unsaved changes* until you do, and asks before closing something unsaved. (The one exception is an
   [AI agent](connect-an-ai-agent.md) you allowed: its change is saved only when you had no unsaved changes of your own.) **Save As…** is `⌘⇧S`.
-  **Revert to Saved…** puts back what is on disk.
+  **Save As…** opens the shared explorer: browse to a folder, edit **File name**, then choose
+  **Save diagram**. The `.draftcanvas` extension is added automatically. An existing file requires
+  **Replace diagram** confirmation; **Change name** keeps it untouched. The first Save of a Quick
+  Draft uses the same explorer. **Revert to Saved…** puts back what is on disk.
 - **New File…** (`⌘⇧N`) asks where the file goes first, then opens it blank.
 - The window title is the file's name, and **Reveal in Finder** / **File Explorer** shows where it is.
 - **Rename File…**, from the File menu or a file's own action in Find a Diagram, changes its name in place —
@@ -69,11 +93,28 @@ diagrams added or removed in their folders the same way.
 Unsaved changes to a file are also copied to the data folder as you work, so if the app closes before you save,
 Home offers them back the next time. The file itself isn't touched until you save.
 
+![Save As: folder navigation and a file name field with the .draftcanvas extension, followed by Save diagram.](../media/guides/desktop-save-as.png)
+
 ## Folders as projects
 
-A project is a folder. **Add project…** (`⌘⇧O`) adds one to Home, and it stays there, beside every other project
-you've added, until you choose **Remove from Home** (which forgets it and leaves the folder alone). There is
-nothing to import and no project file: the folder is the project, and opening a diagram is opening the file.
+A project is a folder. On Home, **Projects** → **Add project…** opens the in-app folder explorer.
+Choose a location in **Places**, then double-click folders (or press Enter) to navigate. Breadcrumbs
+and Back, Forward and Up let you retrace your steps. **Find in this folder** filters names; **Hidden**
+reveals dotfiles and folders. Selecting a diagram shows its preview without opening it.
+
+To make a folder here, choose **New folder**, enter its name, and choose **Create folder**. The
+explorer opens the new folder, ready to use. It is created on disk immediately; **Add project** links
+it to Home.
+
+Select a folder, or navigate into it, then choose **Add project**. Browsing or cancelling never links
+a project.
+
+![The desktop explorer browsing an Architecture folder, with Places, navigation, filtering, New folder, and a preview of the selected diagram.](../media/guides/desktop-explorer.png)
+
+The File menu offers the same explorer through **Add project…** (`⌘⇧O`). Adding a folder puts it on
+Home, and it stays there, beside every other project you've added, until you choose **Remove from
+Home** (which forgets it and leaves the folder alone). There is nothing to import and no project file:
+the folder is the project, and opening a diagram is opening the file.
 
 ```text
 payments/
@@ -139,6 +180,15 @@ While hidden, Draft Canvas does nothing. It doesn't watch your keyboard, mouse, 
 and doesn't look through your disk for diagrams. It only ever touches the files and folders you choose, and its
 own data folder. The one thing it asks the network is whether there's a newer version (below), and it can be
 turned off.
+
+## Settings
+
+Open **Settings…** (`⌘,` / `Ctrl+,`) from the app menu or tray. Choose **General** for window-close
+behavior, **AI agents** for folder access and agent setup, **Updates** for update preferences, or
+**Support** for a diagnostic report. Changes apply immediately; there is no Save or Cancel step.
+Use the arrow keys to move between categories, and Escape or the close button to return to your work.
+
+![Settings: category navigation beside grouped window-close choices, with a single close button.](../media/guides/desktop-settings.png)
 
 ## Diagnostic reports
 

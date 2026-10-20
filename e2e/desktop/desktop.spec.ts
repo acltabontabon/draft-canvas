@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 import { installMockShell } from './mockShell';
+import { chooseWorkFile } from './explorer';
 
 /**
  * The desktop app's flow, end to end in the browser: the real editor and the real controller, with
@@ -52,13 +54,269 @@ test('opens on its own Home, not the browser’s library', async ({ page }) => {
 
   await expect(page.getByRole('button', { name: 'New Quick Draft' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Open file…' })).toBeVisible();
-  // With nothing opened yet, Home shows only the starters, and its label says so.
-  await expect(page.getByText('Or start from an architecture')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Start from Microservices' })).toBeVisible();
+  // A first run offers Projects; empty history tabs stay out of the way.
+  await expect(page.getByRole('group', { name: 'Projects', exact: true })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Recent' })).toHaveCount(0);
+  await expect(page.getByRole('tab', { name: 'Drafts' })).toHaveCount(0);
+  await expect(page.getByRole('tab', { name: 'Starters' })).toHaveCount(0);
   await expect(page.getByRole('tab')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Find a diagram', exact: true })).toHaveCount(0);
   // Nothing of the browser's storage-backed Library.
   await expect(page.getByRole('button', { name: 'Import' })).toHaveCount(0);
   await expect(page.getByPlaceholder('Search diagrams…')).toHaveCount(0);
+});
+
+test('Projects browses folders in-app, cancels without linking, and adds the selected folder', async ({ page }) => {
+  await page.goto('/');
+  const text = await documentText(page, 'Overview', 2);
+  await page.evaluate((text) => window.__shell.seed({ explorer: [{ name: 'Architecture', path: '~/Documents/Architecture', diagrams: [{ path: 'overview.draftcanvas', text, ago: 1000 }] }] }), text);
+  await page.getByRole('button', { name: 'New Quick Draft' }).focus();
+  await page.keyboard.press('ArrowDown');
+  const panel = page.getByRole('group', { name: 'Projects', exact: true });
+  await expect(panel.getByRole('button', { name: 'Add project…' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  const dialog = page.getByRole('dialog', { name: 'Add a project', exact: true });
+  await expect(dialog.getByRole('listbox', { name: 'Folders and diagrams' })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toHaveCount(0);
+  await dialog.getByRole('complementary', { name: 'Places' }).getByRole('button', { name: 'Documents', exact: true }).click();
+  await dialog.getByRole('option', { name: 'Architecture' }).dblclick();
+  await expect(dialog.getByRole('option', { name: 'overview.draftcanvas' })).toBeVisible();
+  await dialog.getByRole('option', { name: 'overview.draftcanvas' }).click();
+  await expect(dialog.getByRole('complementary', { name: 'Selection preview' }).locator('.dc-explorer-paper svg')).toBeVisible();
+  expect(await page.evaluate(() => window.__shell.calls().filter(call => call.command === 'explorer_add_project').length)).toBe(0);
+  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(panel).toContainText('A home for related ideas.');
+  await expect(panel.getByRole('button', { name: 'Add project…' })).toBeFocused();
+  await expect.poll(() => page.evaluate(() => window.__shell.calls().filter(call => call.command === 'explorer_close').length)).toBeGreaterThan(0);
+
+  await page.keyboard.press('Enter');
+  await dialog.getByRole('complementary', { name: 'Places' }).getByRole('button', { name: 'Documents', exact: true }).click();
+  await dialog.getByRole('option', { name: 'Architecture' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(dialog.getByRole('option', { name: 'overview.draftcanvas' })).toBeVisible();
+  await dialog.getByRole('button', { name: 'Add project', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await expect(panel.getByRole('button', { name: 'Show the Architecture project' })).toBeVisible();
+  expect(await page.evaluate(() => window.__shell.calls().filter(call => call.command === 'pick_project').length)).toBe(0);
+  await panel.getByRole('button', { name: 'Show the Architecture project' }).click();
+  await expect(page.getByRole('region', { name: 'Architecture', exact: true })).toBeVisible();
+});
+
+test('explorer filters and pages folders, navigates history, and recovers from unreadable locations', async ({ page }) => {
+  await page.goto('/');
+  const text = await documentText(page, 'Topology', 3);
+  await page.evaluate((text) => window.__shell.seed({ explorer: [
+    { name: 'Studio', path: '~/Documents/Studio', diagrams: [
+      { path: 'flow.draftcanvas', text, ago: 1000 },
+      { path: '.private/hidden.draftcanvas', text, ago: 1000 },
+      { path: 'subfolder/detail.draftcanvas', text, ago: 1000 },
+    ] },
+    ...Array.from({ length: 205 }, (_, i) => ({ name: `Folder ${i}`, path: `~/Downloads/Folder ${String(i).padStart(3, '0')}`, diagrams: [] })),
+  ] }), text);
+  // The native File menu uses the same explorer as Home.
+  await page.evaluate(() => window.__shell.emit({ type: 'menu', command: 'open-project' }));
+  const dialog = page.getByRole('dialog', { name: 'Add a project', exact: true });
+  const places = dialog.getByRole('complementary', { name: 'Places' });
+  await places.getByRole('button', { name: 'Documents', exact: true }).click();
+  await dialog.getByRole('option', { name: 'Studio' }).dblclick();
+  await expect(dialog.getByRole('option', { name: '.private' })).toHaveCount(0);
+  await dialog.getByRole('checkbox', { name: 'Hidden' }).check();
+  await expect(dialog.getByRole('option', { name: '.private' })).toBeVisible();
+  await dialog.getByRole('textbox', { name: 'Find in this folder' }).fill('FLOW');
+  await expect(dialog.getByRole('option')).toHaveCount(1);
+  await expect(dialog.getByRole('option', { name: 'flow.draftcanvas' })).toBeVisible();
+  expect(await page.evaluate(() => window.__shell.calls().filter(call => call.command === 'explorer_peek').length)).toBe(0);
+  await dialog.getByRole('option', { name: 'flow.draftcanvas' }).click();
+  await expect(dialog.getByRole('complementary', { name: 'Selection preview' }).locator('.dc-explorer-paper svg')).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.__shell.calls().filter(call => call.command === 'explorer_peek').length)).toBe(1);
+  await dialog.getByRole('textbox', { name: 'Find in this folder' }).fill('unmatched');
+  await expect(dialog).toContainText('No matches in this folder');
+  await dialog.getByRole('textbox', { name: 'Find in this folder' }).fill('');
+  await expect(dialog.getByRole('option', { name: 'subfolder' })).toBeVisible();
+  await dialog.getByRole('option', { name: 'subfolder' }).dblclick();
+  await expect(dialog.getByRole('option', { name: 'detail.draftcanvas' })).toBeVisible();
+  await dialog.getByRole('button', { name: 'Back', exact: true }).click();
+  await expect(dialog.getByRole('option', { name: 'flow.draftcanvas' })).toBeVisible();
+  await dialog.getByRole('button', { name: 'Forward', exact: true }).click();
+  await expect(dialog.getByRole('option', { name: 'detail.draftcanvas' })).toBeVisible();
+  await dialog.getByRole('button', { name: 'Enclosing folder', exact: true }).click();
+  await expect(dialog.getByRole('option', { name: 'flow.draftcanvas' })).toBeVisible();
+  await page.evaluate(() => window.__shell.failNextExplorer('This folder needs permission. Choose another location.'));
+  await places.getByRole('button', { name: 'Desktop', exact: true }).click();
+  await expect(dialog.getByRole('alert')).toContainText('needs permission');
+  await expect(dialog.getByRole('button', { name: 'Add project', exact: true })).toBeDisabled();
+  await places.getByRole('button', { name: 'Downloads', exact: true }).click();
+  await expect(dialog.getByRole('option')).toHaveCount(200);
+  await dialog.getByRole('button', { name: 'Show more · 200 of 205' }).click();
+  await expect(dialog.getByRole('option')).toHaveCount(205);
+  await dialog.getByRole('option', { name: 'Folder 204' }).click();
+  await expect(dialog.locator('.dc-explorer-destination')).toContainText('~/Downloads/Folder 204');
+  await dialog.getByRole('button', { name: 'Add project', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Show the Folder 204 project' })).toBeVisible();
+  expect(await page.evaluate(() => window.__shell.calls().filter(call => call.command === 'pick_project').length)).toBe(0);
+});
+
+test('Open file shares the explorer with file selection, previews, and native menu access', async ({ page }) => {
+  await page.goto('/');
+  const text = await documentText(page, 'Selected from explorer', 3);
+  await page.evaluate((text) => window.__shell.seed({ explorer: [{ name: 'Diagrams', path: '~/Documents/Diagrams', diagrams: [{ path: 'overview.draftcanvas', text, ago: 1000 }] }] }), text);
+  const open = page.getByRole('button', { name: 'Open file…', exact: true });
+  await open.click();
+  const dialog = page.getByRole('dialog', { name: 'Open a diagram', exact: true });
+  await expect(dialog.getByRole('button', { name: 'Open diagram', exact: true })).toBeDisabled();
+  await expect(dialog.getByRole('button', { name: 'Add project', exact: true })).toHaveCount(0);
+  await dialog.getByRole('complementary', { name: 'Places' }).getByRole('button', { name: 'Documents', exact: true }).click();
+  await dialog.getByRole('option', { name: 'Diagrams', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Open folder', exact: true }).click();
+  await dialog.getByRole('option', { name: 'overview.draftcanvas', exact: true }).click();
+  await expect(dialog.getByRole('complementary', { name: 'Selection preview' }).locator('.dc-starter-glyph')).toBeVisible();
+  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(open).toBeFocused();
+  expect(await page.evaluate(() => window.__shell.calls().filter(call => call.command === 'explorer_open_file' || call.command === 'open_dialog').length)).toBe(0);
+  await page.evaluate(() => window.__shell.emit({ type: 'menu', command: 'open' }));
+  await dialog.getByRole('complementary', { name: 'Places' }).getByRole('button', { name: 'Documents', exact: true }).click();
+  await dialog.getByRole('option', { name: 'Diagrams', exact: true }).dblclick();
+  await dialog.getByRole('button', { name: 'New folder', exact: true }).click();
+  await dialog.getByRole('textbox', { name: 'Folder name', exact: true }).fill('Notes');
+  await dialog.getByRole('textbox', { name: 'Folder name', exact: true }).press('Enter');
+  await expect(dialog.getByRole('navigation', { name: 'Folder path' })).toContainText('Notes');
+  await expect(dialog.getByRole('listbox', { name: 'Folders and diagrams' })).toBeFocused();
+  await dialog.getByRole('button', { name: 'Back', exact: true }).click();
+  await dialog.getByRole('option', { name: 'overview.draftcanvas', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Open diagram', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.locator('.dc-title-input')).toHaveValue('Selected from explorer');
+  expect(await page.evaluate(() => window.__shell.calls().filter(call => call.command === 'open_dialog').length)).toBe(0);
+
+  // Cancelling a file switch leaves both unsaved work and the file explorer intact.
+  const pane = await page.locator(CANVAS).boundingBox();
+  await drawService(page, { x: pane!.width - 60, y: pane!.height - 60 });
+  await page.evaluate(() => { window.__shell.answer(2); window.__shell.emit({ type: 'menu', command: 'open' }); });
+  await dialog.getByRole('complementary', { name: 'Places' }).getByRole('button', { name: 'Documents', exact: true }).click();
+  await dialog.getByRole('option', { name: 'Diagrams', exact: true }).dblclick();
+  await dialog.getByRole('option', { name: 'overview.draftcanvas', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => page.evaluate(() => window.__shell.asked().length)).toBe(1);
+  await expect(dialog).toBeVisible();
+  await expect(status(page)).toContainText('Unsaved changes');
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+});
+
+test('explorer creates a folder inline, handles errors, and adds it only on request', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'Troubleshooting', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Add project…', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Add a project', exact: true });
+  await dialog.getByRole('complementary', { name: 'Places' }).getByRole('button', { name: 'Documents', exact: true }).click();
+  await dialog.getByRole('button', { name: 'New folder', exact: true }).click();
+  const form = dialog.getByRole('form', { name: 'Create a folder' });
+  const name = form.getByRole('textbox', { name: 'Folder name' });
+  await expect(name).toBeFocused();
+  await expect(form.getByRole('button', { name: 'Create folder', exact: true })).toBeDisabled();
+  await expect(dialog.getByRole('button', { name: 'Add project', exact: true })).toBeDisabled();
+  await form.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(dialog.getByRole('button', { name: 'New folder', exact: true })).toBeFocused();
+  expect(await page.evaluate(() => window.__shell.calls().filter(call => call.command === 'explorer_create_folder').length)).toBe(0);
+
+  await page.keyboard.press('Enter');
+  await name.fill('../outside');
+  await name.press('Enter');
+  await expect(form.getByRole('alert')).toContainText('without slashes');
+  await page.evaluate(() => window.__shell.failNextExplorer('This folder is read-only. Choose another location.'));
+  await name.fill('New ideas');
+  await name.press('Enter');
+  await expect(form.getByRole('alert')).toContainText('read-only');
+  await expect(name).toBeFocused();
+  await expect(name).toHaveValue('New ideas');
+  await name.press('Enter');
+  await expect(form).toBeHidden();
+  await expect(dialog.getByRole('navigation', { name: 'Folder path' })).toContainText('New ideas');
+  await expect(dialog.getByRole('navigation', { name: 'Folder path' })).toContainText('New ideas');
+  await expect(dialog.getByRole('button', { name: 'Add project', exact: true })).toBeEnabled();
+  await expect(dialog.getByRole('button', { name: 'Add project', exact: true })).toBeFocused();
+  expect(await page.evaluate(() => window.__shell.calls().filter(call => call.command === 'explorer_add_project').length)).toBe(0);
+
+  // Returning to the parent lists the created folder; a duplicate never reuses it.
+  await dialog.getByRole('button', { name: 'Enclosing folder', exact: true }).click();
+  await expect(dialog.getByRole('option', { name: 'New ideas', exact: true })).toBeVisible();
+  await dialog.getByRole('button', { name: 'New folder', exact: true }).click();
+  await name.fill('New ideas');
+  await name.press('Enter');
+  await expect(form.getByRole('alert')).toContainText('already exists');
+  await form.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(page.getByRole('group', { name: 'Projects', exact: true })).toContainText('A home for related ideas.');
+
+  // Creating is durable, but cancelling the explorer has not linked the folder as a project.
+  await page.getByRole('button', { name: 'Add project…', exact: true }).click();
+  await dialog.getByRole('complementary', { name: 'Places' }).getByRole('button', { name: 'Documents', exact: true }).click();
+  await dialog.getByRole('option', { name: 'New ideas', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Add project', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Show the New ideas project', exact: true })).toBeVisible();
+});
+
+test('explorer opens a selected diagram without adding a project', async ({ page }) => {
+  await page.goto('/');
+  const text = await documentText(page, 'Opened in explorer', 2);
+  await page.evaluate((text) => window.__shell.seed({ explorer: [{ name: 'Documents', path: '~/Documents', diagrams: [{ path: 'overview.draftcanvas', text, ago: 1000 }] }] }), text);
+  await page.getByRole('button', { name: 'Add project…', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Add a project', exact: true });
+  await dialog.getByRole('complementary', { name: 'Places' }).getByRole('button', { name: 'Documents', exact: true }).click();
+  await dialog.getByRole('option', { name: 'overview.draftcanvas' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(dialog).toBeHidden();
+  await expect(page.locator('.dc-title-input')).toHaveValue('Opened in explorer');
+  expect(await page.evaluate(() => window.__shell.calls().filter(call => call.command === 'explorer_add_project').length)).toBe(0);
+  const pane = await page.locator(CANVAS).boundingBox();
+  await drawService(page, { x: pane!.width - 60, y: pane!.height - 60 });
+  await expect(status(page)).toContainText('Unsaved changes');
+  await page.evaluate(() => {
+    window.__shell.answer(2);
+    window.__shell.emit({ type: 'menu', command: 'open-project' });
+  });
+  await dialog.getByRole('complementary', { name: 'Places' }).getByRole('button', { name: 'Documents', exact: true }).click();
+  await dialog.getByRole('option', { name: 'overview.draftcanvas' }).focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => page.evaluate(() => window.__shell.asked().length)).toBe(1);
+  await expect(dialog).toBeVisible();
+  await expect(status(page)).toContainText('Unsaved changes');
+  await page.evaluate(() => window.__shell.answer(1));
+  await dialog.getByRole('button', { name: 'Open diagram', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await expect(status(page)).toContainText('Saved');
+});
+
+test('the gallery shares white light surfaces and teal actions with Home, and reflows real previews', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.goto('/');
+  const text = await documentText(page, 'System', 3);
+  await page.addInitScript((text) => {
+    window.__shell.seed({ drafts: Array.from({ length: 7 }, (_, index) => ({ title: `Draft ${index + 1}`, text, ago: (index + 1) * 60_000 })) });
+  }, text);
+  await reloadSeeded(page);
+  await expect(page.locator('.dc-living-primary')).toHaveCSS('background-color', 'rgb(13, 110, 101)');
+  await expect(page.locator('.dc-living-primary')).toHaveCSS('color', 'rgb(255, 255, 255)');
+  const homeAccent = await page.locator('.dc-desk').evaluate(el => getComputedStyle(el).getPropertyValue('--dc-selection').trim());
+  await page.getByRole('button', { name: 'Find a diagram', exact: true }).click();
+  await expect(page.locator('.dc-gallery-card')).toHaveCount(7);
+  expect(await page.locator('.dc-desk').evaluate(el => getComputedStyle(el).getPropertyValue('--dc-selection').trim())).toBe(homeAccent);
+  expect(homeAccent).toBe('#eae7e1');
+  for (const [width, columns] of [[1200, 3], [760, 2], [375, 1]]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect.poll(() => page.locator('.dc-gallery-grid').evaluate(el => getComputedStyle(el).gridTemplateColumns.split(' ').length)).toBe(columns);
+    await expect.poll(() => page.locator('.dc-gallery-grid').evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+  }
+  await page.emulateMedia({ colorScheme: 'light' });
+  await expect(page.locator(':root')).toHaveAttribute('data-theme', 'light');
+  expect(await page.locator('.dc-desk').evaluate(el => getComputedStyle(el).getPropertyValue('--dc-selection').trim())).toBe('#292827');
+  await expect(page.locator('.dc-desk')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+  const primary = page.locator('.dc-gallery-heading .dc-button-solid');
+  await expect(primary).toHaveCSS('background-color', 'rgb(13, 110, 101)');
+  await primary.hover();
+  await expect(primary).toHaveCSS('color', 'rgb(255, 255, 255)');
 });
 
 test('a Quick Draft starts drawing at once and becomes a file on Save', async ({ page }) => {
@@ -72,19 +330,104 @@ test('a Quick Draft starts drawing at once and becomes a file on Save', async ({
   await drawService(page);
   await expect(page.locator('.dc-node')).toHaveCount(1);
 
-  await page.evaluate(() => window.__shell.nextSaveAs({ name: 'meeting' }));
   await page.keyboard.press('Meta+s');
+  const saveDialog = page.getByRole('dialog', { name: 'Save diagram as', exact: true });
+  await saveDialog.getByRole('complementary', { name: 'Places' }).getByRole('button', { name: 'Documents', exact: true }).click();
+  await saveDialog.getByRole('textbox', { name: 'File name', exact: true }).fill('meeting');
+  await saveDialog.getByRole('button', { name: 'Save diagram', exact: true }).click();
+  await expect(saveDialog).toBeHidden();
 
   await expect(status(page)).toContainText('Saved');
-  await expect(status(page)).toContainText('~/work/meeting.draftcanvas');
+  await expect(status(page)).toContainText('~/Documents/meeting.draftcanvas');
   const saved = await page.evaluate(() => {
-    const text = window.__shell.file('h_1')?.text ?? '';
-    return { text, name: window.__shell.file('h_1')?.name };
+    const handle = window.__shell.calls().filter(call => call.command === 'report_state').map(call => (call.args as { state: { handle?: string } }).state.handle).filter(Boolean).at(-1)!;
+    const file = window.__shell.file(handle)!;
+    return { text: file.text, name: file.name };
   });
   expect(saved.name).toBe('meeting');
   const parsed = JSON.parse(saved.text) as { format: string; nodes: unknown[] };
   expect(parsed.format).toBe('draft-canvas');
   expect(parsed.nodes).toHaveLength(1);
+  await page.getByRole('button', { name: 'Back to your diagrams' }).click();
+  await expect(page.getByRole('tab', { name: 'Drafts' })).toHaveCount(0);
+  await expect(page.getByRole('tab', { name: 'Recent' })).toHaveAttribute('aria-selected', 'true');
+});
+
+test('Save As uses the shared explorer, keeps cancellation safe, and confirms existing targets', async ({ page }) => {
+  await page.goto('/');
+  const original = await documentText(page, 'Original diagram', 2);
+  const existing = await documentText(page, 'Existing diagram', 1);
+  const handles = await page.evaluate(({ original, existing }) => ({
+    source: window.__shell.addFile('source', original),
+    target: window.__shell.addFile('existing', existing),
+  }), { original, existing });
+  await page.getByRole('button', { name: 'Open file…', exact: true }).click();
+  await chooseWorkFile(page, 'source');
+  // The native Save As menu is enabled only once the file has finished opening.
+  await expect(page.locator('.dc-editor')).toBeVisible();
+  await expect(status(page)).toContainText('~/work/source.draftcanvas');
+  await page.evaluate(() => window.__shell.emit({ type: 'menu', command: 'save-as' }));
+  const dialog = page.getByRole('dialog', { name: 'Save diagram as', exact: true });
+  const name = dialog.getByRole('textbox', { name: 'File name', exact: true });
+  await expect(name).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Save diagram', exact: true })).toBeEnabled();
+  await name.fill('cancelled');
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  await expect(status(page)).toContainText('~/work/source.draftcanvas');
+  expect(await page.evaluate(() => window.__shell.calls().filter(call => call.command === 'explorer_save_file').length)).toBe(0);
+
+  await page.evaluate(() => window.__shell.emit({ type: 'menu', command: 'save-as' }));
+  await dialog.getByRole('option', { name: 'work', exact: true }).dblclick();
+  await dialog.getByRole('option', { name: 'existing.draftcanvas', exact: true }).click();
+  await expect(name).toHaveValue('existing');
+  await dialog.getByRole('button', { name: 'Save diagram', exact: true }).click();
+  await expect(dialog.getByRole('alert')).toContainText('already exists');
+  expect(await page.evaluate(handle => window.__shell.file(handle)!.text, handles.target)).toBe(existing);
+  await page.evaluate(handle => { const file = window.__shell.file(handle)!; file.text = 'outside edit'; file.version += 1; }, handles.target);
+  await dialog.getByRole('button', { name: 'Replace diagram', exact: true }).click();
+  await expect(dialog.getByRole('alert')).toContainText('changed since confirmation');
+  expect(await page.evaluate(handle => window.__shell.file(handle)!.text, handles.target)).toBe('outside edit');
+  await dialog.getByRole('button', { name: 'Change name', exact: true }).click();
+  await expect(name).toBeFocused();
+  await expect(dialog.getByRole('button', { name: 'Replace diagram', exact: true })).toHaveCount(0);
+  await name.fill('existing');
+  await dialog.getByRole('button', { name: 'Save diagram', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Replace diagram', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await expect(status(page)).toContainText('~/work/existing.draftcanvas');
+  expect(await page.evaluate(handle => window.__shell.file(handle)!.text, handles.target)).toBe(original);
+  expect(await page.evaluate(handle => window.__shell.file(handle)!.text, handles.source)).toBe(original);
+  expect(await page.evaluate(() => window.__shell.calls().filter(call => call.command === 'save_as').length)).toBe(0);
+  await page.evaluate(() => window.__shell.emit({ type: 'menu', command: 'save-as' }));
+  await expect(dialog).toBeVisible();
+  await page.evaluate(() => window.__shell.emit({ type: 'new-quick-draft' }));
+  await expect(dialog).toBeHidden();
+  await expect(status(page)).toContainText('Quick Draft');
+});
+
+test('Save As creates a folder and recovers from an inline save error', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'New Quick Draft', exact: true }).click();
+  await drawService(page);
+  await page.keyboard.press('Meta+s');
+  const dialog = page.getByRole('dialog', { name: 'Save diagram as', exact: true });
+  await dialog.getByRole('complementary', { name: 'Places' }).getByRole('button', { name: 'Documents', exact: true }).click();
+  await dialog.getByRole('button', { name: 'New folder', exact: true }).click();
+  await dialog.getByRole('textbox', { name: 'Folder name', exact: true }).fill('New project');
+  await dialog.getByRole('button', { name: 'Create folder', exact: true }).click();
+  const name = dialog.getByRole('textbox', { name: 'File name', exact: true });
+  await expect(name).toBeFocused();
+  await name.fill('overview');
+  await page.evaluate(() => window.__shell.failNextExplorer('This folder is read-only. Choose another location.'));
+  await name.press('Enter');
+  await expect(dialog.getByRole('alert')).toContainText('read-only');
+  await expect(name).toHaveValue('overview');
+  await expect(status(page)).toContainText('Quick Draft');
+  await dialog.getByRole('button', { name: 'Save diagram', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await expect(status(page)).toContainText('~/Documents/New project/overview.draftcanvas');
+  await expect(status(page)).toContainText('Saved');
 });
 
 test('what is unsaved is kept, and offered back from Home', async ({ page }) => {
@@ -97,12 +440,11 @@ test('what is unsaved is kept, and offered back from Home', async ({ page }) => 
   await expect.poll(() => page.evaluate(() => window.__shell.recoveryIds().length)).toBe(1);
 
   await page.getByRole('button', { name: 'Back to your diagrams' }).click();
-  // Home opens on the drafts, each drawn as the diagram it is — and, with work to come back to, the
-  // motto steps down to one line.
+  // The shared welcome stays in place as the first drawing appears on the shelf.
   await expect(page.getByRole('tab', { name: 'Drafts' })).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByRole('tab', { name: 'Starters' })).toBeVisible();
+  await expect(page.getByRole('tab')).toHaveText(['Drafts', 'Projects']);
   await expect(page.locator('.dc-desk')).toHaveAttribute('data-mode', 'returning');
-  await expect(page.getByText('For meetings that suddenly need a diagram.')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'It starts with a thought.' })).toBeVisible();
   const tile = page.getByRole('button', { name: 'Open Quick Draft, a draft not saved to a file' });
   await expect(tile).toHaveAttribute('data-thumbnail', 'drawn');
   // A Quick Draft is not asked about on the way out.
@@ -113,22 +455,25 @@ test('what is unsaved is kept, and offered back from Home', async ({ page }) => 
   await expect(page.locator('.dc-node')).toHaveCount(1);
 });
 
-test('an empty tab says what would be there, and the tabs hold still', async ({ page }) => {
+test('clearing Recent hides its tab and selects a remaining project', async ({ page }) => {
   await page.goto('/');
   const text = await documentText(page, 'Flow', 2);
   await page.addInitScript((text) => {
-    window.__shell.seed({ recents: [{ name: 'payment-flow', text, ago: 60_000 }] });
+    window.__shell.seed({
+      recents: [1, 2].map(index => ({ name: `payment-flow-${index}`, text, ago: index * 60_000 })),
+      projects: [{ name: 'Payments', diagrams: [{ path: 'flow.draftcanvas', text, ago: 60_000 }] }],
+    });
   }, text);
   await reloadSeeded(page);
 
   await expect(page.getByRole('tab', { name: 'Recent' })).toHaveAttribute('aria-selected', 'true');
-  await page.getByRole('tab', { name: 'Drafts' }).click();
-  const panel = page.getByRole('tabpanel', { name: 'Drafts' });
-  await expect(panel).toContainText('No drafts.');
-  await expect(panel.getByRole('button')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Clear recent', exact: true }).click();
+  await expect(page.getByRole('tab')).toHaveCount(0);
+  await expect(page.getByRole('group', { name: 'Projects', exact: true })).toBeVisible();
+  await expect(page.getByRole('group', { name: 'Projects', exact: true }).getByRole('button', { name: 'Show the Payments project' })).toBeVisible();
 });
 
-test('forgetting the last of a row leaves its tab chosen and saying so; forgetting everything is a first run again', async ({ page }) => {
+test('removing the last recent selects Drafts, then discarding the last draft selects Projects', async ({ page }) => {
   await page.goto('/');
   const text = await documentText(page, 'Flow', 2);
   await page.addInitScript((text) => {
@@ -138,14 +483,16 @@ test('forgetting the last of a row leaves its tab chosen and saying so; forgetti
 
   await page.getByRole('tab', { name: 'Recent' }).click();
   await page.getByRole('button', { name: 'Remove payment-flow from Recent' }).click();
-  await expect(page.getByRole('tab', { name: 'Recent' })).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByRole('tabpanel', { name: 'Recent' })).toContainText('Nothing opened lately.');
+  await expect(page.getByRole('tab', { name: 'Recent' })).toHaveCount(0);
+  await expect(page.getByRole('tab', { name: 'Drafts' })).toHaveAttribute('aria-selected', 'true');
 
   await page.evaluate(() => window.__shell.answer(0));
   await page.getByRole('tab', { name: 'Drafts' }).click();
   await page.getByRole('button', { name: 'Discard Auth rework' }).click();
+  await expect(page.getByRole('tab')).toHaveCount(0);
+  await expect(page.getByRole('group', { name: 'Projects', exact: true })).toBeVisible();
   await expect(page.locator('.dc-desk')).toHaveAttribute('data-mode', 'first');
-  await expect(page.getByText('For meetings that suddenly need a diagram.')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'It starts with a thought.' })).toBeVisible();
 });
 
 test('the row is walked and opened from the keyboard', async ({ page }) => {
@@ -168,24 +515,26 @@ test('the row is walked and opened from the keyboard', async ({ page }) => {
   await expect(page.locator('.dc-status-left')).toContainText('diagram-2');
 });
 
-test('a first run keeps the full welcome, and the footer claims no global shortcut', async ({ page }) => {
+test('a first run keeps the full welcome', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('.dc-desk')).toHaveAttribute('data-mode', 'first');
-  await expect(page.getByText('For meetings that suddenly need a diagram.')).toBeVisible();
-  await expect(page.getByText('Start drawing. Name it later.')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'New file…' })).toBeVisible();
-  const foot = page.locator('.dc-desk-foot');
-  await expect(foot).toHaveText('Available from your menu bar. Your diagrams stay local.');
+  await expect(page.getByRole('heading', { name: 'It starts with a thought.' })).toBeVisible();
+  await expect(page.getByText('No title needed. Just begin.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Open file…' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Try an example' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Connect an agent…' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'New file…' })).toHaveCount(0);
+  await expect(page.getByRole('navigation', { name: 'More ways in' })).toHaveCount(0);
 });
 
 test('recent files are drawn from their own contents, without being opened', async ({ page }) => {
   await page.goto('/');
   const text = await documentText(page, 'Payments', 3);
   await page.evaluate((text) => {
-    const handle = window.__shell.addFile('payments', text);
-    window.__shell.nextOpen(handle);
+    window.__shell.addFile('payments', text);
   }, text);
   await page.getByRole('button', { name: 'Open file…' }).click();
+  await chooseWorkFile(page, 'payments');
   await expect(page.locator('.dc-editor')).toBeVisible();
   await page.getByRole('button', { name: 'Back to your diagrams' }).click();
 
@@ -195,12 +544,11 @@ test('recent files are drawn from their own contents, without being opened', asy
   // Three services on the canvas, three marks on the tile.
   await expect(tile.locator('.dc-fingerprint-service')).toHaveCount(3);
   // Drawing it was a look, not an open: nothing but the one real open reached the shell.
-  const opens = await page.evaluate(() => window.__shell.calls().filter((call) => call.command === 'open_dialog' || call.command === 'open_handle').length);
+  const opens = await page.evaluate(() => window.__shell.calls().filter((call) => call.command === 'explorer_open_file' || call.command === 'open_handle').length);
   expect(opens).toBe(1);
 
-  // A starter makes a Quick Draft already holding it.
-  await page.getByRole('tab', { name: 'Starters' }).click();
-  await page.getByRole('button', { name: 'Start from Microservices' }).click();
+  // The hero still starts an example directly, without a Starters tab.
+  await page.getByRole('button', { name: 'Try an example' }).click();
   await expect(page.locator('.dc-editor')).toBeVisible();
   await expect(page.locator('.dc-status-left')).toContainText('Quick Draft');
   expect(await page.locator('.dc-node').count()).toBeGreaterThan(3);
@@ -216,13 +564,14 @@ test('keeps the row to one line, with the rest one click away', async ({ page })
 
   await expect(page.getByRole('tab', { name: 'Recent' })).toHaveAttribute('aria-selected', 'true');
   const row = page.locator('.dc-desk-row');
-  const more = row.getByRole('button', { name: 'All 8' });
+  const more = page.getByRole('button', { name: 'All 8' });
   await expect(more).toBeVisible();
   // Every tile in one row: nothing wraps under the connectors.
   const tops = await row.locator('.dc-desk-tile').evaluateAll((tiles) => new Set(tiles.map((tile) => (tile as HTMLElement).offsetTop)).size);
   expect(tops).toBe(1);
 
-  // The rest open in the browse view, scoped to Recent, drawn as the row draws them.
+  // The small header link opens the complete gallery without using a preview slot.
+  await expect(row.locator('[data-kind="more"]')).toHaveCount(0);
   await more.click();
   const recent = page.getByRole('region', { name: 'Recent' });
   await expect(recent.locator('.dc-desk-tile')).toHaveCount(8);
@@ -247,12 +596,11 @@ test('holds many projects: one Projects tab, a row of the newest, and everything
   }, text);
   await reloadSeeded(page);
 
-  // However many projects: one Projects tab, never a tab each — and it is the one shown, being the
-  // only one with anything in it.
-  await expect(page.getByRole('tab')).toHaveText(['Drafts', 'Recent', 'Projects', 'Starters']);
-  await expect(page.getByRole('tab', { name: 'Projects' })).toHaveAttribute('aria-selected', 'true');
+  // Any number of projects is one source. With no other source, its previews need no tab bar.
+  await expect(page.getByRole('tab')).toHaveCount(0);
+  await expect(page.getByRole('group', { name: 'Projects', exact: true })).toBeVisible();
   const row = page.locator('.dc-desk-row');
-  await expect(row.getByRole('button', { name: 'All 10' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'All 10' })).toBeVisible();
   await expect(row.getByRole('button', { name: 'Show the project-1 project' })).toContainText('200 diagrams');
 
   // Only the projects in the row were listed, and nothing was read beyond their front drawings.
@@ -317,6 +665,9 @@ test('browses a project’s folders one level at a time, with breadcrumbs back u
   await row.getByRole('button', { name: 'Show the Shop project' }).click();
   const group = page.getByRole('region', { name: 'Shop' });
 
+  // The root heading already names the folder: a one-item breadcrumb would repeat it.
+  await expect(page.getByRole('navigation', { name: 'Folder' })).toHaveCount(0);
+  await expect(group.getByRole('heading', { name: 'Shop', exact: true })).toBeVisible();
   // At the root: the two files there, and one tile for the folder — not its contents.
   await expect(group.locator('.dc-desk-tile')).toHaveCount(3);
   await expect(group.getByRole('button', { name: 'Open home', exact: true })).toBeVisible();
@@ -340,6 +691,7 @@ test('browses a project’s folders one level at a time, with breadcrumbs back u
 
   // The breadcrumb goes back to the root, with everything there again.
   await crumbs.getByRole('button', { name: 'Shop' }).click();
+  await expect(crumbs).toHaveCount(0);
   await expect(group.locator('.dc-desk-tile')).toHaveCount(3);
 });
 
@@ -455,11 +807,11 @@ test('opens a file, says when it has unsaved changes, and asks before leaving it
   await page.goto('/');
   const text = await documentText(page, 'Payments', 1);
   await page.evaluate((text) => {
-    const handle = window.__shell.addFile('payments', text);
-    window.__shell.nextOpen(handle);
+    window.__shell.addFile('payments', text);
   }, text);
 
   await page.getByRole('button', { name: 'Open file…' }).click();
+  await chooseWorkFile(page, 'payments');
   await expect(page.locator('.dc-editor')).toBeVisible();
   await expect(page.locator('.dc-node')).toHaveCount(1);
   await expect(status(page)).toContainText('Saved');
@@ -567,11 +919,13 @@ test('the native Edit menu undoes what was drawn', async ({ page }) => {
 test('a file that is not a diagram is refused without leaving Home', async ({ page }) => {
   await page.goto('/');
   await page.evaluate(() => {
-    const handle = window.__shell.addFile('notes', '{ definitely not a diagram');
-    window.__shell.nextOpen(handle);
+    window.__shell.addFile('notes', '{ definitely not a diagram');
   });
 
   await page.getByRole('button', { name: 'Open file…' }).click();
+  await chooseWorkFile(page, 'notes');
+  await expect(page.getByRole('dialog', { name: 'Open a diagram', exact: true })).toBeVisible();
+  await page.getByRole('dialog', { name: 'Open a diagram', exact: true }).getByRole('button', { name: 'Close', exact: true }).click();
 
   await expect(page.getByRole('button', { name: 'New Quick Draft' })).toBeVisible();
   await expect(page.locator('.dc-editor')).toHaveCount(0);
@@ -619,11 +973,30 @@ async function openSettings(page: Page, category?: 'General' | 'AI agents' | 'Up
   return settings;
 }
 
+test('Settings fits a compact window and keeps every page accessible in both themes', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 800 });
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'New Quick Draft' })).toBeVisible();
+  const settings = await openSettings(page);
+  for (const theme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: theme });
+    await expect(page.locator(':root')).toHaveAttribute('data-theme', theme);
+    for (const category of ['General', 'AI agents', 'Updates', 'Support']) {
+      await settings.getByRole('tab', { name: category, exact: true }).click();
+      const panel = settings.getByRole('tabpanel', { name: category, exact: true });
+      await expect(panel).toBeVisible();
+      expect(await panel.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+      const result = await new AxeBuilder({ page }).include('.dc-modal-settings').analyze();
+      expect(result.violations).toEqual([]);
+    }
+  }
+});
+
 test('Settings has the update switch, and turning it off tells the shell', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('button', { name: 'New Quick Draft' })).toBeVisible();
   const settings = await openSettings(page, 'Updates');
-  const auto = settings.getByRole('checkbox', { name: /Check for updates automatically/ });
+  const auto = settings.getByRole('switch', { name: /Check for updates automatically/ });
   await expect(auto).toBeChecked();
   await auto.uncheck();
   await expect(auto).not.toBeChecked();

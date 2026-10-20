@@ -5,6 +5,7 @@
 
 pub mod agent;
 pub mod documents;
+pub mod explorer;
 pub mod host;
 pub mod peek;
 pub mod projects;

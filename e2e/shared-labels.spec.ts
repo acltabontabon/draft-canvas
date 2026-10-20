@@ -1,3 +1,4 @@
+import { openGallery } from './library';
 import { expect, test, type Page } from '@playwright/test';
 
 /**
@@ -151,6 +152,7 @@ test.describe('a label shared by connectors leaving together', () => {
   test('survives saving and reopening, with every connector keeping its own label in the file', async ({ page }) => {
     await open(page);
     await page.getByRole('button', { name: 'Back to your diagrams' }).click();
+    await openGallery(page);
     await page.getByRole('button', { name: /Checkout/ }).first().click();
     await page.waitForSelector('.dc-editor');
     await expect(labels(page)).toHaveCount(1);

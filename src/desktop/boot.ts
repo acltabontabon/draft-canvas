@@ -7,6 +7,7 @@ import { createHostLink } from './channel';
 import { dispatchEditCommand } from './commands';
 import { DesktopController, type DesktopUi } from './controller';
 import { desktopStore } from './store';
+import { createExplorerSaver } from './saveExplorer';
 import { createTauriApi } from './tauri/api';
 import { setDesktopController } from './useDesktop';
 
@@ -60,7 +61,8 @@ const ui: DesktopUi = {
  */
 export async function bootDesktop(): Promise<void> {
   try {
-    const api = createTauriApi();
+    const nativeApi = createTauriApi();
+    const api: DesktopApi = { ...nativeApi, saveAs: createExplorerSaver(nativeApi, desktopStore) };
     const { channel, link } = createHostLink();
     const controller = new DesktopController({ api, link, store: desktopStore, ui });
     setDesktopController(controller);

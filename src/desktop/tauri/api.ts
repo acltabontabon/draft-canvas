@@ -89,6 +89,15 @@ export function createTauriApi(): DesktopApi {
     projectForget: (handle) => call('project_forget', { handle }),
     projectSaveNew: (projectHandle, name, bytes) => callRaw('project_save_new', { projectHandle, name }, bytes),
 
+    explorerOpen: (startIn) => call('explorer_open', { startIn }),
+    explorerList: (session, handle, showHidden, query, offset) => call('explorer_list', { session, handle, showHidden, query, offset }),
+    explorerSaveFile: (session, handle, name, bytes, copySidecarFrom, expectedStamp) => callRaw('explorer_save_file', { session, handle, name, copySidecarFrom, expectedStamp }, bytes),
+    explorerCreateFolder: (session, handle, name) => call('explorer_create_folder', { session, handle, name }),
+    explorerPeek: (session, handle) => call('explorer_peek', { session, handle }),
+    explorerAddProject: (session, handle) => call('explorer_add_project', { session, handle }),
+    explorerOpenFile: (session, handle) => call('explorer_open_file', { session, handle }),
+    explorerClose: (session) => call('explorer_close', { session }),
+
     recentsList: () => call('recents_list'),
     recentsRemove: (handle) => call('recents_remove', { handle }),
     recentsClear: () => call('recents_clear'),

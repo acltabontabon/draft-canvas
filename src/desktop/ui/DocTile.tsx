@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type FocusEvent, type KeyboardEvent, type RefObject } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type RefObject } from 'react';
 import { Icon } from '../../ui/common/Icon';
 import { SelectionChrome } from '../../ui/Library/SelectionChrome';
 import { StarterGlyph } from '../../ui/Library/StarterGlyph';
@@ -13,6 +13,11 @@ export interface DocTileProps {
   label: string;
   /** Position in the row, for the arrival stagger. */
   index: number;
+  /** The library's larger preview card; Home keeps the compact diagram tile. */
+  gallery?: boolean;
+  /** A framed page on Home's compact sketch shelf. */
+  shelf?: boolean;
+  description?: string;
   /**
    * A document is drawn from its own contents; a folder as a folder; `more` is the row's last word; a
    * project as a stack of sheets, its newest diagram (the thumbnail) on top.
@@ -33,8 +38,6 @@ export interface DocTileProps {
   secondaryAction?: { label: string; icon: 'pencil'; run: () => void };
   /** Holds work that isn't in a file yet: marked the way macOS marks a window with unsaved changes. */
   edited?: boolean;
-  /** The pointer or the keyboard is on it: Home lights the connector that leads here. */
-  onHot?: (hot: boolean, event?: FocusEvent<HTMLButtonElement>) => void;
   onKeyDown?: (event: KeyboardEvent<HTMLButtonElement>) => void;
 }
 
@@ -43,7 +46,7 @@ export interface DocTileProps {
  * its name under it. The drawing is the diagram's — read once the tile is shown, reduced to a
  * silhouette with no words in it — so "the checkout one" is recognisable before it is opened.
  */
-export function DocTile({ entryKey, name, meta, label, index, kind, stack = 0, missing, glyph, thumbnail, onOpen, action, secondaryAction, edited, onHot, onKeyDown }: DocTileProps) {
+export function DocTile({ entryKey, name, meta, label, index, gallery = false, shelf = false, description, kind, stack = 0, missing, glyph, thumbnail, onOpen, action, secondaryAction, edited, onKeyDown }: DocTileProps) {
   const buttonRef = useRef<HTMLButtonElement>(null);
   // A drawing is read once its tile is on screen or nearly: a project of five hundred reads the few
   // in view, not five hundred.
@@ -54,23 +57,20 @@ export function DocTile({ entryKey, name, meta, label, index, kind, stack = 0, m
   const state = glyph ? 'drawn' : drawsItself ? (thumbnail ? read.state : 'blank') : kind;
 
   return (
-    <div className="dc-desk-tile" data-kind={kind} data-missing={missing ? '' : undefined} style={{ '--i': index } as CSSProperties}>
+    <div className={`dc-desk-tile${gallery ? ' dc-gallery-card' : ''}`} data-kind={kind} data-missing={missing ? '' : undefined} style={{ '--i': index } as CSSProperties}>
       <button
         ref={buttonRef}
         type="button"
-        className="dc-starter"
+        className={`dc-starter${gallery ? ' dc-gallery-open' : ''}`}
         data-entry={entryKey}
         data-thumbnail={state}
         aria-label={label}
+        title={description}
         onClick={onOpen}
-        onPointerEnter={() => onHot?.(true)}
-        onPointerLeave={() => onHot?.(false)}
-        onFocus={(event) => onHot?.(true, event)}
-        onBlur={() => onHot?.(false)}
         onKeyDown={onKeyDown}
       >
         <span
-          className="dc-starter-swatch"
+          className={`dc-starter-swatch${gallery ? ' dc-gallery-preview' : ''}`}
           style={
             kind === 'project'
               ? // The frame hugs the stack of sheets, whatever is drawn on the front one.
@@ -87,7 +87,9 @@ export function DocTile({ entryKey, name, meta, label, index, kind, stack = 0, m
           }
         >
           {kind === 'project' && <StackGlyph sheets={Math.min(3, Math.max(1, stack))} />}
-          {drawn ? <StarterGlyph starter={drawn} /> : kind === 'folder' ? <FolderGlyph /> : kind === 'more' ? <MoreGlyph /> : kind === 'project' ? null : <SheetGlyph />}
+          {drawn ? <StarterGlyph starter={drawn} /> : shelf && kind === 'document' && state === 'blank' ? (
+            <span className="dc-desk-blank-page" aria-hidden="true"><span />Still a blank page</span>
+          ) : kind === 'folder' ? <FolderGlyph /> : kind === 'more' ? <MoreGlyph /> : kind === 'project' ? null : <SheetGlyph />}
           <SelectionChrome />
         </span>
         <span className="dc-starter-name">

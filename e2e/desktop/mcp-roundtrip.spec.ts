@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { McpSession } from '../agent-conversations';
 import { installMockShell } from './mockShell';
+import { chooseWorkFile } from './explorer';
 
 /** A real stdio MCP client and sidecar joined to the real browser editor. Only the OS broker/disk
  *  are faked here; native admission, journaling and access checks have their Rust integration tests. */
@@ -79,10 +80,10 @@ test('real MCP sidecar: inspect a candidate, commit, submit a semantic proposal,
     const { compose } = await load('/src/agent/compile.ts');
     const text = compose({ title: 'MCP order', nodes: [{ id: 'api', type: 'api', label: 'Orders API', evidence: [{ path: 'src/orders.ts', basis: 'observed', line: 42 }] }, { id: 'db', type: 'database', label: 'Orders DB' }], relationships: [{ id: 'r', from: 'api', to: 'db' }], flows: [{ id: 'f', title: 'Order', steps: ['r'] }], notes: [{ id: 'decision', text: 'Old decision', about: 'api' }] }, 'd_mcp00000001').text;
     const handle = window.__shell.addFile('MCP order', text);
-    window.__shell.nextOpen(handle);
     return handle;
   });
   await page.getByRole('button', { name: 'Open file…' }).click();
+  await chooseWorkFile(page, 'MCP order');
   await expect(page.locator('.dc-editor')).toBeVisible();
   const connection = await connect(page, handle);
   const { client } = connection;

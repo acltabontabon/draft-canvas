@@ -1,3 +1,4 @@
+import { openGallery } from './library';
 import { expect, test, type Page } from '@playwright/test';
 import { create, newCanvas } from './canvas';
 
@@ -10,6 +11,7 @@ async function command(page: Page, name: string) {
 test('the library folder trigger toggles its menu closed', async ({ page }) => {
   await newCanvas(page, 'Menu toggle');
   await page.getByRole('button', { name: 'Back to your diagrams' }).click();
+  await openGallery(page);
   const trigger = page.getByRole('button', { name: 'Move Menu toggle to a project' });
   await trigger.click();
   await expect(page.getByRole('menu', { name: 'Move to project' })).toBeVisible();
@@ -21,6 +23,7 @@ test('the library folder trigger toggles its menu closed', async ({ page }) => {
 test('keyboard navigation scrolls the project menu to the highlighted row', async ({ page }) => {
   await newCanvas(page, 'Many projects');
   await page.getByRole('button', { name: 'Back to your diagrams' }).click();
+  await openGallery(page);
   for (let i = 0; i < 12; i += 1) {
     await page.getByRole('button', { name: 'New project', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'New project', exact: true });
@@ -95,6 +98,7 @@ test('long diagram and project names stay readable in narrow layouts', async ({ 
     await expect.poll(() => page.locator('.dc-toolbar').evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
   }
   await page.getByRole('button', { name: 'Back to your diagrams' }).click();
+  await openGallery(page);
   const name = page.locator('.dc-library-item-title');
   await expect(name).toHaveText(title);
   await expect.poll(() => name.evaluate((element) => element.scrollWidth <= element.clientWidth + 1 && element.scrollHeight <= element.clientHeight + 1)).toBe(true);

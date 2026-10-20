@@ -1,3 +1,4 @@
+import { openGallery } from './library';
 import { readFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
 import { create, newCanvas } from './canvas';
@@ -13,10 +14,12 @@ test('two diagrams survive Back up → fresh storage → Restore', async ({ page
   await create(page, 'Service', { x: 200, y: 200 });
   await expect(page.locator('.dc-save')).toContainText('Saved locally');
   await page.getByRole('button', { name: 'Back to your diagrams' }).click();
+  await openGallery(page);
   await newCanvas(page, 'Billing');
   await create(page, 'Data Store', { x: 200, y: 200 });
   await expect(page.locator('.dc-save')).toContainText('Saved locally');
   await page.getByRole('button', { name: 'Back to your diagrams' }).click();
+  await openGallery(page);
   await expect(page.locator('.dc-library-item-title')).toHaveText(['Billing', 'Orders']);
 
   const download = page.waitForEvent('download');
@@ -40,6 +43,7 @@ test('two diagrams survive Back up → fresh storage → Restore', async ({ page
   await other.getByRole('button', { name: 'New canvas' }).click();
   await expect(other.locator('.dc-editor')).toBeVisible();
   await other.getByRole('button', { name: 'Back to your diagrams' }).click();
+  await openGallery(other);
   await other.setInputFiles('input[aria-label="Backup file"]', path);
   await expect(other.getByText('Restored 2 diagrams.')).toBeVisible();
   await expect(other.locator('.dc-library-item-title')).toContainText(['Billing', 'Orders']);

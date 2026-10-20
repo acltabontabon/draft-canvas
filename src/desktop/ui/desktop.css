@@ -1,9 +1,4 @@
-/*
- * The desktop's Home (`DesktopHome.tsx`) is itself a diagram: a selected text node, a connector,
- * one node to press, a fan-out to a row of the person's own work. Canvas vocabulary only — dot
- * grid, selection frame and handles, orthogonal connectors with small arrowheads, an edge label —
- * and one solid colour, on the one thing to do.
- */
+/* Desktop surrounds the shared Living Canvas scene with native projects, recent files and drafts. */
 
 .dc-desk {
   /* The editor's grid dot, a step quieter than the web home's: here it runs behind the words and
@@ -53,8 +48,24 @@
 }
 
 .dc-desk-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   flex-shrink: 0;
   padding: 18px 26px 0;
+}
+
+.dc-desk-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+
+.dc-desk-top-actions .dc-update-chip[data-placement='home'] {
+  position: static;
 }
 
 /* ---- the stage ---------------------------------------------------------- */
@@ -64,7 +75,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  width: min(1120px, calc(100% - 48px));
+  width: min(980px, calc(100% - 48px));
   margin: auto;
   padding: clamp(8px, 2vh, 24px) 0 clamp(24px, 4vh, 48px);
 }
@@ -78,272 +89,112 @@
   }
 }
 
-/* ---- the motto: a text node, just placed, still selected ---------------- */
+/* ---- the sketch shelf -------------------------------------------------- */
 
-/* Words sit on clean canvas: the grid fades out behind every block of text rather than running
-   through it, the way a text node on the canvas covers the dots beneath it. */
-.dc-desk-motto,
-.dc-desk-readout,
-.dc-desk-ways,
-.dc-desk-foot {
-  background: radial-gradient(closest-side, var(--dc-canvas) 72%, color-mix(in srgb, var(--dc-canvas) 0%, transparent));
+.dc-desk-shelf {
+  width: min(810px, 100%);
+  margin-top: 10px;
 }
 
-.dc-desk-motto {
-  padding: 22px 38px 26px;
-  background: var(--dc-canvas);
-  text-align: center;
-}
-
-.dc-desk-motto h1 {
-  margin: 0;
-  color: var(--dc-text);
-  font-size: clamp(40px, 3.4vw + 12px, 66px);
-  font-weight: 650;
-  letter-spacing: -0.036em;
-  line-height: 1.02;
-  text-wrap: balance;
-}
-
-.dc-desk-motto p {
-  margin: 14px 0 0;
-  color: var(--dc-text-muted);
-  font-size: 16px;
-}
-
-/* Decoration, not a control: a quieter frame and hollow, lighter handles than the selection a
-   focused tile shows, so nothing up here looks like it can be pressed. */
-.dc-desk-motto-frame {
-  position: absolute;
-  inset: 0;
-  border: 1px solid color-mix(in srgb, var(--dc-selection) 24%, transparent);
-  border-radius: 2px;
-  pointer-events: none;
-}
-
-.dc-desk-motto-frame span {
-  position: absolute;
-  width: 7px;
-  height: 7px;
-  border: 1px solid color-mix(in srgb, var(--dc-selection) 48%, transparent);
-  border-radius: 1.5px;
-  background: var(--dc-canvas);
-}
-
-/* Coming back: the motto steps down to one quiet line, and the work moves up under the action. */
-.dc-desk[data-mode='returning'] .dc-desk-motto {
-  padding: 12px 26px 14px;
-}
-
-.dc-desk[data-mode='returning'] .dc-desk-motto h1 {
-  font-size: clamp(22px, 0.8vw + 16px, 30px);
-  font-weight: 620;
-  letter-spacing: -0.028em;
-  line-height: 1.15;
-}
-
-.dc-desk-motto-frame [data-at='nw'] {
-  top: -4px;
-  left: -4px;
-}
-
-.dc-desk-motto-frame [data-at='ne'] {
-  top: -4px;
-  right: -4px;
-}
-
-.dc-desk-motto-frame [data-at='se'] {
-  right: -4px;
-  bottom: -4px;
-}
-
-.dc-desk-motto-frame [data-at='sw'] {
-  bottom: -4px;
-  left: -4px;
-}
-
-/* ---- the one thing to do ------------------------------------------------ */
-
-.dc-desk-action {
-  display: inline-flex;
-  align-items: center;
-  gap: 11px;
-  min-height: 54px;
-  margin-top: 42px;
-  padding: 7px 12px 7px 18px;
-  border: 0;
-  border-radius: 12px;
-  background: var(--dc-selection);
-  color: var(--dc-canvas);
-  font: inherit;
-  font-size: 16px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  text-align: left;
-  cursor: pointer;
-  /* Emphasis by colour and weight; the shadow only sets it on the canvas. */
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.14) inset,
-    0 1px 2px rgba(0, 0, 0, 0.1),
-    0 8px 20px -14px var(--dc-selection);
-  transition:
-  transform 80ms ease,
-  filter 120ms ease,
-  box-shadow 200ms ease;
-}
-
-.dc-desk[data-mode='returning'] .dc-desk-action {
-  margin-top: 30px;
-}
-
-/* …and the row sits closer under its tabs: the bus still has room between them. */
-.dc-desk[data-mode='returning'] .dc-desk-label {
-  margin-top: 22px;
-}
-
-.dc-desk[data-mode='returning'] .dc-desk-row {
-  margin-top: 28px;
-}
-
-.dc-desk-action:hover {
-  filter: brightness(1.06);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.14) inset,
-    0 1px 2px rgba(0, 0, 0, 0.1),
-    0 10px 24px -14px var(--dc-selection);
-}
-
-.dc-desk-action-text {
+.dc-desk-shelf-head {
   display: flex;
-  flex-direction: column;
-  gap: 1px;
-  line-height: 20px;
-}
-
-.dc-desk-action-hint {
-  font-size: 12px;
-  font-weight: 450;
-  letter-spacing: 0;
-  line-height: 16px;
-  opacity: 0.78;
-}
-
-.dc-desk-action:active {
-  transform: translateY(1px);
-  filter: brightness(0.98);
-}
-
-.dc-desk-action:focus-visible {
-  outline: 2px solid var(--dc-selection);
-  outline-offset: 4px;
-}
-
-.dc-desk-action kbd {
-  min-width: 0;
-  align-self: center;
-  margin-left: 10px;
-  padding: 0 7px;
-  border: 0;
-  border-radius: var(--dc-radius-sm);
-  background: color-mix(in srgb, var(--dc-canvas) 16%, transparent);
-  color: inherit;
-  font-family: var(--dc-font);
-  font-size: 12.5px;
-  letter-spacing: 0.02em;
-  line-height: 22px;
-}
-
-/* ---- the connector's label: where the row is chosen --------------------- */
-
-.dc-desk-label {
-  margin-top: 26px;
-  padding: 2px 6px;
-  border-radius: 999px;
-  /* An edge label: a halo of canvas behind the words, so the connector runs under them. */
-  background: var(--dc-canvas);
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 20px;
+  padding-bottom: 11px;
+  border-bottom: 1px solid var(--dc-border);
 }
 
 .dc-desk-label [role='tablist'] {
   display: flex;
-  gap: 2px;
+  flex-wrap: wrap;
+  gap: 22px;
 }
 
 .dc-desk-label [role='tab'] {
-  height: 26px;
-  padding: 0 11px;
+  position: relative;
+  padding: 6px 0;
   border: 0;
-  border-radius: 999px;
   background: none;
   color: var(--dc-text-muted);
   font: inherit;
-  font-size: 12.5px;
-  font-weight: 550;
+  font-size: 12px;
   cursor: pointer;
-  transition:
-  color 120ms ease,
-  background 120ms ease;
 }
 
-.dc-desk-label [role='tab']:hover {
-  color: var(--dc-text);
-}
-
+.dc-desk-label [role='tab']:hover,
 .dc-desk-label [role='tab'][aria-selected='true'] {
-  background: var(--dc-selection-soft);
   color: var(--dc-text);
+}
+
+.dc-desk-label [role='tab'][aria-selected='true']::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: -12px;
+  left: 0;
+  height: 2px;
+  background: var(--dc-text);
 }
 
 .dc-desk-label [role='tab']:focus-visible {
   outline: 2px solid var(--dc-selection);
-  outline-offset: 1px;
+  outline-offset: 4px;
 }
 
-.dc-desk-caption {
-  display: block;
-  padding: 3px 6px;
+.dc-desk-view-all {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0 6px 10px;
+  border: 0;
+  background: none;
   color: var(--dc-text-muted);
-  font-size: 12.5px;
-  font-weight: 500;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
 }
 
-/* ---- the row ------------------------------------------------------------ */
+.dc-desk-view-all > span {
+  color: var(--dc-text-faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.dc-desk-view-all:hover {
+  color: var(--dc-text);
+}
 
 .dc-desk-row {
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  gap: var(--tile-gap, 36px);
-  /* A row keeps its height whatever is in it, so switching to an empty tab moves nothing below. */
-  min-height: calc(84px * var(--tile-scale) + 48px);
-  margin-top: 42px;
+  display: grid;
+  grid-template-columns: repeat(var(--shelf-columns, 3), minmax(0, 1fr));
+  align-items: start;
+  gap: 20px;
+  /* An empty tab takes the same space as a short-titled preview, so its navigation stays put. */
+  min-height: 174px;
+  margin-top: 22px;
 }
 
-/* A row with nothing in it: a sentence at the end of the connector, on clean canvas. */
 .dc-desk-empty {
-  max-width: 340px;
-  margin: 0;
-  padding: 10px 18px;
-  border-radius: 10px;
+  grid-column: 1 / -1;
+  align-self: center;
+  max-width: 360px;
+  margin: 0 auto;
+  padding: 12px 18px;
   background: var(--dc-canvas);
   color: var(--dc-text-muted);
   font-size: 13px;
   line-height: 1.5;
   text-align: center;
   text-wrap: balance;
-  animation: dc-fade-in 160ms ease both;
 }
 
-.dc-desk-row-pending {
-  width: 1px;
-}
-
-/* Drawing and name on clean canvas: the tile's own background sits under both, so the grid
-   fades out behind them rather than running through the words. */
 .dc-desk-tile {
   position: relative;
   width: 144px;
   min-width: 0;
-  background: radial-gradient(ellipse 62% 56% at 50% 50%, var(--dc-canvas) 62%, color-mix(in srgb, var(--dc-canvas) 0%, transparent));
 }
 
 .dc-desk-tile > .dc-starter {
@@ -352,76 +203,182 @@
   text-align: center;
 }
 
-/* The page is already canvas: a tile lifts its drawing off the grid instead of adding its own. */
 .dc-desk .dc-starter-swatch::before {
   background: none;
   -webkit-mask-image: none;
   mask-image: none;
-  opacity: 1;
 }
 
-.dc-desk .dc-starter-name {
-  max-width: 100%;
-}
-
-/* Home's row draws each tile at --tile-scale: the drawing, the swatch it sits in and the selection
-   frame around its bounds all grow together. The browse view keeps the standard size. */
+/* A page and its fine second edge suggest a folio without tilting the drawings or their text. */
 .dc-desk-row .dc-desk-tile {
-  width: calc(144px * var(--tile-scale));
-  /* The drops end inside the swatch, at each drawing's frame: a halo over the whole tile would fade
-  them out. Here only the words get clean canvas behind them. */
-  background: none;
+  width: 100%;
 }
 
-.dc-desk-row .dc-starter-name,
-.dc-desk-row .dc-desk-tile-meta {
-  background: radial-gradient(closest-side, var(--dc-canvas) 70%, color-mix(in srgb, var(--dc-canvas) 0%, transparent));
+.dc-desk-row .dc-starter {
+  align-items: stretch;
+  gap: 10px;
+  padding: 0;
+  text-align: left;
+  outline-offset: 5px;
+}
+
+.dc-desk-row .dc-starter:focus-visible {
+  outline-color: var(--dc-selection);
 }
 
 .dc-desk-row .dc-starter-swatch {
   width: 100%;
-  height: calc(84px * var(--tile-scale));
+  height: 118px;
+  border: 1px solid var(--dc-border);
+  border-radius: 5px 5px 3px 3px;
+  background: var(--dc-canvas);
+  box-shadow: 0 3px 0 var(--dc-canvas), 0 4px 0 var(--dc-border);
+  transition: border-color 140ms ease, background-color 140ms ease;
+}
+
+.dc-desk-row .dc-starter:hover .dc-starter-swatch {
+  border-color: var(--dc-border-strong);
+  background: var(--dc-surface);
 }
 
 .dc-desk-row .dc-starter-glyph {
-  width: calc(144px * var(--tile-scale));
-  height: calc(76px * var(--tile-scale));
+  width: 80%;
+  max-width: 180px;
+  height: 94px;
 }
 
-.dc-desk-row .dc-starter-swatch .dc-chrome {
-  top: calc((var(--by, 0px) + 4px) * var(--tile-scale) - 9px);
-  left: calc(var(--bx, 0px) * var(--tile-scale) - 9px);
-  width: calc(var(--bw, 144px) * var(--tile-scale) + 18px);
-  height: calc(var(--bh, 76px) * var(--tile-scale) + 18px);
+.dc-desk-row .dc-starter-swatch::before,
+.dc-desk-row .dc-chrome {
+  display: none;
 }
 
-/* Hover: a faint patch under the drawing, with the side handles the canvas shows on hover. Focus
-   adds the whole selection frame (app.css), so the two never look alike. */
-.dc-desk-row .dc-starter-swatch::before {
-  inset: -2px -6px;
-  border-radius: 12px;
-  transition: background 120ms ease;
-}
-
-@media (hover: hover) {
-  .dc-desk-row .dc-starter:hover .dc-starter-swatch::before {
-  background: color-mix(in srgb, var(--dc-text) 3%, transparent);
-  }
-}
-
-/* Long names wrap fully inside the tile. */
 .dc-desk-row .dc-starter-name {
   display: block;
-  font-size: 13.5px;
+  padding: 0 2px;
+  font-size: 13px;
+  font-weight: 500;
   line-height: 19px;
   white-space: normal;
   overflow-wrap: anywhere;
 }
 
-.dc-desk-row .dc-starter:focus-visible .dc-starter-name {
-  text-decoration: underline;
-  text-decoration-color: color-mix(in srgb, var(--dc-selection) 60%, transparent);
-  text-underline-offset: 3px;
+.dc-desk-row .dc-desk-tile-meta {
+  margin-top: -7px;
+  padding: 0 2px;
+  font-size: 11px;
+}
+
+.dc-desk-blank-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: var(--dc-text-faint);
+  font-family: 'Iowan Old Style', Georgia, serif;
+  font-size: 13px;
+  font-style: italic;
+}
+
+.dc-desk-blank-page > span {
+  width: 22px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid currentColor;
+  transform: rotate(-7deg);
+}
+
+/* Projects are visible before the first folder is added; the invitation lives in their own tab. */
+.dc-desk-shelf-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+  margin-left: auto;
+}
+
+.dc-desk-project-add {
+  height: 28px;
+  padding: 0;
+  color: var(--dc-text-muted);
+  font-size: 12px;
+}
+
+.dc-desk-project-welcome {
+  grid-column: 1 / -1;
+  align-self: center;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 20px 28px;
+  padding: 20px 12px;
+}
+
+.dc-desk-project-art {
+  position: relative;
+  display: flex;
+  margin: 6px 10px;
+  color: var(--dc-text-muted);
+  transform: rotate(-6deg);
+}
+
+.dc-desk-project-art::before {
+  content: '';
+  position: absolute;
+  inset: 12px -8px 1px 8px;
+  z-index: -1;
+  border: 1px solid var(--dc-border);
+  border-radius: 3px;
+  transform: rotate(12deg);
+}
+
+.dc-desk-project-welcome h2 {
+  margin: 0 0 8px;
+  color: var(--dc-text);
+  font-family: 'Iowan Old Style', Georgia, serif;
+  font-size: 23px;
+  font-weight: 400;
+  letter-spacing: -.5px;
+}
+
+.dc-desk-project-welcome p {
+  max-width: 285px;
+  margin: 0;
+  color: var(--dc-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.dc-desk-project-welcome .dc-desk-project-add {
+  margin-left: auto;
+  border-radius: 0;
+  border-bottom: 1px solid currentColor;
+  color: var(--dc-text);
+}
+
+@media (max-width: 520px) {
+  .dc-desk-label [role='tablist'] {
+    gap: 16px;
+  }
+
+  .dc-desk-shelf-head {
+    align-items: flex-start;
+  }
+
+  .dc-desk-project-welcome {
+    gap: 16px;
+    padding: 12px 0;
+  }
+
+  .dc-desk-project-art {
+    margin: 4px;
+  }
+
+  .dc-desk-project-welcome > div {
+    flex: 1;
+    min-width: 185px;
+  }
+
+  .dc-desk-project-welcome .dc-desk-project-add {
+    margin: 0 0 0 80px;
+  }
 }
 
 .dc-desk-tile-meta {
@@ -575,22 +532,6 @@
 
 /* ---- under the row ------------------------------------------------------ */
 
-.dc-desk-readout {
-  max-width: 100%;
-  min-height: 20px;
-  margin: 10px 0 0;
-  color: var(--dc-text-muted);
-  font-size: 12.5px;
-  line-height: 20px;
-  text-align: center;
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-
-.dc-desk-readout[data-idle] {
-  color: var(--dc-text-faint);
-}
-
 .dc-desk-aside {
   display: flex;
   flex-wrap: wrap;
@@ -607,57 +548,12 @@
   font-size: 12px;
 }
 
-.dc-desk-aside-path {
-  max-width: 100%;
-  padding: 0 8px;
-  color: var(--dc-text-faint);
-  font-family: var(--dc-mono);
-  font-size: 11.5px;
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-
-/* Everything else there is to do, as one quiet line: the other way to start, then the ways in. */
-.dc-desk-ways {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-items: center;
-  gap: 2px 6px;
-  margin-top: clamp(18px, 4vh, 44px);
-  padding: 0 12px;
-}
-
-.dc-desk-ways-rule {
-  width: 1px;
-  height: 14px;
-  margin: 0 6px;
-  background: var(--dc-border);
-}
-
-.dc-desk-way {
-  height: 30px;
-  color: var(--dc-text-muted);
-}
-
-.dc-desk-way kbd {
-  min-width: 0;
-  margin-left: 6px;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--dc-text-faint);
-  font-family: var(--dc-font);
-  font-size: 11px;
-  letter-spacing: 0.02em;
-}
-
 /* ---- browsing: everything, grouped, searchable --------------------------- */
 
 .dc-browse {
-  width: min(1180px, 100%);
+  width: min(1120px, 100%);
   margin: 0 auto;
-  padding: 0 32px 72px;
+  padding: 0 clamp(20px, 4vw, 48px) 72px;
 }
 
 /* Mounts fresh each time Browse opens (Home's stage takes its place when it closes) — see the note
@@ -679,11 +575,11 @@
 }
 
 .dc-browse-head {
-  top: 0;
+  top: 48px;
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 20px 0 12px;
+  padding: 16px 0;
 }
 
 .dc-browse-back {
@@ -712,9 +608,9 @@
   flex: 1;
   align-items: center;
   gap: 9px;
-  max-width: 560px;
+  min-width: 0;
   height: 38px;
-  margin: 0 auto;
+  margin: 0;
   padding: 0 8px 0 13px;
   border: 1px solid var(--dc-border);
   border-radius: 10px;
@@ -759,7 +655,7 @@
 }
 
 .dc-browse-scopes {
-  top: 70px;
+  top: 0;
   display: flex;
   gap: 6px;
   padding: 4px 0 14px;
@@ -813,7 +709,7 @@
 }
 
 .dc-browse-group {
-  margin-top: 34px;
+  margin-top: 24px;
 }
 
 .dc-browse-group-head {
@@ -963,47 +859,12 @@
 
 @media (max-width: 720px) {
   .dc-browse {
-  padding: 0 16px 56px;
+  padding: 0 20px 56px;
   }
 
   .dc-browse-add {
   display: none;
   }
-}
-
-/* ---- the foot ----------------------------------------------------------- */
-
-.dc-desk-foot {
-  display: flex;
-  flex-shrink: 0;
-  justify-content: center;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 24px 16px;
-  color: var(--dc-text-faint);
-  font-size: 12px;
-  text-align: center;
-}
-
-.dc-desk-tray-mark {
-  flex-shrink: 0;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2.2;
-  stroke-linejoin: round;
-  stroke-linecap: round;
-}
-
-.dc-desk-motto p {
-  animation-delay: 40ms;
-}
-
-.dc-desk-motto-frame {
-  animation: dc-fade-in 240ms ease 140ms both;
-}
-
-.dc-desk-action {
-  animation-delay: 80ms;
 }
 
 .dc-desk-label {
@@ -1020,42 +881,16 @@
   animation-delay: 0s;
 }
 
-.dc-desk-readout,
-.dc-desk-ways {
-  animation-delay: 480ms;
-}
-
-/* A short window: the same diagram, closer together, so the row and the ways stay in view. */
+/* A short window: the same diagram, closer together, so the shelf stays in view. */
 @media (max-height: 680px) {
   .dc-desk-top {
   padding-top: 12px;
   }
 
-  .dc-desk-motto {
-  padding: 16px 30px 18px;
-  }
-
-  .dc-desk-motto h1 {
-  font-size: clamp(34px, 2.6vw + 12px, 48px);
-  }
-
-  .dc-desk-action,
-  .dc-desk[data-mode='returning'] .dc-desk-action {
-  margin-top: 24px;
-  }
-
-  .dc-desk-label,
-  .dc-desk[data-mode='returning'] .dc-desk-label {
+  .dc-desk-row {
   margin-top: 18px;
   }
 
-  .dc-desk-row {
-  margin-top: 34px;
-  }
-
-  .dc-desk-ways {
-  margin-top: 12px;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

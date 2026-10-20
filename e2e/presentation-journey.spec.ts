@@ -1,3 +1,4 @@
+import { openStarter } from './library';
 import { expect, test, type Page } from '@playwright/test';
 import { cameraAtRest } from './canvas';
 
@@ -10,7 +11,7 @@ import { cameraAtRest } from './canvas';
  */
 async function presentSubmitCommand(page: Page) {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Start from CQRS' }).click();
+  await openStarter(page, 'CQRS');
   await expect(page.locator('.dc-editor')).toBeVisible();
   await page.getByRole('button', { name: 'Present', exact: true }).click();
   await page.getByRole('menuitemradio', { name: 'Submit command' }).click();
@@ -130,7 +131,7 @@ test.describe('Presentation journey', () => {
 
   test('overview keeps the step, a manual pan is respected until Re-centre, and exit restores the editor', async ({ page }) => {
     await page.goto('/');
-    await page.getByRole('button', { name: 'Start from Microservices' }).click();
+    await openStarter(page, 'Microservices');
     await expect(page.locator('.dc-editor')).toBeVisible();
     // Leave the editor somewhere deliberate, so coming back has something to restore.
     await page.mouse.move(700, 450);

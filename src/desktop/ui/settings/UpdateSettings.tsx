@@ -48,8 +48,9 @@ export function UpdateSettings() {
       <SettingsSection title="Automatic checks">
         <ChoiceRow
           type="checkbox"
+          toggle
           label="Check for updates automatically"
-          description="Once a day, and only to look. Nothing is downloaded or installed until you say so."
+          description="Check once a day. Downloads and installation always wait for you."
           checked={settings.autoCheckUpdates}
           onChange={(event) => void controller.setAutoCheckUpdates(event.target.checked)}
         />

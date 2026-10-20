@@ -175,6 +175,7 @@ fn extra_files_notice(extra: usize) -> Option<String> {
 pub struct AppState {
     pub watches: Mutex<Option<crate::watch::Watches>>,
     pub grants: Mutex<Grants>,
+    pub explorer: Mutex<crate::explorer::Explorer>,
     pub recents: Recents,
     pub settings: SettingsStore,
     pub recovery: Recovery,
@@ -196,6 +197,7 @@ impl AppState {
         Self {
             watches: Mutex::new(None),
             grants: Mutex::default(),
+            explorer: Mutex::default(),
             recents: Recents::new(config_dir),
             settings: SettingsStore::new(config_dir),
             recovery: Recovery::new(local_data_dir),

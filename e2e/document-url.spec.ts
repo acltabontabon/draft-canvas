@@ -1,3 +1,4 @@
+import { openGallery } from './library';
 import { expect, test } from '@playwright/test';
 
 /** The open canvas lives in the address (`#doc=<id>`): a refresh, Back and a bookmark all keep it. */
@@ -28,6 +29,7 @@ test('closing the canvas from inside the app clears the address', async ({ page 
   await page.getByRole('button', { name: 'New canvas' }).click();
   await expect(page).toHaveURL(/#doc=/);
   await page.getByRole('button', { name: 'Back to your diagrams' }).click();
+  await openGallery(page);
   await expect(page.locator('.dc-editor')).toHaveCount(0);
   await expect(page).not.toHaveURL(/#doc=/);
 });

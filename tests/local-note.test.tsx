@@ -1,4 +1,5 @@
 import { act, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { LocalNote } from '../src/ui/Library/LocalNote';
 import { MemoryRepository } from '../src/storage/MemoryRepository';
@@ -11,6 +12,18 @@ vi.mock('../src/lib/storagePersistence', () => ({ isStoragePersisted: vi.fn(asyn
 beforeEach(() => writePreference(LAST_BACKUP_PREFERENCE, ''));
 
 describe('backup reminder', () => {
+  it('keeps the backup action visible while the longer explanation stays behind Details', async () => {
+    render(<LocalNote hasDocuments durable repository={new MemoryRepository()} />);
+    const details = screen.getByRole('button', { name: /Stored on this device/ });
+    expect(details).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByText('No recent backup')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Back up now' })).toBeVisible();
+    expect(screen.queryByText(/Your last backup is missing/)).not.toBeInTheDocument();
+    await userEvent.click(details);
+    expect(screen.getByText(/Your last backup is missing/)).toBeVisible();
+    expect(screen.getByText(/Clearing this browser/)).toBeVisible();
+  });
+
   it('still offers a separate backup when persistent storage has been granted', () => {
     render(<LocalNote hasDocuments durable repository={new MemoryRepository()} />);
     expect(screen.getByRole('button', { name: 'Back up now' })).toBeVisible();

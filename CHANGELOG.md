@@ -17,6 +17,19 @@ the release notes and the in-app What's New are generated from here. See
 
 - Agent-generated diagrams arrange look-inside views around their own flows and choose a clearer
   reading direction automatically, reducing crossings without a manual layout pass.
+- Add project, Open file, Save As, and a draft's first Save share an in-app explorer with Places,
+  folder navigation, filtering, hidden files, and on-demand diagram previews. **New folder** creates
+  a folder without leaving the explorer.
+- Save As adds the `.draftcanvas` extension automatically and asks before replacing an existing
+  diagram, retaining atomic saves and background images.
+- Explorer dialogs show location in breadcrumbs and a preview only for a selected diagram, with
+  one primary action and subtle teal input focus rings.
+- Settings matches the new Home and explorer, with neutral surfaces, serif headings, grouped
+  choices, and consistent switches. Agent connection details appear while access is on, and the
+  client selector fits compact windows.
+- Project galleries no longer repeat the root folder name above its heading; nested folders keep
+  their breadcrumbs.
+- About no longer shows the paragraph about local diagrams and update connections.
 
 ### Shared
 
@@ -27,7 +40,25 @@ the release notes and the in-app What's New are generated from here. See
 - Technology suggestions and logos now cover the full Simple Icons catalog, including Rust, with
   common aliases and version recognition. Artwork loads on demand from separate local assets and
   stays available offline.
+- Home gives diagrams a clearer starting point, with quick access to examples and files. Desktop's
+  Living Canvas keeps drafts, projects, and agent access close by.
+- The web library and desktop diagram browser use a matching Canvas Gallery, with larger topology
+  previews. Home and the gallery share white light surfaces and a deep teal primary button, with
+  neutral surroundings in both themes.
+- Web and desktop Home use a compact sketch shelf, with conditional views, paper-like previews,
+  and a View all link into the gallery. Empty Home hides search; a single view keeps its separator
+  without a tab bar. Web project creation is available before the first diagram.
+- Home and gallery headers no longer show the Troubleshooting icon. Diagnostic reports remain
+  available from the editor’s More menu and desktop Settings → Support.
 - Automatic connector cleanup removes unnecessary bends where it can keep neighbouring routes clear.
+
+### Web
+
+#### Improved
+
+- Home has its own sketchbook layout: an editorial heading beside a Quick Draft paper card, with
+  example and import actions below it. The compact diagram and project shelf keeps the gallery's
+  neutral palette and typography.
 
 ## [1.15.1] - 2026-10-19
 

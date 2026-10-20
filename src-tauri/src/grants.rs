@@ -1,5 +1,5 @@
 //! The only way the page ever names a file: an opaque handle Rust minted for a path the user picked
-//! (dialog), the OS opened, or Rust itself wrote down. A path the page invents can't be read or
+//! (dialog or explorer), the OS opened, or Rust itself wrote down. A path the page invents can't be read or
 //! written, because there is no command that accepts one.
 
 use crate::docio::MAX_DOC_BYTES;

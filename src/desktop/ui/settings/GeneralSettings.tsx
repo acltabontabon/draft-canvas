@@ -8,14 +8,14 @@ export function GeneralSettings() {
   const controller = useDesktopController();
   const place = platform === 'macos' ? 'the menu bar' : 'the system tray';
   const choices: { value: CloseBehavior; label: string; description: string }[] = [
-    { value: 'tray', label: `Keep running in ${place}`, description: 'The window hides. Draft Canvas stays a click away and uses next to nothing.' },
+    { value: 'tray', label: `Keep running in ${place}`, description: 'Hide the window. Reopen it from the app icon.' },
     { value: 'quit', label: 'Quit Draft Canvas', description: 'Closing the window ends the app.' },
-    { value: 'ask', label: 'Ask me next time', description: 'Hides the window, then asks once whether that is what you want.' },
+    { value: 'ask', label: 'Ask me next time', description: 'Hide the window, then ask which behavior to keep.' },
   ];
 
   return (
     <SettingsPage title="General">
-      <SettingsSection title="When you close the window" group>
+      <SettingsSection title="When you close the window" group list>
         {choices.map((choice) => (
           <ChoiceRow
             key={choice.value}

@@ -4,7 +4,6 @@ import { IMPORT_ACCEPT, routeImportFile, unsupportedNotice } from '../../import/
 import type { DraftSummary } from '../../document/types';
 import type { NormalizeResult } from '../../document/validate';
 import { isEditableTarget, isImeKeyEvent } from '../../lib/isEditableTarget';
-import { PRODUCT } from '../../product';
 import { useUiStore } from '../../store/uiStore';
 import type { DocumentSession } from '../../store/useDocumentSession';
 import { Button } from '../common/Button';
@@ -12,21 +11,18 @@ import { Icon } from '../common/Icon';
 import { Modal } from '../common/LazyModal';
 import { FirstRunHome } from './FirstRunHome';
 import { relativeTime } from '../../lib/relativeTime';
-import { Fingerprint } from './Fingerprint';
+import { DocumentPreview } from './DocumentPreview';
+import { GalleryHeading } from './GalleryHeading';
 import { LibraryBrand } from './LibraryBrand';
 import { LocalNote } from './LocalNote';
 import { backUpLibrary, restoreLibrary } from './backupActions';
 import { MoveToProjectMenu } from './MoveToProjectMenu';
 import { ProjectSidebar } from './ProjectSidebar';
-import { StarterGrid } from './StarterGrid';
-import { useStarters } from './useStarters';
-import type { StarterId } from '../../starters/types';
 import { headingFor, visibleCanvases, type LibrarySort } from './libraryFilter';
 
 /**
- * The landing screen: what is stored in this browser, optionally grouped
- * into Projects — or, when nothing is stored at all, the first-run screen
- * (`FirstRunHome`), which has a different job and so a different layout.
+ * The web Home and Canvas Gallery: local diagrams, optionally grouped into projects.
+ * Home offers a browser sketchbook and a small shelf; Browse expands the collection.
  *
  * Deliberately still not a file manager. One flat, optional grouping — no
  * nested folders, no required setup before creating a canvas — plus local
@@ -34,11 +30,12 @@ import { headingFor, visibleCanvases, type LibrarySort } from './libraryFilter';
  *
  * It is also the only page most people see before deciding what Draft Canvas
  * is, so the product introduces itself here — but by being itself, not by
- * describing itself: a fingerprint of each diagram's topology, one opinion
- * at the foot of the page. The list stays the point. Nothing here is a tour,
- * a card, or a banner.
+ * describing itself: a preview of each diagram's topology in a gallery, with the same visual family
+ * as desktop. Search and optional project grouping stay local.
  */
 export function LibraryScreen({ session }: { session: DocumentSession }) {
+  const browsing = useUiStore((state) => state.libraryBrowsing);
+  const setBrowsing = useUiStore((state) => state.setLibraryBrowsing);
   const notify = useUiStore((state) => state.notify);
   const searchQuery = useUiStore((state) => state.librarySearchQuery);
   const setSearchQuery = useUiStore((state) => state.setLibrarySearchQuery);
@@ -71,8 +68,7 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
   // developer tool teaches. Never while a dialog is up.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== '/' || event.metaKey || event.ctrlKey || event.altKey) return;
-      // First run has no search box — leave the key alone rather than swallow it.
+      if (!browsing || event.key !== '/' || event.metaKey || event.ctrlKey || event.altKey) return;
       if (!searchInput.current) return;
       if (isEditableTarget(event.target)) return;
       if (document.querySelector('[role="dialog"]')) return;
@@ -81,7 +77,17 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
+  }, [browsing]);
+
+  useEffect(() => {
+    if (!browsing) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || document.querySelector('[role="dialog"]')) return;
+      if (searchQuery) setSearchQuery(''); else setBrowsing(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [browsing, searchQuery, setSearchQuery, setBrowsing]);
 
   useRelativeTimeTick();
 
@@ -99,6 +105,9 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
   // A nav with nothing to navigate: no canvases and no projects means the
   // sidebar would be three views of the same empty list.
   const showSidebar = !firstRun;
+  useEffect(() => {
+    if (firstRun && browsing) setBrowsing(false);
+  }, [firstRun, browsing, setBrowsing]);
 
   const finishImport = async (result: NormalizeResult) => {
     if (!result.ok) {
@@ -208,10 +217,15 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
     );
   }
 
-  if (firstRun) {
+  if (!browsing || firstRun) {
     return (
       <div style={{ display: 'contents' }} {...dropProps}>
-        <FirstRunHome session={session} onImport={() => fileInput.current?.click()} />
+        <FirstRunHome session={session} onImport={() => fileInput.current?.click()} onBrowse={(next, search) => {
+          setView(next);
+          setSearchQuery('');
+          setBrowsing(true);
+          if (search) requestAnimationFrame(() => searchInput.current?.focus());
+        }} />
         {fileInputElement}
         {secureImport}
       </div>
@@ -223,11 +237,21 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
       <main className="dc-library-inner">
         <header className="dc-library-header">
           <LibraryBrand />
-          <p className="dc-lede">{PRODUCT.tagline}</p>
+          <Button variant="quiet" icon="back" onClick={() => { setBrowsing(false); setSearchQuery(''); }}>Home</Button>
         </header>
 
+        <GalleryHeading action={
+          <Button variant="solid" icon="plus" onClick={() => void session.newDocument()}>
+            New canvas
+          </Button>
+        } />
+
+        {showSidebar && (
+          <ProjectSidebar session={session} library={session.library} view={view} onViewChange={setView} />
+        )}
+
         <div className="dc-library-toolbar">
-          <label className="dc-library-search">
+          {session.library.length > 0 && <label className="dc-library-search">
             <Icon name="search" size={14} />
             <input
               ref={searchInput}
@@ -238,7 +262,7 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
               onChange={(event) => setSearchQuery(event.target.value)}
             />
             {!searching && <kbd aria-hidden="true">/</kbd>}
-          </label>
+          </label>}
           <div className="dc-library-actions">
             {/* The whole Library in one file and back — only where a repository stands behind it. */}
             {session.repository && (
@@ -259,9 +283,6 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
             <Button variant="quiet" icon="upload" onClick={() => fileInput.current?.click()}>
               Import
             </Button>
-            <Button variant="solid" icon="plus" onClick={() => void session.newDocument()}>
-              New canvas
-            </Button>
           </div>
         </div>
 
@@ -269,16 +290,12 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
         {restoreInputElement}
 
         <div className="dc-library-body">
-          {showSidebar && (
-            <ProjectSidebar session={session} library={session.library} view={view} onViewChange={setView} />
-          )}
-
           <section className="dc-library-list" ref={listRef}>
             <div className="dc-library-list-head">
               <div className="dc-library-list-head-left">
                 <h2>{heading}</h2>
                 <span className="dc-library-count" aria-live="polite">
-                  {searching ? `${canvases.length} of ${session.library.length}` : ''}
+                  {searching ? `${canvases.length} of ${session.library.length}` : `${canvases.length} ${canvases.length === 1 ? 'diagram' : 'diagrams'}`}
                 </span>
               </div>
               {!(view.kind === 'recent' && !searching) && (
@@ -295,15 +312,7 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
               )}
             </div>
 
-            {/* Projects, but not one canvas yet: the library stays (the projects are real), and
-                the starters sit in the empty list, where the first canvas is going to go. */}
-            {session.library.length === 0 && (
-              <div className="dc-library-empty dc-library-welcome">
-                <p>Nothing here yet.</p>
-                <p className="dc-muted">Start blank, or from an architecture.</p>
-                <LibraryStarterShelf onStart={(id) => void session.newDocument(undefined, id)} />
-              </div>
-            )}
+            {session.library.length === 0 && <div className="dc-library-empty"><p>Nothing here yet.</p><Button variant="quiet" onClick={() => void session.newDocument()}>Start drawing</Button></div>}
 
             {session.library.length > 0 && canvases.length === 0 && (
               <div className="dc-library-empty">
@@ -320,12 +329,12 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
               </div>
             )}
 
-            <ul>
+            <ul className="dc-gallery-grid">
               {canvases.map((entry) => (
-                <li key={entry.id}>
+                <li key={entry.id} className="dc-gallery-card">
                   <button
                     type="button"
-                    className="dc-library-item"
+                    className="dc-library-item dc-gallery-open"
                     title={entry.title.length > 40 ? entry.title : undefined}
                     // How much of a title gets cut off depends on the viewport, not only its length:
                     // a shorter one that still ellipsizes gets its tooltip the moment it's hovered.
@@ -335,7 +344,7 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
                     }}
                     onClick={() => void session.openDocument(entry.id)}
                   >
-                    <Fingerprint shape={entry.shape} />
+                    <DocumentPreview shape={entry.shape} />
                     <span className="dc-library-item-text">
                       <span className="dc-library-item-title">{entry.title}</span>
                       {/* Element and connector counts used to live here. They said nothing anyone
@@ -641,15 +650,5 @@ function RenameDialog({
         />
       </label>
     </Modal>
-  );
-}
-
-/** Only an empty list shows starters, so only an empty list waits for the catalog. */
-function LibraryStarterShelf({ onStart }: { onStart: (id: StarterId) => void }) {
-  const starters = useStarters();
-  return starters ? (
-    <StarterGrid starters={starters.PRIMARY_STARTERS} onStart={onStart} />
-  ) : (
-    <div className="dc-shelf-pending" aria-hidden="true" />
   );
 }

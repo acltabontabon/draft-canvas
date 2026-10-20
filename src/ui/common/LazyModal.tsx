@@ -5,8 +5,9 @@ import { useUiStore } from '../../store/uiStore';
 import type { Modal as ModalComponent } from './Modal';
 import { PanelBoundary } from './PanelBoundary';
 import { retryableLazy } from './retryableLazy';
+import { loadModal } from './modalLoader';
 
-const loaded = retryableLazy(() => import('./Modal').then((module) => ({ default: module.Modal })));
+const loaded = retryableLazy(() => loadModal().then((module) => ({ default: module.Modal })));
 
 /**
  * `Modal` for a screen that only sometimes opens one — the Library's rename, delete and passphrase

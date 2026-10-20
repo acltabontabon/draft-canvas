@@ -11,13 +11,24 @@ Shortcuts are written for a Mac. On Windows and Linux, read `⌘` as `Ctrl`.
 
 ## Start a canvas
 
-On the first visit, choose **New canvas** (pressing `Enter` also works). Later, the same **New
-canvas** button is at the top of the Library, the list of your saved diagrams. Your diagram
-saves itself as you work; see [Saving, backing up and sharing](saving-and-sharing.md).
+Web Home opens as a sketchbook, with **Quick Draft** on a paper card and **Try an example** and
+**Import a file** just below it. [Desktop Home](desktop.md#quick-draft) provides **Open file…** and
+**Connect an agent…**. Choose **Quick Draft** (pressing `Enter` on the web also works). Your drafts,
+recently edited diagrams, and projects appear on the shelf below it. Drafts and Recent appear when they contain
+diagrams; Projects is always available. A single view needs no tab bar; the separator stays in place.
+
+*Web Home*
+
+![Web Home: an editorial heading beside a Quick Draft paper card, with example and import actions underneath and projects below the separator.](../media/guides/home.png)
+
+Choose **View all** to open the Canvas Gallery, or use the search button when you have diagrams.
+Each card previews the diagram itself. **Home** returns to the sketchbook; opening a diagram
+from the gallery brings you back to that gallery when you close it. Your diagram saves itself as
+you work; see [Saving, backing up and sharing](saving-and-sharing.md).
 
 ## Try a complete explanation
 
-**Try an example** on first-run Home or an empty canvas opens a new **Order processing** diagram.
+**Try an example** on Home or an empty canvas opens a new **Order processing** diagram.
 The command palette offers it later too. **Play explanation** presents its three-step **Place an
 order** flow; return to editing to change its ordinary shapes, connectors, captions and queue note.
 Every opening makes a fresh document. On desktop it is a normal Quick Draft.

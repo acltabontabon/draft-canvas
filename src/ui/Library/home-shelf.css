@@ -1,0 +1,223 @@
+.dc-web-home .dc-home-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dc-home-shelf {
+  width: min(960px, 100%);
+  margin: 10px auto 0;
+}
+
+.dc-home-shelf-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 20px;
+  padding-bottom: 11px;
+  border-bottom: 1px solid var(--dc-border);
+}
+
+.dc-home-shelf-head [role='tablist'] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 22px;
+}
+
+.dc-home-shelf-head [role='tab'] {
+  position: relative;
+  padding: 6px 0;
+  border: 0;
+  background: none;
+  color: var(--dc-text-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.dc-home-shelf-head [role='tab'][aria-selected='true'] {
+  color: var(--dc-text);
+}
+
+.dc-home-shelf-head [role='tab'][aria-selected='true']::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: -12px;
+  left: 0;
+  height: 2px;
+  background: var(--dc-text);
+}
+
+.dc-home-shelf-head [role='tab']:focus-visible,
+.dc-home-draft:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 4px;
+}
+
+.dc-home-shelf-actions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-left: auto;
+}
+
+.dc-home-shelf-actions .dc-button,
+.dc-home-project-welcome .dc-button {
+  height: 28px;
+  padding: 0;
+  font-size: 12px;
+}
+
+.dc-home-view-all {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0 6px 10px;
+  border: 0;
+  background: none;
+  color: var(--dc-text-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.dc-home-view-all > span {
+  color: var(--dc-text-faint);
+  font-size: 11px;
+}
+
+.dc-home-shelf-row {
+  display: grid;
+  align-items: start;
+  gap: 20px;
+  min-height: 174px;
+  margin-top: 22px;
+}
+
+.dc-home-draft {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--dc-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dc-home-draft .dc-gallery-preview {
+  height: 118px;
+  border-radius: 4px;
+  background: var(--dc-canvas);
+  box-shadow: 0 3px 0 var(--dc-canvas), 0 4px 0 var(--dc-border);
+}
+
+.dc-home-draft .dc-gallery-glyph {
+  width: 80%;
+  max-width: 180px;
+  height: 94px;
+}
+
+.dc-home-draft:hover .dc-gallery-preview {
+  border-color: var(--dc-border-strong);
+  background-color: var(--dc-surface);
+}
+
+.dc-home-draft-name {
+  max-width: 100%;
+  margin-top: 13px;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dc-home-draft-meta {
+  margin-top: 4px;
+  color: var(--dc-text-faint);
+  font-size: 11px;
+}
+
+.dc-home-empty-paper {
+  color: var(--dc-text-faint);
+  font-family: 'Iowan Old Style', Georgia, serif;
+  font-size: 13px;
+  font-style: italic;
+}
+
+.dc-home-empty-paper::before {
+  content: '';
+  display: block;
+  width: 22px;
+  margin: 0 auto 12px;
+  border-bottom: 1px solid currentColor;
+  transform: rotate(-7deg);
+}
+
+.dc-home-project-welcome {
+  grid-column: 1 / -1;
+  align-self: center;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 20px 28px;
+  padding: 20px 12px;
+}
+
+.dc-home-project-art {
+  position: relative;
+  display: flex;
+  margin: 6px 10px;
+  color: var(--dc-text-muted);
+  transform: rotate(-6deg);
+}
+
+.dc-home-project-art::before {
+  content: '';
+  position: absolute;
+  inset: 12px -8px 1px 8px;
+  z-index: -1;
+  border: 1px solid var(--dc-border);
+  border-radius: 3px;
+  transform: rotate(12deg);
+}
+
+.dc-home-project-welcome h2 {
+  margin: 0 0 8px;
+  font-family: 'Iowan Old Style', Georgia, serif;
+  font-size: 23px;
+  font-weight: 400;
+  letter-spacing: -.5px;
+}
+
+.dc-home-project-welcome p {
+  max-width: 285px;
+  margin: 0;
+  color: var(--dc-text-muted);
+  font-size: 12px;
+}
+
+.dc-home-project-welcome .dc-button {
+  margin-left: auto;
+  border-radius: 0;
+  border-bottom: 1px solid currentColor;
+  color: var(--dc-text);
+}
+
+.dc-web-home .dc-home-status {
+  max-width: 960px;
+  margin: 24px auto 0;
+}
+
+@media (max-width: 520px) {
+  .dc-home-shelf-head [role='tablist'] { gap: 16px; }
+  .dc-home-project-welcome { gap: 16px; padding: 12px 0; }
+  .dc-home-project-art { margin: 4px; }
+  .dc-home-project-welcome > div { flex: 1; min-width: 185px; }
+  .dc-home-project-welcome .dc-button { margin: 0 0 0 80px; }
+}

@@ -1,3 +1,4 @@
+import { openGallery } from './library';
 import { expect, test, type Page } from '@playwright/test';
 import { newCanvas, connect, create, reopenAfterReload } from './canvas';
 
@@ -232,6 +233,7 @@ test.describe('Flows', () => {
     // Reopening from the library is the "fresh open" this guards — a reload
     // keeps the in-memory store, which would mask a regression here.
     await page.getByRole('button', { name: 'Back to your diagrams' }).click();
+    await openGallery(page);
     await page.locator('.dc-library-item', { hasText: 'Fresh open badges' }).click();
     await expect(page.locator('.dc-editor')).toBeVisible();
 

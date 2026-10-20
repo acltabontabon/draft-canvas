@@ -127,9 +127,9 @@ pub async fn save_document(app: AppHandle, request: Request<'_>) -> Result<SaveR
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct StartLocation {
-    project_handle: Handle,
-    rel_path: String,
+pub(crate) struct StartLocation {
+    pub(crate) project_handle: Handle,
+    pub(crate) rel_path: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -158,7 +158,17 @@ fn finish_save_as(
         return Err(AppError::already_exists(&target));
     }
     let stamp = write_unconditional(&target, bytes)?;
-    let handle = state.grant_file(&target)?;
+    complete_save_as(state, &target, stamp, copy_sidecar_from)
+}
+
+/// The shared post-write path for the native picker and in-app explorer.
+pub(crate) fn complete_save_as(
+    state: &AppState,
+    target: &Path,
+    stamp: String,
+    copy_sidecar_from: Option<&FileGrant>,
+) -> Result<(SavedAs, Option<String>), AppError> {
+    let handle = state.grant_file(target)?;
     let grant = state.file(&handle)?;
     let warning = copy_sidecar_from
         .and_then(|from| docio::sidecar_copy(&from.path, &grant.path).err())

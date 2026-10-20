@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { installMockShell } from './mockShell';
+import { chooseWorkFile } from './explorer';
 
 /**
  * What the person sees while an AI agent works, in the real page with the shell faked: the status
@@ -87,10 +88,10 @@ test('Cancel before the gate changes nothing; a change to the open diagram previ
   }, PLATFORM);
   const handle = await page.evaluate((text) => {
     const added = window.__shell.addFile('Checkout platform', text);
-    window.__shell.nextOpen(added);
     return added;
   }, text);
   await page.getByRole('button', { name: 'Open file…' }).click();
+  await chooseWorkFile(page, 'Checkout platform');
   await expect(page.locator('.dc-editor')).toBeVisible();
   await page.evaluate(() => window.__shell.holdGate(true));
 

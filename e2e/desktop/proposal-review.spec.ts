@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { installMockShell } from './mockShell';
+import { chooseWorkFile } from './explorer';
 
 /**
  * The native proposal review panel (Phase 4b): a real browser exercise of the whole review UI
@@ -63,10 +64,10 @@ async function openPlatform(page: Page) {
   }, PLATFORM);
   const handle = await page.evaluate((text) => {
     const added = window.__shell.addFile('Checkout platform', text);
-    window.__shell.nextOpen(added);
     return added;
   }, text);
   await page.getByRole('button', { name: 'Open file…' }).click();
+  await chooseWorkFile(page, 'Checkout platform');
   await expect(page.locator('.dc-editor')).toBeVisible();
   return handle;
 }
@@ -322,10 +323,10 @@ test('a proposal targeting a nested room reviews and applies there, not at the r
     return compose(platform, 'd_open00000001').text;
   }, NESTED_PLATFORM);
   await page.evaluate((text) => {
-    const added = window.__shell.addFile('Nested platform', text);
-    window.__shell.nextOpen(added);
+    window.__shell.addFile('Nested platform', text);
   }, text);
   await page.getByRole('button', { name: 'Open file…' }).click();
+  await chooseWorkFile(page, 'Nested platform');
   await expect(page.locator('.dc-editor')).toBeVisible();
 
   // Reviewing from the root: the proposal targets a room one level down, so nothing in it should be
