@@ -49,68 +49,14 @@ function composeWithin(raw: unknown, diagramId: string, report: Report): Compose
   // A brand-new diagram has nothing manual to preserve, so peer sizing defaults on unless the
   // request explicitly turned it off.
   const layout0: LayoutSpec = { ...spec.layout, normalizePeerSizes: spec.layout.normalizePeerSizes ?? true };
-  // Bounded repair: roomier spacing first; then, only when the caller left the reading direction to
-  // us, the other one. A first readable result wins; with none, the least bad one is what a degraded
-  // request gets.
-  const spacings = [layout0.spacing, ...REPAIR_LADDER.filter((s) => s !== layout0.spacing)];
-  // Each arrangement is tried with straight connectors first (see `LayoutInput.ties`), and balanced
-  // only if that can't be made readable.
-  const attempts: LayoutSpec[] = spacings.map((spacing) => ({ ...layout0, spacing }));
-  if (!layout0.directionChosen) {
-    const other = layout0.direction === 'right' ? 'down' : 'right';
-    attempts.push(...REPAIR_LADDER.map((spacing) => ({ ...layout0, direction: other, spacing }) as LayoutSpec));
-  }
-  attempts.push(...attempts.map((layout) => ({ ...layout, ties: 'balance' as const })));
-  // The best candidate so far is kept, so running out of attempts (or time) never trades a readable
-  // arrangement for a worse last one; among unreadable ones, the one that hides the least wins. A
-  // candidate with fewer errors always outranks one with more, however many jogs either has —
-  // `isBetterReport` decides that, not a summed score (see its doc comment).
-  let best: Candidate | undefined;
-  let outOfTime = false;
-  let tried = 0;
-  const about = aboutOf(spec);
-  const explicit = explicitIds(spec);
-  const judge = (layout: LayoutSpec): Candidate => {
-    tried += 1;
-    report(tried === 1 ? 'arranging' : 'repairing');
-    const candidate = spec.starter ? buildFromStarter(spec, layout, ctx) : placeRoom(spec, layout, ctx);
-    // Complete — every shape placed, every connector anchored — so a preview can show it as it is.
-    // (Once repairing, it stays "repairing": the stage says where the request is, not each step.)
-    report(tried === 1 ? 'routing' : 'repairing', { nodes: candidate.nodes, edges: candidate.edges, flows: candidate.flows });
-    const found = qualityOfEveryRoom(candidate, ctx, explicit);
-    // Only measured against a viewport the request actually gave — otherwise this candidate always
-    // "fits", so a request with no `layout.viewport` compares and stops exactly as it always has.
-    const fit = layout.viewport ? checkFit(renderedBoundsOf(candidate.nodes, candidate.edges, ctx), smallestFontPresent(candidate.nodes, candidate.edges), layout.viewport) : undefined;
-    return { placed: candidate, found, fit, layout, legibility: legibilityOf(candidate.nodes, candidate.edges, about) };
-  };
-  const keep = (candidate: Candidate) => {
-    if (!best || isBetterArrangement(candidate, best, layout0.direction)) best = candidate;
-  };
-  for (const layout of attempts) {
-    // Another attempt only while there is time for it; the first always runs.
-    if (best && pastDeadline()) {
-      outOfTime = true;
-      break;
-    }
-    const candidate = judge(layout);
-    keep(candidate);
-    // A shared trunk for labelled connectors can lose — three branches' captions no longer fitting
-    // their gap — so the same arrangement without one is judged beside it, and the better kept.
-    const alone = hasLabelledTrunk(candidate.placed) && !pastDeadline() ? judge({ ...layout, fans: 'unlabelled' }) : undefined;
-    if (alone) keep(alone);
-    if (isCleanCandidate({ report: candidate.found, fit: candidate.fit }) || (alone && isCleanCandidate({ report: alone.found, fit: alone.fit }))) break;
-  }
-  // Readable is not the same as legible: a clean arrangement can still send connectors the width of
-  // the canvas. When the reading direction was left to us and a clean result came early, the other
-  // direction is laid out too, and kept only when it reads clearly better (`isBetterArrangement`).
-  if (best && !layout0.directionChosen && !spec.starter && !pastDeadline() && !attempts.slice(0, tried).some((a) => a.direction !== layout0.direction)) {
-    const found = best as Candidate;
-    const other = attempts.find((a) => a.direction !== found.layout.direction && a.spacing === found.layout.spacing && a.ties === found.layout.ties);
-    if (other) keep(judge(other));
-  }
-  const repaired = tried - 1;
-  if (!best) throw new AgentError('INTERNAL', 'Nothing was laid out.');
-  const { placed, found, fit, layout: used, legibility } = best as Candidate;
+  // Plan each drill-down once, independently of the root's repair attempts. Otherwise a clean
+  // overview can hide an inside view whose inherited flow id does not even exist in that room.
+  report('arranging');
+  const rooms = new Map<RoomSpec, PlacedRoom>();
+  planInsideViews(spec, layout0, ctx, rooms);
+  const { candidate, repaired, outOfTime } = chooseArrangement(spec, layout0, ctx,
+    (layout) => spec.starter ? buildFromStarter(spec, layout, ctx, rooms) : placeRoom(spec, layout, ctx, undefined, rooms), report, true, !!spec.starter);
+  const { placed, found, fit, layout: used, legibility } = candidate;
   const issues = found.errors;
   report('finishing', { nodes: placed.nodes, edges: placed.edges, flows: placed.flows });
   if (issues.length > 0 && !spec.layout.allowDegraded) {
@@ -158,6 +104,100 @@ function composeWithin(raw: unknown, diagramId: string, report: Report): Compose
       ...advisoriesReceipt(advice, 10),
     },
   };
+}
+
+/** Each inside view has its own main path; root viewport and flow ids do not describe it. */
+function planInsideViews(room: RoomSpec, layout: LayoutSpec, ctx: ReturnType<typeof measureContext>, rooms: Map<RoomSpec, PlacedRoom>): void {
+  for (const node of room.nodes) {
+    if (!node.inside) continue;
+    const inner = node.inside;
+    const { primaryFlow: _outerFlow, viewport: _outerViewport, ...shared } = layout;
+    const primary = inner.flows.find((flow) => !flow.variantOf && flow.steps.some((step) => step.relationship));
+    const local: LayoutSpec = { ...shared, ...(primary ? { primaryFlow: primary.id } : {}) };
+    planInsideViews(inner, local, ctx, rooms);
+    const { candidate } = chooseArrangement(inner, local, ctx, (choice) => placeRoom(inner, choice, ctx, undefined, rooms), silent, false);
+    rooms.set(inner, candidate.placed);
+  }
+}
+
+function chooseArrangement(
+  room: RoomSpec,
+  layout0: LayoutSpec,
+  ctx: ReturnType<typeof measureContext>,
+  build: (layout: LayoutSpec) => PlacedRoom,
+  report: Report,
+  keepDirection = true,
+  starter = false,
+): { candidate: Candidate; repaired: number; outOfTime: boolean } {
+  // Bounded repair: roomier spacing first; then, only when the caller left the reading direction to
+  // us, the other one. A first readable result wins; with none, the least bad one is what a degraded
+  // request gets.
+  const spacings = [layout0.spacing, ...REPAIR_LADDER.filter((s) => s !== layout0.spacing)];
+  // Each arrangement is tried with straight connectors first (see `LayoutInput.ties`), and balanced
+  // only if that can't be made readable.
+  const attempts: LayoutSpec[] = spacings.map((spacing) => ({ ...layout0, spacing }));
+  if (!layout0.directionChosen) {
+    const other = layout0.direction === 'right' ? 'down' : 'right';
+    attempts.push(...REPAIR_LADDER.map((spacing) => ({ ...layout0, direction: other, spacing }) as LayoutSpec));
+  }
+  attempts.push(...attempts.map((layout) => ({ ...layout, ties: 'balance' as const })));
+  // The best candidate so far is kept, so running out of attempts (or time) never trades a readable
+  // arrangement for a worse last one; among unreadable ones, the one that hides the least wins. A
+  // candidate with fewer errors always outranks one with more, however many jogs either has —
+  // `isBetterReport` decides that, not a summed score (see its doc comment).
+  let best: Candidate | undefined;
+  let outOfTime = false;
+  let tried = 0;
+  const triedDirections = new Set<LayoutSpec['direction']>();
+  const about = aboutOf(room);
+  const explicit = explicitIds(room);
+  const judge = (layout: LayoutSpec): Candidate => {
+    tried += 1;
+    triedDirections.add(layout.direction);
+    report(tried === 1 ? 'arranging' : 'repairing');
+    const candidate = build(layout);
+    // Complete — every shape placed, every connector anchored — so a preview can show it as it is.
+    // (Once repairing, it stays "repairing": the stage says where the request is, not each step.)
+    report(tried === 1 ? 'routing' : 'repairing', { nodes: candidate.nodes, edges: candidate.edges, flows: candidate.flows });
+    const found = qualityOfEveryRoom(candidate, ctx, explicit);
+    // Only measured against a viewport the request actually gave — otherwise this candidate always
+    // "fits", so a request with no `layout.viewport` compares and stops exactly as it always has.
+    const fit = layout.viewport ? checkFit(renderedBoundsOf(candidate.nodes, candidate.edges, ctx), smallestFontPresent(candidate.nodes, candidate.edges), layout.viewport) : undefined;
+    return { placed: candidate, found, fit, layout, legibility: legibilityOf(candidate.nodes, candidate.edges, about) };
+  };
+  const keep = (candidate: Candidate) => {
+    if (!best || isBetterArrangement(candidate, best, keepDirection ? layout0.direction : undefined)) best = candidate;
+  };
+  for (const layout of attempts) {
+    // Another attempt only while there is time for it; the first always runs.
+    if (best && pastDeadline()) {
+      outOfTime = true;
+      break;
+    }
+    const candidate = judge(layout);
+    keep(candidate);
+    // A shared trunk for labelled connectors can lose — three branches' captions no longer fitting
+    // their gap — so the same arrangement without one is judged beside it, and the better kept.
+    const alone = keepDirection && hasLabelledTrunk(candidate.placed) && !pastDeadline() ? judge({ ...layout, fans: 'unlabelled' }) : undefined;
+    if (alone) keep(alone);
+    if (isCleanCandidate({ report: candidate.found, fit: candidate.fit }) || (alone && isCleanCandidate({ report: alone.found, fit: alone.fit }))) break;
+  }
+  // Readable is not the same as legible: a clean arrangement can still send connectors the width of
+  // the canvas. When the reading direction was left to us and a clean result came early, the other
+  // direction is laid out too, and kept only when it reads clearly better (`isBetterArrangement`).
+  if (best && !layout0.directionChosen && !starter && !pastDeadline() && !triedDirections.has(layout0.direction === 'right' ? 'down' : 'right')) {
+    const found = best as Candidate;
+    const other = attempts.find((a) => a.direction !== found.layout.direction && a.spacing === found.layout.spacing && a.ties === found.layout.ties);
+    if (other) keep(judge(other));
+  }
+  // A crowded drill-down can have several siblings. Compare its unbundled alternative once, on
+  // the best layout, rather than doubling every attempt before the overview can even be planned.
+  if (best && !keepDirection && hasLabelledTrunk(best.placed) && !pastDeadline()) {
+    keep(judge({ ...best.layout, fans: 'unlabelled' }));
+  }
+  const repaired = tried - 1;
+  if (!best) throw new AgentError('INTERNAL', 'Nothing was laid out.');
+  return { candidate: best as Candidate, repaired, outOfTime };
 }
 
 /**
@@ -218,13 +258,13 @@ export function clearlyBetterDirection(other: number, same: number): boolean {
  * skewed connectors counted in) decide — and a change of reading direction from the default has to be
  * clearly better, so a diagram never flips over a few pixels of connector.
  */
-function isBetterArrangement(a: Candidate, b: Candidate, preferred: LayoutSpec['direction']): boolean {
+function isBetterArrangement(a: Candidate, b: Candidate, preferred?: LayoutSpec['direction']): boolean {
   const errorsOnly = (c: Candidate) => ({ report: { errors: c.found.errors, warnings: [] }, fit: c.fit });
   if (isBetterCandidate(errorsOnly(a), errorsOnly(b))) return true;
   if (isBetterCandidate(errorsOnly(b), errorsOnly(a))) return false;
   const cost = (c: Candidate) => legibilityCost(c.legibility) + c.found.warnings.length * JOG_COST;
   const [ca, cb] = [cost(a), cost(b)];
-  if (a.layout.direction === b.layout.direction) return ca < cb;
+  if (preferred === undefined || a.layout.direction === b.layout.direction) return ca < cb;
   return a.layout.direction === preferred ? !clearlyBetterDirection(cb, ca) : clearlyBetterDirection(ca, cb);
 }
 

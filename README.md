@@ -39,6 +39,46 @@ brew install --cask acltabontabon/tap/draft-canvas
 See the [desktop guide](docs/guides/desktop.md#installing) for first-launch steps, and
 [Contributing](CONTRIBUTING.md) to build and run it from source.
 
+## From codebase to canvas
+
+**Your code already tells a story. See it drawn.**
+
+Connect Claude Code, Codex or Cursor to **Draft Canvas Desktop**. The **Draft Canvas skill** helps
+your agent turn an existing project into a diagram you can explore, edit and present.
+
+![An architecture diagram made with the Draft Canvas skill, showing a storefront, its services, databases and an order flow.](docs/media/guides/agent-skill-example.png)
+
+### 1. Connect your agent
+
+Open your project folder in Draft Canvas Desktop, then go to **Settings → AI agents**:
+
+- Turn on **Allow agent access** and tick your project folder.
+- Choose your agent under **Connect an agent** and follow the setup.
+
+### 2. Install the skill
+
+In the same settings, click **Agent skill → Install skill**.
+Keep Draft Canvas running and start a new agent session in your repository.
+
+### 3. Ask for your first diagram
+
+Copy this into your agent:
+
+```text
+Use the Draft Canvas skill to draw the architecture of this repository.
+Use appropriate C4 views, meaningful grouping boundaries, and look-inside
+details for key services. Attach decision notes, open questions and relevant
+code snippets to the shapes, connectors or boundaries they explain.
+Add presentation flows for the main request path and failure paths the code
+supports. Include source evidence and mark inferences.
+```
+
+**Explore it.** Look inside services for detail, play the flow, or edit the diagram yourself.
+
+**Keep it current.** Ask: “Refresh this Draft Canvas diagram to match the current code.”
+
+[Full setup guide →](docs/guides/connect-an-ai-agent.md) · [Read the skill →](skills/draft-canvas/SKILL.md)
+
 ## Acknowledgements
 
 Draft Canvas is built on [React](https://github.com/react/react), [React Flow](https://github.com/xyflow/xyflow),

@@ -14,7 +14,7 @@ import { assignAnchors } from '../layout/anchors';
 import type { DescribeContext } from '../nodes/describe';
 import { GUTTER } from '../starters/compose';
 import { AgentError } from './errors';
-import type { CreateSpec, LayoutSpec } from './input';
+import type { CreateSpec, LayoutSpec, RoomSpec } from './input';
 import { anchorRectOf, attachNote, captionSizer, connectorFor, edgeLabelSize, flowFromSpec, lineOf, linkVariants, placeBlock, placeRoom, sizeToFit, type PlacedRoom } from './place';
 import { repairAnchors } from './route';
 
@@ -32,7 +32,7 @@ export function starterIds(starter: ArchitectureStarter, prefix: string) {
   return { nodes, edges, flows };
 }
 
-export function buildFromStarter(spec: CreateSpec, layout: LayoutSpec, ctx: DescribeContext): PlacedRoom {
+export function buildFromStarter(spec: CreateSpec, layout: LayoutSpec, ctx: DescribeContext, insideRooms?: ReadonlyMap<RoomSpec, PlacedRoom>): PlacedRoom {
   const choice = spec.starter;
   if (!choice) throw new AgentError('INTERNAL', 'No starter requested.');
   const starter = starterFor(choice.id);
@@ -84,7 +84,7 @@ export function buildFromStarter(spec: CreateSpec, layout: LayoutSpec, ctx: Desc
   if (extras.length || spec.groups.length || ownNotes.length) {
     const own = new Set([...extras.map((n) => n.id)]);
     const inner = spec.relationships.filter((r) => own.has(r.from) && own.has(r.to));
-    const room = placeRoom({ ...spec, relationships: inner, flows: [], notes: ownNotes }, layout, ctx);
+    const room = placeRoom({ ...spec, relationships: inner, flows: [], notes: ownNotes }, layout, ctx, undefined, insideRooms);
     advisories.push(...room.advisories);
     const minX = Math.min(...room.nodes.map((n) => n.x));
     const minY = Math.min(...room.nodes.map((n) => n.y));

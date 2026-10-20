@@ -84,6 +84,8 @@ describe('layout gallery', { timeout: 30_000 }, () => {
     // the provisioning outcome under the main path) step on their way, and are held to it below.
     // The batch case as the agent sent it gathers its externals in one boundary, a column that can
     // line up with only one of its callers (the receipt says so — see case 23 for the fix).
+    // The repository overview's author reaches two separate deployments: one of those branches
+    // bends; the component views themselves must come out without jogs or crossings.
     const jogs = GALLERY.flatMap((entry) => {
       const { doc, touched } = galleryDocument(entry);
       const out: string[] = [];
@@ -94,10 +96,26 @@ describe('layout gallery', { timeout: 30_000 }, () => {
       });
       return out;
     });
-    expect(jogs.filter((j) => !j.startsWith('10-dense') && !j.startsWith('21-card') && !j.startsWith('22-credit'))).toEqual([]);
+    expect(jogs.filter((j) => !j.startsWith('10-dense') && !j.startsWith('21-card') && !j.startsWith('22-credit') && !j.startsWith('25-readme'))).toEqual([]);
     expect(jogs.filter((j) => j.startsWith('10-dense')).length).toBeLessThanOrEqual(1);
     expect(jogs.filter((j) => j.startsWith('21-card')).length).toBeLessThanOrEqual(2);
     expect(jogs.filter((j) => j.startsWith('22-credit')).length).toBeLessThanOrEqual(1);
+    expect(jogs.filter((j) => j.startsWith('25-readme'))).toEqual(['25-readme-architecture: connector t.r-desktop steps sideways between author and app.']);
+  });
+
+  it('25: independently arranges each component view around its own flow without manual routes', () => {
+    const { doc } = galleryDocument(GALLERY.find((g) => g.id === '25-readme-architecture')!);
+    const inside = viewOf(doc, ['app'])!;
+    // The original generated view crossed itself and used over 4,200px of connectors. No hand
+    // coordinates or bends are present in this fixture: the improvement must come from defaults.
+    expect(legibilityOf(inside.nodes, inside.edges)).toMatchObject({ crossings: 0, detours: [], throughBoundaries: [] });
+    expect(legibilityOf(inside.nodes, inside.edges).length).toBeLessThan(4000);
+    expect(checkQuality(inside.nodes, inside.edges, measureContext())).toEqual({ errors: [], warnings: [] });
+    expect(inside.edges.every((edge) => !edge.waypoints)).toBe(true);
+    expect(inside.flows.map((flow) => flow.id)).toEqual(['d.create', 'd.update', 'd.stale', 'd.cancelled']);
+    expect(inside.flows.find((flow) => flow.id === 'd.stale')?.variantOf).toBe('d.update');
+    expect(inside.nodes.flatMap((node) => node.attachments?.map((attachment) => attachment.id) ?? []).sort()).toEqual(['d.n-code', 'd.n-policy', 'd.n-worker']);
+    expect(viewOf(doc, ['web'])?.flows.map((flow) => flow.id)).toEqual(['w.edit', 'w.conflict']);
   });
 
   it('22/23: the batch view is told to ungroup its externals, and the advised edit hangs them beside their caller', () => {

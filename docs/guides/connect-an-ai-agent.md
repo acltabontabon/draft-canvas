@@ -7,7 +7,11 @@ the parts, how they connect, the flows. Draft Canvas lays it out and draws it as
 you can edit, move, present and export like one you drew yourself.
 
 By default the agent leaves the layout to Draft Canvas; when you want something in an exact spot, it
-can put it there (see below). It never touches a file outside the folders you allow. Draft Canvas doesn't send your diagrams anywhere. Your agent does send what it reads and
+can put it there (see below). Look-inside views arrange around their own main flow and choose their
+own reading direction when none was requested. Automatic connectors also shed unnecessary bends
+where doing so keeps neighbouring lines clear.
+
+It never touches a file outside the folders you allow. Draft Canvas doesn't send your diagrams anywhere. Your agent does send what it reads and
 writes to its own AI provider, as it does with your code.
 
 This needs the desktop app, on macOS or Windows. The web app opens the diagrams it makes, but agents

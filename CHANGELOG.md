@@ -11,6 +11,13 @@ the release notes and the in-app What's New are generated from here. See
 
 ## [Unreleased]
 
+### Desktop
+
+#### Improved
+
+- Agent-generated diagrams arrange look-inside views around their own flows and choose a clearer
+  reading direction automatically, reducing crossings without a manual layout pass.
+
 ### Shared
 
 #### Improved
@@ -20,6 +27,7 @@ the release notes and the in-app What's New are generated from here. See
 - Technology suggestions and logos now cover the full Simple Icons catalog, including Rust, with
   common aliases and version recognition. Artwork loads on demand from separate local assets and
   stays available offline.
+- Automatic connector cleanup removes unnecessary bends where it can keep neighbouring routes clear.
 
 ## [1.15.1] - 2026-10-19
 
