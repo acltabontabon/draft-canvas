@@ -5,6 +5,8 @@ import type { LibraryView } from './libraryFilter';
 import { Button } from '../common/Button';
 import { Icon } from '../common/Icon';
 import { Modal } from '../common/LazyModal';
+import { warmModal } from '../common/modalLoader';
+import './project-dialog.css';
 import { isImeKeyEvent } from '../../lib/isEditableTarget';
 
 interface ProjectSidebarProps {
@@ -15,7 +17,7 @@ interface ProjectSidebarProps {
 }
 
 /**
- * The homepage's nav: the two full-library shortcuts ("Recently edited",
+ * The gallery's nav: the two full-library shortcuts ("Recently edited",
  * "All diagrams"), "Unorganized", and the flat list of Projects. One level
  * of grouping, no nesting — see `document/types.ts`'s `Project` doc comment.
  */
@@ -39,6 +41,7 @@ export function ProjectSidebar({ session, library, view, onViewChange }: Project
 
   return (
     <nav className="dc-library-sidebar" aria-label="Diagram views">
+      {library.length > 0 && <>
       <button
         type="button"
         className="dc-sidebar-row"
@@ -67,6 +70,8 @@ export function ProjectSidebar({ session, library, view, onViewChange }: Project
         <span>Unorganized</span>
         <span className="dc-muted dc-sidebar-count">{unorganizedCount}</span>
       </button>
+
+      </>}
 
       <div className="dc-sidebar-section">
         <span className="dc-sidebar-eyebrow">Projects</span>
@@ -103,7 +108,7 @@ export function ProjectSidebar({ session, library, view, onViewChange }: Project
             </div>
           </div>
         ))}
-        <button type="button" className="dc-sidebar-action" onClick={() => setCreating(true)}>
+        <button type="button" className="dc-sidebar-action" onPointerEnter={warmModal} onFocus={warmModal} onClick={() => setCreating(true)}>
           <Icon name="plus" size={14} />
           New project
         </button>
@@ -184,7 +189,7 @@ export function ProjectSidebar({ session, library, view, onViewChange }: Project
   );
 }
 
-function ProjectNameDialog({
+export function ProjectNameDialog({
   title,
   submitLabel,
   submitIcon,
@@ -209,6 +214,7 @@ function ProjectNameDialog({
   return (
     <Modal
       title={title}
+      className="dc-project-dialog"
       onClose={onClose}
       footer={
         <>
@@ -221,6 +227,7 @@ function ProjectNameDialog({
         </>
       }
     >
+      {title === 'New project' && <div className="dc-project-intro"><Icon name="folder" size={48} /><p>A little space for ideas that belong together.</p></div>}
       <label className="dc-field">
         <span>Name</span>
         <input

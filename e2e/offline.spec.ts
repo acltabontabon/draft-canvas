@@ -1,3 +1,4 @@
+import { openGallery } from './library';
 import { expect, test } from '@playwright/test';
 import { siVuedotjs } from 'simple-icons';
 import { create } from './canvas';
@@ -58,6 +59,7 @@ test.describe('offline availability', () => {
 
     // And the Library, one step back, lists it.
     await page.getByRole('button', { name: 'Back to your diagrams' }).click();
+    await openGallery(page);
     await expect(page.getByRole('heading', { name: 'Recently edited' })).toBeVisible();
     await expect(page.locator('.dc-library-item', { hasText: 'Offline Test' })).toBeVisible();
 

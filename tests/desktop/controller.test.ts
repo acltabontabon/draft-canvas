@@ -39,6 +39,15 @@ async function openFile(name = 'payments') {
 const doc = () => h.store.getSnapshot().doc;
 
 describe('opening a file', () => {
+  it('opens the file explorer without showing a native picker or changing the document', async () => {
+    await h.controller.start();
+    await h.controller.openFile();
+    expect(h.store.getSnapshot().explorerMode).toBe('file');
+    expect(doc()).toEqual({ kind: 'none' });
+    expect(h.api.openDialog).not.toHaveBeenCalled();
+    expect(h.loads()).toHaveLength(0);
+  });
+
   it('sends its text to the app and shows it as clean', async () => {
     const handle = await openFile();
 
@@ -276,6 +285,20 @@ describe('Save As', () => {
 
     expect(doc()).toMatchObject({ kind: 'file', name: 'renamed', dirty: false });
     expect(decoder.decode(h.api.saveAs.mock.calls[0]![1])).toBe(edited());
+  });
+
+  it('keeps edits made while Save As is open dirty after saving its earlier snapshot', async () => {
+    const handle = await openFile();
+    const original = h.files.get(handle)!.text;
+    let complete!: (saved: { handle: string; name: string; displayPath: string; stamp: string }) => void;
+    h.api.saveAs.mockImplementationOnce(async () => new Promise(resolve => { complete = resolve; }));
+    const saving = h.controller.saveAs();
+    await vi.waitFor(() => expect(h.api.saveAs).toHaveBeenCalled());
+    h.edit(edited('Newer work'));
+    complete({ handle: 'copy', name: 'copy', displayPath: '~/copy.draftcanvas', stamp: 'stamp' });
+    await saving;
+    expect(doc()).toMatchObject({ name: 'copy', dirty: true });
+    expect(decoder.decode(h.api.saveAs.mock.calls[0]![1])).toBe(original);
   });
 
   it('changes nothing when the dialog is cancelled', async () => {

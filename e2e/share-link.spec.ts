@@ -1,3 +1,4 @@
+import { openGallery } from './library';
 import { expect, test, type Page } from '@playwright/test';
 import { create, newCanvas } from './canvas';
 
@@ -94,6 +95,7 @@ test('a share link opens read-only elsewhere, and a copy of it becomes an editab
   await expect(reader.locator('.dc-save')).toContainText('Saved locally');
 
   await reader.getByRole('button', { name: 'Back to your diagrams' }).click();
+  await openGallery(reader);
   await expect(reader.locator('.dc-editor')).toHaveCount(0);
   await expect(reader.getByText('Shared checkout')).toHaveCount(2);
 });

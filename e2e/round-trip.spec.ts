@@ -1,3 +1,4 @@
+import { openGallery } from './library';
 import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 import { reopenAfterReload } from './canvas';
@@ -153,6 +154,7 @@ test('a rich diagram survives save, reopen, export and import unchanged', async 
 
   // Exported, and imported again: the id is taken, so it arrives as a copy — and says the same.
   await page.getByRole('button', { name: 'Back to your diagrams' }).click();
+  await openGallery(page);
   await page.setInputFiles('input[type="file"]', {
     name: 'again.draftcanvas',
     mimeType: 'application/json',

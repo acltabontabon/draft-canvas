@@ -5,17 +5,20 @@ import { desktopStore, type SettingsCategory } from '../../store';
 import { useDesktopController, useDesktopState } from '../../useDesktop';
 import { RenameFileDialog } from '../RenameFileDialog';
 import { UpdatePanel } from '../Updates';
+import { DesktopExplorer } from '../DesktopExplorer';
 import { AgentSettings } from './AgentSettings';
 import { GeneralSettings } from './GeneralSettings';
 import { SupportSettings } from './SupportSettings';
 import { UpdateSettings } from './UpdateSettings';
 import '../desktop.css';
+import '../../../ui/Library/library-theme.css';
+import '../../../ui/Library/project-dialog.css';
 import './settings.css';
 
 /**
  * The desktop app's own dialogs: Settings, the update panel the update chip opens, and "Rename file…",
  * however it was asked for (the menu, or a file's own action in Find a Diagram) — one dialog, reading
- * whichever target is set. Everything else follows the OS.
+ * whichever target is set, plus the in-app project explorer.
  */
 export function DesktopSettings() {
   return (
@@ -23,6 +26,7 @@ export function DesktopSettings() {
       <SettingsDialog />
       <RenameTargetDialog />
       <UpdatePanel />
+      <DesktopExplorer />
     </>
   );
 }
@@ -92,7 +96,7 @@ function SettingsDialog() {
   };
 
   return (
-    <Modal title="Settings" onClose={() => desktopStore.update({ settingsOpen: false })} width={960} className="dc-modal-settings">
+    <Modal title="Settings" onClose={() => desktopStore.update({ settingsOpen: false })} width={900} className="dc-modal-settings dc-project-dialog">
       <nav className="dc-prefs-rail" aria-label="Settings">
         <div role="tablist" aria-label="Settings category" aria-orientation="vertical" onKeyDown={onKeyDown}>
           {CATEGORIES.map((category, i) => {

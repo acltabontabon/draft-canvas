@@ -1,3 +1,4 @@
+import { openStarter } from './library';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
 /**
@@ -12,7 +13,7 @@ type Box = { x: number; y: number; width: number; height: number };
 
 async function presentSubmitCommand(page: Page) {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Start from CQRS' }).click();
+  await openStarter(page, 'CQRS');
   await expect(page.locator('.dc-editor')).toBeVisible();
   await page.getByRole('button', { name: 'Present', exact: true }).click();
   // The flow picker is a menu, and each flow one of its options — see `FlowBar.tsx`, where that

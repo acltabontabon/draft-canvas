@@ -1,0 +1,42 @@
+/* Home and the library share neutral surfaces and a teal primary action. These variables are scoped to their
+ * screens so a document's chosen appearance and the editor's selection colours stay independent. */
+:is(.dc-home, .dc-library, .dc-desk, .dc-project-dialog) {
+  --dc-library-action: #0d6e65;
+  --dc-library-on-action: #ffffff;
+  --dc-canvas: #151517;
+  --dc-surface: #1b1b1e;
+  --dc-surface-raised: #242427;
+  --dc-surface-hover: #29292d;
+  --dc-border: #333336;
+  --dc-border-strong: #515155;
+  --dc-text: #eae7e1;
+  --dc-text-muted: #aaa7a2;
+  --dc-text-faint: #8c8a86;
+  --dc-selection: #eae7e1;
+  --dc-selection-soft: rgba(234, 231, 225, 0.09);
+  --dc-gallery-dot: rgba(234, 231, 225, 0.08);
+  background-color: var(--dc-canvas);
+  color: var(--dc-text);
+}
+
+:root[data-theme='light'] :is(.dc-home, .dc-library, .dc-desk, .dc-project-dialog) {
+  --dc-canvas: #ffffff;
+  --dc-surface: #f7f7f5;
+  --dc-surface-raised: #ffffff;
+  --dc-surface-hover: #f0f0ed;
+  --dc-border: #deddd7;
+  --dc-border-strong: #a4a29b;
+  --dc-text: #292827;
+  --dc-text-muted: #686660;
+  --dc-text-faint: #78766e;
+  --dc-selection: #292827;
+  --dc-selection-soft: rgba(41, 40, 39, 0.08);
+  --dc-gallery-dot: rgba(41, 40, 39, 0.09);
+}
+
+/* Keep the accent on primary actions; headings, selection and the surrounding scene stay neutral. */
+:is(.dc-home, .dc-library, .dc-desk, .dc-project-dialog) .dc-button-solid,
+:is(.dc-home, .dc-library, .dc-desk, .dc-project-dialog) .dc-button-solid:hover:not(:disabled) {
+  background: var(--dc-library-action);
+  color: var(--dc-library-on-action);
+}

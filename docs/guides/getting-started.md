@@ -11,13 +11,21 @@ Shortcuts are written for a Mac. On Windows and Linux, read `⌘` as `Ctrl`.
 
 ## Start a canvas
 
-On the first visit, choose **New canvas** (pressing `Enter` also works). Later, the same **New
-canvas** button is at the top of the Library, the list of your saved diagrams. Your diagram
-saves itself as you work; see [Saving, backing up and sharing](saving-and-sharing.md).
+Home opens with a small diagram of ways to begin: **Quick Draft**, **Try an example**, and
+**Import a file**. Choose **Quick Draft** (pressing `Enter` also works). Your drafts, recently edited
+diagrams, and projects appear on the shelf below it. Drafts and Recent appear when they contain
+diagrams; Projects is always available. A single view needs no tab bar; the separator stays in place.
+
+![Home: a Quick Draft card connected to Try an example and Import a file, with project creation below the separator.](../media/guides/home.png)
+
+Choose **View all** to open the Canvas Gallery, or use the search button when you have diagrams.
+Each card previews the diagram itself. **Home** returns to the Living Canvas; opening a diagram
+from the gallery brings you back to that gallery when you close it. Your diagram saves itself as
+you work; see [Saving, backing up and sharing](saving-and-sharing.md).
 
 ## Try a complete explanation
 
-**Try an example** on first-run Home or an empty canvas opens a new **Order processing** diagram.
+**Try an example** on Home or an empty canvas opens a new **Order processing** diagram.
 The command palette offers it later too. **Play explanation** presents its three-step **Place an
 order** flow; return to editing to change its ordinary shapes, connectors, captions and queue note.
 Every opening makes a fresh document. On desktop it is a normal Quick Draft.

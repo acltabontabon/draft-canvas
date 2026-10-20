@@ -1,3 +1,4 @@
+import { openGallery } from './library';
 import { expect, test, type Page } from '@playwright/test';
 import { newCanvas, nextFrames, reopenAfterReload } from './canvas';
 import { readFileSync, existsSync } from 'node:fs';
@@ -252,12 +253,14 @@ test.describe('Draft Canvas', () => {
     /* --- delete locally, then import back ----------------------------------- */
 
     await page.getByRole('button', { name: 'Back to your diagrams' }).click();
+    await openGallery(page);
     await expect(page.getByRole('heading', { name: 'Recently edited' })).toBeVisible();
 
     await page.getByRole('button', { name: /^Delete Payment Flow/ }).click();
     await page.getByRole('button', { name: 'Delete', exact: true }).click();
-    // The last canvas gone is a first run again: the blank canvas and the starters, no empty list.
-    await expect(page.getByRole('group', { name: 'Starters', exact: true })).toBeVisible();
+    // The last canvas gone returns to the Living Canvas and the project invitation.
+    await expect(page.getByRole('group', { name: 'Projects', exact: true })).toBeVisible();
+    await expect(page.getByRole('tablist')).toHaveCount(0);
 
     await page.setInputFiles('input[type="file"]', projectPath);
     await expect(page.locator('.dc-editor')).toBeVisible();

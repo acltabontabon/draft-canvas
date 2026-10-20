@@ -91,7 +91,7 @@ function arrowhead({ end, heading }: Route): string {
  * a stroke and nothing else: an SVG path fills itself black unless told not to, and a connector
  * with a bend once drew a solid wedge across the tile when its styling went missing.
  */
-export const StarterGlyph = memo(function StarterGlyph({ starter }: { starter: StarterShape }) {
+export const StarterGlyph = memo(function StarterGlyph({ starter, className }: { starter: StarterShape; className?: string }) {
   const { shape, boxes } = starter;
   const routes = shape.edges.map(([from, to], i) => {
     const a = boxes[from];
@@ -102,7 +102,7 @@ export const StarterGlyph = memo(function StarterGlyph({ starter }: { starter: S
 
   return (
     <svg
-      className="dc-starter-glyph"
+      className={['dc-starter-glyph', className].filter(Boolean).join(' ')}
       viewBox={`0 0 ${GLYPH_WIDTH} ${GLYPH_HEIGHT}`}
       width={GLYPH_WIDTH}
       height={GLYPH_HEIGHT}

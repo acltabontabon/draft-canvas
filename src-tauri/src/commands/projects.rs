@@ -52,7 +52,7 @@ fn project_info_with(state: &AppState, root: &Path, watch: bool) -> Result<Proje
 }
 
 /// Opening a project is also remembering it: it goes to the front of the project list.
-fn open_project_at(state: &AppState, root: &Path) -> Result<ProjectInfo, AppError> {
+pub(crate) fn open_project_at(state: &AppState, root: &Path) -> Result<ProjectInfo, AppError> {
     let info = project_info(state, root)?;
     remember_project(state, &state.project(&info.handle)?.root, &info.name);
     Ok(info)

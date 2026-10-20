@@ -16,7 +16,7 @@ use tauri::AppHandle;
 /// is not worth reading tens of megabytes for.
 pub const MAX_PEEK_BYTES: u64 = 2 * 1024 * 1024;
 
-fn peek_path(path: &Path) -> Option<String> {
+pub(crate) fn peek_path(path: &Path) -> Option<String> {
     let size = fs::metadata(path).ok().filter(|meta| meta.is_file())?.len();
     if size > MAX_PEEK_BYTES {
         return None;

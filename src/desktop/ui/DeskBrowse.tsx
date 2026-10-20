@@ -1,6 +1,9 @@
 import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { warmExplorer } from './DesktopExplorer';
 import { Button } from '../../ui/common/Button';
 import { Icon } from '../../ui/common/Icon';
+import { GalleryHeading } from '../../ui/Library/GalleryHeading';
+import { LibraryBrand } from '../../ui/Library/LibraryBrand';
 import type { Handle } from '../api';
 import { recallBrowse, rememberBrowse } from '../browseMemory';
 import type { DesktopController } from '../controller';
@@ -10,7 +13,7 @@ import { childrenOf, descendantsOf, folderTile, projectTile } from './tiles';
 
 export type BrowseScope = 'all' | 'unsaved' | 'recent' | { project: Handle; relPath: string };
 
-export type BrowseTile = Omit<DocTileProps, 'index' | 'onHot' | 'onKeyDown'> & {
+export type BrowseTile = Omit<DocTileProps, 'index' | 'onKeyDown'> & {
   description: string;
   /** What a search matches: the name, the folder it's in, the project. Empty for a folder tile, which
    * a search never matches directly — only what browsing into it would find. */
@@ -36,6 +39,7 @@ export function DeskBrowse({
   scope: initialScope,
   groupsFor,
   onClose,
+  onAddProject,
   mac,
 }: {
   state: DesktopState;
@@ -43,6 +47,7 @@ export function DeskBrowse({
   scope: BrowseScope;
   groupsFor: (state: DesktopState) => { unsaved: BrowseTile[]; recent: BrowseTile[]; everything: BrowseTile[] };
   onClose: () => void;
+  onAddProject: () => void;
   mac: boolean;
 }) {
   const remembered = recallBrowse();
@@ -154,32 +159,19 @@ export function DeskBrowse({
 
   return (
     <section className="dc-browse" aria-label="Your diagrams" ref={rootRef}>
-      <header className="dc-browse-head">
+      <header className="dc-gallery-top">
+        <LibraryBrand />
         <button type="button" className="dc-browse-back" onClick={onClose} title="Back to Home (Esc)">
           <Icon name="back" size={14} />
           Home
         </button>
-        <label className="dc-browse-search">
-          <Icon name="search" size={15} />
-          <input
-            ref={searchRef}
-            type="search"
-            value={query}
-            onChange={(event) => {
-              setQuery(event.target.value);
-              setShowAll(false);
-            }}
-            placeholder={scope === 'all' ? 'Find a diagram in every project' : 'Find a diagram here'}
-            aria-label="Find a diagram"
-            autoComplete="off"
-            spellCheck={false}
-          />
-          <kbd aria-hidden="true">{mac ? '⌘F' : 'Ctrl+F'}</kbd>
-        </label>
-        <Button variant="quiet" icon="folder" className="dc-browse-add" onClick={() => void controller.pickProject()}>
-          Add project…
-        </Button>
       </header>
+
+      <GalleryHeading action={
+        <Button variant="solid" icon="plus" onClick={() => void controller.newQuickDraft()}>
+          Quick Draft
+        </Button>
+      } />
 
       <nav className="dc-browse-scopes" aria-label="Show">
         {scopes.map((option) => (
@@ -199,7 +191,30 @@ export function DeskBrowse({
         ))}
       </nav>
 
-      {view.breadcrumbs && (
+      <div className="dc-browse-head">
+        <label className="dc-browse-search">
+          <Icon name="search" size={15} />
+          <input
+            ref={searchRef}
+            type="search"
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setShowAll(false);
+            }}
+            placeholder={scope === 'all' ? 'Find a diagram in every project' : 'Find a diagram here'}
+            aria-label="Find a diagram"
+            autoComplete="off"
+            spellCheck={false}
+          />
+          <kbd aria-hidden="true">{mac ? '⌘F' : 'Ctrl+F'}</kbd>
+        </label>
+        <Button variant="quiet" icon="folder" className="dc-browse-add" onPointerEnter={warmExplorer} onFocus={warmExplorer} onClick={onAddProject}>
+          Add project…
+        </Button>
+      </div>
+
+      {view.breadcrumbs && view.breadcrumbs.some((crumb) => crumb.scope !== null) && (
         <nav className="dc-browse-crumbs" aria-label="Folder">
           {view.breadcrumbs.map((crumb, i) => (
             <span key={i} className="dc-browse-crumb-item">
@@ -236,10 +251,10 @@ export function DeskBrowse({
           {view.tiles.length === 0 && !searching ? (
             view.empty ?? <p className="dc-browse-summary">Nothing here yet. Add a project, or start a Quick Draft.</p>
           ) : (
-            <div className="dc-browse-grid">
+            <div className="dc-browse-grid dc-gallery-grid">
               {visible.map((tile, i) => {
                 const { haystack: _haystack, description: _description, ...props } = tile;
-                return <DocTile key={tile.entryKey} {...props} index={Math.min(i, 12)} />;
+                return <DocTile key={tile.entryKey} {...props} gallery index={Math.min(i, 12)} />;
               })}
             </div>
           )}

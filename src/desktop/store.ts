@@ -1,3 +1,4 @@
+import type { ExplorerSaveRequest } from './saveExplorer';
 import type { AgentSettings, DesktopSettings, Handle, ProjectFile, ProjectInfo, RecentItem, RecoveryEntry, UpdateSnapshot } from './api';
 
 /**
@@ -59,6 +60,8 @@ export interface DesktopState {
   recovery: RecoveryEntry[];
   settings: DesktopSettings;
   settingsOpen: boolean;
+  explorerMode: 'project' | 'file' | 'save' | null;
+  explorerSave: ExplorerSaveRequest | null;
   /** The Settings page showing; kept across openings so Settings reopens where it was left. */
   settingsCategory: SettingsCategory;
   renameTarget: RenameTarget | null;
@@ -82,6 +85,8 @@ const INITIAL: DesktopState = {
   recovery: [],
   settings: { closeBehavior: 'ask', autoCheckUpdates: true },
   settingsOpen: false,
+  explorerMode: null,
+  explorerSave: null,
   settingsCategory: 'general',
   renameTarget: null,
   update: null,

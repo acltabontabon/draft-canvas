@@ -35,18 +35,18 @@ export function AgentSettings() {
   }, [controller]);
 
   return (
-    <SettingsPage title="AI agents" lead="Let a coding agent such as Claude Code or Codex create and edit diagrams in folders you choose.">
+    <SettingsPage title="AI agents">
       <SettingsSection title="Access" busy={!agent}>
         <ChoiceRow
           type="checkbox"
           toggle
           label="Allow agent access"
-          description="Agents can work only in the folders you allow below. Draft Canvas sends nothing anywhere; the agent’s own AI provider sees what the agent reads."
+          description="Create and edit diagrams with a coding agent. Its AI provider can see what the agent reads."
           checked={agent?.enabled ?? false}
           disabled={!agent}
           onChange={(event) => void controller.configureAgent({ enabled: event.target.checked })}
         />
-        {agent && <ConnectionStatus agent={agent} platform={platform} />}
+        {agent?.enabled && <ConnectionStatus agent={agent} platform={platform} />}
       </SettingsSection>
       {agent && (
         <>
@@ -64,7 +64,8 @@ function ConnectionStatus({ agent, platform }: { agent: AgentState; platform: Pl
   return (
     <div className="dc-prefs-status" role="status">
       <dl className="dc-prefs-facts">
-        {facts.map((fact) => (
+        {/* Access is already expressed by the switch above. */}
+        {facts.slice(1).map((fact) => (
           <div key={fact.term} className="dc-prefs-fact" data-tone={fact.tone}>
             <dt>{fact.term}</dt>
             <dd>
@@ -96,7 +97,7 @@ function Folders({ agent }: { agent: AgentState }) {
       description={
         agent.enabled
           ? 'An agent can reach a ticked folder and everything inside it.'
-          : 'Access is off, so agents can’t reach any folder. Your choices are kept for when you turn it back on.'
+          : 'Turn on access to choose folders. Your existing choices are kept.'
       }
     >
       {rows.length === 0 ? (

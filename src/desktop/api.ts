@@ -4,15 +4,15 @@
  * that turns each method into an `invoke`.
  *
  * The app never holds a file path it could hand back. Rust gives out opaque handles for the files
- * and folders the user picked (or the OS opened), and only a handle is ever sent back — so a path
+ * and folders the user picked, browsed in the explorer, or the OS opened, and only a handle is ever sent back — so a path
  * that didn't come from the user can't be read or written.
  */
 import type { Snapshot as UpdateSnapshot, HostEvent as WireHostEvent } from './wire';
 export type { UpdateInfo, Phase as UpdatePhase, Snapshot as UpdateSnapshot, MenuCommand } from './wire';
 /** The agent context is refined by the bridge protocol beyond Rust's JSON value envelope. */
 export type HostEvent = Exclude<WireHostEvent, { type: 'agent-request' }> | (Omit<Extract<WireHostEvent, { type: 'agent-request' }>, 'args' | 'context'> & { args: Record<string, unknown>; context: AgentContext });
-import type { OpenedDoc, SavedAs, SaveResult, ProjectInfo, Scan as ProjectScan } from './wire';
-export type { OpenedDoc, SavedAs, SaveResult, ProjectInfo, ProjectFile, Scan as ProjectScan } from './wire';
+import type { ExplorerStart, ExplorerDirectory, ExplorerLocation, ExplorerSaveResult, OpenedDoc, SavedAs, SaveResult, ProjectInfo, Scan as ProjectScan } from './wire';
+export type { ExplorerSaveResult, ExplorerStart, ExplorerDirectory, ExplorerEntry, ExplorerLocation, ExplorerPlace, OpenedDoc, SavedAs, SaveResult, ProjectInfo, ProjectFile, Scan as ProjectScan } from './wire';
 
 export type Handle = string;
 
@@ -268,6 +268,16 @@ export interface DesktopApi {
    * has only ever listed (never opened) needs. */
   projectGrantFile(projectHandle: Handle, relPath: string): Promise<Handle>;
   projectSaveNew(projectHandle: Handle, name: string, bytes: Uint8Array): Promise<SavedAs>;
+
+  // Temporary explorer sessions. Browsing never adds a project or recent file.
+  explorerOpen(startIn?: StartLocation): Promise<ExplorerStart>;
+  explorerList(session: string, handle: Handle, showHidden: boolean, query: string, offset: number): Promise<ExplorerDirectory>;
+  explorerSaveFile(session: string, handle: Handle, name: string, bytes: Uint8Array, copySidecarFrom?: Handle, expectedStamp?: string): Promise<ExplorerSaveResult>;
+  explorerCreateFolder(session: string, handle: Handle, name: string): Promise<ExplorerLocation>;
+  explorerPeek(session: string, handle: Handle): Promise<string | null>;
+  explorerAddProject(session: string, handle: Handle): Promise<ProjectInfo>;
+  explorerOpenFile(session: string, handle: Handle): Promise<OpenedDoc>;
+  explorerClose(session: string): Promise<void>;
 
   // Recents
   recentsList(): Promise<RecentItem[]>;

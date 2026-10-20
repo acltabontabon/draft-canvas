@@ -30,6 +30,7 @@ import {
   type RecoveryEntry,
   type RenamedFile,
   type SavedAs,
+  type StartLocation,
   type UpdateSnapshot,
 } from './api';
 import type { HostLink } from './channel';
@@ -455,7 +456,8 @@ export class DesktopController {
       case 'open':
         return this.openFile();
       case 'open-project':
-        return void (await this.pickProject());
+        this.store.getSnapshot().explorerSave?.cancel();
+        return this.store.update({ explorerMode: 'project' });
       case 'new-canvas':
         return this.newCanvas();
       case 'reveal':
@@ -626,13 +628,12 @@ export class DesktopController {
   // ─── Opening ────────────────────────────────────────────────────────────────────────
 
   async openFile(): Promise<void> {
-    await this.swap('Couldn’t open the file', async () => {
-      const opened = await this.api.openDialog();
-      if (opened) await this.switchTo(opened);
-    });
+    this.store.getSnapshot().explorerSave?.cancel();
+    this.store.update({ explorerMode: 'file' });
   }
 
   async openHandle(handle: Handle): Promise<void> {
+    this.store.getSnapshot().explorerSave?.cancel();
     await this.swap('Couldn’t open the file', async () => this.switchTo(await this.api.openHandle(handle)));
   }
 
@@ -767,6 +768,7 @@ export class DesktopController {
    * nothing is kept until it is drawn on: a starter left untouched is one click from coming back.
    */
   async newQuickDraft(starterId?: StarterId): Promise<void> {
+    this.store.getSnapshot().explorerSave?.cancel();
     await this.swap('Couldn’t start a Quick Draft', async () => {
       // Fetched before anything is settled, so a starter that can't load leaves the open document alone.
       const catalog = starterId ? await loadStarters() : null;
@@ -783,6 +785,7 @@ export class DesktopController {
 
   /** A canvas whose place is chosen first: the Save dialog opens before anything is drawn. */
   async newCanvas(): Promise<void> {
+    this.store.getSnapshot().explorerSave?.cancel();
     await this.swap('Couldn’t create the canvas', async () => {
       if (!(await this.settleBeforeLeaving())) return;
       const blank = encoder.encode(serializeDocument(createDocument()));
@@ -940,7 +943,8 @@ export class DesktopController {
       session.kind === 'file' && !this.pendingBackground ? session.handle : undefined,
       session.kind === 'pending' ? { projectHandle: session.project, relPath: session.relPath } : undefined,
     );
-    if (saved) await this.becomeFile(saved, text);
+    if (saved && this.session === session) await this.becomeFile(saved, text);
+    else if (saved) this.ui.notify(`Saved ${saved.name}.draftcanvas.`);
   }
 
   /**
@@ -973,12 +977,15 @@ export class DesktopController {
     };
     await this.applyBackground(saved.handle);
     this.savedText = text;
-    this.latestText = text;
-    this.edited = false;
+    // A chooser can stay open while an agent or another app event updates the diagram. Only the
+    // captured snapshot was written; newer edits must stay dirty and gain recovery under the new file.
+    this.latestText ??= text;
+    this.edited = this.latestText !== text;
     this.clearSnapshotTimer();
     this.outside = null;
     if (before.kind === 'quick' || before.kind === 'pending') await this.discard(before.id);
     else if (before.kind === 'file') await this.discard(before.recoveryId);
+    if (this.edited) this.scheduleSnapshot();
     this.publish();
     void this.refreshRecents();
     void this.refreshRecovery();
@@ -1320,6 +1327,26 @@ export class DesktopController {
   }
 
   // ─── Projects, recents, settings ────────────────────────────────────────────────────
+
+  explorerOpen(startIn?: StartLocation) { return this.api.explorerOpen(startIn); }
+  explorerList(session: string, handle: Handle, showHidden: boolean, query: string, offset = 0) {
+    return this.api.explorerList(session, handle, showHidden, query, offset);
+  }
+  explorerCreateFolder(session: string, handle: Handle, name: string) { return this.api.explorerCreateFolder(session, handle, name); }
+  explorerPeek(session: string, handle: Handle) { return this.api.explorerPeek(session, handle); }
+  explorerClose(session: string) { return this.api.explorerClose(session); }
+  async explorerAddProject(session: string, handle: Handle) {
+    const info = await this.api.explorerAddProject(session, handle);
+    await this.bringForward(info);
+    return info;
+  }
+  explorerOpenFile(session: string, handle: Handle): Promise<boolean> {
+    // Keep document switches serialized, but let the explorer show errors inline and remain open
+    // when the person cancels an unsaved-document prompt.
+    const next = this.turn.then(async () => this.switchTo(await this.api.explorerOpenFile(session, handle)));
+    this.turn = next.then(() => {}, () => {});
+    return next;
+  }
 
   /** Picks a folder and puts it first on the project list, scanned. */
   async pickProject(): Promise<ProjectInfo | null> {

@@ -11,10 +11,10 @@ import { useEditorStore } from '../../../store/editorStore';
 export function SettingsPage({ title, lead, children }: { title: string; lead?: ReactNode; children: ReactNode }) {
   return (
     <div className="dc-prefs-page">
-      <header className="dc-prefs-page-head">
+      <div className="dc-prefs-page-head">
         <h3>{title}</h3>
         {lead && <p>{lead}</p>}
-      </header>
+      </div>
       {children}
     </div>
   );

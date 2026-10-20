@@ -207,6 +207,14 @@ export function createHarness() {
     sidecarRemove: vi.fn(async (handle: string) => void sidecars.delete(handle)),
     peekDocument: vi.fn(async (handle: string) => files.get(handle)?.text ?? null),
     projectPeek: vi.fn(async (project: string, relPath: string): Promise<string | null> => folders.get(project)?.files.get(relPath)?.text ?? null),
+    explorerOpen: vi.fn(async () => ({ session: 'x_test', places: [], directory: { location: { handle: 'b_home', name: 'Home', displayPath: '~' }, breadcrumbs: [], entries: [], total: 0, nextOffset: null, truncated: false } })),
+    explorerList: vi.fn(async () => { throw new Error('No explorer directory seeded.'); }),
+    explorerSaveFile: vi.fn(async () => { throw new Error('No explorer save target selected.'); }),
+    explorerCreateFolder: vi.fn(async () => ({ handle: 'b_new', name: 'New folder', displayPath: '~/New folder' })),
+    explorerPeek: vi.fn(async () => null),
+    explorerAddProject: vi.fn(async () => { throw new Error('No explorer folder selected.'); }),
+    explorerOpenFile: vi.fn(async () => { throw new Error('No explorer file selected.'); }),
+    explorerClose: vi.fn(async () => {}),
     pickProject: vi.fn(async (): Promise<ProjectInfo | null> => {
       if (!pickedProject) return null;
       toFront(pickedProject);

@@ -18,6 +18,13 @@ export type Scan = { files: Array<ProjectFile>,
  * listed because a limit was hit — the root itself is `""`. Empty when nothing was cut off.
  */
 truncatedDirs: Array<string>, };
+export type ExplorerKind = "folder" | "file";
+export type ExplorerLocation = { handle: string, name: string, displayPath: string, };
+export type ExplorerPlace = { location: ExplorerLocation, project: boolean, };
+export type ExplorerEntry = { handle: string, name: string, kind: ExplorerKind, displayPath: string, size: number | null, modifiedMs: number, };
+export type ExplorerDirectory = { location: ExplorerLocation, breadcrumbs: Array<ExplorerLocation>, entries: Array<ExplorerEntry>, total: number, nextOffset: number | null, truncated: boolean, };
+export type ExplorerStart = { session: string, places: Array<ExplorerPlace>, directory: ExplorerDirectory, };
+export type ExplorerSaveResult = { "outcome": "saved", saved: SavedAs, } | { "outcome": "exists", name: string, stamp: string, };
 export type UpdateInfo = { version: string,
 /**
  * The release's section of the changelog.

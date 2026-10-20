@@ -2,6 +2,7 @@ import { PRODUCT } from '../../product';
 import { useUiStore } from '../../store/uiStore';
 import { Icon } from '../common/Icon';
 import { useUnreadReleaseNotes } from '../common/useUnreadReleaseNotes';
+import './library-theme.css';
 
 /**
  * The product's name, its mark, and the way into About — the one row every state of the home
@@ -44,15 +45,6 @@ export function LibraryBrand() {
           hasUnreadNotes && <span className="dc-new-dot" aria-hidden="true" />
         )}
       </span>
-      <button
-        type="button"
-        className="dc-brand-about"
-        onClick={() => useUiStore.getState().setDiagnosticsOpen(true)}
-        aria-label="Troubleshooting"
-        title="Troubleshooting"
-      >
-        <Icon name="help" size={14} />
-      </button>
     </div>
   );
 }

@@ -9,15 +9,33 @@
      legible on both grounds without a second definition per theme. */
   --dc-prefs-warn: color-mix(in srgb, #e0a82e 62%, var(--dc-text));
   --dc-prefs-tint: color-mix(in srgb, var(--dc-text) 3%, var(--dc-surface));
+  --dc-prefs-accent: #72bfb5;
+  --dc-prefs-focus: color-mix(in srgb, var(--dc-prefs-accent) 16%, transparent);
   height: min(660px, calc(100dvh - 48px));
   max-height: calc(100dvh - 48px);
+  background: var(--dc-canvas);
+}
+
+:root[data-theme='light'] .dc-modal-settings {
+  --dc-prefs-accent: #0d6e65;
+}
+
+.dc-modal-settings .dc-modal-header {
+  padding: 24px 24px 22px;
+  border-bottom: 1px solid var(--dc-border);
+}
+
+.dc-modal-settings .dc-diagnostics-preview:focus-visible {
+  border-color: var(--dc-prefs-accent);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--dc-prefs-focus);
 }
 
 .dc-modal-settings .dc-modal-body {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 212px minmax(0, 1fr);
+  grid-template-columns: 180px minmax(0, 1fr);
   padding: 0;
   overflow: hidden;
 }
@@ -26,17 +44,17 @@
 
 .dc-prefs-rail {
   min-height: 0;
-  padding: 16px 10px;
+  padding: 24px 12px;
   overflow-y: auto;
   border-right: 1px solid var(--dc-border);
-  background: color-mix(in srgb, var(--dc-canvas) 55%, var(--dc-surface));
+  background: var(--dc-surface);
   border-bottom-left-radius: var(--dc-radius-lg);
 }
 
 .dc-prefs-rail [role='tablist'] {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 6px;
 }
 
 .dc-prefs-tab {
@@ -45,8 +63,8 @@
   flex: none;
   align-items: center;
   gap: 10px;
-  min-height: 34px;
-  padding: 6px 12px;
+  min-height: 40px;
+  padding: 8px 12px;
   border: 0;
   border-radius: var(--dc-radius);
   background: none;
@@ -80,7 +98,7 @@
 }
 
 .dc-prefs-tab[aria-selected='true'] svg {
-  color: var(--dc-selection);
+  color: var(--dc-text);
 }
 
 /* The page you're on, marked the way the canvas marks a selection: a short stroke of the accent. */
@@ -95,15 +113,16 @@
 }
 
 .dc-prefs-tab:focus-visible {
-  outline: 2px solid var(--dc-selection);
-  outline-offset: -2px;
+  outline: 1px solid var(--dc-prefs-accent);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px var(--dc-prefs-focus);
 }
 
 /* ---- the page ---------------------------------------------------------------- */
 
 .dc-prefs-panel {
   min-height: 0;
-  padding: 28px 40px 44px;
+  padding: 30px 32px 40px;
   overflow-y: auto;
   scrollbar-gutter: stable;
 }
@@ -111,16 +130,17 @@
 .dc-prefs-page {
   display: flex;
   flex-direction: column;
-  gap: 34px;
+  gap: 28px;
   /* A reading measure: rows don't stretch across a wide window. */
   max-width: 640px;
 }
 
 .dc-prefs-page-head h3 {
   margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
+  font-family: 'Iowan Old Style', Georgia, serif;
+  font-size: 26px;
+  font-weight: 400;
+  letter-spacing: -.5px;
   color: var(--dc-text);
 }
 
@@ -174,13 +194,14 @@
 .dc-prefs-rows[data-list] {
   gap: 0;
   border: 1px solid var(--dc-border);
-  border-radius: var(--dc-radius);
-  background: var(--dc-prefs-tint);
+  border-radius: 10px;
+  background: var(--dc-canvas);
+  overflow: hidden;
 }
 
 .dc-prefs-rows[data-list] > .dc-prefs-row {
   --dc-prefs-inset: 14px;
-  padding-block: 11px;
+  padding-block: 16px;
   padding-inline-end: 14px;
 }
 
@@ -236,6 +257,14 @@
   cursor: pointer;
 }
 
+.dc-prefs-rows[data-list] > .dc-prefs-choice:has(input:checked) {
+  background: var(--dc-prefs-tint);
+}
+
+.dc-prefs-rows[data-list] > .dc-prefs-choice:has(input:focus-visible) {
+  box-shadow: inset 0 0 0 2px var(--dc-prefs-accent);
+}
+
 .dc-prefs-section:disabled .dc-prefs-choice {
   cursor: default;
 }
@@ -245,12 +274,12 @@
   width: 15px;
   height: 15px;
   margin: 2px 0 0;
-  accent-color: var(--dc-selection);
+  accent-color: var(--dc-prefs-accent);
   cursor: inherit;
 }
 
 .dc-prefs-choice > input:focus-visible {
-  outline: 2px solid var(--dc-selection);
+  outline: 2px solid var(--dc-prefs-accent);
   outline-offset: 2px;
 }
 
@@ -263,6 +292,10 @@
 .dc-prefs-choice[data-toggle] {
   flex-direction: row-reverse;
   align-items: center;
+  padding: 16px;
+  border: 1px solid var(--dc-border);
+  border-radius: 10px;
+  background: var(--dc-canvas);
 }
 
 .dc-prefs-switch {
@@ -292,7 +325,7 @@
 }
 
 .dc-prefs-switch:checked {
-  background: var(--dc-selection);
+  background: var(--dc-library-action);
 }
 
 .dc-prefs-switch:checked::before {
@@ -369,10 +402,7 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 12px 14px;
-  border: 1px solid var(--dc-border);
-  border-radius: var(--dc-radius);
-  background: var(--dc-prefs-tint);
+  padding: 0 2px;
 }
 
 .dc-prefs-facts {
@@ -425,6 +455,24 @@
   gap: 10px;
   min-width: 0;
   margin-top: 2px;
+}
+
+.dc-modal-settings .dc-segmented {
+  max-width: 100%;
+  padding: 4px;
+  gap: 4px;
+  border-radius: 8px;
+  background: var(--dc-surface);
+}
+
+.dc-modal-settings .dc-segmented-option {
+  min-height: 30px;
+  border-radius: 5px;
+}
+
+.dc-modal-settings .dc-segmented-option:has(input:focus-visible) {
+  outline: 1px solid var(--dc-prefs-accent);
+  box-shadow: 0 0 0 3px var(--dc-prefs-focus);
 }
 
 /* The agent skill: the second half of connecting an agent, apart from the connector's setup above it
@@ -599,9 +647,9 @@
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 14px;
-  padding: 16px;
+  padding: 20px;
   border: 1px solid var(--dc-border);
-  border-radius: var(--dc-radius-lg);
+  border-radius: 10px;
   background: var(--dc-prefs-tint);
 }
 
@@ -698,6 +746,10 @@
     padding: 4px 10px;
   }
 
+  .dc-prefs-tab svg {
+    display: none;
+  }
+
   .dc-prefs-tab[aria-selected='true']::before {
     inset: auto 10px -8px;
     width: auto;
@@ -711,6 +763,16 @@
 }
 
 @media (max-width: 560px) {
+  .dc-modal-settings .dc-segmented {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .dc-modal-settings .dc-segmented-option {
+    padding-inline: 8px;
+  }
+
   .dc-prefs-action {
     flex-direction: column;
     align-items: stretch;

@@ -491,6 +491,8 @@ export interface UiStore {
    *  against canvas title and project name (see that file's search-filter comment
    *  for the future, content-indexing extension point this deliberately defers). */
   librarySearchQuery: string;
+  /** The web gallery stays open when returning from a diagram opened there. */
+  libraryBrowsing: boolean;
   /** The homepage's chosen sort for the visible canvas list. */
   librarySort: 'updatedAt' | 'createdAt' | 'name';
   /** Which slice of the library the homepage is showing — the sidebar's selection. */
@@ -600,6 +602,7 @@ export interface UiStore {
   /** Marks freshly accepted nodes for their settle animation; the marker expires on its own. */
   setSettleNodeIds: (ids: readonly string[]) => void;
   setLibrarySearchQuery: (query: string) => void;
+  setLibraryBrowsing: (browsing: boolean) => void;
   setLibrarySort: (sort: UiStore['librarySort']) => void;
   setLibraryView: (view: UiStore['libraryView']) => void;
   setMoveMenuOpenFor: (id: string | null) => void;
@@ -685,6 +688,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   depthShapeHoverId: null,
   overviewOfferDismissed: false,
   librarySearchQuery: '',
+  libraryBrowsing: false,
   librarySort: 'updatedAt',
   libraryView: { kind: 'recent' },
   moveMenuOpenFor: null,
@@ -912,6 +916,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
     }, SETTLE_MS);
   },
   setLibrarySearchQuery: (librarySearchQuery) => set({ librarySearchQuery }),
+  setLibraryBrowsing: (libraryBrowsing) => set({ libraryBrowsing }),
   setLibrarySort: (librarySort) => set({ librarySort }),
   setLibraryView: (libraryView) => set({ libraryView }),
   setMoveMenuOpenFor: (moveMenuOpenFor) => set({ moveMenuOpenFor }),

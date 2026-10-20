@@ -39,29 +39,31 @@ export function LocalNote({ durable, repository, hasDocuments }: { durable: bool
 
   return (
     <div className="dc-local" data-warn={durable ? undefined : 'true'}>
-      <button type="button" className="dc-local-toggle" aria-expanded={open} onClick={() => setOpen(!open)}>
-        <Icon name="lock" size={13} />
-        <span>
-          {durable
-            ? 'Stored on this device — nothing you draw leaves it.'
-            : 'This browser is blocking local storage — diagrams live in memory only.'}
-        </span>
-        <span className="dc-local-more">{open ? 'Less' : 'Details'}</span>
-      </button>
-      {nudge && (
-        <p className="dc-local-nudge">
-          Keep another copy of your diagrams — your last backup is missing or over a week old.{' '}
-          <button
-            type="button"
-            className="dc-local-more"
-            onClick={() =>
-              void backUpLibrary(repository, notify).then(() => setLastBackupAt(readPreference(LAST_BACKUP_PREFERENCE)))
-            }
-          >
-            Back up now
-          </button>
-        </p>
-      )}
+      <div className="dc-local-summary">
+        <button type="button" className="dc-local-toggle" aria-expanded={open} onClick={() => setOpen(!open)}>
+          <Icon name="lock" size={13} />
+          <span>
+            {durable
+              ? 'Stored on this device'
+              : 'This browser is blocking local storage — diagrams live in memory only.'}
+          </span>
+          <span className="dc-local-more">{open ? 'Less' : 'Details'}</span>
+        </button>
+        {nudge && (
+          <p className="dc-local-nudge">
+            <span>No recent backup</span>
+            <button
+              type="button"
+              className="dc-local-more"
+              onClick={() =>
+                void backUpLibrary(repository, notify).then(() => setLastBackupAt(readPreference(LAST_BACKUP_PREFERENCE)))
+              }
+            >
+              Back up now
+            </button>
+          </p>
+        )}
+      </div>
       {open && (
         <div className="dc-local-detail">
           {durable ? (
@@ -84,6 +86,7 @@ export function LocalNote({ durable, repository, hasDocuments }: { durable: bool
             Clearing this browser&rsquo;s site data deletes them. Export a <code>.draftcanvas</code>{' '}
             file to keep a copy you control.
           </p>
+          {nudge && <p>Your last backup is missing or over a week old. Keep another copy of your diagrams.</p>}
           {estimate && estimate.usage > 0 && <p>About {formatBytes(estimate.usage)} of local storage in use.</p>}
         </div>
       )}

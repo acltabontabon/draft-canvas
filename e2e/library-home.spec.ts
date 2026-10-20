@@ -1,122 +1,122 @@
 import { expect, test } from '@playwright/test';
+import { openGallery, openStarter } from './library';
 
-/**
- * The home screen as a product surface: first run's blank canvas and starters, the per-row
- * topology fingerprint, search that says how many matched, and the local-first line. Everything
- * here is checked against a fresh browser context, so each test starts from a genuinely empty
- * library.
- */
-
+/** The shared Home composition, browser projects and the full Canvas Gallery. */
 test.describe('Home screen', () => {
-  test('a first run offers the starters, and one seeds a canvas that is initial state', async ({ page }) => {
+  test('an empty Home keeps its separator and invitation, with no starters, tabs, or search', async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'light' });
     await page.goto('/');
-    await expect(page.getByRole('group', { name: 'Starters' })).toBeVisible();
-    // Nothing a first run has nothing to fill: no empty list, no search, no sidebar.
-    await expect(page.getByRole('heading', { name: 'Recently edited' })).toHaveCount(0);
-    await expect(page.getByPlaceholder('Search diagrams…')).toHaveCount(0);
-    await expect(page.locator('.dc-library-sidebar')).toHaveCount(0);
-
-    await page.getByRole('button', { name: 'Start from Hexagonal' }).click();
-    await expect(page.locator('.dc-editor')).toBeVisible();
-    await expect(page.locator('.dc-node')).toHaveCount(13);
-    await expect(page.getByLabel('Diagram title')).toHaveValue('Hexagonal');
-
-    // The starter is the canvas's opening state, not an edit — nothing to undo.
-    await page.keyboard.press('ControlOrMeta+z');
-    await expect(page.locator('.dc-node')).toHaveCount(13);
-
-    await page.getByRole('button', { name: 'Back to your diagrams' }).click();
-    const row = page.locator('.dc-library-item', { hasText: 'Hexagonal' });
-    await expect(row).toBeVisible();
-    // The fingerprint is there on return — the summary was written on create,
-    // not by a later autosave — and it knows a component from a service.
-    await expect(row.locator('svg.dc-fingerprint .dc-fingerprint-component').first()).toBeAttached();
-    await expect(row.locator('.dc-fingerprint-boundary')).toHaveCount(1);
-    await expect(page.locator('.dc-library-sidebar')).toBeVisible();
+    await expect(page.locator('.dc-home')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+    await expect(page.locator('.dc-living-primary')).toHaveCSS('background-color', 'rgb(13, 110, 101)');
+    await expect(page.locator('.dc-living-primary')).toHaveCSS('color', 'rgb(255, 255, 255)');
+    await expect(page.getByRole('heading', { name: 'It starts with a thought.' })).toBeVisible();
+    await expect(page.getByRole('tablist')).toHaveCount(0);
+    await expect(page.getByRole('group', { name: 'Starters' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Find a diagram' })).toHaveCount(0);
+    await expect(page.locator('.dc-home-shelf-head')).toHaveCSS('border-bottom-width', '1px');
+    await expect(page.getByRole('button', { name: 'New project', exact: true })).toBeVisible();
   });
 
-  test('search counts its matches, names a miss, and clears in one click; `/` reaches it', async ({ page }) => {
+  test('a browser project can be created before any diagrams, and its single view has no tab or search', async ({ page }) => {
     await page.goto('/');
-    await page.getByRole('button', { name: 'Start from Monolith' }).click();
+    await page.getByRole('button', { name: 'New canvas' }).focus();
+    await page.keyboard.press('ArrowDown');
+    await expect(page.getByRole('button', { name: 'New project' })).toBeFocused();
+    await page.keyboard.press('Enter');
+    const dialog = page.getByRole('dialog', { name: 'New project', exact: true });
+    await dialog.getByLabel('Name').fill('Architecture');
+    await dialog.getByRole('button', { name: 'Create', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Show the Architecture project' })).toBeVisible();
+    await expect(page.getByRole('tab')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Find a diagram' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Show the Architecture project' }).click();
+    await expect(page.getByRole('heading', { name: 'Architecture', exact: true })).toBeVisible();
+    await expect(page.getByRole('searchbox')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Home', exact: true }).click();
+    await expect(page.locator('.dc-living')).toBeVisible();
+  });
+
+  test('the first example brings back views and search; shelf and gallery navigation work by keyboard', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Try an example' }).click();
+    await expect(page.locator('.dc-node')).toHaveCount(4);
+    await page.getByRole('button', { name: 'Back to your diagrams' }).click();
+    await expect(page.getByRole('tab')).toHaveText(['Drafts', 'Recent', 'Projects']);
+    await expect(page.getByRole('button', { name: 'Find a diagram' })).toBeVisible();
+    await page.getByRole('button', { name: 'New canvas' }).focus();
+    await page.keyboard.press('ArrowDown');
+    await expect(page.getByRole('tab', { name: 'Drafts' })).toBeFocused();
+    await page.keyboard.press('ArrowRight');
+    await expect(page.getByRole('tab', { name: 'Recent' })).toBeFocused();
+    await page.keyboard.press('ArrowDown');
+    await expect(page.getByRole('button', { name: 'Open Order processing' })).toBeFocused();
+    await page.keyboard.press('Enter');
     await expect(page.locator('.dc-editor')).toBeVisible();
     await page.getByRole('button', { name: 'Back to your diagrams' }).click();
-    await expect(page.locator('.dc-library-item', { hasText: 'Monolith' })).toBeVisible();
+    await openGallery(page);
+    await expect(page.locator('.dc-gallery-card')).toHaveCount(1);
+    await page.locator('.dc-gallery-open').click();
+    await expect(page.locator('.dc-editor')).toBeVisible();
+    await page.getByRole('button', { name: 'Back to your diagrams' }).click();
+    await expect(page.locator('.dc-library')).toBeVisible();
+    await page.getByRole('button', { name: 'Home', exact: true }).click();
+    await expect(page.locator('.dc-living')).toBeVisible();
+  });
 
-    await page.keyboard.press('/');
+  test('search from Home opens the full gallery, searches, clears a miss, and Escape returns Home', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Try an example' }).click();
+    await page.getByRole('button', { name: 'Back to your diagrams' }).click();
+    await page.getByRole('button', { name: 'Find a diagram' }).click();
     const search = page.getByPlaceholder('Search diagrams…');
     await expect(search).toBeFocused();
-    await search.fill('mono');
-    await expect(page.getByRole('heading', { name: 'Search results' })).toBeVisible();
+    await search.fill('order');
     await expect(page.getByText('1 of 1')).toBeVisible();
-
     await search.fill('zzz');
     await expect(page.getByText('No diagrams match “zzz”.')).toBeVisible();
     await page.getByRole('button', { name: 'Clear search' }).click();
     await expect(search).toHaveValue('');
-    await expect(page.locator('.dc-library-item', { hasText: 'Monolith' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.dc-living')).toBeVisible();
+    await page.locator('body').click({ position: { x: 5, y: 5 } });
+    await page.keyboard.press('/');
+    await expect(page.getByPlaceholder('Search diagrams…')).toBeFocused();
   });
 
-  test('first run is keyboard-first: Enter starts blank, arrows and Enter start a starter', async ({ page }) => {
+  test('the gallery reflows real previews and keeps backup details compact in both themes', async ({ page }) => {
     await page.goto('/');
-    // WebKit used to send Enter before FirstRunHome's passive shortcut effect subscribed. The
-    // listener now attaches before paint; wait for the catalog too so this journey starts with
-    // the complete keyboard surface, including the starter grid used after returning home.
-    await expect(page.getByRole('group', { name: 'Starters' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'New canvas' })).toBeEnabled();
-    await page.keyboard.press('Enter');
-    await expect(page.locator('.dc-editor')).toBeVisible();
-    await expect(page.locator('.dc-node')).toHaveCount(0);
-
-    // Back on first run only because that blank canvas is still the one thing in the library —
-    // delete it to get there again.
+    await openStarter(page, 'Monolith');
     await page.getByRole('button', { name: 'Back to your diagrams' }).click();
+    await openGallery(page);
+    for (let index = 0; index < 3; index++) {
+      await page.getByRole('button', { name: 'Duplicate Monolith', exact: true }).click();
+      await expect(page.locator('.dc-gallery-card')).toHaveCount(index + 2);
+    }
+    for (const theme of ['dark', 'light'] as const) {
+      await page.emulateMedia({ colorScheme: theme });
+      await expect(page.locator(':root')).toHaveAttribute('data-theme', theme);
+      for (const [width, columns] of [[1200, 3], [760, 2], [375, 1]]) {
+        await page.setViewportSize({ width, height: 900 });
+        await expect.poll(() => page.locator('.dc-gallery-grid').evaluate(el => getComputedStyle(el).gridTemplateColumns.split(' ').length)).toBe(columns);
+        await expect.poll(() => page.locator('.dc-gallery-grid').evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+      }
+    }
+    await expect(page.getByText('No recent backup')).toBeVisible();
+    await expect(page.getByText(/Your last backup is missing/)).toHaveCount(0);
+    await page.getByRole('button', { name: 'Stored on this device Details' }).click();
+    await expect(page.getByText(/Your last backup is missing/)).toBeVisible();
+  });
+
+  test('deleting the last draft returns to an empty Home without search or tabs', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('button', { name: 'New canvas' }).click();
+    await page.getByRole('button', { name: 'Back to your diagrams' }).click();
+    await openGallery(page);
     await page.getByRole('button', { name: /^Delete Untitled/ }).click();
     await page.getByRole('button', { name: 'Delete', exact: true }).click();
-
-    // The library's own header has a same-named "New canvas" button (`LibraryScreen`) that's still
-    // on screen for a moment after the delete confirms — waiting for the first-run starters group,
-    // which only exists once the library has actually emptied out, is what makes the locator below
-    // resolve to the sheet (`FirstRunHome`) rather than a stale reference to that header button.
-    await expect(page.getByRole('group', { name: 'Starters' })).toBeVisible();
-    const sheet = page.getByRole('button', { name: 'New canvas' });
-    await sheet.focus();
-    await page.keyboard.press('ArrowRight');
-    await page.keyboard.press('ArrowRight');
-    await expect(page.getByRole('button', { name: 'Start from Microservices' })).toBeFocused();
-    await page.keyboard.press('Enter');
-    await expect(page.getByLabel('Diagram title')).toHaveValue('Microservices');
-  });
-
-  test('the starters are one row of five, walked with the arrows, and the rest are named as a palette away', async ({ page }) => {
-    await page.goto('/');
-    const group = page.getByRole('group', { name: 'Starters' });
-    await expect(group).toBeVisible();
+    await expect(page.locator('.dc-living')).toBeVisible();
     await expect(page.getByRole('tab')).toHaveCount(0);
-    await expect(group.getByRole('button')).toHaveCount(5);
-    await expect(page.getByText(/More architectures and patterns are in the command palette/)).toBeVisible();
-
-    await page.getByRole('button', { name: 'New canvas' }).focus();
-    await page.keyboard.press('ArrowRight');
-    await expect(page.getByRole('button', { name: 'Start from Monolith' })).toBeFocused();
-    await page.keyboard.press('End');
-    await expect(page.getByRole('button', { name: 'Start from CQRS' })).toBeFocused();
-    // A description appears in the tile itself on focus, and appearing moves nothing.
-    const before = await group.boundingBox();
-    await expect(page.getByRole('button', { name: 'Start from CQRS' }).locator('.dc-starter-description')).toHaveCSS('opacity', '1');
-    expect(await group.boundingBox()).toEqual(before);
-    await page.keyboard.press('Home');
-    await page.keyboard.press('ArrowLeft');
-    await expect(page.getByRole('button', { name: 'New canvas' })).toBeFocused();
-  });
-
-  test('the local-first line opens to the honest detail, and the toolbar fits a narrow screen', async ({ page }) => {
-    await page.goto('/');
-    const toggle = page.getByRole('button', { name: /Stored on this device/ });
-    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-    await toggle.click();
-    await expect(page.getByText(/Clearing this browser/)).toBeVisible();
-
-    await page.setViewportSize({ width: 375, height: 812 });
-    await expect(page.getByRole('button', { name: 'New canvas' })).toBeInViewport();
+    await expect(page.getByRole('button', { name: 'Find a diagram' })).toHaveCount(0);
+    await expect(page.locator('.dc-home-shelf-head')).toBeVisible();
   });
 });

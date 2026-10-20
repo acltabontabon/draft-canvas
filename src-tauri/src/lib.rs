@@ -5,6 +5,7 @@ mod commands;
 mod dialogs;
 mod docio;
 mod errors;
+mod explorer;
 mod grants;
 mod lifecycle;
 mod menu;
@@ -63,6 +64,14 @@ pub fn run() {
             commands::documents::sidecar_remove,
             commands::peek::peek_document,
             commands::peek::project_peek,
+            commands::explorer::explorer_open,
+            commands::explorer::explorer_list,
+            commands::explorer::explorer_create_folder,
+            commands::explorer::explorer_save_file,
+            commands::explorer::explorer_peek,
+            commands::explorer::explorer_add_project,
+            commands::explorer::explorer_open_file,
+            commands::explorer::explorer_close,
             commands::projects::pick_project,
             commands::projects::open_project,
             commands::projects::project_forget,

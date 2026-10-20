@@ -53,11 +53,11 @@ closes, so export before you leave.
 
 ## Reopening a diagram
 
-The Library is the list of everything saved in this browser. Click a diagram to open it. **Search
-diagrams…** (press `/` to jump to it) finds diagrams by title or project name, not by what is drawn
-in them.
+Choose **View all** on Home to open the Library gallery, the list of everything saved in this
+browser. Click a diagram to open it. **Search diagrams…** (press `/` to jump to it) finds diagrams
+by title or project name, not by what is drawn in them. **Home** returns to the starting scene.
 
-![The Library: a search box, Import and New canvas buttons, a sidebar with Recently edited, All diagrams, Unorganized and Projects, and two saved diagrams with thumbnails. The footer reads "Stored on this device — nothing you draw leaves it".](../media/guides/library.png)
+![The Library gallery: a New canvas button, search and project navigation above two diagram preview cards.](../media/guides/library.png)
 
 The Library also lets you rename, duplicate, delete, and move a diagram into a project. Projects are
 flat folders for your own tidiness; a diagram is in at most one, and deleting a project moves its
@@ -260,8 +260,8 @@ browser has granted persistent storage. A partial backup keeps readable diagrams
 could not be read; it does not count as a complete backup. Keep an earlier backup until the problem
 is resolved. Browser persistence does not protect against clearing site data or losing the device.
 
-For a problem report, open **Troubleshooting** on the web home screen, **More → Diagnostic report…**
-in the web editor, or **Settings → Support** on desktop. Review the displayed JSON and choose
-**Download report**. It includes recent failure categories and versions, excluding diagram content
+For a problem report, open **More → Diagnostic report…** in the web editor, or **Settings → Support**
+on desktop. Review the displayed JSON and choose **Download report**. It includes recent failure
+categories and versions, excluding diagram content
 and file paths. It is never sent automatically. Saving and recovery limits are explained in
 [reliability](../reference/reliability.md#recovery-guarantees-and-limits).

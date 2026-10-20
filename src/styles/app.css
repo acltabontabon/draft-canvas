@@ -1410,10 +1410,8 @@ kbd {
 /* ------------------------------------------------------- library foot -- */
 
 /*
- * One quiet row under the list: a thought on the left, the local-first
- * promise on the right. Both in the faint colour, both one line — the
- * personality of the product and the fact about the product, and neither
- * shouting.
+ * A compact local-storage summary with the backup action alongside it. Details expand beneath
+ * the row so caveats remain available without turning the idle footer into two paragraphs.
  */
 .dc-library-foot {
   display: flex;
@@ -1428,16 +1426,25 @@ kbd {
 .dc-local {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
-  flex-shrink: 0;
-  max-width: 420px;
+  align-items: flex-start;
+  min-width: 0;
+  width: 100%;
+}
+
+.dc-local-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 24px;
+  width: 100%;
 }
 
 .dc-local-toggle {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  padding: 2px 4px;
+  padding: 4px 0;
   border: 0;
   border-radius: var(--dc-radius-sm);
   background: none;
@@ -1445,7 +1452,7 @@ kbd {
   font: inherit;
   font-size: 12.5px;
   line-height: 1.5;
-  text-align: right;
+  text-align: left;
   cursor: pointer;
 }
 
@@ -1468,9 +1475,13 @@ kbd {
   color: var(--dc-danger);
 }
 
-/* The backup nudge: one quiet sentence under the toggle, its button styled like "Details". */
+/* Kept beside the local note when there is room, and directly under it on a narrow screen. */
 .dc-local-nudge {
-  margin: 4px 0 0 21px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
   font-size: 12px;
   color: var(--dc-text-muted);
 }
@@ -1485,7 +1496,7 @@ kbd {
 
 .dc-local-detail {
   margin-top: 6px;
-  max-width: 46ch;
+  max-width: 66ch;
   padding: 10px 12px;
   border: 1px solid var(--dc-border);
   border-radius: var(--dc-radius);
@@ -5079,13 +5090,6 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   margin-top: 18px;
   font-size: 13px;
   line-height: 1.65;
-}
-
-.dc-about .dc-about-privacy {
-  margin: 18px 0 0;
-  font-size: 12px;
-  line-height: 1.6;
-  color: var(--dc-text-muted);
 }
 
 .dc-about-view-title {
