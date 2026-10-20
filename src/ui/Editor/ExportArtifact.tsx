@@ -3,6 +3,7 @@ import type { DraftDocument } from '../../document/types';
 import { renderDocumentSvg, type ExportOptions } from '../../render/svg/document';
 import { themeFor, type ThemeName } from '../../render/theme/tokens';
 import { Icon, type IconName } from '../common/Icon';
+import { useTechnologyIcons } from '../../canvas/useTechnologyIcon';
 
 export type ArtifactVisual =
   | {
@@ -69,6 +70,7 @@ function Thumbnail({
 }) {
   const { document, theme, options, onlyKey, describe } = visual;
   const transparent = options.transparent === true;
+  const technologyRevision = useTechnologyIcons(document.nodes);
 
   // Keyed on primitives, not `options` itself — the parent rebuilds that object (and its `only`
   // Set) on every render, which would otherwise re-render the whole diagram on each keystroke.
@@ -80,7 +82,7 @@ function Thumbnail({
       return null;
     }
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [document, theme, transparent, onlyKey, options.selectedFlowId, options.preset, options.openPoints, empty]);
+  }, [document, theme, transparent, onlyKey, options.selectedFlowId, options.preset, options.openPoints, empty, technologyRevision]);
 
   const src = useMemo(
     () => (rendered ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(rendered.svg)}` : null),

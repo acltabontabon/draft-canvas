@@ -25,15 +25,21 @@ visible. Clear the Technology field to remove the icon.
 
 ![A PostgreSQL elephant beside Orders and a generic technology chip beside Internal worker.](../media/guides/technology-generic.png)
 
-The bundled catalog includes PostgreSQL (also **Postgres**), MySQL, MariaDB, MongoDB, Redis, SQLite,
-Node.js, Python, Spring Boot, .NET, RabbitMQ, Apache Kafka, React, NGINX, Docker, Kubernetes, Go and
-TypeScript. Names are case-insensitive, and a trailing version such as **PostgreSQL 16** is recognized.
-Suggestions advertise only this bundled catalog; free text is always allowed.
+The catalog includes every icon in the app's pinned Simple Icons version: currently **3,466 icons**
+from version **16.35.0**, including Rust, Vue.js, Apache Cassandra, Tauri and many more. Search by
+brand name or Simple Icons slug. Common aliases such as **Postgres**, **K8s**, **Rails**, **VueJS**
+and **OTel** work too. Names are case-insensitive, and a trailing version such as **Rust 1.90** is
+recognized. When unrelated brands share a name, suggestions include their slug in parentheses so
+both can be selected and saved unambiguously. Free text is always allowed; a brand missing from
+this upstream version uses the generic icon.
 
-Brand logos come from [Simple Icons](https://github.com/simple-icons/simple-icons). All icons are
-bundled with the app and work offline on the canvas and in image exports. The full technology
-remains in saved files and architecture source exports. Technology never changes a shape's kind
-or its relationships.
+Brand logos come from [Simple Icons](https://github.com/simple-icons/simple-icons). A small name
+index is immediately searchable; artwork loads only when needed, in separate local groups, rather
+than all at startup. The desktop installation includes every group. On the web, the offline cache
+saves the complete set along with the app after the first visit, so even previously unused icons
+remain available offline. No icon requests go to a third party. Image exports wait for their logos
+and embed the paths. The full technology remains in saved files and architecture source exports.
+Technology never changes a shape's kind or its relationships.
 
 ## Pick the right kind
 
@@ -54,6 +60,13 @@ table is in [Architecture semantics](../reference/semantics.md#the-capability-ma
 
 An **External System** is a Service you don't own: a payment provider, an email service. It carries an
 EXTERNAL caption and takes the same connectors a Service does.
+
+### Actor frames
+
+New Actors are **Borderless**: a participant symbol with its name and optional description
+underneath. Select an Actor and use **Actor frame** in its bar to choose **Framed** for the outlined
+card, or switch back to **Borderless**. Both styles support every Actor kind and appear the same in
+image exports. The choice can be undone. Existing diagrams keep their framed Actors.
 
 ## Keep names readable
 

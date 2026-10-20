@@ -12,6 +12,7 @@ import { displayNameFor } from '../document/factory';
 import type { DraftDocument } from '../document/types';
 import { rasterizeSvg } from '../render/png/rasterize';
 import { renderDocumentSvg, type ExportOptions } from '../render/svg/document';
+import { loadTechnologyIcons } from '../nodes/technology';
 import { themeFor } from '../render/theme/tokens';
 import { fileNameFor } from './project';
 import { collectRooms, type ExportRoom } from './rooms';
@@ -61,6 +62,7 @@ export async function renderEveryLevel(document: DraftDocument, options: EveryLe
   const roomOptions: ExportOptions = { ...rest, only: undefined };
   const entries: ZipEntry[] = [];
   for (const level of collectLevels(document)) {
+    await loadTechnologyIcons(level.room.document.nodes);
     const rendered = renderDocumentSvg(level.room.document, roomOptions);
     if (format === 'svg') {
       entries.push({ name: `${level.name}.svg`, data: rendered.svg });

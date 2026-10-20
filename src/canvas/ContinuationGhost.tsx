@@ -13,6 +13,7 @@ import { useUiStore, type ContinuationOffer } from '../store/uiStore';
 import { usePersonality } from '../ui/personality/usePersonality';
 import { useThemeValue } from '../ui/theme/useTheme';
 import { SvgSurface } from './SvgSurface';
+import { useTechnologyIcon } from './useTechnologyIcon';
 
 /** Gap between the ghost's box and its pill — the same breathing room a connector caption keeps
  *  from its line, so the two never read as different systems. */
@@ -143,11 +144,13 @@ export function GhostNode({
   preset: ReturnType<typeof usePersonality>['preset'];
   onClick?: () => void;
 }) {
+  const technologyIcon = useTechnologyIcon(node.technology);
   const shapes = useMemo(() => {
     // Its own clip scope, so a ghost's clip-path ids can never collide with a real node's.
     beginClipScope(`ghost-${node.id}`);
     return emitDisplayList(describeNode(node, describeContext(theme, preset)));
-  }, [node, theme, preset]);
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Artwork can finish loading without a document change.
+  }, [node, theme, preset, technologyIcon]);
   return (
     // Position lives on this outer element alone, so it can glide smoothly (`transition:
     // transform`) when a same-identity offer's placement shifts. The mount-in scale/fade

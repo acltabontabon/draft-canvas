@@ -24,12 +24,12 @@ import { baselineOf, fitLabel, layoutText, type TextLayout } from '../render/tex
 import { getMeasurer, type TextMeasurer } from '../render/text/measure';
 import type { PersonalityPreset } from '../ui/personality/usePersonality';
 import { clamp } from '../lib/math';
-import { nodeTechnologyIcon, technologyMarkBounds, TECHNOLOGY_MARK_SIZE } from './technology';
+import { nodeTechnologyIcon, technologyIconSnapshot, technologyMarkBounds, TECHNOLOGY_MARK_SIZE, type TechnologyIconSnapshot } from './technology';
 
 /**
  * Turns a node from the document model into a display list.
  *
- * Every function here is pure: same node and theme in, same shapes out. Nothing
+ * Every function here is pure: same node and context in, same shapes out. Nothing
  * reads the DOM, so node appearance is fully unit-testable and the exporter can
  * produce it without a browser.
  */
@@ -41,10 +41,11 @@ export interface DescribeContext {
    *  appearance, so every existing call site that only passes a theme keeps
    *  compiling and keeps producing byte-identical output. */
   preset: PersonalityPreset;
+  technologyIcons: TechnologyIconSnapshot;
 }
 
 export function describeContext(theme: Theme, preset: PersonalityPreset = 'clean'): DescribeContext {
-  return { theme, measurer: getMeasurer(), preset };
+  return { theme, measurer: getMeasurer(), preset, technologyIcons: technologyIconSnapshot() };
 }
 
 const PADDING = 12;
@@ -351,11 +352,11 @@ function pinnedCaption(
 }
 
 export function describeNode(node: DraftNode, ctx: DescribeContext): DisplayList {
-  const icon = nodeTechnologyIcon(node);
+  const icon = nodeTechnologyIcon(node, ctx.technologyIcons);
   // This is a display projection only: the full technology (and its version) stays in the file,
   // inspector and source exports. Unrecognized or mixed stacks use the neutral technology mark.
   const shapes = shapesFor(icon ? { ...node, technology: undefined } : node, ctx);
-  const mark = technologyMarkBounds(node);
+  const mark = technologyMarkBounds(node, ctx.technologyIcons);
   if (icon && mark) {
     shapes.push({
       t: 'group',
@@ -2149,10 +2150,8 @@ function thirdPartyGlyph(
 }
 
 /**
- * Actor gets its own light outline container — unlike Service's filled, capped, shadowed card,
- * this is a plain unfilled rounded rect (a touch softer at the corners, too) so the hierarchy
- * reads through composition and treatment rather than through being tiny: a real participant
- * card, just visibly lighter than an internal architecture component.
+ * Actors default to a free-standing glyph and label. The optional light frame keeps the older
+ * participant-card treatment; absent `actorFrame` preserves that look for existing diagrams.
  */
 function actor(node: DraftNode, ctx: DescribeContext): Shape[] {
   const palette = accentOf(ctx.theme, node.accent);
@@ -2191,7 +2190,7 @@ function actor(node: DraftNode, ctx: DescribeContext): Shape[] {
             ? thirdPartyGlyph(node, cx, stroke, ctx)
             : humanGlyph(node, cx, stroke, ctx);
 
-  const shapes: Shape[] = [container, topBar, ...glyphShapes];
+  const shapes: Shape[] = node.actorFrame === 'borderless' ? glyphShapes : [container, topBar, ...glyphShapes];
 
   // No on-shape kind caption ("HUMAN"/"SYSTEM"/"DEVICE") — unlike Service/Data Store/Queue, whose
   // silhouette is shared across every sub-kind, Actor's three kinds are already visually distinct

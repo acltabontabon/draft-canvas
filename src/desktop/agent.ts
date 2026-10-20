@@ -49,6 +49,7 @@ import type { AgentEditorReply, AgentEditorRequest } from '../host/agentBridge';
 import { withPhysChunk } from '../render/png/phys';
 import { fittedScale, rasterizeSvg } from '../render/png/rasterize';
 import { renderDocumentSvg } from '../render/svg/document';
+import { loadTechnologyIcons } from '../nodes/technology';
 import { themeFor, type ThemeName } from '../render/theme/tokens';
 import { agentActivity } from './agentActivity';
 import { forgetPendingWrite, rememberPendingWrite } from './agentWrites';
@@ -300,6 +301,7 @@ async function render(host: AgentHost, args: Record<string, unknown>, context: A
   if (!view) throw new AgentError('NOT_FOUND', 'That view no longer exists.');
 
   const only = renderFocus(view, focus);
+  await loadTechnologyIcons(view.nodes);
   const rendered = renderDocumentSvg(view, { theme, only, ...(focus && typeof focus === 'object' && 'flow' in focus ? { selectedFlowId: String(focus.flow) } : {}), includeBackground: false, idScope: path.length ? `agent-${path.join('.')}` : 'agent' });
   const base = { diagramId, title: file.metadata.title, revision, ...(args.previewId ? { previewId: args.previewId, provisional: true } : {}), ...(only ? { focus: [...only] } : {}), ...(path.length ? { view: { path } } : {}) };
   const tooLarge = (what: string, hint: string) =>

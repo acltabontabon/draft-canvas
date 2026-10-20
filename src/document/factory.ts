@@ -6,6 +6,7 @@ import {
   DRAFT_FORMAT,
   type Accent,
   type ActorKind,
+  type ActorFrame,
   type AttachableType,
   type Attachment,
   type BoundaryPreset,
@@ -225,6 +226,7 @@ export interface CreateNodeInput {
   databaseKind?: DatabaseKind;
   queueKind?: QueueKind;
   actorKind?: ActorKind;
+  actorFrame?: ActorFrame;
   componentKind?: ComponentKind;
   parentId?: string;
   id?: string;
@@ -273,7 +275,10 @@ export function createNode(input: CreateNodeInput): DraftNode {
   if (input.type === 'service') node.serviceKind = input.serviceKind ?? 'generic';
   if (input.type === 'database') node.databaseKind = input.databaseKind ?? 'generic';
   if (input.type === 'queue') node.queueKind = input.queueKind ?? 'queue';
-  if (input.type === 'actor') node.actorKind = input.actorKind ?? 'human';
+  if (input.type === 'actor') {
+    node.actorKind = input.actorKind ?? 'human';
+    node.actorFrame = input.actorFrame ?? 'borderless';
+  }
   if (input.type === 'component') node.componentKind = input.componentKind ?? 'generic';
   if (input.deliveryRole) node.deliveryRole = input.deliveryRole;
   if ((C4_TEXT_TYPES as readonly DraftNodeType[]).includes(input.type)) {

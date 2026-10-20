@@ -16,6 +16,7 @@ import { defaultSizeFor } from './factory';
 import {
   ACCENTS,
   ACTOR_KINDS,
+  ACTOR_FRAMES,
   ATTACHABLE_TYPES,
   BACKGROUND_FITS,
   BOUNDARY_PRESETS,
@@ -41,6 +42,7 @@ import {
   VIEW_LEVELS,
   type Accent,
   type ActorKind,
+  type ActorFrame,
   type AttachableType,
   type Attachment,
   type BackgroundFit,
@@ -537,6 +539,8 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
     }
     if (type === 'actor') {
       node.actorKind = oneOf<ActorKind>(candidate.actorKind, ACTOR_KINDS, 'human');
+      const actorFrame = oneOfOptional<ActorFrame>(candidate.actorFrame, ACTOR_FRAMES);
+      if (actorFrame !== undefined) node.actorFrame = actorFrame;
     }
     if (type === 'component') {
       node.componentKind = oneOf<ComponentKind>(candidate.componentKind, COMPONENT_KINDS, 'generic');

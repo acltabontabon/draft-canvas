@@ -42,6 +42,8 @@
     "test:coverage": "vitest run --coverage",
     "licenses": "node scripts/third-party-licenses.mjs",
     "licenses:check": "node scripts/third-party-licenses.mjs --check",
+    "icons:generate": "node scripts/technology-catalog.mjs",
+    "icons:check": "node scripts/technology-catalog.mjs --check",
     "perf": "tsx benchmark/cli.ts",
     "perf:stress": "tsx benchmark/cli.ts --stress",
     "perf:interaction": "tsx benchmark/interaction-cli.ts",

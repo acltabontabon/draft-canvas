@@ -4,6 +4,7 @@ import { describeContext, describeNode } from '../nodes/describe';
 import { serialize } from '../render/svg/element';
 import { emitDisplayList } from '../render/svg/emit';
 import { useThemeValue } from '../ui/theme/useTheme';
+import { useTechnologyIcon } from './useTechnologyIcon';
 
 /**
  * A miniature, always-clean-preset rendering of a real node shape — the same
@@ -34,6 +35,7 @@ export function ShapePreview({
   frame?: { width: number; height: number };
 }) {
   const theme = useThemeValue();
+  const technologyIcon = useTechnologyIcon(node.technology);
   const markup = useMemo(() => {
     const full: DraftNode = {
       id: 'preview',
@@ -49,7 +51,8 @@ export function ShapePreview({
     const list = describeNode(full, ctx);
     const shapes = list.shapes.filter((shape) => shape.t !== 'text');
     return emitDisplayList({ ...list, shapes }).map(serialize).join('');
-  }, [node, theme, width, height]);
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Artwork can finish loading without a document change.
+  }, [node, theme, width, height, technologyIcon]);
 
   return (
     <svg

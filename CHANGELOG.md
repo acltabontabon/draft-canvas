@@ -22,6 +22,11 @@ the release notes and the in-app What's New are generated from here. See
 
 #### Improved
 
+- New Actors use a borderless symbol and label, with a Framed option in their bar. Existing diagrams
+  keep their frames, and both styles carry through to image exports.
+- Technology suggestions and logos now cover the full Simple Icons catalog, including Rust, with
+  common aliases and version recognition. Artwork loads on demand from separate local assets and
+  stays available offline.
 - Automatic connector cleanup removes unnecessary bends where it can keep neighbouring routes clear.
 
 ## [1.15.1] - 2026-10-19

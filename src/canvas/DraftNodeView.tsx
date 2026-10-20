@@ -43,6 +43,7 @@ import { nodeMarkerOrigin } from '../openPoints/marker';
 import { isImeKeyEvent } from '../lib/isEditableTarget';
 import { count } from '../lib/plural';
 import { TechnologyDetails } from './TechnologyDetails';
+import { useTechnologyIcon } from './useTechnologyIcon';
 import { nodeTechnologyIcon } from '../nodes/technology';
 import { presentationScope, toggledReveal } from '../presentation/presentationAttachments';
 
@@ -272,13 +273,14 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   // While a note is being edited its body belongs to the textarea alone: drawing the committed
   // text underneath as well would show two copies wherever the two wrap differently by a word.
   const editingNote = editing && isNote;
+  const technologyIcon = useTechnologyIcon(node?.technology);
   const shapes = useMemo(() => {
     if (!liveNode) return [];
     beginClipScope(liveNode.id);
     const described = editingNote ? { ...liveNode, text: '' } : liveNode;
     return emitDisplayList(describeNode(described, describeContext(theme, preset)));
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- see comment above.
-  }, [liveNode, theme, preset, editingNote]);
+  }, [liveNode, theme, preset, editingNote, technologyIcon]);
 
   /**
    * The font a plain shape label (Service/Component/Database/Queue/Actor/Group — everything but

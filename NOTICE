@@ -8,3 +8,61 @@ Technology logos are provided by Simple Icons (https://simpleicons.org), whose
 package is released under CC0-1.0. Brand names and logos belong to their owners.
 The Apache Kafka logo is from the Apache Software Foundation, under Apache-2.0
 (https://apache.org/logos). These logos identify the technologies in a diagram.
+
+The following individual logo terms supplement the Simple Icons package license.
+The full generated catalog retains per-icon source, guidelines and license links
+in src/nodes/technologyCatalog/NOTICE.txt; builds include that index with these
+credits in the Licences page.
+Paths are bundled from Simple Icons 16.35.0 and rendered at small sizes in theme
+ink; Draft Canvas does not otherwise change their geometry. Logo adaptations
+remain available under their respective licenses. No endorsement is implied.
+
+Rust: the Rust Foundation. Source: https://www.rust-lang.org
+The bundled Simple Icons asset identifies CC-BY-SA-4.0:
+https://creativecommons.org/licenses/by-sa/4.0/
+Current upstream art terms and trademark policy:
+https://rustfoundation.org/policy/rust-trademark-policy/
+
+PHP: Colin Viebrock, CC-BY-SA-4.0.
+Source: https://www.php.net/download-logos.php
+License: https://creativecommons.org/licenses/by-sa/4.0/
+
+Ruby: Copyright 2006 Yukihiro Matsumoto, CC-BY-SA-2.5.
+Source: https://www.ruby-lang.org/en/about/logo/
+License: https://creativecommons.org/licenses/by-sa/2.5/
+
+Angular: Google, CC-BY-4.0.
+Source: https://angular.dev/press-kit
+License: https://creativecommons.org/licenses/by/4.0/
+
+OpenTelemetry: the OpenTelemetry project / Cloud Native Computing Foundation,
+CC-BY-4.0. Source: https://cncf-branding.netlify.app/projects/opentelemetry/
+License: https://creativecommons.org/licenses/by/4.0/
+
+Git: Jason Long, CC-BY-3.0.
+Source: https://git-scm.com/community/logos
+License: https://creativecommons.org/licenses/by/3.0/
+
+JavaScript logo: Copyright (c) 2011 Christopher Williams <chris@iterativedesigns.com>
+Source: https://github.com/voodootikigod/logo.js
+Deno logo: Copyright (c) 2018-2024 the Deno authors
+Source: https://github.com/denoland/docs
+Both are provided under the MIT License:
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.

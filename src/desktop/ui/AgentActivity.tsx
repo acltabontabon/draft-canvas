@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type Pointe
 import { STAGE_TEXT } from '../../agent/progress';
 import { createDocument } from '../../document/factory';
 import { renderDocumentSvg } from '../../render/svg/document';
+import { useTechnologyIcons } from '../../canvas/useTechnologyIcon';
 import { Button } from '../../ui/common/Button';
 import { usePersonality } from '../../ui/personality/usePersonality';
 import { useTheme } from '../../ui/theme/useTheme';
@@ -85,6 +86,7 @@ function GenerationView({ op }: { op: AgentOp }) {
   const stageRef = useRef<HTMLDivElement>(null);
   const [camera, setCamera] = useState<Camera | null>(null);
   const drag = useRef<{ x: number; y: number; from: Camera } | null>(null);
+  const technologyRevision = useTechnologyIcons(op.candidate?.nodes);
 
   const rendered = useMemo(() => {
     if (!op.candidate) return null;
@@ -94,7 +96,8 @@ function GenerationView({ op }: { op: AgentOp }) {
     } catch {
       return null;
     }
-  }, [op.candidate, op.title, themeName, preset]);
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Artwork can finish loading without a candidate change.
+  }, [op.candidate, op.title, themeName, preset, technologyRevision]);
   const src = useMemo(() => (rendered ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(rendered.svg)}` : null), [rendered]);
 
   const fit = (): Camera | null => {
