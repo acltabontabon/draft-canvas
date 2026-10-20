@@ -53,7 +53,8 @@ async function settledBoxes(locators: readonly Locator[]): Promise<Box[]> {
   // Frame-based observation needs the active test page. Keep observing inside the browser:
   // restarting probes through expect.poll can miss the still window under load. A quiet
   // interval plus two frames avoids requiring six fast frames from a throttled WebKit runner,
-  // while still outlasting the one-frame delay before a camera transition starts.
+  // while still outlasting the one-frame delay before a camera transition starts. Check quiet
+  // time on a timer too, so a delayed WebKit frame cannot hide an already observed quiet camera.
   await page.bringToFront();
   const camera = await page.evaluate(() => new Promise<{ settled: boolean; transform: string }>((resolve) => {
     const viewport = document.querySelector<HTMLElement>('.react-flow__viewport');
@@ -62,21 +63,30 @@ async function settledBoxes(locators: readonly Locator[]): Promise<Box[]> {
     let stillFrames = 0;
     let stillSince = performance.now();
     let frame = 0;
+    let quiet = 0;
     const finish = (settled: boolean) => {
       clearTimeout(deadline);
+      clearTimeout(quiet);
       cancelAnimationFrame(frame);
       resolve({ settled, transform });
     };
     const deadline = window.setTimeout(() => finish(false), 5000);
+    const isQuiet = () => stillFrames >= 2 && performance.now() - stillSince >= 100 && viewport.style.transform === transform;
+    const checkQuiet = () => {
+      if (isQuiet()) finish(true);
+    };
+    quiet = window.setTimeout(checkQuiet, 100);
     const observe = () => {
       const next = viewport.style.transform;
       if (next === transform) stillFrames += 1;
       else {
         stillFrames = 0;
         stillSince = performance.now();
+        clearTimeout(quiet);
+        quiet = window.setTimeout(checkQuiet, 100);
       }
       transform = next;
-      if (stillFrames >= 2 && performance.now() - stillSince >= 100) finish(true);
+      if (isQuiet()) finish(true);
       else frame = requestAnimationFrame(observe);
     };
     frame = requestAnimationFrame(observe);
