@@ -71,6 +71,9 @@ page                        src/desktop/agent.ts → src/agent/ (on a worker thr
     highlighter's entity decoder), so in the packaged app every request ran on the main thread;
     `vite.config.ts` now gives the worker that package's DOM-free build, and
     `e2e/desktop/agent-activity.spec.ts` checks the worker is used.
+- **Queued reads stay bound to their target.** The page checks the file handle inside the controller's
+  turn. If the person has switched away from a formerly open target, the call returns a retryable
+  `DOCUMENT_BUSY`; if the target has since been opened, the read uses its live content and revision.
 - **Nothing about agents is in the file format.** An agent-made diagram is indistinguishable from a
   hand-made one.
 
@@ -406,7 +409,8 @@ after a timeout therefore can't commit an expired request. After the gate, the b
 only before the gate.
 
 **Retention.** Resolved entries are kept for 7 days, and at most 2,000 of them (the oldest are
-evicted first). Unresolved entries are kept 30 days; a replay after that answers `OUTCOME_UNKNOWN`.
+evicted first). Retention is enforced while recording requests as well as at startup, so a long-running
+app does not accumulate an unlimited request history. Unresolved entries are kept 30 days; a replay after that answers `OUTCOME_UNKNOWN`.
 
 **The guarantee.** At most one application per `requestId` while its ledger entry is retained. There
 is no exactly-once claim beyond that.
@@ -976,6 +980,10 @@ This was checked against the released v14 reader:
 editor code.
 
 ## Performance
+
+Geometry reads compute each connector's route once per request and reuse it while fitting the
+96 KB response limit. The cache belongs to that snapshot and is discarded after the read, so later
+edits always get fresh geometry.
 
 Measured on an Apple silicon Mac (macOS 27), in Chromium (Playwright) against the dev server, with
 the editor's own canvas text measurement, so WebKit timings in the app will differ somewhat. Each

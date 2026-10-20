@@ -42,6 +42,22 @@ describe('agent jobs off the main thread', () => {
     vi.useRealTimers();
   });
 
+  it('cleans up a job that cannot be posted, without later terminating the worker under another job', async () => {
+    const post = vi.spyOn(FakeWorker.prototype, 'postMessage');
+    post.mockImplementationOnce(() => { throw new DOMException('Cannot clone', 'DataCloneError'); });
+    const job = { kind: 'probe' } as unknown as Job;
+    await expect(runOffThread(job)).rejects.toMatchObject({ name: 'DataCloneError' });
+    expect(vi.getTimerCount()).toBe(0);
+    post.mockImplementation(function (this: FakeWorker, message) {
+      queueMicrotask(() => this.onmessage?.({ data: { id: message.id, ok: true, value: { kind: 'probe' } } } as MessageEvent));
+    });
+    await expect(runOffThread(job)).resolves.toMatchObject({ kind: 'probe' });
+    await vi.advanceTimersByTimeAsync(HARD_LIMIT_MS + 1);
+    expect(FakeWorker.started).toBe(1);
+    expect(__workerUsable()).toBe(true);
+    post.mockRestore();
+  });
+
   it('keeps using a worker after one job ran past the hard limit — the next one gets a fresh worker', async () => {
     const job = { kind: 'probe' } as unknown as Job;
     const runaway = runOffThread(job);

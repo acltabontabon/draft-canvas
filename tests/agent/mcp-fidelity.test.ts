@@ -8,6 +8,7 @@ import { diffForReview, prepareProposal, preconditionConflicts } from '../../src
 import { schemaProblems, validateToolInput } from '../../src/agent/contract';
 import { TOOLS } from '../../src/agent/schema';
 import { renderFocus } from '../../src/agent/focus';
+import { routeGeometry } from '../../src/agent/route';
 import { viewOf } from '../../src/depth/tree';
 import type { DraftDocument } from '../../src/document/types';
 
@@ -132,6 +133,23 @@ describe('MCP fidelity regressions', () => {
       expect(pages).toBeLessThan(100);
     } while (cursor);
     expect(flows.size).toBe(20);
+  });
+
+  it('keeps routed geometry accurate when fitting pages with large attachments and reading a changed snapshot', () => {
+    const file = base();
+    file.nodes = Array.from({ length: 20 }, (_, i) => ({ ...node(`n${i}`, i * 500), attachments: Array.from({ length: 8 }, (_, j) => createAttachment({ id: `a${i}_${j}`, type: 'note', text: '界'.repeat(600) })) }));
+    file.edges = Array.from({ length: 10 }, (_, i) => createEdge({ id: `e${i}`, source: `n${i * 2}`, target: `n${i * 2 + 1}` }));
+    const args = { include: ['geometry', 'attachments'] };
+    const first = readDiagram(file, args, 'f:one', 'd_one');
+    expect(first.cursor).toBeDefined();
+    expect(new TextEncoder().encode(JSON.stringify(first)).length).toBeLessThanOrEqual(READ_LIMITS.bytes);
+    const relationships = first.relationships as { id: string; geometry: unknown }[];
+    expect(relationships.length).toBeGreaterThan(0);
+    for (const edge of relationships) expect(edge.geometry).toEqual(routeGeometry(file.edges.find((e) => e.id === edge.id)!, file.nodes, file.edges));
+    const changed = { ...file, nodes: file.nodes.map((n, i) => i === 0 ? { ...n, x: n.x - 100 } : n) };
+    const next = readDiagram(changed, args, 'f:two', 'd_one').relationships as { id: string; geometry: unknown }[];
+    expect(next[0]!.geometry).not.toEqual(relationships[0]!.geometry);
+    expect(next[0]!.geometry).toEqual(routeGeometry(changed.edges[0]!, changed.nodes, changed.edges));
   });
 
   it('packs large collections separately when their first items do not fit on the same page', () => {

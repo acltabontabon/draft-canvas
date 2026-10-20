@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import copy
 import json
+import io
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from helpers import TempRepo, example_request, load, run_script
@@ -117,6 +119,47 @@ class Refuses(unittest.TestCase):
         self.assertIn('symbol "PlaceOrder" does not appear', text)
         self.assertIn('must be relative to the repository root', text)
         self.assertIn('basis ("observed" or "inferred")', text)
+
+    def test_evidence_uses_the_apps_portable_path_and_field_rules(self) -> None:
+        for evidence in (
+            {'path': r'..\outside.go', 'basis': 'observed'},
+            {'path': r'\server\share', 'basis': 'observed'},
+            {'path': 'file:secret', 'basis': 'observed'},
+            {'path': 'bad\x00path', 'basis': 'observed'},
+            {'path': 'main.go', 'basis': 'observed', 'line': True},
+            {'path': 'main.go', 'basis': 'observed', 'line': 0},
+            {'path': 'main.go', 'basis': 'observed', 'symbol': ''},
+            {'path': 'main.go', 'basis': 'observed', 'unknown': 'x'},
+        ):
+            with self.subTest(evidence=evidence):
+                r = checker.Report()
+                checker.check_evidence({'evidence': [evidence]}, 'api', r, None)
+                self.assertTrue(r.errors)
+
+    def test_evidence_cannot_follow_a_symlink_out_of_the_repository(self) -> None:
+        with TempRepo(REPO) as root, tempfile.TemporaryDirectory() as outside:
+            target = Path(outside) / 'private.go'
+            target.write_text('private')
+            try:
+                (root / 'linked.go').symlink_to(target)
+            except OSError:
+                self.skipTest('symlinks unavailable')
+            r = checker.Report()
+            checker.check_evidence({'evidence': [{'path': 'linked.go', 'basis': 'observed'}]}, 'api', r, str(root))
+            self.assertTrue(r.errors)
+
+    def test_evidence_reads_in_chunks_and_matches_symbols_across_chunk_boundaries(self) -> None:
+        class Chunked(io.BytesIO):
+            def read(self, size=-1):
+                self.assert_bounded(size)
+                return super().read(min(size, 4))
+            def assert_bounded(self, size):
+                if size < 0 or size > 65536:
+                    raise AssertionError('evidence must not read a whole source file into memory')
+        with TempRepo(REPO) as root, patch.object(checker, 'open', return_value=Chunked(b'xxPlaceOrder\n'), create=True):
+            r = checker.Report()
+            checker.check_evidence({'evidence': [{'path': 'main.go', 'basis': 'observed', 'symbol': 'PlaceOrder', 'line': 2}]}, 'api', r, str(root))
+        self.assertEqual((r.errors, r.warnings), ([], []))
 
 
 class Warns(unittest.TestCase):

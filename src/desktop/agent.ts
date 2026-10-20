@@ -211,12 +211,19 @@ async function run(api: DesktopApi, host: AgentHost, event: Request): Promise<un
  * its file, and past whatever edit is in flight), or the file's text as the shell read it.
  */
 async function fileFor(host: AgentHost, context: AgentContext): Promise<{ file: DraftDocument; revision: string; selection?: { nodes: string[]; edges: string[] }; path?: readonly string[] }> {
-  if (context.open) {
-    const snapshot = await host.inTurn(async () => {
-      await host.syncWithDisk();
-      await host.flush();
-      return host.askEditor({ kind: 'snapshot' });
-    });
+  return host.inTurn(() => fileForInTurn(host, context));
+}
+
+/** Check identity inside the controller turn: the shell's open flag may predate a queued Open. */
+async function fileForInTurn(host: AgentHost, context: AgentContext): Promise<{ file: DraftDocument; revision: string; selection?: { nodes: string[]; edges: string[] }; path?: readonly string[] }> {
+  const open = context.handle ? host.openFile()?.handle === context.handle : context.open;
+  if (context.open && !open) {
+    throw new AgentError('DOCUMENT_BUSY', 'The open diagram changed while this request was waiting. Read the target diagram again.', { retryable: true });
+  }
+  if (open) {
+    await host.syncWithDisk();
+    await host.flush();
+    const snapshot = await host.askEditor({ kind: 'snapshot' });
     if (snapshot.kind !== 'snapshot') throw new AgentError('INTERNAL', 'The editor did not answer.');
     return { file: snapshot.file, revision: handOut(host, snapshot), selection: snapshot.selection, path: snapshot.path };
   }
@@ -342,34 +349,15 @@ async function render(host: AgentHost, args: Record<string, unknown>, context: A
 async function implementationContext(host: AgentHost, args: Record<string, unknown>, context: AgentContext) {
   const diagramId = context.diagramId ?? '';
   const focus = (args.focus ?? {}) as { flow?: unknown; nodes?: unknown };
-  if (context.open) {
-    const snapshot = await host.inTurn(async () => {
-      await host.syncWithDisk();
-      await host.flush();
-      return host.askEditor({ kind: 'snapshot' });
-    });
-    if (snapshot.kind !== 'snapshot') throw new AgentError('INTERNAL', 'The editor did not answer.');
-    const path = viewPathOf(snapshot.file, args.view);
-    return buildImplementationContext(snapshot.file, path, handOut(host, snapshot), diagramId, focus);
-  }
-  if (context.text === undefined || context.stamp === undefined) throw new AgentError('NOT_FOUND', 'That diagram could not be read.');
-  const parsed = deserializeDocument(context.text);
-  if (!parsed.ok) throw new AgentError('UNSUPPORTED', `That file can't be read as a diagram: ${parsed.error}`);
-  const path = viewPathOf(parsed.document, args.view);
-  return buildImplementationContext(parsed.document, path, fileRevision(context.stamp), diagramId, focus);
+  const { file, revision } = await fileFor(host, context);
+  return buildImplementationContext(file, viewPathOf(file, args.view), revision, diagramId, focus);
 }
 
-/** Only the open diagram has a selection; the broker already refused otherwise via `context.open`. */
+/** Only the open diagram has a selection; never borrow the selection from a different document. */
 async function readSelection(host: AgentHost, context: AgentContext) {
-  const diagramId = context.diagramId ?? '';
-  if (!context.open) throw new AgentError('NOT_ACTIVE', 'That diagram is not open, so nothing is selected.', { hint: 'Ask the person to open it and select what to change, or read the whole view with read_diagram.' });
-  const snapshot = await host.inTurn(async () => {
-    await host.syncWithDisk();
-    await host.flush();
-    return host.askEditor({ kind: 'snapshot' });
-  });
-  if (snapshot.kind !== 'snapshot') throw new AgentError('INTERNAL', 'The editor did not answer.');
-  return readSelectionContext(snapshot.file, snapshot.path, snapshot.selection, handOut(host, snapshot), diagramId);
+  const snapshot = await fileFor(host, context);
+  if (!snapshot.selection || !snapshot.path) throw new AgentError('NOT_ACTIVE', 'That diagram is not open, so nothing is selected.', { hint: 'Ask the person to open it and select what to change, or read the whole view with read_diagram.' });
+  return readSelectionContext(snapshot.file, snapshot.path, snapshot.selection, snapshot.revision, context.diagramId ?? '');
 }
 
 /**
@@ -636,24 +624,8 @@ async function submitProposal(host: AgentHost, event: Request) {
   const summary = typeof args.summary === 'string' ? args.summary.trim() : '';
   if (!summary) throw new AgentError('INVALID_INPUT', 'summary is required: what this proposal does, or why it has no architectural impact.', { path: '/summary' });
 
-  let file: DraftDocument;
-  let revision: string;
-  if (context.open) {
-    // Already inside this request's turn (see `submit_proposal` above): taking another would queue
-    // behind itself, and every later request and Open would wait on it for good.
-    await host.syncWithDisk();
-    await host.flush();
-    const snapshot = await host.askEditor({ kind: 'snapshot' });
-    if (snapshot.kind !== 'snapshot') throw new AgentError('INTERNAL', 'The editor did not answer.');
-    file = snapshot.file;
-    revision = handOut(host, snapshot);
-  } else {
-    if (context.text === undefined || context.stamp === undefined) throw new AgentError('NOT_FOUND', 'That diagram could not be read.');
-    const parsed = deserializeDocument(context.text);
-    if (!parsed.ok) throw new AgentError('UNSUPPORTED', `That file can't be read as a diagram: ${parsed.error}`);
-    file = parsed.document;
-    revision = fileRevision(context.stamp);
-  }
+  // This handler already owns the turn; queuing fileFor here would wait behind itself forever.
+  const { file, revision } = await fileForInTurn(host, context);
   if (expected !== revision) throw conflict(revision);
 
   const path = viewPathOf(file, args.view);

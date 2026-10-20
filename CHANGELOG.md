@@ -30,6 +30,18 @@ the release notes and the in-app What's New are generated from here. See
 - Project galleries no longer repeat the root folder name above its heading; nested folders keep
   their breadcrumbs.
 - About no longer shows the paragraph about local diagrams and update connections.
+- Geometry reads reuse connector routes while fitting a response, and agent request logs stay
+  bounded during long desktop sessions.
+
+#### Fixed
+
+- Queued agent reads and proposals can no longer inspect a different diagram after a file switch.
+- Overlapping project folders no longer make a single diagram ambiguous, and remembered diagram
+  paths cannot follow a replaced folder outside agent scope.
+- Failed worker submissions and abandoned MCP calls release their timers and pending requests.
+- Fast agent updates register their commit gate before delivery, preserving retry safety after a crash.
+- The bundled agent skill stops its fallback survey at the file limit, validates portable source
+  evidence paths, and checks source files without loading them whole into memory.
 
 ### Shared
 

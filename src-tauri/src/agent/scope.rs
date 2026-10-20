@@ -12,7 +12,7 @@ use crate::state::AppState;
 use crate::util::lock;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
@@ -131,6 +131,7 @@ impl DiagramIndex {
 
     fn listing_within(&self, projects: &[Project], limits: &Limits) -> Listing {
         let mut out = Vec::new();
+        let mut seen = HashSet::new();
         let mut incomplete = Vec::new();
         for project in projects {
             let Ok(found) = scan(&project.root, limits) else {
@@ -142,6 +143,10 @@ impl DiagramIndex {
             }
             for file in found.files {
                 let absolute = project.root.join(&file.rel_path);
+                // Parent and child folders may both be enabled. One physical file is still one diagram.
+                if !seen.insert(absolute.clone()) {
+                    continue;
+                }
                 let fresh = lock(&self.known)
                     .get(&absolute)
                     .filter(|k| k.mtime_ms == file.mtime_ms && k.size == file.size)
@@ -244,6 +249,10 @@ impl DiagramIndex {
             else {
                 continue;
             };
+            // The remembered directory may have been replaced by a symlink since the last full walk.
+            if !dunce::canonicalize(&path).is_ok_and(|p| p.starts_with(&project.root)) {
+                continue;
+            }
             let Some(read) = read_document(&path).ok() else {
                 continue;
             };
@@ -342,6 +351,62 @@ mod tests {
         // A remembered file that no longer holds the id is not returned.
         fs::write(root.join("z/a.draftcanvas"), diagram("d_other", "Other")).unwrap();
         assert!(index.find_within(&projects, "d_a", &short).is_err());
+    }
+
+    #[test]
+    fn overlapping_project_folders_do_not_make_one_file_ambiguous() {
+        let dir = tempdir().unwrap();
+        let root = dunce::canonicalize(dir.path()).unwrap();
+        fs::create_dir(root.join("docs")).unwrap();
+        fs::write(root.join("docs/a.draftcanvas"), diagram("d_a", "Alpha")).unwrap();
+        let projects = vec![
+            Project {
+                root: root.clone(),
+                name: "Repo".into(),
+            },
+            Project {
+                root: root.join("docs"),
+                name: "Docs".into(),
+            },
+        ];
+        let index = DiagramIndex::default();
+        assert_eq!(index.list(&projects).len(), 1);
+        assert!(index.find(&projects, "d_a").is_ok());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_remembered_path_cannot_escape_scope_through_a_replaced_directory() {
+        let dir = tempdir().unwrap();
+        let root = dunce::canonicalize(dir.path()).unwrap();
+        fs::create_dir_all(root.join("allowed/docs")).unwrap();
+        fs::create_dir(root.join("outside")).unwrap();
+        fs::write(
+            root.join("allowed/docs/a.draftcanvas"),
+            diagram("d_a", "Alpha"),
+        )
+        .unwrap();
+        let projects = vec![Project {
+            root: root.join("allowed"),
+            name: "Repo".into(),
+        }];
+        let index = DiagramIndex::default();
+        assert!(index.find(&projects, "d_a").is_ok());
+        fs::remove_dir_all(root.join("allowed/docs")).unwrap();
+        fs::write(
+            root.join("outside/a.draftcanvas"),
+            diagram("d_a", "Private"),
+        )
+        .unwrap();
+        std::os::unix::fs::symlink(root.join("outside"), root.join("allowed/docs")).unwrap();
+        let short = Limits {
+            max_entries: 0,
+            ..Limits::default()
+        };
+        assert!(matches!(
+            index.find_within(&projects, "d_a", &short),
+            Err(Lookup::NotFound { .. })
+        ));
     }
 
     #[test]

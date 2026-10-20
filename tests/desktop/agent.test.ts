@@ -104,6 +104,35 @@ beforeEach(async () => {
 });
 
 describe('agent requests on desktop', () => {
+  it.each([
+    ['read_diagram', {}],
+    ['read_selection', {}],
+    ['get_implementation_context', {}],
+    ['render_diagram', { format: 'svg' }],
+    ['preview_diagram', { expectedRevision: 'f:1', ops: [{ op: 'arrange' }] }],
+    ['submit_proposal', { requestId: 'switched', expectedRevision: 'f:1', summary: 'No impact', ops: [] }],
+  ])('refuses %s when its formerly open diagram was switched before the request ran', async (tool, args) => {
+    const handle = await openOrders();
+    const other = h.addFile('Other', diagramText().replaceAll('d_orders000001', 'd_other000001').replaceAll('Orders', 'Other'));
+    await h.controller.openHandle(other);
+    await h.settle();
+    const out = await request(tool, { diagramId: 'd_orders000001', ...args }, { handle, open: true, diagramId: 'd_orders000001' });
+    expect(out.ok).toBe(false);
+    expect(out.error?.code).toBe('DOCUMENT_BUSY');
+  });
+
+  it('reads live unsaved content if a formerly closed target has since been opened', async () => {
+    const handle = await openOrders();
+    const original = h.files.get(handle)!.text;
+    useEditorStore.getState().apply('Rename', (doc) => ({ ...doc, metadata: { ...doc.metadata, title: 'Live orders' } }));
+    h.edit(serializeDocument(fileOf(useEditorStore.getState())));
+    const out = await request('read_diagram', { diagramId: 'd_orders000001' }, {
+      handle, open: false, diagramId: 'd_orders000001', text: original, stamp: 'v1:1',
+    });
+    expect(out.ok).toBe(true);
+    expect(out.value).toMatchObject({ title: 'Live orders', revision: currentRevision() });
+  });
+
   it('answers a proposal for the open diagram, and the next request still runs', async () => {
     const handle = await openOrders();
     const read = await request('read_diagram', { diagramId: 'd_orders000001' }, { handle, open: true, diagramId: 'd_orders000001' });

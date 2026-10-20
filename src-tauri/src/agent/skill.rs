@@ -479,6 +479,10 @@ mod tests {
             "2",
             "5dfcf6a6bffad74ba6a6f95df83eaaec46142279ff741f17d1a6d8e7d15c2cd3",
         ),
+        (
+            "3",
+            "4e929ec354859e9a04df109e1fa152654b0269fd3d6ed844742d1efc15f57132",
+        ),
     ];
 
     #[test]
