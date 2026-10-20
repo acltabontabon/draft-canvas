@@ -110,10 +110,13 @@ export async function installMockShell(page: Page): Promise<void> {
       }),
     });
     let agentSettings: Record<string, unknown> = { enabled: false, listening: false, connections: 0, sidecarPath: '/Applications/Draft Canvas.app/Contents/MacOS/draft-canvas-mcp', sidecarWarning: null, background: 'restart-needed', projects: [] };
-    // Claude Code without its CLI where the shell looks (so its manual command shows), Codex not yet set up.
+    // Claude Code without its CLI where the shell looks (so its manual command shows); Codex, Gemini CLI
+    // and Junie not yet set up.
     const agentClients = new Map<string, Record<string, unknown>>([
       ['claude-code', { client: 'claude-code', state: 'not-set-up', automatic: false, location: '~/.claude.json', configuredCommand: null }],
       ['codex', { client: 'codex', state: 'not-set-up', automatic: true, location: '~/.codex/config.toml', configuredCommand: null }],
+      ['gemini', { client: 'gemini', state: 'not-set-up', automatic: true, location: '~/.gemini/settings.json', configuredCommand: null }],
+      ['junie', { client: 'junie', state: 'not-set-up', automatic: true, location: '~/.junie/mcp/mcp.json', configuredCommand: null }],
     ]);
     // The agent skill installed nowhere yet; install and remove flip it as `agent/skill.rs` would.
     const skillAt = (target: string) => (target === 'claude-code' ? '~/.claude/skills/draft-canvas' : '~/.agents/skills/draft-canvas');

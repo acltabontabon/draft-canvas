@@ -4,8 +4,9 @@
 //! for every project:
 //!
 //! - **Claude Code** reads `~/.claude/skills` (`$CLAUDE_CONFIG_DIR/skills` when that is set).
-//! - **Codex** and **Cursor** both read `~/.agents/skills`, the folder the open Agent Skills
-//!   convention names. (Cursor reads Claude Code's folder too, so one install is enough for it.)
+//! - **Codex**, **Cursor**, **Gemini CLI** and **Junie** all read `~/.agents/skills`, the folder the
+//!   open Agent Skills convention names. (Cursor reads Claude Code's folder too, so one install is
+//!   enough for it.)
 //!
 //! Updates are the point of keeping a manifest. Every install writes `.draft-canvas-skill.json` beside
 //! the files: the skill's version and a hash of exactly what was written. From that the app can tell
@@ -72,7 +73,7 @@ pub const FILES: &[(&str, &[u8])] = &[
 pub enum SkillTarget {
     /// `~/.claude/skills`.
     ClaudeCode,
-    /// `~/.agents/skills`, read by Codex and Cursor.
+    /// `~/.agents/skills`, read by Codex, Cursor, Gemini CLI and Junie.
     Agents,
 }
 

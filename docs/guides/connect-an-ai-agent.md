@@ -1,7 +1,7 @@
 # Connect an AI agent
 
-Draft Canvas Desktop can let a coding agent on your computer — Claude Code, Codex, Cursor, or any
-other agent that speaks MCP (the Model Context Protocol) — draw diagrams for you. Ask your agent to "draw
+Draft Canvas Desktop can let a coding agent on your computer — Claude Code, Codex, Cursor, Gemini CLI,
+Junie, or any other agent that speaks MCP (the Model Context Protocol) — draw diagrams for you. Ask your agent to "draw
 how orders flow through this service". It reads your code, then hands Draft Canvas a description:
 the parts, how they connect, the flows. Draft Canvas lays it out and draws it as an ordinary diagram
 you can edit, move, present and export like one you drew yourself.
@@ -46,9 +46,19 @@ can't reach it.
      configuration for you. If nothing opens (no `cursor://` links registered, or you'd rather add it
      to a project's own configuration first), use **Copy the config instead** and paste it into
      `~/.cursor/mcp.json`, or a project's `.cursor/mcp.json`.
+   - **Gemini CLI**: click **Add to Gemini CLI**. Draft Canvas runs Gemini CLI's own
+     `gemini mcp add --scope user` for you, which adds the server to `~/.gemini/settings.json` for
+     every project. If Draft Canvas can't find the `gemini` command, it shows the command to run in a
+     terminal instead. Gemini CLI turns every MCP server off in a folder you haven't trusted, so start
+     a new session in a trusted folder.
+   - **Junie**: click **Add to Junie**. Draft Canvas adds a `draft-canvas` server to
+     `~/.junie/mcp/mcp.json`, which Junie in JetBrains IDEs and the Junie CLI both read. Only that
+     entry changes; your other servers stay as they were, and a file with a mistake in it is left
+     alone. Start a new Junie session afterwards. **Set it up by hand instead** shows the same entry
+     to paste.
    - **Other MCP clients**: add the copied `mcpServers` entry to the agent's MCP configuration.
 
-   For Claude Code and Codex, Settings also says when the agent is already set up, or is set up for
+   For Claude Code, Codex, Gemini CLI and Junie, Settings also says when the agent is already set up, or is set up for
    a different copy of Draft Canvas (after moving or reinstalling the app) — then the button reads
    **Update** and points it at this one.
 5. Under **Agent skill**, click **Install skill** to teach the agent to
@@ -96,12 +106,12 @@ place, keeping your arrangement, notes and flows.
 | Agent | Folder | Read by |
 | --- | --- | --- |
 | Claude Code | `~/.claude/skills/draft-canvas` | Claude Code (and Cursor) |
-| Codex, Cursor, other agents | `~/.agents/skills/draft-canvas` | Codex and Cursor |
+| Codex, Cursor, Gemini CLI, Junie, other agents | `~/.agents/skills/draft-canvas` | Codex, Cursor, Gemini CLI and Junie |
 
 Both are folders every project on your computer sees. Choose the agent in **Connect an agent** to see
-and install its copy; Codex and Cursor share one. Start a new agent session after installing.
+and install its copy; Codex, Cursor, Gemini CLI and Junie share one. Start a new agent session after installing.
 
-![Settings, Connect an agent, with Codex chosen: below Add to Codex, an Agent skill heading with an Install skill button that teaches Codex and Cursor to draw a repository well and installs in ~/.agents/skills.](../media/guides/agent-skill-install.png)
+![Settings, Connect an agent, with Codex chosen: below Add to Codex, an Agent skill heading with an Install skill button that teaches Codex, Cursor, Gemini CLI and Junie to draw a repository well and installs in ~/.agents/skills.](../media/guides/agent-skill-install.png)
 
 ![After clicking: a check mark and "Skill installed in ~/.agents/skills/draft-canvas. It updates when Draft Canvas does.", with a Remove skill button below.](../media/guides/agent-skill-installed.png)
 
@@ -303,7 +313,8 @@ changed in that case.
   elements) are hard to lay out cleanly. Ask for the diagram in steps, or as an overview with the
   detail drawn inside its shapes.
 - **The agent's connector is a different version.** Point the agent at the connector inside the Draft
-  Canvas you are running: for Claude Code and Codex, click **Update** under **Connect an agent**; for
+  Canvas you are running: for Claude Code, Codex, Gemini CLI and Junie, click **Update** under
+  **Connect an agent**; for
   other agents, copy the setup from Settings again.
 - **Claude Code only finds Draft Canvas in one folder.** An older setup command added it to the
   folder the terminal was in. Click **Add to Claude Code** to add it for every project.
@@ -359,14 +370,19 @@ throwaway configuration folder: the Codex CLI bundled with the ChatGPT app (0.16
 Draft Canvas writes, including its tool timeout, and a copy of a real, populated `config.toml` comes
 back unchanged apart from the new table; `claude mcp add --scope user` writes the user-scope entry
 Settings reads back. A full Codex conversation drawing a diagram has not been run in this
-environment. Windows and Linux are untested for every client, as before.
+environment. Gemini CLI's and Junie's one-click setup ran the same way, in a throwaway home folder:
+Gemini CLI 0.65 wrote the entry through `gemini mcp add`, kept a comment already in
+`settings.json`, and `gemini mcp list` reported the connector connected from a trusted folder; Junie's
+`mcp.json` came back with its existing server untouched and the new one in Junie's documented shape,
+but Junie (CLI 26.9.7) wouldn't start a task without a JetBrains sign-in, so Junie launching the
+connector has not been seen. Windows and Linux are untested for every client, as before.
 
 The agent skill's installer is covered by Rust tests against real folders (a fresh install, an
 untouched older copy replaced whole, an edited copy kept as a backup, a newer copy left alone,
 removal), and the Settings flow by a browser test against the mocked shell. Its example request is
 part of the layout gallery, held to the same readability checks as every other case. Following the
 skill end to end was tried on open-source repositories with the skill's own scripts and the app's
-layout pipeline; a full Claude Code, Codex or Cursor conversation through a running Draft Canvas has
+layout pipeline; a full conversation with any agent through a running Draft Canvas has
 not been run in this environment.
 
 Contract 3 adds `npm run e2e:mcp` (after `npm run desktop:check`): a real stdio MCP client and

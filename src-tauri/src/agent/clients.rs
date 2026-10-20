@@ -8,12 +8,19 @@
 //!   rather than replaced.
 //! - **Claude Code** rewrites `~/.claude.json` from every running session, so it is never written here;
 //!   its own `claude mcp add --scope user` does it. The file is only read, to say whether it's set up.
+//! - **Gemini CLI** keeps its servers in `~/.gemini/settings.json` beside every other setting, in JSON
+//!   that may carry comments it preserves on its own saves; so, as for Claude Code, its own
+//!   `gemini mcp add --scope user` writes it, and the file is only read.
+//! - **Junie** (in JetBrains IDEs and the Junie CLI alike) reads `~/.junie/mcp/mcp.json`, a file of
+//!   servers only, and has no command to add one, so it's edited here as Codex's is: only the Draft
+//!   Canvas entry changes; every other server keeps its place and the exact text it was written as.
 //!
-//! Cursor needs neither: its `cursor://` link has Cursor write its own configuration.
+//! Cursor needs none of this: its `cursor://` link has Cursor write its own configuration.
 
 use crate::docio::{self, WriteOutcome};
 use crate::errors::{AppError, ErrorKind};
 use serde::{Deserialize, Serialize};
+use serde_json::value::RawValue;
 use serde_json::Value;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -33,6 +40,8 @@ pub const CODEX_TOOL_TIMEOUT_SECS: i64 = 150;
 pub enum Client {
     Codex,
     ClaudeCode,
+    Gemini,
+    Junie,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -52,8 +61,8 @@ pub enum SetupState {
 pub struct ClientSetup {
     pub client: Client,
     pub state: SetupState,
-    /// Whether the button can do the setup itself. False for Claude Code when its CLI can't be found;
-    /// Settings then offers the command to run instead.
+    /// Whether the button can do the setup itself. False for Claude Code and Gemini CLI when their CLI
+    /// can't be found; Settings then offers the command to run instead.
     pub automatic: bool,
     /// The configuration file, written for a person (`~/.codex/config.toml`).
     pub location: Option<String>,
@@ -247,13 +256,22 @@ fn codex_connect(sidecar: &Path) -> Result<(), AppError> {
     let path = codex_config().ok_or_else(|| {
         unavailable("Draft Canvas couldn’t find your home folder to set up Codex.")
     })?;
-    // Read, change, and swap in only if nobody wrote the file meanwhile: Codex itself saves to it
-    // (trusting a project, say), and that save must not be lost to this one.
+    edit_config(&path, "Codex", |text| codex_with_connector(text, sidecar))
+}
+
+/// Rewrites the agent's configuration file at `path` through `change` (given "" when there is none
+/// yet). Read, change, and swap in only if nobody wrote the file meanwhile: the agent itself saves to
+/// it (Codex trusting a project, say), and that save must not be lost to this one.
+fn edit_config(
+    path: &Path,
+    agent: &str,
+    change: impl Fn(&str) -> Result<String, AppError>,
+) -> Result<(), AppError> {
     for _ in 0..3 {
-        let outcome = match docio::read_document(&path) {
+        let outcome = match docio::read_document(path) {
             Ok(read) => {
-                let text = codex_with_connector(&read.text, sidecar)?;
-                docio::write_atomic(&path, text.as_bytes(), Some(&read.stamp))?
+                let text = change(&read.text)?;
+                docio::write_atomic(path, text.as_bytes(), Some(&read.stamp))?
             }
             Err(e) if e.kind == ErrorKind::NotFound => {
                 if let Some(dir) = path.parent() {
@@ -265,8 +283,8 @@ fn codex_connect(sidecar: &Path) -> Result<(), AppError> {
                         )
                     })?;
                 }
-                let text = codex_with_connector("", sidecar)?;
-                match docio::create_new_atomic(&path, text.as_bytes()) {
+                let text = change("")?;
+                match docio::create_new_atomic(path, text.as_bytes()) {
                     Ok(stamp) => WriteOutcome::Saved { stamp },
                     Err(e) if e.kind == ErrorKind::AlreadyExists => WriteOutcome::Conflict,
                     Err(e) => return Err(e),
@@ -278,7 +296,9 @@ fn codex_connect(sidecar: &Path) -> Result<(), AppError> {
             return Ok(());
         }
     }
-    Err(unavailable("Codex kept changing its settings while Draft Canvas was saving them. Try again in a moment."))
+    Err(unavailable(format!(
+        "{agent} kept changing its settings while Draft Canvas was saving them. Try again in a moment."
+    )))
 }
 
 // --- Claude Code -------------------------------------------------------------------------------
@@ -290,7 +310,9 @@ fn claude_config() -> Option<PathBuf> {
         .map(|dir| dir.join(".claude.json"))
 }
 
-fn claude_entry(config: &Value) -> Option<Entry> {
+/// The Draft Canvas entry in a JSON `mcpServers` object — the shape Claude Code, Gemini CLI and Junie
+/// all use.
+fn servers_entry(config: &Value) -> Option<Entry> {
     let servers = config.get("mcpServers")?.as_object()?;
     pick(servers.iter().map(|(name, server)| {
         let command = server
@@ -301,36 +323,98 @@ fn claude_entry(config: &Value) -> Option<Entry> {
     }))
 }
 
-fn read_claude_entry() -> Option<Entry> {
-    let text = std::fs::read_to_string(claude_config()?).ok()?;
-    claude_entry(&serde_json::from_str(&text).ok()?)
+fn read_servers_entry(path: Option<PathBuf>) -> Option<Entry> {
+    let text = std::fs::read_to_string(path?).ok()?;
+    servers_entry(&serde_json::from_str(&without_comments(&text)).ok()?)
 }
 
-/// Where the `claude` command is. An app started from the Dock or Start menu doesn't have the PATH a
-/// terminal has, so the installers' usual places are tried first, then this process's PATH, then (on
-/// macOS and Linux) the PATH the person's login shell would give a terminal.
+/// `text` with its `//` and `/* */` comments blanked out, strings left alone: Gemini CLI reads its
+/// settings that way, so a commented file must still be seen as set up.
+fn without_comments(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+    let mut in_string = false;
+    while let Some(c) = chars.next() {
+        if in_string {
+            out.push(c);
+            match c {
+                '\\' => out.extend(chars.next()),
+                '"' => in_string = false,
+                _ => {}
+            }
+            continue;
+        }
+        match (c, chars.peek()) {
+            ('"', _) => {
+                in_string = true;
+                out.push(c);
+            }
+            ('/', Some('/')) => {
+                while chars.peek().is_some_and(|&n| n != '\n') {
+                    chars.next();
+                }
+            }
+            ('/', Some('*')) => {
+                chars.next();
+                let mut last = '\0';
+                for n in chars.by_ref() {
+                    if n == '\n' {
+                        // Kept, so a mistake later in the file is still reported on its own line.
+                        out.push('\n');
+                    }
+                    if last == '*' && n == '/' {
+                        break;
+                    }
+                    last = n;
+                }
+                out.push(' ');
+            }
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
+fn read_claude_entry() -> Option<Entry> {
+    read_servers_entry(claude_config())
+}
+
+/// Where an agent's command (`claude`, `gemini`) is. An app started from the Dock or Start menu
+/// doesn't have the PATH a terminal has, so the installers' usual places (`known`) are tried first,
+/// then this process's PATH, then (on macOS and Linux) the PATH the person's login shell would give a
+/// terminal. `names` are the file names it may have: on Windows an npm install leaves a `.cmd`.
+fn find_cli(program: &str, names: &[&str], known: Vec<PathBuf>) -> Option<PathBuf> {
+    let mut candidates = known;
+    if cfg!(not(windows)) {
+        candidates.push(Path::new("/opt/homebrew/bin").join(program));
+        candidates.push(Path::new("/usr/local/bin").join(program));
+    }
+    if let Some(path) = std::env::var_os("PATH") {
+        for dir in std::env::split_paths(&path) {
+            candidates.extend(names.iter().map(|name| dir.join(name)));
+        }
+    }
+    candidates
+        .into_iter()
+        .find(|p| p.is_file())
+        .or_else(|| login_shell_find(program))
+}
+
 fn find_claude() -> Option<PathBuf> {
     let exe = if cfg!(windows) {
         "claude.exe"
     } else {
         "claude"
     };
-    let mut candidates: Vec<PathBuf> = Vec::new();
-    if let Some(home) = home() {
-        candidates.push(home.join(".local/bin").join(exe));
-        candidates.push(home.join(".claude/local").join(exe));
-    }
-    if cfg!(not(windows)) {
-        candidates.push(PathBuf::from("/opt/homebrew/bin/claude"));
-        candidates.push(PathBuf::from("/usr/local/bin/claude"));
-    }
-    if let Some(path) = std::env::var_os("PATH") {
-        candidates.extend(std::env::split_paths(&path).map(|dir| dir.join(exe)));
-    }
-    candidates
-        .into_iter()
-        .find(|p| p.is_file())
-        .or_else(login_shell_claude)
+    let known = home()
+        .map(|home| {
+            vec![
+                home.join(".local/bin").join(exe),
+                home.join(".claude/local").join(exe),
+            ]
+        })
+        .unwrap_or_default();
+    find_cli("claude", &[exe], known)
 }
 
 /// This process's PATH with `dir` first, or `None` when there is no folder to add.
@@ -344,10 +428,10 @@ fn path_with(dir: Option<&Path>) -> Option<std::ffi::OsString> {
 }
 
 #[cfg(not(windows))]
-fn login_shell_claude() -> Option<PathBuf> {
+fn login_shell_find(program: &str) -> Option<PathBuf> {
     let shell = std::env::var_os("SHELL").filter(|s| !s.is_empty())?;
     let mut command = Command::new(shell);
-    command.args(["-l", "-i", "-c", "command -v claude"]);
+    command.args(["-l", "-i", "-c", &format!("command -v {program}")]);
     let output = run(command, Duration::from_secs(5)).ok()?;
     // Startup files may print their own lines first; the answer is the last absolute path.
     String::from_utf8_lossy(&output.stdout)
@@ -360,7 +444,7 @@ fn login_shell_claude() -> Option<PathBuf> {
 }
 
 #[cfg(windows)]
-fn login_shell_claude() -> Option<PathBuf> {
+fn login_shell_find(_program: &str) -> Option<PathBuf> {
     None
 }
 
@@ -428,30 +512,40 @@ fn claude_status(sidecar: &Path) -> ClientSetup {
 
 fn claude_connect(sidecar: &Path) -> Result<(), AppError> {
     let claude = find_claude().ok_or_else(|| unavailable("Draft Canvas couldn’t find the claude command. Run the command below in a terminal instead."))?;
-    let claude_cmd = || {
-        let mut command = Command::new(&claude);
-        // An npm install's `claude` is a `#!/usr/bin/env node` script, and an app started from the
-        // Dock has no `node` on its PATH. npm put `node` beside `claude`, so that folder comes first.
-        if let Some(path) = path_with(claude.parent()) {
-            command.env("PATH", path);
-        }
-        // Claude Code's own config folder, not wherever this app happens to be started from.
-        if let Some(home) = home() {
-            command.current_dir(home);
-        }
-        command
-    };
     // `mcp add` refuses a name that's taken, so an entry pointing elsewhere is removed first.
     if let Some(entry) = read_claude_entry() {
-        let mut remove = claude_cmd();
-        remove.args(["mcp", "remove", "--scope", "user", &entry.name]);
-        let _ = run(remove, Duration::from_secs(20));
+        let _ = run_cli(
+            &claude,
+            &["mcp", "remove", "--scope", "user", &entry.name],
+            None,
+        );
     }
-    let mut add = claude_cmd();
-    add.args(["mcp", "add", "--scope", "user", SERVER_NAME, "--"])
-        .arg(sidecar);
-    let output = run(add, Duration::from_secs(20)).map_err(|_| {
-        unavailable("Claude Code didn’t answer. Run the command below in a terminal instead.")
+    let add = ["mcp", "add", "--scope", "user", SERVER_NAME, "--"];
+    added("Claude Code", run_cli(&claude, &add, Some(sidecar)))
+}
+
+/// Runs an agent's own command with `args` and then `path`, in the person's home folder — the agent's
+/// user-level configuration, not wherever this app happens to be started from.
+fn run_cli(program: &Path, args: &[&str], path: Option<&Path>) -> std::io::Result<Output> {
+    let mut command = Command::new(program);
+    command.args(args).args(path);
+    // An npm install's `claude` or `gemini` is a `#!/usr/bin/env node` script, and an app started
+    // from the Dock has no `node` on its PATH. npm put `node` beside it, so that folder comes first.
+    if let Some(path) = path_with(program.parent()) {
+        command.env("PATH", path);
+    }
+    if let Some(home) = home() {
+        command.current_dir(home);
+    }
+    run(command, Duration::from_secs(20))
+}
+
+/// What an agent's `mcp add` came to, worded for Settings.
+fn added(agent: &str, output: std::io::Result<Output>) -> Result<(), AppError> {
+    let output = output.map_err(|_| {
+        unavailable(format!(
+            "{agent} didn’t answer. Run the command below in a terminal instead."
+        ))
     })?;
     if output.success {
         return Ok(());
@@ -467,14 +561,216 @@ fn claude_connect(sidecar: &Path) -> Result<(), AppError> {
     .unwrap_or("it didn’t say why")
     .to_string();
     Err(unavailable(format!(
-        "Claude Code couldn’t add Draft Canvas: {said}"
+        "{agent} couldn’t add Draft Canvas: {said}"
     )))
+}
+
+// --- Gemini CLI --------------------------------------------------------------------------------
+
+/// `~/.gemini/settings.json`, where `gemini mcp add --scope user` keeps the servers every project sees.
+fn gemini_config() -> Option<PathBuf> {
+    home().map(|h| h.join(".gemini").join("settings.json"))
+}
+
+fn find_gemini() -> Option<PathBuf> {
+    // npm's global folder on Windows, which an app started from the Start menu may not have on PATH.
+    let known = std::env::var_os("APPDATA")
+        .filter(|d| cfg!(windows) && !d.is_empty())
+        .map(|d| vec![PathBuf::from(d).join("npm").join("gemini.cmd")])
+        .unwrap_or_default();
+    find_cli("gemini", &["gemini", "gemini.cmd", "gemini.exe"], known)
+}
+
+fn gemini_status(sidecar: &Path) -> ClientSetup {
+    let path = gemini_config();
+    let entry = read_servers_entry(path.clone());
+    ClientSetup {
+        client: Client::Gemini,
+        state: state_of(entry.as_ref(), sidecar),
+        automatic: find_gemini().is_some(),
+        location: path.as_deref().map(crate::paths::display_path),
+        configured_command: entry.and_then(|e| e.command),
+    }
+}
+
+fn gemini_connect(sidecar: &Path) -> Result<(), AppError> {
+    let gemini = find_gemini().ok_or_else(|| unavailable("Draft Canvas couldn’t find the gemini command. Run the command below in a terminal instead."))?;
+    // Removed first so a hand-made entry under another name doesn't stay beside the new one.
+    if let Some(entry) = read_servers_entry(gemini_config()) {
+        let _ = run_cli(
+            &gemini,
+            &["mcp", "remove", "--scope", "user", &entry.name],
+            None,
+        );
+    }
+    // No `--` before the command: Gemini CLI would take it for the end of the positional arguments.
+    let add = ["mcp", "add", "--scope", "user", SERVER_NAME];
+    added("Gemini CLI", run_cli(&gemini, &add, Some(sidecar)))
+}
+
+// --- Junie -------------------------------------------------------------------------------------
+
+/// `~/.junie/mcp/mcp.json`, the servers Junie gives every project, in the IDE and the CLI alike.
+fn junie_config() -> Option<PathBuf> {
+    home().map(|h| h.join(".junie").join("mcp").join("mcp.json"))
+}
+
+/// A JSON value as it's rewritten: an object Draft Canvas changes inside, or the exact text it was
+/// read as — so whatever it doesn't touch keeps its order, spacing and spelling.
+enum Json {
+    Raw(Box<RawValue>),
+    Object(Vec<(String, Json)>),
+}
+
+impl Serialize for Json {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+        match self {
+            Json::Raw(raw) => raw.serialize(serializer),
+            Json::Object(members) => {
+                let mut map = serializer.serialize_map(Some(members.len()))?;
+                for (key, value) in members {
+                    map.serialize_entry(key, value)?;
+                }
+                map.end()
+            }
+        }
+    }
+}
+
+/// An object's members in the order they were written, each value kept as its own text.
+struct Members(Vec<(String, Box<RawValue>)>);
+
+impl<'de> Deserialize<'de> for Members {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct Visit;
+        impl<'de> serde::de::Visitor<'de> for Visit {
+            type Value = Members;
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                f.write_str("a JSON object")
+            }
+            fn visit_map<A: serde::de::MapAccess<'de>>(
+                self,
+                mut map: A,
+            ) -> Result<Members, A::Error> {
+                let mut members = Vec::new();
+                while let Some(member) = map.next_entry::<String, Box<RawValue>>()? {
+                    members.push(member);
+                }
+                Ok(Members(members))
+            }
+        }
+        deserializer.deserialize_map(Visit)
+    }
+}
+
+fn object_of(text: &str) -> Option<Vec<(String, Json)>> {
+    let Members(members) = serde_json::from_str(text).ok()?;
+    Some(
+        members
+            .into_iter()
+            .map(|(k, v)| (k, Json::Raw(v)))
+            .collect(),
+    )
+}
+
+/// The object at `key` among `members`, opened up for changing; added when it's missing. `None` when
+/// `key` holds something other than an object. The last of repeated keys, as JSON readers take.
+fn member_object<'a>(
+    members: &'a mut Vec<(String, Json)>,
+    key: &str,
+) -> Option<&'a mut Vec<(String, Json)>> {
+    let at = match members.iter().rposition(|(k, _)| k == key) {
+        Some(at) => at,
+        None => {
+            members.push((key.to_string(), Json::Object(Vec::new())));
+            members.len() - 1
+        }
+    };
+    let value = &mut members[at].1;
+    if let Json::Raw(raw) = value {
+        *value = Json::Object(object_of(raw.get())?);
+    }
+    match value {
+        Json::Object(inner) => Some(inner),
+        Json::Raw(_) => None,
+    }
+}
+
+/// The indent the file was written with, so what's rewritten lines up with what's kept.
+fn indent_of(text: &str) -> &str {
+    text.lines()
+        .skip(1)
+        .find(|line| !line.trim().is_empty())
+        .map(|line| &line[..line.len() - line.trim_start_matches([' ', '\t']).len()])
+        .filter(|indent| !indent.is_empty())
+        .unwrap_or("  ")
+}
+
+/// `text` with the connector set up: the existing Draft Canvas entry pointed at `sidecar`, or a new
+/// `draft-canvas` server. Other servers, and anything the person added to the entry, are kept.
+pub fn junie_with_connector(text: &str, sidecar: &Path) -> Result<String, AppError> {
+    let text = if text.trim().is_empty() { "{}" } else { text };
+    let config: Value = serde_json::from_str(text).map_err(|e| {
+        unavailable(format!(
+            "Junie’s mcp.json has a mistake on line {}, so Draft Canvas left it alone. Fix it, then try again.",
+            e.line().max(1)
+        ))
+    })?;
+    let refuse = || {
+        unavailable("Junie’s mcp.json isn’t laid out in a way Draft Canvas can change. Add the server by hand instead.")
+    };
+    let name = servers_entry(&config).map_or_else(|| SERVER_NAME.to_string(), |e| e.name);
+    let mut root = object_of(text).ok_or_else(refuse)?;
+    let servers = member_object(&mut root, "mcpServers").ok_or_else(refuse)?;
+    let entry = member_object(servers, &name).ok_or_else(refuse)?;
+    let command = Json::Raw(
+        serde_json::value::to_raw_value(&sidecar.to_string_lossy()).map_err(|_| refuse())?,
+    );
+    match entry.iter_mut().rfind(|(k, _)| k == "command") {
+        Some((_, value)) => *value = command,
+        None => entry.insert(0, ("command".to_string(), command)),
+    }
+
+    let mut out = Vec::new();
+    let formatter = serde_json::ser::PrettyFormatter::with_indent(indent_of(text).as_bytes());
+    let mut serializer = serde_json::Serializer::with_formatter(&mut out, formatter);
+    Json::Object(root)
+        .serialize(&mut serializer)
+        .map_err(|_| refuse())?;
+    let mut out = String::from_utf8(out).map_err(|_| refuse())?;
+    out.push('\n');
+    Ok(out)
+}
+
+fn junie_status(sidecar: &Path) -> ClientSetup {
+    let path = junie_config();
+    let entry = read_servers_entry(path.clone());
+    ClientSetup {
+        client: Client::Junie,
+        state: state_of(entry.as_ref(), sidecar),
+        automatic: path.is_some(),
+        location: path.as_deref().map(crate::paths::display_path),
+        configured_command: entry.and_then(|e| e.command),
+    }
+}
+
+fn junie_connect(sidecar: &Path) -> Result<(), AppError> {
+    let path = junie_config().ok_or_else(|| {
+        unavailable("Draft Canvas couldn’t find your home folder to set up Junie.")
+    })?;
+    edit_config(&path, "Junie", |text| junie_with_connector(text, sidecar))
 }
 
 // --- Settings ----------------------------------------------------------------------------------
 
 pub fn status(sidecar: &Path) -> Vec<ClientSetup> {
-    vec![codex_status(sidecar), claude_status(sidecar)]
+    vec![
+        codex_status(sidecar),
+        claude_status(sidecar),
+        gemini_status(sidecar),
+        junie_status(sidecar),
+    ]
 }
 
 pub fn connect(client: Client, sidecar: &Path) -> Result<ClientSetup, AppError> {
@@ -486,6 +782,14 @@ pub fn connect(client: Client, sidecar: &Path) -> Result<ClientSetup, AppError> 
         Client::ClaudeCode => {
             claude_connect(sidecar)?;
             Ok(claude_status(sidecar))
+        }
+        Client::Gemini => {
+            gemini_connect(sidecar)?;
+            Ok(gemini_status(sidecar))
+        }
+        Client::Junie => {
+            junie_connect(sidecar)?;
+            Ok(junie_status(sidecar))
         }
     }
 }
@@ -618,7 +922,7 @@ mod tests {
                 "dc": { "type": "stdio", "command": "/old/draft-canvas-mcp" }
             }
         });
-        let entry = claude_entry(&config).unwrap();
+        let entry = servers_entry(&config).unwrap();
         assert_eq!(entry.name, "dc");
         assert_eq!(
             state_of(Some(&entry), Path::new(SIDECAR)),
@@ -628,10 +932,130 @@ mod tests {
         let config: Value =
             serde_json::json!({ "mcpServers": { "draft-canvas": { "command": SIDECAR } } });
         assert_eq!(
-            state_of(claude_entry(&config).as_ref(), Path::new(SIDECAR)),
+            state_of(servers_entry(&config).as_ref(), Path::new(SIDECAR)),
             SetupState::Ready
         );
-        assert_eq!(claude_entry(&serde_json::json!({ "projects": {} })), None);
+        assert_eq!(servers_entry(&serde_json::json!({ "projects": {} })), None);
+    }
+
+    fn junie_entry(text: &str) -> Option<Entry> {
+        servers_entry(&serde_json::from_str(text).unwrap())
+    }
+
+    #[test]
+    fn an_empty_junie_config_gets_one_server_and_nothing_else() {
+        for empty in ["", "\n", "{}"] {
+            let text = junie_with_connector(empty, Path::new(SIDECAR)).unwrap();
+            assert_eq!(
+                text,
+                format!("{{\n  \"mcpServers\": {{\n    \"draft-canvas\": {{\n      \"command\": \"{SIDECAR}\"\n    }}\n  }}\n}}\n")
+            );
+            assert_eq!(
+                state_of(junie_entry(&text).as_ref(), Path::new(SIDECAR)),
+                SetupState::Ready
+            );
+        }
+    }
+
+    #[test]
+    fn other_junie_servers_keep_their_order_and_text() {
+        // Junie's IDE writes four spaces; the new entry follows suit, and the others aren't touched.
+        let before = "{\n    \"mcpServers\": {\n        \"zeta\": {\n            \"command\": \"npx\",\n            \"args\": [\"-y\", \"z\"],\n            \"env\": { \"KEY\": \"v\" }\n        },\n        \"alpha\": {\n            \"url\": \"https://example.com/mcp\"\n        }\n    },\n    \"other\": 1\n}\n";
+        let after = junie_with_connector(before, Path::new(SIDECAR)).unwrap();
+        assert_eq!(
+            after,
+            format!("{{\n    \"mcpServers\": {{\n        \"zeta\": {{\n            \"command\": \"npx\",\n            \"args\": [\"-y\", \"z\"],\n            \"env\": {{ \"KEY\": \"v\" }}\n        }},\n        \"alpha\": {{\n            \"url\": \"https://example.com/mcp\"\n        }},\n        \"draft-canvas\": {{\n            \"command\": \"{SIDECAR}\"\n        }}\n    }},\n    \"other\": 1\n}}\n")
+        );
+        // Doing it again changes nothing.
+        assert_eq!(
+            junie_with_connector(&after, Path::new(SIDECAR)).unwrap(),
+            after
+        );
+    }
+
+    #[test]
+    fn a_junie_entry_is_repointed_in_place_keeping_what_the_person_added() {
+        let before = "{\n  \"mcpServers\": {\n    \"dc\": {\n      \"env\": { \"A\": \"1\" },\n      \"command\": \"/old/draft-canvas-mcp\"\n    }\n  }\n}\n";
+        assert_eq!(
+            state_of(junie_entry(before).as_ref(), Path::new(SIDECAR)),
+            SetupState::Outdated
+        );
+        let after = junie_with_connector(before, Path::new(SIDECAR)).unwrap();
+        assert_eq!(after, before.replace("/old/draft-canvas-mcp", SIDECAR));
+        let entry = junie_entry(&after).unwrap();
+        assert_eq!(entry.name, "dc");
+        assert_eq!(
+            state_of(Some(&entry), Path::new(SIDECAR)),
+            SetupState::Ready
+        );
+    }
+
+    #[test]
+    fn windows_paths_are_escaped_for_junie() {
+        let sidecar = r"C:\Program Files\Draft Canvas\draft-canvas-mcp.exe";
+        let text = junie_with_connector("", Path::new(sidecar)).unwrap();
+        assert!(text.contains(r#""C:\\Program Files\\Draft Canvas\\draft-canvas-mcp.exe""#));
+        assert_eq!(
+            junie_entry(&text).unwrap().command.as_deref(),
+            Some(sidecar)
+        );
+    }
+
+    #[test]
+    fn a_junie_config_draft_canvas_cant_change_is_refused_not_replaced() {
+        let broken =
+            junie_with_connector("{\n  \"mcpServers\": {\n", Path::new(SIDECAR)).unwrap_err();
+        assert!(broken.message.contains("line 3"), "{}", broken.message);
+        for odd in [
+            "[]",
+            "{ \"mcpServers\": [] }",
+            "{ \"mcpServers\": { \"draft-canvas\": \"x\" } }",
+        ] {
+            assert!(
+                junie_with_connector(odd, Path::new(SIDECAR)).is_err(),
+                "{odd}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_junie_config_written_in_a_new_home_reads_back_ready() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(".junie/mcp/mcp.json");
+        edit_config(&path, "Junie", |text| {
+            junie_with_connector(text, Path::new(SIDECAR))
+        })
+        .unwrap();
+        assert_eq!(
+            state_of(
+                read_servers_entry(Some(path.clone())).as_ref(),
+                Path::new(SIDECAR)
+            ),
+            SetupState::Ready
+        );
+        // A second run over the file it wrote leaves it as it was.
+        let first = std::fs::read_to_string(&path).unwrap();
+        edit_config(&path, "Junie", |text| {
+            junie_with_connector(text, Path::new(SIDECAR))
+        })
+        .unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), first);
+    }
+
+    #[test]
+    fn gemini_settings_with_comments_are_still_read() {
+        let text = format!(
+            "// my settings\n{{\n  /* servers */\n  \"theme\": \"a // not a comment\",\n  \"mcpServers\": {{\n    \"draft-canvas\": {{ \"command\": \"{SIDECAR}\" }} // added by Draft Canvas\n  }}\n}}\n"
+        );
+        let stripped = without_comments(&text);
+        assert_eq!(stripped.lines().count(), text.lines().count());
+        let config: Value = serde_json::from_str(&stripped).unwrap();
+        assert_eq!(config["theme"], "a // not a comment");
+        assert_eq!(
+            state_of(servers_entry(&config).as_ref(), Path::new(SIDECAR)),
+            SetupState::Ready
+        );
+        assert_eq!(without_comments(r#"{"a": "\"/*"}"#), r#"{"a": "\"/*"}"#);
     }
 
     #[test]

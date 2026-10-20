@@ -459,6 +459,8 @@
 
 .dc-modal-settings .dc-segmented {
   max-width: 100%;
+  /* Six agents to choose from: past the width they fit in, they take a second row, never the page's. */
+  flex-wrap: wrap;
   padding: 4px;
   gap: 4px;
   border-radius: 8px;

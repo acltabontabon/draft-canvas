@@ -1484,8 +1484,8 @@ export class DesktopController {
     }
   }
 
-  /** Where Codex's and Claude Code's setup stand. Asked when Settings shows it, not store-backed:
-   *  finding Claude Code's CLI can start a shell, so it isn't part of every status refresh. */
+  /** Where each one-click agent's setup stands. Asked when Settings shows it, not store-backed:
+   *  finding Claude Code's or Gemini CLI's command can start a shell, so it isn't part of every status refresh. */
   async agentClients(): Promise<AgentClientSetup[]> {
     try {
       return await this.api.agentClients();
@@ -1507,7 +1507,7 @@ export class DesktopController {
     }
   }
 
-  /** Where the agent skill stands for Claude Code and for Codex/Cursor. Asked when Settings shows it. */
+  /** Where the agent skill stands for Claude Code and for the agents sharing `~/.agents/skills`. Asked when Settings shows it. */
   async agentSkills(): Promise<AgentSkillSetup[]> {
     try {
       return await this.api.agentSkills();

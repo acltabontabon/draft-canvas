@@ -142,14 +142,14 @@ export interface AgentProject {
 }
 
 /** A coding agent Settings can set up with one click (`src-tauri/src/agent/clients.rs`). */
-export type AgentClient = 'codex' | 'claude-code';
+export type AgentClient = 'codex' | 'claude-code' | 'gemini' | 'junie';
 
 /** Where one agent's MCP configuration stands. */
 export interface AgentClientSetup {
   client: AgentClient;
   /** `outdated`: it launches another copy of the connector (a moved or older app), or is turned off. */
   state: 'not-set-up' | 'ready' | 'outdated';
-  /** Whether the shell can do the setup itself; false for Claude Code when `claude` can't be found. */
+  /** Whether the shell can do the setup itself; false for Claude Code or Gemini CLI when its command can't be found. */
   automatic: boolean;
   /** The configuration file, written for a person. */
   location: string | null;
@@ -158,7 +158,8 @@ export interface AgentClientSetup {
 }
 
 /** Where an agent skill is installed for every project (`src-tauri/src/agent/skill.rs`):
- *  `claude-code` is `~/.claude/skills`; `agents` is `~/.agents/skills`, which Codex and Cursor read. */
+ *  `claude-code` is `~/.claude/skills`; `agents` is `~/.agents/skills`, which Codex, Cursor, Gemini CLI
+ *  and Junie read. */
 export type AgentSkillTarget = 'claude-code' | 'agents';
 
 /** Where the Draft Canvas agent skill stands in one target. */
@@ -325,7 +326,7 @@ export interface DesktopApi {
   agentRespond(id: number, outcome: unknown): Promise<void>;
   agentStatus(): Promise<AgentSettings>;
   agentConfigure(patch: AgentPatch): Promise<AgentSettings>;
-  /** Whether Codex and Claude Code launch this app's connector. Empty without a connector. */
+  /** Whether each agent Settings can set up launches this app's connector. Empty without a connector. */
   agentClients(): Promise<AgentClientSetup[]>;
   /** Adds Draft Canvas to an agent's MCP configuration, or repoints the entry already there. */
   agentConnectClient(client: AgentClient): Promise<AgentClientSetup>;
