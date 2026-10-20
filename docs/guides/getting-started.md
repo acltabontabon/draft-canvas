@@ -11,12 +11,15 @@ Shortcuts are written for a Mac. On Windows and Linux, read `⌘` as `Ctrl`.
 
 ## Start a canvas
 
-Home opens with a small diagram of ways to begin: **Quick Draft**, **Try an example**, and
-**Import a file**. Choose **Quick Draft** (pressing `Enter` also works). Your drafts, recently edited
-diagrams, and projects appear on the shelf below it. Drafts and Recent appear when they contain
+Home opens with a small diagram of ways to begin: **Quick Draft** and **Try an example**, with
+**Import a file** on the web. [Desktop Home](desktop.md#quick-draft) provides **Open file…** and
+**Connect an agent…**. Choose **Quick Draft** (pressing `Enter` on the web also works). Your drafts,
+recently edited diagrams, and projects appear on the shelf below it. Drafts and Recent appear when they contain
 diagrams; Projects is always available. A single view needs no tab bar; the separator stays in place.
 
-![Home: a Quick Draft card connected to Try an example and Import a file, with project creation below the separator.](../media/guides/home.png)
+*Web Home*
+
+![Web Home: a Quick Draft card connected to Try an example and Import a file, with project creation below the separator.](../media/guides/home.png)
 
 Choose **View all** to open the Canvas Gallery, or use the search button when you have diagrams.
 Each card previews the diagram itself. **Home** returns to the Living Canvas; opening a diagram

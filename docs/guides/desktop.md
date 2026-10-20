@@ -36,6 +36,10 @@ Home arranges **Quick Draft**, **Try an example**, **Open file…**, and **Conne
 small diagram. Your drafts, recent files, and projects sit just below it. **Try an example** opens a ready-made
 diagram as a Quick Draft.
 
+*Desktop Home*
+
+![Desktop Home: Quick Draft connected to Try an example, Open file, and Connect an agent, with Add project below the separator.](../media/guides/desktop-home.png)
+
 Home keeps a compact shelf of diagram previews. **Projects** remains available before you add a
 project. The tab bar appears only when there are multiple views; a single view shows its content
 directly, keeping the separator above it. **Drafts** appears when at least one draft exists and disappears when the last draft is
