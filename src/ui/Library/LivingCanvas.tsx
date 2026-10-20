@@ -1,8 +1,7 @@
 import type { ReactNode } from 'react';
 import './living-canvas.css';
 
-/** The same small, clickable diagram welcomes people on web and desktop. Platform actions stay
- * with their host: this composition never opens files or changes a document itself. */
+/** The desktop's clickable diagram. Actions stay with the host; this scene only arranges them. */
 export function LivingCanvas({ start, example, open, companion }: {
   start: ReactNode;
   example: ReactNode;

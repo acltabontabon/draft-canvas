@@ -7,7 +7,7 @@ import { Button } from '../common/Button';
 import { Icon } from '../common/Icon';
 import { LibraryBrand } from './LibraryBrand';
 import { LocalNote } from './LocalNote';
-import { LivingCanvas } from './LivingCanvas';
+import { WebHomeScene } from './WebHomeScene';
 import { DocumentPreview } from './DocumentPreview';
 import { ProjectNameDialog } from './ProjectSidebar';
 import type { LibraryView } from './libraryFilter';
@@ -15,7 +15,7 @@ import './home-shelf.css';
 
 type HomeView = 'drafts' | 'recent' | 'projects';
 
-/** The web welcome and returning Home share the desktop's Living Canvas and sketch shelf.
+/** The web welcome and returning Home use a browser sketchbook and compact gallery shelf.
  * Browser diagrams are local drafts; Recent orders them by their most recent edit. */
 export function FirstRunHome({ session, onImport, onBrowse }: {
   session: DocumentSession;
@@ -69,8 +69,6 @@ export function FirstRunHome({ session, onImport, onBrowse }: {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
-
-
   const focusRow = () => rowRef.current?.querySelector<HTMLButtonElement>('button')?.focus();
   const onTabKey = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
     if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
@@ -95,15 +93,15 @@ export function FirstRunHome({ session, onImport, onBrowse }: {
   };
 
   return (
-    <div className="dc-home dc-living-home" ref={rootRef}>
+    <div className="dc-home dc-web-home" ref={rootRef}>
       <div className="dc-home-inner">
         <header className="dc-home-head">
           <LibraryBrand />
           {hasDiagrams && <Button variant="quiet" icon="search" title="Find a diagram" onClick={() => onBrowse({ kind: 'all' }, true)} />}
         </header>
-        <LivingCanvas
+        <WebHomeScene
           start={
-            <button ref={sheetRef} type="button" className="dc-living-primary" aria-label="New canvas"
+            <button ref={sheetRef} type="button" className="dc-web-start" aria-label="New canvas"
               onClick={() => void session.newDocument()}
               onKeyDown={(event) => {
                 if (event.key !== 'ArrowDown') return;
@@ -111,13 +109,13 @@ export function FirstRunHome({ session, onImport, onBrowse }: {
                 const tab = rootRef.current?.querySelector<HTMLButtonElement>('[role="tab"][aria-selected="true"]');
                 if (tab) tab.focus(); else focusRow();
               }}>
-              <Icon name="plus" size={18} />
-              <span className="dc-living-primary-text"><span className="dc-living-primary-name">Quick Draft</span><span className="dc-living-primary-hint">No title needed. Just begin.</span></span>
-              <kbd aria-hidden="true">↵</kbd>
+              <span className="dc-web-start-mark" aria-hidden="true"><Icon name="plus" size={28} /></span>
+              <span className="dc-web-start-name">Quick Draft<Icon name="forward" size={18} /></span>
+              <span className="dc-web-start-hint">No title needed. Just begin.</span>
             </button>
           }
           example={<Button variant="quiet" icon="flow" onClick={() => void session.newDocument(undefined, 'order-processing')}>Try an example</Button>}
-          open={<Button variant="quiet" icon="upload" onClick={onImport} aria-describedby={importHintId}>Import a file</Button>}
+          importFile={<Button variant="quiet" icon="upload" onClick={onImport} aria-describedby={importHintId}>Import a file</Button>}
         />
         <span id={importHintId} className="dc-sr-only">Opens a .draftcanvas, .json or secure .dcenc file, an editable PNG or SVG export, or a Mermaid flowchart.</span>
         <section className="dc-home-shelf" ref={shelfRef} aria-label="Your sketch shelf">

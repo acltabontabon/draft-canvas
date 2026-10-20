@@ -70,9 +70,9 @@ beforeEach(() => {
 describe('LibraryScreen — Home', () => {
   beforeEach(() => useUiStore.setState({ libraryBrowsing: false }));
 
-  it('keeps the Living Canvas, separator and project invitation without empty navigation or search', () => {
+  it('keeps the web sketchbook, separator and project invitation without empty navigation or search', () => {
     const { container } = render(<LibraryScreen session={stubSession()} />);
-    expect(screen.getByRole('heading', { name: 'It starts with a thought.' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /A little space.*A clearer picture/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Try an example' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'New project' })).toBeInTheDocument();
     expect(screen.queryByRole('tablist')).not.toBeInTheDocument();

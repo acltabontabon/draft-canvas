@@ -197,45 +197,6 @@
   transform: rotate(-5deg);
 }
 
-/* Keep the composition shared; only the surrounding library and native file actions differ. */
-.dc-home.dc-living-home {
-  --dc-home-dot: color-mix(in srgb, var(--dc-text-faint) 17%, transparent);
-  background-image: radial-gradient(circle, var(--dc-home-dot) 0.8px, transparent 1px);
-  background-size: 21px 21px;
-}
-
-:root[data-theme='dark'] .dc-home.dc-living-home {
-  --dc-home-dot: color-mix(in srgb, var(--dc-text-faint) 9%, transparent);
-}
-
-.dc-living-home:focus-within .dc-living-primary:not(:focus-visible) kbd {
-  opacity: 0;
-}
-
-.dc-living-home .dc-home-inner {
-  max-width: 1120px;
-  margin: 0 auto;
-  padding-top: 24px;
-  padding-bottom: 28px;
-}
-
-.dc-living-home .dc-living {
-  margin-top: clamp(40px, 7vh, 80px);
-}
-
-.dc-living-home .dc-home-starters {
-  max-width: 880px;
-  margin: 12px auto 0;
-}
-
-.dc-living-home .dc-home-starters-label {
-  margin-bottom: 22px;
-}
-
-.dc-living-home .dc-home-status {
-  margin-top: auto;
-}
-
 @media (max-width: 720px) {
   .dc-living-map {
     height: 310px;

@@ -1,15 +1,33 @@
 import { expect, test } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 import { openGallery, openStarter } from './library';
 
-/** The shared Home composition, browser projects and the full Canvas Gallery. */
+/** The dedicated web Home, browser projects and the full Canvas Gallery. */
 test.describe('Home screen', () => {
+  test('the web sketchbook fits narrow screens and is accessible in both themes', async ({ page }) => {
+    await page.goto('/');
+    for (const theme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme: theme });
+      await expect(page.locator(':root')).toHaveAttribute('data-theme', theme);
+      for (const width of [1200, 760, 375, 320]) {
+        await page.setViewportSize({ width, height: 800 });
+        const scene = page.getByRole('region', { name: 'Start drawing' });
+        await expect(scene.getByRole('button', { name: 'New canvas' })).toBeVisible();
+        await expect(scene.getByRole('button', { name: 'Import a file' })).toBeVisible();
+        expect(await page.locator('.dc-home').evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+        const result = await new AxeBuilder({ page }).include('.dc-home').analyze();
+        expect(result.violations).toEqual([]);
+      }
+    }
+  });
+
   test('an empty Home keeps its separator and invitation, with no starters, tabs, or search', async ({ page }) => {
     await page.emulateMedia({ colorScheme: 'light' });
     await page.goto('/');
     await expect(page.locator('.dc-home')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
-    await expect(page.locator('.dc-living-primary')).toHaveCSS('background-color', 'rgb(13, 110, 101)');
-    await expect(page.locator('.dc-living-primary')).toHaveCSS('color', 'rgb(255, 255, 255)');
-    await expect(page.getByRole('heading', { name: 'It starts with a thought.' })).toBeVisible();
+    await expect(page.locator('.dc-web-start')).toHaveCSS('background-color', 'rgb(13, 110, 101)');
+    await expect(page.locator('.dc-web-start')).toHaveCSS('color', 'rgb(255, 255, 255)');
+    await expect(page.getByRole('heading', { name: /A little space.*A clearer picture/ })).toBeVisible();
     await expect(page.getByRole('tablist')).toHaveCount(0);
     await expect(page.getByRole('group', { name: 'Starters' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Find a diagram' })).toHaveCount(0);
@@ -33,7 +51,7 @@ test.describe('Home screen', () => {
     await expect(page.getByRole('heading', { name: 'Architecture', exact: true })).toBeVisible();
     await expect(page.getByRole('searchbox')).toHaveCount(0);
     await page.getByRole('button', { name: 'Home', exact: true }).click();
-    await expect(page.locator('.dc-living')).toBeVisible();
+    await expect(page.locator('.dc-web-scene')).toBeVisible();
   });
 
   test('the first example brings back views and search; shelf and gallery navigation work by keyboard', async ({ page }) => {
@@ -60,7 +78,7 @@ test.describe('Home screen', () => {
     await page.getByRole('button', { name: 'Back to your diagrams' }).click();
     await expect(page.locator('.dc-library')).toBeVisible();
     await page.getByRole('button', { name: 'Home', exact: true }).click();
-    await expect(page.locator('.dc-living')).toBeVisible();
+    await expect(page.locator('.dc-web-scene')).toBeVisible();
   });
 
   test('search from Home opens the full gallery, searches, clears a miss, and Escape returns Home', async ({ page }) => {
@@ -77,7 +95,7 @@ test.describe('Home screen', () => {
     await page.getByRole('button', { name: 'Clear search' }).click();
     await expect(search).toHaveValue('');
     await page.keyboard.press('Escape');
-    await expect(page.locator('.dc-living')).toBeVisible();
+    await expect(page.locator('.dc-web-scene')).toBeVisible();
     await page.locator('body').click({ position: { x: 5, y: 5 } });
     await page.keyboard.press('/');
     await expect(page.getByPlaceholder('Search diagrams…')).toBeFocused();
@@ -114,7 +132,7 @@ test.describe('Home screen', () => {
     await openGallery(page);
     await page.getByRole('button', { name: /^Delete Untitled/ }).click();
     await page.getByRole('button', { name: 'Delete', exact: true }).click();
-    await expect(page.locator('.dc-living')).toBeVisible();
+    await expect(page.locator('.dc-web-scene')).toBeVisible();
     await expect(page.getByRole('tab')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Find a diagram' })).toHaveCount(0);
     await expect(page.locator('.dc-home-shelf-head')).toBeVisible();

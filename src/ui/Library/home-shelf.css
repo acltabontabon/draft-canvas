@@ -1,11 +1,11 @@
-.dc-living-home .dc-home-head {
+.dc-web-home .dc-home-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 
 .dc-home-shelf {
-  width: min(810px, 100%);
+  width: min(960px, 100%);
   margin: 10px auto 0;
 }
 
@@ -209,8 +209,8 @@
   color: var(--dc-text);
 }
 
-.dc-living-home .dc-home-status {
-  max-width: 810px;
+.dc-web-home .dc-home-status {
+  max-width: 960px;
   margin: 24px auto 0;
 }
 

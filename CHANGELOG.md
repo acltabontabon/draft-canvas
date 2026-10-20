@@ -40,8 +40,8 @@ the release notes and the in-app What's New are generated from here. See
 - Technology suggestions and logos now cover the full Simple Icons catalog, including Rust, with
   common aliases and version recognition. Artwork loads on demand from separate local assets and
   stays available offline.
-- Home uses a Living Canvas scene, with a clearer starting point and connected actions for examples
-  and files. Desktop keeps drafts, projects, and agent access close by.
+- Home gives diagrams a clearer starting point, with quick access to examples and files. Desktop's
+  Living Canvas keeps drafts, projects, and agent access close by.
 - The web library and desktop diagram browser use a matching Canvas Gallery, with larger topology
   previews. Home and the gallery share white light surfaces and a deep teal primary button, with
   neutral surroundings in both themes.
@@ -51,6 +51,14 @@ the release notes and the in-app What's New are generated from here. See
 - Home and gallery headers no longer show the Troubleshooting icon. Diagnostic reports remain
   available from the editor’s More menu and desktop Settings → Support.
 - Automatic connector cleanup removes unnecessary bends where it can keep neighbouring routes clear.
+
+### Web
+
+#### Improved
+
+- Home has its own sketchbook layout: an editorial heading beside a Quick Draft paper card, with
+  example and import actions below it. The compact diagram and project shelf keeps the gallery's
+  neutral palette and typography.
 
 ## [1.15.1] - 2026-10-19
 

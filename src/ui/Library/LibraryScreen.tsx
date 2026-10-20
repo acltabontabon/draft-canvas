@@ -22,7 +22,7 @@ import { headingFor, visibleCanvases, type LibrarySort } from './libraryFilter';
 
 /**
  * The web Home and Canvas Gallery: local diagrams, optionally grouped into projects.
- * Home offers the shared Living Canvas and a small shelf; Browse expands the collection.
+ * Home offers a browser sketchbook and a small shelf; Browse expands the collection.
  *
  * Deliberately still not a file manager. One flat, optional grouping — no
  * nested folders, no required setup before creating a canvas — plus local
@@ -30,8 +30,8 @@ import { headingFor, visibleCanvases, type LibrarySort } from './libraryFilter';
  *
  * It is also the only page most people see before deciding what Draft Canvas
  * is, so the product introduces itself here — but by being itself, not by
- * describing itself: a preview of each diagram's topology in a gallery, with the same composition
- * and typography as desktop. Search and optional project grouping stay local.
+ * describing itself: a preview of each diagram's topology in a gallery, with the same visual family
+ * as desktop. Search and optional project grouping stay local.
  */
 export function LibraryScreen({ session }: { session: DocumentSession }) {
   const browsing = useUiStore((state) => state.libraryBrowsing);
