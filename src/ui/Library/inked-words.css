@@ -1,0 +1,41 @@
+/* Inked like the Home wires: sits below the descenders so it underlines rather than strikes. */
+.dc-inked-words {
+  position: relative;
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.dc-inked-words-stroke {
+  position: absolute;
+  left: -4%;
+  bottom: -0.3em;
+  width: 108%;
+  height: 0.3em;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.dc-inked-words-stroke path {
+  fill: none;
+  stroke: var(--dc-selection);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  opacity: 0.85;
+  animation: dc-inked-words-draw 720ms cubic-bezier(0.65, 0, 0.25, 1) 280ms forwards;
+}
+
+@keyframes dc-inked-words-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-inked-words-stroke path {
+    stroke-dashoffset: 0;
+    animation: none;
+  }
+}

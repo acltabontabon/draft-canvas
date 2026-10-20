@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { InkedWords } from './InkedWords';
 import './living-canvas.css';
 
 /** The desktop's clickable diagram. Actions stay with the host; this scene only arranges them. */
@@ -12,7 +13,7 @@ export function LivingCanvas({ start, example, open, companion }: {
     <section className="dc-living" aria-label="Start drawing">
       <header className="dc-living-heading">
         <p className="dc-living-eyebrow">Good ideas need a little space</p>
-        <h2>It starts with <em>a thought.</em></h2>
+        <h2>It starts with <em><InkedWords>a thought</InkedWords>.</em></h2>
         <p className="dc-living-subtitle">Give it a shape. See where it goes.</p>
       </header>
       <div className="dc-living-map">
