@@ -159,6 +159,7 @@ class StaysUpright(unittest.TestCase):
         def walk(root):
             yield root, [], ['a.py', 'b.py', 'c.py']
             self.fail('the file limit must stop the whole walk, not just one directory')
+
         with patch.object(scan.subprocess, 'run', side_effect=OSError), patch.object(scan.os, 'walk', side_effect=walk):
             files, truncated = scan.list_files('/repo', 2)
         self.assertEqual(files, ['a.py', 'b.py'])

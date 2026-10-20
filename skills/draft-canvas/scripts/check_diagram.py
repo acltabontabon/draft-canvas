@@ -666,7 +666,7 @@ def check_evidence(item: dict, where: str, r: Report, repo: str | None):
                         lines += chunk.count(b'\n')
                         if name:
                             found = found or name in carry + chunk
-                            carry = (carry + chunk)[-len(name) + 1:] if len(name) > 1 else b''
+                            carry = (carry + chunk)[-len(name) + 1 :] if len(name) > 1 else b''
                         if line is None and found:
                             break
             except OSError:

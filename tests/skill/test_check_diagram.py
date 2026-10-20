@@ -153,12 +153,16 @@ class Refuses(unittest.TestCase):
             def read(self, size=-1):
                 self.assert_bounded(size)
                 return super().read(min(size, 4))
+
             def assert_bounded(self, size):
                 if size < 0 or size > 65536:
                     raise AssertionError('evidence must not read a whole source file into memory')
+
         with TempRepo(REPO) as root, patch.object(checker, 'open', return_value=Chunked(b'xxPlaceOrder\n'), create=True):
             r = checker.Report()
-            checker.check_evidence({'evidence': [{'path': 'main.go', 'basis': 'observed', 'symbol': 'PlaceOrder', 'line': 2}]}, 'api', r, str(root))
+            checker.check_evidence(
+                {'evidence': [{'path': 'main.go', 'basis': 'observed', 'symbol': 'PlaceOrder', 'line': 2}]}, 'api', r, str(root)
+            )
         self.assertEqual((r.errors, r.warnings), ([], []))
 
 
