@@ -625,26 +625,56 @@ def check_evidence(item: dict, where: str, r: Report, repo: str | None):
             r.error(where, 'each evidence entry needs path and basis ("observed" or "inferred")')
             continue
         path = e['path']
-        if path.startswith('/') or re.match(r'^[A-Za-z]:[\\/]', path) or '..' in path.split('/'):
+        if re.match(r'^(?:[/\\]|[A-Za-z][A-Za-z0-9+.-]*:)', path) or '..' in re.split(r'[/\\]', path):
             r.error(where, f'evidence path "{path}" must be relative to the repository root')
             continue
-        if repo and not os.path.exists(os.path.join(repo, path)):
+        fields = {'path': 500, 'symbol': 200, 'commit': 80, 'explanation': 300}
+        invalid = set(e) - (set(fields) | {'basis', 'line'})
+        for field, limit in fields.items():
+            if field in e:
+                value = e[field]
+                if not isinstance(value, str) or not value.strip() or len(value) > limit or re.search(r'[\x00-\x1f\x7f]', value):
+                    invalid.add(field)
+        line = e.get('line')
+        if 'line' in e and (type(line) is not int or not 0 < line <= 9007199254740991):
+            invalid.add('line')
+        if invalid:
+            r.error(where, 'invalid evidence fields: ' + ', '.join(sorted(invalid)))
+            continue
+        if not repo:
+            continue
+        source = os.path.realpath(os.path.join(repo, path))
+        root = os.path.realpath(repo)
+        try:
+            contained = os.path.commonpath([root, source]) == root
+        except ValueError:
+            contained = False
+        if not contained:
+            r.error(where, f'evidence path "{path}" must stay inside the repository root')
+            continue
+        if not os.path.exists(source):
             r.error(where, f'evidence path "{path}" does not exist in {repo} — cite only files you read')
-        elif repo and os.path.isfile(os.path.join(repo, path)):
+            continue
+        symbol = e.get('symbol')
+        # `Orders.place`, `orders::place`, `place()`: the last name is what the file must contain.
+        name = re.split(r'[.:#/\\]+', re.sub(r'\(.*\)$', '', symbol.strip()))[-1].encode() if symbol else b''
+        if os.path.isfile(source) and (line is not None or name):
+            lines, found, carry = 1, False, b''
             try:
-                with open(os.path.join(repo, path), 'rb') as fh:
-                    text = fh.read()
+                with open(source, 'rb') as fh:
+                    while chunk := fh.read(65536):
+                        lines += chunk.count(b'\n')
+                        if name:
+                            found = found or name in carry + chunk
+                            carry = (carry + chunk)[-len(name) + 1 :] if len(name) > 1 else b''
+                        if line is None and found:
+                            break
             except OSError:
                 continue
-            lines = text.count(b'\n') + 1
-            if isinstance(e.get('line'), int) and e['line'] > lines:
-                r.error(where, f'evidence line {e["line"]} is past the end of {path} ({lines} lines)')
-            symbol = e.get('symbol')
-            if isinstance(symbol, str) and symbol.strip():
-                # `Orders.place`, `orders::place`, `place()`: the last name is what the file must contain.
-                name = re.split(r'[.:#/\\]+', re.sub(r'\(.*\)$', '', symbol.strip()))[-1]
-                if name and name.encode() not in text:
-                    r.warn(where, f'evidence symbol "{symbol}" does not appear in {path} — cite a name you saw there')
+            if line is not None and line > lines:
+                r.error(where, f'evidence line {line} is past the end of {path} ({lines} lines)')
+            if name and not found:
+                r.warn(where, f'evidence symbol "{symbol}" does not appear in {path} — cite a name you saw there')
 
 
 def load_pairings() -> dict:

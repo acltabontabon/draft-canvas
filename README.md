@@ -39,30 +39,14 @@ brew install --cask acltabontabon/tap/draft-canvas
 See the [desktop guide](docs/guides/desktop.md#installing) for first-launch steps, and
 [Contributing](CONTRIBUTING.md) to build and run it from source.
 
-## From codebase to canvas
+## Try it on your own repo
 
-**Your code already tells a story. See it drawn.**
+Point Claude Code, Codex or Cursor at Draft Canvas Desktop and get your architecture drawn in minutes.
 
-Connect Claude Code, Codex or Cursor to **Draft Canvas Desktop**. The **Draft Canvas skill** helps
-your agent turn an existing project into a diagram you can explore, edit and present.
-
-![An architecture diagram made with the Draft Canvas skill, showing a storefront, its services, databases and an order flow.](docs/media/guides/agent-skill-example.png)
-
-### 1. Connect your agent
-
-Open your project folder in Draft Canvas Desktop, then go to **Settings → AI agents**:
-
-- Turn on **Allow agent access** and tick your project folder.
-- Choose your agent under **Connect an agent** and follow the setup.
-
-### 2. Install the skill
-
-In the same settings, click **Agent skill → Install skill**.
-Keep Draft Canvas running and start a new agent session in your repository.
-
-### 3. Ask for your first diagram
-
-Copy this into your agent:
+1. Open your project in the desktop app. In **Settings → AI agents**, turn on **Allow agent access**
+   and pick your agent.
+2. Click **Agent skill → Install skill**.
+3. Ask your agent:
 
 ```text
 Use the Draft Canvas skill to draw the architecture of this repository.
@@ -73,18 +57,15 @@ Add presentation flows for the main request path and failure paths the code
 supports. Include source evidence and mark inferences.
 ```
 
-**Explore it.** Look inside services for detail, play the flow, or edit the diagram yourself.
+Later, ask it to refresh the diagram when the code changes.
+[Full setup guide →](docs/guides/connect-an-ai-agent.md)
 
-**Keep it current.** Ask: “Refresh this Draft Canvas diagram to match the current code.”
+## Built with
 
-[Full setup guide →](docs/guides/connect-an-ai-agent.md) · [Read the skill →](skills/draft-canvas/SKILL.md)
-
-## Acknowledgements
-
-Draft Canvas is built on [React](https://github.com/react/react), [React Flow](https://github.com/xyflow/xyflow),
+[React](https://github.com/react/react), [React Flow](https://github.com/xyflow/xyflow),
 [Tauri](https://github.com/tauri-apps/tauri), [Simple Icons](https://github.com/simple-icons/simple-icons)
-and other open-source work. See the [third-party credits](docs/reference/third-party.md) and the
-[license notices](THIRD_PARTY_LICENSES.txt), also in the app under **About → Licences**.
+and other open-source projects. Full [credits](docs/reference/third-party.md) and
+[licences](THIRD_PARTY_LICENSES.txt).
 
 ---
 

@@ -110,7 +110,7 @@ async function runNow(job: Job, progress?: (progress: Progress) => void): Promis
   const thread = startWorker();
   if (!thread) return onPage(job, progress);
   const id = nextId++;
-  const reply = await new Promise<Exclude<Reply, { progress: Progress }> | 'timeout'>((resolve) => {
+  const reply = await new Promise<Exclude<Reply, { progress: Progress }> | 'timeout'>((resolve, reject) => {
     const timer = setTimeout(() => {
       pending.delete(id);
       // The only way to stop a runaway computation: the next request starts a fresh worker.
@@ -124,7 +124,14 @@ async function runNow(job: Job, progress?: (progress: Progress) => void): Promis
       },
       ...(progress ? { progress } : {}),
     });
-    thread.postMessage({ id, job, budgetMs: SOFT_BUDGET_MS });
+    try {
+      thread.postMessage({ id, job, budgetMs: SOFT_BUDGET_MS });
+    } catch (error) {
+      // A cloning failure never started a job. Its timer must not kill a later job on this worker.
+      clearTimeout(timer);
+      pending.delete(id);
+      reject(error);
+    }
   });
   if (reply === 'timeout') {
     throw new AgentError('LAYOUT_FAILED', `Arranging this took longer than ${HARD_LIMIT_MS / 1000} s and was stopped. Nothing changed.`, {

@@ -8,20 +8,29 @@ Write user-facing changes once in `CHANGELOG.md`. GitHub release notes, desktop 
 in-app What's New are generated from it.
 
 Under `[Unreleased]`, group changes by where they run. Use only **Shared**, **Desktop** and **Web**
-at `###` level, omitting empty groups. Optional `####` headings such as Fixed or Added go inside them.
+at `###` level, omitting empty groups. Within each group, use the
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/) categories at `####` level: **Added**,
+**Changed**, **Deprecated**, **Removed**, **Fixed** and **Security**. Omit empty categories and put
+improvements to existing functionality under **Changed**.
 
 ```markdown
 ## [Unreleased]
 
 ### Shared
 
+#### Changed
+
 - Changes to the shared editor, shapes or exports.
 
 ### Desktop
 
+#### Changed
+
 - Changes to native files, projects, tray or installers.
 
 ### Web
+
+#### Changed
 
 - Changes to browser storage, offline support or hosting.
 ```

@@ -154,18 +154,20 @@ export function readDiagram(file: DraftDocument, args: ReadArgs, revision: strin
   const all = view.nodes.filter((n) => !scope || scope.has(n.id));
   const signature = fingerprint(JSON.stringify({ diagramId, focus: args.focus ? { nodes: Array.isArray(args.focus.nodes) ? [...new Set(args.focus.nodes)].sort() : null, group: args.focus.group ?? null, flow: args.focus.flow ?? null } : null, include: [...includes].sort() }));
   const offsets = cursorOffsets(args.cursor, revision, path, signature);
+  // Fitting a UTF-8 page may project it several times. Route each connector once for this snapshot.
+  const geometryCache = new Map<string, ReturnType<typeof routeGeometry>>();
   const sizes = [READ_LIMITS.elementsPerPage, READ_LIMITS.relationshipsPerPage, READ_LIMITS.flows, 50];
   // Every collection has its own offset. Reducing elements alone cannot bound a response full of flows.
   for (;;) {
     const page = all.slice(offsets[0], offsets[0]! + sizes[0]!);
-    const result = project(file, view, page, all, path, level, ownLevel, owner, includes, revision, diagramId, offsets, sizes, scope !== undefined, signature, args.focus);
+    const result = project(file, view, page, all, path, level, ownLevel, owner, includes, revision, diagramId, offsets, sizes, scope !== undefined, signature, args.focus, geometryCache);
     if (new TextEncoder().encode(JSON.stringify(result)).length <= READ_LIMITS.bytes) return result;
     if (sizes.every((size) => size <= 1)) {
       // Several individually bounded items can exceed the ceiling together. A page may exhaust
       // just one collection; its cursor still advances and carries the other offsets unchanged.
       for (let collection = 0; collection < sizes.length; collection += 1) {
         const one = sizes.map((_size, index) => index === collection ? 1 : 0);
-        const single = project(file, view, all.slice(offsets[0], offsets[0]! + one[0]!), all, path, level, ownLevel, owner, includes, revision, diagramId, offsets, one, scope !== undefined, signature, args.focus);
+        const single = project(file, view, all.slice(offsets[0], offsets[0]! + one[0]!), all, path, level, ownLevel, owner, includes, revision, diagramId, offsets, one, scope !== undefined, signature, args.focus, geometryCache);
         const progress = ['elements', 'groups', 'notes', 'relationships', 'flows', 'openPoints'].some((key) => Array.isArray(single[key]) && (single[key] as unknown[]).length > 0);
         if (progress && new TextEncoder().encode(JSON.stringify(single)).length <= READ_LIMITS.bytes) return single;
       }
@@ -243,7 +245,8 @@ function project(
   sizes: number[],
   focused: boolean,
   signature: string,
-  focus?: ReadArgs['focus'],
+  focus: ReadArgs['focus'],
+  geometryCache: Map<string, ReturnType<typeof routeGeometry>>,
 ): Record<string, unknown> {
   const byId = new Map(view.nodes.map((n) => [n.id, n]));
   const inPage = new Set(page.map((n) => n.id));
@@ -310,7 +313,8 @@ function project(
   for (const edge of edgePage) {
     const s = inPage.has(edge.source);
     const t = inPage.has(edge.target);
-    const geometry = includes.has('geometry') ? routeGeometry(edge, view.nodes, view.edges) : undefined;
+    if (includes.has('geometry') && !geometryCache.has(edge.id)) geometryCache.set(edge.id, routeGeometry(edge, view.nodes, view.edges, byId));
+    const geometry = geometryCache.get(edge.id);
     relationships.push({
       ...relationshipOf(edge, byId, includes.has('attachments') || includes.has('fullText') || focused, includes.has('fullText')),
       // Its sides and the points where it turns, as drawn; `via` are the bends it was given by hand.
