@@ -13,7 +13,7 @@ the release notes and the in-app What's New are generated from here. See
 
 ### Desktop
 
-#### Improved
+#### Changed
 
 - Agent-generated diagrams arrange look-inside views around their own flows and choose a clearer
   reading direction automatically, reducing crossings without a manual layout pass.
@@ -30,10 +30,27 @@ the release notes and the in-app What's New are generated from here. See
 - Project galleries no longer repeat the root folder name above its heading; nested folders keep
   their breadcrumbs.
 - About no longer shows the paragraph about local diagrams and update connections.
+- Geometry reads reuse connector routes while fitting a response, and agent request logs stay
+  bounded during long desktop sessions.
+
+#### Fixed
+
+- Queued agent reads and proposals can no longer inspect a different diagram after a file switch.
+- Overlapping project folders no longer make a single diagram ambiguous, and remembered diagram
+  paths cannot follow a replaced folder outside agent scope.
+- Failed worker submissions and abandoned MCP calls release their timers and pending requests.
+- Fast agent updates register their commit gate before delivery, preserving retry safety after a crash.
+- The bundled agent skill stops its fallback survey at the file limit, validates portable source
+  evidence paths, and checks source files without loading them whole into memory.
+
+#### Security
+
+- Updated certificate validation and bundled trust roots to address RUSTSEC-2026-0382 and
+  RUSTSEC-2026-0383, which could allow certificate chains through distrusted emSign intermediates.
 
 ### Shared
 
-#### Improved
+#### Changed
 
 - New Actors use a borderless symbol and label, with a Framed option in their bar. Existing diagrams
   keep their frames, and both styles carry through to image exports.
@@ -54,7 +71,7 @@ the release notes and the in-app What's New are generated from here. See
 
 ### Web
 
-#### Improved
+#### Changed
 
 - Home has its own sketchbook layout: an editorial heading beside a Quick Draft paper card, with
   example and import actions below it. The compact diagram and project shelf keeps the gallery's

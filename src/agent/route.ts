@@ -141,8 +141,8 @@ export interface Drawn {
  * curves). The same numbers `route.via` takes back, so an agent can read a line, move a point, and
  * send it.
  */
-export function routeGeometry(edge: DraftEdge, nodes: readonly DraftNode[], edges: readonly DraftEdge[]): { from: Side; to: Side; path: [number, number][] } | undefined {
-  const nodeMap = new Map(nodes.map((n) => [n.id, n]));
+export function routeGeometry(edge: DraftEdge, nodes: readonly DraftNode[], edges: readonly DraftEdge[], byId?: Map<string, DraftNode>): { from: Side; to: Side; path: [number, number][] } | undefined {
+  const nodeMap = byId ?? new Map(nodes.map((n) => [n.id, n]));
   let route;
   try {
     route = routeEdge(edge, nodeMap, {

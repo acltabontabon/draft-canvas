@@ -43,21 +43,24 @@ async function goToStep(page: Page, step: number) {
  * the camera (or entrance animation) has finished — settling either one alone doesn't.
  *
  * First the two things that move them are waited out by name — the camera (a per-frame d3
- * transition on the viewport, so a transform that holds over several consecutive frames has
- * finished) and any animation or transition still running under the elements themselves — and
- * then the boxes are sampled a rendered frame apart, twice over, so the frame React needs to catch
+ * transition on the viewport, so a transform that holds across rendered frames and a quiet
+ * interval has finished) and any animation or transition still running under the elements
+ * themselves — and then the boxes are sampled a rendered frame apart, twice over, so the frame React needs to catch
  * the callout up with the canvas is what separates the samples rather than a guessed interval.
  */
 async function settledBoxes(locators: readonly Locator[]): Promise<Box[]> {
   const page = locators[0]!.page();
   // Frame-based observation needs the active test page. Keep observing inside the browser:
-  // restarting six-frame probes through expect.poll can miss the still window under load.
+  // restarting probes through expect.poll can miss the still window under load. A quiet
+  // interval plus two frames avoids requiring six fast frames from a throttled WebKit runner,
+  // while still outlasting the one-frame delay before a camera transition starts.
   await page.bringToFront();
   const camera = await page.evaluate(() => new Promise<{ settled: boolean; transform: string }>((resolve) => {
     const viewport = document.querySelector<HTMLElement>('.react-flow__viewport');
     if (!viewport) return resolve({ settled: false, transform: 'missing viewport' });
     let transform = viewport.style.transform;
     let stillFrames = 0;
+    let stillSince = performance.now();
     let frame = 0;
     const finish = (settled: boolean) => {
       clearTimeout(deadline);
@@ -67,9 +70,13 @@ async function settledBoxes(locators: readonly Locator[]): Promise<Box[]> {
     const deadline = window.setTimeout(() => finish(false), 5000);
     const observe = () => {
       const next = viewport.style.transform;
-      stillFrames = next === transform ? stillFrames + 1 : 0;
+      if (next === transform) stillFrames += 1;
+      else {
+        stillFrames = 0;
+        stillSince = performance.now();
+      }
       transform = next;
-      if (stillFrames >= 6) finish(true);
+      if (stillFrames >= 2 && performance.now() - stillSince >= 100) finish(true);
       else frame = requestAnimationFrame(observe);
     };
     frame = requestAnimationFrame(observe);

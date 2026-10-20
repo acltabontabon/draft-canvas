@@ -138,7 +138,10 @@ impl Ledger {
         let mut file = private(OpenOptions::new().create(true).append(true)).open(&self.file)?;
         file.write_all(&line)?;
         file.sync_data()?;
+        let now = entry.at;
         self.entries.insert(entry.key.clone(), entry);
+        // A desktop session can last weeks: retention must bound the live journal too, not only open.
+        self.evict(now);
         self.appended += 1;
         if self.appended >= COMPACT_AFTER {
             self.compact()?;
@@ -171,6 +174,16 @@ impl Ledger {
                 Stage::Pending | Stage::Committing => age <= UNRESOLVED_RETENTION_MS,
             }
         });
+        // Most appends stay below the cap; avoid cloning every retained key on those transitions.
+        if self
+            .entries
+            .values()
+            .filter(|e| matches!(e.stage, Stage::Committed | Stage::Failed))
+            .count()
+            <= RESOLVED_CAP
+        {
+            return;
+        }
         let mut resolved: Vec<(u64, String)> = self
             .entries
             .values()
@@ -307,6 +320,25 @@ mod tests {
     }
 
     #[test]
+    fn recording_new_work_expires_old_entries_without_a_restart() {
+        let dir = tempdir().unwrap();
+        let mut ledger = Ledger::open(dir.path(), 0).unwrap();
+        ledger.record(entry("done", Stage::Committed, 0)).unwrap();
+        ledger
+            .record(entry("unknown", Stage::Committing, 0))
+            .unwrap();
+        ledger
+            .record(entry("next", Stage::Pending, RESOLVED_RETENTION_MS + 1))
+            .unwrap();
+        assert!(ledger.get("done").is_none());
+        assert!(ledger.get("unknown").is_some());
+        drop(ledger);
+        let ledger = Ledger::open(dir.path(), RESOLVED_RETENTION_MS + 1).unwrap();
+        assert!(ledger.get("done").is_none());
+        assert!(ledger.get("unknown").is_some());
+    }
+
+    #[test]
     fn the_resolved_cap_drops_the_oldest_first() {
         let dir = tempdir().unwrap();
         let mut ledger = Ledger::open(dir.path(), 0).unwrap();
@@ -315,6 +347,12 @@ mod tests {
                 .record(entry(&format!("k{i}"), Stage::Committed, i))
                 .unwrap();
         }
+        assert_eq!(
+            ledger.entries.len(),
+            RESOLVED_CAP,
+            "bounded before a restart"
+        );
+        assert!(ledger.get("k0").is_none());
         drop(ledger);
         let ledger = Ledger::open(dir.path(), RESOLVED_CAP as u64 + 3).unwrap();
         assert!(ledger.get("k0").is_none());

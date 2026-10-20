@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import time
 import unittest
+from unittest.mock import patch
 
 from helpers import TempRepo, load, run_script
 
@@ -154,6 +155,16 @@ class FindsTheSystem(unittest.TestCase):
 
 
 class StaysUpright(unittest.TestCase):
+    def test_fallback_stops_walking_as_soon_as_the_file_limit_is_reached(self) -> None:
+        def walk(root):
+            yield root, [], ['a.py', 'b.py', 'c.py']
+            self.fail('the file limit must stop the whole walk, not just one directory')
+
+        with patch.object(scan.subprocess, 'run', side_effect=OSError), patch.object(scan.os, 'walk', side_effect=walk):
+            files, truncated = scan.list_files('/repo', 2)
+        self.assertEqual(files, ['a.py', 'b.py'])
+        self.assertTrue(truncated)
+
     def test_a_folder_that_is_not_a_git_checkout_is_walked_skipping_dependencies_and_output(self) -> None:
         files = {
             'package.json': json.dumps({'name': 'shop-web', 'dependencies': {'express': '4', 'pg': '8', 'stripe': '14'}}),

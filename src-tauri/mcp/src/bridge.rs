@@ -54,6 +54,21 @@ struct Conn {
 /// Where a call's progress messages go while it runs (see `Bridge::call`).
 type ProgressSinks = Arc<Mutex<HashMap<u64, mpsc::UnboundedSender<String>>>>;
 
+/// Remove waiters even when a call times out or its future is dropped by the MCP runtime.
+struct Registration<T> {
+    id: u64,
+    entries: Arc<Mutex<HashMap<u64, T>>>,
+}
+
+impl<T> Drop for Registration<T> {
+    fn drop(&mut self) {
+        self.entries
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&self.id);
+    }
+}
+
 #[derive(Default)]
 pub struct Bridge {
     conn: tokio::sync::Mutex<Option<Conn>>,
@@ -94,12 +109,11 @@ impl Bridge {
                 .unwrap_or_else(|e| e.into_inner())
                 .insert(id, sink);
         }
-        let outcome = self.call_as(id, tool, args, on_id).await;
-        self.progress
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .remove(&id);
-        outcome
+        let _progress = Registration {
+            id,
+            entries: self.progress.clone(),
+        };
+        self.call_as(id, tool, args, on_id).await
     }
 
     async fn call_as(
@@ -109,7 +123,7 @@ impl Bridge {
         args: Value,
         on_id: impl FnOnce(u64),
     ) -> Result<Value, Value> {
-        let rx = {
+        let (rx, _pending) = {
             let mut guard = self.conn.lock().await;
             if !guard
                 .as_ref()
@@ -123,12 +137,16 @@ impl Bridge {
                 .lock()
                 .unwrap_or_else(|e| e.into_inner())
                 .insert(id, tx);
+            let pending = Registration {
+                id,
+                entries: conn.pending.clone(),
+            };
             let frame = json!({"type": "call", "id": id, "tool": tool, "args": args});
             if conn.out.send(frame).await.is_err() {
                 *guard = None;
                 return Err(lost());
             }
-            rx
+            (rx, pending)
         };
         on_id(id);
         match tokio::time::timeout(CALL_TIMEOUT, rx).await {
@@ -309,22 +327,65 @@ async fn read_frame<R: AsyncRead + Unpin>(
         if buf.is_empty() {
             return Ok(None);
         }
-        if let Some(pos) = buf.iter().position(|b| *b == b'\n') {
-            line.extend_from_slice(&buf[..pos]);
-            reader.consume(pos + 1);
-            break;
-        }
-        let len = buf.len();
-        line.extend_from_slice(buf);
-        reader.consume(len);
-        if line.len() > MAX_FRAME {
+        let end = buf.iter().position(|b| *b == b'\n');
+        let len = end.unwrap_or(buf.len());
+        // Check the final chunk as well, before extending the allocation.
+        if len > MAX_FRAME - line.len() {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 "frame too large",
             ));
         }
+        line.extend_from_slice(&buf[..len]);
+        reader.consume(len + usize::from(end.is_some()));
+        if end.is_some() {
+            break;
+        }
     }
     serde_json::from_slice(&line)
         .map(Some)
         .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidData, "not JSON"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn frame_limit_includes_the_chunk_containing_the_newline() {
+        let data = format!("\"{}\"\n", "x".repeat(MAX_FRAME - 1));
+        let mut reader = BufReader::with_capacity(data.len(), data.as_bytes());
+        assert_eq!(
+            read_frame(&mut reader).await.unwrap_err().kind(),
+            std::io::ErrorKind::InvalidData
+        );
+        let data = format!("\"{}\"\n", "x".repeat(MAX_FRAME - 2));
+        let mut reader = BufReader::with_capacity(data.len(), data.as_bytes());
+        assert!(read_frame(&mut reader).await.unwrap().is_some());
+    }
+
+    #[tokio::test]
+    async fn dropping_a_call_cleans_up_its_waiter_and_progress_sink() {
+        let (out, mut received) = mpsc::channel(4);
+        let pending = Arc::new(Mutex::new(HashMap::new()));
+        let bridge = Bridge {
+            conn: tokio::sync::Mutex::new(Some(Conn {
+                out,
+                pending: pending.clone(),
+                alive: Arc::new(AtomicBool::new(true)),
+            })),
+            ..Bridge::new("test".into())
+        };
+        let (progress, _rx) = mpsc::unbounded_channel();
+        let mut call = Box::pin(bridge.call("read_diagram", json!({}), |_| {}, Some(progress)));
+        tokio::select! {
+            answer = &mut call => panic!("no app answer: {answer:?}"),
+            frame = received.recv() => assert_eq!(frame.unwrap()["type"], "call"),
+        }
+        assert_eq!(pending.lock().unwrap().len(), 1);
+        assert_eq!(bridge.progress.lock().unwrap().len(), 1);
+        drop(call);
+        assert!(pending.lock().unwrap().is_empty());
+        assert!(bridge.progress.lock().unwrap().is_empty());
+    }
 }

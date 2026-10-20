@@ -1053,6 +1053,19 @@ fn fail(agent: &Agent, key: &str, error: &ToolError) {
 
 // ─── update_diagram ─────────────────────────────────────────────────────────────────────────────
 
+/// Everything the page may need must exist before delivery: a fast page can ask for its gate as
+/// soon as the event is emitted, on a different runtime thread.
+fn register_update(
+    agent: &Agent,
+    key: &str,
+    calls: &CallRegistry,
+) -> (u64, tokio::sync::oneshot::Receiver<super::page::Reply>) {
+    let (id, rx) = agent.page.register();
+    calls.track(agent, id);
+    crate::util::lock(&agent.gates).insert(id, key.to_string());
+    (id, rx)
+}
+
 async fn update(
     agent: &Agent,
     app: &AppHandle,
@@ -1088,7 +1101,7 @@ async fn update(
         .get("stamp")
         .and_then(Value::as_str)
         .map(str::to_string);
-    let (page_id, rx) = agent.page.register();
+    let (page_id, rx) = register_update(agent, &key, calls);
     let sent = app
         .state::<AppState>()
         .events
@@ -1100,6 +1113,8 @@ async fn update(
         });
     if !sent {
         agent.page.forget(page_id);
+        calls.untrack(agent, page_id);
+        crate::util::lock(&agent.gates).remove(&page_id);
         let e = ToolError::new(
             "APP_STARTING",
             "Draft Canvas's window hasn't finished loading.",
@@ -1108,10 +1123,6 @@ async fn update(
         fail(agent, &key, &e);
         return Err(e);
     }
-    calls.track(agent, page_id);
-    // The ledger learns the moment the page passes its gate (see `gate_passed`), so a crash after that
-    // is reported as an unknown outcome, never retried blindly.
-    crate::util::lock(&agent.gates).insert(page_id, key.clone());
     let answer = agent.page.wait(page_id, rx, Budgets::default()).await;
     calls.untrack(agent, page_id);
     crate::util::lock(&agent.gates).remove(&page_id);
@@ -1670,6 +1681,46 @@ mod tests {
         assert_eq!(known.code, "REVISION_CONFLICT");
         let unknown = page_error(Some(&json!({"code": "SOMETHING_NEW", "message": "x"})));
         assert_eq!(unknown.code, "INTERNAL");
+    }
+
+    #[test]
+    fn an_update_can_record_its_gate_immediately_after_delivery() {
+        let dir = tempfile::tempdir().unwrap();
+        let agent = Agent::new(dir.path());
+        agent.ensure_ledger().unwrap();
+        let key = "update_diagram:fast";
+        record(
+            &agent,
+            Entry {
+                key: key.into(),
+                tool: "update_diagram".into(),
+                fingerprint: "fp".into(),
+                stage: Stage::Pending,
+                at: now_ms(),
+                diagram_id: None,
+                path: None,
+                receipt: None,
+            },
+        )
+        .unwrap();
+        let calls = CallRegistry::new("session".into());
+        let (id, _rx) = register_update(&agent, key, &calls);
+        // Simulate the page's first action before the event sender gets another turn.
+        assert!(gate_passed(&agent, id));
+        assert_eq!(calls.current(), Some(id));
+        assert_eq!(
+            agent.with_ledger(|l| l.get(key).unwrap().stage),
+            Some(Stage::Committing)
+        );
+        // A restart must see an unknown outcome, never a Pending update safe to repeat.
+        let ledger = super::super::ledger::Ledger::open(agent.dir(), now_ms()).unwrap();
+        assert!(matches!(
+            ledger.begin(key, "fp"),
+            Begin::Unresolved(Entry {
+                stage: Stage::Committing,
+                ..
+            })
+        ));
     }
 
     fn pending_create(id: &str) -> Entry {

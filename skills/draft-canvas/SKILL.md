@@ -2,7 +2,7 @@
 name: draft-canvas
 description: Draws a codebase's architecture as a detailed, editable Draft Canvas diagram — C4 views with look-inside drill-downs, presentation flows of the real request path, notes, code snippets and source evidence — through the Draft Canvas desktop app's MCP tools. Use when someone asks to diagram, draw, map, visualize or explain the architecture of a repository, service or system in Draft Canvas, to turn a codebase into a diagram, or to refresh such a diagram after the code changed.
 metadata:
-  version: "2"
+  version: "4"
   contract: "3"
   requires: Draft Canvas Desktop with agent access on (MCP server draft-canvas)
 ---

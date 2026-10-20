@@ -622,8 +622,9 @@ def list_files(root: str, max_files: int) -> tuple[list[str], bool]:
             rel_dir = os.path.relpath(dirpath, root)
             for name in filenames:
                 files.append(name if rel_dir == '.' else os.path.join(rel_dir, name).replace(os.sep, '/'))
-                if len(files) > max_files * 2:
-                    break
+                if len(files) > max_files:
+                    # Stop the entire walk, rather than collecting one more file in every directory.
+                    return sorted(files[:max_files]), True
     # Git already leaves out what is ignored, so a committed build/ or out/ folder is source (deploy
     # manifests, say) and is kept; only vendored dependencies and CI configuration still go.
     skip = COMMITTED_SKIP_DIRS if from_git else SKIP_DIRS
@@ -644,7 +645,9 @@ def read_text(root: str, rel: str) -> str | None:
         if os.path.islink(path) or os.path.getsize(path) > MAX_READ:
             return None
         with open(path, 'rb') as fh:
-            data = fh.read()
+            data = fh.read(MAX_READ + 1)
+            if len(data) > MAX_READ:
+                return None
     except OSError:
         return None
     if b'\0' in data[:4096]:
