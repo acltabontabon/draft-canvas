@@ -248,6 +248,9 @@ export default defineConfig(({ mode, command }) => {
       coverage: {
         provider: 'v8',
         include: ['src/**'],
+        // Vite turns JSON assets into executable exports. Count the loader logic, not generated
+        // logo coordinates; catalog freshness and every dynamic path group are tested separately.
+        exclude: ['src/nodes/technologyCatalog/*.json'],
         reporter: ['text-summary', 'html'],
         thresholds: { statements: 70, branches: 60, functions: 64, lines: 72 },
       },

@@ -80,4 +80,11 @@ describe('complete local technology catalog', () => {
     expect(svg).not.toContain(GENERIC_TECHNOLOGY_ICON.path);
     expect(svg).not.toMatch(/<image|(?:href|src)="https?:/);
   });
+
+  it('imports every artwork group and preserves all upstream paths, including numeric slugs', async () => {
+    const groups = await Promise.all(Object.values(TECHNOLOGY_PATH_LOADERS).map((load) => load()));
+    const paths = Object.assign({}, ...groups.map((group) => group.default)) as Record<string, string>;
+    expect(Object.keys(paths)).toHaveLength(TECHNOLOGY_ICON_COUNT);
+    for (const icon of Object.values(upstream)) expect(paths[icon.slug], icon.slug).toBe(icon.path);
+  });
 });
