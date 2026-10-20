@@ -7,8 +7,8 @@ vi.mock('../src/storage/autosave', () => ({ flushAllAutosaves: () => Promise.res
  * A panel that won't open has two quite different causes, and only one of them has a cure the
  * person can apply. A deploy removes the previous build's content-hashed chunks, so a page left
  * open across one asks for a file that is now a 404 — and `retryableLazy` cannot help, because
- * trying the same dead URL again is all it can do. Reloading is the only fix, and a webview that
- * is deliberately kept alive (Draft Canvas for VS Code) never reloads on its own.
+ * trying the same dead URL again is all it can do. Reloading is the only fix, and a long-lived window
+ * (the desktop app) never reloads on its own.
  */
 describe('isStaleChunkError', () => {
   it('recognises how each engine words a dynamic import that did not arrive', () => {

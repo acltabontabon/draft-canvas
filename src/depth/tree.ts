@@ -75,7 +75,7 @@ export function ownerAt(file: DraftDocument, path: DepthPath): DraftNode | undef
 }
 
 /**
- * The longest prefix of `path` that still resolves. Undo restoring an older file, a VS Code
+ * The longest prefix of `path` that still resolves. Undo restoring an older file, an external
  * reload and a discarded conflict can all land on a file where the room you were in no longer
  * exists; the answer is to surface at the nearest room that does, never to fail.
  */

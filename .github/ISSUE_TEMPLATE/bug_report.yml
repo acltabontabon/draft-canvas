@@ -51,7 +51,6 @@ body:
         - Web app (acltabontabon.com)
         - Desktop (macOS)
         - Desktop (Windows)
-        - VS Code extension
         - Built from source
     validations:
       required: true
@@ -74,7 +73,7 @@ body:
     id: version
     attributes:
       label: Draft Canvas version or commit
-      description: Shown in the About dialog (for the VS Code extension, its version in the Extensions view), or the commit you're running if built from source.
+      description: Shown in the About dialog, or the commit you're running if built from source.
     validations:
       required: false
   - type: textarea

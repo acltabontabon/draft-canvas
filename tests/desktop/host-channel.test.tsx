@@ -32,7 +32,7 @@ beforeEach(() => {
   host = createHostLink();
   host.link.onMessage = (message) => posted.push(message);
   host.link.onOpened = (info) => opened.push(info);
-  // The desktop is a host: its documents live in memory, the way a VS Code file's do.
+  // The desktop is a host: its documents live in memory.
   registerDesktopHost({ channel: host.channel, returnHome: () => {} });
 });
 

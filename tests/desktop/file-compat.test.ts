@@ -5,9 +5,9 @@ import { deserializeDocument, serializeDocument } from '../../src/export/project
 import { createHarness, decoder } from './harness';
 
 /**
- * A `.draftcanvas` file is the one format all three hosts share: the browser's Export and Import, the
- * VS Code extension, and this. Whatever the desktop writes has to be readable by the others, and
- * whatever they write readable by it — and it has no business adding anything of its own.
+ * A `.draftcanvas` file is the one format both hosts share: the browser's Export and Import, and the
+ * desktop. Whatever the desktop writes has to be readable by the browser, and
+ * whatever it writes readable by the desktop — and it has no business adding anything of its own.
  */
 describe('a .draftcanvas file across hosts', () => {
   const doc = () => addNodes(createDocument('Payments'), [createNode({ type: 'service', x: 10, y: 20 }), createNode({ type: 'queue', x: 300, y: 20 })]);
@@ -50,7 +50,7 @@ describe('a .draftcanvas file across hosts', () => {
     h.edit(serializeDocument(original));
     await h.controller.save();
 
-    // What the browser's Import (and VS Code) would do with the file.
+    // What the browser's Import would do with the file.
     const parsed = deserializeDocument(h.files.get(handle)!.text);
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;

@@ -11,54 +11,6 @@
     />
     <link rel="canonical" href="https://acltabontabon.com/draft-canvas/" />
 
-    <!--
-      Sends a released VS Code extension's frame on to the editor.
-
-      Must stay here, first, and classic rather than `type="module"`: a module script is deferred
-      until the document has parsed, which in a VS Code webview means a flash of this landing page
-      inside what is supposed to be an editor. It is inline rather than a file so that it cannot be
-      "tidied up" into a deferred module, and so it costs no request; the build hashes it into the
-      Content-Security-Policy (see contentSecurityPolicy in vite.config.js), and e2e/web-deploy.spec.ts
-      loads the built page through the extension's own CSP to prove the hop still works.
-    -->
-    <script>
-      /*
-       * Sends a known editor link on to the editor, and leaves everything else alone.
-       *
-       * The editor used to live at this address. Copies of the retired Draft Canvas for VS Code up to
-       * 0.1.6 load `https://acltabontabon.com/draft-canvas/?host=vscode` into a webview frame, and a copy
-       * that is never updated will keep doing so — so this file is what gets them to the editor's
-       * retirement notice (src/ui/RetiredHostNotice.tsx) rather than a marketing page inside an IDE. The
-       * extension's webview CSP is `frame-src https://acltabontabon.com/draft-canvas/`; a source
-       * expression whose path ends in `/` matches by prefix, so navigating the frame on to
-       * `/draft-canvas/editor/?host=vscode` is allowed by it.
-       *
-       * `host=vscode` is the *only* URL parameter the app has ever understood (src/lib/retiredHost.ts).
-       * That makes this an allowlist rather than a catch-all: an ordinary visit, a `#section` anchor, a
-       * campaign parameter, or anything else stays on the marketing page where it belongs. Nothing here
-       * guesses.
-       *
-       * Loaded synchronously from <head> so the frame never paints marketing before it leaves. It is a
-       * separate file rather than an inline script because the page ships `script-src 'self'` with no
-       * hash — see www/vite.config.js.
-       */
-      (function () {
-        try {
-          var search = window.location.search;
-          if (!search) return;
-          if (new URLSearchParams(search).get('host') !== 'vscode') return;
-
-          // `replace`, not `assign`: the old address should not become a back-button step inside a frame
-          // whose only history is this redirect.
-          window.location.replace(new URL('editor/' + search + window.location.hash, window.location.href).href);
-        } catch {
-          // A browser without URLSearchParams, or a location this cannot be reasoned about. The page
-          // underneath is a working landing page with a link to the editor on it; showing that beats
-          // throwing.
-        }
-      })();
-    </script>
-
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Draft Canvas" />
     <meta property="og:url" content="https://acltabontabon.com/draft-canvas/" />

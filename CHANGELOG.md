@@ -550,7 +550,6 @@ long list of fixes to saving, editing and exporting. Every diagram you already h
 - **GIF export.** Present the flow live or record your screen. PNG, SVG and the other exports are
   unchanged.
 - **Draft Canvas for VS Code.** Your `.draftcanvas` files open in the desktop app or the web editor.
-  [How to move a diagram](docs/guides/vscode-retired.md).
 
 ### Web
 

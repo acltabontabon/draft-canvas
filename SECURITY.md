@@ -67,7 +67,6 @@ ordinary saving also works over HTTP.
 
 - **Web (hosted or self-hosted) and desktop:** the latest stable `vX.Y.Z` release; older releases get no backports.
 - **Desktop previews:** supported until the next preview or the release they lead to.
-- **VS Code extension:** retired at 0.2.0; see the [migration guide](docs/guides/vscode-retired.md).
 
 ## Reporting a concern
 

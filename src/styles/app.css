@@ -6264,40 +6264,6 @@ button.dc-open-points-main:focus-visible .dc-open-points-kind {
   opacity: 0.75;
 }
 
-/* The page a retired VS Code extension's frame lands on (`ui/RetiredHostNotice.tsx`): text and links, nothing else. */
-.dc-retired-host {
-  max-width: 560px;
-  margin: 0 auto;
-  padding: 40px 24px;
-  color: var(--dc-text);
-  font-size: 14px;
-  line-height: 1.5;
-}
-
-.dc-retired-host h1 {
-  margin: 0 0 12px;
-  font-size: 20px;
-}
-
-.dc-retired-host p,
-.dc-retired-host ol {
-  margin: 0 0 14px;
-}
-
-.dc-retired-host li {
-  margin-bottom: 6px;
-}
-
-.dc-retired-host-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px 14px;
-}
-
-.dc-retired-host-actions a {
-  color: var(--dc-selection);
-}
 
 /* A diagram opened from a share link (`uiStore.readOnly`): one slim strip across the top of the
    canvas, over it rather than in the flow, so the camera and every popover measure the same pane

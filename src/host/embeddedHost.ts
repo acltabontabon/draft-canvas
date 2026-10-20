@@ -2,8 +2,7 @@ import type { AgentEditorReply, AgentEditorRequest } from './agentBridge';
 
 /**
  * Messages between the app and the host that owns its file — today the desktop shell, in the same
- * page (`src/desktop/channel.ts`). The message names and shapes are the ones the retired VS Code
- * extension spoke too, kept as they were: nothing depends on the numbering any more, and renaming
+ * page (`src/desktop/channel.ts`). The message names are historical and kept as they were: renaming
  * them would only churn the desktop's own tests.
  */
 export type ToHostMessage =

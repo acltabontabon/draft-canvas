@@ -21,11 +21,6 @@ const appVersion = JSON.parse(
 /**
  * The same promise the app makes, enforced by the browser: `connect-src 'none'` means this page
  * cannot fetch, XHR, beacon or open a socket to anywhere, including github.com.
- *
- * Deliberately absent: `frame-ancestors`. Copies of the retired Draft Canvas for VS Code up to 0.1.6
- * load `/draft-canvas/?host=vscode` inside a webview frame, and the inline script in index.html
- * forwards it to the editor's retirement notice. A `frame-ancestors` directive here would break that
- * frame before the script ever ran.
  */
 const DIRECTIVES = [
   "default-src 'self'",
@@ -41,8 +36,7 @@ const DIRECTIVES = [
 ];
 
 /**
- * The one inline script on the page is the legacy editor-link router, and it has to run before the
- * document paints. Rather than loosen the policy for it, the hash is computed from the very bytes
+ * Any inline script on a page is allowed by hash rather than by loosening the policy. The hash is computed from the very bytes
  * that end up in the output, so it cannot drift: edit the script and the hash follows.
  */
 function policyFor(html) {
