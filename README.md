@@ -41,7 +41,7 @@ See the [desktop guide](docs/guides/desktop.md#installing) for first-launch step
 
 ## Try it on your own repo
 
-Point Claude Code, Codex or Cursor at Draft Canvas Desktop and get your architecture drawn in minutes.
+Point Claude Code, Codex, Cursor, Gemini CLI or Junie at Draft Canvas Desktop and get your architecture drawn in minutes.
 
 1. Open your project in the desktop app. In **Settings → AI agents**, turn on **Allow agent access**
    and pick your agent.

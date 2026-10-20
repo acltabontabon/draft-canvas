@@ -13,6 +13,11 @@ the release notes and the in-app What's New are generated from here. See
 
 ### Desktop
 
+#### Added
+
+- **Settings → AI agents** connects Gemini CLI and Junie in one click, alongside Claude Code, Codex
+  and Cursor. The agent skill installs for both from the folder they share with Codex and Cursor.
+
 #### Changed
 
 - Agent-generated diagrams arrange look-inside views around their own flows and choose a clearer

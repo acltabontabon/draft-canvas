@@ -246,8 +246,9 @@ fn connectable_sidecar() -> Result<PathBuf, AppError> {
     Ok(path)
 }
 
-/// Whether Codex and Claude Code already launch this app's connector (`agent/clients.rs`). Asked
-/// when Settings shows the setup, not with every status refresh: finding `claude` can start a shell.
+/// Whether each agent Settings can set up already launches this app's connector (`agent/clients.rs`).
+/// Asked when Settings shows the setup, not with every status refresh: finding `claude` or `gemini`
+/// can start a shell.
 #[tauri::command]
 pub async fn agent_clients(app: AppHandle) -> Result<Vec<ClientSetup>, AppError> {
     run_blocking(&app, |_, _| match sidecar_path() {

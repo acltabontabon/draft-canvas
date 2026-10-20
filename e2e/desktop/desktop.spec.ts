@@ -1114,6 +1114,16 @@ test('Settings moves between pages by keyboard, shows one agent setup at a time,
   expect(connects).toEqual([{ client: 'codex' }]);
   await settings.getByRole('button', { name: 'Set it up by hand instead' }).click();
   await expect(toml).toBeVisible();
+  // Gemini CLI runs its own `mcp add`; Junie's file is written by the shell. Each says where it went.
+  await settings.getByRole('radio', { name: 'Gemini CLI' }).check({ force: true });
+  await expect(settings.getByText(/^gemini mcp add --scope user draft-canvas/)).toBeHidden();
+  await settings.getByRole('button', { name: 'Add to Gemini CLI' }).click();
+  await expect(settings.getByRole('status').filter({ hasText: 'Set up in ~/.gemini/settings.json. Start a new Gemini CLI session in a trusted folder to use it.' })).toBeVisible();
+  await settings.getByRole('radio', { name: 'Junie' }).check({ force: true });
+  await settings.getByRole('button', { name: 'Add to Junie' }).click();
+  await expect(settings.getByRole('status').filter({ hasText: 'Set up in ~/.junie/mcp/mcp.json. Start a new Junie session to use it.' })).toBeVisible();
+  const allConnects = await page.evaluate(() => window.__shell.calls().filter((call) => call.command === 'agent_connect_client').map((call) => call.args));
+  expect(allConnects).toEqual([{ client: 'codex' }, { client: 'gemini' }, { client: 'junie' }]);
   await settings.getByRole('radio', { name: 'Cursor' }).check({ force: true });
   await expect(command).toHaveCount(0);
   await expect(settings.getByRole('link', { name: 'Add to Cursor' })).toHaveAttribute('href', /^cursor:\/\/anysphere\.cursor-deeplink\/mcp\/install/);
@@ -1180,12 +1190,16 @@ test('Settings installs the agent skill where the chosen agent reads skills, and
   await expect(settings.getByRole('status').filter({ hasText: 'Skill installed in ~/.claude/skills/draft-canvas.' })).toBeVisible();
   expect(await installs()).toEqual([{ target: 'claude-code' }]);
 
-  // Codex and Cursor share ~/.agents/skills: installed from one, it shows as installed in the other.
+  // Codex, Cursor, Gemini CLI and Junie share ~/.agents/skills: installed from one, it shows as installed in the others.
   await settings.getByRole('radio', { name: 'Codex' }).check({ force: true });
-  await expect(settings.getByText(/Teaches Codex and Cursor to draw a repository well/)).toBeVisible();
+  await expect(settings.getByText(/Teaches Codex, Cursor, Gemini CLI and Junie to draw a repository well/)).toBeVisible();
   await settings.getByRole('button', { name: 'Install skill' }).click();
   await expect(settings.getByRole('status').filter({ hasText: 'Skill installed in ~/.agents/skills/draft-canvas.' })).toBeVisible();
   expect(await installs()).toEqual([{ target: 'claude-code' }, { target: 'agents' }]);
+  await settings.getByRole('radio', { name: 'Gemini CLI' }).check({ force: true });
+  await expect(settings.getByRole('status').filter({ hasText: 'Skill installed in ~/.agents/skills/draft-canvas.' })).toBeVisible();
+  await settings.getByRole('radio', { name: 'Junie' }).check({ force: true });
+  await expect(settings.getByRole('status').filter({ hasText: 'Skill installed in ~/.agents/skills/draft-canvas.' })).toBeVisible();
   await settings.getByRole('radio', { name: 'Cursor' }).check({ force: true });
   await expect(settings.getByRole('status').filter({ hasText: 'Skill installed in ~/.agents/skills/draft-canvas.' })).toBeVisible();
 

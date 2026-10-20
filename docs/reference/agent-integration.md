@@ -1,7 +1,7 @@
 # Agent integration (MCP)
 
-Draft Canvas Desktop can let a coding agent on the same computer — Claude Code, Codex, Cursor,
-anything that speaks the [Model Context Protocol](https://modelcontextprotocol.io) — draw and revise diagrams.
+Draft Canvas Desktop can let a coding agent on the same computer — Claude Code, Codex, Cursor, Gemini
+CLI, Junie, anything that speaks the [Model Context Protocol](https://modelcontextprotocol.io) — draw and revise diagrams.
 The agent sends a compact semantic graph: elements, relationships, groups, flows, notes. Draft Canvas
 validates it, lays it out, and creates **ordinary, editable native content**, then persists it and
 makes it undoable. Layout is the app's by default; an agent may place an element exactly or route a

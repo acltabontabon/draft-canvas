@@ -55,8 +55,8 @@ logged or exposed to the editor page; **Disconnect agents** replaces it and ends
 Folder permissions are checked on every call and retry, and input is validated like an imported file.
 Diagrams reachable through overlapping folders are refused as ambiguous, and queued reads stay bound
 to the diagram they targeted. The request history that makes retries safe is bounded and expires.
-**Add to Codex** and **Add to Claude Code** only add the connector entry to that agent's own
-configuration; installing the bundled skill copies files into the agent's skill folder.
+**Add to Codex**, **Add to Claude Code**, **Add to Gemini CLI** and **Add to Junie** only add the
+connector entry to that agent's own configuration; installing the bundled skill copies files into the agent's skill folder.
 Your agent may send diagram content to its own AI provider; that provider is outside Draft Canvas's
 control. See [Agent security](docs/reference/agent-integration.md#security).
 

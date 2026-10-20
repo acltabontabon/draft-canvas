@@ -110,6 +110,12 @@ export function claudeCodeCommand(sidecarPath: string): string {
   return `claude mcp add --scope user draft-canvas -- ${JSON.stringify(sidecarPath)}`;
 }
 
+/** User scope, so every project sees it: `gemini mcp add` alone adds it to the folder the terminal
+ *  happens to be in. No `--` before the path, which Gemini CLI would take for the end of its arguments. */
+export function geminiCommand(sidecarPath: string): string {
+  return `gemini mcp add --scope user draft-canvas ${JSON.stringify(sidecarPath)}`;
+}
+
 /** Matches `CODEX_TOOL_TIMEOUT_SECS` in `src-tauri/src/agent/clients.rs`: Codex's default 60 s
  *  would cut off a long layout before the connector's own two-minute answer arrives. */
 export const CODEX_TOOL_TIMEOUT_SECS = 150;
@@ -119,7 +125,30 @@ export function codexConfigToml(sidecarPath: string): string {
   return `[mcp_servers.draft-canvas]\ncommand = ${JSON.stringify(sidecarPath)}\ntool_timeout_sec = ${CODEX_TOOL_TIMEOUT_SECS}\n`;
 }
 
-const CLIENT_NAMES: Record<AgentClient, string> = { codex: 'Codex', 'claude-code': 'Claude Code' };
+const CLIENT_NAMES: Record<AgentClient, string> = { codex: 'Codex', 'claude-code': 'Claude Code', gemini: 'Gemini CLI', junie: 'Junie' };
+
+/** How a client picks up a new server: each reads its MCP configuration as a session starts. Gemini CLI
+ *  turns every server off, its user-level ones too, in a folder the person hasn't trusted. */
+const RESTART: Record<AgentClient, string> = {
+  codex: 'Start a new Codex chat to use it.',
+  'claude-code': 'Start a new Claude Code session to use it.',
+  gemini: 'Start a new Gemini CLI session in a trusted folder to use it.',
+  junie: 'Start a new Junie session to use it.',
+};
+
+/** What the one-click button does, before it's done. */
+function addText(client: AgentClient, where: string): string {
+  switch (client) {
+    case 'codex':
+      return `Adds Draft Canvas to Codex’s MCP servers${where} — the Codex app, CLI and IDE extension all use it.`;
+    case 'claude-code':
+      return 'Runs claude mcp add for you, so every project can use Draft Canvas.';
+    case 'gemini':
+      return 'Runs gemini mcp add for you, so every project can use Draft Canvas.';
+    case 'junie':
+      return `Adds Draft Canvas to Junie’s MCP servers${where} — Junie in JetBrains IDEs and the Junie CLI both use it.`;
+  }
+}
 
 export interface ClientLine {
   /** The button's label, or null when there's nothing left to do. */
@@ -134,8 +163,7 @@ export function clientLine(setup: AgentClientSetup | undefined): ClientLine | nu
   if (!setup) return null;
   const name = CLIENT_NAMES[setup.client];
   const where = setup.location ? ` in ${setup.location}` : '';
-  const restart = setup.client === 'codex' ? 'Start a new Codex chat to use it.' : 'Start a new Claude Code session to use it.';
-  if (setup.state === 'ready') return { action: null, text: `Set up${where}. ${restart}`, tone: 'on' };
+  if (setup.state === 'ready') return { action: null, text: `Set up${where}. ${RESTART[setup.client]}`, tone: 'on' };
   if (setup.state === 'outdated') {
     return {
       action: `Update ${name}`,
@@ -143,23 +171,16 @@ export function clientLine(setup: AgentClientSetup | undefined): ClientLine | nu
       tone: 'warn',
     };
   }
-  return {
-    action: `Add to ${name}`,
-    text:
-      setup.client === 'codex'
-        ? `Adds Draft Canvas to Codex’s MCP servers${where} — the Codex app, CLI and IDE extension all use it.`
-        : `Runs claude mcp add for you, so every project can use Draft Canvas.`,
-    tone: null,
-  };
+  return { action: `Add to ${name}`, text: addText(setup.client, where), tone: null };
 }
 
-/** Which skills folder a client in Settings reads: Claude Code its own; Codex, Cursor and other agents
- *  the shared `~/.agents/skills` (`src-tauri/src/agent/skill.rs`). */
+/** Which skills folder a client in Settings reads: Claude Code its own; Codex, Cursor, Gemini CLI, Junie
+ *  and other agents the shared `~/.agents/skills` (`src-tauri/src/agent/skill.rs`). */
 export function skillTargetOf(client: AgentClient | 'cursor' | 'other'): AgentSkillTarget {
   return client === 'claude-code' ? 'claude-code' : 'agents';
 }
 
-const SKILL_READERS: Record<AgentSkillTarget, string> = { 'claude-code': 'Claude Code', agents: 'Codex and Cursor' };
+const SKILL_READERS: Record<AgentSkillTarget, string> = { 'claude-code': 'Claude Code', agents: 'Codex, Cursor, Gemini CLI and Junie' };
 
 export interface SkillLine {
   /** The main button's label, or null when there's nothing to do. */

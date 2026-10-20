@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentClientSetup, AgentProject, AgentSettings, AgentSkillSetup } from '../../src/desktop/api';
-import { claudeCodeCommand, clientLine, codexConfigToml, connectionSummary, folderRows, skillLine, skillTargetOf } from '../../src/desktop/ui/settings/agentModel';
+import { claudeCodeCommand, clientLine, codexConfigToml, connectionSummary, folderRows, geminiCommand, skillLine, skillTargetOf } from '../../src/desktop/ui/settings/agentModel';
 
 const AGENT: AgentSettings = {
   enabled: true,
@@ -91,6 +91,12 @@ describe('claudeCodeCommand', () => {
   });
 });
 
+describe('geminiCommand', () => {
+  it('adds the server for every project, with no `--` before the quoted path', () => {
+    expect(geminiCommand(AGENT.sidecarPath!)).toBe('gemini mcp add --scope user draft-canvas "/Applications/Draft Canvas.app/Contents/MacOS/draft-canvas-mcp"');
+  });
+});
+
 describe('codexConfigToml', () => {
   it('is the table Add to Codex writes, with Windows backslashes escaped for TOML', () => {
     expect(codexConfigToml(AGENT.sidecarPath!)).toBe(
@@ -113,6 +119,12 @@ describe('clientLine', () => {
   it('offers to add, update, or says it is done', () => {
     expect(clientLine(setup({}))?.action).toBe('Add to Codex');
     expect(clientLine(setup({ client: 'claude-code' }))?.action).toBe('Add to Claude Code');
+    expect(clientLine(setup({ client: 'gemini' }))).toMatchObject({ action: 'Add to Gemini CLI', text: expect.stringContaining('gemini mcp add') });
+    expect(clientLine(setup({ client: 'junie', location: '~/.junie/mcp/mcp.json' }))).toMatchObject({
+      action: 'Add to Junie',
+      text: 'Adds Draft Canvas to Junie’s MCP servers in ~/.junie/mcp/mcp.json — Junie in JetBrains IDEs and the Junie CLI both use it.',
+    });
+    expect(clientLine(setup({ client: 'junie', state: 'outdated' }))?.action).toBe('Update Junie');
     const outdated = clientLine(setup({ state: 'outdated', configuredCommand: '/old/draft-canvas-mcp' }));
     expect(outdated).toMatchObject({ action: 'Update Codex', tone: 'warn' });
     expect(outdated?.text).toContain('/old/draft-canvas-mcp');
@@ -121,6 +133,9 @@ describe('clientLine', () => {
       text: 'Set up in ~/.codex/config.toml. Start a new Codex chat to use it.',
       tone: 'on',
     });
+    expect(clientLine(setup({ client: 'gemini', state: 'ready', location: '~/.gemini/settings.json' }))?.text).toBe(
+      'Set up in ~/.gemini/settings.json. Start a new Gemini CLI session in a trusted folder to use it.',
+    );
   });
 
   it('says nothing before the shell has answered', () => {
@@ -139,15 +154,17 @@ describe('skillLine', () => {
     ...patch,
   });
 
-  it('installs for Claude Code in its own folder, and for Codex, Cursor and others in the shared one', () => {
+  it('installs for Claude Code in its own folder, and for Codex, Cursor, Gemini CLI, Junie and others in the shared one', () => {
     expect(skillTargetOf('claude-code')).toBe('claude-code');
     expect(skillTargetOf('codex')).toBe('agents');
     expect(skillTargetOf('cursor')).toBe('agents');
+    expect(skillTargetOf('gemini')).toBe('agents');
+    expect(skillTargetOf('junie')).toBe('agents');
     expect(skillTargetOf('other')).toBe('agents');
     const line = skillLine(skill({}));
     expect(line).toMatchObject({ action: 'Install skill', removable: false });
     expect(line?.text).toContain('Installs in ~/.claude/skills for every project.');
-    expect(skillLine(skill({ target: 'agents', location: '~/.agents/skills/draft-canvas' }))?.text).toContain('Teaches Codex and Cursor');
+    expect(skillLine(skill({ target: 'agents', location: '~/.agents/skills/draft-canvas' }))?.text).toContain('Teaches Codex, Cursor, Gemini CLI and Junie');
   });
 
   it('says the skill updates with the app, and never offers to touch a newer copy', () => {

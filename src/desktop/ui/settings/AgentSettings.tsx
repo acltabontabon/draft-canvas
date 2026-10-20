@@ -11,6 +11,7 @@ import {
   connectionSummary,
   cursorDeeplink,
   folderRows,
+  geminiCommand,
   genericConfigJson,
   skillLine,
   skillTargetOf,
@@ -127,6 +128,8 @@ const CLIENTS: { value: Client; label: string }[] = [
   { value: 'claude-code', label: 'Claude Code' },
   { value: 'codex', label: 'Codex' },
   { value: 'cursor', label: 'Cursor' },
+  { value: 'gemini', label: 'Gemini CLI' },
+  { value: 'junie', label: 'Junie' },
   { value: 'other', label: 'Other MCP clients' },
 ];
 
@@ -203,6 +206,18 @@ function Connect({ agent, platform }: { agent: AgentState; platform: Platform })
                 </Disclosure>
               </>
             )}
+            {client === 'gemini' && (
+              <OneClick setup={setupOf('gemini')} blocked={!!agent.sidecarWarning} onConnected={connected}>
+                <p className="dc-prefs-step">Run this once in a terminal:</p>
+                <CopyField label="Terminal command" value={geminiCommand(sidecarPath)} />
+              </OneClick>
+            )}
+            {client === 'junie' && (
+              <OneClick setup={setupOf('junie')} blocked={!!agent.sidecarWarning} onConnected={connected}>
+                <p className="dc-prefs-step">Paste into {setupOf('junie')?.location ?? (platform === 'windows' ? '.junie\\mcp\\mcp.json in your user folder' : '~/.junie/mcp/mcp.json')}:</p>
+                <CopyField label="Junie MCP config" value={genericConfigJson(sidecarPath)} multiline />
+              </OneClick>
+            )}
             {client === 'other' && (
               <>
                 <p className="dc-prefs-step">Add this server to your agent’s MCP configuration:</p>
@@ -220,7 +235,8 @@ function Connect({ agent, platform }: { agent: AgentState; platform: Platform })
 /**
  * The button that writes an agent's setup for the person (`agent/clients.rs`), what it found there,
  * and — tucked away — the manual setup (`children`). The manual setup is all there is while the
- * shell is still looking, or when it can't do it (Claude Code without its CLI where it can be found).
+ * shell is still looking, or when it can't do it (Claude Code or Gemini CLI without its command where
+ * it can be found).
  */
 function OneClick({
   setup,
