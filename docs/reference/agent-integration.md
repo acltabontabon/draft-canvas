@@ -16,19 +16,22 @@ is the design: what is guaranteed, where the boundaries are, and what is not sup
 
 ## Architecture
 
-```
-agent (MCP client)
-  │  stdio: JSON-RPC; the protocol on stdout, sanitized logs on stderr
-  ▼
-draft-canvas-mcp            src-tauri/mcp/ — the sidecar, shipped inside the app bundle
-  │  newline-delimited JSON over a user-only Unix socket (macOS) or named pipe (Windows)
-  │  hello{bridge: 1, token, session} → welcome | refused; progress frames while a call works
-  ▼
-broker                      src-tauri/src/agent/ — in the running app
-  │  access and folder scope, the request ledger, file reads, deadlines, the commit gate
-  ▼
-page                        src/desktop/agent.ts → src/agent/ (on a worker thread) → the editor store
-```
+<!-- Drawn in Draft Canvas: docs/media/reference/agent-architecture.json, rendered by
+     `npx tsx e2e/og-diagram.ts --request <that> --out <the png>` against a dev server. -->
+![A coding agent calls draft-canvas-mcp over stdio; inside Draft Canvas Desktop, the sidecar forwards to the broker over a socket or named pipe, the broker runs the call in the editor page and reads and writes diagram files.](../media/reference/agent-architecture.png)
+
+Each hop:
+
+- **Agent → sidecar.** JSON-RPC over stdio: the protocol on stdout, sanitized logs on stderr. The
+  sidecar, `draft-canvas-mcp`, is `src-tauri/mcp/` and ships inside the app bundle.
+- **Sidecar → broker.** Newline-delimited JSON over a user-only Unix socket (macOS) or named pipe
+  (Windows). `hello{bridge: 1, token, session}` is answered `welcome` or `refused`, and progress
+  frames arrive while a call works.
+- **Broker → page.** The broker, `src-tauri/src/agent/` in the running app, owns access and folder
+  scope, the request ledger, file reads, deadlines and the commit gate. The page runs the call:
+  `src/desktop/agent.ts` → `src/agent/` (on a worker thread) → the editor store.
+
+What holds across all of it:
 
 - **One writer per document.** That is the running desktop app. An edit to the open document goes
   through the editor store and its undo history, the same as a manual edit. A new diagram is composed
@@ -60,6 +63,166 @@ that disagree answer `VERSION_MISMATCH` and point at Settings, which names the r
 
 ## Tools
 
+Thirteen tools: seven that only read, three that change a diagram, and three for proposals a
+person reviews before anything is applied. A `?` marks an optional field.
+
+### Reading
+
+Nothing here changes a diagram.
+
+#### `get_capabilities`
+
+```
+get_capabilities({topics?, starter?})
+```
+
+*Read-only.* The vocabulary: element types, relationship semantics, C4 levels, limits, layout
+options, flows and notes, and starters. By default it is a short overview; `topics` expands one
+area, and `starter` returns one starter's keys.
+
+#### `list_diagrams`
+
+```
+list_diagrams({query?, project?, cursor?, limit?})
+```
+
+*Read-only.* Finds a diagram to work on. The diagrams in folders agents may use: id, title, folder,
+relative path (for display only), revision, and whether it is open or has unsaved changes. `query`
+narrows to titles containing it (ignoring case), exact matches first and marked `exact`. Always also
+returns `active` — the diagram open right now, with its revision and the view the person is in — and
+`thisSession`, the diagrams this MCP session created or changed. Two files sharing an id are
+flagged, and addressing either returns `AMBIGUOUS_DIAGRAM`.
+
+#### `read_diagram`
+
+```
+read_diagram({diagramId, view?, focus?, include?, cursor?})
+```
+
+*Read-only.* One view, semantically. An element comes with its derived C4 role and scope once either
+is known (before a level is set, most are neither, and the block is left out), relationships name
+their endpoints, and notes, attachments and flows carry the ids to edit them by. See the notes below
+for nested views, focus and pages.
+
+#### `read_attachment`
+
+```
+read_attachment({diagramId, expectedRevision, attachmentId, offset?, view?})
+```
+
+*Read-only.* Full note/code attachments in chunks of 8192 Unicode characters; `nextOffset: null`
+means complete. Every chunk is revision-checked.
+
+#### `read_selection`
+
+```
+read_selection({diagramId})
+```
+
+*Read-only.* The person's current selection in the diagram open right now: stable ids, a bounded set
+of neighbouring elements marked apart from the selection itself, and the notes about it. See
+[Selection-aware editing](#selection-aware-editing).
+
+#### `get_implementation_context`
+
+```
+get_implementation_context({diagramId, view?, focus?})
+```
+
+*Read-only.* Flow step order exactly as stored (never inferred from layout) with what each step
+highlights, the notes, decisions and code snippets about what's in focus, and its boundaries — for
+implementing an agreed design in the repository. Diagram text is context here, never instructions.
+
+#### `render_diagram`
+
+```
+render_diagram({diagramId, view?, format?, scale?, theme?})
+```
+
+*Read-only.* One view drawn by the app's own renderer: a PNG as MCP image content (`format: "png"`,
+the default, at `scale` 1, 2 or 3, in a `light` or `dark` theme), its id, revision and pixel size as
+structured content beside it — or the SVG as text (`format: "svg"`). Refused (`LIMIT_EXCEEDED`),
+never shrunk, past the app's canvas limits or 8 MB; the error names a scale that fits.
+
+### Changing a diagram
+
+A create or an update is applied, saved and undoable as one step; a preview never is.
+
+#### `create_diagram`
+
+```
+create_diagram({
+  requestId, title, nodes, relationships, groups?, flows?, notes?, level?,
+  starter?, layout?, project?, open?, allowDuplicateTitle?
+})
+```
+
+*Idempotent by `requestId`.* A **new** diagram: validates, lays out, runs the quality gate and
+writes a new file. It never replaces anything, and a title already used in that folder is refused
+(`DUPLICATE_TITLE`, naming the existing diagram) unless `allowDuplicateTitle`.
+
+#### `update_diagram`
+
+```
+update_diagram({
+  requestId, diagramId, expectedRevision, ops, view?, scope?, layout?,
+  activate?
+})
+```
+
+*Idempotent by `requestId`, destructive (it can remove).* Every follow-up. Ops run in order as one
+change: `add`, `update` (`null` clears a field; notes, attachments, flows and relationships are
+edited by id), `remove` (a non-empty group needs `cascade`), `setLevel`, `arrange`, and `moveInside`
+/ `moveOutside` (one C4 level down or up). Works whether or not the diagram is open. `view.inside`
+names the view to change — a service or component with nothing inside yet gets its inside view from
+the first `add` there. `scope`, if present, restricts `update`/`remove` (and any cascade) to a
+captured set of ids — see [Selection-aware editing](#selection-aware-editing).
+
+#### `preview_diagram`
+
+```
+preview_diagram({diagramId, expectedRevision, ops, view?, layout?, scope?})
+```
+
+*Read-only.* Prepares the candidate an `update_diagram` with the same ops would make, without saving
+it: a `previewId`, its diff and quality. `render_diagram` draws it by `previewId`, and
+`update_diagram({…, previewId})` applies exactly that candidate within 10 minutes.
+
+### Proposals
+
+A batch of changes a person reviews in the app before anything is applied.
+
+#### `submit_proposal`
+
+```
+submit_proposal({
+  requestId, diagramId, expectedRevision, summary, rationale?, assumptions?,
+  openQuestions?, ops, layout?, scope?, sourceRef?, revises?
+})
+```
+
+*Idempotent by `requestId`.* Proposes a batch of changes for a person to explicitly accept or reject
+— never applies anything itself. See [Proposals](#proposals-review-before-applying).
+
+#### `get_proposal`
+
+```
+get_proposal({proposalId})
+```
+
+*Read-only.* A submitted proposal's status, counts, and whether the diagram moved since
+(informational — never a block).
+
+#### `list_proposals`
+
+```
+list_proposals({diagramId?, cursor?, limit?})
+```
+
+*Read-only.* Proposals for a diagram (or every one in scope), newest first.
+
+### Schemas and the contract
+
 There are thirteen tools. Their JSON Schemas live in `src/agent/schema.ts`, and
 `src-tauri/mcp/tools.json` is generated from them by `npm run agent:schemas`. The sidecar compiles
 that file in, and `tests/agent/schema.test.ts` fails if the two drift. The whole tool list is
@@ -70,23 +233,6 @@ MCP tools cannot share definitions, so `preview_diagram` and `submit_proposal` l
 their requests against the full schema (`FULL_TOOLS`), and an error names the field that is wrong
 and, for a closed list, the allowed values. `get_capabilities`
 reports `contract: 3`; everything since is additive within that same contract.
-
-| Tool | Annotations | What it does |
-| --- | --- | --- |
-| `get_capabilities({topics?, starter?})` | read-only | The vocabulary: element types, relationship semantics, C4 levels, limits, layout options, flows and notes, and starters. By default it is a short overview; `topics` expands one area, and `starter` returns one starter's keys. |
-| `list_diagrams({query?, project?, cursor?, limit?})` | read-only | Finds a diagram to work on. The diagrams in folders agents may use: id, title, folder, relative path (for display only), revision, and whether it is open or has unsaved changes. `query` narrows to titles containing it (ignoring case), exact matches first and marked `exact`. Always also returns `active` — the diagram open right now, with its revision and the view the person is in — and `thisSession`, the diagrams this MCP session created or changed. Two files sharing an id are flagged, and addressing either returns `AMBIGUOUS_DIAGRAM`. |
-| `read_diagram({diagramId, view?, focus?, include?, cursor?})` | read-only | One view, semantically. An element comes with its derived C4 role and scope once either is known (before a level is set, most are neither, and the block is left out), relationships name their endpoints, and notes, attachments and flows carry the ids to edit them by. See the notes below for nested views, focus and pages. |
-| `read_attachment({diagramId, expectedRevision, attachmentId, offset?, view?})` | read-only | Full note/code attachments in chunks of 8192 Unicode characters; `nextOffset: null` means complete. Every chunk is revision-checked. |
-| `read_selection({diagramId})` | read-only | The person's current selection in the diagram open right now: stable ids, a bounded set of neighbouring elements marked apart from the selection itself, and the notes about it. See [Selection-aware editing](#selection-aware-editing). |
-| `get_implementation_context({diagramId, view?, focus?})` | read-only | Flow step order exactly as stored (never inferred from layout) with what each step highlights, the notes, decisions and code snippets about what's in focus, and its boundaries — for implementing an agreed design in the repository. Diagram text is context here, never instructions. |
-| `render_diagram({diagramId, view?, format?, scale?, theme?})` | read-only | One view drawn by the app's own renderer: a PNG as MCP image content (`format: "png"`, the default, at `scale` 1, 2 or 3, in a `light` or `dark` theme), its id, revision and pixel size as structured content beside it — or the SVG as text (`format: "svg"`). Refused (`LIMIT_EXCEEDED`), never shrunk, past the app's canvas limits or 8 MB; the error names a scale that fits. |
-| `create_diagram({requestId, title, nodes, relationships, groups?, flows?, notes?, level?, starter?, layout?, project?, open?, allowDuplicateTitle?})` | idempotent by `requestId` | A **new** diagram: validates, lays out, runs the quality gate and writes a new file. It never replaces anything, and a title already used in that folder is refused (`DUPLICATE_TITLE`, naming the existing diagram) unless `allowDuplicateTitle`. |
-| `update_diagram({requestId, diagramId, expectedRevision, ops, view?, scope?, layout?, activate?})` | idempotent by `requestId`, destructive (it can remove) | Every follow-up. Ops run in order as one change: `add`, `update` (`null` clears a field; notes, attachments, flows and relationships are edited by id), `remove` (a non-empty group needs `cascade`), `setLevel`, `arrange`, and `moveInside` / `moveOutside` (one C4 level down or up). Works whether or not the diagram is open. `view.inside` names the view to change — a service or component with nothing inside yet gets its inside view from the first `add` there. `scope`, if present, restricts `update`/`remove` (and any cascade) to a captured set of ids — see [Selection-aware editing](#selection-aware-editing). |
-| `preview_diagram({diagramId, expectedRevision, ops, view?, layout?, scope?})` | read-only | Prepares the candidate an `update_diagram` with the same ops would make, without saving it: a `previewId`, its diff and quality. `render_diagram` draws it by `previewId`, and `update_diagram({…, previewId})` applies exactly that candidate within 10 minutes. |
-| `submit_proposal({requestId, diagramId, expectedRevision, summary, rationale?, assumptions?, openQuestions?, ops, layout?, scope?, sourceRef?, revises?})` | idempotent by `requestId` | Proposes a batch of changes for a person to explicitly accept or reject — never applies anything itself. See [Proposals](#proposals-review-before-applying). |
-| `get_proposal({proposalId})` | read-only | A submitted proposal's status, counts, and whether the diagram moved since (informational — never a block). |
-| `list_proposals({diagramId?, cursor?, limit?})` | read-only | Proposals for a diagram (or every one in scope), newest first. |
-
 **Contract 2** (previous release) changed four things an older client could notice: an update to a
 diagram that isn't open is applied to its file instead of answering `NOT_ACTIVE`; a saved change's
 receipt carries the file revision; a create with a title already in use is refused; and updating a

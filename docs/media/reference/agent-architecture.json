@@ -1,0 +1,105 @@
+{
+  "title": "Agent integration",
+  "level": "container",
+  "open": true,
+  "layout": {
+    "primaryFlow": "call"
+  },
+  "groups": [
+    {
+      "id": "desktop",
+      "kind": "deployment",
+      "label": "Draft Canvas Desktop, on your computer"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "agent",
+      "type": "external-actor",
+      "label": "Coding agent",
+      "description": "Claude Code, Codex, Cursor, Gemini CLI, Junie."
+    },
+    {
+      "id": "sidecar",
+      "type": "service",
+      "group": "desktop",
+      "label": "draft-canvas-mcp",
+      "technology": "Rust",
+      "description": "The sidecar. Thin and stateless; shipped in the app bundle."
+    },
+    {
+      "id": "broker",
+      "type": "service",
+      "group": "desktop",
+      "label": "Broker",
+      "technology": "Rust",
+      "description": "Access, folder scope, the request ledger, deadlines and the commit gate."
+    },
+    {
+      "id": "page",
+      "type": "service",
+      "group": "desktop",
+      "label": "Editor page",
+      "technology": "TypeScript",
+      "description": "Validates, lays out and checks quality on a worker thread."
+    },
+    {
+      "id": "files",
+      "type": "file-system",
+      "label": "Diagram files",
+      "description": "In the folders you allow."
+    }
+  ],
+  "relationships": [
+    {
+      "id": "r1",
+      "from": "agent",
+      "to": "sidecar",
+      "label": "MCP over stdio"
+    },
+    {
+      "id": "r2",
+      "from": "sidecar",
+      "to": "broker",
+      "label": "Socket or named pipe"
+    },
+    {
+      "id": "r3",
+      "from": "broker",
+      "to": "page",
+      "label": "Runs the call"
+    },
+    {
+      "id": "r4",
+      "from": "broker",
+      "to": "files",
+      "label": "Reads and writes",
+      "semantic": "readsWrites"
+    }
+  ],
+  "flows": [
+    {
+      "id": "call",
+      "title": "A tool call",
+      "color": "teal",
+      "steps": [
+        {
+          "relationship": "r1",
+          "caption": "The agent calls a tool."
+        },
+        {
+          "relationship": "r2",
+          "caption": "The sidecar forwards it to the running app."
+        },
+        {
+          "relationship": "r3",
+          "caption": "The page does the diagram work."
+        },
+        {
+          "relationship": "r4",
+          "caption": "The shell saves the result."
+        }
+      ]
+    }
+  ]
+}
