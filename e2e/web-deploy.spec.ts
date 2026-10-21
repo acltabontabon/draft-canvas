@@ -82,10 +82,14 @@ test('the two bundles stay apart', async ({ page }) => {
       (node) => node.getAttribute('src') ?? node.getAttribute('href') ?? '',
     ),
   );
-  // Relative URLs only, and none of them climbing out of the editor's own build.
+  // Every asset from the editor's own origin, none of them climbing out of its own build. Written
+  // relative in the page; a lazy chunk's stylesheet is added later by Vite's preload, resolved
+  // against the chunk's own address, so it arrives absolute but on the same origin.
   for (const url of editorAssets) {
     expect(url.startsWith('..'), `${url} reaches out of the editor`).toBe(false);
-    expect(url.startsWith('http'), `${url} loads from another origin`).toBe(false);
+    const resolved = new URL(url, APP);
+    expect(resolved.origin, `${url} loads from another origin`).toBe(new URL(APP).origin);
+    expect(resolved.pathname.startsWith(new URL(APP).pathname), `${url} reaches out of the editor`).toBe(true);
   }
 });
 
