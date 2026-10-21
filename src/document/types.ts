@@ -10,7 +10,7 @@
 export const DRAFT_FORMAT = 'draft-canvas' as const;
 
 /** Bump when the on-disk shape changes, and add a migration in `migrate.ts`. */
-export const CURRENT_VERSION = 20;
+export const CURRENT_VERSION = 21;
 
 export type DraftFormat = typeof DRAFT_FORMAT;
 
@@ -57,6 +57,17 @@ export type TextRole = (typeof TEXT_ROLES)[number];
 export const TEXT_ALIGNS = ['left', 'center', 'right'] as const;
 export type TextAlign = (typeof TEXT_ALIGNS)[number];
 
+/** A Text element's typeface. All system fonts — see `render/text/fonts.ts`. */
+export const TEXT_FONTS = ['sans', 'serif', 'mono', 'hand'] as const;
+export type TextFont = (typeof TEXT_FONTS)[number];
+
+/**
+ * What sits behind a Text element's words, in its colour: a `card` (a soft callout box), a `marker`
+ * (a highlighter stroke behind each line) or a `banner` (a solid block with the words knocked out).
+ */
+export const TEXT_BACKGROUNDS = ['card', 'marker', 'banner'] as const;
+export type TextBackground = (typeof TEXT_BACKGROUNDS)[number];
+
 export const CODE_LANGUAGES = [
   'plaintext',
   'java',
@@ -69,6 +80,7 @@ export const CODE_LANGUAGES = [
   'bash',
   'http',
   'log',
+  'diff',
 ] as const;
 export type CodeLanguage = (typeof CODE_LANGUAGES)[number];
 
@@ -349,7 +361,10 @@ export interface DraftNode {
   z: number;
   /** Group membership. Coordinates stay absolute in the document model. */
   parentId?: string;
-  /** The node's primary label. Always plain text — never HTML. */
+  /**
+   * The node's primary label. Plain text — never HTML — except on a `text` node, where it is
+   * Markdown (`render/text/markdown.ts`): headings, lists, code, tables, callouts and emphasis.
+   */
   text?: string;
   /**
    * What this element is responsible for, in a sentence — the C4 "description" line, drawn small
@@ -422,6 +437,10 @@ export interface DraftNode {
   textBold?: boolean;
   /** `text` nodes only. See `textBold`. */
   textItalic?: boolean;
+  /** `text` nodes only. Absent is the role's own face (sans, or mono for `technical`). */
+  textFont?: TextFont;
+  /** `text` nodes only. Absent is the words alone on the canvas. */
+  textBackground?: TextBackground;
   /**
    * The architecture that runs inside this shape — see `DraftInside`. Absent on all but the few
    * shapes someone has actually looked inside, which is every shape in every file written before

@@ -154,7 +154,15 @@ KINDS = {'sync', 'async', 'event', 'callback', 'conditional', 'retry', 'failure'
 COLORS = {'neutral', 'teal', 'blue', 'violet', 'amber', 'rose', 'green'}
 GROUP_KINDS = {'system', 'domain', 'network', 'deployment', 'group', 'boundary'}
 NOTE_KINDS = {'note', 'question', 'warning', 'decision', 'code', 'label'}
-LANGUAGES = {'plaintext', 'java', 'javascript', 'typescript', 'json', 'yaml', 'xml', 'sql', 'bash', 'http', 'log'}
+LANGUAGES = {'plaintext', 'java', 'javascript', 'typescript', 'json', 'yaml', 'xml', 'sql', 'bash', 'http', 'log', 'diff'}
+#: A label's `style`: each field and the values it takes.
+LABEL_STYLE = {
+    'role': {'body', 'label', 'heading', 'title', 'technical'},
+    'font': {'sans', 'serif', 'mono', 'hand'},
+    'background': {'none', 'card', 'marker', 'banner'},
+    'align': {'left', 'center', 'right'},
+    'color': {'neutral', 'teal', 'blue', 'violet', 'amber', 'rose', 'green'},
+}
 LEVELS = {'context', 'container', 'component'}
 
 # Hard limits (the app refuses past these) and soft ones (past these it still draws, but reads worse).
@@ -573,6 +581,23 @@ def check_view(view: View, r: Report, repo: str | None, request: dict, is_top: b
                 r.error(where, f'text longer than {MAX["noteText"]}')
         if kind == 'label' and about in view.rel_ids:
             r.error(where, 'a label attaches to elements only')
+        style = note.get('style')
+        if style is not None:
+            if kind != 'label':
+                r.error(where, 'only a label has a style')
+            elif not isinstance(style, dict):
+                r.error(where, 'style is an object')
+            else:
+                if about in view.node_ids and note.get('attach') is not False:
+                    r.error(where, 'an attached label is a chip and has no style; give attach: false to place it beside, styled')
+                for field, value in style.items():
+                    if field in ('bold', 'italic'):
+                        if not isinstance(value, bool):
+                            r.error(where, f'style.{field} is true or false')
+                    elif field not in LABEL_STYLE:
+                        r.error(where, f'style.{field} is not one of {sorted([*LABEL_STYLE, "bold", "italic"])}')
+                    elif value not in LABEL_STYLE[field]:
+                        r.error(where, f'style.{field} "{value}" is not one of {sorted(LABEL_STYLE[field])}')
 
 
 #: Fields a person reads on the canvas. `code` is not among them: a snippet may quote a real TODO.

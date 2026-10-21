@@ -38,6 +38,8 @@ import {
   SERVICE_KINDS,
   SIDES,
   TEXT_ALIGNS,
+  TEXT_BACKGROUNDS,
+  TEXT_FONTS,
   TEXT_ROLES,
   VIEW_LEVELS,
   type Accent,
@@ -69,6 +71,8 @@ import {
   type RouteMode,
   type ServiceKind,
   type TextAlign,
+  type TextBackground,
+  type TextFont,
   type TextRole,
   type OpenPoint,
   type OpenPointKind,
@@ -555,6 +559,10 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
       if (textAlign !== undefined) node.textAlign = textAlign;
       if (candidate.textBold === true) node.textBold = true;
       if (candidate.textItalic === true) node.textItalic = true;
+      const textFont = oneOfOptional<TextFont>(candidate.textFont, TEXT_FONTS);
+      if (textFont !== undefined) node.textFont = textFont;
+      const textBackground = oneOfOptional<TextBackground>(candidate.textBackground, TEXT_BACKGROUNDS);
+      if (textBackground !== undefined) node.textBackground = textBackground;
     }
 
     const nodeAttachments = parseAttachments(candidate.attachments, LIMITS.maxAttachmentsPerNode);

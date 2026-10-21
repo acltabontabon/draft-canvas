@@ -59,6 +59,7 @@ import {
   readDeliveryAttempts,
   readEvidence,
   readHighlight,
+  readLabelStyle,
   readLayout,
   readOpenPoints,
   readResponse,
@@ -594,6 +595,26 @@ function repoint(view: DraftDocument, edge: DraftEdge, ends: { source: string; t
   return next;
 }
 
+/**
+ * A label's `set.style` as a node patch: the fields it names change and the rest stay — `false` and
+ * `"none"` turn one off — and `null` makes the whole label plain.
+ * Its colour is the label's `color`, which `style.color` sets too.
+ */
+function labelStylePatch(r: Reader, value: unknown, at: string): Partial<DraftNode> {
+  const plain: Partial<DraftNode> = { textRole: undefined, annotation: undefined, textFont: undefined, textBackground: undefined, textAlign: undefined, textBold: undefined, textItalic: undefined };
+  if (value === null) return plain;
+  const style = readLabelStyle(r, value, at);
+  if (!style) return {};
+  const given = value as Record<string, unknown>;
+  const patch: Partial<DraftNode> = { ...style };
+  for (const [key, field] of [['role', 'textRole'], ['font', 'textFont'], ['background', 'textBackground'], ['align', 'textAlign'], ['bold', 'textBold'], ['italic', 'textItalic']] as const) {
+    if (given[key] !== undefined && style[field] === undefined) patch[field] = undefined;
+  }
+  // An explicit role replaces the legacy quiet-label flag, which would otherwise keep winning.
+  if (given.role !== undefined) patch.annotation = undefined;
+  return patch;
+}
+
 /** Which `SET_FIELDS` a node of each type takes: a card's own fields, or an element's. */
 const NODE_FIELDS: Partial<Record<DraftNode['type'], keyof typeof SET_FIELDS>> = { group: 'group', note: 'note', code: 'code', text: 'label' };
 
@@ -644,6 +665,7 @@ function updateOne(
       const accent = r.oneOf<Accent>(set.color, `${at}/color`, ACCENTS);
       if (accent) patch.accent = accent;
     }
+    if (set.style !== undefined && node.type === 'text') Object.assign(patch, labelStylePatch(r, set.style, `${at}/style`));
     if (set.type !== undefined) {
       const word = typeof set.type === 'string' ? set.type : '';
       const shape = resolveType(word);
@@ -736,7 +758,7 @@ function updateOne(
         updated.type === 'code'
           ? patch.code !== undefined ? naturalCodeSize(updated.code ?? '', ctx) : updated
           : updated.type === 'text'
-            ? patch.text !== undefined ? naturalTextSize(updated, updated.text ?? '', ctx, { width: 40, height: DEFAULTS.textHeight }) : updated
+            ? patch.text !== undefined || set.style !== undefined ? naturalTextSize(updated, updated.text ?? '', ctx, { width: 40, height: DEFAULTS.textHeight }) : updated
             : sizeToFit(updated, ctx);
       if (sized.width > updated.width || sized.height > updated.height) {
         next = updateNode(next, id, grownInPlace(next, updated, Math.max(sized.width, updated.width), Math.max(sized.height, updated.height)));

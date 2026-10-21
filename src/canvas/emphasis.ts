@@ -39,7 +39,7 @@ export function emphasisColorOf(shapes: readonly Shape[]): string | null {
       if (inner) return inner;
       continue;
     }
-    if (shape.t === 'text' || shape.t === 'code' || !shape.stroke) continue;
+    if (shape.t === 'text' || shape.t === 'rich' || shape.t === 'code' || !shape.stroke) continue;
     return shape.stroke.color;
   }
   return null;
@@ -50,7 +50,7 @@ type Outlined = RectShape | EllipseShape | PathShape;
 function pick(shapes: readonly Shape[], keep: (shape: Outlined) => boolean, scale: number): Shape[] {
   const kept: Shape[] = [];
   for (const shape of shapes) {
-    if (shape.t === 'text' || shape.t === 'code') continue;
+    if (shape.t === 'text' || shape.t === 'rich' || shape.t === 'code') continue;
     if (shape.t === 'group') {
       const children = pick(shape.children, keep, scale * (shape.scale ?? 1));
       if (children.length > 0) kept.push({ ...shape, children });

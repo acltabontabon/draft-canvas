@@ -71,6 +71,8 @@ const NODE_KEYS = [
   'textAlign',
   'textBold',
   'textItalic',
+  'textFont',
+  'textBackground',
   'inside',
 ] as const satisfies KeysOf<DraftNode>;
 const EDGE_KEYS = [

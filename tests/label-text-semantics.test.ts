@@ -8,6 +8,14 @@ import { TEXT_AUTO_MAX_HEIGHT, describeContext, describeNode, effectiveTextRole,
 import { FONTS } from '../src/render/text/fonts';
 import { THEMES } from '../src/render/theme/tokens';
 import { stubContext } from './commandStubs';
+import type { DisplayList, TextRun } from '../src/render/displayList';
+
+/** A Text element's first run of words — its rich text shape's first line, first run. */
+function firstRun(list: DisplayList): TextRun {
+  const rich = list.shapes.find((shape) => shape.t === 'rich');
+  if (!rich || rich.t !== 'rich') throw new Error('no rich text shape');
+  return rich.lines[0]!.runs[0]!;
+}
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
 
 /**
@@ -241,14 +249,14 @@ describe('Label/Text — the "annotation" rendering variant', () => {
   });
 
   it('renders smaller and in a different colour than a plain Label when set', () => {
-    const plain = describeNode(nodeFor(false), ctx).shapes[0] as { font: { size: number }; fill: string };
-    const annotation = describeNode(nodeFor(true), ctx).shapes[0] as { font: { size: number }; fill: string };
+    const plain = firstRun(describeNode(nodeFor(false), ctx));
+    const annotation = firstRun(describeNode(nodeFor(true), ctx));
     expect(annotation.font.size).toBeLessThan(plain.font.size);
     expect(annotation.fill).not.toBe(plain.fill);
   });
 
   it('reuses the exact same quiet caption tokens a connector\'s own inferred relationship uses', () => {
-    const shape = describeNode(nodeFor(true), ctx).shapes[0] as { font: { size: number }; fill: string };
+    const shape = firstRun(describeNode(nodeFor(true), ctx));
     expect(shape.font).toEqual(FONTS.connectorCaption);
     expect(shape.fill).toBe(THEMES.light.textFaint);
   });
@@ -283,7 +291,7 @@ describe('Text — semantic roles, alignment, and emphasis', () => {
 
   it('each role maps to a distinct, opinionated font — never derived from raw px by the caller', () => {
     const sizeOf = (role: string) =>
-      (describeNode(nodeFor({ textRole: role }), ctx).shapes[0] as { font: { size: number } }).font.size;
+      firstRun(describeNode(nodeFor({ textRole: role }), ctx)).font.size;
     expect(sizeOf('label')).toBeLessThan(sizeOf('body'));
     expect(sizeOf('body')).toBeLessThan(sizeOf('heading'));
     expect(sizeOf('heading')).toBeLessThan(sizeOf('title'));
@@ -291,38 +299,43 @@ describe('Text — semantic roles, alignment, and emphasis', () => {
 
   it('technical is monospace, every other role is sans', () => {
     const stackOf = (role: string) =>
-      (describeNode(nodeFor({ textRole: role }), ctx).shapes[0] as { font: { stack: string } }).font.stack;
+      firstRun(describeNode(nodeFor({ textRole: role }), ctx)).font.stack;
     expect(stackOf('technical')).toBe('mono');
     for (const role of ['body', 'label', 'heading', 'title']) expect(stackOf(role)).toBe('sans');
   });
 
   it('bold forces the heaviest weight regardless of the role\'s own base weight', () => {
-    const shape = describeNode(nodeFor({ textRole: 'body', textBold: true }), ctx).shapes[0] as {
-      font: { weight: number };
-    };
+    const shape = firstRun(describeNode(nodeFor({ textRole: 'body', textBold: true }), ctx));
     expect(shape.font.weight).toBe(700);
   });
 
   it('italic is independent of bold and of role, and combines with both', () => {
-    const shape = describeNode(nodeFor({ textRole: 'technical', textBold: true, textItalic: true }), ctx)
-      .shapes[0] as { font: { weight: number; stack: string; italic?: boolean } };
+    const shape = firstRun(describeNode(nodeFor({ textRole: 'technical', textBold: true, textItalic: true }), ctx));
     expect(shape.font.italic).toBe(true);
     expect(shape.font.weight).toBe(700);
     expect(shape.font.stack).toBe('mono');
   });
 
   it('a node with neither toggle set gets the exact same font object as the role default — no stray fields', () => {
-    const shape = describeNode(nodeFor({ textRole: 'heading' }), ctx).shapes[0] as { font: unknown };
+    const shape = firstRun(describeNode(nodeFor({ textRole: 'heading' }), ctx));
     expect(shape.font).toEqual(FONTS.freeTextHeading);
   });
 
-  it('alignment maps to SVG text-anchor and an anchor x matching the box, not CSS left/center/right', () => {
-    const shapeFor = (textAlign?: string) =>
-      describeNode(nodeFor({ textAlign }), ctx).shapes[0] as { align: string; x: number };
-    expect(shapeFor(undefined)).toMatchObject({ align: 'start', x: 0 });
-    expect(shapeFor('left')).toMatchObject({ align: 'start', x: 0 });
-    expect(shapeFor('center')).toMatchObject({ align: 'middle', x: 100 });
-    expect(shapeFor('right')).toMatchObject({ align: 'end', x: 200 });
+  it('alignment places each line within the box: flush left, centred, or flush right', () => {
+    const runFor = (textAlign?: string) => firstRun(describeNode(nodeFor({ textAlign }), ctx));
+    const { width } = runFor();
+    expect(runFor(undefined).x).toBe(0);
+    expect(runFor('left').x).toBe(0);
+    expect(runFor('center').x).toBeCloseTo((200 - width) / 2);
+    expect(runFor('right').x).toBeCloseTo(200 - width);
+  });
+
+  it('the font choice swaps the face and keeps the role\'s size', () => {
+    for (const textFont of ['serif', 'hand', 'mono', 'sans'] as const) {
+      const run = firstRun(describeNode(nodeFor({ textRole: 'heading', textFont }), ctx));
+      expect(run.font.stack).toBe(textFont);
+      expect(run.font.size).toBe(FONTS.freeTextHeading.size);
+    }
   });
 });
 

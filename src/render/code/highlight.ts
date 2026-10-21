@@ -45,6 +45,7 @@ const GRAMMARS: Record<CodeLanguage, string | null> = {
   bash: 'bash',
   http: 'http',
   log: null,
+  diff: null,
 };
 
 export const LANGUAGE_LABELS: Record<CodeLanguage, string> = {
@@ -59,6 +60,7 @@ export const LANGUAGE_LABELS: Record<CodeLanguage, string> = {
   bash: 'Shell',
   http: 'HTTP',
   log: 'Log',
+  diff: 'Diff',
 };
 
 /** A scope is the Prism token class we colour by, e.g. `keyword` or `string`. */
@@ -92,6 +94,7 @@ function computeLines(code: string, language: CodeLanguage): CodeLine[] {
     return rawLines.map((line) => [{ text: expandTabs(line), scope: null }]);
   }
   if (language === 'log') return rawLines.map(highlightLogLine);
+  if (language === 'diff') return rawLines.map(highlightDiffLine);
 
   const grammar = GRAMMARS[language];
   if (!grammar) return rawLines.map((line) => [{ text: expandTabs(line), scope: null }]);
@@ -181,6 +184,43 @@ function highlightLogLine(line: string): CodeLine {
 
   if (rest) tokens.push({ text: rest, scope: null });
   return tokens.length > 0 ? tokens : [{ text: expanded, scope: null }];
+}
+
+/**
+ * A patch reads by its first column: what was added, what was removed, and where a hunk starts.
+ * Prism's diff grammar would do the same at the cost of another grammar in the bundle.
+ */
+function highlightDiffLine(line: string): CodeLine {
+  const text = expandTabs(line);
+  if (text === '') return [];
+  const scope = /^(\+\+\+|---|diff |index )/.test(text)
+    ? 'comment'
+    : text.startsWith('@@')
+      ? 'atrule'
+      : text.startsWith('+')
+        ? 'inserted'
+        : text.startsWith('-')
+          ? 'deleted'
+          : null;
+  return [{ text, scope }];
+}
+
+/** The fence names developers actually write, onto the languages there are grammars for. */
+const FENCE_LANGUAGES: Record<string, CodeLanguage> = {
+  js: 'javascript', jsx: 'javascript', mjs: 'javascript', cjs: 'javascript', javascript: 'javascript',
+  ts: 'typescript', tsx: 'typescript', mts: 'typescript', typescript: 'typescript',
+  json: 'json', jsonc: 'json', json5: 'json',
+  yaml: 'yaml', yml: 'yaml',
+  xml: 'xml', html: 'xml', svg: 'xml', xhtml: 'xml',
+  sql: 'sql', psql: 'sql', postgres: 'sql', mysql: 'sql',
+  bash: 'bash', sh: 'bash', shell: 'bash', zsh: 'bash', console: 'bash', shellsession: 'bash',
+  http: 'http', java: 'java', log: 'log', logs: 'log',
+  diff: 'diff', patch: 'diff',
+};
+
+/** A Markdown fence's info string (```ts) as a highlighting language; plain text when unknown. */
+export function languageForFence(name: string): CodeLanguage {
+  return FENCE_LANGUAGES[name.toLowerCase()] ?? 'plaintext';
 }
 
 const TAB_WIDTH = 2;

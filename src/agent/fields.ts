@@ -7,7 +7,7 @@ export const SET_FIELDS = {
   // is any of them folded onto a host. `attach` turns one into the other, keeping its id.
   note: ['label', 'text', 'kind', 'about', 'near', 'group', 'color', 'attach', 'place'],
   code: ['code', 'language', 'kind', 'about', 'near', 'group', 'color', 'attach', 'place'],
-  label: ['label', 'text', 'kind', 'about', 'near', 'group', 'color', 'attach', 'place'],
+  label: ['label', 'text', 'kind', 'style', 'about', 'near', 'group', 'color', 'attach', 'place'],
   relationship: ['label', 'semantic', 'kind', 'directed', 'async', 'condition', 'color', 'lineStyle', 'response', 'deliveryAttempts', 'from', 'to', 'evidence', 'route'],
   flow: ['title', 'color', 'steps', 'variantOf'],
   attachment: ['label', 'text', 'kind', 'code', 'language', 'about', 'attach'],

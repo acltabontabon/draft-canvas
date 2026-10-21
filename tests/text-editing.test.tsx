@@ -6,7 +6,7 @@ import { addNodes } from '../src/document/operations';
 import { DraftNodeView } from '../src/canvas/DraftNodeView';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
 import { useUiStore } from '../src/store/uiStore';
-import { describeContext, describeNode, NOTE_AUTO_MAX_HEIGHT, TEXT_AUTO_MAX_HEIGHT } from '../src/nodes/describe';
+import { describeContext, describeNode, naturalTextHeight, NOTE_AUTO_MAX_HEIGHT, TEXT_AUTO_MAX_HEIGHT } from '../src/nodes/describe';
 import { LIGHT } from '../src/render/theme/tokens';
 
 /**
@@ -101,8 +101,10 @@ describe('Text editing — Enter is a newline, Cmd/Ctrl+Enter commits', () => {
     expect(editor()).toBeNull();
     const stored = useEditorStore.getState().document.nodes[0]!;
     expect(stored.text).toBe('Heading\nmore\nand more');
-    // The grown height is committed with the text (React Flow hands it back as the node's size).
-    expect(stored.height).toBe(node.height + 80);
+    // Committed at the height the words need as drawn — Markdown renders shorter or taller than
+    // its source, so the editor's own grown height is not what's kept.
+    expect(stored.height).toBe(naturalTextHeight(node, stored.text!, describeContext(LIGHT)));
+    expect(stored.height).toBeGreaterThan(node.height);
   });
 });
 
