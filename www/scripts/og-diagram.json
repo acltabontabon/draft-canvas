@@ -1,0 +1,41 @@
+{
+  "title": "Checkout",
+  "level": "container",
+  "open": true,
+  "layout": { "primaryFlow": "checkout" },
+  "nodes": [
+    { "id": "shopper", "type": "person", "label": "Shopper", "description": "Buys online." },
+    { "id": "web", "type": "service", "label": "Web App", "technology": "Next.js", "description": "Browse and check out." },
+    { "id": "orders", "type": "api", "label": "Orders API", "technology": "Go", "description": "Takes and records orders." },
+    { "id": "stripe", "type": "external-system", "label": "Stripe", "technology": "Stripe", "description": "Takes card payments." },
+    { "id": "db", "type": "sql-database", "label": "Orders DB", "technology": "PostgreSQL" },
+    { "id": "events", "type": "stream", "label": "order-events", "technology": "Apache Kafka" },
+    { "id": "fulfil", "type": "worker", "label": "Fulfilment", "technology": "Python", "description": "Packs and ships each order." }
+  ],
+  "relationships": [
+    { "id": "r1", "from": "shopper", "to": "web", "label": "Checks out" },
+    { "id": "r2", "from": "web", "to": "orders", "label": "Places order", "semantic": "http", "kind": "sync" },
+    { "id": "r3", "from": "orders", "to": "stripe", "label": "Charges card", "semantic": "http", "kind": "sync" },
+    { "id": "r4", "from": "orders", "to": "db", "label": "Writes order", "semantic": "readsWrites" },
+    { "id": "r5", "from": "orders", "to": "events", "label": "Publishes OrderPlaced" },
+    { "id": "r6", "from": "events", "to": "fulfil", "label": "Consumed by" }
+  ],
+  "flows": [
+    {
+      "id": "checkout",
+      "title": "Checkout",
+      "color": "teal",
+      "steps": [
+        { "relationship": "r1", "caption": "The shopper checks out." },
+        { "relationship": "r2", "caption": "The web app places the order." },
+        { "relationship": "r3", "caption": "The card is charged first." },
+        { "relationship": "r4", "caption": "Only then is the order saved." },
+        { "relationship": "r5", "caption": "OrderPlaced goes out on Kafka." },
+        { "relationship": "r6", "caption": "Fulfilment packs and ships it." }
+      ]
+    }
+  ],
+  "notes": [
+    { "id": "n1", "kind": "decision", "about": "r3", "text": "Charge before saving: no unpaid order ever reaches the database." }
+  ]
+}

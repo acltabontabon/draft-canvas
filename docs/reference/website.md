@@ -87,9 +87,10 @@ reads it on the site instead of in a code repository.
 | --- | --- |
 | `npm --prefix www run art` | The hero's pencil-and-ink drawing, written into `www/index.html` |
 | `npm --prefix www run clips` | The five short demo clips, cut from `docs/media/demo.mp4` with ffmpeg |
-| `npm --prefix www run social` | `og-image.png`, from the hero and the stylesheet, and the Apple touch icon |
+| `npx tsx e2e/og-diagram.ts --base <dev server>` | `www/scripts/og-diagram.png`, the share card's diagram, rendered in the real editor from `og-diagram.json` |
+| `npm --prefix www run social` | `og-image.png`, from that diagram and the stylesheet, and the Apple touch icon |
 
-All three commit their output, so a deploy needs neither ffmpeg nor a browser download. The hero is
+All four commit their output, so a deploy needs neither ffmpeg nor a browser download. The hero is
 seeded, so a re-run draws the same pencil strokes; run `social` after it so the share card matches.
 The reel's one still, `www/public/stills/source-evidence.jpg`, is the 1.14.0 release screenshot
 `docs/media/releases/v1.14.0/source-evidence.png` at 1600×900.
