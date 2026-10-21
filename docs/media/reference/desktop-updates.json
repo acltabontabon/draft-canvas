@@ -1,0 +1,96 @@
+{
+  "title": "Desktop updates",
+  "level": "container",
+  "open": true,
+  "layout": {
+    "primaryFlow": "update"
+  },
+  "groups": [
+    {
+      "id": "app",
+      "kind": "deployment",
+      "label": "Draft Canvas Desktop"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "you",
+      "type": "person",
+      "label": "You",
+      "description": "Choose when to download and when to restart."
+    },
+    {
+      "id": "updater",
+      "type": "service",
+      "group": "app",
+      "label": "Updater",
+      "technology": "Rust",
+      "description": "Looks 15 s after launch, then daily. Looking is all it does on its own."
+    },
+    {
+      "id": "quit",
+      "type": "component",
+      "group": "app",
+      "label": "Quit conversation",
+      "description": "Anything unsaved is kept; a file with changes is asked about."
+    },
+    {
+      "id": "feed",
+      "type": "external-system",
+      "label": "Update feed",
+      "technology": "GitHub",
+      "description": "<channel>.json and the signed installers on GitHub Releases."
+    }
+  ],
+  "relationships": [
+    {
+      "id": "r1",
+      "from": "updater",
+      "to": "feed",
+      "label": "Reads the channel manifest"
+    },
+    {
+      "id": "r2",
+      "from": "updater",
+      "to": "you",
+      "label": "Offers a newer version"
+    },
+    {
+      "id": "r3",
+      "from": "you",
+      "to": "updater",
+      "label": "Download, then Update and restart"
+    },
+    {
+      "id": "r4",
+      "from": "updater",
+      "to": "quit",
+      "label": "Asks before replacing the app"
+    }
+  ],
+  "flows": [
+    {
+      "id": "update",
+      "title": "An update",
+      "color": "teal",
+      "steps": [
+        {
+          "relationship": "r1",
+          "caption": "The updater reads the channel's manifest."
+        },
+        {
+          "relationship": "r2",
+          "caption": "Something newer is offered."
+        },
+        {
+          "relationship": "r3",
+          "caption": "You download it, then restart."
+        },
+        {
+          "relationship": "r4",
+          "caption": "The quit conversation keeps your work."
+        }
+      ]
+    }
+  ]
+}

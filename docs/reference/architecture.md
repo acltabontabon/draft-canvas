@@ -22,14 +22,8 @@ Implementation rules are in [AGENTS.md](../../AGENTS.md); module wiring and comm
 
 ## Shape of the system
 
-```mermaid
-flowchart TD
-    UI["UI and canvas"] --> STORE["Editor state and history"]
-    UI --> RENDER["Rendering"]
-    STORE --> DOC["Document model"]
-    RENDER --> DOC
-    STORAGE["Storage and export"] --> DOC
-```
+<!-- Drawn in Draft Canvas: ../media/reference/architecture.json, rendered by e2e/og-diagram.ts. -->
+![UI and canvas edits through editor state and history and draws with rendering; editor state, rendering, and storage and export all depend on the document model.](../media/reference/architecture.png)
 
 Dependencies point toward the document model. It contains plain, serializable data and has no React
 or React Flow dependency. Framework changes therefore do not dictate the file format.

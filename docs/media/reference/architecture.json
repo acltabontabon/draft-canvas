@@ -1,0 +1,71 @@
+{
+  "title": "Shape of the system",
+  "level": "component",
+  "open": true,
+  "nodes": [
+    {
+      "id": "ui",
+      "type": "component",
+      "label": "UI and canvas",
+      "technology": "React",
+      "description": "The editor, the gallery and the canvas."
+    },
+    {
+      "id": "store",
+      "type": "component",
+      "label": "Editor state and history",
+      "description": "Committed content, undo and redo."
+    },
+    {
+      "id": "render",
+      "type": "component",
+      "label": "Rendering",
+      "description": "One drawing for the canvas and every export."
+    },
+    {
+      "id": "storage",
+      "type": "component",
+      "label": "Storage and export",
+      "description": "IndexedDB, files, images and source formats."
+    },
+    {
+      "id": "doc",
+      "type": "component",
+      "label": "Document model",
+      "technology": "TypeScript",
+      "description": "Plain, serializable data. No React."
+    }
+  ],
+  "relationships": [
+    {
+      "id": "r1",
+      "from": "ui",
+      "to": "store",
+      "label": "Edits through"
+    },
+    {
+      "id": "r2",
+      "from": "ui",
+      "to": "render",
+      "label": "Draws with"
+    },
+    {
+      "id": "r3",
+      "from": "store",
+      "to": "doc",
+      "label": "Depends on"
+    },
+    {
+      "id": "r4",
+      "from": "render",
+      "to": "doc",
+      "label": "Depends on"
+    },
+    {
+      "id": "r5",
+      "from": "storage",
+      "to": "doc",
+      "label": "Depends on"
+    }
+  ]
+}

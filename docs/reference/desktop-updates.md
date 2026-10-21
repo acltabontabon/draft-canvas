@@ -5,24 +5,19 @@ release that can be updated from. For what a person sees, see [Draft Canvas Desk
 
 ## How it works
 
-```
-launch ──15 s──▶ look ──(daily)──▶ look …
-                   │
-     read github.com/…/releases/download/desktop-updates/<channel>.json
-                   │
-         newer, and not a prerelease for a stable install?
-             │                        │
-            yes                       no ──▶ up to date
-             ▼
-   Available ── you: Download ──▶ Downloading ──▶ signature checked ──▶ Ready
-                                                                          │
-                     you: Update and restart ◀────────────────────────────┘
-                                 │
-       the quit conversation: anything unsaved is kept, a file with changes is asked about
-                                 │  (Cancel keeps working; the update stays ready)
-                                 ▼
-                     replace the app · relaunch
-```
+<!-- Drawn in Draft Canvas: ../media/reference/desktop-updates.json, rendered by e2e/og-diagram.ts. -->
+![The updater inside Draft Canvas Desktop reads the channel manifest from the update feed on GitHub Releases, offers you a newer version, and when you choose Update and restart asks the quit conversation before replacing the app.](../media/reference/desktop-updates.png)
+
+1. **Look.** 15 seconds after launch, then daily, the updater reads
+   `github.com/…/releases/download/desktop-updates/<channel>.json`.
+2. **Offer.** If it lists something newer — and, for a stable install, not a prerelease — the update
+   is *Available*. Otherwise the app is up to date.
+3. **Download.** *Download* fetches it and checks its signature; it is then *Ready*.
+4. **Restart.** *Update and restart* starts the quit conversation: anything unsaved is kept, and a
+   file with changes is asked about. *Cancel* keeps working, and the update stays ready.
+5. **Replace.** The app is replaced and relaunched.
+
+The rules behind it:
 
 - **Looking is all it does on its own.** Downloading and installing are always asked for. Settings has
   *Check for updates automatically* (on by default) and *Check for updates*.
