@@ -154,14 +154,23 @@ export function parseNotes(notes: string | null): NoteBlock[] {
   return blocks;
 }
 
-/** `**bold**` and `` `code` `` are all the changelog uses inline; everything else is plain text. */
-export function inlineParts(text: string): { kind: 'text' | 'strong' | 'code'; text: string }[] {
-  const parts: { kind: 'text' | 'strong' | 'code'; text: string }[] = [];
-  const pattern = /\*\*([^*]+)\*\*|`([^`]+)`/g;
+export type InlinePart = { kind: 'text' | 'strong' | 'code'; text: string } | { kind: 'link'; text: string; href: string };
+
+/**
+ * `**bold**`, `` `code` `` and `[text](https://…)` are all the changelog uses inline; everything else
+ * is plain text. A link that isn't `https:` stays as its text alone — the notes come from a download,
+ * and nothing in them should open anything else.
+ */
+export function inlineParts(text: string): InlinePart[] {
+  const parts: InlinePart[] = [];
+  const pattern = /\*\*([^*]+)\*\*|`([^`]+)`|\[([^\]]+)\]\(([^)\s]+)\)/g;
   let at = 0;
   for (const match of text.matchAll(pattern)) {
     if (match.index! > at) parts.push({ kind: 'text', text: text.slice(at, match.index) });
-    parts.push(match[1] !== undefined ? { kind: 'strong', text: match[1] } : { kind: 'code', text: match[2]! });
+    if (match[1] !== undefined) parts.push({ kind: 'strong', text: match[1] });
+    else if (match[2] !== undefined) parts.push({ kind: 'code', text: match[2] });
+    else if (/^https:\/\//.test(match[4]!)) parts.push({ kind: 'link', text: match[3]!, href: match[4]! });
+    else parts.push({ kind: 'text', text: match[3]! });
     at = match.index! + match[0].length;
   }
   if (at < text.length) parts.push({ kind: 'text', text: text.slice(at) });

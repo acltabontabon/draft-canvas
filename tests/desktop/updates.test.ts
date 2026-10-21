@@ -108,6 +108,21 @@ describe('release notes', () => {
       { kind: 'text', text: ' <b>tag</b>' },
     ]);
   });
+
+  // The update dialog showed "Full changelog: [1.15.2](https://github.com/…)" verbatim.
+  it('turns an https link into its text and address, and any other link into text alone', () => {
+    expect(inlineParts('Full changelog: [1.15.2](https://github.com/acltabontabon/draft-canvas/blob/v1.15.2/CHANGELOG.md#1152)')).toEqual([
+      { kind: 'text', text: 'Full changelog: ' },
+      { kind: 'link', text: '1.15.2', href: 'https://github.com/acltabontabon/draft-canvas/blob/v1.15.2/CHANGELOG.md#1152' },
+    ]);
+    expect(inlineParts('[run](javascript:void0) or [plain](http://example.com) or [here](file:///etc/hosts)')).toEqual([
+      { kind: 'text', text: 'run' },
+      { kind: 'text', text: ' or ' },
+      { kind: 'text', text: 'plain' },
+      { kind: 'text', text: ' or ' },
+      { kind: 'text', text: 'here' },
+    ]);
+  });
 });
 
 describe('the controller and the updater', () => {

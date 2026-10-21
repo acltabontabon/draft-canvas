@@ -11,6 +11,12 @@ the release notes and the in-app What's New are generated from here. See
 
 ## [Unreleased]
 
+### Desktop
+
+#### Fixed
+
+- The update window's release notes show links as links, instead of raw Markdown.
+
 ### Web
 
 #### Added

@@ -1,3 +1,4 @@
+import { openLink } from '../../host/openLink';
 import { Button } from '../../ui/common/Button';
 import { Modal } from '../../ui/common/Modal';
 import { desktopStore } from '../store';
@@ -127,7 +128,25 @@ function ReleaseNotes({ notes }: { notes: string | null }) {
         ) : (
           <p key={index} data-kind={block.kind}>
             {inlineParts(block.text).map((part, at) =>
-              part.kind === 'strong' ? <strong key={at}>{part.text}</strong> : part.kind === 'code' ? <code key={at}>{part.text}</code> : part.text,
+              part.kind === 'strong' ? (
+                <strong key={at}>{part.text}</strong>
+              ) : part.kind === 'code' ? (
+                <code key={at}>{part.text}</code>
+              ) : part.kind === 'link' ? (
+                // The system browser, never the webview: the same route as every link the app opens.
+                <a
+                  key={at}
+                  href={part.href}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    openLink(part.href);
+                  }}
+                >
+                  {part.text}
+                </a>
+              ) : (
+                part.text
+              ),
             )}
           </p>
         ),
