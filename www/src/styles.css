@@ -2098,16 +2098,6 @@ html:has(.dl[open]) {
   text-align: right;
 }
 
-.doc-edit {
-  margin: 22px 0 0;
-  font-size: 0.86rem;
-}
-
-.doc .doc-edit a {
-  color: var(--ink-faint);
-  text-decoration-color: var(--ink-ghost);
-}
-
 @media (max-width: 1180px) {
   .docs-shell { grid-template-columns: 200px minmax(0, 46rem); gap: 48px; }
   .doc-contents { display: none; }

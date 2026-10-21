@@ -330,8 +330,7 @@ ${
           </nav>
 `
     : ''
-}          <p class="doc-edit"><a href="${GITHUB}docs/${page.source}">Edit this page on GitHub</a></p>
-        </footer>
+}        </footer>
       </main>
 
 ${
