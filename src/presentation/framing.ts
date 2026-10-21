@@ -175,15 +175,7 @@ export function frameOverview(box: Bounds, view: View, insets: Insets, maxZoom =
   return centred(box, safe, zoom);
 }
 
-/**
- * Whether a camera the presenter has moved by hand still shows the framed box well enough to leave
- * alone — the same test `frameStep` answers `stay` with, exposed for the moment the presenter asks
- * for guided framing back and nothing needs to move.
- */
-export function comfortablyShows(box: Bounds, camera: DraftViewport, view: View, insets: Insets): boolean {
-  return frameStep(box, camera, view, insets).kind === 'stay';
-}
-
+/** Which corner of the canvas the step caption sits in — chosen to keep off the interaction. */
 export type CaptionCorner = 'bottom-left' | 'bottom-right' | 'top-left' | 'top-right';
 
 const CORNERS: readonly CaptionCorner[] = ['bottom-left', 'bottom-right', 'top-left', 'top-right'];

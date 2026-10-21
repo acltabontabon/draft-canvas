@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useReactFlow, useStore as useReactFlowStore } from '@xyflow/react';
 import { diffForReview, looksAlreadyApplied, preconditionConflicts, type ElementDiffRow } from '../../agent/proposal';
 import { applyUpdate } from '../../agent/patch';
+import { changedIds } from '../../agent/rebase';
 import { AgentError } from '../../agent/errors';
 import { runOffThread } from '../../agent/offThread';
 import { agentGhostDiff } from '../../canvas/agentGhostDiff';
@@ -10,11 +11,10 @@ import { ownerAt, pathKey, viewOf, type DepthPath } from '../../depth/tree';
 import { displayNameFor } from '../../document/factory';
 import { boundsOf } from '../../document/geometry';
 import type { DraftDocument } from '../../document/types';
-import { fileOf, useEditorStore } from '../../store/editorStore';
+import { fileOf, isInteracting, useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
 import { Button } from '../../ui/common/Button';
 import type { Proposal } from '../api';
-import { desktopStore } from '../store';
 import { useDesktopController } from '../useDesktop';
 
 /** The floating panel's own width (`app.css`'s `.dc-proposal-panel`) plus its margin from the edge
@@ -83,7 +83,6 @@ export function ProposalPanel() {
   // review before the person has ever opened it once.
   const diagramId = useEditorStore((state) => state.document.metadata.id);
   const controller = useDesktopController();
-  const agentOn = useSyncExternalStore(desktopStore.subscribe, () => desktopStore.getSnapshot().agent?.enabled === true);
   const [listed, setProposals] = useState<Proposal[]>([]);
   const [loading, setLoading] = useState(false);
   // Bumped by every refresh, every local update and every diagram switch: a list still in flight from
@@ -124,14 +123,16 @@ export function ProposalPanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- refresh closes over diagramId/controller, both stable per render pass
   }, [diagramId]);
 
-  // Polled as well, lightly, only while a proposal can arrive or is being looked at: with agent access
-  // off nothing new comes in, and a closed panel's badge is kept right by the triggers above.
+  // Polled as well, lightly, only while the panel is open, so whether a proposal went stale stays
+  // right while it is looked at. A closed panel's badge is kept right by the triggers above: the shell
+  // says when a proposal is saved. Polling for it as well walked every project every 15 s, even with
+  // the window hidden in the tray.
   useEffect(() => {
-    if (!open && !agentOn) return;
+    if (!open) return;
     const timer = window.setInterval(() => void refresh(), 15_000);
     return () => window.clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- as above
-  }, [diagramId, open, agentOn]);
+  }, [diagramId, open]);
 
   const pending = proposals.filter((p) => p.status === 'pending' || p.status === 'accepting');
   if (!diagramId) return null;
@@ -188,6 +189,7 @@ export function ProposalPanel() {
           )}
           {selected && (
             <ProposalDetail
+              key={selected.proposalId}
               proposal={selected}
               onChanged={(patch) => {
                 // Applied synchronously, in the same tick the action's own result is known — the
@@ -393,27 +395,37 @@ function ProposalDetail({ proposal, onChanged }: { proposal: Proposal; onChanged
     }
   };
 
+  /**
+   * The proposal worked out against the diagram as it is right now, or why it can't be accepted now.
+   * `unchanged` means the diagram already holds what it would make: nothing to commit, only to record.
+   */
+  const prepareAccept = (): { error: string } | { revision: number; file: DraftDocument; unchanged: boolean } => {
+    // A drag or a text edit in flight would absorb the commit into its own gesture, so `applyToFile`
+    // refuses it — after `begin_accept` had already moved the proposal on. Asked before, it is a retry.
+    if (isInteracting()) return { error: 'Finish the drag or edit in progress, then accept it again. Nothing was committed.' };
+    if (useUiStore.getState().readOnly) return { error: 'This diagram is read-only. Nothing was committed.' };
+    const state = useEditorStore.getState();
+    const file = fileOf(state);
+    // The panel follows the open diagram, but a switch can land while this panel still shows the one
+    // left: a proposal is only ever accepted into the diagram it was written for.
+    if (file.metadata.id !== proposal.diagramId) return { error: 'This proposal is for a different diagram than the one open now. Nothing was committed.' };
+    const result = applyUpdate(file, proposal.path, proposal.ops, proposal.layout ?? undefined, proposal.scope ?? undefined);
+    if (result.quality.errors.length) return { error: 'This proposal would leave unreadable content. Ask the agent to revise it.' };
+    if (preconditionConflicts(file, proposal.path, proposal.preconditions).length > 0) {
+      return { error: 'The diagram changed in a way this proposal conflicts with. Ask the agent to revise it.' };
+    }
+    // `applyToFile` refuses a change that changes nothing; accepting one is still a decision to record.
+    const unchanged = result.file === file || changedIds(file, result.file).size === 0;
+    return { revision: state.revision, file: result.file, unchanged };
+  };
+
   const accept = () =>
     act(async () => {
       // Re-check everything immediately before committing — the diagram may have moved since this
       // render; a stale re-render here would otherwise commit against a document already gone stale.
-      const state = useEditorStore.getState();
-      const file = fileOf(state);
-      // The panel follows the open diagram, but a switch can land while this panel still shows the one
-      // left: a proposal is only ever accepted into the diagram it was written for.
-      if (file.metadata.id !== proposal.diagramId) {
-        setError('This proposal is for a different diagram than the one open now. Nothing was committed.');
-        return undefined;
-      }
-      const beforeRevision = state.revision;
-      const result = applyUpdate(file, proposal.path, proposal.ops, proposal.layout ?? undefined, proposal.scope ?? undefined);
-      if (result.quality.errors.length) {
-        setError('This proposal would leave unreadable content. Ask the agent to revise it.');
-        return undefined;
-      }
-      const freshConflicts = preconditionConflicts(file, proposal.path, proposal.preconditions);
-      if (freshConflicts.length > 0) {
-        setError('The diagram changed in a way this proposal conflicts with. Ask the agent to revise it.');
+      let ready = prepareAccept();
+      if ('error' in ready) {
+        setError(ready.error);
         return undefined;
       }
       const begun = await controller.beginAcceptProposal(proposal.proposalId, proposal.version, proposal.diagramId, proposal.path);
@@ -424,19 +436,29 @@ function ProposalDetail({ proposal, onChanged }: { proposal: Proposal; onChanged
         // current state, not the one this attempt started from.
         return begun.code === 'PROPOSAL_CHANGED' ? begun.proposal : undefined;
       }
-      // The one gap `begin_accept`'s own version/identity check can't see: an edit landing in the
-      // narrow window between it and this commit. `result` was computed from `file`, the document as
-      // of `beforeRevision` — passing that revision lets `applyToFile` refuse atomically, inside the
-      // same synchronous pass that would otherwise commit, rather than as a separate check with a gap
-      // of its own between "check" and "commit".
-      const applied = state.applyToFile(`Applied proposal: ${proposal.summary}`, () => result.file, beforeRevision);
-      if (!applied) {
-        setError('The diagram changed while this was being accepted. Nothing was committed; review it again.');
-        return undefined;
+      // The person may have edited, or begun a drag, while `begin_accept` was in flight: worked out
+      // again against what is there now rather than refused, which would leave it mid-accept.
+      if (ready.revision !== useEditorStore.getState().revision || isInteracting()) {
+        ready = prepareAccept();
+        if ('error' in ready) {
+          setError(ready.error);
+          return begun.proposal;
+        }
+      }
+      if (!ready.unchanged) {
+        // The one gap left: an edit landing between the check above and this commit. Passing the
+        // revision `ready` was worked out at lets `applyToFile` refuse atomically, inside the same
+        // synchronous pass that would otherwise commit.
+        const file = ready.file;
+        const applied = useEditorStore.getState().applyToFile(`Applied proposal: ${proposal.summary}`, () => file, ready.revision);
+        if (!applied) {
+          setError('The diagram changed while this was being accepted. Nothing was committed; accept it again.');
+          return begun.proposal;
+        }
       }
       const resolved = await controller.resolveProposal(proposal.proposalId, 'accepted');
       if (!resolved.ok && resolved.code !== 'ALREADY_RESOLVED') {
-        setError('Applied, but the proposal record could not be updated.');
+        setError(ready.unchanged ? 'The diagram already had this change, but the proposal record could not be updated.' : 'Applied, but the proposal record could not be updated.');
         return undefined;
       }
       // The document already has the change either way (`resolved.ok`, or `ALREADY_RESOLVED` because

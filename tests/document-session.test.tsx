@@ -6,6 +6,7 @@ import { useEditorStore } from '../src/store/editorStore';
 import { useUiStore } from '../src/store/uiStore';
 import { useDocumentSession, type DocumentSession } from '../src/store/useDocumentSession';
 import { __setRepository, type DraftRepository } from '../src/storage';
+import { stashForReload } from '../src/storage/reloadStash';
 
 /** A minimal, fully-stubbed `DraftRepository` — every method resolves with a
  *  harmless default; a test overrides only the method it needs to control or
@@ -177,6 +178,40 @@ describe('useDocumentSession — overlapping opens', () => {
 
     expect(useEditorStore.getState().document.metadata.id).toBe(fast.metadata.id);
     expect(session().openId).toBe(fast.metadata.id);
+  });
+
+  it('keeps a reload stash over a rename made elsewhere, and opens it unsaved when writing it fails', async () => {
+    const original = createDocument('Draft');
+    const edited: DraftDocument = { ...original, metadata: { ...original.metadata, title: 'Draft edited', updatedAt: 1_000 } };
+    // Another tab renamed it since: a later `updatedAt`, the same content stamp.
+    const stored: DraftDocument = { ...original, metadata: { ...original.metadata, title: 'Renamed', updatedAt: 2_000 } };
+    const saves: string[] = [];
+    let failNext = true;
+    const repository = stubRepository({
+      load: async () => structuredClone(stored),
+      knownContentStamp: () => 's_same',
+      save: async (document) => {
+        saves.push(document.metadata.title);
+        if (failNext) {
+          failNext = false;
+          throw new Error('transient');
+        }
+      },
+    });
+    stashForReload(edited, { base: { title: 'Draft' }, stamp: 's_same' });
+    const session = renderSession(repository);
+    await waitFor(() => expect(session().ready).toBe(true));
+
+    await act(async () => {
+      await session().openDocument(edited.metadata.id);
+    });
+    // The stash is on screen, not "could not be read", and still there for a refresh.
+    expect(errorToastShown()).toBe(false);
+    expect(useEditorStore.getState().document.metadata.title).toBe('Draft edited');
+    expect(window.sessionStorage.getItem(`draft-canvas:reload:${edited.metadata.id}`)).not.toBeNull();
+    // Autosave retries the write it owes.
+    await waitFor(() => expect(saves).toHaveLength(2), { timeout: 3000 });
+    window.sessionStorage.clear();
   });
 
   /**
@@ -351,6 +386,28 @@ describe('useDocumentSession — repository failures surface a toast, not an unh
     expect(errorToastShown()).toBe(true);
   });
 
+  it('a duplicate or import that was saved is not reported as failed when only the list re-read fails', async () => {
+    let lists = 0;
+    const repository = stubRepository({
+      list: async () => {
+        lists += 1;
+        if (lists > 1) throw new Error('list failed');
+        return [];
+      },
+      load: async () => createDocument('Original'),
+    });
+    const session = renderSession(repository);
+    await waitFor(() => expect(session().ready).toBe(true));
+
+    await act(async () => {
+      await session().duplicateDocument('id1');
+      await session().adoptDocument(createDocument('Imported'));
+    });
+    expect(lists).toBeGreaterThan(1);
+    expect(errorToastShown()).toBe(false);
+    expect(useEditorStore.getState().document.metadata.title).toBe('Imported');
+  });
+
   it('duplicateDocument of a canvas that cannot be read says so instead of doing nothing', async () => {
     const session = renderSession(stubRepository({ load: async () => null }));
     await waitFor(() => expect(session().ready).toBe(true));
@@ -495,6 +552,58 @@ describe('useDocumentSession — opening viewport fit request', () => {
       await session().openDocument(doc.metadata.id);
     });
     expect(useUiStore.getState().openFitDocumentId).toBeNull();
+  });
+});
+
+describe('useDocumentSession — closing prunes background images', () => {
+  /** Just enough of the Web Locks API: shared holds counted per name, `ifAvailable` probes. */
+  function fakeLocks() {
+    const held = new Map<string, number>();
+    return {
+      async request(name: string, options: LockOptions, callback: (lock: { name: string } | null) => unknown) {
+        if (options.ifAvailable) return callback(held.get(name) ? null : { name });
+        held.set(name, (held.get(name) ?? 0) + 1);
+        try {
+          return await callback({ name });
+        } finally {
+          held.set(name, held.get(name)! - 1);
+        }
+      },
+    };
+  }
+
+  afterEach(() => {
+    Reflect.deleteProperty(navigator, 'locks');
+  });
+
+  it('leaves them alone while another tab has the canvas open, and prunes once none does', async () => {
+    Object.defineProperty(navigator, 'locks', { value: fakeLocks(), configurable: true });
+    const { holdOpen } = await import('../src/storage/openPresence');
+    const doc = createDocument('Backdrop');
+    const pruned: string[] = [];
+    const repository = stubRepository({
+      load: async () => doc,
+      pruneBackgroundImages: async (id) => void pruned.push(id),
+    });
+    const session = renderSession(repository);
+    await waitFor(() => expect(session().ready).toBe(true));
+    const elsewhere = holdOpen(doc.metadata.id);
+
+    const openAndClose = async () => {
+      await act(async () => {
+        await session().openDocument(doc.metadata.id);
+      });
+      await act(async () => {
+        await session().closeDocument();
+      });
+    };
+    await openAndClose();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(pruned).toEqual([]);
+
+    await elsewhere();
+    await openAndClose();
+    await waitFor(() => expect(pruned).toEqual([doc.metadata.id]));
   });
 });
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { shortcutCatalog, shortcutFor } from '../src/commands/shortcutLookup';
-import { isCommandRow, SECTIONS } from '../src/ui/Editor/shortcutSections';
+import { SECTIONS } from '../src/ui/Editor/shortcutSections';
 import { MOD_SYMBOL } from '../src/lib/platform';
 
 /**
@@ -80,7 +80,7 @@ describe('shortcutCatalog', () => {
 describe('ShortcutSheet cross-check', () => {
   const catalog = shortcutCatalog();
   const commandRowIds = new Set(
-    SECTIONS.flatMap((section) => section.rows).filter(isCommandRow).map((row) => row.commandId),
+    SECTIONS.flatMap((section) => section.rows).flatMap((row) => ('commandId' in row ? [row.commandId] : [])),
   );
   // Node-creation letter shortcuts (`add-service`, `add-note`, …) are covered by the sheet's
   // separate "Create" section, generated straight from `canvas/presets.ts` — not from `SECTIONS`,

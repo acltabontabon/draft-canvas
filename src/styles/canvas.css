@@ -2904,10 +2904,6 @@
   font-size: 10.5px;
 }
 
-.dc-empty-keys .dc-dot {
-  margin: 0 6px;
-}
-
 /* ---- the connector ---- */
 
 /* ---- the starters ---- */
@@ -4547,7 +4543,10 @@
 .dc-trace-badges { pointer-events: none; }
 .dc-trace-badge { position: absolute; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: #245bcc; color: white; border: 2px solid white; font: 600 13px system-ui; }
 .dc-editor[data-tracing] .dc-toolbar { pointer-events: none; opacity: .5; }
-.dc-editor[data-tracing] :is(.dc-flow-panel, .dc-inspector, .dc-edge-popover, .dc-element-popover, .dc-node-resizer, .react-flow__resize-control) { display: none; }
+/* A backstop: the editor already unmounts the panels and inspectors while tracing, but the node
+   resizer stays mounted, and only this hides its controls. The inspectors once went by names no
+   element carried (`dc-edge-popover`, `dc-element-popover`, `dc-node-resizer`). */
+.dc-editor[data-tracing] :is(.dc-flow-panel, .dc-inspector, .dc-edge-inspector, .dc-element-inspector, .react-flow__resize-control) { display: none; }
 
 /* Inherit the picker's pointer state: its fading empty layer must let clicks through. */
 .dc-example-link { color: var(--dc-text); background: transparent; border: 0; text-decoration: underline; cursor: pointer; margin: 12px 0; }

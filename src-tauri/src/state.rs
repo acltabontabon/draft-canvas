@@ -219,6 +219,13 @@ impl AppState {
         Ok(lock(&self.grants).insert_file(canonical))
     }
 
+    /// A file's handle without watching its folder: an agent reading diagrams across a project would
+    /// otherwise take a watch, and on macOS a restart of the event stream, for every folder it read.
+    pub fn grant_file_unwatched(&self, path: &Path) -> Result<Handle, AppError> {
+        let canonical = validate_file(path)?;
+        Ok(lock(&self.grants).insert_file(canonical))
+    }
+
     pub fn grant_project(&self, path: &Path) -> Result<Handle, AppError> {
         let canonical = validate_folder(path)?;
         if let Some(watches) = lock(&self.watches).as_mut() {

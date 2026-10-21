@@ -19,6 +19,10 @@ the release notes and the in-app What's New are generated from here. See
   stay at a full frame rate, large diagrams open faster, and hovering connectors, selecting and
   opening panels do less work. <!-- highlight -->
 - The app's first screen loads about a third less code; export tools load when you first use them.
+  Its styles are lighter too: the editor's own load with the editor.
+- Clicking, dragging and panning on a large diagram do 10–20% less work per frame, and drawing a
+  connector on one no longer stalls as long when it lands.
+- Arrange on a large diagram finishes in a second or two instead of freezing the page.
 
 #### Fixed
 
@@ -33,6 +37,18 @@ the release notes and the in-app What's New are generated from here. See
 - Arrange and imports say when they couldn't load, instead of doing nothing.
 - An empty Text removed with Escape no longer comes back after a reload.
 - Two code snippets of the same length no longer show each other's highlighting.
+- Clicking or panning while presenting no longer saves the presentation's camera into the diagram,
+  and clicking a note's chip no longer turns guided framing off.
+- Undo or redo that leaves a shape's inside keeps where you'd panned to there.
+- A rename made elsewhere while the diagram's title field is focused is no longer undone when you
+  click away.
+- Shared diagrams no longer offer Arrange, Find & Replace, Tidy connectors or a background image,
+  which they couldn't apply.
+- Find & Replace no longer opens over the clipboard permission prompt.
+- Exporting every level no longer gives two images the same file name.
+- An agent's or proposal's preview draws connectors with their bends, side by side when parallel,
+  and with their reply line.
+- The status bar says "Saved" only once every edit is saved.
 
 ### Desktop
 
@@ -54,6 +70,20 @@ the release notes and the in-app What's New are generated from here. See
 - A proposal for one diagram can no longer show, or be accepted, on another.
 - An agent's change refused because you were dragging or in a read-only diagram is
   reported to the agent as refused.
+- Save As over an existing file no longer keeps that file's old background image.
+- Renaming a file can no longer replace one that appeared under the new name meanwhile.
+- The recovery copy written as you quit always holds your latest edits.
+- Home notices changes that land while a project is being listed, and folders with a dot in their
+  name being removed or renamed.
+- The open file keeps hearing about outside changes however many project folders are listed.
+- Accepting a proposal no longer gets stuck when it changes nothing or you're mid-drag, and one
+  proposal's error no longer shows on the next.
+- An agent working while you edit can no longer delete what you just added, leave a flow's variants
+  pointing at a removed flow, or go past a diagram's flow limit.
+- An agent's preview no longer shows shapes you added meanwhile as removed.
+- One oversized agent request is refused on its own instead of dropping the agent's connection.
+- Agent requests that list diagrams, and the proposals check, read project folders once instead of
+  twice, or not at all when there's nothing to check.
 
 ### Web
 
@@ -68,6 +98,15 @@ the release notes and the in-app What's New are generated from here. See
 - **A new home** — Draft Canvas lives at [draftcanvas.dev](https://draftcanvas.dev/), and the editor
   at [app.draftcanvas.dev](https://app.draftcanvas.dev/). Old links forward to the same page there.
   <!-- highlight -->
+
+#### Fixed
+
+- Backups, restores and moving diagrams from the old address keep background images.
+- A refresh with unsaved edits keeps them even if saving them fails at first, or the diagram was
+  renamed in another tab.
+- Closing a diagram no longer removes background images its undo history needs in another tab.
+- Duplicating, importing or deleting a diagram is no longer reported as failed when only the list
+  couldn't be refreshed afterwards.
 
 ## [1.15.2] - 2026-10-21
 

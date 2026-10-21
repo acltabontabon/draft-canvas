@@ -142,6 +142,11 @@ impl Bridge {
                 entries: conn.pending.clone(),
             };
             let frame = json!({"type": "call", "id": id, "tool": tool, "args": args});
+            // The app drops the whole connection on a frame past its cap, and every call in flight
+            // with it; the agent, told the connection was lost and to retry, resent the same call.
+            if frame.to_string().len() >= APP_MAX_FRAME {
+                return Err(too_large());
+            }
             if conn.out.send(frame).await.is_err() {
                 *guard = None;
                 return Err(lost());
@@ -278,6 +283,15 @@ impl Bridge {
     }
 }
 
+fn too_large() -> Value {
+    error(
+        "LIMIT_EXCEEDED",
+        "This request is too large for Draft Canvas to accept in one call.",
+        "Split it into smaller update_diagram calls, or shorten long notes and code snippets.",
+        false,
+    )
+}
+
 fn lost() -> Value {
     error(
         "CONNECTION_LOST",
@@ -313,6 +327,9 @@ async fn send<W: AsyncWrite + Unpin>(write: &mut W, frame: &Value) -> std::io::R
     write.write_all(&line).await?;
     write.flush().await
 }
+
+/// The app's own cap on a frame it reads (`MAX_FRAME` in the app's `agent/bridge.rs`), newline included.
+const APP_MAX_FRAME: usize = 4 * 1024 * 1024;
 
 /// A generous cap. The app refuses frames past 4 MiB, and the largest it sends is a `render_diagram`
 /// answer: a PNG the page caps at 8 MB, which is ~10.7 MB once base64-encoded into the frame.

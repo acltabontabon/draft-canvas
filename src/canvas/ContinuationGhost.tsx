@@ -2,8 +2,9 @@ import { memo, useMemo } from 'react';
 import { categoryOf } from '../document/connectorSemantics';
 import { relationshipCaptionLabel } from '../document/edgeSemantics';
 import type { DraftEdge, DraftNode } from '../document/types';
-import { dashForEdge, markerVariantForEdge } from '../edges/kindStyle';
-import { captionAnchor, rectOf, routeBetween, type Rect } from '../edges/routing';
+import { edgeRoutes } from '../edges/edgeRoutes';
+import { RESPONSE_DASH, dashForEdge, markerVariantForEdge } from '../edges/kindStyle';
+import { captionAnchor, labelLaneOffset, responseAwayFor } from '../edges/routing';
 import { describeContext, describeNode } from '../nodes/describe';
 import { markerRef } from '../render/svg/markers';
 import { beginClipScope, emitDisplayList } from '../render/svg/emit';
@@ -12,6 +13,7 @@ import { useEditorStore } from '../store/editorStore';
 import { useUiStore, type ContinuationOffer } from '../store/uiStore';
 import { usePersonality } from '../ui/personality/usePersonality';
 import { useThemeValue } from '../ui/theme/useTheme';
+import { ghostGraph, ghostRouteFor, ghostRouteInputs, type GhostRoute } from './ghostRoutes';
 import { SvgSurface } from './SvgSurface';
 import { useTechnologyIcon } from './useTechnologyIcon';
 
@@ -27,7 +29,7 @@ const TARGET_OUTSET = 6;
  * inside `Canvas`'s `<ViewportLayer>` so they pan and zoom with the diagram but never enter the
  * document, projection, history or an export. Every picture comes from the same
  * `describeNode → emitDisplayList` pipeline the real node uses, and every connector from the
- * same `routeBetween`/`dashForEdge`/marker the real edge will get — a ghost is the real thing at
+ * same `edgeRoutes`/`dashForEdge`/marker the real edge will get — a ghost is the real thing at
  * reduced opacity, not an approximation of it. A compound offer (Queue → Worker) draws all of
  * its nodes and connectors; an offer to connect to something already drawn draws only the
  * connector and a quiet outline around that node — never a copy of it.
@@ -51,18 +53,15 @@ function GhostBody({ offer, anchor }: { offer: ContinuationOffer; anchor: DraftN
   const accept = () => useEditorStore.getState().acceptContinuation(offer);
   const next = () => useUiStore.getState().cycleContinuation(1);
 
-  // One subscription and one `rectOf` pass for the whole ghost, shared by every `GhostEdge` below,
-  // instead of each edge independently subscribing to the full node array and re-deriving rects —
-  // the dominant cost behind unrelated document edits re-rendering every ghost edge. Includes the
-  // offer's *other* fragment nodes too (not just the real document's), so a multi-node fragment's
-  // ghost edges see the same obstacles the real edges will see once accepted.
+  // One subscription and one routing graph for the whole ghost, shared by every `GhostEdge` below:
+  // the document as it will be once the offer is accepted — its nodes *and* the fragment's, its
+  // connectors and the fragment's — so a ghost connector takes the lane, trunk and obstacles the
+  // real one will (see `ghostRoutes.ts`).
   const nodes = useEditorStore((state) => state.document.nodes);
-  const obstacleRects = useMemo(
-    () => [
-      ...nodes.filter((n) => n.type !== 'group').map((n) => ({ id: n.id, rect: rectOf(n) })),
-      ...offer.nodes.map((n) => ({ id: n.id, rect: rectOf(n) })),
-    ],
-    [nodes, offer.nodes],
+  const edges = useEditorStore((state) => state.document.edges);
+  const graph = useMemo(
+    () => ghostGraph([...nodes, ...offer.nodes], [...edges, ...offer.edges]),
+    [nodes, edges, offer.nodes, offer.edges],
   );
   // Endpoints a ghost connector can reach: the anchor, the fragment's own new nodes, and — for a
   // connect-to-existing offer — nodes already drawn, read live so the preview follows them.
@@ -97,9 +96,10 @@ function GhostBody({ offer, anchor }: { offer: ContinuationOffer; anchor: DraftN
         />
       ))}
       <svg className="dc-ghost-edges" width={1} height={1} aria-hidden="true" focusable="false">
-        {offer.edges.map((edge) => (
-          <GhostEdge key={edge.id} edge={edge} endpoints={endpoints} obstacleRects={obstacleRects} />
-        ))}
+        {offer.edges.map((edge) => {
+          const route = ghostRouteFor(graph, edge);
+          return route && <GhostEdge key={edge.id} edge={edge} {...route} />;
+        })}
       </svg>
       {offer.nodes.map((node) => (
         <GhostNode key={node.id} node={node} theme={theme} preset={preset} onClick={showPill ? accept : undefined} />
@@ -179,27 +179,29 @@ const REMOVED_EDGE_DASH = '3 3';
 
 /** A connector routed exactly as the canvas routes it, at a ghost's opacity — shared with `AgentPreviewLayer`.
  *  `removed` draws it in the same danger colour as `.dc-agent-preview-removed`'s crossed-out box,
- *  for a connector the change takes away rather than adds or rewires. */
-export function GhostEdge({
+ *  for a connector the change takes away rather than adds or rewires. Its route context (lane,
+ *  trunk, obstacles — see `ghostRoutes.ts`) arrives as stable values, so a ghost whose own route
+ *  can't have changed skips the render. */
+export const GhostEdge = memo(function GhostEdge({
   edge,
-  endpoints,
-  obstacleRects,
+  source,
+  target,
+  lane,
+  spine,
+  obstacles,
   removed,
-}: {
+}: GhostRoute & {
   edge: DraftEdge;
-  endpoints: ReadonlyMap<string, DraftNode>;
-  obstacleRects: { id: string; rect: Rect }[];
   removed?: boolean;
 }) {
   const theme = useThemeValue();
-  const source = endpoints.get(edge.source);
-  const target = endpoints.get(edge.target);
-  if (!source || !target) return null;
-  const obstacles = obstacleRects.filter((n) => n.id !== source.id && n.id !== target.id).map((n) => n.rect);
-  const route = routeBetween(rectOf(source), rectOf(target), edge.routing, {
-    anchors: { source: edge.sourceAnchor, target: edge.targetAnchor },
-    obstacles,
-  });
+  // The same inputs, and the same cache, as the real connector (`edges/edgeRoutes.ts`) — read, never
+  // written: `'transient'`, so a preview's routes never push out the ones on screen.
+  const routes = useMemo(
+    () => edgeRoutes(ghostRouteInputs(edge, { source, target, lane, spine, obstacles }), 'transient'),
+    [edge, source, target, lane, spine, obstacles],
+  );
+  const route = routes.request;
   // Its own words when it has them (a connector an agent is proposing usually does), else the
   // relationship's caption.
   const caption = edge.label
@@ -212,7 +214,11 @@ export function GhostEdge({
         target: categoryOf(target),
       })
     : undefined;
-  const at = captionAnchor(route.labelSide, route.labelX, route.labelY);
+  // Placed the way both renderers place it: nudged off its parallel siblings, and on the side away
+  // from its reply line.
+  const nudge = labelLaneOffset(route.source.side, route.target.side, lane);
+  const at = captionAnchor(route.labelSide, route.labelX + nudge.x, route.labelY + nudge.y, responseAwayFor(edge.hasResponse, lane));
+  const response = routes.response;
   // Always a literal colour from `theme`, on both branches: `Markers` mints every arrowhead once,
   // as static SVG markup keyed by exact colour string (`Markers.tsx`'s `colors` Set) — a CSS custom
   // property string here would mint a `marker-end` reference nothing in `<defs>` ever defines, and
@@ -232,6 +238,20 @@ export function GhostEdge({
         strokeDasharray={removed ? REMOVED_EDGE_DASH : dashForEdge(edge)?.join(' ')}
         markerEnd={edge.directed ? markerRef(color, markerVariantForEdge(edge)) : undefined}
       />
+      {/* A request/response connector's reply — its own lane, back to the source, as both renderers
+          draw it. */}
+      {response && (
+        <path
+          d={response.d}
+          fill="none"
+          stroke={color}
+          strokeWidth={1}
+          strokeLinecap="round"
+          strokeDasharray={RESPONSE_DASH.join(' ')}
+          opacity={0.8}
+          markerEnd={edge.directed ? markerRef(color, 'open') : undefined}
+        />
+      )}
       {caption && (
         <text
           x={at.x}
@@ -245,5 +265,20 @@ export function GhostEdge({
         </text>
       )}
     </g>
+  );
+}, sameGhostEdge);
+
+/** Every prop by identity, except the obstacle list: rebuilt with each graph, but of rects that keep
+ *  their identity while their node does (`obstaclesForEdge`) — so compared element by element. */
+function sameGhostEdge(a: GhostRoute & { edge: DraftEdge; removed?: boolean }, b: GhostRoute & { edge: DraftEdge; removed?: boolean }): boolean {
+  return (
+    a.edge === b.edge &&
+    a.source === b.source &&
+    a.target === b.target &&
+    a.lane === b.lane &&
+    a.spine === b.spine &&
+    a.removed === b.removed &&
+    (a.obstacles === b.obstacles ||
+      (a.obstacles.length === b.obstacles.length && a.obstacles.every((rect, index) => rect === b.obstacles[index])))
   );
 }

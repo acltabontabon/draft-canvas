@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useReactFlow, useStore } from '@xyflow/react';
 import type { DraftPoint, EdgeRouting } from '../document/types';
 import { flattenPath, type RoutedEdge } from '../edges/routing';
@@ -78,10 +78,18 @@ export function EdgeBendHandles({
   const [dragging, setDragging] = useState<{ handle: Handle; at: DraftPoint } | null>(null);
   const onKeyDown = useRef<((event: KeyboardEvent) => void) | undefined>(undefined);
   const stepped = routing !== 'straight' && routing !== 'bezier';
-  const polyline = route.points ?? (stepped ? stepPolyline(route.d) : [route.source, route.target]);
-  // Only the selected connector mounts this, so following the zoom costs one component, not all.
-  const zoom = useStore((state) => state.transform[2]);
-  const handles = handlesFor(polyline, stepped, route.d, MIN_HANDLE_RUN_PX / zoom);
+  // Zoom decides only which runs are long enough on screen to carry a handle, so it's followed in
+  // steps (a sixteenth of an octave — finer than anyone can see a run cross the threshold) rather
+  // than every frame of a wheel or pinch zoom, which re-rendered this and re-walked the line each one.
+  const zoom = useStore((state) => quantizedZoom(state.transform[2]));
+  const polyline = useMemo(
+    () => route.points ?? (stepped ? stepPolyline(route.d) : [route.source, route.target]),
+    [route, stepped],
+  );
+  const handles = useMemo(
+    () => handlesFor(polyline, stepped, route.d, MIN_HANDLE_RUN_PX / zoom),
+    [polyline, stepped, route.d, zoom],
+  );
 
   const end = useCallback(() => {
     if (onKeyDown.current) window.removeEventListener('keydown', onKeyDown.current);
@@ -224,6 +232,11 @@ export function EdgeBendHandles({
       ))}
     </>
   );
+}
+
+/** `zoom` rounded to a sixteenth of an octave: relative steps, so it never rounds to zero far out. */
+function quantizedZoom(zoom: number): number {
+  return zoom > 0 ? 2 ** (Math.round(Math.log2(zoom) * 16) / 16) : 1;
 }
 
 /** Where the handles go on the line as drawn. */

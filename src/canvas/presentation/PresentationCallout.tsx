@@ -4,6 +4,7 @@ import { useInternalNode, useStoreApi } from '@xyflow/react';
 import { displayNameFor } from '../../document/factory';
 import type { Attachment, DraftNode } from '../../document/types';
 import {
+  calloutReach,
   inflate,
   placeCallout,
   segmentBoxes,
@@ -34,6 +35,38 @@ const DRAWN_LABELS = '.dc-edge-label, .dc-edge-caption, .dc-edge-meta, .dc-attac
 /** Must match `@keyframes dc-callout-out` in `canvas.css`, and its 140 ms there. */
 const EXIT_ANIMATION = 'dc-callout-out';
 const EXIT_MS = 140;
+
+/** The presentation chrome a callout never covers: the flow bar, the exit button, and the step's
+ *  caption or the opening/closing card, in whichever corner it took. */
+const CHROME = ['.dc-explain', '.dc-present-exit', '.dc-present-caption, .dc-present-card'] as const;
+const NO_BOXES = new Float64Array(0);
+
+function packBoxes(boxes: readonly Box[]): Float64Array {
+  const packed = new Float64Array(boxes.length * 4);
+  boxes.forEach((box, index) => {
+    packed[index * 4] = box.x;
+    packed[index * 4 + 1] = box.y;
+    packed[index * 4 + 2] = box.width;
+    packed[index * 4 + 3] = box.height;
+  });
+  return packed;
+}
+
+/** Hands `take` every packed box that comes within `pad` of `area` — the rest can't overlap it. */
+function collect(packed: Float64Array, area: Box, pad: number, take: (box: Box) => void): void {
+  const left = area.x - pad;
+  const top = area.y - pad;
+  const right = area.x + area.width + pad;
+  const bottom = area.y + area.height + pad;
+  for (let i = 0; i < packed.length; i += 4) {
+    const x = packed[i]!;
+    const y = packed[i + 1]!;
+    const width = packed[i + 2]!;
+    const height = packed[i + 3]!;
+    if (x > right || y > bottom || x + width < left || y + height < top) continue;
+    take({ x, y, width, height });
+  }
+}
 
 function chromeBox(selector: string): Box | null {
   const element = window.document.querySelector(selector);
@@ -74,46 +107,71 @@ export function PresentationCallout({
     () => (edge ? edgeAnchor(document, edge, source, target) : hostNode ? nodeAnchor(hostInternal) : null),
     [document, edge, hostNode, source, target, hostInternal],
   );
+  // Presentation chrome sits still in screen space while the canvas pans beneath it, so it's measured
+  // when something could have moved it — a commit here, the canvas resizing, the step changing (its
+  // caption takes a corner) — never per frame. A box not on screen yet is looked for again.
+  const chromeRef = useRef<{ root: DOMRect; boxes: (Box | null)[] } | null>(null);
+  useEffect(
+    () =>
+      useEditorStore.subscribe((state, previous) => {
+        if (state.flowPlayback.step !== previous.flowPlayback.step || state.flowPlayback.stage !== previous.flowPlayback.stage) {
+          chromeRef.current = null;
+        }
+      }),
+    [],
+  );
+
   // Everything placement keeps off, in flow space — every other node, every connector as drawn (each
   // hit path carries its canonical route) and every label and chip row riding on one — read once
   // per commit, so a pan/zoom frame only maps boxes to the screen: no walking the node lookup, no
-  // re-segmenting routes, no measuring. Declared before `useOverlayPosition` so its layout effect
-  // sees this commit's obstacles.
-  const obstaclesRef = useRef<{ nodes: { id: string; box: Box }[]; segments: Box[]; labels: Box[] }>({
-    nodes: [],
-    segments: [],
-    labels: [],
+  // re-segmenting routes, no measuring. Stored flat (x, y, width, height per box) so a frame's cull
+  // to the callout's reach is a scan over numbers, not a walk over objects. Declared before
+  // `useOverlayPosition` so its layout effect sees this commit's obstacles.
+  const obstaclesRef = useRef<{ nodes: Float64Array; segments: Float64Array; labels: Float64Array }>({
+    nodes: NO_BOXES,
+    segments: NO_BOXES,
+    labels: NO_BOXES,
   });
+  // The marker's flow box, measured with this commit's obstacles rather than per frame. A marker not
+  // mounted yet (its row renders in another component's commit) is looked for again next frame.
+  const markerRef = useRef<{ box: Box; measured: boolean } | null>(null);
   useLayoutEffect(() => {
     const { domNode: root, transform, nodeLookup } = storeApi.getState();
+    markerRef.current = null;
+    chromeRef.current = null;
     if (!root) return;
     const [tx, ty, zoom] = transform;
     const rootRect = root.getBoundingClientRect();
     const types = new Map(document.nodes.map((node) => [node.id, node.type]));
-    const nodes: { id: string; box: Box }[] = [];
+    const nodes: Box[] = [];
     for (const internal of nodeLookup.values()) {
-      // Boundaries are skipped: a callout inside a group is still "beside" what it annotates.
-      if (types.get(internal.id) === 'group') continue;
+      // Boundaries are skipped: a callout inside a group is still "beside" what it annotates. So
+      // are the ones the anchor already keeps the callout off outright.
+      if (types.get(internal.id) === 'group' || anchor?.exclude.includes(internal.id)) continue;
       const rect = rectOfInternal(internal);
-      if (rect) nodes.push({ id: internal.id, box: rect });
+      if (rect) nodes.push(rect);
     }
     obstaclesRef.current = {
-      nodes,
+      nodes: packBoxes(nodes),
       // Zero-thickness in flow space; the line's thickness is a screen size, added per frame.
-      segments: [...root.querySelectorAll<SVGPathElement>('.dc-edge-hit')].flatMap((path) =>
-        segmentBoxes(flattenPath(path.getAttribute('d') ?? ''), 0),
+      segments: packBoxes(
+        [...root.querySelectorAll<SVGPathElement>('.dc-edge-hit')].flatMap((path) =>
+          segmentBoxes(flattenPath(path.getAttribute('d') ?? ''), 0),
+        ),
       ),
-      labels: [...root.querySelectorAll<Element>(DRAWN_LABELS)].map((element) => {
-        const rect = element.getBoundingClientRect();
-        return {
-          x: (rect.left - rootRect.left - tx) / zoom,
-          y: (rect.top - rootRect.top - ty) / zoom,
-          width: rect.width / zoom,
-          height: rect.height / zoom,
-        };
-      }),
+      labels: packBoxes(
+        [...root.querySelectorAll<Element>(DRAWN_LABELS)].map((element) => {
+          const rect = element.getBoundingClientRect();
+          return {
+            x: (rect.left - rootRect.left - tx) / zoom,
+            y: (rect.top - rootRect.top - ty) / zoom,
+            width: rect.width / zoom,
+            height: rect.height / zoom,
+          };
+        }),
+      ),
     };
-  }, [document, storeApi, source, target, hostInternal]);
+  }, [document, storeApi, source, target, hostInternal, anchor]);
 
   // The tallest a docked callout may be and still clear the flow bar. Only ever tightens while this
   // callout lives: capping shrinks its measured size, and a cap that lifted again as a result would
@@ -128,7 +186,8 @@ export function PresentationCallout({
     const { root, size } = frame;
     if (root.height > rootHeightRef.current + 1) roomRef.current = Number.POSITIVE_INFINITY;
     rootHeightRef.current = root.height;
-    const [tx, ty, zoom] = storeApi.getState().transform;
+    const { transform, domNode } = storeApi.getState();
+    const [tx, ty, zoom] = transform;
     // Flow → screen is one affine map; `flowToScreenPosition` per corner, per box, per frame adds up.
     const toScreen = (box: Box): Box => ({
       x: root.left + box.x * zoom + tx,
@@ -136,34 +195,27 @@ export function PresentationCallout({
       width: box.width * zoom,
       height: box.height * zoom,
     });
-    const marker = toScreen(anchor.marker(storeApi.getState().domNode));
+    if (!markerRef.current?.measured) markerRef.current = anchor.marker(domNode);
+    const marker = toScreen(markerRef.current.box);
 
-    // Every other element on the canvas is a soft obstacle — covered only when nothing clean exists.
-    const obstacles = obstaclesRef.current;
-    const soft: Box[] = [];
-    for (const { id, box } of obstacles.nodes) {
-      if (!anchor.exclude.includes(id)) soft.push(toScreen(box));
-    }
-    for (const segment of obstacles.segments) soft.push(inflate(toScreen(segment), LINE_THICKNESS / 2));
-    for (const label of obstacles.labels) soft.push(toScreen(label));
-
-    const flowBar = chromeBox('.dc-explain');
-    const exitButton = chromeBox('.dc-present-exit');
-    // The step's caption, or the opening/closing card, in whichever corner it took.
-    const card = chromeBox('.dc-present-caption, .dc-present-card');
+    if (chromeRef.current?.root !== root) chromeRef.current = { root, boxes: [] };
+    const chrome = chromeRef.current.boxes;
+    CHROME.forEach((selector, index) => {
+      if (!chrome[index]) chrome[index] = chromeBox(selector);
+    });
+    const [flowBar = null, exitButton = null, card = null] = chrome;
     const bounds: Box = {
       x: root.left + EDGE_MARGIN,
       y: root.top + EDGE_MARGIN,
       width: root.width - EDGE_MARGIN * 2,
       height: root.height - EDGE_MARGIN * 2,
     };
-    const result = placeCallout({
+    const base = {
       kind: anchor.kind,
       marker,
       host: anchor.host ? toScreen(anchor.host) : marker,
       preferBelow: anchor.preferBelow,
       avoid: anchor.avoid.map(toScreen),
-      soft,
       exclusions: [flowBar, exitButton, card]
         .filter((box): box is Box => box !== null)
         .map((box) => inflate(box, CHROME_MARGIN)),
@@ -171,7 +223,29 @@ export function PresentationCallout({
       size,
       current,
       dockTo: flowBar,
-    });
+    };
+
+    // Every other element on the canvas is a soft obstacle — covered only when nothing clean exists.
+    // Only those inside the callout's reach (every spot it could take, mapped back to flow space)
+    // can change where it goes; the rest are never mapped to the screen at all.
+    const soft: Box[] = [];
+    const reach = calloutReach(base);
+    if (reach) {
+      const area = {
+        x: (reach.x - root.left - tx) / zoom,
+        y: (reach.y - root.top - ty) / zoom,
+        width: reach.width / zoom,
+        height: reach.height / zoom,
+      };
+      const obstacles = obstaclesRef.current;
+      collect(obstacles.nodes, area, 0, (box) => soft.push(toScreen(box)));
+      collect(obstacles.segments, area, LINE_THICKNESS / 2 / zoom, (box) =>
+        soft.push(inflate(toScreen(box), LINE_THICKNESS / 2)),
+      );
+      collect(obstacles.labels, area, 0, (box) => soft.push(toScreen(box)));
+    }
+
+    const result = placeCallout({ ...base, soft });
     if (result.maxHeight !== undefined) roomRef.current = Math.min(roomRef.current, result.maxHeight);
 
     const at = frame.screenToOverlay({ x: result.x, y: result.y });

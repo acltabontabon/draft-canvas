@@ -8,7 +8,10 @@ import { useEditorStore } from '../store/editorStore';
 import { useUiStore } from '../store/uiStore';
 import type { Command, CommandContext } from './types';
 import { count } from '../lib/plural';
-import { notifyLoadFailure } from '../ui/common/notifyLoadFailure';
+// A static import although that module imports this one: the cycle is safe (neither runs the
+// other at load), and the old dynamic import was ineffective — the registry and the editor already
+// import it statically, so it never left the editor chunk and only drew a build warning.
+import { navigateToRoom } from '../ui/Editor/depthNavigation';
 
 /**
  * The same palette is the fastest way to find something on a big canvas. Every
@@ -154,14 +157,11 @@ function arrived(ctx: CommandContext): CommandContext {
   return { ...ctx, editor: useEditorStore.getState(), ui: useUiStore.getState() };
 }
 
-/** Climbs to `path` first, then does what the local row does — loaded lazily, since the editor's
- *  navigation module imports this one. */
+/** Climbs to `path` first, then does what the local row does. */
 function thereThen(ctx: CommandContext, path: DepthPath, then: (fresh: CommandContext) => void): void {
-  void import('../ui/Editor/depthNavigation')
-    .then(async ({ navigateToRoom }) => {
-      if (await navigateToRoom(path)) then(arrived(ctx));
-    })
-    .catch((error: unknown) => notifyLoadFailure(error, 'That couldn’t be reached. Check your connection and try again.'));
+  void navigateToRoom(path).then((reached) => {
+    if (reached) then(arrived(ctx));
+  });
 }
 
 function roomJumpCommands(document: DraftDocument, elsewhere: Elsewhere | null): Command[] {

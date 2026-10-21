@@ -20,18 +20,24 @@ interface DiagramTitleFieldProps {
  * `blur()` synchronously right after reverting, before React has re-rendered the input with
  * the reverted value, so onBlur can't trust the DOM's own `.value` or a `localTitle` closure —
  * only a ref is guaranteed current at that point.
+ *
+ * Blur commits only after the person typed (`dirtyTitleRef`). It once committed on every blur,
+ * so focusing the title, letting a cross-tab or agent rename land, then clicking away wrote the
+ * stale title back as a Rename undo step. Until they type, a title that changes underneath the
+ * focused field is adopted rather than ignored.
  */
 export function DiagramTitleField({ title, onTitleChange, readOnly = false }: DiagramTitleFieldProps) {
   const [localTitle, setLocalTitle] = useState(title);
   const localTitleRef = useRef(title);
   const editingTitleRef = useRef(false);
+  const dirtyTitleRef = useRef(false);
   const fieldRef = useRef<HTMLTextAreaElement>(null);
   const setLocalTitleValue = (value: string) => {
     localTitleRef.current = value;
     setLocalTitle(value);
   };
   useEffect(() => {
-    if (!editingTitleRef.current) {
+    if (!editingTitleRef.current || !dirtyTitleRef.current) {
       localTitleRef.current = title;
       setLocalTitle(title);
     }
@@ -71,11 +77,16 @@ export function DiagramTitleField({ title, onTitleChange, readOnly = false }: Di
       aria-disabled={readOnly || undefined}
       onFocus={() => {
         editingTitleRef.current = true;
+        dirtyTitleRef.current = false;
       }}
-      onChange={(event) => setLocalTitleValue(event.target.value.replace(/[\r\n]+/g, ' '))}
+      onChange={(event) => {
+        dirtyTitleRef.current = true;
+        setLocalTitleValue(event.target.value.replace(/[\r\n]+/g, ' '));
+      }}
       onBlur={() => {
         editingTitleRef.current = false;
-        onTitleChange(localTitleRef.current);
+        if (dirtyTitleRef.current) onTitleChange(localTitleRef.current);
+        dirtyTitleRef.current = false;
         // Show what was kept, not what was typed: `setTitle` trims, and an emptied title falls back
         // to the default. When that leaves the stored title unchanged the effect above never runs,
         // so reset here; when it did change, that effect then lands the new title over this.
@@ -91,6 +102,7 @@ export function DiagramTitleField({ title, onTitleChange, readOnly = false }: Di
           event.currentTarget.blur();
         } else if (event.key === 'Escape') {
           event.preventDefault();
+          dirtyTitleRef.current = false;
           setLocalTitleValue(title);
           event.currentTarget.blur();
         }

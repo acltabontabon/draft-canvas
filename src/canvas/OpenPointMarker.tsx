@@ -18,22 +18,43 @@ import { SvgSurface } from './SvgSurface';
  * (positioned in the node's own box) and `DraftEdgeView` (in the label layer, beside the label).
  */
 export const OpenPointMarker = memo(function OpenPointMarker({
-  target,
+  targetKind,
+  targetId,
   points,
   tabbable,
   variant,
-  style,
-  dim,
+  x,
+  y,
+  dimmed,
+  focusDimmed,
+  lensDimmed,
+  explainTier,
 }: {
-  target: OpenPointTarget;
+  targetKind: OpenPointTarget['kind'];
+  targetId: string;
   /** The unresolved points about this element — never empty; the caller renders nothing otherwise. */
   points: readonly OpenPoint[];
   tabbable: boolean;
   variant: 'node' | 'edge';
-  style: CSSProperties;
+  /** Where it sits: a node's tab its top-left corner in the node's own box, an edge's its centre in
+   *  the label layer. Primitives, like every prop here — an object built inline in the host's render
+   *  defeated `memo` and re-rendered (and re-described) the marker with every host render. */
+  x: number;
+  y: number;
   /** Dimming flags passed straight through as data attributes, so the marker fades with its host. */
-  dim?: { dimmed?: boolean; focusDimmed?: boolean; lensDimmed?: boolean; explainTier?: string };
+  dimmed?: boolean;
+  focusDimmed?: boolean;
+  lensDimmed?: boolean;
+  explainTier?: string;
 }) {
+  const target = useMemo<OpenPointTarget>(() => ({ kind: targetKind, id: targetId }), [targetKind, targetId]);
+  const style = useMemo<CSSProperties>(
+    () =>
+      variant === 'node'
+        ? { left: x, top: y }
+        : { position: 'absolute', transform: `translate(-50%, -50%) translate(${x}px, ${y}px)` },
+    [variant, x, y],
+  );
   const theme = useThemeValue();
   const previewId = useId();
   const open = useUiStore(
@@ -55,10 +76,10 @@ export const OpenPointMarker = memo(function OpenPointMarker({
       data-anchor={`${target.kind}:${target.id}`}
       data-kind={points.length === 1 ? points[0]!.kind : 'several'}
       data-open={open ? 'true' : undefined}
-      data-dimmed={dim?.dimmed ? 'true' : undefined}
-      data-focus-dimmed={dim?.focusDimmed ? 'true' : undefined}
-      data-lens-dimmed={dim?.lensDimmed ? 'true' : undefined}
-      data-explain-tier={dim?.explainTier}
+      data-dimmed={dimmed ? 'true' : undefined}
+      data-focus-dimmed={focusDimmed ? 'true' : undefined}
+      data-lens-dimmed={lensDimmed ? 'true' : undefined}
+      data-explain-tier={explainTier}
       aria-label={label}
       aria-describedby={previewId}
       aria-expanded={open}

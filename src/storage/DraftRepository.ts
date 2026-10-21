@@ -24,6 +24,12 @@ export interface DraftRepository {
    */
   takeRepairs?(id: string): string[] | undefined;
   /**
+   * The content stamp (`DraftSummary.contentStamp`) of the row as this tab last read or wrote it, if
+   * it knows one. Optional: only a store that other tabs share has stamps to compare. Synchronous, so
+   * a page leaving can record it beside its reload stash.
+   */
+  knownContentStamp?(id: string): string | undefined;
+  /**
    * Writes the document. With `base` — the title/project this editor last loaded or wrote — a
    * rename or move made meanwhile elsewhere (another tab's Library) is kept rather than reverted;
    * resolves with the metadata actually written when that differs from the document's own.

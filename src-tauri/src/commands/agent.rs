@@ -393,6 +393,10 @@ pub async fn agent_proposal_list(
         let all: Vec<Proposal> = agent
             .with_proposals(|s| s.list(diagram_id.as_deref()).into_iter().cloned().collect())
             .ok_or_else(|| AppError::new(ErrorKind::Io, "Couldn't open the proposal store."))?;
+        // Nothing to mark stale: don't walk every project to learn that.
+        if all.is_empty() {
+            return Ok(Vec::new());
+        }
         let diagrams = diagrams_by_id(state, &agent);
         Ok(all
             .iter()
@@ -431,28 +435,30 @@ pub async fn agent_proposal_begin_accept(
 ) -> Result<Value, AppError> {
     run_blocking(&app, move |app, _state| {
         let agent = app.state::<Arc<Agent>>();
-        let Some(mut proposal) = agent
-            .with_proposals(|s| s.get(&id).cloned())
-            .ok_or_else(|| AppError::new(ErrorKind::Io, "Couldn't open the proposal store."))?
-        else {
-            return Ok(json!({"ok": false, "code": "NOT_FOUND"}));
-        };
-        // `Accepting` is allowed here too — not just `Pending` — so a restart-recovered proposal the
-        // review panel found was never actually committed (Case A) can simply be retried through the
-        // ordinary flow, re-checked against the exact same identity, rather than needing a separate
-        // "un-accept" transition back to `Pending` that would just be this same check again.
-        if !matches!(proposal.status, ProposalStatus::Pending | ProposalStatus::Accepting) {
-            return Ok(json!({"ok": false, "code": "WRONG_STAGE", "status": serde_json::to_value(proposal.status).unwrap_or(Value::Null)}));
-        }
-        if proposal.version != version || proposal.diagram_id != diagram_id || proposal.path != path {
-            return Ok(json!({"ok": false, "code": "PROPOSAL_CHANGED", "proposal": proposal_json(&proposal, None)}));
-        }
-        proposal.status = ProposalStatus::Accepting;
+        // Checked and written under one hold of the store: an agent's revise landing between a
+        // separate read and write had its newer version overwritten by this one's older content.
         agent
-            .with_proposals(|s| s.put(proposal.clone()))
-            .ok_or_else(|| AppError::new(ErrorKind::Io, "Couldn't record the proposal was being accepted."))?
-            .map_err(|e| AppError::new(ErrorKind::Io, format!("Couldn't record the proposal was being accepted: {e}")))?;
-        Ok(json!({"ok": true, "proposal": proposal_json(&proposal, None)}))
+            .with_proposals(|store| {
+                let Some(mut proposal) = store.get(&id).cloned() else {
+                    return Ok(json!({"ok": false, "code": "NOT_FOUND"}));
+                };
+                // `Accepting` is allowed here too — not just `Pending` — so a restart-recovered proposal the
+                // review panel found was never actually committed (Case A) can simply be retried through the
+                // ordinary flow, re-checked against the exact same identity, rather than needing a separate
+                // "un-accept" transition back to `Pending` that would just be this same check again.
+                if !matches!(proposal.status, ProposalStatus::Pending | ProposalStatus::Accepting) {
+                    return Ok(json!({"ok": false, "code": "WRONG_STAGE", "status": serde_json::to_value(proposal.status).unwrap_or(Value::Null)}));
+                }
+                if proposal.version != version || proposal.diagram_id != diagram_id || proposal.path != path {
+                    return Ok(json!({"ok": false, "code": "PROPOSAL_CHANGED", "proposal": proposal_json(&proposal, None)}));
+                }
+                proposal.status = ProposalStatus::Accepting;
+                store
+                    .put(proposal.clone())
+                    .map_err(|e| AppError::new(ErrorKind::Io, format!("Couldn't record the proposal was being accepted: {e}")))?;
+                Ok(json!({"ok": true, "proposal": proposal_json(&proposal, None)}))
+            })
+            .ok_or_else(|| AppError::new(ErrorKind::Io, "Couldn't open the proposal store."))?
     })
     .await
 }
@@ -529,26 +535,27 @@ pub async fn agent_proposal_resolve(
     let target = ProposalStatus::from(status);
     run_blocking(&app, move |app, _state| {
         let agent = app.state::<Arc<Agent>>();
-        let Some(mut proposal) = agent
-            .with_proposals(|s| s.get(&id).cloned())
+        // One hold of the store for the check and the write, as in `agent_proposal_begin_accept`.
+        agent
+            .with_proposals(|store| {
+                let Some(mut proposal) = store.get(&id).cloned() else {
+                    return Ok(json!({"ok": false, "code": "NOT_FOUND"}));
+                };
+                match resolve_outcome(proposal.status, target) {
+                    ResolveOutcome::AlreadyThere => Ok(json!({"ok": true, "proposal": proposal_json(&proposal, None)})),
+                    ResolveOutcome::Conflict => Ok(json!({"ok": false, "code": "ALREADY_RESOLVED", "status": serde_json::to_value(proposal.status).unwrap_or(Value::Null)})),
+                    ResolveOutcome::WrongStage => Ok(json!({"ok": false, "code": "WRONG_STAGE", "status": serde_json::to_value(proposal.status).unwrap_or(Value::Null)})),
+                    ResolveOutcome::Proceed => {
+                        proposal.status = target;
+                        proposal.resolved_at = Some(now_ms());
+                        store
+                            .put(proposal.clone())
+                            .map_err(|e| AppError::new(ErrorKind::Io, format!("Couldn't record the decision: {e}")))?;
+                        Ok(json!({"ok": true, "proposal": proposal_json(&proposal, None)}))
+                    }
+                }
+            })
             .ok_or_else(|| AppError::new(ErrorKind::Io, "Couldn't open the proposal store."))?
-        else {
-            return Ok(json!({"ok": false, "code": "NOT_FOUND"}));
-        };
-        match resolve_outcome(proposal.status, target) {
-            ResolveOutcome::AlreadyThere => Ok(json!({"ok": true, "proposal": proposal_json(&proposal, None)})),
-            ResolveOutcome::Conflict => Ok(json!({"ok": false, "code": "ALREADY_RESOLVED", "status": serde_json::to_value(proposal.status).unwrap_or(Value::Null)})),
-            ResolveOutcome::WrongStage => Ok(json!({"ok": false, "code": "WRONG_STAGE", "status": serde_json::to_value(proposal.status).unwrap_or(Value::Null)})),
-            ResolveOutcome::Proceed => {
-                proposal.status = target;
-                proposal.resolved_at = Some(now_ms());
-                agent
-                    .with_proposals(|s| s.put(proposal.clone()))
-                    .ok_or_else(|| AppError::new(ErrorKind::Io, "Couldn't record the decision."))?
-                    .map_err(|e| AppError::new(ErrorKind::Io, format!("Couldn't record the decision: {e}")))?;
-                Ok(json!({"ok": true, "proposal": proposal_json(&proposal, None)}))
-            }
-        }
     })
     .await
 }

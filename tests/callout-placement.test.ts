@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { overlapArea } from '../src/lib/math';
 import {
   CALLOUT_GAP,
+  calloutReach,
   leaderBetween,
   placeCallout,
   segmentBoxes,
@@ -170,5 +171,26 @@ describe('leaderBetween', () => {
       y2: 110,
     });
     expect(leaderBetween({ x: 0, y: 0, width: 20, height: 20 }, { x: 10, y: 10, width: 20, height: 20 })).toBeNull();
+  });
+});
+
+describe('calloutReach', () => {
+  it('covers every spot the callout could take, so obstacles outside it never change the answer', () => {
+    const crowd: Box[] = [];
+    for (let x = 0; x < 1400; x += 70) for (let y = 0; y < 900; y += 70) crowd.push({ x, y, width: 50, height: 40 });
+    for (const input of [edgeInput({ soft: crowd }), edgeInput({ soft: crowd, preferBelow: true })]) {
+      const { soft, ...base } = input;
+      const reach = calloutReach(base)!;
+      expect(reach).not.toBeNull();
+      const culled = soft.filter((box) => overlapArea(box, reach) > 0);
+      expect(culled.length).toBeLessThan(soft.length);
+      expect(placeCallout({ ...base, soft: culled })).toEqual(placeCallout(input));
+      expect(inside(rectOf(placeCallout(input)), reach)).toBe(true);
+    }
+  });
+
+  it('is null when the callout docks, which never reads soft obstacles', () => {
+    const { soft: _soft, ...base } = edgeInput({ bounds: { x: 16, y: 16, width: 400, height: 800 } });
+    expect(calloutReach(base)).toBeNull();
   });
 });

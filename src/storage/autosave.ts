@@ -78,6 +78,8 @@ export class Autosave {
   private inFlight = false;
   /** The version whose write is in flight, if any — see `schedule`. */
   private writing: DraftDocument | null = null;
+  /** Whether that in-flight write moves only the camera — see `unsavedForStash`. */
+  private writingCameraOnly = false;
   private current: Promise<void> | null = null;
   private lastFailed = false;
   private timer: ReturnType<typeof setTimeout> | null = null;
@@ -107,6 +109,11 @@ export class Autosave {
     this.loaded.set(document.metadata.id, document);
   }
 
+  /** The title/project last loaded or written for a document — what a reload stash is based on. */
+  baselineOf(documentId: string): SharedMetadata | undefined {
+    return this.baselines.get(documentId);
+  }
+
   /** Drops a document's baseline once it's no longer open, so a long session spent opening many
    *  documents doesn't accumulate one entry per document forever. */
   untrack(documentId: string): void {
@@ -121,8 +128,12 @@ export class Autosave {
    */
   unsavedForStash(): DraftDocument | null {
     if (this.conflict) return null;
-    if (this.pending) return this.pendingCameraOnly ? null : this.pending;
-    return this.inFlight ? this.writing : null;
+    if (this.pending && !this.pendingCameraOnly) return this.pending;
+    // A camera-only write in flight owes nothing either: stashed, the reopen wrote it back as a
+    // content save, minting a new content stamp and a cross-tab conflict nobody caused. A content
+    // write in flight does — and a camera-only version queued behind it is that content plus a pan.
+    if (this.inFlight && !this.writingCameraOnly) return this.pending ?? this.writing;
+    return null;
   }
 
   /**
@@ -210,6 +221,7 @@ export class Autosave {
     this.pendingCameraOnly = false;
     this.inFlight = true;
     this.writing = document;
+    this.writingCameraOnly = cameraOnly && !this.overwriteNext;
     this.firstDirtyAt = 0;
 
     this.savingIndicator = setTimeout(() => {
@@ -241,11 +253,17 @@ export class Autosave {
       if (this.loaded.get(id) === trackedAtStart) this.loaded.delete(id);
       this.lastFailed = false;
       this.clearSavingIndicator();
-      this.emit({ status: 'saved', lastSavedAt: Date.now(), message: undefined, conflict: undefined });
-      if (this.savedHold) clearTimeout(this.savedHold);
-      this.savedHold = setTimeout(() => {
-        if (this.state.status === 'saved') this.emit({ status: 'idle', lastSavedAt: Date.now() });
-      }, HOLD_SAVED_MS);
+      if ((this.pending as DraftDocument | null) !== null) {
+        // Edits queued during this write are still unsaved; "Saved" now would be a claim the next
+        // write might fail to keep. The status stays dirty until that one lands.
+        this.emit({ status: 'dirty', lastSavedAt: Date.now(), message: undefined, conflict: undefined });
+      } else {
+        this.emit({ status: 'saved', lastSavedAt: Date.now(), message: undefined, conflict: undefined });
+        if (this.savedHold) clearTimeout(this.savedHold);
+        this.savedHold = setTimeout(() => {
+          if (this.state.status === 'saved') this.emit({ status: 'idle', lastSavedAt: Date.now() });
+        }, HOLD_SAVED_MS);
+      }
     } catch (error) {
       this.lastFailed = true;
       // Keep the unwritten version queued (unless a newer one already replaced it) so
@@ -279,6 +297,7 @@ export class Autosave {
     } finally {
       this.inFlight = false;
       this.writing = null;
+      this.writingCameraOnly = false;
       if (this.pending && !this.lastFailed && !this.disposed) {
         this.timer = setTimeout(() => void this.flush(), 0);
       }

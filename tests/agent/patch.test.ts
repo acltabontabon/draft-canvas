@@ -4,6 +4,7 @@ import { AgentError } from '../../src/agent/errors';
 import { applyUpdate } from '../../src/agent/patch';
 import { readDiagram } from '../../src/agent/read';
 import { createDocument, createEdge, createNode } from '../../src/document/factory';
+import { LIMITS } from '../../src/document/limits';
 import { viewOf } from '../../src/depth/tree';
 import { deserializeDocument } from '../../src/export/project';
 import type { DraftDocument } from '../../src/document/types';
@@ -293,5 +294,35 @@ describe('update_diagram flow variantOf', () => {
     const { file: withFlows } = applyUpdate(file, [], [{ op: 'add', flows: [{ id: 'a', title: 'A', steps: ['u'] }, { id: 'b', title: 'B', steps: ['d'], variantOf: 'a' }] }], undefined);
     const { file: cleared } = applyUpdate(withFlows, [], [{ op: 'update', id: 'b', set: { variantOf: null } }], undefined);
     expect(cleared.flows.find((f) => f.id === 'b')?.variantOf).toBeUndefined();
+  });
+});
+
+describe('update_diagram flow removal', () => {
+  it('clears variantOf on the variants of a removed flow instead of leaving it dangling', () => {
+    const file = base();
+    const { file: withVariant } = applyUpdate(file, [], [{ op: 'add', flows: [{ id: 'v', title: 'Retry', steps: ['u'], variantOf: 'f' }] }], undefined);
+    expect(withVariant.flows.find((f) => f.id === 'v')?.variantOf).toBe('f');
+    const { file: removed } = applyUpdate(withVariant, [], [{ op: 'remove', ids: ['f'] }], undefined);
+    expect(removed.flows.map((f) => f.id)).toEqual(['v']);
+    expect(removed.flows[0]!.variantOf).toBeUndefined();
+  });
+});
+
+describe('update_diagram file-wide limits', () => {
+  it('refuses an add that would take the file past its flow limit, counting every room', () => {
+    const file = base();
+    // The rest of the budget spent inside another room, so only a file-wide count sees it.
+    const filler = Array.from({ length: LIMITS.maxFlows - file.flows.length }, (_, i) => ({ id: `inner${i}`, title: `Inner ${i}`, steps: [] }));
+    const full: DraftDocument = {
+      ...file,
+      nodes: file.nodes.map((node) => (node.id === 'api'
+        ? { ...node, inside: { nodes: [createNode({ type: 'service', x: 0, y: 0, id: 'core' })], edges: [], flows: filler, viewport: { x: 0, y: 0, zoom: 1 } } }
+        : node)),
+    };
+    const error = refusal(() => applyUpdate(full, [], [{ op: 'add', flows: [{ id: 'g', title: 'Refund', steps: ['u'] }] }], undefined));
+    expect(error.code).toBe('LIMIT_EXCEEDED');
+    // One fewer in the room leaves exactly enough.
+    const roomy: DraftDocument = { ...full, nodes: full.nodes.map((node) => (node.inside ? { ...node, inside: { ...node.inside, flows: filler.slice(1) } } : node)) };
+    expect(applyUpdate(roomy, [], [{ op: 'add', flows: [{ id: 'g', title: 'Refund', steps: ['u'] }] }], undefined).file.flows.map((f) => f.id)).toContain('g');
   });
 });

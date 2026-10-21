@@ -39,14 +39,23 @@ export interface LevelEntry {
  */
 export function collectLevels(document: DraftDocument): LevelEntry[] {
   const seen = new Map<string, number>();
+  const used = new Set<string>();
   return collectRooms(document).map((room) => {
     // `displayNameFor` is what the dialog calls the room ("Inside Orders API"), so the member is
     // named the way the screen named it — an unnamed owner reads as its kind, and the counter below
     // keeps two of those apart.
     const base = [slugOf(document.metadata.title), ...room.owners.map((owner) => slugOf(displayNameFor(owner)))].join('--');
-    const times = (seen.get(base) ?? 0) + 1;
+    // Counted until free, not just once: a second "API" became `api-2`, which a room owned by a
+    // shape named "API 2" already slugs to, and the archive kept only one of them.
+    let times = seen.get(base) ?? 0;
+    let name: string;
+    do {
+      times += 1;
+      name = times === 1 ? base : `${base}-${times}`;
+    } while (used.has(name));
     seen.set(base, times);
-    return { room, name: times === 1 ? base : `${base}-${times}` };
+    used.add(name);
+    return { room, name };
   });
 }
 

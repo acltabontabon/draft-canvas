@@ -17,8 +17,10 @@ import {
 
 export interface FlowAnchor {
   kind: 'edge' | 'node';
-  /** The marker's flow-space box, its rendered size measured from the DOM under `root`. */
-  marker: (root: HTMLElement | null) => Box;
+  /** The marker's flow-space box, its rendered size measured from the DOM under `root` — or, while
+   *  that element isn't there to measure, a fallback size (`measured: false`, so a caller caching
+   *  the box knows to look again). */
+  marker: (root: HTMLElement | null) => { box: Box; measured: boolean };
   host: Box | null;
   /** Nodes the callout must never cover. */
   avoid: Box[];
@@ -35,10 +37,10 @@ const BADGE_TOP = -22;
 const BADGE_RIGHT = 6;
 
 /** Layout size in flow units — `offset*` ignores the viewport's scale transform, which is the point. */
-function measured(element: HTMLElement | null | undefined): { width: number; height: number } {
+function measured(element: HTMLElement | null | undefined): { width: number; height: number; measured: boolean } {
   return element && element.offsetWidth > 0
-    ? { width: element.offsetWidth, height: element.offsetHeight }
-    : FALLBACK_MARKER;
+    ? { width: element.offsetWidth, height: element.offsetHeight, measured: true }
+    : { ...FALLBACK_MARKER, measured: false };
 }
 
 export function edgeAnchor(
@@ -60,9 +62,9 @@ export function edgeAnchor(
     // Mirrors `attachmentRowTransform` in `DraftEdgeView`: centred on the label point, one gap off it.
     marker: (root) => {
       const row = root?.querySelector<HTMLElement>(`.dc-attachment-chip-row[data-host-id="${CSS.escape(edge.id)}"]`);
-      const { width, height } = measured(row);
+      const { width, height, measured: found } = measured(row);
       const y = preferBelow ? labelPoint.y + ATTACHMENT_ROW_GAP : labelPoint.y - ATTACHMENT_ROW_GAP - height;
-      return { x: labelPoint.x - width / 2, y, width, height };
+      return { box: { x: labelPoint.x - width / 2, y, width, height }, measured: found };
     },
     host: null,
     avoid: [box(sourceRect), box(targetRect)],
@@ -81,10 +83,10 @@ export function nodeAnchor(node: InternalNode | undefined): FlowAnchor | null {
       const badge = root?.querySelector<HTMLElement>(
         `.react-flow__node[data-id="${CSS.escape(node.id)}"] .dc-attachment-badge`,
       );
-      const { width, height } = measured(badge);
-      return badge && badge.offsetWidth > 0
-        ? { x: rect.x + badge.offsetLeft, y: rect.y + badge.offsetTop, width, height }
-        : { x: rect.x + rect.width - BADGE_RIGHT - width, y: rect.y + BADGE_TOP, width, height };
+      const { width, height, measured: found } = measured(badge);
+      return found
+        ? { box: { x: rect.x + badge!.offsetLeft, y: rect.y + badge!.offsetTop, width, height }, measured: true }
+        : { box: { x: rect.x + rect.width - BADGE_RIGHT - width, y: rect.y + BADGE_TOP, width, height }, measured: false };
     },
     host,
     avoid: [host],

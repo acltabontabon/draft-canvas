@@ -114,17 +114,31 @@ export function legibilityOf(nodes: readonly DraftNode[], edges: readonly DraftE
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const drawn: { edge: DraftEdge; route: Drawn }[] = [];
   for (const edge of edges) {
-    const route = drawnRoute(edge, nodes, edges);
+    const route = drawnRoute(edge, nodes, edges, undefined, byId);
     if (route && route.points.length > 1) drawn.push({ edge, route });
   }
   const bundled = drawn.filter((d) => d.route.spine).length;
+  // Each route's runs and extent worked out once, not once per pair: two lines whose extents don't
+  // meet can't cross, which settles most pairs of a large view with four comparisons.
+  const runs = drawn.map(({ route }) => {
+    const points = runsOf(route.points);
+    let left = Infinity, right = -Infinity, top = Infinity, bottom = -Infinity;
+    for (const p of points) {
+      if (p.x < left) left = p.x;
+      if (p.x > right) right = p.x;
+      if (p.y < top) top = p.y;
+      if (p.y > bottom) bottom = p.y;
+    }
+    return { points, left, right, top, bottom, spine: route.spine };
+  });
   let crossings = 0;
-  for (let i = 0; i < drawn.length; i += 1) {
-    for (let j = i + 1; j < drawn.length; j += 1) {
-      const a = drawn[i]!;
-      const b = drawn[j]!;
-      if (a.route.spine && a.route.spine === b.route.spine) continue;
-      crossings += crossingsBetween(runsOf(a.route.points), runsOf(b.route.points));
+  for (let i = 0; i < runs.length; i += 1) {
+    const a = runs[i]!;
+    for (let j = i + 1; j < runs.length; j += 1) {
+      const b = runs[j]!;
+      if (a.spine && a.spine === b.spine) continue;
+      if (a.right < b.left || b.right < a.left || a.bottom < b.top || b.bottom < a.top) continue;
+      crossings += crossingsBetween(a.points, b.points);
     }
   }
   const groups = nodes.filter((n) => n.type === 'group');

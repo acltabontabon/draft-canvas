@@ -16,9 +16,10 @@ import { LABEL_LINE_GAP, flattenPath, labelLaneOffset, laneIndex, routeEdge } fr
  * still places the node if every one of them is crossed — which is why this module is allowed to
  * approximate, to give up early, and to cost nothing at all when there is nothing nearby.
  *
- * Deliberately not a spatial index or a cache: the region asked about is one node's worth of
- * canvas, the answer is wanted once per placement, and `obstaclesForEdge` and `laneIndex` already
- * memoize the parts that are worth memoizing.
+ * Not a spatial index: the region asked about is one node's worth of canvas. But a connector's
+ * drawn boxes are kept per document (see `Spans`): every continuation candidate around one anchor
+ * asks about overlapping regions of the same document, and re-routing the same dozen connectors for
+ * each of them cost hundreds of milliseconds per edit on a large diagram.
  */
 
 /** Half the width of the band a connector is treated as occupying. A stroke is 1.5px, but a line
@@ -61,15 +62,28 @@ interface EdgeSpan {
   bottom: number;
 }
 
+/** Where one connector is drawn, as the boxes `connectorClearance` tests: one per segment, and its
+ *  caption's. Plain numbers only — nothing the router used to get there. */
+interface RoutedBoxes {
+  segments: Bounds[];
+  label?: Bounds;
+}
+
+/** A document's spans, and the connectors routed so far for it, by id (`null`: it has no route). */
+interface Spans {
+  spans: EdgeSpan[];
+  routed: Map<string, RoutedBoxes | null>;
+}
+
 /**
  * The spans for a document, computed once per (nodes, edges) pair. Placement asks about the same
  * document repeatedly — once per suggestion offered, and the hook re-derives on every selection —
  * while the document itself only changes when it is edited. Keyed on array identity, nested the
  * same way `bundles.ts`'s plan cache is, so an edit to either drops it.
  */
-const spanCache = new WeakMap<readonly DraftNode[], WeakMap<readonly DraftEdge[], EdgeSpan[]>>();
+const spanCache = new WeakMap<readonly DraftNode[], WeakMap<readonly DraftEdge[], Spans>>();
 
-function spansOf(nodes: readonly DraftNode[], edges: readonly DraftEdge[]): EdgeSpan[] {
+function spansOf(nodes: readonly DraftNode[], edges: readonly DraftEdge[]): Spans {
   let byEdges = spanCache.get(nodes);
   if (!byEdges) {
     byEdges = new WeakMap();
@@ -94,8 +108,44 @@ function spansOf(nodes: readonly DraftNode[], edges: readonly DraftEdge[]): Edge
       bottom: Math.max(source.y + source.height, target.y + target.height) + STRAY_MARGIN,
     });
   }
-  byEdges.set(edges, spans);
-  return spans;
+  const entry: Spans = { spans, routed: new Map() };
+  byEdges.set(edges, entry);
+  return entry;
+}
+
+/**
+ * Routes one connector the way the canvas draws it, lane and shared trunk included: without those a
+ * parallel pair or a bundled fan was tested where neither line is. A module-level function so the
+ * cached result holds the boxes and nothing of the router's working state (see AGENTS.md).
+ */
+function routeBoxes(doc: Pick<DraftDocument, 'nodes' | 'edges'>, { edge, source, target }: EdgeSpan): RoutedBoxes | null {
+  // `routeEdge` looks its endpoints up by id; the span already holds them.
+  const byId = new Map<string, DraftNode>([[source.id, source], [target.id, target]]);
+  // Both memoized on the document's arrays. Not the canvas's own plan slot: the document asked
+  // about may be one that never reaches the screen.
+  const lane = laneIndex(doc.edges).get(edge.id)?.offset ?? 0;
+  const route = routeEdge(edge, byId, {
+    obstacles: obstaclesForEdge(doc.nodes, edge.source, edge.target, 'transient'),
+    lane,
+    spine: routingPlan(doc.nodes, doc.edges, 'transient').spineFor(edge.id),
+  });
+  if (!route) return null;
+  const points = flattenPath(route.d);
+  const segments: Bounds[] = [];
+  for (let i = 1; i < points.length; i += 1) {
+    const a = points[i - 1]!;
+    const b = points[i]!;
+    segments.push({
+      x: Math.min(a.x, b.x) - STROKE_HALF,
+      y: Math.min(a.y, b.y) - STROKE_HALF,
+      width: Math.abs(b.x - a.x) + STROKE_HALF * 2,
+      height: Math.abs(b.y - a.y) + STROKE_HALF * 2,
+    });
+  }
+  // At the lane-nudged point both renderers draw the label at, not at `route.labelX`.
+  const nudge = labelLaneOffset(route.source.side, route.target.side, lane);
+  const label = labelBox(edge, { source, target }, { x: route.labelX + nudge.x, y: route.labelY + nudge.y });
+  return label ? { segments, label } : { segments };
 }
 
 /** The box a connector's own caption occupies, wherever `labelSideFor` ends up putting it: sized
@@ -134,53 +184,23 @@ export function connectorClearance(
 
   // Cheap gate first: which connectors could possibly be drawn in here at all. Nothing is routed
   // until this says so, which is what makes the common case — an empty stretch of canvas — free.
-  const nearby: EdgeSpan[] = [];
-  for (const span of spansOf(doc.nodes, doc.edges)) {
+  const { spans, routed } = spansOf(doc.nodes, doc.edges);
+  const boxes: Bounds[] = [];
+  let nearby = 0;
+  for (const span of spans) {
     if (span.right <= region.x || span.left >= regionRight) continue;
     if (span.bottom <= region.y || span.top >= regionBottom) continue;
-    nearby.push(span);
-    if (nearby.length >= limit) break;
-  }
-  if (nearby.length === 0) return [];
-
-  const boxes: Bounds[] = [];
-  // `routeEdge` looks its endpoints up by id; the spans already hold them, so this is the handful
-  // of connectors that got through the gate, never the whole document.
-  const byId = new Map<string, DraftNode>();
-  for (const { source, target } of nearby) {
-    byId.set(source.id, source);
-    byId.set(target.id, target);
-  }
-  // Routed the way the canvas draws them, lane and shared trunk included: without those a parallel
-  // pair or a bundled fan was tested where neither line is. Both are memoized on the document's
-  // arrays, and asked for only once something is near. Not the canvas's own plan slot: the document
-  // asked about may be one that never reaches the screen.
-  const lanes = laneIndex(doc.edges);
-  const plan = routingPlan(doc.nodes, doc.edges, 'transient');
-  for (const { edge, source, target } of nearby) {
-    const lane = lanes.get(edge.id)?.offset ?? 0;
-    const route = routeEdge(edge, byId, {
-      obstacles: obstaclesForEdge(doc.nodes, edge.source, edge.target, 'transient'),
-      lane,
-      spine: plan.spineFor(edge.id),
-    });
-    if (!route) continue;
-    const points = flattenPath(route.d);
-    for (let i = 1; i < points.length; i += 1) {
-      const a = points[i - 1]!;
-      const b = points[i]!;
-      const box = {
-        x: Math.min(a.x, b.x) - STROKE_HALF,
-        y: Math.min(a.y, b.y) - STROKE_HALF,
-        width: Math.abs(b.x - a.x) + STROKE_HALF * 2,
-        height: Math.abs(b.y - a.y) + STROKE_HALF * 2,
-      };
-      if (overlaps(box, region)) boxes.push(box);
+    let drawn = routed.get(span.edge.id);
+    if (drawn === undefined) {
+      drawn = routeBoxes(doc, span);
+      routed.set(span.edge.id, drawn);
     }
-    // At the lane-nudged point both renderers draw the label at, not at `route.labelX`.
-    const nudge = labelLaneOffset(route.source.side, route.target.side, lane);
-    const label = labelBox(edge, { source, target }, { x: route.labelX + nudge.x, y: route.labelY + nudge.y });
-    if (label && overlaps(label, region)) boxes.push(label);
+    if (drawn) {
+      for (const box of drawn.segments) if (overlaps(box, region)) boxes.push(box);
+      if (drawn.label && overlaps(drawn.label, region)) boxes.push(drawn.label);
+    }
+    nearby += 1;
+    if (nearby >= limit) break;
   }
   return boxes;
 }

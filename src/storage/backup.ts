@@ -13,10 +13,13 @@
  */
 
 import { cloneDocumentAsNew } from '../document/factory';
+import { LIMITS } from '../document/limits';
 import type { DraftDocument, Project } from '../document/types';
 import { parseDocument } from '../document/validate';
+import { adoptEmbeddedBackground } from '../export/background';
 import { fileNameFor, serializeDocument } from '../export/project';
 import { unzipFiles, zipFiles } from '../export/zip';
+import { blobToBase64 } from '../lib/base64';
 import type { DraftRepository } from './DraftRepository';
 
 /** The preference that remembers when the last backup was written (an ISO timestamp, 24 chars). */
@@ -69,6 +72,23 @@ function entryNameFor(document: DraftDocument, index: number): string {
 }
 
 /**
+ * The document as Export writes it: with its background image inline when there is one small enough
+ * to travel. What is stored never carries the image (`adoptEmbeddedBackground` strips it on the way
+ * in), so a backup built from stored rows alone once restored every backdrop as nothing. This reads
+ * the image from `repository` rather than the app's own store, as `withEmbeddedBackground` does, so a
+ * backup of any repository carries that repository's images.
+ */
+async function withStoredBackground(document: DraftDocument, repository: DraftRepository): Promise<DraftDocument> {
+  const { background } = document.settings;
+  if (!background.enabled) return document;
+  // A missing or unreadable image is the state the canvas already shows as "no background".
+  const row = await repository.loadBackgroundImage(document.metadata.id, background.imageId).catch(() => null);
+  if (!row || row.blob.size > LIMITS.maxEmbeddedBackgroundBytes) return document;
+  const dataUri = `data:${row.blob.type || 'image/png'};base64,${await blobToBase64(row.blob)}`;
+  return { ...document, settings: { ...document.settings, background: { ...background, image: { dataUri, width: row.width, height: row.height } } } };
+}
+
+/**
  * Every readable document in the repository as a ZIP. A document that fails to load is left out
  * rather than failing the whole backup — one unreadable row must not stop the other hundred from
  * being saved — and the count says how many made it.
@@ -92,7 +112,7 @@ export async function buildBackup(repository: DraftRepository): Promise<BackupRe
     // the escaped name and its index is unique; the component budget leaves room for it.
     if (names.has(key(name))) name = `${name.slice(0, -DOCUMENT_EXTENSION.length)}~copy-${entries.length}${DOCUMENT_EXTENSION}`;
     names.add(key(name));
-    entries.push({ name, data: serializeDocument(document) });
+    entries.push({ name, data: serializeDocument(await withStoredBackground(document, repository)) });
     if (document.metadata.projectId) membership[document.metadata.id] = document.metadata.projectId;
   }
   const projects = await repository.listProjects();
@@ -163,6 +183,9 @@ export async function restoreBackup(repository: DraftRepository, bytes: Uint8Arr
       document = cloneDocumentAsNew(document, document.metadata.title);
       result.renamed += 1;
     }
+    // The image goes into its own store under the id the canvas now has (so after the clone above)
+    // and out of the document — the same order `adoptDocument` follows for an imported file.
+    document = await adoptEmbeddedBackground(document, repository);
     await repository.save(document);
     result.restored += 1;
   }

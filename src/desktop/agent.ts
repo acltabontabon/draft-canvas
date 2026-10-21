@@ -54,7 +54,7 @@ import { themeFor, type ThemeName } from '../render/theme/tokens';
 import { agentActivity } from './agentActivity';
 import { forgetPendingWrite, rememberPendingWrite } from './agentWrites';
 import type { AgentContext, DesktopApi, Handle, HostEvent } from './api';
-import { BaseSnapshots, overlapOf } from '../agent/rebase';
+import { BaseSnapshots, overlapOf, rebasedOverlapOf } from '../agent/rebase';
 
 /** What the handler needs from the controller — kept narrow so this stays testable on its own. */
 export interface AgentHost {
@@ -526,6 +526,7 @@ async function update(api: DesktopApi, host: AgentHost, event: Request) {
     ? readPreview(args.previewId, context.diagramId ?? '', context.session ?? '', handOut(host, snapshot)).path
     : viewPathOf(snapshot.file, args.view);
   let rebased = false;
+  let rebasedFrom: DraftDocument | undefined;
   if (!accepted) {
     const current = handOut(host, snapshot);
     const base = args.onConflict === 'rebase' ? bases.get(expected) : undefined;
@@ -542,15 +543,34 @@ async function update(api: DesktopApi, host: AgentHost, event: Request) {
       });
     }
     rebased = true;
+    rebasedFrom = base;
   }
 
   // 3. The change, worked out and checked in full (on a worker thread) before anything is touched.
   // The person may keep editing meanwhile; the commit below re-checks the revision, so an edit made
   // in the meantime turns this into a conflict rather than being overwritten.
-  agentActivity.begin({ id: event.id, tool: 'update_diagram', title: snapshot.file.metadata.title, target: 'open', path });
+  const startView = viewOf(snapshot.file, path);
+  agentActivity.begin({
+    id: event.id,
+    tool: 'update_diagram',
+    title: snapshot.file.metadata.title,
+    target: 'open',
+    path,
+    ...(startView ? { base: { nodes: startView.nodes, edges: startView.edges } } : {}),
+  });
   const result = await candidateOrUpdate(event, snapshot.file, path, handOut(host, snapshot), api);
   if (result.kind !== 'update') throw new AgentError('INTERNAL', 'The edit could not be worked out.');
   if (result.problems.length) throw layoutConstrained(result);
+  // The check above compared the batch against the file it was written for; re-run on the current one
+  // it may cascade into what the person added meanwhile (a connector drawn to a shape it removes, an
+  // open point on it, a shape put inside it). That is a conflict too, never a silent deletion.
+  const undone = rebasedFrom ? rebasedOverlapOf(rebasedFrom, snapshot.file, result.file) : [];
+  if (undone.length > 0) {
+    throw new AgentError('REVISION_CONFLICT', 'On the current revision, that change would also remove or alter what the person added since. Nothing changed.', {
+      hint: 'Read the diagram again and rebuild the change on the current revision. Don\'t create a replacement diagram.',
+      details: { currentRevision: handOut(host, snapshot), overlapping: undone.slice(0, 20) },
+    });
+  }
   const title = result.file.metadata.title;
   const base = { diagramId: context.diagramId, title, ...(path.length ? { view: { path } } : {}), ...(rebased ? { rebased: true } : {}) };
   if (result.unchanged) {

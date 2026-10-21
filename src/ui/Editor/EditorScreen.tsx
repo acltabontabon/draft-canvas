@@ -1,3 +1,7 @@
+// The editor's own stylesheet, loaded with this lazy chunk rather than in the entry: nothing the
+// Library, Home or desktop shell draws uses its rules. It still lands after `app.css` (and React
+// Flow's base styles), so its overrides keep winning.
+import '../../styles/canvas.css';
 import { ExampleBanner } from './ExampleBanner';
 import { FlowTraceBar } from './FlowTraceBar';
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';

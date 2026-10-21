@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { Handle, NodeResizer, useUpdateNodeInternals, type NodeProps } from '@xyflow/react';
+import { NodeResizer, useUpdateNodeInternals, type NodeProps } from '@xyflow/react';
 import { displayNameFor, maxSizeFor } from '../document/factory';
 import { lensNodeTier, nodeTierInPlayback, type ExplainTier } from '../document/flow';
 import { stepContextOf } from '../presentation/stepContext';
@@ -25,6 +25,8 @@ import { HANDLE_ANCHORS } from '../edges/routing';
 import { beginClipScope, emitDisplayList } from '../render/svg/emit';
 import { useSettle } from './useContinuation';
 import { DragCapsule } from './DragCapsule';
+import { DraftHandle } from './DraftHandle';
+import { useConnectingHandles } from './useConnectingHandles';
 import { minResizeSizeFor } from './resizeSnap';
 import { FONTS, LINE_HEIGHTS, cssFont } from '../render/text/fonts';
 import type { Shape } from '../render/displayList';
@@ -105,6 +107,8 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
       ? `${state.armedAnchor.side}:${state.armedAnchor.offset}`
       : null,
   );
+  // One subscription for all of this shape's handles (see `DraftHandle.tsx`).
+  const connecting = useConnectingHandles(id);
   const popoverOpen = useUiStore(
     (state) => state.openAttachmentDetail?.hostKind === 'node' && state.openAttachmentDetail?.hostId === id,
   );
@@ -561,13 +565,15 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
         const origin = nodeMarkerOrigin({ type: node.type, width: effectiveWidth, height: effectiveHeight });
         return (
           <OpenPointMarker
-            target={{ kind: 'node', id: node.id }}
+            targetKind="node"
+            targetId={node.id}
             points={openPoints}
             variant="node"
             // Reachable while presenting for the same reason the attachment badge is: nothing is
             // selected then, and the presenter still has to be able to ask what is open here.
             tabbable={Boolean(selected) || mode === 'present'}
-            style={{ left: origin.x, top: origin.y }}
+            x={origin.x}
+            y={origin.y}
           />
         );
       })()}
@@ -696,15 +702,17 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
       */}
       {(node.type === 'ellipse' ? HANDLE_ANCHORS.filter((anchor) => anchor.offset === 0.5) : HANDLE_ANCHORS).map(
         (anchor) => (
-          <Handle
+          <DraftHandle
             key={anchor.id}
+            nodeId={id}
             id={anchor.id}
-            type="source"
             position={anchor.position}
             className="dc-handle"
-            data-armed={armedAnchorKey === `${anchor.side}:${anchor.offset}` ? 'true' : undefined}
+            armed={armedAnchorKey === `${anchor.side}:${anchor.offset}`}
             style={handleStyles.get(anchor.id)}
-            isConnectable={!readOnly}
+            connectable={!readOnly}
+            from={connecting.from === anchor.id}
+            to={connecting.to === anchor.id}
           />
         ),
       )}

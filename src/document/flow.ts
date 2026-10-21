@@ -64,8 +64,8 @@ export function flowHasMembers(doc: DraftDocument, flow: DraftFlow): boolean {
   const byNodes = memoLevel(byEdges, doc.edges, () => new WeakMap<readonly unknown[], boolean>());
   const cached = byNodes.get(doc.nodes);
   if (cached !== undefined) return cached;
-  const edgeIds = new Set(doc.edges.map((edge) => edge.id));
-  const nodeIds = new Set(doc.nodes.map((node) => node.id));
+  const edgeIds = idsOf(doc.edges);
+  const nodeIds = idsOf(doc.nodes);
   const result = flow.steps.some(
     (step) =>
       (step.edgeId !== undefined && edgeIds.has(step.edgeId)) ||
@@ -74,6 +74,14 @@ export function flowHasMembers(doc: DraftDocument, flow: DraftFlow): boolean {
   );
   byNodes.set(doc.nodes, result);
   return result;
+}
+
+/** The ids in one nodes or edges array, shared by every flow asking about it: a drag makes a new
+ *  `nodes` array each frame, and every flow built its own sets of every id again. */
+const idsCache = new WeakMap<readonly { id: string }[], ReadonlySet<string>>();
+
+function idsOf(items: readonly { id: string }[]): ReadonlySet<string> {
+  return memoLevel(idsCache, items, () => new Set(items.map((item) => item.id)));
 }
 
 const hasMembersCache = new WeakMap<

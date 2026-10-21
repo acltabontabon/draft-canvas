@@ -157,14 +157,23 @@ pub(crate) fn complete_save_as(
 ) -> Result<(SavedAs, Option<String>), AppError> {
     let handle = state.grant_file(target)?;
     let grant = state.file(&handle)?;
-    let warning = copy_sidecar_from
-        .and_then(|from| docio::sidecar_copy(&from.path, &grant.path).err())
-        .map(|e| {
+    // Without a source, a file this replaced must not keep its own background: a canvas with none,
+    // saved over `plan.draftcanvas`, reopened with plan's old image behind it. A pending background
+    // is written by the page after this.
+    let warning = match copy_sidecar_from {
+        Some(from) => docio::sidecar_copy(&from.path, &grant.path).err().map(|e| {
             format!(
                 "Saved {}, but its background image wasn't copied. {}",
                 grant.name, e.message
             )
-        });
+        }),
+        None => docio::sidecar_remove(&grant.path).err().map(|e| {
+            format!(
+                "Saved {}, but the replaced file's background image couldn't be removed. {}",
+                grant.name, e.message
+            )
+        }),
+    };
     remember_file(state, &grant.path, &grant.name);
     let saved = SavedAs {
         handle,

@@ -275,6 +275,10 @@ export function layoutGraph(input: LayoutInput): LayoutOutput {
         [e.source, e.target, e.targetEnd, 'source'],
       ] as const) {
         if (!boxesById.has(id) || !groupsById.has(group) || degree.get(id) !== 1 || exits.has(id) || enters.has(id)) continue;
+        // A connector to the boundary itself (or one around it), not to something inside it, has no
+        // end inside to hang beside: the boundary's own layout has no item for it, and asking for one
+        // lost track of it.
+        if (chain(group).includes(end)) continue;
         const inside = get(members, group);
         const flowsOn = input.edges.some((x) => x.source !== x.target && (role === 'sink' ? x.source === end && inside.has(x.target) : x.target === end && inside.has(x.source)));
         if (!flowsOn) continue;

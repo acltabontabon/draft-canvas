@@ -29,6 +29,7 @@ export function ToolbarActions({ onPresent, onExport }: ToolbarActionsProps) {
   const setAboutOpen = useUiStore((state) => state.setAboutOpen);
   const setSettingsOpen = useUiStore((state) => state.setSettingsOpen);
   const setFindReplaceOpen = useUiStore((state) => state.setFindReplaceOpen);
+  const readOnly = useUiStore((state) => Boolean(state.readOnly));
   const flowPanelOpen = useUiStore((state) => state.flowPanelOpen);
   const setFlowPanelOpen = useUiStore((state) => state.setFlowPanelOpen);
   const activeFlowTitle = useEditorStore((state) =>
@@ -108,8 +109,8 @@ export function ToolbarActions({ onPresent, onExport }: ToolbarActionsProps) {
     ] : []),
     // The two document-wide edits, after the app-level utilities so the rows above keep their
     // places under the keyboard. Both are palette commands too: each row only names the store
-    // action the command names.
-    {
+    // action the command names. A shared diagram can't be edited, so it offers neither.
+    ...(readOnly ? [] : [{
       id: 'arrange',
       label: toolbarLabel('arrange'),
       onSelect: () => {
@@ -133,7 +134,7 @@ export function ToolbarActions({ onPresent, onExport }: ToolbarActionsProps) {
         closeMenu();
         setFindReplaceOpen(true);
       },
-    },
+    }]),
   ];
 
   return (

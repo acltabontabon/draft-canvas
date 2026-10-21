@@ -294,6 +294,14 @@ async fn list(
     let project_filter = args.get("project").and_then(Value::as_str);
     let active = agent.active();
     let listing = agent.index.listing(projects);
+    // Resolved once, not per diagram listed; and the open one is found in this same walk; a second
+    // walk of every project for it cost up to as long as the listing itself.
+    let open_path = active
+        .as_ref()
+        .and_then(|a| dunce::canonicalize(&a.path).ok());
+    let is_open =
+        |d: &Diagram| open_path.is_some() && dunce::canonicalize(&d.absolute).ok() == open_path;
+    let open_diagram = listing.diagrams.iter().find(|d| is_open(d)).cloned();
     let mut all: Vec<Diagram> = listing
         .diagrams
         .into_iter()
@@ -317,9 +325,7 @@ async fn list(
         .skip(offset)
         .take(limit)
         .map(|d| {
-            let open = active.as_ref().is_some_and(|a| {
-                dunce::canonicalize(&a.path).ok() == dunce::canonicalize(&d.absolute).ok()
-            });
+            let open = is_open(d);
             let mut item = json!({
                 "diagramId": d.diagram_id,
                 "title": d.title,
@@ -358,7 +364,7 @@ async fn list(
     // "The current diagram": what the person has open right now — which may not be the diagram this
     // conversation has been working on, and is never substituted for it.
     result["active"] = match &active {
-        Some(open) => active_context(agent, app, projects, open, calls).await,
+        Some(open) => active_context(agent, app, open_diagram, open, calls).await,
         None => Value::Null,
     };
     let recent = agent.sessions.recent(&calls.session);
@@ -374,15 +380,11 @@ async fn list(
 async fn active_context(
     agent: &Agent,
     app: &AppHandle,
-    projects: &[Project],
+    diagram: Option<Diagram>,
     open: &super::ActiveDoc,
     calls: &CallRegistry,
 ) -> Value {
-    let Some(diagram) =
-        agent.index.list(projects).into_iter().find(|d| {
-            dunce::canonicalize(&d.absolute).ok() == dunce::canonicalize(&open.path).ok()
-        })
-    else {
+    let Some(diagram) = diagram else {
         // Open, but not in a folder agents may use: say only that much.
         return json!({"inScope": false});
     };
@@ -597,7 +599,7 @@ fn diagram_context(agent: &Agent, diagram: &Diagram, with_text: bool) -> Result<
     let app = agent.app().ok_or_else(unavailable)?;
     let handle = app
         .state::<AppState>()
-        .grant_file(&diagram.absolute)
+        .grant_file_unwatched(&diagram.absolute)
         .map_err(|e| ToolError::new("NOT_FOUND", e.message))?;
     context["handle"] = json!(handle);
     if with_text && active.is_none() {

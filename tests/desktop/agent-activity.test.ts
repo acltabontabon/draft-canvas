@@ -4,6 +4,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { agentActivity, SHOW_AFTER_MS } from '../../src/desktop/agentActivity';
+import { agentGhostDiff } from '../../src/canvas/agentGhostDiff';
 import { createNode } from '../../src/document/factory';
 import { useUiStore } from '../../src/store/uiStore';
 
@@ -29,6 +30,22 @@ describe('agent activity', () => {
     vi.advanceTimersByTime(1000);
     expect(agentActivity.snapshot()).toEqual([]);
     expect(useUiStore.getState().agentPreview).toBeNull();
+  });
+
+  it('carries the view the agent read into the preview, so shapes added on screen meanwhile are not shown as removed', () => {
+    const base = { nodes: [createNode({ id: 'a', type: 'service', x: 0, y: 0, text: 'A' })], edges: [] };
+    agentActivity.begin({ ...op(9), base });
+    vi.advanceTimersByTime(SHOW_AFTER_MS);
+    agentActivity.progress(9, { seq: 1, stage: 'routing', candidate: candidate('A2') });
+    const preview = useUiStore.getState().agentPreview!;
+    expect(preview.base).toBe(base);
+    // The person's own new shape is in neither the base nor the candidate: no part of the change.
+    const added = createNode({ id: 'mine', type: 'database', x: 400, y: 0 });
+    const diff = agentGhostDiff(preview.base!, preview);
+    expect(diff.removedNodes.map((n) => n.id)).not.toContain(added.id);
+    expect(diff.modifiedNodes.map((n) => n.id)).toEqual(['a']);
+    // Against the screen instead, it would read as removed.
+    expect(agentGhostDiff({ nodes: [...base.nodes, added], edges: [] }, preview).removedNodes.map((n) => n.id)).toEqual(['mine']);
   });
 
   it('shows a slow one, previews it on the open diagram, and clears the preview when it ends', () => {

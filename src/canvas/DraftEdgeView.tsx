@@ -1119,12 +1119,17 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
 
         {openPointCenter && (
           <OpenPointMarker
-            target={{ kind: 'edge', id: edge.id }}
+            targetKind="edge"
+            targetId={edge.id}
             points={openPoints}
             variant="edge"
             tabbable={Boolean(selected) || mode === 'present'}
-            dim={{ dimmed, focusDimmed, lensDimmed, explainTier: playbackActive ? tier : undefined }}
-            style={{ position: 'absolute', transform: `translate(-50%, -50%) translate(${openPointCenter.x}px, ${openPointCenter.y}px)` }}
+            dimmed={dimmed}
+            focusDimmed={focusDimmed}
+            lensDimmed={lensDimmed}
+            explainTier={playbackActive ? tier : undefined}
+            x={openPointCenter.x}
+            y={openPointCenter.y}
           />
         )}
 

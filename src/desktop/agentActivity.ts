@@ -16,6 +16,7 @@
 
 import type { Candidate, Stage } from '../agent/progress';
 import type { Progress } from '../agent/offThread';
+import type { DraftEdge, DraftNode } from '../document/types';
 import { useUiStore } from '../store/uiStore';
 
 export const SHOW_AFTER_MS = 300;
@@ -46,6 +47,9 @@ export interface AgentOp {
   /** The person asked to cancel it; the gate will refuse it. */
   cancelling: boolean;
   candidate?: Candidate;
+  /** The view the change is being worked out from, for a change to the open diagram: what its
+   *  preview is told apart from, since the person may keep editing on screen meanwhile. */
+  base?: { nodes: readonly DraftNode[]; edges: readonly DraftEdge[] };
 }
 
 type Listener = () => void;
@@ -74,7 +78,14 @@ function syncPreview(): void {
     return;
   }
   if (ui.agentPreview?.opId === current.id && ui.agentPreview.seq === current.seq) return;
-  ui.setAgentPreview({ opId: current.id, seq: current.seq, path: current.path, nodes: current.candidate!.nodes, edges: current.candidate!.edges });
+  ui.setAgentPreview({
+    opId: current.id,
+    seq: current.seq,
+    path: current.path,
+    nodes: current.candidate!.nodes,
+    edges: current.candidate!.edges,
+    ...(current.base ? { base: current.base } : {}),
+  });
 }
 
 export const agentActivity = {
@@ -88,10 +99,13 @@ export const agentActivity = {
   },
 
   /** A request the page has taken. `reveal`: the generation view may open by itself (see `agent.ts`). */
-  begin(op: Pick<AgentOp, 'id' | 'tool' | 'title' | 'target' | 'path'>, reveal = false): void {
+  begin(op: Pick<AgentOp, 'id' | 'tool' | 'title' | 'target' | 'path' | 'base'>, reveal = false): void {
     const entry: AgentOp = { ...op, stage: 'preparing', seq: 0, startedAt: Date.now(), shown: false, watching: false, follow: false, applying: false, cancelling: false };
     const kept = [...ops.filter((o) => o.id !== op.id), entry];
-    for (const dropped of kept.slice(0, Math.max(0, kept.length - MAX_ENTRIES))) clearTimeout(timers.get(dropped.id));
+    for (const dropped of kept.slice(0, Math.max(0, kept.length - MAX_ENTRIES))) {
+      clearTimeout(timers.get(dropped.id));
+      timers.delete(dropped.id);
+    }
     emit(kept.slice(-MAX_ENTRIES));
     timers.set(
       op.id,

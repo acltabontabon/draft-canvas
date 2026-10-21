@@ -646,7 +646,9 @@ export function canvasCommands(ctx: CommandContext): Command[] {
       run: (inner) => inner.editor.redo(),
     });
   }
-  if (ctx.editor.document.edges.some((edge) => edge.routeMode || edge.waypoints)) {
+  // Tidy, Arrange and Find and replace edit the document, which a shared (read-only) diagram
+  // refuses — offering them only produced a misleading error.
+  if (!ctx.ui.readOnly && ctx.editor.document.edges.some((edge) => edge.routeMode || edge.waypoints)) {
     commands.push({
       id: 'tidy-connections',
       title: 'Tidy connectors',
@@ -658,7 +660,7 @@ export function canvasCommands(ctx: CommandContext): Command[] {
   }
   // Only with shapes to move: the layout engine has nothing to do with an empty room, and a
   // command that does nothing is worse than one that is absent.
-  if (ctx.editor.document.nodes.some((node) => node.type !== 'group' && node.type !== 'note' && node.type !== 'text' && node.type !== 'code')) {
+  if (!ctx.ui.readOnly && ctx.editor.document.nodes.some((node) => node.type !== 'group' && node.type !== 'note' && node.type !== 'text' && node.type !== 'code')) {
     commands.push({
       id: 'arrange',
       title: 'Arrange diagram',
@@ -689,7 +691,7 @@ export function canvasCommands(ctx: CommandContext): Command[] {
       run: (inner) => inner.editor.fitSelectedLabels(),
     });
   }
-  commands.push({
+  if (!ctx.ui.readOnly) commands.push({
     id: 'find-replace',
     title: 'Find and replace…',
     group: 'canvas',

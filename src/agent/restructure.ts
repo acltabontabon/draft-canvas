@@ -27,7 +27,10 @@ export function moveInside(file: DraftDocument, path: DepthPath, ownerId: unknow
   });
   const innerEdges = view.edges.filter((e) => ids.has(e.source) && ids.has(e.target));
   const edgeIds = new Set(innerEdges.map((e) => e.id));
-  const innerFlows = view.flows.filter((f) => f.steps.length && f.steps.every((s) => !!s.edgeId && edgeIds.has(s.edgeId) && (s.extraNodeIds ?? []).every((id) => ids.has(id)) && (s.extraEdgeIds ?? []).every((id) => edgeIds.has(id))));
+  const innerFlows = view.flows
+    .filter((f) => f.steps.length && f.steps.every((s) => !!s.edgeId && edgeIds.has(s.edgeId) && (s.extraNodeIds ?? []).every((id) => ids.has(id)) && (s.extraEdgeIds ?? []).every((id) => edgeIds.has(id))))
+    // A camera pinned in the outer view frames nothing in the inside one: the presentation fits the step instead.
+    .map((f) => (f.steps.some((s) => s.viewport) ? { ...f, steps: f.steps.map(({ viewport: _pinned, ...step }) => step) } : f));
   const flowIds = new Set(innerFlows.map((f) => f.id));
   for (const flow of view.flows) {
     const touches = flow.steps.some((s) => (s.edgeId && edgeIds.has(s.edgeId)) || s.extraNodeIds?.some((id) => ids.has(id)) || s.extraEdgeIds?.some((id) => edgeIds.has(id)));
@@ -49,6 +52,10 @@ export function moveInside(file: DraftDocument, path: DepthPath, ownerId: unknow
   }
   const childPath = [...path, owner.id];
   const inside = viewOf(file, childPath)!;
+  // One flow per title in a view, as an addition is held to: the inside view may already tell one.
+  const taken = new Set(inside.flows.map((f) => f.title.trim().toLowerCase()));
+  const clash = innerFlows.find((f) => taken.has(f.title.trim().toLowerCase()));
+  if (clash) throw new AgentError('DUPLICATE_FLOW', `The inside view already has a flow called "${clash.title}". Rename one of them first.`, { details: { flow: clash.id } });
   // The moved shapes keep their arrangement. Into an empty inside view they keep their coordinates;
   // beside detail already there, they are set clear of it as one block, or they would land on it.
   const moving = view.nodes.filter((n) => ids.has(n.id));

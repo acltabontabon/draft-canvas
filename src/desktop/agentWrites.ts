@@ -30,8 +30,17 @@ const size = (w: { before: string; after: string }) => w.before.length + w.after
 
 export function rememberPendingWrite(id: number, entry: Omit<AgentWrite, 'displayPath' | 'stamp'>): void {
   if (size(entry) > MAX_CHARS) return;
+  pending.delete(id);
   pending.set(id, entry);
-  while (pending.size > MAX_ENTRIES) pending.delete(pending.keys().next().value as number);
+  // Bounded in all, as `written` is, not only per entry: eight entries each just under the limit
+  // would otherwise hold eight times it. The oldest goes first; the newest always fits on its own.
+  let total = 0;
+  for (const held of pending.values()) total += size(held);
+  while (pending.size > MAX_ENTRIES || total > MAX_CHARS) {
+    const oldest = pending.keys().next().value as number;
+    total -= size(pending.get(oldest)!);
+    pending.delete(oldest);
+  }
 }
 
 /** The shell wrote request `id`'s change: it is now `displayPath` at `stamp`. */

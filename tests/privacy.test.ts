@@ -83,6 +83,9 @@ describe('nothing on the canvas can reach a network', () => {
     expect(deps).toEqual(
       expect.arrayContaining([
         '@xyflow/react',
+        // React Flow's own engine, already shipped inside it: named so the canvas can start a
+        // connection from its own handles (`canvas/DraftHandle.tsx`).
+        '@xyflow/system',
         'idb',
         'react',
         'react-dom',
@@ -94,7 +97,7 @@ describe('nothing on the canvas can reach a network', () => {
       ]),
     );
     // A short, auditable dependency list is part of the promise.
-    expect(deps).toHaveLength(9);
+    expect(deps).toHaveLength(10);
     for (const name of deps) {
       expect(name).not.toMatch(/analytics|telemetry|sentry|tracking|posthog|mixpanel|segment/i);
     }

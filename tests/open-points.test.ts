@@ -112,6 +112,19 @@ describe('the model', () => {
     expect(unresolvedOpenPointsFor(settled.openPoints, { kind: 'edge', id: call.id })).toHaveLength(0);
     expect(kindsAmong(two.doc.openPoints)).toEqual(['tentative', 'awaiting']);
   });
+
+  it('hands back the same list for an element when an edit touched only another point', () => {
+    const { doc, api, ledger } = scene();
+    const one = raise(doc, 'tentative', [{ kind: 'node', id: api.id }]);
+    const two = raise(one.doc, 'awaiting', [{ kind: 'node', id: ledger.id }]);
+    const forApi = unresolvedOpenPointsFor(two.doc.openPoints, { kind: 'node', id: api.id });
+    const forLedger = unresolvedOpenPointsFor(two.doc.openPoints, { kind: 'node', id: ledger.id });
+    // A keystroke in the ledger's point: a new `openPoints` array, the api's list untouched.
+    const typed = setOpenPointContext(two.doc, two.point.id, 'waiting on finance');
+    expect(typed.openPoints).not.toBe(two.doc.openPoints);
+    expect(unresolvedOpenPointsFor(typed.openPoints, { kind: 'node', id: api.id })).toBe(forApi);
+    expect(unresolvedOpenPointsFor(typed.openPoints, { kind: 'node', id: ledger.id })).not.toBe(forLedger);
+  });
 });
 
 describe('deleting what a point is about', () => {

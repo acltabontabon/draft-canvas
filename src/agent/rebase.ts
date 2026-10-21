@@ -50,6 +50,18 @@ export function overlapOf(base: DraftDocument, theirs: DraftDocument, ours: Draf
 }
 
 /**
+ * What the batch, re-run on the person's current file, changed among what the person changed since
+ * `base`. `overlapOf` only sees what the batch does to the file it was written against; re-run on the
+ * current one it can cascade into the person's new work — removing a shape takes the connector they
+ * just drew to it, the open point they pinned on it, or the shape they put inside it — none of which
+ * was in `base` to compare. Empty means the re-run left all of their work alone.
+ */
+export function rebasedOverlapOf(base: DraftDocument, theirs: DraftDocument, rebased: DraftDocument): string[] {
+  const person = changedIds(base, theirs);
+  return [...changedIds(theirs, rebased)].filter((id) => person.has(id));
+}
+
+/**
  * The snapshots behind revisions recently handed to agents for the open document, so a rebase can see
  * what an agent's batch was written against. A handful is plenty: an agent rebuilds against its latest
  * read, and an older base falls back to an ordinary conflict.

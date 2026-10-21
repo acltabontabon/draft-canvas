@@ -41,6 +41,27 @@ describe('many projects', () => {
     expect(h.api.projectScan).toHaveBeenCalledTimes(2);
   });
 
+  it('lists a project once more when a change arrives while it is being listed', async () => {
+    const payments = h.addProject('payments', ['checkout.draftcanvas']);
+    h.listProjects(payments);
+    await h.controller.start();
+    const scan = h.api.projectScan.getMockImplementation()!;
+    let release!: () => void;
+    h.api.projectScan.mockImplementationOnce(async (handle: string) => {
+      await new Promise<void>((resolve) => (release = resolve));
+      return scan(handle);
+    });
+
+    const first = h.controller.scanProjects([payments]);
+    // A change that the listing in flight may already have missed.
+    await h.controller.scanProjects([payments], { again: true });
+    release();
+    await first;
+
+    expect(h.api.projectScan).toHaveBeenCalledTimes(2);
+    expect(projects()[0]!.status).toBe('ready');
+  });
+
   it('renaming a file from its project lists the project again, so its tile opens the new name', async () => {
     const payments = h.addProject('payments', ['flows/checkout.draftcanvas', 'overview.draftcanvas']);
     h.listProjects(payments);

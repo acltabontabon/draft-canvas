@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { countLabelMatches, type ReplaceOptions } from '../../document/operations';
 import { roomsOf } from '../../depth/tree';
-import { isImeKeyEvent } from '../../lib/isEditableTarget';
+import { isImeKeyEvent, overlayAboveCanvasIsOpen } from '../../lib/isEditableTarget';
 import { count } from '../../lib/plural';
 import { fileOf, useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
@@ -111,6 +111,8 @@ export function FindReplaceDialog({ onClose }: { onClose: () => void }) {
  * Owns the dialog's open state and the ⌘⌥F (Ctrl+H) chord. The chord is bound here rather than in the
  * editor's key map so the dialog travels with the toolbar that mounts this host. Never while
  * presenting, and never over another dialog — a modal over a modal is two things asking for Escape.
+ * `overlayAboveCanvasIsOpen` rather than `[role="dialog"]`: the clipboard prompt is an
+ * `alertdialog`, which that selector missed. Nor on a shared diagram, which can't be edited.
  */
 export function FindReplaceHost() {
   const open = useUiStore((state) => state.findReplaceOpen);
@@ -126,8 +128,9 @@ export function FindReplaceHost() {
       const other = event.ctrlKey && !event.metaKey && !event.altKey && (key === 'h' || event.code === 'KeyH');
       if (!mac && !other) return;
       if (isImeKeyEvent(event)) return;
+      if (useUiStore.getState().readOnly) return;
       if (useEditorStore.getState().mode === 'present') return;
-      if (window.document.querySelector('[role="dialog"]')) return;
+      if (overlayAboveCanvasIsOpen()) return;
       event.preventDefault();
       setOpen(true);
     };

@@ -129,3 +129,58 @@ it('arranges boundary members without shrinking their container or losing explan
   editor.undo();
   expect(useEditorStore.getState().document.nodes).toEqual(before.nodes);
 });
+
+describe('arrange under a time budget', () => {
+  beforeEach(reset);
+
+  /** A tangled 100-shape room: unbounded, arranging it held the page for tens of seconds. */
+  function tangle() {
+    const ids: string[] = [];
+    let seed = 7;
+    const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    for (let i = 0; i < 100; i++) ids.push(useEditorStore.getState().addNode({ type: i % 3 ? 'service' : 'database', x: (i % 10) * 200, y: Math.floor(i / 10) * 150, text: `N${i}` }).id);
+    let edges = 0;
+    for (let i = 1; i < 100; i++) if (useEditorStore.getState().connect(ids[Math.floor(rnd() * i)]!, ids[i]!)) edges++;
+    while (edges < 148) {
+      const a = ids[Math.floor(rnd() * 100)]!;
+      const b = ids[Math.floor(rnd() * 100)]!;
+      if (a !== b && useEditorStore.getState().connect(a, b)) edges++;
+    }
+  }
+
+  const overlapping = () => {
+    const nodes = useEditorStore.getState().document.nodes;
+    let count = 0;
+    for (let i = 0; i < nodes.length; i++) for (let j = i + 1; j < nodes.length; j++) {
+      const [a, b] = [nodes[i]!, nodes[j]!];
+      if (a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height) count++;
+    }
+    return count;
+  };
+
+  it('a deadline already past still leaves a valid layout: every shape placed, none overlapping', async () => {
+    tangle();
+    const [{ arrangeView, readingDirectionOf }, { measureContext }, { Problems }, { withDeadline }] = await Promise.all([
+      import('../src/agent/arrange'), import('../src/agent/place'), import('../src/agent/errors'), import('../src/agent/route'),
+    ]);
+    const doc = useEditorStore.getState().document;
+    const arranged = withDeadline(performance.now() - 1, () => arrangeView(doc, {
+      connectors: 'tidy', move: true,
+      layout: { direction: readingDirectionOf(doc), spacing: 'comfortable', allowDegraded: false, normalizePeerSizes: false },
+    }, measureContext(), new Problems(), '/arrange'));
+    expect(arranged).toBeDefined();
+    useEditorStore.setState({ document: arranged!.view });
+    expect(useEditorStore.getState().document.nodes).toHaveLength(100);
+    expect(useEditorStore.getState().document.edges).toHaveLength(148);
+    expect(overlapping()).toBe(0);
+  }, 30_000);
+
+  it('arranges a large tangled room within its budget instead of holding the page', async () => {
+    tangle();
+    const started = performance.now();
+    expect(await useEditorStore.getState().arrangeRoom()).toBe(true);
+    // The budget is 1.5 s of repairs; generous for CI. Unbounded, this took over ten times as long.
+    expect(performance.now() - started).toBeLessThan(8_000);
+    expect(overlapping()).toBe(0);
+  }, 30_000);
+});

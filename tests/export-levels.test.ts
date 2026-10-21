@@ -63,6 +63,19 @@ describe('collectLevels', () => {
     ]);
   });
 
+  it('keeps counting when a counted name is already another room’s slug', () => {
+    const owner = (text: string, x: number) => ({
+      ...createNode({ type: 'service', x, y: 0, text }),
+      inside: room([createNode({ type: 'component', x: 0, y: 0, text: 'Inner' })]),
+    });
+    for (const texts of [['API', 'API', 'API 2'], ['API 2', 'API', 'API']]) {
+      const doc = { ...createDocument('Shop'), nodes: texts.map((text, index) => owner(text, index * 240)) };
+      const names = collectLevels(doc).map((level) => level.name);
+      expect(new Set(names).size).toBe(names.length);
+      expect(names).toContain('shop--api-2');
+    }
+  });
+
   it('a flat canvas is one level, and an unnamed owner is named by its kind', () => {
     expect(collectLevels(createDocument('Flat')).map((level) => level.name)).toEqual(['flat']);
     const inner = createNode({ type: 'component', x: 0, y: 0, text: 'Inner' });

@@ -79,7 +79,7 @@ const EDGE_ORDER: CalloutPlacementName[] = ['above', 'below', 'above-right', 'ab
 const EDGE_ORDER_BELOW: CalloutPlacementName[] = ['below', 'above', 'above-right', 'above-left', 'right', 'left'];
 const NODE_ORDER: CalloutPlacementName[] = ['above-right', 'above-left', 'right', 'left', 'below'];
 
-function candidateOrigin(name: CalloutPlacementName, input: CalloutPlacementInput): { x: number; y: number } {
+function candidateOrigin(name: CalloutPlacementName, input: Omit<CalloutPlacementInput, 'soft'>): { x: number; y: number } {
   const { marker, host, size, kind } = input;
   const markerCx = marker.x + marker.width / 2;
   const markerCy = marker.y + marker.height / 2;
@@ -157,15 +157,48 @@ function crosses(leader: CalloutLeader, box: Box): boolean {
   return false;
 }
 
-function evaluate(name: CalloutPlacementName, input: CalloutPlacementInput): Evaluated {
+/** Where candidate `name` puts the callout, kept inside the canvas. */
+function candidateRect(name: CalloutPlacementName, input: Omit<CalloutPlacementInput, 'soft'>): Box {
   const { bounds, size } = input;
   const origin = candidateOrigin(name, input);
-  const rect: Box = {
+  return {
     x: clamp(origin.x, bounds.x, bounds.x + bounds.width - size.width),
     y: clamp(origin.y, bounds.y, bounds.y + bounds.height - size.height),
     width: size.width,
     height: size.height,
   };
+}
+
+const orderFor = (input: Omit<CalloutPlacementInput, 'soft'>): CalloutPlacementName[] =>
+  input.kind === 'node' ? NODE_ORDER : input.preferBelow ? EDGE_ORDER_BELOW : EDGE_ORDER;
+const floats = (input: Omit<CalloutPlacementInput, 'soft'>): boolean =>
+  input.bounds.width >= MIN_FLOATING_WIDTH &&
+  input.size.width <= input.bounds.width &&
+  input.size.height <= input.bounds.height;
+
+/**
+ * Every box a floating callout could take for this input — their union — or null when it docks
+ * (docking never reads `soft`). A soft obstacle outside it can't change the result, so a caller
+ * holding a whole canvas of them hands `placeCallout` only the few that touch it.
+ */
+export function calloutReach(input: Omit<CalloutPlacementInput, 'soft'>): Box | null {
+  if (!floats(input)) return null;
+  let left = Infinity;
+  let top = Infinity;
+  let right = -Infinity;
+  let bottom = -Infinity;
+  for (const name of orderFor(input)) {
+    const rect = candidateRect(name, input);
+    left = Math.min(left, rect.x);
+    top = Math.min(top, rect.y);
+    right = Math.max(right, rect.x + rect.width);
+    bottom = Math.max(bottom, rect.y + rect.height);
+  }
+  return { x: left, y: top, width: right - left, height: bottom - top };
+}
+
+function evaluate(name: CalloutPlacementName, input: CalloutPlacementInput): Evaluated {
+  const rect = candidateRect(name, input);
   // The marker itself counts as something to keep clear of — covering it cuts the thread.
   const hardBoxes = [...input.avoid, ...input.exclusions, inflate(input.marker, 4)];
   let hard = hardBoxes.reduce((sum, box) => sum + overlapArea(rect, box), 0);
@@ -198,12 +231,9 @@ function docked(input: CalloutPlacementInput): CalloutPlacement {
 }
 
 export function placeCallout(input: CalloutPlacementInput): CalloutPlacement {
-  const { bounds, size } = input;
-  const tooBig = size.width > bounds.width || size.height > bounds.height;
-  if (bounds.width < MIN_FLOATING_WIDTH || tooBig) return docked(input);
+  if (!floats(input)) return docked(input);
 
-  const order = input.kind === 'node' ? NODE_ORDER : input.preferBelow ? EDGE_ORDER_BELOW : EDGE_ORDER;
-  const candidates = order.map((name) => evaluate(name, input));
+  const candidates = orderFor(input).map((name) => evaluate(name, input));
   const current = candidates.find((candidate) => candidate.name === input.current);
   const strict = (c: Evaluated) => c.hard === 0 && c.soft === 0 && c.length <= CLEAN_LEADER;
   const relaxed = (c: Evaluated) => c.hard === 0 && c.length <= MAX_LEADER;

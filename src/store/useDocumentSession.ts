@@ -8,13 +8,14 @@ import { adoptEmbeddedBackground } from '../export/background';
 import { hostKind } from '../host/hostInfo';
 import { clearDocUrl, docIdFromLocation, pushDocUrl, replaceDocUrl } from '../lib/documentUrl';
 import { clearShareFragment, decodeShareLink, sharePayloadFromHash } from '../share';
+import { holdOpen, openAnywhere } from '../storage/openPresence';
 import { stashForReload, takeReloadStash } from '../storage/reloadStash';
 import { logDiagnostic } from '../lib/diagnostics';
 import { loadFailureNotice } from '../lib/staleChunk';
 import type { StarterId } from '../starters';
 import { loadStarters } from '../starters/load';
 import { Autosave } from '../storage/autosave';
-import { getRepository, type DraftRepository } from '../storage';
+import { getRepository, reconcileMetadata, type DraftRepository } from '../storage';
 import { IndexedDbRepository, onStorageSuperseded } from '../storage/IndexedDbRepository';
 import { useUiStore } from './uiStore';
 
@@ -215,6 +216,8 @@ export function useDocumentSession(): DocumentSession {
    * real, stored document on screen clears it through `leaveShared`.
    */
   const sharedRef = useRef(false);
+  /** This tab's hold on the open canvas — see `openPresence.ts`. */
+  const openHold = useRef<{ id: string; release: () => Promise<void> } | null>(null);
   const leaveShared = useCallback(() => {
     if (!sharedRef.current) return;
     sharedRef.current = false;
@@ -342,6 +345,18 @@ export function useDocumentSession(): DocumentSession {
     };
   }, [openId]);
 
+  // Tells other tabs this canvas is open here, so closing it there leaves this tab's undo history's
+  // background images alone. A shared diagram is nobody's stored canvas: nothing to hold.
+  useEffect(() => {
+    if (!openId || sharedRef.current) return;
+    const hold = { id: openId, release: holdOpen(openId) };
+    openHold.current = hold;
+    return () => {
+      void hold.release();
+      if (openHold.current === hold) openHold.current = null;
+    };
+  }, [openId]);
+
   // A closed tab must not cost the user their last few seconds of work.
   // `beforeunload` is avoided deliberately: it disables the back/forward cache.
   useEffect(() => {
@@ -353,7 +368,10 @@ export function useDocumentSession(): DocumentSession {
       // queued requests included. The stash is what a refresh actually gets its edits back from
       // (`reloadStash.ts`); the desktop shell keeps its own recovery snapshot instead.
       const unsaved = hostKind() ? null : autosave.current?.unsavedForStash();
-      if (unsaved) stashForReload(unsaved);
+      if (unsaved) {
+        const id = unsaved.metadata.id;
+        stashForReload(unsaved, { base: autosave.current?.baselineOf(id), stamp: repository?.knownContentStamp?.(id) });
+      }
       void autosave.current?.flush();
     };
     window.addEventListener('visibilitychange', flush);
@@ -362,7 +380,7 @@ export function useDocumentSession(): DocumentSession {
       window.removeEventListener('visibilitychange', flush);
       window.removeEventListener('pagehide', flushNow);
     };
-  }, []);
+  }, [repository]);
 
   const refreshLibrary = useCallback(async () => {
     if (!repository) return;
@@ -400,17 +418,37 @@ export function useDocumentSession(): DocumentSession {
       let loaded: DraftDocument | null;
       try {
         loaded = await repository.load(id);
-        // Edits the page was leaving with as it last unloaded (`reloadStash.ts`): written to the
-        // store first, so everything after this is the ordinary open — unless another tab has saved
-        // something newer since, in which case the stash is the stale one.
-        const stashed = takeReloadStash(id);
-        if (loaded && stashed && stashed.metadata.updatedAt >= loaded.metadata.updatedAt) {
-          await repository.save(stashed);
-          loaded = stashed;
-        }
       } catch (error) {
         logDiagnostic(error, { operation: 'open-document', documentId: id });
         loaded = null;
+      }
+      // Edits the page was leaving with as it last unloaded (`reloadStash.ts`): written to the store
+      // first, so everything after this is the ordinary open — unless another tab has saved other
+      // content since, in which case the stash is the stale one.
+      // The stash is what is stored once it's read (the entry is gone), and the stored copy is what is
+      // on disk until the stash lands — tracked as such, so a failed write below leaves it pending.
+      let stashedUnsaved: DraftDocument | null = null;
+      const stash = loaded ? takeReloadStash(id) : null;
+      if (loaded && stash) {
+        // The content stamp, when both are known: a rename or move in another tab bumps `updatedAt`
+        // but keeps the stamp, and comparing times alone dropped a stash of real edits over a rename.
+        // Times still decide when the stamps differ: the write the unload aborted may have landed after
+        // all, and its fresh stamp says nothing about whether the stash is newer than it.
+        const storedStamp = repository.knownContentStamp?.(id);
+        const sameContent = stash.stamp !== undefined && storedStamp !== undefined && stash.stamp === storedStamp;
+        if (sameContent || stash.document.metadata.updatedAt >= loaded.metadata.updatedAt) {
+          try {
+            // With the stash's own baseline, a rename made elsewhere meanwhile is kept, not reverted.
+            const adopted = await repository.save(stash.document, stash.base);
+            loaded = adopted && stash.base ? reconcileMetadata(stash.document, stash.base, adopted) : stash.document;
+          } catch (error) {
+            // A failed write must not cost the stash or the canvas: open the stashed copy in memory,
+            // unsaved, so autosave retries it — and keep the stash for a refresh in the meantime.
+            logDiagnostic(error, { operation: 'open-document-stash', documentId: id });
+            stashForReload(stash.document, stash);
+            stashedUnsaved = stash.document;
+          }
+        }
       }
       if (request !== navigation.current) return;
       if (!loaded) {
@@ -438,6 +476,12 @@ export function useDocumentSession(): DocumentSession {
       // hands over as the stored one rather than write it again.
       leaveShared();
       autosave.current?.track(loaded);
+      if (stashedUnsaved) {
+        // Scheduled against the stored copy just tracked, so it is written as an edit of it; the
+        // status reads "unsaved" until it lands.
+        autosave.current?.schedule(stashedUnsaved);
+        loaded = stashedUnsaved;
+      }
       // Reopening the same canvas — the desktop shell reloading the file after an outside edit, or taking
       // another tab's copy — should leave you standing in the room you were in, as long as the
       // shape you were inside is still there. Opening a *different* canvas always starts at the
@@ -558,11 +602,14 @@ export function useDocumentSession(): DocumentSession {
           arriveWith(document, { reopening: false, fresh: options?.fresh });
           setOpenId(document.metadata.id);
         }
-        await refreshLibrary();
       } catch (error) {
         logDiagnostic(error, { operation: 'adopt-document', documentId: document.metadata.id });
         notify('Could not save that diagram — local storage may be full or unavailable.', 'error');
+        return;
       }
+      // Saved and open; a list that can't be re-read just stays as it was. Inside the try above, a
+      // failed re-read said "Could not save" about a diagram that was saved.
+      await refreshLibrary().catch((error: unknown) => logDiagnostic(error, { operation: 'refresh-library' }));
     },
     [leaveShared, mayLeaveCurrent, notify, projects, refreshLibrary, repository, setOpenId],
   );
@@ -636,20 +683,23 @@ export function useDocumentSession(): DocumentSession {
     }
     // Replaced and removed backgrounds kept their images only so undo could bring them back. Undo
     // history ends here, so everything but the image actually showing goes — the one the *stored*
-    // copy shows, which another tab may have changed since this one last looked.
+    // copy shows, which another tab may have changed since this one last looked. Not while another
+    // tab has the canvas open (`openPresence.ts`), nor when the browser can't say: that tab's undo
+    // history may name an image this one replaced, and pruning left its undo pointing at nothing.
     const closing = (await loadEditorStore()).useEditorStore.getState().document;
     if (repository && closing.metadata.id === openId) {
       const id = closing.metadata.id;
-      void repository
-        .load(id)
-        .then((stored) => {
-          if (!stored) return;
-          const { background } = stored.settings;
-          return repository.pruneBackgroundImages(id, background.enabled ? background : null);
-        })
-        .catch((error: unknown) => {
-          logDiagnostic(error, { operation: 'remove-background-image', documentId: id });
-        });
+      const hold = openHold.current?.id === id ? openHold.current : null;
+      void (async () => {
+        await hold?.release();
+        if ((await openAnywhere(id)) !== false) return;
+        const stored = await repository.load(id);
+        if (!stored) return;
+        const { background } = stored.settings;
+        await repository.pruneBackgroundImages(id, background.enabled ? background : null);
+      })().catch((error: unknown) => {
+        logDiagnostic(error, { operation: 'remove-background-image', documentId: id });
+      });
     }
     setOpenId(null);
     // Home is already showing; a list that can't be re-read just stays as it was.
@@ -800,11 +850,14 @@ export function useDocumentSession(): DocumentSession {
             throw error;
           }
         }
-        await refreshLibrary();
       } catch (error) {
         logDiagnostic(error, { operation: 'duplicate-document', documentId: id });
         notify('Could not duplicate that diagram — local storage may be full or unavailable.', 'error');
+        return;
       }
+      // The copy is stored; a list that can't be re-read just stays as it was until the next refresh.
+      // Inside the try above, a failed re-read reported a duplicate that had worked as failed.
+      await refreshLibrary().catch((error: unknown) => logDiagnostic(error, { operation: 'refresh-library' }));
     },
     [notify, refreshLibrary, repository],
   );
@@ -815,11 +868,13 @@ export function useDocumentSession(): DocumentSession {
       try {
         await repository.remove(id);
         if (openId === id) setOpenId(null);
-        await refreshLibrary();
       } catch (error) {
         logDiagnostic(error, { operation: 'delete-document', documentId: id });
         notify('Could not delete that diagram — local storage may be full or unavailable.', 'error');
+        return;
       }
+      // Deleted; as with duplicating, a list that can't be re-read isn't a delete that failed.
+      await refreshLibrary().catch((error: unknown) => logDiagnostic(error, { operation: 'refresh-library' }));
     },
     [notify, openId, refreshLibrary, repository, setOpenId],
   );

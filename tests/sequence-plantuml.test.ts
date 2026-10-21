@@ -100,6 +100,31 @@ describe('toPlantUml', () => {
     expect(toPlantUml(m)).toContain(': Message');
   });
 
+  it('disarms Creole italic and monospace, and never leaves two markup characters side by side', () => {
+    const label = 'GET https://api.example.com/v1 ""raw"" ***x*** ___';
+    const m = model({
+      participants: [
+        { id: 'P1', alias: 'A', label: 'A', category: 'service', kind: 'participant', sourceNodeId: 'a' },
+        { id: 'P2', alias: 'B', label: 'B', category: 'service', kind: 'participant', sourceNodeId: 'b' },
+      ],
+      elements: [
+        {
+          kind: 'group',
+          id: 'f1',
+          label: 'Flow',
+          sourceFlowId: 'f1',
+          children: [{ kind: 'message', order: 0, from: 'P1', to: 'P2', label, interaction: 'sync', sourceFlowId: 'f1', sourceEdgeIds: [], sourceStepIds: [] }],
+        },
+      ],
+    });
+    const line = toPlantUml(m).split('\n').find((l) => l.trim().startsWith('A -> B: '))!;
+    const text = line.trim().slice('A -> B: '.length);
+    for (const pair of ['//', '""', '**', '__']) expect(text).not.toContain(pair);
+    expect(text).toContain('https:<U+002F>/api');
+    // Decoded the way PlantUML renders the codes, it is exactly what was typed.
+    expect(text.replace(/<U\+([0-9A-F]{4})>/g, (_, hex: string) => String.fromCodePoint(parseInt(hex, 16)))).toBe(label);
+  });
+
   it('escapes a double quote in a participant name', () => {
     const m = model({
       participants: [{ id: 'P1', alias: 'Gateway', label: 'The "Gateway"', category: 'service', kind: 'participant', sourceNodeId: 'a' }],
@@ -180,7 +205,7 @@ describe('toPlantUml', () => {
     const out = toPlantUml(m);
     // The whole label stays on the `group` line — the embedded newline is collapsed to a space,
     // so `!include ...` can never appear as its own line and be read as a separate statement.
-    expect(out).toContain('group Checkout !include http://attacker/x\n');
+    expect(out).toContain('group Checkout !include http:<U+002F>/attacker/x\n');
     expect(out).not.toMatch(/\n!include/);
   });
 

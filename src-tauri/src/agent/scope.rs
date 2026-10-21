@@ -133,6 +133,8 @@ impl DiagramIndex {
         let mut out = Vec::new();
         let mut seen = HashSet::new();
         let mut incomplete = Vec::new();
+        // Projects walked in full: anything remembered inside them that the walk didn't see is gone.
+        let mut walked: Vec<PathBuf> = Vec::new();
         for project in projects {
             let Ok(found) = scan(&project.root, limits) else {
                 incomplete.push(project.name.clone());
@@ -140,6 +142,8 @@ impl DiagramIndex {
             };
             if !found.truncated_dirs.is_empty() {
                 incomplete.push(project.name.clone());
+            } else {
+                walked.push(project.root.clone());
             }
             for file in found.files {
                 let absolute = project.root.join(&file.rel_path);
@@ -186,6 +190,10 @@ impl DiagramIndex {
                 });
             }
         }
+        // Deleted and renamed files were remembered for as long as the app ran.
+        lock(&self.known).retain(|path, _| {
+            seen.contains(path) || !walked.iter().any(|root| path.starts_with(root))
+        });
         out.sort_by(|a, b| a.project.cmp(&b.project).then_with(|| a.path.cmp(&b.path)));
         Listing {
             diagrams: out,

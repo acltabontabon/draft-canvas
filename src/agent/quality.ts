@@ -129,8 +129,9 @@ export function renderedBoundsOf(nodes: readonly DraftNode[], edges: readonly Dr
     if (mark) grow(node.x + mark.x + mark.width, node.y + mark.y + mark.height);
   }
   const caption = captionSizer(nodes, ctx);
+  const byId = new Map(nodes.map((n) => [n.id, n]));
   for (const edge of edges) {
-    const drawn = drawnRoute(edge, nodes, edges, caption);
+    const drawn = drawnRoute(edge, nodes, edges, caption, byId);
     if (!drawn) continue;
     for (const point of drawn.points) grow(point.x, point.y);
     if (drawn.chip) {
@@ -242,11 +243,12 @@ export function checkQuality(
   // Connectors and their captions, exactly as the canvas draws them.
   const caption = captionSizer(nodes, ctx);
   for (const edge of edges) {
-    const problem = judged(edge.id, edge.source, edge.target) ? routeProblem(edge, nodes, edges, caption) : undefined;
+    // `byId`, not a map of the whole view rebuilt per connector.
+    const problem = judged(edge.id, edge.source, edge.target) ? routeProblem(edge, nodes, edges, caption, undefined, byId) : undefined;
     if (problem?.kind === 'through-node') errors.push({ kind: 'through-node', ids: [edge.id, problem.node], message: `connector ${edge.id} runs through ${problem.node}.` });
     if (problem?.kind === 'label-over-node') errors.push({ kind: 'label-over-node', ids: [edge.id, problem.node], message: `the caption of ${edge.id} covers ${problem.node}.` });
   }
-  const drawn = othersOf(nodes, edges, caption);
+  const drawn = othersOf(nodes, edges, caption, undefined, byId);
   const drawnById = new Map(drawn.map((o) => [o.id, o]));
   // A connector between two facing sides that still steps sideways on its way reads as skewed. Only
   // one of several connectors leaving (or reaching) the same side can be straight — the rest of a

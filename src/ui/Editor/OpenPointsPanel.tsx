@@ -57,11 +57,13 @@ function OpenPointsBody({ buildCommandContext }: { buildCommandContext: () => Co
     return openPointsOverview(fileOf(useEditorStore.getState()));
   }, [revision]);
   const focusActive = useEditorStore((state) => state.focus.active);
-  const inRoom = useEditorStore((state) => {
-    void state.revision;
-    const { nodeIds, edgeIds } = unresolvedTargetsIn(state.document);
+  // The room by identity, counted once per change of it: counting inside the selector scanned the
+  // room and allocated two arrays on every store update, a drag frame or a hover included.
+  const room = useEditorStore((state) => state.document);
+  const inRoom = useMemo(() => {
+    const { nodeIds, edgeIds } = unresolvedTargetsIn(room);
     return nodeIds.length + edgeIds.length;
-  });
+  }, [room]);
   const resolvedOpen = useUiStore((state) => state.openPointsResolvedOpen);
 
   const goTo = useCallback(

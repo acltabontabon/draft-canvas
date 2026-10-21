@@ -24,6 +24,7 @@ import { starterById } from '../src/starters';
 import { buildStarter } from '../src/starters/build';
 import { addEdges, addNodes, placeNear } from '../src/document/operations';
 import { flattenPath, rectOf, routeBetween, routeEdge } from '../src/edges/routing';
+import { connectorClearance } from '../src/edges/clearance';
 import type { CreateNodeInput } from '../src/document/factory';
 import type { DraftDocument, DraftNode, EdgeSemantic, ViewLevel } from '../src/document/types';
 
@@ -1758,6 +1759,23 @@ describe('performance — local neighborhoods, not full-graph scans', () => {
     }
     const elapsed = performance.now() - start;
     expect(elapsed).toBeLessThan(500);
+  });
+});
+
+describe('connector clearance cache', () => {
+  it('answers repeated asks about one document from its routed connectors, and drops them on an edit', () => {
+    const doc = graph([{ ...service('a'), x: 0, y: 0 }, { ...database('b'), x: 400, y: 0 }], [['a', 'b']]);
+    const region = { x: 150, y: -40, width: 120, height: 160 };
+    const first = connectorClearance(doc, region);
+    expect(first.length).toBeGreaterThan(0);
+    // The same document again: the same boxes, from the cache.
+    expect(connectorClearance(doc, region)).toEqual(first);
+    // A narrower region over the same document still filters the cached boxes by itself.
+    expect(connectorClearance(doc, { x: 150, y: 400, width: 10, height: 10 })).toEqual([]);
+    // An end moved, so the connector left the region: a new nodes array, routed afresh.
+    const moved = { ...doc, nodes: doc.nodes.map((n) => (n.id === 'b' ? { ...n, y: 900 } : n)) };
+    const next = connectorClearance(moved, region);
+    expect(next).not.toEqual(first);
   });
 });
 

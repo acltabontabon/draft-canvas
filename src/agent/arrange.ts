@@ -424,8 +424,10 @@ function translatedBeside(view: DraftDocument, noteId: string, dx: number, dy: n
   const box = { x: Math.round(note.x + dx), y: Math.round(note.y + dy), width: note.width, height: note.height };
   const others = view.nodes.filter((n) => n.id !== noteId);
   if (others.some((n) => overlaps(box, n))) return undefined;
+  // One lookup for every connector, not a map rebuilt per `drawnRoute`.
+  const byId = new Map(others.map((n) => [n.id, n]));
   const lines = view.edges.flatMap((edge) => {
-    const drawn = drawnRoute(edge, others, view.edges);
+    const drawn = drawnRoute(edge, others, view.edges, undefined, byId);
     return drawn ? [drawn.points] : [];
   });
   if (lines.some((line) => line.some((point, k) => k > 0 && segmentHitsBox(line[k - 1]!, point, box)))) return undefined;
@@ -440,8 +442,9 @@ export function placeBeside(view: DraftDocument, noteId: string, host: DraftNode
   const note = view.nodes.find((n) => n.id === noteId);
   if (!note) return undefined;
   const others = { ...view, nodes: view.nodes.filter((n) => n.id !== noteId) };
+  const byId = new Map(others.nodes.map((n) => [n.id, n]));
   const lines = view.edges.flatMap((edge) => {
-    const drawn = drawnRoute(edge, others.nodes, view.edges);
+    const drawn = drawnRoute(edge, others.nodes, view.edges, undefined, byId);
     return drawn ? [drawn.points] : [];
   });
   const at = placeBlock(others, host, { width: note.width, height: note.height }, direction, undefined, 32, false, lines.length ? lines : [[]]);

@@ -22,25 +22,17 @@
  */
 
 export { AMBIGUOUS, ambiguityFor, ambiguityOf } from './ambiguity';
-export type { Ambiguity } from './ambiguity';
 export { ANCHOR_TYPES, neighborhoodOf } from './context';
-export { ROLE_PREFERENCE, anchorRole } from './role';
-export type { AnchorRole } from './role';
 export { continuationSets, continuationsFor } from './engine';
 export { dismissalKey } from './dismissal';
 export { gapForCaption, horizontalAnchorsFor, materialize } from './materialize';
 export { RULES } from './rules';
 export type {
   Continuation,
-  ContinuationConfidence,
   ContinuationRule,
-  ContinuationTier,
   ContinuationTrigger,
   DismissalKey,
   Fragment,
-  FragmentEdgeSpec,
-  FragmentExistingRef,
   FragmentNodeSpec,
   MaterializedContinuation,
-  Neighborhood,
 } from './types';

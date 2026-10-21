@@ -3,6 +3,7 @@ import type { Preset } from '../canvas/presets';
 import { ANY_CANDIDATE, dismissalKey } from '../continuation/dismissal';
 import type { DismissalKey, MaterializedContinuation } from '../continuation';
 import type { DraftEdge, DraftNode, OpenPointTarget, Side } from '../document/types';
+import type { CaptionCorner } from '../presentation/framing';
 import type { PresentationReveal } from '../presentation/presentationAttachments';
 import { readPreference, writePreference } from '../lib/preferences';
 import { PRODUCT } from '../product';
@@ -118,6 +119,9 @@ export interface AgentPreview {
   /** The whole view as it would be after the change. */
   nodes: readonly DraftNode[];
   edges: readonly DraftEdge[];
+  /** The view as the agent read it, what the change is told apart from: diffed against the view on
+   *  screen instead, a shape the person added meanwhile would show as one the agent removes. */
+  base?: { nodes: readonly DraftNode[]; edges: readonly DraftEdge[] };
 }
 
 /**
@@ -178,9 +182,6 @@ function initialContinuationsEnabled(): boolean {
   }
 }
 
-
-/** Which corner of the canvas the step caption sits in — chosen to keep off the interaction. */
-export type CaptionCorner = 'bottom-left' | 'bottom-right' | 'top-left' | 'top-right';
 
 /**
  * Presentation Mode's own transient state — everything about *how the story is being shown* that

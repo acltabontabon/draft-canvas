@@ -47,6 +47,10 @@ export function CanvasSettingsDialog() {
 function CanvasSettingsBody() {
   const setOpen = useUiStore((state) => state.setSettingsOpen);
   const notify = useUiStore((state) => state.notify);
+  // A shared diagram keeps the device preferences (Personality) but not the Background, which is
+  // part of the document: the store refuses the change, and choosing an image would first have
+  // stored its bytes in IndexedDB for a document this tab can't save.
+  const readOnly = useUiStore((state) => Boolean(state.readOnly));
   const continuationsEnabled = useUiStore((state) => state.continuationsEnabled);
   const setContinuationsEnabled = useUiStore((state) => state.setContinuationsEnabled);
   const document = useEditorStore((state) => state.document);
@@ -60,6 +64,7 @@ function CanvasSettingsBody() {
   const documentId = document.metadata.id;
 
   const onFileChosen = async (file: File) => {
+    if (useUiStore.getState().readOnly) return;
     setBusy(true);
     try {
       // Oversized photos are stored downscaled — see `MAX_BACKGROUND_SIDE`.
@@ -90,6 +95,7 @@ function CanvasSettingsBody() {
   return (
     <Modal title="Canvas settings" width={480} onClose={() => setOpen(false)}>
       <div className="dc-settings">
+        {!readOnly && (
         <section>
           <h3>Background</h3>
           <p className="dc-muted">
@@ -183,6 +189,7 @@ function CanvasSettingsBody() {
             </>
           )}
         </section>
+        )}
 
         <section>
           <h3 id="dc-settings-personality-heading">Personality</h3>

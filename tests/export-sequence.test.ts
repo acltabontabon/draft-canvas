@@ -1,16 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { createDocument, createEdge, createNode } from '../src/document/factory';
 import { createFlow } from '../src/document/flow';
 import type { DraftDocument } from '../src/document/types';
-
-const downloadText = vi.fn();
-vi.mock('../src/export/download', () => ({
-  downloadText,
-  downloadBlob: vi.fn(),
-}));
-
-const { countPlayableFlows, exportSequenceMermaidFile, exportSequencePlantUmlFile, sequenceSourceFor, MERMAID_EXTENSION, PLANTUML_EXTENSION } =
-  await import('../src/export/sequence');
+import { countPlayableFlows, sequenceSourceFor, MERMAID_EXTENSION, PLANTUML_EXTENSION } from '../src/export/sequence';
 
 function fixture(title: string): DraftDocument {
   const a = createNode({ type: 'service', x: 0, y: 0, text: 'A' });
@@ -41,39 +33,10 @@ describe('sequenceSourceFor', () => {
   });
 });
 
-describe('exportSequenceMermaidFile / exportSequencePlantUmlFile', () => {
-  it('downloads with the .mmd extension and a normalized filename', () => {
-    downloadText.mockClear();
-    exportSequenceMermaidFile(fixture('Payment Saga!!'));
-
-    expect(downloadText).toHaveBeenCalledTimes(1);
-    const [text, fileName, mime] = downloadText.mock.calls[0]!;
-    expect(fileName).toBe('payment-saga.mmd');
-    expect(text).toContain('sequenceDiagram');
-    expect(mime).toBe('text/plain');
-  });
-
-  it('downloads with the .puml extension and a normalized filename', () => {
-    downloadText.mockClear();
-    exportSequencePlantUmlFile(fixture('Payment Saga!!'));
-
-    expect(downloadText).toHaveBeenCalledTimes(1);
-    const [text, fileName] = downloadText.mock.calls[0]!;
-    expect(fileName).toBe('payment-saga.puml');
-    expect(text).toContain('@startuml');
-  });
-
+describe('sequence source extensions', () => {
   it('extension constants carry the documented naming convention', () => {
     expect(MERMAID_EXTENSION).toBe('.mmd');
     expect(PLANTUML_EXTENSION).toBe('.puml');
-  });
-
-  it('an empty title falls back to the shared "draft-canvas" filename base', () => {
-    downloadText.mockClear();
-    exportSequenceMermaidFile(fixture(''));
-
-    const [, fileName] = downloadText.mock.calls[0]!;
-    expect(fileName).toBe('draft-canvas.mmd');
   });
 });
 

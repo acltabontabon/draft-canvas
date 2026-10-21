@@ -87,4 +87,22 @@ describe('Toolbar title editing', () => {
     expect(input.value).toBe('Original title');
     expect(onTitleChange).not.toHaveBeenCalledWith('Discard me');
   });
+
+  it('adopts a rename that lands while focused and does not write it back on blur', () => {
+    // A cross-tab or agent rename used to be ignored while the field was focused, and the blur
+    // then committed the stale title as a Rename undo step.
+    const onTitleChange = vi.fn();
+    const props = { onTitleChange, onBack: () => {}, onPresent: () => {}, onExport: () => {} };
+    const { rerender } = render(<Toolbar title="Before" {...props} />);
+    const input = screen.getByLabelText('Diagram title') as HTMLTextAreaElement;
+
+    input.focus();
+    fireEvent.focus(input);
+    rerender(<Toolbar title="Renamed elsewhere" {...props} />);
+    expect(input.value).toBe('Renamed elsewhere');
+
+    fireEvent.blur(input);
+    expect(onTitleChange).not.toHaveBeenCalled();
+    expect(input.value).toBe('Renamed elsewhere');
+  });
 });

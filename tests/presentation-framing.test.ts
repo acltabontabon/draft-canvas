@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   captionCornerFor,
-  comfortablyShows,
   composeStep,
   frameOverview,
   frameStep,
@@ -23,7 +22,6 @@ describe('frameStep', () => {
     const camera = { x: 100, y: 100, zoom: 1 };
     const box = { x: 200, y: 150, width: 400, height: 200 };
     expect(frameStep(box, camera, view, insets)).toEqual({ camera, kind: 'stay' });
-    expect(comfortablyShows(box, camera, view, insets)).toBe(true);
   });
 
   it('slides the least that brings a step just off the edge back in, keeping the zoom', () => {

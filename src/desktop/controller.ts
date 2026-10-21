@@ -227,6 +227,10 @@ export class DesktopController {
   /** The recovery id this run wrote a copy of the open file's unsaved changes under, until it is
    * discarded. Undoing back to what is saved makes that copy wrong to offer after a crash. */
   private snapshotHeld: string | null = null;
+  /** The tail of the recovery writes, which `snapshotNow` keeps in order. Never rejects. */
+  private snapshotWrites: Promise<void> = Promise.resolve();
+  /** Projects a change arrived for while they were being listed (`scanProjects`). */
+  private readonly rescanWanted = new Set<Handle>();
   private saving: Promise<void> | null = null;
   /** A "Rename file…" in flight; saves and snapshots wait for it so a delayed write can't recreate the
    * file under its old name once the rename has moved it. */
@@ -1226,9 +1230,18 @@ export class DesktopController {
   }
 
   /** Writes the working copy into the app's data folder. The user's file is never touched here. */
-  private async snapshotNow(): Promise<void> {
+  private snapshotNow(): Promise<void> {
     this.clearSnapshotTimer();
     this.snapshotFirstAt = null;
+    // One write at a time, each reading the text when its turn comes. Two could finish in either
+    // order on the app's blocking threads: a timer's write still in flight at quit landed after
+    // quit's newer one, and the recovery copy lost the last edits.
+    const write = this.snapshotWrites.then(() => this.writeSnapshot());
+    this.snapshotWrites = write.catch(() => undefined);
+    return write;
+  }
+
+  private async writeSnapshot(): Promise<void> {
     if (this.renaming) await this.renaming;
     const session = this.session;
     const id = this.recoveryId;
@@ -1462,6 +1475,9 @@ export class DesktopController {
   async scanProjects(handles: Handle[], { again = false }: { again?: boolean } = {}): Promise<void> {
     const wanted = handles.filter((handle) => {
       const project = this.projects.find((candidate) => candidate.info.handle === handle);
+      // A change that lands while its project is being listed may be one that listing missed (a
+      // checkout spread over seconds): it is listed once more when that listing ends.
+      if (project?.status === 'scanning' && again) this.rescanWanted.add(handle);
       return project && project.status !== 'scanning' && (again || project.status === 'unscanned');
     });
     if (wanted.length === 0) return;
@@ -1479,6 +1495,10 @@ export class DesktopController {
           next = { status: 'missing', files: [], truncatedDirs: [] };
         }
         const done = handle;
+        if (this.rescanWanted.delete(done)) {
+          queue.push(done);
+          continue;
+        }
         this.setProjects(this.projects.map((project) => (project.info.handle === done ? { ...project, ...next } : project)));
       }
     };

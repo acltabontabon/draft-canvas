@@ -36,11 +36,6 @@ export function openPointsOverview(file: DraftDocument): OpenPointsOverview {
   return { open, resolved };
 }
 
-/** "Payment Service, Payment Service → Ledger" — the elements a point concerns, named. */
-export function describeTargets(row: OpenPointRow): string {
-  return row.targets.map((target) => target.label).join(', ');
-}
-
 /**
  * The elements in one room that carry an unresolved point — what "Focus open points" lights. A
  * shared point contributes every target it has here; targets in other rooms are simply not in

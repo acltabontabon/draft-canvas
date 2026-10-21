@@ -123,21 +123,39 @@ function targetKey(target: OpenPointTarget): string {
   return `${target.kind}:${target.id}`;
 }
 
+/**
+ * The index built last. Any edit to any point (a keystroke in its popover) is a new `openPoints`
+ * array and so a new index — and every element with a point re-rendered, because its list was a
+ * new array too. A list whose points are all the same objects as last time is handed back as last
+ * time's array, so only the element whose point actually changed sees a new one.
+ */
+let previousIndex: ReadonlyMap<string, readonly OpenPoint[]> | null = null;
+
+function sameList(a: readonly OpenPoint[], b: readonly OpenPoint[]): boolean {
+  return a.length === b.length && a.every((point, index) => point === b[index]);
+}
+
 export function unresolvedIndex(openPoints: readonly OpenPoint[] | undefined): ReadonlyMap<string, readonly OpenPoint[]> {
   if (!openPoints) return NO_INDEX;
   const cached = unresolvedIndexCache.get(openPoints);
   if (cached) return cached;
-  const index = new Map<string, OpenPoint[]>();
+  const index = new Map<string, readonly OpenPoint[]>();
+  const built = new Map<string, OpenPoint[]>();
   for (const point of openPoints) {
     if (point.resolved) continue;
     for (const target of point.targets) {
       const key = targetKey(target);
-      const list = index.get(key);
+      const list = built.get(key);
       if (list) list.push(point);
-      else index.set(key, [point]);
+      else built.set(key, [point]);
     }
   }
+  for (const [key, list] of built) {
+    const previous = previousIndex?.get(key);
+    index.set(key, previous && sameList(previous, list) ? previous : list);
+  }
   unresolvedIndexCache.set(openPoints, index);
+  previousIndex = index;
   return index;
 }
 

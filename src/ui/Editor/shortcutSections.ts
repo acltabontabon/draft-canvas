@@ -37,10 +37,6 @@ export interface MouseRow {
 
 export type Row = CommandRow | GestureRow | MouseRow;
 
-/** Test seam: lets the shortcut-sheet tests pick out the rows backed by a real command. */
-export function isCommandRow(row: Row): row is CommandRow {
-  return 'commandId' in row;
-}
 export function isGestureRow(row: Row): row is GestureRow {
   return 'keys' in row;
 }

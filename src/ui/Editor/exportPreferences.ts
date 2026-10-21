@@ -9,7 +9,7 @@ import { isSourceFormat, type SourceFormat } from '../../export/source/formats';
 import { readPreference, writePreference } from '../../lib/preferences';
 import type { ImageFormat } from './exportTypes';
 
-export const SOURCE_FORMAT_PREFERENCE = 'sequence-export-format';
+const SOURCE_FORMAT_PREFERENCE = 'sequence-export-format';
 
 const EDITABLE_PREFERENCE: Record<ImageFormat, string> = { svg: 'export-editable-svg', png: 'export-editable-png' };
 

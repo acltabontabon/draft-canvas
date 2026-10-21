@@ -83,6 +83,9 @@ pub async fn report_state(app: AppHandle, state: ReportedState) -> Result<(), Ap
             }
             _ => None,
         };
+        if let Some(watches) = crate::util::lock(&shared.watches).as_mut() {
+            watches.pin(file.as_deref().and_then(std::path::Path::parent));
+        }
         app.state::<std::sync::Arc<crate::agent::Agent>>()
             .set_active(active);
         apply_state(app, &state, file);

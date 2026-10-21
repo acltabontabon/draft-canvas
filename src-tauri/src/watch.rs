@@ -19,9 +19,23 @@ pub struct Watches {
     watcher: RecommendedWatcher,
     /// Least recently used first.
     paths: Vec<PathBuf>,
+    /// The open document's folder, never given up to make room: two projects' scans each claiming
+    /// their share could otherwise push it out, and the open file stopped hearing about changes.
+    pinned: Option<PathBuf>,
 }
 
 impl Watches {
+    /// Keeps `folder` (the open document's) watched whatever else asks for the budget.
+    pub fn pin(&mut self, folder: Option<&Path>) {
+        if self.pinned.as_deref() == folder {
+            return;
+        }
+        self.pinned = folder.map(Path::to_path_buf);
+        if let Some(folder) = folder {
+            self.add(folder);
+        }
+    }
+
     pub fn add(&mut self, path: &Path) {
         self.add_all([path]);
     }
@@ -33,7 +47,11 @@ impl Watches {
     /// Never recursively subscribes to a repository's dependency/build trees. Project scans register
     /// only directories containing diagrams, under a fixed native-watch budget.
     pub fn add_all<'a>(&mut self, wanted: impl IntoIterator<Item = &'a Path>) {
-        let Watches { watcher, paths } = self;
+        let Watches {
+            watcher,
+            paths,
+            pinned,
+        } = self;
         // Folders already watched only move up the recency order. Opening the batch at all restarts
         // the stream, so a grant or scan that adds nothing new — most of them — must not open it.
         let mut fresh: Vec<&Path> = Vec::new();
@@ -51,7 +69,11 @@ impl Watches {
         let mut batch = watcher.paths_mut();
         for path in fresh {
             if paths.len() >= BUDGET {
-                let oldest = paths.remove(0);
+                let at = paths
+                    .iter()
+                    .position(|p| Some(p) != pinned.as_ref())
+                    .unwrap_or(0);
+                let oldest = paths.remove(at);
                 let _ = batch.remove(&oldest);
             }
             if batch.add(path, RecursiveMode::NonRecursive).is_ok() {
@@ -64,7 +86,7 @@ impl Watches {
     /// Stops watching `root` and every folder inside it — a project taken off the list. In one batch,
     /// for the same reason as `add_all`.
     pub fn remove_under(&mut self, root: &Path) {
-        let Watches { watcher, paths } = self;
+        let Watches { watcher, paths, .. } = self;
         if !paths.iter().any(|path| path.starts_with(root)) {
             return;
         }
@@ -100,6 +122,10 @@ fn relevant(event: &notify::Event) -> bool {
             | Remove(RemoveKind::Folder | RemoveKind::Any)
             | Modify(ModifyKind::Name(_))
     );
+    let is_folder_event = matches!(
+        event.kind,
+        Create(CreateKind::Folder) | Remove(RemoveKind::Folder)
+    );
     event.paths.iter().any(|path| {
         let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
             return true;
@@ -112,7 +138,14 @@ fn relevant(event: &notify::Event) -> bool {
         if name.ends_with(&dot) || name.contains(&format!("{dot}.background.")) {
             return true;
         }
-        folder_change && !name.starts_with('.') && path.extension().is_none()
+        // A name with no extension is taken for a folder. That missed `v2.0/` or `docs.old/` being
+        // removed or renamed, so a backend that says it was a folder, or a renamed path that is one
+        // now, is believed instead.
+        folder_change
+            && !name.starts_with('.')
+            && (path.extension().is_none()
+                || is_folder_event
+                || (matches!(event.kind, Modify(ModifyKind::Name(_))) && path.is_dir()))
     })
 }
 
@@ -128,6 +161,7 @@ pub fn start(app: &tauri::AppHandle) {
     *lock(&app.state::<AppState>().watches) = Some(Watches {
         watcher,
         paths: Vec::new(),
+        pinned: None,
     });
     let app = app.clone();
     std::thread::spawn(move || {
@@ -149,6 +183,7 @@ mod tests {
         Watches {
             watcher: notify::recommended_watcher(|_: notify::Result<notify::Event>| {}).unwrap(),
             paths: Vec::new(),
+            pinned: None,
         }
     }
 
@@ -177,6 +212,24 @@ mod tests {
         assert!(!watches.paths.contains(&dirs[2]));
     }
 
+    #[test]
+    fn the_open_documents_folder_is_never_given_up() {
+        let root = tempfile::tempdir().unwrap();
+        let dirs: Vec<PathBuf> = (0..BUDGET + 1)
+            .map(|i| {
+                let dir = root.path().join(format!("d{i}"));
+                std::fs::create_dir(&dir).unwrap();
+                dir
+            })
+            .collect();
+        let mut watches = watches();
+        watches.pin(Some(&dirs[0]));
+        watches.add_all(dirs[1..].iter().map(PathBuf::as_path));
+        assert_eq!(watches.paths.len(), BUDGET);
+        assert!(watches.paths.contains(&dirs[0]));
+        assert!(!watches.paths.contains(&dirs[1]));
+    }
+
     fn event(kind: notify::EventKind, path: &str) -> notify::Event {
         notify::Event::new(kind).add_path(PathBuf::from(path))
     }
@@ -198,6 +251,18 @@ mod tests {
         assert!(relevant(&event(
             Modify(ModifyKind::Name(RenameMode::Any)),
             "/p/old"
+        )));
+        // A folder whose name has a dot in it.
+        assert!(relevant(&event(Remove(RemoveKind::Folder), "/p/v2.0")));
+        let dotted = tempfile::tempdir().unwrap();
+        let renamed = dotted.path().join("docs.old");
+        std::fs::create_dir(&renamed).unwrap();
+        assert!(relevant(
+            &notify::Event::new(Modify(ModifyKind::Name(RenameMode::To))).add_path(renamed)
+        ));
+        assert!(!relevant(&event(
+            Modify(ModifyKind::Name(RenameMode::Any)),
+            "/p/notes.txt"
         )));
         // Everything else a folder like Downloads or a repository root sees.
         assert!(!relevant(&event(

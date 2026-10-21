@@ -731,6 +731,12 @@ let interaction: Interaction | null = null;
 /** The last system-clipboard text `syncClipboardFromSystem` has already
  *  applied, so an unchanged clipboard doesn't keep resetting `pasteRepeat`. */
 let lastSystemClipboardText: string | null = null;
+/**
+ * How long (ms) "Arrange" may keep the page busy laying out and repairing connectors. Unbounded, a
+ * 100-shape room took tens of seconds on the main thread; past this the best layout so far is kept.
+ */
+const ARRANGE_BUDGET_MS = 1500;
+
 const PASTE_STAGGER_STEP = 16;
 /** Where the last paste was aimed — see `paste`. */
 let lastPasteTarget: { x: number; y: number } | null = null;
@@ -1094,11 +1100,15 @@ function restoreSnapshot(
   // older one it was taken at: a reload right after Ctrl+Z then judged the stashed (undone) copy older
   // than the autosaved edit (`openDocument`) and brought the undone edit back, and the Library's
   // "edited" time ran backwards.
-  const file = touch(restored.file);
-  const path = resolvePath(file, restored.path);
-  const view = (path.length > 0 ? viewOf(file, path) : file) ?? file;
-  const inside = view !== file;
+  const touched = touch(restored.file);
+  const path = resolvePath(touched, restored.path);
+  const target = (path.length > 0 ? viewOf(touched, path) : touched) ?? touched;
+  const inside = target !== touched;
   const moved = pathKey(inside ? path : ROOT_PATH) !== pathKey(state.path);
+  // Leaving a room folds its camera into it first, as `navigateTo` does. Clearing `liveViewport`
+  // alone dropped the view panned in the room being left, which came back with the snapshot's.
+  const file = moved && state.liveViewport ? withRoomViewport(touched, state.path, state.liveViewport) : touched;
+  const view = !inside ? file : file === touched ? target : (viewOf(file, path) ?? file);
   const cleared = moved ? resetViewSession() : undefined;
   set((s) => ({
     history: restored.history,
@@ -1117,6 +1127,14 @@ function restoreSnapshot(
     ...(restored.flowSession ?? {}),
   }));
   closeStaleAttachmentDetail(get().document);
+}
+
+/** `file` with the room at `path` showing `viewport` — unchanged when the room isn't in it. */
+function withRoomViewport(file: DraftDocument, path: DepthPath, viewport: DraftDocument['viewport']): DraftDocument {
+  if (path.length === 0) return { ...file, viewport };
+  if (!samePath(resolvePath(file, path), path)) return file;
+  const room = viewOf(file, path);
+  return room ? fileOf({ document: { ...room, viewport }, path, outer: file }) : file;
 }
 
 /**
@@ -1912,18 +1930,18 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   async arrangeSelection() {
     const before = get();
     if (interaction || useUiStore.getState().readOnly || useUiStore.getState().flowTrace || !before.selection.nodes.length) return false;
-    const [{ arrangeView, readingDirectionOf }, { measureContext }, { Problems }] = await Promise.all([
-      import('../agent/arrange'), import('../agent/place'), import('../agent/errors'),
+    const [{ arrangeView, readingDirectionOf }, { measureContext }, { Problems }, { withDeadline }] = await Promise.all([
+      import('../agent/arrange'), import('../agent/place'), import('../agent/errors'), import('../agent/route'),
     ]);
     const current = get();
     if (current.document !== before.document || current.path !== before.path || current.selection !== before.selection || interaction) {
       useUiStore.getState().notify('Selection changed. Choose Arrange selection again.');
       return false;
     }
-    const arranged = arrangeView(current.document, {
+    const arranged = withDeadline(performance.now() + ARRANGE_BUDGET_MS, () => arrangeView(current.document, {
       scope: { nodes: [...current.selection.nodes] }, keepOutsideFixed: true, connectors: 'tidy', move: true,
       layout: { direction: readingDirectionOf(current.document), directionChosen: true, spacing: 'comfortable', allowDegraded: false, normalizePeerSizes: false },
-    }, measureContext(), new Problems(), '/arrange');
+    }, measureContext(), new Problems(), '/arrange'));
     if (!arranged) {
       useUiStore.getState().notify('There is not enough room. Arrange a larger selection or the whole diagram.');
       return false;
@@ -1937,10 +1955,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (interaction) return false;
     // The layout engine is the agent's chunk, loaded here on demand: the store must not pull it into
     // the editor's bundle, and the agent must never reach back into the store — one direction.
-    const [{ arrangeView, readingDirectionOf }, { measureContext }, { Problems }] = await Promise.all([
+    const [{ arrangeView, readingDirectionOf }, { measureContext }, { Problems }, { withDeadline }] = await Promise.all([
       import('../agent/arrange'),
       import('../agent/place'),
       import('../agent/errors'),
+      import('../agent/route'),
     ]);
     // Again after the import, as `arrangeSelection` does: a drag begun while the chunk loaded would
     // otherwise absorb the arrangement into its own gesture, with no undo step of its own.
@@ -1949,7 +1968,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // loaded, and `apply` hands the recipe the document as it is at commit time.
     let moved = false;
     get().apply('Arrange', (doc) => {
-      const arranged = arrangeView(
+      // Bounded like an agent request: past the budget the engine keeps the best candidate so far and
+      // leaves the remaining anchor repairs undone, instead of holding the page for tens of seconds.
+      const arranged = withDeadline(performance.now() + ARRANGE_BUDGET_MS, () => arrangeView(
         doc,
         {
           connectors: 'tidy',
@@ -1962,7 +1983,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         measureContext(),
         new Problems(),
         '/arrange',
-      );
+      ));
       if (!arranged || arranged.touched.size === 0) return doc;
       moved = true;
       return arranged.view;
@@ -2814,20 +2835,30 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // back and the next save would write it over the other tab's. So those baselines take the
     // adopted value too, on every field the step itself didn't change. Older entries can't grow
     // any more and already agree with themselves, so they need nothing.
+    // One patched object per original: a held gesture's baseline is often the live document (or the
+    // file is the document, at the root), and patching each separately turned one object into two —
+    // `endInteraction`, which compares by identity, then recorded a gesture that moved nothing.
+    const patched = new Map<DraftDocument, DraftDocument>();
+    const patch = (doc: DraftDocument) => {
+      let next = patched.get(doc);
+      if (!next) patched.set(doc, (next = withSharedMetadata(doc, shared)));
+      return next;
+    };
     if (interaction) {
       interaction = {
         ...interaction,
-        document: withSharedMetadata(interaction.document, shared),
-        file: withSharedMetadata(interaction.file, shared),
+        document: patch(interaction.document),
+        file: patch(interaction.file),
       };
     }
     const top = history.past[history.past.length - 1];
     const rebasedTop = top && rebaseEntryMetadata(top, shared);
+    const outer = get().outer;
     set({
       // The title lives on the file, and `embed` carries a room's metadata back up to it, so
       // patching the room is all it takes however deep the editor currently is.
-      document: withSharedMetadata(document, shared),
-      ...(get().outer ? { outer: withSharedMetadata(get().outer!, shared) } : {}),
+      document: patch(document),
+      ...(outer ? { outer: patch(outer) } : {}),
       ...(rebasedTop && rebasedTop !== top ? { history: { ...history, past: [...history.past.slice(0, -1), rebasedTop] } } : {}),
     });
   },

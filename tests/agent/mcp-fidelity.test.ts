@@ -285,6 +285,34 @@ describe('MCP fidelity regressions', () => {
     expect(edge.semantic).not.toBe(file.edges[0]!.semantic);
   });
 
+  it('refuses moving a flow inward onto one the inside view already tells under that title', () => {
+    const file = build({
+      nodes: [
+        { id: 'core', type: 'service', label: 'Orders', inside: { nodes: [{ id: 'r', type: 'component', label: 'Routes' }, { id: 'v', type: 'component', label: 'Validation' }], relationships: [{ id: 'rv', from: 'r', to: 'v' }] } },
+        { id: 'api', type: 'api', label: 'API' },
+        { id: 'db', type: 'database', label: 'DB' },
+      ],
+      relationships: [{ id: 'w', from: 'api', to: 'db' }],
+      flows: [{ id: 'f', title: 'Save order', steps: ['w'] }],
+    });
+    const core = file.nodes.find((n) => n.id === 'core')!;
+    core.inside = { ...core.inside!, flows: [{ id: 'g', title: ' save ORDER ', steps: [{ id: 's', edgeId: 'rv' }] }] };
+    expect(refusalCode(() => applyUpdate(file, [], [{ op: 'moveInside', owner: 'core', ids: ['api', 'db'] }], undefined))).toBe('DUPLICATE_FLOW');
+  });
+
+  it('drops a camera pinned in the outer view from a flow moved inward', () => {
+    const file = build({
+      nodes: [{ id: 'system', type: 'service', label: 'Orders' }, { id: 'api', type: 'api', label: 'API' }, { id: 'db', type: 'database', label: 'DB' }],
+      relationships: [{ id: 'r', from: 'api', to: 'db' }],
+      flows: [{ id: 'f', title: 'Save order', steps: ['r'] }],
+    });
+    file.flows[0]!.steps[0]!.viewport = { x: 10, y: 20, zoom: 1.5 };
+    const next = applyUpdate(file, [], [{ op: 'moveInside', owner: 'system', ids: ['api', 'db'] }], undefined).file;
+    const step = viewOf(next, ['system'])!.flows[0]!.steps[0]!;
+    expect(step.edgeId).toBe('r');
+    expect(step.viewport).toBeUndefined();
+  });
+
   it('sends back a step a person lit a note with, unchanged', () => {
     const file = base();
     file.nodes.push(createNode({ id: 'n1', type: 'note', text: 'Why it waits', x: 0, y: 200 }));
@@ -337,3 +365,12 @@ describe('MCP fidelity regressions', () => {
     expect(() => validateToolInput('update_diagram', { requestId: 'r', diagramId: 'd', expectedRevision: 'f:1', previewId: 'p', ops: [] })).toThrow();
   });
 });
+
+function refusalCode(run: () => unknown): string | undefined {
+  try {
+    run();
+  } catch (error) {
+    return (error as { code?: string }).code;
+  }
+  return undefined;
+}

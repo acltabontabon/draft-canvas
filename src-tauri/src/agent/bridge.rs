@@ -34,6 +34,8 @@ use tokio::sync::{broadcast, mpsc};
 /// A whole diagram fits many times over; a runaway client can't make the app buffer without bound.
 pub const MAX_FRAME: u64 = 4 * 1024 * 1024;
 const HELLO_TIMEOUT: Duration = Duration::from_secs(5);
+/// How long the listener waits after a failed accept before trying again.
+const ACCEPT_BACKOFF: Duration = Duration::from_millis(100);
 /// Calls one connection may have running at once. A well-behaved agent sends one at a time.
 const MAX_CONCURRENT_CALLS: usize = 4;
 
@@ -105,6 +107,8 @@ pub fn listen(agent: Arc<Agent>) -> std::io::Result<Running> {
             };
             loop {
                 let Ok((stream, _)) = listener.accept().await else {
+                    // A lasting failure (out of descriptors) would otherwise spin a core.
+                    tokio::time::sleep(ACCEPT_BACKOFF).await;
                     continue;
                 };
                 if !same_user(&stream) {
@@ -145,6 +149,10 @@ pub fn listen(agent: Arc<Agent>) -> std::io::Result<Running> {
             let mut server = first;
             loop {
                 if server.connect().await.is_err() {
+                    // A client that left before it was connected leaves this instance broken, and
+                    // connecting it again failed at once, forever: reset it, and don't spin meanwhile.
+                    let _ = server.disconnect();
+                    tokio::time::sleep(ACCEPT_BACKOFF).await;
                     continue;
                 }
                 let connected = server;

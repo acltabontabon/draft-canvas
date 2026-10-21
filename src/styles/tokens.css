@@ -140,17 +140,6 @@ pre {
   color: var(--dc-danger);
 }
 
-.dc-dot {
-  display: inline-block;
-  width: 3px;
-  height: 3px;
-  margin: 0 7px;
-  border-radius: 50%;
-  background: currentColor;
-  opacity: 0.45;
-  vertical-align: middle;
-}
-
 .dc-sr-only {
   position: absolute;
   width: 1px;

@@ -45,6 +45,16 @@ describe('commandsFor — edit mode', () => {
     expect(ids(stubContext())).toContain('paste');
   });
 
+  it('a shared (read-only) diagram offers no document-wide edits, but keeps Canvas settings', () => {
+    useEditorStore.getState().addNode({ type: 'service', x: 0, y: 0, text: 'API' });
+    expect(ids(stubContext())).toEqual(expect.arrayContaining(['arrange', 'find-replace', 'settings']));
+    const shared = ids(stubContext({ ui: { ...useUiStore.getState(), readOnly: { sharedTitle: 'Shared' } } }));
+    expect(shared).not.toContain('arrange');
+    expect(shared).not.toContain('find-replace');
+    // Personality is a device preference; only the document's Background is hidden in the dialog.
+    expect(shared).toContain('settings');
+  });
+
   it('an Add command creates the node and selects it, so the next command can act on it', () => {
     const ctx = stubContext();
     const add = commandsFor(ctx).find((command) => command.id === 'add-service')!;

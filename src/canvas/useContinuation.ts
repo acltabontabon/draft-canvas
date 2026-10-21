@@ -6,8 +6,8 @@ import { useUiStore } from '../store/uiStore';
 /**
  * Keeps `uiStore.continuation` in step with the quiet trigger — a single selected node and
  * nothing else going on. Evaluates only when something that could change the answer changes
- * (a document write, the selected node, a dismissal, a cycle, the gates below); never on pointer
- * movement.
+ * (the room's nodes or connectors, its level, the selected node, a dismissal, a cycle, the gates
+ * below); never on pointer movement.
  *
  * What shows is, in order: the alternative the user cycled to (or asked for with `]`) while the
  * anchor's neighborhood is still the one it was chosen in; otherwise the best placeable
@@ -27,7 +27,12 @@ import { useUiStore } from '../store/uiStore';
  * Quick Connect menu while it is open; this hook leaves those alone.
  */
 export function useContinuation(interactive: boolean): void {
-  const revision = useEditorStore((state) => state.revision);
+  // What an offer is computed from — the room's shapes and connectors, and the level it shows — not
+  // the document's revision: every write bumps that (an open point's text per keystroke, metadata,
+  // settings), and each one re-ran every rule and placement for an answer that couldn't change.
+  const nodes = useEditorStore((state) => state.document.nodes);
+  const edges = useEditorStore((state) => state.document.edges);
+  const level = useEditorStore(viewLevel);
   const anchorId = useEditorStore((state) =>
     state.selection.nodes.length === 1 && state.selection.edges.length === 0 ? state.selection.nodes[0]! : null,
   );
@@ -51,13 +56,12 @@ export function useContinuation(interactive: boolean): void {
       if (!interactionActive) ui.setContinuationCycle(null);
       return;
     }
-    const state = useEditorStore.getState();
-    const doc = state.document;
+    const doc = useEditorStore.getState().document;
     // What the view is showing, where that is known — a level narrows what gets offered here.
     const { quiet: suggested, explicit } = continuationSets(doc, anchorId, {
       dismissed: dismissals,
       recent,
-      level: viewLevel(state),
+      level,
     });
     const best = suggested[0];
     const wantsCycle = cycle !== null && cycle.anchorId === anchorId;
@@ -81,7 +85,9 @@ export function useContinuation(interactive: boolean): void {
     const offer = chosen ?? suggested.map((candidate) => placed.get(candidate.id)).find((m) => m !== undefined);
     ui.setContinuation(offer ? { ...offer, trigger: 'select', alternatives: [...placed.keys()] } : null);
   }, [
-    revision,
+    nodes,
+    edges,
+    level,
     anchorId,
     focusActive,
     playbackActive,

@@ -31,6 +31,9 @@ pub struct ProjectGrant {
 #[derive(Default)]
 pub struct Grants {
     files: HashMap<Handle, FileGrant>,
+    /// `files` by path: every agent read and every listing grants a file, and finding an existing
+    /// grant meant searching all of them.
+    file_handles: HashMap<PathBuf, Handle>,
     projects: HashMap<Handle, ProjectGrant>,
 }
 
@@ -42,11 +45,12 @@ impl Grants {
     /// Granting the same canonical path twice returns the same handle: recovery decides which open
     /// document a snapshot belongs to by comparing handles.
     pub fn insert_file(&mut self, canonical: PathBuf) -> Handle {
-        if let Some((handle, _)) = self.files.iter().find(|(_, g)| g.path == canonical) {
+        if let Some(handle) = self.file_handles.get(&canonical) {
             return handle.clone();
         }
         let handle = new_handle();
         let name = doc_stem(&canonical);
+        self.file_handles.insert(canonical.clone(), handle.clone());
         self.files.insert(
             handle.clone(),
             FileGrant {

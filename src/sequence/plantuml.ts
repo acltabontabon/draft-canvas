@@ -37,12 +37,14 @@ function plantUmlKeyword(kind: ParticipantKind): string {
  * label typed in the editor meant. The characters that open any of it are written as PlantUML's
  * own `<U+XXXX>` codes, which render as exactly that character and start nothing: `<` (every tag
  * and image include), `%` (every preprocessor call), `~` (Creole's escape and wave markup), `\`
- * (the `\n` break), `*`, `-` and `_` only when doubled (bold, strike, underline). Checked against
- * PlantUML 1.2025: `<U+003C>b<U+003E>` renders as `<b>`.
+ * (the `\n` break), and `*`, `-`, `_`, `/` and `"` only when doubled (bold, strike, underline,
+ * italic — every `https://` — and monospace). In a run of those, every character but the last is
+ * coded, so no two literal ones are left side by side: `***` is `<U+002A><U+002A>*`, not a code
+ * followed by a fresh `**`. Checked against PlantUML 1.2025: `<U+003C>b<U+003E>` renders as `<b>`.
  */
 function escapePlantUmlText(text: string): string {
-  return text.replace(/<|%|~|\\|\*\*|--|__/g, (token) =>
-    token.length === 2 ? `${unicodeCode(token)}${token[1]}` : unicodeCode(token),
+  return text.replace(/<|%|~|\\|\*{2,}|-{2,}|_{2,}|\/{2,}|"{2,}/g, (token) =>
+    token.length >= 2 ? `${[...token.slice(1)].map(unicodeCode).join('')}${token[0]}` : unicodeCode(token),
   );
 }
 

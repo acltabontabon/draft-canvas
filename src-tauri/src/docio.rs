@@ -186,9 +186,10 @@ pub fn write_atomic(
     // The editor's save and an agent's background write can reach the same file at once. Without one
     // lock across the check and the swap, both could pass the check against the same stamp and the
     // later swap would silently replace the earlier one's content. Another app writing the file is
-    // still only caught by the check itself.
-    static WRITING: Mutex<()> = Mutex::new(());
-    let _writing = lock(&WRITING);
+    // still only caught by the check itself. The lock is the file's own: one lock for every file made
+    // a ⌘S wait behind a 500 MB export to a slow drive.
+    let file_lock = writing_lock(target);
+    let _writing = lock(&file_lock);
     if let Some(expected) = expected_stamp {
         if !stamp_matches(target, expected).map_err(io_err)? {
             return Ok(WriteOutcome::Conflict);
@@ -205,6 +206,25 @@ pub fn write_atomic(
     replace_contents(&real, bytes, Kind::User, true).map_err(io_err)?;
     let stamp = stamp_after_write(&real, bytes).map_err(io_err)?;
     Ok(WriteOutcome::Saved { stamp })
+}
+
+/// The lock `write_atomic` holds for one file, found by its real path so a symlink and its target, or
+/// two spellings of one name on a case-insensitive disk, share it.
+fn writing_lock(target: &Path) -> std::sync::Arc<Mutex<()>> {
+    use std::collections::HashMap;
+    use std::sync::{Arc, Weak};
+    static LOCKS: Mutex<Option<HashMap<PathBuf, Weak<Mutex<()>>>>> = Mutex::new(None);
+    let key = dunce::canonicalize(target).unwrap_or_else(|_| target.to_path_buf());
+    let mut locks = lock(&LOCKS);
+    let locks = locks.get_or_insert_with(HashMap::new);
+    if let Some(held) = locks.get(&key).and_then(Weak::upgrade) {
+        return held;
+    }
+    // Only files being written right now keep an entry alive.
+    locks.retain(|_, weak| weak.strong_count() > 0);
+    let fresh = Arc::new(Mutex::new(()));
+    locks.insert(key, Arc::downgrade(&fresh));
+    fresh
 }
 
 /// Writes `bytes` over `target` (or creates it) with no conflict check, for a file the person just
@@ -273,12 +293,59 @@ pub fn rename_atomic(old: &Path, new: &Path) -> Result<(), AppError> {
             return Err(io_err(e));
         }
     } else {
-        fs::rename(old, new).map_err(io_err)?;
+        match rename_no_replace(old, new) {
+            Ok(()) => {}
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
+                return Err(AppError::already_exists(new))
+            }
+            Err(e) => return Err(io_err(e)),
+        }
     }
     if let Some(dir) = new.parent().filter(|p| !p.as_os_str().is_empty()) {
         sync_dir(dir);
     }
     Ok(())
+}
+
+/// Moves `old` to `new`, failing with `AlreadyExists` rather than replacing a file that appeared at
+/// `new` after it was checked for — an agent's create picks a free name in the same folder, and a
+/// plain `rename` silently replaced that file with this one.
+#[cfg(not(windows))]
+fn rename_no_replace(old: &Path, new: &Path) -> io::Result<()> {
+    // The same atomic claim `install` makes: a hard link to a taken name fails.
+    match fs::hard_link(old, new) {
+        Ok(()) => fs::remove_file(old).inspect_err(|_| {
+            let _ = fs::remove_file(new);
+        }),
+        Err(e) if e.kind() == io::ErrorKind::AlreadyExists => Err(e),
+        // A filesystem without hard links: the check already made is the best available there.
+        Err(_) if fs::symlink_metadata(new).is_ok() => {
+            Err(io::Error::from(io::ErrorKind::AlreadyExists))
+        }
+        Err(_) => fs::rename(old, new),
+    }
+}
+
+#[cfg(windows)]
+fn rename_no_replace(old: &Path, new: &Path) -> io::Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Storage::FileSystem::{MoveFileExW, MOVEFILE_WRITE_THROUGH};
+    const ERROR_FILE_EXISTS: i32 = 80;
+    const ERROR_ALREADY_EXISTS: i32 = 183;
+    let wide = |p: &Path| -> Vec<u16> { p.as_os_str().encode_wide().chain(Some(0)).collect() };
+    let (old_w, new_w) = (wide(old), wide(new));
+    // Without MOVEFILE_REPLACE_EXISTING the move fails when the name is taken.
+    // SAFETY: both buffers are NUL-terminated and outlive the call.
+    if unsafe { MoveFileExW(old_w.as_ptr(), new_w.as_ptr(), MOVEFILE_WRITE_THROUGH) } != 0 {
+        return Ok(());
+    }
+    let err = io::Error::last_os_error();
+    match err.raw_os_error() {
+        Some(ERROR_FILE_EXISTS | ERROR_ALREADY_EXISTS) => {
+            Err(io::Error::from(io::ErrorKind::AlreadyExists))
+        }
+        _ => Err(err),
+    }
 }
 
 fn paths_equal_ignoring_case(a: &Path, b: &Path) -> bool {
@@ -1055,6 +1122,20 @@ mod tests {
         assert_eq!(err.kind, ErrorKind::AlreadyExists);
         assert_eq!(fs::read_to_string(&old).unwrap(), "mine");
         assert_eq!(fs::read_to_string(&other).unwrap(), "someone else's");
+    }
+
+    #[test]
+    fn rename_never_replaces_a_file_that_appeared_after_the_check() {
+        let dir = tempdir().unwrap();
+        let old = dir.path().join("plan.draftcanvas");
+        let new = dir.path().join("roadmap.draftcanvas");
+        fs::write(&old, "mine").unwrap();
+        // An agent's create landed on the name between `rename_atomic`'s check and its move.
+        fs::write(&new, "theirs").unwrap();
+        let err = rename_no_replace(&old, &new).err().unwrap();
+        assert_eq!(err.kind(), io::ErrorKind::AlreadyExists);
+        assert_eq!(fs::read_to_string(&old).unwrap(), "mine");
+        assert_eq!(fs::read_to_string(&new).unwrap(), "theirs");
     }
 
     #[test]

@@ -16,8 +16,6 @@ pub struct Info {
     pub v: u32,
     pub endpoint: String,
     pub token: String,
-    #[allow(dead_code)]
-    pub pid: u32,
 }
 
 /// Where the app keeps `agent.json`: Tauri's `app_local_data_dir`, plus `agent`.

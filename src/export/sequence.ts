@@ -1,7 +1,7 @@
 /**
- * SequenceModel -> downloaded file. Mirrors `project.ts`'s `exportProjectFile` pattern exactly:
- * build the model, render it, hand the text to `downloadText`. There is no image/rendered export
- * here — the source text IS the product (see `docs/reference/architecture.md`).
+ * SequenceModel -> source text: build the model and render it. There is no image/rendered export
+ * here — the source text IS the product (see `docs/reference/architecture.md`). The Export dialog's
+ * Source mode and the agent tools download or return that text themselves.
  *
  * A document is a tree of rooms and a Flow belongs to the room it was drawn in, so the source is
  * one section per room that has something to play, in tree order, each under a comment naming
@@ -12,13 +12,9 @@
 import { flowIsPlayable } from '../document/flow';
 import type { DraftDocument } from '../document/types';
 import { buildSequenceModel, toMermaid, toPlantUml } from '../sequence';
-import { downloadText } from './download';
-import { fileNameFor } from './project';
 import { collectRooms, roomTitleFor } from './rooms';
-import { MERMAID_EXTENSION, PLANTUML_EXTENSION } from './source/formats';
 
 export { MERMAID_EXTENSION, PLANTUML_EXTENSION } from './source/formats';
-const SEQUENCE_MIME = 'text/plain';
 
 export type SequenceFormat = 'mermaid' | 'plantuml';
 
@@ -40,7 +36,7 @@ export function countPlayableFlows(document: DraftDocument): number {
 
 /**
  * The sequence source text for the whole document's playable Flows, in the requested format —
- * shared so `exportSequenceMermaidFile`/`exportSequencePlantUmlFile` can't drift from each other.
+ * one function for both formats, so they can't drift from each other.
  */
 export function sequenceSourceFor(document: DraftDocument, format: SequenceFormat): string {
   const rooms = collectRooms(document);
@@ -52,12 +48,4 @@ export function sequenceSourceFor(document: DraftDocument, format: SequenceForma
   if (sections.length === 0) return render(document, format);
   // Each section already ends in a newline; one more leaves a blank line between diagrams.
   return sections.join('\n');
-}
-
-export function exportSequenceMermaidFile(document: DraftDocument): Promise<void> {
-  return downloadText(sequenceSourceFor(document, 'mermaid'), fileNameFor(document.metadata.title, MERMAID_EXTENSION), SEQUENCE_MIME);
-}
-
-export function exportSequencePlantUmlFile(document: DraftDocument): Promise<void> {
-  return downloadText(sequenceSourceFor(document, 'plantuml'), fileNameFor(document.metadata.title, PLANTUML_EXTENSION), SEQUENCE_MIME);
 }

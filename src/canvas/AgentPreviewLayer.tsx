@@ -1,24 +1,26 @@
 import { memo, useMemo } from 'react';
 import { pathKey } from '../depth/tree';
 import type { DraftEdge, DraftNode } from '../document/types';
-import { rectOf } from '../edges/routing';
 import { useEditorStore } from '../store/editorStore';
 import { useUiStore } from '../store/uiStore';
 import { usePersonality } from '../ui/personality/usePersonality';
 import { useThemeValue } from '../ui/theme/useTheme';
 import { agentGhostDiff } from './agentGhostDiff';
 import { GhostEdge, GhostNode } from './ContinuationGhost';
+import { ghostGraph, ghostRouteFor } from './ghostRoutes';
 
 interface PreviewSource {
   path: readonly string[];
   nodes: readonly DraftNode[];
   edges: readonly DraftEdge[];
+  /** What the change was worked out from, when that isn't the view on screen (see `AgentPreview`). */
+  base?: { nodes: readonly DraftNode[]; edges: readonly DraftEdge[] };
 }
 
 /**
  * An AI agent's change to the diagram on screen, while it is still being prepared: only what it adds
  * or changes, drawn on top in flow space (inside `Canvas`'s `<ViewportLayer>`, so it pans and zooms
- * with the diagram) with the same `describeNode`/`routeBetween` pipeline as the real thing, at a
+ * with the diagram) with the same `describeNode`/`edgeRoutes` pipeline as the real thing, at a
  * ghost's opacity inside a dashed outline — and what it removes, crossed out where it stands.
  *
  * Provisional in every way that matters: never part of the document, its history or autosave (the
@@ -50,8 +52,13 @@ export const ProposalPreviewLayer = memo(function ProposalPreviewLayer() {
 function PreviewBody({ preview, label }: { preview: PreviewSource; label: string }) {
   const theme = useThemeValue();
   const { preset } = usePersonality();
-  const nodes = useEditorStore((state) => state.document.nodes);
-  const edges = useEditorStore((state) => state.document.edges);
+  const liveNodes = useEditorStore((state) => state.document.nodes);
+  const liveEdges = useEditorStore((state) => state.document.edges);
+  // An agent's live change is told apart from the view it read, not the one on screen: the person
+  // keeps editing meanwhile, and what they add is no part of the agent's change — diffed against the
+  // screen it showed as something the agent removes. A proposal is worked out on the view on screen.
+  const nodes = preview.base?.nodes ?? liveNodes;
+  const edges = preview.base?.edges ?? liveEdges;
 
   const diff = useMemo(() => agentGhostDiff({ nodes, edges }, { nodes: preview.nodes, edges: preview.edges }), [nodes, edges, preview]);
   const changedGroups = useMemo(() => [...diff.addedGroups, ...diff.modifiedGroups], [diff]);
@@ -59,14 +66,11 @@ function PreviewBody({ preview, label }: { preview: PreviewSource; label: string
   const changedEdges = useMemo(() => [...diff.addedEdges, ...diff.modifiedEdges], [diff]);
   const removedShapes = useMemo(() => [...diff.removedNodes, ...diff.removedGroups], [diff]);
 
-  // The before-state first, so a removed edge's endpoints (which only exist there) still resolve,
-  // then the after-state on top for anything added, modified, or unaffected.
-  const endpoints = useMemo(() => {
-    const byId = new Map<string, DraftNode>(nodes.map((n) => [n.id, n]));
-    for (const n of preview.nodes) byId.set(n.id, n);
-    return byId;
-  }, [nodes, preview.nodes]);
-  const obstacleRects = useMemo(() => preview.nodes.filter((n) => n.type !== 'group').map((n) => ({ id: n.id, rect: rectOf(n) })), [preview.nodes]);
+  // Routed the way the canvas will route them (`ghostRoutes.ts`): what the change adds or rewires
+  // through the state it leads to — lanes beside its siblings, trunks, bends, the reply line — and
+  // what it removes through the state on screen now, the only one its endpoints still exist in.
+  const after = useMemo(() => ghostGraph(preview.nodes, preview.edges), [preview.nodes, preview.edges]);
+  const before = useMemo(() => ghostGraph(nodes, edges), [nodes, edges]);
   const bounds = useMemo(() => boundsOf([...changedNodes, ...changedGroups, ...removedShapes]), [changedNodes, changedGroups, removedShapes]);
 
   return (
@@ -93,12 +97,14 @@ function PreviewBody({ preview, label }: { preview: PreviewSource; label: string
         />
       ))}
       <svg className="dc-ghost-edges" width={1} height={1} aria-hidden="true" focusable="false">
-        {diff.removedEdges.map((edge: DraftEdge) => (
-          <GhostEdge key={edge.id} edge={edge} endpoints={endpoints} obstacleRects={obstacleRects} removed />
-        ))}
-        {changedEdges.map((edge: DraftEdge) => (
-          <GhostEdge key={edge.id} edge={edge} endpoints={endpoints} obstacleRects={obstacleRects} />
-        ))}
+        {diff.removedEdges.map((edge: DraftEdge) => {
+          const route = ghostRouteFor(before, edge);
+          return route && <GhostEdge key={edge.id} edge={edge} {...route} removed />;
+        })}
+        {changedEdges.map((edge: DraftEdge) => {
+          const route = ghostRouteFor(after, edge);
+          return route && <GhostEdge key={edge.id} edge={edge} {...route} />;
+        })}
       </svg>
       {changedNodes.map((node) => (
         <GhostNode key={node.id} node={node} theme={theme} preset={preset} />

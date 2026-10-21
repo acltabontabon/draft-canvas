@@ -795,10 +795,36 @@ describe('autosave', () => {
     expect(autosave.unsavedForStash()).toBeNull();
 
     stashForReload(edited);
-    expect(takeReloadStash(stored.metadata.id)?.metadata.title).toBe('Edited');
+    expect(takeReloadStash(stored.metadata.id)?.document.metadata.title).toBe('Edited');
     expect(takeReloadStash(stored.metadata.id)).toBeNull();
     stashForReload(edited);
     expect(takeReloadStash('d_someoneelse')).toBeNull();
+    autosave.dispose();
+  });
+
+  it('stashes nothing for a camera-only write in flight, and says "saved" only once nothing is queued', async () => {
+    const repository = new GatedRepository();
+    const stored = documentWith('Original');
+    await MemoryRepository.prototype.save.call(repository, stored);
+    const states: string[] = [];
+    const autosave = new Autosave({ repository, onStateChange: (state) => states.push(state.status), debounceMs: 0, maxWaitMs: 0 });
+    autosave.track(stored);
+
+    autosave.schedule({ ...stored, viewport: { x: 5, y: 5, zoom: 1 } }, { cameraOnly: true });
+    await vi.waitFor(() => expect(repository.release).not.toBeNull());
+    // Stashed, a pan would be rewritten as a content save on reopen — a conflict nobody caused.
+    expect(autosave.unsavedForStash()).toBeNull();
+    const edited = { ...stored, metadata: { ...stored.metadata, title: 'Edited' } };
+    autosave.schedule(edited);
+    expect(autosave.unsavedForStash()).toBe(edited);
+    states.length = 0;
+    repository.release!();
+
+    await vi.waitFor(async () => expect(await autosave.flush()).toBe(true));
+    // The pan landing with "Edited" still queued is not "saved"; "Edited" landing is.
+    expect(states.filter((status) => status === 'saved')).toHaveLength(1);
+    expect(states.at(-1)).toBe('saved');
+    expect(states.indexOf('dirty')).toBeLessThan(states.indexOf('saved'));
     autosave.dispose();
   });
 

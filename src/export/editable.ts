@@ -16,7 +16,7 @@ import { escapeXmlText } from '../render/svg/element';
 import { serializeDocument } from './project';
 
 /** The `id` of the SVG element and the keyword of the PNG chunk — what a reader looks for. */
-export const EDITABLE_KEY = 'draftcanvas';
+const EDITABLE_KEY = 'draftcanvas';
 
 // ---- SVG ------------------------------------------------------------------------------------
 

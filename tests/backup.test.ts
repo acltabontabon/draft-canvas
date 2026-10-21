@@ -141,6 +141,28 @@ describe('restoreBackup', () => {
     expect((await repository.listProjects())[0]!.name).toBe('Shop (renamed)');
   });
 
+  it('carries background images through the archive, onto a copy too, and never stores them inline', async () => {
+    const repository = new MemoryRepository();
+    const base = documentWith('Backdrop');
+    const document: DraftDocument = { ...base, settings: { ...base.settings, background: { ...base.settings.background, enabled: true, imageId: 'img_1' } } };
+    await repository.save(document);
+    const pixels = new Uint8Array([137, 80, 78, 71, 1, 2, 3]);
+    await repository.saveBackgroundImage(document.metadata.id, new Blob([pixels], { type: 'image/png' }), { width: 4, height: 3 }, 'img_1');
+    const { bytes } = await buildBackup(repository);
+
+    // Into an empty library under its own id, and as a copy beside the original it came from.
+    const fresh = new MemoryRepository();
+    await restoreBackup(fresh, bytes);
+    await restoreBackup(repository, bytes);
+    const copyId = (await repository.list()).find((entry) => entry.id !== document.metadata.id)!.id;
+    for (const [target, id] of [[fresh, document.metadata.id], [repository, copyId]] as const) {
+      const image = await target.loadBackgroundImage(id, 'img_1');
+      expect(image).toMatchObject({ width: 4, height: 3 });
+      expect(new Uint8Array(await image!.blob.arrayBuffer())).toEqual(pixels);
+      expect((await target.load(id))!.settings.background.image).toBeUndefined();
+    }
+  });
+
   it('skips what it cannot read and says so, and refuses a file that is not a ZIP', async () => {
     const { repository } = await seeded();
     const { bytes } = await buildBackup(repository);

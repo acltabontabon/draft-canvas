@@ -28,7 +28,7 @@ import {
 import { OPEN_POINT_KINDS } from '../document/types';
 import { inferRelationship, isEligibleForReinference, isSyncPairing, resolveTransparentCategory } from '../document/connectorSemantics';
 import { createAttachment } from '../document/factory';
-import { setFlowVariantOf } from '../document/flow';
+import { deleteFlow, setFlowVariantOf } from '../document/flow';
 import {
   attachToEdge,
   attachToNode,
@@ -46,10 +46,10 @@ import {
 } from '../document/operations';
 import { reinferIfEligible } from '../document/reinfer';
 import { freeOriginFor } from '../document/geometry';
-import { DEFAULTS } from '../document/limits';
+import { DEFAULTS, LIMITS } from '../document/limits';
 import type { Accent, AttachableType, Attachment, DraftDocument, DraftEdge, DraftFlow, DraftFlowStep, DraftNode } from '../document/types';
 import { ACCENTS, CODE_LANGUAGES, CONNECTOR_KINDS, EDGE_SEMANTICS } from '../document/types';
-import { embed, viewOf, walkGraphs, type DepthPath } from '../depth/tree';
+import { embed, totals, viewOf, walkGraphs, type DepthPath } from '../depth/tree';
 import { assignAnchors } from '../layout/anchors';
 import { naturalCodeSize, naturalTextSize } from '../nodes/describe';
 import { AgentError, Problems } from './errors';
@@ -142,6 +142,15 @@ function outOfScope(scope: Scope | undefined, ids: readonly string[], within: 'n
 function refuseOutOfScope(r: Reader, at: string, offending: readonly string[]) {
   if (!offending.length) return;
   r.problems.add('OUT_OF_SCOPE', at, `${offending.map((id) => `"${id}"`).join(', ')} ${offending.length === 1 ? 'is' : 'are'} outside the captured selection; expand the scope, or make this change without one`);
+}
+
+/** The first of the document's file-wide limits `file` is past, if any. */
+function overFileLimits(file: DraftDocument): { what: string; count: number; limit: number } | undefined {
+  const used = totals(file);
+  if (used.nodes > LIMITS.maxNodes) return { what: 'shapes, boundaries and notes', count: used.nodes, limit: LIMITS.maxNodes };
+  if (used.edges > LIMITS.maxEdges) return { what: 'relationships', count: used.edges, limit: LIMITS.maxEdges };
+  if (used.flows > LIMITS.maxFlows) return { what: 'flows', count: used.flows, limit: LIMITS.maxFlows };
+  return undefined;
 }
 
 export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknown, rawLayout: unknown, rawScope: unknown = undefined): PatchResult {
@@ -244,6 +253,15 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
       // the field unset.
       const blockLayout: LayoutSpec = { ...layout, normalizePeerSizes: layout.normalizePeerSizes ?? true };
       view = addToView(view, room, blockLayout, ctx, touched, advisories);
+      // The per-request caps bound one batch; the document's own limits are file-wide, across every
+      // room. Validation would otherwise drop what is over them on the next open, silently — so an
+      // add that would pass one is refused here instead.
+      const over = overFileLimits(path.length ? embed(base, path, view) : view);
+      if (over) {
+        problems.add('LIMIT_EXCEEDED', at, `the diagram can hold at most ${over.limit} ${over.what} across all its views; it would have ${over.count}. Remove some first, or start a separate diagram`);
+        view = before;
+        return;
+      }
       // Then what the request placed or routed itself, over where the block was put.
       const places = new Map(room.nodes.flatMap((n) => (n.place ? [[n.id, n.place] as const] : [])));
       const routes = new Map(room.relationships.flatMap((e) => (e.route ? [[e.id, e.route] as const] : [])));
@@ -334,7 +352,9 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
             refuseOutOfScope(r, `${at}/ids`, [id]);
             continue;
           }
-          view = { ...view, flows: view.flows.filter((f) => f.id !== id) };
+          // `deleteFlow`, not a filter: a variant of this flow would otherwise keep a `variantOf`
+          // pointing at nothing.
+          view = deleteFlow(view, id);
           counts.removed += 1;
           continue;
         }

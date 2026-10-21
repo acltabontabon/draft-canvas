@@ -498,6 +498,16 @@ export interface CanvasProps {
   ) => void;
 }
 
+/** What starts a gesture without moving the camera yet: in Present every plain click is one. */
+const PRESS_EVENTS = new Set(['mousedown', 'pointerdown', 'touchstart']);
+
+/** A presenter's own hand on the camera: guided framing stands down until asked back. */
+function presenterMovedCamera(event: Event | null): void {
+  if (!event || useEditorStore.getState().mode !== 'present') return;
+  const ui = useUiStore.getState();
+  if (ui.presentation.framing !== 'manual') ui.setPresentation({ framing: 'manual' });
+}
+
 const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, onEmptyCanvasMenu }: CanvasProps) {
   const document = useEditorStore((state) => state.document);
   const selection = useEditorStore((state) => state.selection);
@@ -1946,16 +1956,22 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   const onMoveStart = useCallback((event: MouseEvent | TouchEvent | null) => {
     clearHover();
     if (!event) return;
+    // A wheel or trackpad scroll has already moved the camera when it starts (and a single step
+    // reports nothing else); a press has only started a gesture that may never move (see `onMove`).
+    if (!PRESS_EVENTS.has(event.type)) presenterMovedCamera(event);
     const ui = useUiStore.getState();
-    // A presenter's own hand on the camera (a drag, a wheel — never the presentation's own moves,
-    // which come with no event): guided framing stands down until asked back (`resumeFraming`).
-    if (useEditorStore.getState().mode === 'present') ui.setPresentation({ framing: 'manual' });
     if (ui.contextMenu) ui.setContextMenu(null);
     if (ui.quickConnect) {
       ui.setQuickConnect(null);
       if (ui.continuation?.trigger === 'drop') ui.setContinuation(null);
     }
   }, [clearHover]);
+
+  // A presenter's own hand on the camera (a drag, a wheel — never the presentation's own moves,
+  // which come with no event): guided framing stands down until asked back (`resumeFraming`). Judged
+  // when the camera actually moves, not when a gesture starts: in Present every plain click starts
+  // one, and clicking an attachment chip to reveal its note turned framing off.
+  const onMove = useCallback((event: MouseEvent | TouchEvent | null) => presenterMovedCamera(event), []);
 
   const onMoveEnd = useCallback(
     (event: unknown, viewport: { x: number; y: number; zoom: number }) => {
@@ -1964,6 +1980,10 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       // tab told the canvas changed, for looking around. React Flow reports the gesture that
       // caused a move and nothing at all for its own, which is exactly the line to draw.
       if (!event) return;
+      // Presentation is never saved: a presenter's pans (and, in Present, every plain click, which
+      // starts and ends a gesture) wrote the presentation's camera into the file. Leaving Present
+      // puts the editing camera back.
+      if (useEditorStore.getState().mode === 'present') return;
       // Persisted as document state, deliberately not as an undo step: nobody
       // wants Ctrl+Z to undo a scroll.
       useEditorStore.getState().persistViewport(viewport);
@@ -2035,6 +2055,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
         onPaneContextMenu={onPaneContextMenu}
         onPointerMove={onPointerMove}
         onMoveStart={onMoveStart}
+        onMove={onMove}
         onMoveEnd={onMoveEnd}
         defaultViewport={document.viewport}
         minZoom={0.1}

@@ -184,6 +184,10 @@ export class IndexedDbRepository implements DraftRepository {
     return found;
   }
 
+  knownContentStamp(id: string): string | undefined {
+    return this.stamps.get(id);
+  }
+
   async has(id: string): Promise<boolean> {
     return (await this.db.getKey('bodies', id)) !== undefined;
   }

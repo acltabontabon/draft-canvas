@@ -1,9 +1,9 @@
 import { DEFAULTS, LIMITS } from '../src/document/limits';
 import { parseDocument } from '../src/document/validate';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { createDocument } from '../src/document/factory';
+import { createDocument, createNode } from '../src/document/factory';
 import { HISTORY_LIMIT } from '../src/history/HistoryStack';
-import { __resetClipboardSync, __resetInteraction, documentWithLiveViewport, useEditorStore } from '../src/store/editorStore';
+import { __resetClipboardSync, __resetInteraction, documentWithLiveViewport, fileOf, useEditorStore } from '../src/store/editorStore';
 
 const store = useEditorStore;
 
@@ -563,6 +563,30 @@ describe('undo and redo', () => {
     store.getState().undo();
     expect(store.getState().document.nodes[0]!.x).toBe(0);
     expect(store.getState().document.metadata.title).toBe('Renamed elsewhere');
+  });
+
+  it('a rename adopted during a held gesture that moved nothing records no undo step', () => {
+    const documentId = store.getState().document.metadata.id;
+    store.getState().addNode({ type: 'note', x: 0, y: 0 });
+    const entries = store.getState().history.past.length;
+
+    store.getState().beginInteraction('Move');
+    store.getState().adoptStoredMetadata(documentId, { title: 'Renamed elsewhere' });
+    store.getState().endInteraction();
+    expect(store.getState().history.past).toHaveLength(entries);
+  });
+
+  it('an undo that leaves the room keeps the camera panned there', () => {
+    const platform = createNode({ type: 'service', x: 0, y: 0, text: 'Platform' });
+    store.setState({ document: { ...createDocument('Rooms'), nodes: [platform] } });
+    store.getState().enterInside(platform.id);
+    store.getState().addNode({ type: 'service', x: 0, y: 0, text: 'Inner' });
+    store.getState().exitTo(0);
+    store.getState().persistViewport({ x: 100, y: 200, zoom: 1.5 });
+
+    store.getState().undo();
+    expect(store.getState().path).toEqual([platform.id]);
+    expect(fileOf(store.getState()).viewport).toEqual({ x: 100, y: 200, zoom: 1.5 });
   });
 
   it('undoing the user’s own rename still reverts the title', () => {

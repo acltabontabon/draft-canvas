@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useReactFlow, useStore } from '@xyflow/react';
 import { flowFitViewNodes, hasSomethingToFit, useEditorStore, viewLevel } from '../../store/editorStore';
 import { count } from '../../lib/plural';
@@ -9,7 +9,7 @@ import { motionMs } from '../../lib/motion';
 import { DesktopStatus } from '../../desktop/ui/DesktopStatus';
 import { hostKind } from '../../host/hostInfo';
 import { useUiStore } from '../../store/uiStore';
-import { pointsOf, unresolvedOpenPoints } from '../../document/openPoints';
+import { pointsOf } from '../../document/openPoints';
 
 /**
  * The save indicator is the only place the local-first promise is visible while
@@ -127,8 +127,10 @@ export function StatusBar({ durable, presenting = false, onResolveConflict }: St
  */
 function OpenPointsChip() {
   // Root-only and carried into every room, so the room's own view already holds the whole list.
-  const total = useEditorStore((state) => pointsOf(state.document).length);
-  const open = useEditorStore((state) => unresolvedOpenPoints(state.document).length);
+  // The list by identity, filtered once per change of it — not on every store update.
+  const points = useEditorStore((state) => pointsOf(state.document));
+  const total = points.length;
+  const open = useMemo(() => points.filter((point) => !point.resolved).length, [points]);
   const panelOpen = useUiStore((state) => state.openPointsPanelOpen);
   if (total === 0) return null;
   const label = count(open, 'open point');

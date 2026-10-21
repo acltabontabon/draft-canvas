@@ -292,4 +292,30 @@ describe('layered layout', () => {
       }),
     ).toThrow();
   });
+
+  it('lays out a connector into a boundary from inside it without treating it as a satellite', () => {
+    // g0 ⊃ g1 ⊃ b2 and g0 ⊃ b1, with b2→g1 and b1→g1: the first ends on b2's own enclosing boundary,
+    // which once lost track of an item.
+    const out = layoutGraph({
+      boxes: [
+        { id: 'b1', width: 100, height: 60, parent: 'g0' },
+        { id: 'b2', width: 100, height: 60, parent: 'g1' },
+      ],
+      groups: [
+        { id: 'g0', header: 40, minWidth: 0 },
+        { id: 'g1', parent: 'g0', header: 40, minWidth: 0 },
+      ],
+      edges: [
+        { id: 'e1', source: 'b2', target: 'g1' },
+        { id: 'e2', source: 'b1', target: 'g1' },
+      ],
+      direction: 'right',
+      spacing: { layer: 100, sibling: 50, pad: 30, component: 100 },
+    });
+    expect([...out.boxes.keys()].sort()).toEqual(['b1', 'b2']);
+    const g1 = out.groups.get('g1')!;
+    const b2 = out.boxes.get('b2')!;
+    expect(b2.x).toBeGreaterThanOrEqual(g1.x);
+    expect(b2.x + 100).toBeLessThanOrEqual(g1.x + g1.width);
+  });
 });

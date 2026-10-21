@@ -853,8 +853,9 @@ function placeNotes(room: RoomSpec, placed: DraftNode[], edges: DraftEdge[], wid
   const out: DraftNode[] = [];
   let loose = 0;
   // The connectors as they will be drawn, so a note never lands on one.
+  const byId = new Map(placed.map((n) => [n.id, n]));
   const lines = edges.flatMap((edge) => {
-    const drawn = drawnRoute(edge, placed, edges);
+    const drawn = drawnRoute(edge, placed, edges, undefined, byId);
     return drawn ? [drawn.points] : [];
   });
   for (const spec of room.notes) {
