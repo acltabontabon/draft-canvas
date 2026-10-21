@@ -126,6 +126,7 @@ pub fn on_run_event(app: &AppHandle, event: RunEvent) {
                     .emit(HostEvent::WindowFocused);
             }
             WindowEvent::DragDrop(DragDropEvent::Drop { paths, .. }) => open_paths(app, paths),
+            WindowEvent::Destroyed => crate::collab::stop_in_background(app, "window-closed"),
             _ => {}
         },
         // The app is being replaced by an update: a Quit or a shutdown waits, or it would stop halfway.
@@ -149,6 +150,9 @@ pub fn on_run_event(app: &AppHandle, event: RunEvent) {
         RunEvent::Exit => {
             if let Some(agent) = app.try_state::<std::sync::Arc<crate::agent::Agent>>() {
                 agent.shutdown("quit");
+            }
+            if let Some(relay) = app.try_state::<crate::collab::Relay>() {
+                relay.shutdown_now();
             }
         }
         #[cfg(target_os = "macos")]
@@ -279,6 +283,14 @@ pub fn close_window(app: &AppHandle, api: Option<&tauri::CloseRequestApi>) {
         lock(&state.quit).is_quitting(),
         shutting_down,
     );
+    // Guests on the local network are sent away whenever the window goes, hidden in the tray or
+    // closed: nobody is looking at the canvas they were sharing.
+    if matches!(
+        action,
+        CloseAction::Allow | CloseAction::Hide | CloseAction::HideAndAsk
+    ) {
+        crate::collab::stop_in_background(app, "window-closed");
+    }
     if action == CloseAction::Allow {
         if shutting_down {
             // Mark the quit so the app exits with its last window instead of lingering in the tray.

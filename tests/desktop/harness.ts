@@ -348,6 +348,10 @@ export function createHarness() {
       agent.proposals.set(id, next);
       return { ok: true, proposal: next } as const;
     }),
+    collabLanStart: vi.fn(async (_options: { token: string }) => ({ port: 49152, addresses: ['192.168.1.20'] })),
+    collabLanStop: vi.fn(async () => {}),
+    collabLanSend: vi.fn(async (_connId: string, _text: string) => {}),
+    collabLanClose: vi.fn(async (_connId: string, _reason: string) => {}),
   } satisfies DesktopApi;
 
   const link: HostLink = {

@@ -33,7 +33,19 @@ tauri-plugin-opener = "2.5"
 # vulnerable zip 4.x. macOS .app.tar.gz support does not depend on the optional zip feature.
 tauri-plugin-updater = { version = "2.12", default-features = false, features = ["rustls-tls", "system-proxy"] }
 semver = "1"
-tokio = { version = "1", features = ["sync", "time", "net", "io-util", "macros"] }
+tokio = { version = "1", features = ["sync", "time", "net", "io-util", "macros", "rt"] }
+# The collaboration relay on the local network (`collab/`): the app's own files over HTTP and one
+# WebSocket path, served by hyper directly so header timeouts and the connection cap are ours.
+axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio", "ws"] }
+hyper = { version = "1.11", features = ["server", "http1"] }
+hyper-util = { version = "0.1.20", features = ["server", "http1", "tokio", "service"] }
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+# axum's own WebSocket library, named only to tell a frame over the limit from a broken socket.
+tungstenite = { version = "0.29", default-features = false }
+# Binds `::` as IPv6-only beside `0.0.0.0`, on the same port, which std and tokio can't ask for.
+socket2 = { version = "0.6.5", features = ["all"] }
+if-addrs = "0.15"
+subtle = "2.6.1"
 serde = { version = "1", features = ["derive"] }
 # `raw_value` keeps the servers Draft Canvas leaves alone in Junie's mcp.json exactly as written (`agent/clients.rs`).
 serde_json = { version = "1", features = ["raw_value"] }
@@ -65,6 +77,9 @@ tempfile = "3"
 # Tauri drops an unparseable shortcut without a word.
 muda = { version = "0.20", default-features = false }
 proptest = "1"
+# A real WebSocket client for the relay's tests (the version axum's `ws` already uses).
+tokio-tungstenite = "0.29"
+tokio = { version = "1", features = ["rt-multi-thread"] }
 
 [profile.release]
 panic = "abort"

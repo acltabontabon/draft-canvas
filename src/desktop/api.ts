@@ -11,8 +11,8 @@ import type { Snapshot as UpdateSnapshot, HostEvent as WireHostEvent } from './w
 export type { UpdateInfo, Phase as UpdatePhase, Snapshot as UpdateSnapshot } from './wire';
 /** The agent context is refined by the bridge protocol beyond Rust's JSON value envelope. */
 export type HostEvent = Exclude<WireHostEvent, { type: 'agent-request' }> | (Omit<Extract<WireHostEvent, { type: 'agent-request' }>, 'args' | 'context'> & { args: Record<string, unknown>; context: AgentContext });
-import type { ExplorerStart, ExplorerDirectory, ExplorerLocation, ExplorerSaveResult, OpenedDoc, SavedAs, SaveResult, ProjectInfo, Scan as ProjectScan } from './wire';
-export type { ExplorerSaveResult, ExplorerStart, ExplorerDirectory, ExplorerEntry, ExplorerLocation, OpenedDoc, SavedAs, SaveResult, ProjectInfo, ProjectFile, Scan as ProjectScan } from './wire';
+import type { CollabLanStarted, ExplorerStart, ExplorerDirectory, ExplorerLocation, ExplorerSaveResult, OpenedDoc, SavedAs, SaveResult, ProjectInfo, Scan as ProjectScan } from './wire';
+export type { CollabLanStarted, ExplorerSaveResult, ExplorerStart, ExplorerDirectory, ExplorerEntry, ExplorerLocation, OpenedDoc, SavedAs, SaveResult, ProjectInfo, ProjectFile, Scan as ProjectScan } from './wire';
 
 export type Handle = string;
 
@@ -339,4 +339,22 @@ export interface DesktopApi {
   /** Durably records `pending → accepting` before the document commit is attempted. */
   agentProposalBeginAccept(id: string, version: number, diagramId: string, path: string[]): Promise<ProposalAction>;
   agentProposalResolve(id: string, status: 'accepted' | 'rejected' | 'dismissed'): Promise<ProposalAction>;
+
+  // Collaboration on the local network (`src-tauri/src/collab/`). The shell serves this app at
+  // http://<address>:<port>/ and relays text on `/collab` between guests and the page; guests are
+  // heard as `collab-lan-*` events. It listens only between start and stop, and stops by itself
+  // when the window closes or the page reloads (`collab-lan-stopped`).
+  /**
+   * Starts listening, or answers the server already running. `token` is 32 lowercase hex characters,
+   * a guest offers as its second subprotocol, after `draft-canvas.collab.v1`; a different token
+   * sends the last session's guests away (`token-changed`). `addresses` are this machine's network
+   * addresses, best first; an IPv6 one is bare and goes in brackets in a URL.
+   */
+  collabLanStart(options: { token: string }): Promise<CollabLanStarted>;
+  collabLanStop(): Promise<void>;
+  /** Queues text for one guest, in order. A guest that has left is quietly nothing; one too slow
+   *  to keep up is closed as `congested`. At most 16 MiB of UTF-8. */
+  collabLanSend(connId: string, text: string): Promise<void>;
+  /** Closes one guest once everything already sent to it has gone. */
+  collabLanClose(connId: string, reason: string): Promise<void>;
 }

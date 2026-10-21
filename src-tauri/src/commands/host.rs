@@ -46,6 +46,11 @@ pub async fn host_ready(
     app: AppHandle,
     on_event: Channel<HostEvent>,
 ) -> Result<HostBoot, AppError> {
+    // A reloaded page has no session and doesn't know the token: guests of the last one are sent
+    // away before the new page starts listening.
+    if let Some(relay) = app.try_state::<crate::collab::Relay>() {
+        relay.stop("reload").await;
+    }
     run_blocking(&app, move |app, state| {
         state.attach_page(on_event);
         let boot = HostBoot {
