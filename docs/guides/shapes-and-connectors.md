@@ -167,7 +167,9 @@ Network, Deployment) in its bar; each has its own outline so it reads without th
 
 A Text shape (`T`) is written in Markdown, the same syntax as a README or a pull request, and draws
 it formatted on the canvas and in every export. Double-click it, or press `Enter`, to edit the
-source; the bar above it formats the selection, and leaving the editor shows the result.
+source; the bar beside it formats the selection, and leaving the editor shows the result.
+
+![Text shapes with a heading, a checklist and an endpoint table; a TypeScript block and a diff; warning and tip callouts; and a hand-lettered note on a highlighter.](../media/guides/rich-text.png)
 
 | Write | Get |
 | --- | --- |
@@ -192,6 +194,8 @@ highlighted or a link.
 **Aa** in the shape's bar sets how all of it looks: its **font** (Sans, Serif, Mono or Hand), bold
 and italic, alignment, and a **background** — a **Card**, a highlighter **Marker** behind each line,
 or a solid **Banner** with the words knocked out — in the shape's colour.
+
+![A Text shape open in its editor, showing its Markdown source, with the format bar below it.](../media/guides/rich-text-editing.png)
 
 ## Where next
 
