@@ -163,6 +163,13 @@ describe('code tokenizing', () => {
     expect(text(tokenizeCode('{"a":\t1}', 'json'))).toBe(text(tokenizeCode('{"a":\t1}', 'plaintext')));
   });
 
+  it('never hands one snippet the lines of another the same length', () => {
+    const text = (lines: ReturnType<typeof tokenizeCode>) => lines[0]!.map((t) => t.text).join('');
+    // Same length and the same 32-bit djb2 hash: the cache once keyed on exactly those two.
+    expect(text(tokenizeCode('Aa', 'plaintext'))).toBe('Aa');
+    expect(text(tokenizeCode('B@', 'plaintext'))).toBe('B@');
+  });
+
   it('splits highlighted code into one token list per line', () => {
     const lines = tokenizeCode('{\n  "status": "CANCELLED"\n}', 'json');
     expect(lines).toHaveLength(3);

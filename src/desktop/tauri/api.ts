@@ -63,9 +63,7 @@ export function createTauriApi(): DesktopApi {
     },
     reportState: (state) => call('report_state', { state }),
     quitAck: (decision) => call('quit_ack', { decision }),
-    quitNow: () => call('quit_now'),
 
-    openDialog: () => call('open_dialog'),
     openHandle: (handle) => call('open_handle', { handle }),
     saveDocument: (handle, bytes, expectedStamp) => callRaw('save_document', { handle, expectedStamp }, bytes),
     saveAs: (suggestedName, bytes, copySidecarFrom, startIn) =>
@@ -109,7 +107,6 @@ export function createTauriApi(): DesktopApi {
     },
     recoveryDiscard: (id) => call('recovery_discard', { id }),
 
-    settingsGet: () => call<DesktopSettings>('settings_get'),
     settingsSet: (patch) => call<DesktopSettings>('settings_set', { patch }),
     ask: (title, message, buttons) => call('ask', { title, message, buttons }),
     showError: (title, message) => call('show_error', { title, message }),

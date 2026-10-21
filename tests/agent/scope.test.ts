@@ -11,7 +11,7 @@ function build(raw: Record<string, unknown>): DraftDocument {
   return parsed.document;
 }
 
-const base = () =>
+const base = ({ flow = true } = {}) =>
   build({
     groups: [{ id: 'sys', label: 'Orders', kind: 'system' }],
     nodes: [
@@ -23,7 +23,7 @@ const base = () =>
       { id: 'u', from: 'user', to: 'api', label: 'Places orders' },
       { id: 'd', from: 'api', to: 'db' },
     ],
-    flows: [{ id: 'f', title: 'Order', steps: ['u', 'd'] }],
+    ...(flow ? { flows: [{ id: 'f', title: 'Order', steps: ['u', 'd'] }] } : {}),
   });
 
 const refusal = (run: () => unknown): AgentError => {
@@ -75,11 +75,25 @@ describe('update_diagram scope enforcement', () => {
     expect(error.details?.problems).toBeDefined();
   });
 
-  it('permits a cascade whose full descendant set is inside the captured scope', () => {
-    const file = base();
-    const { file: next } = applyUpdate(file, [], [{ op: 'remove', ids: ['sys'], cascade: true }], undefined, { nodes: ['sys', 'api', 'db'], edges: [] });
+  it('permits a cascade whose full descendant set — and every connector it takes — is inside the captured scope', () => {
+    const file = base({ flow: false });
+    const { file: next } = applyUpdate(file, [], [{ op: 'remove', ids: ['sys'], cascade: true }], undefined, { nodes: ['sys', 'api', 'db'], edges: ['u', 'd'] });
     expect(next.nodes.some((n) => n.id === 'sys')).toBe(false);
     expect(next.nodes.some((n) => n.id === 'api')).toBe(false);
+  });
+
+  it('refuses a remove whose connector cascade reaches outside the captured scope', () => {
+    const file = base({ flow: false });
+    // `u` runs from the customer to the API: removing the API alone would take it too.
+    const error = refusal(() => applyUpdate(file, [], [{ op: 'remove', ids: ['api'] }], undefined, { nodes: ['api', 'db'], edges: ['d'] }));
+    expect(error.code).toBe('OUT_OF_SCOPE');
+    expect(error.message).toContain('"u" is outside the captured selection');
+  });
+
+  it('refuses a remove that would trim a flow, which is never in a captured scope', () => {
+    const file = base();
+    const error = refusal(() => applyUpdate(file, [], [{ op: 'remove', ids: ['d'] }], undefined, { nodes: ['api', 'db'], edges: ['u', 'd'] }));
+    expect(error.code).toBe('OUT_OF_SCOPE');
   });
 
   it('refuses a bare (whole-view) arrange while a scope is active', () => {

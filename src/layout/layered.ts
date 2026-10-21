@@ -677,7 +677,16 @@ function layerComponent(ids: string[], edges: LiftedEdge[], env: Env): Block {
   const out = new Map<string, LiftedEdge[]>(ids.map((id) => [id, []]));
   for (const edge of edges) get(out, edge.source).push(edge);
   for (const list of out.values()) list.sort((a, b) => Number(b.primary) - Number(a.primary) || idx(a.target) - idx(b.target));
-  const startsPrimary = (id: string) => edges.some((e) => e.primary && e.source === id) && !edges.some((e) => e.primary && e.target === id);
+  // Asked once per id, not inside the sort's comparator: scanning every edge per comparison was
+  // quadratic-times-log on a large arrange.
+  const primarySources = new Set<string>();
+  const primaryTargets = new Set<string>();
+  for (const edge of edges) {
+    if (!edge.primary) continue;
+    primarySources.add(edge.source);
+    primaryTargets.add(edge.target);
+  }
+  const startsPrimary = (id: string) => primarySources.has(id) && !primaryTargets.has(id);
   const roots = [...ids].sort((a, b) => Number(startsPrimary(b)) - Number(startsPrimary(a)) || idx(a) - idx(b));
   const reversed = new Set<string>();
   const state = new Map<string, 1 | 2>();

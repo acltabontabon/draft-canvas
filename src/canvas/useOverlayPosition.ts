@@ -144,13 +144,20 @@ export function useOverlayPosition<P extends string>(
       rootRef.current = { node: target, rect };
       applyRef.current();
     });
+    // Only a scroll that can carry the canvas along moves its box: one inside a panel's list or a
+    // popover's own body, beside the canvas, would otherwise re-measure it on every scroll frame.
+    const onScroll = (event: Event) => {
+      const scrolled = event.target;
+      if (scrolled instanceof Element && !scrolled.contains(target)) return;
+      measure();
+    };
     observer.observe(target);
     window.addEventListener('resize', measure);
-    window.addEventListener('scroll', measure, true);
+    window.addEventListener('scroll', onScroll, true);
     return () => {
       observer.disconnect();
       window.removeEventListener('resize', measure);
-      window.removeEventListener('scroll', measure, true);
+      window.removeEventListener('scroll', onScroll, true);
     };
   }, [target]);
 

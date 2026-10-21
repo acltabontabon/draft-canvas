@@ -72,6 +72,7 @@ import {
   updateAttachment as updateAttachmentOp,
   setEdgeWaypoints as setEdgeWaypointsOp,
   updateEdge,
+  updateEdges,
   updateEdgeAttachment as updateEdgeAttachmentOp,
   updateNode,
   type AlignEdge,
@@ -559,8 +560,6 @@ export interface EditorStore {
   reorderEdgeAttachment: (edgeId: string, attachmentId: string, direction: -1 | 1) => void;
 
   /* Boundary containment */
-  /** Sets or clears (`boundaryId: null`) a node's containing boundary. */
-  reparentNode: (nodeId: string, boundaryId: string | null) => void;
   /** Commits a finished drag: the new positions, and — in the same write — each moved shape's
    *  boundary membership agreeing with where it landed, so a later delete or boundary drag acts on
    *  what is visibly inside. One write, because every write re-derives the whole diagram's routing
@@ -1135,8 +1134,11 @@ function navigateTo(set: SetEditorState, get: GetEditorState, path: DepthPath): 
   const view = resolved.length > 0 ? viewOf(file, resolved) : file;
   if (!view) return;
   const inside = resolved.length > 0;
+  // Outside the updater, as `setDocument` does: it writes the UI store, and development mode may
+  // run an updater twice.
+  const cleared = resetViewSession();
   set((s) => ({
-    ...resetViewSession(),
+    ...cleared,
     document: view,
     path: inside ? resolved : ROOT_PATH,
     outer: inside ? file : null,
@@ -1553,9 +1555,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       document.edges.length === topBefore.edges.length &&
       !topBefore.nodes.some((n) => n.id === id);
     if (topAddedOnlyThisNode) {
+      // Stamped like any other change, as `restoreSnapshot` does: the snapshot's own stamp is older
+      // than the autosaved "Add text", so the Library's edited time ran backwards and a reload stash
+      // of this state was judged stale, bringing the removed node back.
+      const restored = touch(top.before);
       set({
-        document: topBefore,
-        outer: state.path.length > 0 ? top.before : null,
+        document: viewOf(restored, top.path) ?? restored,
+        outer: state.path.length > 0 ? restored : null,
         // Redo entries were recorded on top of a document that still had this node.
         history: { past: history.past.slice(0, -1), future: [] },
         selection: EMPTY_SELECTION,
@@ -1898,9 +1904,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // Bends the user dragged in go too — they are the most manual routing there is.
     const manual = state.document.edges.filter((edge) => edge.routeMode || edge.waypoints);
     if (manual.length === 0) return;
-    state.apply('Tidy connectors', (doc) =>
-      manual.reduce((next, edge) => updateEdge(next, edge.id, { routeMode: undefined, waypoints: undefined }), doc),
-    );
+    const ids = new Set(manual.map((edge) => edge.id));
+    // One pass over the edges, not one `updateEdge` (and one new edges array) per manual connector.
+    state.apply('Tidy connectors', (doc) => updateEdges(doc, ids, { routeMode: undefined, waypoints: undefined }));
   },
 
   async arrangeSelection() {
@@ -1936,6 +1942,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       import('../agent/place'),
       import('../agent/errors'),
     ]);
+    // Again after the import, as `arrangeSelection` does: a drag begun while the chunk loaded would
+    // otherwise absorb the arrangement into its own gesture, with no undo step of its own.
+    if (interaction || useUiStore.getState().readOnly || useUiStore.getState().flowTrace) return false;
     // Read inside the recipe, not before the import: the room may have changed while the engine
     // loaded, and `apply` hands the recipe the document as it is at commit time.
     let moved = false;
@@ -2072,6 +2081,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         members.forEach((member: DraftEdge, index: number) => {
           const leg = legs[index]!.id;
           next = spliceEdgeInFlows(next, member.id, spine.hub === 'source' ? [shared.id, leg] : [leg, shared.id]);
+          // A point about one relationship follows it onto its own leg, the one that keeps its
+          // label and attachments; `removeElements` alone would prune it with the member.
+          next = retargetOpenPoints(next, { kind: 'edge', id: member.id }, { kind: 'edge', id: leg });
         });
         return removeElements(next, [], memberIds);
       },
@@ -2516,11 +2528,6 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     get().apply('Reorder attachment', (doc) => reorderEdgeAttachmentOp(doc, edgeId, attachmentId, direction));
   },
 
-  reparentNode(nodeId, boundaryId) {
-    get().apply('Reparent', (doc) => setParent(doc, [nodeId], boundaryId ?? undefined));
-  },
-
-
   raise(toFront = false) {
     const { selection, apply } = get();
     apply('Bring forward', (doc) =>
@@ -2791,6 +2798,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (quiet !== null && !(selection.nodes.length === 0 && selection.edges.length === 1 && selection.edges[0] === quiet)) {
       useUiStore.getState().setQuietEdge(null);
     }
+    // A tap on empty canvas with nothing selected, or a click on what is already selected, writes
+    // nothing: every subscriber would otherwise run for a selection that did not change.
+    const current = get().selection;
+    if (sameIdList(current.nodes, selection.nodes) && sameIdList(current.edges, selection.edges)) return;
     set({ selection });
   },
 
@@ -2941,6 +2952,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
    * recorded against the room it changed, so undo takes it back where it happened.
    */
   setOuterViewLevel(depth, level) {
+    // The gates `applyToFile` keeps, since this writes the file and history itself: a gesture in
+    // flight would record its baseline over the change, and a shared or traced diagram takes none.
+    if (interaction || useUiStore.getState().readOnly || useUiStore.getState().flowTrace) return;
     const state = get();
     if (depth < 0 || depth >= state.path.length) return;
     const file = fileOf(state);
@@ -2967,6 +2981,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }));
   },
 }));
+
+function sameIdList(a: readonly string[], b: readonly string[]): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let index = 0; index < a.length; index += 1) if (a[index] !== b[index]) return false;
+  return true;
+}
 
 /**
  * Guards against writes that produce an equal-but-new document object, which

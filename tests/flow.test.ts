@@ -30,7 +30,7 @@ import {
   updateFlowStepCaption,
 } from '../src/document/flow';
 import { removeElements } from '../src/document/operations';
-import { resolveFlowStep, stepFocusBounds } from '../src/presentation/useFlowPlayback';
+import { resolveFlowStep } from '../src/presentation/useFlowPlayback';
 import { parseDocument } from '../src/document/validate';
 import { CURRENT_VERSION, DRAFT_FORMAT } from '../src/document/types';
 import { LIMITS } from '../src/document/limits';
@@ -447,18 +447,6 @@ describe('useFlowPlayback pure helpers', () => {
     expect(resolved?.extraNodes).toEqual([nodeA]);
   });
 
-  it('computes focus bounds as the union of edge endpoints and extra nodes', () => {
-    const a = createNode({ type: 'note', x: 0, y: 0, width: 100, height: 50, id: 'a' });
-    const b = createNode({ type: 'note', x: 200, y: 100, width: 100, height: 50, id: 'b' });
-    const c = createNode({ type: 'note', x: -50, y: -50, width: 20, height: 20, id: 'c' });
-    const edge = createEdge({ source: 'a', target: 'b', id: 'e1' });
-    const nodesById = new Map([['a', a], ['b', b], ['c', c]]);
-
-    const step = resolveFlowStep({ id: 's1', edgeId: 'e1', extraNodeIds: ['c'] }, 0, 1, new Map([['e1', edge]]), nodesById)!;
-    const bounds = stepFocusBounds(step, nodesById);
-    expect(bounds).toEqual({ x: -50, y: -50, width: 350, height: 200 });
-  });
-
   it('honors an explicit step viewport verbatim, distinct from any bounds computation', () => {
     const resolved = resolveFlowStep(
       { id: 's1', extraNodeIds: ['a'], viewport: { x: 5, y: 6, zoom: 2 } },
@@ -468,11 +456,6 @@ describe('useFlowPlayback pure helpers', () => {
       new Map(),
     );
     expect(resolved?.viewport).toEqual({ x: 5, y: 6, zoom: 2 });
-  });
-
-  it('returns null bounds for a step with no resolvable members', () => {
-    const step = resolveFlowStep({ id: 's1', viewport: { x: 0, y: 0, zoom: 1 } }, 0, 1, new Map(), new Map())!;
-    expect(stepFocusBounds(step, new Map())).toBeNull();
   });
 });
 

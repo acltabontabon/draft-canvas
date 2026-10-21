@@ -224,6 +224,9 @@ export class DesktopController {
   private pendingBackground: { write: { mime: string; base64: string } } | { remove: true } | null = null;
   private snapshotTimer: unknown = null;
   private snapshotFirstAt: number | null = null;
+  /** The recovery id this run wrote a copy of the open file's unsaved changes under, until it is
+   * discarded. Undoing back to what is saved makes that copy wrong to offer after a crash. */
+  private snapshotHeld: string | null = null;
   private saving: Promise<void> | null = null;
   /** A "Rename file…" in flight; saves and snapshots wait for it so a delayed write can't recreate the
    * file under its old name once the rename has moved it. */
@@ -233,6 +236,10 @@ export class DesktopController {
   private lastReported = '';
   /** The open file changed or vanished outside the app: said once, and again only if that changes. */
   private outside: 'changed' | 'missing' | null = null;
+  /** The review panel, told when the shell says agent state (proposals among it) changed. */
+  private readonly proposalListeners = new Set<() => void>();
+  /** Home skipped a rescan while the window was hidden and does it when the window is shown. */
+  private rescanWhenShown = false;
   /** Anything that swaps the open document runs in turn: two requests at once (a menu pick and a tray click) mustn't interleave. */
   private turn: Promise<unknown> = Promise.resolve();
 
@@ -291,6 +298,7 @@ export class DesktopController {
       case 'agent-file-written':
         return this.onAgentFileWritten(event);
       case 'agent-changed':
+        for (const listener of this.proposalListeners) listener();
         return void this.refreshAgent();
     }
   }
@@ -351,7 +359,11 @@ export class DesktopController {
       return next;
     },
     askEditor: (request) => this.askEditor(request),
-    flush: () => this.flushApp(),
+    // Agents work while the person may be typing. Their flush posts what is pending but leaves the
+    // field focused, so the editor's busy check sees the typing and the agent waits, rather than
+    // the field closing under the person mid-word. `syncWithDisk` settles (and so blurs) only when
+    // the file really changed and might be reloaded.
+    flush: () => this.flushApp({ keepFocus: true }),
     syncWithDisk: () => this.syncWithDisk(),
     openQuietly: (handle) => this.openQuietly(handle),
     saveQuietly: () => this.saveQuietly(),
@@ -607,9 +619,10 @@ export class DesktopController {
 
   /**
    * Asks the app to let go of a field still being typed in and post what is pending, so what happens
-   * next (a save, a switch, a quit) acts on exactly what is on screen.
+   * next (a save, a switch, a quit) acts on exactly what is on screen. `keepFocus` posts what is
+   * pending without letting go of the field.
    */
-  private flushApp(): Promise<void> {
+  private flushApp({ keepFocus = false }: { keepFocus?: boolean } = {}): Promise<void> {
     if (this.session.kind === 'none') return Promise.resolve();
     const id = ++this.flushCount;
     return new Promise((resolve) => {
@@ -620,7 +633,7 @@ export class DesktopController {
       };
       const timeout = this.clock.setTimeout(done, FLUSH_TIMEOUT_MS);
       this.flushes.set(id, done);
-      const command: CommandMessage = { type: 'draft-canvas:command', command: 'flush', id };
+      const command: CommandMessage = { type: 'draft-canvas:command', command: 'flush', id, ...(keepFocus ? { keepFocus: true } : {}) };
       this.link.deliver(command);
     });
   }
@@ -1033,11 +1046,23 @@ export class DesktopController {
     });
   }
 
-  private async reload(session: Extract<Session, { kind: 'file' }>, onlyIfCurrent?: () => boolean): Promise<boolean> {
+  /**
+   * Replaces what is on screen with the file's contents. With `onlyIfCurrent` (a change noticed on
+   * disk, not Revert) a file whose content is still what is on screen is not reloaded: `'same'`.
+   */
+  private async reload(session: Extract<Session, { kind: 'file' }>, onlyIfCurrent?: () => boolean): Promise<boolean | 'same'> {
     const opened = await this.api.openHandle(session.handle);
     if (onlyIfCurrent) {
       await this.flushApp();
       if (!onlyIfCurrent()) return false;
+      // Only the timestamp moved (a sync client, a checkout of the same content, `touch`): the stamp
+      // check can't tell that from an edit, but the content can. Reloading would announce an outside
+      // change that never happened and drop the person's undo history.
+      if (this.savedText !== null && contentOf(opened.text) === contentOf(this.savedText)) {
+        session.stamp = opened.stamp;
+        session.readOnly = opened.readOnly;
+        return 'same';
+      }
     }
     if (!deserializeDocument(opened.text).ok) {
       await this.api.showError(`Draft Canvas couldn’t read ${opened.name}.draftcanvas`, 'What is on disk is not a valid diagram, so what is on screen was left as it is.');
@@ -1131,7 +1156,10 @@ export class DesktopController {
       else await this.discard(session.id);
       return true;
     }
-    if (!this.dirty) return true;
+    if (!this.dirty) {
+      await this.discardCleanSnapshot();
+      return true;
+    }
     const choice = await this.api.ask(
       `Save the changes to ${session.name}.draftcanvas?`,
       'Your changes will be lost if you don’t save them.',
@@ -1178,7 +1206,13 @@ export class DesktopController {
   }
 
   private scheduleSnapshot(): void {
-    if (!this.dirty) return;
+    if (!this.dirty) {
+      // Back to what is saved (an undo, or an edit and its reverse): nothing is left to recover.
+      this.clearSnapshotTimer();
+      this.snapshotFirstAt = null;
+      void this.discardCleanSnapshot();
+      return;
+    }
     const now = this.clock.now();
     this.snapshotFirstAt ??= now;
     this.clearSnapshotTimer();
@@ -1208,13 +1242,27 @@ export class DesktopController {
         fileless ? (titleOf(text) ?? QUICK_DRAFT_TITLE) : this.displayName,
         encoder.encode(text),
       );
+      if (!fileless) {
+        this.snapshotHeld = id;
+        // Undone back to what is saved while the copy was being written.
+        if (this.session === session && !this.dirty) await this.discardCleanSnapshot();
+      }
     } catch (error) {
       // Losing a snapshot costs only what a crash would have cost; it must not interrupt the drawing.
       logDiagnostic(error, { operation: 'desktop-snapshot' });
     }
   }
 
+  /** Drops the open file's recovery copy once it holds nothing the file doesn't. Quick Drafts keep
+   * theirs: a draft that was drawn on stays on Home even when undone back to blank. */
+  private async discardCleanSnapshot(): Promise<void> {
+    const session = this.session;
+    if (session.kind !== 'file' || this.dirty || this.snapshotHeld !== session.recoveryId) return;
+    await this.discard(session.recoveryId);
+  }
+
   private async discard(id: string): Promise<void> {
+    if (this.snapshotHeld === id) this.snapshotHeld = null;
     try {
       await this.api.recoveryDiscard(id);
     } catch (error) {
@@ -1243,7 +1291,10 @@ export class DesktopController {
         return void (await this.api.quitAck('ready'));
       }
       if (this.dirty) await this.snapshotNow();
-      if (!this.dirty) return void (await this.api.quitAck('ready'));
+      if (!this.dirty) {
+        await this.discardCleanSnapshot();
+        return void (await this.api.quitAck('ready'));
+      }
       await this.api.quitAck('prompting');
       const choice = await this.api.ask(
         reason === 'update'
@@ -1270,11 +1321,27 @@ export class DesktopController {
   /** Focus or a native notification: reconcile the file, or refresh the project list on Home. */
   private async onFocus(): Promise<void> {
     if (this.session.kind === 'none') {
+      // Every listed project is scanned again, so not for a window in the tray or minimized, which
+      // can't show the result: its watched folders kept it rescanning for every file touched there.
+      // Once, when it is shown again, instead.
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        if (!this.rescanWhenShown) {
+          this.rescanWhenShown = true;
+          const shown = () => {
+            if (document.visibilityState === 'hidden') return;
+            document.removeEventListener('visibilitychange', shown);
+            this.rescanWhenShown = false;
+            if (this.session.kind === 'none') void this.refreshProjects();
+          };
+          document.addEventListener('visibilitychange', shown);
+        }
+        return;
+      }
       await this.refreshProjects();
       return;
     }
     try {
-      await this.syncWithDisk(false);
+      await this.syncWithDisk();
     } catch (error) {
       logDiagnostic(error, { operation: 'desktop-check-stamp' });
     }
@@ -1287,32 +1354,31 @@ export class DesktopController {
    * is in the background, so waiting for focus handed them the copy from before a `git pull`, and
    * their edits then landed on it.
    */
-  private async syncWithDisk(settleFirst = true): Promise<'unchanged' | 'reloaded' | 'changed' | 'missing'> {
+  private async syncWithDisk(): Promise<'unchanged' | 'reloaded' | 'changed' | 'missing'> {
     const session = this.session;
     if (session.kind !== 'file' || this.saving) return 'unchanged';
-    // What the page has typed but not yet posted counts: judged without it, `dirty` could still read
-    // false and a reload would replace an edit that was on screen. An agent asking wants it settled
-    // before it reads.
-    if (settleFirst) {
-      await this.flushApp();
-      if (this.session !== session || this.saving) return 'unchanged';
-    }
     const stamp = session.stamp;
     const seq = this.seq;
     const current = () => this.session === session && this.seq === seq && session.stamp === stamp && !this.saving;
     const check = await this.api.checkStamp(session.handle, stamp);
     if (!current() || check === 'unchanged') return 'unchanged';
-    // Disk events and window focus ask with `settleFirst` off: they run for the echo of our own save and
-    // for any file touched in a watched folder, and settling blurs the field the person is typing in —
-    // mid-word, with the next key a canvas shortcut. Only a file that really changed needs it.
-    if (!settleFirst) {
-      await this.flushApp();
-      if (!current()) return 'unchanged';
-    }
+    // What the page has typed but not yet posted counts: judged without it, `dirty` could still read
+    // false and a reload would replace an edit that was on screen. Settled only now, though: disk
+    // events, window focus and every agent request ask, for the echo of our own save and for any file
+    // touched in a watched folder, and settling blurs the field the person is typing in — mid-word,
+    // with the next key a canvas shortcut. Only a file that really changed needs it.
+    await this.flushApp();
+    if (!current()) return 'unchanged';
     if (check === 'changed' && !this.dirty) {
       // A notification can arrive while the person is typing or switching files. Re-check after
       // each async read/cleanup, including edits still waiting in the renderer's fields.
-      if (await this.reload(session, () => current() && !this.dirty)) {
+      const reloaded = await this.reload(session, () => current() && !this.dirty);
+      if (reloaded === 'same') {
+        this.outside = null;
+        this.publish();
+        return 'unchanged';
+      }
+      if (reloaded) {
         this.ui.notify(`${session.name}.draftcanvas was changed outside Draft Canvas, so it was reloaded.`);
         return 'reloaded';
       }
@@ -1541,6 +1607,12 @@ export class DesktopController {
   // ─── Proposal review (`src/ui/Editor/ProposalPanel.tsx`) ───────────────────────────────────────
   // Thin pass-throughs, not store-backed: a proposal's own lifecycle lives in `proposals.rs`, read
   // fresh by the panel each time rather than mirrored into desktop store state.
+
+  /** Calls `listener` whenever proposals may have changed in the shell; returns how to stop. */
+  onProposalsChanged(listener: () => void): () => void {
+    this.proposalListeners.add(listener);
+    return () => void this.proposalListeners.delete(listener);
+  }
 
   async listProposals(diagramId?: string): Promise<Proposal[]> {
     try {

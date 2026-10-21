@@ -20,7 +20,7 @@ const BACKGROUND_SIZE_CSS: Record<BackgroundSettings['fit'], string> = {
  * A decorative, canvas-layer backdrop — never a diagram object.
  * Deliberately fills the visible screen like a wallpaper rather than panning/
  * zooming with the diagram: it is a plain, untransformed sibling of React
- * Flow's own tree (not routed through `ViewportPortal`, which paints *above*
+ * Flow's own tree (not routed through `ViewportLayer`, which paints *above*
  * nodes/edges and is camera-transformed — used elsewhere for drag-guide
  * chrome), so it always covers the pane with no risk of the diagram panning
  * past its edge. Not selectable, no pointer events, no participation in

@@ -37,6 +37,8 @@ export interface CommandMessage {
   command: 'flush' | 'close' | 'agent';
   id?: number;
   request?: AgentEditorRequest;
+  /** `flush` only: post what has reached the document without blurring the field being typed in. */
+  keepFocus?: boolean;
 }
 
 /** The host's answer to `background-read`: the stored image (base64), or none when the file has no image beside it. */

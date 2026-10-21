@@ -19,8 +19,6 @@ export interface ShellHandle {
   /** Adds a file to the fake disk. */
   addFile(name: string, text: string): string;
   file(handle: string): { name: string; text: string; version: number } | undefined;
-  /** What the next Open dialog picks (`null` cancels it). */
-  nextOpen(handle: string | null): void;
   /** Where the next Save dialog saves (`null` cancels it). */
   nextSaveAs(target: { name: string } | null): void;
   /** Answers for the native message boxes, in order: the index of the button pressed. */
@@ -86,7 +84,6 @@ export async function installMockShell(page: Page): Promise<void> {
     const answers: number[] = [];
     const recents: { handle: string; kind: string; name: string; displayPath: string; lastOpenedMs: number }[] = [];
     let handles = 0;
-    let pickedOpen: string | null = null;
     let saveTarget: { name: string } | null = null;
     let cancelExport = false;
     let update: Record<string, unknown> = { currentVersion: '1.9.4', state: { phase: 'idle' }, dismissed: false, held: null, error: null };
@@ -236,13 +233,6 @@ export async function installMockShell(page: Page): Promise<void> {
       },
       report_state: () => null,
       quit_ack: () => null,
-      quit_now: () => null,
-      open_dialog: () => {
-        if (!pickedOpen) return null;
-        const file = files.get(pickedOpen)!;
-        touch(pickedOpen, file);
-        return opened(pickedOpen, file);
-      },
       open_handle: (args: { handle: string }) => {
         const file = files.get(args.handle);
         if (!file) throw { kind: 'InvalidHandle', message: 'That file is no longer available.' };
@@ -430,7 +420,6 @@ export async function installMockShell(page: Page): Promise<void> {
       recovery_list: () => [...recovery.values()].map((held) => held.entry),
       recovery_read: (args: { id: string }) => ({ text: recovery.get(args.id)!.text }),
       recovery_discard: (args: { id: string }) => void recovery.delete(args.id),
-      settings_get: () => settings,
       settings_set: (args: { patch: Record<string, unknown> }) => (settings = { ...settings, ...args.patch }),
       ask: (args: { title: string; message: string; buttons: string[] }) => {
         asked.push(args);
@@ -541,7 +530,6 @@ export async function installMockShell(page: Page): Promise<void> {
       agentProgress: () => [...progressLog],
       addFile,
       file: (handle) => files.get(handle),
-      nextOpen: (handle) => void (pickedOpen = handle),
       nextSaveAs: (target) => void (saveTarget = target),
       answer: (...choices) => void answers.push(...choices),
       cancelNextExport: () => void (cancelExport = true),

@@ -74,13 +74,15 @@ export type CodeLine = CodeToken[];
 /** Above this, highlighting costs more than it is worth; the card renders plain. */
 const MAX_HIGHLIGHT_LINES = 2000;
 
-const cache = new Lru<string, CodeLine[]>(200);
+/** Keyed by the code itself: a key of its length and a 32-bit hash let two different snippets of
+ *  the same length collide, and a card then drew the other snippet's lines. The string is the one the
+ *  document already holds, so the key costs no copy. */
+const cache = new Lru<string, { language: CodeLanguage; lines: CodeLine[] }>(200);
 
 export function tokenizeCode(code: string, language: CodeLanguage): CodeLine[] {
-  const key = `${language}:${code.length}:${cheapHash(code)}`;
-  const cached = cache.get(key);
-  if (cached) return cached;
-  return cache.set(key, computeLines(code, language));
+  const cached = cache.get(code);
+  if (cached && cached.language === language) return cached.lines;
+  return cache.set(code, { language, lines: computeLines(code, language) }).lines;
 }
 
 function computeLines(code: string, language: CodeLanguage): CodeLine[] {
@@ -195,12 +197,6 @@ function expandTabs(text: string, column = 0): string {
     else out += ch;
   }
   return out;
-}
-
-function cheapHash(value: string): number {
-  let hash = 5381;
-  for (let i = 0; i < value.length; i += 1) hash = ((hash << 5) + hash + value.charCodeAt(i)) | 0;
-  return hash;
 }
 
 /** Test seam: `tests/setup.ts` empties it between tests. */

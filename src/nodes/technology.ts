@@ -6,7 +6,6 @@ import { TECHNOLOGY_PATH_LOADERS } from './technologyCatalog/loaders';
 
 export type TechnologyIcon = Pick<SimpleIcon, 'title' | 'slug' | 'path'>;
 export type TechnologyIconSnapshot = ReadonlyMap<string, TechnologyIcon>;
-export const TECHNOLOGY_CATALOG_VERSION = catalog.version;
 export const TECHNOLOGY_ICON_COUNT = catalog.icons.length;
 
 /** A neutral chip, drawn locally rather than borrowing a brand for an unknown technology. */

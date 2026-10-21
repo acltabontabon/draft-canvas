@@ -3,7 +3,6 @@
 //! command thread that other requests need.
 
 use crate::errors::AppError;
-use crate::paths::DOC_EXT;
 use crate::window::main_window;
 use serde::Deserialize;
 use std::path::PathBuf;
@@ -25,20 +24,6 @@ fn owner(app: &AppHandle) -> Option<WebviewWindow> {
     let window = main_window(app)?;
     let seen = window.is_visible().unwrap_or(false) && !window.is_minimized().unwrap_or(false);
     seen.then_some(window)
-}
-
-pub fn pick_file(app: &AppHandle, start_dir: Option<PathBuf>) -> Option<PathBuf> {
-    let mut dialog = app
-        .dialog()
-        .file()
-        .add_filter("Draft Canvas diagram", &[DOC_EXT]);
-    if let Some(dir) = start_dir {
-        dialog = dialog.set_directory(dir);
-    }
-    if let Some(window) = owner(app) {
-        dialog = dialog.set_parent(&window);
-    }
-    dialog.blocking_pick_file().and_then(|p| p.into_path().ok())
 }
 
 pub fn pick_folder(app: &AppHandle, start_dir: Option<PathBuf>) -> Option<PathBuf> {

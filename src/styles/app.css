@@ -231,12 +231,6 @@ kbd {
   background: var(--dc-surface-hover);
 }
 
-.dc-lede {
-  margin: 6px 0 0;
-  color: var(--dc-text-muted);
-  font-size: 13.5px;
-}
-
 .dc-library-toolbar {
   display: flex;
   align-items: center;
@@ -739,206 +733,13 @@ kbd {
   padding: clamp(32px, 6.5vh, 88px) clamp(20px, 4vw, 48px) clamp(32px, 7vh, 104px);
 }
 
-.dc-home-motto {
-  margin: clamp(22px, 4.5vh, 44px) 0 0;
-  color: var(--dc-text);
-  font-size: clamp(32px, 2.9vw + 8px, 52px);
-  font-weight: 650;
-  letter-spacing: -0.032em;
-  line-height: 1.04;
-  text-wrap: balance;
-}
-
-/* The setup, one step quieter; the punchline, on its own line, is what the eye lands on. */
-.dc-home-motto-setup {
-  color: var(--dc-text-muted);
-}
-
-.dc-home-motto-punch {
-  display: block;
-}
-
-.dc-home-tagline {
-  margin: 14px 0 0;
-  color: var(--dc-text-muted);
-  font-size: 16px;
-}
-
-.dc-home-stage {
-  position: relative;
-  display: grid;
-  grid-template-columns: minmax(240px, 360px) minmax(0, 1fr);
-  column-gap: clamp(48px, 8vw, 120px);
-  margin-top: clamp(32px, 6vh, 60px);
-}
-
-.dc-home-start {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-width: 0;
-}
-
 /* ---- the blank canvas --------------------------------------------------- */
-
-.dc-sheet {
-  position: relative;
-  isolation: isolate;
-  flex: 1 1 auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 260px;
-  max-height: 380px;
-  padding: 0;
-  border: 0;
-  border-radius: 3px;
-  background: none;
-  color: var(--dc-text);
-  font: inherit;
-  cursor: pointer;
-  /* Invisible normally; forced-colours mode paints it, so focus never vanishes there. */
-  outline: 2px solid transparent;
-  outline-offset: 4px;
-}
-
-.dc-sheet:focus-visible {
-  outline-color: transparent;
-}
-
-.dc-sheet::before {
-  opacity: 1;
-}
 
 /* Dark mode only: on the near-black canvas the home's dots read far louder than on white and
    pulled at the starters and the words around them. Half the ink keeps the
    sheet a canvas without making it the loudest thing on screen. Light is left exactly as it was. */
 :root[data-theme='dark'] .dc-home {
   --dc-home-dot: color-mix(in srgb, var(--dc-text-faint) 21%, transparent);
-}
-
-/* Crop marks, not a box: where the page is, not a frame around it. */
-.dc-sheet-crops span {
-  position: absolute;
-  width: 16px;
-  height: 16px;
-  border: 0 solid var(--dc-border-strong);
-  transition:
-  border-color 120ms ease,
-  transform 180ms var(--dc-ease-out);
-}
-
-.dc-sheet-crops [data-at='nw'] {
-  top: 0;
-  left: 0;
-  border-top-width: 1.5px;
-  border-left-width: 1.5px;
-}
-
-.dc-sheet-crops [data-at='ne'] {
-  top: 0;
-  right: 0;
-  border-top-width: 1.5px;
-  border-right-width: 1.5px;
-}
-
-.dc-sheet-crops [data-at='se'] {
-  right: 0;
-  bottom: 0;
-  border-right-width: 1.5px;
-  border-bottom-width: 1.5px;
-}
-
-.dc-sheet-crops [data-at='sw'] {
-  bottom: 0;
-  left: 0;
-  border-bottom-width: 1.5px;
-  border-left-width: 1.5px;
-}
-
-.dc-sheet:hover .dc-sheet-crops span {
-  border-color: var(--dc-selection);
-}
-
-.dc-sheet:hover .dc-sheet-crops [data-at='nw'] {
-  transform: translate(-3px, -3px);
-}
-
-.dc-sheet:hover .dc-sheet-crops [data-at='ne'] {
-  transform: translate(3px, -3px);
-}
-
-.dc-sheet:hover .dc-sheet-crops [data-at='se'] {
-  transform: translate(3px, 3px);
-}
-
-.dc-sheet:hover .dc-sheet-crops [data-at='sw'] {
-  transform: translate(-3px, 3px);
-}
-
-/* Keyboard focus is selection, drawn the way the editor draws it. */
-.dc-sheet:focus-visible .dc-sheet-crops span {
-  opacity: 0;
-}
-
-.dc-sheet-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-  height: 42px;
-  padding: 0 10px 0 15px;
-  border-radius: 10px;
-  background: var(--dc-selection);
-  color: var(--dc-canvas);
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: -0.005em;
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.14) inset,
-    0 10px 28px -14px var(--dc-selection);
-  transition:
-  transform 80ms ease,
-  filter 120ms ease,
-  box-shadow 180ms ease;
-}
-
-.dc-sheet:hover .dc-sheet-pill {
-  filter: brightness(1.06);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.14) inset,
-    0 14px 36px -14px var(--dc-selection);
-}
-
-.dc-sheet:active .dc-sheet-pill {
-  transform: translateY(1px);
-  filter: brightness(0.98);
-}
-
-.dc-sheet-pill kbd {
-  min-width: 0;
-  margin-left: 3px;
-  padding: 0 6px;
-  border: 0;
-  border-radius: var(--dc-radius-sm);
-  background: color-mix(in srgb, var(--dc-canvas) 16%, transparent);
-  color: inherit;
-  font-size: 12px;
-  line-height: 20px;
-  transition: opacity 120ms ease;
-}
-
-/* ↵ sits on what Enter will start: the sheet while nothing on the page has focus (or it does),
-   never while focus is somewhere Enter means something else. */
-.dc-home:focus-within .dc-sheet:not(:focus-visible) .dc-sheet-pill kbd {
-  opacity: 0;
-}
-
-.dc-home-import {
-  align-self: flex-start;
-  height: 30px;
-  /* Icon on the sheet's edge, not the button's padding. */
-  margin-left: -8px;
-  color: var(--dc-text-muted);
 }
 
 /* ---- selection chrome (shared by the sheet and the starters) ------------ */
@@ -1023,19 +824,18 @@ kbd {
 /* Hover a node on the canvas and its connection handles appear; select it and the whole frame
    does. Same here. */
 @media (hover: hover) {
-  :is(.dc-sheet, .dc-starter):hover .dc-chrome-anchor {
+  .dc-starter:hover .dc-chrome-anchor {
   opacity: 1;
   }
 }
 
-:is(.dc-sheet, .dc-starter):focus-visible :is(.dc-chrome-corner, .dc-chrome-anchor),
-:is(.dc-sheet, .dc-starter):focus-visible .dc-chrome::before {
+.dc-starter:focus-visible :is(.dc-chrome-corner, .dc-chrome-anchor),
+.dc-starter:focus-visible .dc-chrome::before {
   opacity: 1;
 }
 
 /* The primary starters, one row of drawings. The description is laid out under each name and only
    shown on hover or focus, so it reads as the tile answering a question rather than five captions. */
-.dc-home-starters-label,
 .dc-empty-pick-label {
   margin: 0 0 12px;
   color: var(--dc-text-muted);
@@ -1045,55 +845,7 @@ kbd {
   text-align: center;
 }
 
-/* Rows centre, so five tiles read as one composed group whatever the column count leaves on the
-   last row, and the label and the hint sit on the same axis as the drawings. Five fit one row
-   where there is room; where there is not, the grid narrows to three across so the split is
-   3 + 2 rather than 4 + 1. */
-.dc-home-starters {
-  container-type: inline-size;
-}
-
-.dc-starter-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 20px 24px;
-  justify-content: center;
-  max-width: 816px;
-  margin: 0 auto;
-}
-
-@container (width < 816px) {
-  .dc-starter-grid {
-    max-width: 480px;
-  }
-}
-
-.dc-starter-grid-pending {
-  min-height: 132px;
-}
-
-.dc-home-more {
-  margin: 18px 0 0;
-  font-size: 12.5px;
-  text-align: center;
-}
-
-.dc-home-more kbd {
-  font: 600 11px/1 var(--dc-mono);
-  padding: 2px 5px;
-  border: 1px solid var(--dc-border);
-  border-radius: 4px;
-}
-
-.dc-home-more kbd + kbd {
-  margin-left: 2px;
-}
-
 /* ---- the starters ------------------------------------------------------- */
-
-.dc-home-starters {
-  min-width: 0;
-}
 
 .dc-starter {
   position: relative;
@@ -1205,35 +957,6 @@ kbd {
   color: var(--dc-text);
 }
 
-/*
- * The Browse-all dialog: every starter at once, and all of it on one screen. The seven
- * architectures run along the top; the two smaller categories share the band under them, side by
- * side, so the whole catalog reads as one tidy sheet rather than a page to scroll.
- *
- * Each starter is drawn on its own small patch of canvas — a rounded plate with a faint grid —
- * with its name under it. Hover or focus lights the plate's edge and the drawing, and reveals the
- * description in place. The description is always laid out, only invisible, so every row is
- * already as tall as its longest one and nothing moves when it appears.
- */
-.dc-modal.dc-modal-starters {
-  max-height: min(880px, calc(100vh - 48px));
-  max-height: min(880px, calc(100dvh - 48px));
-}
-
-.dc-modal-starters .dc-modal-header {
-  padding: 16px 14px 14px 24px;
-  border-bottom: 0;
-}
-
-.dc-modal-starters .dc-modal-header h2 {
-  font-size: 16px;
-  letter-spacing: -0.01em;
-}
-
-.dc-modal-starters .dc-modal-body {
-  padding: 2px 24px 24px;
-}
-
 .dc-starter-description {
   padding: 0 2px;
   color: var(--dc-text-muted);
@@ -1288,12 +1011,6 @@ kbd {
   border-top: 1px solid var(--dc-border);
 }
 
-.dc-home-status-inner {
-  max-width: 1240px;
-  margin: 0 auto;
-  padding: 8px clamp(20px, 4vw, 48px);
-}
-
 .dc-home-status .dc-local,
 .dc-home-warn .dc-local {
   align-items: flex-start;
@@ -1316,10 +1033,6 @@ kbd {
   margin-top: 32px;
 }
 
-.dc-home-start {
-  animation-delay: 60ms;
-}
-
 .dc-home .dc-starter {
   animation-delay: calc(220ms + var(--i, 0) * 16ms);
 }
@@ -1331,9 +1044,6 @@ kbd {
   animation: none !important;
   }
 
-  .dc-sheet:hover .dc-sheet-crops span {
-  transform: none;
-  }
 }
 
 /* ---- narrower ----------------------------------------------------------- */
@@ -1346,19 +1056,6 @@ kbd {
   padding-bottom: 28px;
   }
 
-  .dc-home-motto {
-  margin-top: 20px;
-  font-size: clamp(32px, 2.6vw + 8px, 46px);
-  }
-
-  .dc-home-tagline {
-  margin-top: 10px;
-  }
-
-  .dc-home-stage {
-  margin-top: 30px;
-  }
-
   .dc-starter-swatch {
   height: 78px;
   }
@@ -1366,44 +1063,8 @@ kbd {
 
 /* A very wide screen gets a little more of everything, not a stretched version of the same. */
 @media (min-width: 1800px) {
-  .dc-home-inner,
-  .dc-home-status-inner {
+  .dc-home-inner {
   max-width: 1380px;
-  }
-
-  .dc-home-stage {
-  grid-template-columns: minmax(240px, 400px) minmax(0, 1fr);
-  }
-
-  .dc-sheet {
-  max-height: 420px;
-  }
-}
-
-/* Without a keyboard, ↵ is advice nobody can take. */
-@media (hover: none) and (pointer: coarse) {
-  .dc-sheet-pill kbd {
-  display: none;
-  }
-}
-
-/* Below this the two columns stack. */
-@media (max-width: 1079px) {
-  .dc-home-stage {
-  grid-template-columns: minmax(0, 1fr);
-  row-gap: 36px;
-  }
-
-  .dc-sheet {
-  flex: none;
-  height: clamp(168px, 24vh, 220px);
-  min-height: 0;
-  }
-}
-
-@media (max-width: 720px) {
-  .dc-home-tagline {
-  font-size: 15px;
   }
 }
 
@@ -1612,15 +1273,6 @@ kbd {
   .dc-editor {
   animation: dc-screen-in 160ms var(--dc-ease-out) both;
   }
-}
-
-/* Embedded in a host: waiting for its file, or saying why the file isn't a diagram. */
-.dc-host-waiting {
-  display: grid;
-  place-items: center;
-  padding: 24px;
-  color: var(--dc-text-muted);
-  text-align: center;
 }
 
 /* Over the canvas, not in a toast: it stays true until the file is fixed. Above the status bar, clear
@@ -2321,8 +1973,7 @@ button.dc-status-level:focus-visible {
   overflow-wrap: anywhere;
 }
 
-.dc-depth-level,
-.dc-depth-plate-level {
+.dc-depth-level {
   flex: none;
   color: var(--dc-text-faint);
   font-size: 11px;
@@ -3210,24 +2861,6 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   white-space: nowrap;
 }
 
-.dc-explain-flow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  font-size: 13px;
-}
-
-.dc-explain-flow strong {
-  font-weight: 600;
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-
-.dc-explain-arrow {
-  color: var(--dc-selection);
-}
-
 /* The flow's name, now the picker's trigger rather than a caption above one: it is what the
    presenter reads to know where they are, so it carries the bar's normal text weight and keeps its
    own words instead of being shouted in uppercase. Long names wrap within the control. */
@@ -3292,40 +2925,6 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.02em;
-}
-
-.dc-explain-caption {
-  max-width: 260px;
-  color: var(--dc-text);
-  font-size: 13px;
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-
-.dc-explain-condition {
-  padding: 1px 7px;
-  border-radius: var(--dc-radius-xs);
-  background: var(--dc-edge-label-bg);
-  color: var(--dc-text-muted);
-  font-size: 11px;
-  white-space: nowrap;
-}
-
-.dc-flow-dots {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.dc-flow-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--dc-border-strong);
-}
-
-.dc-flow-dot[data-filled='true'] {
-  background: var(--dc-selection);
 }
 
 /* The flow list, above the bar in `.dc-explain`'s own column — the slot the code drawer already
@@ -5092,13 +4691,6 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   line-height: 1.65;
 }
 
-.dc-about-view-title {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 650;
-  letter-spacing: -0.01em;
-}
-
 .dc-diagnostics {
   display: flex;
   flex-direction: column;
@@ -5980,23 +5572,6 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   gap: 8px;
 }
 
-.dc-points-row[data-done] .dc-points-box {
-  border-color: var(--dc-text-faint);
-  background: var(--dc-text-faint);
-}
-
-/* Quiet, not struck through: a finished item stops asking for attention, it doesn't get defaced. */
-
-.dc-points-row[data-done] .dc-points-text,
-.dc-points-row[data-done] .dc-points-note {
-  color: var(--dc-text-faint);
-}
-
-.dc-points-row[data-done] .dc-mention {
-  color: inherit;
-  font-weight: inherit;
-}
-
 .dc-points-remove {
   flex: none;
   opacity: 0;
@@ -6046,10 +5621,6 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   margin-left: 6px;
   color: var(--dc-text-faint);
   font-size: 11px;
-}
-
-.dc-points[data-mode='panel'] .dc-points-capture {
-  border-bottom: 1px solid var(--dc-border);
 }
 
 /* ---- done group, foot, readout ---- */
@@ -6116,14 +5687,6 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   border: 1px solid var(--dc-border);
   border-radius: var(--dc-radius-xs);
   font-size: 10.5px;
-}
-
-.dc-points-row[data-kind='decision'] .dc-points-glyph {
-  color: var(--dc-accent-green-chip);
-}
-
-.dc-points-row[data-kind='question'] .dc-points-glyph {
-  color: var(--dc-accent-blue-chip);
 }
 
 /* ------------------------------------------------------------ open points -- */
@@ -6263,7 +5826,6 @@ button.dc-open-points-main:focus-visible .dc-open-points-kind {
 .dc-open-points-row:not([data-done]) .dc-open-points-resolve {
   opacity: 0.75;
 }
-
 
 /* A diagram opened from a share link (`uiStore.readOnly`): one slim strip across the top of the
    canvas, over it rather than in the flow, so the camera and every popover measure the same pane

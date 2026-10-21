@@ -5,7 +5,6 @@ import {
   BackgroundVariant,
   ConnectionMode,
   ReactFlow,
-  ViewportPortal,
   applyEdgeChanges,
   applyNodeChanges,
   useReactFlow,
@@ -51,6 +50,7 @@ import { edgeToSelect, pickEdgeAt } from './edgePick';
 import { endsBendDrag } from './bendDrag';
 import { DraftEdgeView } from './DraftEdgeView';
 import { EdgeLabelRoot } from './EdgeLabels';
+import { ViewportLayer } from './ViewportLayer';
 import { DraftNodeView } from './DraftNodeView';
 import { Markers } from './Markers';
 import {
@@ -173,6 +173,16 @@ interface ProjectionState {
 }
 
 const EMPTY_VIEW: ProjectionState = { nodes: [], edges: [], from: null };
+
+/**
+ * The selection's ids as a set that keeps its identity while the ids are the same. React Flow
+ * reports a selection as fresh arrays even when nothing changed (`onSelectionChange` rebuilds the
+ * edge list on every click), and a new set re-projected the whole canvas.
+ */
+function useIdSet(ids: readonly string[]): ReadonlySet<string> {
+  const key = ids.join('\u0000');
+  return useMemo(() => new Set(key === '' ? [] : key.split('\u0000')), [key]);
+}
 
 const NO_SNAP = { changes: [] as NodeChange<DraftRfNode>[], guides: [] as Guide[] };
 
@@ -337,8 +347,6 @@ function sweepDescendants(
 /** How long the zoom must hold still before `--dc-zoom` follows it. */
 const ZOOM_VARIABLE_SETTLE_MS = 140;
 
-/** A host's name in the one-line "Attach to …" pill — a note can hold pages of text, and the pill
- *  never wraps, so anything past a short name would run off across the canvas. */
 /**
  * Publishes the zoom as `--dc-zoom` on React Flow's root, for the few hit areas that must stay a
  * steady size on screen (`canvas.css`). Written from a store subscription — no React render per
@@ -349,12 +357,37 @@ const ZOOM_VARIABLE_SETTLE_MS = 140;
  * or pinch zoom — the hitches in an otherwise cheap gesture. What reads the value is hit-area sizing,
  * which nobody is exercising while the view is still moving, so it follows the zoom when it settles.
  * The first value is written at once: there is no earlier one to be stale against.
+ *
+ * The same subscription marks the root `data-zooming` while the zoom is moving, until it settles.
+ * The diagram rides its own compositor layer so a pan or a drag costs one frame (`canvas.css`), but a
+ * layer re-rasters whole at every new scale, which made each wheel-zoom step twice as slow; so the
+ * layer is dropped for a zoom and comes back once it holds still. An attribute only restyles the one
+ * element its selector names, unlike the inherited `--dc-zoom`.
  */
 function useZoomVariable() {
   const storeApi = useStoreApi();
   useEffect(() => {
     let written: { node: HTMLElement; zoom: number } | null = null;
     let timer: number | undefined;
+    let zooming: { node: HTMLElement; zoom: number; timer: number | undefined } | null = null;
+    const settleZoom = () => {
+      if (!zooming) return;
+      zooming.node.removeAttribute('data-zooming');
+      zooming.timer = undefined;
+    };
+    const followZoom = (domNode: HTMLElement | null, zoom: number) => {
+      if (!domNode) return;
+      if (zooming?.node !== domNode) {
+        if (zooming) window.clearTimeout(zooming.timer);
+        zooming = { node: domNode, zoom, timer: undefined };
+        return;
+      }
+      if (zooming.zoom === zoom) return;
+      zooming.zoom = zoom;
+      if (zooming.timer === undefined) domNode.setAttribute('data-zooming', '');
+      else window.clearTimeout(zooming.timer);
+      zooming.timer = window.setTimeout(settleZoom, ZOOM_VARIABLE_SETTLE_MS);
+    };
     const quantized = (transform: [number, number, number]) => Math.round(transform[2] * 20) / 20;
     const write = () => {
       timer = undefined;
@@ -366,6 +399,7 @@ function useZoomVariable() {
     };
     write();
     const unsubscribe = storeApi.subscribe(({ domNode, transform }) => {
+      followZoom(domNode, transform[2]);
       if (written === null) {
         write();
         return;
@@ -377,6 +411,8 @@ function useZoomVariable() {
     return () => {
       unsubscribe();
       if (timer !== undefined) window.clearTimeout(timer);
+      if (zooming) window.clearTimeout(zooming.timer);
+      settleZoom();
     };
   }, [storeApi]);
 }
@@ -427,6 +463,8 @@ function frameFor(room: DraftDocument, width: number, height: number): DraftView
 /** Far enough out for a big room, never so far that its labels stop being readable. */
 const MIN_FRAME_ZOOM = 0.25;
 
+/** A host's name in the one-line "Attach to …" pill — a note can hold pages of text, and the pill
+ *  never wraps, so anything past a short name would run off across the canvas. */
 function truncateForAffordance(text: string): string {
   const firstLine = text.split('\n', 1)[0]!.trim();
   return firstLine.length > 40 ? `${firstLine.slice(0, 39)}…` : firstLine;
@@ -678,8 +716,8 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   }, []);
   useEffect(() => clearCapsule, [clearCapsule]);
 
-  const selectedNodes = useMemo(() => new Set(selection.nodes), [selection.nodes]);
-  const selectedEdges = useMemo(() => new Set(selection.edges), [selection.edges]);
+  const selectedNodes = useIdSet(selection.nodes);
+  const selectedEdges = useIdSet(selection.edges);
 
   // React Flow's own marquee (rubber-band) selection state — see `onEdgesChange`
   // for why this is read here.
@@ -707,9 +745,20 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
     view.from.interactive !== interactive
   ) {
     const options = { selectedNodes, selectedEdges, interactive };
+    const from = view.from;
+    // Each half only when its own inputs moved: a click on a shape needn't revisit 800 connectors.
+    // A connector's reading names its shapes, so the edges follow a node change too.
+    const nodesStale =
+      from === null || from.document.nodes !== document.nodes || from.selectedNodes !== selectedNodes || from.interactive !== interactive;
+    const edgesStale =
+      from === null ||
+      from.document.nodes !== document.nodes ||
+      from.document.edges !== document.edges ||
+      from.selectedEdges !== selectedEdges ||
+      from.interactive !== interactive;
     setView((current) => ({
-      nodes: projectNodes(document, current.nodes, options),
-      edges: projectEdges(document, current.edges, options),
+      nodes: nodesStale ? projectNodes(document, current.nodes, options) : current.nodes,
+      edges: edgesStale ? projectEdges(document, current.edges, options) : current.edges,
       from: { document, selectedNodes, selectedEdges, interactive },
     }));
   }
@@ -1567,7 +1616,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   /** The connector a pointer event is on, as a click would pick it — see `edgePick.ts`. */
   const edgeAtEvent = useCallback(
     (event: { clientX: number; clientY: number }) =>
-      pickEdgeAt(event.clientX, event.clientY, screenToFlowPosition({ x: event.clientX, y: event.clientY }), getZoom()),
+      pickEdgeAt(event.clientX, event.clientY, () => screenToFlowPosition({ x: event.clientX, y: event.clientY }), getZoom()),
     [getZoom, screenToFlowPosition],
   );
 
@@ -1675,6 +1724,8 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
     window.clearTimeout(pending.timer);
     longPress.current = null;
   }, []);
+  // A hold still being timed when the canvas goes away must not open a menu over whatever replaced it.
+  useEffect(() => cancelLongPress, [cancelLongPress]);
 
   /** Every press reaches here first (capture phase): the right-click snapshot, then a long-press timer
    *  for a touch or pen. A mouse never qualifies — a held left button is a drag about to start — and
@@ -2056,7 +2107,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
           />
         )}
 
-        <ViewportPortal>
+        <ViewportLayer>
           {tracing && <FlowTraceBadges />}
           {/*
             Both of these are drag-in-progress chrome, meaningless once the
@@ -2106,7 +2157,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
               Attach to {truncateForAffordance(attachTarget.text || defaultTextFor(attachTarget.type))}
             </div>
           )}
-        </ViewportPortal>
+        </ViewportLayer>
       </ReactFlow>
     </div>
   );

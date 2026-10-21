@@ -13,22 +13,17 @@
  * whose crossings didn't change.
  */
 import type { DraftEdge, DraftNode } from '../document/types';
-import { edgeLabelSize } from './labelLayout';
 import { routingPlan } from './bundles';
 import { dashForEdge } from './kindStyle';
 import { obstaclesForEdge } from './obstacles';
-import { sameNodeGeometry } from './sameGeometry';
+import { sameNodeGeometry, type PlanScope } from './sameGeometry';
 import { BRIDGE_RADIUS } from './bridge';
+import { edgeRoutes } from './edgeRoutes';
 import {
   flattenPath,
   labelLaneOffset,
   laneIndex,
   rectOf,
-  responseAwayFor,
-  responseLaneFor,
-  responseWaypointsFor,
-  responseSpineFor,
-  routeBetween,
   type Rect,
 } from './routing';
 
@@ -212,10 +207,16 @@ const rectKey = (rect: Rect) => `${rect.x},${rect.y},${rect.width},${rect.height
 /** Routes every connector once, exactly as the renderers do, and reduces each to a polyline plus
  *  the few points an arc must keep away from. `memoize` is the canvas's own pass; an export or a
  *  mid-gesture plan routes afresh and leaves the memo to the canvas. */
-function linesOf(nodes: readonly DraftNode[], edges: readonly DraftEdge[], obstacleNodes: readonly DraftNode[], memoize = false): Line[] {
+function linesOf(
+  nodes: readonly DraftNode[],
+  edges: readonly DraftEdge[],
+  obstacleNodes: readonly DraftNode[],
+  scope: PlanScope,
+  memoize = false,
+): Line[] {
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
   const lanes = laneIndex(edges);
-  const plan = routingPlan(nodes, edges);
+  const plan = routingPlan(nodes, edges, scope);
   const lines: Line[] = [];
   const nextMemo = memoize ? new Map<string, { key: string; lines: Line[] }>() : null;
 
@@ -225,7 +226,7 @@ function linesOf(nodes: readonly DraftNode[], edges: readonly DraftEdge[], obsta
     if (!source || !target) continue;
     const lane = lanes.get(edge.id)?.offset ?? 0;
     const spine = plan.spineFor(edge.id);
-    const obstacles = obstaclesForEdge(obstacleNodes, edge.source, edge.target);
+    const obstacles = obstaclesForEdge(obstacleNodes, edge.source, edge.target, scope);
     const sourceRect = rectOf(source);
     const targetRect = rectOf(target);
 
@@ -255,14 +256,26 @@ function linesOf(nodes: readonly DraftNode[], edges: readonly DraftEdge[], obsta
     }
     const firstLine = lines.length;
 
-    const route = routeBetween(sourceRect, targetRect, edge.routing, {
-      anchors: { source: edge.sourceAnchor, target: edge.targetAnchor },
-      waypoints: edge.waypoints,
-      lane,
-      label: edge.label ? { ...edgeLabelSize(edge.label), away: responseAwayFor(edge.hasResponse, lane) } : undefined,
-      obstacles,
-      spine,
-    });
+    // The same routes the canvas draws, from the cache it reads (`edgeRoutes.ts`): on the canvas,
+    // this pass runs inside the first connector's render, and every connector then finds its routes
+    // already worked out.
+    const routes = edgeRoutes(
+      {
+        source: sourceRect,
+        target: targetRect,
+        routing: edge.routing,
+        label: edge.label,
+        sourceAnchor: edge.sourceAnchor,
+        targetAnchor: edge.targetAnchor,
+        hasResponse: edge.hasResponse,
+        lane,
+        spine,
+        obstacles,
+        waypoints: edge.waypoints,
+      },
+      scope,
+    );
+    const route = routes.request;
     const points = flattenPath(route.d);
     if (points.length >= 2) {
       // Both renderers draw the label cluster at the *lane-nudged* point, not at `route.labelX`
@@ -284,14 +297,8 @@ function linesOf(nodes: readonly DraftNode[], edges: readonly DraftEdge[], obsta
 
     // A request/response connector's reply line is a second path on the canvas, so it must be
     // crossable — but it is always dashed (`RESPONSE_DASH`), so it never draws an arc of its own.
-    if (edge.hasResponse) {
-      const responseRoute = routeBetween(targetRect, sourceRect, edge.routing, {
-        anchors: { source: edge.targetAnchor, target: edge.sourceAnchor },
-        waypoints: responseWaypointsFor(edge.waypoints, lane),
-        lane: responseLaneFor(lane),
-        obstacles,
-        spine: responseSpineFor(spine),
-      });
+    const responseRoute = routes.response;
+    if (responseRoute) {
       const responsePoints = flattenPath(responseRoute.d);
       if (responsePoints.length >= 2) {
         lines.push({
@@ -396,11 +403,12 @@ function compute(
   nodes: readonly DraftNode[],
   edges: readonly DraftEdge[],
   obstacleNodes: readonly DraftNode[],
+  scope: PlanScope,
   previous?: ReadonlyMap<string, readonly Crossing[]>,
 ): ComputedPlan {
   if (edges.length < 2 || edges.length > MAX_CROSSING_EDGES) return EMPTY_PLAN;
   // `previous` is passed only by the canvas's own cached path — the one pass worth remembering routes for.
-  const lines = linesOf(nodes, edges, obstacleNodes, previous !== undefined);
+  const lines = linesOf(nodes, edges, obstacleNodes, scope, previous !== undefined);
   if (lines.length < 2) return EMPTY_PLAN;
   const blocking = rectGrid(blockingRects(nodes), BRIDGE_CLEARANCE);
 
@@ -688,6 +696,10 @@ function intersect(
 }
 
 const planCache = new WeakMap<readonly DraftNode[], WeakMap<readonly DraftEdge[], CrossingPlan>>();
+/** Plans built for a `'transient'` render, kept apart so the canvas never adopts one: their lists
+ *  were not interned against the canvas's, and handing them over would re-render every crossed
+ *  connector. Still cached by identity, so an animated export plans once, not once a frame. */
+const transientCache = new WeakMap<readonly DraftNode[], WeakMap<readonly DraftEdge[], CrossingPlan>>();
 
 /** The lists of the plan most recently built for the canvas, for `compute` to reuse — see there. Only
  *  ever the cached path's: an export or a mid-gesture plan is for a different set of obstacles and
@@ -709,8 +721,9 @@ export function crossingPlan(
   nodes: readonly DraftNode[],
   edges: readonly DraftEdge[],
   obstacleNodes: readonly DraftNode[] = nodes,
+  scope: PlanScope = 'canvas',
 ): CrossingPlan {
-  if (obstacleNodes !== nodes) return compute(nodes, edges, obstacleNodes);
+  if (obstacleNodes !== nodes) return compute(nodes, edges, obstacleNodes, scope);
   const byNodes = planCache.get(nodes);
   const cached = byNodes?.get(edges);
   if (cached) return cached;
@@ -719,10 +732,18 @@ export function crossingPlan(
   // by identity, a new plan, for an answer that cannot have changed. Crossings are where connectors
   // are, and where they are depends only on the shapes' places, so the plan already built stands.
   const previous = lastBuilt;
-  const plan =
-    previous && previous.edges === edges && sameNodeGeometry(previous.nodes, nodes)
-      ? previous.plan
-      : compute(nodes, edges, obstacleNodes, lastLists);
+  const reusable = previous && previous.edges === edges && sameNodeGeometry(previous.nodes, nodes) ? previous.plan : null;
+  if (scope === 'transient') {
+    if (reusable) return reusable;
+    const byTransient = transientCache.get(nodes);
+    const built = byTransient?.get(edges);
+    if (built) return built;
+    const plan = compute(nodes, edges, obstacleNodes, scope);
+    if (byTransient) byTransient.set(edges, plan);
+    else transientCache.set(nodes, new WeakMap([[edges, plan]]));
+    return plan;
+  }
+  const plan = reusable ?? compute(nodes, edges, obstacleNodes, scope, lastLists);
   lastBuilt = { nodes, edges, plan };
   lastLists = plan.lists;
   if (byNodes) byNodes.set(edges, plan);
@@ -738,6 +759,8 @@ export function crossingPlan(
  *  call, so anything subscribing to the result must compare it shallowly (`useShallow`). */
 export function withoutMoving(crossings: readonly Crossing[], moving: ReadonlySet<string>): readonly Crossing[] {
   if (moving.size === 0 || crossings.length === 0) return crossings;
+  // The usual answer mid-drag, for every connector not crossing one attached to what moves: no copy.
+  if (!crossings.some((crossing) => moving.has(crossing.otherSource) || moving.has(crossing.otherTarget))) return crossings;
   const kept = crossings.filter((crossing) => !moving.has(crossing.otherSource) && !moving.has(crossing.otherTarget));
   return kept.length === crossings.length ? crossings : kept.length === 0 ? NO_CROSSINGS : kept;
 }

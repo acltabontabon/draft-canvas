@@ -199,7 +199,6 @@ export const NOTE_KIND_NAMES = ['note', 'question', 'warning', 'decision'] as co
  * attach to what they are about, or stand on the canvas, exactly as the editor's cards do.
  */
 export const NOTE_FORM_NAMES = [...NOTE_KIND_NAMES, 'code', 'label'] as const;
-export type NoteFormName = (typeof NOTE_FORM_NAMES)[number];
 
 /** A connector's line, by the names the inspector shows (Stepped, Curved, Straight). */
 export const LINE_STYLES = { stepped: 'smoothstep', curved: 'bezier', straight: 'straight' } as const satisfies Record<string, EdgeRouting>;

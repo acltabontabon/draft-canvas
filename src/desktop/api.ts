@@ -232,10 +232,8 @@ export interface DesktopApi {
   hostReady(onEvent: (event: HostEvent) => void): Promise<HostBoot>;
   reportState(state: DocState): Promise<void>;
   quitAck(decision: QuitDecision): Promise<void>;
-  quitNow(): Promise<void>;
 
   // Documents. `null` is the user cancelling a dialog, never an error.
-  openDialog(): Promise<OpenedDoc | null>;
   openHandle(handle: Handle): Promise<OpenedDoc>;
   saveDocument(handle: Handle, bytes: Uint8Array, expectedStamp: string | undefined): Promise<SaveResult>;
   saveAs(suggestedName: string, bytes: Uint8Array, copySidecarFrom?: Handle, startIn?: StartLocation): Promise<SavedAs | null>;
@@ -297,7 +295,6 @@ export interface DesktopApi {
   recoveryDiscard(id: string): Promise<void>;
 
   // Settings and dialogs
-  settingsGet(): Promise<DesktopSettings>;
   settingsSet(patch: Partial<DesktopSettings>): Promise<DesktopSettings>;
   /**
    * A native message box with one to three buttons; resolves to the index of the one pressed. Closing

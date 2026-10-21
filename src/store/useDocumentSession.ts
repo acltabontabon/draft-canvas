@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { cloneDocumentAsNew, createDocument } from '../document/factory';
 import { createId } from '../document/ids';
+import { totals } from '../depth/tree';
 import { LIMITS } from '../document/limits';
 import type { DraftDocument, DraftSummary, Project } from '../document/types';
 import { adoptEmbeddedBackground } from '../export/background';
@@ -41,8 +42,25 @@ async function loadEditorStore(): Promise<EditorStoreModule> {
 /** How often, at most, a save measures the file it wrote. Serializing a large diagram costs a few
  *  tens of milliseconds, which is fine now and then, not after every burst of typing. */
 const SIZE_CHECK_INTERVAL_MS = 15_000;
+/** How much longer than that a canvas far below the limit waits before it is measured again. */
+const MAX_SIZE_CHECK_BACKOFF = 20;
 let lastSizeCheck = 0;
 let sizeWarnedFor: string | null = null;
+/**
+ * What the last measurement of a canvas found. Measuring every interval cost a compact
+ * `JSON.stringify` of the whole file every 15 seconds of editing, and a canvas between the two
+ * thresholds paid for the full indented serialization each time too, for as long as it stayed open.
+ */
+let lastMeasured: {
+  id: string;
+  at: number;
+  /** Compact JSON length. */
+  compact: number;
+  /** Elements across every room when measured — growth there is what moves the size most. */
+  elements: number;
+  /** Indented over compact length, once a canvas has been near enough to need the real thing. */
+  ratio: number | null;
+} | null = null;
 
 /**
  * Warns once per canvas when the file is nearing what an import accepts (`LIMITS.maxFileBytes`). The
@@ -54,16 +72,36 @@ function warnIfNearFileLimit(module: EditorStoreModule, notify: (message: string
   if (now - lastSizeCheck < SIZE_CHECK_INTERVAL_MS) return;
   lastSizeCheck = now;
   const file = module.fileOf(module.useEditorStore.getState());
-  if (sizeWarnedFor === file.metadata.id) return;
+  const id = file.metadata.id;
+  if (sizeWarnedFor === id) return;
+  const counts = totals(file);
+  const elements = counts.nodes + counts.edges + counts.flows;
+  const previous = lastMeasured?.id === id ? lastMeasured : null;
+  const compactThreshold = LIMITS.maxFileBytes * 0.4;
+  if (previous) {
+    // A canvas far below the threshold is measured less often the further below it is, unless its
+    // element count has moved enough to matter; text typed into existing shapes grows it slowly.
+    const headroom = compactThreshold / Math.max(1, previous.compact);
+    const backoff = Math.min(MAX_SIZE_CHECK_BACKOFF, Math.max(1, Math.floor(headroom)));
+    const grew = Math.abs(elements - previous.elements) > Math.max(10, previous.elements * 0.1);
+    if (!grew && now - previous.at < SIZE_CHECK_INTERVAL_MS * backoff) return;
+  }
   // The file is written indented (about 1.7x the compact size), and it is the written file that has to
   // open again: measuring the compact text let a canvas past the limit save with no warning at all.
   // So only a canvas that could be near it pays for the real serialization.
-  if (JSON.stringify(file).length < LIMITS.maxFileBytes * 0.4) return;
+  const compact = JSON.stringify(file).length;
+  const ratio = previous?.ratio ?? null;
+  lastMeasured = { id, at: now, compact, elements, ratio };
+  if (compact < compactThreshold) return;
+  // Once the real ratio is known, a canvas whose estimate stays clearly below the warning skips the
+  // indented serialization; the margin covers the ratio drifting as the canvas changes.
+  if (ratio !== null && compact * ratio < LIMITS.maxFileBytes * 0.7) return;
   void import('../export/project').then(({ serializeDocument }) => {
     // UTF-16 length is a lower bound on the UTF-8 bytes, which is the right side to err on for a warning.
     const bytes = serializeDocument(file).length;
-    if (bytes < LIMITS.maxFileBytes * 0.8 || sizeWarnedFor === file.metadata.id) return;
-    sizeWarnedFor = file.metadata.id;
+    if (lastMeasured?.id === id) lastMeasured.ratio = bytes / Math.max(1, compact);
+    if (bytes < LIMITS.maxFileBytes * 0.8 || sizeWarnedFor === id) return;
+    sizeWarnedFor = id;
     warnSize(bytes, notify);
   });
 }
@@ -427,6 +465,9 @@ export function useDocumentSession(): DocumentSession {
   const openShared = useCallback(
     async (document: DraftDocument) => {
       const request = (navigation.current += 1);
+      // A share link replaces the canvas on screen like any other open: without asking first, a
+      // canvas with a failed save or an unresolved conflict was swapped out with nothing saved.
+      if (!(await mayLeaveCurrent(null)) || request !== navigation.current) return;
       let editorStore: EditorStoreModule;
       try {
         editorStore = await loadEditorStore();
@@ -446,7 +487,7 @@ export function useDocumentSession(): DocumentSession {
       arriveWith(document, { reopening: false });
       setOpenId(document.metadata.id);
     },
-    [notify, setOpenId],
+    [mayLeaveCurrent, notify, setOpenId],
   );
 
   /** The address carries a share payload: decode it as an import, then show it read-only. */

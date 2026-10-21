@@ -95,7 +95,15 @@ function mergeOrphanPunctuation(pieces: string[]): string[] {
   return out;
 }
 
-const layoutCache = new Lru<string, TextLayout>(2000);
+/** One cache per measurer: a layout is only true for the measurer that measured it, and a key
+ *  without it handed one measurer's lines to another (the export's and a test's, say). */
+let layoutCaches = new WeakMap<TextMeasurer, Lru<string, TextLayout>>();
+
+function layoutCacheFor(measurer: TextMeasurer): Lru<string, TextLayout> {
+  let cache = layoutCaches.get(measurer);
+  if (!cache) layoutCaches.set(measurer, (cache = new Lru<string, TextLayout>(2000)));
+  return cache;
+}
 
 /**
  * The single text-layout implementation in the application.
@@ -108,6 +116,7 @@ const layoutCache = new Lru<string, TextLayout>(2000);
 export function layoutText(text: string, options: LayoutOptions): TextLayout {
   const measurer = options.measurer ?? getMeasurer();
   const key = `${cssFont(options.font)}|${options.maxWidth}|${options.lineHeight}|${options.maxLines ?? 0}|${text}`;
+  const layoutCache = layoutCacheFor(measurer);
   const cached = layoutCache.get(key);
   if (cached) return cached;
 
@@ -319,5 +328,5 @@ export function baselineOf(layout: TextLayout, index: number): number {
 
 /** Test seam: `tests/setup.ts` empties it between tests. */
 export function clearLayoutCache(): void {
-  layoutCache.clear();
+  layoutCaches = new WeakMap();
 }

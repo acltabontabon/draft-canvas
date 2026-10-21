@@ -12,11 +12,22 @@ import { routeImportFile, unsupportedNotice } from '../../import/route';
 import { useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
 import type { DocumentSession } from '../../store/useDocumentSession';
+import { notifyLoadFailure } from '../common/notifyLoadFailure';
 
 export { looksLikeMermaid } from '../../import/mermaid/sniff';
 
-/** Lays a flowchart out and adds it to the current room, selected. Resolves to whether anything landed. */
+/** Lays a flowchart out and adds it to the current room, selected. Resolves to whether anything
+ *  landed; never rejects, because every caller is a fire-and-forget paste or drop handler. */
 export async function insertMermaidText(text: string): Promise<boolean> {
+  try {
+    return await insertMermaid(text);
+  } catch (error) {
+    notifyLoadFailure(error, 'The flowchart couldn’t be added. Check your connection and try again.');
+    return false;
+  }
+}
+
+async function insertMermaid(text: string): Promise<boolean> {
   const notify = useUiStore.getState().notify;
   const { importMermaid } = await import('../../import/mermaid');
   const imported = await importMermaid(text, 'Pasted flowchart');
@@ -34,8 +45,16 @@ export async function insertMermaidText(text: string): Promise<boolean> {
   return true;
 }
 
-/** Imports a dropped file into the Library and opens it. */
+/** Imports a dropped file into the Library and opens it. Never rejects, for the same reason. */
 export async function importDroppedFile(file: File, session: DocumentSession): Promise<void> {
+  try {
+    await importFile(file, session);
+  } catch (error) {
+    notifyLoadFailure(error, 'That file couldn’t be imported. Check your connection and try again.');
+  }
+}
+
+async function importFile(file: File, session: DocumentSession): Promise<void> {
   const notify = useUiStore.getState().notify;
   const routed = await routeImportFile(file);
   if (routed.kind === 'secure') {

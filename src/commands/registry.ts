@@ -34,8 +34,20 @@ import type { CopyResult } from '../export/clipboard';
 
 // The exporters (rasterizer, Structurizr, draw.io, sequence engine) load when a copy command runs, not with the editor.
 const clipboard = () => import('../export/clipboard');
+
+/**
+ * Starts loading the exporters behind the Copy commands. Called when the palette or a context menu
+ * opens, so the chunk is in by the time one is picked: Safari honours a clipboard write only when it
+ * begins inside the keypress or click that asked for it, and waiting on the network for the
+ * exporters would outlast that. Not when the commands are merely built — that happens on every
+ * editor open (shortcut tooltips build the catalog), and would load every exporter with it.
+ */
+export function warmCopyExports(): void {
+  void clipboard().catch(() => {});
+}
 import { readEditableImagePreference } from '../ui/Editor/exportPreferences';
 import { systemTheme } from '../ui/theme/systemTheme';
+import { ARRANGE_FAILED, notifyLoadFailure } from '../ui/common/notifyLoadFailure';
 import { hostKind } from '../host/hostInfo';
 import { copyShareLink } from '../share';
 import { focusBounds, focusNodes } from './search';
@@ -656,9 +668,11 @@ export function canvasCommands(ctx: CommandContext): Command[] {
       run: (inner) => {
         // The camera follows only once the engine has moved things: fitting first would frame the
         // old positions, and the engine loads on demand.
-        void inner.editor.arrangeRoom().then((moved) => {
-          if (moved) void inner.camera.fitView({ padding: 0.2, duration: 320 });
-        });
+        void inner.editor.arrangeRoom()
+          .then((moved) => {
+            if (moved) void inner.camera.fitView({ padding: 0.2, duration: 320 });
+          })
+          .catch((error: unknown) => notifyLoadFailure(error, ARRANGE_FAILED));
       },
     });
   }
@@ -1780,7 +1794,7 @@ export function arrangeSelectionCommands(ctx: CommandContext): Command[] {
     return node && !['note', 'text', 'code'].includes(node.type);
   })) return [];
   return [{ id: 'arrange-selection', title: 'Arrange selection', group: 'selection', keywords: ['layout', 'tidy'],
-    run: (inner) => { void inner.editor.arrangeSelection(); } }];
+    run: (inner) => { void inner.editor.arrangeSelection().catch((error: unknown) => notifyLoadFailure(error, ARRANGE_FAILED)); } }];
 }
 
 function selectionCommands(ctx: CommandContext): Command[] {

@@ -146,8 +146,8 @@ export function routeGeometry(edge: DraftEdge, nodes: readonly DraftNode[], edge
   let route;
   try {
     route = routeEdge(edge, nodeMap, {
-      obstacles: obstaclesForEdge(nodes, edge.source, edge.target),
-      spine: routingPlan(nodes, edges).spineFor(edge.id),
+      obstacles: obstaclesForEdge(nodes, edge.source, edge.target, 'transient'),
+      spine: routingPlan(nodes, edges, 'transient').spineFor(edge.id),
       lane: laneIndex(edges).get(edge.id)?.offset ?? 0,
     });
   } catch {
@@ -204,11 +204,11 @@ export function together(a: { id?: string; spine?: string }, b: Other): boolean 
  *  `repairAnchors`'s per-candidate loop, up to `MAX_CHECKS` times per problem connector. */
 export function drawnRoute(edge: DraftEdge, nodes: readonly DraftNode[], edges: readonly DraftEdge[], caption?: CaptionSize, byId?: Map<string, DraftNode>): Drawn | null {
   const nodeMap = byId ?? new Map(nodes.map((n) => [n.id, n]));
-  const spine = routingPlan(nodes, edges).spineFor(edge.id);
+  const spine = routingPlan(nodes, edges, 'transient').spineFor(edge.id);
   let route;
   try {
     route = routeEdge(edge, nodeMap, {
-      obstacles: obstaclesForEdge(nodes, edge.source, edge.target),
+      obstacles: obstaclesForEdge(nodes, edge.source, edge.target, 'transient'),
       spine,
       lane: laneIndex(edges).get(edge.id)?.offset ?? 0,
     });
@@ -219,7 +219,7 @@ export function drawnRoute(edge: DraftEdge, nodes: readonly DraftNode[], edges: 
   let chip: Box | null = null;
   const size = caption?.(edge);
   if (size && size.width > 0) {
-    const group = labelGroupPlan(nodes, edges).groupFor(edge.id);
+    const group = labelGroupPlan(nodes, edges, 'transient').groupFor(edge.id);
     if (group) {
       if (group.members[0] === edge.id) chip = labelChipBox(group.side, group.x, group.y, size.width, size.height);
     } else {
@@ -283,7 +283,7 @@ export function crosses(a: Drawn & { id?: string }, b: Other): boolean {
 
 /** Every connector in `edges` as drawn, for `routeProblem`'s `others`. */
 export function othersOf(nodes: readonly DraftNode[], edges: readonly DraftEdge[], caption?: CaptionSize, except?: string, byId?: Map<string, DraftNode>): Other[] {
-  const groups = labelGroupPlan(nodes, edges);
+  const groups = labelGroupPlan(nodes, edges, 'transient');
   const nodeMap = byId ?? new Map(nodes.map((n) => [n.id, n]));
   return edges.flatMap((e) => {
     if (e.id === except) return [];
@@ -525,7 +525,7 @@ export function repairAnchors(
       const route = drawn.get(edge.id);
       if (edge.waypoints?.length || edge.routeMode === 'direct' || !route || bendsOf(route.points) < 2) continue;
       const touching = edges.filter((e) => e.source === edge.source || e.target === edge.source || e.source === edge.target || e.target === edge.target);
-      const plan = routingPlan(nodes, edges);
+      const plan = routingPlan(nodes, edges, 'transient');
       if (touching.some((e) => plan.spineFor(e.id))) continue;
       const clean = touching.filter((e) => !routeProblem(e, nodes, edges, caption, [...drawn.values()], byId));
       tryMove(edge, clean, 'tidiness');
@@ -547,7 +547,7 @@ function roughCost(edge: DraftEdge, nodes: readonly DraftNode[], byId: Map<strin
   // through a shape) is no candidate at all: its recorded anchors would describe another route.
   if (!anchorsHold(edge, byId)) return undefined;
   try {
-    const route = routeEdge(edge, byId, { obstacles: obstaclesForEdge(nodes, edge.source, edge.target) });
+    const route = routeEdge(edge, byId, { obstacles: obstaclesForEdge(nodes, edge.source, edge.target, 'transient') });
     return route ? routeCost(pathPoints(route.d)) : undefined;
   } catch {
     return undefined;

@@ -70,19 +70,6 @@ pub(crate) fn opened_doc(state: &AppState, path: &Path) -> Result<OpenedDoc, App
 }
 
 #[tauri::command]
-pub async fn open_dialog(app: AppHandle) -> Result<Option<OpenedDoc>, AppError> {
-    run_blocking(&app, |app, state| {
-        let Some(path) = dialogs::pick_file(app, last_dir(state)) else {
-            return Ok(None);
-        };
-        let doc = opened_doc(state, &path)?;
-        recents_changed(app);
-        Ok(Some(doc))
-    })
-    .await
-}
-
-#[tauri::command]
 pub async fn open_handle(app: AppHandle, handle: String) -> Result<OpenedDoc, AppError> {
     run_blocking(&app, move |app, state| {
         let grant = state.file(&handle)?;

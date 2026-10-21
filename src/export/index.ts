@@ -5,14 +5,14 @@ import { renderPngBlob, renderSvgText, type ImageExportOptions, type PngExportOp
 import { LEVELS_EXTENSION, zipEveryLevel, type EveryLevelOptions } from './levels';
 import { FILE_MIME, fileNameFor, serializeDocument } from './project';
 
-export * from './project';
-export * from './secureProject';
-export * from './sequence';
-export * from './source';
-export * from './clipboard';
-export { readDocumentFromPng, readDocumentFromSvg, withDocumentChunk, withDocumentMetadata } from './editable';
-export type { ImageExportOptions, PngExportOptions } from './image';
-export { collectLevels, LEVELS_EXTENSION, type EveryLevelOptions, type LevelImageFormat } from './levels';
+// What the Export dialog reads, named one by one: the modules' other exports are imported from the
+// modules themselves, so a barrel import never drags a writer into a graph that didn't ask for it.
+export { fileNameFor } from './project';
+export { exportSecureProjectFile, SECURE_EXPORT_FILE_EXTENSION } from './secureProject';
+export { countPlayableFlows } from './sequence';
+export { exportSourceFile, SOURCE_FORMAT_INFO, SOURCE_FORMATS, sourceFileNameFor, sourceTextFor, type SourceFamily, type SourceFormat } from './source';
+export { copyImage, copySource, copySvg, type CopyResult } from './clipboard';
+export { collectLevels, LEVELS_EXTENSION } from './levels';
 export { hasRooms } from './rooms';
 export { backgroundTravels } from './background';
 

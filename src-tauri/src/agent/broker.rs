@@ -1453,7 +1453,10 @@ async fn submit_proposal(
         })
     });
     match saved {
-        Some(Ok(())) => {}
+        // The review panel lists proposals when told to rather than polling for them all the time.
+        Some(Ok(())) => {
+            app.state::<AppState>().events.emit(HostEvent::AgentChanged);
+        }
         Some(Err(e)) => {
             fail(agent, &key, &e);
             return Err(e);

@@ -5,6 +5,7 @@
  */
 import type { DraftNode } from '../document/types';
 import { rectOf, type Rect } from './routing';
+import { sameNodeGeometry, type PlanScope } from './sameGeometry';
 
 const OBSTACLE_CELL = 512;
 /** Include the full reach of a wrapped label, not just the stroke's corridor. */
@@ -15,13 +16,16 @@ interface ObstacleGrid {
   byId: Map<string, DraftNode>;
   cells: Map<string, DraftNode[]>;
   order: Map<DraftNode, number>;
-  results: Map<string, readonly Rect[]>;
+  /** By source id, then target id: a lookup per connector per render allocates no key. */
+  results: Map<string, Map<string, readonly Rect[]>>;
 }
 
 const obstacleRects = new WeakMap<DraftNode, Rect>();
 /** Which node each cached obstacle rect stands for — see `withoutNodes`. */
 const obstacleNodeIds = new WeakMap<Rect, string>();
 const obstacleGrids = new WeakMap<readonly DraftNode[], ObstacleGrid>();
+/** The canvas's most recent grid and the array it was built from — see `gridFor`. */
+let lastGrid: { nodes: readonly DraftNode[]; grid: ObstacleGrid } | null = null;
 
 function stableRectOf(node: DraftNode): Rect {
   let rect = obstacleRects.get(node);
@@ -32,9 +36,19 @@ function stableRectOf(node: DraftNode): Rect {
   return rect;
 }
 
-function gridFor(nodes: readonly DraftNode[]): ObstacleGrid {
+function gridFor(nodes: readonly DraftNode[], scope: PlanScope): ObstacleGrid {
   let grid = obstacleGrids.get(nodes);
   if (grid) return grid;
+  // A rename or a colour is a new `nodes` array with every shape where it was: the grid, and every
+  // connector's obstacle list in it, still stands — rebuilding it handed each connector near the
+  // edited shape a new list for the same rects. Its nodes are read for their boxes and kinds only,
+  // which is exactly what `sameNodeGeometry` compares.
+  if (lastGrid && sameNodeGeometry(lastGrid.nodes, nodes)) {
+    grid = lastGrid.grid;
+    obstacleGrids.set(nodes, grid);
+    if (scope === 'canvas') lastGrid = { nodes, grid };
+    return grid;
+  }
   grid = { byId: new Map(), cells: new Map(), order: new Map(), results: new Map() };
   nodes.forEach((node, index) => {
     grid!.byId.set(node.id, node);
@@ -50,6 +64,7 @@ function gridFor(nodes: readonly DraftNode[]): ObstacleGrid {
     }
   });
   obstacleGrids.set(nodes, grid);
+  if (scope === 'canvas') lastGrid = { nodes, grid };
   return grid;
 }
 
@@ -62,16 +77,22 @@ function gridFor(nodes: readonly DraftNode[]): ObstacleGrid {
  * and each rect per node object, so under `useShallow` a connector re-renders only when a node
  * near it actually moves — not whenever any node anywhere commits.
  */
-export function obstaclesForEdge(nodes: readonly DraftNode[], sourceId: string, targetId: string): readonly Rect[] {
-  const grid = gridFor(nodes);
-  const key = `${sourceId}|${targetId}`;
-  const cached = grid.results.get(key);
+export function obstaclesForEdge(
+  nodes: readonly DraftNode[],
+  sourceId: string,
+  targetId: string,
+  scope: PlanScope = 'canvas',
+): readonly Rect[] {
+  const grid = gridFor(nodes, scope);
+  let bySource = grid.results.get(sourceId);
+  if (!bySource) grid.results.set(sourceId, (bySource = new Map()));
+  const cached = bySource.get(targetId);
   if (cached) return cached;
 
   const source = grid.byId.get(sourceId);
   const target = grid.byId.get(targetId);
   if (!source || !target) {
-    grid.results.set(key, NO_RECTS);
+    bySource.set(targetId, NO_RECTS);
     return NO_RECTS;
   }
   const minX = Math.min(source.x, target.x) - OBSTACLE_REACH;
@@ -101,7 +122,7 @@ export function obstaclesForEdge(nodes: readonly DraftNode[], sourceId: string, 
     found.size === 0
       ? NO_RECTS
       : [...found].sort((a, b) => grid.order.get(a)! - grid.order.get(b)!).map(stableRectOf);
-  grid.results.set(key, result);
+  bySource.set(targetId, result);
   return result;
 }
 
@@ -112,6 +133,8 @@ export function obstaclesForEdge(nodes: readonly DraftNode[], sourceId: string, 
  */
 export function withoutNodes(obstacles: readonly Rect[], excludedIds: ReadonlySet<string>): readonly Rect[] {
   if (excludedIds.size === 0 || obstacles.length === 0) return obstacles;
+  // Most connectors are nowhere near what is moving: answer them without a copy to throw away.
+  if (!obstacles.some((rect) => excludedIds.has(obstacleNodeIds.get(rect) ?? ''))) return obstacles;
   const kept = obstacles.filter((rect) => !excludedIds.has(obstacleNodeIds.get(rect) ?? ''));
   return kept.length === obstacles.length ? obstacles : kept.length === 0 ? NO_RECTS : kept;
 }

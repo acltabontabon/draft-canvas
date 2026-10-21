@@ -34,13 +34,22 @@ impl Watches {
     /// only directories containing diagrams, under a fixed native-watch budget.
     pub fn add_all<'a>(&mut self, wanted: impl IntoIterator<Item = &'a Path>) {
         let Watches { watcher, paths } = self;
-        let mut batch = watcher.paths_mut();
+        // Folders already watched only move up the recency order. Opening the batch at all restarts
+        // the stream, so a grant or scan that adds nothing new — most of them — must not open it.
+        let mut fresh: Vec<&Path> = Vec::new();
         for path in wanted {
             if let Some(at) = paths.iter().position(|p| p == path) {
                 let used = paths.remove(at);
                 paths.push(used);
-                continue;
+            } else if !fresh.contains(&path) {
+                fresh.push(path);
             }
+        }
+        if fresh.is_empty() {
+            return;
+        }
+        let mut batch = watcher.paths_mut();
+        for path in fresh {
             if paths.len() >= BUDGET {
                 let oldest = paths.remove(0);
                 let _ = batch.remove(&oldest);
@@ -52,16 +61,22 @@ impl Watches {
         let _ = batch.commit();
     }
 
-    /// Stops watching `root` and every folder inside it — a project taken off the list.
+    /// Stops watching `root` and every folder inside it — a project taken off the list. In one batch,
+    /// for the same reason as `add_all`.
     pub fn remove_under(&mut self, root: &Path) {
-        let watcher = &mut self.watcher;
-        self.paths.retain(|path| {
+        let Watches { watcher, paths } = self;
+        if !paths.iter().any(|path| path.starts_with(root)) {
+            return;
+        }
+        let mut batch = watcher.paths_mut();
+        paths.retain(|path| {
             let inside = path.starts_with(root);
             if inside {
-                let _ = watcher.unwatch(path);
+                let _ = batch.remove(path);
             }
             !inside
         });
+        let _ = batch.commit();
     }
 }
 

@@ -8,6 +8,7 @@ import { useEditorStore } from '../store/editorStore';
 import { useUiStore } from '../store/uiStore';
 import type { Command, CommandContext } from './types';
 import { count } from '../lib/plural';
+import { notifyLoadFailure } from '../ui/common/notifyLoadFailure';
 
 /**
  * The same palette is the fastest way to find something on a big canvas. Every
@@ -71,10 +72,8 @@ export function flash(ctx: CommandContext, id: string) {
 
 /**
  * Pans and zooms so `nodeIds` fill the view — capped so a single node never becomes a wall.
- * Computed from the document's own geometry with the same `getViewportForBounds` Presentation
- * Mode uses (`useFlowPlayback.ts`'s `resolveStepViewport`), rather than React Flow's `fitView`
- * — this is pure, so it's unit-testable, and it's the camera math Presentation Mode already
- * trusts.
+ * Computed from the document's own geometry with React Flow's `getViewportForBounds` rather
+ * than its `fitView` — this is pure, so it's unit-testable.
  */
 export function focusNodes(ctx: CommandContext, nodeIds: string[]) {
   const wanted = new Set(nodeIds);
@@ -158,9 +157,11 @@ function arrived(ctx: CommandContext): CommandContext {
 /** Climbs to `path` first, then does what the local row does — loaded lazily, since the editor's
  *  navigation module imports this one. */
 function thereThen(ctx: CommandContext, path: DepthPath, then: (fresh: CommandContext) => void): void {
-  void import('../ui/Editor/depthNavigation').then(async ({ navigateToRoom }) => {
-    if (await navigateToRoom(path)) then(arrived(ctx));
-  });
+  void import('../ui/Editor/depthNavigation')
+    .then(async ({ navigateToRoom }) => {
+      if (await navigateToRoom(path)) then(arrived(ctx));
+    })
+    .catch((error: unknown) => notifyLoadFailure(error, 'That couldn’t be reached. Check your connection and try again.'));
 }
 
 function roomJumpCommands(document: DraftDocument, elsewhere: Elsewhere | null): Command[] {

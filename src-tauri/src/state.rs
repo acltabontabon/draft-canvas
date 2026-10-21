@@ -94,7 +94,8 @@ pub enum HostEvent {
         /// A new diagram (nothing to undo); otherwise a change to an existing one.
         created: bool,
     },
-    /// Agent access was switched on or off, or its connections changed: Settings looks again.
+    /// Agent access was switched on or off, or its connections changed: Settings looks again. Also
+    /// sent when an agent submits a proposal: the review panel lists them again.
     AgentChanged,
 }
 

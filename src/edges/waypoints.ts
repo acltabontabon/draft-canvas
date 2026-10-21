@@ -325,9 +325,3 @@ export function translateWaypoints(points: readonly Point[], dx: number, dy: num
 export function responseWaypoints(points: readonly Point[], shift: number): Point[] {
   return translateWaypoints([...points].reverse(), shift, shift);
 }
-
-export function sameWaypoints(a: readonly Point[] | undefined, b: readonly Point[] | undefined): boolean {
-  if (a === b) return true;
-  if (!a || !b || a.length !== b.length) return false;
-  return a.every((p, i) => p.x === b[i]!.x && p.y === b[i]!.y);
-}

@@ -80,8 +80,6 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   });
   const focused = useEditorStore((state) => isNodeFocused(state.focus, id));
   const lensMember = useEditorStore((state) => lensMemberFor(state, id));
-  const updateNodeText = useEditorStore((state) => state.updateNodeText);
-  const updateNodeById = useEditorStore((state) => state.updateNodeById);
   const theme = useThemeValue();
   const lensAccent = useEditorStore((state) => lensAccentFor(state, theme, id));
   const { preset } = usePersonality();
@@ -107,7 +105,6 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
       ? `${state.armedAnchor.side}:${state.armedAnchor.offset}`
       : null,
   );
-  const setOpenAttachmentDetail = useUiStore((state) => state.setOpenAttachmentDetail);
   const popoverOpen = useUiStore(
     (state) => state.openAttachmentDetail?.hostKind === 'node' && state.openAttachmentDetail?.hostId === id,
   );
@@ -372,7 +369,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
         // pasted; never shrinking respects a card the user sized on purpose.
         const needed = naturalCodeSize(value, describeContext(theme)).height;
         const patch = needed > node.height ? { code: value, height: needed } : { code: value };
-        updateNodeById(node.id, patch, 'Edit code');
+        useEditorStore.getState().updateNodeById(node.id, patch, 'Edit code');
       }
     } else if (isNote) {
       const text = normalizeNoteText(value);
@@ -382,14 +379,14 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
       const needed = Math.max(naturalNoteHeight(node, text, describeContext(theme)), liveHeight ?? 0);
       const height = needed > node.height ? needed : undefined;
       if (text !== (node.text ?? '') || height !== undefined) {
-        updateNodeText(node.id, text, height === undefined ? undefined : { height });
+        useEditorStore.getState().updateNodeText(node.id, text, height === undefined ? undefined : { height });
       }
     } else if (isText) {
       // Same grow-only contract as a note's box, above: never shrinks what's already on screen.
       const needed = Math.max(naturalTextHeight(node, value, describeContext(theme)), liveHeight ?? 0);
       const height = needed > node.height ? needed : undefined;
       if (value !== (node.text ?? '') || height !== undefined) {
-        updateNodeText(node.id, value, height === undefined ? undefined : { height });
+        useEditorStore.getState().updateNodeText(node.id, value, height === undefined ? undefined : { height });
       }
       // Runs on every exit from editing, not just when something changed: a Text node that never
       // received a real commit (`textOrigin` still `'auto'`) and ends up empty here is removed
@@ -398,7 +395,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
       // deliberately cleared (`textOrigin: 'explicit'`) is left alone; see `finishTextEdit`.
       useEditorStore.getState().finishTextEdit(node.id, value);
     } else if (value !== (node.text ?? '')) {
-      updateNodeText(node.id, value);
+      useEditorStore.getState().updateNodeText(node.id, value);
     }
   };
 
@@ -553,7 +550,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
               ui.setPresentationReveal(toggledReveal(ui.presentationReveal, 'node', node.id, scope));
               return;
             }
-            setOpenAttachmentDetail(popoverOpen ? null : { hostKind: 'node', hostId: node.id, attachmentId: null });
+            useUiStore.getState().setOpenAttachmentDetail(popoverOpen ? null : { hostKind: 'node', hostId: node.id, attachmentId: null });
           }}
         >
           {'<>'} {attachmentCount}

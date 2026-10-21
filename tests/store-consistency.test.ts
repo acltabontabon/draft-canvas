@@ -170,3 +170,19 @@ describe('changing a boundary kind', () => {
     expect(result.document.nodes[0]).toMatchObject({ boundaryPreset: 'network', accent: 'violet', text: 'Edge' });
   });
 });
+
+describe('setSelection', () => {
+  it('a selection that changes nothing keeps the store state as it is', () => {
+    store.setState({ selection: { nodes: [], edges: [] } });
+    const before = store.getState();
+    // A tap on empty canvas with nothing selected: no subscriber should hear about it.
+    store.getState().setSelection({ nodes: [], edges: [] });
+    expect(store.getState()).toBe(before);
+
+    store.getState().setSelection({ nodes: ['a'], edges: [] });
+    expect(store.getState().selection).toEqual({ nodes: ['a'], edges: [] });
+    const selected = store.getState();
+    store.getState().setSelection({ nodes: ['a'], edges: [] });
+    expect(store.getState()).toBe(selected);
+  });
+});

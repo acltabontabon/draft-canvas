@@ -9,6 +9,7 @@ import type { DocumentSession } from '../store/useDocumentSession';
 import type { HostChannel } from './channel';
 import type { BackgroundMessage, CommandMessage, LoadMessage, ToHostMessage } from './embeddedHost';
 import { base64ToBlob, blobToBase64 } from '../lib/base64';
+import { watchTyping } from '../lib/recentTyping';
 
 const EXTERNAL_PROTOCOLS = new Set(['http:', 'https:', 'mailto:']);
 const BACKGROUND_READ_TIMEOUT_MS = 3000;
@@ -55,6 +56,9 @@ export function useHostDocument(session: DocumentSession, channel?: HostChannel 
 
   useEffect(() => {
     if (!host || !ready || !repository) return;
+    // An agent's change waits while someone is typing (`agentBridge.ts`'s `busyReason`), which only
+    // keystrokes seen from here on can tell.
+    if (host.kind === 'desktop') watchTyping();
 
     // The text the host holds right now, so reopening or echoing it back never dirties the file.
     let hostText: string | null = null;
@@ -235,7 +239,9 @@ export function useHostDocument(session: DocumentSession, channel?: HostChannel 
       if (command?.type === 'draft-canvas:command') {
         if (command.command === 'flush' && typeof command.id === 'number') {
           const id = command.id;
-          void flush().then(() => post({ type: 'draft-canvas:flushed', id }));
+          // An agent's flush (see `desktop/controller.ts`) keeps the field the person is typing in.
+          const keepFocus = command.keepFocus === true;
+          void flush({ keepFocus }).then(() => post({ type: 'draft-canvas:flushed', id }));
         } else if (command.command === 'close') {
           void sessionRef.current.closeDocument();
         } else if (__DESKTOP__ && command.command === 'agent' && host.kind === 'desktop' && typeof command.id === 'number' && command.request) {
@@ -275,10 +281,12 @@ export function useHostDocument(session: DocumentSession, channel?: HostChannel 
 
     /** Lets go of a field still being typed in and posts every edit still pending, so the host acts on
      *  exactly what is on screen. Text being typed (a label, an inspector field) only reaches the document
-     *  when its field lets go, so without this a save — or a tab closing — would miss what was just typed. */
-    const flush = async () => {
+     *  when its field lets go, so without this a save — or a tab closing — would miss what was just typed.
+     *  `keepFocus` posts only what has already reached the document, for a caller that must not
+     *  interrupt the typing. */
+    const flush = async ({ keepFocus = false }: { keepFocus?: boolean } = {}) => {
       const active = document.activeElement;
-      if (isEditableTarget(active)) {
+      if (!keepFocus && isEditableTarget(active)) {
         (active as HTMLElement).blur();
         await new Promise((resolve) => window.setTimeout(resolve, 0));
       }

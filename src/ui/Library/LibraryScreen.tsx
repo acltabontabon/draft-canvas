@@ -9,6 +9,7 @@ import type { DocumentSession } from '../../store/useDocumentSession';
 import { Button } from '../common/Button';
 import { Icon } from '../common/Icon';
 import { Modal } from '../common/LazyModal';
+import { notifyLoadFailure } from '../common/notifyLoadFailure';
 import { FirstRunHome } from './FirstRunHome';
 import { relativeTime } from '../../lib/relativeTime';
 import { DocumentPreview } from './DocumentPreview';
@@ -85,7 +86,7 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
   useEffect(() => {
     if (!browsing) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || document.querySelector('[role="dialog"]')) return;
+      if (event.key !== 'Escape' || isImeKeyEvent(event) || document.querySelector('[role="dialog"]')) return;
       if (searchQuery) setSearchQuery(''); else setBrowsing(false);
     };
     window.addEventListener('keydown', onKeyDown);
@@ -130,19 +131,24 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
 
   const onImport = async (file: File | undefined) => {
     if (!file) return;
-    // What the file is — a document, an encrypted one, a Mermaid flowchart, an editable image — is
-    // decided in one place for every entry point (`import/route.ts`).
-    const routed = await routeImportFile(file);
-    if (routed.kind === 'secure') {
-      // Reading it needs a passphrase first — hand off to the prompt below
-      // rather than reading (and failing) here.
-      setSecurePendingFile(file);
-      return;
+    try {
+      // What the file is — a document, an encrypted one, a Mermaid flowchart, an editable image — is
+      // decided in one place for every entry point (`import/route.ts`).
+      const routed = await routeImportFile(file);
+      if (routed.kind === 'secure') {
+        // Reading it needs a passphrase first — hand off to the prompt below
+        // rather than reading (and failing) here.
+        setSecurePendingFile(file);
+        return;
+      }
+      // Named before the document opens, so what was left out is read once, not found later.
+      const notice = unsupportedNotice(routed.unsupported ?? []);
+      if (notice) notify(notice);
+      await finishImport(routed.result);
+    } catch (error) {
+      // The picture and flowchart readers load on demand; the drop and the picker don't wait on this.
+      notifyLoadFailure(error, 'That file couldn’t be imported. Check your connection and try again.');
     }
-    // Named before the document opens, so what was left out is read once, not found later.
-    const notice = unsupportedNotice(routed.unsupported ?? []);
-    if (notice) notify(notice);
-    await finishImport(routed.result);
   };
 
   // A file dropped anywhere on the Library imports the same way the button does. `dragover` must be

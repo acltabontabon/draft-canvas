@@ -270,7 +270,7 @@ function isBetterArrangement(a: Candidate, b: Candidate, preferred?: LayoutSpec[
 
 /** Whether any labelled connector shares a Smart Routing trunk here (see `assignAnchors`'s labelled fan). */
 export function hasLabelledTrunk(room: { nodes: readonly DraftNode[]; edges: readonly DraftEdge[] }): boolean {
-  const plan = routingPlan(room.nodes, room.edges);
+  const plan = routingPlan(room.nodes, room.edges, 'transient');
   return room.edges.some((e) => e.label && plan.spineFor(e.id));
 }
 

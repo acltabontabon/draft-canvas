@@ -364,7 +364,24 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
       }
       if (!problems.empty) return;
       const before = view.nodes.length + view.edges.length;
-      view = removeElements(view, nodeIds, edgeIds);
+      const removed = removeElements(view, nodeIds, edgeIds);
+      if (scope) {
+        // The checks above cover the ids named; `removeElements` also takes every connector touching
+        // a removed shape and trims every flow step that lit one — which may lie outside the scope.
+        const kept = new Set(removed.edges.map((e) => e.id));
+        const cascaded = outOfScope(scope, view.edges.filter((e) => !kept.has(e.id)).map((e) => e.id), 'edges');
+        const keptFlows = new Set(removed.flows);
+        const editedFlows = view.flows.filter((f) => !keptFlows.has(f)).map((f) => f.id);
+        if (cascaded.length || editedFlows.length) {
+          refuseOutOfScope(r, `${at}/ids`, cascaded);
+          // A flow is never part of a captured selection, so widening the scope can't help.
+          if (editedFlows.length) {
+            r.problems.add('OUT_OF_SCOPE', `${at}/ids`, `removing these would change ${editedFlows.length === 1 ? 'flow' : 'flows'} ${editedFlows.map((id) => `"${id}"`).join(', ')}, which a captured selection never covers; make this change without a scope`);
+          }
+          return;
+        }
+      }
+      view = removed;
       counts.removed += before - (view.nodes.length + view.edges.length);
       return;
     }
@@ -435,7 +452,11 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
   walkGraphs(nextFile, (graph, graphPath) => {
     const original = viewOf(file, graphPath);
     if (original?.nodes === graph.nodes && original?.edges === graph.edges) return;
-    const report = checkQuality(graph.nodes, graph.edges, ctx, graphPath.some((id) => touched.has(id)) ? undefined : touched, explicit);
+    const inTouchedRoom = graphPath.some((id) => touched.has(id));
+    // `embed` rewrites every owner up the chain, so each ancestor room reads as changed. One holding
+    // nothing this request touched has nothing for a focused check to judge — skip its whole pass.
+    if (!inTouchedRoom && !graph.nodes.some((n) => touched.has(n.id)) && !graph.edges.some((e) => touched.has(e.id))) return;
+    const report = checkQuality(graph.nodes, graph.edges, ctx, inTouchedRoom ? undefined : touched, explicit);
     quality.errors.push(...report.errors);
     quality.warnings.push(...report.warnings);
   });

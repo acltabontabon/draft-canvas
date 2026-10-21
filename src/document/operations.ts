@@ -6,7 +6,7 @@
  */
 import { reconnectProblem } from './reconnect';
 import { createId } from './ids';
-import { pruneOpenPoints } from './openPoints';
+import { OPEN_POINT_ID_PREFIX, pruneOpenPoints } from './openPoints';
 import { defaultSizeFor } from './factory';
 import { pruneFlowSteps } from './flow';
 import { LIMITS } from './limits';
@@ -138,6 +138,25 @@ export function updateEdge(
   patch = cleanTextFields(patch).patch;
   const edges = doc.edges.map((edge) => {
     if (edge.id !== id) return edge;
+    const next = applyPatch<DraftEdge>(edge, patch);
+    if (sameFields(edge, next)) return edge;
+    changed = true;
+    return next;
+  });
+  return changed ? withEdges(doc, edges) : doc;
+}
+
+/** `updateEdge` with one patch for several connectors, in one pass over the edges. */
+export function updateEdges(
+  doc: DraftDocument,
+  ids: ReadonlySet<string>,
+  patch: Partial<Omit<DraftEdge, 'id' | 'source' | 'target'>>,
+): DraftDocument {
+  if (ids.size === 0) return doc;
+  let changed = false;
+  patch = cleanTextFields(patch).patch;
+  const edges = doc.edges.map((edge) => {
+    if (!ids.has(edge.id)) return edge;
     const next = applyPatch<DraftEdge>(edge, patch);
     if (sameFields(edge, next)) return edge;
     changed = true;
@@ -360,9 +379,13 @@ export function extractFragment(doc: DraftDocument, nodeIds: Iterable<string>): 
   const nodes = doc.nodes.filter((n) => ids.has(n.id));
   const edges = doc.edges.filter((e) => ids.has(e.source) && ids.has(e.target));
   const edgeIds = new Set(edges.map((e) => e.id));
+  // A copied shape brings its rooms, so a point about something inside them travels too: dropping
+  // it made a cut of a Service lose every question raised about its components, for good.
+  const pointNodeIds = new Set(ids);
+  for (const node of nodes) collectInsideIds(node, pointNodeIds, edgeIds);
   const openPoints: OpenPoint[] = [];
   for (const point of doc.openPoints ?? []) {
-    const targets = point.targets.filter((target) => (target.kind === 'node' ? ids.has(target.id) : edgeIds.has(target.id)));
+    const targets = point.targets.filter((target) => (target.kind === 'node' ? pointNodeIds.has(target.id) : edgeIds.has(target.id)));
     if (targets.length > 0) openPoints.push({ ...point, targets });
   }
   const fragment: Clipboard = { nodes: structuredClone(nodes), edges: structuredClone(edges) };
@@ -375,9 +398,13 @@ export function extractFragment(doc: DraftDocument, nodeIds: Iterable<string>): 
  * membership, flows and their steps. Positions are untouched: an inside has its own space, and a
  * copy of it opens looking exactly like the original did.
  */
-function reidentifyInside(inside: DraftInside): DraftInside {
+function reidentifyInside(inside: DraftInside, renamed?: IdRenames): DraftInside {
   const nodeIds = new Map(inside.nodes.map((node) => [node.id, createId('n')]));
   const edgeIds = new Map(inside.edges.map((edge) => [edge.id, createId('e')]));
+  if (renamed) {
+    for (const [from, to] of nodeIds) renamed.nodes.set(from, to);
+    for (const [from, to] of edgeIds) renamed.edges.set(from, to);
+  }
 
   const nodes = inside.nodes.map((node) => {
     const next: DraftNode = { ...node, id: nodeIds.get(node.id)! };
@@ -387,7 +414,7 @@ function reidentifyInside(inside: DraftInside): DraftInside {
       else delete next.parentId;
     }
     if (node.attachments) next.attachments = node.attachments.map((a) => ({ ...a, id: createId('a') }));
-    if (node.inside) next.inside = reidentifyInside(node.inside);
+    if (node.inside) next.inside = reidentifyInside(node.inside, renamed);
     return next;
   });
 
@@ -458,6 +485,12 @@ export function costOf(nodes: readonly DraftNode[]): { nodes: number; edges: num
   return total;
 }
 
+/** Old id to new, for everything `reidentifyInside` renamed — what a copied open point is re-pointed by. */
+interface IdRenames {
+  nodes: Map<string, string>;
+  edges: Map<string, string>;
+}
+
 /** Re-identifies a fragment and offsets it, so paste never collides with the original. */
 function instantiateFragment(
   fragment: Clipboard,
@@ -465,6 +498,8 @@ function instantiateFragment(
 ): Clipboard {
   const idMap = new Map<string, string>();
   for (const node of fragment.nodes) idMap.set(node.id, createId('n'));
+  // Only collected when a point could need it: most fragments carry none.
+  const inner: IdRenames | undefined = fragment.openPoints?.length ? { nodes: new Map(), edges: new Map() } : undefined;
 
   const nodes = fragment.nodes.map((node) => {
     const next: DraftNode = {
@@ -489,7 +524,7 @@ function instantiateFragment(
     // And so does everything inside it, all the way down: a copy that kept the original's inner
     // ids would give two shapes rooms full of the same nodes, and the second copy of a copy would
     // then be ambiguous to every id-keyed thing in the app.
-    if (node.inside) next.inside = reidentifyInside(node.inside);
+    if (node.inside) next.inside = reidentifyInside(node.inside, inner);
     return next;
   });
 
@@ -517,10 +552,13 @@ function instantiateFragment(
   for (const point of fragment.openPoints ?? []) {
     const targets: OpenPointTarget[] = [];
     for (const target of point.targets) {
-      const mapped = target.kind === 'node' ? idMap.get(target.id) : edgeIdMap.get(target.id);
+      const mapped =
+        target.kind === 'node'
+          ? (idMap.get(target.id) ?? inner?.nodes.get(target.id))
+          : (edgeIdMap.get(target.id) ?? inner?.edges.get(target.id));
       if (mapped) targets.push({ kind: target.kind, id: mapped });
     }
-    if (targets.length > 0) openPoints.push({ ...point, id: createId('op'), targets });
+    if (targets.length > 0) openPoints.push({ ...point, id: createId(OPEN_POINT_ID_PREFIX), targets });
   }
 
   return openPoints.length > 0 ? { nodes, edges, openPoints } : { nodes, edges };
@@ -590,11 +628,14 @@ export function pasteFragment(
   // and past the file's own cap the rest are left out rather than the oldest pushed off.
   if (instantiated.openPoints?.length) {
     const keptEdgeIds = new Set(created.edges.map((e) => e.id));
+    // What landed includes the rooms of the shapes that did.
+    const landedNodeIds = new Set(keptNodeIds);
+    for (const node of created.nodes) collectInsideIds(node, landedNodeIds, keptEdgeIds);
     const room = Math.max(0, LIMITS.maxOpenPoints - (doc.openPoints?.length ?? 0));
     const landed: OpenPoint[] = [];
     for (const point of instantiated.openPoints) {
       if (landed.length >= room) break;
-      const targets = point.targets.filter((t) => (t.kind === 'node' ? keptNodeIds.has(t.id) : keptEdgeIds.has(t.id)));
+      const targets = point.targets.filter((t) => (t.kind === 'node' ? landedNodeIds.has(t.id) : keptEdgeIds.has(t.id)));
       if (targets.length > 0) landed.push(targets.length === point.targets.length ? point : { ...point, targets });
     }
     if (landed.length > 0) next = { ...next, openPoints: [...next.openPoints, ...landed] };
@@ -1265,6 +1306,9 @@ export function reconcileMembership(doc: DraftDocument, movedIds: Iterable<strin
   const moved = new Set(movedIds);
   if (moved.size === 0) return doc;
   const byId = new Map(doc.nodes.map((node) => [node.id, node]));
+  // Once, not per moved node: a marquee drag of hundreds of shapes scanned every node for every one
+  // of them (`deepestBoundaryAt`), then rebuilt the node list once per re-homed shape (`setParent`).
+  const boundaries = doc.nodes.filter((node) => node.type === 'group');
 
   const carriedByAnother = (node: DraftNode): boolean => {
     const seen = new Set<string>();
@@ -1274,24 +1318,71 @@ export function reconcileMembership(doc: DraftDocument, movedIds: Iterable<strin
     }
     return false;
   };
+  // Whether `candidate` is `ancestorId` or sits anywhere inside it, as the document stood — what
+  // `descendantsOf` answered, walked up from the candidate rather than scanned down the document.
+  const within = (candidate: DraftNode, ancestorId: string): boolean => {
+    const seen = new Set<string>();
+    for (let at: DraftNode | undefined = candidate; at && !seen.has(at.id); at = at.parentId ? byId.get(at.parentId) : undefined) {
+      if (at.id === ancestorId) return true;
+      seen.add(at.id);
+    }
+    return false;
+  };
+  const deepestAt = (point: { x: number; y: number }, excluding: (boundary: DraftNode) => boolean): string | undefined => {
+    let best: { id: string; area: number } | null = null;
+    for (const node of boundaries) {
+      if (!pointInBox(point, node) || excluding(node)) continue;
+      const area = node.width * node.height;
+      if (!best || area < best.area) best = { id: node.id, area };
+    }
+    return best?.id;
+  };
 
-  let next = doc;
+  // Parents as the decisions so far leave them, so the cycle guard `setParent` applied one call at a
+  // time still sees each earlier re-homing.
+  const parents = new Map<string, string | undefined>();
+  const parentOf = (id: string): string | undefined => (parents.has(id) ? parents.get(id) : byId.get(id)?.parentId);
+  const isAncestorOf = (id: string, of: string): boolean => {
+    const seen = new Set<string>();
+    for (let at: string | undefined = of; at !== undefined && !seen.has(at); at = parentOf(at)) {
+      if (at === id) return true;
+      seen.add(at);
+    }
+    return false;
+  };
   for (const id of moved) {
     const node = byId.get(id);
     if (!node || carriedByAnother(node)) continue;
     const centre = centerOf(node);
+    let target: string | undefined;
     if (node.type === 'group') {
       const parent = node.parentId ? byId.get(node.parentId) : undefined;
       if (!parent || pointInBox(centre, parent)) continue;
-      const exclude = new Set([id, ...descendantsOf(doc, id)]);
-      next = setParent(next, [id], deepestBoundaryAt(centre, doc, exclude) ?? undefined);
+      target = deepestAt(centre, (boundary) => within(boundary, id));
     } else {
       // Only a boundary can be a parent, so a plain shape has no descendants to exclude.
-      const target = deepestBoundaryAt(centre, doc, new Set([id])) ?? undefined;
-      if (target !== node.parentId) next = setParent(next, [id], target);
+      target = deepestAt(centre, (boundary) => boundary.id === id);
+      if (target === node.parentId) continue;
     }
+    if (target === parentOf(id)) continue;
+    // A node cannot be reparented under its own descendant (see `setParent`).
+    if (target !== undefined && isAncestorOf(id, target)) continue;
+    parents.set(id, target);
   }
-  return next;
+  if (parents.size === 0) return doc;
+  let changed = false;
+  const nodes = doc.nodes.map((node) => {
+    if (!parents.has(node.id)) return node;
+    const parentId = parents.get(node.id);
+    if (parentId === node.parentId) return node;
+    changed = true;
+    if (parentId === undefined) {
+      const { parentId: _drop, ...rest } = node;
+      return rest;
+    }
+    return { ...node, parentId };
+  });
+  return changed ? withNodes(doc, nodes) : doc;
 }
 
 /**

@@ -15,7 +15,7 @@
 
 import { FRONT_MATTER, HEADER, MERMAID_TEXT_LIMIT, stripFrontMatter, unfence } from './sniff';
 
-export { looksLikeMermaid, unfence } from './sniff';
+export { looksLikeMermaid } from './sniff';
 
 export interface MermaidElement {
   id: string;

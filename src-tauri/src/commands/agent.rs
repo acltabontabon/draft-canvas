@@ -12,6 +12,7 @@ use crate::state::{AppState, HostEvent};
 use crate::util::now_ms;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -343,6 +344,18 @@ fn diagram_for(state: &AppState, agent: &Agent, diagram_id: &str) -> Option<scop
         .find(|d| d.diagram_id == diagram_id)
 }
 
+/// Every in-scope diagram by id, from one walk of the enabled folders. A list of proposals looks
+/// each one's diagram up here instead of walking the folders once per proposal. The first file seen
+/// with an id wins, as in `diagram_for`.
+fn diagrams_by_id(state: &AppState, agent: &Agent) -> HashMap<String, scope::Diagram> {
+    let projects = enabled_projects(state);
+    let mut by_id = HashMap::new();
+    for diagram in agent.index.list(&projects) {
+        by_id.entry(diagram.diagram_id.clone()).or_insert(diagram);
+    }
+    by_id
+}
+
 /// The full record the review UI needs to render a diff and act on it. `stale` is a courtesy — the
 /// panel always re-checks the live document itself before ever offering Accept.
 fn proposal_json(proposal: &Proposal, diagram: Option<&scope::Diagram>) -> Value {
@@ -380,9 +393,10 @@ pub async fn agent_proposal_list(
         let all: Vec<Proposal> = agent
             .with_proposals(|s| s.list(diagram_id.as_deref()).into_iter().cloned().collect())
             .ok_or_else(|| AppError::new(ErrorKind::Io, "Couldn't open the proposal store."))?;
+        let diagrams = diagrams_by_id(state, &agent);
         Ok(all
             .iter()
-            .map(|p| proposal_json(p, diagram_for(state, &agent, &p.diagram_id).as_ref()))
+            .map(|p| proposal_json(p, diagrams.get(&p.diagram_id)))
             .collect())
     })
     .await

@@ -78,7 +78,7 @@ import {
 } from './types';
 import { clamp, isFiniteNumber } from '../lib/math';
 import { isRecord } from '../lib/isRecord';
-import { normalizeOpenPointText, normalizeTargets } from './openPoints';
+import { normalizeOpenPointText, normalizeTargets, OPEN_POINT_ID_PREFIX } from './openPoints';
 
 export type NormalizeResult =
   | { ok: true; document: DraftDocument; repairs: string[] }
@@ -926,8 +926,8 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
         droppedPoints += 1;
         continue;
       }
-      let id = safeId(candidate.id) ?? createId('op');
-      if (seenPointIds.has(id)) id = createId('op');
+      let id = safeId(candidate.id) ?? createId(OPEN_POINT_ID_PREFIX);
+      if (seenPointIds.has(id)) id = createId(OPEN_POINT_ID_PREFIX);
       seenPointIds.add(id);
 
       const point: OpenPoint = { id, kind, targets: normalizeTargets(targets) };
