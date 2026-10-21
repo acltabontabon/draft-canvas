@@ -5,6 +5,7 @@ import {
   type AgentSkillSetup,
   type AgentSettings,
   type AppErrorKind,
+  type CollabLanStarted,
   type DesktopApi,
   type DesktopSettings,
   type HostBoot,
@@ -53,6 +54,9 @@ async function callRaw<T>(command: string, meta: Record<string, unknown>, bytes:
     throw asDesktopError(error);
   }
 }
+
+/** A guest's message goes as raw UTF-8 (`callRaw`): a whole diagram is megabytes of JSON already. */
+const utf8 = new TextEncoder();
 
 export function createTauriApi(): DesktopApi {
   return {
@@ -131,5 +135,10 @@ export function createTauriApi(): DesktopApi {
     agentProposalGet: (id) => call<Proposal | null>('agent_proposal_get', { id }),
     agentProposalBeginAccept: (id, version, diagramId, path) => call<ProposalAction>('agent_proposal_begin_accept', { id, version, diagramId, path }),
     agentProposalResolve: (id, status) => call<ProposalAction>('agent_proposal_resolve', { id, status }),
+
+    collabLanStart: ({ token }) => call<CollabLanStarted>('collab_lan_start', { token }),
+    collabLanStop: () => call<void>('collab_lan_stop'),
+    collabLanSend: (connId, text) => callRaw<void>('collab_lan_send', { connId }, utf8.encode(text)),
+    collabLanClose: (connId, reason) => call<void>('collab_lan_close', { connId, reason }),
   };
 }

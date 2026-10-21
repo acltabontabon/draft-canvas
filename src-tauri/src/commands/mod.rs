@@ -4,6 +4,7 @@
 //! itself lives in plain functions over `&AppState`, which the tests drive directly.
 
 pub mod agent;
+pub mod collab;
 pub mod documents;
 pub mod explorer;
 pub mod host;

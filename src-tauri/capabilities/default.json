@@ -65,6 +65,10 @@
     "allow-agent-proposal-list",
     "allow-agent-proposal-get",
     "allow-agent-proposal-begin-accept",
-    "allow-agent-proposal-resolve"
+    "allow-agent-proposal-resolve",
+    "allow-collab-lan-start",
+    "allow-collab-lan-stop",
+    "allow-collab-lan-send",
+    "allow-collab-lan-close"
   ]
 }

@@ -55,4 +55,5 @@ export type HostEvent = { "type": "open", handle: string, name: string, displayP
 /**
  * A new diagram (nothing to undo); otherwise a change to an existing one.
  */
-created: boolean, } | { "type": "agent-changed" };
+created: boolean, } | { "type": "agent-changed" } | { "type": "collab-lan-open", connId: string, } | { "type": "collab-lan-message", connId: string, text: string, } | { "type": "collab-lan-close", connId: string, reason: string, } | { "type": "collab-lan-stopped", reason: string, };
+export type CollabLanStarted = { port: number, addresses: Array<string>, };
