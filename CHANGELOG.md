@@ -11,76 +11,71 @@ the release notes and the in-app What's New are generated from here. See
 
 ## [Unreleased]
 
-### Desktop
+## [1.15.2] - 2026-10-21
 
-#### Added
+A new Home, a file explorer, and every technology logo.
 
-- **Settings → AI agents** connects Gemini CLI and Junie in one click, alongside Claude Code, Codex
-  and Cursor. The agent skill installs for both from the folder they share with Codex and Cursor.
-
-#### Changed
-
-- Agent-generated diagrams arrange look-inside views around their own flows and choose a clearer
-  reading direction automatically, reducing crossings without a manual layout pass.
-- Add project, Open file, Save As, and a draft's first Save share an in-app explorer with Places,
-  folder navigation, filtering, hidden files, and on-demand diagram previews. **New folder** creates
-  a folder without leaving the explorer.
-- Save As adds the `.draftcanvas` extension automatically and asks before replacing an existing
-  diagram, retaining atomic saves and background images.
-- Explorer dialogs show location in breadcrumbs and a preview only for a selected diagram, with
-  one primary action and subtle teal input focus rings.
-- Settings matches the new Home and explorer, with neutral surfaces, serif headings, grouped
-  choices, and consistent switches. Agent connection details appear while access is on, and the
-  client selector fits compact windows.
-- Project galleries no longer repeat the root folder name above its heading; nested folders keep
-  their breadcrumbs.
-- About no longer shows the paragraph about local diagrams and update connections.
-- Geometry reads reuse connector routes while fitting a response, and agent request logs stay
-  bounded during long desktop sessions.
-
-#### Fixed
-
-- Queued agent reads and proposals can no longer inspect a different diagram after a file switch.
-- Overlapping project folders no longer make a single diagram ambiguous, and remembered diagram
-  paths cannot follow a replaced folder outside agent scope.
-- Failed worker submissions and abandoned MCP calls release their timers and pending requests.
-- Fast agent updates register their commit gate before delivery, preserving retry safety after a crash.
-- The bundled agent skill stops its fallback survey at the file limit, validates portable source
-  evidence paths, and checks source files without loading them whole into memory.
-
-#### Security
-
-- Updated certificate validation and bundled trust roots to address RUSTSEC-2026-0382 and
-  RUSTSEC-2026-0383, which could allow certificate chains through distrusted emSign intermediates.
+Home and the gallery are redrawn around your sketches, the desktop app browses files in its own
+explorer, and technology logos cover the whole Simple Icons catalog. Gemini CLI and Junie join the
+agents you can connect in one click.
 
 ### Shared
 
 #### Changed
 
-- New Actors use a borderless symbol and label, with a Framed option in their bar. Existing diagrams
-  keep their frames, and both styles carry through to image exports.
-- Technology suggestions and logos now cover the full Simple Icons catalog, including Rust, with
-  common aliases and version recognition. Artwork loads on demand from separate local assets and
-  stays available offline.
-- Home gives diagrams a clearer starting point, with quick access to examples and files. Desktop's
-  Living Canvas keeps drafts, projects, and agent access close by.
-- The web library and desktop diagram browser use a matching Canvas Gallery, with larger topology
-  previews. Home and the gallery share white light surfaces and a deep teal primary button, with
-  neutral surroundings in both themes.
-- Web and desktop Home use a compact sketch shelf, with conditional views, paper-like previews,
-  and a View all link into the gallery. Empty Home hides search; a single view keeps its separator
-  without a tab bar. Web project creation is available before the first diagram.
-- Home and gallery headers no longer show the Troubleshooting icon. Diagnostic reports remain
-  available from the editor’s More menu and desktop Settings → Support.
-- Automatic connector cleanup removes unnecessary bends where it can keep neighbouring routes clear.
+- **A new Home** — Home opens on Quick Draft, examples and files, with a compact shelf of recent
+  diagrams and projects. **View all** leads to a matching gallery with larger previews.
+  <!-- highlight -->
+- **Every technology logo** — suggestions and logos cover the full Simple Icons catalog, Rust
+  included, with common aliases and version recognition. Logos load on demand and work offline.
+  <!-- highlight -->
+- New Actors are a borderless symbol and label, with a **Framed** option in their bar. Existing
+  diagrams keep their frames, and image exports show both styles.
+- Automatic connector cleanup removes bends it doesn't need while keeping neighbouring routes clear.
+- The Troubleshooting icon left Home and the gallery. Diagnostic reports are in the editor's More
+  menu and, on desktop, **Settings → Support**.
+
+### Desktop
+
+#### Added
+
+- **Gemini CLI and Junie** — **Settings → AI agents** connects them in one click, alongside Claude
+  Code, Codex and Cursor, and installs the agent skill for both. <!-- highlight -->
+
+#### Changed
+
+- **A built-in file explorer** — Add project, Open file, Save As and a draft's first Save share one
+  explorer with Places, breadcrumbs, filtering, hidden files, **New folder** and a preview of the
+  selected diagram. Save As adds the `.draftcanvas` extension and asks before replacing a diagram.
+  <!-- highlight -->
+- Settings matches the new Home, with grouped choices and consistent switches. Agent connection
+  details show while access is on, and the client picker fits small windows.
+- Agent-drawn diagrams lay out look-inside views around their own flows and pick a clearer reading
+  direction, with fewer crossings.
+- Project galleries no longer repeat the root folder's name above its heading, and About drops its
+  paragraph about local diagrams and update connections.
+
+#### Fixed
+
+- Queued agent reads and proposals can no longer act on a different diagram after you switch files.
+- Overlapping project folders no longer make a diagram ambiguous to agents, and a remembered diagram
+  path can't follow a replaced folder outside agent scope.
+- Failed or abandoned agent requests release their timers, fast agent updates stay safe to retry
+  after a crash, and agent request logs stay bounded in long sessions.
+- The bundled agent skill stops its fallback survey at the file limit, validates source evidence
+  paths, and no longer reads whole source files into memory.
+
+#### Security
+
+- Updated certificate validation and bundled trust roots for RUSTSEC-2026-0382 and
+  RUSTSEC-2026-0383, which could accept certificate chains through distrusted emSign intermediates.
 
 ### Web
 
 #### Changed
 
-- Home has its own sketchbook layout: an editorial heading beside a Quick Draft paper card, with
-  example and import actions below it. The compact diagram and project shelf keeps the gallery's
-  neutral palette and typography.
+- Web Home pairs a sketchbook heading with a Quick Draft card, and you can create a project before
+  your first diagram.
 
 ## [1.15.1] - 2026-10-19
 
@@ -2201,7 +2196,8 @@ pre-release milestone; this is the one meant for real use.
 - Fully local and private by design — no accounts, no cloud sync, nothing you draw ever leaves
   your device. Documents are encrypted at rest in your browser.
 
-[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.15.1...main
+[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.15.2...main
+[1.15.2]: https://github.com/acltabontabon/draft-canvas/compare/v1.15.1...v1.15.2
 [1.15.1]: https://github.com/acltabontabon/draft-canvas/compare/v1.15.0...v1.15.1
 [1.15.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.14.0...v1.15.0
 [1.14.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.13.1...v1.14.0
