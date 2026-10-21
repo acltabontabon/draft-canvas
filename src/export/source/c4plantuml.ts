@@ -66,7 +66,7 @@ function macroFor(node: DraftNode, role: C4Role, external: boolean): string {
     default:
       switch (node.type) {
         case 'actor':
-          return node.actorKind === 'system' || node.actorKind === 'thirdParty' ? 'System_Ext' : `Person${ext}`;
+          return node.actorKind === 'system' || node.actorKind === 'thirdParty' || node.actorKind === 'agent' ? 'System_Ext' : `Person${ext}`;
         case 'database':
           return `ContainerDb${ext}`;
         case 'queue':

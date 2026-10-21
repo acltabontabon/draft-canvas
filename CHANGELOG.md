@@ -13,7 +13,15 @@ the release notes and the in-app What's New are generated from here. See
 
 ### Shared
 
+#### Added
+
+- **AI Agent actors** — an Actor can now be an AI Agent, drawn as a robot, for assistants, chatbots
+  and autonomous agents that act on your system. Agents can draw them too. <!-- highlight -->
+
 #### Changed
+
+- An Actor's name follows its kind: switch a new User to Device and it becomes "Device". A name
+  you typed stays.
 
 - **Smoother large diagrams** — panning, dragging, selecting and drawing connectors on a diagram with
   hundreds of shapes do less work per frame, large diagrams open faster, and the command palette and

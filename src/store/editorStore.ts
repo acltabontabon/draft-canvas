@@ -152,7 +152,7 @@ import type {
   Side,
   ViewLevel,
 } from '../document/types';
-import { C4_TEXT_TYPES } from '../document/types';
+import { ACTOR_KINDS, C4_TEXT_TYPES } from '../document/types';
 import { routingPlan } from '../edges/bundles';
 import { anchorPoint, rectOf, trunkCoordinate } from '../edges/routing';
 import { centerOf, clamp } from '../lib/math';
@@ -707,6 +707,24 @@ function applyComponentAutoLabel(doc: DraftDocument, nodeId: string, before: Dra
   const node = doc.nodes.find((n) => n.id === nodeId);
   if (!node) return doc;
   return updateNode(doc, nodeId, { text: defaultTextFor('component', undefined, node.componentKind) });
+}
+
+/**
+ * The same idea for Actor, with one extra case: a label that is still one of the kinds' own names
+ * ("User", "System", "AI Agent"…) follows too, whatever `textOrigin` says. Actors were created with
+ * an explicit "User" whatever their kind until this followed the kind, so most saved ones carry that
+ * placeholder marked as a typed name; a user who switches one to AI Agent means the robot to stop
+ * being called "User". Any other name, typed or from a starter, stays.
+ */
+function applyActorAutoLabel(doc: DraftDocument, nodeId: string, before: DraftNode, patch: Partial<DraftNode>): DraftDocument {
+  if (before.type !== 'actor' || patch.text !== undefined) return doc;
+  const text = (before.text ?? '').trim();
+  const placeholder =
+    before.textOrigin === 'auto' || ACTOR_KINDS.some((kind) => defaultTextFor('actor', undefined, undefined, kind) === text);
+  if (!placeholder) return doc;
+  const node = doc.nodes.find((n) => n.id === nodeId);
+  if (!node) return doc;
+  return updateNode(doc, nodeId, { text: defaultTextFor('actor', undefined, undefined, node.actorKind), textOrigin: 'auto' });
 }
 
 /**
@@ -1492,6 +1510,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       let next = updateNode(doc, id, patch);
       if (before && 'serviceKind' in patch) next = applyServiceAutoLabel(next, id, before, patch);
       if (before && 'componentKind' in patch) next = applyComponentAutoLabel(next, id, before, patch);
+      if (before && 'actorKind' in patch) next = applyActorAutoLabel(next, id, before, patch);
       if (before?.type === 'note' && 'noteKind' in patch) next = growNoteToFit(next, id);
       if (before?.type === 'text' && ('textRole' in patch || 'textBold' in patch || 'textItalic' in patch)) {
         next = growTextToFit(next, id);

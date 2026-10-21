@@ -51,7 +51,7 @@ from the bar that appears; the silhouette changes so the kind can be read from a
 | Service (`S`) | Service, API, Worker, External System, Scheduler, Gateway |
 | Data Store (`D`) | Database, SQL, NoSQL, Cache, File system, Object storage, Search index, Table |
 | Queue (`Q`) | Queue, Topic, Stream |
-| Actor (`A`) | Human, System, Device, Group, Third Party |
+| Actor (`A`) | Human, System, Device, Group, Third Party, AI Agent |
 | Component (`M`) | Component, Module, Adapter, Port |
 
 The kind decides which relationships the shape can have. A Service *reads / writes* its Database and

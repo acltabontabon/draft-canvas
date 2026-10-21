@@ -24,6 +24,7 @@
   "external-actor": "actor",
   "system-actor": "actor",
   "device": "actor",
+  "ai-agent": "actor",
   "component": "component",
   "module": "component",
   "adapter": "component",
@@ -70,7 +71,13 @@
   "actor": "actor",
   "human": "actor",
   "team": "actor",
-  "third-party": "actor"
+  "third-party": "actor",
+  "agent": "actor",
+  "ai-assistant": "actor",
+  "assistant": "actor",
+  "bot": "actor",
+  "chatbot": "actor",
+  "llm": "actor"
  },
  "holdsInside": [
   "service",

@@ -28,6 +28,7 @@ signals that point to each one.
 | End users, admins, operators | `person` (`user-group` for a team) | |
 | A partner or provider that *starts* interactions (a webhook sender) | `external-actor` | |
 | A device that talks to the system (POS terminal, IoT sensor) | `device` | |
+| An AI agent, assistant or chatbot that acts on the system (an MCP client, a support bot) | `ai-agent` | `Claude` · `MCP client` |
 | A controller, handler, use case, domain module inside one container | `component` | `Spring MVC Controller` · `Express router` |
 | A package/module boundary in a modular monolith | `module` | |
 | A repository/gateway/client class that adapts to infrastructure | `adapter` | `JPA repository` · `Stripe SDK` |

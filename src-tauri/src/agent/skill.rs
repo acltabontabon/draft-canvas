@@ -488,6 +488,10 @@ mod tests {
             "4",
             "6fdefbde5e9bed0c1fc4884a92136c553cca96b952da186b5bce86a55122e473",
         ),
+        (
+            "5",
+            "260673e5ea85546bf4539127105089be7f17028e746e5f194f40c00c9dd521b6",
+        ),
     ];
 
     #[test]

@@ -33,7 +33,7 @@ function styleOf(node: DraftNode): string {
     case 'queue':
       return 'shape=process;whiteSpace=wrap;html=1;backgroundOutline=1;';
     case 'actor':
-      return node.actorKind === 'system' || node.actorKind === 'thirdParty'
+      return node.actorKind === 'system' || node.actorKind === 'thirdParty' || node.actorKind === 'agent'
         ? 'rounded=0;whiteSpace=wrap;html=1;dashed=1;'
         : 'shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;';
     case 'component':

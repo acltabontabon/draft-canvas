@@ -77,7 +77,7 @@ const PRESET_KEYWORDS: Record<string, string[]> = {
   service: ['api', 'app', 'worker', 'microservice'],
   database: ['db', 'database', 'sql', 'store', 'cache', 'table'],
   queue: ['topic', 'stream', 'kafka', 'event bus', 'message'],
-  actor: ['user', 'person', 'client', 'device'],
+  actor: ['user', 'person', 'client', 'device', 'agent', 'bot'],
   ellipse: ['junction', 'branch', 'merge', 'circle'],
   // Deliberately no 'module'/'adapter' typed alone here — 'module' would compete with
   // Architecture Starters' own "Modular Monolith" alias ('modules') for the same query, and

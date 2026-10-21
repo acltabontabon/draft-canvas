@@ -130,14 +130,16 @@ export const DEV_PRESETS: Preset[] = [
     usageHint: 'The base primitive for queues, topics, and streams — pick a kind for the specific pattern.',
   },
   {
+    // No `text` here either: a fresh Actor starts as "User" from `defaultTextFor` and follows its
+    // `actorKind` from there. A hardcoded "User" froze it `textOrigin: 'explicit'`, so picking
+    // AI Agent or Device left a person's name on a robot or a phone.
     id: 'actor',
     label: 'Actor',
     type: 'actor',
     shortcut: 'A',
-    hint: 'A person or client',
+    hint: 'A person, agent or client',
     description: 'A person or external participant interacting with the system.',
-    usageHint: 'Use for users, operators, clients, organizations, or other external actors.',
-    text: 'User',
+    usageHint: 'Use for users, AI agents, operators, clients, organizations, or other external actors.',
   },
   {
     id: 'ellipse',
