@@ -4,6 +4,7 @@ import type {
   EllipseShape,
   PathShape,
   RectShape,
+  RichTextShape,
   Shape,
   Stroke,
   TextShape,
@@ -127,6 +128,39 @@ function emitText(shape: TextShape): SvgEl[] {
 }
 
 /**
+ * One `<text>` per line, one positioned `<tspan>` per run. Each run is pinned to its laid-out width
+ * for `emitText`'s reason, and placed by its own `x` rather than flowing after the one before it,
+ * so a viewer with other fonts can't push a bold word into the code chip drawn behind the next.
+ */
+function emitRichText(shape: RichTextShape): SvgEl[] {
+  return shape.lines.flatMap((line) => {
+    if (line.runs.length === 0) return [];
+    const spans = line.runs.map((run) =>
+      el(
+        'tspan',
+        {
+          // Right-to-left text starts at its right edge.
+          x: n(line.rtl ? run.x + run.width : run.x),
+          y: n(line.baseline),
+          fill: run.fill,
+          'font-family': familyOf(run.font.stack),
+          'font-size': n(run.font.size),
+          'font-weight': run.font.weight,
+          'font-style': run.font.italic ? 'italic' : undefined,
+          textLength: run.width > 0 ? n(run.width) : undefined,
+          lengthAdjust: run.width > 0 ? 'spacingAndGlyphs' : undefined,
+        },
+        undefined,
+        run.text,
+      ),
+    );
+    return [
+      el('text', { direction: line.rtl ? 'rtl' : undefined, 'letter-spacing': 0, opacity: shape.opacity, 'xml:space': 'preserve' }, spans),
+    ];
+  });
+}
+
+/**
  * Code is monospace, so every token's x position is `charWidth * columnIndex` —
  * no measurement, and byte-identical between the canvas and the export.
  */
@@ -187,6 +221,8 @@ export function emitShape(shape: Shape): SvgEl[] {
       return [emitPath(shape)];
     case 'text':
       return emitText(shape);
+    case 'rich':
+      return emitRichText(shape);
     case 'code':
       return emitCode(shape);
     case 'group': {

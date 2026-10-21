@@ -1493,7 +1493,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       if (before && 'serviceKind' in patch) next = applyServiceAutoLabel(next, id, before, patch);
       if (before && 'componentKind' in patch) next = applyComponentAutoLabel(next, id, before, patch);
       if (before?.type === 'note' && 'noteKind' in patch) next = growNoteToFit(next, id);
-      if (before?.type === 'text' && ('textRole' in patch || 'textBold' in patch || 'textItalic' in patch)) {
+      if (before?.type === 'text' && TEXT_STYLE_FIELDS.some((field) => field in patch)) {
         next = growTextToFit(next, id);
       }
       const changesKind = KIND_FIELDS.some((field) => field in patch);
@@ -3099,7 +3099,10 @@ function growArchitectureToFit(doc: DraftDocument, id: string): DraftDocument {
   return updateNode(doc, id, { width: Math.max(node.width, needed.width), height: Math.max(node.height, needed.height) });
 }
 
-/** Same idea as `growNoteToFit`: a role/bold/italic change can make the same text wrap onto more
+/** The Text fields that change how its words are set, and so how much room they need. */
+const TEXT_STYLE_FIELDS = ['textRole', 'textBold', 'textItalic', 'textFont', 'textBackground'] as const;
+
+/** Same idea as `growNoteToFit`: a role/bold/italic/font/background change can make the same text wrap onto more
  *  lines (a bigger font, a heavier — hence wider — weight), so the box has to be re-checked, not
  *  just the text re-rendered inside whatever height it already had. Grow-only, never shrinks a box
  *  sized by hand. */

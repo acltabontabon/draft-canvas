@@ -155,7 +155,9 @@ the skill tells it whether a copy is exactly what it installed:
 - **Add notes, code snippets and labels.** Each can sit beside a shape or inside a boundary, or be
   attached to a shape, a connector or a boundary so it moves with it — and the agent can attach a
   loose one, or take one off again, the way you would drag it. Code keeps its language and
-  indentation.
+  indentation. A label is [rich text](shapes-and-connectors.md#write-rich-text): the agent can write a
+  table of endpoints, a checklist, a highlighted snippet or a warning callout, and give it a font,
+  colour and background.
 - **Set up a presentation.** Flows walk through the connectors that are already there and play in
   presentation mode. The agent writes what each step says, lights extra shapes with a step (as
   **+ Selection** does), and can open on a step that shows just a part of the diagram — "start with the

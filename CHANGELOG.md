@@ -13,6 +13,14 @@ the release notes and the in-app What's New are generated from here. See
 
 ### Shared
 
+#### Added
+
+- **Rich text** — Text shapes are written in Markdown: headings, bold and italic, highlights,
+  inline code, syntax-highlighted code blocks and diffs, lists and checklists, tables, quotes,
+  GitHub-style callouts and coloured words, drawn the same on the canvas and in every export. A
+  format bar and shortcuts help while you type, and Aa adds Serif, Mono and Hand fonts and Card,
+  Marker and Banner backgrounds. AI agents can write and style them too. <!-- highlight -->
+
 #### Changed
 
 - **Smoother large diagrams** — panning, dragging, selecting and drawing connectors on a diagram with

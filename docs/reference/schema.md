@@ -9,7 +9,7 @@ this drifts from it, trust the code.
 
 Every `.draftcanvas` file (and everything in IndexedDB's `bodies` store) carries a `version:
 number` and a `format: "draft-canvas"` marker. `CURRENT_VERSION` is declared in
-`src/document/types.ts`, currently **20**. A file missing the marker, or whose `version` isn't a
+`src/document/types.ts`, currently **21**. A file missing the marker, or whose `version` isn't a
 finite integer, is treated as version 1 — the oldest shape the app has ever written.
 
 ## The migration funnel
@@ -40,6 +40,7 @@ v(n+1)-shaped one:
 | v17 → v18 | `migrateReadsWritesLabel` | Adds the `readsWrites` relationship (a service and the store it owns, read and written over one connector — now the Service → Database default). A `writes` connector whose hand-typed label says "reads / writes" (any case or spacing) becomes `readsWrites` with the label cleared, so the caption is the connector's own and reverses correctly; any other label, and any other relationship, is left exactly as it was. Wrapped in `everyRoom`. |
 | v18 → v19 | Optional evidence | Elements and relationships can carry bounded repository-relative source evidence with an observed/inferred basis. The transition is a no-op; older graphs keep their meaning, and evidence is validated independently in every room on import. |
 | v19 → v20 | `migrateAddWaypoints` | Structural no-op — a v19 connector has no `waypoints` (the bends the user dragged it through), which is what absent already means: routed automatically. The version moves so an older build refuses a v20 file by name instead of its whitelist silently straightening every bent connector and, where edits save straight back to disk, writing that over the original. |
+| v20 → v21 | `migrateTextToMarkdown` | A Text node's `text` becomes Markdown. Every Text node and every Text attachment, in every room, has its words escaped (`escapeLegacyText`): characters Markdown would read as syntax get a backslash where they would act, leading indentation becomes no-break spaces, and a blank line holds one no-break space, so a v20 diagram reads exactly as typed. Notes, code and every other node keep their text unchanged. |
 
 Several of these are deliberate **structural no-ops**: versions where the on-disk shape didn't
 actually need to change, but an entry is still required. `migrateToCurrent` walks the chain from a
@@ -122,6 +123,13 @@ export and only when the image is at most `LIMITS.maxEmbeddedBackgroundBytes`. I
 the file in transit: import stores the bytes in the image store and drops the field, so no saved
 document ever holds it, and validation drops anything that isn't a well-formed image data URI of
 that size. Being optional, it needed no version bump.
+
+A `text` node's `text` is Markdown from v21 (`src/render/text/markdown.ts`): headings, emphasis,
+inline and fenced code, lists, task lists, tables, quotes, GitHub-style callouts, `==highlight==` and
+`[words]{.accent}` spans. It may also carry `textFont: 'sans' | 'serif' | 'mono' | 'hand'` and
+`textBackground: 'card' | 'marker' | 'banner'`, beside the existing `textRole`, `textAlign`, `textBold`
+and `textItalic`. Absent means the role's own face and no background. Validation drops invalid values
+and strips both fields from other node types. Every other node's `text` stays plain text.
 
 Actors may carry `actorFrame: 'borderless' | 'framed'`. New actors explicitly use `borderless`;
 an absent field preserves the framed appearance of existing diagrams. Validation drops invalid

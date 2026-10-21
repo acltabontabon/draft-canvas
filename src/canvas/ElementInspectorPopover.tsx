@@ -17,6 +17,8 @@ import {
   CODE_LANGUAGES,
   NOTE_KINDS,
   TEXT_ALIGNS,
+  TEXT_BACKGROUNDS,
+  TEXT_FONTS,
   TEXT_ROLES,
   type Accent,
   type ActorKind,
@@ -30,12 +32,15 @@ import {
   type QueueKind,
   type ServiceKind,
   type TextAlign,
+  type TextBackground,
+  type TextFont,
   type TextRole,
 } from '../document/types';
 import { isImeKeyEvent, overlayAboveCanvasIsOpen } from '../lib/isEditableTarget';
 import { MOD_SYMBOL } from '../lib/platform';
 import { effectiveTextRole } from '../nodes/describe';
 import { LANGUAGE_LABELS } from '../render/code/highlight';
+import { familyOf } from '../render/text/fonts';
 import { useEditorStore } from '../store/editorStore';
 import { useUiStore } from '../store/uiStore';
 import { nodeIndex } from '../store/selectors';
@@ -57,6 +62,7 @@ import { useToolbarHeight } from './useToolbarHeight';
 import { useOverlayPosition } from './useOverlayPosition';
 import { useLastPresent, usePopoverPresence } from './usePopoverPresence';
 import { InspectorSelect, type InspectorSelectOption } from './InspectorSelect';
+import { TextFormatBar } from './TextFormatBar';
 import { usePopoverKeyboard } from './usePopoverKeyboard';
 import { QUEUE_ICON_OPTIONS } from './queueOptions';
 import { SERVICE_ICON_OPTIONS } from './serviceOptions';
@@ -104,6 +110,9 @@ const TEXT_ROLE_OPTIONS: InspectorSelectOption[] = TEXT_ROLES.map((role) => ({
   value: role,
   label: TEXT_ROLE_OPTION_LABELS[role],
 }));
+const FONT_LABELS: Record<TextFont, string> = { sans: 'Sans', serif: 'Serif', mono: 'Mono', hand: 'Hand' };
+const BACKGROUND_LABELS: Record<TextBackground | 'none', string> = { none: 'None', card: 'Card', marker: 'Marker', banner: 'Banner' };
+
 const ALIGN_ICONS: Record<TextAlign, 'alignLeft' | 'alignCenter' | 'alignRight'> = {
   left: 'alignLeft',
   center: 'alignCenter',
@@ -236,6 +245,7 @@ function ElementInspectorBody({
   }, [openPanel]);
 
   const rect = displayInternal ? rectOfInternal(displayInternal) : null;
+  const editingText = useUiStore((state) => state.editingTextId !== null && state.editingTextId === nodeId);
 
   // The element's own screen-space vertical bounds, so a dropdown can shrink/flip rather than cover it
   // even when the popover itself barely had room on its preferred side. Read when the dropdown opens —
@@ -338,6 +348,9 @@ function ElementInspectorBody({
         {/* The caret ties the popover to the element it belongs to — see `.dc-popover-caret`. */}
         <span className="dc-popover-caret" aria-hidden="true" />
         <div className="dc-popover-inner">
+          {editingText ? (
+            <TextFormatBar theme={theme} />
+          ) : (
           <ElementInspectorRow
             node={displayNode}
             hasDlqEdge={hasDlqEdge}
@@ -348,6 +361,7 @@ function ElementInspectorBody({
             theme={theme}
             buildCommandContext={buildCommandContext}
           />
+          )}
         </div>
       </div>,
     target,
@@ -601,7 +615,7 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
             active={openPanel === 'typography'}
             aria-expanded={openPanel === 'typography'}
             aria-label="Text style"
-            title="Bold, italic, alignment"
+            title="Font, emphasis, alignment, background"
             onClick={() => setOpenPanel(openPanel === 'typography' ? null : 'typography')}
           >
             Aa
@@ -736,6 +750,51 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
             >
               I
             </Button>
+          </div>
+          <span className="dc-popover-divider" aria-hidden="true" />
+          <div className="dc-font-group" role="group" aria-label="Font">
+            {TEXT_FONTS.map((textFont) => {
+              const current = (node.textFont ?? (effectiveTextRole(node) === 'technical' ? 'mono' : 'sans')) === textFont;
+              return (
+                <Button
+                  key={textFont}
+                  variant="quiet"
+                  active={current}
+                  aria-pressed={current}
+                  aria-label={`${FONT_LABELS[textFont]} font`}
+                  title={FONT_LABELS[textFont]}
+                  style={{ fontFamily: familyOf(textFont) }}
+                  onClick={() => useEditorStore.getState().updateNodeById(node.id, { textFont }, 'Change font')}
+                >
+                  Aa
+                </Button>
+              );
+            })}
+          </div>
+          <span className="dc-popover-divider" aria-hidden="true" />
+          <div className="dc-background-group" role="group" aria-label="Background">
+            {(['none', ...TEXT_BACKGROUNDS] as const).map((background) => {
+              const current = (node.textBackground ?? 'none') === background;
+              return (
+                <Button
+                  key={background}
+                  variant="quiet"
+                  active={current}
+                  aria-pressed={current}
+                  aria-label={`${BACKGROUND_LABELS[background]} background`}
+                  title={`Background: ${BACKGROUND_LABELS[background]}`}
+                  className="dc-background-option"
+                  data-background={background}
+                  onClick={() =>
+                    useEditorStore
+                      .getState()
+                      .updateNodeById(node.id, { textBackground: background === 'none' ? undefined : background }, 'Change background')
+                  }
+                >
+                  <span aria-hidden="true">Ab</span>
+                </Button>
+              );
+            })}
           </div>
           <span className="dc-popover-divider" aria-hidden="true" />
           <div className="dc-align-group" role="group" aria-label="Text alignment">

@@ -380,6 +380,11 @@ export interface UiStore {
    */
   editRequestId: string | null;
   /**
+   * The Text element whose Markdown is open in its inline editor, if any. The element's popover
+   * shows the format bar instead of its own row for exactly as long as this names it.
+   */
+  editingTextId: string | null;
+  /**
    * A connector selected by the app rather than picked by the person — the one a drag just drew, or
    * one an undo/redo selected — whose editing panel stays closed until it is clicked. Opening that
    * panel after every connection covered the shape just connected to and half the new line, on
@@ -545,6 +550,7 @@ export interface UiStore {
   setProposalPanelOpen: (open: boolean, proposalId?: string | null) => void;
   setInteractionActive: (active: boolean, movingNodeIds?: Iterable<string>) => void;
   requestEdit: (id: string | null) => void;
+  setEditingText: (id: string | null) => void;
   setQuietEdge: (id: string | null) => void;
   notify: (message: string, tone?: Toast['tone'], action?: ToastAction) => void;
   dismiss: (id: number) => void;
@@ -668,6 +674,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   interactionActive: false,
   movingNodeIds: NO_MOVING_NODES,
   editRequestId: null,
+  editingTextId: null,
   quietEdgeId: null,
   updateReady: false,
   lastSeenProductRelease: readLastSeenRelease(),
@@ -777,6 +784,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
       return { interactionActive, movingNodeIds: moving.size === 0 ? NO_MOVING_NODES : moving };
     }),
   requestEdit: (editRequestId) => set({ editRequestId }),
+  setEditingText: (editingTextId) => set({ editingTextId }),
   setQuietEdge: (quietEdgeId) => set((state) => (state.quietEdgeId === quietEdgeId ? state : { quietEdgeId })),
 
   notify(message, tone = 'info', action) {
