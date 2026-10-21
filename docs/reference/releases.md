@@ -75,7 +75,7 @@ Standalone desktop previews and rebuilds run shared and desktop verification the
 packaging, startup and update-signature checks gate publication; Pages publishes the verified web
 artifact after desktop packaging succeeds.
 Homebrew verifies both published macOS installers and updates the cask independently of Pages and
-updater channels. See [Homebrew releases](../guides/desktop.md#homebrew-releases) for credentials and retries.
+updater channels. See [Homebrew releases](desktop-updates.md#homebrew-releases) for credentials and retries.
 The dependencies are in [release.yml](../../.github/workflows/release.yml).
 
 ## Desktop previews
@@ -84,7 +84,7 @@ Use `desktop-vX.Y.Z-alpha.N` or `desktop-vX.Y.Z-beta.N` with a matching dated ch
 Its base version may equal or lead the root package version. Preview notes include Shared and Desktop;
 a stable desktop release ships with the web app under `vX.Y.Z`.
 
-See [Desktop releases](../guides/desktop.md#releasing) for packaging and
+See [Desktop releases](desktop-updates.md#what-a-release-does) for packaging and
 [Desktop updates](desktop-updates.md) for signing and update channels.
 
 ## Website

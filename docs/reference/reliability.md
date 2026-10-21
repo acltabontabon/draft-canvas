@@ -33,7 +33,7 @@ the selected editor source and current site. Site-only publication does not rele
 Homebrew verifies both published macOS installers against `SHA256SUMS.txt`, checks the generated
 cask with Homebrew, and updates only that cask in the shared tap. It runs after desktop publication,
 independently of Pages and updater channels. A failed tap update is retried with the **Homebrew**
-workflow; see [Homebrew releases](../guides/desktop.md#homebrew-releases).
+workflow; see [Homebrew releases](desktop-updates.md#homebrew-releases).
 
 Hosted [CI](https://github.com/acltabontabon/draft-canvas/actions/runs/38040880397),
 [Desktop CI](https://github.com/acltabontabon/draft-canvas/actions/runs/38018279380) and

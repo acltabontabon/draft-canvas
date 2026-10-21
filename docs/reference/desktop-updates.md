@@ -150,3 +150,34 @@ With a throwaway key and a local server; nothing is published.
    and `python3 -m http.server 8787 --bind 127.0.0.1 --directory <folder>`.
 5. Open the older copy. About 15 seconds later the chip says *Update available*; Download, then
    *Update and restart*, and it reopens as the newer version.
+
+## Homebrew releases
+
+The Release orchestrator calls `.github/workflows/homebrew.yml` after stable desktop publication.
+Drafts and prereleases do not update the cask. Pages and updater channels run independently;
+a Homebrew failure does not retract a release.
+
+The job verifies both published DMGs against `SHA256SUMS.txt`, runs Homebrew style and audit
+checks, then updates only `Casks/draft-canvas.rb` in
+[the shared tap](https://github.com/acltabontabon/homebrew-tap). Other casks are untouched.
+Older versions are refused, concurrent pushes are retried, and identical output creates no commit.
+
+### Credentials
+
+1. Create a dedicated Ed25519 deploy key for Draft Canvas.
+2. Add its public key to `acltabontabon/homebrew-tap` as a write-enabled deploy key.
+3. Save its private key as the `HOMEBREW_TAP_DEPLOY_KEY` Actions secret on
+   `acltabontabon/draft-canvas`. Pass it only to the Homebrew reusable workflow.
+
+The normal `GITHUB_TOKEN` cannot push to the tap. Missing credentials fail the workflow.
+Never commit private keys or secret values.
+
+### Retry and recovery
+
+Run **Actions → Homebrew** with the published stable tag, including after a manual desktop rebuild.
+The workflow uses its current source and can refresh same-version installer checksums.
+It preserves newer casks and skips releases older than the latest published stable version.
+
+Fix verification or audit failures before retrying. Do not bypass checksum or Gatekeeper checks.
+Withdrawals and intentional rollbacks need a reviewed tap correction; they do not downgrade
+installed copies. See [release recovery](reliability.md#withdrawal-and-recovery-procedure).
