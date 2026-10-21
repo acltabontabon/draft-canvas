@@ -1,4 +1,5 @@
 import { createId } from './ids';
+import { plainTextOfMarkdown } from './markdownText';
 import { DEFAULTS } from './limits';
 import {
   C4_TEXT_TYPES,
@@ -26,6 +27,8 @@ import {
   type RouteMode,
   type ServiceKind,
   type TextAlign,
+  type TextBackground,
+  type TextFont,
   type TextRole,
 } from './types';
 
@@ -191,7 +194,8 @@ export function displayNameFor(
     'type' | 'text' | 'queueKind' | 'serviceKind' | 'databaseKind' | 'actorKind' | 'componentKind'
   >,
 ): string {
-  if (node.text && node.text.trim()) return node.text;
+  // A Text element's words are Markdown; its name is what they say, not how they're formatted.
+  if (node.text && node.text.trim()) return node.type === 'text' ? plainTextOfMarkdown(node.text) : node.text;
   switch (node.type) {
     case 'queue':
       return QUEUE_KIND_NAMES[node.queueKind ?? 'queue'];
@@ -245,6 +249,8 @@ export interface CreateNodeInput {
   textAlign?: TextAlign;
   textBold?: boolean;
   textItalic?: boolean;
+  textFont?: TextFont;
+  textBackground?: TextBackground;
   /** Architecture shapes only (`C4_TEXT_TYPES`) — ignored on anything else. */
   description?: string;
   technology?: string;
@@ -300,6 +306,8 @@ export function createNode(input: CreateNodeInput): DraftNode {
     if (input.textAlign) node.textAlign = input.textAlign;
     if (input.textBold) node.textBold = true;
     if (input.textItalic) node.textItalic = true;
+    if (input.textFont) node.textFont = input.textFont;
+    if (input.textBackground) node.textBackground = input.textBackground;
   }
   return node;
 }

@@ -168,6 +168,40 @@ for an empty one and drag shapes in. Pick the boundary's kind (Boundary, Group, 
 Network, Deployment) in its bar; each has its own outline so it reads without the label. The
 [getting started guide](getting-started.md#draw-a-boundary) walks through them.
 
+## Write rich text
+
+A Text shape (`T`) is written in Markdown, the same syntax as a README or a pull request, and draws
+it formatted on the canvas and in every export. Double-click it, or press `Enter`, to edit the
+source; the bar beside it formats the selection, and leaving the editor shows the result.
+
+![Text shapes with a heading, a checklist and an endpoint table; a TypeScript block and a diff; warning and tip callouts; and a hand-lettered note on a highlighter.](../media/guides/rich-text.png)
+
+| Write | Get |
+| --- | --- |
+| `# Title`, `## Section`, `### Detail` | Headings |
+| `**bold**`, `_italic_`, `~~struck~~`, `==highlighted==` | Emphasis |
+| `` `inline code` `` | Code in a chip |
+| ```` ```ts ```` … ```` ``` ```` | A code block, highlighted for its language (TypeScript, JavaScript, Java, SQL, JSON, YAML, XML, shell, HTTP, logs). ` ```diff ` tints added and removed lines |
+| `- item`, `1. step`, `- [ ] todo`, `- [x] done` | Lists and checklists; indent with `Tab` to nest |
+| `> quoted` | A quote |
+| `> [!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`, `[!CAUTION]` | A coloured callout, as on GitHub |
+| `\| A \| B \|` with a `\| --- \| --- \|` row | A table |
+| `---` | A divider |
+| `[words](https://…)` | A link |
+| `[words]{.rose}` | Words in one of the diagram's colours |
+
+A single line break is a new line; a blank line starts a new paragraph. In the editor, `Enter` on a
+list item starts the next one and `Enter` on an empty item ends the list. `⌘⇧8`, `⌘⇧7` and `⌘⇧9`
+make the selected lines a bulleted, numbered or checklist; `⌘⌥1` to `⌘⌥3` make them headings.
+`⌘B`, `⌘I`, `⌘E`, `⌘⇧X`, `⌘⇧H` and `⌘K` format the selection as bold, italic, code, struck,
+highlighted or a link.
+
+**Aa** in the shape's bar sets how all of it looks: its **font** (Sans, Serif, Mono or Hand), bold
+and italic, alignment, and a **background** — a **Card**, a highlighter **Marker** behind each line,
+or a solid **Banner** with the words knocked out — in the shape's colour.
+
+![A Text shape open in its editor, showing its Markdown source, with the format bar below it.](../media/guides/rich-text-editing.png)
+
 ## Where next
 
 - [Explain a system at different levels](depth.md): keep the overview small and draw the detail

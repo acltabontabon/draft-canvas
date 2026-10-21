@@ -8,10 +8,10 @@ import { DARK, LIGHT } from '../src/render/theme/tokens';
 import { PERSONALITY_PRESETS } from '../src/ui/personality/usePersonality';
 
 const outlined = (shapes: readonly Shape[]): Extract<Shape, { stroke?: unknown }>[] =>
-  shapes.flatMap((shape) => (shape.t === 'group' ? outlined(shape.children) : shape.t === 'text' || shape.t === 'code' ? [] : [shape]));
+  shapes.flatMap((shape) => (shape.t === 'group' ? outlined(shape.children) : shape.t === 'text' || shape.t === 'rich' || shape.t === 'code' ? [] : [shape]));
 
 const words = (shapes: readonly Shape[]): Shape[] =>
-  shapes.flatMap((shape) => (shape.t === 'group' ? words(shape.children) : shape.t === 'text' || shape.t === 'code' ? [shape] : []));
+  shapes.flatMap((shape) => (shape.t === 'group' ? words(shape.children) : shape.t === 'text' || shape.t === 'rich' || shape.t === 'code' ? [shape] : []));
 
 describe('presentation emphasis', () => {
   it('traces the filled bodies of a shape in their own line colour, heavier, with no fill, shadow or words', () => {

@@ -88,12 +88,13 @@ all appear as **Jump to** results. Choosing one selects it and moves the view to
 | `Delete` or `Backspace` | Delete the selection |
 | `⌘A` | Select all shapes |
 | `⌘G` / `⌘⇧G` | Group into a Boundary / ungroup |
-| `⌘B` / `⌘I` | Bold / italic, for a selected Text shape |
+| `⌘B` / `⌘I` | Bold / italic, for a selected Text shape (while editing it, for the selected words) |
 | `⌘⌥F` (`Ctrl+H` on Windows and Linux) | Find and replace, across every shape, connector, note and flow in every room — one undo step |
 
 While you type, `Enter` commits a shape's label and `Shift+Enter` adds a line. Notes work the other
 way round: `Enter` adds a line and `⌘Enter` commits. In a Code shape, `Enter` is always a new line.
-`Esc` keeps what you typed in a Note and discards it elsewhere. On a Boundary, `Enter` edits its
+`Esc` keeps what you typed in a Note and discards it elsewhere. A Text shape is Markdown and has its
+own formatting keys: see [Write rich text](shapes-and-connectors.md#write-rich-text). On a Boundary, `Enter` edits its
 caption.
 
 `Shift+F10` (or the Menu key) opens the context menu for the selection, the keyboard route to the

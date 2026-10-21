@@ -17,6 +17,7 @@ import { openGallery } from './library';
  *
  *   npx tsx e2e/docs-screenshots.ts --theme dark --out <directory>
  *   npx tsx e2e/docs-screenshots.ts --technology-only
+ *   npx tsx e2e/docs-screenshots.ts --rich-text-only
  *
  * The guides' own set is what you get with no arguments, unchanged.
  */
@@ -213,6 +214,63 @@ async function technologyScreenshots(page: Page) {
   await shot(page, 'technology-generic');
 }
 
+/** Markdown a developer would put beside an architecture: an API's checklist and latencies, the code
+ *  a box stands for, and the warnings that go with it. */
+const RICH_TEXT = [
+  '## Checkout API\nHandles **payments** with `idempotency keys`.\n\n- [x] Rate limiting\n- [ ] Circuit breaker\n\n| Endpoint | p99 |\n| --- | ---: |\n| `POST /orders` | 120 ms |\n| `GET /orders/:id` | 18 ms |',
+  '```ts\nexport async function charge(order: Order) {\n  const key = order.id; // idempotent\n  return stripe.charge({ amount, key });\n}\n```\n\n```diff\n- timeout: 30s\n+ timeout: 5s\n```',
+  '> [!WARNING]\n> Never call **Ledger** synchronously from the hot path.\n\n> [!TIP]\n> Publish through the ==outbox== instead.',
+];
+
+/** A Text shape dropped at `at`, its Markdown typed in (inserted, so Enter's list continuation stays
+ *  out of it), committed, then widened by its corner handle by `widen` pixels. */
+async function richText(page: Page, at: { x: number; y: number }, markdown: string, widen: number) {
+  await page.mouse.move(at.x, at.y);
+  await page.keyboard.press('t');
+  await page.keyboard.insertText(markdown);
+  await page.keyboard.press('Escape');
+  const corner = await box(page.locator('.react-flow__resize-control.handle.bottom.right').first());
+  await page.mouse.move(corner.x + corner.width / 2, corner.y + corner.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(corner.x + corner.width / 2 + widen, corner.y + corner.height / 2, { steps: 8 });
+  await page.mouse.up();
+}
+
+async function richTextScreenshots(page: Page) {
+  await page.getByRole('button', { name: 'New canvas' }).first().click();
+  await expect(page.locator('.dc-editor')).toBeVisible();
+  const title = page.getByLabel('Diagram title');
+  await title.fill('Checkout notes');
+  await title.blur();
+  await richText(page, { x: 150, y: 120 }, RICH_TEXT[0]!, 80);
+  await richText(page, { x: 470, y: 120 }, RICH_TEXT[1]!, 170);
+  await richText(page, { x: 920, y: 120 }, RICH_TEXT[2]!, 30);
+  await richText(page, { x: 960, y: 400 }, 'Ship it **Friday**', 0);
+  // Its look, from the shape's own Aa panel: a marker-pen note.
+  await page.locator('.dc-element-inspector').getByRole('button', { name: 'Text style' }).click();
+  await page.getByRole('button', { name: 'Hand font' }).click();
+  await page.getByRole('button', { name: 'Marker background' }).click();
+  await page.locator(CANVAS).click({ position: { x: 12, y: 12 } });
+  await page.mouse.move(20, 600);
+  const canvas = await box(page.locator(CANVAS));
+  await shot(page, 'rich-text', { ...canvas, height: 470 });
+
+  // The same shape being edited: its Markdown source, and the format bar in its popover.
+  await page.locator('.dc-node').first().dblclick();
+  await expect(page.getByRole('toolbar', { name: 'Format text' })).toBeVisible();
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+ArrowUp' : 'Control+Home');
+  // Framed on the editor and its bar together, wherever the popover chose to sit.
+  await page.waitForTimeout(600);
+  const editor = await box(page.locator('.dc-node[data-editing]'));
+  const bar = await box(page.locator('.dc-element-inspector'));
+  const left = Math.max(0, Math.min(editor.x, bar.x) - 24);
+  const top = Math.max(0, Math.min(editor.y, bar.y) - 24);
+  const right = Math.max(editor.x + editor.width, bar.x + bar.width) + 24;
+  const bottom = Math.max(editor.y + editor.height, bar.y + bar.height) + 24;
+  await shot(page, 'rich-text-editing', { x: left, y: top, width: right - left, height: bottom - top });
+  await page.keyboard.press('Escape');
+}
+
 async function main() {
   mkdirSync(OUT, { recursive: true });
   log(`${THEME} theme -> ${OUT}`);
@@ -230,6 +288,10 @@ async function main() {
 
     if (process.argv.includes('--technology-only')) {
       await technologyScreenshots(page);
+      return;
+    }
+    if (process.argv.includes('--rich-text-only')) {
+      await richTextScreenshots(page);
       return;
     }
 
@@ -420,6 +482,10 @@ async function main() {
     }
 
     await technologyScreenshots(page);
+    log('rich text');
+    await page.getByRole('button', { name: /Back to your diagrams/ }).click();
+    await openGallery(page);
+    await richTextScreenshots(page);
     await context.close();
   } finally {
     await browser.close();

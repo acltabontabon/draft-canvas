@@ -21,6 +21,11 @@ import {
   type NoteKind,
   type OpenPointKind,
   OPEN_POINT_KINDS,
+  TEXT_ALIGNS,
+  TEXT_BACKGROUNDS,
+  TEXT_FONTS,
+  TEXT_ROLES,
+  type DraftNode,
   type ViewLevel,
 } from '../document/types';
 import { LIMITS } from '../document/limits';
@@ -162,6 +167,37 @@ export interface NoteSpec {
   near?: string;
   group?: string;
   attachTo?: { kind: 'node' | 'edge'; id: string };
+  /** A label's look on the canvas. Labels only. */
+  style?: LabelStyle;
+}
+
+/** A Text label's look, as the node fields it sets. */
+export type LabelStyle = Partial<Pick<DraftNode, 'textRole' | 'textFont' | 'textBackground' | 'textAlign' | 'textBold' | 'textItalic' | 'accent'>>;
+
+const STYLE_KEYS = ['role', 'font', 'background', 'align', 'bold', 'italic', 'color'] as const;
+
+/**
+ * A label's `style` object: its role (body, label, heading, title, technical), font, background,
+ * alignment, emphasis and colour. `null` (in an update) is "back to plain", every field cleared.
+ * `undefined` when absent or wrong (a problem is recorded).
+ */
+export function readLabelStyle(r: Reader, value: unknown, at: string): LabelStyle | undefined {
+  const item = r.object(value, at, STYLE_KEYS);
+  if (!item) return undefined;
+  const style: LabelStyle = {};
+  const role = r.oneOf(item.role, `${at}/role`, TEXT_ROLES);
+  if (role) style.textRole = role;
+  const font = r.oneOf(item.font, `${at}/font`, TEXT_FONTS);
+  if (font) style.textFont = font;
+  const background = r.oneOf(item.background, `${at}/background`, ['none', ...TEXT_BACKGROUNDS] as const);
+  if (background && background !== 'none') style.textBackground = background;
+  const align = r.oneOf(item.align, `${at}/align`, TEXT_ALIGNS);
+  if (align) style.textAlign = align;
+  if (r.bool(item.bold, `${at}/bold`)) style.textBold = true;
+  if (r.bool(item.italic, `${at}/italic`)) style.textItalic = true;
+  const color = r.oneOf(item.color, `${at}/color`, ACCENTS);
+  if (color) style.accent = color;
+  return style;
 }
 
 /** An open point an agent raises: its kind, what it is about (one or more ids), and optional context. */
@@ -532,12 +568,23 @@ export function readRoom(r: Reader, raw: Json, path: string, ctx: RoomContext): 
   const notes: NoteSpec[] = [];
   r.array(raw.notes, `${path}/notes`, AGENT_LIMITS.notesPerRequest).forEach((n, i) => {
     const at = `${path}/notes/${i}`;
-    const item = r.object(n, at, ['id', 'text', 'kind', 'code', 'language', 'about', 'near', 'attach']);
+    const item = r.object(n, at, ['id', 'text', 'kind', 'code', 'language', 'about', 'near', 'attach', 'style']);
     if (!item) return;
     const id = r.newId(item.id, `${at}/id`, ctx.taken);
     const body = readNoteBody(r, item, at);
     const relation = readNoteRelation(r, item, at, { elementIds, groupIds, relationshipIds }, body?.type ?? 'note');
-    if (id && body && relation) notes.push({ id, ...body, ...relation });
+    let style: LabelStyle | undefined;
+    if (item.style !== undefined) {
+      if (body?.type !== 'text') {
+        r.problems.add('INVALID_INPUT', `${at}/style`, 'only a note of kind "label" has a style');
+      } else if (relation?.attachTo) {
+        // An attachment is a chip on its host: there is no canvas text to style.
+        r.problems.add('UNSUPPORTED', `${at}/style`, 'an attached label is a chip on its host and has no style; give attach: false to place it beside, styled');
+      } else {
+        style = readLabelStyle(r, item.style, `${at}/style`);
+      }
+    }
+    if (id && body && relation) notes.push({ id, ...body, ...relation, ...(style && Object.keys(style).length > 0 ? { style } : {}) });
   });
 
   return { ...(level ? { level } : {}), nodes, relationships, groups, flows, notes };

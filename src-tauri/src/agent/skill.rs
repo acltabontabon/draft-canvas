@@ -490,7 +490,11 @@ mod tests {
         ),
         (
             "5",
-            "5825d9782df70b698537a8586f32bfe6313afa84f0eece8347393b0512b3e117",
+            "84aed3fee5399a160dffe37ad59c07ea8852baefade384091a737eb9f8a4d688",
+        ),
+        (
+            "6",
+            "bb862773b28eb8ac532113d51b08292c3d8a690032ada8f571c5018af366083e",
         ),
     ];
 

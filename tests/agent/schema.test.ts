@@ -220,7 +220,9 @@ describe('MCP tool definitions', () => {
     // proposal/preview vocabulary prose is removed. Presentation steps (highlight, spotlight), code
     // and label notes, connector options and moveOutside added ~9 KB on 87 KB, with the step schema
     // shared through $defs. Explicit placement and routing (place, route) added ~4 KB, both shared
-    // through $defs too. Keep a measured ceiling on further growth.
-    expect(JSON.stringify(TOOLS).length).toBeLessThan(67_000);
+    // through $defs too. The ai-agent element type and the asks/delegates/escalates/notifies
+    // relationships added ~0.3 KB: vocabulary repeated in every tool that names a type or a
+    // relationship, since each tool's schema stands alone. Keep a measured ceiling on further growth.
+    expect(JSON.stringify(TOOLS).length).toBeLessThan(67_500);
   });
 });

@@ -1,4 +1,5 @@
 import type {
+  Accent,
   BoundaryPreset,
   ComponentKind,
   DatabaseKind,
@@ -9,9 +10,9 @@ import type {
   TextAlign,
   TextRole,
 } from '../document/types';
-import type { DisplayList, Shape, Stroke } from '../render/displayList';
-import { tokenizeCode } from '../render/code/highlight';
-import { CODE_THEMES } from '../render/code/theme';
+import type { DisplayList, RichTextShape, Shape, Stroke, TextRun } from '../render/displayList';
+import { languageForFence, tokenizeCode } from '../render/code/highlight';
+import { CODE_THEMES, colorForScope } from '../render/code/theme';
 import { LANGUAGE_LABELS } from '../render/code/highlight';
 import { PERSONALITY_PROFILES } from '../render/roughness/presets';
 import { DS_GLYPH_HEIGHT, DS_GLYPH_TOP, dataStoreScale } from '../document/dataStoreGeometry';
@@ -20,7 +21,8 @@ import { bowControlPoint, roughEllipsePath, roughRectOvershootPath, roughRectPat
 import { jitter } from '../render/roughness/seed';
 import { accentOf, boundaryLine, type AccentPalette, type Theme } from '../render/theme/tokens';
 import { FONTS, LINE_HEIGHTS, TEXT_SIZES, type FontSpec } from '../render/text/fonts';
-import { baselineOf, fitLabel, layoutText, type TextLayout } from '../render/text/layout';
+import { baselineOf, fitLabel, layoutRichText, layoutText, type RichBox, type RichRun, type TextLayout } from '../render/text/layout';
+import type { CalloutKind } from '../render/text/markdown';
 import { getMeasurer, type TextMeasurer } from '../render/text/measure';
 import type { PersonalityPreset } from '../ui/personality/usePersonality';
 import { clamp } from '../lib/math';
@@ -2341,24 +2343,34 @@ export function naturalNoteHeight(
 
 /** How wide a Text element made from a sentence grows before it wraps instead. */
 const TEXT_AUTO_MAX_WIDTH = 320;
+/** …and how wide it may grow for a code block or a table, which read worse wrapped or squeezed. */
+const TEXT_AUTO_MAX_WIDE = 560;
+
+/** Every field that changes how a Text element's words are set. */
+export type TextStyleFields = Pick<DraftNode, 'textRole' | 'annotation' | 'textBold' | 'textItalic' | 'textFont' | 'textBackground'>;
 
 /**
  * The box a Text element needs to show all of `text` with its own font: one line up to
- * `TEXT_AUTO_MAX_WIDTH`, wrapped below that. `freeText` draws as many lines as the height holds, so
- * the height is exactly the lines it lays out. Never smaller than `min`.
+ * `TEXT_AUTO_MAX_WIDTH` (wider for a code block or a table), wrapped below that. `freeText` draws as
+ * many lines as the height holds, so the height is exactly what it lays out. Never smaller than `min`.
  */
 export function naturalTextSize(
-  node: Pick<DraftNode, 'textRole' | 'annotation' | 'textBold' | 'textItalic'>,
+  node: TextStyleFields,
   text: string,
   ctx: Pick<DescribeContext, 'measurer'>,
   min: { width: number; height: number },
 ): { width: number; height: number } {
   const font = fontForTextNode(node);
-  const lineHeight = font.size * LINE_HEIGHTS.body;
-  const layout = layoutText(text, { font, maxWidth: TEXT_AUTO_MAX_WIDTH, lineHeight, measurer: ctx.measurer });
+  const pad = textPaddingOf(node);
+  const lay = (maxWidth: number) =>
+    layoutRichText(text, { font, maxWidth, lineHeightRatio: LINE_HEIGHTS.body, measurer: ctx.measurer });
+  let layout = lay(TEXT_AUTO_MAX_WIDTH);
+  if (layout.naturalWidth > TEXT_AUTO_MAX_WIDTH && layout.boxes.some((box) => box.kind === 'code' || box.kind === 'table')) {
+    layout = lay(Math.min(TEXT_AUTO_MAX_WIDE, Math.ceil(layout.naturalWidth)));
+  }
   return {
-    width: Math.max(min.width, Math.min(TEXT_AUTO_MAX_WIDTH, Math.ceil(layout.width) + 4)),
-    height: Math.max(min.height, Math.ceil(layout.lines.length * lineHeight)),
+    width: Math.max(min.width, Math.ceil(layout.width) + 4 + pad.x * 2),
+    height: Math.max(min.height, Math.ceil(layout.height + pad.y * 2)),
   };
 }
 
@@ -2461,24 +2473,37 @@ const TEXT_ALIGN_ANCHOR: Record<TextAlign, 'start' | 'middle' | 'end'> = {
 
 /**
  * The concrete `FontSpec` a Text node renders/measures/edits with: its role's base font, with
- * `textBold` forcing the heaviest weight and `textItalic` adding the style — independent toggles,
- * combinable with any role. Shared by `freeText` (the SVG renderer), `naturalTextHeight` (auto-grow
- * measurement), and `DraftNodeView.tsx`'s `editorStyle` (the live textarea overlay), so all three
- * can never disagree about what a styled Text node looks like. Byte-identical to the role's own
- * `FontSpec` object — not just equal, the same reference — whenever neither toggle is set, so a
- * node saved before these fields existed never picks up a stray `italic: false` key.
+ * `textBold` forcing the heaviest weight, `textItalic` adding the style and `textFont` choosing the
+ * face — independent choices, combinable with any role. Shared by `freeText` (the SVG renderer),
+ * `naturalTextHeight` (auto-grow measurement), and `DraftNodeView.tsx`'s `editorStyle` (the live
+ * textarea overlay), so all three can never disagree about what a styled Text node looks like.
+ * Byte-identical to the role's own `FontSpec` object — not just equal, the same reference — whenever
+ * none is set, so a node saved before these fields existed never picks up a stray `italic: false` key.
  */
-export function fontForTextNode(
-  node: Pick<DraftNode, 'textRole' | 'annotation' | 'textBold' | 'textItalic'>,
-): FontSpec {
+export function fontForTextNode(node: Pick<DraftNode, 'textRole' | 'annotation' | 'textBold' | 'textItalic' | 'textFont'>): FontSpec {
   const baseFont = FONTS_BY_TEXT_ROLE[effectiveTextRole(node)];
-  return node.textBold || node.textItalic
+  return node.textBold || node.textItalic || node.textFont
     ? {
         ...baseFont,
+        ...(node.textFont ? { stack: node.textFont } : {}),
         weight: node.textBold ? 700 : baseFont.weight,
         ...(node.textItalic ? { italic: true as const } : {}),
       }
     : baseFont;
+}
+
+/** The inset between a Text element's box and its words: room for its background to show. */
+export function textPaddingOf(node: Pick<DraftNode, 'textBackground'>): { x: number; y: number } {
+  switch (node.textBackground) {
+    case 'card':
+      return { x: 12, y: 10 };
+    case 'banner':
+      return { x: 14, y: 10 };
+    case 'marker':
+      return { x: 5, y: 2 };
+    default:
+      return { x: 0, y: 0 };
+  }
 }
 
 /**
@@ -2505,44 +2530,306 @@ function emptyTextPlaceholder(node: DraftNode, ctx: DescribeContext): Shape[] {
   ];
 }
 
+/** A path's `d` with its numbers at two decimals: float noise in an exported SVG is only bytes. */
+const pathD = (parts: TemplateStringsArray, ...values: number[]): string =>
+  parts.reduce((out, part, index) => out + part + (index < values.length ? String(Math.round(values[index]! * 100) / 100) : ''), '');
+
+/** GitHub's alert colours, in the diagram's own palette. */
+const CALLOUT_ACCENTS: Record<CalloutKind, Accent> = {
+  note: 'blue',
+  tip: 'green',
+  important: 'violet',
+  warning: 'amber',
+  caution: 'rose',
+};
+
+/** A highlighter is yellow unless the element has a colour of its own. */
+const markerAccent = (accent: Accent | undefined): Accent => (accent && accent !== 'neutral' ? accent : 'amber');
+
+interface TextInk {
+  /** The words' own colour. */
+  text: string;
+  /** List markers, rules and quote bars: quieter than the words. */
+  muted: string;
+  /** A Markdown link, ~~struck~~ words and `[spans]{.colour}` keep their own colour unless knocked out. */
+  knockout: boolean;
+}
+
+function textInkOf(node: DraftNode, ctx: DescribeContext): TextInk {
+  const palette = accentOf(ctx.theme, node.accent);
+  const accented = node.accent !== undefined && node.accent !== 'neutral';
+  if (node.textBackground === 'banner') return { text: ctx.theme.canvas, muted: ctx.theme.canvas, knockout: true };
+  if (node.textBackground === 'card') {
+    return { text: accented ? palette.text : ctx.theme.text, muted: accented ? palette.chip : ctx.theme.textMuted, knockout: false };
+  }
+  if (effectiveTextRole(node) === 'label') return { text: ctx.theme.textFaint, muted: ctx.theme.textFaint, knockout: false };
+  if (node.textBackground === 'marker') return { text: ctx.theme.text, muted: ctx.theme.textMuted, knockout: false };
+  return { text: accented ? palette.chip : ctx.theme.text, muted: accented ? palette.chip : ctx.theme.textMuted, knockout: false };
+}
+
+const runFill = (run: RichRun, ink: TextInk, base: string, ctx: DescribeContext): string => {
+  if (ink.knockout) return base;
+  if (run.style.color) return accentOf(ctx.theme, run.style.color).chip;
+  if (run.style.link) return ctx.theme.accents.blue.chip;
+  return base;
+};
+
+/** An `i` or `!` drawn as strokes, not a glyph: no font can be missing it. */
+function calloutGlyph(kind: CalloutKind, x: number, cy: number, size: number, color: string): Shape[] {
+  const r = size / 2;
+  const cx = x + r;
+  const stroke: Stroke = { color, width: Math.max(1.2, size / 11), linecap: 'round' };
+  const warn = kind === 'warning' || kind === 'caution';
+  const outline: Shape = warn
+    ? { t: 'path', d: pathD`M${cx} ${cy - r}L${cx + r} ${cy + r * 0.8}L${cx - r} ${cy + r * 0.8}Z`, stroke: { ...stroke, linecap: undefined } }
+    : { t: 'ellipse', cx, cy, rx: r, ry: r, stroke };
+  if (kind === 'tip') {
+    return [outline, { t: 'path', d: pathD`M${cx - r * 0.42} ${cy + 0.02 * r}L${cx - r * 0.1} ${cy + r * 0.34}L${cx + r * 0.45} ${cy - r * 0.32}`, stroke }];
+  }
+  // `i` stands for information; `!` for everything that asks to be heeded.
+  const bang = kind !== 'note';
+  const top = warn ? cy - r * 0.25 : cy - r * 0.45;
+  const bottom = warn ? cy + r * 0.25 : cy + r * 0.05;
+  const dot = warn ? cy + r * 0.52 : cy + r * 0.42;
+  return bang
+    ? [outline, { t: 'path', d: pathD`M${cx} ${top}L${cx} ${bottom}M${cx} ${dot}L${cx} ${dot + 0.01}`, stroke }]
+    : [outline, { t: 'path', d: pathD`M${cx} ${cy - r * 0.42}L${cx} ${cy - r * 0.41}M${cx} ${cy - r * 0.08}L${cx} ${cy + r * 0.45}`, stroke }];
+}
+
+function richCodeBlock(
+  box: Extract<RichBox, { kind: 'code' }>,
+  origin: { x: number; y: number },
+  ctx: DescribeContext,
+): Shape[] {
+  const x = origin.x + box.x;
+  const y = origin.y + box.y;
+  const language = languageForFence(box.lang);
+  const metrics = ctx.measurer.metrics(box.font);
+  const lines = tokenizeCode(box.code, language);
+  const codeTheme = CODE_THEMES[ctx.theme.name];
+  const top = y + box.header + box.padY;
+  const shapes: Shape[] = [
+    { t: 'rect', x: x + 0.5, y: y + 0.5, w: box.w - 1, h: box.h - 1, r: 6, fill: ctx.theme.codeBg, stroke: { color: ctx.theme.codeBorder, width: 1 } },
+  ];
+  if (box.lang) {
+    const label = LANGUAGE_LABELS[language] === 'Text' ? box.lang : LANGUAGE_LABELS[language];
+    const font: FontSpec = { stack: 'mono', size: 9, weight: 500 };
+    shapes.push({
+      t: 'text',
+      x: x + box.padX,
+      y: y + 5,
+      layout: layoutText(label.toLowerCase(), { font, maxWidth: Math.max(16, box.w - box.padX * 2), lineHeight: 12, maxLines: 1, measurer: ctx.measurer }),
+      font,
+      fill: ctx.theme.textFaint,
+      align: 'start',
+    });
+  }
+  const tints: Shape[] = [];
+  if (language === 'diff') {
+    lines.slice(0, box.visibleLines).forEach((line, index) => {
+      const scope = line[0]?.scope;
+      if (scope !== 'inserted' && scope !== 'deleted') return;
+      tints.push({
+        t: 'rect',
+        x: x + 1,
+        y: top + index * box.lineHeight,
+        w: box.w - 2,
+        h: box.lineHeight,
+        fill: colorForScope(codeTheme, scope),
+        opacity: 0.12,
+      });
+    });
+  }
+  shapes.push({
+    t: 'group',
+    // Code never wraps: a long line runs to the block's edge and is cut there, like an editor's.
+    clip: { x: x + 1, y: y + 1, w: box.w - 2, h: box.h - 2, r: 5 },
+    children: [
+      ...tints,
+      {
+        t: 'code',
+        x: x + box.padX,
+        y: top,
+        lines,
+        font: box.font,
+        lineHeight: box.lineHeight,
+        charWidth: ctx.measurer.charWidth(box.font),
+        ascent: metrics.ascent,
+        descent: metrics.descent,
+        theme: codeTheme,
+        firstLine: 0,
+        lastLine: Math.min(lines.length, box.visibleLines) - 1,
+      },
+    ],
+  });
+  return shapes;
+}
+
+/**
+ * A Text element: Markdown, laid out by `layoutRichText` and drawn here — backgrounds and boxes
+ * first, then the words, then what sits on the words (underlines, strike-throughs).
+ */
 function freeText(node: DraftNode, ctx: DescribeContext): Shape[] {
   const body = node.text ?? '';
   if (!body.trim()) return emptyTextPlaceholder(node, ctx);
-  const role = effectiveTextRole(node);
   const font = fontForTextNode(node);
+  const pad = textPaddingOf(node);
   const palette = accentOf(ctx.theme, node.accent);
-  const lineHeight = font.size * LINE_HEIGHTS.body;
-  const layout = layoutText(body, {
+  const ink = textInkOf(node, ctx);
+  const layout = layoutRichText(body, {
     font,
-    maxWidth: Math.max(16, node.width),
-    lineHeight,
-    maxLines: Math.max(1, Math.floor(node.height / lineHeight)),
+    maxWidth: Math.max(16, node.width - pad.x * 2),
+    lineHeightRatio: LINE_HEIGHTS.body,
+    maxHeight: Math.max(font.size * LINE_HEIGHTS.body, node.height - pad.y * 2),
     measurer: ctx.measurer,
   });
-  const fill = role === 'label'
-    ? ctx.theme.textFaint
-    : node.accent && node.accent !== 'neutral'
-      ? palette.chip
-      : ctx.theme.text;
-  const align = TEXT_ALIGN_ANCHOR[node.textAlign ?? 'left'];
-  const x = align === 'middle' ? node.width / 2 : align === 'end' ? node.width : 0;
-  return [
-    {
-      t: 'text',
-      x,
-      y: 0,
-      layout,
-      font,
-      fill,
-      align,
-    },
-  ];
+  const origin = { x: pad.x, y: pad.y };
+  const nodeAlign = TEXT_ALIGN_ANCHOR[node.textAlign ?? 'left'];
+
+  const back: Shape[] = [];
+  const under: Shape[] = [];
+  const over: Shape[] = [];
+  const lines: RichTextShape['lines'] = [];
+
+  if (node.textBackground === 'card') {
+    back.push(outlineShape(node.id, ctx, { x: 0.5, y: 0.5, w: node.width - 1, h: node.height - 1, r: 8 }, { fill: palette.fill, stroke: { color: palette.line, width: 1 } }));
+  } else if (node.textBackground === 'banner') {
+    back.push(outlineShape(node.id, ctx, { x: 0, y: 0, w: node.width, h: node.height, r: 6 }, { fill: palette.chip }));
+  }
+
+  for (const box of layout.boxes) {
+    const x = origin.x + box.x;
+    const y = origin.y + box.y;
+    if (box.kind === 'code') {
+      back.push(...richCodeBlock(box, origin, ctx));
+    } else if (box.kind === 'rule') {
+      back.push({ t: 'path', d: pathD`M${x} ${y}H${x + box.w}`, stroke: { color: ink.knockout ? ink.muted : ctx.theme.border, width: 1 } });
+    } else if (box.kind === 'frame') {
+      if (box.frame.kind === 'callout') {
+        const tone = accentOf(ctx.theme, CALLOUT_ACCENTS[box.frame.callout!]);
+        back.push(
+          { t: 'rect', x: x + 0.5, y: y + 0.5, w: box.w - 1, h: box.h - 1, r: 6, fill: tone.fill, stroke: { color: tone.line, width: 1 }, opacity: ink.knockout ? 0.9 : undefined },
+          { t: 'group', clip: { x, y, w: box.w, h: box.h, r: 6 }, children: [{ t: 'rect', x, y, w: 3, h: box.h, fill: tone.chip }] },
+        );
+      } else {
+        back.push({ t: 'rect', x, y, w: 3, h: box.h, r: 1.5, fill: ink.knockout ? ink.muted : ctx.theme.borderStrong });
+      }
+    } else {
+      // Table: a quiet ruled grid, the header row set apart by a fill.
+      const header = box.rows.find((row) => row.header);
+      if (header) back.push({ t: 'rect', x, y: origin.y + header.y, w: box.w, h: header.h, fill: ink.knockout ? 'rgba(0, 0, 0, 0.12)' : ctx.theme.codeBg });
+      const rule: Stroke = { color: ink.knockout ? ink.muted : ctx.theme.border, width: 1 };
+      for (const row of box.rows.slice(1)) back.push({ t: 'path', d: pathD`M${x} ${origin.y + row.y}H${x + box.w}`, stroke: rule });
+      for (const column of box.columns.slice(1)) back.push({ t: 'path', d: pathD`M${origin.x + column.x} ${y}V${y + box.h}`, stroke: rule });
+      back.push({ t: 'rect', x: x + 0.5, y: y + 0.5, w: box.w - 1, h: box.h - 1, r: 4, stroke: rule });
+    }
+  }
+
+  for (const line of layout.lines) {
+    let align = line.align ?? nodeAlign;
+    // Right-to-left text starts at the right: "left aligned" means its own start.
+    if (line.rtl && !line.align && align === 'start') align = 'end';
+    const shift = align === 'middle' ? (line.avail - line.width) / 2 : align === 'end' ? line.avail - line.width : 0;
+    const left = origin.x + line.left + Math.max(0, shift);
+    const top = origin.y + line.top;
+    const baseline = top + line.baseline;
+    const base = line.callout ? accentOf(ctx.theme, CALLOUT_ACCENTS[line.callout]).chip : line.muted ? ctx.theme.textMuted : ink.text;
+    const lineInk = ink.knockout ? ink.text : base;
+
+    if (node.textBackground === 'marker' && line.runs.length > 0 && line.level !== 'cell') {
+      back.push({
+        t: 'rect',
+        x: left - 3,
+        y: top + line.height * 0.18,
+        w: line.width + 6,
+        h: line.height * 0.7,
+        r: 3,
+        fill: accentOf(ctx.theme, markerAccent(node.accent)).chip,
+        opacity: ctx.theme.name === 'dark' ? 0.34 : 0.26,
+      });
+    }
+
+    if (line.marker) {
+      const marker = line.marker;
+      const markerInk = ink.knockout ? ink.text : ink.muted;
+      if (marker.kind === 'bullet') {
+        const cx = origin.x + marker.x + marker.size / 2;
+        const cy = top + line.baseline - (line.height > 0 ? font.size * 0.33 : 0);
+        const r = marker.size / 2;
+        if (marker.depth % 3 === 0) under.push({ t: 'ellipse', cx, cy, rx: r, ry: r, fill: markerInk });
+        else if (marker.depth % 3 === 1) under.push({ t: 'ellipse', cx, cy, rx: r, ry: r, stroke: { color: markerInk, width: 1 } });
+        else under.push({ t: 'rect', x: cx - r, y: cy - r, w: r * 2, h: r * 2, fill: markerInk });
+      } else if (marker.kind === 'task') {
+        const size = marker.size;
+        const x = origin.x + marker.x + 1;
+        const y = top + (line.height - size) / 2;
+        const done = ink.knockout ? ink.text : accentOf(ctx.theme, node.accent && node.accent !== 'neutral' ? node.accent : 'green').chip;
+        under.push(
+          marker.checked
+            ? { t: 'rect', x, y, w: size, h: size, r: 3, fill: done }
+            : { t: 'rect', x: x + 0.5, y: y + 0.5, w: size - 1, h: size - 1, r: 3, stroke: { color: markerInk, width: 1.2 } },
+        );
+        if (marker.checked) {
+          under.push({
+            t: 'path',
+            d: pathD`M${x + size * 0.24} ${y + size * 0.52}L${x + size * 0.43} ${y + size * 0.7}L${x + size * 0.77} ${y + size * 0.32}`,
+            stroke: { color: ink.knockout ? palette.chip : ctx.theme.canvas, width: Math.max(1.4, size / 8), linecap: 'round' },
+          });
+        }
+      } else if (marker.kind === 'callout') {
+        under.push(...calloutGlyph(marker.callout, origin.x + marker.x, top + line.height / 2, marker.size, lineInk));
+      } else {
+        lines.push({ baseline, runs: [{ x: origin.x + marker.x, text: marker.text, width: marker.width, font: marker.font, fill: markerInk }] });
+      }
+    }
+
+    const runs: TextRun[] = [];
+    for (const run of line.runs) {
+      const x = left + run.x;
+      const fill = runFill(run, ink, lineInk, ctx);
+      if (run.style.code) {
+        under.push({
+          t: 'rect',
+          x,
+          y: top + (line.height - run.font.size * 1.45) / 2,
+          w: run.width,
+          h: run.font.size * 1.45,
+          r: 3,
+          fill: ink.knockout ? 'rgba(0, 0, 0, 0.18)' : ctx.theme.codeBg,
+          stroke: ink.knockout ? undefined : { color: ctx.theme.codeBorder, width: 1 },
+        });
+      }
+      if (run.style.mark) {
+        under.push({
+          t: 'rect',
+          x: x - 1,
+          y: top + (line.height - run.font.size * 1.3) / 2,
+          w: run.width + 2,
+          h: run.font.size * 1.3,
+          r: 2,
+          fill: accentOf(ctx.theme, 'amber').chip,
+          opacity: ctx.theme.name === 'dark' ? 0.38 : 0.3,
+        });
+      }
+      const thin = Math.max(1, run.font.size / 15);
+      if (run.style.link) {
+        over.push({ t: 'path', d: pathD`M${x} ${baseline + run.font.size * 0.14}H${x + run.width}`, stroke: { color: fill, width: thin }, opacity: 0.7 });
+      }
+      if (run.style.strike) {
+        over.push({ t: 'path', d: pathD`M${x} ${baseline - run.font.size * 0.3}H${x + run.width}`, stroke: { color: fill, width: thin } });
+      }
+      runs.push({ x: x + run.pad, text: run.text, width: run.width - run.pad * 2, font: run.font, fill });
+    }
+    if (runs.length > 0) lines.push({ baseline, ...(line.rtl ? { rtl: true } : {}), runs });
+  }
+
+  return [...back, ...under, { t: 'rich', lines }, ...over];
 }
 
 /** Where a Text node stops growing on its own as its text gets longer — same idea as
  *  `NOTE_AUTO_MAX_HEIGHT`, independent constant since Text has no header/padding chrome eating
- *  into it. */
-export const TEXT_AUTO_MAX_HEIGHT = 400;
+ *  into it. Tall enough for a code block or a short table, which a Text element now holds. */
+export const TEXT_AUTO_MAX_HEIGHT = 720;
 
 /**
  * The height a Text node needs to show all of `text` at its current width, role and emphasis — at
@@ -2551,22 +2838,21 @@ export const TEXT_AUTO_MAX_HEIGHT = 400;
  * just width, because a heavier or larger font wraps at a different point than the body default.
  */
 export function naturalTextHeight(
-  node: Pick<DraftNode, 'width' | 'textRole' | 'annotation' | 'textBold' | 'textItalic'>,
+  node: Pick<DraftNode, 'width'> & TextStyleFields,
   text: string,
   ctx: Pick<DescribeContext, 'measurer'>,
 ): number {
   const font = fontForTextNode(node);
-  const lineHeight = font.size * LINE_HEIGHTS.body;
-  const lines = text.trim()
-    ? layoutText(text, {
+  const pad = textPaddingOf(node);
+  const height = text.trim()
+    ? layoutRichText(text, {
         font,
-        maxWidth: Math.max(16, node.width),
-        lineHeight,
+        maxWidth: Math.max(16, node.width - pad.x * 2),
+        lineHeightRatio: LINE_HEIGHTS.body,
         measurer: ctx.measurer,
-      }).lines.length
-    : 1;
-  const needed = Math.ceil(lines * lineHeight);
-  return Math.min(TEXT_AUTO_MAX_HEIGHT, needed);
+      }).height
+    : font.size * LINE_HEIGHTS.body;
+  return Math.min(TEXT_AUTO_MAX_HEIGHT, Math.ceil(height + pad.y * 2));
 }
 
 /** A boundary is explicitly meant to feel stronger than an ordinary node — "someone drawing a

@@ -2,7 +2,7 @@
 name: draft-canvas
 description: Draws a codebase's architecture as a detailed, editable Draft Canvas diagram — C4 views with look-inside drill-downs, presentation flows of the real request path, notes, code snippets and source evidence — through the Draft Canvas desktop app's MCP tools. Use when someone asks to diagram, draw, map, visualize or explain the architecture of a repository, service or system in Draft Canvas, to turn a codebase into a diagram, or to refresh such a diagram after the code changed.
 metadata:
-  version: "5"
+  version: "6"
   contract: "3"
   requires: Draft Canvas Desktop with agent access on (MCP server draft-canvas)
 ---
@@ -67,7 +67,9 @@ system (fan out to sub-agents per deployable on a big monorepo, if you can). The
   (retry → dead letter, compensation). Never invent an order.
 - **Notes, three to eight**, each with an `about`: `decision` (a choice the code or an ADR makes),
   `warning` (a risk you can see), `question` (what the code can't tell you), `code` (≤ 15 lines that say
-  more than a sentence).
+  more than a sentence). A `label` is Markdown — a legend, an endpoint table, a runbook checklist or a
+  `> [!WARNING]` callout — and, placed beside its element (`attach: false`), takes a `style`
+  ([mcp-playbook.md](references/mcp-playbook.md#styled-labels)).
 
 ## 3. Check it
 

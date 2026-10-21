@@ -816,7 +816,7 @@ export function noteNode(spec: NoteSpec, ctx: DescribeContext): DraftNode {
     return createNode({ id: spec.id, type: 'code', x: 0, y: 0, code, language: spec.language ?? 'plaintext', ...naturalCodeSize(code, ctx), ...parent });
   }
   if (spec.type === 'text') {
-    const node = createNode({ id: spec.id, type: 'text', x: 0, y: 0, text: spec.text, ...parent });
+    const node = createNode({ id: spec.id, type: 'text', x: 0, y: 0, text: spec.text, ...spec.style, ...parent });
     return { ...node, ...naturalTextSize(node, spec.text, ctx, { width: 40, height: DEFAULTS.textHeight }) };
   }
   return sizeToFit(createNode({ id: spec.id, type: 'note', x: 0, y: 0, text: spec.text, noteKind: spec.kind, ...parent }), ctx);

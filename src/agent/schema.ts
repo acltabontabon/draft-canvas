@@ -10,7 +10,7 @@
  * the same field-by-field answer.
  */
 
-import { ACCENTS, CODE_LANGUAGES, CONNECTOR_KINDS, EDGE_SEMANTICS, OPEN_POINT_KINDS, SIDES } from '../document/types';
+import { ACCENTS, CODE_LANGUAGES, CONNECTOR_KINDS, EDGE_SEMANTICS, OPEN_POINT_KINDS, SIDES, TEXT_ALIGNS, TEXT_BACKGROUNDS, TEXT_FONTS, TEXT_ROLES } from '../document/types';
 import { STARTER_IDS } from '../starters/types';
 import { AGENT_LIMITS, NEW_ID } from './input';
 import { SET_FIELDS } from './fields';
@@ -187,12 +187,27 @@ const flow: Schema = {
   additionalProperties: false,
 };
 
+const labelStyle: Schema = {
+  type: 'object',
+  description: 'A free label\'s look (not an attached one). In an update, false/"none" turns a field off and null makes it plain.',
+  properties: {
+    role: { enum: TEXT_ROLES },
+    font: { enum: TEXT_FONTS },
+    background: { enum: ['none', ...TEXT_BACKGROUNDS], description: 'In its color.' },
+    align: { enum: TEXT_ALIGNS },
+    bold: { type: 'boolean' },
+    italic: { type: 'boolean' },
+    color: { enum: ACCENTS },
+  },
+  additionalProperties: false,
+};
+
 const note: Schema = {
   type: 'object',
-  description: 'Context, an assumption or a decision — only what helps explain the diagram. Multiline text is fine. Mark an inference from code as an assumption. kind "code" is a code snippet (code + language, shown as code, never run); kind "label" is a plain Text label.',
+  description: 'Context, an assumption or a decision — only what helps explain the diagram. Multiline text is fine. Mark an inference from code as an assumption. kind "code" is a code snippet (code + language, shown as code, never run); kind "label" is a Text label written in Markdown (get_capabilities notes.labels), with an optional style.',
   properties: {
     id: id('note'),
-    text: text(AGENT_LIMITS.noteLength, 'The words; not for kind "code".'),
+    text: text(AGENT_LIMITS.noteLength, 'The words; not for kind "code". Markdown for kind "label".'),
     kind: { enum: NOTE_FORM_NAMES, description: 'note (default), question, warning, decision — or code, or label.' },
     code: text(AGENT_LIMITS.codeLength, 'kind "code" only. Indentation is kept.'),
     language: { enum: CODE_LANGUAGES, description: 'kind "code" only. Default plaintext.' },
@@ -203,6 +218,7 @@ const note: Schema = {
     },
     attach: { type: 'boolean', description: 'Default true for an element: a native attachment (moves, exports and is removed with it). false: a free card beside it, for a callout meant to be read at a glance. true about a group: attached to the boundary.' },
     near: { type: 'string', description: 'Older name for about.' },
+    style: ref('labelStyle'),
   },
   required: ['id'],
   additionalProperties: false,
@@ -296,6 +312,7 @@ const roomDefs: Record<string, Schema> = {
   group,
   flow,
   note,
+  labelStyle,
   element0: element(0),
   ...Object.fromEntries(Array.from({ length: AGENT_LIMITS.insideDepth }, (_, i) => [`element${i + 1}`, undescribed(element(i + 1))])),
 };
@@ -340,6 +357,7 @@ const setProperties: Record<string, Schema> = {
   to: { type: 'string' },
   steps: ref('steps'), variantOf: nullable({ type: 'string' }),
   code: text(4000), language: { enum: CODE_LANGUAGES },
+  style: nullable(ref('labelStyle')),
   about: { anyOf: [{ type: 'string' }, { type: 'array', minItems: 1, maxItems: 40, items: { type: 'string' } }] },
   near: { type: 'string' }, place: ref('place'), route: nullable(ref('route')), context: nullable(text(500)), resolved: { type: 'boolean' }, resolution: nullable(text(500)), evidence: nullable(ref('evidence')),
 };

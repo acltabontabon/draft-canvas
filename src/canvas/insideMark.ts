@@ -40,7 +40,7 @@ export function depthGlyphPaths(preset: PersonalityPreset, seedId: string): Dept
 export function layerBehind(shapes: readonly Shape[]): Shape[] {
   const kept: Shape[] = [];
   for (const shape of shapes) {
-    if (shape.t === 'text' || shape.t === 'code') continue;
+    if (shape.t === 'text' || shape.t === 'rich' || shape.t === 'code') continue;
     if (shape.t === 'group') {
       const children = layerBehind(shape.children);
       if (children.length > 0) kept.push({ ...shape, children });

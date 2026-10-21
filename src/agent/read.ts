@@ -277,6 +277,7 @@ function project(
         ...(node.type === 'code' ? { language: node.language, code: body.text } : { text: body.text }),
         ...(body.truncated ? { truncated: true } : {}),
         ...(node.accent ? { color: node.accent } : {}),
+        ...(node.type === 'text' ? labelStyleOf(node) : {}),
         ...group,
         ...(nearest ? { nearest } : {}),
         ...geometry,
@@ -471,4 +472,17 @@ export function readAttachment(file: DraftDocument, args: { attachmentId?: unkno
     return { diagramId, revision, view: { path }, attachmentId: attachment.id, hostId: host.id, kind: attachment.type, offset, nextOffset: end < characters.length ? end : null, totalCharacters: characters.length, ...(attachment.type === 'code' ? { code: content, language: attachment.language } : { text: content, noteKind: attachment.noteKind }) };
   }
   throw new AgentError('NOT_FOUND', 'No attachment with that id exists in this view.');
+}
+
+/** A label's look, in `style`'s own words — only what differs from a plain label. */
+function labelStyleOf(node: DraftNode): { style?: Record<string, string | boolean> } {
+  const style: Record<string, string | boolean> = {};
+  if (node.textRole) style.role = node.textRole;
+  else if (node.annotation) style.role = 'label';
+  if (node.textFont) style.font = node.textFont;
+  if (node.textBackground) style.background = node.textBackground;
+  if (node.textAlign && node.textAlign !== 'left') style.align = node.textAlign;
+  if (node.textBold) style.bold = true;
+  if (node.textItalic) style.italic = true;
+  return Object.keys(style).length > 0 ? { style } : {};
 }

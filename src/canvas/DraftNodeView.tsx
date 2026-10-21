@@ -19,7 +19,9 @@ import {
   naturalNoteHeight,
   naturalTextHeight,
   noteLayout,
+  textPaddingOf,
 } from '../nodes/describe';
+import { activeTextEditor, handleMarkdownKey } from './textEditor';
 import { nodeReading } from '../nodes/readings';
 import { HANDLE_ANCHORS } from '../edges/routing';
 import { beginClipScope, emitDisplayList } from '../render/svg/emit';
@@ -194,7 +196,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
     // A note whose text already overflows its box (sized down by hand, or grown past what a
     // narrower width can hold) opens tall enough to show all of it — see `liveHeight`.
     if ((isNote || isText) && node) {
-      const grown = isText ? grownTextHeight(el, node.height) : grownNoteHeight(node, el, node.height);
+      const grown = isText ? grownTextHeight(node, el, node.height) : grownNoteHeight(node, el, node.height);
       if (grown !== null) setLiveHeight(grown);
     }
     // Only the transition into editing matters; the node's own fields are read once, at that moment.
@@ -202,6 +204,21 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   }, [editing]);
 
   const stopEditing = useCallback(() => setEditing(false), []);
+
+  // A Text element's editor hands its textarea to the format bar (in the element's popover) and
+  // tells the popover to show that bar, for exactly as long as it's open.
+  useLayoutEffect(() => {
+    if (!editing || !isText) return;
+    activeTextEditor.current = editorRef.current;
+    useUiStore.getState().setEditingText(id);
+    return () => {
+      if (activeTextEditor.current === editorRef.current) activeTextEditor.current = null;
+      if (useUiStore.getState().editingTextId === id) useUiStore.getState().setEditingText(null);
+      // The editor grew to fit the Markdown source; the drawing sizes itself from what the source
+      // renders as, which is usually shorter. Let go of the source's height.
+      setLiveHeight(null);
+    };
+  }, [editing, isText, id]);
 
   // `liveHeight` is kept until the committed document has caught up with it, so the box never
   // dips back to its old height for the frame between the commit and React Flow re-projecting.
@@ -273,12 +290,14 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   // the ternary above); that *is* the memoization the linter can't see through.
   // While a note is being edited its body belongs to the textarea alone: drawing the committed
   // text underneath as well would show two copies wherever the two wrap differently by a word.
-  const editingNote = editing && isNote;
+  const editingNote = editing && (isNote || isText);
   const technologyIcon = useTechnologyIcon(node?.technology);
   const shapes = useMemo(() => {
     if (!liveNode) return [];
     beginClipScope(liveNode.id);
-    const described = editingNote ? { ...liveNode, text: '' } : liveNode;
+    // A Text element keeps its background (a zero-width space is "something", so no empty-state
+    // outline) while its source is edited over it.
+    const described = editingNote ? { ...liveNode, text: isText ? '\u200b' : '' } : liveNode;
     return emitDisplayList(describeNode(described, describeContext(theme, preset)));
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- see comment above.
   }, [liveNode, theme, preset, editingNote, technologyIcon]);
@@ -386,8 +405,9 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
         useEditorStore.getState().updateNodeText(node.id, text, height === undefined ? undefined : { height });
       }
     } else if (isText) {
-      // Same grow-only contract as a note's box, above: never shrinks what's already on screen.
-      const needed = Math.max(naturalTextHeight(node, value, describeContext(theme)), liveHeight ?? 0);
+      // Same grow-only contract as a note's box, above — measured from what the Markdown renders
+      // as, not from the source's height in the editor (headings, code and markers set differently).
+      const needed = naturalTextHeight(node, value, describeContext(theme));
       const height = needed > node.height ? needed : undefined;
       if (value !== (node.text ?? '') || height !== undefined) {
         useEditorStore.getState().updateNodeText(node.id, value, height === undefined ? undefined : { height });
@@ -404,7 +424,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   };
 
   const growToFit = (el: HTMLTextAreaElement) => {
-    const grown = isText ? grownTextHeight(el, effectiveHeight) : grownNoteHeight(node, el, effectiveHeight);
+    const grown = isText ? grownTextHeight(node, el, effectiveHeight) : grownNoteHeight(node, el, effectiveHeight);
     if (grown !== null) setLiveHeight(grown);
   };
 
@@ -624,7 +644,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
           className={`dc-node-editor nodrag nowheel${isCode ? ' dc-node-editor-code' : ''}${isNote ? ' dc-node-editor-note' : ''}`}
           defaultValue={isCode ? (node.code ?? '') : (node.text ?? '')}
           aria-label={isCode ? 'Code' : isNote ? 'Note' : isText ? 'Text' : 'Label'}
-          placeholder={isNote ? 'Add a note…' : isText ? 'Type something…' : undefined}
+          placeholder={isNote ? 'Add a note…' : isText ? 'Type something… Markdown works: **bold**, - lists, ```code```' : undefined}
           spellCheck={false}
           style={editorStyle(node, effectiveHeight >= (isText ? TEXT_AUTO_MAX_HEIGHT : NOTE_AUTO_MAX_HEIGHT), editingLabel)}
           onInput={isNote || isText ? (event) => growToFit(event.currentTarget) : undefined}
@@ -651,9 +671,10 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
               stopEditing();
               return;
             }
-            // Bold/italic are whole-node toggles, not a rich-text selection format, so they apply
-            // without touching editing state or the caret — the same reason there is no inline
-            // formatting model to route a text selection through.
+            // Markdown: format shortcuts on a selection, list continuation, Tab to nest.
+            if (isText && handleMarkdownKey(event)) return;
+            // With nothing selected, bold and italic stay whole-element toggles: they apply without
+            // touching editing state or the caret.
             if (isText && (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'b') {
               event.preventDefault();
               useEditorStore.getState().updateNodeById(node.id, { textBold: !node.textBold }, 'Toggle bold');
@@ -745,12 +766,11 @@ function grownNoteHeight(node: DraftNode, el: HTMLTextAreaElement, current: numb
   return Math.min(NOTE_AUTO_MAX_HEIGHT, needed);
 }
 
-/** Same idea as `grownNoteHeight`, without a note's padding geometry — a Text editor sits at
- *  `inset: 0` (see `editorStyle`), so the textarea's own `scrollHeight` already is the needed box
- *  height. */
-function grownTextHeight(el: HTMLTextAreaElement, current: number): number | null {
+/** Same idea as `grownNoteHeight`, with a Text element's own inset — none, unless it has a
+ *  background (`textPaddingOf`), which the editor sits inside of (see `editorStyle`). */
+function grownTextHeight(node: DraftNode, el: HTMLTextAreaElement, current: number): number | null {
   if (current >= TEXT_AUTO_MAX_HEIGHT) return null;
-  const needed = Math.ceil(el.scrollHeight);
+  const needed = Math.ceil(el.scrollHeight + textPaddingOf(node).y * 2);
   if (needed <= current + 1) return null;
   return Math.min(TEXT_AUTO_MAX_HEIGHT, needed);
 }
@@ -811,12 +831,21 @@ function editorStyle(
     // Same role/bold/italic resolution `freeText` renders with (`fontForTextNode`), so committing
     // an edit never makes the text visibly jump — and the same `textAlign` value CSS and the SVG
     // shape's `text-anchor` mapping (`TEXT_ALIGN_ANCHOR` in `describe.ts`) both key off.
+    // The Markdown source is edited in the element's body font, inside its background's padding,
+    // over the background itself (the drawing keeps it while editing).
     const font = fontForTextNode(node);
+    const pad = textPaddingOf(node);
+    const knockout = node.textBackground === 'banner';
     return {
       font: cssFont(font),
       lineHeight: `${font.size * LINE_HEIGHTS.body}px`,
-      inset: 0,
+      inset: `${pad.y}px ${pad.x}px`,
       textAlign: node.textAlign ?? 'left',
+      background: node.textBackground === 'card' || knockout ? 'transparent' : undefined,
+      color: knockout ? 'var(--dc-canvas)' : undefined,
+      caretColor: knockout ? 'var(--dc-canvas)' : undefined,
+      tabSize: 2,
+      overflowY: atGrowthCap ? 'auto' : 'hidden',
     };
   }
   if (node.type === 'group') {

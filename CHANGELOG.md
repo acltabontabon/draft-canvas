@@ -15,6 +15,11 @@ the release notes and the in-app What's New are generated from here. See
 
 #### Added
 
+- **Rich text** — Text shapes are written in Markdown: headings, bold and italic, highlights,
+  inline code, syntax-highlighted code blocks and diffs, lists and checklists, tables, quotes,
+  GitHub-style callouts and coloured words, drawn the same on the canvas and in every export. A
+  format bar and shortcuts help while you type, and Aa adds Serif, Mono and Hand fonts and Card,
+  Marker and Banner backgrounds. AI agents can write and style them too. <!-- highlight -->
 - **AI Agent actors** — an Actor can now be an AI Agent, drawn as a robot, for assistants, chatbots
   and autonomous agents that act on your system. Agents can draw them too. <!-- highlight -->
 - **Actors that talk to each other** — connectors between people, AI agents and devices label

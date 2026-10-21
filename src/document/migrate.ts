@@ -512,6 +512,56 @@ function migrateAddWaypoints(doc: Record<string, unknown>): Record<string, unkno
 }
 
 /**
+ * Plain text written before v21, as Markdown that renders the same words in the same places. A
+ * frozen copy, like `nearestSides`: what a v20 file meant can't change when the live parser does.
+ *
+ * - Every character Markdown could read as syntax is backslash-escaped where it could act: emphasis,
+ *   code, highlight and link punctuation anywhere; list, heading and quote markers at a line's start;
+ *   the `://` that would turn an address into a link.
+ * - Leading indentation becomes no-break spaces, which Markdown keeps, so an indented line stays
+ *   indented instead of starting a list or losing its offset.
+ * - A blank line becomes a line holding one no-break space, so the gap stays one line tall rather
+ *   than becoming a paragraph break.
+ */
+export function escapeLegacyText(text: string): string {
+  return text
+    .split(/\r\n|\r|\n/)
+    .map((line) => {
+      if (line.trim() === '') return '\u00a0';
+      const indent = /^[ \t]*/.exec(line)![0];
+      let rest = line.slice(indent.length).replace(/[\\`*_~=[\]<>|&!]/g, '\\$&').replace(/:\/\//g, '\\://');
+      if (/^(?:#|[-+](?:\s|$|-)|>)/.test(rest)) rest = `\\${rest}`;
+      rest = rest.replace(/^(\d+)([.)])(?=\s|$)/, '$1\\$2');
+      return indent.replace(/\t/g, '    ').replace(/ /g, '\u00a0') + rest;
+    })
+    .join('\n');
+}
+
+/**
+ * v21 makes a Text element's words Markdown. Every Text node and every Text attachment written
+ * before it is escaped (`escapeLegacyText`) so it reads exactly as it did; nothing else changes.
+ */
+function migrateTextToMarkdown(doc: Record<string, unknown>): Record<string, unknown> {
+  if (!Array.isArray(doc.nodes)) return doc;
+  const escapeText = (item: Record<string, unknown>) =>
+    item.type === 'text' && typeof item.text === 'string' && item.text !== '' ? { ...item, text: escapeLegacyText(item.text) } : item;
+  return {
+    ...doc,
+    nodes: doc.nodes.map((raw) => {
+      if (!raw || typeof raw !== 'object') return raw;
+      const node = escapeText(raw as Record<string, unknown>);
+      if (!Array.isArray(node.attachments)) return node;
+      return {
+        ...node,
+        attachments: node.attachments.map((attachment) =>
+          attachment && typeof attachment === 'object' ? escapeText(attachment as Record<string, unknown>) : attachment,
+        ),
+      };
+    }),
+  };
+}
+
+/**
  * `MIGRATIONS[n]` upgrades a version-`n` document to version `n + 1`.
  */
 const MIGRATIONS: Record<number, Migration> = {
@@ -535,6 +585,7 @@ const MIGRATIONS: Record<number, Migration> = {
   // Evidence is optional on every element/relationship; old graphs already mean exactly the same.
   18: (document) => document,
   19: migrateAddWaypoints,
+  20: everyRoom(migrateTextToMarkdown),
 };
 
 export class UnsupportedVersionError extends Error {
