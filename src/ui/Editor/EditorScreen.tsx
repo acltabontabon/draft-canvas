@@ -23,6 +23,7 @@ import { useCommandContext } from '../../commands/useCommandContext';
 import type { StarterId } from '../../starters';
 import { defaultSizeFor } from '../../document/factory';
 import { DEFAULTS } from '../../document/limits';
+import { pathKey } from '../../depth/tree';
 import { boundsOf, placeNear } from '../../document/operations';
 import { naturalCodeSize, describeContext } from '../../nodes/describe';
 import { isActivatableTarget, isEditableTarget, isInOwnKeyboardRegion, isTextChord } from '../../lib/isEditableTarget';
@@ -68,7 +69,6 @@ const ExportDialogChunk = retryableLazy(() => import('./ExportDialog').then((mod
 // build entirely, the same way `App.tsx` gates every other desktop-only chunk.
 const ProposalPanelChunk = __DESKTOP__ ? retryableLazy(() => import('../../desktop/ui/ProposalPanel').then((module) => ({ default: module.ProposalPanel }))) : null;
 
-/** Whether a modal dialog (`Modal`'s `aria-modal` panel) is up — the editor's shortcuts stand down. */
 /**
  * What a ⌘C/⌘X keydown just copied, for the browser's copy event that follows it to write — see
  * `onCopyOrCut`. Cleared as soon as that event reads it; a keystroke whose event never comes (Safari
@@ -76,12 +76,9 @@ const ProposalPanelChunk = __DESKTOP__ ? retryableLazy(() => import('../../deskt
  */
 let keyedClipboardText: string | null = null;
 
+/** Whether a modal dialog (`Modal`'s `aria-modal` panel) is up — the editor's shortcuts, chords as
+ *  well as bare keys, stand down. */
 function modalIsOpen(): boolean {
-  return document.querySelector('[aria-modal="true"]') !== null;
-}
-
-/** A modal dialog is up: the editor's chords stand down as well as its bare keys. */
-function dialogIsOpen(): boolean {
   return document.querySelector('[aria-modal="true"]') !== null;
 }
 
@@ -389,19 +386,23 @@ function EditorScreen({ session }: { session: DocumentSession }) {
   // Coming back out. The selection is restored by the store (`setMode` is the one door every exit
   // goes through); the camera can only be restored here, because React Flow owns it. Keyed on the
   // transition rather than on any one exit path, so all six of them — Escape, ⌘Enter, the bar's
-  // Exit, the corner control, the palette, opening another document — get it for free.
-  const presentedFrom = useRef<DraftViewport | null>(null);
+  // Exit, the corner control, the palette, opening another document — get it for free. The camera
+  // is remembered with the room and document it belongs to: after ⌘↓/⌘↑ while presenting, or an
+  // exit by opening another document, it would frame a different canvas, so it is dropped instead.
+  const presentedFrom = useRef<{ viewport: DraftViewport; documentId: string; roomKey: string } | null>(null);
   useEffect(() => {
-    const remembered = useEditorStore.getState().editReturn?.viewport ?? null;
+    const state = useEditorStore.getState();
     if (mode === 'present') {
-      presentedFrom.current = remembered;
+      const viewport = state.editReturn?.viewport ?? null;
+      presentedFrom.current = viewport ? { viewport, documentId: state.document.metadata.id, roomKey: pathKey(state.path) } : null;
       return;
     }
     const going = presentedFrom.current;
     presentedFrom.current = null;
+    if (!going || going.documentId !== state.document.metadata.id || going.roomKey !== pathKey(state.path)) return;
     // Nothing fights this: playback has stopped by the time the mode flips, so no step focus is
     // in flight to animate over the top of it.
-    if (going) void setViewport(going, { duration: motionMs(320) });
+    void setViewport(going.viewport, { duration: motionMs(320) });
   }, [mode, setViewport]);
 
   useKeyboard({ createAtPointer, onPresent, playback });
@@ -930,7 +931,7 @@ export function useKeyboard({
       // `isEditableTarget` doesn't count — without this, Backspace deleted the selection
       // behind the dialog and letter keys dropped nodes under it. Its own Escape/Tab
       // handling is untouched. (A keyboard region stops bare keys further down, after the ⌘ chords.)
-      if (dialogIsOpen()) return;
+      if (modalIsOpen()) return;
       // Mid-gesture (a node dragged or resized, a connector end being repointed), commands wait:
       // Delete removes the node React Flow is dragging, which aborts the drag without its stop
       // callback and strands the undo bracket open; Escape or ⌘A rebuild the nodes under the drag;

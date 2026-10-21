@@ -576,6 +576,17 @@ describe('taking manual control of a bundle', () => {
     expect(reloaded.ok && reloaded.document.flows[0]!.steps).toHaveLength(3);
   });
 
+  it('keeps an open point about a converted member, on that member\'s own leg', () => {
+    const { edges } = bundleInStore();
+    const pointId = useEditorStore.getState().addOpenPoint('tentative', [{ kind: 'edge', id: edges[1]!.id }])!;
+
+    useEditorStore.getState().convertBundleToJunction(edges[0]!.id);
+    const doc = useEditorStore.getState().document;
+    const junction = doc.nodes.find((node) => node.type === 'ellipse')!;
+    const leg = doc.edges.find((edge) => edge.source === junction.id && edge.target === edges[1]!.target)!;
+    expect(doc.openPoints.find((point) => point.id === pointId)?.targets).toEqual([{ kind: 'edge', id: leg.id }]);
+  });
+
   it('does nothing for a connector that is not bundled', () => {
     reset();
     const state = useEditorStore.getState();

@@ -13,7 +13,9 @@
 import type { DraftDocument } from '../document/types';
 import type { Selection } from '../history/HistoryStack';
 import { isEditableTarget } from '../lib/isEditableTarget';
+import { typedWithin } from '../lib/recentTyping';
 import { fileWithLiveViewport, isInteracting, useEditorStore } from '../store/editorStore';
+import { useUiStore } from '../store/uiStore';
 
 /** Changes once per page load, so a revision from before a reload or restart can never match. */
 const EPOCH = Math.random().toString(36).slice(2, 8);
@@ -33,11 +35,20 @@ export function currentRevision(): string {
   return `o:${EPOCH}.${useEditorStore.getState().revision}`;
 }
 
+/** How long after the last keystroke a focused field still counts as being typed in. Focus alone
+ *  isn't enough: counted as busy, an idle title or inspector field held every agent change back
+ *  until the person happened to click elsewhere. */
+const TYPING_IDLE_MS = 2500;
+
 /** Why an outside change must wait, if it must. Never steals focus to make the moment right. */
 export function busyReason(): string | undefined {
   if (isInteracting()) return 'Someone is dragging or resizing on the canvas.';
-  if (typeof document !== 'undefined' && isEditableTarget(document.activeElement)) return 'Someone is typing in the diagram.';
+  if (typeof document !== 'undefined' && isEditableTarget(document.activeElement) && typedWithin(TYPING_IDLE_MS)) {
+    return 'Someone is typing in the diagram.';
+  }
   if (useEditorStore.getState().mode === 'present') return 'The diagram is being presented.';
+  // A change to the diagram cancels a trace in progress (see `editorStore`), losing the person's picks.
+  if (useUiStore.getState().flowTrace) return 'Someone is tracing a flow on the diagram.';
   return undefined;
 }
 
@@ -59,5 +70,11 @@ export function handleAgentRequest(request: AgentEditorRequest): AgentEditorRepl
   const busy = busyReason();
   if (busy) return { kind: 'refused', code: 'BUSY', revision, reason: busy };
   const applied = state.applyToFile(request.label, () => request.file);
-  return applied ? { kind: 'committed', revision: currentRevision() } : { kind: 'committed', revision };
+  if (applied) return { kind: 'committed', revision: currentRevision() };
+  // Refused by the store's own last gates, which `busyReason` can miss in a race. Answered as
+  // committed, the agent was told its change landed when nothing changed.
+  if (isInteracting()) return { kind: 'refused', code: 'BUSY', revision, reason: 'Someone is dragging or resizing on the canvas.' };
+  if (useUiStore.getState().readOnly) return { kind: 'refused', code: 'BUSY', revision, reason: 'The diagram is read-only.' };
+  // Otherwise the file already was what was asked for: nothing to change, and nothing refused.
+  return { kind: 'committed', revision };
 }

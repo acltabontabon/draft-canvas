@@ -19,6 +19,20 @@
   background: transparent;
 }
 
+/* The whole diagram on its own compositor layer. Without it a pan moved an uncomposited transform,
+ * so every frame re-layerized and re-painted every shape and connector, and the main thread spent
+ * most of each frame waiting for that commit: at 500 shapes a pointer pan ran at 88 ms frames
+ * (p95), a shape drag at 43 ms; with it both hold one frame. A layer re-rasters whole at each new
+ * scale, though, which doubled the cost of every zoom step — so it is dropped while the zoom moves
+ * (`data-zooming`, set by `useZoomVariable` in `Canvas.tsx`) and rebuilt, sharp, once it settles. */
+.dc-canvas .react-flow__viewport {
+  will-change: transform;
+}
+
+.dc-canvas .react-flow[data-zooming] .react-flow__viewport {
+  will-change: auto;
+}
+
 /* A faint inset ring for when the canvas itself has real keyboard focus (Tab landed here) but
  * nothing is selected yet — without it, that state would have no visible feedback at all. Once
  * something *is* selected, the node/edge rules above already carry the stronger signal; this stays

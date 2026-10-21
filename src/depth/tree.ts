@@ -346,7 +346,7 @@ function rememberView(file: DraftDocument, path: DepthPath, view: DraftDocument)
 }
 
 function keyOf(path: DepthPath): string {
-  return path.join(' ');
+  return path.join('\u0000');
 }
 
 /**

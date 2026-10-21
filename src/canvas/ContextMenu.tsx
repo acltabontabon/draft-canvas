@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useToolbarHeight } from './useToolbarHeight';
 import { menuItemsOf, type AlignIcon, type ContextMenuEntry } from '../commands/contextMenu';
+import { warmCopyExports } from '../commands/registry';
 import type { Command } from '../commands/types';
 import { Icon, type IconName } from '../ui/common/Icon';
 import { isEditableTarget } from '../lib/isEditableTarget';
@@ -61,6 +62,8 @@ const ALIGN_GLYPHS: Record<AlignIcon, IconName> = {
  */
 export function ContextMenu({ screenPosition, entries, viaKeyboard = false, onSelect, onDismiss }: ContextMenuProps) {
   const panel = useRef<HTMLDivElement>(null);
+  // Its Copy rows must be able to start a clipboard write inside the click — see `warmCopyExports`.
+  useEffect(warmCopyExports, []);
 
   const [measuredSize, setMeasuredSize] = useState({ width: 0, height: 0 });
   // oxlint-disable-next-line react-hooks/exhaustive-deps

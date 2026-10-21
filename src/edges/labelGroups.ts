@@ -26,18 +26,20 @@
  */
 import type { DraftEdge, DraftNode } from '../document/types';
 import { routingPlan } from './bundles';
-import { LABEL_PADDING_X, LABEL_PADDING_Y, edgeLabelSize, layoutEdgeLabel } from './labelLayout';
+import { LABEL_PADDING_X, LABEL_PADDING_Y, layoutEdgeLabel } from './labelLayout';
 import { distanceToPolyline, type Point } from './nearest';
-import { sameNodeGeometry } from './sameGeometry';
+import { sameNodeGeometry, type PlanScope } from './sameGeometry';
 import { obstaclesForEdge } from './obstacles';
+import { edgeRoutes } from './edgeRoutes';
 import {
   LABEL_BEND_CLEARANCE,
   LABEL_LINE_GAP,
   flattenPath,
+  labelChipSide,
   labelLaneOffset,
   laneIndex,
   rectOf,
-  routeBetween,
+  responseAwayFor,
   type Rect,
   type Side,
 } from './routing';
@@ -85,24 +87,38 @@ function polyOf(d: string): Poly | null {
 }
 
 function pointAt(poly: Poly, distance: number): Point {
+  return walkerOf(poly)(distance);
+}
+
+/**
+ * `pointAt` for a run of distances that mostly climbs: each answer starts looking from the segment
+ * the last one ended in, so stepping along a route is one pass over it rather than a rescan from its
+ * start per step. The same segment and arithmetic as a fresh search, so the same points.
+ */
+function walkerOf(poly: Poly): (distance: number) => Point {
   const { points, at } = poly;
-  if (distance <= 0) return points[0]!;
-  for (let i = 1; i < points.length; i += 1) {
-    if (at[i]! >= distance) {
-      const span = at[i]! - at[i - 1]!;
-      const t = span === 0 ? 0 : (distance - at[i - 1]!) / span;
-      return { x: points[i - 1]!.x + (points[i]!.x - points[i - 1]!.x) * t, y: points[i - 1]!.y + (points[i]!.y - points[i - 1]!.y) * t };
-    }
-  }
-  return points[points.length - 1]!;
+  let i = 1;
+  let last = -Infinity;
+  return (distance) => {
+    if (distance <= 0) return points[0]!;
+    if (distance < last) i = 1;
+    last = distance;
+    while (i < points.length && at[i]! < distance) i += 1;
+    if (i >= points.length) return points[points.length - 1]!;
+    const span = at[i]! - at[i - 1]!;
+    const t = span === 0 ? 0 : (distance - at[i - 1]!) / span;
+    return { x: points[i - 1]!.x + (points[i]!.x - points[i - 1]!.x) * t, y: points[i - 1]!.y + (points[i]!.y - points[i - 1]!.y) * t };
+  };
 }
 
 /** How far two routes from the same point run as one line before they part. */
 function sharedLength(a: Poly, b: Poly): number {
   const max = Math.min(a.length, b.length);
+  const alongA = walkerOf(a);
+  const alongB = walkerOf(b);
   const same = (s: number) => {
-    const p = pointAt(a, s);
-    const q = pointAt(b, s);
+    const p = alongA(s);
+    const q = alongB(s);
     return Math.hypot(p.x - q.x, p.y - q.y) <= SAME_LINE;
   };
   if (!same(0)) return 0;
@@ -179,12 +195,12 @@ interface Routed {
   chip?: Rect;
 }
 
-function compute(nodes: readonly DraftNode[], edges: readonly DraftEdge[]): Map<string, LabelGroup> {
+function compute(nodes: readonly DraftNode[], edges: readonly DraftEdge[], scope: PlanScope): Map<string, LabelGroup> {
   const found = new Map<string, LabelGroup>();
   const buckets = new Map<string, DraftEdge[]>();
   for (const edge of edges) {
     if (!eligible(edge)) continue;
-    const key = `${edge.source} ${lookOf(edge)}`;
+    const key = `${edge.source}\u0000${lookOf(edge)}`;
     const bucket = buckets.get(key);
     if (bucket) bucket.push(edge);
     else buckets.set(key, [edge]);
@@ -194,7 +210,7 @@ function compute(nodes: readonly DraftNode[], edges: readonly DraftEdge[]): Map<
 
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
   const lanes = laneIndex(edges);
-  const plan = routingPlan(nodes, edges);
+  const plan = routingPlan(nodes, edges, scope);
   const routed = new Map<string, Routed | null>();
   // Routed exactly as both renderers route it, and only when something asks.
   const route = (edge: DraftEdge): Routed | null => {
@@ -204,21 +220,33 @@ function compute(nodes: readonly DraftNode[], edges: readonly DraftEdge[]): Map<
     let result: Routed | null = null;
     if (source && target) {
       const lane = lanes.get(edge.id)?.offset ?? 0;
-      const drawn = routeBetween(rectOf(source), rectOf(target), edge.routing, {
-        anchors: { source: edge.sourceAnchor, target: edge.targetAnchor },
-        waypoints: edge.waypoints,
-        lane,
-        label: edge.label ? edgeLabelSize(edge.label) : undefined,
-        obstacles: obstaclesForEdge(nodes, edge.source, edge.target),
-        spine: plan.spineFor(edge.id),
-      });
+      // A connector with a reply keeps its label on the side away from the reply line, on both
+      // renderers; routed without that, its chip was checked for room where it is never drawn.
+      const away = responseAwayFor(edge.hasResponse, lane);
+      // From the cache the canvas and the crossing plan share (`edgeRoutes.ts`).
+      const drawn = edgeRoutes(
+        {
+          source: rectOf(source),
+          target: rectOf(target),
+          routing: edge.routing,
+          label: edge.label,
+          sourceAnchor: edge.sourceAnchor,
+          targetAnchor: edge.targetAnchor,
+          hasResponse: edge.hasResponse,
+          lane,
+          spine: plan.spineFor(edge.id),
+          obstacles: obstaclesForEdge(nodes, edge.source, edge.target, scope),
+          waypoints: edge.waypoints,
+        },
+        scope,
+      ).request;
       const poly = polyOf(drawn.d);
       if (poly) {
         let chip: Rect | undefined;
         if (edge.label?.trim()) {
           const layout = layoutEdgeLabel(edge.label);
           const nudge = labelLaneOffset(drawn.source.side, drawn.target.side, lane);
-          chip = labelChipBox(drawn.labelSide, drawn.labelX + nudge.x, drawn.labelY + nudge.y, layout.width + LABEL_PADDING_X * 2, layout.height + LABEL_PADDING_Y * 2);
+          chip = labelChipBox(labelChipSide(drawn.labelSide, away), drawn.labelX + nudge.x, drawn.labelY + nudge.y, layout.width + LABEL_PADDING_X * 2, layout.height + LABEL_PADDING_Y * 2);
         }
         result = { edge, poly, chip };
       }
@@ -227,6 +255,18 @@ function compute(nodes: readonly DraftNode[], edges: readonly DraftEdge[]): Map<
     return result;
   };
   const shapes = nodes.filter((node) => node.type !== 'group').map(rectOf);
+  // Each connector's box around its two shapes, once: `others` asks for every probe of every group.
+  const spans: { edge: DraftEdge; box: Rect }[] = [];
+  for (const edge of edges) {
+    const source = nodeById.get(edge.source);
+    const target = nodeById.get(edge.target);
+    if (!source || !target) continue;
+    const x = Math.min(source.x, target.x);
+    const y = Math.min(source.y, target.y);
+    spans.push({ edge, box: { x, y, width: Math.max(source.x + source.width, target.x + target.width) - x, height: Math.max(source.y + source.height, target.y + target.height) - y } });
+  }
+  /** The connectors near a lead's route, by lead: a group grows around one lead, asking per candidate. */
+  const nearLead = new Map<Routed, DraftEdge[]>();
 
   for (const bucket of candidates) {
     const members = bucket.map(route).filter((entry): entry is Routed => entry !== null);
@@ -275,18 +315,15 @@ function compute(nodes: readonly DraftNode[], edges: readonly DraftEdge[]): Map<
    */
   function others(group: Routed[]): Routed[] {
     const ids = new Set(group.map((member) => member.edge.id));
-    const near = regionOf(group[0]!.poly);
-    return edges
-      .filter((edge) => {
-        if (ids.has(edge.id)) return false;
-        const source = nodeById.get(edge.source);
-        const target = nodeById.get(edge.target);
-        if (!source || !target) return false;
-        const x = Math.min(source.x, target.x);
-        const y = Math.min(source.y, target.y);
-        const box = { x, y, width: Math.max(source.x + source.width, target.x + target.width) - x, height: Math.max(source.y + source.height, target.y + target.height) - y };
-        return overlaps(box, near, NEARBY);
-      })
+    const lead = group[0]!;
+    let nearby = nearLead.get(lead);
+    if (!nearby) {
+      const near = regionOf(lead.poly);
+      nearby = spans.filter((span) => overlaps(span.box, near, NEARBY)).map((span) => span.edge);
+      nearLead.set(lead, nearby);
+    }
+    return nearby
+      .filter((edge) => !ids.has(edge.id))
       .map(route)
       .filter((entry): entry is Routed => entry !== null);
   }
@@ -310,14 +347,16 @@ function compute(nodes: readonly DraftNode[], edges: readonly DraftEdge[]): Map<
     for (const spot of spots) {
       const distance = (spot.from + spot.to) / 2;
       const point = pointAt(lead.poly, distance);
-      // Anyone else on this stretch of line would seem to carry the label as well.
-      const crowded = rest.some((other) => {
-        for (let s = distance - spot.extent / 2; s <= distance + spot.extent / 2; s += STEP * 2) {
-          const probe = pointAt(lead.poly, s);
-          if ((distanceToPolyline(probe, other.poly.points) ?? Infinity) <= CROWDED) return true;
-        }
-        return false;
-      });
+      // Anyone else on this stretch of line would seem to carry the label as well. The probes along
+      // the stretch are the same for every other connector, so they are walked out once.
+      const probes: Point[] = [];
+      if (rest.length > 0) {
+        const along = walkerOf(lead.poly);
+        for (let s = distance - spot.extent / 2; s <= distance + spot.extent / 2; s += STEP * 2) probes.push(along(s));
+      }
+      const crowded = rest.some((other) =>
+        probes.some((probe) => (distanceToPolyline(probe, other.poly.points) ?? Infinity) <= CROWDED),
+      );
       if (crowded) continue;
       const sides: Side[] = spot.run.horizontal ? ['top', 'bottom'] : ['right', 'left'];
       for (const side of sides) {
@@ -365,13 +404,16 @@ function planOf(groups: Map<string, LabelGroup>): LabelGroupPlan {
 let lastBuilt: { nodes: readonly DraftNode[]; edges: readonly DraftEdge[]; plan: LabelGroupPlan } | null = null;
 
 function planOfGroups(nodes: readonly DraftNode[], edges: readonly DraftEdge[]): LabelGroupPlan {
-  const groups = intern(compute(nodes, edges));
+  const groups = intern(compute(nodes, edges, 'canvas'));
   lastGroups = groups;
   return planOf(groups);
 }
 
+/** Plans for a `'transient'` render, apart from the canvas's (see `PlanScope`). */
+const transientCache = new WeakMap<readonly DraftNode[], WeakMap<readonly DraftEdge[], LabelGroupPlan>>();
+
 /** Which connectors share one label, for the whole document (or an export's subset of it). */
-export function labelGroupPlan(nodes: readonly DraftNode[], edges: readonly DraftEdge[]): LabelGroupPlan {
+export function labelGroupPlan(nodes: readonly DraftNode[], edges: readonly DraftEdge[], scope: PlanScope = 'canvas'): LabelGroupPlan {
   const byNodes = cache.get(nodes);
   const cached = byNodes?.get(edges);
   if (cached) return cached;
@@ -380,6 +422,17 @@ export function labelGroupPlan(nodes: readonly DraftNode[], edges: readonly Draf
   // Without it every keystroke in a label re-routed the members of every shared label.
   const previous = lastBuilt;
   const reused = previous && previous.edges === edges && sameNodeGeometry(previous.nodes, nodes);
+  if (scope === 'transient') {
+    if (reused) return previous.plan;
+    const byTransient = transientCache.get(nodes);
+    const built = byTransient?.get(edges);
+    if (built) return built;
+    // Not interned: interning against the canvas's groups is only worth anything to the canvas.
+    const plan = planOf(compute(nodes, edges, scope));
+    if (byTransient) byTransient.set(edges, plan);
+    else transientCache.set(nodes, new WeakMap([[edges, plan]]));
+    return plan;
+  }
   const plan = reused ? previous.plan : planOfGroups(nodes, edges);
   lastBuilt = { nodes, edges, plan };
   if (byNodes) byNodes.set(edges, plan);

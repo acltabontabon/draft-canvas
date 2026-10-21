@@ -98,17 +98,6 @@ pub async fn quit_ack(app: AppHandle, decision: QuitDecision) -> Result<(), AppE
 }
 
 #[tauri::command]
-pub async fn quit_now(app: AppHandle) -> Result<(), AppError> {
-    quit::quit_now(&app);
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn settings_get(app: AppHandle) -> Result<DesktopSettings, AppError> {
-    run_blocking(&app, |_, state| Ok(state.settings.get().public())).await
-}
-
-#[tauri::command]
 pub async fn settings_set(
     app: AppHandle,
     patch: SettingsPatch,

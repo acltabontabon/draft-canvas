@@ -5,6 +5,7 @@ import { PRODUCT } from '../../../product';
 import { openLink } from '../../../host/openLink';
 import { useUnreadReleaseNotes } from '../../common/useUnreadReleaseNotes';
 import { Button } from '../../common/Button';
+import { ARRANGE_FAILED, notifyLoadFailure } from '../../common/notifyLoadFailure';
 import { Tooltip } from '../../common/Tooltip';
 import { FindReplaceHost } from '../FindReplaceDialog';
 import { ToolbarMenu, type ToolbarMenuItem } from './ToolbarMenu';
@@ -120,7 +121,8 @@ export function ToolbarActions({ onPresent, onExport }: ToolbarActionsProps) {
           .arrangeRoom()
           .then((moved) => {
             if (moved) useUiStore.getState().requestFit();
-          });
+          })
+          .catch((error: unknown) => notifyLoadFailure(error, ARRANGE_FAILED));
       },
     },
     {

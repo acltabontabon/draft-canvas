@@ -313,6 +313,17 @@ describe('moving a shape', () => {
 });
 
 describe('the plan itself', () => {
+  it('is not displaced by an export of another diagram', () => {
+    const { nodes, edges } = squareCrossing();
+    const before = crossingPlan(nodes, edges);
+    // An export, its preview, a room of a render of every level: not the canvas. Taking the canvas's
+    // slot made its next commit re-plan every connector for nothing.
+    const other = crossroads();
+    renderDocumentSvg(addEdges(addNodes(createDocument('Other'), other.nodes), other.edges), { theme: 'dark' });
+    const renamed = nodes.map((node) => (node.id === 'up' ? { ...node, text: 'Renamed' } : node));
+    expect(crossingPlan(renamed, edges)).toBe(before);
+  });
+
   it('hands back the identical result for an unchanged document', () => {
     const { nodes, edges } = squareCrossing();
     expect(crossingPlan(nodes, edges)).toBe(crossingPlan(nodes, edges));

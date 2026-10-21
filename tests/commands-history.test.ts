@@ -50,6 +50,13 @@ describe('command history', () => {
     expect(frequencyBonus('add-service')).toBeGreaterThan(frequencyBonus('connect-to'));
   });
 
+  it('does not remember a command named for one flow, which would leave a key per flow behind', () => {
+    recordUse('flow-trace-f_abc123');
+    recordUse('flow-trace');
+    expect(recentIds()).toEqual(['flow-trace']);
+    expect([...prefs.keys()].some((key) => key.includes('f_abc123'))).toBe(false);
+  });
+
   it('only ever writes short values, well inside the preferences cap', () => {
     for (let i = 0; i < 12; i += 1) recordUse(`edge-reconnect-target-${i}`);
     for (const [key, value] of prefs) {

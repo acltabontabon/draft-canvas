@@ -175,7 +175,7 @@ test('Open file shares the explorer with file selection, previews, and native me
   await expect(dialog.getByRole('complementary', { name: 'Selection preview' }).locator('.dc-starter-glyph')).toBeVisible();
   await dialog.getByRole('button', { name: 'Close', exact: true }).click();
   await expect(open).toBeFocused();
-  expect(await page.evaluate(() => window.__shell.calls().filter(call => call.command === 'explorer_open_file' || call.command === 'open_dialog').length)).toBe(0);
+  expect(await page.evaluate(() => window.__shell.calls().filter(call => call.command === 'explorer_open_file').length)).toBe(0);
   await page.evaluate(() => window.__shell.emit({ type: 'menu', command: 'open' }));
   await dialog.getByRole('complementary', { name: 'Places' }).getByRole('button', { name: 'Documents', exact: true }).click();
   await dialog.getByRole('option', { name: 'Diagrams', exact: true }).dblclick();
@@ -189,7 +189,6 @@ test('Open file shares the explorer with file selection, previews, and native me
   await dialog.getByRole('button', { name: 'Open diagram', exact: true }).click();
   await expect(dialog).toBeHidden();
   await expect(page.locator('.dc-title-input')).toHaveValue('Selected from explorer');
-  expect(await page.evaluate(() => window.__shell.calls().filter(call => call.command === 'open_dialog').length)).toBe(0);
 
   // Cancelling a file switch leaves both unsaved work and the file explorer intact.
   const pane = await page.locator(CANVAS).boundingBox();

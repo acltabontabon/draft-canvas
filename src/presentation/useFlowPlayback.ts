@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { getViewportForBounds, useReactFlow, useStore, useStoreApi } from '@xyflow/react';
+import { useReactFlow, useStore, useStoreApi } from '@xyflow/react';
 import { useShallow } from 'zustand/react/shallow';
 import { findFlow, flowIsPlayable } from '../document/flow';
 import { boundsOf, type Bounds } from '../document/operations';
@@ -73,23 +73,6 @@ export function resolveFlowSteps(
   return result;
 }
 
-/**
- * The bounding box a step's playback focus fits to: the union of its edges'
- * endpoints and its `extraNodes`. `null` when the step lights up no members
- * at all (an explicit-viewport-only step, which `focusOn` handles before
- * ever calling this). Exported for unit testing.
- */
-export function stepFocusBounds(target: FlowPlaybackStep, nodesById: Map<string, DraftNode>): Bounds | null {
-  const members: DraftNode[] = [...target.extraNodes];
-  for (const edge of target.edges) {
-    const source = nodesById.get(edge.source);
-    const dest = nodesById.get(edge.target);
-    if (source) members.push(source);
-    if (dest) members.push(dest);
-  }
-  return boundsOf(members);
-}
-
 /** Where the presentation is in its telling of a flow — see `FlowPlaybackState.stage`. */
 export type PlaybackStage = 'opening' | 'step' | 'closing';
 
@@ -135,33 +118,6 @@ export interface FlowPlaybackController {
    *  beginning mid-sentence is the one thing a presenter can't recover from gracefully. */
   nextFlow: () => void;
   previousFlow: () => void;
-}
-
-/** Never zoom in so far on a single connection that context is lost. */
-const MAX_STEP_ZOOM = 1.15;
-const STEP_PADDING = 0.4;
-
-/**
- * Resolves the camera viewport a step's playback focus should show: its
- * explicit `viewport` verbatim, or a bounds-fit of its members capped at
- * `MAX_STEP_ZOOM`. `null` when the step has neither (nothing to focus on).
- *
- * Pure — no React Flow instance required — so a headless reader (the retired
- * GIF exporter was one) can compute the same simple camera path for a step
- * rather than reimplementing this math. The live presentation's
- * directed camera (`framing.ts`) starts from the same box and adds what only
- * a live view has: where the camera already is, and the room the chrome takes.
- */
-export function resolveStepViewport(
-  target: FlowPlaybackStep,
-  nodesById: Map<string, DraftNode>,
-  viewWidth: number,
-  viewHeight: number,
-): DraftViewport | null {
-  if (target.viewport) return target.viewport;
-  const bounds = stepFocusBounds(target, nodesById);
-  if (!bounds) return null;
-  return getViewportForBounds(bounds, viewWidth, viewHeight, 0.1, MAX_STEP_ZOOM, STEP_PADDING);
 }
 
 /**

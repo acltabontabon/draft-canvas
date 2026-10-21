@@ -14,8 +14,7 @@ import type { DraftDocument } from '../../document/types';
 import { deserializeDocument } from '../../export/project';
 import { parseMermaidFlowchart } from './parse';
 
-export { looksLikeMermaid, parseMermaidFlowchart, unfence, MERMAID_LIMITS } from './parse';
-export type { MermaidCreate, MermaidElement, MermaidGroup, MermaidParse, MermaidRelationship } from './parse';
+export { looksLikeMermaid, parseMermaidFlowchart, MERMAID_LIMITS } from './parse';
 
 export type ImportResult =
   | { ok: true; document: DraftDocument; unsupported: string[]; legibility: unknown }

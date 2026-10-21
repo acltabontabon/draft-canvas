@@ -275,6 +275,22 @@ describe('copy, paste and duplicate', () => {
     expect(pasted.doc.openPoints[1]!.targets).toEqual([{ kind: 'edge', id: pasted.edgeIds[0] }]);
   });
 
+  it('carries a point about something inside a copied shape, re-pointed at the copy\'s own room', () => {
+    const { doc, api } = scene();
+    const inner = createNode({ type: 'service', x: 0, y: 0, text: 'Ledger writer' });
+    const roomy = { ...doc, nodes: doc.nodes.map((node) => (node.id === api.id ? { ...node, inside: { nodes: [inner], edges: [], flows: [], viewport: { x: 0, y: 0, zoom: 1 } } } : node)) };
+    const raised = raise(roomy, 'tentative', [{ kind: 'node', id: inner.id }], 'Split it?');
+    // Cut is a copy and a delete: the point must be in the clipboard, or the delete loses it for good.
+    const fragment = extractFragment(raised.doc, [api.id]);
+    expect(fragment.openPoints).toHaveLength(1);
+    const pasted = pasteFragment(removeElements(raised.doc, [api.id]), fragment, { x: 0, y: 500 });
+    const innerCopy = pasted.doc.nodes.find((node) => node.id === pasted.nodeIds[0])!.inside!.nodes[0]!;
+    expect(innerCopy.id).not.toBe(inner.id);
+    expect(pasted.doc.openPoints).toHaveLength(1);
+    expect(pasted.doc.openPoints[0]!.targets).toEqual([{ kind: 'node', id: innerCopy.id }]);
+    expect(pasted.doc.openPoints[0]!.context).toBe('Split it?');
+  });
+
   it('a fragment copied without a marked element carries no point', () => {
     const { doc, api, ledger } = scene();
     const raised = raise(doc, 'parked', [{ kind: 'node', id: ledger.id }]);

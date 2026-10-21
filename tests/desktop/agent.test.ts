@@ -13,6 +13,7 @@ import { __resetAgentBases, agentTiming } from '../../src/desktop/agent';
 import { __resetAgentWrites } from '../../src/desktop/agentWrites';
 import { agentActivity } from '../../src/desktop/agentActivity';
 import { useUiStore } from '../../src/store/uiStore';
+import { watchTyping } from '../../src/lib/recentTyping';
 import { createHarness, decoder, type Harness } from './harness';
 
 /** A 1×1 PNG, as the browser's encoder would hand it back (no `pHYs` chunk of its own). */
@@ -217,6 +218,41 @@ describe('agent requests on desktop', () => {
     const out = await request('update_diagram', addMailer(currentRevision()), { handle, open: true });
     expect(out.error?.code).toBe('BUSY');
     useEditorStore.getState().endInteraction();
+  });
+
+  it('waits for someone typing in a field, but not for a field that only holds focus', async () => {
+    watchTyping();
+    const field = document.body.appendChild(document.createElement('input'));
+    field.focus();
+    try {
+      const commit = () => answerInEditor({ kind: 'commit', expectedRevision: currentRevision(), file: fileOf(useEditorStore.getState()), label: 'x' });
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(Date.now() + 60_000);
+      expect(commit()).not.toMatchObject({ code: 'BUSY' });
+      field.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }));
+      expect(commit()).toMatchObject({ kind: 'refused', code: 'BUSY' });
+      vi.setSystemTime(Date.now() + 3_000);
+      expect(commit()).not.toMatchObject({ code: 'BUSY' });
+      expect(document.activeElement).toBe(field);
+    } finally {
+      vi.useRealTimers();
+      field.remove();
+    }
+  });
+
+  it('does not cancel a flow the person is tracing: says BUSY instead', async () => {
+    const handle = await openOrders();
+    agentTiming.busyWaitMs = 60;
+    agentTiming.busyPollMs = 20;
+    useUiStore.getState().setFlowTrace({ documentId: 'd', path: [], revision: 0, title: 'Trace', edgeIds: [], choices: [], message: '' });
+    try {
+      const out = await request('update_diagram', addMailer(currentRevision()), { handle, open: true });
+      expect(out.error?.code).toBe('BUSY');
+      expect(useUiStore.getState().flowTrace).not.toBeNull();
+      expect(answerInEditor({ kind: 'commit', expectedRevision: currentRevision(), file: fileOf(useEditorStore.getState()), label: 'x' })).toMatchObject({ kind: 'refused', code: 'BUSY' });
+    } finally {
+      useUiStore.getState().setFlowTrace(null);
+    }
   });
 
   it('says when a save after the change failed, so the change is not sent again', async () => {

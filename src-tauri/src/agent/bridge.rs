@@ -412,7 +412,18 @@ async fn serve<R, W>(
                         crate::util::lock(&calls).insert(id, registry.clone());
                         let (agent, out_tx, calls) = (agent.clone(), out_tx.clone(), calls.clone());
                         tauri::async_runtime::spawn(async move {
-                            let result = broker::call(&agent, &tool, args, &registry).await;
+                            // A call walks project folders, reads and writes diagram files and fsyncs
+                            // the ledger between its waits on the page, all synchronously; on a
+                            // blocking thread none of that stalls the runtime's few workers, which
+                            // keep every connection's frames moving meanwhile.
+                            let result = {
+                                let (agent, registry) = (agent.clone(), registry.clone());
+                                tauri::async_runtime::spawn_blocking(move || {
+                                    tauri::async_runtime::block_on(broker::call(&agent, &tool, args, &registry))
+                                })
+                                .await
+                                .unwrap_or_else(|_| Err(broker::ToolError::new("INTERNAL", "The request failed unexpectedly.")))
+                            };
                             crate::util::lock(&calls).remove(&id);
                             let frame = match result {
                                 Ok(value) => json!({"type": "result", "id": id, "ok": true, "value": value}),

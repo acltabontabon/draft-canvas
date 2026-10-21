@@ -5,7 +5,7 @@
  * does. One reader per key, so the two can't disagree about a default.
  */
 
-import { isSourceFormat, type SourceFormat } from '../../export';
+import { isSourceFormat, type SourceFormat } from '../../export/source/formats';
 import { readPreference, writePreference } from '../../lib/preferences';
 import type { ImageFormat } from './exportTypes';
 

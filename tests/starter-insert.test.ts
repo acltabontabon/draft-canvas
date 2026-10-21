@@ -238,17 +238,12 @@ describe('freeOriginFor', () => {
 describe('a starter after insertion is an ordinary diagram', () => {
   beforeEach(reset);
 
-  it('can be edited, regrouped and deleted like anything else', () => {
+  it('can be edited and deleted like anything else', () => {
     const created = store.getState().insertStarter(starterById('microservices')!);
     const service = created.find((node) => node.text === 'Capability B Service')!;
 
     store.getState().updateNodeText(service.id, 'Fulfilment');
     expect(store.getState().document.nodes.find((n) => n.id === service.id)!.text).toBe('Fulfilment');
-
-    // Nothing marks these as belonging to a starter, so pulling one out of its boundary is just a
-    // reparent — there is no "starter object" to keep consistent.
-    store.getState().reparentNode(service.id, null);
-    expect(store.getState().document.nodes.find((n) => n.id === service.id)!.parentId).toBeUndefined();
 
     store.getState().setSelection({ nodes: [service.id], edges: [] });
     store.getState().deleteSelection();

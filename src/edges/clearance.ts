@@ -3,8 +3,9 @@ import { categoryOf } from '../document/connectorSemantics';
 import { effectiveConnectorText } from '../document/edgeSemantics';
 import type { DraftDocument, DraftEdge, DraftNode } from '../document/types';
 import { LABEL_PADDING_X, LABEL_PADDING_Y, layoutEdgeLabel } from './labelLayout';
+import { routingPlan } from './bundles';
 import { obstaclesForEdge } from './obstacles';
-import { LABEL_LINE_GAP, flattenPath, routeEdge } from './routing';
+import { LABEL_LINE_GAP, flattenPath, labelLaneOffset, laneIndex, routeEdge } from './routing';
 
 /**
  * Where the connectors already drawn in a region are, as plain boxes.
@@ -150,8 +151,19 @@ export function connectorClearance(
     byId.set(source.id, source);
     byId.set(target.id, target);
   }
+  // Routed the way the canvas draws them, lane and shared trunk included: without those a parallel
+  // pair or a bundled fan was tested where neither line is. Both are memoized on the document's
+  // arrays, and asked for only once something is near. Not the canvas's own plan slot: the document
+  // asked about may be one that never reaches the screen.
+  const lanes = laneIndex(doc.edges);
+  const plan = routingPlan(doc.nodes, doc.edges, 'transient');
   for (const { edge, source, target } of nearby) {
-    const route = routeEdge(edge, byId, { obstacles: obstaclesForEdge(doc.nodes, edge.source, edge.target) });
+    const lane = lanes.get(edge.id)?.offset ?? 0;
+    const route = routeEdge(edge, byId, {
+      obstacles: obstaclesForEdge(doc.nodes, edge.source, edge.target, 'transient'),
+      lane,
+      spine: plan.spineFor(edge.id),
+    });
     if (!route) continue;
     const points = flattenPath(route.d);
     for (let i = 1; i < points.length; i += 1) {
@@ -165,7 +177,9 @@ export function connectorClearance(
       };
       if (overlaps(box, region)) boxes.push(box);
     }
-    const label = labelBox(edge, { source, target }, { x: route.labelX, y: route.labelY });
+    // At the lane-nudged point both renderers draw the label at, not at `route.labelX`.
+    const nudge = labelLaneOffset(route.source.side, route.target.side, lane);
+    const label = labelBox(edge, { source, target }, { x: route.labelX + nudge.x, y: route.labelY + nudge.y });
     if (label && overlaps(label, region)) boxes.push(label);
   }
   return boxes;

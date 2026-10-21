@@ -17,7 +17,7 @@ interface PreviewSource {
 
 /**
  * An AI agent's change to the diagram on screen, while it is still being prepared: only what it adds
- * or changes, drawn on top in flow space (inside `Canvas`'s `<ViewportPortal>`, so it pans and zooms
+ * or changes, drawn on top in flow space (inside `Canvas`'s `<ViewportLayer>`, so it pans and zooms
  * with the diagram) with the same `describeNode`/`routeBetween` pipeline as the real thing, at a
  * ghost's opacity inside a dashed outline — and what it removes, crossed out where it stands.
  *

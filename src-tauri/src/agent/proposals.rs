@@ -120,26 +120,50 @@ impl Proposals {
             entries: HashMap::new(),
             appended: 0,
         };
-        store.load()?;
+        let tidy = store.load()?;
+        let loaded = store.entries.len();
         store.evict(now);
-        store.compact()?;
+        // Rewritten only when that changes something: an fsynced rewrite on every launch, before the
+        // window shows, for a journal that is already exactly its live entries, is wasted start-up time.
+        if !tidy || store.entries.len() != loaded {
+            store.compact()?;
+        }
         Ok(store)
     }
 
-    fn load(&mut self) -> io::Result<()> {
+    /// Reads the journal. True when it holds exactly one complete line per live entry — nothing
+    /// superseded, torn or unreadable — so rewriting it would change nothing.
+    fn load(&mut self) -> io::Result<bool> {
         let file = match File::open(&self.file) {
             Ok(file) => file,
-            Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(true),
             Err(e) => return Err(e),
         };
-        for line in BufReader::new(file).lines() {
-            let Ok(line) = line else { break };
+        let mut reader = BufReader::new(file);
+        let (mut lines, mut clean) = (0, true);
+        let mut line = String::new();
+        loop {
+            line.clear();
+            match reader.read_line(&mut line) {
+                Ok(0) => break,
+                Ok(_) => lines += 1,
+                Err(_) => {
+                    clean = false;
+                    break;
+                }
+            }
+            // A line without its newline is one a crash cut short. It must not be left in place even
+            // when it parses: the next record appended would join it on the same line.
+            clean &= line.ends_with('\n');
             // A line that doesn't parse is the one a crash cut short; everything before it stands.
-            if let Ok(proposal) = serde_json::from_str::<Proposal>(&line) {
-                self.entries.insert(proposal.id.clone(), proposal);
+            match serde_json::from_str::<Proposal>(line.trim_end()) {
+                Ok(proposal) => {
+                    self.entries.insert(proposal.id.clone(), proposal);
+                }
+                Err(_) => clean = false,
             }
         }
-        Ok(())
+        Ok(clean && lines == self.entries.len())
     }
 
     pub fn get(&self, id: &str) -> Option<&Proposal> {

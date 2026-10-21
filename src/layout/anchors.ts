@@ -167,6 +167,9 @@ export function assignAnchors(
 ): Map<string, Anchors> {
   const sides = new Map<string, { source: Side; target: Side }>();
   const onSide = new Map<string, { edge: string; end: 'source' | 'target'; other: Rect; pinnedOffset?: number }[]>();
+  // Which ordered pairs have a connector, once, so finding a twin is a lookup rather than a scan.
+  const pairs = new Map<string, number>();
+  for (const edge of edges) pairs.set(`${edge.source}\u0000${edge.target}`, (pairs.get(`${edge.source}\u0000${edge.target}`) ?? 0) + 1);
   for (const edge of edges) {
     const s = rects.get(edge.source);
     const t = rects.get(edge.target);
@@ -175,7 +178,9 @@ export function assignAnchors(
     // The way back of a pair drawn both ways: straight back beside its twin when both shapes are tall
     // enough for the two to sit a caption's height apart (0.25 and 0.75 of the side); between small
     // shapes (a queue's tube) they would run a few pixels apart, so it goes around instead.
-    const twin = edges.some((other) => other !== edge && other.source === edge.target && other.target === edge.source);
+    // A self-loop is its own reverse, so it needs a second loop to have a twin.
+    const reverse = pairs.get(`${edge.target}\u0000${edge.source}`) ?? 0;
+    const twin = edge.source === edge.target ? reverse > 1 : reverse > 0;
     const roomy = Math.min(spanOf(s, direction), spanOf(t, direction)) >= TWIN_SPAN;
     const free = fixed ? { source: fixed.sourceAnchor.side, target: fixed.targetAnchor.side } : (options.sides?.get(edge.id) ?? sidesFor(s, t, direction, (!twin || roomy) && corridorClear(s, t, rects, edge, direction)));
     // A reserved side gives way to the one the reading direction leaves (or arrives) by.

@@ -102,10 +102,6 @@ export function unresolvedOpenPoints(doc: Partial<Pick<DraftDocument, 'openPoint
   return pointsOf(doc).filter((point) => !point.resolved);
 }
 
-export function resolvedOpenPoints(doc: Partial<Pick<DraftDocument, 'openPoints'>>): OpenPoint[] {
-  return pointsOf(doc).filter((point) => point.resolved);
-}
-
 /** Whether a point is attached to this element. */
 export function pointConcerns(point: OpenPoint, target: OpenPointTarget): boolean {
   return point.targets.some((entry) => sameTarget(entry, target));

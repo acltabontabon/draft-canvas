@@ -202,11 +202,6 @@ pub fn acknowledge(app: &AppHandle, decision: QuitDecision) {
     apply(app, step);
 }
 
-pub fn quit_now(app: &AppHandle) {
-    let step = lock(&app.state::<AppState>().quit).quit_now();
-    apply(app, step);
-}
-
 /// Whether the open file has changes the page has not saved, as the page last reported it.
 fn unsaved_work(app: &AppHandle) -> bool {
     app.state::<std::sync::Arc<crate::agent::Agent>>()

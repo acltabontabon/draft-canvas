@@ -40,5 +40,4 @@ export function exportSourceFile(document: DraftDocument, format: SourceFormat):
   return downloadText(sourceTextFor(document, format), sourceFileNameFor(document, format), SOURCE_FORMAT_INFO[format].mime);
 }
 
-export { SOURCE_FORMATS, SOURCE_FORMAT_INFO, isSourceFormat, type SourceFamily, type SourceFormat, type SourceFormatInfo } from './formats';
-export { c4PlantUmlSource, drawioSource, mermaidFlowchartSource, structurizrSource };
+export { SOURCE_FORMATS, SOURCE_FORMAT_INFO, type SourceFamily, type SourceFormat } from './formats';

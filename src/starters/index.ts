@@ -13,10 +13,9 @@
  */
 
 export { ARCHITECTURE_STARTERS } from './catalog';
-export { buildStarter, starterSize, type BuiltStarter } from './build';
+export { buildStarter, starterSize } from './build';
 export { starterDocument } from './document';
 export {
-  STARTER_CATEGORIES,
   STARTER_IDS,
   type ArchitectureStarter,
   type StarterCategory,

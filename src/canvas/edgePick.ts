@@ -43,6 +43,8 @@ const TIE_PX = 1;
 const EDGE_SELECTOR = '.react-flow__edge[data-id]';
 const OVERLAY_SELECTOR = '[data-edge-overlay]';
 /** Canvas surfaces with nothing of their own to click: looked through, never a reason to stop. */
+/** The bottom of the canvas's stack: nothing that can be clicked lies beneath it. */
+const PANE_SELECTOR = '.react-flow__pane, .react-flow__background';
 const BACKDROP_SELECTOR = '.react-flow__pane, .react-flow__renderer, .react-flow__viewport, .react-flow__edges, .react-flow__edgelabel-renderer, .react-flow__nodes, .react-flow__background';
 
 function insideRect(clientX: number, clientY: number, element: Element): boolean {
@@ -53,8 +55,9 @@ function insideRect(clientX: number, clientY: number, element: Element): boolean
 /**
  * A node's element the pointer may look through to a connector underneath: a connection handle's
  * hit ring where it reaches past the node's own body, and a boundary's empty interior (a selected
- * boundary is lifted above the connectors inside it, which otherwise made every one of them
- * unclickable). Anything else of a node — its body, a resize grip, a boundary's title — is the node's.
+ * boundary used to be lifted above the connectors inside it, which made every one of them
+ * unclickable; `projection.ts` no longer lifts one, but a boundary given a high enough z still sits
+ * above them). Anything else of a node — its body, a resize grip, a boundary's title — is the node's.
  */
 function seeThrough(element: Element, clientX: number, clientY: number): boolean {
   const node = element.closest('.react-flow__node');
@@ -103,10 +106,12 @@ function overlayPick(overlay: Element, element: Element): EdgePick | null {
  * The connector at a screen point, or `null` when the point is on something else — a node, a panel,
  * a popover, an empty stretch of canvas.
  *
- * @param aim The same point in flow coordinates, the space every route's `d` is written in.
+ * @param aim The same point in flow coordinates, the space every route's `d` is written in — or a
+ *   function giving it, called only once a connector is actually under the pointer: converting means
+ *   reading the canvas's box, a forced layout that most picks (a shape, empty canvas) never need.
  * @param zoom The canvas zoom, so "equally close" means the same thing on screen at every zoom.
  */
-export function pickEdgeAt(clientX: number, clientY: number, aim: Point, zoom: number): EdgePick | null {
+export function pickEdgeAt(clientX: number, clientY: number, aim: Point | (() => Point), zoom: number): EdgePick | null {
   // The topmost element alone settles the commonest cases — a shape's body, a panel — and the browser
   // finds it without visiting everything else at the point. The full stack means stroke-testing every
   // connector's hit path there: 20 ms a click on a large diagram, for an answer already known.
@@ -114,7 +119,13 @@ export function pickEdgeAt(clientX: number, clientY: number, aim: Point, zoom: n
   // A panel, toolbar or popover over the canvas: whatever it covers can't be seen or aimed at.
   if (!top || !top.closest('.react-flow') || top.closest('[class*="dc-popover"], .dc-context-menu')) return null;
   if (ownsThePoint(top, clientX, clientY)) return null;
+  // Empty canvas on top: every connector's hit path paints above the pane, so none is here. The
+  // commonest hover of all, and the full stack below is the expensive question — the browser
+  // stroke-tests every hit path at the point.
+  if (top.matches(PANE_SELECTOR)) return null;
 
+  let flowAim: Point | null = typeof aim === 'function' ? null : aim;
+  const aimPoint = () => (flowAim ??= (aim as () => Point)());
   const stack = document.elementsFromPoint(clientX, clientY);
   const candidates: { id: string; distance: number; order: number }[] = [];
   const seen = new Set<string>();
@@ -135,7 +146,7 @@ export function pickEdgeAt(clientX: number, clientY: number, aim: Point, zoom: n
       if (!element.classList.contains('dc-edge-hit') && candidates.length === 0 && element.closest('.dc-edge-caption, .dc-edge-glyph')) {
         return { id, part: 'line', tied: [id] };
       }
-      const distance = distanceTo(edge, aim);
+      const distance = distanceTo(edge, aimPoint());
       candidates.push({ id, distance: distance ?? Number.POSITIVE_INFINITY, order: candidates.length });
       continue;
     }

@@ -3,11 +3,13 @@
 
 use crate::errors::{AppError, Subject, Verb};
 use crate::paths::file_name;
+use crate::util::lock;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use std::time::UNIX_EPOCH;
 
 pub const MAX_DOC_BYTES: u64 = 24 * 1024 * 1024;
@@ -181,6 +183,12 @@ pub fn write_atomic(
     expected_stamp: Option<&str>,
 ) -> Result<WriteOutcome, AppError> {
     let io_err = |e: io::Error| AppError::from_io(&e, Verb::Save, Subject::Path(target));
+    // The editor's save and an agent's background write can reach the same file at once. Without one
+    // lock across the check and the swap, both could pass the check against the same stamp and the
+    // later swap would silently replace the earlier one's content. Another app writing the file is
+    // still only caught by the check itself.
+    static WRITING: Mutex<()> = Mutex::new(());
+    let _writing = lock(&WRITING);
     if let Some(expected) = expected_stamp {
         if !stamp_matches(target, expected).map_err(io_err)? {
             return Ok(WriteOutcome::Conflict);
@@ -258,7 +266,12 @@ pub fn rename_atomic(old: &Path, new: &Path) -> Result<(), AppError> {
         // (the default on macOS and Windows); hopping through a temporary sibling name forces it through.
         let hop = temp_path(new.parent().unwrap_or(Path::new(".")), new);
         fs::rename(old, &hop).map_err(io_err)?;
-        fs::rename(&hop, new).map_err(io_err)?;
+        if let Err(e) = fs::rename(&hop, new) {
+            // Left at the hop's temporary name the document would vanish from the person's folder
+            // (and from Home, which skips our temp files): put it back where it was.
+            let _ = fs::rename(&hop, old);
+            return Err(io_err(e));
+        }
     } else {
         fs::rename(old, new).map_err(io_err)?;
     }
@@ -277,6 +290,23 @@ fn paths_equal_ignoring_case(a: &Path, b: &Path) -> bool {
 pub fn write_private(target: &Path, bytes: &[u8], subject: Subject<'_>) -> Result<(), AppError> {
     replace_contents(target, bytes, Kind::Private, true)
         .map_err(|e| AppError::from_io(&e, Verb::Save, subject))
+}
+
+/// `write_private` for files that live in one folder and are written one after the other (a recovery
+/// copy and its label): each is swapped in as usual, and the folder is flushed once at the end rather
+/// than after each. A crash before that flush can keep any one of the swaps without the others, so a
+/// caller must already cope with the files disagreeing.
+pub fn write_private_together(
+    dir: &Path,
+    files: &[(&Path, &[u8])],
+    subject: Subject<'_>,
+) -> Result<(), AppError> {
+    for (target, bytes) in files {
+        replace_contents_in(target, bytes, Kind::Private, true, false)
+            .map_err(|e| AppError::from_io(&e, Verb::Save, subject))?;
+    }
+    sync_dir(dir);
+    Ok(())
 }
 
 /// Whether the person may not save over this file. Feeds `OpenedDoc.readOnly` as well as the save path.
@@ -339,6 +369,16 @@ enum Kind {
 }
 
 fn replace_contents(target: &Path, bytes: &[u8], kind: Kind, clobber: bool) -> io::Result<()> {
+    replace_contents_in(target, bytes, kind, clobber, true)
+}
+
+fn replace_contents_in(
+    target: &Path,
+    bytes: &[u8],
+    kind: Kind,
+    clobber: bool,
+    flush_folder: bool,
+) -> io::Result<()> {
     let dir = target
         .parent()
         .filter(|p| !p.as_os_str().is_empty())
@@ -348,7 +388,8 @@ fn replace_contents(target: &Path, bytes: &[u8], kind: Kind, clobber: bool) -> i
     let result = write_temp(&temp, bytes, kind, existing.as_ref())
         .and_then(|()| install(&temp, target, existing.is_some(), clobber));
     match &result {
-        Ok(()) => sync_dir(dir),
+        Ok(()) if flush_folder => sync_dir(dir),
+        Ok(()) => {}
         Err(_) => {
             // The temp file holds the only copy of the new contents when the swap took the old file away
             // and then failed (Windows can do that part-way through a replace). Keep it, named as it

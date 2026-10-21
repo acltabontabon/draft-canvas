@@ -1,3 +1,4 @@
+import { LIMITS } from '../../document/limits';
 import { Lru } from '../../lib/lru';
 import { bowControlPoint } from './roughRect';
 import { jitter } from './seed';
@@ -42,12 +43,23 @@ function segmentEndpoint(segment: PathSegment): { x: number; y: number } {
  * time; `Q`/`C` segments are left to the `amplitude` pass alone, since they're already curved.
  */
 /** Pure in its inputs, and every connector re-renders far more often than its path changes (a
- *  selection, a lens, a playback step) — so each wobble is computed once, not on every render. */
-const roughened = new Lru<string, string>(4096);
+ *  selection, a lens, a playback step) — so each wobble is computed once, not on every render.
+ *
+ *  Sized for a whole diagram at the document limits: a connector draws up to three paths (its line,
+ *  a second sketch stroke, a reply) and every shape outline comes through here too. At 4,096 one
+ *  Sketch pass over 1,500 connectors evicted itself before it finished, so nothing was ever reused. */
+const roughened = new Lru<string, string>(LIMITS.maxEdges * 3 + LIMITS.maxNodes);
 
-export function roughenPath(d: string, seedId: string, amplitude: number, bow = 0): string {
+/**
+ * `cache: false` is for a path that will not be drawn again — a frame of a drag, whose route changes
+ * every frame. Those still roughen exactly the same way; they just don't push the settled diagram's
+ * paths out of the cache.
+ */
+export function roughenPath(d: string, seedId: string, amplitude: number, bow = 0, cache = true): string {
   if (amplitude === 0 && bow === 0) return d;
-  return roughened.getOrCreate(`${amplitude}|${bow}|${seedId}|${d}`, () => roughenPathUncached(d, seedId, amplitude, bow));
+  const key = `${amplitude}|${bow}|${seedId}|${d}`;
+  if (!cache) return roughened.get(key) ?? roughenPathUncached(d, seedId, amplitude, bow);
+  return roughened.getOrCreate(key, () => roughenPathUncached(d, seedId, amplitude, bow));
 }
 
 function roughenPathUncached(d: string, seedId: string, amplitude: number, bow: number): string {

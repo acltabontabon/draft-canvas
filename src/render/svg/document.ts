@@ -10,7 +10,7 @@ import { MARKER_SIZE, describeMarker, describeMarkerKey, nodeMarkerOrigin } from
 import { describeAttachmentBadge } from '../../edges/attachmentChips';
 import { laneIndex } from '../../edges/routing';
 import { routingPlan } from '../../edges/bundles';
-import { crossingPlan, withoutMoving } from '../../edges/crossings';
+import { crossingPlan } from '../../edges/crossings';
 import { labelGroupPlan } from '../../edges/labelGroups';
 import { blurRadiusFor } from '../backgroundAnchor';
 import { themeFor, type Theme, type ThemeName } from '../theme/tokens';
@@ -147,9 +147,6 @@ export interface SceneOptions {
   /** Clip-path id scope (see `beginClipScope`). Defaults to `'export'`; anything drawn into the
    *  live page beside the canvas needs its own. */
   clipScope?: string;
-  /** Nodes mid-drag: connectors don't route around them, the same as on the live canvas while a
-   *  gesture is in flight (`uiStore.movingNodeIds`). */
-  movingNodeIds?: ReadonlySet<string>;
   decorateNode?: (node: DraftNode) => Decoration | undefined;
   /** `pulseTarget` picks which of a request/response connector's two lines the pulse animates —
    *  see `DescribedEdge.responseLine` in `edges/describe.ts`. Defaults to `'request'` (the primary
@@ -268,17 +265,17 @@ export function buildScene(
   // group it now is — re-expanding to independent lines if it drops below a
   // bundle's floor — rather than drawing branches off a trunk whose other
   // members aren't in the picture.
-  const plan = routingPlan(nodes, edges);
-  const moving = options.movingNodeIds;
-  const obstacleNodes = moving?.size ? nodes.filter((node) => !moving.has(node.id)) : nodes;
-  // Planned over the same filtered arrays, and against the same obstacle set actually routed
-  // against — otherwise it would place arcs on routes nobody draws. Mid-gesture, the crossings
-  // against a connector attached to a moving node are dropped exactly as the live canvas drops
-  // them, so a frame rendered mid-drag looks like the canvas mid-drag.
-  const crossings = crossingPlan(nodes, edges, obstacleNodes);
+  //
+  // Every plan here is asked for as `'transient'`: an export, the export preview, each room of a
+  // render of every level and an agent preview are not the canvas, and must not take the slot the
+  // canvas's plans keep their last result in (see `PlanScope`).
+  const plan = routingPlan(nodes, edges, 'transient');
+  // Planned over the same filtered arrays the connectors are routed over — otherwise it would place
+  // arcs on routes nobody draws.
+  const crossings = crossingPlan(nodes, edges, nodes, 'transient');
   // Connectors that leave together under one label draw it once, as on the canvas — unless a flow's
   // numbered steps are showing, which ride inside each connector's own label.
-  const labels = labelGroupPlan(nodes, edges);
+  const labels = labelGroupPlan(nodes, edges, 'transient');
   const sharedLabelOf = (edgeId: string) => {
     const group = labels.groupFor(edgeId);
     if (!group || group.members.some((member) => stepIndexOf(options.selectedFlow, member) !== undefined)) return undefined;
@@ -308,10 +305,8 @@ export function buildScene(
       ...(edgePoints.length ? { openPoints: edgePoints } : {}),
       spine: plan.spineFor(edge.id),
       sharedLabel: sharedLabelOf(edge.id),
-      obstacles: obstaclesForEdge(obstacleNodes, edge.source, edge.target),
-      crossings: moving?.size
-        ? withoutMoving(crossings.crossingsFor(edge.id), moving)
-        : crossings.crossingsFor(edge.id),
+      obstacles: obstaclesForEdge(nodes, edge.source, edge.target, 'transient'),
+      crossings: crossings.crossingsFor(edge.id),
     });
     if (!described) continue;
     if (edge.directed) arrowColors.add(described.color);

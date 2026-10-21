@@ -116,6 +116,27 @@ describe('the desktop channel', () => {
     );
   });
 
+  it('lets go of a field being typed in for a flush, but not for an agent’s', async () => {
+    mount();
+    const file = createDocument('Payments');
+    host.link.deliver({ type: 'draft-canvas:load', text: serializeDocument(file), seq: 1 });
+    await waitFor(() => expect(sessionOf().openId).toBe(file.metadata.id));
+    const field = document.createElement('input');
+    document.body.append(field);
+    field.focus();
+
+    act(() => useEditorStore.getState().rename('Checkout'));
+    host.link.deliver({ type: 'draft-canvas:command', command: 'flush', id: 13, keepFocus: true });
+    await waitFor(() => expect(messages('draft-canvas:flushed')).toEqual([{ type: 'draft-canvas:flushed', id: 13 }]));
+    expect(messages('draft-canvas:change')).toHaveLength(1);
+    expect(document.activeElement).toBe(field);
+
+    host.link.deliver({ type: 'draft-canvas:command', command: 'flush', id: 14 });
+    await waitFor(() => expect(messages('draft-canvas:flushed')).toHaveLength(2));
+    expect(document.activeElement).not.toBe(field);
+    field.remove();
+  });
+
   it('closes the document when told to, and says that Home is showing', async () => {
     mount();
     const file = createDocument('Payments');

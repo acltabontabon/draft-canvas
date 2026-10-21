@@ -11,8 +11,8 @@ const loaded = retryableLazy(() => loadModal().then((module) => ({ default: modu
 
 /**
  * `Modal` for a screen that only sometimes opens one — the Library's rename, delete and passphrase
- * prompts. The dialog (React Aria's focus scope, scroll lock and outside-hiding, ~64 KB) arrives with
- * the first one instead of with the Library's first paint. Callers render it only while it is open, so
+ * prompts, and the diagnostic report. The dialog (React Aria's focus scope, scroll lock and
+ * outside-hiding, ~64 KB) arrives with the first one instead of with the first paint. Callers render it only while it is open, so
  * nothing shows while it loads. A chunk that cannot be fetched (offline, or replaced by a deploy under
  * an old tab) closes the dialog with a message rather than taking the Library down, and the next open
  * tries a fresh import.

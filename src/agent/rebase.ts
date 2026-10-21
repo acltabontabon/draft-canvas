@@ -9,22 +9,27 @@ import type { DraftDocument, DraftEdge, DraftFlow, DraftNode } from '../document
  * real conflict and is refused as before.
  */
 
-type Room = { nodes: DraftNode[]; edges: DraftEdge[]; flows: DraftFlow[] };
+type Room = { nodes: DraftNode[]; edges: DraftEdge[]; flows: DraftFlow[]; level?: string };
 
 /** Every node, connector and flow in the file, in every room, keyed by id, as comparable text. A node's
- *  own fields only: what is inside it is its own room, compared on its own. */
+ *  own fields only: what is inside it is its own room, compared on its own. The rest an agent's batch
+ *  can change is keyed too — each room's level, the root-only open points and the title — or a rebase
+ *  would apply over the person's change to one of them as though the two edits were independent. */
 function contentsOf(file: DraftDocument): Map<string, string> {
   const out = new Map<string, string>();
-  const visit = (room: Room) => {
+  const visit = (room: Room, owner: string) => {
+    out.set(`level:level@${owner}`, room.level ?? '');
     for (const node of room.nodes) {
       const { inside, ...own } = node;
       out.set(`node:${node.id}`, JSON.stringify(own));
-      if (inside) visit(inside);
+      if (inside) visit(inside, node.id);
     }
     for (const edge of room.edges) out.set(`edge:${edge.id}`, JSON.stringify(edge));
     for (const flow of room.flows) out.set(`flow:${flow.id}`, JSON.stringify(flow));
   };
-  visit(file);
+  visit(file, 'root');
+  for (const point of file.openPoints) out.set(`point:${point.id}`, JSON.stringify(point));
+  out.set('meta:title', file.metadata.title);
   return out;
 }
 

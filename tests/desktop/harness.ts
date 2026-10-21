@@ -82,7 +82,6 @@ export function createHarness() {
   const notices: string[] = [];
   /** A notice's action button, by the notice's text. */
   const noticeActions = new Map<string, () => void>();
-  let pickedFile: string | null = null;
   let saveAsPath: { name: string; displayPath: string } | null = null;
   let lastSaveAsStartIn: StartLocation | null = null;
   let hostEvents: (event: HostEvent) => void = () => {};
@@ -147,8 +146,6 @@ export function createHarness() {
     }),
     reportState: vi.fn(async (_state: DocState) => {}),
     quitAck: vi.fn(async (_decision: QuitDecision) => {}),
-    quitNow: vi.fn(async () => {}),
-    openDialog: vi.fn(async () => (pickedFile ? opened(pickedFile, files.get(pickedFile)!) : null)),
     openHandle: vi.fn(async (handle: string) => {
       const file = files.get(handle);
       if (!file) throw new DesktopError('InvalidHandle', 'That file is no longer available.');
@@ -286,7 +283,6 @@ export function createHarness() {
     recoveryList: vi.fn(async () => [...recovery.values()].map((held) => held.entry)),
     recoveryRead: vi.fn(async (id: string) => recovery.get(id)!.text),
     recoveryDiscard: vi.fn(async (id: string) => void recovery.delete(id)),
-    settingsGet: vi.fn(async () => ({ closeBehavior: 'ask' as const, autoCheckUpdates: true })),
     settingsSet: vi.fn(async (patch: { closeBehavior?: 'ask' | 'tray' | 'quit'; autoCheckUpdates?: boolean }) => ({
       closeBehavior: patch.closeBehavior ?? ('ask' as const),
       autoCheckUpdates: patch.autoCheckUpdates ?? true,
@@ -417,7 +413,6 @@ export function createHarness() {
     addFile,
     /** The dialogs' answers, in order. */
     answer: (...choices: number[]) => void answers.push(...choices),
-    pickFile: (handle: string | null) => void (pickedFile = handle),
     saveAsTo: (target: { name: string; displayPath: string } | null) => void (saveAsPath = target),
     /** What the last `saveAs` call was asked to start in, or `null` if none was given. */
     lastSaveAsStartIn: () => lastSaveAsStartIn,

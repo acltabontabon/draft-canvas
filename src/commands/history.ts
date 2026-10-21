@@ -36,9 +36,16 @@ export function usageCount(id: string): number {
   return Number.isFinite(count) && count > 0 ? count : 0;
 }
 
+/**
+ * Commands named for one element of one diagram — "Trace more steps: Checkout" is `flow-trace-<flow
+ * id>` — mean nothing in the next diagram, and remembering them wrote a counter key per flow ever
+ * traced that nothing would read again or prune. Their family's plain command (`flow-trace`) is kept.
+ */
+const ELEMENT_SCOPED_PREFIXES = ['flow-trace-'];
+
 /** Records one run of `id`: moves it to the front of the recents and bumps its counter. */
 export function recordUse(id: string): void {
-  if (!id || id.length > MAX_ID_LENGTH) return;
+  if (!id || id.length > MAX_ID_LENGTH || ELEMENT_SCOPED_PREFIXES.some((prefix) => id.startsWith(prefix))) return;
   const next = [id, ...recentIds().filter((entry) => entry !== id)].slice(0, RECENT_LIMIT);
   next.forEach((entry, slot) => writePreference(RECENT_KEY(slot), entry));
   for (let slot = next.length; slot < RECENT_LIMIT; slot += 1) removePreference(RECENT_KEY(slot));

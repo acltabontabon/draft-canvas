@@ -1,6 +1,6 @@
 import type { DraftEdge, DraftNode, Side } from '../document/types';
 import { type EdgeSpine, type Rect, anchorPoint, laneIndex, rectOf, resolveSides } from './routing';
-import { sameNodeGeometry } from './sameGeometry';
+import { sameNodeGeometry, type PlanScope } from './sameGeometry';
 
 /**
  * Fan-out / fan-in edge bundling — the planning half of Smart Routing.
@@ -270,7 +270,8 @@ function planTrunkGap(
   hubCross: number,
   members: readonly Candidate[],
   hub: 'source' | 'target',
-  obstacles: readonly Rect[],
+  candidates: readonly { id: string; rect: Rect }[],
+  endpoints: ReadonlySet<string>,
   budget: { remaining: number },
 ): { gap: number; corridor: number } | null {
   const outward = hubSide === 'right' || hubSide === 'bottom' ? 1 : -1;
@@ -292,6 +293,22 @@ function planTrunkGap(
   const farRects = members.map((member) => (hub === 'source' ? member.targetRect : member.sourceRect));
   const crossFrom = Math.min(hubCross, ...branches.map((branch) => branch.cross));
   const crossTo = Math.max(hubCross, ...branches.map((branch) => branch.cross));
+
+  // Every run tested below lies in the box from the hub's face to the farthest branch face, across
+  // the span the branches tap off over — so a node outside it, margin included, can never block one.
+  // Testing only those keeps the budget for the search: charging every node on the canvas to every
+  // probe exhausted `MAX_ROUTING_PLAN_OPS` on a large diagram and quietly stopped bundling.
+  const axis = [start, start + outward * usable, ...branches.map((branch) => branch.face)];
+  const axisLo = Math.min(...axis) - TRUNK_OBSTACLE_MARGIN;
+  const axisHi = Math.max(...axis) + TRUNK_OBSTACLE_MARGIN;
+  const crossLo = crossFrom - TRUNK_OBSTACLE_MARGIN;
+  const crossHi = crossTo + TRUNK_OBSTACLE_MARGIN;
+  const [loX, hiX, loY, hiY] = verticalTrunk ? [axisLo, axisHi, crossLo, crossHi] : [crossLo, crossHi, axisLo, axisHi];
+  const obstacles: Rect[] = [];
+  for (const { id, rect } of candidates) {
+    if (endpoints.has(id)) continue;
+    if (rect.x <= hiX && rect.x + rect.width >= loX && rect.y <= hiY && rect.y + rect.height >= loY) obstacles.push(rect);
+  }
 
   /** A point on the trunk axis, at `gap` from the hub, as real coordinates. */
   const at = (gap: number, cross: number) => {
@@ -334,6 +351,9 @@ function planTrunkGap(
 }
 
 const planCache = new WeakMap<readonly DraftNode[], WeakMap<readonly DraftEdge[], RoutingPlan>>();
+/** Plans for a `'transient'` render, kept apart from the canvas's: their spines are not interned, so
+ *  the canvas adopting one would hand every bundled connector a new spine object. */
+const transientCache = new WeakMap<readonly DraftNode[], WeakMap<readonly DraftEdge[], RoutingPlan>>();
 
 /** The most recent plan and what it was built from — see `routingPlan`. */
 let lastPlanned: { nodes: readonly DraftNode[]; edges: readonly DraftEdge[]; plan: RoutingPlan } | null = null;
@@ -347,7 +367,7 @@ let lastPlanned: { nodes: readonly DraftNode[]; edges: readonly DraftEdge[]; pla
  * node drag therefore re-plans once on commit rather than per frame, which is
  * exactly the intended cost model: the document isn't written during a drag.
  */
-export function routingPlan(nodes: readonly DraftNode[], edges: readonly DraftEdge[]): RoutingPlan {
+export function routingPlan(nodes: readonly DraftNode[], edges: readonly DraftEdge[], scope: PlanScope = 'canvas'): RoutingPlan {
   const byNodes = planCache.get(nodes);
   const cached = byNodes?.get(edges);
   if (cached) return cached;
@@ -355,10 +375,18 @@ export function routingPlan(nodes: readonly DraftNode[], edges: readonly DraftEd
   // A rename or a colour makes a new `nodes` array, and by identity a new plan, for a plan that
   // depends only on where shapes are (and what kind they are). Same edges, same places: same plan.
   const previous = lastPlanned;
-  const plan =
-    previous && previous.edges === edges && sameNodeGeometry(previous.nodes, nodes)
-      ? previous.plan
-      : computePlan(nodes, edges);
+  const reusable = previous && previous.edges === edges && sameNodeGeometry(previous.nodes, nodes) ? previous.plan : null;
+  if (scope === 'transient') {
+    if (reusable) return reusable;
+    const byTransient = transientCache.get(nodes);
+    const built = byTransient?.get(edges);
+    if (built) return built;
+    const plan = computePlan(nodes, edges, scope);
+    if (byTransient) byTransient.set(edges, plan);
+    else transientCache.set(nodes, new WeakMap([[edges, plan]]));
+    return plan;
+  }
+  const plan = reusable ?? computePlan(nodes, edges, scope);
   lastPlanned = { nodes, edges, plan };
   if (byNodes) byNodes.set(edges, plan);
   else planCache.set(nodes, new WeakMap([[edges, plan]]));
@@ -389,7 +417,7 @@ function internSpine(spine: EdgeSpine): EdgeSpine {
   return spine;
 }
 
-function computePlan(nodes: readonly DraftNode[], edges: readonly DraftEdge[]): RoutingPlan {
+function computePlan(nodes: readonly DraftNode[], edges: readonly DraftEdge[], scope: PlanScope): RoutingPlan {
   if (edges.length < MIN_SPINE_MEMBERS) return EMPTY_PLAN;
 
   const nodeMap = new Map(nodes.map((node) => [node.id, node]));
@@ -483,19 +511,23 @@ function computePlan(nodes: readonly DraftNode[], edges: readonly DraftEdge[]): 
       hubCross,
       free,
       group.hub,
-      obstacles.filter((entry) => !endpoints.has(entry.id)).map((entry) => entry.rect),
+      obstacles,
+      endpoints,
       budget,
     );
     if (placed === null) continue;
 
-    const spine = internSpine({
+    const planned: EdgeSpine = {
       id: group.key,
       hub: group.hub,
       hubSide: group.hubSide,
       trunkGap: placed.gap,
       corridor: placed.corridor,
       count: free.length,
-    });
+    };
+    // Interned only for the canvas: another document's trunk under the same id would replace the
+    // canvas's own, and its connectors would re-render for nothing on the next commit.
+    const spine = scope === 'canvas' ? internSpine(planned) : planned;
     members.set(
       spine.id,
       free

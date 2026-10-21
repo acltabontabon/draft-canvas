@@ -24,3 +24,12 @@ export function sameNodeGeometry(a: readonly DraftNode[], b: readonly DraftNode[
   }
   return true;
 }
+
+/**
+ * Who a whole-document plan is for. The plans keep what the canvas last built — to reuse it across an
+ * edit that moved nothing, and to hand back unchanged results by identity — in one slot each. An
+ * export, the export preview, a render of every room or an agent preview is a different document,
+ * and writing that slot made the canvas's next commit re-plan every connector and re-render every
+ * crossed one. `'transient'` reads what the canvas left and never writes over it.
+ */
+export type PlanScope = 'canvas' | 'transient';

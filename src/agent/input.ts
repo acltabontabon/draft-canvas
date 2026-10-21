@@ -25,7 +25,7 @@ import {
 } from '../document/types';
 import { LIMITS } from '../document/limits';
 import { STARTER_IDS, type StarterId } from '../starters/types';
-import { AgentError, Problems } from './errors';
+import { Problems } from './errors';
 import { starterFor, starterIds } from './starter';
 import { isEvidence, EVIDENCE_LIMIT } from '../document/evidence';
 import type { SourceEvidence } from '../document/types';
@@ -839,9 +839,4 @@ export function readCreate(raw: unknown): CreateSpec {
   if (!starter && room.nodes.length === 0) problems.add('INVALID_INPUT', '/nodes', 'a diagram needs at least one element (or a starter)');
   problems.throwIfAny();
   return { ...room, title, ...(starter ? { starter } : {}), layout };
-}
-
-export function requireObject(raw: unknown): Json {
-  if (!isObject(raw)) throw new AgentError('INVALID_INPUT', 'Arguments must be an object.');
-  return raw;
 }

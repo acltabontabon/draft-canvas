@@ -76,6 +76,8 @@ interface Segment {
   points: Point[];
   /** Cumulative chord length at each of `SAMPLES + 1` evenly spaced `t` values. */
   arc: number[];
+  /** The point at each of those `t` values, kept for `place`'s nearest-sample scan. */
+  samples: Point[];
   length: number;
 }
 
@@ -107,7 +109,32 @@ function parse(d: string): Segment[] | null {
   return segments.length > 0 ? segments : null;
 }
 
+/**
+ * De Casteljau at `t`. Unrolled for the three degrees a path holds, each step the same arithmetic in
+ * the same order as the general loop, so every point is bit-for-bit what it always was — the loop
+ * allocated two arrays a level, and a large diagram's crossings call this tens of thousands of times
+ * as it opens.
+ */
 function bezier(points: readonly Point[], t: number): Point {
+  const a = points[0]!;
+  const b = points[1]!;
+  if (points.length === 2) return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+  const c = points[2]!;
+  const abx = a.x + (b.x - a.x) * t;
+  const aby = a.y + (b.y - a.y) * t;
+  const bcx = b.x + (c.x - b.x) * t;
+  const bcy = b.y + (c.y - b.y) * t;
+  if (points.length === 3) return { x: abx + (bcx - abx) * t, y: aby + (bcy - aby) * t };
+  const d = points[3]!;
+  if (points.length === 4) {
+    const cdx = c.x + (d.x - c.x) * t;
+    const cdy = c.y + (d.y - c.y) * t;
+    const abcx = abx + (bcx - abx) * t;
+    const abcy = aby + (bcy - aby) * t;
+    const bcdx = bcx + (cdx - bcx) * t;
+    const bcdy = bcy + (cdy - bcy) * t;
+    return { x: abcx + (bcdx - abcx) * t, y: abcy + (bcdy - abcy) * t };
+  }
   let xs = points.map((p) => p.x);
   let ys = points.map((p) => p.y);
   while (xs.length > 1) {
@@ -125,15 +152,17 @@ function bezier(points: readonly Point[], t: number): Point {
 
 function measure(points: Point[]): Segment {
   const arc: number[] = [0];
+  const samples: Point[] = [bezier(points, 0)];
   let total = 0;
   let previous = points[0]!;
   for (let i = 1; i <= SAMPLES; i += 1) {
     const point = bezier(points, i / SAMPLES);
     total += Math.hypot(point.x - previous.x, point.y - previous.y);
     arc.push(total);
+    samples.push(point);
     previous = point;
   }
-  return { points, arc, length: total };
+  return { points, arc, samples, length: total };
 }
 
 /** How far along a segment a given `t` sits, interpolated within the sample table — the inverse of
@@ -221,7 +250,7 @@ function place(segments: readonly Segment[], crossing: Crossing): Placement | nu
   for (let index = 0; index < segments.length; index += 1) {
     const segment = segments[index]!;
     for (let i = 0; i <= SAMPLES; i += 1) {
-      const point = bezier(segment.points, i / SAMPLES);
+      const point = segment.samples[i]!;
       const distance = Math.hypot(point.x - crossing.x, point.y - crossing.y);
       if (distance < bestDistance) {
         bestSegment = index;

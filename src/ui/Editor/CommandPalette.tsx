@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Preset } from '../../canvas/presets';
 import { rank, type RankedEntry } from '../../commands/fuzzy';
-import { commandsFor } from '../../commands/registry';
+import { commandsFor, warmCopyExports } from '../../commands/registry';
 import { frequencyBonus, recentIds, recordUse } from '../../commands/history';
 import { JUMP_LIMIT, JUMP_RANK_PENALTY, jumpCommands } from '../../commands/search';
 import {
@@ -56,6 +56,7 @@ export function CommandPalette(props: CommandPaletteProps) {
 }
 
 function CommandPaletteBody({ createAt, createAtPointer, playback, onPresent }: CommandPaletteProps) {
+  useEffect(warmCopyExports, []);
   const setOpen = useUiStore((state) => state.setCommandPaletteOpen);
   const setQuickConnect = useUiStore((state) => state.setQuickConnect);
   // Reactive slices only so an open palette re-lists as the world changes underneath it — the

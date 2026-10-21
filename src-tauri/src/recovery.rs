@@ -4,7 +4,7 @@
 //!
 //! Each entry is two files, `<id>.draftcanvas` (the document) and `<id>.json` (who it belongs to).
 
-use crate::docio::{read_document, write_private, MAX_DOC_BYTES};
+use crate::docio::{read_document, write_private_together, MAX_DOC_BYTES};
 use crate::errors::{AppError, ErrorKind, Subject, Verb};
 use crate::util::lock;
 use serde::{Deserialize, Serialize};
@@ -93,7 +93,9 @@ impl Recovery {
     }
 
     /// The document first, then who it belongs to: a crash between the two leaves a document without a
-    /// label (still recoverable, see `list`), never a label pointing at nothing.
+    /// label (still recoverable, see `list`). The folder is flushed once, after both, so a crash before
+    /// that flush may instead keep the new label over the previous copy (still a whole document) or over
+    /// none (a label with nothing to recover, which `list` deletes) — never a half-written file.
     pub fn write(
         &self,
         id: &str,
@@ -125,8 +127,11 @@ impl Recovery {
         let _held = lock(&self.guard);
         fs::create_dir_all(&self.dir)
             .map_err(|e| AppError::from_io(&e, Verb::Save, Subject::RecoveryCopy))?;
-        write_private(&self.data_path(id), bytes, Subject::RecoveryCopy)?;
-        write_private(&self.meta_path(id), &meta, Subject::RecoveryCopy)
+        write_private_together(
+            &self.dir,
+            &[(&self.data_path(id), bytes), (&self.meta_path(id), &meta)],
+            Subject::RecoveryCopy,
+        )
     }
 
     /// Newest first. A document with no (or unreadable) label is still offered, as a quick draft called

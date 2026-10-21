@@ -18,11 +18,6 @@ import {
   laneIndex,
   rectOf,
   responseAwayFor,
-  responseLaneFor,
-  responseLabelAnchor,
-  responseSpineFor,
-  responseWaypointsFor,
-  routeBetween,
   snappedAnchorForDrop,
   strokeSeed,
   type Rect,
@@ -31,7 +26,7 @@ import {
 } from '../edges/routing';
 import { routingPlan } from '../edges/bundles';
 import { labelGroupPlan, labelLeader, pointAlong } from '../edges/labelGroups';
-import { LABEL_PADDING_X, LABEL_PADDING_Y, edgeLabelSize, layoutEdgeLabel, layoutEdgeResponse } from '../edges/labelLayout';
+import { LABEL_PADDING_X, LABEL_PADDING_Y, layoutEdgeLabel, layoutEdgeResponse } from '../edges/labelLayout';
 import { RESPONSE_DASH, dashForEdge, markerVariantForEdge, resolveEdgeColor } from '../edges/kindStyle';
 import { EdgeLabels } from './EdgeLabels';
 import { ATTACHMENT_ROW_GAP, attachmentRowBelowsSourceOrTarget, captionSideOf, rectOfInternal } from './edgeGeometry';
@@ -62,19 +57,14 @@ import { pointInBox } from '../lib/math';
 import { isImeKeyEvent } from '../lib/isEditableTarget';
 import { EdgeBendHandles, type BendPreview } from './EdgeBendHandles';
 import { translateWaypoints } from '../edges/waypoints';
+import { computeEdgeRoutes, edgeRoutes, type EdgeRouteInputs, type EdgeRoutes } from '../edges/edgeRoutes';
 
 const NO_OBSTACLES: readonly Rect[] = [];
 
-interface EdgeRoutes {
-  request: ReturnType<typeof routeBetween>;
-  response: ReturnType<typeof routeBetween> | null;
-  responseLabel: ReturnType<typeof responseLabelAnchor> | null;
-}
-
-/** Routing is pure in its inputs, so results are shared by key across every connector. Room for
- *  every connector a document may hold — smaller, a render that touches them all evicts routes
- *  still on screen and recomputes most of them. */
-const ROUTES = new Lru<string, EdgeRoutes>(LIMITS.maxEdges);
+/** Each connector's last routes and every input they were made from, compared by identity. Most
+ *  renders (selection, lens, playback, hover) move none of them, and building the shared cache's
+ *  string key meant serialising every obstacle rect on each of those renders, for every connector. */
+const LAST_ROUTES = new Lru<string, { inputs: readonly unknown[]; routes: EdgeRoutes }>(LIMITS.maxEdges);
 
 /** Minimum pointer movement, in screen pixels, before an endpoint gesture
  *  counts as a drag rather than a click — see `EdgeEndpointHandle`. */
@@ -201,23 +191,18 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const mode = useEditorStore((state) => state.mode);
   // Identity-stable out of a per-document index — see `DraftNodeView`'s matching subscription.
   const openPoints = useEditorStore((state) => unresolvedOpenPointsFor(state.document.openPoints, { kind: 'edge', id }));
-  const updateEdgeLabel = useEditorStore((state) => state.updateEdgeLabel);
-  const setEdgeCondition = useEditorStore((state) => state.setEdgeCondition);
-  const updateEdgeAttachment = useEditorStore((state) => state.updateEdgeAttachment);
-  const removeEdgeAttachment = useEditorStore((state) => state.removeEdgeAttachment);
-  const detachEdgeAttachment = useEditorStore((state) => state.detachEdgeAttachment);
-  const reorderEdgeAttachment = useEditorStore((state) => state.reorderEdgeAttachment);
   // Bound to this edge's own id here, since `AttachmentActions` takes only an attachment id — the
   // host id is already known to the caller, not something every attachment mutation should have
-  // to repeat.
+  // to repeat. Actions are read when called, not subscribed to: they never change, and a
+  // subscription per action per connector was thousands of selector calls on every store update.
   const attachmentActions: AttachmentActions = useMemo(
     () => ({
-      update: (attachmentId, patch) => updateEdgeAttachment(id, attachmentId, patch),
-      remove: (attachmentId) => removeEdgeAttachment(id, attachmentId),
-      detach: (attachmentId) => detachEdgeAttachment(id, attachmentId),
-      reorder: (attachmentId, direction) => reorderEdgeAttachment(id, attachmentId, direction),
+      update: (attachmentId, patch) => useEditorStore.getState().updateEdgeAttachment(id, attachmentId, patch),
+      remove: (attachmentId) => useEditorStore.getState().removeEdgeAttachment(id, attachmentId),
+      detach: (attachmentId) => useEditorStore.getState().detachEdgeAttachment(id, attachmentId),
+      reorder: (attachmentId, direction) => useEditorStore.getState().reorderEdgeAttachment(id, attachmentId, direction),
     }),
-    [id, updateEdgeAttachment, removeEdgeAttachment, detachEdgeAttachment, reorderEdgeAttachment],
+    [id],
   );
   const theme = useThemeValue();
   const { preset } = usePersonality();
@@ -462,60 +447,46 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
     ? bendPreview.waypoints
     : carriedWaypoints(edge.waypoints, committedSource, committedTarget, sourceNode, targetNode);
 
-  // Every input the two routes read, as one key: a connector re-renders for selection, lens,
-  // playback, and hover far more often than its geometry actually moves.
-  const routeKey = JSON.stringify([
-    effectiveSourceRect,
-    effectiveTargetRect,
-    edge.routing,
-    edge.label,
-    edge.sourceAnchor,
-    edge.targetAnchor,
-    edge.hasResponse,
+  const routeInputs = [
+    edge,
+    sourceNode,
+    targetNode,
+    sourceType,
+    targetType,
+    dragOverride,
+    bendPreview,
+    committedSource,
+    committedTarget,
     laneOffset,
-    dragOverride?.endpoint,
     spine,
     routeObstacles,
-    waypoints,
-  ]);
-  // Every frame of a drag, resize, reconnect or bend has a key no later frame repeats: filed in the
-  // shared cache (10,000 routes) a few long drags of a busy hub pushed out the routes of connectors
-  // still on screen, and the next canvas-wide render routed them all again. Those frames are computed
-  // and dropped; the settled route goes to the shared cache once the gesture ends.
+  ] as const;
+  const known = LAST_ROUTES.get(id) ?? null;
+  const unmoved = known !== null && known.inputs.every((input, index) => input === routeInputs[index]);
+  // Every frame of a drag, resize, reconnect or bend has inputs no later frame repeats: filed in the
+  // shared cache, a few long drags of a busy hub pushed out the routes of connectors still on screen,
+  // and the next canvas-wide render routed them all again. Those frames are computed and dropped; the
+  // settled route goes to the shared cache (`edges/edgeRoutes.ts`) once the gesture ends — where the
+  // crossing plan has usually filed it already.
   const transient = routeUnsettled;
-  const routes = transient ? computeRoutes() : ROUTES.getOrCreate(routeKey, computeRoutes);
-  function computeRoutes(): EdgeRoutes {
-    const request = routeBetween(effectiveSourceRect, effectiveTargetRect, edge!.routing, {
-      anchors: {
-        source: dragOverride?.endpoint === 'source' ? undefined : edge!.sourceAnchor,
-        target: dragOverride?.endpoint === 'target' ? undefined : edge!.targetAnchor,
-      },
-      waypoints,
-      lane: laneOffset,
-      label: edge!.label ? { ...edgeLabelSize(edge!.label), away: responseAwayFor(edge!.hasResponse, laneOffset) } : undefined,
-      obstacles: routeObstacles,
-      // An endpoint being dragged is on its way out of this bundle — keeping it
-      // on the trunk would rubber-band it back to a group it is leaving.
-      spine: dragOverride ? undefined : spine,
-    });
-    // The reply half of a request/response connector — see `responseRoute` below.
-    const response = edge!.hasResponse
-      ? routeBetween(effectiveTargetRect, effectiveSourceRect, edge!.routing, {
-          anchors: {
-            source: dragOverride?.endpoint === 'target' ? undefined : edge!.targetAnchor,
-            target: dragOverride?.endpoint === 'source' ? undefined : edge!.sourceAnchor,
-          },
-          waypoints: responseWaypointsFor(waypoints, laneOffset),
-          lane: responseLaneFor(laneOffset),
-          obstacles: routeObstacles,
-          spine: dragOverride ? undefined : responseSpineFor(spine),
-        })
-      : null;
-    const responseLabel = response
-      ? responseLabelAnchor(request, response, effectiveSourceRect, effectiveTargetRect, laneOffset)
-      : null;
-    return { request, response, responseLabel };
-  }
+  const routeRequest: EdgeRouteInputs = {
+    source: effectiveSourceRect,
+    target: effectiveTargetRect,
+    routing: edge.routing,
+    label: edge.label,
+    // A dragged end's persisted anchor is set aside (see `effectiveSourceRect` above).
+    sourceAnchor: dragOverride?.endpoint === 'source' ? undefined : edge.sourceAnchor,
+    targetAnchor: dragOverride?.endpoint === 'target' ? undefined : edge.targetAnchor,
+    hasResponse: edge.hasResponse,
+    lane: laneOffset,
+    // An endpoint being dragged is on its way out of this bundle — keeping it
+    // on the trunk would rubber-band it back to a group it is leaving.
+    spine: dragOverride ? undefined : spine,
+    obstacles: routeObstacles,
+    waypoints,
+  };
+  const routes = unmoved ? known.routes : transient ? computeEdgeRoutes(routeRequest) : edgeRoutes(routeRequest);
+  if (!unmoved) LAST_ROUTES.set(id, { inputs: routeInputs, routes });
   const route = routes.request;
   // A label chip is far taller than the line's own lane nudge — extra
   // separation on top of it is what keeps parallel labels from stacking.
@@ -623,10 +594,13 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // of it — the whole line would visibly re-settle whenever an unrelated crossing appeared, and a
   // bundle's members would each wobble the shared trunk differently, which is exactly what
   // `strokeSeed` exists to prevent. Going on afterwards leaves the wobble byte-identical.
-  const drawnPath = bridgePath(roughenPath(route.d, `${seed}:0`, profile.outline, profile.bow), crossings);
+  // A gesture's frames each have a route no later frame repeats: wobbled, but never filed, so a long
+  // drag can't push out the settled wobble of every other connector on screen.
+  const keepWobble = !transient;
+  const drawnPath = bridgePath(roughenPath(route.d, `${seed}:0`, profile.outline, profile.bow, keepWobble), crossings);
   const secondStrokePath =
     profile.strokes === 2
-      ? bridgePath(roughenPath(route.d, `${seed}:1`, profile.outline, profile.bow), crossings)
+      ? bridgePath(roughenPath(route.d, `${seed}:1`, profile.outline, profile.bow, keepWobble), crossings)
       : null;
   // Sketch draws its own arrowhead inline instead of referencing the shared marker — see
   // `render/roughness/roughArrow.ts`.
@@ -649,7 +623,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // "fix" the apparent reversal. See `responseLaneFor`'s own doc comment in `edges/routing.ts`.
   const responseRoute = routes.response;
   const responseDrawnPath = responseRoute
-    ? roughenPath(responseRoute.d, `${seed}${RESPONSE_SEED_SUFFIX}`, profile.outline, profile.bow)
+    ? roughenPath(responseRoute.d, `${seed}${RESPONSE_SEED_SUFFIX}`, profile.outline, profile.bow, keepWobble)
     : null;
   const responseUsesHandDrawnArrow = responseRoute && edge.directed && profile.arrowStyle === 'per-edge-hand';
   const responseArrowPath = responseUsesHandDrawnArrow
@@ -1009,14 +983,14 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
                 dir="auto"
                 spellCheck={false}
                 onBlur={(event) => {
-                  updateEdgeLabel(edge.id, event.currentTarget.value.trim());
+                  useEditorStore.getState().updateEdgeLabel(edge.id, event.currentTarget.value.trim());
                   stopEditing();
                 }}
                 onKeyDown={(event) => {
                   event.stopPropagation();
                   if (isImeKeyEvent(event)) return;
                   if (event.key === 'Enter') {
-                    updateEdgeLabel(edge.id, event.currentTarget.value.trim());
+                    useEditorStore.getState().updateEdgeLabel(edge.id, event.currentTarget.value.trim());
                     stopEditing();
                   }
                   if (event.key === 'Escape') stopEditing();
@@ -1102,14 +1076,14 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
                   dir="auto"
                   spellCheck={false}
                   onBlur={(event) => {
-                    setEdgeCondition(edge.id, event.currentTarget.value.trim());
+                    useEditorStore.getState().setEdgeCondition(edge.id, event.currentTarget.value.trim());
                     stopEditingCondition();
                   }}
                   onKeyDown={(event) => {
                     event.stopPropagation();
                     if (isImeKeyEvent(event)) return;
                     if (event.key === 'Enter') {
-                      setEdgeCondition(edge.id, event.currentTarget.value.trim());
+                      useEditorStore.getState().setEdgeCondition(edge.id, event.currentTarget.value.trim());
                       stopEditingCondition();
                     }
                     if (event.key === 'Escape') stopEditingCondition();

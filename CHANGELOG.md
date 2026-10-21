@@ -11,11 +11,49 @@ the release notes and the in-app What's New are generated from here. See
 
 ## [Unreleased]
 
+### Shared
+
+#### Changed
+
+- **Smoother large diagrams** — panning and dragging shapes on a diagram with hundreds of shapes
+  stay at a full frame rate, large diagrams open faster, and hovering connectors, selecting and
+  opening panels do less work. <!-- highlight -->
+- The app's first screen loads about a third less code; export tools load when you first use them.
+
+#### Fixed
+
+- Selecting a boundary no longer covers the boundaries and connectors inside it, so they stay
+  clickable while it's selected.
+- Cutting and pasting a shape keeps the open points on what's inside it.
+- Turning a shared connector run into a Junction keeps the open points on those connectors.
+- Leaving Present after looking inside a shape no longer moves the camera to the top level's view.
+- Escape closes an open dialog rather than the depth map behind it, and finishing an IME
+  composition with Escape no longer clears the Library search.
+- Opening a share link asks first when the current diagram couldn't be saved.
+- Arrange and imports say when they couldn't load, instead of doing nothing.
+- An empty Text removed with Escape no longer comes back after a reload.
+- Two code snippets of the same length no longer show each other's highlighting.
+
 ### Desktop
+
+#### Changed
+
+- AI agents no longer take focus from the field you're typing in, and wait while you trace a flow.
+- AI agent work on large projects no longer holds up saving and other file actions.
+- The proposals panel checks proposals in the background and stops checking for new ones when
+  nothing needs them.
 
 #### Fixed
 
 - The update window's release notes show links as links, instead of raw Markdown.
+- Undoing back to the saved state removes the recovery copy, so reopening the file doesn't offer
+  to recover unchanged work.
+- A file touched without changing its contents, by a sync client or git, is no longer reloaded with
+  a notice.
+- Two saves to the same file at the same moment can no longer lose one of them.
+- A proposal for one diagram can no longer show, or be accepted, on another.
+- An agent's change refused because you were dragging or in a read-only diagram is
+  reported to the agent as refused.
 
 ### Web
 

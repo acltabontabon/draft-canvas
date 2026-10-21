@@ -7,6 +7,7 @@ import { displayNameFor } from '../../document/factory';
 import { libraryShapeOf } from '../../document/shape';
 import { accentOf } from '../../render/theme/tokens';
 import { fileOf, useEditorStore } from '../../store/editorStore';
+import { isImeKeyEvent, overlayAboveCanvasIsOpen } from '../../lib/isEditableTarget';
 import { useThemeValue } from '../theme/useTheme';
 import { Fingerprint } from '../Library/Fingerprint';
 import { useUiStore } from '../../store/uiStore';
@@ -81,6 +82,9 @@ function DepthMap({ trail }: { trail: string }) {
     // nothing selected steps out of the room. The view that is open is the nearer thing to close.
     const escape = (event: globalThis.KeyboardEvent) => {
       if (event.key !== 'Escape' || navRef.current?.contains(document.activeElement)) return;
+      // A dialog or menu over the canvas owns this Escape (it is nearer still), and an IME's
+      // Escape cancels a conversion — neither may put the view away underneath.
+      if (isImeKeyEvent(event) || overlayAboveCanvasIsOpen()) return;
       const active = document.activeElement as HTMLElement | null;
       if (active?.isContentEditable || active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) return;
       event.preventDefault();

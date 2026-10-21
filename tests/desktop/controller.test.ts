@@ -44,7 +44,6 @@ describe('opening a file', () => {
     await h.controller.openFile();
     expect(h.store.getSnapshot().explorerMode).toBe('file');
     expect(doc()).toEqual({ kind: 'none' });
-    expect(h.api.openDialog).not.toHaveBeenCalled();
     expect(h.loads()).toHaveLength(0);
   });
 
@@ -576,6 +575,20 @@ describe('a file’s recovery copy', () => {
     expect(h.recovery.size).toBe(0);
   });
 
+  it('is discarded once the edits are undone back to what is saved', async () => {
+    vi.useFakeTimers();
+    const handle = await openFile();
+    h.edit(edited());
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(h.recovery.size).toBe(1);
+
+    h.edit(h.files.get(handle)!.text);
+    await vi.advanceTimersByTimeAsync(1500);
+
+    expect(doc()).toMatchObject({ dirty: false });
+    expect(h.recovery.size).toBe(0);
+  });
+
   it('is kept when more was edited while the save was being written', async () => {
     vi.useFakeTimers();
     await openFile();
@@ -800,6 +813,24 @@ describe.each(['window-focused', 'disk-changed'] as const)('disk reconciliation 
 
     expect(h.loads().at(-1)!.text).toBe(file.text);
     expect(h.notices[0]).toContain('was changed outside Draft Canvas');
+  });
+
+  it('adopts a file whose timestamp moved but whose content did not, without reloading or saying so', async () => {
+    const handle = await openFile();
+    const file = h.files.get(handle)!;
+    file.version += 1;
+    await h.controller.start();
+
+    h.hostEvent({ type: eventType });
+    await h.settle();
+
+    expect(h.loads()).toHaveLength(1);
+    expect(h.notices).toHaveLength(0);
+    expect(doc()).toMatchObject({ dirty: false });
+    expect((doc() as { outside?: string }).outside).toBeUndefined();
+    h.edit(edited());
+    await h.controller.save();
+    expect(h.api.saveDocument.mock.calls[0]![2]).toBe('v1:2');
   });
 
   it('leaves unsaved work on screen and flags the file instead', async () => {

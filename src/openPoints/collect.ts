@@ -7,7 +7,7 @@
  * `document/`.
  */
 
-import { OPEN_POINT_LABELS, pointsOf, unresolvedIndex } from '../document/openPoints';
+import { pointsOf, unresolvedIndex } from '../document/openPoints';
 import type { DraftDocument, OpenPoint } from '../document/types';
 import { indexFile, resolveTarget, type ElementTarget } from './locate';
 
@@ -34,11 +34,6 @@ export function openPointsOverview(file: DraftDocument): OpenPointsOverview {
     (point.resolved ? resolved : open).push({ point, targets });
   }
   return { open, resolved };
-}
-
-/** What a row is called when it has no context of its own: its kind and what it is about. */
-export function rowTitle(row: OpenPointRow): string {
-  return row.point.context?.trim() || `${OPEN_POINT_LABELS[row.point.kind]} · ${describeTargets(row)}`;
 }
 
 /** "Payment Service, Payment Service → Ledger" — the elements a point concerns, named. */

@@ -24,7 +24,7 @@ const TARGET_OUTSET = 6;
 
 /**
  * Intent Continuation's preview: the nodes and connectors an offer would add, drawn in flow space
- * inside `Canvas`'s `<ViewportPortal>` so they pan and zoom with the diagram but never enter the
+ * inside `Canvas`'s `<ViewportLayer>` so they pan and zoom with the diagram but never enter the
  * document, projection, history or an export. Every picture comes from the same
  * `describeNode → emitDisplayList` pipeline the real node uses, and every connector from the
  * same `routeBetween`/`dashForEdge`/marker the real edge will get — a ghost is the real thing at

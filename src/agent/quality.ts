@@ -48,16 +48,6 @@ const WEIGHT: Record<QualityIssue['kind'], number> = {
   jog: 1,
 };
 
-/**
- * One number to compare candidate arrangements by: errors by how much they hide, then (far less)
- * skewed connectors. Lower is better; 0 is a clean result with every connector straight. For
- * display only — `isBetterReport` is what candidate selection uses, since a plain sum can't
- * guarantee an error-free candidate always outranks one with errors.
- */
-export function scoreOf(report: QualityReport): number {
-  return [...report.errors, ...report.warnings].reduce((sum, issue) => sum + WEIGHT[issue.kind], 0);
-}
-
 const weightOf = (issues: readonly QualityIssue[]) => issues.reduce((sum, issue) => sum + WEIGHT[issue.kind], 0);
 
 /**
@@ -257,10 +247,11 @@ export function checkQuality(
     if (problem?.kind === 'label-over-node') errors.push({ kind: 'label-over-node', ids: [edge.id, problem.node], message: `the caption of ${edge.id} covers ${problem.node}.` });
   }
   const drawn = othersOf(nodes, edges, caption);
+  const drawnById = new Map(drawn.map((o) => [o.id, o]));
   // A connector between two facing sides that still steps sideways on its way reads as skewed. Only
   // one of several connectors leaving (or reaching) the same side can be straight — the rest of a
   // fan must step — so only a connector alone on both its sides counts.
-  const plan = routingPlan(nodes, edges);
+  const plan = routingPlan(nodes, edges, 'transient');
   const onSide = new Map<string, number>();
   const sideKey = (node: string, side?: string) => `${node}|${side ?? ''}`;
   for (const edge of edges) {
@@ -272,7 +263,7 @@ export function checkQuality(
     if (!judged(edge.id, edge.source, edge.target) || plan.spineFor(edge.id)) continue;
     if (!facing(edge.sourceAnchor?.side, edge.targetAnchor?.side)) continue;
     if (onSide.get(sideKey(edge.source, edge.sourceAnchor?.side)) !== 1 || onSide.get(sideKey(edge.target, edge.targetAnchor?.side)) !== 1) continue;
-    const route = drawn.find((o) => o.id === edge.id);
+    const route = drawnById.get(edge.id);
     const start = route?.points[0];
     const end = route?.points[route.points.length - 1];
     if (!start || !end) continue;

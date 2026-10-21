@@ -19,9 +19,20 @@ export type DraftRfEdge = Edge<{ id: string }>;
 export const NODE_COMPONENT = 'draft';
 export const EDGE_COMPONENT = 'draft';
 
-/** Boundaries always sit behind their contents, whatever their z value. */
-function zIndexOf(node: DraftNode): number {
-  return node.type === 'group' ? node.z - 1000 : node.z;
+/** How far React Flow lifts a selected node (`elevateNodesOnSelect`, on by default). */
+const SELECTED_LIFT = 1000;
+
+/**
+ * Boundaries always sit behind their contents, whatever their z value — selected or not. React Flow
+ * lifts a selected node by `SELECTED_LIFT`, which is right for a shape (it comes up to be dragged
+ * over its neighbours) and wrong for a boundary: it rose back level with the shapes, over every
+ * boundary nested in it and every connector inside, so selecting the outer of two boundaries made
+ * the inner one impossible to click until the outer was let go. A selected boundary is projected
+ * that much lower, so selecting one never changes what is in front of it.
+ */
+function zIndexOf(node: DraftNode, selected: boolean): number {
+  if (node.type !== 'group') return node.z;
+  return node.z - 1000 - (selected ? SELECTED_LIFT : 0);
 }
 
 function isSameGeometry(a: DraftRfNode, node: DraftNode, selected: boolean): boolean {
@@ -30,7 +41,7 @@ function isSameGeometry(a: DraftRfNode, node: DraftNode, selected: boolean): boo
     a.position.y === node.y &&
     a.width === node.width &&
     a.height === node.height &&
-    a.zIndex === zIndexOf(node) &&
+    a.zIndex === zIndexOf(node, selected) &&
     a.selected === selected &&
     a.draggable !== undefined
   );
@@ -67,7 +78,7 @@ export function projectNodes(
       position: { x: node.x, y: node.y },
       width: node.width,
       height: node.height,
-      zIndex: zIndexOf(node),
+      zIndex: zIndexOf(node, selected),
       selected,
       draggable: options.interactive,
       selectable: options.interactive,
@@ -77,6 +88,21 @@ export function projectNodes(
   });
 
   return changed ? projected : (previous as DraftRfNode[]);
+}
+
+/** A connector's spoken sentence, kept while it and both its shapes are the same objects: every
+ *  selection change re-projects every connector, and rebuilding 800 sentences per click was most
+ *  of what that cost. */
+const readings = new WeakMap<DraftEdge, { source: DraftNode | undefined; target: DraftNode | undefined; text: string }>();
+
+function readingOf(edge: DraftEdge, lookup: ReturnType<typeof nodeLookupOf>): string {
+  const source = lookup(edge.source);
+  const target = lookup(edge.target);
+  const known = readings.get(edge);
+  if (known && known.source === source && known.target === target) return known.text;
+  const text = connectorReading(edge, lookup);
+  readings.set(edge, { source, target, text });
+  return text;
 }
 
 export function projectEdges(
@@ -97,7 +123,7 @@ export function projectEdges(
     // "Edge from <id> to <id>" by default, and an `img` makes everything inside it presentational —
     // so the sentence has to be given to the wrapper here, not drawn in `DraftEdgeView`. Computed
     // from the document once per projection, never per edge per store update.
-    const ariaLabel = connectorReading(edge, lookup);
+    const ariaLabel = readingOf(edge, lookup);
     if (
       existing &&
       existing.selected === selected &&

@@ -87,26 +87,50 @@ impl Ledger {
             entries: HashMap::new(),
             appended: 0,
         };
-        ledger.load()?;
+        let tidy = ledger.load()?;
+        let loaded = ledger.entries.len();
         ledger.evict(now);
-        ledger.compact()?;
+        // Rewritten only when that changes something: an fsynced rewrite on every launch, before the
+        // window shows, for a journal that is already exactly its live entries, is wasted start-up time.
+        if !tidy || ledger.entries.len() != loaded {
+            ledger.compact()?;
+        }
         Ok(ledger)
     }
 
-    fn load(&mut self) -> io::Result<()> {
+    /// Reads the journal. True when it holds exactly one complete line per live entry — nothing
+    /// superseded, torn or unreadable — so rewriting it would change nothing.
+    fn load(&mut self) -> io::Result<bool> {
         let file = match File::open(&self.file) {
             Ok(file) => file,
-            Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(true),
             Err(e) => return Err(e),
         };
-        for line in BufReader::new(file).lines() {
-            let Ok(line) = line else { break };
+        let mut reader = BufReader::new(file);
+        let (mut lines, mut clean) = (0, true);
+        let mut line = String::new();
+        loop {
+            line.clear();
+            match reader.read_line(&mut line) {
+                Ok(0) => break,
+                Ok(_) => lines += 1,
+                Err(_) => {
+                    clean = false;
+                    break;
+                }
+            }
+            // A line without its newline is one a crash cut short. It must not be left in place even
+            // when it parses: the next record appended would join it on the same line.
+            clean &= line.ends_with('\n');
             // A line that doesn't parse is the one a crash cut short; everything before it stands.
-            if let Ok(entry) = serde_json::from_str::<Entry>(&line) {
-                self.entries.insert(entry.key.clone(), entry);
+            match serde_json::from_str::<Entry>(line.trim_end()) {
+                Ok(entry) => {
+                    self.entries.insert(entry.key.clone(), entry);
+                }
+                Err(_) => clean = false,
             }
         }
-        Ok(())
+        Ok(clean && lines == self.entries.len())
     }
 
     pub fn get(&self, key: &str) -> Option<&Entry> {
@@ -358,5 +382,44 @@ mod tests {
         assert!(ledger.get("k0").is_none());
         assert!(ledger.get("k2").is_none());
         assert!(ledger.get("k3").is_some());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_journal_that_is_already_its_live_entries_is_not_rewritten_on_open() {
+        use std::os::unix::fs::MetadataExt;
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("ledger.jsonl");
+        let mut ledger = Ledger::open(dir.path(), 1).unwrap();
+        ledger.record(entry("a", Stage::Committed, 1)).unwrap();
+        ledger.record(entry("b", Stage::Committed, 2)).unwrap();
+        drop(ledger);
+        let inode = fs::metadata(&file).unwrap().ino();
+        drop(Ledger::open(dir.path(), 3).unwrap());
+        assert_eq!(fs::metadata(&file).unwrap().ino(), inode, "left in place");
+
+        // A superseded record is worth a rewrite.
+        let mut ledger = Ledger::open(dir.path(), 3).unwrap();
+        ledger
+            .advance("a", Stage::Committed, 3, |e| e.receipt = Some(json!({})))
+            .unwrap();
+        drop(ledger);
+        drop(Ledger::open(dir.path(), 4).unwrap());
+        assert_ne!(fs::metadata(&file).unwrap().ino(), inode, "compacted");
+        assert_eq!(fs::read_to_string(&file).unwrap().lines().count(), 2);
+    }
+
+    #[test]
+    fn a_record_cut_short_before_its_newline_does_not_swallow_the_next_one() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("ledger.jsonl");
+        let line = serde_json::to_string(&entry("a", Stage::Committed, 1)).unwrap();
+        fs::write(&file, line).unwrap();
+        let mut ledger = Ledger::open(dir.path(), 1).unwrap();
+        assert!(ledger.get("a").is_some());
+        ledger.record(entry("b", Stage::Committed, 2)).unwrap();
+        drop(ledger);
+        let ledger = Ledger::open(dir.path(), 2).unwrap();
+        assert!(ledger.get("a").is_some() && ledger.get("b").is_some());
     }
 }
