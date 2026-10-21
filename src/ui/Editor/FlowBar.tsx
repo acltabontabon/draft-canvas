@@ -721,8 +721,10 @@ function FlowPicker({
 
   // Focus lands inside on open — both so the arrow keys below reach it, and because the Escape
   // handler is a React one: with focus left outside, a press would fall through to the editor's
-  // cascade and end the presentation instead of closing this.
-  useEffect(() => {
+  // cascade and end the presentation instead of closing this. A layout effect, so focus is inside
+  // before the picker is first painted: a passive effect runs after paint, and an Escape pressed in
+  // that gap — the picker on screen, focus still behind it — ended the walkthrough (seen on WebKit).
+  useLayoutEffect(() => {
     const current =
       rootRef.current?.querySelector<HTMLElement>('[aria-checked="true"]') ??
       rootRef.current?.querySelector<HTMLElement>('[role="menuitemradio"]');

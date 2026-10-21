@@ -15,6 +15,11 @@ test.describe('Home screen', () => {
         await expect(scene.getByRole('button', { name: 'New canvas' })).toBeVisible();
         await expect(scene.getByRole('button', { name: 'Import a file' })).toBeVisible();
         expect(await page.locator('.dc-home').evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+        // A theme switch eases colours over a few frames. Measured mid-ease, a grey sits between its
+        // light and dark values and fails contrast in neither theme's real palette (seen on WebKit).
+        await page.waitForFunction(() =>
+          document.getAnimations().every((animation) => animation.playState !== 'running' || animation.effect?.getTiming().iterations === Infinity),
+        );
         const result = await new AxeBuilder({ page }).include('.dc-home').analyze();
         expect(result.violations).toEqual([]);
       }
