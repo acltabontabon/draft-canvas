@@ -1020,6 +1020,7 @@
             "external-actor",
             "system-actor",
             "device",
+            "ai-agent",
             "component",
             "module",
             "adapter",
@@ -1388,7 +1389,11 @@
                 "implementedBy",
                 "implements",
                 "compensates",
-                "transforms"
+                "transforms",
+                "asks",
+                "delegates",
+                "escalates",
+                "notifies"
               ],
               "description": "Optional: inferred from the two element types when left out."
             },
@@ -1707,6 +1712,7 @@
                     "external-actor",
                     "system-actor",
                     "device",
+                    "ai-agent",
                     "component",
                     "module",
                     "adapter",
@@ -1856,6 +1862,7 @@
                     "external-actor",
                     "system-actor",
                     "device",
+                    "ai-agent",
                     "component",
                     "module",
                     "adapter",
@@ -1998,6 +2005,7 @@
                     "external-actor",
                     "system-actor",
                     "device",
+                    "ai-agent",
                     "component",
                     "module",
                     "adapter",
@@ -2140,6 +2148,7 @@
                     "external-actor",
                     "system-actor",
                     "device",
+                    "ai-agent",
                     "component",
                     "module",
                     "adapter",
@@ -2485,6 +2494,7 @@
                               "external-actor",
                               "system-actor",
                               "device",
+                              "ai-agent",
                               "component",
                               "module",
                               "adapter",
@@ -2681,7 +2691,11 @@
                               "implementedBy",
                               "implements",
                               "compensates",
-                              "transforms"
+                              "transforms",
+                              "asks",
+                              "delegates",
+                              "escalates",
+                              "notifies"
                             ]
                           },
                           {
@@ -3415,7 +3429,11 @@
                 "implementedBy",
                 "implements",
                 "compensates",
-                "transforms"
+                "transforms",
+                "asks",
+                "delegates",
+                "escalates",
+                "notifies"
               ],
               "description": "Optional: inferred from the two element types when left out."
             },
@@ -3734,6 +3752,7 @@
                     "external-actor",
                     "system-actor",
                     "device",
+                    "ai-agent",
                     "component",
                     "module",
                     "adapter",
@@ -3883,6 +3902,7 @@
                     "external-actor",
                     "system-actor",
                     "device",
+                    "ai-agent",
                     "component",
                     "module",
                     "adapter",
@@ -4025,6 +4045,7 @@
                     "external-actor",
                     "system-actor",
                     "device",
+                    "ai-agent",
                     "component",
                     "module",
                     "adapter",
@@ -4167,6 +4188,7 @@
                     "external-actor",
                     "system-actor",
                     "device",
+                    "ai-agent",
                     "component",
                     "module",
                     "adapter",

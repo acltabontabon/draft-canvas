@@ -201,4 +201,8 @@ export const SEMANTIC_DEFAULTS: Record<EdgeSemantic, { label: string }> = {
   implements: { label: 'implements' },
   compensates: { label: 'compensates' },
   transforms: { label: 'transforms' },
+  asks: { label: 'asks' },
+  delegates: { label: 'delegates to' },
+  escalates: { label: 'escalates to' },
+  notifies: { label: 'notifies' },
 };

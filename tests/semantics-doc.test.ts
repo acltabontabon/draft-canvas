@@ -14,6 +14,8 @@ import { isStructural } from '../src/sequence/structural';
  */
 const NAMES: Record<NodeCategory, string> = {
   actor: 'Actor',
+  agent: 'AI Agent',
+  device: 'Device',
   service: 'Service',
   external: 'External',
   worker: 'Worker',

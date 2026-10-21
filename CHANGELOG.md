@@ -20,8 +20,17 @@ the release notes and the in-app What's New are generated from here. See
   GitHub-style callouts and coloured words, drawn the same on the canvas and in every export. A
   format bar and shortcuts help while you type, and Aa adds Serif, Mono and Hand fonts and Card,
   Marker and Banner backgrounds. AI agents can write and style them too. <!-- highlight -->
+- **AI Agent actors** — an Actor can now be an AI Agent, drawn as a robot, for assistants, chatbots
+  and autonomous agents that act on your system. Agents can draw them too. <!-- highlight -->
+- **Actors that talk to each other** — connectors between people, AI agents and devices label
+  themselves: a user *asks* an agent, an agent *delegates to* another or *escalates to* a person, and
+  a service *notifies* the people and devices it reaches. Change an actor's kind and its connectors
+  follow.
 
 #### Changed
+
+- An Actor's name follows its kind: switch a new User to Device and it becomes "Device". A name
+  you typed stays.
 
 - **Smoother large diagrams** — panning, dragging, selecting and drawing connectors on a diagram with
   hundreds of shapes do less work per frame, large diagrams open faster, and the command palette and

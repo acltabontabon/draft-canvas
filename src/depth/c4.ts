@@ -46,7 +46,7 @@ export function isC4Element(node: DraftNode): boolean {
 
 function isExternal(node: DraftNode): boolean {
   if (node.type === 'service') return node.serviceKind === 'external';
-  if (node.type === 'actor') return node.actorKind === 'thirdParty' || node.actorKind === 'system';
+  if (node.type === 'actor') return node.actorKind === 'thirdParty' || node.actorKind === 'system' || node.actorKind === 'agent';
   return false;
 }
 

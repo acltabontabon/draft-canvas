@@ -22,7 +22,9 @@ Connections are reasoned about using `NodeCategory` — coarser than a node's sh
 
 | Category | Derived from |
 | --- | --- |
-| `actor` | the Actor shape |
+| `actor` | the Actor shape — a person, a group, a third party or a system acting as a participant |
+| `agent` | Actor shape with `actorKind: 'agent'` — an AI agent; folds to `actor` for pairings without its own row |
+| `device` | Actor shape with `actorKind: 'device'` — folds to `actor` for pairings without its own row |
 | `service` | the Service shape, any `serviceKind` except `external` |
 | `external` | Service shape with `serviceKind: 'external'` |
 | `component` | the Component shape, `componentKind` of `generic`/`module`/`adapter` — see below |
@@ -65,6 +67,13 @@ inward" is a picture rather than a footnote. Either way a realization wears a ho
 (`edges/kindStyle.ts`), the one connector that carries no runtime traffic told apart from the
 solid-headed calls beside it.
 
+**AI Agent and Device** are kinds of Actor with relationships of their own: an agent delegates to
+another agent, escalates to a person and reads stores directly; a device is used by a person and
+publishes telemetry. Each folds back to `actor` for every pairing without its own row, so an agent
+or a device calls a service exactly as a person does, and a voice assistant (a Device) *asks* an AI
+agent through the Actor → AI Agent row. Switching an actor's kind re-reads its connectors that still
+carry an inferred relationship: a User who *asks* a teammate, switched to AI Agent, *escalates* to them.
+
 **Dead-letter queue** works the same way on the messaging side: a DLQ resolves to `queue` for every
 pairing without its own row (a re-drive worker consumes it exactly like any queue), and has its own
 category only so the pairing that *feeds* it — Queue → DLQ — can carry its own rule.
@@ -99,6 +108,18 @@ unrestricted connector.
 | Port → Service | implementedBy | implementedBy |  |
 | Port → Database | dependsOn | *(none)* | **`status: 'unusual'`** — a port is a contract; something implements it and talks to the store |
 | Actor → Service | calls, http, command, query | calls | synchronous by predetermination, no behaviour picker |
+| Actor → Actor | asks, delegates, notifies, uses | asks | participants talking to participants |
+| Actor → AI Agent | asks, delegates, uses | asks | prompting an assistant, or handing it a task |
+| AI Agent → AI Agent | delegates, asks, calls | delegates | an orchestrator handing work to a sub-agent |
+| AI Agent → Actor | escalates, asks, notifies | escalates | a bot handing a case to a person; `asks` for an approval |
+| Actor → Device | uses | uses |  |
+| Device → Actor | notifies | notifies |  |
+| AI Agent → Database | reads, query, readsWrites, writes | reads | retrieval and memory; a person goes through a service, so Actor → Database stays unlisted |
+| AI Agent → Search Index | searches, indexes | searches | a vector or keyword index an agent retrieves from |
+| Device → Queue | publishes, command, event | publishes | telemetry straight into a broker |
+| Device → Topic | publishes, event | publishes | a Stream folds to Topic and reaches this row too |
+| Service → Actor | notifies, event | notifies | an email, a push notification; a Device target folds to Actor |
+| Service → AI Agent | triggers, notifies, calls | triggers | a webhook or schedule setting an agent going |
 | Service → External | calls, http, grpc, command, event, compensates, dependsOn | calls | `external` is a flavour of `service` for any pairing without its own row |
 | Service → Topic | publishes, event, dependsOn | publishes |  |
 | Topic → Service | deliversTo | deliversTo | a topic pushes to every subscriber; never "consumed by", which is a queue's shape |
@@ -222,7 +243,7 @@ judgement calls that remain on purpose:
   `query`, `reads`, `writes`, `readsWrites`, `publishes`, `consumes`, `calls`, `dependsOn`, `fansOut`,
   `deliversTo`, `ingests`, `replicates`, `cdc`, `syncs`, `deadLetters`, `invalidates`, `watches`,
   `searches`, `indexes`, `routes`, `triggers`, `uses`, `implements`, `implementedBy`, `compensates`,
-  `transforms`. A label convenience only — never changes the connector's colour.
+  `transforms`, `asks`, `delegates`, `escalates`, `notifies`. A label convenience only — never changes the connector's colour.
 - **`ConnectorKind`** — how it *behaves*: `sync`, `async`, `event`, `callback`, `conditional`,
   `retry`, `failure`, `fallback`. Drives the solid/dashed line and small glyphs, not the caption.
 

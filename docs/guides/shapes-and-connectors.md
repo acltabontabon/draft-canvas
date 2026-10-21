@@ -51,12 +51,17 @@ from the bar that appears; the silhouette changes so the kind can be read from a
 | Service (`S`) | Service, API, Worker, External System, Scheduler, Gateway |
 | Data Store (`D`) | Database, SQL, NoSQL, Cache, File system, Object storage, Search index, Table |
 | Queue (`Q`) | Queue, Topic, Stream |
-| Actor (`A`) | Human, System, Device, Group, Third Party |
+| Actor (`A`) | Human, System, Device, Group, Third Party, AI Agent |
 | Component (`M`) | Component, Module, Adapter, Port |
 
 The kind decides which relationships the shape can have. A Service *reads / writes* its Database and
 *invalidates* a Cache; a Topic *fans out* to queues and a Queue is *consumed by* a worker. The full
 table is in [Architecture semantics](../reference/semantics.md#the-capability-matrix).
+
+Actors talk to each other too. A person *asks* a colleague or an AI Agent, one agent *delegates to*
+another, and an agent *escalates to* a person when it shouldn't finish alone. A person *uses* a
+Device, and a service *notifies* a person or a device. Change an actor's kind and its connectors
+follow, unless you picked their relationship yourself.
 
 An **External System** is a Service you don't own: a payment provider, an email service. It carries an
 EXTERNAL caption and takes the same connectors a Service does.

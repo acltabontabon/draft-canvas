@@ -44,6 +44,7 @@ TYPES = {
     'external-actor',
     'system-actor',
     'device',
+    'ai-agent',
     'component',
     'module',
     'adapter',
@@ -114,7 +115,21 @@ CAN_HAVE_INSIDE = {
     'software-system',
     'system',
 }
-PEOPLE = {'person', 'user-group', 'external-actor', 'system-actor', 'device', 'user', 'actor', 'human', 'team', 'third-party'}
+PEOPLE = {
+    'person',
+    'user-group',
+    'external-actor',
+    'system-actor',
+    'device',
+    'ai-agent',
+    'user',
+    'actor',
+    'human',
+    'team',
+    'third-party',
+    'agent',
+    'bot',
+}
 EXTERNAL = {'external-system', 'external', 'external-service', 'external-actor', 'third-party'}
 ENTRY = PEOPLE | {'gateway', 'load-balancer', 'api-gateway', 'frontend', 'spa', 'web-app', 'scheduler', 'cron', 'job'}
 NO_FIELDS = PEOPLE | {'junction'}
@@ -149,6 +164,10 @@ SEMANTICS = {
     'implements',
     'compensates',
     'transforms',
+    'asks',
+    'delegates',
+    'escalates',
+    'notifies',
 }
 KINDS = {'sync', 'async', 'event', 'callback', 'conditional', 'retry', 'failure', 'fallback'}
 COLORS = {'neutral', 'teal', 'blue', 'violet', 'amber', 'rose', 'green'}

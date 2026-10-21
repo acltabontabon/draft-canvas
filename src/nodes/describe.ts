@@ -2100,6 +2100,52 @@ function groupGlyph(
 }
 
 /**
+ * AI Agent: a robot head — a rounded head with an antenna, two ears, two eyes and a mouth.
+ *
+ * A robot is the shorthand people already use for "a bot," and it reads apart from System's monitor
+ * at a glance: a face says "acts on its own," a screen says "a machine you integrate with." The head
+ * carries Human's light body wash, so a user and an agent side by side read as two participants of
+ * the same weight rather than a person beside an icon.
+ */
+function agentGlyph(
+  node: DraftNode,
+  cx: number,
+  stroke: Stroke,
+  ctx: DescribeContext,
+): { shapes: Shape[]; glyphBottom: number } {
+  const bottom = GLYPH_BOTTOM;
+  const headW = 44;
+  const headH = 30;
+  const headX = cx - headW / 2;
+  const headY = bottom - headH;
+  const antennaR = 3;
+  const antennaCy = GLYPH_TOP + antennaR;
+  const earW = 4;
+  const earH = 12;
+  const earY = headY + (headH - earH) / 2;
+  const eyeY = headY + 12;
+  const mouthY = headY + headH - 8;
+  const feature = { fill: stroke.color };
+
+  return {
+    shapes: [
+      outlineShape(`${node.id}:actor-glyph-ear-left`, ctx, { x: headX - earW, y: earY, w: earW, h: earH, r: 1.5 }, { fill: 'none', stroke }),
+      outlineShape(`${node.id}:actor-glyph-ear-right`, ctx, { x: headX + headW, y: earY, w: earW, h: earH, r: 1.5 }, { fill: 'none', stroke }),
+      { t: 'path', d: `M${cx},${antennaCy + antennaR} L${cx},${headY}`, fill: 'none', stroke },
+      { t: 'ellipse', cx, cy: antennaCy, rx: antennaR, ry: antennaR, ...feature },
+      // Wash and outline as two shapes on one seed, so they trace the same hand-drawn path — the
+      // same split Human's torso uses to keep the outline at full strength over a faint fill.
+      outlineShape(`${node.id}:actor-glyph`, ctx, { x: headX, y: headY, w: headW, h: headH, r: 8 }, { fill: stroke.color, opacity: 0.12 }),
+      outlineShape(`${node.id}:actor-glyph`, ctx, { x: headX, y: headY, w: headW, h: headH, r: 8 }, { fill: 'none', stroke }),
+      { t: 'ellipse', cx: cx - 9, cy: eyeY, rx: 3.2, ry: 3.2, ...feature },
+      { t: 'ellipse', cx: cx + 9, cy: eyeY, rx: 3.2, ry: 3.2, ...feature },
+      { t: 'path', d: `M${cx - 7},${mouthY} L${cx + 7},${mouthY}`, fill: 'none', stroke: { ...stroke, linecap: 'round' } },
+    ],
+    glyphBottom: bottom,
+  };
+}
+
+/**
  * Third Party: an office building — a tower with a lower wing beside it, windows and a door.
  *
  * A third party is an organisation outside this system's own ownership (a vendor, a partner), and
@@ -2190,7 +2236,9 @@ function actor(node: DraftNode, ctx: DescribeContext): Shape[] {
           ? groupGlyph(node, cx, stroke, ctx)
           : kind === 'thirdParty'
             ? thirdPartyGlyph(node, cx, stroke, ctx)
-            : humanGlyph(node, cx, stroke, ctx);
+            : kind === 'agent'
+              ? agentGlyph(node, cx, stroke, ctx)
+              : humanGlyph(node, cx, stroke, ctx);
 
   const shapes: Shape[] = node.actorFrame === 'borderless' ? glyphShapes : [container, topBar, ...glyphShapes];
 
