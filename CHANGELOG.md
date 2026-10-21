@@ -93,12 +93,6 @@ the release notes and the in-app What's New are generated from here. See
 
 ### Web
 
-#### Added
-
-- **Bring my diagrams** — the editor at the old address moves every diagram in that browser to
-  app.draftcanvas.dev in one click, straight from one tab to the other. Nothing is uploaded, and
-  nothing already there is overwritten. <!-- highlight -->
-
 #### Changed
 
 - **A new home** — Draft Canvas lives at [draftcanvas.dev](https://draftcanvas.dev/), and the editor
@@ -107,7 +101,7 @@ the release notes and the in-app What's New are generated from here. See
 
 #### Fixed
 
-- Backups, restores and moving diagrams from the old address keep background images.
+- Backups and restores keep background images.
 - A refresh with unsaved edits keeps them even if saving them fails at first, or the diagram was
   renamed in another tab.
 - Closing a diagram no longer removes background images its undo history needs in another tab.
