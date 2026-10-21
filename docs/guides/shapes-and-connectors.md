@@ -14,11 +14,14 @@ Press a shape's key to add it. Select it to choose a kind in its toolbar.
 | Service | `S` | Service, API, Worker, External System, Scheduler, Gateway |
 | Data Store | `D` | Database, SQL, NoSQL, Cache, File system, Object storage, Search index, Table |
 | Queue | `Q` | Queue, Topic, Stream |
-| Actor | `A` | Human, System, Device, Group, Third Party |
+| Actor | `A` | Human, System, Device, Group, Third Party, AI Agent |
 | Component | `M` | Component, Module, Adapter, Port |
 
 Use **External System** for a service you do not own. Actors start borderless;
 **Actor frame → Framed** adds an outlined card.
+
+Use **AI Agent** for an automated participant. Actor connectors can express *asks*, *delegates to*
+and *escalates to*. Changing a kind updates inferred relationships; manually chosen relationships stay.
 
 ## Technology and description
 
@@ -109,5 +112,34 @@ Choose its kind and colour in the toolbar:
 | Deployment | A runtime or hosting scope |
 
 Kinds change the outline and header; they do not enforce architecture rules.
+
+## Write rich text
+
+Press `T` for a Text shape. Double-click it or press `Enter` to edit its Markdown;
+the format bar edits selected words. Canvas and exports show the formatted result.
+
+| Write | Get |
+| --- | --- |
+| `# Title`, `## Section`, `### Detail` | Headings |
+| `**bold**`, `_italic_`, `~~struck~~`, `==highlighted==` | Emphasis |
+| `` `code` ``; a fenced code block with a language such as `ts` or `diff` | Inline or highlighted code |
+| `- item`, `1. step`, `- [ ] todo`, `- [x] done` | Lists and checklists |
+| `> quote`; `> [!WARNING]` | Quotes and callouts (NOTE, TIP, IMPORTANT, WARNING, CAUTION) |
+| `\| A \| B \|` followed by `\| --- \| --- \|` | A table |
+| `---` | A divider |
+| `[words](https://…)`; `[words]{.rose}` | A link; coloured words |
+
+![A Text shape's Markdown editor and format bar.](../media/guides/rich-text-editing.png)
+
+While editing, `⌘B` / `⌘I` / `⌘E` / `⌘⇧X` / `⌘⇧H` / `⌘K` apply bold, italic, code,
+strikethrough, highlight or a link. `⌘⇧8` / `⌘⇧7` / `⌘⇧9` create bulleted, numbered or checklists;
+`⌘⌥1`–`⌘⌥3` create headings. On Windows and Linux, use `Alt` for `⌥`.
+
+In a list, `Enter` adds the next item; on an empty item it ends the list. `Tab` nests items.
+A single line break stays a new line; a blank line starts a paragraph.
+
+Use **Aa** to choose Sans, Serif, Mono or Hand fonts, alignment and a background:
+**Card**, **Marker** or **Banner**. Backgrounds use the shape's colour.
+[Preview formatting examples.](../media/guides/rich-text.png)
 
 Next: [look inside a shape](depth.md) or [present a flow](flows-and-presentation.md).

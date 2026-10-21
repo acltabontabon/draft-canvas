@@ -55,6 +55,7 @@ export const ELEMENT_TYPES: Record<string, NativeShape & { summary: string }> = 
   'external-actor': { type: 'actor', actorKind: 'thirdParty', summary: 'A third party acting on the system (a partner, a payment provider).' },
   'system-actor': { type: 'actor', actorKind: 'system', summary: 'Another system as an actor that starts interactions.' },
   device: { type: 'actor', actorKind: 'device', summary: 'A device (a phone, a sensor, a terminal).' },
+  'ai-agent': { type: 'actor', actorKind: 'agent', summary: 'An AI agent or bot acting on the system (an assistant, an autonomous agent, a chatbot).' },
   component: { type: 'component', componentKind: 'generic', summary: 'A component inside a container (C4 component level).' },
   module: { type: 'component', componentKind: 'module', summary: 'A module or package.' },
   adapter: { type: 'component', componentKind: 'adapter', summary: 'An adapter (hexagonal architecture).' },
@@ -106,6 +107,12 @@ const ALIASES: Record<string, string> = {
   human: 'person',
   team: 'user-group',
   'third-party': 'external-actor',
+  agent: 'ai-agent',
+  'ai-assistant': 'ai-agent',
+  assistant: 'ai-agent',
+  bot: 'ai-agent',
+  chatbot: 'ai-agent',
+  llm: 'ai-agent',
 };
 
 export const ELEMENT_TYPE_NAMES = Object.keys(ELEMENT_TYPES);
@@ -149,6 +156,16 @@ function distance(a: string, b: string): number {
   return row[b.length] as number;
 }
 
+/** A table rather than a chain of conditions, so a new actor kind can't fall through to "device". */
+const ACTOR_TYPE_NAMES: Record<ActorKind, string> = {
+  human: 'person',
+  group: 'user-group',
+  thirdParty: 'external-actor',
+  system: 'system-actor',
+  device: 'device',
+  agent: 'ai-agent',
+};
+
 /** The agent's word for a native shape — the inverse of `resolveType`, used when reading. */
 export function typeWordOf(node: DraftNode): string {
   switch (node.type) {
@@ -166,7 +183,7 @@ export function typeWordOf(node: DraftNode): string {
       return node.queueKind ?? 'queue';
     case 'actor': {
       const kind = node.actorKind ?? 'human';
-      return kind === 'human' ? 'person' : kind === 'group' ? 'user-group' : kind === 'thirdParty' ? 'external-actor' : kind === 'system' ? 'system-actor' : 'device';
+      return ACTOR_TYPE_NAMES[kind];
     }
     case 'component':
       return node.componentKind && node.componentKind !== 'generic' ? node.componentKind : 'component';

@@ -1,4 +1,5 @@
 import { createId } from './ids';
+import { plainTextOfMarkdown } from './markdownText';
 import { DEFAULTS } from './limits';
 import {
   C4_TEXT_TYPES,
@@ -26,6 +27,8 @@ import {
   type RouteMode,
   type ServiceKind,
   type TextAlign,
+  type TextBackground,
+  type TextFont,
   type TextRole,
 } from './types';
 
@@ -99,12 +102,17 @@ export function maxSizeFor(type: DraftNodeType): { width: number; height: number
 }
 
 /**
- * `serviceKind`/`componentKind` only matter for their own type — every kind gets its own default
- * name (see `SERVICE_KIND_NAMES`/`COMPONENT_KIND_NAMES`) rather than the generic literal, so a
- * fresh Worker/API/Adapter/etc. starts out named for what it *is*, not for its family. Ignored for
- * every other type.
+ * `serviceKind`/`componentKind`/`actorKind` only matter for their own type — every kind gets its
+ * own default name (see `SERVICE_KIND_NAMES`/`COMPONENT_KIND_NAMES`/`ACTOR_KIND_NAMES`) rather than
+ * the generic literal, so a fresh Worker/API/Adapter/AI Agent/etc. starts out named for what it
+ * *is*, not for its family. Ignored for every other type.
  */
-export function defaultTextFor(type: DraftNodeType, serviceKind?: ServiceKind, componentKind?: ComponentKind): string {
+export function defaultTextFor(
+  type: DraftNodeType,
+  serviceKind?: ServiceKind,
+  componentKind?: ComponentKind,
+  actorKind?: ActorKind,
+): string {
   switch (type) {
     case 'service':
       return SERVICE_KIND_NAMES[serviceKind ?? 'generic'];
@@ -115,7 +123,7 @@ export function defaultTextFor(type: DraftNodeType, serviceKind?: ServiceKind, c
     case 'queue':
       return '';
     case 'actor':
-      return 'User';
+      return ACTOR_KIND_NAMES[actorKind ?? 'human'];
     case 'group':
       return 'Boundary';
     case 'note':
@@ -151,12 +159,16 @@ const DATABASE_KIND_NAMES: Partial<Record<DatabaseKind, string>> = {
   'search-index': 'Search index',
   table: 'Table',
 };
+/** Doubles as the fallback display name and the label a fresh Actor starts with — same one-table
+ *  discipline as `SERVICE_KIND_NAMES`. Human is "User", not "Human": it names the participant, the
+ *  way every other entry does, not the category the picker sorts it under. */
 const ACTOR_KIND_NAMES: Record<ActorKind, string> = {
-  human: 'Human',
+  human: 'User',
   system: 'System',
   device: 'Device',
-  group: 'Group',
+  group: 'User Group',
   thirdParty: 'Third Party',
+  agent: 'AI Agent',
 };
 /** Doubles as the fallback display name and the auto-generated label a fresh Component starts
  *  with — same one-table discipline as `SERVICE_KIND_NAMES`. */
@@ -182,7 +194,8 @@ export function displayNameFor(
     'type' | 'text' | 'queueKind' | 'serviceKind' | 'databaseKind' | 'actorKind' | 'componentKind'
   >,
 ): string {
-  if (node.text && node.text.trim()) return node.text;
+  // A Text element's words are Markdown; its name is what they say, not how they're formatted.
+  if (node.text && node.text.trim()) return node.type === 'text' ? plainTextOfMarkdown(node.text) : node.text;
   switch (node.type) {
     case 'queue':
       return QUEUE_KIND_NAMES[node.queueKind ?? 'queue'];
@@ -236,6 +249,8 @@ export interface CreateNodeInput {
   textAlign?: TextAlign;
   textBold?: boolean;
   textItalic?: boolean;
+  textFont?: TextFont;
+  textBackground?: TextBackground;
   /** Architecture shapes only (`C4_TEXT_TYPES`) — ignored on anything else. */
   description?: string;
   technology?: string;
@@ -254,7 +269,7 @@ export function createNode(input: CreateNodeInput): DraftNode {
     height:
       input.height ?? (input.type === 'queue' && input.text?.trim() ? DEFAULTS.queueNamedHeight : size.height),
     z: input.z ?? 0,
-    text: input.text ?? defaultTextFor(input.type, input.serviceKind, input.componentKind),
+    text: input.text ?? defaultTextFor(input.type, input.serviceKind, input.componentKind, input.actorKind),
     // A caller-supplied `text` is a deliberate name, kept forever. An omitted one is a
     // system-managed placeholder — `updateNodeById`'s Service auto-relabeling (`editorStore.ts`)
     // is the one place that later reads this to decide whether it may still follow the node's
@@ -291,6 +306,8 @@ export function createNode(input: CreateNodeInput): DraftNode {
     if (input.textAlign) node.textAlign = input.textAlign;
     if (input.textBold) node.textBold = true;
     if (input.textItalic) node.textItalic = true;
+    if (input.textFont) node.textFont = input.textFont;
+    if (input.textBackground) node.textBackground = input.textBackground;
   }
   return node;
 }

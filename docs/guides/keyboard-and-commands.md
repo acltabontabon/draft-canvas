@@ -55,7 +55,7 @@ Use **Turn off Intent Continuation** in `⌘K` to disable suggestions; the comma
 | `Delete` / `Backspace` | Delete |
 | `⌘A` | Select all shapes |
 | `⌘G` / `⌘⇧G` | Group in a boundary / ungroup |
-| `⌘B` / `⌘I` | Bold / italic on selected Text |
+| `⌘B` / `⌘I` | Bold / italic on selected Text, or selected words while editing |
 | `⌘⌥F` (`Ctrl+H` on Windows/Linux) | Find and replace across all rooms |
 | `Shift+F10` / Menu key | Open the selection's context menu |
 | `F` | Open Flows |
@@ -65,6 +65,8 @@ Use **Turn off Intent Continuation** in `⌘K` to disable suggestions; the comma
 For shape labels, `Enter` commits and `Shift+Enter` adds a line; `Esc` cancels.
 For Notes, `Enter` adds a line, `⌘Enter` commits, and `Esc` keeps the text.
 Code always uses `Enter` for a new line.
+Text shapes have a [Markdown editor and formatting shortcuts](shapes-and-connectors.md#write-rich-text);
+while editing Text, `⌘K` inserts a link.
 
 ## The Outline, and what a screen reader hears
 

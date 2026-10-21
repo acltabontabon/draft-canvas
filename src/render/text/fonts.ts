@@ -16,7 +16,16 @@ const FONT_SANS =
 const FONT_MONO =
   'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace';
 
-export type FontStack = 'sans' | 'mono';
+/** A Text element's editorial voice. Named faces first (macOS, iOS, Windows, Linux), the generic
+ *  keyword last, for the same reason as the stacks above. */
+const FONT_SERIF =
+  'ui-serif, "New York", "Iowan Old Style", Charter, "Palatino Linotype", Georgia, Cambria, "Times New Roman", serif';
+
+/** A marker-on-a-whiteboard voice. Every face here ships with its OS — Chalkboard SE on Apple
+ *  systems, Segoe Print on Windows, Comic Neue on many Linux desktops — and `cursive` closes it. */
+const FONT_HAND = '"Segoe Print", "Chalkboard SE", "Comic Sans MS", "Comic Neue", cursive';
+
+export type FontStack = 'sans' | 'mono' | 'serif' | 'hand';
 export type FontWeight = 400 | 500 | 600 | 700;
 
 export interface FontSpec {
@@ -26,8 +35,10 @@ export interface FontSpec {
   italic?: boolean;
 }
 
+const FAMILIES: Record<FontStack, string> = { sans: FONT_SANS, mono: FONT_MONO, serif: FONT_SERIF, hand: FONT_HAND };
+
 export function familyOf(stack: FontStack): string {
-  return stack === 'mono' ? FONT_MONO : FONT_SANS;
+  return FAMILIES[stack];
 }
 
 /** A canonical key for caching, and the value a canvas 2D context wants. */

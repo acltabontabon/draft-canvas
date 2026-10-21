@@ -87,6 +87,27 @@ export interface TextShape {
   labelWidth?: number;
 }
 
+/** One run of a rich text line: its own font and colour, pinned to where layout placed it. */
+export interface TextRun {
+  /** The run's left edge. */
+  x: number;
+  text: string;
+  width: number;
+  font: FontSpec;
+  fill: Paint;
+}
+
+/**
+ * Lines of differently styled runs — a Text element's Markdown, as `layoutRichText` laid it out.
+ * Backgrounds, rules, underlines and list markers are ordinary shapes around it; this carries only
+ * the words, so emphasis and selection chrome treat it like any other text.
+ */
+export interface RichTextShape {
+  t: 'rich';
+  lines: { baseline: number; rtl?: boolean; runs: TextRun[] }[];
+  opacity?: number;
+}
+
 export interface CodeShape {
   t: 'code';
   x: number;
@@ -121,6 +142,7 @@ export type Shape =
   | EllipseShape
   | PathShape
   | TextShape
+  | RichTextShape
   | CodeShape
   | GroupShape;
 

@@ -121,6 +121,10 @@ test.describe('contextual connector toolbar', () => {
       'Implements',
       'Compensates',
       'Transforms',
+      'Asks',
+      'Delegates to',
+      'Escalates to',
+      'Notifies',
     ]);
   });
 
@@ -348,6 +352,10 @@ test.describe('Junction connector', () => {
       'Implements',
       'Compensates',
       'Transforms',
+      'Asks',
+      'Delegates to',
+      'Escalates to',
+      'Notifies',
     ]);
     await page.keyboard.press('Escape');
 

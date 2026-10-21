@@ -968,7 +968,7 @@ Each read returns `{role, scope, derived: true, basis}` for an element where eit
 | Element | context view | container view | component view | no level |
 | --- | --- | --- | --- | --- |
 | Actor: human, group | person | person | person | person |
-| Actor: system, third party | software-system | software-system | software-system | unspecified |
+| Actor: system, third party, AI agent | software-system | software-system | software-system | unspecified |
 | Actor: device | unspecified | unspecified | unspecified | unspecified |
 | Service: external system | software-system | software-system | software-system | unspecified |
 | Service: any other kind | software-system | container | unspecified — a service in a component view may be a supporting container or a component drawn as a service | unspecified |

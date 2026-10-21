@@ -1,3 +1,4 @@
+import { ACTOR_CATEGORIES } from '../document/connectorSemantics';
 import type { EdgeSemantic } from '../document/types';
 import { DELIVERY_SEMANTICS, defineChain, defineFanOut, hasInboundEvidence, hasInboundWrite, hasOutboundSemantic, isExplicit } from './families';
 import type { ContinuationRule, Neighborhood } from './types';
@@ -436,7 +437,7 @@ const SERVICE_SEARCH_INDEX: ContinuationRule = {
  * calls is the matrix row; a Gateway and an API reach it through the service fallback.
  */
 const ACTOR_NEXT = defineFanOut(
-  ['actor'],
+  ACTOR_CATEGORIES,
   () => false,
   [
     {
@@ -468,7 +469,7 @@ const ACTOR_NEXT = defineFanOut(
  * about scope, not a shape the graph implies, so Draft Canvas answers when asked and not before.
  */
 const CONTEXT_NEXT = defineFanOut(
-  ['actor'],
+  ACTOR_CATEGORIES,
   () => false,
   [
     {

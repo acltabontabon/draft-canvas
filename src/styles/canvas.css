@@ -1928,9 +1928,65 @@
 }
 
 .dc-emphasis-group,
-.dc-align-group {
+.dc-align-group,
+.dc-font-group,
+.dc-background-group {
   display: flex;
   gap: 2px;
+}
+
+/* Each background option previews itself: the same treatment the canvas draws, in miniature. */
+.dc-typography-panel .dc-background-option > span {
+  padding: 1px 3px;
+  border-radius: 3px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.dc-background-option[data-background='card'] > span {
+  border: 1px solid var(--dc-border-strong);
+  background: var(--dc-surface-raised);
+}
+
+.dc-background-option[data-background='marker'] > span {
+  background: color-mix(in srgb, var(--dc-accent-amber-chip) 34%, transparent);
+}
+
+.dc-background-option[data-background='banner'] > span {
+  background: var(--dc-text);
+  color: var(--dc-canvas);
+}
+
+/* The Markdown format bar, which stands in for the element popover's row while a Text element is
+   being edited. One row of compact controls; it wraps rather than running off a narrow window. */
+.dc-format-row {
+  flex-wrap: wrap;
+  gap: 2px;
+}
+
+.dc-element-inspector:has(.dc-format-bar) {
+  max-width: min(600px, calc(100vw - 32px));
+}
+
+.dc-format-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.dc-format-row .dc-button {
+  height: var(--dc-popover-control);
+  min-width: var(--dc-popover-control);
+  padding: 0 4px;
+  border-radius: var(--dc-radius-sm);
+  font-size: var(--dc-popover-font);
+  justify-content: center;
+}
+
+.dc-format-color-glyph {
+  font-weight: 700;
+  text-decoration: underline 3px;
+  text-underline-offset: 2px;
 }
 
 /* The popover never focuses itself, so a ring only appears once the user Tabs in — and then every

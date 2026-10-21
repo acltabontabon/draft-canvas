@@ -59,7 +59,8 @@ Continue with plain requests:
 - “Refresh this diagram from the changed code; preserve my notes and arrangement.”
 
 Follow-ups update the same diagram. Changes use ordinary shapes, connectors, notes and flows.
-Each committed update is one undo step.
+Each committed update is one undo step. Agents can add [rich text](shapes-and-connectors.md#write-rich-text)
+with tables, checklists, code or callouts, and set its font, colour and background.
 
 ### Where the skill lives
 

@@ -1020,6 +1020,7 @@
             "external-actor",
             "system-actor",
             "device",
+            "ai-agent",
             "component",
             "module",
             "adapter",
@@ -1323,7 +1324,8 @@
                 "sql",
                 "bash",
                 "http",
-                "log"
+                "log",
+                "diff"
               ]
             },
             "code": {
@@ -1387,7 +1389,11 @@
                 "implementedBy",
                 "implements",
                 "compensates",
-                "transforms"
+                "transforms",
+                "asks",
+                "delegates",
+                "escalates",
+                "notifies"
               ],
               "description": "Optional: inferred from the two element types when left out."
             },
@@ -1548,7 +1554,7 @@
         },
         "note": {
           "type": "object",
-          "description": "Context, an assumption or a decision — only what helps explain the diagram. Multiline text is fine. Mark an inference from code as an assumption. kind \"code\" is a code snippet (code + language, shown as code, never run); kind \"label\" is a plain Text label.",
+          "description": "Context, an assumption or a decision — only what helps explain the diagram. Multiline text is fine. Mark an inference from code as an assumption. kind \"code\" is a code snippet (code + language, shown as code, never run); kind \"label\" is a Text label written in Markdown (get_capabilities notes.labels), with an optional style.",
           "properties": {
             "id": {
               "type": "string",
@@ -1558,7 +1564,7 @@
             "text": {
               "type": "string",
               "maxLength": 1000,
-              "description": "The words; not for kind \"code\"."
+              "description": "The words; not for kind \"code\". Markdown for kind \"label\"."
             },
             "kind": {
               "enum": [
@@ -1588,7 +1594,8 @@
                 "sql",
                 "bash",
                 "http",
-                "log"
+                "log",
+                "diff"
               ],
               "description": "kind \"code\" only. Default plaintext."
             },
@@ -1603,11 +1610,71 @@
             "near": {
               "type": "string",
               "description": "Older name for about."
+            },
+            "style": {
+              "$ref": "#/$defs/labelStyle"
             }
           },
           "required": [
             "id"
           ],
+          "additionalProperties": false
+        },
+        "labelStyle": {
+          "type": "object",
+          "description": "A free label's look (not an attached one). In an update, false/\"none\" turns a field off and null makes it plain.",
+          "properties": {
+            "role": {
+              "enum": [
+                "body",
+                "label",
+                "heading",
+                "title",
+                "technical"
+              ]
+            },
+            "font": {
+              "enum": [
+                "sans",
+                "serif",
+                "mono",
+                "hand"
+              ]
+            },
+            "background": {
+              "enum": [
+                "none",
+                "card",
+                "marker",
+                "banner"
+              ],
+              "description": "In its color."
+            },
+            "align": {
+              "enum": [
+                "left",
+                "center",
+                "right"
+              ]
+            },
+            "bold": {
+              "type": "boolean"
+            },
+            "italic": {
+              "type": "boolean"
+            },
+            "color": {
+              "enum": [
+                "neutral",
+                "teal",
+                "blue",
+                "violet",
+                "amber",
+                "rose",
+                "green"
+              ]
+            }
+          },
           "additionalProperties": false
         },
         "element0": {
@@ -1645,6 +1712,7 @@
                     "external-actor",
                     "system-actor",
                     "device",
+                    "ai-agent",
                     "component",
                     "module",
                     "adapter",
@@ -1794,6 +1862,7 @@
                     "external-actor",
                     "system-actor",
                     "device",
+                    "ai-agent",
                     "component",
                     "module",
                     "adapter",
@@ -1936,6 +2005,7 @@
                     "external-actor",
                     "system-actor",
                     "device",
+                    "ai-agent",
                     "component",
                     "module",
                     "adapter",
@@ -2078,6 +2148,7 @@
                     "external-actor",
                     "system-actor",
                     "device",
+                    "ai-agent",
                     "component",
                     "module",
                     "adapter",
@@ -2423,6 +2494,7 @@
                               "external-actor",
                               "system-actor",
                               "device",
+                              "ai-agent",
                               "component",
                               "module",
                               "adapter",
@@ -2572,7 +2644,18 @@
                           "sql",
                           "bash",
                           "http",
-                          "log"
+                          "log",
+                          "diff"
+                        ]
+                      },
+                      "style": {
+                        "anyOf": [
+                          {
+                            "$ref": "#/$defs/labelStyle"
+                          },
+                          {
+                            "type": "null"
+                          }
                         ]
                       },
                       "semantic": {
@@ -2608,7 +2691,11 @@
                               "implementedBy",
                               "implements",
                               "compensates",
-                              "transforms"
+                              "transforms",
+                              "asks",
+                              "delegates",
+                              "escalates",
+                              "notifies"
                             ]
                           },
                           {
@@ -3277,7 +3364,8 @@
                 "sql",
                 "bash",
                 "http",
-                "log"
+                "log",
+                "diff"
               ]
             },
             "code": {
@@ -3341,7 +3429,11 @@
                 "implementedBy",
                 "implements",
                 "compensates",
-                "transforms"
+                "transforms",
+                "asks",
+                "delegates",
+                "escalates",
+                "notifies"
               ],
               "description": "Optional: inferred from the two element types when left out."
             },
@@ -3502,7 +3594,7 @@
         },
         "note": {
           "type": "object",
-          "description": "Context, an assumption or a decision — only what helps explain the diagram. Multiline text is fine. Mark an inference from code as an assumption. kind \"code\" is a code snippet (code + language, shown as code, never run); kind \"label\" is a plain Text label.",
+          "description": "Context, an assumption or a decision — only what helps explain the diagram. Multiline text is fine. Mark an inference from code as an assumption. kind \"code\" is a code snippet (code + language, shown as code, never run); kind \"label\" is a Text label written in Markdown (get_capabilities notes.labels), with an optional style.",
           "properties": {
             "id": {
               "type": "string",
@@ -3512,7 +3604,7 @@
             "text": {
               "type": "string",
               "maxLength": 1000,
-              "description": "The words; not for kind \"code\"."
+              "description": "The words; not for kind \"code\". Markdown for kind \"label\"."
             },
             "kind": {
               "enum": [
@@ -3542,7 +3634,8 @@
                 "sql",
                 "bash",
                 "http",
-                "log"
+                "log",
+                "diff"
               ],
               "description": "kind \"code\" only. Default plaintext."
             },
@@ -3557,11 +3650,71 @@
             "near": {
               "type": "string",
               "description": "Older name for about."
+            },
+            "style": {
+              "$ref": "#/$defs/labelStyle"
             }
           },
           "required": [
             "id"
           ],
+          "additionalProperties": false
+        },
+        "labelStyle": {
+          "type": "object",
+          "description": "A free label's look (not an attached one). In an update, false/\"none\" turns a field off and null makes it plain.",
+          "properties": {
+            "role": {
+              "enum": [
+                "body",
+                "label",
+                "heading",
+                "title",
+                "technical"
+              ]
+            },
+            "font": {
+              "enum": [
+                "sans",
+                "serif",
+                "mono",
+                "hand"
+              ]
+            },
+            "background": {
+              "enum": [
+                "none",
+                "card",
+                "marker",
+                "banner"
+              ],
+              "description": "In its color."
+            },
+            "align": {
+              "enum": [
+                "left",
+                "center",
+                "right"
+              ]
+            },
+            "bold": {
+              "type": "boolean"
+            },
+            "italic": {
+              "type": "boolean"
+            },
+            "color": {
+              "enum": [
+                "neutral",
+                "teal",
+                "blue",
+                "violet",
+                "amber",
+                "rose",
+                "green"
+              ]
+            }
+          },
           "additionalProperties": false
         },
         "element0": {
@@ -3599,6 +3752,7 @@
                     "external-actor",
                     "system-actor",
                     "device",
+                    "ai-agent",
                     "component",
                     "module",
                     "adapter",
@@ -3748,6 +3902,7 @@
                     "external-actor",
                     "system-actor",
                     "device",
+                    "ai-agent",
                     "component",
                     "module",
                     "adapter",
@@ -3890,6 +4045,7 @@
                     "external-actor",
                     "system-actor",
                     "device",
+                    "ai-agent",
                     "component",
                     "module",
                     "adapter",
@@ -4032,6 +4188,7 @@
                     "external-actor",
                     "system-actor",
                     "device",
+                    "ai-agent",
                     "component",
                     "module",
                     "adapter",

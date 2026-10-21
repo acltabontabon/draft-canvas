@@ -75,6 +75,7 @@ export const ACTOR_KIND_OPTION_LABELS: Record<ActorKind, string> = {
   device: 'Device',
   group: 'Group',
   thirdParty: 'Third Party',
+  agent: 'AI Agent',
 };
 
 export const COMPONENT_KIND_OPTION_LABELS: Record<ComponentKind, string> = {

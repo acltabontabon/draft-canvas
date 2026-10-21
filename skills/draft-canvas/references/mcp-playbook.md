@@ -113,3 +113,22 @@ When the person asks to *review* a change against the diagram ("what does this P
 architecturally? don't apply it"), send the ops through `submit_proposal` with a `summary`, a
 `rationale`, `assumptions` and `openQuestions`. Draft Canvas shows it for them to accept or reject;
 don't wait for the decision. `ops: []` with a summary is a valid "no architectural impact" answer.
+
+## Styled labels
+
+A label's `text` is Markdown, drawn as such on the canvas and in every export: `#` headings,
+`**bold**`, `` `code` ``, `==highlight==`, `[words]{.rose}` in a diagram colour, lists, `- [ ]` tasks,
+tables, `> [!NOTE]` / `[!TIP]` / `[!WARNING]` callouts and fenced code with a language (` ```ts `,
+` ```diff `). A single newline is a line break. `style` sets its look on the canvas — `role`, `font`
+(`sans`, `serif`, `mono`, `hand`), `background` (`card`, `marker`, `banner`, in its `color`), `align`,
+`bold`, `italic` — and only a free label has one, so give it `attach: false`:
+
+```json
+{ "id": "orders-sla", "kind": "label", "about": "orders", "attach": false,
+  "text": "### Orders SLA\n| Endpoint | p99 |\n| --- | ---: |\n| `POST /orders` | 120 ms |\n\n> [!WARNING]\n> Ledger is called synchronously.",
+  "style": { "background": "card", "color": "blue" } }
+```
+
+Change one later with `{ "op": "update", "id": "orders-sla", "set": { "style": { "font": "mono" } } }`;
+`false` or `"none"` turns a field off, and `"style": null` makes the label plain.
+

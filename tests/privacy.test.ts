@@ -94,10 +94,12 @@ describe('nothing on the canvas can reach a network', () => {
         'fflate',
         'react-aria-components',
         'simple-icons',
+        // Reads a Text element's Markdown. Parsing only: layout and drawing stay the app's own.
+        'marked',
       ]),
     );
     // A short, auditable dependency list is part of the promise.
-    expect(deps).toHaveLength(10);
+    expect(deps).toHaveLength(11);
     for (const name of deps) {
       expect(name).not.toMatch(/analytics|telemetry|sentry|tracking|posthog|mixpanel|segment/i);
     }

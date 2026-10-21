@@ -1,4 +1,4 @@
-import { capabilityFor, categoryOf, type NodeCategory } from '../document/connectorSemantics';
+import { ACTOR_CATEGORIES, capabilityFor, categoryOf, type NodeCategory } from '../document/connectorSemantics';
 import { displayNameFor } from '../document/factory';
 import type { DraftDocument, DraftNode, EdgeSemantic } from '../document/types';
 import { ANCHOR_TYPES } from './context';
@@ -12,7 +12,7 @@ const NEARBY_GAP = 360;
 const MAX_CANDIDATES = 3;
 
 /** A System Context view connects people and systems, leaving infrastructure a level down. */
-const CONTEXT_CATEGORIES: ReadonlySet<NodeCategory> = new Set(['actor', 'service', 'external']);
+const CONTEXT_CATEGORIES: ReadonlySet<NodeCategory> = new Set([...ACTOR_CATEGORIES, 'service', 'external']);
 
 /**
  * The verbs worth completing with something already drawn: each reads as the next word of an
@@ -32,7 +32,7 @@ const CONNECTABLE: Partial<Record<EdgeSemantic, readonly NodeCategory[] | 'any'>
   consumes: 'any',
   routes: 'any',
   triggers: 'any',
-  calls: ['actor'],
+  calls: ACTOR_CATEGORIES,
 };
 
 /**

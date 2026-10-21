@@ -7,6 +7,7 @@
  * diagrams.net reads an `html=1` label as markup — a shape named `<b>` must still say `<b>`.
  */
 
+import { plainTextOfMarkdown } from '../../document/markdownText';
 import type { DraftDocument, DraftEdge, DraftNode } from '../../document/types';
 import { escapeXmlAttr } from '../../render/svg/element';
 import { collectRooms, edgeCaption, isBoundary, oneLine, roomTitleFor, titleOf, type ExportRoom } from './shared';
@@ -33,7 +34,7 @@ function styleOf(node: DraftNode): string {
     case 'queue':
       return 'shape=process;whiteSpace=wrap;html=1;backgroundOutline=1;';
     case 'actor':
-      return node.actorKind === 'system' || node.actorKind === 'thirdParty'
+      return node.actorKind === 'system' || node.actorKind === 'thirdParty' || node.actorKind === 'agent'
         ? 'rounded=0;whiteSpace=wrap;html=1;dashed=1;'
         : 'shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;';
     case 'component':
@@ -60,6 +61,8 @@ function edgeStyle(edge: DraftEdge): string {
 
 function textOf(node: DraftNode): string {
   if (node.type === 'code') return node.code ?? '';
+  // diagrams.net has no Markdown: a Text element goes over as the words it reads as.
+  if (node.type === 'text') return plainTextOfMarkdown(node.text ?? '');
   return node.text ?? '';
 }
 
