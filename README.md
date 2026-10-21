@@ -9,9 +9,10 @@
 A local-first canvas for turning software architecture into a clear visual story.<br>
 Sketch an idea. Explore the detail. Walk through the flow.
 
+**[draftcanvas.dev](https://draftcanvas.dev/)** ·
 **[Try it in your browser](https://app.draftcanvas.dev/)** ·
 **[Download for macOS & Windows](https://github.com/acltabontabon/draft-canvas/releases/latest)** ·
-[Documentation](docs/index.md)
+[Documentation](https://draftcanvas.dev/docs/)
 
 </div>
 
