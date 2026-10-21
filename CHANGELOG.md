@@ -23,6 +23,8 @@ the release notes and the in-app What's New are generated from here. See
 - Clicking, dragging and panning on a large diagram do 10–20% less work per frame, and drawing a
   connector on one no longer stalls as long when it lands.
 - Arrange on a large diagram finishes in a second or two instead of freezing the page.
+- The command palette stays quick to type in on a large diagram, and dragging with the Outline open
+  no longer slows the canvas.
 
 #### Fixed
 
@@ -43,7 +45,16 @@ the release notes and the in-app What's New are generated from here. See
 - A rename made elsewhere while the diagram's title field is focused is no longer undone when you
   click away.
 - Shared diagrams no longer offer Arrange, Find & Replace, Tidy connectors or a background image,
-  which they couldn't apply.
+  which they couldn't apply, nor any other edit in the command palette or right-click menus.
+- While presenting, a camera you moved yourself stays put on the next step unless that step is off
+  screen, and clicking the flow's title closes the flow picker it opened.
+- Copying a shape with an inside view keeps the copy's flow variants linked to their base flow.
+- Insert worker and Convert to junction keep a connector's source evidence.
+- C4-PlantUML export no longer turns `//` or `***` in a description into italics or bold, and code
+  notes in a sequence diagram keep their indentation.
+- In the Library, typing in search with a Move menu open no longer moves a diagram, and a file dropped
+  on a dialog is no longer imported behind it.
+- Tooltips no longer stay closed when you hover back onto a button quickly.
 - Find & Replace no longer opens over the clipboard permission prompt.
 - Exporting every level no longer gives two images the same file name.
 - An agent's or proposal's preview draws connectors with their bends, side by side when parallel,
@@ -58,10 +69,21 @@ the release notes and the in-app What's New are generated from here. See
 - AI agent work on large projects no longer holds up saving and other file actions.
 - The proposals panel checks proposals in the background and stops checking for new ones when
   nothing needs them.
+- Editing a large diagram does less work per keystroke, and exporting a large image writes faster.
+- Rebuilding a project's `dist`, `build` or `node_modules` folder no longer makes Home rescan, and
+  listing recent files no longer pushes project folders out of what Home watches.
 
 #### Fixed
 
 - The update window's release notes show links as links, instead of raw Markdown.
+- A file touched without changing its contents while you have unsaved edits no longer blocks AI
+  agents until you save.
+- An AI agent's save no longer lands in the file you picked in an open Save As, and a ⌘S during an
+  agent's save no longer reports the file as changed by something else.
+- The recovery copy of a renamed file with unsaved edits follows the new name.
+- An update download that stalls gives up after a minute so you can try again, and the daily update
+  check counts time the Mac was asleep.
+- On Windows, two AI agents connecting at the same moment no longer get told the app isn't running.
 - Undoing back to the saved state removes the recovery copy, so reopening the file doesn't offer
   to recover unchanged work.
 - A file touched without changing its contents, by a sync client or git, is no longer reloaded with
@@ -102,6 +124,7 @@ the release notes and the in-app What's New are generated from here. See
 #### Fixed
 
 - Backups, restores and moving diagrams from the old address keep background images.
+- About → Licences opens offline.
 - A refresh with unsaved edits keeps them even if saving them fails at first, or the diagram was
   renamed in another tab.
 - Closing a diagram no longer removes background images its undo history needs in another tab.

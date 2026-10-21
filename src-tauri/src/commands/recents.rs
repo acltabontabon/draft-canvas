@@ -30,9 +30,12 @@ fn recent_items(state: &AppState) -> Result<(Vec<RecentItem>, bool), AppError> {
         .into_iter()
         .filter_map(|e| {
             let path = Path::new(&e.path);
+            // Unwatched: listing Recent (on every change to it) took a watch, and on macOS a restart of
+            // the event stream, per folder, pushing the scanned projects' folders out of the budget.
+            // Home doesn't rescan Recent on disk changes, and a file opened from here is watched then.
             let handle = match e.kind {
-                RecentKind::File => state.grant_file(path),
-                RecentKind::Project => state.grant_project(path),
+                RecentKind::File => state.grant_file_unwatched(path),
+                RecentKind::Project => state.grant_project_unwatched(path),
             }
             .ok()?;
             Some(RecentItem {

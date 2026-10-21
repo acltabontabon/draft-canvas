@@ -413,16 +413,17 @@ export function renderDocumentSvg(
   // Only the kinds actually in the picture — a "selection only" export of an unmarked corner needs
   // no key at all. Below the architecture, inside the margin, so it never reads as part of it.
   const shown = scene.markerEls.length || scene.edgeEntries.some((entry) => unresolvedOpenPointsFor(openPoints, { kind: 'edge', id: entry.edge.id }).length);
-  const key = shown
-    ? describeMarkerKey(
-        openPoints.filter((point) =>
-          point.targets.some((target) =>
-            target.kind === 'node' ? scene.nodes.some((node) => node.id === target.id) : scene.edgeEntries.some((entry) => entry.edge.id === target.id),
-          ),
-        ),
-        { theme, measurer },
-      )
-    : null;
+  let key: ReturnType<typeof describeMarkerKey> | null = null;
+  if (shown) {
+    // Sets, not a scan of every shape and connector per target: at the limits that was millions of
+    // comparisons per export.
+    const nodeIds = new Set(scene.nodes.map((node) => node.id));
+    const edgeIds = new Set(scene.edgeEntries.map((entry) => entry.edge.id));
+    key = describeMarkerKey(
+      openPoints.filter((point) => point.targets.some((target) => (target.kind === 'node' ? nodeIds : edgeIds).has(target.id))),
+      { theme, measurer },
+    );
+  }
   const keyBlock = key ? key.height + KEY_GAP : 0;
   const width = Math.max(1, Math.round(Math.max(bounds.width, key?.width ?? 0) + padding * 2));
   const height = Math.max(1, Math.round(bounds.height + keyBlock + padding * 2));

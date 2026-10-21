@@ -12,7 +12,7 @@ use crate::state::{AppState, HostEvent};
 use crate::util::{lock, now_ms};
 use semver::Version;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant, SystemTime};
 use tauri::{AppHandle, Manager};
 use tauri_plugin_updater::{Error as PluginError, Update, UpdaterExt};
 use tokio::sync::Notify;
@@ -23,6 +23,11 @@ const FIRST_CHECK_DELAY: Duration = Duration::from_secs(15);
 const CHECK_EVERY: Duration = Duration::from_secs(24 * 60 * 60);
 /// The manifest is a few hundred bytes; longer than this is a hung connection.
 const CHECK_TIMEOUT: Duration = Duration::from_secs(20);
+/// A download that has received nothing for this long is taken for a dropped connection.
+const DOWNLOAD_IDLE_TIMEOUT: Duration = Duration::from_secs(60);
+/// How often the daily check looks at the wall clock. Tokio's timer doesn't run while the computer
+/// sleeps, so a 24-hour wait on a laptop that sleeps every night took days.
+const CHECK_WAKE: Duration = Duration::from_secs(60 * 60);
 /// What `tauri.conf.json` holds until a real key is put there. A build with it can't verify anything,
 /// so it doesn't try: updates are reported as unavailable, not as a failure that looks like an attack.
 const UNSET_PREFIX: &str = "UNSET";
@@ -208,10 +213,21 @@ impl Backend for PluginBackend {
             .ok_or_else(|| UpdateError::Other("There's no update to download.".into()))?;
             // The plugin checks the signature before it hands the bytes back, and returns an error
             // instead when they don't verify. There's no way from here to `package` that skips it.
-            let bytes = update
-                .download(|chunk, total| progress(chunk as u64, total), || {})
-                .await
-                .map_err(|error| classify(&error))?;
+            // The plugin sets no timeout on the download request, so a connection that stalls would
+            // leave it downloading forever. A whole-request timeout would cut off a slow but moving
+            // download too; this one only fires when no bytes have arrived for a while.
+            let last_chunk = Mutex::new(Instant::now());
+            let download = update.download(
+                |chunk, total| {
+                    *lock(&last_chunk) = Instant::now();
+                    progress(chunk as u64, total)
+                },
+                || {},
+            );
+            let bytes = tokio::select! {
+                bytes = download => bytes.map_err(|error| classify(&error))?,
+                () = stalled(&last_chunk, DOWNLOAD_IDLE_TIMEOUT) => return Err(UpdateError::Interrupted),
+            };
             lock(&self.staged).package = Some(bytes);
             Ok(())
         })
@@ -331,7 +347,33 @@ async fn checks(app: AppHandle, updater: Updater, wake: Arc<CheckWake>) {
                 eprintln!("Draft Canvas: update check failed: {}", failure.message);
             }
         }
-        let _ = tokio::time::timeout(CHECK_EVERY, wake.0.notified()).await;
+        let looked = SystemTime::now();
+        loop {
+            let woken = tokio::time::timeout(CHECK_WAKE, wake.0.notified())
+                .await
+                .is_ok();
+            if woken || check_due(looked, SystemTime::now()) {
+                break;
+            }
+        }
+    }
+}
+
+/// A day has passed on the wall clock since the last look. A clock set back before it counts as due,
+/// so the next look sets a new starting point instead of waiting out the difference.
+fn check_due(looked: SystemTime, now: SystemTime) -> bool {
+    now.duration_since(looked)
+        .map_or(true, |elapsed| elapsed >= CHECK_EVERY)
+}
+
+/// Resolves once nothing has touched `last` for `idle`.
+async fn stalled(last: &Mutex<Instant>, idle: Duration) {
+    loop {
+        let quiet = lock(last).elapsed();
+        if quiet >= idle {
+            return;
+        }
+        tokio::time::sleep(idle - quiet).await;
     }
 }
 
@@ -418,6 +460,37 @@ mod tests {
             endpoints(updater, "alpha").unwrap()[0].as_str(),
             "https://github.com/acltabontabon/draft-canvas/releases/download/desktop-updates/alpha.json"
         );
+    }
+
+    #[test]
+    fn the_daily_check_goes_by_the_wall_clock() {
+        let looked = SystemTime::UNIX_EPOCH + Duration::from_secs(1_000_000);
+        assert!(!check_due(looked, looked + Duration::from_secs(60 * 60)));
+        assert!(check_due(looked, looked + CHECK_EVERY));
+        assert!(
+            check_due(looked, looked - Duration::from_secs(60)),
+            "a clock set back"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_download_is_stalled_only_once_bytes_stop_arriving() {
+        let last = Mutex::new(Instant::now());
+        let idle = Duration::from_millis(80);
+        let started = Instant::now();
+        let stall = stalled(&last, idle);
+        let feed = async {
+            for _ in 0..3 {
+                tokio::time::sleep(Duration::from_millis(40)).await;
+                *lock(&last) = Instant::now();
+            }
+            std::future::pending::<()>().await
+        };
+        tokio::select! {
+            () = stall => {}
+            () = feed => unreachable!(),
+        }
+        assert!(started.elapsed() >= Duration::from_millis(120 + 80));
     }
 
     #[test]

@@ -10,7 +10,7 @@ import { nodeIndex } from '../store/selectors';
 import { useEditorStore } from '../store/editorStore';
 import { useUiStore } from '../store/uiStore';
 import { flowOverviewBounds, stepComposition } from './composition';
-import { captionCornerFor, composeStep, frameOverview, frameStep, screenRectOf, type Insets } from './framing';
+import { captionCornerFor, composeStep, frameManualStep, frameOverview, frameStep, screenRectOf, type Insets } from './framing';
 import { RESPONSE_PHASE_DELAY_MS } from './responsePhase';
 import { motionMs } from '../lib/motion';
 
@@ -164,7 +164,17 @@ const RESIZE_MS = 240;
  * has taken the camera by hand (`uiStore.presentation.framing`).
  */
 export function useFlowPlayback(): FlowPlaybackController {
-  const flowPlayback = useEditorStore((state) => state.flowPlayback);
+  // Every field but `phase`: the response pulse writes it twice per reply step, and a whole-object
+  // subscription re-rendered `EditorScreen` and rebuilt this controller (and the keyboard listener
+  // keyed on it) for each write. Nothing here reads `phase`.
+  const flowPlayback = useEditorStore(
+    useShallow((state) => ({
+      active: state.flowPlayback.active,
+      flowId: state.flowPlayback.flowId,
+      step: state.flowPlayback.step,
+      stage: state.flowPlayback.stage,
+    })),
+  );
   const setFlowPlayback = useEditorStore((state) => state.setFlowPlayback);
   // Only what render needs, never the whole document: this hook lives in `EditorScreen`, and a
   // whole-document subscription re-rendered the entire editor on every commit. Edges and nodes are
@@ -260,11 +270,15 @@ export function useFlowPlayback(): FlowPlaybackController {
       const composed = stepComposition(target, nodeIndex(document.nodes), routeBoxesFor(target));
       if (!composed) return;
       const view = { width: viewWidth, height: viewHeight };
-      let frame = frameStep(composed.bounds, cameraNow(), view, PRESENTATION_INSETS);
+      // A camera the presenter took by hand moves only for a step that left the screen; anything
+      // else just reseats the caption (`frameManualStep`), so Re-centre stays on offer.
+      const manual = ui.presentation.framing === 'manual' && !fresh;
+      let frame = (manual ? frameManualStep : frameStep)(composed.bounds, cameraNow(), view, PRESENTATION_INSETS);
       // Re-centre promised a frame, not a verdict: compose the step afresh even if the camera the
       // presenter left would have done.
       if (fresh && view.width > 0 && view.height > 0) frame = { camera: composeStep(composed.bounds, view, PRESENTATION_INSETS), kind: 'fit' };
-      if (settle && flow && view.width > 0 && view.height > 0) {
+      // Settling out of the opening is a guided move; a hand on the camera keeps it.
+      if (settle && !manual && flow && view.width > 0 && view.height > 0) {
         const whole = flowOverviewBounds(document.nodes, document.edges, flow);
         const centred = whole ? frameOverview(whole, view, PRESENTATION_INSETS) : null;
         if (centred && frameStep(composed.bounds, centred, view, PRESENTATION_INSETS).kind === 'stay') {
@@ -478,16 +492,18 @@ export function useFlowPlayback(): FlowPlaybackController {
   // The view changed size under a guided camera — the editor chrome leaving as presenting starts,
   // a window resized — so the same moment is framed again for the new size. A camera the presenter
   // took by hand, or pulled back to the overview, is theirs and stays where it is.
-  const momentRef = useRef({ current, flow, stage, frameStepFor, frameFlow });
-  momentRef.current = { current, flow, stage, frameStepFor, frameFlow };
+  // Keyed on size alone: `active` used to be a dependency too, so starting a presentation reframed
+  // straight away and replaced the opening's 520ms overview move with a 240ms resize one. Starting
+  // frames itself (`pickFlow`); `active` is read fresh here, like the moment.
+  const momentRef = useRef({ active: flowPlayback.active, current, flow, stage, frameStepFor, frameFlow });
+  momentRef.current = { active: flowPlayback.active, current, flow, stage, frameStepFor, frameFlow };
   useEffect(() => {
     const moment = momentRef.current;
-    if (!flowPlayback.active || !moment.flow || viewWidth === 0 || viewHeight === 0) return;
+    if (!moment.active || !moment.flow || viewWidth === 0 || viewHeight === 0) return;
     if (useUiStore.getState().presentation.framing !== 'guided') return;
     if (moment.current) moment.frameStepFor(moment.current, { resize: true });
     else moment.frameFlow(moment.flow, 'guided', RESIZE_MS);
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- only a change of size reframes; the moment is read fresh.
-  }, [viewWidth, viewHeight, flowPlayback.active]);
+  }, [viewWidth, viewHeight]);
 
   // One stable object per actual change, so consumers keyed on it (`useKeyboard`'s window listener,
   // `useCommandContext`, `FlowBar`) don't tear down and rebuild on unrelated renders.
@@ -523,7 +539,9 @@ export function useFlowPlayback(): FlowPlaybackController {
       flow,
       flowIndex,
       steps,
-      flowPlayback,
+      flowPlayback.step,
+      flowPlayback.active,
+      flowPlayback.flowId,
       current,
       stage,
       upcoming,

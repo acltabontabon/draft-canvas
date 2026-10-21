@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { isLibraryShape } from '../src/document/shape';
 import { ARCHITECTURE_STARTERS } from '../src/starters';
-import { GLYPH_HEIGHT, GLYPH_WIDTH, starterShape } from '../src/ui/Library/starterShapes';
+import { starterShape } from '../src/ui/Library/starterShape';
+import { GLYPH_HEIGHT, GLYPH_WIDTH } from '../src/ui/Library/starterShapes';
 
 /**
  * The home screen's starter tiles are drawn from the starters themselves, never from a second

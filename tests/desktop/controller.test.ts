@@ -837,6 +837,7 @@ describe.each(['window-focused', 'disk-changed'] as const)('disk reconciliation 
     const handle = await openFile();
     h.edit(edited());
     const file = h.files.get(handle)!;
+    file.text = documentText('Edited in another app');
     file.version += 1;
     await h.controller.start();
 
@@ -849,6 +850,7 @@ describe.each(['window-focused', 'disk-changed'] as const)('disk reconciliation 
 
   it('keeps an edit made while the changed file is being read', async () => {
     const handle = await openFile();
+    h.files.get(handle)!.text = documentText('Edited in another app');
     h.files.get(handle)!.version += 1;
     await h.controller.start();
     const open = h.api.openHandle.getMockImplementation()!;

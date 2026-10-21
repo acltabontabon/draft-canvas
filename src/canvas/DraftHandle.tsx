@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import { memo, type CSSProperties } from 'react';
 import { addEdge, useStoreApi, type Connection, type Position } from '@xyflow/react';
 import { XYHandle } from '@xyflow/system';
 
@@ -14,8 +14,11 @@ import { XYHandle } from '@xyflow/system';
  * Everything React Flow reads from a handle is kept: its classes (`source`, `connectable`,
  * `connectableend` — measured into the node's handle bounds and checked when a connection ends),
  * its `data-*` attributes, and the same pointer-down that starts a connection.
+ *
+ * Memoized as React Flow's own is: a shape re-renders on every selection, lens or mode change, and
+ * twelve handles re-rendering with it is what the node's memoized `handleStyles` exists to avoid.
  */
-export function DraftHandle({
+export const DraftHandle = memo(function DraftHandle({
   nodeId,
   id,
   position,
@@ -108,4 +111,4 @@ export function DraftHandle({
       onTouchStart={onPointerDown}
     />
   );
-}
+});

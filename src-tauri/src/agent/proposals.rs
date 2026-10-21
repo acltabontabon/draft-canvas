@@ -31,6 +31,12 @@ pub const RESOLVED_RETENTION_MS: u64 = 30 * 24 * 60 * 60 * 1000;
 /// full op payload, larger than a ledger entry, so this is tighter than the ledger's cap.
 pub const RESOLVED_CAP: usize = 500;
 const COMPACT_AFTER: usize = 200;
+/// Unreviewed proposals one diagram may have waiting, and all diagrams together. Waiting ones are never
+/// aged out (they're work nobody has looked at), so without a cap an agent in a loop could grow the
+/// journal, and the review panel's list, without end. Far more than anyone reviews; a new one past
+/// either is refused until some are accepted, rejected or dismissed. Revising one in place is not new.
+pub const PENDING_PER_DIAGRAM: usize = 50;
+pub const PENDING_TOTAL: usize = 500;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -178,6 +184,28 @@ impl Proposals {
             .collect();
         out.sort_by_key(|p| std::cmp::Reverse(p.updated_at));
         out
+    }
+
+    /// Why another waiting proposal for `diagram_id` can't be added, if it can't.
+    pub fn pending_limit(&self, diagram_id: &str) -> Option<String> {
+        let (mut here, mut total) = (0, 0);
+        for p in self.entries.values().filter(|p| !p.status.is_terminal()) {
+            total += 1;
+            if p.diagram_id == diagram_id {
+                here += 1;
+            }
+        }
+        if here >= PENDING_PER_DIAGRAM {
+            Some(format!(
+                "This diagram already has {PENDING_PER_DIAGRAM} proposals waiting for review."
+            ))
+        } else if total >= PENDING_TOTAL {
+            Some(format!(
+                "There are already {PENDING_TOTAL} proposals waiting for review."
+            ))
+        } else {
+            None
+        }
     }
 
     /// Writes `proposal` through to disk before returning — inserted if its id is new, overwritten in
@@ -358,6 +386,42 @@ mod tests {
         assert!(store.get("p0").is_none());
         assert!(store.get("p2").is_none());
         assert!(store.get("p3").is_some());
+    }
+
+    #[test]
+    fn waiting_proposals_are_capped_per_diagram_and_in_total() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut store = Proposals::open(dir.path(), 1).unwrap();
+        for i in 0..PENDING_PER_DIAGRAM {
+            store
+                .put(proposal(&format!("p{i}"), ProposalStatus::Pending, 1))
+                .unwrap();
+        }
+        // Resolved ones don't count.
+        store
+            .put(proposal("done", ProposalStatus::Accepted, 1))
+            .unwrap();
+        assert!(store.pending_limit("d_1").is_some());
+        assert!(store.pending_limit("d_2").is_none());
+        let mut accepting = proposal("p0", ProposalStatus::Rejected, 2);
+        accepting.version = 2;
+        store.put(accepting).unwrap();
+        assert!(store.pending_limit("d_1").is_none());
+
+        let mut others = 0;
+        while store
+            .entries
+            .values()
+            .filter(|p| !p.status.is_terminal())
+            .count()
+            < PENDING_TOTAL
+        {
+            let mut p = proposal(&format!("o{others}"), ProposalStatus::Accepting, 1);
+            p.diagram_id = format!("d_other_{}", others % 20);
+            store.entries.insert(p.id.clone(), p);
+            others += 1;
+        }
+        assert!(store.pending_limit("d_new").unwrap().contains("500"));
     }
 
     #[test]

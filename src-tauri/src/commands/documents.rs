@@ -5,7 +5,7 @@ use super::{last_dir, recents_changed, remember_dir, remember_file, run_blocking
 use crate::dialogs::{self, FileFilter};
 use crate::docio::{
     self, ensure_document_size, is_read_only, read_document, rename_atomic, write_atomic,
-    write_unconditional, StampCheck, WriteOutcome, MAX_SIDECAR_BYTES,
+    write_unconditional, write_unstamped, StampCheck, WriteOutcome, MAX_SIDECAR_BYTES,
 };
 use crate::errors::{AppError, ErrorKind, Verb};
 use crate::grants::{FileGrant, Handle};
@@ -323,7 +323,7 @@ pub async fn export_file(app: AppHandle, request: Request<'_>) -> Result<bool, A
         let Some(path) = dialogs::save_file(app, last_dir(state), &meta.name, &meta.filters) else {
             return Ok(false);
         };
-        write_unconditional(&path, &bytes)?;
+        write_unstamped(&path, &bytes)?;
         remember_dir(state, path.parent());
         Ok(true)
     })

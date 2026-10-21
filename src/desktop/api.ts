@@ -8,11 +8,11 @@
  * that didn't come from the user can't be read or written.
  */
 import type { Snapshot as UpdateSnapshot, HostEvent as WireHostEvent } from './wire';
-export type { UpdateInfo, Phase as UpdatePhase, Snapshot as UpdateSnapshot, MenuCommand } from './wire';
+export type { UpdateInfo, Phase as UpdatePhase, Snapshot as UpdateSnapshot } from './wire';
 /** The agent context is refined by the bridge protocol beyond Rust's JSON value envelope. */
 export type HostEvent = Exclude<WireHostEvent, { type: 'agent-request' }> | (Omit<Extract<WireHostEvent, { type: 'agent-request' }>, 'args' | 'context'> & { args: Record<string, unknown>; context: AgentContext });
 import type { ExplorerStart, ExplorerDirectory, ExplorerLocation, ExplorerSaveResult, OpenedDoc, SavedAs, SaveResult, ProjectInfo, Scan as ProjectScan } from './wire';
-export type { ExplorerSaveResult, ExplorerStart, ExplorerDirectory, ExplorerEntry, ExplorerLocation, ExplorerPlace, OpenedDoc, SavedAs, SaveResult, ProjectInfo, ProjectFile, Scan as ProjectScan } from './wire';
+export type { ExplorerSaveResult, ExplorerStart, ExplorerDirectory, ExplorerEntry, ExplorerLocation, OpenedDoc, SavedAs, SaveResult, ProjectInfo, ProjectFile, Scan as ProjectScan } from './wire';
 
 export type Handle = string;
 

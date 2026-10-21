@@ -32,7 +32,6 @@ export type {
   ContinuationRule,
   ContinuationTrigger,
   DismissalKey,
-  Fragment,
   FragmentNodeSpec,
   MaterializedContinuation,
 } from './types';

@@ -316,7 +316,18 @@ async fn open(endpoint: &str) -> std::io::Result<Halves> {
 #[cfg(windows)]
 async fn open(endpoint: &str) -> std::io::Result<Halves> {
     use tokio::net::windows::named_pipe::ClientOptions;
-    let client = ClientOptions::new().open(endpoint)?;
+    /// `ERROR_PIPE_BUSY`: every instance of the pipe is taken for a moment, while the app is between
+    /// accepting one connection and creating the next instance. Failing there lost a connection that
+    /// would have been taken a few milliseconds later; the caller's connect timeout bounds the retries.
+    const ERROR_PIPE_BUSY: i32 = 231;
+    let client = loop {
+        match ClientOptions::new().open(endpoint) {
+            Ok(client) => break client,
+            Err(e) if e.raw_os_error() == Some(ERROR_PIPE_BUSY) => {}
+            Err(e) => return Err(e),
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    };
     let (r, w) = tokio::io::split(client);
     Ok((Box::new(r), Box::new(w)))
 }

@@ -69,13 +69,15 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
 
   // `/` reaches the search box from anywhere on the page that isn't already
   // taking keys — the one shortcut this screen has, and the one every
-  // developer tool teaches. Never while a dialog is up.
+  // developer tool teaches. Never while a dialog is up, nor while a row's Move menu is open: its
+  // window-level listener keeps taking Space, Enter and arrows, so typing into search moved the diagram.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!browsing || event.key !== '/' || event.metaKey || event.ctrlKey || event.altKey) return;
       if (!searchInput.current) return;
       if (isEditableTarget(event.target)) return;
       if (document.querySelector('[role="dialog"]')) return;
+      if (useUiStore.getState().moveMenuOpenFor !== null) return;
       event.preventDefault();
       searchInput.current?.focus();
     };
@@ -92,6 +94,10 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [browsing, searchQuery, setSearchQuery, setBrowsing]);
+
+  // The open Move menu is store state, so it would outlive this screen — and reopen on the same row
+  // the next time the Library mounts.
+  useEffect(() => () => useUiStore.getState().setMoveMenuOpenFor(null), []);
 
   useRelativeTimeTick();
 
@@ -160,6 +166,9 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
     onDrop: (event: DragEvent) => {
       if (!Array.from(event.dataTransfer.types).includes('Files')) return;
       event.preventDefault();
+      // A dialog is portalled out of this element but its events still bubble here through React —
+      // a file let go over one must not import (or open) behind it.
+      if (event.target instanceof Element && event.target.closest('.dc-modal-backdrop')) return;
       void onImport(event.dataTransfer.files[0]);
     },
   };
@@ -355,8 +364,9 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
                     // How much of a title gets cut off depends on the viewport, not only its length:
                     // a shorter one that still ellipsizes gets its tooltip the moment it's hovered.
                     onPointerEnter={(event) => {
+                      // Always assigned: set once and never cleared, it outlived a resize that stopped the cut.
                       const title = event.currentTarget.querySelector('.dc-library-item-title');
-                      if (title && title.scrollWidth > title.clientWidth) event.currentTarget.title = entry.title;
+                      event.currentTarget.title = title && title.scrollWidth > title.clientWidth ? entry.title : '';
                     }}
                     onClick={() => void session.openDocument(entry.id)}
                   >

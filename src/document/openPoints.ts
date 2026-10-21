@@ -1,12 +1,12 @@
 /**
  * Open points — what the discussion has not settled yet, attached to the architecture it concerns.
  *
- * The same shape as `actions.ts`: pure functions over a `DraftDocument`, each returning a new
+ * Pure functions over a `DraftDocument`, like the rest of `src/document/`: each returns a new
  * document that reuses everything it didn't touch, and the *same* document when it changed nothing
  * so the store's no-op guard keeps working. Nothing here knows about React, the store, or how a
- * marker is drawn.
+ * marker is drawn (that is `openPoints/marker.ts`).
  *
- * Root-only, like actions: a document handed to these functions while the editor is inside a room
+ * Root-only metadata, kept on the file rather than in any room: a document handed to these functions while the editor is inside a room
  * is the room's view, which carries the root's `openPoints` by way of `depth/tree.ts`'s `viewOf` —
  * and `embed` carries it back out again. So a point can be raised at any depth, and can concern
  * shapes in several rooms at once, without anything here knowing what depth is.

@@ -437,6 +437,19 @@ describe('useFlowPlayback — opening, steps, closing', () => {
     expect(result.current.step).toBe(2);
   });
 
+  it('keeps one controller through the response pulse — a phase write is not a new moment', () => {
+    const flow = twoStepFlow();
+    const { result, rerender } = mount();
+    act(() => result.current.pickFlow(flow));
+    act(() => result.current.goTo(1));
+    rerender();
+    const before = result.current;
+    act(() => useEditorStore.getState().setFlowPlayback({ phase: 'response' }));
+    act(() => useEditorStore.getState().setFlowPlayback({ phase: 'request' }));
+    rerender();
+    expect(result.current).toBe(before);
+  });
+
   it('stopping puts presentation state back to rest', () => {
     const flow = twoStepFlow();
     const { result } = mount();

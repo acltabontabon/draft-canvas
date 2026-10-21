@@ -189,6 +189,10 @@ export default defineConfig(({ mode, command }) => {
                 // /a/assets/*.js. Offline, `/` is still answered from the precache (Workbox maps a
                 // directory request to its index.html); anything else is as unknown offline as on.
                 navigateFallback: null,
+                // Workbox's default takes only js, css and html, so About → Licences failed offline.
+                // Named rather than `*.txt`: it is ~1.1 MB (~150 kB compressed), and nothing else
+                // plain-text should start riding along in every install unnoticed.
+                globPatterns: ['**/*.{js,css,html}', 'THIRD_PARTY_LICENSES.txt'],
               },
             }),
           ]),

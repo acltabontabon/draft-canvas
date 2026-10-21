@@ -86,6 +86,41 @@ describe('Tooltip warmth', () => {
     expect(screen.getByRole('tooltip')).toHaveTextContent('B');
   });
 
+  it('opens again on a later hover once its own hide delay has run out', () => {
+    vi.useFakeTimers();
+    const { a } = mountPair();
+
+    fireEvent.mouseEnter(a);
+    advance(COLD_DELAY);
+    fireEvent.mouseLeave(a);
+    advance(150);
+    expect(screen.queryByRole('tooltip')).toBeNull();
+
+    // The spent hide timer once stayed recorded as pending, so this hover only "cancelled" it.
+    fireEvent.mouseEnter(a);
+    advance(COLD_DELAY);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('A');
+  });
+
+  it('opens again when re-hovered right after a sibling closed it', () => {
+    vi.useFakeTimers();
+    const { a, b } = mountPair();
+
+    fireEvent.mouseEnter(a);
+    advance(COLD_DELAY);
+    fireEvent.mouseLeave(a);
+    fireEvent.mouseEnter(b);
+    advance(WARM_DELAY);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('B');
+
+    // Back to A while its hide delay (closed early by B) would still have been pending.
+    fireEvent.mouseLeave(b);
+    fireEvent.mouseEnter(a);
+    advance(WARM_DELAY);
+    expect(screen.getAllByRole('tooltip')).toHaveLength(1);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('A');
+  });
+
   it('goes cold again once the group has been idle', () => {
     vi.useFakeTimers();
     const { a, b } = mountPair();

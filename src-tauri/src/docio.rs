@@ -195,6 +195,22 @@ pub fn write_atomic(
             return Ok(WriteOutcome::Conflict);
         }
     }
+    let real = write_held(target, bytes)?;
+    let stamp = stamp_after_write(&real, bytes).map_err(io_err)?;
+    Ok(WriteOutcome::Saved { stamp })
+}
+
+/// `write_unconditional` for a file whose stamp nobody keeps (an export, a background image): the stamp
+/// hashes every byte written, which for a 500 MB export was a second pass over it for nothing.
+pub fn write_unstamped(target: &Path, bytes: &[u8]) -> Result<(), AppError> {
+    let file_lock = writing_lock(target);
+    let _writing = lock(&file_lock);
+    write_held(target, bytes).map(drop)
+}
+
+/// The swap itself, under `target`'s writing lock. Returns the path actually written.
+fn write_held(target: &Path, bytes: &[u8]) -> Result<PathBuf, AppError> {
+    let io_err = |e: io::Error| AppError::from_io(&e, Verb::Save, Subject::Path(target));
     // A symlinked document is written through: the link stays a link and the real file is replaced.
     let real = resolve_through_symlink(target).map_err(io_err)?;
     if let Some(block) = write_block(&real) {
@@ -204,8 +220,7 @@ pub fn write_atomic(
         });
     }
     replace_contents(&real, bytes, Kind::User, true).map_err(io_err)?;
-    let stamp = stamp_after_write(&real, bytes).map_err(io_err)?;
-    Ok(WriteOutcome::Saved { stamp })
+    Ok(real)
 }
 
 /// The lock `write_atomic` holds for one file, found by its real path so a symlink and its target, or
@@ -688,7 +703,7 @@ pub fn sidecar_write(doc: &Path, mime: &str, bytes: &[u8]) -> Result<(), AppErro
     if bytes.len() as u64 > MAX_SIDECAR_BYTES {
         return Err(AppError::too_large(&path, Verb::Save, MAX_SIDECAR_BYTES));
     }
-    write_unconditional(&path, bytes)?;
+    write_unstamped(&path, bytes)?;
     // A stale `.png` beside a fresh `.jpg` would win on the next read, so the others must go.
     for (_, other) in SIDECAR_TYPES.iter().filter(|(_, e)| e != ext) {
         remove_if_present(&sidecar_path(doc, other))?;

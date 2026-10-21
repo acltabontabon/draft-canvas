@@ -4,7 +4,7 @@
  * sentence becomes one very wide box that stretches the whole diagram sideways.
  *
  * Author-written line breaks are intent and are always kept; wrapping only ever adds breaks inside
- * a line that is too long on its own.
+ * a line that is too long on its own. Code is never wrapped at all (`noteLines`).
  */
 
 /** Chosen to keep a note roughly as wide as a couple of participant boxes — wide enough to read as
@@ -39,4 +39,19 @@ export function wrapNoteLines(text: string, width: number = NOTE_WRAP_WIDTH): st
   }
 
   return wrapped;
+}
+
+/**
+ * A note's display lines. Prose is wrapped; code keeps its lines exactly as written. Wrapping trims
+ * and re-joins words, which flattened the indentation a Python or YAML snippet depends on and split
+ * statements at arbitrary spaces — a wide code note is the lesser harm.
+ */
+export function noteLines(text: string, code: boolean): string[] {
+  return code ? text.split(/\r\n?|\n/).map((line) => line.trimEnd()) : wrapNoteLines(text);
+}
+
+/** A Code annotation, as `build.ts` emits one: it always sets `language` — even when the code has
+ *  none — and a prose note never does. */
+export function isCodeNote(note: object): boolean {
+  return 'language' in note;
 }

@@ -36,7 +36,12 @@ const INDENT = '    ';
  */
 function escapeText(text: string): string {
   return oneLine(text)
-    .replace(/<|%|~|\\|\$|\*\*|--|__/g, (token) => (token.length === 2 ? `${unicodeCode(token)}${token[1]}` : unicodeCode(token)))
+    // A run is coded whole but its last character: coding only exact pairs left `***` as
+    // `<U+002A>**`, still bold, and `//` (italic) wasn't coded at all, so two URLs in one
+    // description italicized the text between them. Same rule as `sequence/plantuml.ts`.
+    .replace(/<|%|~|\\|\$|\*{2,}|-{2,}|_{2,}|\/{2,}/g, (token) =>
+      token.length >= 2 ? `${[...token.slice(1)].map(unicodeCode).join('')}${token[0]}` : unicodeCode(token),
+    )
     .replace(/"/g, '<U+0022>');
 }
 

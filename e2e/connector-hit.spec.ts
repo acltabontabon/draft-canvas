@@ -220,7 +220,7 @@ test.describe('clicking a connector', () => {
       await page.mouse.click(point.x, point.y);
     }
     await expect(page.locator('.react-flow__edge')).toHaveCount(4);
-    await expect(page.locator('.dc-continuation, .dc-quick-connect')).toHaveCount(0);
+    await expect(page.locator('.dc-quick-connect')).toHaveCount(0);
     expect(await page.locator('.react-flow__edge[data-id="short"] .dc-edge-hit').first().getAttribute('d')).toBe(before);
     await expect(page.getByRole('button', { name: /^Undo/ })).toBeDisabled();
   });

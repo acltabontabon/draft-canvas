@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { DraftRepository } from '../../storage';
-import { backupIsStale, LAST_BACKUP_PREFERENCE } from '../../storage/backup';
+import { backupIsStale, LAST_BACKUP_PREFERENCE } from '../../storage/backupStatus';
 import { readPreference } from '../../lib/preferences';
 import { isStoragePersisted } from '../../lib/storagePersistence';
 import { useUiStore } from '../../store/uiStore';

@@ -1669,6 +1669,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       accent: edge.accent,
     });
     if (edge.attachments) edgeToWorker.attachments = edge.attachments;
+    // So do its details and the source it was drawn from: the relationship is still that message,
+    // and dropping them lost what an author or agent had recorded about it.
+    if (edge.details) edgeToWorker.details = edge.details;
+    if (edge.evidence) edgeToWorker.evidence = edge.evidence;
     const edgeFromWorker = createEdge({
       source: worker.id,
       target: edge.target,
@@ -2066,8 +2070,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     });
 
     // Everything that belongs to one specific relationship — its label, its
-    // condition, its attachments — moves onto that member's own leg, never
-    // onto the shared one.
+    // condition, its attachments, details and evidence — moves onto that
+    // member's own leg, never onto the shared one.
     const legs = members.map((edge: DraftEdge) => {
       const leg = createEdge({
         source: spine.hub === 'source' ? junction.id : edge.source,
@@ -2087,6 +2091,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       if (edge.condition) leg.condition = edge.condition;
       if (edge.response) leg.response = edge.response;
       if (edge.attachments) leg.attachments = edge.attachments;
+      if (edge.details) leg.details = edge.details;
+      if (edge.evidence) leg.evidence = edge.evidence;
       return leg;
     });
 

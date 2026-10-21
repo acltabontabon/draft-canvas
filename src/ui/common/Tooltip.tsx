@@ -169,7 +169,15 @@ export function Tooltip({ content, children }: TooltipProps) {
   // leave the group permanently warm.
   useEffect(() => {
     if (!open) return;
-    const close = () => setOpen(false);
+    // A sibling closing this one must also drop its pending timers: a hide delay left running
+    // made the next hover over this trigger only cancel it — and stay closed.
+    const close = () => {
+      if (showTimer.current !== null) window.clearTimeout(showTimer.current);
+      if (hideTimer.current !== null) window.clearTimeout(hideTimer.current);
+      showTimer.current = null;
+      hideTimer.current = null;
+      setOpen(false);
+    };
     warmth.enter(close);
     return () => warmth.leave(close);
   }, [open, warmth]);
@@ -194,7 +202,11 @@ export function Tooltip({ content, children }: TooltipProps) {
       showTimer.current = null;
       return;
     }
-    hideTimer.current = window.setTimeout(() => setOpen(false), HIDE_DELAY_MS);
+    hideTimer.current = window.setTimeout(() => {
+      // Spent, so no longer pending — otherwise the next hover reads it as one to cancel.
+      hideTimer.current = null;
+      setOpen(false);
+    }, HIDE_DELAY_MS);
   };
 
   const close = () => {

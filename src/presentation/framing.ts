@@ -156,6 +156,21 @@ export function frameStep(box: Bounds, camera: DraftViewport, view: View, insets
 }
 
 /**
+ * `frameStep` for a camera the presenter took by hand (`framing: 'manual'`). Their pan or zoom is a
+ * choice, not a frame that fell short: `frameStep` alone reframes anything below `READABLE_ZOOM` or
+ * near the safe edge, so stepping after zooming out to 0.6 snapped the camera back and took
+ * Re-centre with it. Only a step with no part left in the view at all moves the camera — then it
+ * gets the frame `frameStep` would give it; anything still on screen, however small or close to
+ * the chrome, stays where the presenter put it.
+ */
+export function frameManualStep(box: Bounds, camera: DraftViewport, view: View, insets: Insets): Frame {
+  const rect = screenRectOf(box, camera);
+  const onScreen =
+    rect.x < view.width && rect.x + rect.width > 0 && rect.y < view.height && rect.y + rect.height > 0;
+  return onScreen ? { camera, kind: 'stay' } : frameStep(box, camera, view, insets);
+}
+
+/**
  * The camera a step gets composed afresh — where `frameStep` would cut to with no camera to
  * respect: the Re-centre action, which promises a frame and not merely a verdict that the current
  * one will do.

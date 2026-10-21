@@ -68,7 +68,7 @@ export function thumbnailOf(text: string | null): Thumbnail {
 }
 
 /**
- * The thumbnail for `key`, from the cache or read with `load` — shared by Home's tiles and the tray.
+ * The thumbnail for `key`, from the cache or read with `load` — shared by Home's tiles and the file explorer.
  * `wanted` is asked again when the read's turn comes: a tile that has scrolled away or closed by then
  * isn't read at all (and resolves `null`).
  */

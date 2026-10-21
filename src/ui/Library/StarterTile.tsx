@@ -2,11 +2,11 @@ import { useId, type CSSProperties, type FocusEvent } from 'react';
 import type { ArchitectureStarter, StarterId } from '../../starters/types';
 import { SelectionChrome } from './SelectionChrome';
 import { StarterGlyph } from './StarterGlyph';
-import { starterShape } from './starterShapes';
+import { starterShape } from './starterShape';
 
 /**
  * One starter, shown as the thing it will draw: its own topology (derived from the catalog — see
- * `starterShapes.ts`) with its name under it. No card, no border, no description competing for
+ * `starterShape.ts`) with its name under it. No card, no border, no description competing for
  * attention — the shape says what it is.
  *
  * Shared by the home screen's shelf and the editor's empty canvas so the two surfaces cannot

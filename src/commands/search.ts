@@ -49,10 +49,22 @@ const TYPE_CAPTIONS: Record<DraftNode['type'], string> = {
   ellipse: 'Junction',
 };
 
-function edgeLabel(document: DraftDocument, edge: DraftEdge): string | undefined {
+/**
+ * `nodesById` is the room's, built once by the caller: `edgeRelationLabel` looks both endpoints up
+ * in the graph it is handed, so passing the whole room scanned every shape twice per connector —
+ * O(connectors × shapes) per room, on every palette keystroke. Handing it just the two endpoints
+ * keeps the one implementation of the relationship caption.
+ */
+function edgeLabel(nodesById: ReadonlyMap<string, DraftNode>, edge: DraftEdge): string | undefined {
   const explicit = edge.label?.trim();
   if (explicit) return explicit;
-  return edgeRelationLabel(document, edge);
+  if (!edge.semantic) return undefined;
+  const endpoints: DraftNode[] = [];
+  const source = nodesById.get(edge.source);
+  const target = nodesById.get(edge.target);
+  if (source) endpoints.push(source);
+  if (target) endpoints.push(target);
+  return edgeRelationLabel({ nodes: endpoints }, edge);
 }
 
 let flashTimer: ReturnType<typeof setTimeout> | null = null;
@@ -167,6 +179,7 @@ function thereThen(ctx: CommandContext, path: DepthPath, then: (fresh: CommandCo
 function roomJumpCommands(document: DraftDocument, elsewhere: Elsewhere | null): Command[] {
   const commands: Command[] = [];
   const names = new Map(document.nodes.map((node) => [node.id, displayNameFor(node)]));
+  const nodesById = new Map(document.nodes.map((node) => [node.id, node]));
   const where = elsewhere ? ` · ${elsewhere.where}` : '';
   const roomWords = elsewhere ? elsewhere.words : [];
   // A local row acts on the context it is given; a row elsewhere climbs there and acts on a fresh one.
@@ -218,7 +231,7 @@ function roomJumpCommands(document: DraftDocument, elsewhere: Elsewhere | null):
   }
 
   for (const edge of document.edges) {
-    const label = edgeLabel(document, edge);
+    const label = edgeLabel(nodesById, edge);
     if (!label) continue;
     const from = names.get(edge.source) ?? '?';
     const to = names.get(edge.target) ?? '?';

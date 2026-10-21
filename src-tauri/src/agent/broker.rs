@@ -1445,6 +1445,11 @@ async fn submit_proposal(
                     ));
                 }
             }
+        } else if !proposal.status.is_terminal() {
+            if let Some(why) = s.pending_limit(&proposal.diagram_id) {
+                return Err(ToolError::new("LIMIT_EXCEEDED", why)
+                    .hint("Ask the person to review the waiting proposals, or revise one of them instead."));
+            }
         }
         s.put(proposal.clone()).map_err(|_| {
             ToolError::new(
@@ -1622,8 +1627,8 @@ pub fn gate_passed(agent: &Agent, page_id: u64) -> bool {
             .map(|r| r.is_ok())
             .unwrap_or(false);
         if !written {
-            // The ledger couldn't record the gate: going ahead would make a crash unrecoverable.
-            agent.page.cancel(page_id);
+            // The ledger couldn't record the gate: going ahead would make a crash unrecoverable. (No
+            // `page.cancel` here: `gate` has already moved the request past `Live`, where cancel acts.)
             return false;
         }
     }

@@ -10,9 +10,22 @@ export interface DiagnosticContext {
   edgeIds?: string[];
 }
 
+// Every tag `logDiagnostic` is called with in `src/`. They are constants in the code, never user
+// data; a tag missing here reports as 'other', which says nothing about where a failure happened.
 const OPERATIONS = new Set([
-  'about-panel', 'app-shell', 'export-panel', 'canvas-render', 'autosave',
-  'desktop-open-external', 'desktop-report-state',
+  'about-panel', 'adopt-document', 'app-shell', 'autosave', 'canvas-render', 'create-project',
+  'delete-document', 'delete-project', 'delete-project-refresh', 'duplicate-document', 'export-panel',
+  'file-explorer', 'library-backfill', 'library-dialog', 'library-startup', 'library-visibility-refresh',
+  'load-editor', 'load-starters', 'load-technology-icon', 'load-technology-icons', 'move-document-to-project',
+  'open-document', 'open-document-refresh', 'open-document-stash', 'open-share-link', 'refresh-library',
+  'release-notes', 'remove-background-image', 'rename-document', 'rename-project',
+  'host-agent', 'host-background-report', 'host-background-restore', 'host-change', 'host-forget', 'host-load',
+  'desktop-action', 'desktop-agent-clients', 'desktop-agent-configure', 'desktop-agent-connect-client',
+  'desktop-agent-install-skill', 'desktop-agent-proposal-get', 'desktop-agent-proposal-list',
+  'desktop-agent-remove-skill', 'desktop-agent-skills', 'desktop-agent-status', 'desktop-background-read',
+  'desktop-background-save', 'desktop-boot', 'desktop-check-stamp', 'desktop-open-external',
+  'desktop-project-scan', 'desktop-quit', 'desktop-recents', 'desktop-recovery', 'desktop-recovery-discard',
+  'desktop-report-state', 'desktop-snapshot', 'desktop-update',
 ]);
 const ERROR_NAMES = new Set(['Error', 'TypeError', 'RangeError', 'AbortError', 'QuotaExceededError', 'SecurityError', 'InvalidStateError']);
 const MAX_EVENTS = 20;

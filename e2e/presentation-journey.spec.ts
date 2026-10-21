@@ -63,7 +63,6 @@ test.describe('Presentation journey', () => {
     // half strength — and nothing draws a box around either.
     await expect(page.locator('.dc-node[data-explain-role="target"] .dc-emphasis[data-role="target"]')).toHaveCount(1);
     await expect(page.locator('.dc-node[data-explain-role="source"] .dc-emphasis[data-role="source"]')).toHaveCount(1);
-    await expect(page.locator('.dc-arrival')).toHaveCount(0);
     const caption = page.locator('.dc-present-caption');
     await expect(caption).toContainText('Step 1 of 7');
     await expect(caption).toContainText('Client');

@@ -13,6 +13,7 @@ import {
 } from '../../presentation/calloutPlacement';
 import type { PresentationSubject } from '../../presentation/presentationAttachments';
 import { useEditorStore } from '../../store/editorStore';
+import { useUiStore } from '../../store/uiStore';
 import { edgeIndex, nodeIndex } from '../../store/selectors';
 import { useThemeValue } from '../../ui/theme/useTheme';
 import { ReadOnlyCode } from '../AttachmentPresentation';
@@ -109,17 +110,25 @@ export function PresentationCallout({
   );
   // Presentation chrome sits still in screen space while the canvas pans beneath it, so it's measured
   // when something could have moved it — a commit here, the canvas resizing, the step changing (its
-  // caption takes a corner) — never per frame. A box not on screen yet is looked for again.
+  // caption takes a corner, or moves to another one as a manual pan slides the interaction under it)
+  // — never per frame. A box not on screen yet is looked for again.
   const chromeRef = useRef<{ root: DOMRect; boxes: (Box | null)[] } | null>(null);
-  useEffect(
-    () =>
-      useEditorStore.subscribe((state, previous) => {
-        if (state.flowPlayback.step !== previous.flowPlayback.step || state.flowPlayback.stage !== previous.flowPlayback.stage) {
-          chromeRef.current = null;
-        }
-      }),
-    [],
-  );
+  useEffect(() => {
+    const offEditor = useEditorStore.subscribe((state, previous) => {
+      if (state.flowPlayback.step !== previous.flowPlayback.step || state.flowPlayback.stage !== previous.flowPlayback.stage) {
+        chromeRef.current = null;
+      }
+    });
+    // The caption changes corner without a step change (`useCaptionFollowsCamera`); a cached box
+    // would keep the callout off where the caption was and let it land on where it is.
+    const offUi = useUiStore.subscribe((state, previous) => {
+      if (state.presentation.captionCorner !== previous.presentation.captionCorner) chromeRef.current = null;
+    });
+    return () => {
+      offEditor();
+      offUi();
+    };
+  }, []);
 
   // Everything placement keeps off, in flow space — every other node, every connector as drawn (each
   // hit path carries its canonical route) and every label and chip row riding on one — read once

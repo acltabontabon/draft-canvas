@@ -16,7 +16,7 @@
  */
 
 import { PRODUCT } from '../product';
-import { buildBackup, restoreBackup, type RestoreResult } from './backup';
+import type { RestoreResult } from './backup';
 import type { DraftRepository } from './DraftRepository';
 
 export const HANDOFF_TYPE = 'draft-canvas:handoff';
@@ -190,6 +190,8 @@ export function sendDiagrams(options: SendOptions): Promise<SendOutcome> {
     if ('kind' in ready) return ready;
     let backup;
     try {
+      // Loaded here, not with the page: the ZIP writer is only ever needed once a handoff is under way.
+      const { buildBackup } = await import('./backup');
       backup = await buildBackup(repository);
     } catch (error) {
       return { kind: 'failed', message: error instanceof Error ? error.message : 'Your diagrams could not be read.' };
@@ -317,6 +319,7 @@ async function receive(host: ReceiverHost, options: ReceiveOptions & { appOrigin
     outcome = { kind: 'failed', message: 'What arrived was not a Draft Canvas Library.' };
   } else {
     try {
+      const { restoreBackup } = await import('./backup');
       outcome = { kind: 'received', result: await restoreBackup(repository, new Uint8Array(payload.bytes)) };
     } catch (error) {
       outcome = { kind: 'failed', message: error instanceof Error ? error.message : 'The diagrams could not be read.' };

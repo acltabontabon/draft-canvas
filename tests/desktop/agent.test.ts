@@ -14,6 +14,7 @@ import { __resetAgentWrites } from '../../src/desktop/agentWrites';
 import { agentActivity } from '../../src/desktop/agentActivity';
 import { useUiStore } from '../../src/store/uiStore';
 import { watchTyping } from '../../src/lib/recentTyping';
+import { withPhysChunk } from '../../src/render/png/phys';
 import { createHarness, decoder, type Harness } from './harness';
 
 /** A 1×1 PNG, as the browser's encoder would hand it back (no `pHYs` chunk of its own). */
@@ -28,7 +29,8 @@ vi.mock('../../src/render/png/rasterize', async (importOriginal) => {
     ...actual,
     rasterizeSvg: vi.fn(async (svg: string, options: Record<string, unknown>) => {
       rasterized.push({ svg, options });
-      return new Blob([new Uint8Array(ONE_PIXEL_PNG)], { type: 'image/png' });
+      // Stamped as the real one stamps what the encoder hands it: `render_diagram` adds nothing itself.
+      return new Blob([withPhysChunk(new Uint8Array(ONE_PIXEL_PNG), Number(options.scale ?? 2))], { type: 'image/png' });
     }),
   };
 });
@@ -314,9 +316,22 @@ describe('agent requests on desktop', () => {
     const handle = await openOrders();
     useEditorStore.getState().apply('Rename', (doc) => ({ ...doc, nodes: doc.nodes.map((n) => ({ ...n, text: `${n.text}!` })) }));
     h.edit(serializeDocument(fileOf(useEditorStore.getState())));
-    h.files.get(handle)!.version += 1;
+    const file = h.files.get(handle)!;
+    file.text = file.text.replace('Orders API', 'Orders Gateway');
+    file.version += 1;
     const out = await request('update_diagram', addMailer(currentRevision()), { handle, open: true });
     expect(out.error?.code).toBe('DOCUMENT_BUSY');
+  });
+
+  it('changes an open diagram with unsaved edits when only its file’s timestamp moved', async () => {
+    const handle = await openOrders();
+    useEditorStore.getState().apply('Rename', (doc) => ({ ...doc, nodes: doc.nodes.map((n) => ({ ...n, text: `${n.text}!` })) }));
+    h.edit(serializeDocument(fileOf(useEditorStore.getState())));
+    // A sync client or a checkout of the same commit: a new mtime, the same bytes.
+    h.files.get(handle)!.version += 1;
+    const out = await request('update_diagram', addMailer(currentRevision()), { handle, open: true });
+    expect(out.ok).toBe(true);
+    expect(out.value).toMatchObject({ applied: true, persisted: false, state: 'applied-unsaved' });
   });
 
   /** What the shell tells the page about a diagram that isn't open. */

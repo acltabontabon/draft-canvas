@@ -319,8 +319,20 @@ export function useDocumentSession(): DocumentSession {
     let cancelled = false;
     // Already loaded — `openId` is only ever set after the document went into the store — so this
     // subscribes a microtask later, before any edit can happen.
-    void loadEditorStore().then(({ useEditorStore, fileWithLiveViewport }) => {
+    void loadEditorStore().then((module) => {
+      const { useEditorStore, fileWithLiveViewport } = module;
       if (cancelled) return;
+      // A host owns the file (`useHostDocument.ts` posts every edit to it), and the in-memory
+      // repository it opens from is written by that hook before each open and otherwise read only
+      // for the open itself: an autosave there cloned and summarized the whole file after every
+      // edit for no one. The size warning is the one thing a save did that still matters; it gates
+      // its own cost.
+      if (hostKind()) {
+        unsubscribe = useEditorStore.subscribe((state, previous) => {
+          if (state.revision !== previous.revision && state.document.metadata.id === openId) warnIfNearFileLimit(module, notify);
+        });
+        return;
+      }
       // What's on disk right now, so a later save can tell a rename made here from one made in
       // another tab's Library.
       autosave.current?.track(fileWithLiveViewport(useEditorStore.getState()));
@@ -343,7 +355,7 @@ export function useDocumentSession(): DocumentSession {
       unsubscribe?.();
       autosave.current?.untrack(openId);
     };
-  }, [openId]);
+  }, [notify, openId]);
 
   // Tells other tabs this canvas is open here, so closing it there leaves this tab's undo history's
   // background images alone. A shared diagram is nobody's stored canvas: nothing to hold.
@@ -686,14 +698,18 @@ export function useDocumentSession(): DocumentSession {
     // copy shows, which another tab may have changed since this one last looked. Not while another
     // tab has the canvas open (`openPresence.ts`), nor when the browser can't say: that tab's undo
     // history may name an image this one replaced, and pruning left its undo pointing at nothing.
-    const closing = (await loadEditorStore()).useEditorStore.getState().document;
+    const editor = await loadEditorStore();
+    const closing = editor.useEditorStore.getState().document;
+    // A host's file has no other tab, and its in-memory copy is never autosaved: the file on screen
+    // names the background to keep.
+    const hostFile = hostKind() ? editor.fileOf(editor.useEditorStore.getState()) : null;
     if (repository && closing.metadata.id === openId) {
       const id = closing.metadata.id;
       const hold = openHold.current?.id === id ? openHold.current : null;
       void (async () => {
         await hold?.release();
         if ((await openAnywhere(id)) !== false) return;
-        const stored = await repository.load(id);
+        const stored = hostFile ?? (await repository.load(id));
         if (!stored) return;
         const { background } = stored.settings;
         await repository.pruneBackgroundImages(id, background.enabled ? background : null);

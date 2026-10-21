@@ -250,6 +250,15 @@ describe('CommandPalette', () => {
     expect(screen.getByText('No matching commands.')).toBeInTheDocument();
   });
 
+  it('ArrowDown on an empty list leaves the highlight on the first row once the list refills', () => {
+    mount();
+    fireEvent.change(input(), { target: { value: ' zzzzqq ' } });
+    key('ArrowDown');
+    fireEvent.change(input(), { target: { value: 'serv' } });
+    // A highlight left at -1 would select no row at all, and Enter would do nothing.
+    expect(highlighted()).toHaveTextContent('Add Service');
+  });
+
   it('shows "No matching commands." for a query nothing matches while presenting', () => {
     useEditorStore.setState({ mode: 'present' });
     mount();

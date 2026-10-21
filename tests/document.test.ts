@@ -156,6 +156,28 @@ describe('document model', () => {
     expect(result.doc.nodes.find((n) => n.id === node.id)!.attachments![0]!.id).toBe(attachment.id);
   });
 
+  it('points a copied room’s flow variants at the copies of their flows', () => {
+    const inner = createNode({ type: 'service', x: 0, y: 0 });
+    const base = { id: 'f-base', title: 'Payment', steps: [] };
+    const variant = { id: 'f-variant', title: 'Payment — failure', steps: [], variantOf: base.id };
+    const stray = { id: 'f-stray', title: 'Elsewhere', steps: [], variantOf: 'f-not-in-this-room' };
+    const node = {
+      ...createNode({ type: 'service', x: 0, y: 0 }),
+      inside: { nodes: [inner], edges: [], flows: [base, variant, stray], viewport: { x: 0, y: 0, zoom: 1 } },
+    };
+    const doc = addNodes(createDocument(), [node]);
+
+    const result = pasteFragment(doc, extractFragment(doc, [node.id]), { x: 40, y: 40 });
+
+    const flows = result.doc.nodes.find((n) => result.nodeIds.includes(n.id))!.inside!.flows;
+    const [copiedBase, copiedVariant, copiedStray] = flows;
+    expect(copiedBase!.id).not.toBe(base.id);
+    expect(copiedVariant!.variantOf).toBe(copiedBase!.id);
+    // A variant whose flow is not in the room has nothing to point at in the copy.
+    expect(copiedStray!.variantOf).toBeUndefined();
+    expect('variantOf' in copiedStray!).toBe(false);
+  });
+
   it('aligns and distributes selections', () => {
     const nodes = [
       createNode({ type: 'note', x: 0, y: 0, width: 100, height: 50 }),

@@ -96,5 +96,3 @@ export function evaluateAttachCandidates(
   return { overlapId, centerHitId };
 }
 
-/** Where a dropped node is a member: the rule lives beside the operation that applies it. */
-export { deepestBoundaryAt } from '../document/operations';

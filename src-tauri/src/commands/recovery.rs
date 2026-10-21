@@ -107,7 +107,8 @@ fn recovery_entries(state: &AppState) -> Result<Vec<RecoveryEntry>, AppError> {
 }
 
 fn file_origin(state: &AppState, path: &str, base_stamp: &str) -> Option<RecoveryOrigin> {
-    let handle = state.grant_file(Path::new(path)).ok()?;
+    // Only to name the file and tell whether it is the one open; opening it is what watches it.
+    let handle = state.grant_file_unwatched(Path::new(path)).ok()?;
     let grant = state.file(&handle).ok()?;
     Some(RecoveryOrigin::File {
         display_path: display_path(&grant.path),

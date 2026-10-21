@@ -17,6 +17,7 @@ import type {
   Attachment,
   DraftDocument,
   DraftEdge,
+  DraftFlow,
   DraftFlowStep,
   DraftInside,
   DraftNode,
@@ -429,17 +430,28 @@ function reidentifyInside(inside: DraftInside, renamed?: IdRenames): DraftInside
     return next;
   });
 
-  const flows = inside.flows.map((flow) => ({
-    ...flow,
-    id: createId('f'),
-    steps: flow.steps.map((step) => {
-      const next: DraftFlowStep = { ...step, id: createId('fs') };
-      if (step.edgeId) next.edgeId = edgeIds.get(step.edgeId) ?? step.edgeId;
-      if (step.extraEdgeIds) next.extraEdgeIds = step.extraEdgeIds.map((id) => edgeIds.get(id) ?? id);
-      if (step.extraNodeIds) next.extraNodeIds = step.extraNodeIds.map((id) => nodeIds.get(id) ?? id);
-      return next;
-    }),
-  }));
+  // Every flow's new id first, so a variant points at the copy of the flow it varies. Carried over
+  // as it was, it named the original room's flow, which validation then dropped on the next open.
+  const flowIds = new Map(inside.flows.map((flow) => [flow.id, createId('f')]));
+  const flows = inside.flows.map((flow) => {
+    const next: DraftFlow = {
+      ...flow,
+      id: flowIds.get(flow.id)!,
+      steps: flow.steps.map((step) => {
+        const next: DraftFlowStep = { ...step, id: createId('fs') };
+        if (step.edgeId) next.edgeId = edgeIds.get(step.edgeId) ?? step.edgeId;
+        if (step.extraEdgeIds) next.extraEdgeIds = step.extraEdgeIds.map((id) => edgeIds.get(id) ?? id);
+        if (step.extraNodeIds) next.extraNodeIds = step.extraNodeIds.map((id) => nodeIds.get(id) ?? id);
+        return next;
+      }),
+    };
+    if (flow.variantOf !== undefined) {
+      const variantOf = flowIds.get(flow.variantOf);
+      if (variantOf) next.variantOf = variantOf;
+      else delete next.variantOf;
+    }
+    return next;
+  });
 
   const next: DraftInside = { nodes, edges, flows, viewport: inside.viewport };
   // What the room says it shows is part of the room, not part of its identity: a copy that lost it
@@ -1269,26 +1281,6 @@ export function carryDescendants(
 }
 
 /**
- * The deepest (most specific) boundary containing `point` — nested boundaries
- * resolve to the smallest one that still contains the point, not whichever
- * happens to appear first in the document.
- */
-export function deepestBoundaryAt(
-  point: { x: number; y: number },
-  doc: DraftDocument,
-  excludeIds: ReadonlySet<string>,
-): string | null {
-  let best: { id: string; area: number } | null = null;
-  for (const node of doc.nodes) {
-    if (node.type !== 'group' || excludeIds.has(node.id)) continue;
-    if (!pointInBox(point, node)) continue;
-    const area = node.width * node.height;
-    if (!best || area < best.area) best = { id: node.id, area };
-  }
-  return best?.id ?? null;
-}
-
-/**
  * Makes membership agree with where a gesture left things. A node is a member of a boundary exactly
  * when its centre is inside it — that is the rule a single dropped node has always followed — and
  * `parentId` is what a delete cascades along and a boundary drag carries, so a node whose parent no
@@ -1307,7 +1299,7 @@ export function reconcileMembership(doc: DraftDocument, movedIds: Iterable<strin
   if (moved.size === 0) return doc;
   const byId = new Map(doc.nodes.map((node) => [node.id, node]));
   // Once, not per moved node: a marquee drag of hundreds of shapes scanned every node for every one
-  // of them (`deepestBoundaryAt`), then rebuilt the node list once per re-homed shape (`setParent`).
+  // of them for the deepest boundary under it, then rebuilt the node list once per re-homed shape (`setParent`).
   const boundaries = doc.nodes.filter((node) => node.type === 'group');
 
   const carriedByAnother = (node: DraftNode): boolean => {

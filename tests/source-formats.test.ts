@@ -133,6 +133,15 @@ describe('C4-PlantUML', () => {
     expect(text).toContain('!include <C4/C4_Component>');
     expect(text).toContain('<U+0022>quoted<U+0022>');
   });
+
+  it('disarms every Creole run, including italics and runs longer than a pair', () => {
+    const node = createNode({ type: 'service', x: 0, y: 0, text: 'A *** B *** C', description: 'Calls https://a.io and https://b.io' });
+    const text = c4PlantUmlSource({ ...createDocument('Runs'), nodes: [node] });
+    const line = text.split('\n').find((l) => l.includes('A '))!;
+    expect(line).not.toMatch(/\*\*|\/\/|--|__/);
+    expect(line).toContain('<U+002A><U+002A>*');
+    expect(line).toContain('https:<U+002F>/a.io');
+  });
 });
 
 describe('Structurizr DSL', () => {

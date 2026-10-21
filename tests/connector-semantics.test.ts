@@ -1324,6 +1324,24 @@ describe('insertWorkerOnEdge() — the "Insert Worker" quick fix', () => {
     expect(worker.serviceKind).toBe('worker');
   });
 
+  it('keeps the connector’s evidence and details on the leg into the worker', () => {
+    const { queue, edge } = setUpQueueToTopic();
+    const evidence = [{ path: 'src/orders/consumer.ts', basis: 'observed' as const, line: 12 }];
+    const details = { language: 'typescript' as const, code: 'await queue.publish(order);' };
+    store.setState((state) => ({
+      document: { ...state.document, edges: state.document.edges.map((e) => (e.id === edge.id ? { ...e, evidence, details } : e)) },
+    }));
+
+    store.getState().insertWorkerOnEdge(edge.id);
+    const doc = store.getState().document;
+
+    const toWorker = doc.edges.find((e) => e.source === queue.id)!;
+    expect(toWorker.evidence).toEqual(evidence);
+    expect(toWorker.details).toEqual(details);
+    const fromWorker = doc.edges.find((e) => e.source === toWorker.target)!;
+    expect(fromWorker.evidence).toBeUndefined();
+  });
+
   it('positions the worker between the two original endpoints', () => {
     const { queue, topic, edge } = setUpQueueToTopic();
     store.getState().insertWorkerOnEdge(edge.id);

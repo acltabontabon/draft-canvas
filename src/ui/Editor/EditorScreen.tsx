@@ -21,7 +21,7 @@ import { QuickConnectMenu } from '../../canvas/QuickConnectMenu';
 import { offerFor, quickConnectItems, type QuickConnectItem } from '../../canvas/quickConnectItems';
 import { stepContinuation, type AskInstead } from '../../canvas/stepContinuation';
 import { contextMenuCommandsFor } from '../../commands/contextMenu';
-import { openPointTargetsOf, starterCommands } from '../../commands/registry';
+import { openPointTargetsOf, readSafeMenu, starterCommands } from '../../commands/registry';
 import type { Command } from '../../commands/types';
 import { useCommandContext } from '../../commands/useCommandContext';
 import type { StarterId } from '../../starters';
@@ -456,7 +456,11 @@ function EditorScreen({ session }: { session: DocumentSession }) {
 
   const contextMenuEntries = useMemo(() => {
     if (!contextMenu) return [];
-    return contextMenuCommandsFor(buildCommandContext(), contextMenu.target, contextMenu.flowPosition);
+    const ctx = buildCommandContext();
+    const entries = contextMenuCommandsFor(ctx, contextMenu.target, contextMenu.flowPosition);
+    // A shared diagram keeps only what leaves the document as it is — the palette's same allowlist,
+    // applied to the finished menu so the pane's "Add here" grid and every edit row go with it.
+    return ctx.ui.readOnly ? readSafeMenu(entries) : entries;
     // `selection`/`editorDocument` aren't read directly here — they're what make this recompute
     // when the thing the menu is showing changes underneath it (see the effect right below).
     // oxlint-disable-next-line react-hooks/exhaustive-deps
@@ -1122,6 +1126,10 @@ export function useKeyboard({
       if (isInOwnKeyboardRegion(event.target) || modalIsOpen()) return;
 
       if (event.shiftKey && event.code === 'Digit1') {
+        // Dead while presenting, like the bare keys below: a plain fit ignores the presentation's
+        // insets and leaves guided framing on, so the next step would snap the camera back. The
+        // walkthrough's own O (overview) and R (re-centre) are the camera keys there.
+        if (presenting) return;
         event.preventDefault();
         if (hasSomethingToFit(state)) void fitView({ padding: 0.2, duration: motionMs(320), nodes: flowFitViewNodes(state) });
         return;
@@ -1201,6 +1209,9 @@ export function useKeyboard({
           // menu's `open-point-add` make. Nothing selected means nothing to be about, so the key
           // falls through unclaimed rather than opening a popover on nothing.
           if (event.shiftKey || event.altKey) break;
+          // A shared (read-only) diagram refuses the point the popover would raise, the same reason
+          // the palette and context menu don't offer `open-point-add` there.
+          if (useUiStore.getState().readOnly) break;
           const targets = openPointTargetsOf(state.selection);
           if (targets.length === 0) break;
           event.preventDefault();

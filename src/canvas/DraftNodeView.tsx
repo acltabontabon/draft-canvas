@@ -230,7 +230,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   const handleBand = liveNode
     ? anchorBandOf({ type: liveNode.type, x: 0, y: 0, width: effectiveWidth, height: effectiveHeight })
     : undefined;
-  // React Flow's `Handle` is memoized, so each keeps its style object until the band itself moves —
+  // `DraftHandle` is memoized, so each keeps its style object until the band itself moves —
   // twelve fresh objects per node render would re-render every handle every time.
   const bandTop = handleBand?.top;
   const bandBottom = handleBand?.bottom;

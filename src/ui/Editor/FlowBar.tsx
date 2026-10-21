@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from 'react';
 import { useStore, useStoreApi } from '@xyflow/react';
 import { categoryOf } from '../../document/connectorSemantics';
 import { effectiveConnectorText } from '../../document/edgeSemantics';
@@ -63,6 +63,7 @@ export function FlowBar({ playback }: { playback: FlowPlaybackController }) {
   const [pickerFor, setPickerFor] = useState<string | null>(null);
   const pickerOpen = playback.active && pickerFor !== null && pickerFor === playback.flow?.id;
   const closePicker = useCallback(() => setPickerFor(null), []);
+  const pickToggleRef = useRef<HTMLButtonElement>(null);
 
   const leave = useCallback(() => {
     setPickerFor(null);
@@ -271,6 +272,7 @@ export function FlowBar({ playback }: { playback: FlowPlaybackController }) {
           <FlowPicker
             playback={playback}
             onClose={closePicker}
+            toggleRef={pickToggleRef}
             closeLabel="Close"
             heading="Flows you can present"
           />
@@ -292,6 +294,7 @@ export function FlowBar({ playback }: { playback: FlowPlaybackController }) {
             />
           )}
           <button
+            ref={pickToggleRef}
             type="button"
             className="dc-explain-flow-pick"
             aria-haspopup="menu"
@@ -708,11 +711,14 @@ function Timeline({ playback, nodes }: { playback: FlowPlaybackController; nodes
 function FlowPicker({
   playback,
   onClose,
+  toggleRef,
   closeLabel,
   heading,
 }: {
   playback: FlowPlaybackController;
   onClose: () => void;
+  /** The control that opens this, which closes it on its own click. */
+  toggleRef?: RefObject<HTMLElement | null>;
   closeLabel: string;
   heading: string;
 }) {
@@ -735,11 +741,14 @@ function FlowPicker({
   useEffect(() => {
     const onPointerDown = (event: PointerEvent) => {
       if (event.target instanceof Node && rootRef.current?.contains(event.target)) return;
+      // …except on the toggle itself: closing here re-rendered it closed before its click, which
+      // then opened the picker again, so the title could never close what it opened.
+      if (event.target instanceof Node && toggleRef?.current?.contains(event.target)) return;
       onClose();
     };
     window.addEventListener('pointerdown', onPointerDown, true);
     return () => window.removeEventListener('pointerdown', onPointerDown, true);
-  }, [onClose]);
+  }, [onClose, toggleRef]);
 
   const items = () => Array.from(rootRef.current?.querySelectorAll<HTMLElement>('[role="menuitemradio"]') ?? []);
 

@@ -1,3 +1,4 @@
+import { LIMITS } from '../../document/limits';
 import { Lru } from '../../lib/lru';
 import { cssFont, type FontSpec } from './fonts';
 import { getMeasurer, type TextMeasurer } from './measure';
@@ -99,9 +100,15 @@ function mergeOrphanPunctuation(pieces: string[]): string[] {
  *  without it handed one measurer's lines to another (the export's and a test's, say). */
 let layoutCaches = new WeakMap<TextMeasurer, Lru<string, TextLayout>>();
 
+/** Sized for one pass over a diagram at the document limits: a shape lays out its name,
+ *  description, technology and caption (and `fitLabel` one entry per size it tries), a connector its
+ *  label. At 2,000, a pass over a large diagram evicted its own entries before reaching them again,
+ *  so leaving a room or exporting after the canvas pass laid every label out from scratch. */
+const LAYOUT_CACHE_SIZE = LIMITS.maxNodes * 3 + LIMITS.maxEdges;
+
 function layoutCacheFor(measurer: TextMeasurer): Lru<string, TextLayout> {
   let cache = layoutCaches.get(measurer);
-  if (!cache) layoutCaches.set(measurer, (cache = new Lru<string, TextLayout>(2000)));
+  if (!cache) layoutCaches.set(measurer, (cache = new Lru<string, TextLayout>(LAYOUT_CACHE_SIZE)));
   return cache;
 }
 

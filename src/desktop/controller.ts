@@ -116,11 +116,16 @@ const contentCache = new Map<string, string>();
  * recovery snapshot, written only while there is a real change, keeps the current one.
  *
  * Cached by text, since `dirty` is read on every publish and the texts are the same two strings
- * until the next edit or save.
+ * until the next edit or save. Least recently used goes first: evicting in insertion order dropped
+ * the saved text every few edits, so a whole-document parse of it came back with every third keystroke.
  */
 function contentOf(text: string): string {
   const cached = contentCache.get(text);
-  if (cached !== undefined) return cached;
+  if (cached !== undefined) {
+    contentCache.delete(text);
+    contentCache.set(text, cached);
+    return cached;
+  }
   let content = text;
   try {
     content = JSON.stringify(withoutCameras(JSON.parse(text)));
@@ -130,6 +135,14 @@ function contentOf(text: string): string {
   if (contentCache.size >= 4) contentCache.delete(contentCache.keys().next().value!);
   contentCache.set(text, content);
   return content;
+}
+
+/** Field by field: a `DesktopDoc` is flat. */
+function sameDoc(a: DesktopDoc, b: DesktopDoc): boolean {
+  const left = a as Record<string, unknown>;
+  const right = b as Record<string, unknown>;
+  const keys = Object.keys(left);
+  return keys.length === Object.keys(right).length && keys.every((key) => left[key] === right[key]);
 }
 
 function uuid(): string {
@@ -370,7 +383,7 @@ export class DesktopController {
     flush: () => this.flushApp({ keepFocus: true }),
     syncWithDisk: () => this.syncWithDisk(),
     openQuietly: (handle) => this.openQuietly(handle),
-    saveQuietly: () => this.saveQuietly(),
+    saveQuietly: (handle) => this.saveQuietly(handle),
     notify: (message) => this.ui.notify(message),
   };
 
@@ -399,7 +412,9 @@ export class DesktopController {
   private async openQuietly(handle: Handle): Promise<{ opened: true } | { opened: false; reason: string }> {
     if (this.session.kind === 'file' && this.session.handle === handle) return { opened: true };
     await this.flushApp();
-    if (this.saving) await this.saving;
+    // Not waited for: a save can be a Save As dialog left open for minutes, and this holds the
+    // controller's turn — every other agent request and the person's own opens would queue behind it.
+    if (this.saving) return { opened: false, reason: 'A save is in progress.' };
     if (this.dirty) return { opened: false, reason: `${this.displayName} has unsaved changes.` };
     const opened = await this.api.openHandle(handle);
     const parsed = deserializeDocument(opened.text);
@@ -426,12 +441,21 @@ export class DesktopController {
     return { opened: true };
   }
 
-  /** Save for an agent's change: the same stamp-guarded write as ⌘S, with no dialog either way. */
-  private saveQuietly(): Promise<{ saved: true } | { saved: false; reason: string }> {
+  /**
+   * Save for an agent's change to the file `handle`: the same stamp-guarded write as ⌘S, with no
+   * dialog either way. Refused when, by the time its turn comes, that file is no longer what is open:
+   * the save it waited behind could be a Save As that moved the document to another file, and saving
+   * that one instead had the agent's receipt name a write that never happened to its file.
+   */
+  private saveQuietly(handle: Handle): Promise<{ saved: true } | { saved: false; reason: string }> {
+    // Captured now, for the reason `saveNow` gives.
+    const waitForRename = this.renaming;
     const run = async (): Promise<{ saved: true } | { saved: false; reason: string }> => {
       await this.flushApp();
+      if (waitForRename) await waitForRename;
       const session = this.session;
       if (session.kind !== 'file') return { saved: false, reason: 'The document has no file yet.' };
+      if (session.handle !== handle) return { saved: false, reason: 'The open document moved to another file while this waited to save.' };
       if (!this.dirty) return { saved: true };
       const text = this.latestText;
       if (text === null) return { saved: false, reason: 'Nothing to save yet.' };
@@ -567,7 +591,8 @@ export class DesktopController {
   private get dirty(): boolean {
     if (this.session.kind === 'quick' || this.session.kind === 'pending') return this.edited;
     if (this.session.kind !== 'file') return false;
-    return this.savedText === null || this.latestText === null || contentOf(this.latestText) !== contentOf(this.savedText);
+    if (this.savedText === null || this.latestText === null) return true;
+    return this.latestText !== this.savedText && contentOf(this.latestText) !== contentOf(this.savedText);
   }
 
   private get displayName(): string {
@@ -598,7 +623,8 @@ export class DesktopController {
       doc = { kind: 'none' };
       state = { kind: 'none', dirty: false };
     }
-    this.store.update({ doc });
+    // Every edit publishes; Home, the status bar and the title re-render only when what they show moved.
+    if (!sameDoc(this.store.getSnapshot().doc, doc)) this.store.update({ doc });
     const key = JSON.stringify(state);
     if (key === this.lastReported) return;
     this.lastReported = key;
@@ -874,11 +900,21 @@ export class DesktopController {
    * save already running is the answer to a second request rather than a second dialog.
    */
   save(): Promise<void> {
-    this.saving ??= this.saveNow().finally(() => {
-      this.saving = null;
+    return this.saving ?? this.startSaving(this.saveNow());
+  }
+
+  /**
+   * Records `work` as the save in flight until it ends. Cleared only if it still is: an agent's
+   * `saveQuietly` chains on top of it and becomes the save in flight, and clearing that let the
+   * next save or open run alongside the agent's write.
+   */
+  private startSaving(work: Promise<void>): Promise<void> {
+    const saving: Promise<void> = work.finally(() => {
+      if (this.saving === saving) this.saving = null;
       this.store.update({ saving: false });
     });
-    return this.saving;
+    this.saving = saving;
+    return saving;
   }
 
   private async saveNow(): Promise<void> {
@@ -933,11 +969,7 @@ export class DesktopController {
   }
 
   saveAs(): Promise<void> {
-    this.saving ??= this.saveAsNow().finally(() => {
-      this.saving = null;
-      this.store.update({ saving: false });
-    });
-    return this.saving;
+    return this.saving ?? this.startSaving(this.saveAsNow());
   }
 
   private async saveAsNow(): Promise<void> {
@@ -972,9 +1004,12 @@ export class DesktopController {
     await this.flushApp();
     if (this.session.kind !== 'quick') return;
     await this.swap('Couldn’t move the draft', async () => {
+      // Checked again in turn: something queued ahead of this (an open, a Save As) may have replaced the draft.
+      if (this.session.kind !== 'quick') return;
       const project = this.projects.find((candidate) => candidate.info.handle === handle)?.info ?? this.projects[0]?.info ?? (await this.pickProject());
       const text = this.latestText ?? this.savedText;
-      if (!project || text === null) return;
+      // The folder dialog above can stay open while a Save As, which runs outside the turn, makes it a file.
+      if (!project || text === null || this.session.kind !== 'quick') return;
       const saved = await this.api.projectSaveNew(project.handle, this.suggestedName(text), encoder.encode(text));
       await this.becomeFile(saved, text);
       await this.scanProjects([project.handle], { again: true });
@@ -1038,6 +1073,9 @@ export class DesktopController {
     const session = this.session;
     if (session.kind !== 'file') return;
     await this.swap('Couldn’t revert', async () => {
+      // The page posts its edits on a short timer; one still pending would read as clean here and
+      // be reverted without asking.
+      await this.flushApp();
       if (this.dirty) {
         const choice = await this.api.ask(
           `Revert to the saved ${session.name}?`,
@@ -1130,6 +1168,9 @@ export class DesktopController {
       if (this.session.kind === 'file' && this.session.handle === handle) {
         this.session = { ...this.session, handle: renamed.handle, name: renamed.name, displayPath: renamed.displayPath };
         this.publish();
+        // The recovery copy names the file by its old handle and path, and a crash now would offer it
+        // back for a file that is no longer there. Rewritten once this rename is over (it waits for it).
+        if (this.dirty) void this.snapshotNow();
       }
       void this.refreshRecents();
       return renamed;
@@ -1374,7 +1415,15 @@ export class DesktopController {
     const seq = this.seq;
     const current = () => this.session === session && this.seq === seq && session.stamp === stamp && !this.saving;
     const check = await this.api.checkStamp(session.handle, stamp);
-    if (!current() || check === 'unchanged') return 'unchanged';
+    if (!current()) return 'unchanged';
+    if (check === 'unchanged') {
+      // Back where it was opened from (moved away and back, a branch switched and switched back).
+      if (this.outside) {
+        this.outside = null;
+        this.publish();
+      }
+      return 'unchanged';
+    }
     // What the page has typed but not yet posted counts: judged without it, `dirty` could still read
     // false and a reload would replace an edit that was on screen. Settled only now, though: disk
     // events, window focus and every agent request ask, for the echo of our own save and for any file
@@ -1397,12 +1446,41 @@ export class DesktopController {
       }
       if (!current()) return 'unchanged';
     }
+    if (check === 'changed' && this.dirty && (await this.adoptUnchangedContent(session, current))) return 'unchanged';
+    if (!current()) return 'unchanged';
     if (this.outside !== check) {
       this.outside = check;
       this.publish();
       if (check === 'missing') this.ui.notify(`${session.name}.draftcanvas was moved or deleted. Save As… keeps your work.`);
     }
     return check;
+  }
+
+  /**
+   * Unsaved edits over a file whose timestamp moved but whose content is still what they were made
+   * on (a sync client, a checkout of the same commit, `touch`): nothing changed outside, so the new
+   * stamp is adopted, as `reload` does for a clean file. Without this every agent change was refused
+   * as `DOCUMENT_BUSY` and ⌘S asked about a conflict that wasn't there. Returns whether it adopted.
+   */
+  private async adoptUnchangedContent(session: Extract<Session, { kind: 'file' }>, current: () => boolean): Promise<boolean> {
+    const saved = this.savedText;
+    if (saved === null) return false;
+    let opened: OpenedDoc;
+    try {
+      opened = await this.api.openHandle(session.handle);
+    } catch {
+      // Unreadable now: judged by its stamp alone, as before.
+      return false;
+    }
+    if (!current() || this.savedText !== saved || contentOf(opened.text) !== contentOf(saved)) return false;
+    session.stamp = opened.stamp;
+    session.readOnly = opened.readOnly;
+    this.outside = null;
+    this.publish();
+    // The recovery copy records the stamp its edits were made on; a crash now would offer it as made
+    // on an older file and ask which copy to keep.
+    if (this.dirty) this.scheduleSnapshot();
+    return true;
   }
 
   // ─── Projects, recents, settings ────────────────────────────────────────────────────

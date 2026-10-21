@@ -116,6 +116,41 @@ describe('the desktop channel', () => {
     );
   });
 
+  it('gathers quick edits into one change, serializing the file once', async () => {
+    mount();
+    const file = createDocument('Payments');
+    host.link.deliver({ type: 'draft-canvas:load', text: serializeDocument(file), seq: 1 });
+    await waitFor(() => expect(sessionOf().openId).toBe(file.metadata.id));
+
+    act(() => useEditorStore.getState().rename('Check'));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    act(() => useEditorStore.getState().rename('Checkout'));
+
+    await waitFor(() => expect(messages('draft-canvas:change')).toHaveLength(1));
+    const change = messages('draft-canvas:change')[0] as Extract<ToHostMessage, { type: 'draft-canvas:change' }>;
+    expect(JSON.parse(change.text).metadata.title).toBe('Checkout');
+  });
+
+  it('posts the latest text before a save asked for straight after an edit', async () => {
+    mount();
+    const file = createDocument('Payments');
+    host.link.deliver({ type: 'draft-canvas:load', text: serializeDocument(file), seq: 1 });
+    await waitFor(() => expect(sessionOf().openId).toBe(file.metadata.id));
+
+    act(() => useEditorStore.getState().rename('Checkout'));
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', metaKey: true, bubbles: true }));
+
+    await waitFor(() => expect(messages('draft-canvas:save')).toHaveLength(1));
+    const changeAt = posted.findIndex((message) => message.type === 'draft-canvas:change');
+    expect(changeAt).toBeGreaterThanOrEqual(0);
+    expect(changeAt).toBeLessThan(posted.findIndex((message) => message.type === 'draft-canvas:save'));
+    const change = posted[changeAt] as Extract<ToHostMessage, { type: 'draft-canvas:change' }>;
+    expect(JSON.parse(change.text).metadata.title).toBe('Checkout');
+    // Posted once: the timer that edit armed was settled by the save, not left to post it again.
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(messages('draft-canvas:change')).toHaveLength(1);
+  });
+
   it('lets go of a field being typed in for a flush, but not for an agent’s', async () => {
     mount();
     const file = createDocument('Payments');

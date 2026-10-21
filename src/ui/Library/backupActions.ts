@@ -1,6 +1,7 @@
 import { downloadBlob } from '../../export/download';
 import { writePreference } from '../../lib/preferences';
-import { backupFileName, buildBackup, describeRestore, LAST_BACKUP_PREFERENCE, restoreBackup, type RestoreResult } from '../../storage/backup';
+import type { RestoreResult } from '../../storage/backup';
+import { LAST_BACKUP_PREFERENCE } from '../../storage/backupStatus';
 import type { DraftRepository } from '../../storage';
 
 type Notify = (message: string, tone?: 'info' | 'error') => void;
@@ -9,9 +10,12 @@ export const BACKUP_COMPLETED_EVENT = 'draft-canvas:backup-completed';
 /**
  * The Library's two backup actions, shared by the action row and the storage footnote's nudge so
  * a backup started from either goes the same way and leaves the same timestamp behind.
+ *
+ * The backup module (and the ZIP library behind it) loads on the click, not with the Library.
  */
 export async function backUpLibrary(repository: DraftRepository, notify: Notify): Promise<void> {
   try {
+    const { backupFileName, buildBackup } = await import('../../storage/backup');
     const { bytes, count, skipped } = await buildBackup(repository);
     if (count === 0) {
       notify(skipped.length ? 'No diagrams could be read for this backup. Your stored copies have not been changed.' : 'Nothing to back up yet.', skipped.length ? 'error' : 'info');
@@ -36,6 +40,7 @@ export async function backUpLibrary(repository: DraftRepository, notify: Notify)
 /** Reads a backup ZIP into the repository; the caller refreshes the Library afterwards. */
 export async function restoreLibrary(repository: DraftRepository, file: File, notify: Notify): Promise<RestoreResult | null> {
   try {
+    const { describeRestore, restoreBackup } = await import('../../storage/backup');
     const result = await restoreBackup(repository, new Uint8Array(await file.arrayBuffer()));
     notify(describeRestore(result), result.restored === 0 && result.skipped.length > 0 ? 'error' : 'info');
     return result;

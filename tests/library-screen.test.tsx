@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createEdge, createNode } from '../src/document/factory';
+import { createDocument, createEdge, createNode } from '../src/document/factory';
 import { libraryShapeOf } from '../src/document/shape';
 import type { DraftSummary } from '../src/document/types';
 import { useUiStore } from '../src/store/uiStore';
@@ -196,6 +196,46 @@ describe('LibraryScreen — search', () => {
 
     await userEvent.type(input, 'a/b');
     expect(input).toHaveValue('a/b');
+  });
+
+  it('leaves `/` alone while a Move menu is open, so typing never reaches the menu', async () => {
+    const moveDocumentToProject = vi.fn(async () => {});
+    render(<LibraryScreen session={stubSession({ library: [shaped()], moveDocumentToProject })} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Move Checkout to a project' }));
+    expect(screen.getByRole('menu', { name: 'Move to project' })).toBeInTheDocument();
+
+    await userEvent.keyboard('/');
+    expect(screen.getByRole('searchbox', { name: 'Search diagrams' })).not.toHaveFocus();
+    expect(moveDocumentToProject).not.toHaveBeenCalled();
+  });
+
+  it('closes the Move menu when the Library goes away', async () => {
+    const { unmount } = render(<LibraryScreen session={stubSession({ library: [shaped()] })} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Move Checkout to a project' }));
+    expect(useUiStore.getState().moveMenuOpenFor).toBe('d-Checkout');
+    unmount();
+    expect(useUiStore.getState().moveMenuOpenFor).toBeNull();
+  });
+});
+
+describe('LibraryScreen — dropped files', () => {
+  const dropped = () => {
+    const file = new File([JSON.stringify(createDocument('Dropped'))], 'dropped.draftcanvas', { type: 'application/json' });
+    return { dataTransfer: { types: ['Files'], files: [file] } };
+  };
+
+  it('imports a file dropped on the gallery but not one let go over a dialog', async () => {
+    const adoptDocument = vi.fn(async () => {});
+    render(<LibraryScreen session={stubSession({ library: [shaped()], adoptDocument })} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Delete Checkout' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.drop(dialog, dropped());
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(adoptDocument).not.toHaveBeenCalled();
+
+    fireEvent.drop(screen.getByRole('heading', { name: 'Recently edited', hidden: true }), dropped());
+    await vi.waitFor(() => expect(adoptDocument).toHaveBeenCalledTimes(1));
   });
 });
 

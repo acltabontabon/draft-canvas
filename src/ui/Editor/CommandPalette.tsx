@@ -88,11 +88,25 @@ function CommandPaletteBody({ createAt, createAtPointer, playback, onPresent }: 
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  // The list, re-derived whenever the query, the stage, or any reactive slice above changes.
-  // `commandsFor` is pure and a few dozen entries long — cheaper to rebuild than to cache.
+  // Three memos, so a keystroke only re-ranks: the commands follow the reactive slices above, the
+  // jump rows follow the file (they reach every room, which is the expensive part on a big file),
+  // and only the ranking follows the query. One memo over all of it rebuilt both lists per key.
+  const commands = useMemo<Command[] | null>(
+    () => (stage ? null : commandsFor(buildContext())),
+    // The reactive slices are what make this recompute; they aren't read here directly.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+    [stage, buildContext, mode, selection, document, path, outer, focus, flowPlayback, selectedFlowId],
+  );
+  // Jump rows answer a typed query only, so browsing never builds them.
+  const searching = query.trim().length > 0;
+  const jumps = useMemo<Entry[] | null>(
+    () => (stage || !searching ? null : jumpCommands(document, { file: fileOf({ document, path, outer }), path })),
+    [stage, searching, document, path, outer],
+  );
+
   const rows = useMemo<RankedEntry<Entry>[]>(() => {
     if (stage) return rank(query, stage.options);
-    const commands = commandsFor(buildContext());
+    if (!commands) return [];
     if (!query.trim()) {
       // Browsing: the last few commands that still apply lead, then everything in its group.
       // The same command listed twice is deliberate — "Recent" is a shortcut, not a move.
@@ -108,15 +122,12 @@ function CommandPaletteBody({ createAt, createAtPointer, playback, onPresent }: 
     // handicapped, see `JUMP_RANK_PENALTY`) and capped so a big canvas never floods the list.
     // Frequently used commands get a small nudge — never enough to beat a better text match.
     const groupOf = (entry: Entry) => ('group' in entry ? entry.group : undefined);
-    const jumps = jumpCommands(document, { file: fileOf({ document, path, outer }), path });
-    const ranked = rank(query, [...commands, ...(jumps as Entry[])], (entry) =>
+    const ranked = rank(query, [...commands, ...(jumps ?? [])], (entry) =>
       groupOf(entry) === 'jump' ? -JUMP_RANK_PENALTY : frequencyBonus(entry.id),
     );
     let shown = 0;
     return ranked.filter((row) => (groupOf(row.entry) === 'jump' ? shown++ < JUMP_LIMIT : true));
-    // The reactive slices are what make this recompute; they aren't read here directly.
-    // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [stage, query, buildContext, mode, selection, document, path, outer, focus, flowPlayback, selectedFlowId]);
+  }, [stage, query, commands, jumps]);
 
   // Nothing else may keep competing for the keyboard. (State starts fresh on its own: the body
   // only exists while the palette is open.)
@@ -137,7 +148,8 @@ function CommandPaletteBody({ createAt, createAtPointer, playback, onPresent }: 
 
   // Keep the highlight on a real row when the list shrinks underneath it.
   useEffect(() => {
-    setHighlight((index) => Math.min(index, Math.max(0, rows.length - 1)));
+    // Floored at 0 as well: an index that once went negative must not stay there.
+    setHighlight((index) => Math.max(0, Math.min(index, rows.length - 1)));
   }, [rows.length]);
 
   useEffect(() => {
@@ -214,7 +226,9 @@ function CommandPaletteBody({ createAt, createAtPointer, playback, onPresent }: 
         case 'ArrowDown':
           event.preventDefault();
           event.stopPropagation();
-          setHighlight((index) => Math.min(rowsRef.current.length - 1, index + 1));
+          // Floored at 0: on an empty list `length - 1` is -1, and a negative highlight survives
+          // the list refilling, leaving no row selected for Enter.
+          setHighlight((index) => Math.max(0, Math.min(rowsRef.current.length - 1, index + 1)));
           return;
         case 'ArrowUp':
           event.preventDefault();
@@ -256,7 +270,6 @@ function CommandPaletteBody({ createAt, createAtPointer, playback, onPresent }: 
     return () => window.removeEventListener('keydown', onKeyDown, true);
   }, [run, setOpen]);
 
-  const searching = query.trim().length > 0;
   const placeholder = stage
     ? 'Filter…'
     : mode === 'present'

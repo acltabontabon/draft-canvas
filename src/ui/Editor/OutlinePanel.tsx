@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type MouseEvent } from 'react';
 import { useReactFlow } from '@xyflow/react';
 import type { CommandContext } from '../../commands/types';
+import type { DraftDocument } from '../../document/types';
 import { canvasBounds } from '../../canvas/canvasFrame';
 import { centerOf } from '../../lib/math';
 import { motionMs } from '../../lib/motion';
@@ -44,8 +45,32 @@ function focusCanvas(): void {
   document.querySelector<HTMLElement>('.dc-canvas')?.focus();
 }
 
+const subscribeToRoom = (onChange: () => void) => {
+  const offEditor = useEditorStore.subscribe(onChange);
+  const offUi = useUiStore.subscribe(onChange);
+  return () => {
+    offEditor();
+    offUi();
+  };
+};
+
+/**
+ * The current room, held still while a drag or resize is in flight. Every frame of a gesture is a
+ * new document, and rebuilding and re-sorting the whole tree for each one is wasted work: the
+ * names and nesting don't change, only positions (and so, at most, the reading order — caught up
+ * the moment the gesture ends).
+ */
+function useSettledRoom(): DraftDocument {
+  const held = useRef<DraftDocument | null>(null);
+  const getSnapshot = useCallback(() => {
+    if (!held.current || !useUiStore.getState().interactionActive) held.current = useEditorStore.getState().document;
+    return held.current;
+  }, []);
+  return useSyncExternalStore(subscribeToRoom, getSnapshot);
+}
+
 function OutlineTree({ buildCommandContext }: { buildCommandContext: () => CommandContext }) {
-  const room = useEditorStore((state) => state.document);
+  const room = useSettledRoom();
   const selection = useEditorStore((state) => state.selection);
   const rows = useMemo(() => buildOutline(room), [room]);
   const byKey = useMemo(() => new Map(rows.map((row) => [row.key, row])), [rows]);
@@ -86,11 +111,13 @@ function OutlineTree({ buildCommandContext }: { buildCommandContext: () => Comma
   }
   const current = activeKey && byKey.has(activeKey) && !hidden(byKey.get(activeKey)!) ? activeKey : (visible[0]?.key ?? null);
 
-  // Keep the selected row in view as the canvas selection moves — nearest edge, never a jump.
+  // Keep the selected row in view as the canvas selection moves — nearest edge, never a jump. Keyed
+  // on the selection alone: `visible` is a new list whenever the room changes, which ran this lookup
+  // and its forced layout on every frame of a drag. A row the selection unfolds is in the DOM by now.
   useEffect(() => {
     if (!selectedKey) return;
     treeRef.current?.querySelector<HTMLElement>(`[data-outline-key="${CSS.escape(selectedKey)}"]`)?.scrollIntoView({ block: 'nearest' });
-  }, [selectedKey, visible]);
+  }, [selectedKey]);
 
   const focusRow = useCallback((key: string) => {
     setActiveKey(key);

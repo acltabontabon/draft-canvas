@@ -5,7 +5,8 @@
  * Loaded on the first request, so the editor never pays for it otherwise. The work is `src/agent/`'s
  * (validation, layout, the diagram model); this module is the choreography around the document:
  *
- * 1. **Acknowledge** at once, so the shell can tell a slow request from a page that isn't running.
+ * 1. **Acknowledge** at once, so the shell can tell a slow request from a page that isn't running —
+ *    the controller does, before this module has even loaded.
  * 2. **Serialize** with the person's own actions (the controller's turn), so an agent never lands
  *    between a Save and its dialog, or halfway through an open.
  * 3. **Check the revision** against the document as it stands, work out the change, then ask the
@@ -46,7 +47,6 @@ import { deserializeDocument } from '../export/project';
 import { countPlayableFlows, sequenceSourceFor, type SequenceFormat } from '../export/sequence';
 import { c4PlantUmlSource } from '../export/source/c4plantuml';
 import type { AgentEditorReply, AgentEditorRequest } from '../host/agentBridge';
-import { withPhysChunk } from '../render/png/phys';
 import { fittedScale, rasterizeSvg } from '../render/png/rasterize';
 import { renderDocumentSvg } from '../render/svg/document';
 import { loadTechnologyIcons } from '../nodes/technology';
@@ -75,8 +75,8 @@ export interface AgentHost {
   syncWithDisk(): Promise<'unchanged' | 'reloaded' | 'changed' | 'missing'>;
   /** Makes `handle` the open document without asking anything — or says why it won't. */
   openQuietly(handle: Handle): Promise<{ opened: true } | { opened: false; reason: string }>;
-  /** Saves the open file without any dialog. */
-  saveQuietly(): Promise<{ saved: true } | { saved: false; reason: string }>;
+  /** Saves the open file without any dialog — refused unless `handle` is still the file that is open. */
+  saveQuietly(handle: Handle): Promise<{ saved: true } | { saved: false; reason: string }>;
   /** Draft Canvas holds unsaved changes to this file from an earlier session (a recovery copy). */
   hasRecoveryFor(displayPath: string): Promise<boolean>;
   /**
@@ -99,8 +99,8 @@ export function fileRevision(stamp: string): string {
   return `f:${sha.slice(0, 16)}`;
 }
 
+/** The controller has already acknowledged `event` (see step 1 above). */
 export async function handleAgentRequest(api: DesktopApi, host: AgentHost, event: Request): Promise<void> {
-  await api.agentAck(event.id).catch(() => {});
   let outcome: unknown;
   try {
     outcome = { ok: true, value: await run(api, host, event) };
@@ -334,7 +334,8 @@ async function render(host: AgentHost, args: Record<string, unknown>, context: A
     );
   }
   const blob = await rasterizeSvg(rendered.svg, { width: rendered.width, height: rendered.height, scale, background: themeFor(theme).canvas });
-  const png = withPhysChunk(new Uint8Array(await blob.arrayBuffer()), scale);
+  // Already carries its pHYs density: `rasterizeSvg` stamps the scale it actually drew at.
+  const png = new Uint8Array(await blob.arrayBuffer());
   if (png.byteLength > RENDER_MAX_BYTES) {
     throw tooLarge(`The PNG at scale ${scale} is ${(png.byteLength / (1024 * 1024)).toFixed(1)} MB, more than 8 MB.`, scale > 1 ? `Ask for scale ${scale - 1}, or for format "svg".` : 'Ask for format "svg", or render one view at a time (view.inside).');
   }
@@ -593,7 +594,7 @@ async function update(api: DesktopApi, host: AgentHost, event: Request) {
     return { ...receipt, revision: committed.revision, persisted: false, state: 'applied-unsaved', note: 'Applied in the editor. The person has unsaved changes of their own, so saving is theirs; a recovery copy covers it meanwhile.' };
   }
   try {
-    const saved = await host.saveQuietly();
+    const saved = await host.saveQuietly(open.handle);
     const now = host.openFile();
     if (saved.saved && now) {
       bases.remember(fileRevision(now.stamp), result.file);

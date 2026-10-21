@@ -13,6 +13,11 @@ import { watchTyping } from '../lib/recentTyping';
 
 const EXTERNAL_PROTOCOLS = new Set(['http:', 'https:', 'mailto:']);
 const BACKGROUND_READ_TIMEOUT_MS = 3000;
+/** How long edits gather before the file is posted. Each post serializes the whole file and compares
+ *  it with what the host holds, which on a large diagram is too much to do for every nudge; the host
+ *  asks for a flush before anything that reads the text (save, Save As, leaving the file, quitting,
+ *  an agent's read or commit), so only its dirty dot and its crash copy wait this long. */
+const CHANGE_POST_MS = 150;
 
 export interface HostDocumentState {
   /** Why the file couldn't be opened, if it couldn't. */
@@ -27,10 +32,10 @@ export interface HostDocumentState {
  * same page (`src/desktop/channel.ts`). With no `channel` given nothing happens — the web app owns
  * its own documents.
  *
- * The host sends the file's text; every committed edit goes straight back as the whole serialized
- * document. There's no debounce: the host can take the document away at any moment, so anything not
- * already posted would be lost. ⌘S is forwarded so the shell saves; links to other sites go to the
- * host too, which opens them in the system browser.
+ * The host sends the file's text; committed edits go back as the whole serialized document, gathered
+ * for `CHANGE_POST_MS` at most. Whatever the host does with the text it first asks for a flush, which
+ * posts what is still waiting at once. ⌘S is forwarded so the shell saves; links to other sites go to
+ * the host too, which opens them in the system browser.
  */
 export function useHostDocument(session: DocumentSession, channel?: HostChannel | null): HostDocumentState {
   const [state, setState] = useState<HostDocumentState>({ error: null, invalidWhileOpen: false });
@@ -157,6 +162,12 @@ export function useHostDocument(session: DocumentSession, channel?: HostChannel 
       return lastChange;
     };
 
+    /** Posts the waiting edits now rather than when their timer comes round. */
+    const sendPending = () => {
+      window.clearTimeout(pending);
+      return sendChange();
+    };
+
     const open = async ({ text, title, seq }: LoadMessage) => {
       const blank = text.trim() === '';
       const parsed = blank ? null : deserializeDocument(text);
@@ -182,7 +193,9 @@ export function useHostDocument(session: DocumentSession, channel?: HostChannel 
         // Revisions only: panning alone moves the viewport, and a file shouldn't turn dirty for that.
         // Nor does opening a document count as an edit of it.
         if (loading || current.revision === previous.revision) return;
-        pending ||= window.setTimeout(() => void sendChange(), 0);
+        // Armed once and not pushed back by later edits, so a long drag or a held arrow key still
+        // reaches the host every `CHANGE_POST_MS`.
+        pending ||= window.setTimeout(() => void sendChange(), CHANGE_POST_MS);
         // Only the image itself is the host's to keep; how it's drawn (dim, blur) is in the file.
         const now = current.document.settings.background;
         const was = previous.document.settings.background;
@@ -251,7 +264,7 @@ export function useHostDocument(session: DocumentSession, channel?: HostChannel 
             const { handleAgentRequest } = await import('./agentBridge');
             const reply = handleAgentRequest(request);
             // The shell decides whether to save from the text it holds, so the change is posted first.
-            if (reply.kind === 'committed') await sendChange();
+            if (reply.kind === 'committed') await sendPending();
             post({ type: 'draft-canvas:agent', id, reply });
           })().catch((error: unknown) => logDiagnostic(error, { operation: 'host-agent' }));
         }
@@ -291,8 +304,7 @@ export function useHostDocument(session: DocumentSession, channel?: HostChannel 
         await new Promise((resolve) => window.setTimeout(resolve, 0));
       }
       if (pending) {
-        window.clearTimeout(pending);
-        await sendChange();
+        await sendPending();
       } else {
         await lastChange;
       }

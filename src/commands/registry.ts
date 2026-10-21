@@ -31,6 +31,8 @@ import { fileOf, fileWithLiveViewport, ownsData, viewLevel } from '../store/edit
 import { pointer, type UiStore } from '../store/uiStore';
 import { SOURCE_FORMAT_INFO, SOURCE_FORMATS } from '../export/source/formats';
 import type { CopyResult } from '../export/clipboard';
+// Type-only: `contextMenu.ts` builds its menus from this module, so a value import would be a cycle.
+import type { ContextMenuEntry } from './contextMenu';
 
 // The exporters (rasterizer, Structurizr, draw.io, sequence engine) load when a copy command runs, not with the editor.
 const clipboard = () => import('../export/clipboard');
@@ -314,8 +316,13 @@ function presentModeCommands(ctx: CommandContext): Command[] {
       title: 'Fit to view',
       group: 'view',
       keywords: ['zoom', 'center', 'all'],
-      shortcut: 'Shift 1',
-      run: (inner) => void inner.camera.fitView({ padding: 0.2, duration: 320 }),
+      // No Shift 1 here: that key is dead while presenting (see `EditorScreen`), and this fit is a
+      // presenter's own camera move, so it hands framing to them like a pan does — otherwise the
+      // next guided move would snap the camera straight back.
+      run: (inner) => {
+        inner.ui.setPresentation({ framing: 'manual' });
+        void inner.camera.fitView({ padding: 0.2, duration: 320 });
+      },
     },
     {
       id: 'present-exit',
@@ -862,6 +869,11 @@ function connectToStage(ctx: CommandContext, source: DraftNode): CommandStage {
     keywords: PRESET_KEYWORDS[preset.id],
     hint: 'Create and connect',
     run: (inner) => {
+      // The options were built when the picker opened. Read the source again now: if it has been
+      // deleted since (an undo, another tab, an agent), creating the new shape would leave it an
+      // orphan with nothing to connect to — and if it moved, the neighbour belongs by where it is now.
+      const live = inner.editor.document.nodes.find((node) => node.id === source.id);
+      if (!live) return;
       const size = defaultSizeFor(preset.type);
       // One gesture, one undo step — the same as Quick Connect — not an orphan left behind by ⌘Z.
       inner.editor.beginInteraction(`Add and connect ${preset.label}`);
@@ -869,8 +881,8 @@ function connectToStage(ctx: CommandContext, source: DraftNode): CommandStage {
         const created = inner.createAt(
           preset,
           {
-            x: Math.round(source.x + source.width + NEW_NEIGHBOUR_GAP),
-            y: Math.round(source.y + source.height / 2 - size.height / 2),
+            x: Math.round(live.x + live.width + NEW_NEIGHBOUR_GAP),
+            y: Math.round(live.y + live.height / 2 - size.height / 2),
           },
           // Only reachable via ⌘K/Shift+F10 on a selected node — never a mouse gesture — so this
           // opens ready to name, same as every other keyboard-driven creation path.
@@ -1850,11 +1862,105 @@ export function starterCommands(): Command[] {
   }));
 }
 
+/**
+ * The top-level commands a shared (read-only) diagram still offers: looking, moving the camera,
+ * presenting, copying out and the app's own panels and dialogs — nothing that writes the document.
+ * An allowlist rather than a per-command flag, so a command added later is hidden from a shared
+ * diagram until someone decides it is safe there: `editorStore.apply` refuses every change while
+ * `uiStore.readOnly` is set, so an edit command offered anyway only does nothing, or says why not.
+ * Stage options are not listed: a read-safe command's picker (Present flow…, Copy source as…) is
+ * read-safe by construction.
+ */
+const READ_SAFE_COMMANDS: ReadonlySet<string> = new Set([
+  // Presenting and flows, without changing any.
+  'present',
+  'present-flow',
+  'switch-flow',
+  'flow-manage',
+  // Open points: the panel and Focus are views; raising or resolving one is not.
+  'open-points',
+  'open-points-focus',
+  // Camera, depth and spotlight — all transient view state.
+  'fit',
+  'fit-selection',
+  'zoom-in',
+  'zoom-out',
+  'zoom-reset',
+  'back-out',
+  'back-out-all',
+  'look-inside',
+  'spotlight',
+  'focus-exit',
+  'select-all',
+  'select-contents',
+  // A device preference, not a document setting.
+  'continuation-toggle',
+  // Copying out of the diagram.
+  'copy',
+  'export',
+  'export-selection',
+  'share-from-here',
+  'copy-image',
+  'copy-svg',
+  'copy-source',
+  'copy-share-link',
+  // The app's own panels and dialogs (Canvas settings hides the document's Background itself).
+  'settings',
+  'outline',
+  'shortcuts',
+  'open-docs',
+  'about',
+]);
+
+/** Whether `command` leaves the document as it is — what a shared (read-only) diagram may offer. */
+export function isReadSafe(command: Pick<Command, 'id'>): boolean {
+  return READ_SAFE_COMMANDS.has(command.id);
+}
+
+/**
+ * A context menu with only its read-safe entries, for a shared diagram: a grid or icon row keeps
+ * the items that survive, and separators are re-laid so none leads, trails or doubles up. Empty
+ * when nothing runnable survives, so the menu does not open on a header alone.
+ */
+export function readSafeMenu(entries: ContextMenuEntry[]): ContextMenuEntry[] {
+  const kept: ContextMenuEntry[] = [];
+  let runnable = false;
+  for (const entry of entries) {
+    if (entry.type === 'command') {
+      if (!isReadSafe(entry.command)) continue;
+      kept.push(entry);
+    } else if (entry.type === 'grid') {
+      const items = entry.items.filter((item) => isReadSafe(item.command));
+      if (items.length === 0) continue;
+      kept.push({ ...entry, items });
+    } else if (entry.type === 'icons') {
+      const items = entry.items.filter((item) => isReadSafe(item.command));
+      if (items.length === 0) continue;
+      kept.push({ ...entry, items });
+    } else if (entry.type === 'separator') {
+      const last = kept[kept.length - 1];
+      if (last && last.type !== 'separator' && last.type !== 'header') kept.push(entry);
+      continue;
+    } else {
+      kept.push(entry);
+      continue;
+    }
+    runnable = true;
+  }
+  if (kept[kept.length - 1]?.type === 'separator') kept.pop();
+  return runnable ? kept : [];
+}
+
 /** Every command that applies to `ctx` right now, in display order. */
 
 export function commandsFor(ctx: CommandContext): Command[] {
   if (ctx.ui.flowTrace) return [{ id: 'trace-cancel', title: 'Cancel tracing', group: 'flow', run: (inner) => inner.ui.setFlowTrace(null) }];
   if (ctx.editor.mode === 'present') return presentModeCommands(ctx);
+  const commands = editCommands(ctx);
+  return ctx.ui.readOnly ? commands.filter(isReadSafe) : commands;
+}
+
+function editCommands(ctx: CommandContext): Command[] {
   return [
     ...selectionCommands(ctx),
     ...ALL_PRESETS.map(createCommand),

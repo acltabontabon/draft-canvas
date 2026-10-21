@@ -141,8 +141,11 @@ fn relevant(event: &notify::Event) -> bool {
         // A name with no extension is taken for a folder. That missed `v2.0/` or `docs.old/` being
         // removed or renamed, so a backend that says it was a folder, or a renamed path that is one
         // now, is believed instead.
+        // Dependency and build folders (`dist/`, `target/`, `node_modules/`) come and go with every
+        // build, and the scan never walks them, so their churn can't change what Home lists.
         folder_change
             && !name.starts_with('.')
+            && !crate::project::is_skipped_dir(&name)
             && (path.extension().is_none()
                 || is_folder_event
                 || (matches!(event.kind, Modify(ModifyKind::Name(_))) && path.is_dir()))
@@ -271,6 +274,13 @@ mod tests {
         )));
         assert!(!relevant(&event(data, "/p/.git/index.lock")));
         assert!(!relevant(&event(Create(CreateKind::Folder), "/p/.cache")));
+        // Build output and dependencies the scan never walks.
+        for skipped in ["/p/dist", "/p/target", "/p/node_modules", "/p/Coverage"] {
+            assert!(!relevant(&event(Create(CreateKind::Folder), skipped)));
+            assert!(!relevant(&event(Remove(RemoveKind::Folder), skipped)));
+        }
+        // A diagram inside one still counts: it is in a folder someone opened.
+        assert!(relevant(&event(data, "/p/dist/plan.draftcanvas")));
         assert!(!relevant(&event(data, "/p/.plan.draftcanvas.dctmp-1-abcd")));
         assert!(!relevant(&event(
             Access(AccessKind::Any),

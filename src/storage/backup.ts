@@ -22,8 +22,7 @@ import { unzipFiles, zipFiles } from '../export/zip';
 import { blobToBase64 } from '../lib/base64';
 import type { DraftRepository } from './DraftRepository';
 
-/** The preference that remembers when the last backup was written (an ISO timestamp, 24 chars). */
-export const LAST_BACKUP_PREFERENCE = 'last-backup-at';
+export { backupIsStale, LAST_BACKUP_PREFERENCE } from './backupStatus';
 
 const DOCUMENT_EXTENSION = '.draftcanvas';
 const MANIFEST_NAME = 'projects.json';
@@ -198,12 +197,4 @@ export function describeRestore(result: RestoreResult): string {
   const renamed = result.renamed === 0 ? '' : ` (${result.renamed} renamed as ${result.renamed === 1 ? 'a copy' : 'copies'})`;
   const skipped = result.skipped.length === 0 ? '' : `; ${result.skipped.length} ${result.skipped.length === 1 ? 'file' : 'files'} couldn't be read`;
   return `Restored ${diagrams}${renamed}${skipped}.`;
-}
-
-/** Whether the last backup is missing or older than `days` — what the Library's nudge asks. */
-export function backupIsStale(lastBackupAt: string | null, now = Date.now(), days = 7): boolean {
-  if (!lastBackupAt) return true;
-  const at = Date.parse(lastBackupAt);
-  if (Number.isNaN(at)) return true;
-  return now - at > days * 24 * 60 * 60 * 1000;
 }

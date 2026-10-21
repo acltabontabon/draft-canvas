@@ -11,7 +11,7 @@ import {
   updateNode,
 } from '../src/document/operations';
 import { createFlow, explainEdgeTier, stepIndexOf } from '../src/document/flow';
-import { evaluateAttachCandidates, deepestBoundaryAt } from '../src/canvas/dragTargets';
+import { evaluateAttachCandidates } from '../src/canvas/dragTargets';
 import { clearPathCache, distanceToPath } from '../src/edges/nearest';
 import { obstaclesForEdge, withoutNodes } from '../src/edges/obstacles';
 import { isEdgeFocused } from '../src/store/editorStore';
@@ -217,7 +217,6 @@ describe(`a document with ${NODE_COUNT} nodes and ~${EDGE_COUNT} edges`, () => {
       // than its own rectangle. Same code path, so it shares this budget rather than getting a
       // performance test of its own.
       evaluateAttachCandidates({ ...point, width: 0, height: 0 }, 'note', doc, exclude);
-      deepestBoundaryAt(point, doc, exclude);
     }
     // A generous budget: this exists to catch an accidental quadratic scan
     // per candidate, not to police milliseconds on a variable CI machine.
@@ -490,7 +489,7 @@ describe(`a document with ${NODE_COUNT} nodes and ~${EDGE_COUNT} edges`, () => {
 
 /**
  * Evidence-gathering, not a fix: a prior hardening pass flagged
- * `evaluateAttachCandidates`/`deepestBoundaryAt` (`src/canvas/dragTargets.ts`)
+ * `evaluateAttachCandidates` (`src/canvas/dragTargets.ts`)
  * as an unindexed O(n) scan per pointer-move frame, tested only at the
  * `NODE_COUNT` (100) above — a 50x gap against `LIMITS.maxNodes` (5,000).
  * This runs the exact same hit-testing loop at that real ceiling and asserts
@@ -515,7 +514,6 @@ describe('drag hit-testing at the schema node/edge ceiling', () => {
     for (let frame = 0; frame < 60; frame += 1) {
       const point = { x: draggedRect.x + frame, y: draggedRect.y };
       evaluateAttachCandidates({ ...draggedRect, x: point.x }, dragged.type, ceilingDoc, exclude);
-      deepestBoundaryAt(point, ceilingDoc, exclude);
     }
     // 50x the fixture size the equivalent budget above uses (500ms) — generous
     // in the same spirit: this exists to catch an accidental quadratic scan,

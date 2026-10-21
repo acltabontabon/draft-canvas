@@ -408,14 +408,17 @@ async fn serve<R, W>(
                 let Ok(Some(frame)) = frame else { break };
                 match frame.get("type").and_then(Value::as_str) {
                     Some("call") => {
-                        let id = frame.get("id").and_then(Value::as_u64).unwrap_or(0);
+                        let id = frame.get("id").and_then(Value::as_u64);
                         let tool = frame.get("tool").and_then(Value::as_str).unwrap_or("").to_string();
                         let args = frame.get("args").cloned().unwrap_or(Value::Null);
-                        if crate::util::lock(&calls).len() >= MAX_CONCURRENT_CALLS {
-                            let error = broker::ToolError::new("BUSY", "Too many requests at once on this connection.").retryable();
-                            let _ = out_tx.send(json!({"type": "result", "id": id, "ok": false, "error": error.to_value()})).await;
-                            continue;
-                        }
+                        let admitted = admit(&crate::util::lock(&calls), id);
+                        let id = match admitted {
+                            Ok(id) => id,
+                            Err(error) => {
+                                let _ = out_tx.send(json!({"type": "result", "id": id.unwrap_or(0), "ok": false, "error": error.to_value()})).await;
+                                continue;
+                            }
+                        };
                         let registry = Arc::new(CallRegistry::new(session.clone()).with_progress(out_tx.clone(), id));
                         crate::util::lock(&calls).insert(id, registry.clone());
                         let (agent, out_tx, calls) = (agent.clone(), out_tx.clone(), calls.clone());
@@ -461,6 +464,31 @@ async fn serve<R, W>(
     drop(out_tx);
     let _ = writer.await;
     agent.connection_closed();
+}
+
+/// Why a call can't start on this connection, if it can't. An id already in flight would replace that
+/// call's entry, slipping past the cap and sending a cancel for either to the wrong one.
+fn admit<T>(calls: &HashMap<u64, T>, id: Option<u64>) -> Result<u64, broker::ToolError> {
+    let Some(id) = id else {
+        return Err(broker::ToolError::new(
+            "INVALID_INPUT",
+            "A request needs a numeric id.",
+        ));
+    };
+    if calls.contains_key(&id) {
+        return Err(broker::ToolError::new(
+            "INVALID_INPUT",
+            "A request with this id is already running on this connection.",
+        ));
+    }
+    if calls.len() >= MAX_CONCURRENT_CALLS {
+        return Err(broker::ToolError::new(
+            "BUSY",
+            "Too many requests at once on this connection.",
+        )
+        .retryable());
+    }
+    Ok(id)
 }
 
 async fn send<W: AsyncWrite + Unpin>(write: &mut W, frame: &Value) -> std::io::Result<()> {
@@ -515,6 +543,23 @@ mod tests {
         assert!(same_secret("abc", "abc"));
         assert!(!same_secret("abc", "abd"));
         assert!(!same_secret("abc", "ab"));
+    }
+
+    #[test]
+    fn a_call_needs_an_id_not_already_running_and_room_under_the_cap() {
+        let mut calls: HashMap<u64, ()> = HashMap::new();
+        assert_eq!(admit(&calls, Some(1)), Ok(1));
+        assert_eq!(admit(&calls, None).unwrap_err().code, "INVALID_INPUT");
+        calls.insert(1, ());
+        assert_eq!(
+            admit(&calls, Some(1)).unwrap_err().code,
+            "INVALID_INPUT",
+            "a duplicate would replace the running call"
+        );
+        for id in 2..=MAX_CONCURRENT_CALLS as u64 {
+            calls.insert(id, ());
+        }
+        assert_eq!(admit(&calls, Some(99)).unwrap_err().code, "BUSY");
     }
 
     #[tokio::test]

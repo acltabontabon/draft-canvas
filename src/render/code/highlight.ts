@@ -76,8 +76,9 @@ const MAX_HIGHLIGHT_LINES = 2000;
 
 /** Keyed by the code itself: a key of its length and a 32-bit hash let two different snippets of
  *  the same length collide, and a card then drew the other snippet's lines. The string is the one the
- *  document already holds, so the key costs no copy. */
-const cache = new Lru<string, { language: CodeLanguage; lines: CodeLine[] }>(200);
+ *  document already holds, so the key costs no copy. Past 200 distinct snippets every pass
+ *  re-tokenized them all, so it holds as many as a large diagram realistically carries. */
+const cache = new Lru<string, { language: CodeLanguage; lines: CodeLine[] }>(1000);
 
 export function tokenizeCode(code: string, language: CodeLanguage): CodeLine[] {
   const cached = cache.get(code);

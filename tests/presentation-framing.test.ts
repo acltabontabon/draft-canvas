@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   captionCornerFor,
   composeStep,
+  frameManualStep,
   frameOverview,
   frameStep,
   OVERVIEW_MAX_ZOOM,
@@ -131,5 +132,46 @@ describe('captionCornerFor', () => {
   it('settles for the least covered corner when every corner is under the interaction', () => {
     const everywhere = { x: -100, y: -100, width: 1400, height: 1000 };
     expect(captionCornerFor(everywhere, view, insets, size)).toBe('bottom-left');
+  });
+});
+
+describe('frameManualStep', () => {
+  it('leaves a zoomed-out camera alone while the step is still on screen', () => {
+    // The bug: below READABLE_ZOOM, frameStep recomposes anything — a presenter who zoomed out to
+    // 0.6 pressed → and the camera snapped back.
+    const camera = { x: 0, y: 0, zoom: 0.6 };
+    const box = { x: 200, y: 150, width: 400, height: 200 };
+    expect(frameStep(box, camera, view, insets).kind).not.toBe('stay');
+    expect(frameManualStep(box, camera, view, insets)).toEqual({ camera, kind: 'stay' });
+  });
+
+  it('leaves a step near the edge, or partly off it, where the presenter put it', () => {
+    const camera = { x: 0, y: 0, zoom: 1 };
+    const partlyOff = { x: 1100, y: 300, width: 400, height: 100 };
+    expect(frameStep(partlyOff, camera, view, insets).kind).not.toBe('stay');
+    expect(frameManualStep(partlyOff, camera, view, insets).kind).toBe('stay');
+    // Under the control strip still counts as on screen.
+    const underStrip = { x: 200, y: 720, width: 200, height: 60 };
+    expect(frameManualStep(underStrip, camera, view, insets).kind).toBe('stay');
+  });
+
+  it('moves only for a step that has left the view entirely, as frameStep would', () => {
+    const camera = { x: 0, y: 0, zoom: 0.6 };
+    for (const box of [
+      { x: 2100, y: 300, width: 200, height: 100 }, // right of the view (screen x 1260)
+      { x: -600, y: 300, width: 200, height: 100 }, // left (ends at screen x −240)
+      { x: 200, y: -400, width: 200, height: 100 }, // above
+      { x: 200, y: 1400, width: 200, height: 100 }, // below (screen y 840)
+    ]) {
+      const frame = frameManualStep(box, camera, view, insets);
+      expect(frame).toEqual(frameStep(box, camera, view, insets));
+      expect(frame.kind).not.toBe('stay');
+    }
+  });
+
+  it('treats a step exactly touching the edge as gone — no pixel of it shows', () => {
+    const camera = { x: 0, y: 0, zoom: 1 };
+    expect(frameManualStep({ x: 1200, y: 300, width: 100, height: 100 }, camera, view, insets).kind).not.toBe('stay');
+    expect(frameManualStep({ x: 1199, y: 300, width: 100, height: 100 }, camera, view, insets).kind).toBe('stay');
   });
 });

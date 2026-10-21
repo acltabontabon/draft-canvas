@@ -5,6 +5,7 @@
 use crate::errors::{AppError, Subject, Verb};
 use crate::paths::{doc_stem, has_doc_ext};
 use serde::Serialize;
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, UNIX_EPOCH};
@@ -12,7 +13,7 @@ use std::time::{Duration, Instant, UNIX_EPOCH};
 /// Directories that are never worth walking: dependencies and build output would swamp the list and
 /// spend the scan's budget on files that are not diagrams.
 /// (Hidden folders — `.git`, `.venv` — are skipped separately, by their leading dot.)
-const SKIPPED_DIRS: [&str; 11] = [
+pub(crate) const SKIPPED_DIRS: [&str; 11] = [
     "node_modules",
     "target",
     "dist",
@@ -71,7 +72,7 @@ pub struct Scan {
 pub fn scan(root: &Path, limits: &Limits) -> Result<Scan, AppError> {
     let started = Instant::now();
     let mut files = Vec::new();
-    let mut truncated_dirs: Vec<String> = Vec::new();
+    let mut truncated_dirs = Truncated::default();
     let mut visited = 0usize;
     let mut pending = vec![(root.to_path_buf(), String::new(), 0usize)];
 
@@ -113,11 +114,11 @@ pub fn scan(root: &Path, limits: &Limits) -> Result<Scan, AppError> {
                 format!("{rel}/{name}")
             };
             if kind.is_dir() {
-                if SKIPPED_DIRS.iter().any(|s| s.eq_ignore_ascii_case(name)) {
+                if is_skipped_dir(name) {
                     continue;
                 }
                 if depth >= limits.max_depth {
-                    mark_truncated(&mut truncated_dirs, &child_rel);
+                    truncated_dirs.mark(&child_rel);
                     continue;
                 }
                 pending.push((entry.path(), child_rel, depth + 1));
@@ -150,30 +151,46 @@ pub fn scan(root: &Path, limits: &Limits) -> Result<Scan, AppError> {
     });
     Ok(Scan {
         files,
-        truncated_dirs,
+        truncated_dirs: truncated_dirs.order,
     })
+}
+
+/// A dependency or build folder, never walked (and never worth waking Home for when one comes or goes).
+pub(crate) fn is_skipped_dir(name: &str) -> bool {
+    SKIPPED_DIRS.iter().any(|s| s.eq_ignore_ascii_case(name))
+}
+
+/// Truncated folders in the order they were found, each once. The set keeps marking cheap: a cut-off
+/// walks every pending folder up to the root, and checking the list alone made that quadratic.
+#[derive(Default)]
+struct Truncated {
+    order: Vec<String>,
+    seen: HashSet<String>,
+}
+
+impl Truncated {
+    fn mark(&mut self, rel: &str) {
+        if !self.seen.contains(rel) {
+            self.seen.insert(rel.to_string());
+            self.order.push(rel.to_string());
+        }
+    }
 }
 
 /// The walk stopped inside `rel`: that folder, every folder still waiting to be read, and all of their
 /// parents (the root is `""`) are incomplete. Marking only the folder it stopped in left the root
 /// looking complete, so the browser showed no warning where most of the project was missing.
-fn mark_cut_off(truncated_dirs: &mut Vec<String>, rel: &str, pending: &[(PathBuf, String, usize)]) {
+fn mark_cut_off(truncated_dirs: &mut Truncated, rel: &str, pending: &[(PathBuf, String, usize)]) {
     for rel in std::iter::once(rel).chain(pending.iter().map(|(_, rel, _)| rel.as_str())) {
         let mut at = rel;
         loop {
-            mark_truncated(truncated_dirs, at);
+            truncated_dirs.mark(at);
             match at.rfind('/') {
                 Some(slash) => at = &at[..slash],
                 None if !at.is_empty() => at = "",
                 None => break,
             }
         }
-    }
-}
-
-fn mark_truncated(truncated_dirs: &mut Vec<String>, rel: &str) {
-    if !truncated_dirs.iter().any(|d| d == rel) {
-        truncated_dirs.push(rel.to_string());
     }
 }
 
@@ -407,6 +424,22 @@ mod tests {
         );
         // Whichever folders were still waiting are named, not just the one it stopped in.
         assert!(marked.len() >= 3, "{marked:?}");
+    }
+
+    #[test]
+    fn a_cut_off_names_each_folder_once_in_the_order_it_was_found() {
+        let mut marked = Truncated::default();
+        marked.mark("x/deep");
+        let pending: Vec<(PathBuf, String, usize)> = ["a/b", "a", "a/c", "x/deep"]
+            .into_iter()
+            .map(|rel| (PathBuf::new(), rel.to_string(), 0))
+            .collect();
+        mark_cut_off(&mut marked, "a/b/c", &pending);
+        assert_eq!(
+            marked.order,
+            ["x/deep", "a/b/c", "a/b", "a", "", "a/c", "x"]
+        );
+        assert_eq!(marked.seen.len(), marked.order.len());
     }
 
     #[test]

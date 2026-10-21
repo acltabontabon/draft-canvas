@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { commandsFor, primaryCommandsFor } from '../src/commands/registry';
+import { commandsFor, isReadSafe, primaryCommandsFor, readSafeMenu } from '../src/commands/registry';
+import { contextMenuCommandsFor, menuItemsOf } from '../src/commands/contextMenu';
+import { isStage } from '../src/commands/types';
 import { rank } from '../src/commands/fuzzy';
 import { STARTER_IDS } from '../src/starters';
 import type { CommandContext } from '../src/commands/types';
@@ -205,6 +207,79 @@ describe('commandsFor — present mode is navigation only', () => {
     expect(list).toEqual(expect.arrayContaining(['step-next', 'step-previous', 'step-go-to', 'fit', 'present-exit']));
     commandsFor(ctx).find((command) => command.id === 'step-next')!.run(ctx);
     expect(playback.next).toHaveBeenCalledOnce();
+  });
+});
+
+describe('commandsFor — a shared (read-only) diagram offers nothing that edits', () => {
+  beforeEach(reset);
+
+  const shared = () => stubContext({ ui: { ...useUiStore.getState(), readOnly: { sharedTitle: 'Shared' } } });
+  // Every family of edit the editable lists hold, so a command slipping past the allowlist shows.
+  const MUTATING = /^(add-|attach-|starter-|try-example|delete|duplicate|cut|paste|undo|redo|group|ungroup|align|distribute|connect|edit-text|text-|bring-|send-|edge-|flow-(new|trace|start)|open-point-add|view-level|arrange|tidy|find-replace|fit-shapes|accept-continuation|remove-dead)/;
+
+  function seed() {
+    const state = useEditorStore.getState();
+    const api = state.addNode({ type: 'service', x: 0, y: 0, text: 'API' });
+    const db = state.addNode({ type: 'database', x: 300, y: 0, text: 'Ledger' });
+    const edge = state.connect(api.id, db.id)!;
+    state.createFlow('Checkout');
+    return { api, db, edge };
+  }
+
+  it('lists only read-safe commands — with nothing, one shape, one connector or several selected', () => {
+    const { api, db, edge } = seed();
+    for (const selection of [
+      { nodes: [], edges: [] },
+      { nodes: [api.id], edges: [] },
+      { nodes: [], edges: [edge.id] },
+      { nodes: [api.id, db.id], edges: [edge.id] },
+    ]) {
+      useEditorStore.getState().setSelection(selection);
+      const list = ids(shared());
+      expect(list.filter((id) => MUTATING.test(id))).toEqual([]);
+      expect(list.every((id) => isReadSafe({ id }))).toBe(true);
+      expect(list).toEqual(expect.arrayContaining(['fit', 'present', 'export', 'copy-image', 'settings', 'outline']));
+    }
+  });
+
+  it('keeps the editable list whole outside a shared diagram', () => {
+    seed();
+    expect(ids(stubContext())).toEqual(expect.arrayContaining(['add-service', 'flow-new', 'paste', 'arrange']));
+  });
+
+  it('a right-click menu keeps only read-safe rows, with no "Add here" grid and no stray separators', () => {
+    const { api, edge } = seed();
+    useEditorStore.getState().setSelection({ nodes: [api.id], edges: [] });
+    const ctx = shared();
+    for (const target of [{ kind: 'pane' }, { kind: 'node', id: api.id }, { kind: 'edge', id: edge.id }] as const) {
+      const menu = readSafeMenu(contextMenuCommandsFor(ctx, target, { x: 0, y: 0 }));
+      expect(menuItemsOf(menu).every((item) => isReadSafe(item.command))).toBe(true);
+      expect(menu.some((entry) => entry.type === 'grid')).toBe(false);
+      const withoutHeader = menu.filter((entry) => entry.type !== 'header');
+      expect(withoutHeader[0]?.type).not.toBe('separator');
+      expect(withoutHeader.at(-1)?.type).not.toBe('separator');
+      expect(menu.some((entry, index) => entry.type === 'separator' && menu[index + 1]?.type === 'separator')).toBe(false);
+    }
+    const pane = menuItemsOf(readSafeMenu(contextMenuCommandsFor(ctx, { kind: 'pane' }, { x: 0, y: 0 })));
+    expect(pane.map((item) => item.command.id)).toEqual(['select-all', 'fit']);
+  });
+});
+
+describe('Connect to… → New …', () => {
+  beforeEach(reset);
+
+  it('creates nothing when the source was deleted after the picker opened', () => {
+    const state = useEditorStore.getState();
+    const api = state.addNode({ type: 'service', x: 0, y: 0, text: 'API' });
+    state.setSelection({ nodes: [api.id], edges: [] });
+    const ctx = stubContext();
+    const stage = commandsFor(ctx).find((command) => command.id === 'connect-to')!.run(ctx);
+    if (!isStage(stage)) throw new Error('Connect to… should open a picker');
+    const fresh = stage.options.find((option) => option.id.startsWith('connect-new:'))!;
+    // Gone before the option runs: the selection still names it, so Delete takes it.
+    useEditorStore.getState().deleteSelection();
+    fresh.run(stubContext());
+    expect(useEditorStore.getState().document.nodes).toHaveLength(0);
   });
 });
 
