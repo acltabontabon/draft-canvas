@@ -5,8 +5,8 @@ export default defineConfig({
   // `offline.spec.ts` runs only against `dist/` via `playwright.dist.config.ts` (`npm run e2e:offline`) —
   // `vite dev` never registers the Service Worker it depends on, so it hangs here instead of failing fast.
   // `desktop/` needs the desktop build and a faked shell: `playwright.desktop.config.ts` (`npm run e2e:desktop`).
-  // `web-deploy.spec.ts` is about the assembled artifact served under /draft-canvas/, which is the
-  // one thing this config cannot produce: it serves the app alone, at the root, from `vite dev`.
+  // `web-deploy.spec.ts` is about the assembled artifact — site, editor and old address, each served
+  // as it is hosted — which this config cannot produce: it serves the app alone, from `vite dev`.
   // `playwright.web.config.ts` (`npm run e2e:web`).
   testIgnore: ['offline.spec.ts', 'web-deploy.spec.ts', '**/e2e/desktop/**'],
   // A cold `vite dev` compiles the editor chunk on the first test's clock — see `e2e/warm.ts`.

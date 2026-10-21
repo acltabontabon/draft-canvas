@@ -139,9 +139,7 @@ function documentation() {
 }
 
 // `base` stays relative so one build works wherever it is served from: at http://localhost:4174/
-// while it is being written, and at https://acltabontabon.com/draft-canvas/ once GitHub Pages has
-// it. The apex belongs to the acltabontabon.github.io repository and cascades to every project
-// site, so the /draft-canvas/ prefix comes from the repository name and is never written down here.
+// while it is being written, and at https://draftcanvas.dev/ once it is deployed.
 export default defineConfig({
   base: './',
   define: { __APP_VERSION__: JSON.stringify(appVersion) },

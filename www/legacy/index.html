@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'none'; font-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'self'; object-src 'none'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Draft Canvas has moved — draftcanvas.dev</title>
+    <meta
+      name="description"
+      content="Draft Canvas now lives at draftcanvas.dev, with the editor at app.draftcanvas.dev. Diagrams drawn at this old address can be brought along in one click."
+    />
+    <link rel="canonical" href="https://draftcanvas.dev/" />
+    <meta name="robots" content="noindex, follow" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0f1012" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2314161a'/%3E%3Crect x='6' y='8' width='11' height='7' rx='2' fill='none' stroke='%235fd6c9' stroke-width='2'/%3E%3Crect x='15' y='18' width='11' height='7' rx='2' fill='none' stroke='%236b7280' stroke-width='2'/%3E%3Cpath d='M11.5 15.5v3.5h4' fill='none' stroke='%235fd6c9' stroke-width='1.6'/%3E%3C/svg%3E" />
+
+    <link rel="stylesheet" href="./moved.css" />
+  </head>
+
+  <!--
+    The old front door: https://acltabontabon.com/draft-canvas/
+
+    Draft Canvas moved to its own domain. This page stays behind for two reasons. Old links should
+    land somewhere that says where things went (404.html forwards every other old path to the same
+    page on draftcanvas.dev). And diagrams drawn in the editor at ./editor/ live in this origin's
+    browser storage, which the new address cannot read — so the editor stays here too, and offers
+    to hand them across. Static on purpose: no build, nothing shared with the site, so it keeps
+    working for as long as it needs to.
+  -->
+  <body>
+    <main class="sheet">
+      <p class="overline">Change of address</p>
+      <h1>Draft Canvas has moved <em>house.</em></h1>
+      <p class="lead">
+        Same canvas, same promise &mdash; nothing you draw leaves your device. It just lives somewhere
+        easier to find now.
+      </p>
+
+      <figure class="moving" role="img" aria-labelledby="moving-caption">
+        <svg viewBox="0 0 720 250" aria-hidden="true" focusable="false">
+          <g class="old">
+            <path pathLength="1" d="M44 122L122 58L201 121M48 118L123 61L198 124" />
+            <path pathLength="1" d="M60 114V212H186V114M58 116L61 213M184 117L187 211" />
+            <path pathLength="1" d="M110 212V168H136V212" />
+            <path pathLength="1" d="M76 134H100V156H76ZM146 134H170V156H146Z" />
+            <path pathLength="1" d="M28 212Q120 208 214 213" />
+          </g>
+          <g class="sign">
+            <path d="M226 212V150" />
+            <path d="M206 128H262V154H206Z" />
+            <text x="234" y="145" text-anchor="middle">MOVED</text>
+          </g>
+          <text class="addr old-addr" x="122" y="238" text-anchor="middle">acltabontabon.com/draft-canvas</text>
+
+          <path class="route" d="M228 196C312 246 430 246 516 196" />
+          <path class="route-head" d="M505 194L517 196L511 207" />
+
+          <g class="box">
+            <path d="M326 176H394V226H326Z" />
+            <path d="M326 176L338 162H406L394 176M394 176L406 162V212L394 226" />
+            <path class="tape" d="M360 176V191M350 162L372 176" />
+            <path class="mini" d="M336 196H352V206H336ZM368 196H384V206H368ZM352 201H368" />
+          </g>
+
+          <g class="new">
+            <path pathLength="1" d="M520 121L601 54L682 121Z" />
+            <path pathLength="1" d="M650 82V60H664V94" />
+            <path pathLength="1" d="M536 114H666V212H536Z" />
+            <path pathLength="1" d="M590 212V170H612V212" />
+            <path pathLength="1" d="M551 132H579V156H551ZM623 132H651V156H623Z" />
+            <path pathLength="1" d="M565 144H637" />
+            <path pathLength="1" d="M508 212H694" />
+          </g>
+          <text class="addr new-addr" x="601" y="238" text-anchor="middle">draftcanvas.dev</text>
+        </svg>
+        <figcaption class="visually-hidden" id="moving-caption">
+          A pencilled house marked “moved” at the old address, a moving box with a small diagram on it
+          travelling along a dashed path, and a house drawn in ink at draftcanvas.dev.
+        </figcaption>
+      </figure>
+
+      <div class="label" aria-labelledby="label-title">
+        <p class="overline" id="label-title">Forwarding address</p>
+        <dl>
+          <div>
+            <dt><a href="https://draftcanvas.dev/">draftcanvas.dev</a></dt>
+            <dd>The site and the docs</dd>
+          </div>
+          <div>
+            <dt><a href="https://app.draftcanvas.dev/">app.draftcanvas.dev</a></dt>
+            <dd>The editor, at a door of its own</dd>
+          </div>
+        </dl>
+      </div>
+
+      <div class="actions">
+        <a class="button button-primary" href="https://draftcanvas.dev/">Go to draftcanvas.dev</a>
+        <a class="button" href="https://app.draftcanvas.dev/">Open the editor</a>
+      </div>
+
+      <section class="yours" id="yours" aria-labelledby="yours-title">
+        <h2 id="yours-title">Drew something here before?</h2>
+        <p>
+          Your diagrams are still in this browser, at this old address &mdash; browsers keep saved work
+          per address, so the new one can&rsquo;t see it yet. Open them here and press
+          <strong>Bring my diagrams</strong>: they move straight from this tab to the new editor.
+          Nothing is uploaded.
+        </p>
+        <a class="button" href="./editor/">Open my diagrams here</a>
+      </section>
+
+      <p class="fine">Old links still work &mdash; they forward to the same page on draftcanvas.dev.</p>
+    </main>
+
+    <script type="module" src="./moved.js"></script>
+  </body>
+</html>

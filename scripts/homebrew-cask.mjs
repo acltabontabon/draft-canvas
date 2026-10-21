@@ -49,7 +49,7 @@ export function buildCask({ version, armSha256, intelSha256 }) {
   url "https://github.com/acltabontabon/draft-canvas/releases/download/v#{version}/Draft-Canvas_#{version}_macOS_#{arch}.dmg"
   name "Draft Canvas"
   desc "Draw software architecture and explain how it works"
-  homepage "https://acltabontabon.com/draft-canvas/"
+  homepage "https://draftcanvas.dev/"
 
   livecheck do
     url :url

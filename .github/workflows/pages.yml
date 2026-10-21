@@ -1,14 +1,23 @@
-name: Deploy to Pages
+name: Deploy the web
 
-# Publishes one artifact holding both halves of the web deploy:
+# Publishes one verified artifact (scripts/assemble-web.mjs) to two hosts:
 #
-#   https://acltabontabon.com/draft-canvas/         the landing page (www/)
-#   https://acltabontabon.com/draft-canvas/editor/  the editor (the same dist/ as always)
+#   Cloudflare    https://draftcanvas.dev/         the landing page and docs (dist-web/site)
+#                 https://app.draftcanvas.dev/     the editor (dist-web/app — the same dist/ as always)
+#                 https://www.draftcanvas.dev/     a redirect to the apex
+#   GitHub Pages  https://acltabontabon.com/draft-canvas/   the old front door (dist-web/legacy): a
+#                 moved-house page, old links forwarded, and the editor kept at /editor/ so diagrams
+#                 saved at that origin can be handed to the new one.
 #
-# The apex belongs to the acltabontabon.github.io repository and GitHub applies a user site's
-# custom domain to every project site of the same account — so this repository needs no CNAME file
-# and no custom-domain setting of its own, and the /draft-canvas/ prefix comes from the repository
-# name. Adding a CNAME here would try to claim the apex from the root site.
+# Cloudflare deploys first and Pages only after it succeeds, so the old address never points at a
+# new home that is not up yet. Wrangler creates the custom domains' DNS records itself; it needs the
+# CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets (see docs/reference/website.md).
+#
+# The old address: acltabontabon.com belongs to the acltabontabon.github.io repository and GitHub
+# applies a user site's custom domain to every project site of the same account — so this repository
+# needs no CNAME file, and the /draft-canvas/ prefix comes from the repository name. Giving this
+# repository a custom domain of its own would make GitHub redirect the old address away, and with it
+# the only editor that can still read diagrams saved there.
 #
 # Releases call this only after verification and desktop acceptance. This is the only workflow that deploys. pages-site.yml calls it rather than building its own
 # copy, so there is exactly one definition of what gets published. On a release tag both halves
@@ -158,7 +167,7 @@ jobs:
           CONTROL_COMMIT: ${{ github.sha }}
         run: |
           git fetch --no-tags --depth=1 origin "$CONTROL_COMMIT"
-          git checkout FETCH_HEAD -- playwright.dist.config.ts playwright.web.config.ts
+          git checkout FETCH_HEAD -- playwright.dist.config.ts playwright.web.config.ts e2e/web-deploy.spec.ts scripts/stage-subpath.mjs scripts/serve-web.mjs
       - run: npm ci
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
@@ -175,10 +184,44 @@ jobs:
             playwright-report-offline/
             playwright-report-web/
 
-  deploy:
+  cloudflare:
     needs: [build, acceptance]
     # A release caller already completed CI. Site-only builds must pass every browser shard.
     if: ${{ !cancelled() && (inputs.artifact-name != '' || (needs.build.result == 'success' && needs.acceptance.result == 'success')) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    environment:
+      name: cloudflare
+      url: https://draftcanvas.dev/
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: ${{ inputs.artifact-name || format('verified-site-{0}', github.run_id) }}
+      - run: tar -xf verified-web.tar
+      - name: The artifact belongs to the verified source
+        env:
+          EXPECTED_COMMIT: ${{ inputs.verified-commit || github.sha }}
+        run: node -e 'const source=require("./verified-source.json"); if(source.commit !== process.env.EXPECTED_COMMIT) throw new Error("Artifact source does not match verification")'
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 22.14.0
+      # The editor first, so the site never links to an editor that is not there yet; the www.
+      # redirect last. Each config names its custom domain, and Wrangler creates its DNS record.
+      - name: Deploy app.draftcanvas.dev, draftcanvas.dev and www.
+        working-directory: dist-web/cloudflare
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          for config in app site www; do
+            npx --yes wrangler@4.149.0 deploy --config "$config.jsonc"
+          done
+
+  deploy:
+    needs: [build, acceptance, cloudflare]
+    # Only once the new home is up: this replaces the old address with the moved-house page.
+    if: ${{ !cancelled() && needs.cloudflare.result == 'success' }}
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -195,6 +238,6 @@ jobs:
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
         with:
-          path: dist-web/
+          path: dist-web/legacy/
       - id: deploy
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5

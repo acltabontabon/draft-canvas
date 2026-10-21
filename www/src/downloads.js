@@ -49,10 +49,10 @@ export function setUpDownloads() {
   row.querySelector('a')?.setAttribute('aria-current', 'true');
   list.prepend(row);
 
-  // The downloads fold away behind one button, so say on the button which one it is about to open
-  // — "Download desktop" alone would make a Mac visitor open it just to find out. The hero's button
-  // says the same, since it leads here. Only ever the platform, never the architecture: the guess
-  // above is not good enough to name that, which is the whole reason both Macs stay listed inside.
+  // The downloads wait behind the hero's button, so say on it which one it is about to offer —
+  // "Download desktop" alone would make a Mac visitor open the sheet just to find out. Only ever the
+  // platform, never the architecture: the guess above is not good enough to name that, which is the
+  // whole reason both Macs stay listed inside.
   const platform = row.querySelector('strong')?.textContent?.trim();
   if (!platform) return;
   for (const label of document.querySelectorAll('.downloads-label')) label.textContent = `Download for ${platform}`;

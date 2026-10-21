@@ -1,17 +1,21 @@
 #!/usr/bin/env node
 /*
- * Puts the two web builds together into the one thing GitHub Pages publishes.
+ * Puts the web builds together into the one artifact the deploy publishes, three sites in it:
  *
- *   dist-web/          the marketing site  ->  https://acltabontabon.com/draft-canvas/
- *   dist-web/editor/   the app             ->  https://acltabontabon.com/draft-canvas/editor/
+ *   dist-web/site/        the marketing site and docs  ->  https://draftcanvas.dev/         (Cloudflare)
+ *   dist-web/app/         the editor                   ->  https://app.draftcanvas.dev/     (Cloudflare)
+ *   dist-web/legacy/      the old front door           ->  https://acltabontabon.com/draft-canvas/  (GitHub Pages)
+ *   dist-web/cloudflare/  the Wrangler configs that deploy site/ and app/ (and the www. redirect)
  *
- * The app is copied in unchanged. It builds with `base: './'` and registers its service worker
- * relatively, so being served a directory deeper is all the relocation it needs: no rebuild, no
- * base-path flag, and dist/ stays exactly what static self-hosting, the offline e2e suite and
- * `vite preview` already consume.
+ * The editor is copied in unchanged, twice: once as the app, and once under legacy/editor/, because
+ * diagrams drawn at the old address live in that origin's browser storage and only an editor served
+ * there can read them — and hand them to the new one (src/storage/handoff.ts). It builds with
+ * `base: './'` and registers its service worker relatively, so where it is served is all the
+ * relocation it needs: no rebuild, no base-path flag, and dist/ stays exactly what static
+ * self-hosting, the offline e2e suite and `vite preview` already consume.
  *
- * Run through `npm run build:web`, which builds both halves first. Assembling is kept separate from
- * building so that a failure here is obviously an assembly failure.
+ * Run through `npm run build:web`, which builds the editor and the site first. Assembling is kept
+ * separate from building so that a failure here is obviously an assembly failure.
  */
 
 import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
@@ -21,6 +25,8 @@ import { fileURLToPath } from 'node:url';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const editorBuild = join(root, 'dist');
 const siteBuild = join(root, 'www', 'dist');
+const legacySource = join(root, 'www', 'legacy');
+const cloudflareSource = join(root, 'www', 'cloudflare');
 const out = join(root, 'dist-web');
 
 function insist(condition, message) {
@@ -36,32 +42,51 @@ insist(existsSync(join(siteBuild, 'index.html')), 'www/dist/index.html is missin
 rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
 
-// The site first, then the app underneath it. In this order an app file can never quietly land on
-// top of a marketing file of the same name — and `editor/` is a directory the site does not have.
-cpSync(siteBuild, out, { recursive: true });
-insist(!existsSync(join(out, 'editor')), 'the marketing build already contains an editor/ entry.');
-cpSync(editorBuild, join(out, 'editor'), { recursive: true });
+cpSync(siteBuild, join(out, 'site'), { recursive: true });
+cpSync(editorBuild, join(out, 'app'), { recursive: true });
+// Only the hosted editor gets these headers; dist/ itself stays free of host-specific files.
+cpSync(join(cloudflareSource, 'app.headers'), join(out, 'app', '_headers'));
 
-// What the deploy has to contain to work at all. Each of these has been wrong at least once in a
-// dry run, and every one of them fails silently in production rather than loudly in CI.
+// The old front door first, then the editor underneath it. In this order an editor file can never
+// quietly land on top of the page, and `editor/` is a directory the page does not have.
+cpSync(legacySource, join(out, 'legacy'), { recursive: true });
+insist(!existsSync(join(out, 'legacy', 'editor')), 'www/legacy/ already contains an editor/ entry.');
+cpSync(editorBuild, join(out, 'legacy', 'editor'), { recursive: true });
+
+mkdirSync(join(out, 'cloudflare'));
+for (const name of readdirSync(cloudflareSource)) {
+  if (name.endsWith('.jsonc') || name.endsWith('.js')) cpSync(join(cloudflareSource, name), join(out, 'cloudflare', name));
+}
+
+// What each site has to contain to work at all. Every one of these fails silently in production
+// rather than loudly in CI.
 const required = [
-  ['index.html', 'the landing page'],
-  ['editor/index.html', 'the editor entry document'],
-  ['editor/sw.js', "the editor's own service worker, which scopes offline use to /editor/"],
-  ['sw.js', 'the retirement service worker for the old /draft-canvas/ registration'],
-  ['docs/index.html', 'the documentation, which the app\'s Documentation menu opens'],
-  ['docs/getting-started/index.html', 'the first guide, which every other page links to'],
+  ['site/index.html', 'the landing page'],
+  ['site/404.html', 'the page Cloudflare serves for a missing path'],
+  ['site/_redirects', 'the redirect from the old /editor/ layout to app.draftcanvas.dev'],
+  ['site/docs/index.html', "the documentation, which the app's Documentation menu opens"],
+  ['site/docs/getting-started/index.html', 'the first guide, which every other page links to'],
+  ['app/index.html', 'the editor entry document'],
+  ['app/sw.js', "the editor's own service worker"],
+  ['legacy/index.html', 'the moved-house page at the old address'],
+  ['legacy/404.html', 'the page that forwards every other old link to draftcanvas.dev'],
+  ['legacy/forward.js', 'what 404.html runs to forward'],
+  ['legacy/sw.js', 'the retirement worker for the very first /draft-canvas/ registration'],
+  ['legacy/editor/index.html', 'the editor that hands diagrams at the old address to the new one'],
+  ['cloudflare/site.jsonc', 'the deploy config for draftcanvas.dev'],
+  ['cloudflare/app.jsonc', 'the deploy config for app.draftcanvas.dev'],
+  ['cloudflare/www.jsonc', 'the deploy config for the www. redirect'],
 ];
 for (const [path, what] of required) {
   insist(existsSync(join(out, path)), `dist-web/${path} is missing — ${what}.`);
 }
 
-// The retirement worker and the editor's own worker are different files doing opposite jobs; if the
-// copy above ever put the app's worker at the root, every visitor would be handed the old
-// navigation fallback again.
+// The retirement worker belongs to the old address alone; the new site has no old registration to
+// retire, and a worker at its root would be one more thing to explain.
+insist(!existsSync(join(out, 'site', 'sw.js')), 'a service worker reached the site root — the new site has none.');
 insist(
-  !readdirSync(out).includes('workbox-precache'),
-  'a Workbox artefact reached the site root — the editor build leaked out of editor/.',
+  !readdirSync(join(out, 'site')).some((name) => name.startsWith('workbox')),
+  'a Workbox artefact reached the site — the editor build leaked into it.',
 );
 
 function bytes(path) {
@@ -74,5 +99,7 @@ function bytes(path) {
 }
 
 const mb = (n) => `${(n / 1024 / 1024).toFixed(2)} MB`;
-console.log(`assemble-web: dist-web/ ${mb(bytes(out))} — site ${mb(bytes(out) - bytes(join(out, 'editor')))}, editor ${mb(bytes(join(out, 'editor')))}`);
-console.log('assemble-web: preview it at the real subpath with `npm run site:preview`.');
+console.log(
+  `assemble-web: dist-web/ — site ${mb(bytes(join(out, 'site')))}, app ${mb(bytes(join(out, 'app')))}, legacy ${mb(bytes(join(out, 'legacy')))}`,
+);
+console.log('assemble-web: preview all three with `npm run site:preview`.');

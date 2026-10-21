@@ -1,7 +1,7 @@
 /*
  * Draft Canvas — the site.
  *
- * A drafting sheet. The page is vellum with ink on it: warm paper, a near-black ink, graphite for
+ * A drafting sheet. The page is white paper with ink on it: a near-black ink, graphite for
  * what is still a sketch, and the product's own teal doing all the pointing — so the page and the
  * editor are recognisably the same object without the page pretending to be the editor. At night it
  * turns into the same sheet under a lamp: chalk on slate, the teal brightened to the app's dark one.
@@ -17,9 +17,9 @@
  */
 
 :root {
-  --paper: #f4f1ea;
-  --sheet: #fbf9f4;
-  --paper-2: #fbf9f4;
+  --paper: #ffffff;
+  --sheet: #faf9f6;
+  --paper-2: #faf9f6;
   --paper-3: #ffffff;
   --rule: #e2dccf;
   --rule-strong: #cbc3b2;
@@ -52,7 +52,7 @@
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --shadow: 0 30px 60px -34px rgba(48, 38, 20, 0.42), 0 2px 6px -2px rgba(48, 38, 20, 0.08);
   --grain-blend: multiply;
-  --grain-opacity: 0.07;
+  --grain-opacity: 0.035;
 
   color-scheme: light;
 }
@@ -337,8 +337,9 @@ code {
   font-size: 0.9rem;
 }
 
-/* Three short links fit beside the button down to a large phone; below that the page is one column
-   you scroll anyway, and Docs and Download are both in the masthead. */
+/* Two short links fit beside the button down to a large phone; below that the page is one column
+   you scroll anyway, and Docs is in the footer. Download stays out of the masthead: the hero and the
+   closing sheet both offer it. */
 @media (max-width: 600px) {
   .masthead-nav { display: none; }
   .masthead-cta { margin-left: auto; }
@@ -379,80 +380,6 @@ main > * {
   color: var(--accent-ink);
 }
 
-/* ── The moved notice ────────────────────────────────────────────────────────────────────── */
-
-/* `display` in author CSS beats the `hidden` attribute's UA `display: none`, so without this the
-   notice shows to everyone — including someone arriving for the first time, who has no editor to be
-   told has moved. */
-.moved[hidden] {
-  display: none;
-}
-
-.moved {
-  position: relative;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 14px 22px;
-  margin-top: 20px;
-  padding: 14px 52px 14px 20px;
-  background: var(--paper-2);
-  border: 1px solid var(--rule-strong);
-  border-left: 2px solid var(--accent);
-  border-radius: var(--radius);
-}
-
-/* Inset by the page padding: the notice is one of <main>'s children, so it is padded like them. */
-main > .moved {
-  max-width: calc(var(--page) - 2 * var(--pad));
-  margin-inline: max(var(--pad), (100% - var(--page)) / 2 + var(--pad));
-}
-
-.moved-text {
-  flex: 1 1 32ch;
-  margin: 0;
-  font-size: 0.92rem;
-  line-height: 1.55;
-  color: var(--ink-faint);
-}
-
-.moved-text strong {
-  color: var(--ink);
-  font-weight: 600;
-  margin-right: 4px;
-}
-
-.moved code {
-  color: var(--ink-soft);
-}
-
-.moved .button {
-  flex: none;
-  padding: 9px 16px;
-  font-size: 0.9rem;
-}
-
-.moved-dismiss {
-  position: absolute;
-  top: 10px;
-  right: 12px;
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  color: var(--ink-faint);
-  background: none;
-  border: 1px solid transparent;
-  border-radius: 7px;
-  cursor: pointer;
-}
-
-.moved-dismiss:hover {
-  color: var(--ink);
-  border-color: var(--rule-strong);
-}
-
 /* ── Hero ────────────────────────────────────────────────────────────────────────────────── */
 
 .hero {
@@ -481,45 +408,6 @@ main > .moved {
 
 .hero-words {
   max-width: 34rem;
-}
-
-.flag {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: clamp(22px, 4vh, 36px);
-  padding: 5px 12px 5px 5px;
-  font-size: 0.84rem;
-  color: var(--ink-soft);
-  text-decoration: none;
-  background: var(--paper-2);
-  border: 1px solid var(--rule);
-  border-radius: 999px;
-  transition: border-color 0.16s var(--ease), color 0.16s var(--ease);
-}
-
-.flag:hover {
-  color: var(--ink);
-  border-color: var(--accent-line);
-}
-
-.flag-tag {
-  padding: 2px 8px;
-  font-family: var(--mono);
-  font-size: 0.66rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--accent-ink);
-  background: var(--accent-soft);
-  border-radius: 999px;
-}
-
-.flag svg {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.6;
-  stroke-linecap: round;
-  stroke-linejoin: round;
 }
 
 .hero h1 {
@@ -999,264 +887,834 @@ main > .moved {
   color: var(--ink-soft);
 }
 
-/* ── The final sheet ────────────────────────────────────────────────────────────────────── */
+/* ── The brief ──────────────────────────────────────────────────────────────────────────── */
 
+.try {
+  padding-block: clamp(48px, 8vh, 96px) clamp(40px, 6vh, 72px);
+}
+
+.try-head {
+  max-width: 34rem;
+}
+
+.try-head h2 {
+  margin: 12px 0 0;
+  font-family: var(--serif);
+  font-size: clamp(2.3rem, 4.1vw, 3.7rem);
+  font-weight: 400;
+  line-height: 1.02;
+  letter-spacing: -0.035em;
+}
+
+.try-head h2 em {
+  position: relative;
+  color: var(--accent-ink);
+}
+
+/* The same imperfect second stroke as the closing headline. */
+.try-head h2 em::after {
+  content: '';
+  position: absolute;
+  left: -2px;
+  right: 6px;
+  bottom: -10px;
+  height: 12px;
+  border-top: 1px solid var(--accent-line);
+  border-radius: 50%;
+  transform: rotate(-1.5deg);
+}
+
+.try-lead {
+  margin: 28px 0 0;
+  max-width: 36rem;
+  color: var(--ink-soft);
+  font-size: clamp(0.98rem, 1.5vw, 1.1rem);
+  line-height: 1.7;
+}
+
+.try-body {
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  gap: clamp(36px, 5vw, 80px);
+  align-items: center;
+}
+
+.try-steps {
+  margin: clamp(32px, 5vh, 48px) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.try-steps li {
+  display: grid;
+  grid-template-columns: 3.2rem minmax(0, 1fr);
+  gap: 14px;
+  padding: 20px 0 18px;
+  border-top: 1px solid var(--rule);
+}
+
+.try-steps li:last-child {
+  border-bottom: 1px solid var(--rule);
+}
+
+/* A revision bubble: the numeral with a quick pencil ring around it, never quite closed. */
+.try-n {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  margin-top: -4px;
+  font-family: var(--serif);
+  font-size: 1.35rem;
+  font-style: italic;
+  color: var(--accent-ink);
+}
+
+.try-n svg {
+  position: absolute;
+  inset: -3px;
+  width: calc(100% + 6px);
+  height: calc(100% + 6px);
+  fill: none;
+  stroke: var(--accent-line);
+  stroke-width: 1.3;
+  stroke-linecap: round;
+  overflow: visible;
+}
+
+.try-steps h3 {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 1.34rem;
+  font-weight: 400;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+.try-steps p {
+  margin: 6px 0 0;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+
+.try-steps b {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.brief {
+  position: relative;
+  margin: 0;
+  padding: 128px 0 0 0;
+}
+
+/* The finished drawing the brief asks for, on the sheet underneath. */
+.brief-under {
+  position: absolute;
+  top: 0;
+  right: -14px;
+  width: 78%;
+  transform: rotate(2.4deg);
+  transform-origin: 80% 0;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.bu-sheet {
+  fill: var(--sheet);
+  stroke: var(--rule-strong);
+  stroke-width: 1;
+}
+
+.bu-ink {
+  stroke: var(--ink-soft);
+  stroke-width: 1.3;
+}
+
+.bu-bnd {
+  stroke: var(--ink-ghost);
+  stroke-dasharray: 5 4;
+}
+
+.bu-plane {
+  stroke: var(--ink-ghost);
+}
+
+.bu-wire {
+  stroke: var(--accent-ink);
+}
+
+.bu-dash {
+  stroke-dasharray: 4 3;
+}
+
+.bu-step {
+  fill: var(--accent-ink);
+  stroke: none;
+}
+
+.brief-under text {
+  stroke: none;
+  font-family: var(--mono);
+}
+
+.bu-cap {
+  fill: var(--ink-faint);
+  font-size: 8px;
+  letter-spacing: 0.14em;
+}
+
+.brief-under .bu-name {
+  fill: var(--ink-soft);
+  font-family: var(--serif);
+  font-size: 11px;
+  font-style: italic;
+}
+
+.bu-leader {
+  stroke: var(--accent-line);
+  stroke-width: 1;
+}
+
+.brief-under .bu-q {
+  fill: var(--graphite);
+  font-family: var(--serif);
+  font-size: 10.5px;
+  font-style: italic;
+}
+
+.bu-n {
+  fill: var(--on-accent);
+  font-size: 9px;
+}
+
+.bu-ev {
+  fill: var(--accent-ink);
+  font-size: 9.5px;
+}
+
+.brief-card {
+  position: relative;
+  padding: 26px clamp(20px, 3vw, 34px) 0;
+  background: var(--paper-3);
+  border: 1px solid var(--rule-strong);
+  border-radius: 3px;
+  box-shadow: var(--shadow);
+  transform: rotate(-0.7deg);
+}
+
+/* A strip of drafting tape holding the brief to the sheet. */
+.brief-tape {
+  position: absolute;
+  top: -13px;
+  left: 50%;
+  width: 104px;
+  height: 26px;
+  margin-left: -52px;
+  background: color-mix(in srgb, var(--guide) 70%, transparent);
+  border-inline: 1px dashed color-mix(in srgb, var(--rule-strong) 60%, transparent);
+  transform: rotate(-3deg);
+}
+
+.brief-top {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-left: auto;
+  padding: 5px 11px;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+  background: var(--paper);
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color 0.15s var(--ease), border-color 0.15s var(--ease), background 0.15s var(--ease);
+}
+
+.copy[hidden] {
+  display: none;
+}
+
+.copy svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+}
+
+.copy:hover {
+  color: var(--ink);
+  border-color: var(--accent-line);
+}
+
+.copy[data-copied] {
+  color: var(--accent-ink);
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+}
+
+.brief-text {
+  margin: 0;
+  padding: 22px 0 24px;
+  font-family: var(--mono);
+  font-size: clamp(0.8rem, 1.1vw, 0.9rem);
+  line-height: 1.85;
+  color: var(--ink);
+  white-space: pre-line;
+}
+
+/* An editor's marker over the words that matter. The band is a background so it follows the phrase
+   across a line break; it sweeps in from the left, one phrase after another. */
+.brief-text mark {
+  color: inherit;
+  background-color: transparent;
+  background-image: linear-gradient(
+    transparent 55%,
+    color-mix(in srgb, var(--accent) 22%, transparent) 55%,
+    color-mix(in srgb, var(--accent) 22%, transparent) 90%,
+    transparent 90%
+  );
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  border-radius: 2px;
+}
+
+/* A drawing's title block: who drew it, who signs it off. */
+.brief-tb {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0 calc(-1 * clamp(20px, 3vw, 34px));
+  border-top: 1px solid var(--rule-strong);
+}
+
+.brief-tb div {
+  padding: 10px clamp(12px, 2vw, 20px) 12px;
+}
+
+.brief-tb div + div {
+  border-left: 1px solid var(--rule);
+}
+
+.brief-tb dt {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.brief-tb dd {
+  margin: 2px 0 0;
+  font-family: var(--serif);
+  font-size: 1.05rem;
+  font-style: italic;
+  color: var(--ink-soft);
+}
+
+/* Signed, in the house ink. */
+.brief-you {
+  position: relative;
+  width: fit-content;
+  color: var(--accent-ink) !important;
+}
+
+.brief-you::after {
+  content: '';
+  position: absolute;
+  left: -6px;
+  right: -14px;
+  bottom: 1px;
+  height: 7px;
+  border-bottom: 1.3px solid var(--accent-line);
+  border-radius: 0 0 60% 40%;
+  transform: rotate(-4deg);
+}
+
+/* ── The last sheet ─────────────────────────────────────────────────────────────────────── */
+
+/*
+ * A screen of its own, edge to edge: registration marks at the corners, the editor's dot grid
+ * fading out from the middle, and nothing on it but the idea. The masthead is sticky, so the sheet
+ * is a screen tall less the masthead and its margins.
+ */
 .get {
-  padding-block: clamp(64px, 8vw, 112px) 48px;
+  max-width: none;
+  padding-block: clamp(20px, 3vh, 36px) 0;
 }
 
 .get-sheet {
   position: relative;
-  padding-top: 64px;
-  border-top: 1px solid var(--rule);
+  display: grid;
+  place-items: center;
+  min-height: max(560px, calc(100svh - 64px - 2 * clamp(20px, 3vh, 36px)));
+  padding-block: clamp(72px, 12vh, 128px);
+  isolation: isolate;
 }
+
+.get-sheet::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image: radial-gradient(circle, var(--rule-strong) 1px, transparent 1.4px);
+  background-size: 24px 24px;
+  background-position: center;
+  -webkit-mask-image: radial-gradient(ellipse 58% 52% at 50% 50%, #000 0%, transparent 100%);
+  mask-image: radial-gradient(ellipse 58% 52% at 50% 50%, #000 0%, transparent 100%);
+  opacity: 0.7;
+}
+
+/* Registration marks: a hairline cross at each corner of the sheet. */
+.get-reg i {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  background:
+    linear-gradient(var(--rule-strong), var(--rule-strong)) center / 100% 1px no-repeat,
+    linear-gradient(var(--rule-strong), var(--rule-strong)) center / 1px 100% no-repeat;
+}
+
+.get-reg i:nth-child(1) { top: -14px; left: -14px; }
+.get-reg i:nth-child(2) { top: -14px; right: -14px; }
+.get-reg i:nth-child(3) { bottom: -14px; left: -14px; }
+.get-reg i:nth-child(4) { bottom: -14px; right: -14px; }
 
 .get-heading {
   position: relative;
-  max-width: 800px;
-  margin-inline: auto;
   text-align: center;
 }
 
 .get-heading .overline {
-  font-size: 0.68rem;
+  font-size: 0.7rem;
 }
 
 .get-heading h2 {
-  margin-top: 32px;
+  margin: clamp(22px, 4vh, 40px) 0 0;
   font-family: var(--serif);
-  font-size: clamp(4.2rem, 8.5vw, 7.2rem);
+  font-size: clamp(4.2rem, 8.6vw, 9.2rem);
   font-weight: 400;
-  line-height: 1.02;
+  line-height: 1;
   letter-spacing: -0.045em;
 }
 
-.get-heading h2 span,
-.get-heading h2 em {
+.get-big,
+.get-rough {
   display: block;
 }
 
-.get-heading h2 span { margin-right: 72px; }
+.get-big { margin-right: 0.6em; }
 
-.get-heading h2 em {
+.get-rough {
   position: relative;
   width: fit-content;
   margin: 0 auto;
-  padding-left: 64px;
+  padding-left: 0.55em;
   font-weight: 400;
   color: var(--accent-ink);
+  white-space: nowrap;
 }
 
-/* An imperfect second stroke gives the words the same pencil-and-ink finish as the hero. */
-.get-heading h2 em::after {
+/* The ink pass: the same words in ink, wiped across the pencilled ones while the sheet plays. It
+   exists only for that: at rest, and once the words beneath are inked, it is hidden. */
+.get-ink-pass {
+  position: absolute;
+  inset: 0 auto auto 0;
+  padding-left: inherit;
+  color: var(--accent-ink);
+  visibility: hidden;
+}
+
+/* An imperfect second stroke under the inked words. */
+.get-rough::after {
   content: '';
   position: absolute;
-  left: 62px;
-  right: -8px;
-  bottom: -12px;
-  height: 13px;
-  border-top: 1px solid var(--accent-line);
+  left: 0.5em;
+  right: -0.06em;
+  bottom: -0.1em;
+  height: 0.11em;
+  border-top: 1.5px solid var(--accent-line);
   border-radius: 50%;
   transform: rotate(-2deg);
+  transform-origin: left center;
 }
 
 .get-lead {
-  margin: 36px 0 0;
+  margin: clamp(32px, 5vh, 52px) 0 0;
   color: var(--ink-soft);
-  font-size: clamp(0.95rem, 1.5vw, 1.08rem);
+  font-size: clamp(1rem, 1.5vw, 1.15rem);
   line-height: 1.7;
 }
 
 .get-drawing {
   position: absolute;
-  inset: 28px 0 auto;
+  inset: 0;
   margin: 0;
   pointer-events: none;
 }
 
-.get-drawing > svg {
+.get-drawing svg {
+  position: absolute;
   display: block;
-  width: 100%;
   fill: none;
   stroke-linecap: round;
   stroke-linejoin: round;
+  overflow: visible;
 }
 
-.get-drawing > .get-art-narrow { display: none; }
-
-.draft-guides {
-  stroke: var(--guide);
-  stroke-width: 1;
+/* The question up in one corner, the answer down in the other: the page's own reading direction. */
+.get-sketch {
+  top: clamp(40px, 9%, 120px);
+  left: clamp(0px, 2.6vw, 72px);
+  width: clamp(200px, 23vw, 340px);
 }
+
+.get-ink {
+  right: clamp(0px, 3.4vw, 96px);
+  bottom: clamp(28px, 6%, 96px);
+  width: clamp(160px, 18vw, 260px);
+}
+
+.get-drawing .get-art-narrow { display: none; }
 
 .draft-rough {
   stroke: var(--graphite);
-  stroke-width: 1.2;
+  stroke-width: 1.3;
 }
 
 .draft-clear {
   stroke: var(--accent-ink);
-  stroke-width: 1.35;
+  stroke-width: 1.5;
 }
 
-.get-drawing text {
+.draft-plane {
+  stroke: var(--accent-line);
+}
+
+.draft-hand {
   stroke: none;
   fill: var(--ink-faint);
   font-family: var(--serif);
-  font-size: 21px;
+  font-size: 22px;
   font-style: italic;
 }
 
 .draft-flourish {
   stroke: var(--accent-line);
-  stroke-width: 1.5;
+  stroke-width: 1.6;
 }
 
-.get-desktop {
+/* ── The download sheet ─────────────────────────────────────────────────────────────────── */
+
+/*
+ * One more sheet laid on the drawing table. With a script it is a modal in the top layer; without
+ * one the browser never opens it, so it is shown in place, under the button that links to it.
+ */
+.dl {
+  width: min(600px, 100% - 32px);
+  max-width: none;
+  max-height: calc(100dvh - 32px);
+  padding: 0;
+  margin: auto;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  overflow: visible;
+}
+
+@media (scripting: none) {
+  .dl {
+    display: block;
+    position: static;
+    margin: 40px auto 0;
+  }
+
+  .dl-close { display: none; }
+}
+
+.dl::backdrop {
+  background: rgba(250, 249, 246, 0.62);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+@media (prefers-color-scheme: dark) {
+  .dl::backdrop { background: rgba(6, 7, 8, 0.66); }
+}
+
+/* While it is open the page underneath stays put. */
+html:has(.dl[open]) {
+  overflow: hidden;
+}
+
+.dl-sheet {
   position: relative;
-  width: fit-content;
-  max-width: 100%;
-  margin: 32px auto 0;
-  scroll-margin-top: 100px;
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  padding: 30px clamp(22px, 5vw, 40px) 26px;
+  background: var(--paper-3);
+  border: 1px solid var(--rule-strong);
+  border-radius: 14px;
+  box-shadow: var(--shadow), 0 50px 100px -40px rgba(48, 38, 20, 0.35);
+  overscroll-behavior: contain;
 }
 
-.get-download .downloads-summary {
-  width: 100%;
-  min-width: 230px;
-  min-height: 52px;
-  justify-content: space-between;
-  padding-inline: 24px;
-  border-radius: 5px;
-}
-
-.get-version {
-  margin: 12px 0 0;
-  color: var(--ink-faint);
-  font-family: var(--mono);
-  font-size: 0.68rem;
-  text-align: center;
-}
-
-.get-version span { margin-inline: 3px; }
-
-.install-notes {
-  position: relative;
-  margin-top: 22px;
-  font-size: 0.78rem;
-  color: var(--ink-faint);
-}
-
-.install-notes > summary {
-  width: fit-content;
-  margin-inline: auto;
-  padding-block: 8px;
-  cursor: pointer;
-  text-underline-offset: 4px;
-}
-
-.install-notes > summary:hover { text-decoration: underline; }
-
-.install-notes-body {
+.dl-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px 40px;
-  margin-top: 20px;
-  padding-block: 24px;
-  border-top: 1px solid var(--rule);
-  line-height: 1.7;
-}
-
-.install-notes-body > :last-child { grid-column: 1 / -1; }
-.install-notes-body p { margin: 0; }
-.install-notes-body strong { color: var(--ink-soft); }
-
-.install-command {
-  display: block;
-  margin-top: 8px;
-  overflow-wrap: anywhere;
-  color: var(--ink-soft);
-  font-size: 0.72rem;
-}
-
-.downloads {
-  margin: 0;
-}
-
-.downloads-summary {
-  display: inline-flex;
-  /* `.button` stacks a label over a sub-label, which put the caret on its own line here. */
-  flex-direction: row;
-  align-items: center;
-  gap: 10px;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  color: var(--ink-faint);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 8px;
   cursor: pointer;
-  list-style: none;
-  white-space: nowrap;
+  transition: color 0.15s var(--ease), border-color 0.15s var(--ease);
 }
 
-.downloads-summary::-webkit-details-marker {
-  display: none;
+.dl-close:hover {
+  color: var(--ink);
+  border-color: var(--rule-strong);
 }
 
-.downloads-caret {
-  width: 14px;
-  height: 14px;
+.dl-close svg {
   fill: none;
   stroke: currentColor;
   stroke-width: 1.7;
   stroke-linecap: round;
+}
+
+.dl-art {
+  display: block;
+  width: 168px;
+  margin: 0 auto 18px;
+  fill: none;
+  stroke-linecap: round;
   stroke-linejoin: round;
 }
 
-.downloads[open] .downloads-caret {
-  transform: rotate(180deg);
+.dl-guides { stroke: var(--guide); stroke-width: 1; }
+.dl-window { stroke: var(--ink-soft); stroke-width: 1.4; }
+.dl-dots { fill: var(--ink-ghost); }
+.dl-ink { stroke: var(--accent-ink); stroke-width: 1.5; }
+.dl-step { fill: var(--accent-ink); }
+.dl-pencil { stroke: var(--graphite); stroke-width: 1.1; stroke-dasharray: 3 4; }
+
+/* A version reads as v1.2.3 even inside the capitals around it. */
+.dl-version {
+  text-transform: none;
 }
 
-/* A row, not a tile: the platform leads and the architecture and file type follow it. */
-.targets {
+.dl-over,
+.dl-title,
+.dl-lead {
+  text-align: center;
+}
+
+.dl-title {
   margin: 10px 0 0;
+  font-family: var(--serif);
+  font-size: clamp(2.1rem, 6vw, 2.8rem);
+  font-weight: 400;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+}
+
+.dl-title em {
+  color: var(--accent-ink);
+}
+
+.dl-lead {
+  max-width: 27rem;
+  margin: 12px auto 0;
+  color: var(--ink-soft);
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+/* Three tiles, the likeliest one first and marked; each says its platform, chip and file in words. */
+.targets {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 26px 0 0;
   padding: 0;
   list-style: none;
 }
 
-.targets li + li {
-  margin-top: 6px;
-}
-
 .targets a {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 2px 14px;
-  min-width: 15rem;
-  padding: 9px 13px;
+  position: relative;
+  display: grid;
+  justify-items: start;
+  gap: 2px;
+  height: 100%;
+  padding: 16px 16px 14px;
   color: var(--ink);
   background: var(--paper-2);
   border: 1px solid var(--rule-strong);
-  border-radius: 8px;
+  border-radius: 10px;
   text-decoration: none;
-  transition: border-color 0.16s var(--ease), background 0.16s var(--ease);
+  transition: border-color 0.16s var(--ease), background 0.16s var(--ease), transform 0.16s var(--ease);
 }
 
 .targets a:hover {
   border-color: var(--accent-line);
   background: var(--paper-3);
+  transform: translateY(-2px);
+}
+
+.t-glyph {
+  width: 30px;
+  height: 30px;
+  margin-bottom: 10px;
+  fill: none;
+  stroke: var(--ink-soft);
+  stroke-width: 1.4;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.t-arrow {
+  position: absolute;
+  top: 16px;
+  right: 14px;
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: var(--ink-faint);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: stroke 0.16s var(--ease), transform 0.16s var(--ease);
+}
+
+.targets a:hover .t-arrow {
+  stroke: var(--accent-ink);
+  transform: translateY(2px);
 }
 
 .targets strong {
-  font-weight: 580;
+  font-family: var(--serif);
+  font-size: 1.15rem;
+  font-weight: 400;
 }
 
 .targets span {
   font-family: var(--mono);
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   letter-spacing: 0.04em;
   color: var(--ink-faint);
   white-space: nowrap;
 }
 
 .targets [aria-current='true'] {
+  background: var(--accent-soft);
   border-color: var(--accent-line);
+}
+
+.targets [aria-current='true'] .t-glyph,
+.targets [aria-current='true'] .t-arrow {
+  stroke: var(--accent-ink);
+}
+
+/* The guess, said quietly: a tab on the tile's top edge. */
+.targets [aria-current='true']::before {
+  content: 'Suggested';
+  position: absolute;
+  top: -9px;
+  left: 14px;
+  padding: 1px 7px;
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--on-accent);
+  background: var(--accent);
+  border-radius: 4px;
+}
+
+.dl-brew {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--rule);
+}
+
+.dl-brew-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.dl-brew code {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 12px;
+  overflow-x: auto;
+  font-size: 0.76rem;
+  white-space: nowrap;
+  color: var(--ink);
+  background: var(--paper-2);
+  border: 1px solid var(--rule);
+  border-radius: 7px;
+}
+
+.dl-note {
+  margin: 16px 0 0;
+  padding: 11px 14px;
+  font-size: 0.82rem;
+  line-height: 1.6;
+  color: var(--ink-soft);
+  background: var(--paper-2);
+  border-left: 2px solid var(--accent-line);
+  border-radius: 0 7px 7px 0;
+}
+
+.dl-note strong {
+  color: var(--ink);
+}
+
+.dl-foot {
+  display: grid;
+  gap: 6px;
+  margin: 18px 0 0;
+  font-size: 0.76rem;
+  line-height: 1.6;
+  color: var(--ink-faint);
+  text-align: center;
+}
+
+.dl-foot code {
+  font-size: 0.92em;
+}
+
+@media (max-width: 560px) {
+  .targets { grid-template-columns: 1fr; gap: 14px; }
+
+  .targets a {
+    grid-template-columns: auto auto minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 12px;
+    padding: 13px 14px;
+  }
+
+  .t-glyph { width: 26px; height: 26px; margin: 0; }
+  .t-arrow { position: static; justify-self: end; }
 }
 
 /* ── Footer ──────────────────────────────────────────────────────────────────────────────── */
@@ -1275,40 +1733,79 @@ main > .moved {
 .footer-brand {
   display: flex;
   align-items: center;
-  gap: 10px;
-  color: var(--accent);
-}
-
-.footer-brand p {
+  gap: 12px;
   margin: 0;
-  font-size: 0.9rem;
-  color: var(--ink);
+  color: var(--accent);
 }
 
 .footer-brand span {
   font-family: var(--mono);
   font-size: 0.74rem;
   color: var(--ink-faint);
-  margin-left: 6px;
 }
 
 .footer-links {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px 22px;
+  align-items: center;
+  gap: 14px;
   margin-left: auto;
-  font-size: 0.9rem;
+  font-size: 0.86rem;
   color: var(--ink-soft);
 }
 
 .footer-links a {
   text-decoration: none;
+  transition: color 0.16s var(--ease), border-color 0.16s var(--ease), background 0.16s var(--ease);
 }
 
-.footer-links a:hover {
+.footer-links svg {
+  display: block;
+}
+
+/* A small ask, said once and plainly: a pill with a steaming cup. */
+.footer-coffee {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px 6px 11px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+}
+
+.footer-coffee svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  overflow: visible;
+}
+
+.footer-coffee .steam {
+  stroke: var(--accent);
+}
+
+.footer-coffee:hover {
   color: var(--ink);
-  text-decoration: underline;
-  text-decoration-color: var(--accent);
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+}
+
+.footer-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  color: var(--ink-faint);
+  border-radius: 8px;
+}
+
+.footer-icon svg {
+  fill: currentColor;
+}
+
+.footer-icon:hover {
+  color: var(--ink);
 }
 
 /* ── Documentation ───────────────────────────────────────────────────────────────────────── */
@@ -1715,8 +2212,136 @@ main > .moved {
 /* ── Motion ──────────────────────────────────────────────────────────────────────────────── */
 
 @media (prefers-reduced-motion: no-preference) {
-  .downloads-caret {
-    transition: transform 0.18s var(--ease);
+  /*
+   * The last sheet, played once as it arrives (main.js sets `data-stage`). The question is pencilled
+   * in, an arrow leaves it, the headline is written in graphite and then inked over left to right,
+   * and the answer inks itself into the far corner. `waiting` holds every first frame; without a
+   * script, or with reduced motion, there is no stage and the sheet is simply finished.
+   */
+  .get-sheet[data-stage='waiting']::before,
+  .get-sheet[data-stage='waiting'] :is(.get-reg, .get-heading .overline, .get-big, .get-rough, .get-lead, .draft-hand, .draft-flourish) {
+    opacity: 0;
+  }
+
+  .get-sheet[data-stage='waiting'] :is(.draft-rough, .draft-clear) path {
+    stroke-dasharray: 1 1;
+    stroke-dashoffset: 1;
+  }
+
+  .get-sheet[data-stage='waiting'] .get-ink-pass {
+    clip-path: inset(-20% 100% -30% 0);
+  }
+
+  .get-sheet[data-stage='waiting'] .get-rough::after {
+    transform: rotate(-2deg) scaleX(0);
+  }
+
+  .get-sheet:is([data-stage='waiting'], [data-stage='play']) .get-rough {
+    color: var(--graphite);
+  }
+
+  .get-sheet[data-stage='play']::before { animation: appear 1.6s ease both; }
+  .get-sheet[data-stage='play'] .get-reg { animation: appear 0.9s ease both; }
+  .get-sheet[data-stage='play'] .get-heading .overline { animation: appear 0.6s ease 0.05s both; }
+  .get-sheet[data-stage='play'] .get-big { animation: rise 0.9s var(--ease) 0.1s both; }
+
+  .get-sheet[data-stage='play'] .get-rough {
+    animation: rise 0.9s var(--ease) 0.55s both, inked 0.3s linear 2.6s forwards;
+  }
+
+  .get-sheet:is([data-stage='waiting'], [data-stage='play']) .get-ink-pass {
+    visibility: visible;
+  }
+
+  .get-sheet[data-stage='play'] .get-ink-pass {
+    animation: ink-wipe 1.15s cubic-bezier(0.6, 0, 0.3, 1) 1.5s both, fade-out 0.2s linear 2.9s forwards;
+  }
+
+  .get-sheet[data-stage='play'] .get-rough::after {
+    animation: underline 0.75s var(--ease) 2.4s both;
+  }
+
+  .get-sheet[data-stage='play'] .get-lead { animation: rise 0.8s var(--ease) 2.3s both; }
+
+  .get-sheet[data-stage='play'] .hand-q { animation: appear 0.6s ease 0.3s both; }
+  .get-sheet[data-stage='play'] .hand-a { animation: appear 0.6s ease 2.75s both; }
+
+  .get-sheet[data-stage='play'] :is(.draft-rough, .draft-clear) path {
+    stroke-dasharray: 1 1;
+    animation: draw 0.7s ease-out both;
+  }
+
+  .get-sheet[data-stage='play'] .draft-rough path:nth-child(1) { animation-delay: 0.35s; }
+  .get-sheet[data-stage='play'] .draft-rough path:nth-child(2) { animation-delay: 0.5s; }
+  .get-sheet[data-stage='play'] .draft-rough path:nth-child(3) { animation-delay: 0.65s; }
+  .get-sheet[data-stage='play'] .draft-rough path:nth-child(4) { animation-delay: 0.8s; }
+
+  .get-sheet[data-stage='play'] .draft-clear path { animation-timing-function: var(--ease); }
+  .get-sheet[data-stage='play'] .draft-clear path:nth-child(1) { animation-delay: 1.9s; }
+  .get-sheet[data-stage='play'] .draft-clear path:nth-child(2) { animation-delay: 2.02s; }
+  .get-sheet[data-stage='play'] .draft-clear path:nth-child(3) { animation-delay: 2.14s; }
+  .get-sheet[data-stage='play'] .draft-clear path:nth-child(4) { animation-delay: 2.26s; }
+  .get-sheet[data-stage='play'] .draft-clear path:nth-child(5) { animation-delay: 2.38s; }
+  .get-sheet[data-stage='play'] .draft-clear path:nth-child(6) { animation-delay: 2.5s; }
+  .get-sheet[data-stage='play'] .draft-clear path:nth-child(7) { animation-delay: 2.62s; }
+
+  .get-sheet[data-stage='play'] .draft-flourish {
+    stroke-dasharray: 1 1;
+    animation: draw 0.9s ease-in-out 1.05s both;
+  }
+
+  .get-sheet[data-stage='play'] .draft-flourish + .draft-flourish {
+    animation-duration: 0.3s;
+    animation-delay: 1.85s;
+  }
+
+  /* The download sheet rises onto the table, and the drawing on it inks itself in. */
+  .dl[open] {
+    animation: dl-in 0.42s var(--ease);
+  }
+
+  .dl[open]::backdrop {
+    animation: appear 0.3s ease;
+  }
+
+  .dl[data-closing] {
+    animation: dl-out 0.2s ease-in forwards;
+  }
+
+  .dl[data-closing]::backdrop {
+    animation: fade-out 0.2s ease-in forwards;
+  }
+
+  .dl[open] :is(.dl-window, .dl-ink) path {
+    stroke-dasharray: 1 1;
+    animation: draw 0.7s var(--ease) both;
+  }
+
+  .dl[open] .dl-window path { animation-delay: 0.12s; }
+  .dl[open] .dl-ink path { animation-delay: 0.45s; }
+  .dl[open] .dl-ink path + path { animation-delay: 0.6s; }
+  .dl[open] .dl-ink path + path + path { animation-delay: 0.78s; }
+
+  .dl[open] .dl-step {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: pop 0.4s var(--ease) 1.05s both;
+  }
+
+  .dl[open] .dl-pencil {
+    animation: appear 0.6s ease 1.1s both;
+  }
+
+  .dl[open] .targets li {
+    animation: dl-tile 0.45s var(--ease) both;
+  }
+
+  .dl[open] .targets li:nth-child(2) { animation-delay: 0.06s; }
+  .dl[open] .targets li:nth-child(3) { animation-delay: 0.12s; }
+
+  /* The cup steams a little when you reach for it. */
+  .footer-coffee:hover .steam {
+    animation: steam 1.2s ease-in-out infinite;
   }
 
   /* Hidden only where a script is going to show it again: with scripting off, nothing would. */
@@ -1730,6 +2355,38 @@ main > .moved {
     .reveal.shown {
       opacity: 1;
       transform: none;
+    }
+
+    /* The brief gets marked up as it arrives: rings around the step numbers, then the marker
+       through each phrase that matters, then the drawing underneath slides out from beneath it. */
+    .try-n svg path {
+      stroke-dasharray: 1 1;
+      stroke-dashoffset: 1;
+      transition: stroke-dashoffset 0.7s var(--ease);
+      transition-delay: calc(0.35s + var(--i) * 0.22s);
+    }
+
+    .try-steps.shown .try-n svg path {
+      stroke-dashoffset: 0;
+    }
+
+    .brief-text mark {
+      background-size: 0% 100%;
+      transition: background-size 0.55s cubic-bezier(0.5, 0, 0.3, 1);
+      transition-delay: calc(0.7s + var(--m) * 0.28s);
+    }
+
+    .brief.shown .brief-text mark {
+      background-size: 100% 100%;
+    }
+
+    .brief-under {
+      transform: rotate(0deg) translate(-6%, 18%);
+      transition: transform 1.1s var(--ease) 0.25s;
+    }
+
+    .brief.shown .brief-under {
+      transform: rotate(2.4deg);
     }
   }
 
@@ -1823,6 +2480,41 @@ main > .moved {
   to { stroke-dashoffset: 0; }
 }
 
+@keyframes dl-in {
+  from { opacity: 0; transform: translateY(18px) scale(0.975); }
+}
+
+@keyframes dl-out {
+  to { opacity: 0; transform: translateY(10px) scale(0.985); }
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(18px); }
+}
+
+@keyframes inked {
+  to { color: var(--accent-ink); }
+}
+
+@keyframes ink-wipe {
+  from { clip-path: inset(-20% 100% -30% 0); }
+  to { clip-path: inset(-20% -10% -30% 0); }
+}
+
+@keyframes underline {
+  from { transform: rotate(-2deg) scaleX(0); }
+  to { transform: rotate(-2deg) scaleX(1); }
+}
+
+@keyframes steam {
+  0%, 100% { transform: translateY(0); opacity: 1; }
+  50% { transform: translateY(-1.5px); opacity: 0.55; }
+}
+
+@keyframes dl-tile {
+  from { opacity: 0; transform: translateY(8px); }
+}
+
 @keyframes appear {
   from { opacity: 0; }
 }
@@ -1878,6 +2570,9 @@ main > .moved {
 
   .reel { grid-template-columns: 1fr; gap: 28px; }
   .reel-stage { order: -1; }
+
+  .try-body { grid-template-columns: 1fr; }
+  .brief { max-width: 640px; }
   .reel-stage figcaption { margin-top: 22px; min-height: 0; }
 }
 
@@ -1885,24 +2580,19 @@ main > .moved {
   .hero-art-wide { display: none; }
   .hero-art-narrow { display: block; width: 100%; max-width: 380px; margin-inline: auto; }
 
-  .get { padding-top: 52px; }
-  .get-sheet { display: flex; flex-direction: column; padding-top: 44px; }
-  .get-heading h2 { font-size: clamp(3.2rem, 11.8vw, 4.7rem); }
-  .get-heading h2 span { margin-right: 24px; }
-  .get-heading h2 em { padding-left: 12px; }
-  .get-heading h2 em::after { left: 12px; right: 0; }
-  .get-heading { order: 0; }
-  .get-drawing { position: static; order: 1; width: 100%; max-width: 340px; margin: 28px auto 0; }
-  .get-drawing .get-art-wide { display: none; }
-  .get-drawing > .get-art-narrow { display: block; }
-  .get-drawing text { font-size: 16px; }
-  .get-desktop { order: 2; margin-top: 28px; }
-  .install-notes { order: 3; width: 100%; }
-  .install-notes-body { grid-template-columns: 1fr; }
-  .targets a { min-width: 0; }
-  .footer-brand p { display: flex; flex-direction: column; gap: 2px; }
-  .footer-brand span { margin-left: 0; font-size: 0.7rem; }
-  .moved { padding: 22px 46px 20px 20px; }
+  .brief { padding-top: 96px; }
+  .brief-under { width: 96%; right: -6px; }
+  .brief-card { transform: rotate(-0.4deg); }
+  .brief-text { white-space: normal; }
+  .brief-tb dd { font-size: 0.95rem; }
+
+  .get-sheet { padding-block: 72px 56px; }
+  .get-heading h2 { font-size: clamp(3.3rem, 13.6vw, 4.9rem); }
+  .get-drawing { position: static; order: 1; width: 100%; max-width: 340px; margin: 40px auto 0; }
+  .get-sketch, .get-ink { display: none; }
+  .get-drawing .get-art-narrow { position: static; display: block; width: 100%; }
+  .draft-hand { font-size: 16px; }
+  .footer-brand span { font-size: 0.7rem; }
   .footer-links { margin-left: 0; }
 }
 

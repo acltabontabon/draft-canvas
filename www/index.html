@@ -9,17 +9,17 @@
       name="description"
       content="A local-first canvas for turning software architecture into a clear visual story. Shapes that know what they are, depth you can step into, flows you can present, and a coding agent that can draw with you. In your browser with no account, or on your desktop."
     />
-    <link rel="canonical" href="https://acltabontabon.com/draft-canvas/" />
+    <link rel="canonical" href="https://draftcanvas.dev/" />
 
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Draft Canvas" />
-    <meta property="og:url" content="https://acltabontabon.com/draft-canvas/" />
+    <meta property="og:url" content="https://draftcanvas.dev/" />
     <meta property="og:title" content="Draft Canvas — Draw software. Explain how it works." />
     <meta
       property="og:description"
       content="A local-first canvas for turning software architecture into a clear visual story. No account, nothing uploaded."
     />
-    <meta property="og:image" content="https://acltabontabon.com/draft-canvas/og-image.png" />
+    <meta property="og:image" content="https://draftcanvas.dev/og-image.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta
@@ -32,12 +32,12 @@
       name="twitter:description"
       content="A local-first canvas for turning software architecture into a clear visual story. No account, nothing uploaded."
     />
-    <meta name="twitter:image" content="https://acltabontabon.com/draft-canvas/og-image.png" />
+    <meta name="twitter:image" content="https://draftcanvas.dev/og-image.png" />
 
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./icon-180.png" />
     <meta name="color-scheme" content="light dark" />
-    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f4f1ea" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff" />
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0f1012" />
 
     <link rel="stylesheet" href="./src/styles.css" />
@@ -58,53 +58,28 @@
       <nav class="masthead-nav" aria-label="Site">
         <a href="#features">Features</a>
         <a href="./docs/">Docs</a>
-        <a href="#get">Download</a>
       </nav>
-      <a class="button button-primary masthead-cta" href="./editor/">Open editor</a>
+      <a class="button button-primary masthead-cta" href="https://app.draftcanvas.dev/">Open editor</a>
     </header>
 
     <main id="main">
-      <!-- ================================================================
-           Shown only to someone who has used the editor in this browser.
-           The editor used to answer at this address; they came here for it.
-      ================================================================= -->
-      <aside class="moved" id="moved" hidden aria-labelledby="moved-title">
-        <p class="moved-text">
-          <strong id="moved-title">The editor moved. Your diagrams didn't.</strong>
-          It opens at <code>/draft-canvas/editor/</code> now — everything you have drawn is still
-          saved in this browser, exactly where it was. Nothing was moved, reset, or needs
-          re-importing. It also runs as a <a href="#desktop">desktop app</a>.
-        </p>
-        <a class="button button-primary" href="./editor/">Open your diagrams</a>
-        <button class="moved-dismiss" id="moved-dismiss" type="button" aria-label="Dismiss this notice">
-          <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" focusable="false">
-            <path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
-          </svg>
-        </button>
-      </aside>
-
       <!-- ================================================================
            THE SHEET. A pencil sketch, inked over — what the product does
            to the diagram a meeting starts with, as the first thing you see.
       ================================================================= -->
       <section class="hero" id="top">
         <div class="hero-words">
-          <a class="flag" href="#agents">
-            <span class="flag-tag">New</span>
-            <span>Your coding agent draws like you do</span>
-            <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" focusable="false"><path d="M3 8h9M8.5 4.5L12 8l-3.5 3.5" /></svg>
-          </a>
           <h1>Draw software. <em>Explain</em> how it&nbsp;works.</h1>
           <p class="lead">
             A local-first canvas for turning architecture into a clear story. Sketch the idea, step
             inside the detail, walk the room through the flow.
           </p>
           <div class="hero-actions">
-            <a class="button button-primary button-lg" href="./editor/" id="hero-cta">
+            <a class="button button-primary button-lg" href="https://app.draftcanvas.dev/" id="hero-cta">
               <span id="hero-cta-label">Open live editor</span>
               <small id="hero-cta-note">nothing to install</small>
             </a>
-            <a class="button button-lg" href="#get">
+            <a class="button button-lg" href="#download" data-download>
               <span class="downloads-label">Download desktop</span>
               <small>macOS · Windows</small>
             </a>
@@ -257,121 +232,263 @@
         </div>
       </section>
 
-      <!-- An open drafting sheet, continuous with the paper and ink above. -->
-      <section class="get" id="get" aria-labelledby="get-title">
-        <div class="get-sheet">
-          <figure class="get-drawing" role="img" aria-labelledby="get-drawing-caption">
-            <svg class="get-art-wide" viewBox="0 0 1100 470" aria-hidden="true" focusable="false">
-              <g class="draft-guides">
-                <path d="M0 20H26M13 7V33M1074 20H1100M1087 7V33M0 450H26M13 437V463M1074 450H1100M1087 437V463" />
-                <path d="M13 75V395M1087 75V395" stroke-dasharray="2 8" />
+      <!-- ================================================================
+           THE BRIEF. The three steps and the exact words to paste, set as a
+           brief taped over the drawing it produces. Copy works without a script
+           too: the text is ordinary selectable text.
+      ================================================================= -->
+      <section class="try" id="try" aria-labelledby="try-title">
+        <div class="try-body">
+          <div class="try-words">
+            <header class="try-head reveal">
+              <p class="overline">Try it on your own repo</p>
+              <h2 id="try-title">Hand your agent<br /> the <em>pencil.</em></h2>
+              <p class="try-lead">
+                Point Claude&nbsp;Code, Codex, Cursor, Gemini&nbsp;CLI or Junie at Draft Canvas Desktop.
+                It reads the code, draws what&rsquo;s really there, and shows its working. Minutes, not a meeting.
+              </p>
+            </header>
+
+            <ol class="try-steps reveal">
+              <li style="--i:0">
+                <span class="try-n" aria-hidden="true">1<svg viewBox="0 0 48 48"><path pathLength="1" d="M27 5C14 3 4 12 5 25S17 45 29 43 45 31 43 19 31 3 19 7" /></svg></span>
+                <div>
+                  <h3>Let it in.</h3>
+                  <p>Open your project in the desktop app. In <b>Settings&nbsp;→ AI&nbsp;agents</b>, turn on <b>Allow agent access</b> and pick your agent.</p>
+                </div>
+              </li>
+              <li style="--i:1">
+                <span class="try-n" aria-hidden="true">2<svg viewBox="0 0 48 48"><path pathLength="1" d="M21 6C9 9 3 20 6 31S22 46 33 41 46 25 40 14 25 2 14 9" /></svg></span>
+                <div>
+                  <h3>Teach it the craft.</h3>
+                  <p>Click <b>Agent skill&nbsp;→ Install skill</b>. Now it knows shapes, depth and flows the way you do.</p>
+                </div>
+              </li>
+              <li style="--i:2">
+                <span class="try-n" aria-hidden="true">3<svg viewBox="0 0 48 48"><path pathLength="1" d="M30 6C17 2 5 11 5 24S15 44 28 43 44 33 43 20 34 4 22 6" /></svg></span>
+                <div>
+                  <h3>Hand over the brief.</h3>
+                  <p>Paste it into your agent and watch the sheet fill in.</p>
+                </div>
+              </li>
+            </ol>
+          </div>
+
+          <figure class="brief reveal" aria-labelledby="brief-label">
+            <!-- What the brief turns into, peeking out from underneath it. -->
+            <svg class="brief-under" viewBox="0 0 420 300" aria-hidden="true" focusable="false">
+              <rect class="bu-sheet" x="1" y="1" width="418" height="298" rx="3" />
+              <g class="bu-ink">
+                <path class="bu-bnd" d="M150 14H406V104H150Z" />
+                <text class="bu-cap" x="158" y="27">ORDERS · CONTAINER</text>
+                <rect x="22" y="44" width="86" height="34" rx="5" />
+                <text class="bu-name" x="65" y="65" text-anchor="middle">storefront</text>
+                <path class="bu-plane" d="M181 40H265V74" />
+                <rect x="176" y="44" width="84" height="34" rx="5" />
+                <text class="bu-name" x="218" y="65" text-anchor="middle">orders api</text>
+                <path d="M310 44H372A8 17 0 0 1 372 78H310A8 17 0 0 1 310 44ZM372 44A8 17 0 0 0 372 78" />
+                <text class="bu-name" x="338" y="65" text-anchor="middle">orders</text>
+                <path class="bu-wire" d="M108 61H174M169 57L174 61L169 65" />
+                <path class="bu-wire bu-dash" d="M260 61H308M303 57L308 61L303 65" />
+                <circle class="bu-step" cx="140" cy="61" r="7" />
+                <text class="bu-n" x="140" y="64.5" text-anchor="middle">1</text>
+                <circle class="bu-step" cx="284" cy="61" r="7" />
+                <text class="bu-n" x="284" y="64.5" text-anchor="middle">2</text>
+                <path class="bu-leader" d="M218 78V90H228" />
               </g>
-              <g class="draft-rough">
-                <path d="M48 102L173 96L178 170L52 177Z" />
-                <path d="M46 105Q99 98 176 99M174 97Q175 136 180 173M177 171L49 179M51 175L47 103" />
-                <path d="M72 126Q96 119 118 124M72 139Q112 131 152 136M74 151L125 147" />
-                <path d="M108 177C107 208 143 218 164 205S166 172 149 181S145 228 187 231" />
-                <text x="47" y="76" transform="rotate(-4 47 76)">what if...</text>
-              </g>
-              <g class="draft-clear">
-                <rect x="925" y="226" width="108" height="54" rx="5" />
-                <path d="M933 232H1040V286H933" opacity=".35" />
-                <path d="M979 280V316Q979 326 969 326H921M979 316Q979 326 989 326H1040" />
-                <rect x="890" y="326" width="60" height="40" rx="4" />
-                <rect x="1010" y="326" width="60" height="40" rx="4" />
-                <path d="M963 251H995M908 346H932M1028 346H1052" />
-                <text x="939" y="400" transform="rotate(3 939 400)">oh, I see.</text>
-              </g>
-              <path class="draft-flourish" d="M158 344C202 304 249 314 235 342S167 370 189 346S273 337 307 352" />
-              <path class="draft-flourish" d="M297 343L309 353L295 357" />
+              <text class="bu-ev" x="232" y="93">src/orders/api.ts:42</text>
+              <text class="bu-q" x="30" y="100">why a queue? — inferred</text>
             </svg>
+
+            <div class="brief-card">
+              <span class="brief-tape" aria-hidden="true"></span>
+              <div class="brief-top">
+                <p class="overline" id="brief-label">Brief <span aria-hidden="true">·</span> for your agent</p>
+                <button class="copy" type="button" data-copy="brief-text" hidden>
+                  <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" focusable="false"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5" /><path d="M10.5 3.5v-.5a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h.5" /></svg>
+                  <span class="copy-label">Copy</span>
+                </button>
+              </div>
+              <p class="brief-text" id="brief-text">Use the Draft Canvas skill to draw the architecture of this repository.
+Use appropriate <mark style="--m:0">C4 views</mark>, meaningful <mark style="--m:1">grouping boundaries</mark>, and <mark style="--m:2">look-inside details</mark> for key services.
+Attach <mark style="--m:3">decision notes, open questions</mark> and relevant <mark style="--m:4">code snippets</mark> to the shapes, connectors or boundaries they explain.
+Add <mark style="--m:5">presentation flows</mark> for the main request path and failure paths the code supports.
+Include <mark style="--m:6">source evidence</mark> and <mark style="--m:7">mark inferences</mark>.</p>
+              <dl class="brief-tb">
+                <div><dt>Sheet</dt><dd>Your repo</dd></div>
+                <div><dt>Drawn by</dt><dd>Your agent</dd></div>
+                <div><dt>Checked by</dt><dd class="brief-you">You</dd></div>
+              </dl>
+            </div>
+          </figure>
+        </div>
+      </section>
+
+      <!-- ================================================================
+           THE LAST SHEET. One screen, nothing else on it: a pencil note
+           becomes an inked drawing, and the headline goes the same way.
+           Plays once as it arrives (main.js, `data-stage`); without a script
+           or with reduced motion it is simply the finished sheet.
+      ================================================================= -->
+      <section class="get" id="get" aria-labelledby="get-title">
+        <div class="get-sheet" data-stage>
+          <span class="get-reg" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+
+          <figure class="get-drawing" role="img" aria-labelledby="get-drawing-caption">
+            <svg class="get-sketch" viewBox="0 0 300 250" aria-hidden="true" focusable="false">
+              <text class="draft-hand hand-q" x="8" y="26" transform="rotate(-4 8 26)">what if...</text>
+              <g class="draft-rough">
+                <path pathLength="1" d="M10 56L135 50L140 124L14 131Z" />
+                <path pathLength="1" d="M8 59Q61 52 138 53M136 51Q137 90 142 127M139 125L11 133M13 129L9 57" />
+                <path pathLength="1" d="M34 80Q58 73 80 78M34 93Q74 85 114 90M36 105L87 101" />
+                <path pathLength="1" d="M70 131C69 162 105 172 126 159S128 126 111 135S107 182 149 185" />
+              </g>
+              <path class="draft-flourish" pathLength="1" d="M150 214C186 182 232 188 222 212S166 236 182 216S246 208 292 224" />
+              <path class="draft-flourish" pathLength="1" d="M281 214L293 224L279 229" />
+            </svg>
+
+            <svg class="get-ink" viewBox="0 0 220 220" aria-hidden="true" focusable="false">
+              <g class="draft-clear">
+                <path pathLength="1" d="M60 22H163Q168 22 168 27V71Q168 76 163 76H60Q55 76 55 71V27Q55 22 60 22Z" />
+                <path class="draft-plane" pathLength="1" d="M63 28H176V84H63" />
+                <path pathLength="1" d="M95 47H127" />
+                <path pathLength="1" d="M111 76V112Q111 122 101 122H53M111 112Q111 122 121 122H172" />
+                <path pathLength="1" d="M26 122H82Q86 122 86 126V158Q86 162 82 162H26Q22 162 22 158V126Q22 122 26 122Z" />
+                <path pathLength="1" d="M142 122H198Q202 122 202 126V158Q202 162 198 162H142Q138 162 138 158V126Q138 122 142 122Z" />
+                <path pathLength="1" d="M42 142H66M158 142H182" />
+              </g>
+              <text class="draft-hand hand-a" x="74" y="206" transform="rotate(3 74 206)">oh, I see.</text>
+            </svg>
+
             <svg class="get-art-narrow" viewBox="0 0 340 135" aria-hidden="true" focusable="false">
               <g class="draft-rough">
-                <path d="M18 33L96 29L100 82L21 87ZM20 36L98 32M97 30L102 84M22 83L19 35" />
-                <path d="M33 48L65 45M34 59L81 56M35 70L71 67" />
-                <text x="18" y="18">what if...</text>
+                <path pathLength="1" d="M18 33L96 29L100 82L21 87ZM20 36L98 32M97 30L102 84M22 83L19 35" />
+                <path pathLength="1" d="M33 48L65 45M34 59L81 56M35 70L71 67" />
               </g>
-              <path class="draft-flourish" d="M102 62C133 42 164 49 158 69S124 84 137 68S186 59 206 64M197 58L207 64L197 70" />
+              <text class="draft-hand hand-q" x="18" y="18">what if...</text>
+              <path class="draft-flourish" pathLength="1" d="M102 62C133 42 164 49 158 69S124 84 137 68S186 59 206 64M197 58L207 64L197 70" />
               <g class="draft-clear">
-                <rect x="220" y="31" width="72" height="44" rx="4" />
-                <path d="M225 35H297V80H225M239 53H273M256 75V94H234M256 94H301" />
-                <rect x="220" y="94" width="28" height="20" rx="3" />
-                <rect x="287" y="94" width="28" height="20" rx="3" />
-                <text x="226" y="133">oh, I see.</text>
+                <path pathLength="1" d="M224 31H288Q292 31 292 35V71Q292 75 288 75H224Q220 75 220 71V35Q220 31 224 31Z" />
+                <path pathLength="1" d="M225 35H297V80H225M239 53H273M256 75V94H234M256 94H301" />
+                <path pathLength="1" d="M223 94H245Q248 94 248 97V111Q248 114 245 114H223Q220 114 220 111V97Q220 94 223 94Z" />
+                <path pathLength="1" d="M290 94H312Q315 94 315 97V111Q315 114 312 114H290Q287 114 287 111V97Q287 94 290 94Z" />
               </g>
+              <text class="draft-hand hand-a" x="226" y="133">oh, I see.</text>
             </svg>
             <figcaption class="visually-hidden" id="get-drawing-caption">A rough note marked “what if…” becomes a connected diagram marked “oh, I see.”</figcaption>
           </figure>
 
-          <div class="get-heading reveal">
+          <div class="get-heading">
             <p class="overline">A little space to think</p>
-            <h2 id="get-title"><span>Big ideas.</span><em>Rough drafts.</em></h2>
+            <h2 id="get-title">
+              <span class="get-big">Big ideas.</span>
+              <em class="get-rough"><span class="get-ink-pass" aria-hidden="true">Rough drafts.</span>Rough drafts.</em>
+            </h2>
             <p class="get-lead">You don&rsquo;t need the whole picture to start.<br />Just a thought worth drawing out.</p>
           </div>
-
-          <div class="get-desktop reveal" id="desktop">
-            <div class="get-download">
-              <details class="downloads" id="downloads">
-                <summary class="button button-primary downloads-summary">
-                  <span class="downloads-label">Download desktop</span>
-                  <svg class="downloads-caret" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-                    <path d="M4 6.5l4 4 4-4" />
-                  </svg>
-                </summary>
-                <ul class="targets" id="targets">
-                  <li>
-                    <a data-slug="macos-arm64" href="https://github.com/acltabontabon/draft-canvas/releases/download/v__VERSION__/Draft-Canvas___VERSION___macOS_arm64.dmg">
-                      <strong>macOS</strong><span>Apple silicon · .dmg</span>
-                    </a>
-                  </li>
-                  <li>
-                    <a data-slug="macos-x64" href="https://github.com/acltabontabon/draft-canvas/releases/download/v__VERSION__/Draft-Canvas___VERSION___macOS_x64.dmg">
-                      <strong>macOS</strong><span>Intel · .dmg</span>
-                    </a>
-                  </li>
-                  <li>
-                    <a data-slug="windows-x64" href="https://github.com/acltabontabon/draft-canvas/releases/download/v__VERSION__/Draft-Canvas___VERSION___Windows_x64.exe">
-                      <strong>Windows</strong><span>x64 · installer</span>
-                    </a>
-                  </li>
-                </ul>
-              </details>
-              <p class="get-version">macOS &amp; Windows <span aria-hidden="true">·</span> v__VERSION__</p>
-            </div>
-          </div>
-
-          <details class="install-notes reveal">
-            <summary>Installation notes</summary>
-            <div class="install-notes-body">
-              <p><strong>First install?</strong> Installers aren&rsquo;t code-signed yet. macOS and Windows
-                show a warning — <a href="./docs/desktop/#installing">here&rsquo;s how to open the app</a>.
-                See <a href="https://github.com/acltabontabon/draft-canvas/releases">all releases</a>.</p>
-              <div>
-                <p><strong>On a Mac with Homebrew</strong></p>
-                <code class="install-command">brew install --cask acltabontabon/tap/draft-canvas</code>
-              </div>
-              <p id="web"><strong>Prefer a tab?</strong> The browser editor needs no account and works offline once loaded.
-                Diagrams stay in this browser; export the ones you want to keep before clearing site data.
-                Move between browser and desktop with a <code>.draftcanvas</code> file.
-                <a href="./docs/privacy/">Privacy details</a> · <a href="./docs/self-hosting/">Self-hosting</a>.</p>
-            </div>
-          </details>
         </div>
+
+          <!-- The downloads. With a script this is a modal the download buttons open in place; without
+               one it is simply the last thing on the sheet, and those buttons are links to it. -->
+          <dialog class="dl" id="download" aria-labelledby="dl-title" aria-describedby="dl-lead">
+            <div class="dl-sheet">
+              <button class="dl-close" type="button" data-close aria-label="Close">
+                <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false"><path d="M4 4l8 8M12 4l-8 8" /></svg>
+              </button>
+
+              <!-- A desktop window with a drawing in it, inked in as the sheet opens. -->
+              <svg class="dl-art" viewBox="0 0 220 132" aria-hidden="true" focusable="false">
+                <g class="dl-guides"><path d="M2 8h10M7 3v10M208 8h10M213 3v10M2 124h10M7 119v10M208 124h10M213 119v10" /></g>
+                <g class="dl-window">
+                  <path pathLength="1" d="M24 18H196Q202 18 202 24V108Q202 114 196 114H24Q18 114 18 108V24Q18 18 24 18Z" />
+                  <path pathLength="1" d="M18 34H202" />
+                </g>
+                <g class="dl-dots"><circle cx="29" cy="26" r="2.4" /><circle cx="38" cy="26" r="2.4" /><circle cx="47" cy="26" r="2.4" /></g>
+                <g class="dl-ink">
+                  <path pathLength="1" d="M40 58H88V80H40Z" />
+                  <path pathLength="1" d="M132 52H176A6 14 0 0 1 176 80H132A6 14 0 0 1 132 52ZM176 52A6 14 0 0 0 176 80" />
+                  <path pathLength="1" d="M88 69H128M123 65L128 69L123 73" />
+                </g>
+                <circle class="dl-step" cx="108" cy="69" r="6" />
+                <path class="dl-pencil" pathLength="1" d="M44 98C60 92 84 101 104 95S140 92 160 97" />
+              </svg>
+
+              <p class="overline dl-over">Draft Canvas Desktop <span aria-hidden="true">·</span> <span class="dl-version">v__VERSION__</span></p>
+              <h2 class="dl-title" id="dl-title">Put it on your <em>desk.</em></h2>
+              <p class="dl-lead" id="dl-lead">
+                Diagrams as files beside your code, a window of their own, and a door your coding agent
+                can draw through.
+              </p>
+
+              <ul class="targets" id="targets">
+                <li>
+                  <a data-slug="macos-arm64" href="https://github.com/acltabontabon/draft-canvas/releases/download/v__VERSION__/Draft-Canvas___VERSION___macOS_arm64.dmg">
+                    <svg class="t-glyph" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><path d="M7 8.5h18v12H7zM4 23.5h24l-2 2H6z" /></svg>
+                    <strong>macOS</strong><span>Apple silicon · .dmg</span>
+                    <svg class="t-arrow" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M8 3v9M4.5 8.5L8 12l3.5-3.5M3.5 14h9" /></svg>
+                  </a>
+                </li>
+                <li>
+                  <a data-slug="macos-x64" href="https://github.com/acltabontabon/draft-canvas/releases/download/v__VERSION__/Draft-Canvas___VERSION___macOS_x64.dmg">
+                    <svg class="t-glyph" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><path d="M7 8.5h18v12H7zM4 23.5h24l-2 2H6z" /></svg>
+                    <strong>macOS</strong><span>Intel · .dmg</span>
+                    <svg class="t-arrow" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M8 3v9M4.5 8.5L8 12l3.5-3.5M3.5 14h9" /></svg>
+                  </a>
+                </li>
+                <li>
+                  <a data-slug="windows-x64" href="https://github.com/acltabontabon/draft-canvas/releases/download/v__VERSION__/Draft-Canvas___VERSION___Windows_x64.exe">
+                    <svg class="t-glyph" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><path d="M5 6.5h22v15H5zM5 10.5h22M13 25.5h6M16 21.5v4" /></svg>
+                    <strong>Windows</strong><span>x64 · installer</span>
+                    <svg class="t-arrow" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M8 3v9M4.5 8.5L8 12l3.5-3.5M3.5 14h9" /></svg>
+                  </a>
+                </li>
+              </ul>
+
+              <div class="dl-brew">
+                <p class="overline">Or, on a Mac with Homebrew</p>
+                <div class="dl-brew-row">
+                  <code id="brew-command">brew install --cask acltabontabon/tap/draft-canvas</code>
+                  <button class="copy" type="button" data-copy="brew-command" hidden>
+                    <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" focusable="false"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5" /><path d="M10.5 3.5v-.5a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h.5" /></svg>
+                    <span class="copy-label">Copy</span>
+                  </button>
+                </div>
+              </div>
+
+              <p class="dl-note">
+                <strong>First launch?</strong> The installers aren&rsquo;t code-signed yet, so macOS and
+                Windows warn you once. <a href="./docs/desktop/#installing">Here&rsquo;s how to open it</a>.
+              </p>
+
+              <p class="dl-foot" id="web">
+                <span>Prefer a tab? The <a href="https://app.draftcanvas.dev/">browser editor</a> needs no account and works offline;
+                  move between the two with a <code>.draftcanvas</code> file.</span>
+                <span><a href="https://github.com/acltabontabon/draft-canvas/releases">All releases</a>
+                  <span aria-hidden="true">·</span> <a href="./docs/privacy/">Privacy</a>
+                  <span aria-hidden="true">·</span> <a href="./docs/self-hosting/">Self-hosting</a></span>
+              </p>
+            </div>
+          </dialog>
       </section>
     </main>
 
     <footer class="footer">
-      <div class="footer-brand">
+      <p class="footer-brand">
         <svg class="mark" viewBox="0 0 32 32" width="22" height="22" aria-hidden="true" focusable="false">
           <rect x="6" y="8" width="11" height="7" rx="2" fill="none" stroke="currentColor" stroke-width="2" />
           <rect x="15" y="18" width="11" height="7" rx="2" fill="none" stroke="var(--ink-ghost)" stroke-width="2" />
           <path d="M11.5 15.5v3.5h4" fill="none" stroke="currentColor" stroke-width="1.6" />
         </svg>
-        <p><strong>Draft Canvas</strong> <span>Free &amp; open source · Apache 2.0</span></p>
-      </div>
+        <span>Free &amp; open source · Apache 2.0</span>
+      </p>
       <nav class="footer-links" aria-label="Elsewhere">
-        <a href="https://github.com/acltabontabon/draft-canvas">Source</a>
-        <a href="./docs/">Docs</a>
+        <a class="footer-coffee" href="https://ko-fi.com/aclt_attic">
+          <svg viewBox="0 0 20 20" width="17" height="17" aria-hidden="true" focusable="false"><path class="steam" d="M7.2 2.6c-.9 1 .9 1.7 0 2.9M10.6 2.6c-.9 1 .9 1.7 0 2.9" /><path d="M3.5 8h11v4.4a4 4 0 0 1-4 4h-3a4 4 0 0 1-4-4zM14.5 9.4h1a2 2 0 0 1 0 4h-1.1" /></svg>
+          <span>Buy me a coffee</span>
+        </a>
+        <a class="footer-icon" href="https://github.com/acltabontabon/draft-canvas" aria-label="Source on GitHub" title="Source on GitHub">
+          <svg viewBox="0 0 16 16" width="20" height="20" aria-hidden="true" focusable="false"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" /></svg>
+        </a>
       </nav>
     </footer>
 

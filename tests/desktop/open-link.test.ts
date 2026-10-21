@@ -22,15 +22,15 @@ describe('openLink', () => {
       returnHome: () => {},
     });
 
-    openLink('https://acltabontabon.com/draft-canvas/docs/');
+    openLink('https://draftcanvas.dev/docs/');
 
-    expect(posted).toEqual([{ type: 'draft-canvas:open-external', url: 'https://acltabontabon.com/draft-canvas/docs/' }]);
+    expect(posted).toEqual([{ type: 'draft-canvas:open-external', url: 'https://draftcanvas.dev/docs/' }]);
     expect(open).not.toHaveBeenCalled();
   });
 
   it('opens a new tab on the web', () => {
     const open = vi.spyOn(window, 'open').mockReturnValue(null);
-    openLink('https://acltabontabon.com/draft-canvas/docs/');
-    expect(open).toHaveBeenCalledWith('https://acltabontabon.com/draft-canvas/docs/', '_blank', 'noopener');
+    openLink('https://draftcanvas.dev/docs/');
+    expect(open).toHaveBeenCalledWith('https://draftcanvas.dev/docs/', '_blank', 'noopener');
   });
 });

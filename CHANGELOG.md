@@ -11,6 +11,20 @@ the release notes and the in-app What's New are generated from here. See
 
 ## [Unreleased]
 
+### Web
+
+#### Added
+
+- **Bring my diagrams** — the editor at the old address moves every diagram in that browser to
+  app.draftcanvas.dev in one click, straight from one tab to the other. Nothing is uploaded, and
+  nothing already there is overwritten. <!-- highlight -->
+
+#### Changed
+
+- **A new home** — Draft Canvas lives at [draftcanvas.dev](https://draftcanvas.dev/), and the editor
+  at [app.draftcanvas.dev](https://app.draftcanvas.dev/). Old links forward to the same page there.
+  <!-- highlight -->
+
 ## [1.15.2] - 2026-10-21
 
 A new Home, a file explorer, and every technology logo.

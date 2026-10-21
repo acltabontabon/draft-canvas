@@ -17,10 +17,25 @@ export const PRODUCT = {
   pitch: 'Sketch architecture, trace flows, explain systems, and get back to the conversation.',
   author: author.name,
   version: __APP_VERSION__,
+  /**
+   * Where Draft Canvas lives on the web. The site and its docs are at the apex; the editor has an
+   * origin of its own, so its storage, service worker and security policy are never the site's.
+   */
+  web: {
+    site: 'https://draftcanvas.dev/',
+    app: 'https://app.draftcanvas.dev/',
+    appOrigin: 'https://app.draftcanvas.dev',
+    /**
+     * The editor's first home, `https://acltabontabon.com/draft-canvas/editor/`. Diagrams drawn
+     * there stay in that origin's storage, where no other address can read them — so the editor
+     * still served there offers to hand them to `app` (see `storage/handoff.ts`).
+     */
+    legacyOrigin: 'https://acltabontabon.com',
+  },
   links: {
     github: 'https://github.com/acltabontabon',
     /** The guides and reference, where the in-app handbook used to be. */
-    docs: 'https://acltabontabon.com/draft-canvas/docs/',
+    docs: 'https://draftcanvas.dev/docs/',
     linkedin: 'https://www.linkedin.com/in/acltabontabon/',
     website: author.url,
     email: author.email,

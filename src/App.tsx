@@ -3,6 +3,7 @@ import { currentDesktopHost, hostKind, returnHome } from './host/hostInfo';
 import { useHostDocument } from './host/useHostDocument';
 import { useDocumentSession } from './store/useDocumentSession';
 import { LibraryScreen } from './ui/Library/LibraryScreen';
+import { useHandoffReceiver } from './ui/Library/useHandoffReceiver';
 import { ErrorBoundary } from './ui/common/ErrorBoundary';
 import { PanelBoundary } from './ui/common/PanelBoundary';
 import { retryableLazy } from './ui/common/retryableLazy';
@@ -72,6 +73,8 @@ function LazyAboutDialog() {
 function Shell() {
   const session = useDocumentSession();
   const host = useHostDocument(session, currentDesktopHost()?.channel);
+  // Diagrams arriving from the editor's old address, when it opened this tab to send them.
+  useHandoffReceiver(session);
   const exampleRequested = useUiStore((state) => state.exampleRequested);
   useEffect(() => {
     if (!exampleRequested) return;

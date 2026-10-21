@@ -9,7 +9,7 @@
 A local-first canvas for turning software architecture into a clear visual story.<br>
 Sketch an idea. Explore the detail. Walk through the flow.
 
-**[Try it in your browser](https://acltabontabon.com/draft-canvas/editor/)** ·
+**[Try it in your browser](https://app.draftcanvas.dev/)** ·
 **[Download for macOS & Windows](https://github.com/acltabontabon/draft-canvas/releases/latest)** ·
 [Documentation](docs/index.md)
 
@@ -28,7 +28,7 @@ Sketch an idea. Explore the detail. Walk through the flow.
 
 ## Install
 
-Use the [web editor](https://acltabontabon.com/draft-canvas/editor/), or download the desktop app for
+Use the [web editor](https://app.draftcanvas.dev/), or download the desktop app for
 macOS or Windows from the [latest release](https://github.com/acltabontabon/draft-canvas/releases/latest).
 On a Mac you can also install it with Homebrew:
 

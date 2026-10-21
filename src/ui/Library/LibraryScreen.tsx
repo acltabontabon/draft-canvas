@@ -17,6 +17,9 @@ import { LibraryBrand } from './LibraryBrand';
 import { LocalNote } from './LocalNote';
 import { backUpLibrary, restoreLibrary } from './backupActions';
 import { MoveToProjectMenu } from './MoveToProjectMenu';
+import { MovedHouseNotice } from './MovedHouseNotice';
+import { hostKind } from '../../host/hostInfo';
+import { offersHandoff } from '../../storage/handoff';
 import { ProjectSidebar } from './ProjectSidebar';
 import { headingFor, visibleCanvases, type LibrarySort } from './libraryFilter';
 
@@ -108,6 +111,11 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
   useEffect(() => {
     if (firstRun && browsing) setBrowsing(false);
   }, [firstRun, browsing, setBrowsing]);
+
+  // The editor's old address: Draft Canvas lives elsewhere now, and this Library can be sent there.
+  const movedNotice = !__DESKTOP__ && hostKind() === null && offersHandoff() && session.repository ? (
+    <MovedHouseNotice repository={session.repository} hasDocuments={session.library.length > 0} />
+  ) : null;
 
   const finishImport = async (result: NormalizeResult) => {
     if (!result.ok) {
@@ -220,7 +228,7 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
   if (!browsing || firstRun) {
     return (
       <div style={{ display: 'contents' }} {...dropProps}>
-        <FirstRunHome session={session} onImport={() => fileInput.current?.click()} onBrowse={(next, search) => {
+        <FirstRunHome session={session} notice={movedNotice} onImport={() => fileInput.current?.click()} onBrowse={(next, search) => {
           setView(next);
           setSearchQuery('');
           setBrowsing(true);
@@ -239,6 +247,8 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
           <LibraryBrand />
           <Button variant="quiet" icon="back" onClick={() => { setBrowsing(false); setSearchQuery(''); }}>Home</Button>
         </header>
+
+        {movedNotice}
 
         <GalleryHeading action={
           <Button variant="solid" icon="plus" onClick={() => void session.newDocument()}>

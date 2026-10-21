@@ -1,8 +1,9 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * The assembled web deploy, served the way GitHub Pages serves it: under /draft-canvas/, with the
- * editor nested at /draft-canvas/editor/.
+ * The assembled web deploy, served the way it is hosted: the site and the editor each at the root
+ * of an origin of their own (ports PORT and PORT+1), and the old front door under /draft-canvas/
+ * (PORT+2) — see scripts/serve-web.mjs.
  *
  * None of this is visible to the other two suites. `playwright.config.ts` runs against `vite dev`
  * at the root, and `playwright.dist.config.ts` serves `dist/` at the root — so neither can catch a
@@ -41,7 +42,7 @@ export default defineConfig({
     command: process.env.DC_TEST_BUILT === '1'
       ? `node scripts/stage-subpath.mjs && node scripts/serve-web.mjs ${port}`
       : `npm run site:preview -- ${port}`,
-    url: `http://localhost:${port}/draft-canvas/`,
+    url: `http://localhost:${port}/`,
     reuseExistingServer: !process.env.CI,
     timeout: 240_000,
   },

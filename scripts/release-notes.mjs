@@ -42,7 +42,7 @@ export function getIt(version) {
   return [
     '### Get it',
     '',
-    '- **On the web:** [acltabontabon.com/draft-canvas](https://acltabontabon.com/draft-canvas/). Nothing you draw leaves your browser.',
+    '- **On the web:** [draftcanvas.dev](https://draftcanvas.dev/). Nothing you draw leaves your browser.',
     `- **Desktop (macOS and Windows):** the installers under **Assets** below. Installed copies update themselves.`,
     ...(/^\d+\.\d+\.\d+$/.test(version) ? [HOMEBREW] : []),
   ].join('\n');
@@ -53,7 +53,7 @@ export function getItOnTheWeb() {
   return [
     '### Get it',
     '',
-    '- **On the web:** [acltabontabon.com/draft-canvas](https://acltabontabon.com/draft-canvas/). Nothing you draw leaves your browser.',
+    '- **On the web:** [draftcanvas.dev](https://draftcanvas.dev/). Nothing you draw leaves your browser.',
   ].join('\n');
 }
 
@@ -89,7 +89,7 @@ function releaseLandingPage(tag, version, changelog, audience, notes) {
   const rows = [];
   for (let at = 0; at < cards.length; at += 2) rows.push(`| ${cards[at]} | ${cards[at + 1] ?? ''} |`);
   const downloads = [];
-  if (audience !== 'desktop') downloads.push('**[Open the web editor →](https://acltabontabon.com/draft-canvas/editor/)**');
+  if (audience !== 'desktop') downloads.push('**[Open the web editor →](https://app.draftcanvas.dev/)**');
   if (audience !== 'web') {
     downloads.push(
       `**[macOS · Apple silicon](${assets}/Draft-Canvas_${version}_macOS_arm64.dmg)**`,
@@ -109,7 +109,7 @@ function releaseLandingPage(tag, version, changelog, audience, notes) {
   ];
   if (audience !== 'web') parts.push(HOMEBREW);
   if (audience !== 'desktop') {
-    parts.push('[Self-host the static editor](https://acltabontabon.com/draft-canvas/docs/self-hosting/).');
+    parts.push('[Self-host the static editor](https://draftcanvas.dev/docs/self-hosting/).');
   }
   parts.push(`<details>\n<summary>Everything added, changed and fixed</summary>\n\n${details}\n\n</details>`);
   if (audience !== 'web') {
@@ -118,7 +118,7 @@ function releaseLandingPage(tag, version, changelog, audience, notes) {
       `<details>\n<summary>First-time desktop installation</summary>\n\n${FIRST_LAUNCH}\n\n</details>`,
     );
   }
-  parts.push('**[Getting started](https://acltabontabon.com/draft-canvas/docs/getting-started/)** · **[All guides](https://acltabontabon.com/draft-canvas/docs/)**');
+  parts.push('**[Getting started](https://draftcanvas.dev/docs/getting-started/)** · **[All guides](https://draftcanvas.dev/docs/)**');
   return `${parts.join('\n\n')}\n`;
 }
 

@@ -48,7 +48,7 @@ const card = `<!doctype html><html><head><meta charset="utf-8"><style>${styles}
     <div class="words">
       <div class="brand">${mark}<span>Draft Canvas</span></div>
       <h1>Draw software. <em>Explain</em> how it works.</h1>
-      <p class="url">acltabontabon.com/draft-canvas</p>
+      <p class="url">draftcanvas.dev</p>
     </div>
     <div>${art}</div>
   </div>

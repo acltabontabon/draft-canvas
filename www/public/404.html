@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Not on this sheet — Draft Canvas</title>
+    <meta name="robots" content="noindex" />
+    <!-- Served for any missing path, at any depth, so it needs nothing beside it. -->
+    <style>
+      :root { --paper: #fff; --ink: #1d1c18; --soft: #4f4b42; --accent: #0b6e65; --rule: #cbc3b2; color-scheme: light dark; }
+      @media (prefers-color-scheme: dark) { :root { --paper: #0f1012; --ink: #ece9e1; --soft: #b0aca2; --accent: #5fd6c9; --rule: #363940; } }
+      body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: var(--paper); color: var(--ink);
+        font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; text-align: center; padding: 24px; }
+      h1 { margin: 0; font: 400 clamp(2.4rem, 7vw, 4rem)/1.05 'Iowan Old Style', 'New York', ui-serif, Georgia, serif; letter-spacing: -0.03em; }
+      h1 em { color: var(--accent); }
+      p { color: var(--soft); margin: 16px 0 28px; }
+      a { display: inline-block; padding: 11px 18px; border: 1px solid var(--rule); border-radius: 8px; color: var(--ink); text-decoration: none; margin: 4px; }
+      a:hover { border-color: var(--accent); }
+      code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9em; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Not on this <em>sheet.</em></h1>
+      <p>Nothing is drawn at this address.</p>
+      <a href="/">draftcanvas.dev</a>
+      <a href="/docs/">The docs</a>
+      <a href="https://app.draftcanvas.dev/">Open the editor</a>
+    </main>
+  </body>
+</html>

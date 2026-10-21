@@ -1,4 +1,4 @@
-import { useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import type { DocumentSession } from '../../store/useDocumentSession';
 import { isImeKeyEvent } from '../../lib/isEditableTarget';
 import { relativeTime } from '../../lib/relativeTime';
@@ -17,8 +17,10 @@ type HomeView = 'drafts' | 'recent' | 'projects';
 
 /** The web welcome and returning Home use a browser sketchbook and compact gallery shelf.
  * Browser diagrams are local drafts; Recent orders them by their most recent edit. */
-export function FirstRunHome({ session, onImport, onBrowse }: {
+export function FirstRunHome({ session, notice, onImport, onBrowse }: {
   session: DocumentSession;
+  /** Shown under the brand row — the old address's moved-house notice. */
+  notice?: ReactNode;
   onImport: () => void;
   onBrowse: (view: LibraryView, search?: boolean) => void;
 }) {
@@ -99,6 +101,7 @@ export function FirstRunHome({ session, onImport, onBrowse }: {
           <LibraryBrand />
           {hasDiagrams && <Button variant="quiet" icon="search" title="Find a diagram" onClick={() => onBrowse({ kind: 'all' }, true)} />}
         </header>
+        {notice}
         <WebHomeScene
           start={
             <button ref={sheetRef} type="button" className="dc-web-start" aria-label="New canvas"

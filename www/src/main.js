@@ -4,9 +4,8 @@
  * Every section reads, and every link works, with this file blocked: the hero draws itself in CSS,
  * the reveal only hides what it is about to show (and only when scripting is on, see styles.css),
  * the reel falls back to an ordinary player on its first clip with all six features listed beside
- * it, the download rows are real links in the HTML before anything here runs, and the notice for
- * returning visitors is the only thing that is not in the markup at all — because it should not be
- * shown to someone arriving for the first time.
+ * it, the download rows are real links in the HTML before anything here runs, and the last sheet
+ * is simply finished.
  */
 
 import { setUpDownloads } from './downloads.js';
@@ -252,113 +251,151 @@ function setUpReel() {
   }
 }
 
-/* ── The old service worker ─────────────────────────────────────────────────────────────── */
+/* ── The last sheet ─────────────────────────────────────────────────────────────────────── */
 
 /**
- * Takes the editor's former registration out of the picture, from the page's side.
+ * Plays a `[data-stage]` sheet once, when most of a screen of it is showing.
  *
- * The worker that used to live at this address answered *every* navigation under it with the
- * precached editor shell, so it would go on serving the old app at the address this page now
- * occupies. `sw.js` in this site's own output is what normally retires it, during the browser's
- * update check; this is the second half of the same job, for a visit that got here before that
- * happened.
- *
- * It is written to be incapable of touching anything else. acltabontabon.com is one origin shared
- * with other projects, so there is no blanket sweep here: the only registration considered is the
- * one whose scope is exactly this page's own directory, and the only caches deleted are the ones
- * whose names contain that scope — which is how Workbox names them and how nothing else is named.
- * No IndexedDB is opened, no storage key is read, nothing anyone has drawn is anywhere near this.
+ * Only a sheet still below the fold is held back: one already on screen when the page opens is left
+ * finished rather than blanked and replayed. Like the reveal, a sheet the viewport skips past in a
+ * single frame never reports as intersecting, so a scroll check plays anything already passed.
  */
-async function retireFormerWorker() {
-  if (!('serviceWorker' in navigator)) return;
-  const here = new URL('./', window.location.href).href;
+function setUpStages() {
+  if (reduceMotion.matches || !('IntersectionObserver' in window)) return;
 
-  try {
-    for (const registration of await navigator.serviceWorker.getRegistrations()) {
-      if (registration.scope !== here) continue; // the editor's own worker is at ./editor/ — leave it
-      const names = await caches.keys();
-      await Promise.all(
-        names
-          .filter((name) => name.includes(here))
-          .map((name) => caches.delete(name).catch(() => false)),
-      );
-      await registration.unregister();
-    }
-  } catch {
-    // Unsupported, or storage is blocked. The page is already the right one; this was only tidying.
+  for (const stage of document.querySelectorAll('[data-stage]')) {
+    if (stage.getBoundingClientRect().top < window.innerHeight) continue;
+    stage.dataset.stage = 'waiting';
+
+    const play = () => {
+      stage.dataset.stage = 'play';
+      observer.disconnect();
+      window.removeEventListener('scroll', onScroll);
+    };
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) play();
+      },
+      { threshold: 0.4 },
+    );
+    const onScroll = () => {
+      if (stage.getBoundingClientRect().top < window.innerHeight * 0.3) play();
+    };
+
+    observer.observe(stage);
+    window.addEventListener('scroll', onScroll, { passive: true });
   }
 }
 
-/* ── The notice for people who came here for the editor ─────────────────────────────────── */
+/* ── Copy buttons ───────────────────────────────────────────────────────────────────────── */
 
-const DISMISSED = 'draft-canvas-site.moved-notice';
+/** Each stays hidden where there is no clipboard to write to; what it copies is selectable text. */
+function setUpCopyButtons() {
+  if (!navigator.clipboard?.writeText) return;
+
+  for (const button of document.querySelectorAll('[data-copy]')) {
+    const source = document.getElementById(button.dataset.copy);
+    const label = button.querySelector('.copy-label');
+    if (!source || !label) continue;
+
+    button.hidden = false;
+    let reset = 0;
+    button.addEventListener('click', async () => {
+      // One line per line, exactly as it reads on the page.
+      const text = source.textContent
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .join('\n');
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch {
+        return;
+      }
+      button.dataset.copied = '';
+      label.textContent = 'Copied';
+      clearTimeout(reset);
+      reset = setTimeout(() => {
+        delete button.dataset.copied;
+        label.textContent = 'Copy';
+      }, 1800);
+    });
+  }
+}
+
+/* ── The download sheet ─────────────────────────────────────────────────────────────────── */
 
 /**
- * Has this browser been used to draw?
- *
- * A preference key is the reliable signal: the app writes `draft-canvas.personality` and
- * `draft-canvas.last-seen-product-release` the first time it runs, it is synchronous, and it works
- * everywhere. `indexedDB.databases()` is the stronger signal but Firefox does not implement it, so
- * it only ever corroborates. Neither opens a database or reads a single thing anyone has drawn.
+ * Without this, the download buttons are links to the downloads further down the page. With it,
+ * they open the same markup as a modal: the browser's own <dialog> traps focus, closes on Escape,
+ * makes the page behind it inert and hands focus back to the button that opened it.
  */
-function hasPreferences() {
-  try {
-    for (let index = 0; index < localStorage.length; index += 1) {
-      if (localStorage.key(index)?.startsWith('draft-canvas.')) return true;
-    }
-  } catch {
-    // Storage blocked (a private window, third-party restrictions). Treat as a first visit.
+function setUpDownloadSheet() {
+  const dialog = document.getElementById('download');
+  if (!(dialog instanceof HTMLDialogElement) || typeof dialog.showModal !== 'function') return;
+
+  document.documentElement.dataset.downloadSheet = '';
+
+  const open = () => {
+    if (dialog.open) return;
+    delete dialog.dataset.closing;
+    dialog.showModal();
+    // The row the visitor most likely wants is first (see downloads.js); start there.
+    dialog.querySelector('#targets a')?.focus({ preventScroll: true });
+  };
+
+  const finish = () => {
+    delete dialog.dataset.closing;
+    dialog.close();
+    if (location.hash === '#download') history.replaceState(null, '', location.pathname + location.search);
+  };
+
+  const close = () => {
+    if (!dialog.open || 'closing' in dialog.dataset) return;
+    if (reduceMotion.matches) return finish();
+    dialog.dataset.closing = '';
+    // A fallback in case the exit animation never runs, which would leave the sheet stuck open.
+    const timer = setTimeout(finish, 400);
+    dialog.addEventListener(
+      'animationend',
+      () => {
+        clearTimeout(timer);
+        finish();
+      },
+      { once: true },
+    );
+  };
+
+  for (const trigger of document.querySelectorAll('[data-download]')) {
+    trigger.addEventListener('click', (event) => {
+      event.preventDefault();
+      open();
+    });
   }
-  return false;
-}
 
-async function hasDiagrams() {
-  try {
-    if (typeof indexedDB.databases !== 'function') return false;
-    return (await indexedDB.databases()).some((database) => database.name === 'draft-canvas');
-  } catch {
-    return false;
-  }
-}
+  dialog.querySelector('[data-close]')?.addEventListener('click', close);
+  // A click on the backdrop lands on the <dialog> itself; the sheet inside fills the dialog box.
+  dialog.addEventListener('click', (event) => {
+    if (event.target === dialog) close();
+  });
+  dialog.addEventListener('cancel', (event) => {
+    event.preventDefault();
+    close();
+  });
 
-async function setUpReturningVisitor() {
-  const notice = document.getElementById('moved');
-  const dismiss = document.getElementById('moved-dismiss');
-  const label = document.getElementById('hero-cta-label');
-  const note = document.getElementById('hero-cta-note');
-
-  let dismissed = false;
-  try {
-    dismissed = localStorage.getItem(DISMISSED) === 'yes';
-  } catch {
-    // Not readable; show it. A notice shown twice is better than a bookmark that leads nowhere.
-  }
-
-  if (!(hasPreferences() || (await hasDiagrams()))) return;
-
-  // Whether or not they dismiss the notice, the button they are most likely to want is the one
-  // back to their own work.
-  if (label) label.textContent = 'Open your diagrams';
-  if (note) note.textContent = 'where you left them';
-
-  if (dismissed || !notice) return;
-  notice.hidden = false;
-
-  dismiss?.addEventListener('click', () => {
-    notice.hidden = true;
-    try {
-      localStorage.setItem(DISMISSED, 'yes');
-    } catch {
-      // Cannot remember; it will be shown again next time. Harmless.
-    }
+  // A shared link to the downloads opens them.
+  if (location.hash === '#download') open();
+  window.addEventListener('hashchange', () => {
+    if (location.hash === '#download') open();
   });
 }
 
 /* ── Go ─────────────────────────────────────────────────────────────────────────────────── */
 
 setUpReveal();
+setUpStages();
 setUpMasthead();
 setUpReel();
 setUpDownloads();
-void retireFormerWorker();
-void setUpReturningVisitor();
+setUpDownloadSheet();
+setUpCopyButtons();

@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 /*
- * Serves the assembled build the way GitHub Pages will: under /draft-canvas/, not at the root.
+ * Stages the assembled build the way it is served: the site and the app each at the root of an
+ * origin of their own, and the old front door under /draft-canvas/, where GitHub Pages serves it.
  *
- * Both halves use relative URLs, so in principle the prefix should not matter — and checking that
- * it actually does not matter is the entire point of staging it this way rather than trusting a
- * preview at the root. A root preview passes happily while every asset reference is wrong by one
- * directory; this one does not.
+ * Every build uses relative URLs, so in principle where it is served should not matter — and
+ * checking that it actually does not is the point of staging the old address under its real prefix
+ * rather than trusting a preview at the root. A root preview passes happily while every asset
+ * reference is wrong by one directory; this one does not.
  */
 
 import { cpSync, existsSync, mkdirSync, rmSync } from 'node:fs';
@@ -22,9 +23,9 @@ if (!existsSync(built)) {
 }
 
 rmSync(preview, { recursive: true, force: true });
-mkdirSync(join(preview, 'draft-canvas'), { recursive: true });
-cpSync(built, join(preview, 'draft-canvas'), { recursive: true });
+mkdirSync(join(preview, 'legacy', 'draft-canvas'), { recursive: true });
+cpSync(join(built, 'site'), join(preview, 'site'), { recursive: true });
+cpSync(join(built, 'app'), join(preview, 'app'), { recursive: true });
+cpSync(join(built, 'legacy'), join(preview, 'legacy', 'draft-canvas'), { recursive: true });
 
-console.log('stage-subpath: staged at .preview-web/draft-canvas');
-console.log('  landing page  http://localhost:4174/draft-canvas/');
-console.log('  editor        http://localhost:4174/draft-canvas/editor/');
+console.log('stage-subpath: staged .preview-web/{site,app,legacy/draft-canvas}');

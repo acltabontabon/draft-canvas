@@ -48,7 +48,7 @@ body:
     attributes:
       label: Where are you running Draft Canvas?
       options:
-        - Web app (acltabontabon.com)
+        - Web app (app.draftcanvas.dev)
         - Desktop (macOS)
         - Desktop (Windows)
         - Built from source

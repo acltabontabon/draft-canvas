@@ -123,7 +123,8 @@ Library and editor are states of `src/App.tsx`, with no router. Keep the editor'
 or store modules. `depth/c4.ts` shares C4 role and scope derivation with the editor and agent.
 
 `www/` is a separate Vite project with its own lockfile and no shared app dependencies. Web assembly
-copies `dist/` into `dist-web/editor/` unchanged. Keep marketing code out of the editor and website
+copies `dist/` unchanged into `dist-web/app/` (app.draftcanvas.dev) and `dist-web/legacy/editor/` (the
+old address, kept for the diagram handoff). Never set `Cross-Origin-Opener-Policy` on the app. Keep marketing code out of the editor and website
 assembly out of the editor's `vite.config.ts`.
 
 ## Conventions and docs

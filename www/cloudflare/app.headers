@@ -1,0 +1,12 @@
+# Copied to dist-web/app/_headers by scripts/assemble-web.mjs — the hosted editor only, never the
+# dist/ that self-hosting and the desktop app use.
+#
+# Never add Cross-Origin-Opener-Policy here: the diagram handoff from the old address
+# (src/storage/handoff.ts) talks to the tab that opened this one through `window.opener`, and COOP
+# severs that link — every move would silently time out.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin

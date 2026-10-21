@@ -94,6 +94,8 @@ jobs:
       pages: write
       id-token: write
     uses: ./.github/workflows/pages.yml
+    # CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID, for the draftcanvas.dev deploy.
+    secrets: inherit
     with:
       artifact-name: ${{ needs.verification.outputs.artifact-name }}
       verified-commit: ${{ needs.verification.outputs.commit }}

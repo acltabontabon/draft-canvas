@@ -1,0 +1,9 @@
+// www.draftcanvas.dev — one permanent redirect to the apex, path and query kept.
+{
+  "name": "draftcanvas-www",
+  "main": "www.js",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [{ "pattern": "www.draftcanvas.dev", "custom_domain": true }]
+}

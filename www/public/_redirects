@@ -1,0 +1,3 @@
+# The editor has an address of its own. Anyone who guesses the old layout lands there.
+/editor    https://app.draftcanvas.dev/  301
+/editor/*  https://app.draftcanvas.dev/  301

@@ -1,0 +1,86 @@
+/* The old address's notice that Draft Canvas lives elsewhere now — see `MovedHouseNotice.tsx`.
+   A card in the page's own surface, its one accent the solid button: news, not an alarm. */
+
+.dc-moved {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 24px;
+  padding: 14px 16px 12px;
+  border: 1px solid var(--dc-border);
+  border-left: 3px solid var(--dc-selection);
+  border-radius: var(--dc-radius-lg);
+  background: color-mix(in srgb, var(--dc-selection) 5%, var(--dc-surface));
+  color: var(--dc-text-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+/* On Home it sits under the brand row, as wide as the shelf below it. */
+.dc-web-home .dc-moved {
+  width: min(960px, 100%);
+  margin: 20px auto 0;
+}
+
+.dc-moved-title {
+  margin: 0;
+  color: var(--dc-text);
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: -0.005em;
+}
+
+.dc-moved-body {
+  margin: 0;
+  max-width: 72ch;
+}
+
+.dc-moved-problem {
+  color: var(--dc-danger);
+}
+
+.dc-moved-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin-top: 4px;
+}
+
+.dc-moved-link {
+  color: var(--dc-selection);
+  font-weight: 600;
+  text-underline-offset: 3px;
+}
+
+.dc-moved-again {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--dc-text-muted);
+  font: inherit;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.dc-moved-again:hover {
+  color: var(--dc-text);
+}
+
+.dc-moved-aside {
+  color: var(--dc-text-muted);
+  font-size: 12px;
+}
+
+.dc-moved-fallback {
+  margin: 2px 0 0;
+  /* Muted, not faint: the faint token is under 4.5:1 at this size. */
+  color: var(--dc-text-muted);
+  font-size: 12px;
+}
+
+.dc-moved-fallback a,
+.dc-moved-fallback .dc-moved-again {
+  color: var(--dc-text);
+}
