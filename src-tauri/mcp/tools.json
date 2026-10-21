@@ -1388,7 +1388,11 @@
                 "implementedBy",
                 "implements",
                 "compensates",
-                "transforms"
+                "transforms",
+                "asks",
+                "delegates",
+                "escalates",
+                "notifies"
               ],
               "description": "Optional: inferred from the two element types when left out."
             },
@@ -2614,7 +2618,11 @@
                               "implementedBy",
                               "implements",
                               "compensates",
-                              "transforms"
+                              "transforms",
+                              "asks",
+                              "delegates",
+                              "escalates",
+                              "notifies"
                             ]
                           },
                           {
@@ -3347,7 +3355,11 @@
                 "implementedBy",
                 "implements",
                 "compensates",
-                "transforms"
+                "transforms",
+                "asks",
+                "delegates",
+                "escalates",
+                "notifies"
               ],
               "description": "Optional: inferred from the two element types when left out."
             },

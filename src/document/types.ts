@@ -243,6 +243,20 @@ export const EDGE_SEMANTICS = [
    *  the move a data-pipeline layer (raw → refined → curated) makes, distinct from a plain copy
    *  (`ingests`/`replicates`/`syncs`), which says nothing about the shape of the data changing. */
   'transforms',
+  /** One participant putting a question or a request to another and waiting on the answer — a
+   *  person asking a support team, a user prompting an AI agent, an agent asking a person to
+   *  approve a step. The conversational counterpart of `calls`, between participants rather than
+   *  software. */
+  'asks',
+  /** Handing a task over to be done by someone or something else, who then owns it — a person
+   *  delegating to an AI agent, an orchestrating agent to a sub-agent. */
+  'delegates',
+  /** Passing a case up to a person when an automated participant can't or shouldn't finish it —
+   *  a support bot handing a conversation to a human agent. */
+  'escalates',
+  /** Telling a participant something happened, without asking anything back — an email, a push
+   *  notification, an alert. */
+  'notifies',
 ] as const;
 export type EdgeSemantic = (typeof EDGE_SEMANTICS)[number];
 

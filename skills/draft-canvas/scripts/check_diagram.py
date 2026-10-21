@@ -150,6 +150,10 @@ SEMANTICS = {
     'implements',
     'compensates',
     'transforms',
+    'asks',
+    'delegates',
+    'escalates',
+    'notifies',
 }
 KINDS = {'sync', 'async', 'event', 'callback', 'conditional', 'retry', 'failure', 'fallback'}
 COLORS = {'neutral', 'teal', 'blue', 'violet', 'amber', 'rose', 'green'}

@@ -1402,15 +1402,15 @@ describe('reverseEdge() — reclassifying an eligible connector after a directio
   });
 
   it('clears a stale inferred semantic when the reversed pair has no inference', () => {
-    const actor = store.getState().addNode({ type: 'actor', x: 0, y: 0 });
-    const service = store.getState().addNode({ type: 'service', x: 300, y: 0 });
-    const edge = store.getState().connect(actor.id, service.id)!;
-    expect(edge.semantic).toBe('calls'); // actor>service has an opinion; service>actor does not
+    const topic = store.getState().addNode({ type: 'queue', queueKind: 'topic', x: 0, y: 0 });
+    const database = store.getState().addNode({ type: 'database', x: 300, y: 0 });
+    const edge = store.getState().connect(topic.id, database.id)!;
+    expect(edge.semantic).toBe('ingests'); // topic>database has an opinion; database>topic does not
 
     store.getState().reverseEdge(edge.id);
     const stored = store.getState().document.edges[0]!;
-    expect(stored.source).toBe(service.id);
-    expect(stored.target).toBe(actor.id);
+    expect(stored.source).toBe(database.id);
+    expect(stored.target).toBe(topic.id);
     expect(stored.semantic).toBeUndefined();
     expect(stored.kind).toBeUndefined();
     expect(stored.semanticsOrigin).toBeUndefined();

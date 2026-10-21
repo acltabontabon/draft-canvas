@@ -56,6 +56,8 @@ export function shapeKindOf(node: DraftNode): ShapeKind | null {
     case 'topic':
       return 'topic';
     case 'actor':
+    case 'agent':
+    case 'device':
       return 'actor';
     case 'component':
     case 'port':

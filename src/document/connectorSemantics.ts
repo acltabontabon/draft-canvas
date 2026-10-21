@@ -38,6 +38,8 @@ import type { ConnectorKind, DraftEdge, DraftNode, EdgeSemantic } from './types'
  */
 export type NodeCategory =
   | 'actor'
+  | 'agent'
+  | 'device'
   | 'service'
   | 'external'
   | 'worker'
@@ -58,11 +60,19 @@ export type NodeCategory =
   | 'generic';
 
 type CategorizableNode = Pick<DraftNode, 'type'> &
-  Partial<Pick<DraftNode, 'serviceKind' | 'databaseKind' | 'queueKind' | 'deliveryRole' | 'componentKind'>>;
+  Partial<Pick<DraftNode, 'serviceKind' | 'databaseKind' | 'queueKind' | 'deliveryRole' | 'componentKind' | 'actorKind'>>;
 
 export function categoryOf(node: CategorizableNode): NodeCategory {
   switch (node.type) {
     case 'actor':
+      // An AI agent and a device take part in relationships a person doesn't — an agent hands work
+      // to another agent and escalates to a person, a device is used by one and publishes
+      // telemetry — so each gets its own category. Both fold back to `actor` (see `resolved()`)
+      // for every pairing without its own row, which is what keeps "an agent calls the API" and
+      // every Actor continuation working for them unchanged. People, organisations and a system
+      // acting as a participant all stay `actor`: no rule tells them apart.
+      if (node.actorKind === 'agent') return 'agent';
+      if (node.actorKind === 'device') return 'device';
       return 'actor';
     case 'service':
       switch (node.serviceKind) {
@@ -113,6 +123,10 @@ export function categoryOf(node: CategorizableNode): NodeCategory {
       return 'generic';
   }
 }
+
+/** Every category an Actor shape can have — for a rule about participants as a whole, whatever
+ *  kind of participant they are. */
+export const ACTOR_CATEGORIES: readonly NodeCategory[] = ['actor', 'agent', 'device'];
 
 /**
  * How architecturally ordinary a category pair is. Omitted (or `'valid'`) is
@@ -306,6 +320,34 @@ export const MATRIX: Record<string, ConnectionCapability> = {
   // `command` and `query` because a person's request is one or the other more often than it's
   // neither — the two halves of CQRS, read straight off the client's own connectors.
   'actor>service': capability(['calls', 'http', 'command', 'query'], 'calls', []),
+  // Participants talking to participants. Between people the likely word is a request — a
+  // customer asking support, a manager handing work to a team is a pick away. A person and an AI
+  // agent read the same way round: you ask an assistant, or hand it a task outright. An agent
+  // talking to another agent is the orchestration pattern, so `delegates` leads; an agent turning
+  // to a person is the hand-off a bot makes when it can't or shouldn't finish, so `escalates`
+  // leads, with "asks for approval" and a plain notification beside it. A device is something a
+  // person uses, and tells them things back. An agent or device reaching a pairing without its
+  // own row reads as a person would (`resolved()`): a voice assistant asks an agent, a
+  // computer-use agent uses a device.
+  'actor>actor': capability(['asks', 'delegates', 'notifies', 'uses'], 'asks', []),
+  'actor>agent': capability(['asks', 'delegates', 'uses'], 'asks', []),
+  'agent>agent': capability(['delegates', 'asks', 'calls'], 'delegates', []),
+  'agent>actor': capability(['escalates', 'asks', 'notifies'], 'escalates', []),
+  'actor>device': capability(['uses'], 'uses', []),
+  'device>actor': capability(['notifies'], 'notifies', []),
+  // What an agent does that a person doesn't: it reads stores directly — retrieval, memory, a
+  // vector index — where a person always goes through a service (`actor>database` stays unlisted).
+  'agent>database': capability(['reads', 'query', 'readsWrites', 'writes'], 'reads', []),
+  'agent>searchIndex': capability(['searches', 'indexes'], 'searches', []),
+  // A device on the edge publishing straight into a broker — telemetry over MQTT, a sensor's
+  // readings onto a stream (which folds to `topic`).
+  'device>queue': capability(['publishes', 'command', 'event'], 'publishes', [], 'event'),
+  'device>topic': capability(['publishes', 'event'], 'publishes', [], 'event'),
+  // Software turning to a participant: a person or device is told something (an email, a push
+  // notification); an AI agent is set going, by a webhook or a schedule, the way a Scheduler
+  // triggers a worker.
+  'service>actor': capability(['notifies', 'event'], 'notifies', []),
+  'service>agent': capability(['triggers', 'notifies', 'calls'], 'triggers', []),
   'service>external': capability(
     ['calls', 'http', 'grpc', 'command', 'event', 'compensates', 'dependsOn'],
     'calls',
@@ -446,6 +488,7 @@ export const MATRIX: Record<string, ConnectionCapability> = {
  *  above instead, checked first by `capabilityFor` before this fallback is ever reached. */
 function resolved(category: NodeCategory): NodeCategory {
   if (category === 'deadLetter') return 'queue';
+  if (category === 'agent' || category === 'device') return 'actor';
   // A stream fans a record out to every consumer group the way a topic does to every subscriber;
   // what it feeds without its own row (a search index, a warehouse) it feeds like a topic.
   if (category === 'stream') return 'topic';

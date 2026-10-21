@@ -66,6 +66,12 @@ right most of the time. Set it when the code says something more specific:
 | An adapter implements a port | adapter → port | `implements` | |
 | Undoes an earlier step (saga) | service → service | `compensates` | `failure` |
 | A webhook or callback | external → service | `http` | `callback` |
+| A person prompts an AI agent, or hands it a task | person → ai-agent | `asks` · `delegates` | |
+| An orchestrating agent hands work to a sub-agent | ai-agent → ai-agent | `delegates` | |
+| A bot hands a case to a person, or asks for approval | ai-agent → person | `escalates` · `asks` | |
+| An agent retrieves from a store or vector index | ai-agent → store/search-index | `reads` · `searches` | |
+| An email, push or alert reaches someone | service → person/device | `notifies` | |
+| A webhook or schedule starts an agent | service/scheduler → ai-agent | `triggers` | |
 | A retry or fallback path | any | as the call | `retry` · `fallback` |
 
 `response` on a synchronous call draws its reply line: `true`, or a label such as `"201 Order"`. Use

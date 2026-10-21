@@ -17,6 +17,10 @@ the release notes and the in-app What's New are generated from here. See
 
 - **AI Agent actors** — an Actor can now be an AI Agent, drawn as a robot, for assistants, chatbots
   and autonomous agents that act on your system. Agents can draw them too. <!-- highlight -->
+- **Actors that talk to each other** — connectors between people, AI agents and devices label
+  themselves: a user *asks* an agent, an agent *delegates to* another or *escalates to* a person, and
+  a service *notifies* the people and devices it reaches. Change an actor's kind and its connectors
+  follow.
 
 #### Changed
 

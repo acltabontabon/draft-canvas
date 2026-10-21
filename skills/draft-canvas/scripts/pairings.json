@@ -23,8 +23,8 @@
   "user-group": "actor",
   "external-actor": "actor",
   "system-actor": "actor",
-  "device": "actor",
-  "ai-agent": "actor",
+  "device": "device",
+  "ai-agent": "agent",
   "component": "component",
   "module": "component",
   "adapter": "component",
@@ -72,12 +72,12 @@
   "human": "actor",
   "team": "actor",
   "third-party": "actor",
-  "agent": "actor",
-  "ai-assistant": "actor",
-  "assistant": "actor",
-  "bot": "actor",
-  "chatbot": "actor",
-  "llm": "actor"
+  "agent": "agent",
+  "ai-assistant": "agent",
+  "assistant": "agent",
+  "bot": "agent",
+  "chatbot": "agent",
+  "llm": "agent"
  },
  "holdsInside": [
   "service",
@@ -109,11 +109,25 @@
   "system"
  ],
  "offered": {
+  "actor>actor": [
+   "asks",
+   "delegates",
+   "notifies",
+   "uses"
+  ],
+  "actor>agent": [
+   "asks",
+   "delegates",
+   "uses"
+  ],
   "actor>component": [
    "calls",
    "http",
    "command",
    "query"
+  ],
+  "actor>device": [
+   "uses"
   ],
   "actor>external": [
    "calls",
@@ -145,6 +159,65 @@
    "command",
    "query"
   ],
+  "agent>actor": [
+   "escalates",
+   "asks",
+   "notifies"
+  ],
+  "agent>agent": [
+   "delegates",
+   "asks",
+   "calls"
+  ],
+  "agent>component": [
+   "calls",
+   "http",
+   "command",
+   "query"
+  ],
+  "agent>database": [
+   "reads",
+   "query",
+   "readsWrites",
+   "writes"
+  ],
+  "agent>device": [
+   "uses"
+  ],
+  "agent>external": [
+   "calls",
+   "http",
+   "command",
+   "query"
+  ],
+  "agent>gateway": [
+   "calls",
+   "http",
+   "command",
+   "query"
+  ],
+  "agent>scheduler": [
+   "calls",
+   "http",
+   "command",
+   "query"
+  ],
+  "agent>searchIndex": [
+   "searches",
+   "indexes"
+  ],
+  "agent>service": [
+   "calls",
+   "http",
+   "command",
+   "query"
+  ],
+  "agent>worker": [
+   "calls",
+   "http",
+   "command",
+   "query"
+  ],
   "cache>component": [
    "reads"
   ],
@@ -162,6 +235,15 @@
   ],
   "cache>worker": [
    "reads"
+  ],
+  "component>actor": [
+   "notifies",
+   "event"
+  ],
+  "component>agent": [
+   "triggers",
+   "notifies",
+   "calls"
   ],
   "component>cache": [
    "reads",
@@ -185,6 +267,10 @@
   "component>deadLetter": [
    "deadLetters",
    "publishes"
+  ],
+  "component>device": [
+   "notifies",
+   "event"
   ],
   "component>external": [
    "calls",
@@ -358,6 +444,80 @@
    "command",
    "event"
   ],
+  "device>actor": [
+   "notifies"
+  ],
+  "device>agent": [
+   "asks",
+   "delegates",
+   "uses"
+  ],
+  "device>component": [
+   "calls",
+   "http",
+   "command",
+   "query"
+  ],
+  "device>deadLetter": [
+   "publishes",
+   "command",
+   "event"
+  ],
+  "device>device": [
+   "uses"
+  ],
+  "device>external": [
+   "calls",
+   "http",
+   "command",
+   "query"
+  ],
+  "device>gateway": [
+   "calls",
+   "http",
+   "command",
+   "query"
+  ],
+  "device>queue": [
+   "publishes",
+   "command",
+   "event"
+  ],
+  "device>scheduler": [
+   "calls",
+   "http",
+   "command",
+   "query"
+  ],
+  "device>service": [
+   "calls",
+   "http",
+   "command",
+   "query"
+  ],
+  "device>stream": [
+   "publishes",
+   "event"
+  ],
+  "device>topic": [
+   "publishes",
+   "event"
+  ],
+  "device>worker": [
+   "calls",
+   "http",
+   "command",
+   "query"
+  ],
+  "external>actor": [
+   "notifies",
+   "event"
+  ],
+  "external>agent": [
+   "triggers",
+   "notifies",
+   "calls"
+  ],
   "external>cache": [
    "reads",
    "writes",
@@ -385,6 +545,10 @@
   "external>deadLetter": [
    "deadLetters",
    "publishes"
+  ],
+  "external>device": [
+   "notifies",
+   "event"
   ],
   "external>external": [
    "calls",
@@ -494,6 +658,15 @@
   "fileSystem>worker": [
    "reads"
   ],
+  "gateway>actor": [
+   "notifies",
+   "event"
+  ],
+  "gateway>agent": [
+   "triggers",
+   "notifies",
+   "calls"
+  ],
   "gateway>cache": [
    "dependsOn",
    "writes",
@@ -514,6 +687,10 @@
   "gateway>deadLetter": [
    "deadLetters",
    "publishes"
+  ],
+  "gateway>device": [
+   "notifies",
+   "event"
   ],
   "gateway>external": [
    "calls",
@@ -689,6 +866,15 @@
    "command",
    "event"
   ],
+  "scheduler>actor": [
+   "notifies",
+   "event"
+  ],
+  "scheduler>agent": [
+   "triggers",
+   "notifies",
+   "calls"
+  ],
   "scheduler>cache": [
    "reads",
    "writes",
@@ -711,6 +897,10 @@
   "scheduler>deadLetter": [
    "deadLetters",
    "publishes"
+  ],
+  "scheduler>device": [
+   "notifies",
+   "event"
   ],
   "scheduler>external": [
    "calls",
@@ -782,6 +972,15 @@
    "calls",
    "dependsOn"
   ],
+  "service>actor": [
+   "notifies",
+   "event"
+  ],
+  "service>agent": [
+   "triggers",
+   "notifies",
+   "calls"
+  ],
   "service>cache": [
    "reads",
    "writes",
@@ -809,6 +1008,10 @@
   "service>deadLetter": [
    "deadLetters",
    "publishes"
+  ],
+  "service>device": [
+   "notifies",
+   "event"
   ],
   "service>external": [
    "calls",
@@ -970,6 +1173,15 @@
   "topic>worker": [
    "deliversTo"
   ],
+  "worker>actor": [
+   "notifies",
+   "event"
+  ],
+  "worker>agent": [
+   "triggers",
+   "notifies",
+   "calls"
+  ],
   "worker>cache": [
    "reads",
    "writes",
@@ -997,6 +1209,10 @@
   "worker>deadLetter": [
    "deadLetters",
    "publishes"
+  ],
+  "worker>device": [
+   "notifies",
+   "event"
   ],
   "worker>external": [
    "calls",
