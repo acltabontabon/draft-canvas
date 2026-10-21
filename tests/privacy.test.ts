@@ -1,5 +1,5 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 /**
@@ -31,12 +31,24 @@ function sourceFiles(dir: string): string[] {
 const NETWORK_APIS: [string, RegExp][] = [
   ['fetch', /\bfetch\s*\(/],
   ['XMLHttpRequest', /\bXMLHttpRequest\b/],
-  ['WebSocket', /\bnew\s+WebSocket\b/],
   ['EventSource', /\bnew\s+EventSource\b/],
   ['sendBeacon', /\bsendBeacon\b/],
   ['importScripts', /\bimportScripts\s*\(/],
   ['dynamic remote import', /\bimport\s*\(\s*['"`]https?:/],
 ];
+
+/**
+ * The ways collaboration talks to a peer. Any mention counts, not only a constructor call: a type,
+ * a `globalThis` lookup or an alias is how such a call starts. They are allowed in exactly one
+ * place, `src/collab/transport/`, which hands the rest of the app whole messages and nothing else.
+ * Collaboration is opt-in and peer-to-peer; diagrams still never reach a server.
+ */
+const PEER_APIS: [string, RegExp][] = [
+  ['RTCPeerConnection', /\bRTCPeerConnection\b/],
+  ['RTCDataChannel', /\bRTCDataChannel\b/],
+  ['WebSocket', /\bWebSocket\b/],
+];
+const TRANSPORT_DIR = join(SRC, 'collab', 'transport') + sep;
 
 /** Ways code could be built from a string at runtime. */
 const EVAL_APIS: [string, RegExp][] = [
@@ -54,6 +66,29 @@ describe('nothing on the canvas can reach a network', () => {
 
   it.each(NETWORK_APIS)('uses no %s anywhere in src/', (_name, pattern) => {
     const offenders = files.filter((file) => pattern.test(readFileSync(file, 'utf8')));
+    expect(offenders.map((file) => relative(ROOT, file))).toEqual([]);
+  });
+
+  it.each(PEER_APIS)('uses %s only in src/collab/transport/', (_name, pattern) => {
+    const offenders = files.filter((file) => !file.startsWith(TRANSPORT_DIR) && pattern.test(readFileSync(file, 'utf8')));
+    expect(offenders.map((file) => relative(ROOT, file))).toEqual([]);
+  });
+
+  it('allows peer connections in exactly one directory, and it is in use', () => {
+    // The allowlist above is a single prefix; this keeps it from quietly covering nothing.
+    expect(files.some((file) => file.startsWith(TRANSPORT_DIR) && /\bRTCPeerConnection\b/.test(readFileSync(file, 'utf8')))).toBe(true);
+  });
+
+  it('is reached only from src/collab/', () => {
+    const collab = join(SRC, 'collab') + sep;
+    const SPECIFIER = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)['"`]([^'"`]+)['"`]/g;
+    const offenders = files.filter((file) => {
+      if (file.startsWith(collab)) return false;
+      return [...readFileSync(file, 'utf8').matchAll(SPECIFIER)].some(([, specifier]) => {
+        if (!specifier!.startsWith('.')) return false;
+        return (resolve(dirname(file), specifier!) + sep).startsWith(TRANSPORT_DIR);
+      });
+    });
     expect(offenders.map((file) => relative(ROOT, file))).toEqual([]);
   });
 
