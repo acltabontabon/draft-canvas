@@ -14,29 +14,6 @@ choose, and never involves a network.
 For setting it up, see the guide [Connect an AI agent](../guides/connect-an-ai-agent.md). This page
 is the design: what is guaranteed, where the boundaries are, and what is not supported.
 
-## Contents
-
-- [Architecture](#architecture)
-- [Tools](#tools)
-- [Selection-aware editing](#selection-aware-editing)
-- [Proposals: review before applying](#proposals-review-before-applying)
-- [One diagram across a conversation](#one-diagram-across-a-conversation)
-- [Revisions, persistence and undo](#revisions-persistence-and-undo)
-- [Retries and the request ledger](#retries-and-the-request-ledger)
-- [Layout and the quality gate](#layout-and-the-quality-gate)
-- [Notes and flows](#notes-and-flows)
-- [Relationship options and ends](#relationship-options-and-ends)
-- [Live progress and preview](#live-progress-and-preview)
-- [C4 support](#c4-support)
-- [Feature coverage](#feature-coverage)
-- [Limits](#limits)
-- [Errors](#errors)
-- [Security](#security)
-- [Running while the window is hidden](#running-while-the-window-is-hidden)
-- [Document compatibility and releases](#document-compatibility-and-releases)
-- [Performance](#performance)
-- [Not supported, and why](#not-supported-and-why)
-
 ## Architecture
 
 ```
