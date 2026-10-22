@@ -50,8 +50,11 @@ export interface CollabState {
    * own choice ("Only my network"): no relay is contacted at all.
    */
   rendezvous: 'off' | 'local' | 'connecting' | 'open' | 'unavailable';
-  /** The owner's: who has changed the canvas this session, by peer id — whose changes can be taken back. */
-  authors: Readonly<Record<string, true>>;
+  /**
+   * The owner's: who has changed the canvas this session — peer id to name — whose changes can be
+   * taken back. Kept after they leave: closing the tab is no way out of having your changes undone.
+   */
+  authors: Readonly<Record<string, string>>;
 }
 
 export interface KnockView {

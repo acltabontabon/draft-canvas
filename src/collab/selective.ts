@@ -69,7 +69,7 @@ export function revertEach(current: DraftDocument, reverts: readonly KeyRevert[]
   for (const revert of reverts) {
     const changes = diffOf(revert.left, revert.found).filter((change) => keyOf(change) === revert.key);
     if (changes.length === 0) continue;
-    if (stillAsLeft(current, revert.left, revert.key)) kept.push(...changes);
+    if (sameAt(current, revert.left, revert.key)) kept.push(...changes);
     else partial = true;
   }
   if (kept.length === 0) return { file: current, partial, blocked: false };
@@ -83,7 +83,7 @@ export function revertEach(current: DraftDocument, reverts: readonly KeyRevert[]
 }
 
 /** Whether `current` still holds, for `key`, exactly what `left` holds — the edit's result untouched. */
-function stillAsLeft(current: DraftDocument, left: DraftDocument, key: string): boolean {
+export function sameAt(current: DraftDocument, left: DraftDocument, key: string): boolean {
   const colon = key.indexOf(':');
   const kind = colon === -1 ? key : key.slice(0, colon);
   const rest = colon === -1 ? '' : key.slice(colon + 1);

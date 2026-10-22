@@ -7,6 +7,7 @@
  * editor for edits to send, and ends the session when the canvas on screen stops being the shared one.
  */
 import { HOST_ORIGIN } from '../collab/hostCore';
+import { idsUnique, withinLimits } from '../collab/limits';
 import { GuestSession, type GuestStatus } from '../collab/guestSession';
 import { HostSession } from '../collab/hostSession';
 import { withLocalView } from '../collab/localView';
@@ -177,7 +178,7 @@ export function startHosting(options: HostOptions): HostSession {
         useCollabStore.setState({ peers: others });
       },
       presence: setPresenceOf,
-      authored: (peerId: string) => useCollabStore.setState((state) => ({ authors: { ...state.authors, [peerId]: true } })),
+      authored: (peerId: string, name: string) => useCollabStore.setState((state) => ({ authors: { ...state.authors, [peerId]: name } })),
     },
     { name: options.name },
   );
@@ -219,7 +220,7 @@ export function removeCollaborator(peerId: string): void {
 }
 
 /** What taking back one person's changes came to, for the owner to be told. */
-export type UndoChangesOutcome = 'done' | 'partial' | 'nothing' | 'blocked';
+export type UndoChangesOutcome = 'done' | 'partial' | 'nothing' | 'blocked' | 'too-large';
 
 /**
  * Takes back everything `peerId` changed this session, where nobody has changed it since and nobody
@@ -234,6 +235,9 @@ export function undoChangesOf(peerId: string, name: string): UndoChangesOutcome 
   const result = host.authorship.revert(peerId, current);
   if (result.file === current) return result.blocked ? 'blocked' : 'nothing';
   const reverted = result.file;
+  // Bringing back what they deleted, after others have added their own, could pass the limits —
+  // the same check every collaborator's patch gets.
+  if (!withinLimits(reverted) || !idsUnique(reverted)) return 'too-large';
   if (!useEditorStore.getState().applyToFile(`Undo ${name}’s changes`, (file) => withLocalView(reverted, file))) return 'nothing';
   return result.partial || result.kept ? 'partial' : 'done';
 }

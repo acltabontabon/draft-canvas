@@ -2,12 +2,14 @@
  * Who changed what, on the owner's side, so the owner can take back one person's changes — the way
  * out when a collaborator's edits went wrong that doesn't also throw away everyone else's.
  *
- * For each person and each thing they touched (`changeKeys`), it keeps the file just before their
- * first edit to it and the file just after their last: enough to put it back, through the same rules
- * as selective undo (`revertEach`). Files share structure, so holding them costs only what changed.
+ * For each person and each thing they touched (`changeKeys`), it keeps the file just after their last
+ * edit to it, and the file just before the run of their edits that led there — the run starts again
+ * whenever someone else changed it in between. That is enough to put it back, through the same rules
+ * as selective undo (`revertEach`), without reaching past anyone else's version. Files share
+ * structure, so holding them costs only what changed.
  */
 import type { DraftDocument } from '../document/types';
-import { changeKeys, revertEach, type KeyRevert, type SelectiveStep } from './selective';
+import { changeKeys, revertEach, sameAt, type KeyRevert, type SelectiveStep } from './selective';
 
 interface Touch extends KeyRevert {
   /** The order of the last edit that touched it, so the newest come back first. */
@@ -33,6 +35,10 @@ export class Authorship {
     for (const key of keys) {
       const touch = touches.get(key);
       if (touch) {
+        // Someone else changed it since this person last did: what this person made before is
+        // already gone, and taking their changes back must land on that other person's version
+        // (or keep the owner's deletion), not reach past it to the very first.
+        if (!sameAt(before, touch.left, key)) touch.found = before;
         touch.left = after;
         touch.order = this.order;
       } else {

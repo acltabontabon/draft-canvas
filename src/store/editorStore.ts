@@ -161,6 +161,7 @@ import {
   EMPTY_SELECTION,
   canRedo,
   canUndo,
+  markCrossed,
   pushEntry,
   redo as redoStack,
   undo as undoStack,
@@ -1434,6 +1435,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       ...(moved ? { liveViewport: null } : {}),
       selection: cleared ? EMPTY_SELECTION : selectionThatExists(document, s.selection),
       revision: s.revision + 1,
+      // Someone else's edit now sits between every recorded step and the file: undo stays
+      // selective for all of them, during the session and after it.
+      history: markCrossed(s.history),
     }));
     closeStaleAttachmentDetail(document);
     return true;
@@ -2925,7 +2929,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // Mid-gesture (a drag or resize still held), swapping the document out from under it would
     // fold the restored state into the gesture's own entry and clear the redo stack.
     if (interaction) return;
-    if (isSharedEditing()) return selectiveStep(set, get, 'undo');
+    if (isSharedEditing() || state.history.past.at(-1)?.crossed) return selectiveStep(set, get, 'undo');
     const { history, entry } = undoStack(state.history);
     if (!entry) return;
     restoreSnapshot(set, get, {
@@ -2945,7 +2949,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (useUiStore.getState().flowTrace) return;
     const state = get();
     if (interaction) return;
-    if (isSharedEditing()) return selectiveStep(set, get, 'redo');
+    if (isSharedEditing() || state.history.future[0]?.crossed) return selectiveStep(set, get, 'redo');
     const { history, entry } = redoStack(state.history);
     if (!entry) return;
     restoreSnapshot(set, get, {

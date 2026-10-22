@@ -54,6 +54,13 @@ export interface HistoryEntry {
    * entry stop being "your edit" alone; undo then takes back just these.
    */
   keys?: readonly string[];
+  /**
+   * Someone else's edit landed after this one was recorded. Its snapshots no longer hold their
+   * work, so putting one back whole would take that work away — even once the session has ended.
+   * Such an entry only ever steps selectively (`collab/selective.ts`), and never absorbs a later
+   * edit recorded without keys.
+   */
+  crossed?: true;
 }
 
 export interface HistoryState {
@@ -88,6 +95,8 @@ export function pushEntry(
     entry.coalesceKey !== undefined &&
     top.coalesceKey === entry.coalesceKey &&
     samePath(top.path, entry.path) &&
+    // Coalesced, it would span someone else's edit with no keys to tell theirs from this one.
+    !(top.crossed && entry.keys === undefined) &&
     entry.at - top.at < COALESCE_WINDOW_MS;
 
   if (canCoalesce) {
@@ -153,6 +162,18 @@ function equivalent(a: unknown, b: unknown, depth: number): boolean {
   return aKeys.every(
     (key) => Object.hasOwn(b, key) && equivalent((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key], depth - 1),
   );
+}
+
+/**
+ * `history` with every entry marked as crossed by someone else's edit (see `HistoryEntry.crossed`).
+ * The same object when there is nothing new to mark, so a busy session costs nothing per edit.
+ */
+export function markCrossed(history: HistoryState): HistoryState {
+  const mark = (entries: HistoryEntry[]) =>
+    entries.every((entry) => entry.crossed) ? entries : entries.map((entry): HistoryEntry => (entry.crossed ? entry : { ...entry, crossed: true }));
+  const past = mark(history.past);
+  const future = mark(history.future);
+  return past === history.past && future === history.future ? history : { past, future };
 }
 
 export function undo(history: HistoryState): {

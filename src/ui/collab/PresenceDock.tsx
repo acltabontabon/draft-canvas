@@ -137,7 +137,7 @@ function DockPerson({ peer, presence, owner, presenting }: { peer: PeerView; pre
   const myRoom = useEditorStore((state) => state.path[state.path.length - 1] ?? '');
   const elsewhere = presence !== undefined && presence.room !== myRoom;
   const typing = presence?.editing != null;
-  const authored = useCollabStore((state) => state.authors[peer.id] === true);
+  const authored = useCollabStore((state) => state.authors[peer.id] !== undefined);
   const where = !presence ? 'Away from the canvas' : elsewhere ? `Inside ${roomName(presence.room)}` : presence.pointer ? 'Here with you' : 'In this view';
   const glyph = presenting ? 'present' : typing ? 'pencil' : elsewhere ? 'down' : null;
 

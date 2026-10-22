@@ -54,7 +54,7 @@ export interface HostEvents {
   peers(peers: PeerView[]): void;
   presence(peerId: string, presence: Presence | null): void;
   /** `peerId` changed the canvas for the first time this session: their changes can now be taken back. */
-  authored?(peerId: string): void;
+  authored?(peerId: string, name: string): void;
 }
 
 /** Ids and secrets: unguessable, from the platform's random source. */
@@ -388,7 +388,7 @@ export class HostSession {
     if (outcome.commit) {
       const first = !this.authorship.has(slot.info.id);
       this.authorship.record(slot.info.id, before, this.core.file);
-      if (first) this.events.authored?.(slot.info.id);
+      if (first) this.events.authored?.(slot.info.id, slot.info.name);
       // Same turn as the busy check that let this through, so the editor takes it.
       this.env.applyRemote(this.core.file);
       this.broadcast({ t: 'commit', ...outcome.commit });

@@ -5,10 +5,14 @@
  * element is now. Applying is deterministic and never invents anything (no ids, no timestamps), so
  * every copy that applies the same changes to the same file arrives at the same file.
  *
- * A change that cannot apply is skipped rather than failing the rest: an edit to a shape somebody
- * else just deleted, an add into a room whose owner is gone, a move that would nest a shape inside
- * itself or deeper than `LIMITS.maxInsideDepth`. The host's commit is what everyone then agrees on,
- * and it simply does not contain what was skipped.
+ * A change that cannot apply is skipped rather than failing the rest: an add into a room whose
+ * owner is gone, a move that would nest a shape inside itself or deeper than `LIMITS.maxInsideDepth`.
+ * The host's commit is what everyone then agrees on, and it simply does not contain what was skipped.
+ *
+ * An edit to a shape somebody else just deleted is not one of those: a change carries the whole
+ * element, so it brings the shape back as its editor last saw it — last writer wins, as for any two
+ * edits that cross — while its connectors and inside stay gone. The owner can take that person's
+ * changes back (`authorship.ts`), which then keeps the deletion.
  *
  * Changes go through in four passes, whatever order they are listed in: new shapes, then moves, then
  * everything else in each room (outermost room first, so a shape added in this batch exists before

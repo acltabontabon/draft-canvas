@@ -84,6 +84,24 @@ describe('taking back one person’s changes', () => {
     expect(s.ledger.revert('nobody', s.file).file).toBe(s.file);
   });
 
+  it('lands on someone else’s version in between, never reaching past it', () => {
+    const s = session(addNodes(createDocument('Shared'), [node('a')]));
+    s.edit('gus', (file) => updateNode(file, 'a', { text: 'G1' }));
+    s.edit('ada', (file) => updateNode(file, 'a', { text: 'Ada' }));
+    s.edit('gus', (file) => updateNode(file, 'a', { text: 'G2' }));
+    const result = s.ledger.revert('gus', s.file);
+    expect(result.file.nodes.find((n) => n.id === 'a')!.text).toBe('Ada');
+  });
+
+  it('keeps the owner’s deletion when a late edit of theirs brought the shape back', () => {
+    const s = session(addNodes(createDocument('Shared'), [node('a')]));
+    s.edit('gus', (file) => updateNode(file, 'a', { text: 'Gus' }));
+    s.edit('owner', (file) => removeElements(file, ['a']));
+    s.edit('gus', (file) => addNodes(file, [node('a', 'Gus again')]));
+    const result = s.ledger.revert('gus', s.file);
+    expect(ids(result.file)).toEqual([]);
+  });
+
   it('can be taken back again after an undo of the take-back', () => {
     const s = session(addNodes(createDocument('Shared'), [node('a')]));
     s.edit('gus', (file) => removeElements(file, ['a']));

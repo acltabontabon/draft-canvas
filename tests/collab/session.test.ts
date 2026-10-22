@@ -6,7 +6,7 @@ import { createDocument, createEdge, createNode } from '../../src/document/facto
 import { addEdges, addNodes, removeElements, updateNode } from '../../src/document/operations';
 import type { DraftDocument } from '../../src/document/types';
 import { PRODUCT } from '../../src/product';
-import { __resetCollabBridge, attachCollaborator, joinSession, setCollaboratorRole, startHosting, undoChangesOf } from '../../src/store/collabBridge';
+import { __resetCollabBridge, attachCollaborator, joinSession, removeCollaborator, setCollaboratorRole, startHosting, undoChangesOf } from '../../src/store/collabBridge';
 import { useCollabStore } from '../../src/store/collabStore';
 import { __resetClipboardSync, __resetInteraction, fileOf, useEditorStore } from '../../src/store/editorStore';
 import { useUiStore } from '../../src/store/uiStore';
@@ -180,13 +180,30 @@ describe('hosting from the editor', () => {
     expect(store.getState().document.nodes.some((node) => node.id === 'n_a')).toBe(false);
   });
 
+  it('never takes away a collaborator’s work with undo, even after the session has ended', () => {
+    store.getState().addNode({ type: 'note', x: 0, y: 200, text: 'Mine' });
+    settle(pump);
+    guest.edit((file) => addNodes(file, [createNode({ type: 'note', x: 0, y: 400, text: 'Guest note' })]));
+    settle(pump);
+    __resetCollabBridge();
+    const texts = () => store.getState().document.nodes.map((node) => node.text).sort();
+    store.getState().undo();
+    expect(texts()).toEqual(['A', 'B', 'Guest note']);
+    store.getState().redo();
+    expect(texts()).toEqual(['A', 'B', 'Guest note', 'Mine']);
+    // An edit made after the session is the owner's alone, and undoes as before.
+    store.getState().addNode({ type: 'note', x: 0, y: 600, text: 'Later' });
+    store.getState().undo();
+    expect(texts()).toEqual(['A', 'B', 'Guest note', 'Mine']);
+  });
+
   it('takes back one collaborator’s changes — and only theirs — as one undoable edit', () => {
     const gus = guest.session.id!;
     expect(useCollabStore.getState().authors[gus]).toBeUndefined();
     guest.edit((file) => removeElements(file, ['n_a', 'n_b']));
     settle(pump);
     expect(store.getState().document.nodes).toHaveLength(0);
-    expect(useCollabStore.getState().authors[gus]).toBe(true);
+    expect(useCollabStore.getState().authors[gus]).toBe('Ada');
     // The owner's own edit since is the owner's, and stays.
     store.getState().addNode({ type: 'note', x: 0, y: 200, text: 'Owner note' });
     settle(pump);
@@ -200,6 +217,19 @@ describe('hosting from the editor', () => {
     store.getState().undo();
     settle(pump);
     expect(texts()).toEqual(['Owner note']);
+  });
+
+  it('can still take back a collaborator’s changes once they are gone from the list', () => {
+    const gus = guest.session.id!;
+    guest.edit((file) => removeElements(file, ['n_a']));
+    settle(pump);
+    removeCollaborator(gus);
+    vi.advanceTimersByTime(1_000);
+    settle(pump);
+    expect(useCollabStore.getState().peers.some((peer) => peer.id === gus)).toBe(false);
+    expect(useCollabStore.getState().authors[gus]).toBe('Ada');
+    expect(undoChangesOf(gus, 'Ada')).toBe('done');
+    expect(store.getState().document.nodes.map((node) => node.id).sort()).toEqual(['n_a', 'n_b']);
   });
 
   it('leaves a collaborator’s shape that the owner has built on', () => {

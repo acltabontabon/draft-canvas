@@ -14,6 +14,8 @@ export function undoPersonChanges(peerId: string, name: string): void {
       return notify(`${name}’s changes stay: others have built on them.`, 'error');
     case 'nothing':
       return notify(`Nothing of ${name}’s is left to take back.`);
+    case 'too-large':
+      return notify(`Taking back ${name}’s changes would make this diagram too large.`, 'error');
   }
 }
 
@@ -22,7 +24,7 @@ export function undoPersonChanges(peerId: string, name: string): void {
  * too — the usual reason to remove an editor mid-session.
  */
 export function removePerson(peerId: string, name: string): void {
-  const authored = useCollabStore.getState().authors[peerId] === true;
+  const authored = useCollabStore.getState().authors[peerId] !== undefined;
   removeCollaborator(peerId);
   const notify = useUiStore.getState().notify;
   if (authored) notify(`${name} was removed from the session.`, 'info', { label: 'Undo their changes', run: () => undoPersonChanges(peerId, name) });
