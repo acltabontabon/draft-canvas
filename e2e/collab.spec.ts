@@ -63,13 +63,18 @@ async function startSession(owner: Page): Promise<string> {
   // at a documentation address (TEST-NET-1) that nothing answers, so the run asks nothing of the
   // internet. (A loopback address doesn't do: Chromium then fails to pair the host candidates.)
   await dialog.getByText('Anyone with the link').click();
+  // The STUN server is set behind the privacy seal, with the rest of what leaves the browser.
+  await dialog.getByRole('button', { name: 'How your diagram stays private' }).click();
   await dialog.getByText('Use your own STUN server').click();
   await dialog.getByLabel('Server').fill('stun:192.0.2.1:3478');
   await dialog.getByRole('button', { name: 'Start session' }).click();
   const link = dialog.getByRole('textbox', { name: 'Session link' });
   await expect(link).toHaveValue(/#join=2\./, { timeout: 15_000 });
-  // Said where the link is copied: the relay never sees the diagram.
-  await expect(dialog.getByText('Your diagram never passes through the relay', { exact: false })).toBeVisible();
+  // Behind the seal, said plainly: the relay never sees the diagram.
+  await dialog.getByRole('button', { name: 'How your diagram stays private' }).click();
+  await expect(dialog.getByRole('note')).toContainText('Your diagram never passes through the relay');
+  await dialog.getByRole('button', { name: 'How your diagram stays private' }).click();
+  await expect(dialog.getByRole('note')).toHaveCount(0);
   return link.inputValue();
 }
 

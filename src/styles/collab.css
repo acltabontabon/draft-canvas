@@ -649,6 +649,195 @@
   62% { transform: translate(calc(var(--dc-scene-x) - 7px), calc(var(--dc-scene-y) + 5px)); }
 }
 
+/* The privacy seal: a lock pressed onto the canvas's corner like wax on a letter. The note it opens
+   is the only place the dialogs explain what stays private; nobody has to read it to get going. */
+.dc-scene-layer {
+  position: absolute;
+  inset: 0;
+}
+
+.dc-scene-seal-anchor {
+  position: absolute;
+  z-index: 2;
+  transform: translate(-50%, -50%);
+}
+
+.dc-scene-seal {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--dc-selection) 70%, white), var(--dc-selection) 70%);
+  box-shadow: 0 0 0 3px var(--dc-canvas), 0 0 0 4px color-mix(in srgb, var(--dc-selection) 35%, transparent), 0 3px 8px rgb(0 0 0 / 18%);
+  color: var(--dc-canvas);
+  cursor: pointer;
+  transform: rotate(-8deg);
+  transition: transform 160ms ease, box-shadow 160ms ease;
+  animation: dc-scene-pop 420ms cubic-bezier(0.3, 1.4, 0.5, 1) 900ms both;
+}
+
+.dc-scene-seal svg {
+  width: 13px;
+  height: 13px;
+}
+
+.dc-scene-seal:hover,
+.dc-scene-seal[aria-expanded='true'] {
+  transform: rotate(0deg) scale(1.08);
+}
+
+.dc-scene-seal:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 4px;
+}
+
+.dc-scene-note {
+  position: absolute;
+  top: calc(100% + 12px);
+  right: -44px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  width: min(310px, 80vw);
+  padding: 12px 14px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-lg);
+  background: var(--dc-surface);
+  box-shadow: var(--dc-shadow-panel);
+  color: var(--dc-text);
+  font-size: 12.5px;
+  line-height: 1.5;
+  text-align: left;
+  animation: dc-scene-unfold 180ms ease-out both;
+}
+
+/* The bubble's tail, pointing back up at the seal. */
+.dc-scene-note::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  right: 50px;
+  width: 10px;
+  height: 10px;
+  border-top: 1px solid var(--dc-border);
+  border-left: 1px solid var(--dc-border);
+  background: var(--dc-surface);
+  transform: rotate(45deg);
+}
+
+.dc-scene-note-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--dc-selection);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.dc-scene-note .dc-collab-field {
+  align-self: stretch;
+}
+
+@keyframes dc-scene-unfold {
+  from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+}
+
+/* --------------------------------------------------------------- name tag -- */
+
+/* A conference sticker: a coloured band that says what it is, and the name written underneath. */
+.dc-nametag {
+  display: inline-flex;
+  flex-direction: column;
+  align-self: center;
+  min-width: 230px;
+  overflow: hidden;
+  border: 1.5px solid var(--dc-selection);
+  border-radius: 12px;
+  background: var(--dc-canvas);
+  box-shadow: 0 2px 0 color-mix(in srgb, var(--dc-selection) 25%, transparent), 0 6px 18px rgb(0 0 0 / 8%);
+  transform: rotate(-1.2deg);
+  transition: transform 160ms ease;
+}
+
+.dc-nametag:focus-within {
+  transform: rotate(0deg);
+}
+
+.dc-nametag-lead {
+  padding: 5px 12px 4px;
+  background: var(--dc-selection);
+  color: var(--dc-canvas);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.dc-nametag input {
+  width: auto;
+  min-width: 0;
+  padding: 9px 14px 11px;
+  border: 0;
+  background: transparent;
+  color: var(--dc-text);
+  font: inherit;
+  font-size: 19px;
+  font-weight: 600;
+  text-align: center;
+  outline: none;
+}
+
+.dc-nametag input::placeholder {
+  color: var(--dc-text-faint);
+  font-weight: 500;
+}
+
+/* Focus shows on the tag itself: a second ring around the sticker. */
+.dc-nametag:has(input:focus-visible) {
+  box-shadow: 0 0 0 3px var(--dc-selection-soft), 0 6px 18px rgb(0 0 0 / 8%);
+}
+
+/* ------------------------------------------------------------ centred page -- */
+
+.dc-collab-centred {
+  text-align: center;
+}
+
+.dc-collab-centred .dc-collab-form {
+  align-items: center;
+  gap: 18px;
+}
+
+.dc-collab-centred .dc-collab-choice {
+  width: 100%;
+}
+
+.dc-collab-centred .dc-collab-choice legend {
+  width: 100%;
+  margin-bottom: 8px;
+  color: var(--dc-text-muted);
+  text-align: center;
+}
+
+.dc-collab-centred .dc-collab-option {
+  text-align: left;
+}
+
+.dc-collab-go {
+  min-width: 190px;
+  height: 36px;
+  justify-content: center;
+  font-size: 13.5px;
+}
+
 /* ------------------------------------------------------------ hero, cards -- */
 
 .dc-collab-hero {
@@ -824,10 +1013,6 @@
   text-decoration-color: currentColor;
 }
 
-.dc-collab-assurance .dc-collab-textbutton {
-  display: inline;
-}
-
 .dc-collab-footer .dc-collab-restore {
   margin-right: auto;
 }
@@ -847,7 +1032,9 @@
   .dc-scene-face,
   .dc-scene-seat .dc-scene-face,
   .dc-scene-tie,
-  .dc-scene-pointer {
+  .dc-scene-pointer,
+  .dc-scene-seal,
+  .dc-scene-note {
     animation: none !important;
   }
 
@@ -1071,26 +1258,6 @@
   from { opacity: 0; transform: translateX(8px); }
 }
 
-/* -------------------------------------------- session link and assurance -- */
-
-.dc-collab-assurance {
-  display: flex;
-  align-items: flex-start;
-  gap: 7px;
-  margin: 2px 0 0;
-  padding: 8px 10px;
-  border-radius: var(--dc-radius-sm);
-  background: var(--dc-selection-soft);
-  color: var(--dc-text);
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.dc-collab-assurance svg {
-  flex: none;
-  margin-top: 2px;
-  color: var(--dc-selection);
-}
 
 .dc-collab-direct > summary {
   font-size: 12.5px;

@@ -223,6 +223,9 @@ async function collabScreenshots(browser: Browser, page: Page) {
   await page.setViewportSize(tall);
   await page.waitForTimeout(900); // the scene draws itself in
   await shotDialog(page, 'collab-start');
+  // The privacy seal, opened: what leaves the browser, and the STUN server setting.
+  await dialog.getByRole('button', { name: 'How your diagram stays private' }).click();
+  await shotDialog(page, 'collab-privacy');
   // A STUN server nothing answers (TEST-NET-1): the two browsers on this machine need none.
   await dialog.getByText('Use your own STUN server').click();
   await dialog.getByLabel('Server').fill('stun:192.0.2.1:3478');

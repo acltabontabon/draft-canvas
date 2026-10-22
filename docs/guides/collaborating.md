@@ -12,7 +12,7 @@ canvas is theirs alone again.
 
 1. Open the canvas and press **Collaborate** (the people icon in the toolbar), or run
    **Collaborate…** from the command palette (`⌘K`).
-2. Enter your name — the one shown next to your cursor — and choose **who can join**:
+2. Write your name on the name tag — it's shown next to your cursor — and choose **who can join**:
    - **Anyone with the link** (the default) works between different homes and offices. A public
      STUN server helps your browsers find a route to each other, and Draft Canvas's relay lets people
      ask to join (below). Both see IP addresses; neither ever sees the diagram.
@@ -24,7 +24,12 @@ canvas is theirs alone again.
 
 Collaborators don't choose: their browser follows yours, asking a STUN server only if you did.
 
-![The Collaborate dialog before a session: a sketch of a shared canvas with your face beside it and three empty seats, the steps "Share one link, They ask to join, You let them in", a name field holding "Ada", and two choices — Anyone with the link, Only my network — above the Start session button.](../media/guides/collab-start.png)
+![The Collaborate dialog before a session: a sketch of a shared canvas with your face beside it, three empty seats and a lock on the canvas's corner, the steps "Share one link, They ask to join, You let them in", a "Hello, my name is" name tag reading "Ada", and two choices — Anyone with the link, Only my network — above the Start session button.](../media/guides/collab-start.png)
+
+**What stays private** is one click away: press the lock on the sketched canvas, in the Collaborate
+and Join dialogs alike. Your own STUN server, if you'd rather not use the default, is set there too.
+
+![The lock opened: a "Private by design" note saying the diagram goes straight between browsers, encrypted, that the relay and STUN server see IP addresses but never the diagram, and a link to use your own STUN server.](../media/guides/collab-privacy.png)
 
 The toolbar now shows **Live** and how many people are in the session, and the people themselves
 appear in a column at the top right of the canvas.
@@ -37,7 +42,7 @@ people column, ringed and waiting, with a card that says who wants to join: choo
 **Can view** and press **Let in**, or **Deny**. The same question waits at the top of the
 Collaborate dialog, and if you're presenting, a notice with **Let in** pops up too.
 
-![The Collaborate dialog during a session: the sketch of the shared canvas with your face and empty seats, an Invite people card with the session link and a Copy link button, a note that the diagram never passes through the relay, and Ada listed as owner.](../media/guides/collab-session.png)
+![The Collaborate dialog during a session: the sketch of the shared canvas with your face and empty seats, an Invite people card with the session link and a Copy link button, and Ada listed as owner.](../media/guides/collab-session.png)
 
 ![The owner's canvas with a card at the top right reading "Wants to join: Grace", a Can edit choice, Let in and Deny, beside Grace's dashed, waiting face in the people column.](../media/guides/collab-door.png)
 
@@ -67,11 +72,11 @@ send you back a reply code to paste.
 
 ## Join a session
 
-Open the link you were sent. Type your name — the one others will see — and press **Ask to join**.
+Open the link you were sent. Write your name on the name tag — the one others will see — and press **Ask to join**.
 Keep the page open: it says when the owner has seen you, and the canvas opens as soon as they let
 you in.
 
-![The Join a live session dialog: the sketch of the owner's canvas with your initials waiting at a seat, a short explanation, a name field holding "Grace", the Ask to join button, and a note on what the relay and STUN server see.](../media/guides/collab-join.png)
+![The Join a live session dialog: the sketch of the owner's canvas with your initials waiting at a seat, a short explanation, a "Hello, my name is" name tag reading "Grace", and the Ask to join button.](../media/guides/collab-join.png)
 
 If you were sent a direct invite instead, you get a reply code, already copied to your
 clipboard where your browser allows it; send it back to the person who invited you.

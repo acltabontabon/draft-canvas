@@ -2,7 +2,6 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { answerInvite, CollabCodeError, peerConnectionsAvailable, relayUrl, type CollabTransport } from '../../collab/connect';
 import { knock, type KnockStatus } from '../../collab/lobby';
 import { readSessionPayload, rendezvousAvailable } from '../../collab/rendezvous';
-import { Icon } from '../common/Icon';
 import { logDiagnostic } from '../../lib/diagnostics';
 import { rejoinByRelay } from './relayGuest';
 import { keepLanGuestConnected, lanTokenFromPayload, openLanGuest } from '../../collab/lan';
@@ -13,6 +12,7 @@ import type { DocumentSession } from '../../store/useDocumentSession';
 import { Button } from '../common/Button';
 import { Modal } from '../common/Modal';
 import { copyText } from './clipboard';
+import { NameTag } from './NameTag';
 import { SessionScene, type SeatState } from './SessionScene';
 import { END_MESSAGES, readConnectionPreferences, readDisplayName, writeDisplayName } from './collabCopy';
 
@@ -39,7 +39,6 @@ export function JoinDialog({ session, invite }: { session: DocumentSession; invi
   const cancelJoin = useRef<(() => void) | null>(null);
   /** Whether this began as picking a dropped session back up — read once it is live again. */
   const rejoining = useRef(false);
-  const nameId = useId();
   const codeId = useId();
   const notify = useUiStore((state) => state.notify);
   const status = useCollabStore((state) => state.status);
@@ -157,8 +156,26 @@ export function JoinDialog({ session, invite }: { session: DocumentSession; invi
 
   return (
     <Modal title={resuming ? 'Rejoin the session' : 'Join a live session'} onClose={close} width={500} className="dc-collab-dialog">
-      <div className="dc-collab">
-        <SessionScene owner={{ name: shown.kind === 'knocking' && 'owner' in shown.status ? shown.status.owner : '', color: 0 }} people={[{ key: 'me', name: name.trim(), color: 1, state: seatOf(shown), you: true }]} />
+      <div className="dc-collab dc-collab-centred">
+        <SessionScene
+          owner={{ name: shown.kind === 'knocking' && 'owner' in shown.status ? shown.status.owner : '', color: 0 }}
+          people={[{ key: 'me', name: name.trim(), color: 1, state: seatOf(shown), you: true }]}
+          privacy={
+            lanToken ? (
+              <span>
+                You connect straight to the owner’s computer on this network — nothing goes through the internet. Traffic on the
+                network isn’t encrypted, so join on a network you trust.
+              </span>
+            ) : (
+              // How to connect follows the owner's choice (`followOwner`), so there is nothing to pick — only what is asked.
+              <span>
+                The diagram comes straight from the owner’s browser, encrypted — never through a server.{' '}
+                {sessionLink ? 'A relay passes along your request to join, and a STUN server may help you connect: ' : 'A STUN server may help you connect: '}
+                they see IP addresses, never the diagram.
+              </span>
+            )
+          }
+        />
         {shown.kind === 'form' || shown.kind === 'preparing' ? (
           <>
             <p className="dc-collab-lead">
@@ -182,34 +199,10 @@ export function JoinDialog({ session, invite }: { session: DocumentSession; invi
                   void begin();
                 }}
               >
-                <label className="dc-collab-field" htmlFor={nameId}>
-                  <span>Your name</span>
-                  <input
-                    id={nameId}
-                    value={name}
-                    maxLength={40}
-                    autoFocus
-                    autoComplete="nickname"
-                    placeholder="How others in the session see you"
-                    onChange={(event) => setName(event.target.value)}
-                  />
-                </label>
-                <div className="dc-collab-actions">
-                  <Button type="submit" variant="solid" icon="people" disabled={!name.trim() || shown.kind === 'preparing'} aria-busy={shown.kind === 'preparing'}>
-                    {shown.kind === 'preparing' ? 'Preparing…' : resuming ? 'Rejoin' : sessionLink ? 'Ask to join' : 'Join'}
-                  </Button>
-                </div>
-                {/* How to connect follows the owner's choice (`followOwner`), so there is nothing to pick — only what is asked. */}
-                {!lanToken && (
-                  <p className="dc-collab-assurance">
-                    <Icon name="lock" />
-                    <span>
-                      The diagram comes straight from the owner’s browser, encrypted — never through a server.{' '}
-                      {sessionLink ? 'A relay passes along your request to join, and a STUN server may help you connect; ' : 'A STUN server may help you connect; '}
-                      they see IP addresses only.
-                    </span>
-                  </p>
-                )}
+                <NameTag value={name} onChange={setName} />
+                <Button type="submit" variant="solid" icon="people" className="dc-collab-go" disabled={!name.trim() || shown.kind === 'preparing'} aria-busy={shown.kind === 'preparing'}>
+                  {shown.kind === 'preparing' ? 'Preparing…' : resuming ? 'Rejoin' : sessionLink ? 'Ask to join' : 'Join'}
+                </Button>
               </form>
             )}
           </>
@@ -230,7 +223,7 @@ export function JoinDialog({ session, invite }: { session: DocumentSession; invi
             </p>
           </div>
         ) : shown.kind === 'knocking' ? (
-          <KnockProgress status={shown.status} onCancel={close} viaRelay={lanToken === null} />
+          <KnockProgress status={shown.status} onCancel={close} />
         ) : shown.kind === 'joining' ? (
           <>
             <p className="dc-collab-hint dc-collab-waiting" aria-live="polite">
@@ -255,7 +248,7 @@ export function JoinDialog({ session, invite }: { session: DocumentSession; invi
 }
 
 /** The wait at the owner's door, in words — and what to do when the door can't be reached. */
-function KnockProgress({ status, onCancel, viaRelay }: { status: KnockStatus; onCancel: () => void; viaRelay: boolean }) {
+function KnockProgress({ status, onCancel }: { status: KnockStatus; onCancel: () => void }) {
   const message =
     status.kind === 'connecting'
       ? 'Knocking…'
@@ -276,12 +269,6 @@ function KnockProgress({ status, onCancel, viaRelay }: { status: KnockStatus; on
       <p className={settled ? 'dc-collab-error' : 'dc-collab-hint dc-collab-waiting'} role={settled ? 'alert' : undefined} aria-live="polite">
         {message}
       </p>
-      {!settled && viaRelay && (
-        <p className="dc-collab-assurance">
-          <Icon name="lock" /> The link only introduces your browsers. The diagram never passes through the relay — it comes straight from
-          the owner, encrypted — and none of it is stored.
-        </p>
-      )}
       <div className="dc-collab-actions">
         <Button variant={settled ? 'solid' : 'quiet'} onClick={onCancel}>
           {settled ? 'Close' : 'Cancel'}

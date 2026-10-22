@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useId, useRef, useState } from 'react';
 import { DEFAULT_STUN, peerConnectionsAvailable } from '../../collab/connect';
 import { MAX_COLLABORATORS, type PeerView, type Role } from '../../collab/protocol';
 import { leaveSessionKeepingView, removeCollaborator, restoreSessionStart, setCollaboratorRole, startHosting, stopHosting } from '../../store/collabBridge';
@@ -15,6 +15,7 @@ import { openLobby } from './lobbyStore';
 import { answerKnock } from '../../store/collabBridge';
 import { hostKind } from '../../host/hostInfo';
 import { PeerBadge } from './PeerBadge';
+import { NameTag } from './NameTag';
 import { SessionScene, type ScenePerson } from './SessionScene';
 
 function onDesktop(): boolean {
@@ -39,21 +40,10 @@ export function CollaborateDialog() {
   );
 }
 
-/** The fine print every screen ends with: what goes where, in one sentence. */
-function Assurance({ children }: { children: ReactNode }) {
-  return (
-    <p className="dc-collab-assurance">
-      <Icon name="lock" />
-      <span>{children}</span>
-    </p>
-  );
-}
-
 function Start() {
   const [name, setName] = useState(readDisplayName);
   const [network, setNetwork] = useState(() => readConnectionPreferences());
   const [ownServer, setOwnServer] = useState(() => network.server.trim() !== '');
-  const nameId = useId();
   const serverId = useId();
   // The desktop app can always host: its local network link needs no peer connections.
   const available = peerConnectionsAvailable() || onDesktop();
@@ -71,9 +61,38 @@ function Start() {
     else openLobby(trimmed);
   };
 
+  const privacy = network.localOnly ? (
+    <span>Nothing leaves your network — no relay, no STUN server. Your diagram goes straight from your browser to theirs, encrypted.</span>
+  ) : (
+    <>
+      <span>
+        Your diagram goes straight from your browser to theirs, encrypted. Draft Canvas never sees it. A relay passes along
+        requests to join and a STUN server helps browsers find each other — they see IP addresses, never the diagram.
+      </span>
+      {ownServer ? (
+        <label className="dc-collab-field" htmlFor={serverId}>
+          <span>Server</span>
+          <input
+            id={serverId}
+            value={network.server}
+            maxLength={64}
+            spellCheck={false}
+            autoFocus
+            placeholder={DEFAULT_STUN}
+            onChange={(event) => setNetwork({ ...network, server: event.target.value })}
+          />
+        </label>
+      ) : (
+        <button type="button" className="dc-collab-textbutton" onClick={() => setOwnServer(true)}>
+          Use your own STUN server
+        </button>
+      )}
+    </>
+  );
+
   return (
-    <div className="dc-collab">
-      <SessionScene owner={{ name: name.trim() || 'You', color: 0, you: true }} people={[]} />
+    <div className="dc-collab dc-collab-centred">
+      <SessionScene owner={{ name: name.trim(), color: 0, you: true }} people={[]} privacy={privacy} />
       <div className="dc-collab-hero">
         <h3 className="dc-collab-title">Draw together, live</h3>
         <ol className="dc-collab-how" aria-label="How it works">
@@ -101,18 +120,7 @@ function Start() {
           start();
         }}
       >
-        <label className="dc-collab-field" htmlFor={nameId}>
-          <span>Your name</span>
-          <input
-            id={nameId}
-            value={name}
-            maxLength={40}
-            autoFocus
-            autoComplete="nickname"
-            placeholder="Shown next to your cursor"
-            onChange={(event) => setName(event.target.value)}
-          />
-        </label>
+        <NameTag value={name} onChange={setName} />
         <fieldset className="dc-collab-choice">
           <legend>Who can join?</legend>
           <Choice
@@ -132,41 +140,10 @@ function Start() {
             onSelect={() => setNetwork({ ...network, localOnly: true })}
           />
         </fieldset>
-        {!network.localOnly && ownServer && (
-          <label className="dc-collab-field" htmlFor={serverId}>
-            <span>Server</span>
-            <input
-              id={serverId}
-              value={network.server}
-              maxLength={64}
-              spellCheck={false}
-              autoFocus
-              placeholder={DEFAULT_STUN}
-              onChange={(event) => setNetwork({ ...network, server: event.target.value })}
-            />
-          </label>
-        )}
-        <div className="dc-collab-actions">
-          <Button type="submit" variant="solid" icon="people" disabled={!available || !name.trim()}>
-            Start session
-          </Button>
-        </div>
+        <Button type="submit" variant="solid" icon="people" className="dc-collab-go" disabled={!available || !name.trim()}>
+          Start session
+        </Button>
       </form>
-      <Assurance>
-        {network.localOnly ? (
-          'Nothing leaves your network: no relay, no STUN server. Your diagram goes straight from your browser to theirs, encrypted.'
-        ) : (
-          <>
-            Your diagram goes straight from your browser to theirs, encrypted — Draft Canvas never sees it. A relay passes
-            along requests to join and a STUN server helps browsers find each other; both see IP addresses only.{' '}
-            {!ownServer && (
-              <button type="button" className="dc-collab-textbutton" onClick={() => setOwnServer(true)}>
-                Use your own STUN server
-              </button>
-            )}
-          </>
-        )}
-      </Assurance>
     </div>
   );
 }
@@ -204,7 +181,16 @@ function Hosting({ onClose }: { onClose: () => void }) {
   const full = present.length >= MAX_COLLABORATORS;
   return (
     <div className="dc-collab">
-      <SessionScene owner={{ name: selfName, color: 0, you: true }} people={scene} />
+      <SessionScene
+        owner={{ name: selfName, color: 0, you: true }}
+        people={scene}
+        privacy={
+          <span>
+            The link only introduces your browsers. Your diagram never passes through the relay — it goes straight between
+            browsers, encrypted — and none of it is stored.
+          </span>
+        }
+      />
       <Knocks />
       <InviteCard full={full} />
       <section className="dc-collab-section" aria-labelledby="dc-collab-people">
@@ -362,7 +348,6 @@ function SessionLink({ full }: { full: boolean }) {
           ? `The session is full: it holds up to ${MAX_COLLABORATORS} collaborators.`
           : 'Send it to anyone you like. When they open it, they ask to join and you choose: let them in, or not.'}
       </p>
-      <Assurance>The link only introduces your browsers. Your diagram never passes through the relay — it goes straight between browsers, encrypted, and none of it is stored.</Assurance>
     </>
   );
 }
@@ -614,7 +599,13 @@ function Joined({ onClose }: { onClose: () => void }) {
   ];
   return (
     <div className="dc-collab">
-      {status !== 'ended' && <SessionScene owner={{ name: owner?.name ?? 'Owner', color: owner?.color ?? 0 }} people={scene} />}
+      {status !== 'ended' && (
+        <SessionScene
+          owner={{ name: owner?.name ?? 'Owner', color: owner?.color ?? 0 }}
+          people={scene}
+          privacy={<span>You’re connected straight to the owner’s browser, encrypted. The diagram never passes through Draft Canvas.</span>}
+        />
+      )}
       {status === 'ended' && endReason ? (
         <p className="dc-collab-error" role="status">
           {END_MESSAGES[endReason]} What you see stays on screen; make an editable copy to keep it.
