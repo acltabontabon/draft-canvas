@@ -23,7 +23,7 @@ export default defineConfig({
     acceptDownloads: true,
   },
   // Every engine the app ships to. `--project=firefox` or `PLAYWRIGHT_BROWSER=firefox` runs one;
-  // CI also splits each engine by file with `--shard`. A local run takes all three, slowest last.
+  // CI splits each engine with `--fully-parallel --shard`. A local run takes all three, slowest last.
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
     { name: 'firefox', use: { ...devices['Desktop Firefox'] } },

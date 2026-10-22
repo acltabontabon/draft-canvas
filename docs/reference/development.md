@@ -82,7 +82,8 @@ npx playwright show-trace 'test-results/<failed-test>/trace.zip'
 `ci.yml` is the entry point for pull requests and `main`.
 
 - **Shared checks** (`shared-checks.yml`): lint, tooling type-check, unit tests with coverage, once.
-- **Browsers:** the editor suite runs in three shards per browser. CI retries once but
+- **Browsers:** the editor suite runs in four Chromium shards, four Firefox shards and six WebKit
+  shards. `--fully-parallel` distributes individual tests, with one worker per runner. CI retries once but
   `--fail-on-flaky-tests` fails a test that passes only on retry.
 - **Desktop** (`desktop-ci.yml`): runs when `src/`, `src-tauri/`, desktop tests, root package or
   build config, workflows or CI scripts change (`scripts/ci-plan.mjs`).
@@ -91,6 +92,11 @@ npx playwright show-trace 'test-results/<failed-test>/trace.zip'
   link checks and the site build only. `CHANGELOG.md` is compiled into the editor, so it runs full CI.
 - **`verify`** is the final required job. Performance budgets run only for tagged releases.
 - Manual runs, release callers (`full-checks: true`) and missing history always run everything.
+
+Desktop Chromium and WebKit journeys run on separate runners. Native CI builds retain line tables
+for backtraces rather than full type/variable debug data, reducing compilation and cache size; local
+Cargo profiles keep their defaults. Security caches its pinned `cargo-audit` executable, while
+fetching current advisories and running every audit again.
 
 ### Reusing a PR run on `main`
 

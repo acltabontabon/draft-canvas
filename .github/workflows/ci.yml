@@ -174,8 +174,9 @@ jobs:
       # Published guides are part of the site; validate rendering without rebuilding the editor.
       - run: npm run site:build
 
-  # The whole journey suite, split by file across three runners per engine. Keep one worker per
-  # runner: parallel browsers on one CPU compete for frames and make interaction tests less stable.
+  # Split individual tests across four runners per engine, six for the slower WebKit suite.
+  # Keep one worker per runner: parallel browsers on one CPU compete for frames and make
+  # interaction tests less stable. These 14 shards leave room for desktop and shared checks.
   # Retries stay on so a flaky test is *identified*: `--fail-on-flaky-tests` fails when a test only
   # passed on its retry, so a flake is fixed, not tolerated.
   e2e:
@@ -187,7 +188,10 @@ jobs:
       fail-fast: false
       matrix:
         browser: [chromium, firefox, webkit]
-        shard: [1, 2, 3]
+        shard: [1, 2, 3, 4]
+        include:
+          - { browser: webkit, shard: 5 }
+          - { browser: webkit, shard: 6 }
     env:
       PLAYWRIGHT_BROWSER: ${{ matrix.browser }}
       DC_TEST_BUILT: '1'
@@ -224,7 +228,7 @@ jobs:
       - run: tar -xf verified-web.tar
       - id: journeys
         timeout-minutes: 15
-        run: npm run e2e -- --shard=${{ matrix.shard }}/3 --fail-on-flaky-tests
+        run: npm run e2e -- --fully-parallel --shard=${{ matrix.shard }}/${{ matrix.browser == 'webkit' && 6 || 4 }} --fail-on-flaky-tests
       # These small artifact suites run once per engine, not once per journey shard. They consume
       # the verified build above; neither needs the site's dependencies or a rebuild.
       - if: ${{ !cancelled() && steps.journeys.outcome != 'skipped' && matrix.shard == 1 && matrix.browser == 'chromium' }}
