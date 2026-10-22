@@ -105,9 +105,9 @@ jobs:
       - name: Patch the released editor's source-map build dependency
         if: github.ref_type != 'tag' || inputs.release-tag != ''
         run: npm update source-map-js --package-lock-only --ignore-scripts
-      - run: npm ci
+      - run: npm ci --no-audit --no-fund
       # The site has its own lockfile and shares no dependency with the app on purpose.
-      - run: npm ci
+      - run: npm ci --no-audit --no-fund
         working-directory: www
       # Builds the editor, builds the site, and assembles dist-web/ — failing loudly if either
       # half is missing a file the deploy needs.
@@ -169,7 +169,7 @@ jobs:
         run: |
           git fetch --no-tags --depth=1 origin "$CONTROL_COMMIT"
           git checkout FETCH_HEAD -- playwright.dist.config.ts playwright.web.config.ts e2e/web-deploy.spec.ts scripts/stage-subpath.mjs scripts/serve-web.mjs
-      - run: npm ci
+      - run: npm ci --no-audit --no-fund
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: verified-site-${{ github.run_id }}

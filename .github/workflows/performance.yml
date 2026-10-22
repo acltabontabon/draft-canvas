@@ -40,7 +40,7 @@ jobs:
         with:
           node-version: 22.14.0
           cache: npm
-      - run: npm ci
+      - run: npm ci --no-audit --no-fund
       - run: npx playwright install --with-deps chromium
       - name: Verify the selected source against current performance budgets
         run: |

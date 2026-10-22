@@ -37,8 +37,8 @@ jobs:
           node-version: 22.14.0
           cache: npm
       - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
-      - run: npm ci
-      - run: npm ci
+      - run: npm ci --no-audit --no-fund
+      - run: npm ci --no-audit --no-fund
         working-directory: www
       - run: npx --no-install tsx .automation/scripts/dependency-audit.ts npm --policy .automation/.github/advisory-exceptions.json
       - run: cargo install cargo-audit --version 0.22.2 --locked

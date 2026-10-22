@@ -248,7 +248,7 @@ jobs:
       - uses: swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           workspaces: src-tauri
-      - run: npm ci
+      - run: npm ci --no-audit --no-fund
       # The app is built as the version being released: package.json's for a release, the tag's for a
       # prerelease that leads it (check-desktop-version.mjs allows only that).
       - name: Build as this version
