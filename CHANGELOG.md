@@ -15,6 +15,11 @@ the release notes and the in-app What's New are generated from here. See
 
 #### Added
 
+- **Live collaboration** — edit one canvas together in real time. Start a session, share one link,
+  and let people in as they ask to join. Everyone's browser connects straight to yours: your diagram
+  never passes through a server, and your copy stays the one that's saved. See who's here and where,
+  each other's cursors and selections, follow the presenter, decide who can edit, and undo only your
+  own changes. <!-- highlight -->
 - **Rich text** — Text shapes are written in Markdown: headings, bold and italic, highlights,
   inline code, syntax-highlighted code blocks and diffs, lists and checklists, tables, quotes,
   GitHub-style callouts and coloured words, drawn the same on the canvas and in every export. A
@@ -71,6 +76,12 @@ the release notes and the in-app What's New are generated from here. See
 - The status bar says "Saved" only once every edit is saved.
 
 ### Desktop
+
+#### Added
+
+- **Share on your local network** — during a live session, the desktop app can share with everyone
+  on the same network through one link they open in a browser, with no reply code. Meant for a
+  trusted network: that link's traffic isn't encrypted.
 
 #### Changed
 

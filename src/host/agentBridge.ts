@@ -16,6 +16,7 @@ import { isEditableTarget } from '../lib/isEditableTarget';
 import { typedWithin } from '../lib/recentTyping';
 import { fileWithLiveViewport, isInteracting, useEditorStore } from '../store/editorStore';
 import { useUiStore } from '../store/uiStore';
+import { useCollabStore } from '../store/collabStore';
 
 /** Changes once per page load, so a revision from before a reload or restart can never match. */
 const EPOCH = Math.random().toString(36).slice(2, 8);
@@ -42,6 +43,9 @@ const TYPING_IDLE_MS = 2500;
 
 /** Why an outside change must wait, if it must. Never steals focus to make the moment right. */
 export function busyReason(): string | undefined {
+  // A collaborator's copy is not the diagram: the owner's is, and an agent edit here would only be
+  // a patch the owner might refuse. Agents work on the owner's machine.
+  if (useCollabStore.getState().role === 'guest') return 'This diagram is open as a collaborator in someone else’s session; agents can edit it on the owner’s copy.';
   if (isInteracting()) return 'Someone is dragging or resizing on the canvas.';
   if (typeof document !== 'undefined' && isEditableTarget(document.activeElement) && typedWithin(TYPING_IDLE_MS)) {
     return 'Someone is typing in the diagram.';

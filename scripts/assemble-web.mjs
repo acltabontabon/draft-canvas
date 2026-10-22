@@ -5,7 +5,8 @@
  *   dist-web/site/        the marketing site and docs  ->  https://draftcanvas.dev/         (Cloudflare)
  *   dist-web/app/         the editor                   ->  https://app.draftcanvas.dev/     (Cloudflare)
  *   dist-web/legacy/      the old front door           ->  https://acltabontabon.com/draft-canvas/  (GitHub Pages)
- *   dist-web/cloudflare/  the Wrangler configs that deploy site/ and app/ (and the www. redirect)
+ *   dist-web/cloudflare/  the Wrangler configs that deploy site/ and app/ (and the www. redirect and the
+ *                         collaboration relay, relay.draftcanvas.dev)
  *
  * The editor is copied in unchanged, twice: once as the app, and once under legacy/editor/, because
  * diagrams drawn at the old address live in that origin's browser storage and only an editor served
@@ -76,6 +77,9 @@ const required = [
   ['cloudflare/site.jsonc', 'the deploy config for draftcanvas.dev'],
   ['cloudflare/app.jsonc', 'the deploy config for app.draftcanvas.dev'],
   ['cloudflare/www.jsonc', 'the deploy config for the www. redirect'],
+  ['cloudflare/relay.jsonc', 'the deploy config for relay.draftcanvas.dev'],
+  ['cloudflare/relay.js', 'the collaboration relay the editor connects to'],
+  ['cloudflare/relay-room.js', "the relay's rules, which relay.js imports"],
 ];
 for (const [path, what] of required) {
   insist(existsSync(join(out, path)), `dist-web/${path} is missing — ${what}.`);

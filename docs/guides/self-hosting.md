@@ -35,8 +35,12 @@ prevent framing; `frame-ancestors` cannot be enforced through an HTML meta tag.
 
 ## Storage and updates
 
-Diagrams stay in each browser's IndexedDB. Serving a shared URL does not share diagrams or create
-collaboration: each person has their own local Library. Different origins, including different
+Diagrams stay in each browser's IndexedDB. Serving a shared URL does not share diagrams: each person
+has their own local Library. [Live sessions](collaborating.md) work from a self-hosted copy too —
+invite links point at the address the owner is using, and the session runs between browsers, not
+through your server. Invites made from your copy use reply codes: the hosted relay that lets an owner
+approve joiners instead only admits app.draftcanvas.dev and the desktop app. To run your own, see
+[the collaboration relay](../reference/website.md#the-collaboration-relay). Different origins, including different
 ports or HTTP versus HTTPS, have separate storage. Export diagrams before moving to another host
 or clearing browser data. See [saving and sharing](saving-and-sharing.md).
 

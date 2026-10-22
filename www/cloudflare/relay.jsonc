@@ -1,0 +1,28 @@
+// relay.draftcanvas.dev — the live-collaboration relay (relay.js): a Worker in front of one Durable
+// Object per room. It passes along a few end-to-end-encrypted messages so an owner can let people
+// into a session, logs nothing, and stores only each room's owner fingerprint (for 12 hours at most).
+{
+  "name": "draft-canvas-relay",
+  "main": "relay.js",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": false,
+  "preview_urls": false,
+  // No request logs and no traces: a room id is all the relay could record, and it records nothing.
+  "observability": { "enabled": false },
+  "logpush": false,
+  "durable_objects": {
+    "bindings": [{ "name": "ROOMS", "class_name": "RelayRoom" }]
+  },
+  // SQLite-backed, as Cloudflare recommends for new classes. The only thing written is a room's owner
+  // claim (a SHA-256, deleted when the room's lifetime ends), plus the alarm that closes idle rooms.
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["RelayRoom"] }],
+  // New sockets per client address: the same budget the dev relay enforces (`LIMITS.connectsPerMinute`),
+  // kept across rooms by Cloudflare's rate limiter, since each room is its own Durable Object.
+  "ratelimits": [{ "name": "CONNECTIONS", "namespace_id": "1001", "simple": { "limit": 60, "period": 60 } }],
+  "vars": {
+    // The pages that may connect, comma-separated: the web editor and the desktop app's webview on
+    // macOS/Linux (tauri://localhost) and Windows (http(s)://tauri.localhost).
+    "ALLOWED_ORIGINS": "https://app.draftcanvas.dev,tauri://localhost,http://tauri.localhost,https://tauri.localhost"
+  },
+  "routes": [{ "pattern": "relay.draftcanvas.dev", "custom_domain": true }]
+}

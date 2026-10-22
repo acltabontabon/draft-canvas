@@ -19,6 +19,7 @@ import {
   type CompactSdp,
   type CollabCodeReason,
 } from '../src/collab/transport/invite';
+import { DEFAULT_STUN, followOwner } from '../src/collab/connect';
 
 const CHROME_OFFER = [
   'v=0',
@@ -282,5 +283,27 @@ describe('decoding untrusted codes', () => {
       expect(decodeReply(encodeReply({ nonce, answer: normalized }), { nonce, expiresAt: NOW }, NOW)).toEqual(normalized);
       expect(normalized.candidates).toHaveLength(answer.candidates.length);
     }), { seed: 20261022, numRuns: 200 });
+  });
+});
+
+describe('a collaborator follows the owner’s choice of network', () => {
+  const nonce = Uint8Array.from({ length: 16 }, (_, i) => i);
+  const across = compactSdp(CHROME_OFFER);
+  const local: CompactSdp = { ...across, candidates: across.candidates.filter((candidate) => candidate.type === 'host') };
+  const invite = (offer: CompactSdp) => encodeInvite({ nonce, issuedAt: Date.now(), offer }).payload;
+
+  it('asks a STUN server only when the owner’s offer shows they asked one', () => {
+    expect(followOwner(invite(across), '')).toEqual({ servers: [{ urls: DEFAULT_STUN }], localOnly: false });
+    // "Only my network" on the owner's side: the collaborator asks no one either.
+    expect(followOwner(invite(local), '')).toEqual({ servers: [], localOnly: true });
+  });
+
+  it('uses the collaborator’s own STUN server, never one the invite names', () => {
+    expect(followOwner(invite(across), 'stun:stun.example.org:3478')).toEqual({ servers: [{ urls: 'stun:stun.example.org:3478' }], localOnly: false });
+    expect(followOwner(invite(local), 'stun:stun.example.org:3478')).toEqual({ servers: [], localOnly: true });
+  });
+
+  it('asks no one about an invite it can’t read', () => {
+    expect(followOwner('1.not-an-invite', '')).toEqual({ servers: [], localOnly: true });
   });
 });

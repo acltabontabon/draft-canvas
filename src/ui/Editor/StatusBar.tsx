@@ -1,6 +1,8 @@
 import { useEffect, useMemo } from 'react';
 import { useReactFlow, useStore } from '@xyflow/react';
 import { flowFitViewNodes, hasSomethingToFit, useEditorStore, viewLevel } from '../../store/editorStore';
+import { useShallow } from 'zustand/react/shallow';
+import { useCollabStore } from '../../store/collabStore';
 import { count } from '../../lib/plural';
 import { LEVEL_HINTS, LEVEL_LABELS } from '../../depth/level';
 import { Button } from '../common/Button';
@@ -61,7 +63,45 @@ function ConflictChoice({ conflict, onResolveConflict }: { conflict: 'changed' |
   );
 }
 
+/**
+ * A live session changes what is true about saving, and the bar is where that promise is kept: a
+ * collaborator's copy is saved nowhere (the owner's is), and an owner's canvas reaches the people in
+ * the session — still through no server.
+ */
+function LiveStatus({ role }: { role: 'host' | 'guest' }) {
+  const { unconfirmed, status, owner, people } = useCollabStore(
+    useShallow((state) => ({
+      unconfirmed: state.unconfirmed,
+      status: state.status,
+      owner: state.peers.find((peer) => peer.role === 'owner')?.name,
+      people: state.peers.filter((peer) => peer.link !== 'gone').length,
+    })),
+  );
+  if (role === 'guest') {
+    return (
+      <div className="dc-status-left">
+        <span className="dc-save" data-status={unconfirmed > 0 ? 'saving' : 'saved'}>
+          <Icon name="people" /> {status === 'ended' ? 'Not saved' : unconfirmed > 0 ? 'Sending…' : 'Live copy'}
+        </span>
+        <span className="dc-muted dc-status-hint">
+          {status === 'ended'
+            ? 'This copy isn’t saved anywhere — make an editable copy to keep it.'
+            : `${owner ? `${owner}’s` : 'The owner’s'} copy is the one that’s saved. Nothing goes through a server.`}
+        </span>
+      </div>
+    );
+  }
+  return (
+    <span className="dc-muted dc-status-hint">
+      {people === 0
+        ? 'Saved in this browser · live session, nobody else here yet.'
+        : `Saved in this browser · shared live with ${people} ${people === 1 ? 'person' : 'people'}, through no server.`}
+    </span>
+  );
+}
+
 export function StatusBar({ durable, presenting = false, onResolveConflict }: StatusBarProps) {
+  const collab = useCollabStore((state) => state.role);
   const save = useEditorStore((state) => state.save);
   const nodeCount = useEditorStore((state) => state.document.nodes.length);
   const edgeCount = useEditorStore((state) => state.document.edges.length);
@@ -82,7 +122,9 @@ export function StatusBar({ durable, presenting = false, onResolveConflict }: St
 
   return (
     <footer className="dc-status">
-      {__DESKTOP__ && hostKind() === 'desktop' ? (
+      {collab === 'guest' ? (
+        <LiveStatus role="guest" />
+      ) : __DESKTOP__ && hostKind() === 'desktop' ? (
         <DesktopStatus />
       ) : (
         <div className="dc-status-left">
@@ -95,11 +137,15 @@ export function StatusBar({ durable, presenting = false, onResolveConflict }: St
           <span className="dc-sr-only" role="status">
             {!durable ? 'Storage unavailable. Changes are kept in memory only.' : save.status === 'error' ? saveLabel(save, durable) : ''}
           </span>
-          <span className="dc-muted dc-status-hint" hidden={Boolean(save.conflict)}>
-            {durable
-              ? 'Your diagrams stay in this browser. Nothing you draw is uploaded.'
-              : 'This browser is blocking storage — export to keep your work.'}
-          </span>
+          {collab === 'host' && durable && !save.conflict ? (
+            <LiveStatus role="host" />
+          ) : (
+            <span className="dc-muted dc-status-hint" hidden={Boolean(save.conflict)}>
+              {durable
+                ? 'Your diagrams stay in this browser. Nothing you draw is uploaded.'
+                : 'This browser is blocking storage — export to keep your work.'}
+            </span>
+          )}
         </div>
       )}
 

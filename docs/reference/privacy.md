@@ -1,7 +1,7 @@
 # Privacy
 
 Draft Canvas does not upload diagrams, send telemetry or require an account. Editing works locally.
-Exports, share links and optional coding agents can carry content elsewhere when you use them.
+Exports, share links, live sessions and optional coding agents can carry content elsewhere when you use them.
 
 ## What is stored, and where
 
@@ -73,6 +73,41 @@ A share link carries the diagram's text, code and nested rooms as compressed dat
 - Links are capped at 32 KB of encoded payload; larger diagrams need a file export.
 
 Use a `.dcenc` export for protected sharing. See [Saving and sharing](../guides/saving-and-sharing.md).
+
+## Live collaboration
+
+A live session sends the diagram only to the people in it. The owner's editor hosts the session;
+nothing passes through a Draft Canvas server, and the owner's copy is the only one saved.
+
+- **Draft Canvas collects no diagrams, live or otherwise.** A session's diagram travels only between
+  the people in it.
+- **Browser sessions** use WebRTC data channels, encrypted end to end by DTLS between the two
+  browsers. To find a route between networks, each browser asks a STUN server (by default
+  `stun.cloudflare.com`, or one you name) for its public address; the STUN server sees IP addresses,
+  never diagram content. The owner decides for everyone: a collaborator's browser asks a STUN server
+  only when the owner's connection offer shows the owner asked one.
+- **Only my network** contacts no STUN server and no relay, on the owner's side or any
+  collaborator's: people join by direct invite (or the desktop's local network link), and nothing
+  leaves your network.
+- **The rendezvous relay** (`relay.draftcanvas.dev`) lets someone holding a session link ask to join
+  and receive the owner's answer before the two browsers connect. It passes along a few small
+  messages — the joiner's name and connection details — every one encrypted with a key that exists
+  only in the session link's `#` fragment, which is never sent to it. It sees a random room id, IP
+  addresses and timing; it cannot read the messages and never receives the diagram. It stores no
+  messages, diagrams or names — only, for each room, the SHA-256 of a secret the owner's browser made
+  (never in the link), so nobody else can host the room; that is deleted within 12 hours.
+  Self-hosted builds can point at their own relay or none (`VITE_COLLAB_RELAY`); without one, direct
+  invites still work.
+- **Direct invite links and reply codes** carry connection details — including the network addresses each
+  browser found — after the URL's `#`, which is not sent to the app's host. An invite works once,
+  for one person, and expires after 30 minutes. The page takes it off the address as soon as it is read.
+- **The desktop app's local network link** serves the editor and relays the session over plain HTTP
+  and WebSocket on your local network, authenticated by a random 128-bit token in the link. That
+  traffic is **not encrypted**: use it on a network you trust or through a VPN.
+- **A collaborator's copy** is never written to their browser storage. They keep the diagram only by
+  making an editable copy, which then lives in their own Library like any other diagram.
+- **Presence** — names you type, pointer positions, selections — goes to the session's members and is
+  never stored. Your name is kept as a preference in this browser for next time.
 
 ## Optional AI agents
 

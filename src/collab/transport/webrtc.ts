@@ -66,6 +66,11 @@ export interface JoinResult {
   cancel(): void;
 }
 
+/** Whether this browser can make peer connections at all (some webviews and locked-down browsers can't). */
+export function peerConnectionsAvailable(): boolean {
+  return typeof globalThis.RTCPeerConnection === 'function';
+}
+
 export async function createHostOffer(config: IceConfig, opts: WebRtcOptions = {}): Promise<HostOffer> {
   const now = opts.now ?? Date.now;
   const pc = new (peerConnectionCtor(opts))(rtcConfiguration(config));

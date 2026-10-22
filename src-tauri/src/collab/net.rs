@@ -79,7 +79,9 @@ fn score(interface: &str, ip: IpAddr, ipv6: bool) -> Option<(u8, u8)> {
             } else if is_shared_v4(v4) {
                 2
             } else {
-                1
+                // A public address: guests reaching it would come from the internet, and
+                // `local_peer` turns those away — so it is not offered either.
+                return None;
             }
         }
         IpAddr::V6(v6) => {
@@ -95,11 +97,28 @@ fn score(interface: &str, ip: IpAddr, ipv6: bool) -> Option<(u8, u8)> {
             if is_unique_local_v6(v6) {
                 3
             } else {
-                4
+                // Global IPv6 is reachable from anywhere, with no NAT in front of it.
+                return None;
             }
         }
     };
     Some((u8::from(is_virtual(interface)), address))
+}
+
+/// Whether a connection comes from the local network (or a VPN overlay such as Tailscale) rather
+/// than the internet. The server listens on every interface so any LAN address works, but a machine
+/// with a public or global IPv6 address would otherwise be serving the diagram to the world:
+/// anything else is closed before a byte is read.
+pub fn local_peer(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(v4) => {
+            v4.is_loopback() || v4.is_private() || v4.is_link_local() || is_shared_v4(v4)
+        }
+        IpAddr::V6(v6) => match v6.to_ipv4_mapped() {
+            Some(v4) => local_peer(IpAddr::V4(v4)),
+            None => v6.is_loopback() || is_unique_local_v6(v6) || is_link_local_v6(v6),
+        },
+    }
 }
 
 /// 100.64.0.0/10, carrier-grade NAT and the range VPNs such as Tailscale hand out.

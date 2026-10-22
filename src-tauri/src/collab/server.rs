@@ -1,7 +1,7 @@
 //! The HTTP side: accepting connections, serving files, and the checks a WebSocket upgrade passes
 //! before it is accepted.
 
-use super::{assets, net, socket, Shared, MAX_TEXT, PROTOCOL, SOCKET_PATH};
+use super::{assets, net, socket, Shared, MAX_GUEST_TEXT, PROTOCOL, SOCKET_PATH};
 use axum::body::Body;
 use axum::extract::ws::rejection::WebSocketUpgradeRejection;
 use axum::extract::ws::WebSocketUpgrade;
@@ -37,10 +37,15 @@ pub(super) async fn serve(listener: TcpListener, shared: Arc<Shared>) {
         tokio::select! {
             () = socket::stopped(&mut shutdown) => break,
             accepted = listener.accept() => {
-                let Ok((stream, _)) = accepted else {
+                let Ok((stream, peer)) = accepted else {
                     tokio::time::sleep(ACCEPT_BACKOFF).await;
                     continue;
                 };
+                // Local network only: see `net::local_peer`.
+                if !net::local_peer(peer.ip()) {
+                    drop(stream);
+                    continue;
+                }
                 while connections.try_join_next().is_some() {}
                 if connections.len() >= MAX_HTTP_CONNECTIONS {
                     continue;
@@ -218,11 +223,13 @@ async fn upgrade(
     let Some(slot) = shared.reserve() else {
         return plain(StatusCode::SERVICE_UNAVAILABLE, "Too many guests", host);
     };
-    // A failed upgrade drops the callback, and the slot with it.
+    // A failed upgrade drops the callback, and the slot with it. Both limits bound only what the
+    // guest sends, checked as each frame's header arrives and as fragments add up, before the rest
+    // is buffered. The page's sends to the guest are bounded by `MAX_TEXT` in `Relay::send` instead.
     let response = upgrade
         .protocols([PROTOCOL])
-        .max_message_size(MAX_TEXT)
-        .max_frame_size(MAX_TEXT)
+        .max_message_size(MAX_GUEST_TEXT)
+        .max_frame_size(MAX_GUEST_TEXT)
         .on_upgrade(move |ws| socket::run(ws, slot));
     secure(response, host)
 }

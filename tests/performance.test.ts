@@ -26,6 +26,8 @@ import { labelGroupPlan } from '../src/edges/labelGroups';
 import { embed, totals, viewOf } from '../src/depth/tree';
 import type { DraftDocument } from '../src/document/types';
 import { ARCHITECTURE_STARTERS } from '../src/starters';
+import { applyChanges } from '../src/collab/apply';
+import { diffFile } from '../src/collab/diff';
 import { freeOriginFor } from '../src/document/operations';
 import { buildStarter, starterSize } from '../src/starters/build';
 
@@ -689,5 +691,39 @@ describe('depth', () => {
         expect(performance.now() - started).toBeLessThan(400);
       }
     });
+  });
+});
+
+/**
+ * Collaboration diffs the owner's file on every commit and applies every collaborator's commit, so
+ * both run once per keystroke on every copy in a session. Identity does the work: a keystroke changes
+ * one node, and neither side may walk the other thousand by value — the index of the previous file
+ * is already cached, so each commit indexes one new file and compares one element.
+ */
+describe('collaboration on a thousand-shape document', () => {
+  const NODES = 1000;
+  const shapes = Array.from({ length: NODES }, (_, i) => createNode({ type: 'service', text: `Service ${i}`, x: (i % 40) * 220, y: Math.floor(i / 40) * 140 }));
+  const wires = shapes.slice(1).map((node, i) => createEdge({ source: shapes[i]!.id, target: node.id, label: `call ${i}` }));
+  const base = addEdges(addNodes(createDocument('Shared'), shapes), wires);
+
+  it('diffs and applies a keystroke without rereading the document', () => {
+    const timings: number[] = [];
+    let current = base;
+    diffFile(current, current);
+    for (let key = 0; key < 200; key += 1) {
+      const next = updateNode(current, shapes[key % NODES]!.id, { text: `Typed ${key}` });
+      const started = performance.now();
+      const changes = diffFile(current, next);
+      const applied = applyChanges(current, changes);
+      timings.push(performance.now() - started);
+      expect(changes).toHaveLength(1);
+      expect(applied.edges).toBe(current.edges);
+      current = next;
+    }
+    timings.sort((a, b) => a - b);
+    // The budget is under a millisecond on a laptop (p95 ~0.5 ms). The median is the cliff guard: a
+    // garbage collection or a busy CI runner lands in the tail, never in the middle, while a by-value
+    // walk of the document would move the middle by an order of magnitude.
+    expect(timings[Math.floor(timings.length / 2)]!).toBeLessThan(4);
   });
 });

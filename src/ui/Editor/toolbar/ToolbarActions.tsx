@@ -8,6 +8,7 @@ import { Button } from '../../common/Button';
 import { ARRANGE_FAILED, notifyLoadFailure } from '../../common/notifyLoadFailure';
 import { Tooltip } from '../../common/Tooltip';
 import { FindReplaceHost } from '../FindReplaceDialog';
+import { CollabControl } from '../../collab/CollabControl';
 import { ToolbarMenu, type ToolbarMenuItem } from './ToolbarMenu';
 import { toolbarLabel, toolbarTooltip } from './toolbarTooltips';
 
@@ -30,6 +31,7 @@ export function ToolbarActions({ onPresent, onExport }: ToolbarActionsProps) {
   const setSettingsOpen = useUiStore((state) => state.setSettingsOpen);
   const setFindReplaceOpen = useUiStore((state) => state.setFindReplaceOpen);
   const readOnly = useUiStore((state) => Boolean(state.readOnly));
+  const collaborative = useUiStore((state) => state.readOnly?.collaborative === true);
   const flowPanelOpen = useUiStore((state) => state.flowPanelOpen);
   const setFlowPanelOpen = useUiStore((state) => state.setFlowPanelOpen);
   const activeFlowTitle = useEditorStore((state) =>
@@ -170,6 +172,10 @@ export function ToolbarActions({ onPresent, onExport }: ToolbarActionsProps) {
           one composed control — so they read as siblings rather than as two systems that happen to
           sit next to each other. Flows can be persistently on and takes the tint; Present is
           momentary, so it deliberately has no active state to fake. */}
+      {/* A live session is a mode too: who is in it, and how the connection is. A share link's
+          read-only copy has nobody to collaborate with, so it offers nothing here. */}
+      {(!readOnly || collaborative) && <CollabControl />}
+
       <div className="dc-toolbar-modes">
         <Tooltip content={toolbarTooltip('flows')}>
           {(tip) => (

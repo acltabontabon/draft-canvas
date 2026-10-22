@@ -25,6 +25,7 @@ function stubSession(overrides: Partial<DocumentSession> = {}): DocumentSession 
     newDocument: vi.fn(async () => {}),
     adoptDocument: async () => {},
     openShared: async () => {},
+    openCollaborative: async () => false,
     makeEditableCopy: async () => {},
     closeDocument: async () => true,
     resolveConflict: async () => {},

@@ -15,6 +15,7 @@ Guides and reference for using and developing Draft Canvas.
 | [Keyboard shortcuts](guides/keyboard-and-commands.md) | Shortcuts and the command palette |
 | [Accessibility](guides/accessibility.md) | Keyboard, screen reader and touch support |
 | [Saving and sharing](guides/saving-and-sharing.md) | Save, back up, export and share |
+| [Collaborating live](guides/collaborating.md) | Edit one canvas together in real time |
 | [Desktop app](guides/desktop.md) | Files, projects and Quick Drafts |
 | [AI agents](guides/connect-an-ai-agent.md) | Connect an agent to the desktop app |
 | [Self-hosting](guides/self-hosting.md) | Build and serve the static web editor |

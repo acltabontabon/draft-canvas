@@ -5,6 +5,8 @@ import type { AgentEditorReply, AgentEditorRequest } from '../host/agentBridge';
 import type { CommandMessage, LoadMessage, ToHostMessage } from '../host/embeddedHost';
 import type { AgentHost } from './agent';
 import { agentActivity } from './agentActivity';
+import { dispatchCollabLanEvent, lanRelayOf } from './collabLan';
+import type { LanRelay } from '../collab/lan';
 import { confirmWrite, takeWrite, type AgentWrite } from './agentWrites';
 import { logDiagnostic } from '../lib/diagnostics';
 import { isRecord } from '../lib/isRecord';
@@ -317,7 +319,17 @@ export class DesktopController {
       case 'agent-changed':
         for (const listener of this.proposalListeners) listener();
         return void this.refreshAgent();
+      case 'collab-lan-open':
+      case 'collab-lan-message':
+      case 'collab-lan-close':
+      case 'collab-lan-stopped':
+        return dispatchCollabLanEvent(event);
     }
+  }
+
+  /** The shell's LAN relay, for network sharing (`ui/collab/LanShare.tsx`); its events come back through `collabLan.ts`. */
+  lanRelay(): LanRelay {
+    return lanRelayOf(this.api);
   }
 
   // ─── AI agents ──────────────────────────────────────────────────────────────────────

@@ -27,15 +27,28 @@ function sourceFiles(dir: string): string[] {
   return out;
 }
 
-/** Every way a browser can talk to a server. */
+/**
+ * Every way a browser can talk to a server. Any mention in code counts — `fetch?.(`, `fetch.call`, an
+ * alias or a `Reflect.apply` all start from the name — but not in a comment, so prose explaining why
+ * something never fetches doesn't trip it.
+ */
 const NETWORK_APIS: [string, RegExp][] = [
-  ['fetch', /\bfetch\s*\(/],
+  ['fetch', /\bfetch\b/],
   ['XMLHttpRequest', /\bXMLHttpRequest\b/],
-  ['EventSource', /\bnew\s+EventSource\b/],
+  ['EventSource', /\bEventSource\b/],
   ['sendBeacon', /\bsendBeacon\b/],
-  ['importScripts', /\bimportScripts\s*\(/],
+  ['importScripts', /\bimportScripts\b/],
+  ['WebTransport', /\bWebTransport\b/],
+  ['WebSocketStream', /\bWebSocketStream\b/],
   ['dynamic remote import', /\bimport\s*\(\s*['"`]https?:/],
 ];
+
+/** Source with its comments removed (a `//` inside a URL's `://` is left alone). */
+function code(file: string): string {
+  return readFileSync(file, 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:\\])\/\/.*$/gm, '$1');
+}
 
 /**
  * The ways collaboration talks to a peer. Any mention counts, not only a constructor call: a type,
@@ -44,8 +57,9 @@ const NETWORK_APIS: [string, RegExp][] = [
  * Collaboration is opt-in and peer-to-peer; diagrams still never reach a server.
  */
 const PEER_APIS: [string, RegExp][] = [
-  ['RTCPeerConnection', /\bRTCPeerConnection\b/],
-  ['RTCDataChannel', /\bRTCDataChannel\b/],
+  // Vendor-prefixed names too (`webkitRTCPeerConnection`): the same API under another spelling.
+  ['RTCPeerConnection', /\b\w*RTCPeerConnection\b/],
+  ['RTCDataChannel', /\b\w*RTCDataChannel\b/],
   ['WebSocket', /\bWebSocket\b/],
 ];
 const TRANSPORT_DIR = join(SRC, 'collab', 'transport') + sep;
@@ -64,8 +78,15 @@ describe('nothing on the canvas can reach a network', () => {
     expect(files.length).toBeGreaterThan(20);
   });
 
+  it('catches the ways around a call-shaped pattern', () => {
+    const caught = (text: string) => NETWORK_APIS.some(([, pattern]) => pattern.test(text));
+    for (const sneaky of ['fetch?.(url)', 'fetch.call(null, url)', 'Reflect.apply(fetch, null, [url])', 'const get = fetch;', 'new globalThis.EventSource(u)', 'new WebTransport(u)', 'new WebSocketStream(u)']) {
+      expect(caught(sneaky), sneaky).toBe(true);
+    }
+  });
+
   it.each(NETWORK_APIS)('uses no %s anywhere in src/', (_name, pattern) => {
-    const offenders = files.filter((file) => pattern.test(readFileSync(file, 'utf8')));
+    const offenders = files.filter((file) => pattern.test(code(file)));
     expect(offenders.map((file) => relative(ROOT, file))).toEqual([]);
   });
 

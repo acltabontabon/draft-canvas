@@ -1,0 +1,359 @@
+/*
+ * Live presence: other people's pointers, the rings around what they hold, the tag on the shape
+ * they are writing in (`canvas/PresenceLayer.tsx`), and the offer to follow a presenter
+ * (`ui/collab/FollowPrompt.tsx`). Imported by those components, so it ships with them.
+ *
+ * Colours come from the session palette (`collab.css`: `data-peer-color` sets `--dc-peer`, and
+ * `--dc-peer-ink` is the text that reads on it); the fallbacks only matter if that sheet is absent.
+ * Every person carries a name, never colour alone. Chrome in flow space keeps a constant size on
+ * screen by undoing the zoom (`--dc-zoom`, set by `Canvas`).
+ */
+
+.dc-presence {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+.dc-presence * {
+  pointer-events: none;
+}
+
+.dc-presence-name {
+  overflow: hidden;
+  max-width: 168px;
+  padding: 2px 7px 3px;
+  border-radius: var(--dc-radius-pill, 999px);
+  background: var(--dc-peer, #6b7280);
+  color: var(--dc-peer-ink, #fff);
+  font-family: var(--dc-font, system-ui, sans-serif);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: 0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18), 0 4px 12px -6px rgba(0, 0, 0, 0.35);
+}
+
+/* ---------------------------------------------------------------- cursor -- */
+
+.dc-presence-cursor {
+  position: absolute;
+  top: 0;
+  left: 0;
+  /* A little longer than the 50 ms between updates, so consecutive ones blend into one glide. */
+  transition: transform 110ms linear, opacity 600ms ease;
+  will-change: transform;
+}
+
+.dc-presence-cursor[data-faint='true'] {
+  opacity: 0.45;
+}
+
+/* After the faint rule: a pointer left at rest fades out whatever its connection is doing. */
+.dc-presence-cursor[data-idle='true'] {
+  opacity: 0;
+}
+
+.dc-presence-cursor-body {
+  display: flex;
+  align-items: flex-start;
+  transform: scale(calc(1 / var(--dc-zoom, 1)));
+  transform-origin: 0 0;
+  animation: dc-presence-arrive 180ms ease-out;
+}
+
+.dc-presence-arrow {
+  flex: none;
+  /* The arrow's tip is the pointer's hotspot. */
+  margin: -2px 0 0 -3px;
+  overflow: visible;
+  filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.3));
+}
+
+.dc-presence-arrow path {
+  fill: var(--dc-peer, #6b7280);
+  stroke: var(--dc-peer-ink, #fff);
+  stroke-width: 1.4;
+  stroke-linejoin: round;
+}
+
+.dc-presence-cursor .dc-presence-name {
+  margin: 13px 0 0 -4px;
+}
+
+@keyframes dc-presence-arrive {
+  from {
+    opacity: 0;
+    transform: scale(calc(0.8 / var(--dc-zoom, 1)));
+  }
+}
+
+/* ----------------------------------------------------------------- rings -- */
+
+.dc-presence-ring {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: visible;
+  animation: dc-presence-ring-in 200ms ease-out;
+}
+
+.dc-presence-ring-band {
+  color: var(--dc-peer, #6b7280);
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--dc-peer, #6b7280) 55%, transparent));
+}
+
+.dc-presence-ring[data-faint='true'] {
+  opacity: 0.45;
+}
+
+@keyframes dc-presence-ring-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* ---------------------------------------------------------------- typing -- */
+
+.dc-presence-typing {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.dc-presence-typing-body {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  /* Lifted clear of the shape's top edge, at a constant size on screen. */
+  transform: scale(calc(1 / var(--dc-zoom, 1))) translateY(calc(-100% - 7px));
+  transform-origin: 0 0;
+}
+
+.dc-presence-typing-who {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+}
+
+.dc-presence-dots {
+  display: inline-flex;
+  flex: none;
+  gap: 2.5px;
+}
+
+.dc-presence-dots i {
+  width: 3.5px;
+  height: 3.5px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: dc-presence-typing 1.2s ease-in-out infinite;
+}
+
+.dc-presence-dots i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.dc-presence-dots i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes dc-presence-typing {
+  0%,
+  60%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
+/* ---------------------------------------------------------------- follow -- */
+
+/* Bottom centre: the top of the canvas carries its own notices (the example banner, room levels). */
+.dc-follow {
+  position: absolute;
+  bottom: 18px;
+  left: 50%;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100% - 32px);
+  padding: 5px 5px 5px 6px;
+  border: 1px solid color-mix(in srgb, var(--dc-peer, #6b7280) 38%, var(--dc-border, #dde1e7));
+  border-radius: var(--dc-radius-pill, 999px);
+  background: var(--dc-surface-raised, #fff);
+  box-shadow: var(--dc-shadow-panel, 0 8px 28px -10px rgba(19, 24, 32, 0.22));
+  color: var(--dc-text, #1a1d23);
+  font-family: var(--dc-font, system-ui, sans-serif);
+  font-size: 12.5px;
+  transform: translateX(-50%);
+  animation: dc-follow-in 260ms cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+
+.dc-follow-text {
+  display: flex;
+  overflow: hidden;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.dc-follow-title {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dc-follow-detail {
+  overflow: hidden;
+  color: var(--dc-text-muted, #59606d);
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dc-follow-badge {
+  position: relative;
+  flex: none;
+}
+
+/* A slow pulse around the presenter's badge: someone is live, without anything blinking. */
+.dc-follow-badge::after {
+  position: absolute;
+  inset: -3px;
+  border: 2px solid var(--dc-peer, #6b7280);
+  border-radius: 50%;
+  content: '';
+  opacity: 0;
+  animation: dc-follow-live 2.4s ease-out infinite;
+}
+
+.dc-follow-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+}
+
+.dc-follow-primary {
+  height: 28px;
+  padding: 0 13px;
+  border: 0;
+  border-radius: var(--dc-radius-pill, 999px);
+  background: var(--dc-peer, #6b7280);
+  color: var(--dc-peer-ink, #fff);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 120ms ease;
+}
+
+.dc-follow-primary:hover {
+  filter: brightness(1.08);
+}
+
+.dc-follow-quiet {
+  height: 28px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: var(--dc-radius-pill, 999px);
+  background: transparent;
+  color: var(--dc-text-muted, #59606d);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.dc-follow-quiet:hover {
+  background: var(--dc-surface-hover, rgba(0, 0, 0, 0.05));
+  color: var(--dc-text, #1a1d23);
+}
+
+.dc-follow-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  padding: 0;
+}
+
+.dc-follow-primary:focus-visible,
+.dc-follow-quiet:focus-visible {
+  outline: 2px solid var(--dc-peer, #6b7280);
+  outline-offset: 2px;
+}
+
+/* Folded by "Not now": the presenter's badge, still one click from following. */
+.dc-follow[data-folded='true'] {
+  padding: 3px;
+}
+
+.dc-follow-unfold {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px 0 4px;
+}
+
+/* While following, the whole canvas wears the presenter's colour at its edge: whose eyes these are. */
+.dc-follow-frame {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  border-radius: 2px;
+  box-shadow:
+    inset 0 0 0 2px var(--dc-peer, #6b7280),
+    inset 0 0 28px -10px var(--dc-peer, #6b7280);
+  pointer-events: none;
+  animation: dc-presence-ring-in 240ms ease-out;
+}
+
+@keyframes dc-follow-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 8px) scale(0.96);
+  }
+}
+
+@keyframes dc-follow-live {
+  0% {
+    opacity: 0.7;
+    transform: scale(0.85);
+  }
+  70%,
+  100% {
+    opacity: 0;
+    transform: scale(1.35);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-presence-cursor {
+    transition: opacity 600ms ease;
+  }
+
+  .dc-presence-cursor-body,
+  .dc-presence-ring,
+  .dc-follow,
+  .dc-follow-frame {
+    animation: none;
+  }
+
+  .dc-presence-dots i {
+    animation: none;
+    opacity: 0.8;
+  }
+
+  .dc-follow-badge::after {
+    animation: none;
+  }
+}

@@ -197,8 +197,9 @@ Past any of these the import is refused with the limit it hit, so a hostile file
 
 ## Share a diagram
 
-There are no accounts and no server, so sharing means handing someone the diagram itself. Pick
-whichever of these fits:
+There are no accounts and no server, so sharing means handing someone the diagram itself — or, to
+work on it together, inviting them into a [live session](collaborating.md) hosted from your own
+browser. Pick whichever of these fits:
 
 - **Send a link.** Run **Copy share link** from the command palette (`⌘K`), or open **Export →
   Document** and press **Copy share link**. The whole diagram — every room inside a shape included —

@@ -12,6 +12,7 @@ Implementation rules are in [AGENTS.md](../../AGENTS.md); module wiring and comm
 | --- | --- |
 | **The document is the product** | Keep files usable beyond any framework or rendering library. |
 | **Local-first** | Editing requires no account or server; diagrams stay on the device. |
+| **The owner hosts** | Collaboration connects people to the owner's copy; no service ever holds or sees a diagram. |
 | **Shared rendering** | Keep the canvas and exported images visually consistent. |
 | **Model meaning, not technology** | Use architectural roles; technology names belong in labels. |
 | **Suggest, never block** | Offer useful defaults without forbidding a valid design. |
@@ -107,8 +108,33 @@ scope, retries and cancellation must not create duplicate or late edits, and pre
 provisional until committed. Agent edits join the same undo history as manual edits. Protocol and
 permission details are in [Agent integration](agent-integration.md).
 
+## Live collaboration
+
+Collaboration keeps the file model intact by keeping one file. The person who starts a session hosts
+it: their editor holds the authoritative copy and saves it as always, and collaborators connect to
+that editor — over a WebRTC data channel from any browser, or through the desktop app's local network
+relay. There is no merge library and no shared database. To let people in by approval rather than by
+copying codes, a stateless rendezvous relay ([`relay.js`](../../www/cloudflare/relay.js)) passes along the few messages
+two browsers need before they connect — sealed with a key held only in the session link's fragment
+(`collab/rendezvous.ts`, `collab/lobby.ts`). It never carries the diagram and keeps nothing but a fingerprint of the owner's room secret, for 12 hours at most; without it,
+direct invites still connect people by hand.
+
+Collaborators send changes element by element, keyed by the ids every element already has
+(`collab/diff.ts`). The owner checks each change as strictly as an imported file (`collab/sanitize.ts`),
+applies it, removes references concurrent edits left dangling (`collab/repair.ts`), and broadcasts the
+resulting diff as a numbered commit. Each collaborator keeps the owner's confirmed file plus their own
+unconfirmed changes on top (`collab/replica.ts`), so edits show at once and settle when the owner's
+answer arrives. Applying the diff of two versions to the first reproduces the second exactly; that
+property, tested over random concurrent histories, is what keeps every copy equal to the owner's.
+
+The same pressures that shape solo editing shape the session: a gesture in progress holds incoming
+changes until it ends, undo reverts only what that person's edit touched and refuses to take away
+work somebody built on it, and cameras, selection and presence never enter the document. Network
+access is confined to `collab/transport/`, which nothing outside `collab/` may import.
+
 ## Deliberately not built
 
-Accounts, cloud sync, real-time collaboration, cloud-provider icon packs, standalone image nodes
-and a built-in AI generation service remain outside the editor's scope. Optional local agent
-integration and Mermaid import extend how a diagram is authored without adding an editor backend.
+Accounts, cloud sync, a hosted collaboration service, cloud-provider icon packs, standalone image
+nodes and a built-in AI generation service remain outside the editor's scope. Optional local agent
+integration, Mermaid import and owner-hosted live sessions extend how a diagram is authored without
+adding an editor backend.

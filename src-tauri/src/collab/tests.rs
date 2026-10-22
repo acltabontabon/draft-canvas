@@ -2,16 +2,19 @@
 //! real WebSocket client.
 
 use super::server::content_security_policy;
+use super::socket::{Bucket, Budget};
 use super::*;
 use crate::state::HostEvent;
 use futures_util::{SinkExt, StreamExt};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::time::Instant;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::time::timeout;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::http::HeaderValue;
-use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
+use tokio_tungstenite::tungstenite::protocol::frame::coding::{CloseCode, Data, OpCode};
+use tokio_tungstenite::tungstenite::protocol::frame::Frame;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
@@ -70,6 +73,39 @@ impl Events {
                 .nth(nth)
         })
         .await
+    }
+
+    /// The texts the page has heard from one guest so far.
+    fn heard(&self, id: &str) -> Vec<String> {
+        lock(&self.list)
+            .iter()
+            .filter_map(|e| match e {
+                HostEvent::CollabLanMessage { conn_id, text } if conn_id == id => {
+                    Some(text.clone())
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Waits until the page has heard `count` texts from one guest.
+    async fn heard_at_least(&self, id: &str, count: usize) {
+        self.wait(|events| {
+            let heard = events
+                .iter()
+                .filter(
+                    |e| matches!(e, HostEvent::CollabLanMessage { conn_id, .. } if conn_id == id),
+                )
+                .count();
+            (heard >= count).then_some(())
+        })
+        .await;
+    }
+
+    fn is_closed(&self, id: &str) -> bool {
+        lock(&self.list)
+            .iter()
+            .any(|e| matches!(e, HostEvent::CollabLanClose { conn_id, .. } if conn_id == id))
     }
 
     async fn closed(&self, id: &str) -> String {
@@ -391,17 +427,30 @@ fn request_paths_become_bundle_keys_only_when_they_plainly_name_a_file() {
 
 #[test]
 fn the_policy_is_the_web_builds_own() {
+    // The web build's policy as `vite.config.ts` writes it, without the collaboration relay: a page
+    // served over the local network talks only to this server — it never reaches the internet, the
+    // rendezvous relay included (a LAN guest joins by its link's token, with no knock to relay).
     const VITE: &str = include_str!("../../../vite.config.ts");
     let start = VITE
-        .find("const CONTENT_SECURITY_POLICY = [")
+        .find("const contentSecurityPolicyFor = (relay: string) => [")
         .expect("the policy in vite.config.ts");
     let end = start + VITE[start..].find("].join('; ')").expect("its end");
-    let directives: Vec<&str> = VITE[start..end]
+    let body = &VITE[start..end];
+    assert!(
+        body.contains(r#": "connect-src 'self'","#),
+        "the relay-less connect-src"
+    );
+    let mut directives: Vec<&str> = body
         .lines()
         .map(str::trim)
         .filter_map(|line| line.strip_prefix('"')?.strip_suffix("\","))
         .collect();
-    assert_eq!(directives.len(), 9, "{directives:?}");
+    assert_eq!(directives.len(), 8, "{directives:?}");
+    let font = directives
+        .iter()
+        .position(|d| d.starts_with("font-src"))
+        .expect("font-src");
+    directives.insert(font + 1, "connect-src 'self'");
     assert_eq!(content_security_policy(None), directives.join("; "));
     assert_eq!(
         content_security_policy(Some("10.0.0.2:5000")),
@@ -520,7 +569,7 @@ async fn a_frame_over_the_limit_or_a_binary_one_closes_the_guest() {
 
     let mut big = guest(port).await;
     let id = events.opened(0).await;
-    let at_limit = "x".repeat(MAX_TEXT);
+    let at_limit = "x".repeat(MAX_GUEST_TEXT);
     big.send(Message::text(at_limit.clone())).await.unwrap();
     let heard = events
         .wait(|all| {
@@ -530,13 +579,42 @@ async fn a_frame_over_the_limit_or_a_binary_one_closes_the_guest() {
             })
         })
         .await;
-    assert_eq!(heard, MAX_TEXT, "exactly the limit gets through");
+    assert_eq!(heard, MAX_GUEST_TEXT, "exactly the limit gets through");
     let _ = big.send(Message::text(at_limit + "x")).await;
-    assert_eq!(close_of(&mut big).await.0, u16::from(CloseCode::Size));
+    assert_eq!(
+        close_of(&mut big).await,
+        (u16::from(CloseCode::Size), "too-large".to_string())
+    );
     assert_eq!(events.closed(&id).await, "too-large");
+    assert_eq!(
+        events.heard(&id).len(),
+        1,
+        "the oversized one never reached the page"
+    );
+
+    // Frames each under the limit that add up to a message over it.
+    let mut pieces = guest(port).await;
+    let id = events.opened(1).await;
+    let piece = "y".repeat(MAX_GUEST_TEXT / 2);
+    let frames = [
+        Frame::message(piece.clone(), OpCode::Data(Data::Text), false),
+        Frame::message(piece.clone(), OpCode::Data(Data::Continue), false),
+        Frame::message(piece, OpCode::Data(Data::Continue), true),
+    ];
+    for frame in frames {
+        if pieces.send(Message::Frame(frame)).await.is_err() {
+            break;
+        }
+    }
+    assert_eq!(
+        close_of(&mut pieces).await,
+        (u16::from(CloseCode::Size), "too-large".to_string())
+    );
+    assert_eq!(events.closed(&id).await, "too-large");
+    assert!(events.heard(&id).is_empty());
 
     let mut binary = guest(port).await;
-    let id = events.opened(1).await;
+    let id = events.opened(2).await;
     binary.send(Message::binary(vec![1, 2, 3])).await.unwrap();
     assert_eq!(
         close_of(&mut binary).await,
@@ -604,6 +682,205 @@ async fn a_guest_too_slow_to_keep_up_is_closed_as_congested() {
         tokio::time::sleep(Duration::from_millis(2)).await;
     }
     assert_eq!(events.closed(&id).await, "congested");
+    relay.stop("stopped").await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_page_may_still_send_a_guest_a_whole_diagram() {
+    let (events, relay, port) = started(Limits::default()).await;
+    let mut guest = guest(port).await;
+    let id = events.opened(0).await;
+    let snapshot = "s".repeat(MAX_TEXT);
+    relay.send(&id, snapshot.clone()).unwrap();
+    assert_eq!(next(&mut guest).await, Some(Message::text(snapshot)));
+    relay.stop("stopped").await;
+}
+
+#[test]
+fn the_guest_message_cap_is_the_pages_own() {
+    const PROTOCOL_TS: &str = include_str!("../../../src/collab/protocol.ts");
+    let line = PROTOCOL_TS
+        .lines()
+        .find_map(|line| line.strip_prefix("export const MAX_GUEST_MESSAGE_BYTES = "))
+        .expect("MAX_GUEST_MESSAGE_BYTES in src/collab/protocol.ts");
+    let bytes: usize = line
+        .trim_end_matches(';')
+        .split('*')
+        .map(|factor| factor.trim().parse::<usize>().expect("a number"))
+        .product();
+    assert_eq!(bytes, MAX_GUEST_TEXT);
+}
+
+// ─── What a guest may send ──────────────────────────────────────────────────────────────────────
+
+#[test]
+fn a_bucket_spends_its_burst_then_refills_at_its_rate_up_to_the_burst() {
+    let start = Instant::now();
+    let rate = Rate {
+        per_second: 10,
+        burst: 30,
+    };
+    let mut bucket = Bucket::new(rate, start);
+    assert!(bucket.take(30, start), "the whole burst at once");
+    assert!(!bucket.take(1, start));
+    let half = start + Duration::from_millis(500);
+    assert!(!bucket.take(6, half), "half a second is five more, not six");
+    assert!(bucket.take(5, half));
+    // A long quiet spell fills it to the burst and no further.
+    let later = half + Duration::from_secs(60);
+    assert!(!bucket.take(31, later));
+    assert!(bucket.take(30, later));
+    // Time going backwards adds nothing.
+    assert!(!bucket.take(1, start));
+
+    let limits = Limits::default();
+    let mut budget = Budget::new(&limits, start);
+    assert!(budget.admit(MAX_GUEST_TEXT, start));
+    assert!(
+        budget.admit(MAX_GUEST_TEXT, start),
+        "two of the largest at once"
+    );
+    assert!(!budget.admit(1, start), "but not a third byte");
+    let mut budget = Budget::new(&limits, start);
+    for _ in 0..limits.inbound_messages.burst {
+        assert!(budget.admit(0, start));
+    }
+    assert!(
+        !budget.admit(0, start),
+        "an empty message is still a message"
+    );
+}
+
+/// Sends until the guest's socket refuses (the relay closed it), returning how many went.
+async fn flood(guest: &mut Guest, message: impl Fn() -> Message, count: usize) -> usize {
+    for sent in 0..count {
+        if guest.send(message()).await.is_err() {
+            return sent;
+        }
+    }
+    count
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_guest_sending_past_its_budget_is_closed_as_rate() {
+    let (events, relay, port) = started(Limits::default()).await;
+    let burst = usize::try_from(Limits::default().inbound_messages.burst).unwrap();
+
+    // Messages: the burst goes through, a stream doesn't.
+    let mut chatty = guest(port).await;
+    let id = events.opened(0).await;
+    flood(&mut chatty, || Message::text("{}"), 4 * burst).await;
+    assert_eq!(close_of(&mut chatty).await, (1008, "rate".to_string()));
+    assert_eq!(events.closed(&id).await, "rate");
+    let heard = events.heard(&id).len();
+    assert!((burst..2 * burst).contains(&heard), "heard {heard}");
+
+    // Pings count as messages, though the page never sees them.
+    let mut pinging = guest(port).await;
+    let id = events.opened(1).await;
+    flood(&mut pinging, || Message::Ping(Vec::new().into()), 4 * burst).await;
+    assert_eq!(close_of(&mut pinging).await, (1008, "rate".to_string()));
+    assert_eq!(events.closed(&id).await, "rate");
+
+    // Bytes: two of the largest messages back to back, then not a third.
+    let mut bulky = guest(port).await;
+    let id = events.opened(2).await;
+    let largest = "b".repeat(MAX_GUEST_TEXT);
+    flood(&mut bulky, || Message::text(largest.clone()), 3).await;
+    assert_eq!(close_of(&mut bulky).await, (1008, "rate".to_string()));
+    assert_eq!(events.closed(&id).await, "rate");
+    assert_eq!(events.heard(&id).len(), 2);
+
+    relay.stop("stopped").await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn traffic_within_the_budget_reaches_the_page() {
+    let (events, relay, port) = started(Limits::default()).await;
+    let mut busy = guest(port).await;
+    let id = events.opened(0).await;
+    // Most of both bursts: a large paste, a smaller one, and a flurry of edits and pings.
+    busy.send(Message::text("p".repeat(MAX_GUEST_TEXT)))
+        .await
+        .unwrap();
+    busy.send(Message::text("q".repeat(3 * 1024 * 1024)))
+        .await
+        .unwrap();
+    for n in 0..150 {
+        busy.send(Message::text(format!("{{\"n\":{n}}}")))
+            .await
+            .unwrap();
+    }
+    for _ in 0..50 {
+        busy.send(Message::Ping(Vec::new().into())).await.unwrap();
+    }
+    events.heard_at_least(&id, 152).await;
+    busy.send(Message::text("last")).await.unwrap();
+    events.heard_at_least(&id, 153).await;
+    assert!(!events.is_closed(&id));
+    relay.stop("stopped").await;
+
+    // A guest that keeps to the rate may go on sending past the burst.
+    let limits = Limits {
+        inbound_messages: Rate {
+            per_second: 50,
+            burst: 20,
+        },
+        ..Limits::default()
+    };
+    let (events, relay, port) = started(limits).await;
+    let mut steady = guest(port).await;
+    let id = events.opened(0).await;
+    for round in 1..=3 {
+        for _ in 0..20 {
+            steady.send(Message::text("tick")).await.unwrap();
+        }
+        events.heard_at_least(&id, 20 * round).await;
+        // Refills at least 30, so the whole burst again.
+        tokio::time::sleep(Duration::from_millis(600)).await;
+    }
+    assert!(!events.is_closed(&id));
+    flood(&mut steady, || Message::text("tick"), 200).await;
+    assert_eq!(close_of(&mut steady).await, (1008, "rate".to_string()));
+    relay.stop("stopped").await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn nothing_from_a_guest_reaches_the_page_after_the_page_closes_it() {
+    let limits = Limits {
+        queue_bytes: 256 * 1024 * 1024,
+        ..Limits::default()
+    };
+    let (events, relay, port) = started(limits).await;
+    let mut guest = guest(port).await;
+    let id = events.opened(0).await;
+    // More than the sockets' buffers hold, to a guest not reading: the close waits behind it.
+    let chunk = "c".repeat(1024 * 1024);
+    let chunks = 48;
+    for _ in 0..chunks {
+        relay.send(&id, chunk.clone()).unwrap();
+    }
+    guest.send(Message::text("early")).await.unwrap();
+    events.heard_at_least(&id, 1).await;
+
+    relay.close(&id, "bye");
+    for _ in 0..10 {
+        guest.send(Message::text("late")).await.unwrap();
+    }
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert!(
+        !events.is_closed(&id),
+        "still open, sending what was queued before the close"
+    );
+    assert_eq!(events.heard(&id), ["early"]);
+
+    // Everything queued before the close still arrives, then the close.
+    for _ in 0..chunks {
+        assert_eq!(next(&mut guest).await, Some(Message::text(chunk.clone())));
+    }
+    assert_eq!(close_of(&mut guest).await, (1000, "bye".to_string()));
+    assert_eq!(events.closed(&id).await, "bye");
+    assert_eq!(events.heard(&id), ["early"]);
     relay.stop("stopped").await;
 }
 
@@ -770,6 +1047,8 @@ fn addresses_put_the_home_network_first_and_leave_out_what_no_guest_can_open() {
         ("en1", "192.168.1.20"),
         ("en5", "100.70.0.1"),
         ("en0", "::ffff:192.168.1.20"),
+        // Public: reachable from the internet, so never offered (and refused by `local_peer`).
+        ("en0", "203.0.113.9"),
     ];
     let parsed: Vec<(&str, IpAddr)> = found
         .iter()
@@ -787,7 +1066,6 @@ fn addresses_put_the_home_network_first_and_leave_out_what_no_guest_can_open() {
             "192.168.1.20",
             "100.70.0.1",
             "fd12::5",
-            "2001:db8::5",
             "192.168.64.1",
             "100.101.1.2"
         ]
@@ -796,6 +1074,36 @@ fn addresses_put_the_home_network_first_and_leave_out_what_no_guest_can_open() {
         ranked(false),
         ["192.168.1.20", "100.70.0.1", "192.168.64.1", "100.101.1.2"]
     );
+}
+
+#[test]
+fn only_local_network_peers_are_served() {
+    for local in [
+        "127.0.0.1",
+        "192.168.1.30",
+        "10.0.0.4",
+        "172.16.9.9",
+        "169.254.3.3",
+        "100.70.0.1",
+        "::1",
+        "fd12::7",
+        "fe80::1",
+        "::ffff:192.168.1.30",
+    ] {
+        assert!(net::local_peer(local.parse().unwrap()), "{local} is local");
+    }
+    for remote in [
+        "8.8.8.8",
+        "203.0.113.9",
+        "2001:db8::5",
+        "2606:4700::1111",
+        "::ffff:8.8.8.8",
+    ] {
+        assert!(
+            !net::local_peer(remote.parse().unwrap()),
+            "{remote} is not local"
+        );
+    }
 }
 
 #[test]

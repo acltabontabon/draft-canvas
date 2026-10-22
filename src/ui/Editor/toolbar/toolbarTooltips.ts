@@ -57,6 +57,12 @@ const SPECS = {
   shortcuts: { title: 'Keyboard shortcuts', commandId: 'shortcuts' },
   about: { title: 'About Draft Canvas', commandId: 'about' },
   more: { title: 'More' },
+  collaborate: {
+    title: 'Collaborate',
+    commandId: 'collaborate',
+    description: 'Edit this canvas together, live.',
+    usageHint: 'Invite people with a link; they connect straight to you, with no server in between.',
+  },
 } satisfies Record<string, ToolbarTooltipSpec>;
 
 export type ToolbarTooltipId = keyof typeof SPECS;

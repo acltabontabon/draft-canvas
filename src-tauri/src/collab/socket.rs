@@ -1,7 +1,8 @@
-//! One guest's WebSocket: text in goes to the page as it arrives, text the page sends goes out in
-//! order, and a ping every few seconds finds a guest that has quietly gone.
+//! One guest's WebSocket: text in goes to the page as it arrives, within the guest's budget and
+//! until the page closes it; text the page sends goes out in order; and a ping every few seconds
+//! finds a guest that has quietly gone.
 
-use super::{new_conn, Kill, Limits, Outbound, Shared, Slot};
+use super::{new_conn, Ends, Kill, Limits, Outbound, Rate, Shared, Slot};
 use crate::state::HostEvent;
 use crate::util::lock;
 use axum::body::Bytes;
@@ -16,6 +17,9 @@ use tokio::time::timeout;
 
 /// How long the last frame (the close) gets to leave before the socket is simply dropped.
 const CLOSE_GRACE: Duration = Duration::from_secs(2);
+/// How long, after its close has gone, a guest gets to answer with its own (a browser answers at
+/// once). See `Reader::drain`.
+const CLOSE_REPLY_WAIT: Duration = Duration::from_secs(1);
 /// A close frame's reason is at most 123 bytes.
 const MAX_CLOSE_REASON: usize = 123;
 
@@ -59,7 +63,7 @@ pub(super) async fn stopped(shutdown: &mut watch::Receiver<bool>) {
 pub(super) async fn run(socket: WebSocket, slot: Slot) {
     let shared = slot.shared().clone();
     let id = uuid::Uuid::new_v4().simple().to_string();
-    let (conn, outbound, queued, kill) = new_conn(&shared.limits);
+    let (conn, ends) = new_conn(&shared.limits);
     if !shared.register(&id, conn) {
         let mut socket = socket;
         let _ = timeout(
@@ -72,7 +76,7 @@ pub(super) async fn run(socket: WebSocket, slot: Slot) {
     shared.sink.emit(HostEvent::CollabLanOpen {
         conn_id: id.clone(),
     });
-    let reason = drive(socket, &shared, &id, outbound, queued, kill).await;
+    let reason = drive(socket, &shared, &id, ends).await;
     shared.unregister(&id);
     shared.sink.emit(HostEvent::CollabLanClose {
         conn_id: id,
@@ -81,23 +85,30 @@ pub(super) async fn run(socket: WebSocket, slot: Slot) {
     drop(slot);
 }
 
-async fn drive(
-    socket: WebSocket,
-    shared: &Shared,
-    id: &str,
-    outbound: mpsc::Receiver<Outbound>,
-    queued: std::sync::Arc<AtomicUsize>,
-    kill: watch::Receiver<Kill>,
-) -> String {
+async fn drive(socket: WebSocket, shared: &Shared, id: &str, ends: Ends) -> String {
+    let Ends {
+        outbound,
+        queued,
+        kill,
+        closing,
+    } = ends;
     let (mut sink, mut stream) = socket.split();
     let alive = Mutex::new(Instant::now());
+    let mut reader = Reader {
+        shared,
+        id,
+        budget: Budget::new(&shared.limits, Instant::now()),
+        closing,
+        shutdown: shared.shutdown.subscribe(),
+    };
     let shutdown = shared.shutdown.subscribe();
     // Reading and writing run side by side, so a guest that is slow to read still has its messages
     // heard. Whichever ends first decides why the connection ended; the other is dropped mid-wait,
-    // which loses nothing (a frame half written stays in the socket's buffer).
-    let end = tokio::select! {
-        end = read(&mut stream, &alive, shared, id) => end,
-        end = write(&mut sink, &alive, &shared.limits, outbound, &queued, kill, shutdown) => end,
+    // which loses nothing (a frame half written stays in the socket's buffer). Once the page closes
+    // the guest, reading stops for good and writing alone decides, after what was queued has gone.
+    let (end, writer_ended) = tokio::select! {
+        end = reader.read(&mut stream, &alive) => (end, false),
+        end = write(&mut sink, &alive, &shared.limits, outbound, &queued, kill, shutdown) => (end, true),
     };
     let _ = timeout(CLOSE_GRACE, async {
         if let Some(code) = end.code {
@@ -106,6 +117,11 @@ async fn drive(
         let _ = sink.close().await;
     })
     .await;
+    // When reading ended the connection, the guest closed, the socket broke, or it is being cut off
+    // mid-flood: there is nothing to wait for, and after a read error nothing more may be read.
+    if writer_ended {
+        reader.drain(&mut stream).await;
+    }
     end.reason
 }
 
@@ -113,30 +129,150 @@ fn touch(alive: &Mutex<Instant>) {
     *lock(alive) = Instant::now();
 }
 
-async fn read(
-    stream: &mut SplitStream<WebSocket>,
-    alive: &Mutex<Instant>,
-    shared: &Shared,
-    id: &str,
-) -> End {
-    while let Some(message) = stream.next().await {
-        // Any frame shows the guest is there; browsers answer pings on their own.
-        touch(alive);
-        match message {
-            Ok(Message::Text(text)) => shared.sink.emit(HostEvent::CollabLanMessage {
-                conn_id: id.to_string(),
-                text: text.as_str().to_owned(),
-            }),
-            Ok(Message::Binary(_)) => return End::close("binary", UNSUPPORTED),
-            Ok(Message::Ping(_) | Message::Pong(_)) => {}
-            Ok(Message::Close(_)) => return End::quiet("closed"),
-            Err(error) => return read_error(error),
-        }
-    }
-    End::quiet("closed")
+/// A token bucket: full to start with, refilled at a steady rate, never above its burst.
+pub(super) struct Bucket {
+    level: f64,
+    rate: Rate,
+    last: Instant,
 }
 
-/// A frame over `MAX_TEXT` is the guest's to hear about; anything else means the socket broke.
+impl Bucket {
+    pub(super) fn new(rate: Rate, now: Instant) -> Self {
+        Self {
+            level: rate.burst as f64,
+            rate,
+            last: now,
+        }
+    }
+
+    /// Spends `amount`, or says there isn't that much left (and spends nothing).
+    pub(super) fn take(&mut self, amount: u64, now: Instant) -> bool {
+        let elapsed = now.saturating_duration_since(self.last).as_secs_f64();
+        self.last = now;
+        let refill = elapsed * self.rate.per_second as f64;
+        self.level = (self.level + refill).min(self.rate.burst as f64);
+        let amount = amount as f64;
+        if amount > self.level {
+            return false;
+        }
+        self.level -= amount;
+        true
+    }
+}
+
+/// What one guest may still send: bytes and messages, each its own bucket.
+pub(super) struct Budget {
+    bytes: Bucket,
+    messages: Bucket,
+}
+
+impl Budget {
+    pub(super) fn new(limits: &Limits, now: Instant) -> Self {
+        Self {
+            bytes: Bucket::new(limits.inbound_bytes, now),
+            messages: Bucket::new(limits.inbound_messages, now),
+        }
+    }
+
+    /// Spends one message of `len` bytes, or says the guest is sending faster than it may. A refusal
+    /// closes the connection, so what a refused message spent doesn't matter.
+    pub(super) fn admit(&mut self, len: usize, now: Instant) -> bool {
+        self.messages.take(1, now) && self.bytes.take(len as u64, now)
+    }
+}
+
+/// The reading half of a connection: what arrives goes to the page, within the guest's budget, until
+/// the page closes the guest or the server stops.
+struct Reader<'a> {
+    shared: &'a Shared,
+    id: &'a str,
+    budget: Budget,
+    closing: watch::Receiver<bool>,
+    shutdown: watch::Receiver<bool>,
+}
+
+impl Reader<'_> {
+    /// Returns why the connection ended; never returns once the page closed the guest or the server
+    /// is stopping, which leaves the writer to send what was queued and then the close.
+    async fn read(&mut self, stream: &mut SplitStream<WebSocket>, alive: &Mutex<Instant>) -> End {
+        loop {
+            let message = tokio::select! {
+                biased;
+                () = stopped(&mut self.shutdown) => break,
+                // An error is the connection leaving the books: stop just the same.
+                _ = self.closing.wait_for(|closing| *closing) => break,
+                message = stream.next() => message,
+            };
+            let message = match message {
+                Some(Ok(message)) => message,
+                Some(Err(error)) => return read_error(error),
+                None => return End::quiet("closed"),
+            };
+            // Any frame shows the guest is there; browsers answer pings on their own.
+            touch(alive);
+            let Some(len) = payload_len(&message) else {
+                return End::quiet("closed");
+            };
+            if !self.budget.admit(len, Instant::now()) {
+                return End::close("rate", POLICY);
+            }
+            match message {
+                Message::Text(text) => {
+                    if !self.forward(text.as_str()) {
+                        break;
+                    }
+                }
+                Message::Binary(_) => return End::close("binary", UNSUPPORTED),
+                _ => {}
+            }
+        }
+        // Not reading leaves anything more the guest sends in its own socket, unread.
+        std::future::pending().await
+    }
+
+    /// After the close has gone, reads what the guest still sends, dropping it, until the guest's own
+    /// close. A socket dropped with frames unread in it is reset rather than closed, and a reset can
+    /// cost the guest the last frames sent to it, the close among them. Bounded by
+    /// `CLOSE_REPLY_WAIT` and the guest's budget; the page hears none of it.
+    async fn drain(&mut self, stream: &mut SplitStream<WebSocket>) {
+        let _ = timeout(CLOSE_REPLY_WAIT, async {
+            while let Some(Ok(message)) = stream.next().await {
+                match payload_len(&message) {
+                    Some(len) if self.budget.admit(len, Instant::now()) => {}
+                    _ => return,
+                }
+            }
+        })
+        .await;
+    }
+
+    /// Hands one message to the page unless the page has closed the guest or the server is stopping.
+    /// `closing` stays borrowed until the message is handed on, so a close waits for it and nothing
+    /// is handed on after a close returns.
+    fn forward(&self, text: &str) -> bool {
+        let closing = self.closing.borrow();
+        if *closing || self.shared.stopping() {
+            return false;
+        }
+        self.shared.sink.emit(HostEvent::CollabLanMessage {
+            conn_id: self.id.to_string(),
+            text: text.to_owned(),
+        });
+        true
+    }
+}
+
+/// What a message costs against the byte budget; `None` for a close.
+fn payload_len(message: &Message) -> Option<usize> {
+    match message {
+        Message::Text(text) => Some(text.len()),
+        Message::Binary(bytes) | Message::Ping(bytes) | Message::Pong(bytes) => Some(bytes.len()),
+        Message::Close(_) => None,
+    }
+}
+
+/// A message over `MAX_GUEST_TEXT` is the guest's to hear about; anything else means the socket
+/// broke.
 fn read_error(error: axum::Error) -> End {
     match error.into_inner().downcast::<tungstenite::Error>() {
         Ok(error) if matches!(*error, tungstenite::Error::Capacity(_)) => {

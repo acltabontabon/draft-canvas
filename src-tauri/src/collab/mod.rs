@@ -36,12 +36,25 @@ pub const PROTOCOL: &str = "draft-canvas.collab.v1";
 pub const SOCKET_PATH: &str = "/collab";
 /// Guests at once. The 11th is turned away until someone leaves.
 pub const MAX_CONNECTIONS: usize = 10;
-/// The largest text frame either way: a whole diagram with room to spare.
+/// The largest text frame the page may send a guest: a whole diagram (a snapshot) with room to spare.
 pub const MAX_TEXT: usize = 16 * 1024 * 1024;
+/// The largest text message a guest may send the page. Keep it equal to `MAX_GUEST_MESSAGE_BYTES` in
+/// `src/collab/protocol.ts`, which counts the same UTF-8 bytes: a guest only ever sends edits, and
+/// anything larger the page would drop anyway, after paying to receive it. Refused here, while it is
+/// still being read, with 1009 `too-large`.
+pub const MAX_GUEST_TEXT: usize = 4 * 1024 * 1024;
 /// The page makes a 128-bit token and sends it as 32 lowercase hex characters.
 const TOKEN_LEN: usize = 32;
-/// How long `stop` waits for every guest to be sent its close before saying the server stopped.
-const DRAIN_TIMEOUT: Duration = Duration::from_secs(3);
+/// How long `stop` waits for every guest to be sent its close before saying the server stopped: a
+/// close that takes all of `socket`'s grace, then all of the wait for the guest's answer, with room.
+const DRAIN_TIMEOUT: Duration = Duration::from_secs(4);
+
+/// A sustained rate per second, and the burst allowed above it before the rate applies.
+#[derive(Debug, Clone, Copy)]
+pub struct Rate {
+    pub per_second: u64,
+    pub burst: u64,
+}
 
 /// The timings and bounds of one connection; the tests shorten them.
 #[derive(Debug, Clone, Copy)]
@@ -55,6 +68,11 @@ pub struct Limits {
     pub queue_messages: usize,
     /// One frame that takes longer than this to leave is a guest that stopped reading.
     pub send_timeout: Duration,
+    /// Bytes and messages (pings and pongs included) one guest may send, checked as each arrives and
+    /// before the page hears it. Past either the guest is closed with 1008 `rate`: the page can't
+    /// refuse what it is never given a chance to look at, so a flood stops here.
+    pub inbound_bytes: Rate,
+    pub inbound_messages: Rate,
 }
 
 impl Default for Limits {
@@ -65,6 +83,19 @@ impl Default for Limits {
             queue_bytes: 2 * MAX_TEXT,
             queue_messages: 1024,
             send_timeout: Duration::from_secs(30),
+            // The page's own byte budget for a guest (`BYTE_RATE`, `BYTE_BURST` in
+            // `src/collab/hostSession.ts`): two of the largest messages back to back, then 1 MiB/s.
+            inbound_bytes: Rate {
+                per_second: 1024 * 1024,
+                burst: 2 * MAX_GUEST_TEXT as u64,
+            },
+            // A guest's page sends its cursor and a held gesture's edits at most every 50 ms each,
+            // plus a heartbeat every few seconds: well under this, which is the page's own patch
+            // limit (`PATCH_RATE`, `PATCH_BURST`).
+            inbound_messages: Rate {
+                per_second: 60,
+                burst: 240,
+            },
         }
     }
 }
@@ -122,10 +153,21 @@ pub(crate) struct Conn {
     outbound: mpsc::Sender<Outbound>,
     queued: Arc<AtomicUsize>,
     kill: watch::Sender<Kill>,
+    /// Set once the page no longer wants to hear from this guest: it closed it, it was killed, or the
+    /// server is stopping. Its reader stops reading at once and forwards nothing more. The reader
+    /// checks it under the channel's lock as it hands a message on, so once this is set (setting it
+    /// waits for a message being handed on) not one more reaches the page.
+    closing: watch::Sender<bool>,
 }
 
 impl Conn {
+    fn stop_reading(&self) {
+        self.closing
+            .send_if_modified(|closing| !std::mem::replace(closing, true));
+    }
+
     fn kill(&self, reason: &str, code: u16) {
+        self.stop_reading();
         self.kill.send_if_modified(|kill| {
             if kill.is_some() {
                 return false;
@@ -190,6 +232,16 @@ impl Shared {
         for conn in lock(&self.conns).values() {
             conn.kill(reason, code);
         }
+    }
+
+    /// Tells every connection and listener to stop. Under the lock `register` checks `stopping`
+    /// under, so a connection either sees the stop when it registers or is told here.
+    fn begin_stop(&self) {
+        let conns = lock(&self.conns);
+        for conn in conns.values() {
+            conn.stop_reading();
+        }
+        self.shutdown.send_replace(true);
     }
 
     async fn drained(&self) {
@@ -334,7 +386,7 @@ impl Relay {
             return;
         };
         lock(&self.current).take();
-        running.shared.shutdown.send_replace(true);
+        running.shared.begin_stop();
         // Each listener task owns its socket: once it has returned, the port is free again.
         for listener in running.listeners {
             let _ = listener.await;
@@ -349,7 +401,7 @@ impl Relay {
     /// the listeners stop accepting. Nobody is left to hear about it.
     pub fn shutdown_now(&self) {
         if let Some(shared) = lock(&self.current).take() {
-            shared.shutdown.send_replace(true);
+            shared.begin_stop();
         }
     }
 
@@ -388,7 +440,8 @@ impl Relay {
         Ok(())
     }
 
-    /// Closes one guest once everything already sent to it has gone.
+    /// Closes one guest once everything already sent to it has gone. Nothing more from the guest
+    /// reaches the page once this returns.
     pub fn close(&self, conn_id: &str, reason: &str) {
         let Some(shared) = lock(&self.current).clone() else {
             return;
@@ -397,6 +450,7 @@ impl Relay {
         let Some(conn) = conns.get(conn_id) else {
             return;
         };
+        conn.stop_reading();
         if conn
             .outbound
             .try_send(Outbound::Close(reason.to_string()))
@@ -429,26 +483,32 @@ fn parse_token(token: &str) -> Result<[u8; TOKEN_LEN], AppError> {
     Ok(out)
 }
 
+/// The ends of one connection its task holds; the `Conn` on the books holds the others.
+pub(crate) struct Ends {
+    pub(crate) outbound: mpsc::Receiver<Outbound>,
+    pub(crate) queued: Arc<AtomicUsize>,
+    pub(crate) kill: watch::Receiver<Kill>,
+    pub(crate) closing: watch::Receiver<bool>,
+}
+
 /// Builds a connection's book entry and the ends its task reads from.
-pub(crate) fn new_conn(
-    limits: &Limits,
-) -> (
-    Conn,
-    mpsc::Receiver<Outbound>,
-    Arc<AtomicUsize>,
-    watch::Receiver<Kill>,
-) {
+pub(crate) fn new_conn(limits: &Limits) -> (Conn, Ends) {
     let (outbound, outbound_rx) = mpsc::channel(limits.queue_messages);
     let queued = Arc::new(AtomicUsize::new(0));
     let (kill, kill_rx) = watch::channel(None);
+    let (closing, closing_rx) = watch::channel(false);
     (
         Conn {
             outbound,
             queued: queued.clone(),
             kill,
+            closing,
         },
-        outbound_rx,
-        queued,
-        kill_rx,
+        Ends {
+            outbound: outbound_rx,
+            queued,
+            kill: kill_rx,
+            closing: closing_rx,
+        },
     )
 }

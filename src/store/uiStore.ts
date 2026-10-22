@@ -260,12 +260,20 @@ export interface UiStore {
   diagnosticsOpen: boolean;
   /** Canvas Settings — background image and personality preset. */
   settingsOpen: boolean;
+  /** Whether the Collaborate dialog (`ui/collab/CollaborateDialog.tsx`) is open. */
+  collabOpen: boolean;
+  /**
+   * An invite this page was opened with (`#join=…`), read off the address and then cleared from it,
+   * waiting for the person to say who they are and join. Transient: never stored.
+   */
+  joinInvite: string | null;
   /**
    * Set while a diagram opened from a share link (`src/share/`) is on screen. It is nobody's file:
    * not in the library, never autosaved, and `editorStore.apply`/`applyToFile` refuse every change
    * while this is set — the camera still moves. Cleared by closing it or by making an editable copy.
    */
-  readOnly: { sharedTitle: string } | null;
+  /** `collaborative`: a collaborator's copy in a live session (view-only, or a session that ended), not a share link. */
+  readOnly: { sharedTitle: string; collaborative?: true } | null;
   toasts: Toast[];
   quickConnect: QuickConnectState | null;
   contextMenu: ContextMenuState | null;
@@ -523,6 +531,8 @@ export interface UiStore {
   setAboutOpen: (open: boolean) => void;
   setDiagnosticsOpen: (open: boolean) => void;
   setSettingsOpen: (open: boolean) => void;
+  setCollabOpen: (open: boolean) => void;
+  setJoinInvite: (payload: string | null) => void;
   setQuickConnect: (state: QuickConnectState | null) => void;
   setContextMenu: (state: ContextMenuState | null) => void;
   setAttachArmedTarget: (nodeId: string | null) => void;
@@ -649,6 +659,8 @@ export const useUiStore = create<UiStore>((set, get) => ({
   aboutOpen: false,
   diagnosticsOpen: false,
   settingsOpen: false,
+  collabOpen: false,
+  joinInvite: null,
   readOnly: null,
   toasts: [],
   quickConnect: null,
@@ -712,6 +724,8 @@ export const useUiStore = create<UiStore>((set, get) => ({
   setAboutOpen: (aboutOpen) => set({ aboutOpen }),
   setDiagnosticsOpen: (diagnosticsOpen) => set({ diagnosticsOpen }),
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
+  setCollabOpen: (collabOpen) => set({ collabOpen }),
+  setJoinInvite: (joinInvite) => set({ joinInvite }),
   setQuickConnect: (quickConnect) => set({ quickConnect }),
   setContextMenu: (contextMenu) => set({ contextMenu }),
   setAttachArmedTarget: (attachArmedTarget) =>

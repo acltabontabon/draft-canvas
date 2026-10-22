@@ -1,3 +1,4 @@
+import { changeKeys } from '../collab/selective';
 import { samePath, viewOf } from '../depth/tree';
 import type { DraftDocument } from '../document/types';
 
@@ -47,6 +48,12 @@ export interface HistoryEntry {
   /** See `FlowSessionSnapshot`. Only ever set by `deleteFlow`. */
   flowSessionBefore?: FlowSessionSnapshot;
   flowSessionAfter?: FlowSessionSnapshot;
+  /**
+   * What this edit touched (`collab/selective.ts`'s `changeKeys`), recorded only while others are
+   * editing the file too. Their edits land between yours, so `before` and `after` of a coalesced
+   * entry stop being "your edit" alone; undo then takes back just these.
+   */
+  keys?: readonly string[];
 }
 
 export interface HistoryState {
@@ -95,6 +102,9 @@ export function pushEntry(
       selectionAfter: entry.selectionAfter,
       at: entry.at,
     };
+    // `top.after` is still exactly what that edit left, so its keys can be worked out late — an
+    // entry recorded just before a session started coalescing with one recorded just after.
+    if (entry.keys) merged.keys = [...new Set([...(top.keys ?? changeKeys(top.before, top.after)), ...entry.keys])];
     return { past: [...history.past.slice(0, -1), merged], future: [] };
   }
 
