@@ -538,7 +538,10 @@ mod tests {
         let view = submenu_items(&bar, "View");
         assert_eq!(find(view, "app:commands").0, "Commands\u{2026}");
         assert_eq!(find(view, "app:arrange").0, "Arrange Diagram");
-        assert_eq!(find(view, "app:canvas-settings").0, "Canvas Settings\u{2026}");
+        assert_eq!(
+            find(view, "app:canvas-settings").0,
+            "Canvas Settings\u{2026}"
+        );
         assert_eq!(view.last(), Some(&Spec::Predefined(Predefined::Fullscreen)));
         // The canvas has its own chord for Find and Replace, so the menu takes none.
         assert_eq!(
@@ -568,7 +571,12 @@ mod tests {
         );
         // No View menu here: the diagram's items end Edit.
         let edit = submenu_items(&bar, "Edit");
-        for id in ["app:find-replace", "app:commands", "app:arrange", "app:canvas-settings"] {
+        for id in [
+            "app:find-replace",
+            "app:commands",
+            "app:arrange",
+            "app:canvas-settings",
+        ] {
             assert!(items(edit).iter().any(|(item, ..)| *item == id), "{id}");
         }
         assert_eq!(
