@@ -1,194 +1,75 @@
 # Getting started
 
-In a few minutes you'll draw a small system, annotate it, walk someone through it, and export
-it. The system is an API that puts orders on a queue for a worker to process.
+Draw a small order-processing system, present it, and export it.
+Open the [web editor](https://app.draftcanvas.dev/) or [desktop app](desktop.md).
+No account is needed.
 
-You need the app open: the [hosted version](https://app.draftcanvas.dev/), a
-[self-hosted copy](self-hosting.md), or the [desktop app](desktop.md). Nothing here
-needs an account, and nothing you draw leaves your machine.
-
-Shortcuts are written for a Mac. On Windows and Linux, read `⌘` as `Ctrl`.
+Shortcuts use Mac keys. On Windows and Linux, use `Ctrl` for `⌘`.
 
 ## Start a canvas
 
-Web Home opens as a sketchbook, with **Quick Draft** on a paper card and **Try an example** and
-**Import a file** just below it. [Desktop Home](desktop.md#quick-draft) provides **Open file…** and
-**Connect an agent…**. Choose **Quick Draft** (pressing `Enter` on the web also works). Your drafts,
-recently edited diagrams, and projects appear on the shelf below it. Drafts and Recent appear when they contain
-diagrams; Projects is always available. A single view needs no tab bar; the separator stays in place.
+Choose **Quick Draft** on Home for a blank canvas. To explore a finished diagram first,
+choose **Try an example**, then **Play explanation**.
 
-*Web Home*
-
-![Web Home: an editorial heading beside a Quick Draft paper card, with example and import actions underneath and projects below the separator.](../media/guides/home.png)
-
-Choose **View all** to open the Canvas Gallery, or use the search button when you have diagrams.
-Each card previews the diagram itself. **Home** returns to the sketchbook; opening a diagram
-from the gallery brings you back to that gallery when you close it. Your diagram saves itself as
-you work; see [Saving, backing up and sharing](saving-and-sharing.md).
-
-## Try a complete explanation
-
-**Try an example** on Home or an empty canvas opens a new **Order processing** diagram.
-The command palette offers it later too. **Play explanation** presents its three-step **Place an
-order** flow; return to editing to change its ordinary shapes, connectors, captions and queue note.
-Every opening makes a fresh document. On desktop it is a normal Quick Draft.
+The web app saves locally as you draw. On desktop, press `⌘S` to save a Quick Draft as a file.
 
 ## Draw Service → Queue → Worker
 
-1. **Add the service.** Move your pointer over the canvas and press `S`. A Service appears under it,
-   ready to type. Type `Orders API` and press `Enter`.
-2. **Add the queue.** Select the service and drag from one of the small dots on its edge (its handles) into empty
-   space, then let go. A short menu offers Service, Data Store, Queue and Actor. Choose **Queue**,
-   press `Enter` to name it, and type `orders`.
+1. Move your pointer over the canvas and press `S`. Type `Orders API`, then press `Enter`.
+2. Drag from a dot on the service's edge into empty space. Choose **Queue**.
+   Type `orders`, then press `Enter`.
+3. A faint Worker suggestion appears beside the selected queue. Press `Tab` to accept it,
+   then `Enter` to name it `Fulfilment worker`. If no suggestion is visible, press `]`.
 
-   ![Dragging a connector from Orders API into empty space opens a menu offering Service, Data Store, Queue and Actor.](../media/guides/quick-connect.png)
+[Preview the finished drawing.](../media/guides/service-queue-worker.png)
 
-3. **Take the suggestion.** With the queue selected, a faint Worker appears beside it, connected. That
-   is Draft Canvas guessing your next move from what you've drawn. Press `Tab` to accept it, then
-   `Enter` to name it `Fulfilment worker`. If the guess isn't what you want, press `Esc`, or `]` to
-   see another.
-
-   ![A faint Worker shape and a dashed connector labelled "consumed by" appear next to the selected queue, with a small pill reading "Worker" and "Tab".](../media/guides/suggestion.png)
-
-The connectors have labelled themselves with what they mean. The line from the API to the queue
-says it *sends command to* it — a job handed off, drawn dashed because nothing waits for it — and
-reads in the direction the arrow points. To change one, select the
-connector and pick another relationship from its popover; only those that make sense for that pair
-are offered. Nothing stops you drawing something unusual on purpose.
-
-Pointing at a connector highlights it faintly and marks its two ends, so you can see which one a click
-will select; click anywhere along its line, or on its arrowhead. When several connectors leave a shape
-along the same line with the same label, the label is shown once on the stretch they share. Click it to
-select one of them, and click again for the next.
-
-![Orders API, a queue called orders and Fulfilment worker in a row. The connectors are labelled "sends command to" and "consumed by".](../media/guides/service-queue-worker.png)
-
-Some other ways to draw the same thing:
-
-- Press `⌘K`, type `queue`, and press `Enter` to add a Queue from the palette.
-- Type a letter for other shapes: `D` Data Store, `A` Actor, `B` Boundary, `N` Note. `?` lists them all.
-- Select a shape, press `⌘K`, and choose **Connect to…** to wire it to another shape without the mouse.
+Connectors label themselves. Click one to change its relationship.
+To connect existing shapes, drag from a dot on one shape onto the other.
 
 ## Add a note
 
-Notes are for what the boxes don't say: why the queue is there, or a decision the room just made.
+Right-click the queue and choose **Attach note**. Write why the queue is there;
+press `Esc` to keep the text. Click the note's chip to reopen it.
 
-1. Press `N` to drop a note and type into it. `Enter` starts a new line; `Esc` keeps what you typed.
-2. Drag the note onto the queue and hold it there until it docks. It collapses to a small chip on the
-   shape, and clicking the chip opens the note. You can dock a note on a connector the same way.
-
-![The queue now carries a small chip in its top corner, marking the attached note.](../media/guides/note-docked.png)
-
-Or right-click a shape and choose **Attach note**, which creates one already attached.
+For a free-standing note, press `N`. Drag it onto a shape or connector and hold to attach it.
 
 ## Draw a boundary
 
-A boundary is a frame around shapes that belong to the same scope. Select some shapes and press `⌘G`
-to put a boundary around them, or press `B` to draw an empty one. A shape dragged into a boundary
-becomes part of it. When you move, copy or delete a boundary, the shapes inside go with it.
-Draft Canvas never moves a shape into or out of a boundary just because the two overlap.
+Select the service, queue and worker, then press `⌘G` to group them in a boundary.
+Press `Enter` to name it. Moving the boundary moves its contents too.
 
-Choose a boundary's **kind** in the bar that appears when you select it. Each kind has its own
-outline and header, so you can tell kinds apart without reading the labels:
-
-| Kind | Use it for | How it looks |
-|---|---|---|
-| Boundary | Any frame, with no particular meaning | Dashed outline, name only |
-| Group | Shapes that go together for this explanation | Dotted outline, quiet name |
-| System | What sits inside one software system | Solid outline, window mark |
-| Domain | Shapes that share a domain responsibility | Dashed outline, name on a corner tab |
-| Network | What sits within one network scope | Dash-dot outline, connected-nodes mark |
-| Deployment | What runs in one runtime or hosting scope | Solid outline, cube mark, ruled header |
-
-These kinds describe your diagram. They don't enforce anything: a Network boundary doesn't make
-anything secure, and a Deployment boundary doesn't have to be one machine.
-
-The name is the boundary's own. The kind appears after it in small capitals, and is hidden when the
-name needs the room. To rename a boundary, double-click its name or press `Enter`.
-
-Use the colour swatch in the same bar to colour a boundary. The colour applies to the outline and
-the kind mark, and tints the inside slightly, so the shapes inside stay easy to read. If you change
-the kind later, the name, colour, contents and connectors stay as they were.
+Choose a kind or colour in the boundary's toolbar. See [boundary kinds](shapes-and-connectors.md#boundaries)
+for the options.
 
 ## Present a flow
 
-A flow is a numbered path through connectors. It's how you say "first this happens, then this".
+1. Click the API-to-queue connector and choose **Add to flow**. Name it `Place an order`.
+2. Click the queue-to-worker connector and choose **Add to Place an order**.
+3. Open **Flows** (`F`) to check the order or edit step captions.
+4. Click **Present** (`⌘Enter`). Press `→` or `Space` to advance, `←` to go back,
+   and `Esc` to return to editing.
 
-1. Click the connector from `Orders API` to `orders`. Its popover opens, with an **Add to flow** tab at
-   the top. Click it. That starts a new flow with this connector as step 1 and opens the Flows panel
-   with the name selected, so type `Place an order` and press `Enter`.
+![The Flows panel with two ordered steps.](../media/guides/flows-panel.png)
 
-   ![A connector's popover with two tabs at the top: "sends command to" and "Add to flow".](../media/guides/add-to-flow.png)
-
-2. Click the next connector, from the queue to the worker, and choose **Add to Place an order** in the
-   same place. It becomes step 2.
-3. The **Flows** panel (the **Flows** button in the toolbar, or `F`) lists the steps. Use it to reorder,
-   rename, or remove them.
-
-   ![The Flows panel listing "Place an order" with two steps, and numbered badges on the two connectors.](../media/guides/flows-panel.png)
-
-4. Click **Present** in the toolbar. The editor gets out of the way and the flow opens: its title
-   beside the whole path, framed with the rest of the diagram quietly around it. Press `→` or
-   `Space` to begin. Each press tells one step: a signal travels the connector from where the
-   interaction starts to where it arrives, the destination lights up, and a caption in the corner
-   names the two shapes and what the step says. Then everything is still, so you can talk. `←` goes
-   back, and after the last step the flow closes on its whole path, with **Replay** and the next
-   flow a click away. `Esc` returns to editing, to the same view and the same selection you left.
-   `⌘Enter` does the same as the button.
-
-   ![The opening of a presentation: the flow's title and its route on the left, the whole diagram framed beside it.](../media/guides/presenting-opening.png)
-
-While a step is showing, the notes attached to what it shows appear beside it. The note on the queue
-appears when the flow first reaches the queue.
-
-![Presenting step 1 of 2: the first connector is highlighted, the rest of the diagram is faded, and the queue's note appears above it.](../media/guides/presenting.png)
-
-The camera follows the story rather than each shape: it holds still while the next step already
-reads, slides a little when it has to, and only recomposes for a long handoff. Pan or zoom by hand
-whenever you like; **Re-centre** (`R`) hands the camera back. **Overview** (`O`) pulls back to the
-whole flow without losing your place, and the pointer (`P`) is a soft ring that follows your cursor
-for pointing at things.
-
-If you have more than one flow, Draft Canvas asks **Present which flow?** first — and you can change
-your mind later without stopping. The bar names the flow you are in and where it sits (`Place an
-order · Flow 2 of 4`); click it for the full list, or press `Shift+→` and `Shift+←` to move to the
-next and previous flow. On the last step of a flow, the button to the right of the title names the
-one that follows, so the hand-off is there when you need it.
+The active step is highlighted, with its caption and attached notes.
+The [presentation guide](flows-and-presentation.md) covers tracing, camera controls and multiple flows.
 
 ## Export it
 
-Press `⌘⇧E`, or open **Export** in the toolbar.
+Open **Export** (`⌘⇧E`) and choose:
 
-![The Export dialog with Image selected: PNG, a Light palette, and a preview of the diagram with the file name order-processing.png.](../media/guides/export-image.png)
+| Choose | Use it for |
+| --- | --- |
+| **Image → PNG** | A slide or chat message |
+| **Document → Editable** | A `.draftcanvas` file you can reopen or send |
+| **Source** | A sequence diagram from your flow, or architecture source |
 
-- **Image → PNG** for a slide or a chat message. Choose the **Light** palette for a document, or tick
-  **Transparent** to lay it over your own background.
-- **Document → Editable** saves a `.draftcanvas` file you can reopen later, send to someone, or commit
-  to a repository.
-- **Source** turns your flow into a Mermaid or PlantUML sequence diagram, as plain text you can paste
-  into a README or wiki.
+See [saving and sharing](saving-and-sharing.md) for backups, encrypted files and share links.
 
-The [saving guide](saving-and-sharing.md#export-a-file) covers each option, including encrypted
-exports.
+## Keep going
 
-## Where next
-
-- **Skip the blank page.** Press `⌘K` and type `microservices`, `cqrs` or `saga`: a starter fills the
-  canvas with a composed architecture you edit like anything else.
-- **Show more or less detail.** [Explain a system at different levels](depth.md) uses **Look inside**
-  to keep the overview clean and draw the detail one level down.
-- **Go faster.** [Keyboard shortcuts and the command palette](keyboard-and-commands.md).
-- **Say what is still open.** [Mark what is still open](open-points.md) attaches a tentative, awaiting-input
-  or parked point to a shape or connector, for the next conversation to pick up.
-
-## Clean up part of a drawing
-
-Select the shapes to tidy, then choose **Arrange selection** from the command palette or context
-menu. A selected boundary includes its contents. Unselected shapes and free notes stay fixed;
-containing boundaries may grow but do not shrink or change membership. Connectors alone do not
-select their endpoints. If there is too little room, select a larger area and try again.
-The result is one undo step. **Arrange diagram** remains available for a whole-diagram cleanup.
-
-If an existing shape's name is shortened, select it and run **Fit shapes to text** from the command
-palette. It expands the selected architecture shapes and boundaries without moving them, in one
-undo step. New name edits grow the shapes automatically.
+- Press `⌘K` to find a command, shape or [architecture starter](examples.md).
+- Run **Arrange selection** to tidy selected shapes, or **Fit shapes to text** for shortened labels.
+- Use [Look inside](depth.md) to draw detail inside a service.
+- Add an [open point](open-points.md) to record an unresolved question.
+- Press `?` for shortcuts.

@@ -42,24 +42,18 @@ See the [desktop guide](docs/guides/desktop.md#installing) for first-launch step
 
 ## Try it on your own repo
 
-Point Claude Code, Codex, Cursor, Gemini CLI or Junie at Draft Canvas Desktop and get your architecture drawn in minutes.
+Connect Claude Code, Codex, Cursor, Gemini CLI, Junie or another MCP agent:
 
-1. Open your project in the desktop app. In **Settings → AI agents**, turn on **Allow agent access**
-   and pick your agent.
-2. Click **Agent skill → Install skill**.
-3. Ask your agent:
+1. Add your project folder in Draft Canvas Desktop.
+2. In **Settings → AI agents**, turn on **Allow agent access** and tick the folder.
+3. Pick your agent, click **Add to…**, then **Install skill**. Start a new agent session.
+4. Ask:
 
-```text
-Use the Draft Canvas skill to draw the architecture of this repository.
-Use appropriate C4 views, meaningful grouping boundaries, and look-inside
-details for key services. Attach decision notes, open questions and relevant
-code snippets to the shapes, connectors or boundaries they explain.
-Add presentation flows for the main request path and failure paths the code
-supports. Include source evidence and mark inferences.
-```
+> Use the Draft Canvas skill to draw this repository's architecture, with a flow for
+> the main request path and source references for the important parts.
 
-Later, ask it to refresh the diagram when the code changes.
-[Full setup guide →](docs/guides/connect-an-ai-agent.md)
+Ask it to refresh the same diagram when the code changes.
+[Setup and troubleshooting →](docs/guides/connect-an-ai-agent.md)
 
 ## Built with
 

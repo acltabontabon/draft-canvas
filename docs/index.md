@@ -1,54 +1,44 @@
 # Draft Canvas documentation
 
-Guides and reference for using and developing Draft Canvas.
+Start with [Getting started](guides/getting-started.md): draw, present and export a small diagram.
 
-## Using Draft Canvas
+## Guides
 
 | Guide | Covers |
 | --- | --- |
-| **[Getting started](guides/getting-started.md)** | Draw, present and export your first diagram |
-| [Shapes and connectors](guides/shapes-and-connectors.md) | Shapes, relationships and boundaries |
-| [Flows and presenting](guides/flows-and-presentation.md) | Explain a flow step by step |
-| [Architecture examples](guides/examples.md) | Start from an existing pattern |
-| [System levels](guides/depth.md) | Draw the detail inside a shape |
-| [Open points](guides/open-points.md) | Track unresolved questions |
-| [Keyboard shortcuts](guides/keyboard-and-commands.md) | Shortcuts and the command palette |
-| [Accessibility](guides/accessibility.md) | Keyboard, screen reader and touch support |
-| [Saving and sharing](guides/saving-and-sharing.md) | Save, back up, export and share |
-| [Desktop app](guides/desktop.md) | Files, projects and Quick Drafts |
-| [AI agents](guides/connect-an-ai-agent.md) | Connect an agent to the desktop app |
-| [Self-hosting](guides/self-hosting.md) | Build and serve the static web editor |
+| **[Getting started](guides/getting-started.md)** | Make a first diagram |
+| [Shapes and connectors](guides/shapes-and-connectors.md) | Kinds, labels, notes and boundaries |
+| [Flows and presenting](guides/flows-and-presentation.md) | Trace steps and control a presentation |
+| [Architecture examples](guides/examples.md) | Pick a starter |
+| [System levels](guides/depth.md) | Keep detail at separate levels |
+| [Open points](guides/open-points.md) | Record and resolve questions |
+| [Keyboard shortcuts](guides/keyboard-and-commands.md) | Shortcuts and commands |
+| [Accessibility](guides/accessibility.md) | Outline, screen readers and touch |
+| [Saving and sharing](guides/saving-and-sharing.md) | Backups, files, images and links |
+| [Desktop app](guides/desktop.md) | Quick Drafts, files and folders |
+| [AI agents](guides/connect-an-ai-agent.md) | Setup and diagram requests |
+| [Self-hosting](guides/self-hosting.md) | Build and serve the web editor |
 
-## Contributing
-
-| Document | Covers |
-| --- | --- |
-| [Contributing](../CONTRIBUTING.md) | Setup, checks and pull requests |
-| [Development](reference/development.md) | Commands, repository map and host wiring |
-| [Agent instructions](../AGENTS.md) | Implementation rules for coding agents |
-| [Releases](reference/releases.md) | Changelog format and release workflow |
-| [Changelog](../CHANGELOG.md) | Changes by version |
-
-## Technical reference
+## Reference
 
 | Document | Covers |
 | --- | --- |
-| [Architecture](reference/architecture.md) | Design principles and module boundaries |
-| [Semantics](reference/semantics.md) | Connector rules and suggestions |
-| [Document schema](reference/schema.md) | File format, validation and migrations |
-| [Library adoption](reference/library-adoption.md) | Desktop types, notifications and comparison harnesses |
-| [Third-party acknowledgements](reference/third-party.md) | Project credits, license notices and asset attribution |
-| [Privacy](reference/privacy.md) | What is stored and what leaves the device |
-| [Security](../SECURITY.md) | Threat model and reporting concerns |
-| [Performance](reference/performance.md) | Benchmarks and results |
-| [Website](reference/website.md) | Build and deploy the landing page |
-| [Agent integration](reference/agent-integration.md) | MCP tools, permissions and guarantees |
-| [Desktop updates](reference/desktop-updates.md) | Update channels, signing and release checks |
+| [Privacy](reference/privacy.md) | Storage and data leaving the device |
+| [Agent integration](reference/agent-integration.md) | MCP tools and guarantees |
+| [Architecture](reference/architecture.md) | Design and module boundaries |
+| [Semantics](reference/semantics.md) | Relationship and suggestion rules |
+| [Document schema](reference/schema.md) | File format and limits |
+| [Mermaid import](reference/mermaid-import.md) | Supported flowchart syntax |
+| [Performance](reference/performance.md) | Benchmarks |
+| [Security](../SECURITY.md) | Threat model and reporting |
 
-## Planning and acceptance
+## Contributing and maintenance
 
-| Document | Covers |
-| --- | --- |
-| [Roadmap](reference/roadmap.md) | Planned work and acceptance checks |
-| [Explanation usability](reference/explanation-usability.md) | Observed drawing and handoff tasks |
-| [Release acceptance](reference/reliability.md) | Reliability checks and recovery drills |
+[Contributing](../CONTRIBUTING.md) · [Development](reference/development.md) ·
+[Agent instructions](../AGENTS.md) · [Releases](reference/releases.md) ·
+[Desktop updates](reference/desktop-updates.md) · [Website](reference/website.md) ·
+[Changelog](../CHANGELOG.md)
+
+Planning: [Roadmap](reference/roadmap.md), [usability](reference/explanation-usability.md),
+[release acceptance](reference/reliability.md), [connector audit](reference/connector-ux-audit.md).
+Dependencies: [library adoption](reference/library-adoption.md), [third-party credits](reference/third-party.md).
