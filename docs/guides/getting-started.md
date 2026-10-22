@@ -13,6 +13,7 @@ On Home, choose **Quick Draft**. To see a finished diagram first, choose **Try a
 The web app saves in your browser as you draw; on desktop, `⌘S` saves a file. Shape tools are at
 the top; **Present**, **Flows** and **Share** at the top right. `⌘K` finds any command and `?` lists
 shortcuts.
+The back arrow beside the diagram title returns to your diagrams.
 
 On a blank canvas, double-click anywhere to choose your first shape, or pick one of the five
 architecture sketches for a starting point.

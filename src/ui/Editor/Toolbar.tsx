@@ -1,5 +1,4 @@
 import { useLayoutEffect, useRef } from 'react';
-import { BrandMark } from '../common/BrandMark';
 import { Button } from '../common/Button';
 import { Tooltip, TooltipGroup } from '../common/Tooltip';
 import { CreateRail } from './toolbar/CreateRail';
@@ -43,12 +42,18 @@ export function Toolbar({
     const update = (height: number) => editor.style.setProperty('--dc-toolbar-height', `${height}px`);
     update(header.getBoundingClientRect().height);
     if (typeof ResizeObserver === 'undefined') return () => editor.style.removeProperty('--dc-toolbar-height');
+    let frame: number | undefined;
     const observer = new ResizeObserver(([entry]) => {
-      update(entry?.borderBoxSize?.[0]?.blockSize ?? header.getBoundingClientRect().height);
+      const height = entry?.borderBoxSize?.[0]?.blockSize ?? header.getBoundingClientRect().height;
+      // This also resizes the canvas background. Defer that write so its own observers cannot
+      // start another layout cycle while the header's resize notification is still delivering.
+      if (frame !== undefined) cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => update(height));
     });
     observer.observe(header);
     return () => {
       observer.disconnect();
+      if (frame !== undefined) cancelAnimationFrame(frame);
       editor.style.removeProperty('--dc-toolbar-height');
     };
   }, []);
@@ -63,10 +68,7 @@ export function Toolbar({
           {onBack && (
             <Tooltip content={toolbarTooltip('back')}>
               {(tip) => (
-                // The Draft Canvas mark is the way home: back to your diagrams.
-                <Button variant="quiet" className="dc-brand-mark" onClick={onBack} aria-label={toolbarLabel('back')} {...tip}>
-                  <BrandMark />
-                </Button>
+                <Button variant="quiet" className="dc-toolbar-back" icon="arrowLeft" onClick={onBack} aria-label={toolbarLabel('back')} {...tip} />
               )}
             </Tooltip>
           )}

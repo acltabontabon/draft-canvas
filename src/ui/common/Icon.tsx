@@ -6,6 +6,7 @@ import { memo } from 'react';
  */
 const PATHS = {
   back: 'M15 19l-7-7 7-7',
+  arrowLeft: 'M19 12H5 M11 6l-6 6 6 6',
   forward: 'M9 5l7 7-7 7',
   up: 'M5 15l7-7 7 7',
   down: 'M19 9l-7 7-7-7',

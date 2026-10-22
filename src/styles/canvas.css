@@ -33,13 +33,10 @@
   will-change: auto;
 }
 
-/* A faint inset ring for when the canvas itself has real keyboard focus (Tab landed here) but
- * nothing is selected yet — without it, that state would have no visible feedback at all. Once
- * something *is* selected, the node/edge rules above already carry the stronger signal; this stays
- * deliberately subtle so it never reads as competing with that. */
+/* Keep keyboard focus for editing, without framing the whole drawing as a selected object.
+ * An inset focus ring lingered after deleting shapes; selected nodes and edges carry feedback. */
 .dc-canvas:focus-visible {
   outline: none;
-  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--dc-selection) 25%, transparent);
 }
 
 /* ------------------------------------------------------- 5.1 background -- */
