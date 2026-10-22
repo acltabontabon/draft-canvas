@@ -51,10 +51,16 @@ jobs:
   frontend:
     needs: source
     runs-on: ubuntu-latest
-    # The tests take about five minutes; the rest is headroom for installing two browsers' system
+    # Each engine gets its own runner; the rest is headroom for installing the browser's system
     # libraries. When the runner's Ubuntu mirror stalls, apt falls back to archive.ubuntu.com one
     # package at a time — 15 minutes on 2026-10-01, which cut the WebKit run off at the old 20.
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, webkit]
+    env:
+      PLAYWRIGHT_BROWSER: ${{ matrix.browser }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -86,14 +92,13 @@ jobs:
       - run: |
           sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt
           printf 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n' | sudo tee /etc/apt/apt.conf.d/99ci-network > /dev/null
-          npx playwright install --with-deps chromium webkit
+          npx playwright install --with-deps "$PLAYWRIGHT_BROWSER"
       # Chromium and WebKit: the engines the desktop shell actually embeds (WebView2, WebKitGTK/WKWebView).
-      - run: PLAYWRIGHT_BROWSER=chromium npm run e2e:desktop -- --fail-on-flaky-tests
-      - run: PLAYWRIGHT_BROWSER=webkit npm run e2e:desktop -- --fail-on-flaky-tests
+      - run: npm run e2e:desktop -- --fail-on-flaky-tests
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: failure()
         with:
-          name: playwright-report-desktop
+          name: playwright-report-desktop-${{ matrix.browser }}
           path: playwright-report-desktop/
           retention-days: 7
 
@@ -104,6 +109,11 @@ jobs:
     name: rust (${{ matrix.name }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
+    env:
+      # Full type/variable debug data made Windows compilation and cache compression expensive.
+      # Keep source lines in failure backtraces; local development still uses Cargo's full default.
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      CARGO_PROFILE_TEST_DEBUG: line-tables-only
     strategy:
       fail-fast: false
       matrix:

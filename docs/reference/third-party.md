@@ -52,6 +52,7 @@ Not bundled in the apps.
 | [Oxc / oxlint](https://github.com/oxc-project/oxc) and [tsx](https://github.com/privatenumber/tsx) | Linting and TypeScript scripts |
 | [Vitest](https://github.com/vitest-dev/vitest) | Unit tests and coverage |
 | [Playwright](https://github.com/microsoft/playwright) | Browser tests, screenshots, performance harnesses |
+| [GitHub Actions cache](https://github.com/actions/cache) | Reusing the pinned Rust audit tool between CI runs |
 | [axe-core](https://github.com/dequelabs/axe-core) and its [Playwright integration](https://github.com/dequelabs/axe-core-npm) | Accessibility checks |
 | [React Testing Library](https://github.com/testing-library/react-testing-library), [jest-dom](https://github.com/testing-library/jest-dom) and [user-event](https://github.com/testing-library/user-event) | Component tests |
 | [jsdom](https://github.com/jsdom/jsdom) and [fake-indexeddb](https://github.com/dumbmatter/fakeIndexedDB) | Test environments |
