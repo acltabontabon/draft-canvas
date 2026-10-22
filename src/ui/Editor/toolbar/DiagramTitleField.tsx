@@ -38,7 +38,11 @@ export function DiagramTitleField({ title, onTitleChange, readOnly = false }: Di
     localTitleRef.current = value;
     setLocalTitle(value);
   };
-  useEffect(() => {
+  // A layout effect, not a passive one: a committed rename first renders the blur's reset to the
+  // previous title, and this lands the new one over it. Deferred to a passive effect, the field
+  // painted the old name for a frame, and the pending update could be flushed inside React Flow's
+  // ResizeObserver callback, regrowing the header mid-round (WebKit's "ResizeObserver loop" error).
+  useLayoutEffect(() => {
     if (!editingTitleRef.current || !dirtyTitleRef.current) {
       localTitleRef.current = title;
       setLocalTitle(title);
