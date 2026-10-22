@@ -187,7 +187,7 @@
 
 .dc-collab-control[data-status='reconnecting'] .dc-collab-live-dot,
 .dc-collab-control[data-status='joining'] .dc-collab-live-dot {
-  background: #e3a33b;
+  background: var(--dc-caution);
 }
 
 .dc-collab-control[data-status='ended'] .dc-collab-live-dot {
@@ -428,7 +428,7 @@
 }
 
 .dc-collab-person-meta[data-link='reconnecting'] {
-  color: #c98a2b;
+  color: var(--dc-caution);
 }
 
 /* The controls hug the person they belong to — a row, not a table stretched to the dialog's edge. */
@@ -1441,7 +1441,7 @@
 
 .dc-dock-card-warning {
   max-width: 240px;
-  color: #c98a2b;
+  color: var(--dc-caution);
   font-size: 11.5px;
   line-height: 1.4;
 }

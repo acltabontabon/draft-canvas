@@ -74,7 +74,8 @@ export function checkOwner(
   claim: OwnerClaim | null | undefined,
   digest: string | null,
   now: number,
-): { verdict: 'owner' } | { verdict: 'claim'; claim: OwnerClaim } | { verdict: 'not-owner' };
+): { verdict: 'owner'; claim: OwnerClaim } | { verdict: 'claim'; claim: OwnerClaim } | { verdict: 'not-owner' };
+export function renewClaim(claim: OwnerClaim | null | undefined, now: number): OwnerClaim | null;
 export function guestTag(random?: (bytes: Uint8Array) => Uint8Array): string;
 export function uniqueGuestTag(peers: Peer[], random?: (bytes: Uint8Array) => Uint8Array): string;
 export function live(peers: Peer[]): Peer[];

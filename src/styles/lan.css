@@ -154,7 +154,7 @@
   margin: 0;
   padding: 8px 10px;
   border-radius: var(--dc-radius-sm);
-  background: color-mix(in srgb, #e3a33b 12%, transparent);
+  background: color-mix(in srgb, var(--dc-caution) 12%, transparent);
   color: var(--dc-text-muted);
   font-size: 12px;
   line-height: 1.5;
@@ -165,7 +165,7 @@
   width: 14px;
   height: 14px;
   margin-top: 2px;
-  color: #c98a2b;
+  color: var(--dc-caution);
 }
 
 @media (prefers-reduced-motion: reduce) {

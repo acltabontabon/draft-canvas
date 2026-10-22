@@ -86,6 +86,9 @@ export function Modal({ title, onClose, children, footer, width = 460, className
       // Escape that cancels an IME conversion in one of the dialog's fields isn't "close".
       if (isImeKeyEvent(event)) return;
       if (event.key === 'Escape') {
+        // Something open inside the dialog that folds on Escape itself (marked `data-dc-escape-local`)
+        // takes this one: this listener runs first, in the capture phase, so it has to step aside.
+        if (panel.current?.querySelector('[data-dc-escape-local="true"]')) return;
         event.stopPropagation();
         onClose();
         return;

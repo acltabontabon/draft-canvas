@@ -351,7 +351,8 @@ export interface DesktopApi {
    * addresses, best first; an IPv6 one is bare and goes in brackets in a URL.
    */
   collabLanStart(options: { token: string }): Promise<CollabLanStarted>;
-  collabLanStop(): Promise<void>;
+  /** With `token`, stops only that session's server — a late stop never ends a newer session. */
+  collabLanStop(options?: { token: string }): Promise<void>;
   /** Queues text for one guest, in order. A guest that has left is quietly nothing; one too slow
    *  to keep up is closed as `congested`. At most 16 MiB of UTF-8. */
   collabLanSend(connId: string, text: string): Promise<void>;

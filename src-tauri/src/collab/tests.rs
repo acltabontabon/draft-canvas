@@ -995,6 +995,26 @@ async fn a_new_token_sends_the_old_sessions_guests_away_and_keeps_the_port() {
     relay.stop("stopped").await;
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn a_late_stop_for_a_replaced_session_leaves_the_new_one_running() {
+    let (events, relay, port) = started(Limits::default()).await;
+    // Sharing turned off and straight back on: the new session's start lands first, then the old
+    // session's stop.
+    relay.start_on(OTHER_TOKEN, LOOPBACK).await.unwrap();
+    relay.stop_session(TOKEN, "stopped").await;
+    relay.stop_session("not a token", "stopped").await;
+    assert_eq!(get(port, "/").await.status, 200);
+    assert!(!events
+        .all()
+        .iter()
+        .any(|e| matches!(e, HostEvent::CollabLanStopped { .. })));
+    relay.stop_session(OTHER_TOKEN, "stopped").await;
+    assert!(
+        TcpStream::connect(("127.0.0.1", port)).await.is_err(),
+        "its own session's stop still stops it"
+    );
+}
+
 // ─── Names and addresses ────────────────────────────────────────────────────────────────────────
 
 #[test]

@@ -210,6 +210,8 @@ async fn upgrade(
     if !same_origin {
         return plain(StatusCode::FORBIDDEN, "Forbidden", host);
     }
+    // Read before the token is checked: a token change in between leaves this request in the old session.
+    let session = shared.session();
     if !authorized(&headers, &shared) {
         return plain(StatusCode::UNAUTHORIZED, "Unauthorized", host);
     }
@@ -220,7 +222,7 @@ async fn upgrade(
     if shared.stopping() {
         return plain(StatusCode::SERVICE_UNAVAILABLE, "Stopping", host);
     }
-    let Some(slot) = shared.reserve() else {
+    let Some(slot) = shared.reserve(session) else {
         return plain(StatusCode::SERVICE_UNAVAILABLE, "Too many guests", host);
     };
     // A failed upgrade drops the callback, and the slot with it. Both limits bound only what the

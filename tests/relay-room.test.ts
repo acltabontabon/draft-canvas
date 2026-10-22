@@ -7,6 +7,7 @@ import {
   PROTOCOL,
   admission,
   checkOwner,
+  renewClaim,
   checkRequest,
   closePeer,
   deadline,
@@ -129,15 +130,27 @@ describe('relay requests', () => {
 });
 
 describe('who owns a room', () => {
-  it('is whoever claimed it first, for the room’s lifetime — nobody else may host it', () => {
+  it('is whoever claimed it first, until a lifetime after they were last there — nobody else may host it', () => {
     const first = checkOwner(null, 'aa', 1000);
     expect(first).toEqual({ verdict: 'claim', claim: { digest: 'aa', until: 1000 + LIMITS.lifetimeMs } });
     const claim = first.verdict === 'claim' ? first.claim : null;
-    expect(checkOwner(claim, 'aa', 2000)).toEqual({ verdict: 'owner' });
+    expect(checkOwner(claim, 'aa', 2000)).toEqual({ verdict: 'owner', claim: { digest: 'aa', until: 2000 + LIMITS.lifetimeMs } });
     expect(checkOwner(claim, 'bb', 2000)).toEqual({ verdict: 'not-owner' });
     expect(checkOwner(claim, 'a', 2000)).toEqual({ verdict: 'not-owner' });
-    // Once the room's lifetime is over, the claim is gone and the room starts afresh.
+    // Once a lifetime has passed with the owner gone, the claim is gone and the room starts afresh.
     expect(checkOwner(claim, 'bb', 1000 + LIMITS.lifetimeMs)).toMatchObject({ verdict: 'claim' });
+  });
+
+  it('outlasts a session longer than one lifetime: the owner’s every connection and departure renews it', () => {
+    const opened = checkOwner(null, 'aa', 0);
+    if (opened.verdict === 'not-owner') throw new Error('the first host claims the room');
+    let claim = opened.claim;
+    // The owner's socket is swept away near the end of the first lifetime and reconnects a second later;
+    // someone holding the link tries to host in between.
+    claim = renewClaim(claim, LIMITS.lifetimeMs - 1)!;
+    expect(checkOwner(claim, 'bb', LIMITS.lifetimeMs + 500)).toEqual({ verdict: 'not-owner' });
+    expect(checkOwner(claim, 'aa', LIMITS.lifetimeMs + 1000)).toMatchObject({ verdict: 'owner' });
+    expect(renewClaim(null, 5)).toBeNull();
   });
 
   it.each([

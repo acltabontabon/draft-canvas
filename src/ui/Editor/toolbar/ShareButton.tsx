@@ -18,7 +18,6 @@ export function ShareButton({ onExport }: { onExport: () => void }) {
   const ref = useRef<HTMLButtonElement>(null);
   const [menu, setMenu] = useState<{ rect: DOMRect; trigger: HTMLElement } | null>(null);
   const readOnly = useUiStore((state) => Boolean(state.readOnly));
-  const collaborative = useUiStore((state) => state.readOnly?.collaborative === true);
   const title = useEditorStore((state) => state.document.metadata.title);
   const { role, people } = useCollabStore(
     useShallow((state) => ({ role: state.role, people: state.peers.filter((peer) => peer.link !== 'gone').length + 1 })),
@@ -35,8 +34,9 @@ export function ShareButton({ onExport }: { onExport: () => void }) {
 
   const live = role !== 'off';
   const items: ToolbarMenuItem[] = [
-    // A share link's read-only copy has nobody to draw with.
-    ...(!readOnly || collaborative
+    // A read-only copy (a share link's, or a session left behind) has nobody to draw with: hosting it
+    // would let others edit a canvas nobody saves. A view-only collaborator still opens their session.
+    ...(!readOnly || live
       ? [
           {
             id: 'live',

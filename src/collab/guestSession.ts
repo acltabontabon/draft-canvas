@@ -13,7 +13,7 @@
 import type { DraftDocument } from '../document/types';
 import { CURRENT_VERSION } from '../document/types';
 import { parseDocument } from '../document/validate';
-import { CLOSE_GRACE_MS, GONE_MS, HEARTBEAT_MS, HOLD_RETRY_MS, REAL_CLOCK, SILENT_MS, type Clock } from './clock';
+import { CLOSE_GRACE_MS, GONE_MS, HEARTBEAT_MS, HOLD_RETRY_MS, REAL_CLOCK, RESYNC_RETRY_MS, SILENT_MS, type Clock } from './clock';
 import { diffFile } from './diff';
 import {
   encode,
@@ -78,6 +78,7 @@ export class GuestSession {
   private readonly held: Inbound[] = [];
   private holdTimer: unknown = null;
   private heartbeatTimer: unknown = null;
+  private resyncTimer: unknown = null;
   private lastHeard = 0;
   private pingCount = 0;
   /** After a gap in the commits: everything until a fresh snapshot is ignored. */
@@ -106,6 +107,11 @@ export class GuestSession {
     return this.ended;
   }
 
+  /** What the owner lets this person do now — the latest `role`, not the one the welcome gave. */
+  get role(): Role {
+    return this.access;
+  }
+
   /** The file as the owner has confirmed it, plus this person's unconfirmed edits. */
   get local(): DraftDocument | null {
     return this.replica?.local ?? null;
@@ -115,6 +121,9 @@ export class GuestSession {
   connect(transport: CollabTransport): void {
     if (this.ended) return transport.close('ended');
     this.release();
+    // The connection this one replaces is closed, not just ignored: if it recovered on its own, both
+    // would hold a place in the session.
+    if (this.transport && this.transport !== transport) this.transport.close('replaced');
     this.transport = transport;
     this.lastHeard = this.clock.now();
     const offMessage = transport.onMessage((text) => {
@@ -227,11 +236,12 @@ export class GuestSession {
     this.awaitingSnapshot = false;
     this.held.length = 0;
     if (resuming) {
-      this.replica!.reset(parsed.document, message.seq);
-      // The owner skips any of these it already applied (it remembers each patch number).
-      for (const patch of this.replica!.pending) this.send({ t: 'patch', clientSeq: patch.clientSeq, changes: patch.changes });
       this.env.setAccess(message.role);
-      this.env.applyRemote(this.replica!.local);
+      // Taken in like any snapshot: after a gesture under way has ended, and after the edits on screen
+      // since the drop are in the replica. Reset while a drag still held the old file, the editor kept
+      // it, and the next local diff sent the owner's offline work back out as this person's deletions.
+      this.held.push({ t: 'snapshot', seq: message.seq, snapshot: message.snapshot });
+      this.drainHeld();
     } else {
       this.replica = new Replica(parsed.document, message.seq);
       this.env.open(parsed.document, message.role);
@@ -243,12 +253,17 @@ export class GuestSession {
   }
 
   private apply(message: Inbound): void {
+    // An edit the editor holds and hasn't sent yet — a drag's drop, waiting out the bridge's gesture
+    // timer — goes into the replica first. Applied over, `local` would replace it on screen and the
+    // later diff would find nothing to send: the shape snapped back and the move was never shared.
+    this.localChanged();
     const replica = this.replica;
     if (message.t === 'snapshot') {
       const parsed = parseDocument(message.snapshot);
       if (!parsed.ok || !replica) return this.finish('protocol');
       replica.reset(parsed.document, message.seq);
       this.awaitingSnapshot = false;
+      // The owner skips any of these it already applied (it remembers each patch number).
       for (const patch of replica.pending) this.send({ t: 'patch', clientSeq: patch.clientSeq, changes: patch.changes });
     } else if (message.t === 'ack') {
       replica!.acknowledge(message.clientSeq);
@@ -272,6 +287,14 @@ export class GuestSession {
   private resync(): void {
     this.awaitingSnapshot = true;
     this.send({ t: 'resync' });
+    // The owner answers a few requests at a time and drops the rest without a word (or the snapshot
+    // is lost on the way): asked once, this copy would ignore every commit for good while still
+    // showing "live". Ask again until a snapshot comes.
+    if (this.resyncTimer !== null) this.clock.clearTimeout(this.resyncTimer);
+    this.resyncTimer = this.clock.setTimeout(() => {
+      this.resyncTimer = null;
+      if (this.awaitingSnapshot && !this.ended) this.resync();
+    }, RESYNC_RETRY_MS);
   }
 
   private scheduleHold(): void {
@@ -316,7 +339,8 @@ export class GuestSession {
     this.transport = null;
     if (this.holdTimer !== null) this.clock.clearTimeout(this.holdTimer);
     if (this.heartbeatTimer !== null) this.clock.clearTimeout(this.heartbeatTimer);
-    this.holdTimer = this.heartbeatTimer = null;
+    if (this.resyncTimer !== null) this.clock.clearTimeout(this.resyncTimer);
+    this.holdTimer = this.heartbeatTimer = this.resyncTimer = null;
     this.held.length = 0;
     this.events.status('ended', reason);
   }

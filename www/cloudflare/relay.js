@@ -7,7 +7,8 @@
 // socket's role, tag and limits live in its attachment, not in the object's memory.
 //
 // Nothing is logged, and the only thing stored is each room's owner claim — the SHA-256 of a secret
-// only the owner's browser has, kept for the room's lifetime at most (`checkOwner`), so nobody else
+// only the owner's browser has, kept until 12 hours after the owner was last connected (`checkOwner`,
+// `renewClaim`), so nobody else
 // can host the room. `relay-room.js` holds the rules; this file only adapts
 // Cloudflare's sockets to them. `scripts/dev-relay.mjs` runs the same rules locally.
 import { DurableObject } from 'cloudflare:workers';
@@ -26,6 +27,7 @@ import {
   opened,
   parseOrigins,
   received,
+  renewClaim,
   sweep,
   uniqueGuestTag,
 } from './relay-room.js';
@@ -129,8 +131,8 @@ export class RelayRoom extends DurableObject {
     if (!refused && role === 'host') {
       const digest = request.headers.get('x-relay-owner');
       const owner = digest ? checkOwner(await this.ctx.storage.get('owner'), digest, Date.now()) : { verdict: 'not-owner' };
-      if (owner.verdict === 'claim') await this.ctx.storage.put('owner', owner.claim);
-      else if (owner.verdict === 'not-owner') refused = CLOSE.notOwner;
+      if (owner.verdict === 'not-owner') refused = CLOSE.notOwner;
+      else await this.ctx.storage.put('owner', owner.claim);
     }
     if (refused) {
       // Accepted without hibernation only to say why: the socket never joins the room.
@@ -155,7 +157,15 @@ export class RelayRoom extends DurableObject {
     received(peers.includes(peer) ? peers : [...peers, peer], peer, typeof message === 'string' ? message : null, Date.now());
   }
 
+  /** The owner's socket is going: their claim runs from now, so it outlasts the reconnect that follows. */
+  async #renewIfOwner(peer) {
+    if (peer.read()?.role !== 'host') return;
+    const claim = renewClaim(await this.ctx.storage.get('owner'), Date.now());
+    if (claim) await this.ctx.storage.put('owner', claim);
+  }
+
   async webSocketClose(ws, code) {
+    await this.#renewIfOwner(this.#peer(ws));
     departed(this.#room(), this.#peer(ws));
     // Answer the client's close, for runtimes that do not do it themselves. Only codes that may be sent
     // on the wire are echoed (1005 and 1006, for one, only ever describe a close).
@@ -164,6 +174,7 @@ export class RelayRoom extends DurableObject {
 
   async webSocketError(ws) {
     const peer = this.#peer(ws);
+    await this.#renewIfOwner(peer);
     const peers = this.#room();
     if (peers.includes(peer)) closePeer(peers, peer, { code: 1011, reason: 'error' });
     else departed(peers, peer);
@@ -171,7 +182,11 @@ export class RelayRoom extends DurableObject {
 
   async alarm() {
     const now = Date.now();
-    const next = sweep(this.#room(), now);
+    const room = this.#room();
+    // A sweep closes the owner's socket too, and the owner reconnects a moment later.
+    const host = live(room).find((peer) => peer.read().role === 'host');
+    const next = sweep(room, now);
+    if (next === null && host) await this.#renewIfOwner(host);
     if (next !== null) return this.ctx.storage.setAlarm(next);
     if (live(this.#room()).length > 0) return;
     // An empty room keeps its owner's claim until the room's lifetime is up, then forgets everything.

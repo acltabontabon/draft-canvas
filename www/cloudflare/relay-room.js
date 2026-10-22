@@ -8,8 +8,8 @@
 // fragment). So nothing here reads, keeps or logs `data`: it is length-checked and passed along.
 //
 // One thing a room does remember: who its owner is. The first host socket presents a secret of its
-// own (never in the session link) and the room keeps that secret's SHA-256, for the room's lifetime at
-// most; any later host socket must present the same secret. Without it, anyone holding the link could
+// own (never in the session link) and the room keeps that secret's SHA-256 until 12 hours after the
+// owner was last connected; any later host socket must present the same secret. Without it, anyone holding the link could
 // take the owner's place on the relay while the owner's connection was down — they still couldn't
 // pose as the owner (knockers check the owner's signature), but they could keep everyone waiting.
 //
@@ -159,15 +159,26 @@ export async function secretDigest(secret) {
 
 /**
  * Whether a host socket presenting `digest` is the room's owner. `claim` is what the room remembers —
- * `{ digest, until }`, or `null` — and the result says whether to remember a new one.
- * Returns `{ verdict: 'owner' }`, `{ verdict: 'claim', claim }` (first host, or the old claim expired),
- * or `{ verdict: 'not-owner' }`.
+ * `{ digest, until }`, or `null` — and the result carries the claim to remember from now on.
+ * Returns `{ verdict: 'owner', claim }` (renewed), `{ verdict: 'claim', claim }` (first host, or the
+ * old claim expired), or `{ verdict: 'not-owner' }`.
  */
 export function checkOwner(claim, digest, now) {
   if (!claim || typeof claim.digest !== 'string' || !(now < claim.until)) {
     return { verdict: 'claim', claim: { digest, until: now + LIMITS.lifetimeMs } };
   }
-  return sameText(claim.digest, digest) ? { verdict: 'owner' } : { verdict: 'not-owner' };
+  return sameText(claim.digest, digest) ? { verdict: 'owner', claim: renewClaim(claim, now) } : { verdict: 'not-owner' };
+}
+
+/**
+ * The claim kept for `lifetimeMs` from now — renewed whenever the owner connects and whenever the
+ * owner's socket goes. Set once, a claim ran out under a session that lasted: the owner's relay socket
+ * drops routinely (a quiet room is swept as idle, every room at its lifetime), and the first host to
+ * reconnect after that moment took the room. Guests are told the instant the owner leaves, so someone
+ * holding the link could be first, and the owner was then refused as not the owner for good.
+ */
+export function renewClaim(claim, now) {
+  return claim && typeof claim.digest === 'string' ? { digest: claim.digest, until: now + LIMITS.lifetimeMs } : null;
 }
 
 /** Compares two strings in time that doesn't depend on where they first differ. */

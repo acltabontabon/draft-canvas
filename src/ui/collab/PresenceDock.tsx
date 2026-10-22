@@ -10,7 +10,7 @@ import { fileOf, useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
 import { Button } from '../common/Button';
 import { Icon } from '../common/Icon';
-import { ROLE_LABELS } from './collabCopy';
+import { LOOKALIKE_WARNING, nameKey, ROLE_LABELS, takenNameKeys } from './collabCopy';
 import { PeerBadge } from './PeerBadge';
 
 /**
@@ -21,14 +21,15 @@ import { PeerBadge } from './PeerBadge';
  * breathing, with Let in and Deny on their card.
  */
 export function PresenceDock() {
-  const { role, peers, relayKnocks, lanKnocks, presence, presenter, status } = useCollabStore(
+  // Not `presence`: pointers move twenty times a second per person, and each face reads the little
+  // it shows for itself (`DockPerson`), so the column doesn't re-render with every one.
+  const { role, peers, relayKnocks, lanKnocks, presenting: someonePresents, status } = useCollabStore(
     useShallow((state) => ({
       role: state.role,
       peers: state.peers,
       relayKnocks: state.knocks,
       lanKnocks: state.lanKnocks,
-      presence: state.presence,
-      presenter: state.presenter,
+      presenting: state.presenter !== null,
       status: state.status,
     })),
   );
@@ -43,7 +44,7 @@ export function PresenceDock() {
       {role === 'host' && knocks.length > 0 && <Door knocks={knocks} />}
       {role === 'host' && knocks.map((knock) => <KnockSeat key={knock.id} knock={knock} />)}
       {here.map((peer) => (
-        <DockPerson key={peer.id} peer={peer} presence={presence[peer.id]} owner={role === 'host'} presenting={peer.role === 'owner' && presenter !== null} />
+        <DockPerson key={peer.id} peer={peer} owner={role === 'host'} presenting={peer.role === 'owner' && someonePresents} />
       ))}
     </aside>
   );
@@ -83,7 +84,7 @@ function KnockSeat({ knock }: { knock: KnockView }) {
  */
 function Door({ knocks }: { knocks: readonly KnockView[] }) {
   // Names are whatever each person typed: a knock wearing the name of someone already here is said to.
-  const taken = useCollabStore(useShallow((state) => [state.selfName, ...state.peers.filter((peer) => peer.link !== 'gone').map((peer) => peer.name)].map(nameKey)));
+  const taken = useCollabStore(useShallow(takenNameKeys));
   return (
     <div className="dc-dock-door" role="region" aria-label="Waiting to join">
       <span className="dc-dock-door-title">{knocks.length === 1 ? 'Wants to join' : `${knocks.length} want to join`}</span>
@@ -94,11 +95,6 @@ function Door({ knocks }: { knocks: readonly KnockView[] }) {
   );
 }
 
-/** How two names compare for "is this the same person's name": case- and accent-blind. */
-function nameKey(name: string): string {
-  return name.normalize('NFKD').replace(/\p{M}/gu, '').toLocaleLowerCase();
-}
-
 function DoorRow({ knock, lookalike }: { knock: KnockView; lookalike: boolean }) {
   const [role, setRole] = useState<Role>('editor');
   return (
@@ -107,7 +103,7 @@ function DoorRow({ knock, lookalike }: { knock: KnockView; lookalike: boolean })
       {!knock.admitting && <span className="dc-dock-card-meta">Let them in to draw with you, or just to watch.</span>}
       {lookalike && (
         <span className="dc-dock-card-warning" role="note">
-          Someone here already goes by this name — make sure it’s who you expect.
+          {LOOKALIKE_WARNING}
         </span>
       )}
       {knock.admitting ? (
@@ -132,17 +128,28 @@ function DoorRow({ knock, lookalike }: { knock: KnockView; lookalike: boolean })
   );
 }
 
-function DockPerson({ peer, presence, owner, presenting }: { peer: PeerView; presence: Presence | undefined; owner: boolean; presenting: boolean }) {
-  const { setCenter } = useReactFlow();
+function DockPerson({ peer, owner, presenting }: { peer: PeerView; owner: boolean; presenting: boolean }) {
+  const { setCenter, getZoom } = useReactFlow();
   const myRoom = useEditorStore((state) => state.path[state.path.length - 1] ?? '');
-  const elsewhere = presence !== undefined && presence.room !== myRoom;
-  const typing = presence?.editing != null;
+  // What the face shows, not where the pointer is: this changes when they arrive, leave, change rooms
+  // or start typing — not with every move.
+  const seen = useCollabStore(
+    useShallow((state) => {
+      const presence = state.presence[peer.id];
+      return { here: presence !== undefined, room: presence?.room ?? '', typing: presence?.editing != null, pointer: presence?.pointer != null };
+    }),
+  );
+  const elsewhere = seen.here && seen.room !== myRoom;
+  const typing = seen.typing;
   const authored = useCollabStore((state) => state.authors[peer.id] !== undefined);
-  const where = !presence ? 'Away from the canvas' : elsewhere ? `Inside ${roomName(presence.room)}` : presence.pointer ? 'Here with you' : 'In this view';
+  const where = !seen.here ? 'Away from the canvas' : elsewhere ? `Inside ${roomName(seen.room)}` : seen.pointer ? 'Here with you' : 'In this view';
   const glyph = presenting ? 'present' : typing ? 'pencil' : elsewhere ? 'down' : null;
 
   const find = () => {
+    // Where they are now, read at the click.
+    const presence: Presence | undefined = useCollabStore.getState().presence[peer.id];
     if (!presence) return;
+    const elsewhere = presence.room !== (useEditorStore.getState().path.at(-1) ?? '');
     const editor = useEditorStore.getState();
     if (elsewhere) {
       const path = pathOf(indexOf(fileOf(editor)), presence.room);
@@ -154,7 +161,12 @@ function DockPerson({ peer, presence, owner, presenting }: { peer: PeerView; pre
     }
     // Their pointer, or failing that what they have selected, framed with a soft glide.
     const target = presence.pointer ?? centreOf(presence.selection.nodes);
-    if (target) void setCenter(target.x, target.y, { duration: 420, zoom: Math.max(0.8, useEditorStore.getState().liveViewport?.zoom ?? 1) });
+    if (!target) return;
+    const glide = () => void setCenter(target.x, target.y, { duration: 420, zoom: Math.max(0.8, getZoom()) });
+    // A room just entered moves the camera to that room's own view from an effect on `path`
+    // (`Canvas`), which would cut this glide short: a frame later, it has run.
+    if (elsewhere) requestAnimationFrame(glide);
+    else glide();
   };
 
   return (
@@ -173,7 +185,7 @@ function DockPerson({ peer, presence, owner, presenting }: { peer: PeerView; pre
           {peer.role === 'owner' ? 'Owner' : ROLE_LABELS[peer.role]} · {peer.link === 'reconnecting' ? 'Reconnecting…' : presenting ? 'Presenting' : typing ? 'Typing…' : where}
         </span>
         <span className="dc-dock-card-actions">
-          {presence && (
+          {seen.here && (
             <Button variant="ghost" icon="pointer" onClick={find}>
               Find
             </Button>

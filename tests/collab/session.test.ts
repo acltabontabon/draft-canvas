@@ -126,6 +126,22 @@ describe('hosting from the editor', () => {
     expect(guest.state.file!.nodes.find((node) => node.id === 'n_a')!.x).toBe(40);
   });
 
+  it('never folds a later edit into one someone else has edited since, so undoing it keeps theirs', () => {
+    store.getState().apply('Nudge', (doc) => updateNode(doc, 'n_a', { x: 10 }), { coalesceKey: 'nudge:n_a' });
+    settle(pump);
+    guest.edit((file) => updateNode(file, 'n_a', { text: 'Renamed by Ada' }));
+    settle(pump);
+    store.getState().apply('Nudge', (doc) => updateNode(doc, 'n_a', { x: 20 }), { coalesceKey: 'nudge:n_a' });
+    settle(pump);
+
+    // One step spanning Ada's rename went back to before it, rename and all.
+    store.getState().undo();
+    settle(pump);
+    const node = store.getState().document.nodes.find((candidate) => candidate.id === 'n_a')!;
+    expect(node).toMatchObject({ x: 10, text: 'Renamed by Ada' });
+    expect(guest.state.file!.nodes.find((candidate) => candidate.id === 'n_a')!.text).toBe('Renamed by Ada');
+  });
+
   it('undoes only the owner’s own edit, leaving the collaborator’s', () => {
     const added = store.getState().addNode({ type: 'note', x: 0, y: 200, text: 'Mine' });
     settle(pump);
@@ -369,6 +385,51 @@ describe('a collaborator holding their own copy of the owner’s diagram', () =>
     vi.advanceTimersByTime(1000);
     expect(store.getState().document.metadata.title).toBe('My copy');
     expect(store.getState().document.nodes.map((node) => node.id)).toEqual(['n_mine']);
+    owner.end();
+  });
+});
+
+describe('a role changed while the collaborator’s copy is still opening', () => {
+  afterEach(() => {
+    __resetCollabBridge();
+    vi.useRealTimers();
+  });
+
+  it('is the role the copy opens with, and leaves the canvas still on screen alone', async () => {
+    vi.useFakeTimers();
+    __resetCollabBridge();
+    resetEditor(addNodes(createDocument('Mine'), [createNode({ id: 'n_mine', type: 'note', x: 0, y: 0, text: 'My own' })]));
+    let ownerFile = addNodes(createDocument('Owner’s'), [createNode({ id: 'n_o', type: 'service', x: 0, y: 0, text: 'Owner' })]);
+    const owner = new HostSession(
+      { readFile: () => ownerFile, applyRemote: (file) => ((ownerFile = file), true), isBusy: () => false, appVersion: PRODUCT.version },
+      { peers: () => {}, presence: () => {} },
+      { name: 'Owner' },
+    );
+    const pair = loopbackPair();
+    owner.attach(pair.a, { role: 'editor' });
+    let finishOpening: () => void = () => {};
+    joinSession(pair.b, {
+      name: 'Guest',
+      open: (file) =>
+        new Promise<boolean>((resolve) => {
+          finishOpening = () => {
+            store.getState().setDocument(file);
+            resolve(true);
+          };
+        }),
+    });
+    settle(pair.pump);
+    const [peer] = owner.peers().filter((candidate) => candidate.role !== 'owner');
+    owner.setRole(peer!.id, 'viewer');
+    settle(pair.pump);
+    // Their own canvas is still on screen: not this session's to make read-only.
+    expect(useUiStore.getState().readOnly).toBeNull();
+
+    finishOpening();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(useCollabStore.getState().access).toBe('viewer');
+    expect(useUiStore.getState().readOnly).toMatchObject({ collaborative: true });
     owner.end();
   });
 });

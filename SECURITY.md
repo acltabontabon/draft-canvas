@@ -71,7 +71,7 @@ size-capped before parsing, prototype keys refused, and validated like an import
   AES-GCM sealed under keys derived from it. Each knock adds a fresh P-256 key, so other link holders
   cannot read or answer someone else's approval.
 - **Owner identity.** The link carries the owner's signing-key fingerprint, so a link holder cannot
-  pose as the owner. The relay keeps a SHA-256 of an owner-only secret for up to 12 hours and refuses
+  pose as the owner. The relay keeps a SHA-256 of an owner-only secret until 12 hours after the owner was last connected and refuses
   any host without it.
 - **Rejoining** needs an HMAC from the place's private resume key, bound to the room and knock.
 - **Direct invites** are single-use, expire after 30 minutes and pin the owner's DTLS fingerprint.

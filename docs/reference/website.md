@@ -112,6 +112,7 @@ browsers connect directly.
 - **Sees:** encrypted messages, a random 128-bit room id, origins, IP addresses, sizes and timing.
 - **Stores:** only the owner claim, a SHA-256 of the secret in the handshake
   (`Sec-WebSocket-Protocol: draft-canvas.relay.v1, host.<secret>`); another host is closed with 4003.
+  Each owner connection or departure renews the claim for 12 hours.
   No logging; observability is off in `relay.jsonc`.
 - **Limits:** one owner and 32 joining sockets per room; text frames with at most 16,384 characters
   of data; 30 messages per 10 seconds per socket; 60 new sockets per minute per address. A room closes

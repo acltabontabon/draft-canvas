@@ -41,7 +41,7 @@ export function onCollabLanEvent(listener: (event: LanRelayEvent) => void): () =
 export function lanRelayOf(api: Pick<DesktopApi, 'collabLanStart' | 'collabLanStop' | 'collabLanSend' | 'collabLanClose'>): LanRelay {
   return {
     start: (token) => api.collabLanStart({ token }),
-    stop: () => api.collabLanStop(),
+    stop: (token) => api.collabLanStop(token === undefined ? undefined : { token }),
     send: (connId, text) => api.collabLanSend(connId, text),
     close: (connId, reason) => api.collabLanClose(connId, reason),
     subscribe: onCollabLanEvent,

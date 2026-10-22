@@ -13,7 +13,7 @@
  *   bytes 10-  UTF-8 payload slice
  *
  * The receiving side is untrusted input: whatever arrives is checked against hard caps (16 MiB per
- * message and in flight, eight partial messages at once, 15 s to finish one), and anything that
+ * message and in flight, eight partial messages at once, 15 s without a new chunk), and anything that
  * fails is dropped and reported through `onDrop` — never thrown into the channel's event handler.
  */
 
@@ -154,6 +154,10 @@ export class Reassembler {
     if (this.buffered + payload.length > this.maxMessageBytes) {
       return this.discard(id, 'overflow', `more than ${this.maxMessageBytes} bytes in flight`);
     }
+    // Time without progress, not time to finish: a big snapshot over a slow link, or across a short
+    // outage, takes longer than the timeout and is still arriving. (Only ever later, so the armed timer
+    // at worst wakes early and `expire` re-arms it.)
+    partial.deadline = Date.now() + this.timeoutMs;
     // Copied: the frame's buffer belongs to the channel event and may be large.
     partial.chunks[index] = payload.slice();
     partial.received++;
@@ -225,7 +229,7 @@ export class Reassembler {
       if (partial.deadline > now) continue;
       this.partials.delete(id);
       this.buffered -= partial.bytes;
-      this.drop('timeout', `message ${id} incomplete after ${this.timeoutMs} ms (${partial.received}/${partial.count} chunks)`);
+      this.drop('timeout', `message ${id} stalled for ${this.timeoutMs} ms (${partial.received}/${partial.count} chunks)`);
     }
     this.schedule();
   }

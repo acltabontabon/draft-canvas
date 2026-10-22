@@ -191,6 +191,20 @@ describe('untrusted frames', () => {
     expect(messages).toHaveLength(1);
   });
 
+  it('times a message out only when it stalls: a slow one still arriving is never dropped', () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    const { reassembler, messages, drops } = collector();
+    const count = 6;
+    // A chunk every 2/3 of the timeout: the whole message takes far longer than the timeout.
+    for (let index = 0; index < count; index++) {
+      reassembler.push(frame(1, index, count, [0x61 + index]));
+      if (index < count - 1) vi.advanceTimersByTime((REASSEMBLY_TIMEOUT_MS * 2) / 3);
+    }
+    expect(drops).toEqual([]);
+    expect(messages).toEqual([['abcdef', 'message']]);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it('never throws, whatever bytes arrive', () => {
     fc.assert(fc.property(fc.array(fc.uint8Array({ maxLength: 64 }), { maxLength: 40 }), (frames) => {
       const { reassembler } = collector({ maxPartialMessages: 3 });

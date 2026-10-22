@@ -238,7 +238,7 @@ class WebRtcTransport implements CollabTransport {
     this.channel.bufferedAmountLowThreshold = BUFFER_LOW_WATERMARK;
     this.reassembler = new Reassembler({
       onMessage: (text, kind) => this.receive(text, kind),
-      onDrop: (reason, detail) => this.reportDrop(reason, detail),
+      onDrop: (reason, detail) => this.lostFrame(reason, detail),
     });
     const options = { signal: this.lifetime.signal };
     this.channel.addEventListener('open', () => this.onOpen(), options);
@@ -504,6 +504,17 @@ class WebRtcTransport implements CollabTransport {
     } catch (error) {
       console.error(error);
     }
+  }
+
+  /**
+   * The channel is ordered and reliable, so a frame that can't be used means the stream has a hole in
+   * it — a stall, or a peer sending junk. Staying open would lose a commit without a word (and the copy
+   * behind it would quietly stop matching); closed, the session reconnects and starts again from a
+   * snapshot.
+   */
+  private lostFrame(reason: DropReason, detail: string): void {
+    this.reportDrop(reason, detail);
+    this.close(`dropped-${reason}`);
   }
 
   private refresh(): void {

@@ -20,9 +20,17 @@ pub async fn collab_lan_start(relay: State<'_, Relay>, token: String) -> Result<
     relay.start(&token).await
 }
 
+/// With `token`, stops only that session's server: a late stop from a session the page has already
+/// replaced leaves the new one running.
 #[tauri::command]
-pub async fn collab_lan_stop(relay: State<'_, Relay>) -> Result<(), AppError> {
-    relay.stop("stopped").await;
+pub async fn collab_lan_stop(
+    relay: State<'_, Relay>,
+    token: Option<String>,
+) -> Result<(), AppError> {
+    match token {
+        Some(token) => relay.stop_session(&token, "stopped").await,
+        None => relay.stop("stopped").await,
+    }
     Ok(())
 }
 

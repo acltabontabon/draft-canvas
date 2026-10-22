@@ -355,6 +355,7 @@ export function useDocumentSession(): DocumentSession {
       // its own cost.
       if (hostKind()) {
         unsubscribe = useEditorStore.subscribe((state, previous) => {
+          if (sharedRef.current) return;
           if (state.revision !== previous.revision && state.document.metadata.id === openId) warnIfNearFileLimit(module, notify);
         });
         return;
@@ -363,6 +364,10 @@ export function useDocumentSession(): DocumentSession {
       // another tab's Library.
       autosave.current?.track(fileWithLiveViewport(useEditorStore.getState()));
       unsubscribe = useEditorStore.subscribe((state, previous) => {
+        // A shared or collaborative copy opened under this same id (a stored copy of the owner's
+        // diagram keeps its id) doesn't re-run this effect: without the check, every commit in the
+        // session was written over this person's own stored canvas.
+        if (sharedRef.current) return;
         if (state.revision === previous.revision && state.liveViewport === previous.liveViewport) return;
         // Stepping into or out of a shape is navigation, not an edit: it clears `liveViewport`
         // (folding the camera into the room being left) without bumping `revision`, and saving

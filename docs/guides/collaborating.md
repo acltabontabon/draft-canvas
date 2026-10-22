@@ -60,8 +60,8 @@ session ends, or ask the owner for an export.
 - **People column** (top right): everyone in the session, each in a colour. Hover a face to see
   where they are; **Find** takes you there.
 - **Pointers and selections** show for people in the same room as you.
-- **Follow**: when the owner presents, collaborators can follow along. Moving the canvas stops
-  following.
+- **Follow**: when the owner presents, collaborators can follow along. Moving the canvas, or stepping into
+  or out of a shape, stops following.
 - **Same shape, same moment**: the last change to reach the owner wins for that shape.
 
 ## Owner controls

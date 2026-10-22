@@ -51,6 +51,7 @@ export function warmCopyExports(): void {
 }
 import { readEditableImagePreference } from '../ui/Editor/exportPreferences';
 import { systemTheme } from '../ui/theme/systemTheme';
+import { copyText } from '../ui/collab/clipboard';
 import { ARRANGE_FAILED, notifyLoadFailure } from '../ui/common/notifyLoadFailure';
 import { focusBounds, focusNodes } from './search';
 import { ARCHITECTURE_STARTERS } from '../starters';
@@ -759,14 +760,20 @@ export function canvasCommands(ctx: CommandContext): Command[] {
       hint: 'Read-only snapshot · optional passphrase',
       run: (inner) => inner.ui.requestShareFromHere(),
     },
-    {
-      id: 'collaborate',
-      title: useCollabStore.getState().role === 'off' ? 'Collaborate…' : 'Live session…',
-      group: 'canvas',
-      keywords: ['collaborate', 'live', 'invite', 'share', 'together', 'real time', 'multiplayer', 'session', 'people'],
-      hint: useCollabStore.getState().role === 'off' ? 'Edit together, live — your diagram never goes through a server' : 'People, invites and roles',
-      run: (inner) => inner.ui.setCollabOpen(true),
-    },
+    // A read-only copy (a share link, a session left behind) is nobody's file: hosting it would let
+    // others edit a canvas nobody saves. A view-only collaborator still needs it to see who's here.
+    ...(ctx.ui.readOnly && useCollabStore.getState().role === 'off'
+      ? []
+      : [
+          {
+            id: 'collaborate',
+            title: useCollabStore.getState().role === 'off' ? 'Collaborate…' : 'Live session…',
+            group: 'canvas' as const,
+            keywords: ['collaborate', 'live', 'invite', 'share', 'together', 'real time', 'multiplayer', 'session', 'people'],
+            hint: useCollabStore.getState().role === 'off' ? 'Edit together, live — your diagram never goes through a server' : 'People, invites and roles',
+            run: (inner: CommandContext) => inner.ui.setCollabOpen(true),
+          },
+        ]),
     ...collabCommands(),
     {
       id: 'settings',
@@ -1881,10 +1888,8 @@ function collabCommands(): Command[] {
         keywords: ['invite', 'collaborate', 'live', 'share', 'join'],
         hint: 'Anyone who opens it asks to join',
         run: (inner) => {
-          void navigator.clipboard
-            ?.writeText(link)
-            .then(() => inner.ui.notify('Session link copied. Anyone who opens it asks to join.'))
-            .catch(() => inner.ui.setCollabOpen(true));
+          // Where the clipboard can't be written (or is missing altogether), the dialog shows the link to copy by hand.
+          void copyText(link).then((copied) => (copied ? inner.ui.notify('Session link copied. Anyone who opens it asks to join.') : inner.ui.setCollabOpen(true)));
         },
       });
     }

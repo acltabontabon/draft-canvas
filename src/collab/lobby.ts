@@ -97,7 +97,8 @@ export class HostLobby {
     this.link = link;
     this.identity = identity;
     this.relayUrl = relayUrl;
-    this.owner = owner;
+    // Signed and sent as every knocker reads it back (`readName`), or the greeting never verifies.
+    this.owner = readName(owner) ?? owner;
     this.network = network;
     this.events = events;
   }
@@ -334,6 +335,8 @@ export async function knock(
   let owner = '';
   let knocked = false;
   let settled = false;
+  /** Answering an offer: the connection settles it now, not the relay (the owner may already be opening it). */
+  let joining = false;
   let cancelJoin: (() => void) | null = null;
   let resolve!: (transport: CollabTransport | null) => void;
   const transport = new Promise<CollabTransport | null>((done) => (resolve = done));
@@ -355,7 +358,7 @@ export async function knock(
 
   onStatus({ kind: 'connecting' });
   relay.onState((state) => {
-    if (state === 'closed' && !settled) finish({ kind: 'unavailable' }, null);
+    if (state === 'closed' && !settled && !joining) finish({ kind: 'unavailable' }, null);
   });
   relay.onEvent((event) => {
     if (settled) return;
@@ -388,14 +391,18 @@ export async function knock(
       } else if (message.t === 'offer' && pair) {
         const opened = await unseal(pair, 'to-guest', message.box);
         const invite = typeof opened === 'object' && opened !== null ? (opened as { invite?: unknown }).invite : undefined;
-        if (typeof invite !== 'string') return;
+        if (typeof invite !== 'string' || joining) return;
+        joining = true;
         onStatus({ kind: 'joining', owner });
         try {
           const answer = await joinFromInvite(invite, followOwner(invite, stunServer));
           cancelJoin = answer.cancel;
+          if (settled) return answer.cancel();
           relay.send('host', await seal(key, 'to-host', { t: 'answer', box: await seal(pair, 'to-host', { reply: answer.replyCode }) }));
           const connected = await answer.transport;
-          finish(null, connected);
+          // Cancelled while it connected: nobody is waiting for it any more.
+          if (settled) connected.close('cancelled');
+          else finish(null, connected);
         } catch {
           finish({ kind: 'unavailable' }, null);
         }

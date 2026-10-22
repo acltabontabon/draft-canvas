@@ -468,14 +468,34 @@ describe('sending', () => {
     expect(hostPc.channel!.sent.every((frame) => frame.length <= 16 * 1024)).toBe(true);
   });
 
-  it('drops and reports frames it cannot read, and keeps working', async () => {
+  it('reports a frame it cannot read and closes, rather than carry on with a hole in the stream', async () => {
+    const { guest, guestPc } = await connect();
+    const seen = states(guest);
+    guestPc.channel!.dispatchEvent(new MessageEvent('message', { data: new Uint8Array([1, 2, 3]).buffer }));
+    expect(drops.map((drop) => drop.split(':')[0])).toEqual(['malformed']);
+    expect(guest.state).toBe('closed');
+    expect(seen.at(-1)).toBe('closed:dropped-malformed');
+  });
+
+  it('closes when a message stops arriving part-way, so the session starts again from a snapshot', async () => {
+    const { guest, guestPc } = await connect();
+    vi.useFakeTimers();
+    try {
+      const [first] = encodeFrames('x'.repeat(5000), 7, 'message', 1024);
+      guestPc.channel!.dispatchEvent(new MessageEvent('message', { data: first!.buffer }));
+      vi.advanceTimersByTime(15_001);
+      expect(drops.map((drop) => drop.split(':')[0])).toEqual(['timeout']);
+      expect(guest.state).toBe('closed');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('still answers an unreadable control frame with nothing worse than a report', async () => {
     const { host, guest, guestPc } = await connect();
     const atGuest = inbox(guest);
-    const channel = guestPc.channel!;
-    channel.dispatchEvent(new MessageEvent('message', { data: 'not a frame' }));
-    channel.dispatchEvent(new MessageEvent('message', { data: new Uint8Array([1, 2, 3]).buffer }));
-    channel.dispatchEvent(new MessageEvent('message', { data: encodeFrames('{"t":"nope"}', 99, 'control')[0]!.buffer }));
-    expect(drops.map((drop) => drop.split(':')[0])).toEqual(['malformed', 'malformed', 'malformed']);
+    guestPc.channel!.dispatchEvent(new MessageEvent('message', { data: encodeFrames('{"t":"nope"}', 99, 'control')[0]!.buffer }));
+    expect(drops.map((drop) => drop.split(':')[0])).toEqual(['malformed']);
     host.send('still fine', 'commit');
     await settle();
     expect(atGuest).toEqual(['still fine']);

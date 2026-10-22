@@ -1,6 +1,6 @@
 import { lazy, Suspense, useId, useRef, useState } from 'react';
 import { DEFAULT_STUN, peerConnectionsAvailable } from '../../collab/connect';
-import { MAX_COLLABORATORS, type PeerView, type Role } from '../../collab/protocol';
+import { MAX_COLLABORATORS, readName, type PeerView, type Role } from '../../collab/protocol';
 import { leaveSessionKeepingView, setCollaboratorRole, startHosting, stopHosting } from '../../store/collabBridge';
 import { removePerson, undoPersonChanges } from './peerActions';
 import { useShallow } from 'zustand/react/shallow';
@@ -10,7 +10,7 @@ import { Button } from '../common/Button';
 import { Icon, type IconName } from '../common/Icon';
 import { Modal } from '../common/Modal';
 import { canShareLink, copyText, looksLikeCode, pasteText, shareLink } from './clipboard';
-import { END_MESSAGES, LINK_LABELS, readConnectionPreferences, readDisplayName, ROLE_LABELS, writeConnectionPreferences, writeDisplayName } from './collabCopy';
+import { END_MESSAGES, LINK_LABELS, LOOKALIKE_WARNING, nameKey, readConnectionPreferences, readDisplayName, ROLE_LABELS, takenNameKeys, writeConnectionPreferences, writeDisplayName } from './collabCopy';
 import { useInviteStore } from './inviteStore';
 import { openLobby } from './lobbyStore';
 import { answerKnock } from '../../store/collabBridge';
@@ -50,7 +50,9 @@ function Start() {
   const available = peerConnectionsAvailable() || onDesktop();
 
   const start = () => {
-    const trimmed = name.trim();
+    // As every collaborator will read it: the greeting is signed over this exact name, and one they
+    // read differently (doubled spaces, an invisible character, past the length limit) never verifies.
+    const trimmed = readName(name);
     if (!trimmed) return;
     writeDisplayName(trimmed);
     writeConnectionPreferences(ownServer ? network : { ...network, server: '' });
@@ -139,7 +141,7 @@ function Start() {
             onSelect={() => setNetwork({ ...network, localOnly: true })}
           />
         </fieldset>
-        <Button type="submit" variant="solid" icon="people" className="dc-collab-go" disabled={!available || !name.trim()}>
+        <Button type="submit" variant="solid" icon="people" className="dc-collab-go" disabled={!available || !readName(name)}>
           Start session
         </Button>
       </form>
@@ -374,12 +376,19 @@ function Knocks() {
 
 export function KnockRow({ id, name, admitting }: { id: string; name: string; admitting?: Role }) {
   const [role, setRole] = useState<Role>('editor');
+  // As the dock says it: a knock wearing the name of someone already here.
+  const lookalike = useCollabStore(useShallow(takenNameKeys)).includes(nameKey(name));
   return (
     <li className="dc-collab-person dc-collab-knock" data-admitting={admitting ? 'true' : undefined}>
       <span className="dc-knock-seat" aria-hidden="true">
         <PeerBadge name={name} color={7} />
       </span>
       <span className="dc-collab-person-name">{name}</span>
+      {lookalike && (
+        <span className="dc-collab-person-meta dc-collab-lookalike" role="note">
+          {LOOKALIKE_WARNING}
+        </span>
+      )}
       {admitting ? (
         <span className="dc-collab-person-meta" aria-live="polite">
           Connecting…

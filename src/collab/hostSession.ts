@@ -160,10 +160,14 @@ export class HostSession {
     return this.ended;
   }
 
-  /** The role a returning collaborator's place had, if that place is waiting for them — for the lobby to let them straight back in. */
-  waitingPlace(peerId: string): { role: Role; key: string } | null {
+  /**
+   * The role a returning collaborator's place had, if that place is waiting for them — for the lobby to
+   * let them straight back in. `evenIfLive` also offers a place whose link still looks up here (they
+   * may have lost it first): only for a caller that never sees the key itself, just a proof of it.
+   */
+  waitingPlace(peerId: string, evenIfLive = false): { role: Role; key: string } | null {
     const slot = this.slots.get(peerId);
-    return slot && slot.link !== 'live' ? { role: slot.ledger.role, key: slot.key } : null;
+    return slot && (evenIfLive || slot.link !== 'live') ? { role: slot.ledger.role, key: slot.key } : null;
   }
 
   /** Everyone in the session, the owner first. */
@@ -242,7 +246,9 @@ export class HostSession {
     // place, which the owner chose to give back; otherwise reclaiming one takes that place's key.
     const claimed = pending.reuse !== undefined ? this.slots.get(pending.reuse) : hello.resume && this.slots.get(hello.resume.peer);
     const keyMatches = hello.resume !== undefined && claimed !== undefined && hello.resume.peer === claimed.info.id && hello.resume.key === claimed.key;
-    const mayClaim = claimed !== undefined && claimed.link !== 'live' && ((pending.reuse !== undefined && !pending.requireKey) || keyMatches);
+    // The key proves it is them even over a link this side still thinks is up: the old one may be
+    // mid-restart, or already dead on their side, and refusing left them shut out of their own place.
+    const mayClaim = claimed !== undefined && (keyMatches || (claimed.link !== 'live' && pending.reuse !== undefined && !pending.requireKey));
     let slot: Slot | undefined;
     if (pending.reuse !== undefined && !mayClaim) return this.refuse(pending, 'unauthorized');
     // A place being reclaimed counts once, as the connection now claiming it.

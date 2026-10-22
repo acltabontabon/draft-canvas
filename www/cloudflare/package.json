@@ -4,6 +4,7 @@
   "version": "0.0.0",
   "description": "Pins Wrangler for the Cloudflare deploy (.github/workflows/pages.yml): the deploy installs it from this lockfile instead of fetching a version by name. Kept apart from the site's own dependencies so no other job downloads it.",
   "license": "Apache-2.0",
+  "type": "module",
   "devDependencies": {
     "wrangler": "4.149.0"
   }

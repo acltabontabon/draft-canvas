@@ -23,7 +23,8 @@ const TOKEN_PATTERN = /^[0-9a-f]{32}$/;
 /** The desktop app's relay, as `src/desktop/collabLan.ts` adapts `DesktopApi` to it. */
 export interface LanRelay extends LanRelayLink {
   start(token: string): Promise<{ port: number; addresses: string[] }>;
-  stop(): Promise<void>;
+  /** With `token`, stops the server only while it runs that session. */
+  stop(token?: string): Promise<void>;
   /** Every `collab-lan-*` event the shell sends, in order. */
   subscribe(listener: (event: LanRelayEvent) => void): () => void;
 }
@@ -145,7 +146,9 @@ export async function startLanSharing(relay: LanRelay, options: LanSharingOption
       stopped = true;
       unsubscribe();
       host.closeAll('stopped');
-      await relay.stop();
+      // Only this session's server: a stop that answers late (sharing was turned off and on again)
+      // must not end the session that replaced it.
+      await relay.stop(token);
     },
   };
 }

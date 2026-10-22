@@ -27,6 +27,8 @@
   --dc-shadow: rgba(0, 0, 0, 0.45);
 
   --dc-danger: #e2687f;
+  /* Waiting, reconnecting, "check this": amber that reads as text (4.5:1) on its own theme's surfaces. */
+  --dc-caution: #e3a33b;
 
   --dc-font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --dc-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
@@ -72,6 +74,7 @@
   color-scheme: light;
   --dc-surface-hover: color-mix(in srgb, var(--dc-text) 6%, var(--dc-surface));
   --dc-danger: #c2455f;
+  --dc-caution: #9a6412;
   --dc-shadow-panel: 0 8px 28px -10px rgba(19, 24, 32, 0.22), 0 1px 2px rgba(19, 24, 32, 0.08);
 }
 
@@ -97,6 +100,7 @@
     --dc-code-bg: #f7f8fa;
     --dc-shadow: rgba(19, 24, 32, 0.1);
     --dc-danger: #c2455f;
+    --dc-caution: #9a6412;
     --dc-shadow-panel: 0 8px 28px -10px rgba(19, 24, 32, 0.22), 0 1px 2px rgba(19, 24, 32, 0.08);
     color-scheme: light;
   }

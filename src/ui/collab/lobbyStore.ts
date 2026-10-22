@@ -10,7 +10,7 @@ import { useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
 import { announce } from '../../lib/announce';
 import { logDiagnostic } from '../../lib/diagnostics';
-import { readConnectionPreferences } from './collabCopy';
+import { nameKey, readConnectionPreferences, takenNameKeys } from './collabCopy';
 
 /**
  * The owner's waiting room, for as long as a session runs: one session link for everyone, a knock
@@ -58,7 +58,10 @@ function start(owner: string, url: string, identity: Awaited<ReturnType<typeof n
       if (lobby !== current) return;
       // Locally recorded only, as a category: the relay couldn't be reached (no address, no room id).
       if (status === 'unavailable' && useCollabStore.getState().rendezvous !== 'unavailable') logDiagnostic(new Error('relay'), { operation: 'collab-relay' });
-      useCollabStore.setState({ rendezvous: status, sessionLink: status === 'unavailable' ? null : base.toString() });
+      // The link appears once the relay holds the room for this owner, and stays through reconnects:
+      // handed out sooner, someone holding it could claim the room first and keep the owner out.
+      const shown = useCollabStore.getState().sessionLink !== null;
+      useCollabStore.setState({ rendezvous: status, sessionLink: status === 'open' || (status === 'connecting' && shown) ? base.toString() : null });
     },
     knocks: (knocks) => {
       if (lobby !== current) return;
@@ -70,12 +73,20 @@ function start(owner: string, url: string, identity: Awaited<ReturnType<typeof n
         seen.add(knock.id);
         if (!knock.admitting) announce(`${knock.name} is asking to join.`);
         if (useEditorStore.getState().mode === 'present' && !knock.admitting) {
-          useUiStore.getState().notify(`${knock.name} wants to join`, 'info', { label: 'Let in', run: () => void current.allow(knock.id, 'editor') });
+          // No one-click "Let in" for a name someone here already has: that is for the door card,
+          // where the owner sees the warning beside the question.
+          if (takenNameKeys(useCollabStore.getState()).includes(nameKey(knock.name))) {
+            useUiStore.getState().notify(`${knock.name} wants to join — someone here already goes by that name. Check who it is before letting them in.`);
+          } else {
+            useUiStore.getState().notify(`${knock.name} wants to join`, 'info', { label: 'Let in', run: () => void current.allow(knock.id, 'editor') });
+          }
         }
       }
     },
     admitted: (transport, role, reuse) => attachCollaborator(transport, role, reuse, reuse !== undefined),
-    isReturning: (peerId) => hostSession()?.waitingPlace(peerId) ?? null,
+    // A knock proves the place's key without carrying it, so a place whose link only looks up from
+    // here (it dropped on their side first) is theirs to take back — not a stranger at the door.
+    isReturning: (peerId) => hostSession()?.waitingPlace(peerId, true) ?? null,
     failed: (name, reason) => {
       logDiagnostic(new Error(reason), { operation: 'collab-knock' });
       useUiStore
