@@ -2,7 +2,7 @@
 // Object per room. It passes along a few end-to-end-encrypted messages so an owner can let people
 // into a session, logs nothing, and stores only each room's owner fingerprint (for 12 hours at most).
 {
-  "name": "draft-canvas-relay",
+  "name": "draftcanvas-relay",
   "main": "relay.js",
   "compatibility_date": "2026-10-01",
   "workers_dev": false,
