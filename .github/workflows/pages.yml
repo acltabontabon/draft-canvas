@@ -99,12 +99,13 @@ jobs:
         with:
           node-version: 22.14.0
           cache: npm
-      # A published editor's lockfile can predate a build-tool security fix. Refresh this
-      # compatible development dependency without changing the editor's released source; the
+      # A published editor's lockfile can predate a security fix in a build or test tool. Refresh
+      # these compatible development dependencies (source-map-js for the build, DOMPurify for
+      # Mermaid in tests; neither is bundled) without changing the editor's released source; the
       # complete audit and artifact acceptance below still apply to the resulting build.
-      - name: Patch the released editor's source-map build dependency
+      - name: Patch the released editor's development dependencies
         if: github.ref_type != 'tag' || inputs.release-tag != ''
-        run: npm update source-map-js --package-lock-only --ignore-scripts
+        run: npm update source-map-js dompurify --package-lock-only --ignore-scripts
       - run: npm ci --no-audit --no-fund
       # The site has its own lockfile and shares no dependency with the app on purpose.
       - run: npm ci --no-audit --no-fund
