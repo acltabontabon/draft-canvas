@@ -12,6 +12,24 @@ import { encryptExportBytes } from '../src/crypto/passphraseExport';
 afterEach(() => vi.unstubAllGlobals());
 
 describe('compact sharing', () => {
+  it.each([undefined, 'separate rich text passphrase'])('preserves rich text and actor styling through a share link (%s)', async (passphrase) => {
+    const file = createDocument('Styled reader');
+    const text = createNode({ type: 'text', x: 20, y: 40, width: 360, text: '## Release **checklist**\n- [x] Validate `order.id`\n- [ ] [Review]{.rose}', textFont: 'serif', textBackground: 'card', textBold: true, textItalic: true, textAlign: 'center', accent: 'violet' });
+    const agent = createNode({ type: 'actor', x: 480, y: 40, text: 'Review assistant', actorKind: 'agent', actorFrame: 'borderless' });
+    agent.inside = { nodes: [text], edges: [], flows: [], viewport: file.viewport };
+    file.nodes = [agent];
+    const before = serializeDocument(file);
+    const encoded = await encodeShareLink(file, 'https://app.draftcanvas.dev/', { path: [agent.id] }, passphrase);
+    if (!('url' in encoded)) throw new Error('Expected a link');
+    const decoded = await decodeShareLink(new URL(encoded.url).hash, passphrase);
+    if (!decoded?.ok) throw new Error('Expected a document');
+    expect(decoded.repairs).toEqual([]);
+    expect(decoded.document.nodes[0]).toMatchObject({ actorKind: 'agent', actorFrame: 'borderless', text: agent.text });
+    expect(decoded.document.nodes[0]!.inside!.nodes[0]).toMatchObject({ text: text.text, textFont: 'serif', textBackground: 'card', textBold: true, textItalic: true, textAlign: 'center', accent: 'violet', width: 360 });
+    expect(decoded.start?.path).toEqual([decoded.document.nodes[0]!.id]);
+    expect(serializeDocument(file)).toBe(before);
+  });
+
   it('preserves content and geometry while remapping every structural reference, including nested starting points', () => {
     const file = createDocument('Shared architecture');
     const boundary = createNode({ type: 'group', x: -30, y: -30 });

@@ -40,6 +40,17 @@ async function runCommand(page: Page, title: string) {
   await page.keyboard.press('Enter');
 }
 
+async function expectAttachmentClearsDiagram(page: Page) {
+  await expect.poll(() => page.locator('.dc-reader-canvas').evaluate((element) => {
+    const detail = element.querySelector('.dc-reader-attachment-card')?.getBoundingClientRect();
+    if (!detail) return false;
+    return [...element.querySelectorAll('.dc-node, .dc-reader-attachment-marker')].every((shape) => {
+      const bounds = shape.getBoundingClientRect();
+      return Math.min(detail.right, bounds.right) <= Math.max(detail.left, bounds.left) || Math.min(detail.bottom, bounds.bottom) <= Math.max(detail.top, bounds.top);
+    });
+  })).toBe(true);
+}
+
 test('a diagram without Flows opens in Focus view with the actual fixed shapes', async ({ page, context, browserName }, testInfo) => {
   await recordClipboardWrites(page);
   await newCanvas(page, 'Shared checkout');
@@ -255,18 +266,12 @@ for (const withFlow of [false, true]) {
     expect(detail.y + detail.height).toBeLessThanOrEqual(diagram.y + diagram.height);
     await page.screenshot({ path: testInfo.outputPath('reader-placement-check.png') });
     // Browsing may still be framing the destination room; judge the settled placement.
-    await expect.poll(() => canvas.evaluate((element) => {
-      const detail = element.querySelector('.dc-reader-attachment-card')?.getBoundingClientRect();
-      if (!detail) return false;
-      return [...element.querySelectorAll('.dc-node')].every((shape) => {
-        const bounds = shape.getBoundingClientRect();
-        return Math.min(detail.right, bounds.right) <= Math.max(detail.left, bounds.left) || Math.min(detail.bottom, bounds.bottom) <= Math.max(detail.top, bounds.top);
-      });
-    })).toBe(true);
+    await expectAttachmentClearsDiagram(page);
     await page.screenshot({ path: testInfo.outputPath('reader-refined-attachments.png') });
     await page.getByRole('button', { name: 'Attachments on Orders database', exact: true }).click();
     await expect(card).toContainText('Awaiting input');
     await expect(card).toContainText('Confirm how long completed orders should be retained.');
+    await expectAttachmentClearsDiagram(page);
     await card.getByRole('button', { name: 'Next attachment', exact: true }).click();
     await expect(card).toContainText('Resolved');
     await expect(card).toContainText('The API assigns UUIDs before publishing work.');

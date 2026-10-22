@@ -97,7 +97,7 @@ function AttachmentMarker({ group, selected, onSelect, onClose }: Pick<Props, 's
     return { placement: 'above', transform: `translate(${point.x - frame.size.width / 2}px, ${point.y - frame.size.height - 10}px)` };
   });
   if (!target || !anchor) return null;
-  return createPortal(<button type="button" ref={ref} className="dc-reader-attachment-marker nodrag nopan" aria-label={`Attachments on ${group.target.label}`} aria-expanded={active}
+  return createPortal(<button type="button" ref={ref} className="dc-reader-attachment-marker nodrag nopan" data-reader-host={`${group.target.kind}:${group.target.id}`} aria-label={`Attachments on ${group.target.label}`} aria-expanded={active}
     onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); event.currentTarget.focus(); if (active) onClose(); else onSelect(item, group.target); }}>
     <DetailGlyph item={item} /><span>{group.items.length > 1 ? 'Details' : item.point && !item.point.resolved ? 'Pending' : labelOf(item)}</span>{group.items.length > 1 && <span className="dc-reader-attachment-count">{group.items.length}</span>}
   </button>, target);
@@ -108,6 +108,7 @@ function FloatingDetail({ target, children }: { target: ElementTarget; children:
   const anchor = useDetailAnchor(target);
   const store = useStoreApi();
   const obstacles = useRef<Box[]>([]);
+  const otherMarkers = useRef<Array<{ x: number; y: number; width: number; height: number }>>([]);
   const chrome = useRef<{ root: DOMRect; boxes: Box[] } | null>(null);
   useLayoutEffect(() => {
     obstacles.current = [...store.getState().nodeLookup.values()].flatMap((node) => {
@@ -115,7 +116,18 @@ function FloatingDetail({ target, children }: { target: ElementTarget; children:
       const rect = rectOfInternal(node);
       return rect ? [rect] : [];
     });
-  }, [anchor, store]);
+    const { domNode, transform: [panX, panY, zoom] } = store.getState();
+    if (!domNode) return;
+    const root = domNode.getBoundingClientRect();
+    // A card must leave every other detail reachable. Cache marker anchors in flow space and
+    // their unscaled sizes once; pan/zoom frames can project them without measuring the DOM.
+    otherMarkers.current = [...domNode.querySelectorAll<HTMLElement>('.dc-reader-attachment-marker')]
+      .filter((marker) => marker.dataset.readerHost !== `${target.kind}:${target.id}`)
+      .map((marker) => {
+        const rect = marker.getBoundingClientRect();
+        return { x: (rect.x + rect.width / 2 - root.x - panX) / zoom, y: (rect.y + rect.height + 10 - root.y - panY) / zoom, width: rect.width, height: rect.height };
+      });
+  }, [anchor, store, target.kind, target.id]);
   const { target: portal } = useOverlayPosition<CalloutPlacementName>(ref, 'above', (frame, current) => {
     if (!anchor || frame.size.width === 0) return null;
     const zoom = store.getState().transform[2];
@@ -130,7 +142,10 @@ function FloatingDetail({ target, children }: { target: ElementTarget; children:
     }
     const placed = placeCallout({
       kind: anchor.kind, centeredMarker: true, marker, host: screenBox(anchor.host), avoid: anchor.avoid.map(screenBox),
-      soft: obstacles.current.map(screenBox), exclusions: chrome.current.boxes, preferBelow: anchor.below,
+      soft: obstacles.current.map(screenBox), exclusions: [...chrome.current.boxes, ...otherMarkers.current.map((marker) => {
+        const at = frame.flowToScreenPosition(marker);
+        return inflate({ x: at.x - marker.width / 2, y: at.y - marker.height - 10, width: marker.width, height: marker.height }, 4);
+      })], preferBelow: anchor.below,
       bounds: { x: frame.root.x + 16, y: frame.root.y + 16, width: frame.root.width - 32, height: frame.root.height - 32 },
       size: frame.size, current,
     });
