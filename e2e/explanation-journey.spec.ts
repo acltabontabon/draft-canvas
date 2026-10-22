@@ -83,7 +83,11 @@ test('Share from here opens the chosen flow introduction read-only', async ({ pa
   await reader.goto(url);
   await reader.bringToFront();
   await expect(reader.locator('.dc-editor')).toHaveAttribute('data-mode', 'present');
-  expect(await reader.evaluate(async () => (await import('/src/store/editorStore.ts')).useEditorStore.getState().flowPlayback.stage)).toBe('opening');
+  // Polled: the editor can enter present mode a moment before the flow's opening stage is set, and a
+  // slow runner (WebKit in CI) read it in between.
+  await expect
+    .poll(() => reader.evaluate(async () => (await import('/src/store/editorStore.ts')).useEditorStore.getState().flowPlayback.stage))
+    .toBe('opening');
   await reader.keyboard.press('Escape');
   await expect(reader.getByRole('button', { name: 'Start walkthrough', exact: true })).toBeVisible();
   await expect(reader.locator('.dc-shared-reader')).toBeVisible();
