@@ -2979,6 +2979,64 @@ SOFTWARE.
 
 (no licence file in the package; see its registry page)
 
+### axum 0.8.9 — MIT
+
+Copyright (c) 2019 axum Contributors
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+### axum-core 0.5.6 — MIT
+
+MIT License
+
+Copyright (c) 2019–2025 axum Contributors
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
 ### base64 0.21.7 — MIT OR Apache-2.0
 
 (no licence file in the package; see its registry page)
@@ -4582,6 +4640,31 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
+### data-encoding 2.11.1 — MIT
+
+The MIT License (MIT)
+
+Copyright (c) 2015-2020 Julien Cretin
+Copyright (c) 2017-2020 Google Inc.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
 ### dbus 0.9.12 — Apache-2.0/MIT
 
 (no licence file in the package; see its registry page)
@@ -6070,6 +6153,10 @@ DEALINGS IN THE SOFTWARE.
 
 (no licence file in the package; see its registry page)
 
+### httpdate 1.0.3 — MIT OR Apache-2.0
+
+(no licence file in the package; see its registry page)
+
 ### hyper 1.11.1 — MIT
 
 Copyright (c) 2014-2026 Sean McArthur
@@ -6523,6 +6610,10 @@ SOFTWARE.
 
 (no licence file in the package; see its registry page)
 
+### if-addrs 0.15.0 — MIT OR BSD-3-Clause
+
+(no licence file in the package; see its registry page)
+
 ### image 0.25.10 — MIT OR Apache-2.0
 
 (no licence file in the package; see its registry page)
@@ -6933,6 +7024,30 @@ ICU 1.8.1 to ICU 57.1 © 1995-2016 International Business Machines Corporation a
 ### markup5ever 0.38.0 — MIT OR Apache-2.0
 
 (no licence file in the package; see its registry page)
+
+### matchit 0.8.4 — MIT AND BSD-3-Clause
+
+MIT License
+
+Copyright (c) 2022 Ibraheem Ahmed
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
 ### memchr 2.8.3 — Unlicense OR MIT
 
@@ -8017,6 +8132,10 @@ ICU 1.8.1 to ICU 57.1 © 1995-2016 International Business Machines Corporation a
 
 (no licence file in the package; see its registry page)
 
+### ppv-lite86 0.2.21 — MIT OR Apache-2.0
+
+(no licence file in the package; see its registry page)
+
 ### precomputed-hash 0.1.1 — MIT
 
 MIT License
@@ -8126,7 +8245,19 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 (no licence file in the package; see its registry page)
 
+### rand 0.9.5 — MIT OR Apache-2.0
+
+(no licence file in the package; see its registry page)
+
+### rand_chacha 0.9.0 — MIT OR Apache-2.0
+
+(no licence file in the package; see its registry page)
+
 ### rand_core 0.10.1 — MIT OR Apache-2.0
+
+(no licence file in the package; see its registry page)
+
+### rand_core 0.9.5 — MIT OR Apache-2.0
 
 (no licence file in the package; see its registry page)
 
@@ -8534,6 +8665,10 @@ SOFTWARE.
 (no licence file in the package; see its registry page)
 
 ### servo_arc 0.4.3 — MIT OR Apache-2.0
+
+(no licence file in the package; see its registry page)
+
+### sha1 0.10.7 — MIT OR Apache-2.0
 
 (no licence file in the package; see its registry page)
 
@@ -9790,6 +9925,29 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
+### tokio-tungstenite 0.29.0 — MIT
+
+Copyright (c) 2017 Daniel Abramov
+Copyright (c) 2017 Alexey Galakhov
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
 ### tokio-util 0.7.19 — MIT
 
 MIT License
@@ -10104,6 +10262,10 @@ THE SOFTWARE.
 (no licence file in the package; see its registry page)
 
 ### ts-rs-macros 12.0.1 — MIT
+
+(no licence file in the package; see its registry page)
+
+### tungstenite 0.29.0 — MIT OR Apache-2.0
 
 (no licence file in the package; see its registry page)
 
@@ -11072,6 +11234,14 @@ CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
+
+### zerocopy 0.8.63 — BSD-2-Clause OR Apache-2.0 OR MIT
+
+(no licence file in the package; see its registry page)
+
+### zerocopy-derive 0.8.63 — BSD-2-Clause OR Apache-2.0 OR MIT
+
+(no licence file in the package; see its registry page)
 
 ### zerofrom 0.1.8 — Unicode-3.0
 
