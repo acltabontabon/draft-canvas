@@ -106,6 +106,8 @@ test('Projects browses folders in-app, cancels without linking, and adds the sel
 
 test('explorer filters and pages folders, navigates history, and recovers from unreadable locations', async ({ page }) => {
   await page.goto('/');
+  // The menu event below is dropped if it beats host_ready; Home renders after that handshake.
+  await expect(page.getByRole('button', { name: 'New Quick Draft' })).toBeVisible();
   const text = await documentText(page, 'Topology', 3);
   await page.evaluate((text) => window.__shell.seed({ explorer: [
     { name: 'Studio', path: '~/Documents/Studio', diagrams: [
@@ -783,6 +785,8 @@ test('Home’s dotted canvas is quieter in dark mode, and exactly as it was in l
 
 test('renames the open file in place, from the File menu', async ({ page }) => {
   await page.goto('/');
+  // The open event below is dropped if it beats host_ready; Home renders after that handshake.
+  await expect(page.getByRole('button', { name: 'New Quick Draft' })).toBeVisible();
   const text = await documentText(page, 'Payments', 1);
   const handle = await page.evaluate((text) => window.__shell.addFile('payments', text), text);
   await page.evaluate(

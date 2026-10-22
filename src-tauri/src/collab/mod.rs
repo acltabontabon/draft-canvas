@@ -205,12 +205,21 @@ impl Shared {
     }
 
     pub(crate) fn reserve(self: &Arc<Self>) -> Option<Slot> {
-        self.slots
-            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |n| {
-                (n < MAX_CONNECTIONS).then_some(n + 1)
-            })
-            .ok()?;
-        Some(Slot(self.clone()))
+        // A bounded increment, spelled out: `fetch_update` is deprecated from Rust 1.99 (renamed
+        // `try_update`, which the 1.88 floor in Cargo.toml doesn't have), and CI denies warnings.
+        let mut n = self.slots.load(Ordering::SeqCst);
+        loop {
+            if n >= MAX_CONNECTIONS {
+                return None;
+            }
+            match self
+                .slots
+                .compare_exchange_weak(n, n + 1, Ordering::SeqCst, Ordering::SeqCst)
+            {
+                Ok(_) => return Some(Slot(self.clone())),
+                Err(current) => n = current,
+            }
+        }
     }
 
     /// Takes a freshly upgraded connection onto the books, unless the server is stopping. The check

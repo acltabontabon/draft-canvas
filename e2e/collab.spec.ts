@@ -28,31 +28,77 @@ test.use({
   ],
 });
 
+/** The ICE servers `startSession` sets up: one STUN server at a documentation address nothing answers. */
+const UNANSWERED_STUN = 'stun:192.0.2.1:3478';
+
 /**
- * Whether this engine can open a peer connection at all — two in one page, no network asked.
- * Playwright's WebKit build on macOS gathers no ICE candidates, so a live session can't open there;
- * only WebKit is asked, so a regression anywhere else still fails loudly.
+ * Whether this engine, on this machine, can connect two browser contexts the way a session does —
+ * separate processes, full gathering, the offer and answer swapped whole. Two peers in one page
+ * prove nothing: they share one mDNS registry, so hidden host addresses resolve there and nowhere
+ * else. Playwright's WebKit hides them with no switch to turn that off, and a CI runner has no mDNS
+ * responder; its WebKit on macOS gathers no candidates at all. Chromium is never asked, so a
+ * regression in the app still fails loudly there. What the probe saw goes into the report.
  */
-async function peersConnect(page: Page, browserName: string): Promise<boolean> {
-  if (browserName !== 'webkit') return true;
-  return page.evaluate(async () => {
-    const a = new RTCPeerConnection();
-    const b = new RTCPeerConnection();
-    a.onicecandidate = (event) => event.candidate && void b.addIceCandidate(event.candidate);
-    b.onicecandidate = (event) => event.candidate && void a.addIceCandidate(event.candidate);
-    const channel = a.createDataChannel('probe');
-    await a.setLocalDescription(await a.createOffer());
-    await b.setRemoteDescription(a.localDescription!);
-    await b.setLocalDescription(await b.createAnswer());
-    await a.setRemoteDescription(b.localDescription!);
-    const open = await new Promise<boolean>((resolve) => {
-      channel.onopen = () => resolve(true);
-      setTimeout(() => resolve(false), 5_000);
+async function peersConnect(browser: Browser, browserName: string): Promise<boolean> {
+  if (browserName === 'chromium') return true;
+  const probe = async (stun: string | null) => {
+    const contexts = await Promise.all([browser.newContext(), browser.newContext()]);
+    try {
+      const [a, b] = await Promise.all(contexts.map((context) => context.newPage()));
+      const setUp = async (page: Page, offer: string | null) =>
+        page.evaluate(
+          async ({ stun, offer }) => {
+            const pc = new RTCPeerConnection({ iceServers: stun ? [{ urls: stun }] : [], bundlePolicy: 'max-bundle' });
+            const channel = pc.createDataChannel('probe', { negotiated: true, id: 0 });
+            const open = new Promise<boolean>((resolve) => {
+              channel.onopen = () => resolve(true);
+              setTimeout(() => resolve(false), 8_000);
+            });
+            (window as unknown as { probe: unknown }).probe = { pc, open };
+            const gathered = new Promise<void>((resolve) => {
+              pc.onicegatheringstatechange = () => pc.iceGatheringState === 'complete' && resolve();
+              setTimeout(resolve, 5_000);
+            });
+            if (offer) await pc.setRemoteDescription({ type: 'offer', sdp: offer });
+            await pc.setLocalDescription(offer ? await pc.createAnswer() : await pc.createOffer());
+            await gathered;
+            return pc.localDescription!.sdp;
+          },
+          { stun, offer },
+        );
+      const offer = await setUp(a, null);
+      const answer = await setUp(b, offer);
+      const finish = (page: Page, answer: string | null) =>
+        page.evaluate(async (answer) => {
+          const { pc, open } = (window as unknown as { probe: { pc: RTCPeerConnection; open: Promise<boolean> } }).probe;
+          if (answer) await pc.setRemoteDescription({ type: 'answer', sdp: answer });
+          const result = await open;
+          pc.close();
+          return result;
+        }, answer);
+      const [opened] = await Promise.all([finish(a, answer), finish(b, null)]);
+      return { opened, offered: candidates(offer), answered: candidates(answer) };
+    } catch (error) {
+      return { opened: false, error: String(error).slice(0, 200) };
+    } finally {
+      await Promise.all(contexts.map((context) => context.close()));
+    }
+  };
+  // Each candidate by kind (`udp v4 host`, `udp mdns host`, …), never its address: the log is public.
+  const candidates = (sdp: string) =>
+    (sdp.match(/^a=candidate:.*$/gm) ?? []).map((line) => {
+      const [, , transport, , address, , , type] = line.split(' ');
+      const kind = address.endsWith('.local') ? 'mdns' : address.startsWith('127.') || address === '::1' ? 'loopback' : address.includes(':') ? 'v6' : 'v4';
+      return `${transport.toLowerCase()} ${kind} ${type}`;
     });
-    a.close();
-    b.close();
-    return open;
+  const withStun = await probe(UNANSWERED_STUN);
+  const withoutStun = withStun.opened ? null : await probe(null);
+  test.info().annotations.push({
+    type: 'webrtc-probe',
+    description: JSON.stringify({ browserName, withStun, withoutStun }),
   });
+  console.warn(`[webrtc-probe] ${browserName}: ${JSON.stringify({ withStun, withoutStun })}`);
+  return withStun.opened;
 }
 
 async function startSession(owner: Page): Promise<string> {
@@ -67,7 +113,7 @@ async function startSession(owner: Page): Promise<string> {
   // The STUN server is set behind the privacy seal, with the rest of what leaves the browser.
   await dialog.getByRole('button', { name: 'How your diagram stays private' }).click();
   await dialog.getByText('Use your own STUN server').click();
-  await dialog.getByLabel('Server').fill('stun:192.0.2.1:3478');
+  await dialog.getByLabel('Server').fill(UNANSWERED_STUN);
   await dialog.getByRole('button', { name: 'Start session' }).click();
   const link = dialog.getByRole('textbox', { name: 'Session link' });
   await expect(link).toHaveValue(/#join=2\./, { timeout: 15_000 });
@@ -131,7 +177,7 @@ const labels = (page: Page) => page.locator('.react-flow__node').allInnerTexts()
 
 test('two browsers edit one canvas live, and the owner stays in charge', async ({ page: owner, browser, browserName }) => {
   await newCanvas(owner, 'Payments');
-  test.skip(!(await peersConnect(owner, browserName)), 'This engine build opens no peer connections');
+  test.skip(!(await peersConnect(browser, browserName)), 'This engine can’t connect two browser contexts on this machine');
   await create(owner, 'Service', { x: 260, y: 220 });
 
   const link = await startSession(owner);
@@ -206,7 +252,7 @@ test('someone the owner turns away is told so, and never gets in', async ({ page
 
 test('without the relay, a direct invite and reply code still work — and a wrong code is refused', async ({ page: owner, browser, browserName }) => {
   await newCanvas(owner, 'Mixups');
-  test.skip(!(await peersConnect(owner, browserName)), 'This engine build opens no peer connections');
+  test.skip(!(await peersConnect(browser, browserName)), 'This engine can’t connect two browser contexts on this machine');
   await startSession(owner);
   const first = await openInvite(owner);
   const other = await join(browser, first, 'Early');
