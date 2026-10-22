@@ -1,216 +1,109 @@
 # Reliability and release acceptance
 
-Draft Canvas is a local-first tool. Its readiness is judged by whether supported drawing, explaining,
-saving and recovery journeys work, and whether publication depends on verified source and artifacts.
-OS code signing and notarization are intentionally outside this milestone: installers remain ad-hoc
-signed on macOS and unsigned on Windows. The in-app updater's signature checks remain mandatory.
-
 ## Release gates
 
-[CI](../../.github/workflows/ci.yml) is reusable. It resolves a source ref to one commit, then runs
-lint, tooling typechecks, build, coverage, license checks, the three-engine editor journeys,
-offline and assembled-site checks, desktop browser/native acceptance, dependency audits and
-release performance budgets. Shared lint, tooling typechecks and unit coverage run once.
-Ordinary PRs and pushes to `main` skip timing benchmarks.
-The build artifact records its source commit. Offline and assembled-site browser jobs test its
-compiled files without rebuilding. The editor journeys run against Vite's development server at
-the same source commit; several of those journeys also inspect source modules through that server.
+| Workflow | What it gates |
+| --- | --- |
+| [CI](../../.github/workflows/ci.yml) | Resolves the ref to one commit. Lint, tooling typecheck and coverage once ([Shared checks](../../.github/workflows/shared-checks.yml)); build and `licenses:check`; editor journeys in Chromium, Firefox and WebKit; offline and assembled-site journeys against the built artifact; [Desktop checks](../../.github/workflows/desktop-ci.yml); [Dependency security](../../.github/workflows/security.yml); [Performance](../../.github/workflows/performance.yml) on tag pushes only |
+| [Release](../../.github/workflows/release.yml) | Runs CI, then creates a **draft** release, then Desktop Release, Pages and Homebrew |
+| [Desktop Release](../../.github/workflows/desktop-release.yml) | Checks version and updater signatures, starts the arm64 macOS app, installs and starts the Windows app. Only then publishes and moves the update channels |
+| [Deploy the web](../../.github/workflows/pages.yml) | Publishes the verified artifact from the same run and checks its recorded commit |
+| [Deploy site changes](../../.github/workflows/pages-site.yml) | Site-only changes: keeps the released editor, builds once, tests in all three browsers. Never releases a new editor |
+| [Homebrew](../../.github/workflows/homebrew.yml) | Verifies both macOS installers against `SHA256SUMS.txt`, checks the cask, updates only that cask. Rerun it if the tap update fails; see [Homebrew releases](desktop-updates.md#homebrew-releases) |
 
-[Release](../../.github/workflows/release.yml) waits for this workflow before creating a **draft**.
-[Desktop acceptance](../../.github/workflows/desktop-ci.yml) runs within CI before desktop packaging.
-Standalone desktop previews and rebuilds call it with shared verification enabled; releases from
-the unified orchestrator use the acceptance already completed for the verified commit.
-The release packages are checked for version and updater signatures; the arm64 macOS bundle is
-started, and the Windows installer is installed into a temporary folder and its installed app started.
-The Intel macOS package is cross-compiled: native Intel installation remains a manual acceptance item.
-Only then is the release made public and the updater channels advanced.
-
-Pages downloads the same-run verified web artifact and checks its recorded commit before uploading.
-Site-only changes retain the previous released editor, build the combined artifact once and test it
-in Chromium, Firefox and WebKit before deploying. Their unit/coverage and license checks run against
-the selected editor source and current site. Site-only publication does not release a new editor.
-
-Homebrew verifies both published macOS installers against `SHA256SUMS.txt`, checks the generated
-cask with Homebrew, and updates only that cask in the shared tap. It runs after desktop publication,
-independently of Pages and updater channels. A failed tap update is retried with the **Homebrew**
-workflow; see [Homebrew releases](desktop-updates.md#homebrew-releases).
-
-Hosted [CI](https://github.com/acltabontabon/draft-canvas/actions/runs/38040880397),
-[Desktop CI](https://github.com/acltabontabon/draft-canvas/actions/runs/38018279380) and
-[site deployment](https://github.com/acltabontabon/draft-canvas/actions/runs/38018279754) passed on
-10 October 2026. Release tags additionally verify signed update packages before promotion. Keep release tags and publishing workflows limited to
-trusted maintainers. No signing certificate or paid service is required by this milestone.
+- OS code signing is optional. Without signing secrets, macOS builds are ad-hoc signed and Windows
+  builds unsigned. Updater signatures are always required.
+- The Intel macOS package is cross-compiled and not started in CI.
+- Keep release tags and publishing workflows limited to trusted maintainers.
 
 ## Recovery guarantees and limits
 
-- A confirmed IndexedDB save writes the summary and body in one transaction. A synchronous body-write
-  failure aborts the previously queued summary too. Failed autosaves retain the pending document for
-  retry or export. Conflicts require a choice; recovery is not permission to overwrite another copy.
-- Browser autosave normally starts after 700 ms without an edit, or after at most 4 seconds of
-  continuous edits. This is scheduling latency, not a guaranteed durable-write deadline. A crash,
-  force quit or power loss can lose edits that have not completed a save.
-- The synchronous reload stash is for same-tab refresh/navigation only. It can fail when storage is
-  full and does not protect against closing the tab or losing the browser profile.
-- Persistent browser storage reduces eviction risk. It does not protect against clearing site data,
-  losing the device or editing the wrong copy. Stale-backup reminders therefore apply even when the
-  browser granted persistence. A reminder is not proof that a browser download was kept.
-- A backup can salvage readable diagrams when another row is unreadable, but explicitly reports the
-  partial result and does not reset the complete-backup date. A missing project manifest fails the
-  backup instead of silently dropping grouping. Cancellation does not record a backup. Opaque
-  document IDs are escaped in archive names, avoiding path traversal and case-insensitive filename
-  collisions without changing the IDs inside the files; names stay within 255 UTF-8 bytes.
-- Restoring never overwrites an existing diagram. Restore may stop on a storage failure after some
-  copies were saved; those copies remain usable, and retrying may create additional copies.
-- Desktop writes use an atomic temporary-file replacement and retain unsaved recovery copies in the
-  app's own data folder. Existing recovery behavior is deliberately retained: rotating historical
-  snapshots would need selection, retention and restore semantics. They are a later product feature,
-  not a substitute for an independent exported backup.
+- **IndexedDB saves** write summary and body in one transaction. A failed autosave keeps the
+  document for retry or export. Conflicts always ask.
+- **Autosave** runs 700 ms after the last edit, or within 4 s of continuous editing. A crash or power
+  loss can still lose unsaved edits.
+- **Reload stash** covers same-tab refresh only, and fails when storage is full.
+- **Persistent storage** lowers eviction risk only; backup reminders still apply.
+- **Backups** skip unreadable diagrams and report it; a partial backup does not reset the
+  last-backup date. A missing project manifest fails the backup.
+- **Restore** never overwrites a diagram. Retrying after a storage error may add extra copies.
+- **Desktop saves** replace the file atomically and keep unsaved recovery copies in the app's data
+  folder. Not a substitute for an exported backup.
 
 ## Performance acceptance
 
-The automated supported workload is **200 shapes and 300 connectors**, including nested boundaries,
-rooms, notes and attachments. This is a regression target, not an import limit or a promise of 60 Hz
-on every device. Import ceilings remain hostile-input bounds. Larger diagrams remain available but
-may lag; the [published measurements](performance.md#latest-results) show the tradeoffs.
+Supported workload: **200 shapes and 300 connectors**, with nested boundaries, rooms, notes and
+attachments. It is a regression target, not an import limit or a 60 Hz promise. Larger diagrams work
+but may lag; see [published measurements](performance.md#latest-results).
 
-`npm run perf:check` measures three iterations after warmup, then requires:
+`npm run perf:check` takes medians of three iterations after warmup. Limits are in
+[`benchmark/budgets.ts`](../../benchmark/budgets.ts):
 
 | Metric | Maximum |
 | --- | --- |
-| p95 frame time for pan, single-shape drag and selection | 50 ms |
-| p95 input latency for those gestures | 100 ms |
-| Worst gesture/tail long task, median across iterations | 250 ms |
-| Medium diagram cold open, median | 3,000 ms |
-| Longest task while opening, median | 1,000 ms |
+| p95 frame time: pan, single-shape drag, selection | 50 ms (compared in whole ms) |
+| p95 input latency, same gestures | 100 ms |
+| Worst long task during or after a gesture | 250 ms |
+| Medium diagram cold open | 3,000 ms |
+| Longest task while opening | 1,000 ms |
 | JS heap after opening | 256 MiB |
 | SVG / PNG export | 1,500 / 6,000 ms |
 
-The first local run passed: pan/drag p95 about 17 ms, selection about 33 ms, opening about 585 ms,
-40 MiB JS heap, SVG 71 ms and PNG 943 ms. These are Apple M2 Pro measurements on 9 October 2026,
-not a CI-runner calibration or ordinary-laptop validation. The coarse limits provide headroom for
-shared runners and detect material regressions; tighten them only from repeatable evidence.
-An idle frame floor over 25 ms fails acceptance as a throttled environment, rather than passing a
-misleading run. Missing, failed, nonnumeric, duplicate or broken measurements fail the gate.
-Larger workloads and long-session measurements use the dedicated Performance workflow’s manual
-option. Stable releases, standalone desktop previews and rebuilds require timing acceptance;
-ordinary PRs, pushes to `main` and manual CI verification skip timing benchmarks.
-The coarse frame-time gate compares whole milliseconds: three nominal 60 Hz frames may be recorded
-as 50.1 ms. Raw measurements remain unchanged in the reports; other limits retain their full precision.
-CI pins timing measurements to the `ubuntu-24.04-arm` runner image; browser journeys retain their
-x64 matrix. The previous x64 pool supplied different EPYC generations, moving selection p95 from
-50 to 67 ms between runs with unchanged selection code and roughly 32 ms input latency. Timing
-limits stay unchanged. Reports retain CPU, OS and browser versions so comparisons can account for
-the measurement environment; the runner label alone is not a guarantee of identical hardware.
-Manual runs can additionally measure larger workloads and long-session behavior; these retain
-reports for investigation and do not claim a calibrated memory-leak gate.
+- An idle frame floor over 25 ms, or any missing, invalid or broken measurement, fails.
+- CI times on `ubuntu-24.04-arm`; the x64 pool varied between CPU generations.
+- Only tag pushes run the gate. Tighten limits only from repeatable evidence.
 
 ## Dependency triage
 
-`npm run audit:npm` scans both lockfiles and blocks unaccepted high/critical advisories.
-`npm run audit:rust` requires cargo-audit 0.22.2 and blocks vulnerability and unsoundness advisories,
-as well as yanked dependencies. Transport errors and malformed reports fail closed.
-Full reports, including lower-severity and maintenance warnings, are retained as CI artifacts.
-The scan also runs weekly so new advisories do not wait for the next code change.
+- `npm run audit:npm` scans both lockfiles and blocks unaccepted high and critical advisories.
+- `npm run audit:rust` uses cargo-audit 0.22.2 and blocks vulnerabilities, unsoundness and yanked
+  crates.
+- Network errors and malformed reports fail. The scan also runs weekly.
 
-Update compatible dependencies first. The source-map-js indexed-map denial-of-service advisory
-GHSA-68fv-2mgg-jv7q was resolved by updating both lockfiles to 1.2.2.
-Site-only deployments also refresh that compatible build-only dependency in the published editor's
-lockfile before installation. They retain the full audit and browser acceptance gates, and record
-the installed build-lock digest and source-map version beside the released source commit.
-If no supported fix is available, an entry in
-[advisory-exceptions.json](../../.github/advisory-exceptions.json) must name the ecosystem, advisory,
-package, technical reason, tracking reference and expiry. Expired or incomplete entries fail even
-when the current scan no longer contains the advisory. Remove obsolete exceptions promptly.
+Update compatible dependencies first. If no fix exists, add an entry to
+[advisory-exceptions.json](../../.github/advisory-exceptions.json) with ecosystem, id, package,
+reason, tracking reference and expiry. Expired or incomplete entries fail.
 
-The initial RustSec unsoundness warning RUSTSEC-2024-0429 concerns glib 0.18.5, reached through Tauri's
-Linux-only GTK stack. The supported macOS arm64 and Windows x64 dependency trees contain no glib.
-Its exception expires on 8 November 2026 and must be reconsidered before adding Linux distribution.
-GTK-family unmaintained warnings remain an upstream/platform maintenance risk and are retained in
-reports. This triage is not a claim that Linux desktop is supported or cleared for release.
+Current exception: RUSTSEC-2024-0429 (glib 0.18.5), reached only through Tauri's Linux GTK stack.
+The macOS and Windows dependency trees contain no glib. It expires 8 November 2026 and must be
+resolved before shipping a Linux desktop build.
 
 ## Local diagnostic reports
 
-Open **Troubleshooting** on the web home screen, **More → Diagnostic report…** in the web editor,
-or **Settings → Support** on desktop to preview a report before choosing **Download report**.
-It contains the app and document schema versions, timestamps and up to twenty recent failures with an operation category,
-error category and optional element counts. It contains no document ids, names, labels, paths, URLs,
-stacks or raw error messages. Unrecognized operations and error types become generic categories.
-Nothing is uploaded; the record exists only in memory until the person downloads it and disappears
-on reload. Development console logging remains more detailed for local debugging.
+Open **?** → **Diagnostic report…** in the web editor, or **Settings → Support** on desktop, to
+preview a report, then choose **Download report**.
 
-## Historical verification
-
-The dated records below describe checks performed on the linked revisions; they are historical
-evidence, not current release requirements.
-
-## Local automated verification (9 October 2026)
-
-- Lint, application/tooling typechecks, web/desktop frontend builds and workflow validation (`actionlint`) passed.
-- All 3,739 unit tests passed; coverage floors passed (71.02% statements, 61.79% branches,
-  65.47% functions, 73.39% lines).
-- Full Chromium `check:full` passed: 310 editor journeys, one offline reload and 13 assembled-site
-  journeys. Full WebKit `check:full` passed: 301 editor journeys and 13 assembled-site journeys;
-  nine editor cases and the offline-emulation case were skipped by existing platform guards.
-- Both desktop browser suites passed all 80 journeys against the fake shell. `desktop:check`
-  passed the desktop frontend build, formatting, Clippy, 297 Rust unit/integration tests and version alignment.
-- Chromium offline and assembled-site journeys also passed with `DC_TEST_BUILT=1`, exercising the
-  artifact-only server path without rebuilding.
-- Dependency scans passed the policy above. No high/critical npm finding remains; the glib
-  unsoundness exception is explicit, dated and limited to unsupported Linux desktop dependencies.
-- Two existing gesture tests were corrected: the hit-corridor check samples the rendered path,
-  and the pinch check waits for Fit, touches empty canvas and sends moves across frames. Both
-  passed ten repetitions without retries before the complete suites were rerun successfully.
-
-These local results were recorded before hosted acceptance. The native browser file-dialog drill
-was not completed.
-
-## Hosted automated verification (10 October 2026)
-
-- [CI on 60f3eca](https://github.com/acltabontabon/draft-canvas/actions/runs/38040880397) passed the
-  three-engine editor, offline and assembled-site matrix, coverage, licensing,
-  dependency policy and performance gates. Firefox acceptance is verified on the Linux runner.
-- [Desktop CI on 584bf60](https://github.com/acltabontabon/draft-canvas/actions/runs/38018279380)
-  passed its fake-shell, Rust and packaged-startup checks.
-- [Site deployment on 584bf60](https://github.com/acltabontabon/draft-canvas/actions/runs/38018279754)
-  passed all three browser acceptance shards and deployed the verified artifact.
-
-These are engineering checks. The manual observations below remain separate, and a release tag must
-pass its own verification and artifact publication gates.
+- Contains: app and schema versions, timestamps, and up to 20 recent failures with operation and
+  error category and optional element counts.
+- Never contains: document ids, names, labels, paths, URLs, stacks or raw error messages.
+- Nothing is uploaded. The record lives in memory and is gone on reload.
 
 ## Manual acceptance record
 
-Automated checks do not establish installation usability, reader comprehension or power-loss safety.
-Run each drill with disposable copies; record revision, platform, exact steps and actual outcome.
+Use disposable copies; record revision, platform, steps and outcome.
 
-| Drill | Required evidence | Status |
+| Drill | Evidence | Status |
 | --- | --- | --- |
-| Abrupt browser termination | Confirm a saved version, make a later edit, force quit, reopen; record what survived | Pending |
-| Desktop interrupted save / unavailable drive | Prior confirmed file stays readable; pending edits recover or remain exportable | Pending |
-| Clean install and upgrade | macOS arm64, Intel macOS and Windows; actual dialogs, file associations, unsaved work and updater behavior | Pending |
-| Ordinary-laptop performance | Supported workload and hardware details against the budgets above | Pending |
-| Drawing and recipient handoff | Five observations following [the existing protocol](explanation-usability.md), including keyboard/touch/screen-reader use | Pending |
-| Release withdrawal rehearsal | Verify the procedure below with disposable artifacts | Pending |
-
-Browser automation must pass all supported engines in CI. Firefox cannot currently launch in this
-local macOS environment ("Could not find profile folder"); changing the runner's temporary directory
-did not resolve it. Its hosted Linux matrix passed; local launch failure is an environment limitation,
-not an application failure or an allowed CI skip.
+| Abrupt browser termination | Confirm a save, edit, force quit, reopen; record what survived | Pending |
+| Desktop interrupted save or unavailable drive | Last saved file stays readable; pending edits recover or can be exported | Pending |
+| Clean install and upgrade | macOS arm64, Intel macOS, Windows: dialogs, file associations, unsaved work, updater | Pending |
+| Intel macOS install | Native install of the cross-compiled package | Pending |
+| Ordinary-laptop performance | Supported workload against the budgets above, with hardware details | Pending |
+| Drawing and handoff | Five sessions following [the observation protocol](explanation-usability.md) | Pending |
+| Release withdrawal | Rehearse the procedure below with disposable artifacts | Pending |
 
 ## Withdrawal and recovery procedure
 
-1. Stop promoting the bad release. Do not delete users' files or clear browser storage.
-2. For desktop, run **Desktop update channels** with the last good tag and `force=true`. This stops
-   new offers; it does not downgrade people who already installed the bad version.
-3. For Homebrew, submit a reviewed tap correction to withdraw or replace a bad cask. The automatic
-   workflow refuses downgrades; rolling back the tap is an explicit maintainer action and does not
-   downgrade installed copies.
-4. For web, run the current **Deploy to Pages** workflow from `main`, setting `release-tag` to the
-   last good tag. It builds, verifies and promotes that editor source with the current site. Confirm hosted asset loading, document reopening and service-worker scope afterward.
-5. Before offering an older editor, check schema compatibility on exported disposable documents.
-   A client refusing a newer schema is not data loss; never bypass validation or rewrite users' files
-   to force a downgrade. If rollback cannot read current files, ship a forward fix instead.
-6. Publish a short incident note describing affected versions, workarounds, recovery instructions
-   and what was verified. Keep the bad release discoverable with a clear warning rather than making
-   the incident impossible to investigate.
+Not yet rehearsed.
 
-These are reviewable procedures, not a claim that withdrawal has already been rehearsed.
+1. Stop promoting the bad release. Never delete users' files or clear browser storage.
+2. Desktop: run **Desktop update channels** with the last good tag and `force` on. This stops new
+   offers; it does not downgrade installed copies.
+3. Homebrew: submit a reviewed tap correction. The automatic workflow refuses downgrades, and a tap
+   rollback does not downgrade installed copies.
+4. Web: run **Deploy the web** from `main` with `release-tag` set to the last good tag. Then check
+   asset loading, reopening documents and service-worker scope.
+5. Before offering an older editor, test it on exported disposable documents. If it cannot read
+   current files, ship a forward fix instead. Never bypass validation or rewrite users' files.
+6. Publish an incident note (affected versions, workarounds, recovery steps) and keep the bad
+   release visible with a warning.

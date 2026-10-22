@@ -54,8 +54,6 @@ The reasoning behind these rules is in [Architecture](docs/reference/architectur
 - Commands live in `src/commands/registry.ts`, with jump targets in `search.ts`. Call existing store
   actions or camera methods, never document operations directly. Add an operation and store wrapper
   before naming a new command.
-- Learn recipes pair an entry in `src/learn/recipes.ts` with a scene in `src/learn/scenes/`.
-  Keep `src/learn/` React-free; drawing belongs in lazily loaded `src/ui/learn/`. Use actual UI labels.
 
 ### Documents, depth and history
 
@@ -133,9 +131,10 @@ The reasoning behind these rules is in [Architecture](docs/reference/architectur
 Dependencies flow `ui/` → `canvas/` → `document/`; storage and export consume the document model.
 Library and editor are states of `src/App.tsx`, with no router. Keep the editor's Vite `base: './'`.
 
-`depth/`, `layout/` and `starters/` import only `document/`. `collab/` imports `document/` and `depth/`. `continuation/` also imports `render/text`;
-`openPoints/` also imports `depth/`. `agent/` may consume these and rendering/export helpers, never UI
-or store modules. `depth/c4.ts` shares C4 role and scope derivation with the editor and agent.
+`depth/` and `starters/` import only `document/`; `layout/` also imports `edges/bundles`. `collab/`
+imports `document/` and `depth/`. `continuation/` also imports `render/text` and `edges/` routing
+helpers; `openPoints/` also imports `depth/` and `render/` types. None of these import UI, canvas or
+store modules. `agent/` may consume these and rendering/export helpers, never UI or store modules. `depth/c4.ts` shares C4 role and scope derivation with the editor and agent.
 
 `www/` is a separate Vite project with its own lockfile and no shared app dependencies. Web assembly
 copies `dist/` unchanged into `dist-web/app/` (app.draftcanvas.dev) and `dist-web/legacy/editor/` (the

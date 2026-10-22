@@ -1,79 +1,60 @@
 # Flows and presenting
 
-A flow is an ordered list of connectors. Use it to explain what happens, one step at a time.
+A flow is an ordered list of connectors, presented one step at a time.
 
 Shortcuts use Mac keys. On Windows and Linux, use `Ctrl` for `⌘`.
 
 ## Trace a flow
 
-1. Open **Flows** (`F`, the glyph beside **Present** at the top right) and choose **Trace a flow**, or
-   find it in `⌘K`.
-2. Name the flow and click connectors in the order you want to explain them.
-3. Choose **Finish** to save the trace as one undo step.
+1. Press `F` to open **Flows**, then choose **Trace a flow** (also in `⌘K`).
+2. Name it and click connectors in order.
+3. Choose **Finish**.
 
-Use **Remove last** (`Backspace` outside a text field) to undo a provisional step.
-**Cancel** or `Esc` discards the trace. **Trace more steps** appends to an existing flow.
+While tracing, **Remove last** (`Backspace`) and **Cancel** (`Esc`) undo; **Outline** picks
+connectors by keyboard. **Trace more steps** extends a flow.
 
-You can pan and zoom while tracing. For keyboard selection, open **Outline** from the tracing bar,
-navigate to a connector, and press `Enter`. For a shared line, pick its connector in the tracing bar.
-Leaving the diagram or level, or an outside edit, cancels an unfinished trace.
+## Add steps one at a time
 
-## Build a flow one step at a time
-
-Click a connector and choose **Add to flow**. Name the new flow, then click another connector
-and choose **Add to <flow name>**. Repeat for each step.
+Click a connector and choose **Add to flow**, then name the flow. On the next connector, choose
+**Add to <flow name>**.
 
 ![The Flows panel with two steps in Place an order.](../media/guides/flows-panel.png)
 
 In **Flows**:
 
-| Action | Use it to |
+| Control | Does |
 | --- | --- |
-| **Move earlier / Move later** | Reorder a step |
-| **Remove step** | Remove it from the flow |
-| **New flow** | Tell another story using the same diagram |
-| **Rename** (`F2`) / **Delete** | Manage the selected flow |
-| **Spotlight extra shapes** | Include selected shapes in a step's highlight |
-| **Pin the camera** | Keep the current view for a step |
+| Up / down arrows | Reorder a step |
+| **⋯ → + Selection** | Also highlight the selected shapes in that step |
+| **⋯ → Pin view** | Present the step from the current camera |
+| **Remove step** | Remove a step |
+| **New flow** (+) | Start another flow on the same diagram |
+| **Rename** (`F2`) / **Delete** | Manage a flow |
 
-Edit a step's caption in its connector popover. Deleting a connector removes its steps too;
-Undo restores both.
+A step shows its connector's label; rename the connector to change it.
 
 ## Present
 
-Click **Present** (`⌘Enter`). If several flows have steps, choose one.
-The opening shows the whole path; advance to begin.
+Click **Present** (`⌘Enter`) and pick a flow if there are several. The opening shows the whole
+path; advance to start.
 
 ![A presentation step highlighting its connector and showing the queue's note.](../media/guides/presenting.png)
 
 | Key | Action |
 | --- | --- |
-| `→` / `Space` | Advance through opening, steps, closing and the next flow |
-| `←` | Go back |
-| `Home` / `End`; `1`–`9` | First / last step; jump to a step |
-| `Shift+→` / `Shift+←` | Next / previous flow |
-| `Shift+F` | Choose a flow |
-| `O` | Toggle the whole-flow overview without losing your step |
-| `R` | Re-centre and resume guided camera movement |
-| `P` | Toggle the pointer ring |
-| `⌘↓` / `⌘↑` | Look inside a selected shape / go back out |
-| `Esc` | Close a reveal, then leave presentation |
+| `→` / `Space`, `←` | Next, previous |
+| `Home` / `End`, `1`–`9` | First, last, jump to step |
+| `Shift+→` / `Shift+←`, `Shift+F` | Next, previous, choose flow |
+| `O` | Whole-flow overview |
+| `R` | Re-centre and resume guided camera |
+| `P` | Pointer ring |
+| `⌘↓` / `⌘↑` | Look inside a shape / go back out |
+| `Esc` | Close a reveal, then leave |
 
-Each step highlights its connector and destination, with its caption and attached notes.
-Click an open-point marker to read it. Pan or zoom freely; guided framing resumes only after **Re-centre**.
+Pan and zoom freely; `R` hands the camera back. For a long step, choose **Read full step details**.
 
-For a long caption, choose **Read full step details** and scroll with `↑`/`↓`, `Page Up`/`Page Down`
-or `Space`. Left and right arrows still change steps.
-Leaving presentation restores your editing view and selection.
+## Export a flow
 
-## Export a flow as a sequence diagram
-
-Open **Export → Source** (`⌘⇧E`), choose flows, then **Mermaid** or **PlantUML**.
-Copy the text or download it for a README or wiki. Each playable flow becomes a sequence diagram;
-nested levels are included.
-
-Messages follow who acts: `Database → Worker: read by` exports as the worker reading the database.
-Async calls and replies are kept; open points are omitted.
-For an image with numbered connectors, select the flow and export **Image**.
-
-See [saving and sharing](saving-and-sharing.md) for file and link options.
+**Share → Export → Source → Flows** (`⌘⇧E`) turns each flow into a **Mermaid** or **PlantUML**
+sequence diagram, nested levels included. With a flow selected, an **Image** export numbers its
+connectors. See [Saving and sharing](saving-and-sharing.md).

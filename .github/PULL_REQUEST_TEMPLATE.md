@@ -1,20 +1,19 @@
 ## What & why
 
-<!-- What does this change, and why does it need to happen? Link an issue if there is one. -->
+<!-- What changes and why. Link the issue if there is one. -->
 
 ## Testing
 
-<!-- Output of `npm run check`, plus anything else you ran (e2e, manual browser check). -->
+<!-- Checks you ran: `npm run check`, focused tests, e2e, manual browser checks. -->
 
 ## Screenshots
 
-<!-- If this changes anything visual, a before/after screenshot or clip helps a lot. Delete this
-     section if not applicable. -->
+<!-- Before/after for visual changes. Delete if not applicable. -->
 
 ## Checklist
 
-- [ ] `npm run check` passes locally, plus the [checks for what this touches](https://github.com/acltabontabon/draft-canvas/blob/main/CONTRIBUTING.md#which-checks-for-which-change) (desktop, site, release tooling)
-- [ ] Tests added/updated for the behavior that changed
-- [ ] A `CHANGELOG.md` line under `[Unreleased]` if people using Draft Canvas would notice this
-- [ ] Docs updated if this changes architecture semantics, the document schema (`src/document/types.ts`, `docs/reference/schema.md`), or anything a guide in `docs/guides/` (or a Learn recipe) describes
-- [ ] For anything large: this was discussed in an issue first
+- [ ] [Checks for what this touches](https://github.com/acltabontabon/draft-canvas/blob/main/CONTRIBUTING.md#which-checks-for-which-change) pass locally
+- [ ] Tests added or updated for changed behavior
+- [ ] `CHANGELOG.md` entry under `[Unreleased]` if users would notice
+- [ ] Docs updated for changed behavior, architecture or the document schema (`src/document/types.ts`, `docs/reference/schema.md`)
+- [ ] Large changes were discussed in an issue first

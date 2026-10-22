@@ -1,27 +1,21 @@
 # Architecture examples
 
-Use a starter to get an editable diagram with shapes, relationships and flows already in place.
+A starter adds an ordinary, editable diagram with flows to the current canvas. Home and an empty
+canvas offer the first five below; type any name in `⌘K` (`Ctrl+K` on Windows and Linux). Click a
+name to preview it.
 
-On Home or an empty canvas, choose **Monolith**, **Microservices**, **Event-Driven**, **Hexagonal**
-or **CQRS**. For the full catalog, open `⌘K` (`Ctrl+K` on Windows/Linux) and type a starter's name.
-
-Starters add to the current canvas. Rename, delete or reconnect anything.
-Click a name below to preview its diagram.
-
-| Starter | Starting point |
+| Starter | Shows |
 | --- | --- |
-| [Monolith](../media/guides/example-monolith.png) | One application with API, business logic and data access layers |
+| [Monolith](../media/guides/example-monolith.png) | One app in API, logic and data layers |
 | [Modular Monolith](../media/guides/example-modular-monolith.png) | One deployable with separate modules |
-| [Microservices](../media/guides/example-microservices.png) | Services with their own data, behind a gateway |
-| [Event-Driven](../media/guides/example-event-driven.png) | A topic, subscriber queues, workers and a dead-letter queue |
+| [Microservices](../media/guides/example-microservices.png) | Services with own data behind a gateway |
+| [Event-Driven](../media/guides/example-event-driven.png) | Topic, subscriber queues, workers, DLQ |
 | [Hexagonal](../media/guides/example-hexagonal.png) | A core with ports and adapters |
-| [Backend for Frontend](../media/guides/example-bff.png) | A separate backend for each frontend |
-| [CQRS](../media/guides/example-cqrs.png) | Command and query paths with an async read projection |
-| [Medallion](../media/guides/example-medallion.png) | Raw, validated and business-ready datasets |
-| [Kappa](../media/guides/example-kappa.png) | Live and historical processing through one stream |
+| [Backend for Frontend](../media/guides/example-bff.png) | One backend per frontend |
+| [CQRS](../media/guides/example-cqrs.png) | Command and query paths, async projection |
+| [Medallion](../media/guides/example-medallion.png) | Raw, validated and business-ready data |
+| [Kappa](../media/guides/example-kappa.png) | Live and replayed processing on one stream |
 | [Change Data Capture](../media/guides/example-cdc.png) | Committed changes feeding derived views |
-| [Saga – Orchestration](../media/guides/example-saga-orchestration.png) | A coordinator managing local transactions and compensation |
-| [Saga – Choreography](../media/guides/example-saga-choreography.png) | Local transactions coordinated through events |
-| [Transactional Outbox](../media/guides/example-transactional-outbox.png) | Save state and event intent together, then publish |
-
-Next: [edit shapes and connectors](shapes-and-connectors.md) or [present a flow](flows-and-presentation.md).
+| [Saga – Orchestration](../media/guides/example-saga-orchestration.png) | A coordinator with compensation |
+| [Saga – Choreography](../media/guides/example-saga-choreography.png) | Steps coordinated through events |
+| [Transactional Outbox](../media/guides/example-transactional-outbox.png) | State and event saved together, then published |

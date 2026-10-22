@@ -1,85 +1,58 @@
 # Getting started
 
-Draw a small order-processing system, present it, and export it.
-Open the [web editor](https://app.draftcanvas.dev/) or [desktop app](desktop.md).
-No account is needed.
+Open the [web editor](https://app.draftcanvas.dev/) or the [desktop app](desktop.md). No account
+needed.
 
 Shortcuts use Mac keys. On Windows and Linux, use `Ctrl` for `⌘`.
 
 ## Start a canvas
 
-Choose **Quick Draft** on Home for a blank canvas. To explore a finished diagram first,
-choose **Try an example**, then **Play explanation**.
+On Home, choose **Quick Draft**. To see a finished diagram first, choose **Try an example**, then
+**Play explanation**.
 
-The web app saves locally as you draw. On desktop, press `⌘S` to save a Quick Draft as a file.
-
-### Find your way around
-
-- **Top left:** the Draft Canvas mark takes you back to your diagrams; click the name to rename it.
-- **Top centre:** the tools. Each is a small drawing of its shape; hover one for its name and key.
-- **Top right:** **Present**, the **Flows** glyph beside it, and **Share** — draw together live,
-  export, or copy a read-only link.
-- **Bottom right:** undo and redo, zoom, and **?** for help: commands, shortcuts and the guides.
-- **Right-click the canvas** for what acts on the whole diagram: tidy the layout, find and replace,
-  and canvas settings. Everything is also in `⌘K`.
+The web app saves in your browser as you draw; on desktop, `⌘S` saves a file. Shape tools are at
+the top; **Present**, **Flows** and **Share** at the top right. `⌘K` finds any command and `?` lists
+shortcuts.
 
 ## Draw Service → Queue → Worker
 
-1. Move your pointer over the canvas and press `S`. Type `Orders API`, then press `Enter`.
-2. Drag from a dot on the service's edge into empty space. Choose **Queue**.
-   Type `orders`, then press `Enter`.
-3. A faint Worker suggestion appears beside the selected queue. Press `Tab` to accept it,
-   then `Enter` to name it `Fulfilment worker`. If no suggestion is visible, press `]`.
+1. Point at the canvas and press `S`. Type `Orders API`, then `Enter`.
+2. Drag from a dot on the service's edge into empty space and choose **Queue**. Name it `orders`.
+3. A faint Worker suggestion appears beside the queue. Press `Tab` to accept it and name it
+   `Fulfilment worker`. No suggestion? Press `]`.
 
-[Preview the finished drawing.](../media/guides/service-queue-worker.png)
+[Preview the result.](../media/guides/service-queue-worker.png)
 
-Connectors label themselves. Click one to change its relationship.
-To connect existing shapes, drag from a dot on one shape onto the other.
+Connectors label themselves; click one to change it.
 
 ## Add a note
 
-Right-click the queue and choose **Attach note**. Write why the queue is there;
-press `Esc` to keep the text. Click the note's chip to reopen it.
-
-For a free-standing note, press `N`. Drag it onto a shape or connector and hold to attach it.
+Right-click the queue and choose **Attach note**. Type, then press `Esc`. Click the chip to reopen it.
 
 ## Draw a boundary
 
-Select the service, queue and worker, then press `⌘G` to group them in a boundary.
-Press `Enter` to name it. Moving the boundary moves its contents too.
-
-Choose a kind or colour in the boundary's toolbar. See [boundary kinds](shapes-and-connectors.md#boundaries)
-for the options.
+Select all three shapes, press `⌘G`, then `Enter` to name the [boundary](shapes-and-connectors.md#boundaries).
 
 ## Present a flow
 
 1. Click the API-to-queue connector and choose **Add to flow**. Name it `Place an order`.
 2. Click the queue-to-worker connector and choose **Add to Place an order**.
-3. Open **Flows** (`F`, the glyph beside **Present**) to check the order or edit step captions.
-4. Click **Present** (`⌘Enter`). Press `→` or `Space` to advance, `←` to go back,
-   and `Esc` to return to editing.
+3. Press `F` to open **Flows** and check the order.
+4. Click **Present** (`⌘Enter`). `→` or `Space` advances, `←` goes back, `Esc` returns to editing.
 
 ![The Flows panel with two ordered steps.](../media/guides/flows-panel.png)
 
-The active step is highlighted, with its caption and attached notes.
-The [presentation guide](flows-and-presentation.md) covers tracing, camera controls and multiple flows.
+More in [Flows and presenting](flows-and-presentation.md).
 
-## Export it
+## Export
 
-Open **Share → Export** (`⌘⇧E`) and choose:
+Open **Share → Export** (`⌘⇧E`):
 
-| Choose | Use it for |
+| Choose | For |
 | --- | --- |
-| **Image → PNG** | A slide or chat message |
-| **Document → Editable** | A `.draftcanvas` file you can reopen or send |
-| **Source** | A sequence diagram from your flow, or architecture source |
+| **Image** | PNG or SVG for a slide or chat |
+| **Document → Editable** | A `.draftcanvas` file to reopen or send |
+| **Source** | Mermaid or PlantUML from your flows, or architecture source |
 
-See [saving and sharing](saving-and-sharing.md) for backups, encrypted files and share links.
-
-## Keep going
-
-- Press `⌘K` to find a command, shape or [architecture starter](examples.md).
-- Run **Arrange selection** to tidy selected shapes, or **Fit shapes to text** for shortened labels.
-- Use [Look inside](depth.md) to draw detail inside a service.
-- Add an [open point](open-points.md) to record an unresolved question.
-- Press `?` for shortcuts.
+Next: [saving and sharing](saving-and-sharing.md), [starters](examples.md),
+[looking inside a service](depth.md) and [open points](open-points.md).

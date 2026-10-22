@@ -1,92 +1,53 @@
 # Releases
 
-Changelog format and steps for publishing Draft Canvas.
-
 ## Release notes
 
-Write user-facing changes once in `CHANGELOG.md`. GitHub release notes, desktop update notes and
-in-app What's New are generated from it.
+Write user-facing changes only in `CHANGELOG.md`. Release notes, desktop update notes and What's New
+are generated from it (`scripts/changelog.mjs`).
 
-Under `[Unreleased]`, group changes by where they run. Use only **Shared**, **Desktop** and **Web**
-at `###` level, omitting empty groups. Within each group, use the
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/) categories at `####` level: **Added**,
-**Changed**, **Deprecated**, **Removed**, **Fixed** and **Security**. Omit empty categories and put
-improvements to existing functionality under **Changed**.
+- Group changes under `### Shared`, `### Desktop` or `### Web`, then
+  [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) categories at `####`: Added, Changed,
+  Deprecated, Removed, Fixed, Security. Omit empty headings.
+- An optional paragraph under the version heading becomes the What's New summary.
+- Highlight a bullet with a **bold title** and `<!-- highlight -->`.
+- Minor and major releases get a launch-style page; a patch opts in with `<!-- launch -->` on its own
+  line in a platform section.
 
 ```markdown
-## [Unreleased]
-
 ### Shared
 
 #### Changed
 
-- Changes to the shared editor, shapes or exports.
-
-### Desktop
-
-#### Changed
-
-- Changes to native files, projects, tray or installers.
-
-### Web
-
-#### Changed
-
-- Changes to browser storage, offline support or hosting.
-```
-
-A version can start with a short headline; its first paragraph becomes the What's New summary.
-Mark highlights with a **bold title** and `<!-- highlight -->`:
-
-```markdown
 - **Clearer connectors** — captions stay visible while editing.
   <!-- highlight -->
 ```
 
-A patch can opt into launch-style release notes by placing `<!-- launch -->` on its own line
-inside a platform section. Older What's New entries in `ARCHIVED_RELEASES` remain frozen.
-
 ## Release workflow
 
-1. Finalize `[Unreleased]` entries and highlights.
-2. Rename the section to `## [X.Y.Z] - YYYY-MM-DD` and add a fresh `[Unreleased]` section above it.
-3. Update `package.json` and its lockfile to `X.Y.Z`. The desktop takes its version from the root
-   package; the stable tag must match it.
-4. Add the version's comparison link and update `[Unreleased]` at the end of the changelog:
+1. Rename `[Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD` and add an empty `[Unreleased]` above it.
+2. Set `package.json` and `package-lock.json` to `X.Y.Z`.
+3. Update the compare links at the end of the changelog:
 
    ```markdown
    [X.Y.Z]: https://github.com/acltabontabon/draft-canvas/compare/vPREVIOUS...vX.Y.Z
    [Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/vX.Y.Z...main
    ```
 
-5. Preview the generated notes and highlights before tagging:
+4. Preview (add `--draft`, or `--draft X.Y.Z` for What's New, before the dated section exists):
 
    ```bash
    npm run release:notes -- vX.Y.Z
-   npm run release:whats-new -- desktop
+   npm run release:whats-new -- desktop    # or web
    ```
 
-   Use `web` instead of `desktop` for web highlights. To preview before writing the dated section,
-   use `release:notes -- vX.Y.Z --draft` or `release:whats-new -- desktop --draft X.Y.Z` with `npm run`.
-6. Commit and push the release changes, then push the `vX.Y.Z` tag.
+5. Commit, push, then push the `vX.Y.Z` tag.
 
-CI verifies shared, web and desktop checks, including performance budgets, before creating a draft.
-Standalone desktop previews and rebuilds run shared and desktop verification themselves. Desktop
-packaging, startup and update-signature checks gate publication; Pages publishes the verified web
-artifact after desktop packaging succeeds.
-Homebrew verifies both published macOS installers and updates the cask independently of Pages and
-updater channels. See [Homebrew releases](desktop-updates.md#homebrew-releases) for credentials and retries.
-The dependencies are in [release.yml](../../.github/workflows/release.yml).
+The tag runs [release.yml](../../.github/workflows/release.yml): full CI, a draft release, then the
+[desktop release](desktop-updates.md#what-a-release-does). After that succeeds, the
+[website](website.md) deploys and, for stable tags, [Homebrew](desktop-updates.md#homebrew-releases)
+updates.
 
 ## Desktop previews
 
-Use `desktop-vX.Y.Z-alpha.N` or `desktop-vX.Y.Z-beta.N` with a matching dated changelog section.
-Its base version may equal or lead the root package version. Preview notes include Shared and Desktop;
-a stable desktop release ships with the web app under `vX.Y.Z`.
-
-See [Desktop releases](desktop-updates.md#what-a-release-does) for packaging and
-[Desktop updates](desktop-updates.md) for signing and update channels.
-
-## Website
-
-Landing-page changes deploy separately; see [Website](website.md).
+Tag `desktop-vX.Y.Z-alpha.N` or `-beta.N`, with a dated changelog section. `X.Y.Z` may equal or lead
+`package.json`. Notes include Shared and Desktop changes.
