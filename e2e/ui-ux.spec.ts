@@ -84,13 +84,18 @@ test('keyboard navigation scrolls the project menu to the highlighted row', asyn
   await expect.poll(() => menu.evaluate((element) => element.scrollTop)).toBeLessThanOrEqual(4);
 });
 
-test('settings tabs directly to the visible image chooser', async ({ page }) => {
+test('the status bar opens Settings at Canvas, which tabs through every visible control', async ({ page }) => {
   await newCanvas(page, 'Settings focus');
-  await command(page, 'Canvas settings');
-  const settings = page.getByRole('dialog', { name: 'Canvas settings', exact: true });
-  await expect(settings).toBeVisible();
+  await page.getByRole('button', { name: 'Canvas settings', exact: true }).click();
+  const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
+  // Focus starts on the page it opened at.
+  await expect(settings.getByRole('tab', { name: 'Canvas', exact: true })).toBeFocused();
+  // One stop for the drawing styles (a radio group), then the suggestions switch, then the image
+  // chooser — never the hidden file input behind it.
   await page.keyboard.press('Tab');
-  await expect(settings.getByRole('button', { name: 'Close', exact: true })).toBeFocused();
+  await expect(settings.getByRole('radio', { name: /^Clean/ })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(settings.getByRole('switch', { name: 'Suggest the next move while drawing' })).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(settings.getByRole('button', { name: 'Choose image…', exact: true })).toBeFocused();
 });

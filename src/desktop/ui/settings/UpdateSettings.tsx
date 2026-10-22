@@ -3,7 +3,7 @@ import { Icon, type IconName } from '../../../ui/common/Icon';
 import { desktopStore } from '../../store';
 import { canCheck, describeUpdate, updateStatusLine } from '../../updates';
 import { useDesktopController, useDesktopState } from '../../useDesktop';
-import { ChoiceRow, SettingsPage, SettingsSection } from './layout';
+import { ChoiceRow, SettingsPage, SettingsSection } from '../../../ui/settings/layout';
 
 type Tone = 'idle' | 'busy' | 'ok' | 'news' | 'error';
 

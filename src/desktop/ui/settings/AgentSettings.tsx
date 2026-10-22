@@ -16,7 +16,7 @@ import {
   skillLine,
   skillTargetOf,
 } from './agentModel';
-import { ChoiceRow, CopyField, Disclosure, SettingRow, SettingsPage, SettingsSection } from './layout';
+import { ChoiceRow, CopyField, Disclosure, SettingRow, SettingsPage, SettingsSection } from '../../../ui/settings/layout';
 
 type Platform = 'macos' | 'windows' | 'linux' | null;
 

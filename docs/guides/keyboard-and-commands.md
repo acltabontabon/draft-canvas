@@ -17,7 +17,8 @@ Single keys work when the canvas has focus (`Tab` from the toolbar), not in text
 The shape appears under the pointer, ready to name. **Connect to…** in `⌘K` connects it.
 
 `Tab` accepts the faint next-shape suggestion; `]` / `[` cycle through others, or pick the next
-shape when none shows. **Turn off Intent Continuation** in `⌘K` hides them.
+shape when none shows. **Turn off Intent Continuation** in `⌘K`, or the switch in
+[Settings → Canvas](getting-started.md#make-it-yours), hides them.
 
 ## Move around
 

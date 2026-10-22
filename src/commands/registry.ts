@@ -779,7 +779,7 @@ export function canvasCommands(ctx: CommandContext): Command[] {
       id: 'settings',
       title: 'Canvas settings…',
       group: 'canvas',
-      keywords: ['background', 'personality', 'roughness', 'sketch', 'appearance', 'image', 'theme'],
+      keywords: ['background', 'personality', 'roughness', 'sketch', 'appearance', 'image', 'theme', 'drawing style', 'preferences', 'intent continuation', 'suggestions'],
       run: (inner) => inner.ui.setSettingsOpen(true),
     },
     {

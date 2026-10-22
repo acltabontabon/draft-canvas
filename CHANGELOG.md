@@ -35,6 +35,9 @@ the release notes and the in-app What's New are generated from here. See
 
 #### Changed
 
+- Canvas settings is now **Settings → Canvas**, the same Settings dialog on the web and the desktop:
+  each drawing style shows a preview of itself, Intent Continuation is one switch, and the
+  background's fit, dim and blur sit together under the image.
 - The blank canvas has a centered heading with an inked underline and a tidy row of architecture
   sketches. **View all starters** opens the full collection, with a subtle keyboard search hint.
 - Long diagram titles use more space on wide screens, and the header grows to hold wrapped lines
@@ -43,8 +46,8 @@ the release notes and the in-app What's New are generated from here. See
   window. A back arrow takes you to your diagrams, beside the diagram's name. The tools
   are small drawings of their shapes, and the one in hand shows its name. **Present** and **Flows**
   are one control, and **Share** holds drawing together live, exporting and a read-only link. Undo,
-  redo and **?** for help sit with zoom at the bottom right; tidy up, find and replace and canvas
-  settings are a right-click on the canvas away. <!-- highlight -->
+  redo, canvas settings and **?** for help sit with zoom at the bottom right; tidy up and find and
+  replace are a right-click on the canvas away. <!-- highlight -->
 - **Guided sharing** — share from desktop or web into a dedicated reader with the actual diagram,
   fixed shapes, level navigation and Flow playback. Export & share has its own Share tab and real
   diagram preview; passphrase protection is on by default, with encryption and unlocking kept local.
@@ -119,6 +122,8 @@ the release notes and the in-app What's New are generated from here. See
 
 - The menu bar has **Find and Replace…**, **Commands…**, **Arrange Diagram** and **Canvas Settings…**
   (in View on macOS, at the end of Edit on Windows and Linux).
+- **Canvas Settings…** in the menu bar opens **Settings → Canvas**, beside General, AI agents,
+  Updates and Support.
 - AI agents no longer take focus from the field you're typing in, wait while you trace a flow, and
   no longer hold up saving on large projects.
 - The proposals panel checks proposals in the background, and only when something needs it.
