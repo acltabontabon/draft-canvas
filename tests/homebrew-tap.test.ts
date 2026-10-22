@@ -37,7 +37,9 @@ function tap() {
   return { dir, remote, seed, local, candidate };
 }
 
-describe('the shared Homebrew tap writer', () => {
+// Each case drives real git repositories through push retries: 1.5–2.5s alone, and past the 5s
+// default once the full suite loads the machine. Seconds of real work, not a hang.
+describe('the shared Homebrew tap writer', { timeout: 20_000 }, () => {
   it('changes only Draft Canvas, makes repeated publication a no-op, and accepts rebuilt checksums', () => {
     const { remote, local, candidate } = tap();
     expect(updateTap('v1.13.1', candidate, local)).toBe('updated');
