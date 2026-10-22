@@ -64,6 +64,8 @@ export interface KnockView {
   at: number;
   /** Set once the owner let them in, while their connection is made. */
   admitting?: Role;
+  /** Coming back to a place they had after a drop: that place's role, offered first. */
+  returning?: Role;
 }
 
 export const COLLAB_AT_REST: CollabState = {

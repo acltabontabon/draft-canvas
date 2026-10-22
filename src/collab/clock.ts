@@ -87,3 +87,5 @@ export const HELLO_TIMEOUT_MS = 10_000;
 export const CLOSE_GRACE_MS = 250;
 /** How often a change held back during a gesture is tried again. */
 export const HOLD_RETRY_MS = 100;
+/** How long a collaborator waits for the snapshot it asked for before asking again: past the owner's resync rate. */
+export const RESYNC_RETRY_MS = 6_000;

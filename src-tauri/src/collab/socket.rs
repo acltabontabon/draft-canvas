@@ -64,7 +64,7 @@ pub(super) async fn run(socket: WebSocket, slot: Slot) {
     let shared = slot.shared().clone();
     let id = uuid::Uuid::new_v4().simple().to_string();
     let (conn, ends) = new_conn(&shared.limits);
-    if !shared.register(&id, conn) {
+    if !shared.register(&id, conn, slot.session()) {
         let mut socket = socket;
         let _ = timeout(
             CLOSE_GRACE,

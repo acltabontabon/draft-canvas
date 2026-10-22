@@ -58,6 +58,8 @@ export function useFollowPresenter(path: DepthPath): void {
   const storeApi = useStoreApi();
   const guest = useCollabStore((state) => state.role === 'guest');
   const sync = useRef<(arrived: boolean) => void>(() => {});
+  /** Set when following itself changes rooms, so the room change that follows isn't taken for the person's own. */
+  const walked = useRef(false);
 
   useEffect(() => {
     if (!guest) return;
@@ -73,6 +75,7 @@ export function useFollowPresenter(path: DepthPath): void {
       if (!shouldFollow(collab, editor.mode) || !collab.presenter) return;
       const presenter = collab.presenter;
       if (pathKey(editor.path) !== pathKey(presenter.path)) {
+        walked.current = true;
         walkTo(presenter.path);
         return;
       }
@@ -118,6 +121,16 @@ export function useFollowPresenter(path: DepthPath): void {
   }, [guest, storeApi, setViewport, getViewport]);
 
   useEffect(() => {
+    const ours = walked.current;
+    walked.current = false;
+    const collab = useCollabStore.getState();
+    // Stepping into a shape, backing out, finding someone in another room: the person went somewhere
+    // themselves, which lets go of the presenter as a drag does — taking them straight back fought them.
+    // (Their own presentation only pauses following, so rooms changed there leave it be.)
+    if (!ours && shouldFollow(collab, useEditorStore.getState().mode) && collab.role === 'guest' && pathKey(path) !== pathKey(collab.presenter!.path)) {
+      useCollabStore.setState({ following: false });
+      return;
+    }
     sync.current(true);
   }, [path]);
 }

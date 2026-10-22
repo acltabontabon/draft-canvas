@@ -4,6 +4,7 @@ import { CollabCodeError } from '../src/collab/transport/invite';
 import {
   BUFFER_HIGH_WATERMARK,
   BUFFER_LOW_WATERMARK,
+  CLOSE_DRAIN_MS,
   CONGESTION_DEGRADE_MS,
   ICE_GATHER_TIMEOUT_MS,
   ICE_RESTART_GIVE_UP_MS,
@@ -23,6 +24,12 @@ import type { CollabTransport, IceConfig, TransportState } from '../src/collab/t
 const FINGERPRINT = Array.from({ length: 32 }, (_, i) => ((i * 9) & 0xff).toString(16).padStart(2, '0').toUpperCase()).join(':');
 const byUfrag = new Map<string, FakePeerConnection>();
 let counter = 0;
+/**
+ * Whether the path between the two fakes carries packets. A connection that goes 'disconnected' because
+ * the network really changed carries nothing — the data channel included, so nothing signalled over it
+ * arrives until the path is back.
+ */
+const network = { down: false };
 
 function sdp(ufrag: string, pwd: string, setup: string, candidates: string[]): string {
   return [
@@ -61,13 +68,13 @@ class FakeChannel extends EventTarget {
     this.sent.push(data);
     this.outbox.push(data.slice().buffer);
     this.bufferedAmount += data.length;
-    if (!this.paused) queueMicrotask(() => this.flush());
+    if (!this.paused && !network.down) queueMicrotask(() => this.flush());
   }
 
   /** Delivers everything buffered, then signals the drop below the threshold. */
   flush(): void {
     const before = this.bufferedAmount;
-    while (this.outbox.length && !this.paused) {
+    while (this.outbox.length && !this.paused && !network.down) {
       const data = this.outbox.shift()!;
       this.bufferedAmount -= data.byteLength;
       if (this.peer?.readyState === 'open') this.peer.dispatchEvent(new MessageEvent('message', { data }));
@@ -237,6 +244,7 @@ beforeEach(() => {
   FakePeerConnection.instances = [];
   byUfrag.clear();
   drops.length = 0;
+  network.down = false;
   clock = NOW;
   for (const key of Object.keys(behaviour) as (keyof FakeBehaviour)[]) delete behaviour[key];
 });
@@ -381,11 +389,67 @@ describe('connection state', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it('degrades on disconnect and restarts ICE over the data channel', async () => {
+  it('lets what was queued — the goodbye last — reach the other side before the connection goes', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const { host, guest, hostPc, guestPc } = await connect();
+    const seenHost = states(host);
+    const seenGuest = states(guest);
+    const atGuest = inbox(guest);
+    const channel = hostPc.channel!;
+    channel.paused = true;
+    const big = 'x'.repeat(200 * 1024);
+    for (let i = 0; i < 8; i++) host.send(`${i}:${big}`, 'commit');
+    host.send('{"t":"end","reason":"removed"}', 'commit');
+    host.close('removed');
+    // Closed for the session at once; nothing more can be sent.
+    expect(host.state).toBe('closed');
+    expect(seenHost).toEqual(['closed:removed']);
+    expect(host.send('late', 'commit')).toBe(false);
+    expect(hostPc.connectionState).toBe('connected');
+
+    channel.paused = false;
+    while (channel.bufferedAmount > 0) {
+      channel.flush();
+      await settle();
+    }
+    expect(atGuest).toHaveLength(9);
+    expect(atGuest.at(-1)).toBe('{"t":"end","reason":"removed"}');
+    // Drained: now the connection goes, and the other side hears it close.
+    expect(hostPc.connectionState).toBe('closed');
+    await settle();
+    expect(guestPc.channel!.readyState).toBe('closed');
+    expect(seenGuest).toEqual(['closed:peer-closed']);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('stops draining after a while when the other side is not reading', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const { host, hostPc } = await connect();
+    hostPc.channel!.paused = true;
+    host.send('x'.repeat(2 * BUFFER_HIGH_WATERMARK), 'commit');
+    host.close('ended');
+    await vi.advanceTimersByTimeAsync(CLOSE_DRAIN_MS - 1);
+    expect(hostPc.connectionState).toBe('connected');
+    await vi.advanceTimersByTimeAsync(1);
+    expect(hostPc.connectionState).toBe('closed');
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('lets a draining connection go at once when it drops', async () => {
+    const { host, hostPc } = await connect();
+    hostPc.channel!.paused = true;
+    host.send('{"t":"end","reason":"ended"}', 'commit');
+    host.close('ended');
+    hostPc.setConnectionState('disconnected');
+    expect(hostPc.connectionState).toBe('closed');
+  });
+
+  it('degrades on disconnect and restarts ICE over the data channel once packets cross again', async () => {
     const { host, guest, hostPc, guestPc } = await connect();
     const seenHost = states(host);
     const seenGuest = states(guest);
     const hostRemoteBefore = ufragOf(hostPc.remoteDescription!.sdp!);
+    network.down = true;
     hostPc.setConnectionState('disconnected');
     guestPc.setConnectionState('disconnected');
     expect(seenHost).toEqual(['degraded:disconnected']);
@@ -394,6 +458,14 @@ describe('connection state', () => {
     const atGuest = inbox(guest);
     expect(host.send('{"commit":"during"}', 'commit')).toBe(true);
 
+    await settle();
+    // The restart offer is made, but it travels the path that just failed: nothing reaches the guest.
+    expect(hostPc.offerOptions.at(-1)).toEqual({ iceRestart: true });
+    expect(guestPc.remoteHistory).toHaveLength(1);
+
+    // The path comes back by itself (a Wi-Fi blip): the offer crosses, and the restart completes.
+    network.down = false;
+    hostPc.channel!.flush();
     await settle();
     // The owner made a restart offer; the collaborator answered it; the owner applied the answer.
     expect(hostPc.offerOptions.at(-1)).toEqual({ iceRestart: true });
@@ -408,11 +480,15 @@ describe('connection state', () => {
 
   it('gives up when a lost connection does not come back within 20 s', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    const { host, hostPc } = await connect();
+    const { host, hostPc, guestPc } = await connect();
     const seen = states(host);
-    hostPc.channel!.paused = true;
+    // A real network change (Wi-Fi to cellular): the restart offer has no way across. A session-link
+    // guest is already knocking through the relay by now (`relayGuest.ts`); this is the direct-invite case.
+    network.down = true;
     hostPc.setConnectionState('disconnected');
-    await vi.advanceTimersByTimeAsync(ICE_RESTART_GIVE_UP_MS - 1);
+    await vi.advanceTimersByTimeAsync(ICE_GATHER_TIMEOUT_MS);
+    expect(guestPc.remoteHistory).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(ICE_RESTART_GIVE_UP_MS - ICE_GATHER_TIMEOUT_MS - 1);
     expect(host.state).toBe('degraded');
     await vi.advanceTimersByTimeAsync(1);
     expect(seen).toEqual(['degraded:disconnected', 'closed:reconnect-timeout']);
@@ -453,6 +529,9 @@ describe('sending', () => {
     expect(atGuest.slice(1).map((message) => message.slice(0, message.indexOf(':')))).toEqual(Array.from({ length: 12 }, (_, i) => String(i)));
     expect(host.send('{"cursor":4}', 'presence')).toBe(true);
     host.close();
+    // The cursor still in the buffer leaves first; then nothing is left running.
+    await settle();
+    expect(hostPc.connectionState).toBe('closed');
     expect(vi.getTimerCount()).toBe(0);
   });
 
@@ -468,14 +547,34 @@ describe('sending', () => {
     expect(hostPc.channel!.sent.every((frame) => frame.length <= 16 * 1024)).toBe(true);
   });
 
-  it('drops and reports frames it cannot read, and keeps working', async () => {
+  it('reports a frame it cannot read and closes, rather than carry on with a hole in the stream', async () => {
+    const { guest, guestPc } = await connect();
+    const seen = states(guest);
+    guestPc.channel!.dispatchEvent(new MessageEvent('message', { data: new Uint8Array([1, 2, 3]).buffer }));
+    expect(drops.map((drop) => drop.split(':')[0])).toEqual(['malformed']);
+    expect(guest.state).toBe('closed');
+    expect(seen.at(-1)).toBe('closed:dropped-malformed');
+  });
+
+  it('closes when a message stops arriving part-way, so the session starts again from a snapshot', async () => {
+    const { guest, guestPc } = await connect();
+    vi.useFakeTimers();
+    try {
+      const [first] = encodeFrames('x'.repeat(5000), 7, 'message', 1024);
+      guestPc.channel!.dispatchEvent(new MessageEvent('message', { data: first!.buffer }));
+      vi.advanceTimersByTime(15_001);
+      expect(drops.map((drop) => drop.split(':')[0])).toEqual(['timeout']);
+      expect(guest.state).toBe('closed');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('still answers an unreadable control frame with nothing worse than a report', async () => {
     const { host, guest, guestPc } = await connect();
     const atGuest = inbox(guest);
-    const channel = guestPc.channel!;
-    channel.dispatchEvent(new MessageEvent('message', { data: 'not a frame' }));
-    channel.dispatchEvent(new MessageEvent('message', { data: new Uint8Array([1, 2, 3]).buffer }));
-    channel.dispatchEvent(new MessageEvent('message', { data: encodeFrames('{"t":"nope"}', 99, 'control')[0]!.buffer }));
-    expect(drops.map((drop) => drop.split(':')[0])).toEqual(['malformed', 'malformed', 'malformed']);
+    guestPc.channel!.dispatchEvent(new MessageEvent('message', { data: encodeFrames('{"t":"nope"}', 99, 'control')[0]!.buffer }));
+    expect(drops.map((drop) => drop.split(':')[0])).toEqual(['malformed']);
     host.send('still fine', 'commit');
     await settle();
     expect(atGuest).toEqual(['still fine']);
@@ -493,6 +592,21 @@ describe('sending', () => {
     expect(atGuest).toEqual(['hello']);
     expect(error).toHaveBeenCalled();
     error.mockRestore();
+  });
+
+  it('holds a collaborator to the owner’s smaller message cap', async () => {
+    const offer = await createHostOffer(LOCAL, { ...options, maxMessageBytes: 4096 });
+    const join = await joinFromInvite(offer.invitePayload, LOCAL, options);
+    const host = await offer.acceptReply(join.replyCode);
+    const guest = await join.transport;
+    const atHost = inbox(host);
+    guest.send('x'.repeat(4096), 'commit');
+    await settle();
+    expect(atHost).toHaveLength(1);
+    guest.send('x'.repeat(4097), 'commit');
+    await settle();
+    expect(drops.map((drop) => drop.split(':')[0])).toEqual(['oversize']);
+    expect(host.state).toBe('closed');
   });
 
   it('refuses a message too large for any peer to accept', async () => {

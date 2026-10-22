@@ -84,7 +84,7 @@ Only session members receive the diagram, and only the owner's copy is saved.
 | Desktop local network link | Plain HTTP with a 128-bit token. **Not encrypted.** |
 | Presence | Names, pointers, selections; never stored |
 
-- The relay's key exists only in the link's `#`. It stores only a hash of the owner's secret, for 12 hours at most.
+- The relay's key exists only in the link's `#`. It stores only a hash of the owner's secret, until 12 hours after the owner was last connected.
 - Collaborators' copies are never saved unless they choose **Make an editable copy**.
 
 ## Optional AI agents

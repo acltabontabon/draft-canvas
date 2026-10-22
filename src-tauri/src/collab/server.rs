@@ -13,6 +13,8 @@ use axum::Router;
 use hyper::server::conn::http1;
 use hyper_util::rt::{TokioIo, TokioTimer};
 use hyper_util::service::TowerToHyperService;
+use std::collections::HashMap;
+use std::net::IpAddr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::{TcpListener, TcpStream};
@@ -21,6 +23,9 @@ use tokio::task::JoinSet;
 /// Plain HTTP connections at once (a browser opens several to load the app). Upgraded WebSockets
 /// leave this count and are bound by `MAX_CONNECTIONS` instead.
 const MAX_HTTP_CONNECTIONS: usize = 64;
+/// Of those, from one address: a browser loading the app opens about six. One machine on the network
+/// can't take every place and keep the people the link was sent to from loading the page.
+pub(super) const MAX_HTTP_CONNECTIONS_PER_PEER: usize = 16;
 /// A request whose headers haven't arrived by now is dropped, so idle sockets can't pile up.
 const HEADER_TIMEOUT: Duration = Duration::from_secs(10);
 const MAX_HEADER_BYTES: usize = 64 * 1024;
@@ -33,6 +38,8 @@ pub(super) async fn serve(listener: TcpListener, shared: Arc<Shared>) {
     let router = router(shared.clone());
     let mut shutdown = shared.shutdown.subscribe();
     let mut connections = JoinSet::new();
+    // Each connection holds a clone of its address's marker, so the count is the clones beyond ours.
+    let mut peers: HashMap<IpAddr, Arc<()>> = HashMap::new();
     loop {
         tokio::select! {
             () = socket::stopped(&mut shutdown) => break,
@@ -50,7 +57,17 @@ pub(super) async fn serve(listener: TcpListener, shared: Arc<Shared>) {
                 if connections.len() >= MAX_HTTP_CONNECTIONS {
                     continue;
                 }
-                connections.spawn(serve_connection(stream, router.clone()));
+                peers.retain(|_, held| Arc::strong_count(held) > 1);
+                let held = peers.entry(peer.ip()).or_default();
+                if Arc::strong_count(held) > MAX_HTTP_CONNECTIONS_PER_PEER {
+                    continue;
+                }
+                let held = held.clone();
+                let router = router.clone();
+                connections.spawn(async move {
+                    let _held = held;
+                    serve_connection(stream, router).await;
+                });
             }
         }
     }
@@ -210,6 +227,8 @@ async fn upgrade(
     if !same_origin {
         return plain(StatusCode::FORBIDDEN, "Forbidden", host);
     }
+    // Read before the token is checked: a token change in between leaves this request in the old session.
+    let session = shared.session();
     if !authorized(&headers, &shared) {
         return plain(StatusCode::UNAUTHORIZED, "Unauthorized", host);
     }
@@ -220,7 +239,7 @@ async fn upgrade(
     if shared.stopping() {
         return plain(StatusCode::SERVICE_UNAVAILABLE, "Stopping", host);
     }
-    let Some(slot) = shared.reserve() else {
+    let Some(slot) = shared.reserve(session) else {
         return plain(StatusCode::SERVICE_UNAVAILABLE, "Too many guests", host);
     };
     // A failed upgrade drops the callback, and the slot with it. Both limits bound only what the

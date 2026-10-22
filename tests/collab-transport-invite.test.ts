@@ -249,13 +249,23 @@ describe('decoding untrusted codes', () => {
     }), { seed: 20261022, numRuns: 300 });
   });
 
+  it('drops a candidate named by DNS, which would have the browser look that name up', () => {
+    const plain = compactSdp(CHROME_OFFER);
+    const named = { ...plain, candidates: [...plain.candidates, { type: 'host' as const, protocol: 'udp' as const, priority: 1, address: 'tracker.example.com', port: 9 }] };
+    const expected = compactSdp(expandSdp(plain)).candidates;
+    // In a description of this side's own…
+    expect(compactSdp(expandSdp(named)).candidates).toEqual(expected);
+    // …and in a code from the other side.
+    const nonce = newNonce();
+    expect(decodeReply(encodeReply({ nonce, answer: { ...named, setup: 'active' } }), { nonce, expiresAt: NOW }, NOW).candidates).toEqual(plain.candidates);
+  });
+
   it('round-trips any description it can represent', () => {
     const iceString = (min: number, max: number) => fc.string({ unit: fc.constantFrom(...'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'), minLength: min, maxLength: max });
     const address = fc.oneof(
       fc.ipV4(),
       fc.uuid({ version: 4 }).map((uuid) => `${uuid}.local`),
       fc.array(fc.integer({ min: 0, max: 0xffff }), { minLength: 8, maxLength: 8 }).map((groups) => groups.map((g) => g.toString(16)).join(':')),
-      fc.constantFrom('turn.example.com', 'relay-1.example.net'),
     );
     const candidate = fc.record({
       type: fc.constantFrom('host', 'srflx', 'prflx', 'relay'),

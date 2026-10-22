@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { holdAtDoor } from '../../src/collab/door';
+import { holdAtDoor, returningPlace } from '../../src/collab/door';
 import { GuestSession } from '../../src/collab/guestSession';
 import { HostSession } from '../../src/collab/hostSession';
 import { createDocument, createNode } from '../../src/document/factory';
@@ -77,6 +77,52 @@ describe('the local network door', () => {
     expect(neighbour.state.reasons.at(-1)).toBe('denied');
     expect(neighbour.state.file).toBeNull();
     vi.useRealTimers();
+  });
+
+  it('never lets a replayed resume key back in unasked: the owner sees the knock and chooses the role', async () => {
+    let owner = addNodes(createDocument('LAN'), [createNode({ type: 'service', x: 0, y: 0, text: 'A' })]);
+    let peers: { id: string; role: string; link: string }[] = [];
+    const host = new HostSession(
+      { readFile: () => owner, applyRemote: (file) => ((owner = file), true), isBusy: () => false, appVersion: PRODUCT.version },
+      { peers: (next) => (peers = next), presence: () => {} },
+      { name: 'Owner' },
+    );
+    const first = loopbackPair();
+    const knocking = holdAtDoor(first.a);
+    const neighbour = guest(first.b);
+    settle(first.pump);
+    host.attach((await knocking)!.admit(), { role: 'editor' });
+    await Promise.resolve();
+    settle(first.pump);
+    const placeId = neighbour.session.id!;
+    expect(peers.find((peer) => peer.id === placeId)?.role).toBe('editor');
+
+    // The neighbour drops. Someone else on the Wi‑Fi saw their reconnecting hello — the key in clear.
+    first.drop();
+    const retry = loopbackPair();
+    neighbour.session.connect(retry.b);
+    const sniffed = JSON.parse(retry.sent.b[0]!) as { resume: { peer: string; key: string } };
+    expect(sniffed.resume).toMatchObject({ peer: placeId, key: neighbour.session.resumeKey });
+
+    const replay = loopbackPair();
+    const atDoor = holdAtDoor(replay.a);
+    replay.b.send(JSON.stringify({ ...sniffed, name: 'Neighbour' }), 'commit');
+    settle(replay.pump);
+    const door = (await atDoor)!;
+    // Held at the door, not in the session: the place is still empty.
+    expect(peers.find((peer) => peer.id === placeId)?.link).toBe('gone');
+    const back = returningPlace(door, (peer) => host.waitingPlace(peer, true));
+    expect(back).toEqual({ peer: placeId, role: 'editor' });
+    // A wrong key is just a new person knocking.
+    expect(returningPlace({ ...door, returning: { peer: placeId, key: 'f'.repeat(32) } }, (peer) => host.waitingPlace(peer, true))).toBeNull();
+
+    // The owner lets them in, but only to watch: their old place, with the role chosen now (as `LanShare` does).
+    host.setRole(back!.peer, 'viewer');
+    host.attach(door.admit(), { role: 'viewer', reuse: back!.peer, requireKey: true });
+    await Promise.resolve();
+    settle(replay.pump);
+    expect(peers.find((peer) => peer.id === placeId)).toMatchObject({ role: 'viewer', link: 'live' });
+    host.end();
   });
 
   it('drops a connection that never says hello', async () => {

@@ -8,8 +8,8 @@
 // fragment). So nothing here reads, keeps or logs `data`: it is length-checked and passed along.
 //
 // One thing a room does remember: who its owner is. The first host socket presents a secret of its
-// own (never in the session link) and the room keeps that secret's SHA-256, for the room's lifetime at
-// most; any later host socket must present the same secret. Without it, anyone holding the link could
+// own (never in the session link) and the room keeps that secret's SHA-256 until 12 hours after the
+// owner was last connected; any later host socket must present the same secret. Without it, anyone holding the link could
 // take the owner's place on the relay while the owner's connection was down — they still couldn't
 // pose as the owner (knockers check the owner's signature), but they could keep everyone waiting.
 //
@@ -134,20 +134,39 @@ export function checkRequest({ method, url, upgrade, origin, protocols }, { orig
 }
 
 /**
+ * What one client's connections are counted under: its address, or for IPv6 the /64 it is in. An IPv6
+ * client is usually handed a whole /64 and can take a fresh address from it for every connection.
+ */
+export function clientKey(address) {
+  const text = String(address ?? '').trim().toLowerCase();
+  if (!text.includes(':')) return text || 'unknown';
+  const bare = text.replace(/^\[|\]$/g, '').split('%')[0];
+  const mapped = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/.exec(bare);
+  if (mapped) return mapped[1];
+  const halves = bare.split('::');
+  if (halves.length > 2) return bare;
+  const left = halves[0] ? halves[0].split(':') : [];
+  const right = halves[1] ? halves[1].split(':') : [];
+  const groups = halves.length === 1 ? left : [...left, ...Array(Math.max(0, 8 - left.length - right.length)).fill('0'), ...right];
+  return `${groups.slice(0, 4).map((group) => (parseInt(group, 16) || 0).toString(16)).join(':')}::/64`;
+}
+
+/**
  * Whether `address` may open another socket now: at most `LIMITS.connectsPerMinute` a minute, across
- * every room. `seen` maps addresses to their recent connection times; old entries are dropped as they
- * pass. Cloudflare enforces the same budget with a rate-limiting binding; the dev relay uses this.
+ * every room. `seen` maps clients (`clientKey`) to their recent connection times; old entries are
+ * dropped as they pass. Cloudflare enforces the same budget with a rate-limiting binding; the dev relay uses this.
  */
 export function connectionAllowed(seen, address, now) {
+  const key = clientKey(address);
   const since = now - 60_000;
-  const recent = (seen.get(address) ?? []).filter((at) => at > since);
+  const recent = (seen.get(key) ?? []).filter((at) => at > since);
   if (seen.size > 10_000) for (const [key, times] of seen) if (!times.some((at) => at > since)) seen.delete(key);
   if (recent.length >= LIMITS.connectsPerMinute) {
-    seen.set(address, recent);
+    seen.set(key, recent);
     return false;
   }
   recent.push(now);
-  seen.set(address, recent);
+  seen.set(key, recent);
   return true;
 }
 
@@ -159,15 +178,26 @@ export async function secretDigest(secret) {
 
 /**
  * Whether a host socket presenting `digest` is the room's owner. `claim` is what the room remembers —
- * `{ digest, until }`, or `null` — and the result says whether to remember a new one.
- * Returns `{ verdict: 'owner' }`, `{ verdict: 'claim', claim }` (first host, or the old claim expired),
- * or `{ verdict: 'not-owner' }`.
+ * `{ digest, until }`, or `null` — and the result carries the claim to remember from now on.
+ * Returns `{ verdict: 'owner', claim }` (renewed), `{ verdict: 'claim', claim }` (first host, or the
+ * old claim expired), or `{ verdict: 'not-owner' }`.
  */
 export function checkOwner(claim, digest, now) {
   if (!claim || typeof claim.digest !== 'string' || !(now < claim.until)) {
     return { verdict: 'claim', claim: { digest, until: now + LIMITS.lifetimeMs } };
   }
-  return sameText(claim.digest, digest) ? { verdict: 'owner' } : { verdict: 'not-owner' };
+  return sameText(claim.digest, digest) ? { verdict: 'owner', claim: renewClaim(claim, now) } : { verdict: 'not-owner' };
+}
+
+/**
+ * The claim kept for `lifetimeMs` from now — renewed whenever the owner connects and whenever the
+ * owner's socket goes. Set once, a claim ran out under a session that lasted: the owner's relay socket
+ * drops routinely (a quiet room is swept as idle, every room at its lifetime), and the first host to
+ * reconnect after that moment took the room. Guests are told the instant the owner leaves, so someone
+ * holding the link could be first, and the owner was then refused as not the owner for good.
+ */
+export function renewClaim(claim, now) {
+  return claim && typeof claim.digest === 'string' ? { digest: claim.digest, until: now + LIMITS.lifetimeMs } : null;
 }
 
 /** Compares two strings in time that doesn't depend on where they first differ. */

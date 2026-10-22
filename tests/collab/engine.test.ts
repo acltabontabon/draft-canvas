@@ -1,15 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
 import type { Clock } from '../../src/collab/clock';
-import { GONE_MS, HEARTBEAT_MS, HELLO_TIMEOUT_MS, SILENT_MS } from '../../src/collab/clock';
+import { GONE_MS, HEARTBEAT_MS, HELLO_TIMEOUT_MS, RESYNC_RETRY_MS, SILENT_MS } from '../../src/collab/clock';
 import { diffFile } from '../../src/collab/diff';
 import { GuestSession, type GuestEvents } from '../../src/collab/guestSession';
 import { HostSession } from '../../src/collab/hostSession';
 import { encode, MAX_COLLABORATORS, PROTOCOL_VERSION, type PeerView } from '../../src/collab/protocol';
 import { changeKeys, revertKeys } from '../../src/collab/selective';
 import { indexOf } from '../../src/collab/fileIndex';
-import { createDocument, createNode } from '../../src/document/factory';
-import { addNodes, updateNode } from '../../src/document/operations';
+import { createDocument, createEdge, createNode } from '../../src/document/factory';
+import { addFlow, createFlow, deleteFlow } from '../../src/document/flow';
+import { addEdges, addNodes, removeElements, updateNode } from '../../src/document/operations';
 import { CURRENT_VERSION, type DraftDocument } from '../../src/document/types';
 import { PRODUCT } from '../../src/product';
 import { loopbackPair, randomEdit, rngFrom, seededFile } from './support';
@@ -63,7 +64,7 @@ function ownerOf(file: DraftDocument, clock: Clock, extra: Partial<ConstructorPa
   return { host, state };
 }
 
-function guestOf(clock: Clock, options: { token?: string; name?: string } = {}) {
+function guestOf(clock: Clock, options: { token?: string; name?: string; busy?: () => boolean } = {}) {
   const state = { file: null as DraftDocument | null, statuses: [] as string[], reasons: [] as (string | undefined)[] };
   const events: GuestEvents = {
     status: (status, reason) => {
@@ -81,11 +82,13 @@ function guestOf(clock: Clock, options: { token?: string; name?: string } = {}) 
   const session = new GuestSession(
     {
       readFile: () => state.file!,
+      // Like the editor: a held gesture owns the file until it ends.
       applyRemote: (file) => {
+        if (options.busy?.()) return false;
         state.file = file;
         return true;
       },
-      isBusy: () => false,
+      isBusy: () => options.busy?.() ?? false,
       open: (file) => (state.file = file),
       setAccess: () => {},
       appVersion: PRODUCT.version,
@@ -190,6 +193,100 @@ describe('coming back', () => {
     expect(guest.session.id).toBe(id);
     expect(owner.file.nodes[0]!.text).toBe('Made offline');
     expect(owner.peers.filter((peer) => peer.role !== 'owner')).toHaveLength(1);
+  });
+
+  it('gives their place back for its key even while the old link still looks up from the owner’s side', () => {
+    const clock = manualClock();
+    const { host, state: owner } = ownerOf(base(), clock);
+    const first = loopbackPair();
+    host.attach(first.a, { role: 'editor' });
+    const guest = guestOf(clock);
+    guest.session.connect(first.b);
+    settle(first.pump);
+    const id = guest.session.id!;
+
+    // They lost the link on their side first and knocked back in, as the lobby admits them: the
+    // owner's side hasn't noticed yet. Refused, they were shut out of their own place.
+    const second = loopbackPair();
+    host.attach(second.a, { role: 'editor', reuse: id, requireKey: true });
+    second.b.send(encode({ t: 'hello', v: PROTOCOL_VERSION, app: PRODUCT.version, doc: CURRENT_VERSION, name: 'Guest', resume: { peer: id, key: guest.session.resumeKey!, seq: 0 } }), 'commit');
+    settle(second.pump);
+    expect(JSON.parse(second.sent.a[0]!)).toMatchObject({ t: 'welcome', peer: id });
+    expect(first.a.state).toBe('closed');
+    expect(owner.peers.filter((peer) => peer.role !== 'owner')).toHaveLength(1);
+  });
+
+  it('starts coming back as soon as the link degrades, not when the transport gives up', () => {
+    // A network change strands an ICE restart signalled over the channel itself, so a session-link
+    // guest's way back (`relayGuest.ts`, through the session's `lost`) must not wait for the 20 s close.
+    const clock = manualClock();
+    const { host } = ownerOf(base(), clock);
+    const first = loopbackPair();
+    host.attach(first.a, { role: 'editor' });
+    let degrade: (() => void) | null = null;
+    const watched: typeof first.b = {
+      ...first.b,
+      get state() {
+        return first.b.state;
+      },
+      onState(listener) {
+        degrade = () => listener('degraded', 'disconnected');
+        return first.b.onState(listener);
+      },
+    };
+    const guest = guestOf(clock);
+    guest.session.connect(watched);
+    settle(first.pump);
+    expect(guest.state.statuses.at(-1)).toBe('live');
+    degrade!();
+    expect(guest.state.statuses.at(-1)).toBe('reconnecting');
+  });
+
+  it('closes the connection a reconnect replaces, so it can’t hold a second place', () => {
+    const clock = manualClock();
+    const { host } = ownerOf(base(), clock);
+    const first = loopbackPair();
+    host.attach(first.a, { role: 'editor' });
+    const guest = guestOf(clock);
+    guest.session.connect(first.b);
+    settle(first.pump);
+    const second = loopbackPair();
+    host.attach(second.a, { role: 'editor' });
+    guest.session.connect(second.b);
+    expect(first.b.state).toBe('closed');
+  });
+
+  it('takes the owner’s work back in after a gesture held across a reconnect, not over it', () => {
+    const clock = manualClock();
+    const { host, state: owner } = ownerOf(base(), clock);
+    let busy = false;
+    const first = loopbackPair();
+    host.attach(first.a, { role: 'editor' });
+    const guest = guestOf(clock, { busy: () => busy });
+    guest.session.connect(first.b);
+    settle(first.pump);
+
+    first.drop();
+    owner.file = addNodes(owner.file, [createNode({ id: 'n_new', type: 'note', x: 0, y: 200, text: 'Made while they were away' })]);
+    host.commitLocal();
+    // Mid-drag as the reconnect lands; the drop is written and sent as the drag ends.
+    busy = true;
+    const second = loopbackPair();
+    host.attach(second.a, { role: 'editor' });
+    guest.session.connect(second.b);
+    settle(second.pump);
+    guest.state.file = updateNode(guest.state.file!, 'n_a', { x: 50 });
+    busy = false;
+    guest.session.localChanged();
+    settle(second.pump);
+    clock.advance(500);
+    settle(second.pump);
+
+    // Before: the drag ended over the stale file, and the diff sent the owner's new shape back out
+    // as this person's deletion.
+    expect(owner.file.nodes.map((node) => node.id).sort()).toEqual(['n_a', 'n_new']);
+    expect(owner.file.nodes.find((node) => node.id === 'n_a')!.x).toBe(50);
+    expect(guest.state.file!.nodes.map((node) => node.id).sort()).toEqual(['n_a', 'n_new']);
   });
 
   it('does not let anyone else claim a dropped place by its id alone', () => {
@@ -304,6 +401,50 @@ describe('a quiet or abusive connection', () => {
     expect(owner.peers.filter((peer) => peer.role !== 'owner' && peer.link !== 'gone')).toHaveLength(0);
   });
 
+  it('answers a ping flood with a few pongs', () => {
+    const clock = manualClock();
+    const { host } = ownerOf(base(), clock);
+    const { a, b, pump, sent } = loopbackPair();
+    host.attach(a, { role: 'editor' });
+    b.send(encode({ t: 'hello', v: PROTOCOL_VERSION, app: PRODUCT.version, doc: CURRENT_VERSION, name: 'Loud' }), 'commit');
+    settle(pump);
+    for (let n = 1; n <= 50; n += 1) b.send(encode({ t: 'ping', n }), 'commit');
+    settle(pump);
+    expect(sent.a.filter((text) => text.startsWith('{"t":"pong"'))).toHaveLength(5);
+    clock.advance(1000);
+    b.send(encode({ t: 'ping', n: 51 }), 'commit');
+    settle(pump);
+    expect(sent.a.filter((text) => text.startsWith('{"t":"pong"'))).toHaveLength(6);
+  });
+
+  it('stops keeping one collaborator’s patches past what a held gesture may hold, and sends a fresh copy after it', () => {
+    const clock = manualClock();
+    let busy = true;
+    const { host, state: owner } = ownerOf(base(), clock, { isBusy: () => busy });
+    const { a, b, pump, sent } = loopbackPair();
+    host.attach(a, { role: 'editor' });
+    b.send(encode({ t: 'hello', v: PROTOCOL_VERSION, app: PRODUCT.version, doc: CURRENT_VERSION, name: 'Busy' }), 'commit');
+    settle(pump);
+    // Within the patch rate, for longer than anyone holds a drag: more than the owner keeps.
+    for (let i = 1; i <= 4200; i += 1) {
+      b.send(encode({ t: 'patch', clientSeq: i, changes: [{ kind: 'title', value: `t${i}` }] }), 'commit');
+      if (i % 20 === 0) {
+        settle(pump);
+        clock.advance(400);
+      }
+    }
+    settle(pump);
+    expect(owner.peers.find((peer) => peer.role !== 'owner')?.link).toBe('live');
+    expect(sent.a.some((text) => text.startsWith('{"t":"snapshot"'))).toBe(false);
+
+    busy = false;
+    clock.advance(1000);
+    settle(pump);
+    // None of theirs was applied out of order; they were sent a copy, which makes them send again.
+    expect(owner.file.metadata.title).toBe('Engine');
+    expect(sent.a.filter((text) => text.startsWith('{"t":"snapshot"'))).toHaveLength(1);
+  });
+
   it('asks for a fresh copy when a commit goes missing', () => {
     const clock = manualClock();
     const { host, state: owner } = ownerOf(base(), clock);
@@ -336,6 +477,84 @@ describe('a quiet or abusive connection', () => {
     expect(sent.some((text) => JSON.parse(text).t === 'resync')).toBe(true);
     expect(guest.state.file!.nodes[0]!.text).toBe('two');
   });
+});
+
+describe('edits the editor holds but hasn’t sent', () => {
+  it('sends a drop that an owner’s commit overtakes, instead of snapping it back', () => {
+    const clock = manualClock();
+    const { host, state: owner } = ownerOf(base(), clock);
+    const { a, b, pump } = loopbackPair();
+    host.attach(a, { role: 'editor' });
+    const guest = guestOf(clock);
+    guest.session.connect(b);
+    settle(pump);
+
+    // The drop is on screen; the bridge sends it a moment later (its gesture timer), and the owner's
+    // commit lands first.
+    guest.state.file = updateNode(guest.state.file!, 'n_a', { x: 90 });
+    owner.file = addNodes(owner.file, [createNode({ id: 'n_b', type: 'note', x: 0, y: 200, text: 'Owner' })]);
+    host.commitLocal();
+    settle(pump);
+    guest.session.localChanged();
+    settle(pump);
+
+    expect(guest.state.file!.nodes.find((node) => node.id === 'n_a')!.x).toBe(90);
+    expect(guest.state.file!.nodes.map((node) => node.id).sort()).toEqual(['n_a', 'n_b']);
+    expect(owner.file.nodes.find((node) => node.id === 'n_a')!.x).toBe(90);
+  });
+});
+
+describe('a lost fresh copy', () => {
+  it('asks again when the snapshot it asked for never comes', () => {
+    const clock = manualClock();
+    const { host, state: owner } = ownerOf(base(), clock);
+    const { a, b, pump } = loopbackPair();
+    host.attach(a, { role: 'editor' });
+    const guest = guestOf(clock);
+    guest.session.connect(b);
+    settle(pump);
+    // Commit 1 goes missing, and so does the snapshot that answers the request it causes (or the
+    // owner, over its resync rate, drops the request without a word).
+    const lose = new Set(['commit', 'snapshot']);
+    const hostSend = a.send.bind(a);
+    a.send = (text, priority) => {
+      const kind = JSON.parse(text).t as string;
+      if (lose.delete(kind)) return true;
+      return hostSend(text, priority);
+    };
+    owner.file = updateNode(owner.file, 'n_a', { text: 'one' });
+    host.commitLocal();
+    owner.file = updateNode(owner.file, 'n_a', { text: 'two' });
+    host.commitLocal();
+    settle(pump);
+    expect(guest.state.file!.nodes[0]!.text).toBe('A');
+
+    clock.advance(RESYNC_RETRY_MS);
+    settle(pump);
+    expect(guest.state.file!.nodes[0]!.text).toBe('two');
+  });
+});
+
+it('selective undo of a delete puts the element back where it was in its list', () => {
+  const a = createNode({ type: 'service', x: 0, y: 0, text: 'A' });
+  const b = createNode({ type: 'service', x: 200, y: 0, text: 'B' });
+  let f0 = addNodes(createDocument('Order'), [a, b]);
+  f0 = addEdges(f0, ['one', 'two', 'three'].map((label) => createEdge({ source: a.id, target: b.id, label })));
+  for (const title of ['First', 'Second', 'Third']) f0 = addFlow(f0, createFlow({ title }));
+  const middleEdge = f0.edges[1]!.id;
+  const middleFlow = f0.flows[1]!.id;
+
+  // The owner deletes the middle connector and the middle flow; a collaborator then adds a flow.
+  const f1 = deleteFlow(removeElements(f0, [], [middleEdge]), middleFlow);
+  const f2 = addFlow(f1, createFlow({ title: 'Theirs' }));
+
+  const step = revertKeys(f2, f1, f0, changeKeys(f0, f1));
+  expect(step.blocked).toBe(false);
+  expect(step.file.edges.map((edge) => edge.label)).toEqual(['one', 'two', 'three']);
+  expect(step.file.flows.map((flow) => flow.title)).toEqual(['First', 'Second', 'Third', 'Theirs']);
+  // Redo takes them out again, leaving the collaborator's flow where it is.
+  const redo = revertKeys(step.file, f0, f1, changeKeys(f0, f1));
+  expect(redo.file.flows.map((flow) => flow.title)).toEqual(['First', 'Third', 'Theirs']);
 });
 
 /**

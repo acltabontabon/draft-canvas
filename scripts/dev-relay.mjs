@@ -32,6 +32,7 @@ import {
   opened,
   parseOrigins,
   received,
+  renewClaim,
   secretDigest,
   sweep,
   uniqueGuestTag,
@@ -240,6 +241,11 @@ export function startRelay({ port = 8791, host = '127.0.0.1', origins = parseOri
   const relay = {
     peers: (room) => [...(rooms.get(room) ?? [])].filter((connection) => connection.state && !connection.closing && !connection.ended),
     forget(room, connection) {
+      // As the Durable Object does: the owner's claim runs from the moment their socket goes.
+      if (connection.state?.role === 'host') {
+        const claim = renewClaim(claims.get(room), Date.now());
+        if (claim) claims.set(room, claim);
+      }
       const members = rooms.get(room);
       if (!members) return;
       members.delete(connection);
@@ -312,9 +318,12 @@ export function startRelay({ port = 8791, host = '127.0.0.1', origins = parseOri
     const peers = relay.peers(room);
     let refused = admission(peers, role);
     if (!refused && role === 'host') {
-      const owner = checkOwner(claims.get(room) ?? null, digest, Date.now());
-      if (owner.verdict === 'claim') claims.set(room, owner.claim);
-      else if (owner.verdict === 'not-owner') refused = CLOSE.notOwner;
+      const now = Date.now();
+      // Forgotten once they run out, as the Durable Object's storage is cleared.
+      for (const [other, claim] of claims) if (!(now < claim.until)) claims.delete(other);
+      const owner = checkOwner(claims.get(room) ?? null, digest, now);
+      if (owner.verdict === 'not-owner') refused = CLOSE.notOwner;
+      else claims.set(room, owner.claim);
     }
     if (refused) {
       connection.close(refused.code, refused.reason);

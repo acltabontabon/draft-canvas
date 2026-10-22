@@ -84,7 +84,8 @@ export const useInviteStore = create<InviteState>((set, get) => ({
       const message =
         error instanceof CollabCodeError
           ? error.message
-          : error instanceof Error && error.message === 'connect-timeout'
+          : // The transport names the reason it closed inside its message ("…before it opened (connect-timeout).").
+            error instanceof Error && error.message.includes('connect-timeout')
             ? 'Couldn’t connect. On different networks, start the session with “Anyone with the link”; some office networks block direct connections entirely.'
             : 'Couldn’t connect with that code.';
       set({ stage: { kind: 'ready', role: stage.role, ...(stage.reuse === undefined ? {} : { reuse: stage.reuse }), link: stage.link, expiresAt: stage.expiresAt, error: `${message} Create a new invite to try again.`, spent: true } });

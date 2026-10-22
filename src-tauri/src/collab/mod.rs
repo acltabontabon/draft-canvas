@@ -22,7 +22,7 @@ use crate::state::{AppState, HostEvent};
 use crate::util::lock;
 use std::collections::HashMap;
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use subtle::ConstantTimeEq;
@@ -185,6 +185,10 @@ pub(crate) struct Shared {
     pub(crate) sink: Arc<dyn Sink>,
     pub(crate) assets: Arc<dyn AssetSource>,
     token: Mutex<[u8; TOKEN_LEN]>,
+    /// Bumped whenever the page starts a new session on the running server (a new token). A guest
+    /// is checked against the session it was authorized in as it registers, so one that passed with
+    /// the old token while the token changed can't slip in after the old guests were closed.
+    session: AtomicU64,
     conns: Mutex<HashMap<String, Conn>>,
     /// Connections being upgraded or open, counted before the upgrade is accepted so that eleven
     /// simultaneous requests can't all slip past the cap.
@@ -200,11 +204,28 @@ impl Shared {
         offered.len() == TOKEN_LEN && bool::from(offered.ct_eq(&token[..]))
     }
 
+    /// The session a request is authorized in: read before its token is checked.
+    pub(crate) fn session(&self) -> u64 {
+        self.session.load(Ordering::SeqCst)
+    }
+
+    /// A new session on the running server: the new token, and every guest of the old one closed.
+    /// Under the lock `register` checks the session under, so an upgrade still on its way either
+    /// registers before this and is closed here, or sees the new session and is refused.
+    fn renew(&self, token: [u8; TOKEN_LEN]) {
+        let conns = lock(&self.conns);
+        self.session.fetch_add(1, Ordering::SeqCst);
+        *lock(&self.token) = token;
+        for conn in conns.values() {
+            conn.kill("token-changed", 1008);
+        }
+    }
+
     pub(crate) fn stopping(&self) -> bool {
         *self.shutdown.borrow()
     }
 
-    pub(crate) fn reserve(self: &Arc<Self>) -> Option<Slot> {
+    pub(crate) fn reserve(self: &Arc<Self>, session: u64) -> Option<Slot> {
         // A bounded increment, spelled out: `fetch_update` is deprecated from Rust 1.99 (renamed
         // `try_update`, which the 1.88 floor in Cargo.toml doesn't have), and CI denies warnings.
         let mut n = self.slots.load(Ordering::SeqCst);
@@ -216,7 +237,7 @@ impl Shared {
                 .slots
                 .compare_exchange_weak(n, n + 1, Ordering::SeqCst, Ordering::SeqCst)
             {
-                Ok(_) => return Some(Slot(self.clone())),
+                Ok(_) => return Some(Slot(self.clone(), session)),
                 Err(current) => n = current,
             }
         }
@@ -224,9 +245,9 @@ impl Shared {
 
     /// Takes a freshly upgraded connection onto the books, unless the server is stopping. The check
     /// and the insert are one step under the lock, so `stop` never misses a connection.
-    pub(crate) fn register(&self, id: &str, conn: Conn) -> bool {
+    pub(crate) fn register(&self, id: &str, conn: Conn, session: u64) -> bool {
         let mut conns = lock(&self.conns);
-        if self.stopping() {
+        if self.stopping() || self.session() != session {
             return false;
         }
         conns.insert(id.to_string(), conn);
@@ -235,12 +256,6 @@ impl Shared {
 
     pub(crate) fn unregister(&self, id: &str) {
         lock(&self.conns).remove(id);
-    }
-
-    fn close_all(&self, reason: &str, code: u16) {
-        for conn in lock(&self.conns).values() {
-            conn.kill(reason, code);
-        }
     }
 
     /// Tells every connection and listener to stop. Under the lock `register` checks `stopping`
@@ -267,11 +282,16 @@ impl Shared {
 }
 
 /// A place among the `MAX_CONNECTIONS`, given back when the connection ends or its upgrade fails.
-pub(crate) struct Slot(Arc<Shared>);
+pub(crate) struct Slot(Arc<Shared>, u64);
 
 impl Slot {
     pub(crate) fn shared(&self) -> &Arc<Shared> {
         &self.0
+    }
+
+    /// The session the connection was authorized in.
+    pub(crate) fn session(&self) -> u64 {
+        self.1
     }
 }
 
@@ -341,8 +361,7 @@ impl Relay {
         let mut life = self.life.lock().await;
         if let Some(running) = life.as_ref() {
             if !running.shared.token_is(&token) {
-                *lock(&running.shared.token) = token;
-                running.shared.close_all("token-changed", 1008);
+                running.shared.renew(token);
             }
             return Ok(running.started());
         }
@@ -358,6 +377,7 @@ impl Relay {
             sink: self.sink.clone(),
             assets: self.assets.clone(),
             token: Mutex::new(token),
+            session: AtomicU64::new(0),
             conns: Mutex::new(HashMap::new()),
             slots: AtomicUsize::new(0),
             shutdown: watch::channel(false).0,
@@ -390,7 +410,28 @@ impl Relay {
     /// Stops listening and closes every guest, then tells the page why. Stopping a server that isn't
     /// running does nothing, and says nothing.
     pub async fn stop(&self, reason: &str) {
+        self.stop_if(reason, |_| true).await;
+    }
+
+    /// Stops the server only while it runs `token`'s session. The page's stop for a session it has
+    /// since replaced (sharing turned off and straight back on, the first start answering late) would
+    /// otherwise end the new one, whose links it had just shown.
+    pub async fn stop_session(&self, token: &str, reason: &str) {
+        let Ok(token) = parse_token(token) else {
+            return;
+        };
+        self.stop_if(reason, |shared| shared.token_is(&token)).await;
+    }
+
+    /// Decided under the same lock `start_on` holds, so no start can come between the check and the stop.
+    async fn stop_if(&self, reason: &str, matches: impl FnOnce(&Shared) -> bool) {
         let mut life = self.life.lock().await;
+        if !life
+            .as_ref()
+            .is_some_and(|running| matches(running.shared.as_ref()))
+        {
+            return;
+        }
         let Some(running) = life.take() else {
             return;
         };

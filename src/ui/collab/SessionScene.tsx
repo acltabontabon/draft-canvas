@@ -186,22 +186,20 @@ function Seal({ children }: { children: ReactNode }) {
     const away = (event: PointerEvent) => {
       if (!root.current?.contains(event.target as Node)) setOpen(false);
     };
+    // Escape folds the note, not the whole dialog: the dialog leaves Escape alone while the note is
+    // marked open (`data-dc-escape-local`), wherever focus is, and it arrives here instead.
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
     document.addEventListener('pointerdown', away, true);
-    return () => document.removeEventListener('pointerdown', away, true);
+    window.addEventListener('keydown', escape);
+    return () => {
+      document.removeEventListener('pointerdown', away, true);
+      window.removeEventListener('keydown', escape);
+    };
   }, [open]);
   return (
-    <span
-      ref={root}
-      className="dc-scene-seal-anchor"
-      style={at(SEAL)}
-      onKeyDown={(event) => {
-        // Escape folds the note, not the whole dialog.
-        if (event.key === 'Escape' && open) {
-          event.stopPropagation();
-          setOpen(false);
-        }
-      }}
-    >
+    <span ref={root} className="dc-scene-seal-anchor" style={at(SEAL)} data-dc-escape-local={open ? 'true' : undefined}>
       <button
         type="button"
         className="dc-scene-seal"

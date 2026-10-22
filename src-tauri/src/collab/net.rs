@@ -32,11 +32,39 @@ fn listen(address: SocketAddr) -> std::io::Result<TcpListener> {
     if address.is_ipv6() {
         socket.set_only_v6(true)?;
     }
-    // No SO_REUSEADDR: on Windows it would let another program bind the same port over ours.
+    // No SO_REUSEADDR: on Windows it would let another program bind the same port over ours. Nor is
+    // leaving it off enough there: a program that sets it on its own socket can still take the port,
+    // and hear the guests meant for this one, unless this socket holds it exclusively.
+    #[cfg(windows)]
+    exclusive(&socket)?;
     socket.set_nonblocking(true)?;
     socket.bind(&address.into())?;
     socket.listen(BACKLOG)?;
     Ok(socket.into())
+}
+
+#[cfg(windows)]
+fn exclusive(socket: &Socket) -> std::io::Result<()> {
+    use std::os::windows::io::AsRawSocket;
+    use windows_sys::Win32::Networking::WinSock::{
+        setsockopt, SOCKET, SOCKET_ERROR, SOL_SOCKET, SO_EXCLUSIVEADDRUSE,
+    };
+    let on: i32 = 1;
+    // SAFETY: the socket is open for the whole call, and the option points at an `i32` of the
+    // length given, which outlives it.
+    let result = unsafe {
+        setsockopt(
+            socket.as_raw_socket() as SOCKET,
+            SOL_SOCKET,
+            SO_EXCLUSIVEADDRUSE,
+            (&on as *const i32).cast(),
+            std::mem::size_of::<i32>() as i32,
+        )
+    };
+    if result == SOCKET_ERROR {
+        return Err(std::io::Error::last_os_error());
+    }
+    Ok(())
 }
 
 /// Every address of this machine a guest on the same network could open, best first.

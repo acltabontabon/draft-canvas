@@ -132,7 +132,7 @@ provisional until committed, and join the normal undo history ([Agent integratio
   WebRTC, or through the desktop app's LAN relay.
 - A stateless rendezvous relay ([`relay.js`](../../www/cloudflare/relay.js)) forwards only the
   connection handshake, sealed with a key from the link's fragment. It keeps a fingerprint of the room
-  secret for at most 12 hours. Direct invites work without it.
+  secret until 12 hours after the owner was last connected. Direct invites work without it.
 - Changes travel per element id (`collab/diff.ts`). The owner sanitizes each like an import
   (`collab/sanitize.ts`), repairs dangling references (`collab/repair.ts`) and broadcasts a numbered commit.
 - Collaborators show the confirmed file plus their pending changes (`collab/replica.ts`). Property

@@ -57,8 +57,7 @@ export interface HistoryEntry {
   /**
    * Someone else's edit landed after this one was recorded. Its snapshots no longer hold their
    * work, so putting one back whole would take that work away — even once the session has ended.
-   * Such an entry only ever steps selectively (`collab/selective.ts`), and never absorbs a later
-   * edit recorded without keys.
+   * Such an entry only ever steps selectively (`collab/selective.ts`), and never absorbs a later edit.
    */
   crossed?: true;
 }
@@ -95,8 +94,9 @@ export function pushEntry(
     entry.coalesceKey !== undefined &&
     top.coalesceKey === entry.coalesceKey &&
     samePath(top.path, entry.path) &&
-    // Coalesced, it would span someone else's edit with no keys to tell theirs from this one.
-    !(top.crossed && entry.keys === undefined) &&
+    // Coalesced, it would span someone else's edit: `before` predates it, so undoing an element both
+    // of you touched (a nudge, their rename, another nudge) would put theirs back out too.
+    !top.crossed &&
     entry.at - top.at < COALESCE_WINDOW_MS;
 
   if (canCoalesce) {

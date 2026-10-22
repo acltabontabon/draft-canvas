@@ -7,8 +7,25 @@
  * connection is handed to the session with the hello delivered again first, exactly as it arrived;
  * turned away, they are told so and the connection closes.
  */
-import { encode, parseWire, readGuestMessage, type HelloMessage } from './protocol';
+import { encode, parseWire, readGuestMessage, type HelloMessage, type Role } from './protocol';
+import { sameSecret } from './rendezvous';
 import type { CollabTransport, TransportState } from './transport/types';
+
+/**
+ * The place someone at the door says is theirs, when the session still keeps it and their hello
+ * carries its key: for the owner's knock card ("back after a drop") and for letting them in to that
+ * place, with the role the owner then chooses. Never a reason to let them in unasked — on the local
+ * network the hello and the welcome travel in clear, so anyone on the same Wi‑Fi can have read the
+ * key. A wrong key is just a new person knocking.
+ */
+export function returningPlace(
+  door: AtTheDoor,
+  waitingPlace: (peerId: string) => { role: Role; key: string } | null,
+): { peer: string; role: Role } | null {
+  if (!door.returning) return null;
+  const place = waitingPlace(door.returning.peer);
+  return place && sameSecret(place.key, door.returning.key) ? { peer: door.returning.peer, role: place.role } : null;
+}
 
 /** How long a new connection has to say hello before it is dropped at the door. */
 export const DOOR_HELLO_MS = 10_000;

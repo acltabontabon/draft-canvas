@@ -137,7 +137,7 @@ export function createTauriApi(): DesktopApi {
     agentProposalResolve: (id, status) => call<ProposalAction>('agent_proposal_resolve', { id, status }),
 
     collabLanStart: ({ token }) => call<CollabLanStarted>('collab_lan_start', { token }),
-    collabLanStop: () => call<void>('collab_lan_stop'),
+    collabLanStop: (options) => call<void>('collab_lan_stop', options ? { token: options.token } : {}),
     collabLanSend: (connId, text) => callRaw<void>('collab_lan_send', { connId }, utf8.encode(text)),
     collabLanClose: (connId, reason) => call<void>('collab_lan_close', { connId, reason }),
   };

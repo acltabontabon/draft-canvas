@@ -212,7 +212,10 @@ function parseCandidate(value: string): CompactCandidate | null {
   if (!Number.isInteger(port) || port < 0 || port > 0xffff) return null;
   if (!CANDIDATE_TYPES.includes(type)) return null;
   const address = parts[4]!;
-  if (addressKind(address) === null) return null;
+  // A browser offers only IP addresses and mDNS names; a DNS name would have the other side's browser
+  // look it up, telling whoever runs that name's server it is there.
+  const kind = addressKind(address);
+  if (kind === null || kind === 'hostname') return null;
   let tcpType: TcpType | undefined;
   for (let i = 8; i + 1 < parts.length; i += 2) {
     if (parts[i] === 'tcptype' && TCP_TYPES.includes(parts[i + 1] as TcpType)) tcpType = parts[i + 1] as TcpType;
@@ -474,8 +477,10 @@ function readSdp(reader: Reader): CompactSdp {
       const hex = [...reader.raw(16)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
       address = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}.local`;
     } else {
+      // Read past, never used: see `parseCandidate`. The kind stays in the format so older codes still read.
       address = reader.text();
       if (addressKind(address) !== 'hostname') throw new Truncated();
+      continue;
     }
     candidates.push({ type, protocol: tcp ? 'tcp' : 'udp', ...(tcp ? { tcpType } : {}), priority, address, port });
   }

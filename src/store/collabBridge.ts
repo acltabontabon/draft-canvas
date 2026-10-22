@@ -159,6 +159,8 @@ export interface HostOptions {
 export function startHosting(options: HostOptions): HostSession {
   if (host && !host.isEnded) return host;
   if (guest) throw new Error('Leave the session you joined before sharing a canvas of your own.');
+  // Nobody's file: everyone could edit it, and nothing would be saved.
+  if (useUiStore.getState().readOnly) throw new Error('A read-only copy can’t be shared live. Make an editable copy first.');
   const editor = useEditorStore.getState();
   sharedDocumentId = editor.document.metadata.id;
   sharedCanvasOpen = true;
@@ -306,7 +308,8 @@ export function joinSession(transport: CollabTransport, options: JoinOptions): G
     const before = useCollabStore.getState().access;
     if (before !== access && useCollabStore.getState().status === 'live') announce(access === 'editor' ? 'The owner let you edit.' : 'The owner made you view-only.');
     useCollabStore.setState({ access });
-    useUiStore.getState().setReadOnly(access === 'viewer' ? { sharedTitle: title, collaborative: true } : null);
+    // Only the shared copy: while it is still opening, the canvas on screen is this person's own.
+    if (onSharedCanvas()) useUiStore.getState().setReadOnly(access === 'viewer' ? { sharedTitle: title, collaborative: true } : null);
   };
   const session: GuestSession = new GuestSession(
     {
@@ -316,7 +319,7 @@ export function joinSession(transport: CollabTransport, options: JoinOptions): G
       appVersion: PRODUCT.version,
       name: options.name,
       ...(options.token === undefined ? {} : { token: options.token }),
-      open(file, access) {
+      open(file) {
         title = file.metadata.title;
         sharedDocumentId = file.metadata.id;
         sharedCanvasOpen = false;
@@ -334,7 +337,9 @@ export function joinSession(transport: CollabTransport, options: JoinOptions): G
             () => session.localChanged(),
             () => leaveSession(),
           );
-          setAccess(access);
+          // Read now: the owner may have changed it while the copy was opening (an unsaved-changes
+          // prompt can hold that open for as long as it likes).
+          setAccess(session.role);
           // Commits that arrived while the canvas was opening waited for it.
           session.drainHeld();
         });
@@ -344,7 +349,7 @@ export function joinSession(transport: CollabTransport, options: JoinOptions): G
     {
       status(status: GuestStatus, reason?: EndReason) {
         const mapped: SessionStatus = status;
-        useCollabStore.setState({ status: mapped, endReason: reason ?? null, ...(status === 'ended' ? { presence: {}, presenter: null, following: false } : {}) });
+        useCollabStore.setState({ status: mapped, endReason: reason ?? null, ...(status === 'ended' ? { peers: [], presence: {}, presenter: null, following: false } : {}) });
         if (status === 'ended') {
           if (reason) announce(`The live session ended.`, { assertive: true });
           if (reason && FAULTS.has(reason)) logDiagnostic(new Error('collab ended'), { operation: 'collab-session' });
@@ -385,12 +390,12 @@ export function reconnectSession(transport: CollabTransport): void {
  * Leaves on purpose, keeping what's on screen: read-only, with the banner's way to keep a copy —
  * left editable, it would look like a canvas that saves, and it saves nowhere.
  */
-export function leaveSessionKeepingView(): void {
+export function leaveSessionKeepingView(notice: { message: string; tone?: 'error' } = { message: 'You left the session. Make an editable copy to keep what you see.' }): void {
   const keep = onSharedCanvas();
   const title = useEditorStore.getState().document.metadata.title;
   leaveSession();
   if (keep) useUiStore.getState().setReadOnly({ sharedTitle: title, collaborative: true });
-  useUiStore.getState().notify('You left the session. Make an editable copy to keep what you see.');
+  useUiStore.getState().notify(notice.message, notice.tone);
 }
 
 /** Leaves on purpose — or, after the owner ended it, puts the session's leftovers away. */

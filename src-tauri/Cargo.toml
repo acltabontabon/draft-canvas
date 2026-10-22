@@ -60,7 +60,7 @@ notify = "8"
 toml_edit = "0.25"
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_Storage_FileSystem", "Win32_UI_WindowsAndMessaging", "Win32_Foundation", "Win32_Security", "Win32_Security_Authorization"] }
+windows-sys = { version = "0.61", features = ["Win32_Networking_WinSock", "Win32_Storage_FileSystem", "Win32_UI_WindowsAndMessaging", "Win32_Foundation", "Win32_Security", "Win32_Security_Authorization"] }
 
 # Same major versions Tauri already resolves, for the "edited" dot and proxy icon on the window, and
 # the tray panel's rounded corners.

@@ -1,11 +1,12 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { answerInvite, CollabCodeError, peerConnectionsAvailable, relayUrl, type CollabTransport } from '../../collab/connect';
 import { knock, type KnockStatus } from '../../collab/lobby';
+import { readName } from '../../collab/protocol';
 import { readSessionPayload, rendezvousAvailable } from '../../collab/rendezvous';
 import { logDiagnostic } from '../../lib/diagnostics';
 import { rejoinByRelay } from './relayGuest';
 import { keepLanGuestConnected, lanTokenFromPayload, openLanGuest } from '../../collab/lan';
-import { guestSession, joinSession, leaveSession, reconnectSession } from '../../store/collabBridge';
+import { guestSession, joinSession, leaveSession, leaveSessionKeepingView, reconnectSession } from '../../store/collabBridge';
 import { useCollabStore } from '../../store/collabStore';
 import { useUiStore } from '../../store/uiStore';
 import type { DocumentSession } from '../../store/useDocumentSession';
@@ -77,10 +78,11 @@ export function JoinDialog({ session, invite }: { session: DocumentSession; invi
     const keeper = keepLanGuestConnected(token, transport, {
       reconnect: reconnectSession,
       wanted: () => guestSession() !== null,
-      gaveUp: (why) => {
-        leaveSession();
-        notify(why === 'stopped' ? 'The owner stopped sharing on this network.' : 'Couldn’t reach the owner’s computer. Check you’re on the same network, then open the link again.', 'error');
-      },
+      gaveUp: (why) =>
+        leaveSessionKeepingView({
+          message: why === 'stopped' ? 'The owner stopped sharing on this network.' : 'Couldn’t reach the owner’s computer. Check you’re on the same network, then open the link again.',
+          tone: 'error',
+        }),
     });
     if (resuming) return reconnectSession(transport);
     joinSession(transport, { name: trimmed, token, open: session.openCollaborative, lost: keeper.lost });
@@ -111,8 +113,15 @@ export function JoinDialog({ session, invite }: { session: DocumentSession; invi
   };
 
   const begin = async () => {
-    const trimmed = name.trim();
+    // As the owner will show it: the same name on both sides.
+    const trimmed = readName(name);
     if (!trimmed) return;
+    // Checked before any connection is made: joining throws while this tab hosts, and the half-made
+    // connection would be left open with the dialog stuck on "joining".
+    if (useCollabStore.getState().role === 'host') {
+      setStage({ kind: 'failed', message: 'You’re sharing a canvas of your own. End that session, then open this link again.' });
+      return;
+    }
     writeDisplayName(trimmed);
     rejoining.current = resuming;
     if (lanToken) return beginLan(lanToken, trimmed);
@@ -200,7 +209,7 @@ export function JoinDialog({ session, invite }: { session: DocumentSession; invi
                 }}
               >
                 <NameTag value={name} onChange={setName} />
-                <Button type="submit" variant="solid" icon="people" className="dc-collab-go" disabled={!name.trim() || shown.kind === 'preparing'} aria-busy={shown.kind === 'preparing'}>
+                <Button type="submit" variant="solid" icon="people" className="dc-collab-go" disabled={!readName(name) || shown.kind === 'preparing'} aria-busy={shown.kind === 'preparing'}>
                   {shown.kind === 'preparing' ? 'Preparing…' : resuming ? 'Rejoin' : sessionLink ? 'Ask to join' : 'Join'}
                 </Button>
               </form>

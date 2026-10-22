@@ -60,8 +60,8 @@ session ends, or ask the owner for an export.
 - **People column** (top right): everyone in the session, each in a colour. Hover a face to see
   where they are; **Find** takes you there.
 - **Pointers and selections** show for people in the same room as you.
-- **Follow**: when the owner presents, collaborators can follow along. Moving the canvas stops
-  following.
+- **Follow**: when the owner presents, collaborators can follow along. Moving the canvas, or stepping into
+  or out of a shape, stops following.
 - **Same shape, same moment**: the last change to reach the owner wins for that shape.
 
 ## Owner controls
@@ -77,7 +77,8 @@ Hover a face in the people column, or open the faces beside **Share** in the too
 | **End session** | Disconnects everyone |
 
 Closing the tab, reloading or opening another canvas also ends the session. Your canvas keeps
-saving as usual. A collaborator whose connection drops rejoins on their own, in the same role.
+saving as usual. A collaborator whose connection drops rejoins on their own, in the same role —
+except over the desktop local network link, where they ask to join again and you let them back in.
 
 ## Desktop: share on your local network
 

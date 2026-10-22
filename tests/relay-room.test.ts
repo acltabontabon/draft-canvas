@@ -7,8 +7,11 @@ import {
   PROTOCOL,
   admission,
   checkOwner,
+  renewClaim,
   checkRequest,
+  clientKey,
   closePeer,
+  connectionAllowed,
   deadline,
   departed,
   guestTag,
@@ -128,16 +131,47 @@ describe('relay requests', () => {
   });
 });
 
+describe('connections per client', () => {
+  it('counts an IPv6 client by its /64, which it can take a fresh address from each time', () => {
+    expect(clientKey('2001:db8:1:2:aaaa::1')).toBe('2001:db8:1:2::/64');
+    expect(clientKey('2001:DB8:1:2:ffff:ffff:ffff:ffff')).toBe('2001:db8:1:2::/64');
+    expect(clientKey('2001:db8::1')).toBe('2001:db8:0:0::/64');
+    expect(clientKey('[fe80::1%en0]')).toBe('fe80:0:0:0::/64');
+    expect(clientKey('::ffff:192.0.2.7')).toBe('192.0.2.7');
+    expect(clientKey('192.0.2.7')).toBe('192.0.2.7');
+    expect(clientKey(null)).toBe('unknown');
+  });
+
+  it('holds a whole /64 to one client’s budget', () => {
+    const seen = new Map<string, number[]>();
+    for (let i = 0; i < LIMITS.connectsPerMinute; i += 1) expect(connectionAllowed(seen, `2001:db8:1:2::${i.toString(16)}`, 1000)).toBe(true);
+    expect(connectionAllowed(seen, '2001:db8:1:2:ffff::9', 1000)).toBe(false);
+    expect(connectionAllowed(seen, '2001:db8:1:3::1', 1000)).toBe(true);
+  });
+});
+
 describe('who owns a room', () => {
-  it('is whoever claimed it first, for the room’s lifetime — nobody else may host it', () => {
+  it('is whoever claimed it first, until a lifetime after they were last there — nobody else may host it', () => {
     const first = checkOwner(null, 'aa', 1000);
     expect(first).toEqual({ verdict: 'claim', claim: { digest: 'aa', until: 1000 + LIMITS.lifetimeMs } });
     const claim = first.verdict === 'claim' ? first.claim : null;
-    expect(checkOwner(claim, 'aa', 2000)).toEqual({ verdict: 'owner' });
+    expect(checkOwner(claim, 'aa', 2000)).toEqual({ verdict: 'owner', claim: { digest: 'aa', until: 2000 + LIMITS.lifetimeMs } });
     expect(checkOwner(claim, 'bb', 2000)).toEqual({ verdict: 'not-owner' });
     expect(checkOwner(claim, 'a', 2000)).toEqual({ verdict: 'not-owner' });
-    // Once the room's lifetime is over, the claim is gone and the room starts afresh.
+    // Once a lifetime has passed with the owner gone, the claim is gone and the room starts afresh.
     expect(checkOwner(claim, 'bb', 1000 + LIMITS.lifetimeMs)).toMatchObject({ verdict: 'claim' });
+  });
+
+  it('outlasts a session longer than one lifetime: the owner’s every connection and departure renews it', () => {
+    const opened = checkOwner(null, 'aa', 0);
+    if (opened.verdict === 'not-owner') throw new Error('the first host claims the room');
+    let claim = opened.claim;
+    // The owner's socket is swept away near the end of the first lifetime and reconnects a second later;
+    // someone holding the link tries to host in between.
+    claim = renewClaim(claim, LIMITS.lifetimeMs - 1)!;
+    expect(checkOwner(claim, 'bb', LIMITS.lifetimeMs + 500)).toEqual({ verdict: 'not-owner' });
+    expect(checkOwner(claim, 'aa', LIMITS.lifetimeMs + 1000)).toMatchObject({ verdict: 'owner' });
+    expect(renewClaim(null, 5)).toBeNull();
   });
 
   it.each([

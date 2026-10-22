@@ -65,6 +65,7 @@ export function checkRequest(
   options: { origins: readonly string[]; loopback?: boolean },
 ): Verdict;
 export function secretDigest(secret: string): Promise<string>;
+export function clientKey(address: string | null | undefined): string;
 export function connectionAllowed(seen: Map<string, number[]>, address: string, now: number): boolean;
 export interface OwnerClaim {
   digest: string;
@@ -74,7 +75,8 @@ export function checkOwner(
   claim: OwnerClaim | null | undefined,
   digest: string | null,
   now: number,
-): { verdict: 'owner' } | { verdict: 'claim'; claim: OwnerClaim } | { verdict: 'not-owner' };
+): { verdict: 'owner'; claim: OwnerClaim } | { verdict: 'claim'; claim: OwnerClaim } | { verdict: 'not-owner' };
+export function renewClaim(claim: OwnerClaim | null | undefined, now: number): OwnerClaim | null;
 export function guestTag(random?: (bytes: Uint8Array) => Uint8Array): string;
 export function uniqueGuestTag(peers: Peer[], random?: (bytes: Uint8Array) => Uint8Array): string;
 export function live(peers: Peer[]): Peer[];

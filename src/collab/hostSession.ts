@@ -79,6 +79,16 @@ const BYTE_BURST = 2 * MAX_GUEST_MESSAGE_BYTES;
 /** A fresh copy of the file costs the owner a full serialisation; one every few seconds is plenty. */
 const RESYNC_RATE = 0.2;
 const RESYNC_BURST = 2;
+/** A collaborator pings every few seconds; answering a flood would make the owner do the work. */
+const PING_RATE = 1;
+const PING_BURST = 5;
+/**
+ * What may wait for a gesture of the owner's to end, from everyone together. A gesture can be held
+ * for as long as a mouse button can; past this, a collaborator's patches stop being kept and they
+ * are sent a fresh copy once it ends, which makes them send their edits again.
+ */
+const MAX_HELD_PATCHES = 4096;
+const MAX_HELD_BYTES = 8 * MAX_GUEST_MESSAGE_BYTES;
 /** What a connection may send before it has introduced itself. A hello is a few hundred bytes. */
 const MAX_HELLO_BYTES = 4096;
 
@@ -92,6 +102,7 @@ interface Slot {
   patches: RateLimit;
   presenceLimit: RateLimit;
   resyncs: RateLimit;
+  pings: RateLimit;
   budget: ByteBudget;
   presence: Presence | null;
   release: () => void;
@@ -118,6 +129,7 @@ interface Held {
   slot: Slot;
   clientSeq: number;
   changes: unknown;
+  bytes: number;
 }
 
 export class HostSession {
@@ -136,6 +148,9 @@ export class HostSession {
   private readonly slots = new Map<string, Slot>();
   private readonly pending = new Set<Pending>();
   private readonly held: Held[] = [];
+  private heldBytes = 0;
+  /** Collaborators whose patches no longer fit while a gesture holds them: sent a fresh copy after it. */
+  private readonly heldOut = new Set<Slot>();
   private holdTimer: unknown = null;
   private heartbeatTimer: unknown = null;
   private ended = false;
@@ -160,10 +175,14 @@ export class HostSession {
     return this.ended;
   }
 
-  /** The role a returning collaborator's place had, if that place is waiting for them — for the lobby to let them straight back in. */
-  waitingPlace(peerId: string): { role: Role; key: string } | null {
+  /**
+   * The role a returning collaborator's place had, if that place is waiting for them — for the lobby to
+   * let them straight back in. `evenIfLive` also offers a place whose link still looks up here (they
+   * may have lost it first): only for a caller that never sees the key itself, just a proof of it.
+   */
+  waitingPlace(peerId: string, evenIfLive = false): { role: Role; key: string } | null {
     const slot = this.slots.get(peerId);
-    return slot && slot.link !== 'live' ? { role: slot.ledger.role, key: slot.key } : null;
+    return slot && (evenIfLive || slot.link !== 'live') ? { role: slot.ledger.role, key: slot.key } : null;
   }
 
   /** Everyone in the session, the owner first. */
@@ -242,7 +261,9 @@ export class HostSession {
     // place, which the owner chose to give back; otherwise reclaiming one takes that place's key.
     const claimed = pending.reuse !== undefined ? this.slots.get(pending.reuse) : hello.resume && this.slots.get(hello.resume.peer);
     const keyMatches = hello.resume !== undefined && claimed !== undefined && hello.resume.peer === claimed.info.id && hello.resume.key === claimed.key;
-    const mayClaim = claimed !== undefined && claimed.link !== 'live' && ((pending.reuse !== undefined && !pending.requireKey) || keyMatches);
+    // The key proves it is them even over a link this side still thinks is up: the old one may be
+    // mid-restart, or already dead on their side, and refusing left them shut out of their own place.
+    const mayClaim = claimed !== undefined && (keyMatches || (claimed.link !== 'live' && pending.reuse !== undefined && !pending.requireKey));
     let slot: Slot | undefined;
     if (pending.reuse !== undefined && !mayClaim) return this.refuse(pending, 'unauthorized');
     // A place being reclaimed counts once, as the connection now claiming it.
@@ -268,6 +289,7 @@ export class HostSession {
         patches: new RateLimit(this.clock, PATCH_RATE, PATCH_BURST),
         presenceLimit: new RateLimit(this.clock, PRESENCE_RATE, PRESENCE_BURST),
         resyncs: new RateLimit(this.clock, RESYNC_RATE, RESYNC_BURST),
+        pings: new RateLimit(this.clock, PING_RATE, PING_BURST),
         budget: new ByteBudget(this.clock, BYTE_RATE, BYTE_BURST),
         presence: null,
         release: () => {},
@@ -330,7 +352,7 @@ export class HostSession {
         if (bad > MAX_BAD_MESSAGES) this.disconnect(slot, 'protocol');
         return;
       }
-      this.receive(slot, message);
+      this.receive(slot, message, text.length);
     });
     const offState = transport.onState((state) => {
       if (state === 'closed' && slot.transport === transport) this.lose(slot);
@@ -348,12 +370,16 @@ export class HostSession {
     };
   }
 
-  private receive(slot: Slot, message: GuestMessage): void {
+  private receive(slot: Slot, message: GuestMessage, bytes: number): void {
     switch (message.t) {
       case 'patch':
         if (!slot.patches.take()) return this.disconnect(slot, 'protocol');
+        // Not kept, and not acknowledged: the fresh copy after the gesture has them sent again.
+        if (this.heldOut.has(slot)) return;
         if (this.held.length > 0 || this.env.isBusy()) {
-          this.held.push({ slot, clientSeq: message.clientSeq, changes: message.changes });
+          if (this.held.length >= MAX_HELD_PATCHES || this.heldBytes + bytes > MAX_HELD_BYTES) return this.holdOut(slot);
+          this.held.push({ slot, clientSeq: message.clientSeq, changes: message.changes, bytes });
+          this.heldBytes += bytes;
           this.scheduleHold();
           return;
         }
@@ -370,7 +396,7 @@ export class HostSession {
         this.send(slot, { t: 'snapshot', seq: this.core.seq, snapshot: this.core.snapshot() });
         return;
       case 'ping':
-        this.send(slot, { t: 'pong', n: message.n });
+        if (slot.pings.take()) this.send(slot, { t: 'pong', n: message.n });
         return;
       case 'pong':
         return;
@@ -405,13 +431,39 @@ export class HostSession {
     }, HOLD_RETRY_MS);
   }
 
+  /**
+   * `slot`'s patches don't fit while the gesture lasts. Dropping only some of them would lose edits —
+   * a later patch applied first makes the owner take the earlier ones for repeats — so all of theirs
+   * go, nothing more of theirs is kept, and they are sent a fresh copy when it ends.
+   */
+  private holdOut(slot: Slot): void {
+    this.dropHeld(slot);
+    this.heldOut.add(slot);
+    this.scheduleHold();
+  }
+
+  private dropHeld(slot: Slot): void {
+    for (let i = this.held.length - 1; i >= 0; i -= 1) {
+      if (this.held[i]!.slot !== slot) continue;
+      this.heldBytes -= this.held[i]!.bytes;
+      this.held.splice(i, 1);
+    }
+  }
+
   /** Applies what waited for a gesture to end, in the order it arrived. */
   drainHeld(): void {
     while (this.held.length > 0 && !this.env.isBusy()) {
       const next = this.held.shift()!;
+      this.heldBytes -= next.bytes;
       if (this.slots.get(next.slot.info.id) === next.slot) this.applyPatch(next.slot, next.clientSeq, next.changes);
     }
-    if (this.held.length > 0) this.scheduleHold();
+    if (this.held.length === 0 && this.heldOut.size > 0 && !this.env.isBusy()) {
+      // A snapshot makes a collaborator send every patch it still has unconfirmed.
+      this.commitLocal();
+      for (const slot of this.heldOut) if (this.slots.get(slot.info.id) === slot) this.send(slot, { t: 'snapshot', seq: this.core.seq, snapshot: this.core.snapshot() });
+      this.heldOut.clear();
+    }
+    if (this.held.length > 0 || this.heldOut.size > 0) this.scheduleHold();
   }
 
   /** The owner's own edit (or undo, or anything else that changed the file here). */
@@ -469,7 +521,8 @@ export class HostSession {
     if (slot.transport) this.closeSoon(slot.transport, reason);
     slot.transport = null;
     slot.link = 'gone';
-    for (let i = this.held.length - 1; i >= 0; i -= 1) if (this.held[i]!.slot === slot) this.held.splice(i, 1);
+    this.dropHeld(slot);
+    this.heldOut.delete(slot);
     if (slot.presence) {
       slot.presence = null;
       this.events.presence(slot.info.id, null);
@@ -507,6 +560,8 @@ export class HostSession {
     }
     this.slots.clear();
     this.held.length = 0;
+    this.heldBytes = 0;
+    this.heldOut.clear();
     if (this.holdTimer !== null) this.clock.clearTimeout(this.holdTimer);
     if (this.heartbeatTimer !== null) this.clock.clearTimeout(this.heartbeatTimer);
     this.holdTimer = this.heartbeatTimer = null;

@@ -2,6 +2,22 @@ import type { EndReason, LinkState, Role } from '../../collab/protocol';
 import { readPreference, writePreference } from '../../lib/preferences';
 import type { ConnectionPreferences } from '../../collab/connect';
 
+/** How two names compare for "is this the same person's name": case- and accent-blind. */
+export function nameKey(name: string): string {
+  return name.normalize('NFKD').replace(/\p{M}/gu, '').toLocaleLowerCase();
+}
+
+/** The names of everyone in the session (this person included), as `nameKey`s. */
+export function takenNameKeys(state: { selfName: string; peers: readonly { name: string; link: string }[] }): string[] {
+  return [state.selfName, ...state.peers.filter((peer) => peer.link !== 'gone').map((peer) => peer.name)].map(nameKey);
+}
+
+/** Said beside a knock wearing the name of someone already here: names are whatever each person typed. */
+export const LOOKALIKE_WARNING = 'Someone here already goes by this name — make sure it’s who you expect.';
+
+/** Said beside a knock from someone coming back to the place they had, over the local network. */
+export const RETURNING_NOTE = 'Back after their connection dropped.';
+
 /** What a person sees when a session ends, by reason — always with what they can do next. */
 export const END_MESSAGES: Record<EndReason, string> = {
   'owner-left': 'The owner closed the canvas, so the session ended.',

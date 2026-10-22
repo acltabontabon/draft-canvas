@@ -72,5 +72,7 @@ describe('the shell’s LAN events', () => {
     await sharing.stop();
     expect(transports[0]!.state).toBe('closed');
     expect(h.api.collabLanStop).toHaveBeenCalledTimes(1);
+    // Only this session's server: a late stop must not end one started after it.
+    expect(h.api.collabLanStop).toHaveBeenCalledWith({ token: sharing.token });
   });
 });
