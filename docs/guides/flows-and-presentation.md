@@ -1,115 +1,78 @@
 # Flows and presenting
 
-A flow is a numbered path through connectors: "first the API receives the order, then it publishes
-to the queue, then the worker picks it up". Presenting plays a flow one step at a time while you talk.
-Nothing about presenting changes the diagram; it is a reading of it.
+A flow is an ordered list of connectors. Use it to explain what happens, one step at a time.
 
-Shortcuts are written for a Mac. On Windows and Linux, read `⌘` as `Ctrl`.
+Shortcuts use Mac keys. On Windows and Linux, use `Ctrl` for `⌘`.
 
 ## Trace a flow
 
-Choose **Trace a flow** in the Flows panel or command palette. Name the flow, then click
-connectors in the order you want to explain them. The tracing bar counts the steps and the canvas
-previews their numbers. Branches and disconnected connectors are fine: only your choices determine
-the order. A connector already included tells you its step number instead of adding a duplicate.
-When several connectors share a label or line, choose the connector from the tracing bar.
+1. Open **Flows** (`F`) and choose **Trace a flow**, or find it in `⌘K`.
+2. Name the flow and click connectors in the order you want to explain them.
+3. Choose **Finish** to save the trace as one undo step.
 
-**Remove last** (or `Backspace` outside a text field) removes your most recent provisional step.
-**Finish** commits the whole trace as one undo step and opens its flow. **Cancel** or `Escape`
-discards it. A flow's **Trace more steps** appends using the same controls and continues its numbering.
-You can pan and zoom while tracing, but drawing is suspended. Leaving the diagram or level, or an
-outside edit, cancels the preview. Nothing provisional is saved or exported.
+Use **Remove last** (`Backspace` outside a text field) to undo a provisional step.
+**Cancel** or `Esc` discards the trace. **Trace more steps** appends to an existing flow.
 
-For a keyboard path, open **Outline** from the tracing bar, use arrow keys to reach a connector and
-press `Enter` to append it. Additions and removals are announced.
+You can pan and zoom while tracing. For keyboard selection, open **Outline** from the tracing bar,
+navigate to a connector, and press `Enter`. For a shared line, pick its connector in the tracing bar.
+Leaving the diagram or level, or an outside edit, cancels an unfinished trace.
 
 ## Build a flow one step at a time
 
-1. Click a connector. Its popover has **Add to flow** at the top. The first time, that creates a new
-   flow with this connector as step 1 and opens the **Flows** panel with the name selected; type a
-   name and press `Enter`.
-2. Click the next connector and choose **Add to <flow name>** in the same place. It becomes the next
-   step. Repeat along the path.
-3. Press `F` (or the **Flows** button) to open the Flows panel: every flow on the canvas, and the
-   steps of the selected one.
+Click a connector and choose **Add to flow**. Name the new flow, then click another connector
+and choose **Add to <flow name>**. Repeat for each step.
 
-![The Flows panel listing "Place an order" with two steps, and numbered badges on the two connectors.](../media/guides/flows-panel.png)
+![The Flows panel with two steps in Place an order.](../media/guides/flows-panel.png)
 
-In the panel:
+In **Flows**:
 
-- **Move earlier** and **Move later** reorder a step; **Remove step** drops it.
-- **New flow** starts a second story over the same diagram. Two flows may share early steps and
-  diverge later, so one diagram carries both the happy path and the failure path.
-- **Rename** (`F2`) and **Delete** act on the selected flow.
-- Each step can carry a **caption**: the sentence you would say when the step comes up. Type it in the
-  connector's popover once the connector is in a flow; it shows in the corner while presenting.
-- **Spotlight extra shapes** adds the shapes selected on the canvas to a step, so a step can light up
-  a boundary or a data store as well as its connector. **Pin the camera** saves the current view for
-  that step; **Present this step from exactly the current camera position** does the same from the
-  canvas.
+| Action | Use it to |
+| --- | --- |
+| **Move earlier / Move later** | Reorder a step |
+| **Remove step** | Remove it from the flow |
+| **New flow** | Tell another story using the same diagram |
+| **Rename** (`F2`) / **Delete** | Manage the selected flow |
+| **Spotlight extra shapes** | Include selected shapes in a step's highlight |
+| **Pin the camera** | Keep the current view for a step |
 
-A step whose connector is deleted is dropped with it. Undo brings both back.
+Edit a step's caption in its connector popover. Deleting a connector removes its steps too;
+Undo restores both.
 
 ## Present
 
-Click **Present** in the toolbar, or press `⌘Enter`. The editor gets out of the way and the flow opens
-on its whole path, framed with the rest of the diagram quietly around it.
+Click **Present** (`⌘Enter`). If several flows have steps, choose one.
+The opening shows the whole path; advance to begin.
 
-![The opening of a presentation: the flow's title and its route on the left, the whole diagram framed beside it.](../media/guides/presenting-opening.png)
+![A presentation step highlighting its connector and showing the queue's note.](../media/guides/presenting.png)
 
-| Key | Does |
+| Key | Action |
 | --- | --- |
-| `→` or `Space` | Begin, then the next step; after the last step, on to the next flow |
-| `←` | The previous step |
-| `Shift+→` / `Shift+←` | Move to the next or previous flow without stopping |
-| `Shift+F` | Pick any flow from a list |
-| `R` | Re-centre: hand the camera back after you panned by hand |
-| `O` | Overview: pull back to the whole flow, keeping your place; again to return |
-| `P` | Pointer: a soft ring that follows your cursor |
-| `⌘↓` / `⌘↑` | Look inside a shape mid-presentation, and back out |
-| `Esc` | Back out one thing at a time: a reveal, then the presentation |
+| `→` / `Space` | Advance through opening, steps, closing and the next flow |
+| `←` | Go back |
+| `Home` / `End`; `1`–`9` | First / last step; jump to a step |
+| `Shift+→` / `Shift+←` | Next / previous flow |
+| `Shift+F` | Choose a flow |
+| `O` | Toggle the whole-flow overview without losing your step |
+| `R` | Re-centre and resume guided camera movement |
+| `P` | Toggle the pointer ring |
+| `⌘↓` / `⌘↑` | Look inside a selected shape / go back out |
+| `Esc` | Close a reveal, then leave presentation |
 
-Each press tells one step: a signal travels the connector from where the interaction starts to where
-it arrives, the destination lights up along its own outline, and the caption names the two shapes and
-what the step says. Then everything holds still so you can talk.
+Each step highlights its connector and destination, with its caption and attached notes.
+Click an open-point marker to read it. Pan or zoom freely; guided framing resumes only after **Re-centre**.
 
-Long captions keep their full text in the corner. Choose **Read full step details** to focus the
-caption, then use `↑`/`↓`, `Page Up`/`Page Down`, `Home`/`End` or `Space` to scroll it. While the caption
-has focus, `←` and `→` still move between steps; the next explanation starts at the top and keeps
-keyboard focus. In a narrow window, the playback controls scroll so long flow names remain readable.
-
-![Presenting step 1 of 2: the first connector is highlighted, the rest of the diagram is faded, and the queue's note appears above it.](../media/guides/presenting.png)
-
-The notes attached to what a step shows appear beside it, the first time the flow reaches them.
-Click an open-point marker for a read-only look at what is still unsettled there.
-
-The camera follows the story rather than each shape: it holds still while the next step already
-reads, slides a little when it has to, and recomposes only for a long handoff. Pan or zoom by hand
-whenever you like; guided framing stands down until **Re-centre** asks it back.
-
-With more than one flow, Draft Canvas asks **Present which flow?** first. The bar names the flow you
-are in and where it sits (`Place an order · Flow 2 of 4`); click it for the full list. On the last
-step, the button to the right of the title names the flow that follows.
-
-`Esc` returns to editing at the same view with the same selection.
+For a long caption, choose **Read full step details** and scroll with `↑`/`↓`, `Page Up`/`Page Down`
+or `Space`. Left and right arrows still change steps.
+Leaving presentation restores your editing view and selection.
 
 ## Export a flow as a sequence diagram
 
-Press `⌘⇧E` and choose **Source**, then **Mermaid** or **PlantUML**. Every playable flow becomes one
-sequence diagram, as plain text for a README or a wiki that already renders those formats; the panel
-shows the text, and **Copy** puts it on the clipboard. Flows inside other levels come too, one section
-per level. A connector's asynchronous mode and its response line come through; sequence diagrams have
-no notation for open points, so those are left out.
+Open **Export → Source** (`⌘⇧E`), choose flows, then **Mermaid** or **PlantUML**.
+Copy the text or download it for a README or wiki. Each playable flow becomes a sequence diagram;
+nested levels are included.
 
-Each message is sent by whoever acts. A connector drawn from a store or a queue to the thing that
-reads it — *Database → Worker: read by* — becomes the worker reading the database
-(`Worker ->> Database: reads from`), because in a sequence diagram the arrow is the call.
+Messages follow who acts: `Database → Worker: read by` exports as the worker reading the database.
+Async calls and replies are kept; open points are omitted.
+For an image with numbered connectors, select the flow and export **Image**.
 
-For a picture of one step, present it and take a screenshot, or export **Image** with the flow
-selected: its step badges are drawn on the connectors.
-
-## Where next
-
-- [Getting started](getting-started.md#present-a-flow): the first flow, end to end.
-- [Mark what is still open](open-points.md): capture what the presentation raised.
-- [Saving, backing up and sharing](saving-and-sharing.md): every export, and what each keeps.
+See [saving and sharing](saving-and-sharing.md) for file and link options.
