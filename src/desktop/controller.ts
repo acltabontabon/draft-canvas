@@ -49,7 +49,11 @@ export interface DesktopUi {
   openRename(): void;
   /** Undo, Redo and Select All from the native Edit menu: see `dispatchEditCommand`. */
   editCommand(command: 'undo' | 'redo' | 'select-all'): void;
+  /** What acts on the open diagram, from the menu bar (it used to sit behind the toolbar's ⋯). */
+  canvasCommand(command: CanvasMenuCommand): void;
 }
+
+export type CanvasMenuCommand = 'canvas-settings' | 'find-replace' | 'commands' | 'arrange';
 
 interface Clock {
   setTimeout(run: () => void, ms: number): unknown;
@@ -528,6 +532,13 @@ export class DesktopController {
       case 'redo':
       case 'select-all':
         return this.ui.editCommand(command);
+      case 'canvas-settings':
+      case 'find-replace':
+      case 'commands':
+      case 'arrange':
+        // Only with a diagram open: Home has nothing for them to act on.
+        if (this.store.getSnapshot().doc.kind === 'none') return;
+        return this.ui.canvasCommand(command);
     }
   }
 

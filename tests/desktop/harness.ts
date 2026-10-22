@@ -380,6 +380,7 @@ export function createHarness() {
       if (action) noticeActions.set(message, action.run);
     },
     editCommand: vi.fn(),
+    canvasCommand: vi.fn(),
     openRename: vi.fn(),
   };
 

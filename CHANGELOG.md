@@ -35,9 +35,12 @@ the release notes and the in-app What's New are generated from here. See
 
 #### Changed
 
-- **One Share button** — drawing together live, exporting, and copying a read-only link now live
-  behind **Share** at the top right, each spelled out. During a session, everyone's faces sit beside
-  it. The command palette's toolbar button moved into **More**; `⌘K` opens it as before.
+- **A calmer editor** — the header floats on the canvas, so the drawing runs to the top of the
+  window. The Draft Canvas mark takes you back to your diagrams, beside the diagram's name. The tools
+  are small drawings of their shapes, and the one in hand shows its name. **Present** and **Flows**
+  are one control, and **Share** holds drawing together live, exporting and a read-only link. Undo,
+  redo and **?** for help sit with zoom at the bottom right; tidy up, find and replace and canvas
+  settings are a right-click on the canvas away. <!-- highlight -->
 - An Actor's name follows its kind: switch a new User to Device and it becomes "Device". A name
   you typed stays.
 
@@ -89,6 +92,8 @@ the release notes and the in-app What's New are generated from here. See
 
 #### Changed
 
+- The menu bar has **Find and Replace…**, **Commands…**, **Arrange Diagram** and **Canvas Settings…**
+  (in View on macOS, at the end of Edit on Windows and Linux).
 - AI agents no longer take focus from the field you're typing in, wait while you trace a flow, and
   no longer hold up saving on large projects.
 - The proposals panel checks proposals in the background, and only when something needs it.

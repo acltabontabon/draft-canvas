@@ -2,6 +2,7 @@ import { useEffect, useMemo } from 'react';
 import { useReactFlow, useStore } from '@xyflow/react';
 import { flowFitViewNodes, hasSomethingToFit, useEditorStore, viewLevel } from '../../store/editorStore';
 import { useShallow } from 'zustand/react/shallow';
+import { HelpMenu, HistoryControls } from './HelpMenu';
 import { useCollabStore } from '../../store/collabStore';
 import { count } from '../../lib/plural';
 import { LEVEL_HINTS, LEVEL_LABELS } from '../../depth/level';
@@ -157,7 +158,9 @@ export function StatusBar({ durable, presenting = false, onResolveConflict }: St
           {edgeCount === 1 ? 'connector' : 'connectors'}
         </span>
         <span className="dc-inspector-divider" />
+        <HistoryControls />
         <ZoomControls />
+        <HelpMenu />
       </div>
     </footer>
   );

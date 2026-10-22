@@ -39,6 +39,12 @@ pub enum MenuCommand {
     Undo,
     Redo,
     SelectAll,
+    /// The open diagram's own settings (background, personality), not the app's.
+    CanvasSettings,
+    FindReplace,
+    /// The command palette.
+    Commands,
+    Arrange,
 }
 
 /// What Rust tells the page on its own account (`HostEvent` in `api.ts`).

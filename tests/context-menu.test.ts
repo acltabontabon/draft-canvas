@@ -53,6 +53,9 @@ describe('contextMenuCommandsFor — empty canvas', () => {
       'add-text',
       'add-ellipse',
       'fit',
+      // What acts on the whole diagram, now that the header has no ⋯.
+      'find-replace',
+      'settings',
     ]);
   });
 
@@ -94,8 +97,8 @@ describe('contextMenuCommandsFor — empty canvas', () => {
     useEditorStore.getState().setSelection({ nodes: [useEditorStore.getState().document.nodes[0]!.id], edges: [] });
     useEditorStore.getState().copySelection();
     const entries = pane(stubContext());
-    // Paste and Undo, the shapes, then selection and view.
-    expect(layout(entries)).toEqual(['paste', 'undo', 'sep', 'grid', 'sep', 'select-all', 'fit']);
+    // Paste and Undo, the shapes, selection and view, then the whole diagram.
+    expect(layout(entries)).toEqual(['paste', 'undo', 'sep', 'grid', 'sep', 'select-all', 'fit', 'sep', 'find-replace', 'settings']);
   });
 
   it('an Add command creates the node centered on the exact clicked position, not the tracked pointer', () => {

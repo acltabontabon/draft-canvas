@@ -3,6 +3,7 @@ import {
   anchorsForRect,
   placementTransform,
   resolvePlacement,
+  type Placement,
   type PlacementPoint,
 } from '../../../canvas/popoverPlacement';
 import { isEditableTarget } from '../../../lib/isEditableTarget';
@@ -35,6 +36,8 @@ interface ToolbarMenuProps {
   heading?: string;
   /** An extra class, for a menu dressed differently from the overflow menu. */
   className?: string;
+  /** Which side of the trigger it prefers: below for the toolbar, above for the status bar. */
+  placement?: Placement;
 }
 
 /** `popoverPlacement`'s math only needs a space that maps to itself — the anchor is already in
@@ -57,7 +60,7 @@ const GAP = 6;
  * dismissal behaviour but different rows (this one has badge dots and key caps, which a
  * canvas right-click never needs), and a shared abstraction would have to grow both.
  */
-export function ToolbarMenu({ label = 'More', anchorRect, trigger, items, onDismiss, heading, className }: ToolbarMenuProps) {
+export function ToolbarMenu({ label = 'More', anchorRect, trigger, items, onDismiss, heading, className, placement: preferred = 'below' }: ToolbarMenuProps) {
   const panel = useRef<HTMLDivElement>(null);
   const [measuredSize, setMeasuredSize] = useState({ width: 0, height: 0 });
 
@@ -168,7 +171,7 @@ export function ToolbarMenu({ label = 'More', anchorRect, trigger, items, onDism
     width: anchorRect.width,
     height: anchorRect.height,
   });
-  const placement = resolvePlacement('below', anchors, identity, measuredSize, clearances);
+  const placement = resolvePlacement(preferred, anchors, identity, measuredSize, clearances);
   const transform = placementTransform(placement, anchors, measuredSize, clearances, identity, identity);
 
   return (

@@ -4,6 +4,7 @@ import { DEV_PRESETS, PRESETS, SELECT_TOOLTIP, tooltipContentFor, type Preset } 
 import { prefersReducedMotion } from '../../../lib/motion';
 import { Button } from '../../common/Button';
 import { Tooltip } from '../../common/Tooltip';
+import { ToolGlyph } from './ToolGlyph';
 
 /**
  * What you can put on the canvas — the toolbar's centre of gravity, since drawing architecture is
@@ -14,11 +15,18 @@ import { Tooltip } from '../../common/Tooltip';
  * already uses wherever one option of several is chosen — so this reads as native rather than as
  * a new kind of container invented for the toolbar.
  *
- * Names, not icons. "Data Store" and "Queue" say what they are, and a developer sketching a
- * system should never have to learn a diagramming app's private glyph vocabulary first.
+ * Pictures that are the shapes themselves, in miniature (`ToolGlyph`): a Data Store is a small
+ * cylinder, a Queue a small tube — so there is no private glyph vocabulary to learn, which is why
+ * this bar once used words alone. The words are still there where they matter: the tool in your hand
+ * shows its name beside its picture, every tool names itself on hover (with its key and what it is
+ * for), and each carries its letter, small: press it over the canvas and that shape lands at the
+ * pointer, so the keyboard is learnable at a glance.
  *
- * The three families are separated by whitespace alone — interaction, annotation, architecture —
- * because a divider between every pair is what made the old bar read as an inventory.
+ * It is drawn the way Draft Canvas draws: the tools sit on a strip of the canvas's own dotted
+ * ground, idle ones in graphite; the one in hand turns to the product's teal ink, draws itself in, and
+ * writes its name in the mono face a drawing's annotations use. The three families — interaction,
+ * annotation, architecture — are joined by the logo's own elbow connector, not walled off by
+ * dividers (a divider between every pair is what made the old bar read as an inventory).
  */
 export function CreateRail() {
   const armed = useUiStore((state) => state.armed);
@@ -105,12 +113,14 @@ export function CreateRail() {
       {(tip) => (
         <Button
           variant="ghost"
+          className="dc-tool"
           active={armed?.id === preset.id}
           aria-pressed={armed?.id === preset.id}
+          aria-label={preset.label}
           onClick={() => arm(armed?.id === preset.id ? null : preset)}
           {...tip}
         >
-          {preset.label}
+          <ToolContent id={preset.id} label={preset.label} shortcut={preset.shortcut} />
         </Button>
       )}
     </Tooltip>
@@ -130,17 +140,22 @@ export function CreateRail() {
           {(tip) => (
             <Button
               variant="ghost"
+              className="dc-tool"
               active={armed === null}
               aria-pressed={armed === null}
+              aria-label="Select"
               onClick={() => arm(null)}
               {...tip}
             >
-              Select
+              {/* No letter: Select's key is Esc, which its tooltip shows. */}
+              <ToolContent id="select" label="Select" />
             </Button>
           )}
         </Tooltip>
       </div>
+      <RailLink />
       <div className="dc-create-family">{PRESETS.map(toolButton)}</div>
+      <RailLink />
       <div className="dc-create-family">{DEV_PRESETS.map(toolButton)}</div>
       {more.start && (
         <button type="button" className="dc-create-rail-more" data-side="start" tabIndex={-1} aria-label="Show earlier tools" onClick={() => page(-1)}>
@@ -153,5 +168,33 @@ export function CreateRail() {
         </button>
       )}
     </div>
+  );
+}
+
+/**
+ * A tool's face: its picture, its name (seen only while it is the tool in hand — the button's
+ * accessible name is the name either way), and its key, small, in the corner.
+ */
+function ToolContent({ id, label, shortcut }: { id: string; label: string; shortcut?: string }) {
+  return (
+    <>
+      <ToolGlyph id={id} />
+      <span className="dc-tool-name">{label}</span>
+      {shortcut && (
+        <span className="dc-tool-key" aria-hidden="true">
+          {shortcut}
+        </span>
+      )}
+    </>
+  );
+}
+
+/** The elbow connector from the Draft Canvas mark, small, joining one family of tools to the next. */
+function RailLink() {
+  return (
+    <svg className="dc-rail-link" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+      <path d="M2.5 5h5.5v6h5.5" />
+      <circle cx="2.5" cy="5" r="1.1" fill="currentColor" stroke="none" />
+    </svg>
   );
 }

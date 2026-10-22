@@ -53,9 +53,9 @@ test.describe('command palette', () => {
     await expect(page.locator('.dc-node')).toHaveCount(0);
   });
 
-  test('the More menu opens it too', async ({ page }) => {
+  test('the Help menu opens it too', async ({ page }) => {
     await newCanvas(page, 'Palette button');
-    await page.getByRole('button', { name: /^More/ }).click();
+    await page.getByRole('button', { name: /^Help/ }).click();
     await page.getByRole('menuitem', { name: 'Commands' }).click();
     await expect(page.getByRole('dialog', { name: 'Commands' })).toBeVisible();
     await expect(page.getByRole('combobox', { name: 'Search commands' })).toBeFocused();
@@ -63,13 +63,13 @@ test.describe('command palette', () => {
 
   test('closing it returns focus to whatever opened it', async ({ page }) => {
     await newCanvas(page, 'Palette focus return');
-    const trigger = page.getByRole('button', { name: /^More/ });
+    const trigger = page.getByRole('button', { name: /^Help/ });
     // Opened from the keyboard: Safari never focuses a button that is clicked, so a mouse open there
     // has no focus to give back — focus return is for the people who reached the button by Tab.
-    // Commands is the More menu's first row.
+    // Commands is the Help menu's first row.
     await trigger.focus();
     await page.keyboard.press('Enter');
-    await expect(page.getByRole('menu', { name: 'More' })).toBeVisible();
+    await expect(page.getByRole('menu', { name: 'Help' })).toBeVisible();
     await page.keyboard.press('Enter');
     await expect(page.getByRole('dialog', { name: 'Commands' })).toBeVisible();
     await page.keyboard.press('Escape');

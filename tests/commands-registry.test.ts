@@ -261,7 +261,8 @@ describe('commandsFor — a shared (read-only) diagram offers nothing that edits
       expect(menu.some((entry, index) => entry.type === 'separator' && menu[index + 1]?.type === 'separator')).toBe(false);
     }
     const pane = menuItemsOf(readSafeMenu(contextMenuCommandsFor(ctx, { kind: 'pane' }, { x: 0, y: 0 })));
-    expect(pane.map((item) => item.command.id)).toEqual(['select-all', 'fit']);
+    // Canvas settings is read-safe (the registry's own list): a shared copy may still change how it looks.
+    expect(pane.map((item) => item.command.id)).toEqual(['select-all', 'fit', 'settings']);
   });
 });
 

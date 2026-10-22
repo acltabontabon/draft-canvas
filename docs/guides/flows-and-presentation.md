@@ -6,7 +6,8 @@ Shortcuts use Mac keys. On Windows and Linux, use `Ctrl` for `⌘`.
 
 ## Trace a flow
 
-1. Open **Flows** (`F`) and choose **Trace a flow**, or find it in `⌘K`.
+1. Open **Flows** (`F`, the glyph beside **Present** at the top right) and choose **Trace a flow**, or
+   find it in `⌘K`.
 2. Name the flow and click connectors in the order you want to explain them.
 3. Choose **Finish** to save the trace as one undo step.
 
