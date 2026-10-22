@@ -390,6 +390,16 @@ describe('hostile text', () => {
     expect(result.create.nodes.map((n) => n.label)).toContain('Api');
   });
 
+  it('decodes an escaped entity once: &amp;lt; reads as &lt;, not <', () => {
+    const result = parsed('flowchart TD\n  A["a &amp;lt; b"] --> B["#quot;q#quot; &#38;gt;"]');
+    expect(result.create.nodes.map((n) => n.label)).toEqual(['a &lt; b', '"q" &gt;']);
+  });
+
+  it('strips tags that removing another tag joins together', () => {
+    const result = parsed('flowchart TD\n  A["x<<b>i>y"] --> B');
+    expect(result.create.nodes.map((n) => n.label)).toContain('xy');
+  });
+
   it('does not backtrack for seconds on a long run of spaces after an opening arrow', () => {
     const started = performance.now();
     parseMermaidFlowchart(`flowchart TD\n  A -- x${' '.repeat(60_000)}y`);

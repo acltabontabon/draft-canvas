@@ -881,6 +881,9 @@ def parse_compose(text: str) -> dict[str, dict]:
 K8S_KIND = re.compile(
     r'^kind:\s*(Deployment|StatefulSet|DaemonSet|CronJob|Job|Service|Ingress|HTTPRoute|Gateway|KafkaTopic|Rollout|KnativeService)\s*$', re.M
 )
+#: Each line under `metadata:` is either indented content or blank, never both: with `\s+.*\n` a run
+#: of blank lines could be split many ways and a manifest without a name backtracked exponentially.
+K8S_NAME = re.compile(r'^metadata:[ \t]*\r?\n(?:[ \t]+\S.*\n|[ \t]*\r?\n)*?[ \t]+name:[ \t]*[\'"]?([^\s\'"]+)', re.M)
 
 
 def parse_k8s(text: str) -> list[tuple[str, str, str | None]]:
@@ -889,7 +892,7 @@ def parse_k8s(text: str) -> list[tuple[str, str, str | None]]:
         kind = K8S_KIND.search(doc)
         if not kind:
             continue
-        name = re.search(r'^metadata:\s*\n(?:\s+.*\n)*?\s+name:\s*[\'"]?([^\s\'"]+)', doc, re.M)
+        name = K8S_NAME.search(doc)
         image = re.search(r'^\s+image:\s*[\'"]?([^\s\'"]+)', doc, re.M)
         schedule = re.search(r'^\s+schedule:\s*[\'"]?([^\'"\n]+)', doc, re.M)
         out.append(
@@ -993,7 +996,6 @@ MAX_CODE_FILES = 6000
 COMPOSE_FILE = re.compile(r'(^|/)(docker-)?compose[\w.-]*\.ya?ml$', re.I)
 TEST_FILE = re.compile(r'(\.|_)(test|spec)\.\w+$|_test\.go$|Test\.(java|kt)$')
 WORKLOAD_KIND = re.compile(r'^kind:\s*(Deployment|StatefulSet|DaemonSet|CronJob|Job|Rollout)\s*$', re.M)
-K8S_NAME = re.compile(r'^metadata:\s*\n(?:\s+.*\n)*?\s+name:\s*[\'"]?([^\s\'"]+)', re.M)
 FILE_ROUTES = re.compile(r'(^|/)(app|pages)/(.*?)(/route|/page)?\.(ts|tsx|js|jsx)$')
 #: Committed environment templates (.env.example, .env.sample…): names only. A real .env is never read.
 ENV_TEMPLATE = re.compile(r'(^|/)\.env\.(example|sample|template|dist|defaults)$', re.I)

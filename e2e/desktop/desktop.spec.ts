@@ -23,9 +23,19 @@ test.beforeEach(async ({ page }) => {
  * "Importing a module script failed" (a page error some tests count as a crash) or fail the reload
  * itself with "WebKit encountered an internal error". Importing the same module here waits for that
  * graph — a module loads once — so the warm-up has nothing left to fetch, whenever it fires.
+ * The desktop shell also renders Home, Settings and AgentActivity as lazy chunks at start-up; a
+ * reload that cut Home or Settings off mid-import failed the same way (6 runs in 15), so this waits
+ * for every chunk `App.tsx` loads before anyone asks.
  */
 async function reloadSeeded(page: Page) {
-  await page.evaluate(() => import('/src/ui/Editor/EditorScreen.tsx').then(() => undefined));
+  await page.evaluate(() =>
+    Promise.all([
+      import('/src/ui/Editor/EditorScreen.tsx'),
+      import('/src/desktop/ui/DesktopHome.tsx'),
+      import('/src/desktop/ui/settings/SettingsDialog.tsx'),
+      import('/src/desktop/ui/AgentActivity.tsx'),
+    ]).then(() => undefined),
+  );
   await page.reload();
 }
 

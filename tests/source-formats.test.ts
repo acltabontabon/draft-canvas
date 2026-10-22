@@ -117,7 +117,8 @@ describe('C4-PlantUML', () => {
     expect(opens).toBe(closes);
     // No raw markup or preprocessor opener survives into a quoted argument.
     for (const line of text.split('\n').filter((l) => /^\s*(Rel|BiRel|Person|System|Container|Component|Boundary)/.test(l))) {
-      expect(line).not.toMatch(/"[^"]*[<%~\\$][^"]*"/.source.replace('<', '<(?!U\\+)'));
+      // A regex, not a string: `toMatch(string)` is a substring test, so this check once never ran.
+      expect(line).not.toMatch(/"[^"]*(?:<(?!U\+)|[%~\\$])[^"]*"/);
     }
   });
 
