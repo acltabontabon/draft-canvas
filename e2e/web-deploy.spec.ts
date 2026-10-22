@@ -102,7 +102,12 @@ test('a path the site does not have gets its 404 page', async ({ page }) => {
 test('the editor asks not to be indexed as a second landing page', async ({ page }) => {
   await page.goto(APP);
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/);
-  await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', 'https://app.draftcanvas.dev/');
+  // Off a release tag the editor here is the latest release, which can predate a change of
+  // address, so this asks only that it never claims the landing page's place. The exact address
+  // is pinned against the current source in tests/site-isolation.test.ts.
+  const canonical = await page.locator('link[rel="canonical"]').getAttribute('href');
+  expect(canonical).toMatch(/^https:\/\//);
+  expect(canonical).not.toBe('https://draftcanvas.dev/');
 
   await page.goto(SITE);
   await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', 'https://draftcanvas.dev/');
