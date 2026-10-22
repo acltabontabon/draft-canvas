@@ -35,6 +35,9 @@ the release notes and the in-app What's New are generated from here. See
 
 #### Changed
 
+- **One Share button** — drawing together live, exporting, and copying a read-only link now live
+  behind **Share** at the top right, each spelled out. During a session, everyone's faces sit beside
+  it. The command palette's toolbar button moved into **More**; `⌘K` opens it as before.
 - An Actor's name follows its kind: switch a new User to Device and it becomes "Device". A name
   you typed stays.
 

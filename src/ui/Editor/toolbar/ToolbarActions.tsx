@@ -9,6 +9,7 @@ import { ARRANGE_FAILED, notifyLoadFailure } from '../../common/notifyLoadFailur
 import { Tooltip } from '../../common/Tooltip';
 import { FindReplaceHost } from '../FindReplaceDialog';
 import { CollabControl } from '../../collab/CollabControl';
+import { ShareButton } from './ShareButton';
 import { ToolbarMenu, type ToolbarMenuItem } from './ToolbarMenu';
 import { toolbarLabel, toolbarTooltip } from './toolbarTooltips';
 
@@ -18,13 +19,12 @@ interface ToolbarActionsProps {
 }
 
 /**
- * Everything you do to the workspace, in one capsule that answers the create rail on the left,
- * grouped by what each thing is for and parted by hairlines: history (undo, redo); showing (Flows
- * and Present, modes you enter, so they carry words when there is room); sharing (Collaborate and
- * Export, the two ways a diagram reaches someone else); and tools (commands, More). The app-level
- * utilities behind `More` are the ones you touch once a session — folding them up is what stops the
- * right edge reading as an icon train, and the trigger inherits their badges so nothing gets
- * quietly buried.
+ * Everything you do to the workspace, in order of how often it matters: undo and redo, quiet; the
+ * two modes you enter (Flows, Present), which carry words when there is room; then the people in a
+ * live session, as faces, and Share — the one filled button, because it is the one thing that takes
+ * the diagram anywhere. The app-level utilities behind `More` (the command palette among them,
+ * since ⌘K is how most people open it) are the ones you touch once a session; the trigger inherits
+ * their badges so nothing gets quietly buried.
  */
 export function ToolbarActions({ onPresent, onExport }: ToolbarActionsProps) {
   const setShortcutsOpen = useUiStore((state) => state.setShortcutsOpen);
@@ -66,6 +66,17 @@ export function ToolbarActions({ onPresent, onExport }: ToolbarActionsProps) {
   const moreState = aboutState;
 
   const menuItems: ToolbarMenuItem[] = [
+    // The palette's own button is gone from the bar (⌘K is how most people open it); it stays
+    // findable here, with its keys shown.
+    {
+      id: 'commands',
+      label: toolbarLabel('commands'),
+      shortcut: toolbarTooltip('commands').shortcut,
+      onSelect: () => {
+        closeMenu();
+        setCommandPaletteOpen(true);
+      },
+    },
     {
       id: 'settings',
       label: toolbarLabel('settings'),
@@ -142,136 +153,113 @@ export function ToolbarActions({ onPresent, onExport }: ToolbarActionsProps) {
 
   return (
     <div className="dc-toolbar-trail">
-      <div className="dc-toolbar-capsule">
-        <div className="dc-toolbar-history">
-          <Tooltip content={toolbarTooltip('undo')}>
-            {(tip) => (
-              <Button
-                icon="undo"
-                variant="quiet"
-                disabled={past === 0}
-                onClick={undo}
-                aria-label={toolbarLabel('undo')}
-                {...tip}
-              />
-            )}
-          </Tooltip>
-          <Tooltip content={toolbarTooltip('redo')}>
-            {(tip) => (
-              <Button
-                icon="redo"
-                variant="quiet"
-                disabled={future === 0}
-                onClick={redo}
-                aria-label={toolbarLabel('redo')}
-                {...tip}
-              />
-            )}
-          </Tooltip>
-        </div>
+      <div className="dc-toolbar-history">
+        <Tooltip content={toolbarTooltip('undo')}>
+          {(tip) => (
+            <Button
+              icon="undo"
+              variant="quiet"
+              disabled={past === 0}
+              onClick={undo}
+              aria-label={toolbarLabel('undo')}
+              {...tip}
+            />
+          )}
+        </Tooltip>
+        <Tooltip content={toolbarTooltip('redo')}>
+          {(tip) => (
+            <Button
+              icon="redo"
+              variant="quiet"
+              disabled={future === 0}
+              onClick={redo}
+              aria-label={toolbarLabel('redo')}
+              {...tip}
+            />
+          )}
+        </Tooltip>
+      </div>
 
-        {/* Modes you enter, not commands you fire. Both are built the same way — glyph, then word,
-            one composed control — so they read as siblings rather than as two systems that happen to
-            sit next to each other. Flows can be persistently on and takes the tint; Present is
-            momentary, so it deliberately has no active state to fake. */}
-        <div className="dc-toolbar-modes">
-          <Tooltip content={toolbarTooltip('flows')}>
-            {(tip) => (
-              <Button
-                icon="flow"
-                variant="ghost"
-                active={flowPanelOpen}
-                className="dc-toolbar-mode dc-flow-toggle"
-                onClick={() => setFlowPanelOpen(!flowPanelOpen)}
-                aria-label={toolbarLabel('flows')}
-                {...tip}
-              >
-                <span className="dc-mode-label">Flows</span>
-                {activeFlowTitle && (
-                  <>
-                    <span className="dc-flow-toggle-sep" aria-hidden="true">
-                      ·
-                    </span>
-                    <span className="dc-flow-toggle-title">{activeFlowTitle}</span>
-                  </>
-                )}
-              </Button>
-            )}
-          </Tooltip>
-          <Tooltip content={toolbarTooltip('present')}>
-            {(tip) => (
-              <Button
-                icon="present"
-                variant="ghost"
-                className="dc-toolbar-mode"
-                // Wrapped, never passed straight through: `onPresent` takes an optional flow id,
-                // and a bare `onClick={onPresent}` hands it the click event instead — truthy, so
-                // the presentation would start on a flow that doesn't exist and quietly do nothing.
-                onClick={() => onPresent()}
-                aria-label={toolbarLabel('present')}
-                {...tip}
-              >
-                <span className="dc-mode-label">Present</span>
-              </Button>
-            )}
-          </Tooltip>
-        </div>
-
-        {/* The two ways the diagram reaches someone else: live, or as a file. A share link's read-only
-            copy has nobody to collaborate with, so it offers only Export. */}
-        <div className="dc-toolbar-share">
-          {(!readOnly || collaborative) && <CollabControl />}
-          <Tooltip content={toolbarTooltip('export')}>
-            {(tip) => (
-              <Button
-                icon="export"
-                variant="quiet"
-                onClick={onExport}
-                aria-label={toolbarLabel('export')}
-                {...tip}
-              />
-            )}
-          </Tooltip>
-        </div>
-
-        <div className="dc-toolbar-utilities">
-          <Tooltip content={toolbarTooltip('commands')}>
-            {(tip) => (
-              <Button
-                icon="search"
-                variant="quiet"
-                onClick={() => setCommandPaletteOpen(true)}
-                aria-label={toolbarLabel('commands')}
-                {...tip}
-              />
-            )}
-          </Tooltip>
-          <span className="dc-badge-anchor">
-            <Tooltip content={toolbarTooltip('more')}>
-              {(tip) => (
-                <Button
-                  ref={moreRef}
-                  icon="more"
-                  variant="quiet"
-                  active={menu !== null}
-                  aria-haspopup="menu"
-                  aria-expanded={menu !== null}
-                  onClick={(event) => {
-                    const trigger = event.currentTarget;
-                    setMenu((open) => (open ? null : { rect: trigger.getBoundingClientRect(), trigger }));
-                  }}
-                  aria-label={moreState ? `${toolbarLabel('more')} — ${moreState}` : toolbarLabel('more')}
-                  {...tip}
-                />
+      {/* Modes you enter, not commands you fire. Both are built the same way — glyph, then word,
+          one composed control — so they read as siblings rather than as two systems that happen to
+          sit next to each other. Flows can be persistently on and takes the tint; Present is
+          momentary, so it deliberately has no active state to fake. */}
+      <div className="dc-toolbar-modes">
+        <Tooltip content={toolbarTooltip('flows')}>
+          {(tip) => (
+            <Button
+              icon="flow"
+              variant="ghost"
+              active={flowPanelOpen}
+              className="dc-toolbar-mode dc-flow-toggle"
+              onClick={() => setFlowPanelOpen(!flowPanelOpen)}
+              aria-label={toolbarLabel('flows')}
+              {...tip}
+            >
+              <span className="dc-mode-label">Flows</span>
+              {activeFlowTitle && (
+                <>
+                  <span className="dc-flow-toggle-sep" aria-hidden="true">
+                    ·
+                  </span>
+                  <span className="dc-flow-toggle-title">{activeFlowTitle}</span>
+                </>
               )}
-            </Tooltip>
-            {escalatedDot === 'update' ? (
-              <span className="dc-update-dot" aria-hidden="true" />
-            ) : (
-              escalatedDot === 'new' && <span className="dc-new-dot" aria-hidden="true" />
+            </Button>
+          )}
+        </Tooltip>
+        <Tooltip content={toolbarTooltip('present')}>
+          {(tip) => (
+            <Button
+              icon="present"
+              variant="ghost"
+              className="dc-toolbar-mode"
+              // Wrapped, never passed straight through: `onPresent` takes an optional flow id,
+              // and a bare `onClick={onPresent}` hands it the click event instead — truthy, so
+              // the presentation would start on a flow that doesn't exist and quietly do nothing.
+              onClick={() => onPresent()}
+              aria-label={toolbarLabel('present')}
+              {...tip}
+            >
+              <span className="dc-mode-label">Present</span>
+            </Button>
+          )}
+        </Tooltip>
+      </div>
+
+      {/* Who is here (a live session's faces), then the one filled button: how the diagram
+          reaches anyone else. */}
+      <div className="dc-toolbar-share">
+        {(!readOnly || collaborative) && <CollabControl />}
+        <ShareButton onExport={onExport} />
+      </div>
+
+      <div className="dc-toolbar-utilities">
+        <span className="dc-badge-anchor">
+          <Tooltip content={toolbarTooltip('more')}>
+            {(tip) => (
+              <Button
+                ref={moreRef}
+                icon="more"
+                variant="quiet"
+                active={menu !== null}
+                aria-haspopup="menu"
+                aria-expanded={menu !== null}
+                onClick={(event) => {
+                  const trigger = event.currentTarget;
+                  setMenu((open) => (open ? null : { rect: trigger.getBoundingClientRect(), trigger }));
+                }}
+                aria-label={moreState ? `${toolbarLabel('more')} — ${moreState}` : toolbarLabel('more')}
+                {...tip}
+              />
             )}
-          </span>
-        </div>
+          </Tooltip>
+          {escalatedDot === 'update' ? (
+            <span className="dc-update-dot" aria-hidden="true" />
+          ) : (
+            escalatedDot === 'new' && <span className="dc-new-dot" aria-hidden="true" />
+          )}
+        </span>
       </div>
 
       {menu && (

@@ -2753,6 +2753,84 @@
   gap: 8px;
 }
 
+.dc-toolbar-menu-heading {
+  overflow: hidden;
+  padding: 8px 10px 6px;
+  color: var(--dc-text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Rows that are choices, not commands: a picture in a soft tile, a name, and one plain line. */
+.dc-toolbar-menu-icon {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--dc-row-tint, var(--dc-selection)) 14%, transparent);
+  color: var(--dc-row-tint, var(--dc-selection));
+  transition: transform 140ms ease;
+}
+
+.dc-toolbar-menu-icon svg {
+  width: 17px;
+  height: 17px;
+}
+
+.dc-toolbar-menu-item[data-highlighted='true'] .dc-toolbar-menu-icon {
+  transform: scale(1.06) rotate(-4deg);
+}
+
+.dc-toolbar-menu-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.dc-toolbar-menu-detail {
+  color: var(--dc-text-muted);
+  font-size: 11.5px;
+  line-height: 1.4;
+  white-space: normal;
+}
+
+/* Share's panel: wider rows, each choice in its own colour from the peer palette. */
+.dc-share-menu {
+  min-width: 300px;
+  max-width: 320px;
+  padding: 6px;
+}
+
+.dc-share-menu .dc-toolbar-menu-item {
+  gap: 12px;
+  padding: 9px 10px;
+}
+
+.dc-share-menu .dc-context-menu-title {
+  font-weight: 600;
+}
+
+.dc-share-menu [data-item='live'] { --dc-row-tint: var(--dc-peer-0); }
+.dc-share-menu [data-item='export'] { --dc-row-tint: var(--dc-peer-1); }
+.dc-share-menu [data-item='link'] { --dc-row-tint: var(--dc-peer-3); }
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-toolbar-menu-icon {
+    transition: none;
+  }
+
+  .dc-toolbar-menu-item[data-highlighted='true'] .dc-toolbar-menu-icon {
+    transform: none;
+  }
+}
+
 .dc-toolbar-menu-item .dc-new-dot[data-inline='true'],
 .dc-toolbar-menu-item .dc-update-dot[data-inline='true'] {
   position: static;

@@ -100,26 +100,45 @@
 
 /* -------------------------------------------------------- toolbar control -- */
 
+/* The faces of a live session, piled up beside Share. */
 .dc-collab-control {
   position: relative;
-  gap: 5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   height: 28px;
-  padding: 0 7px 0 6px;
-  color: var(--dc-text-muted);
-  font-size: 12.5px;
-}
-
-.dc-collab-control .dc-collab-count {
-  padding: 0;
+  padding: 0 6px 0 4px;
+  border: 0;
+  border-radius: var(--dc-radius-pill);
   background: none;
-  color: inherit;
-  font-size: 12px;
-  font-weight: 600;
+  color: var(--dc-text-muted);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
 }
 
-.dc-collab-control:hover:not(:disabled) {
+.dc-collab-control:hover,
+.dc-collab-control[data-active='true'] {
   background: var(--dc-surface-hover);
   color: var(--dc-text);
+}
+
+.dc-collab-control:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 1px;
+}
+
+.dc-collab-stack .dc-collab-more {
+  background: var(--dc-surface-raised);
+  color: var(--dc-text-muted);
+}
+
+/* Someone at the door, in the pile: no colour yet, a dashed ring that breathes. */
+.dc-collab-stack .dc-collab-knocking {
+  border: 1.5px dashed var(--dc-selection);
+  background: var(--dc-surface);
+  color: var(--dc-text);
+  animation: dc-collab-breathe 1.8s ease-in-out infinite;
 }
 
 .dc-collab-stack {
@@ -152,11 +171,11 @@
   animation: dc-collab-breathe 1.8s ease-in-out infinite;
 }
 
-/* A live session says so with a small breathing dot on the people glyph's shoulder. */
+/* A live session says so with a small breathing dot on the pile's shoulder. */
 .dc-collab-live-dot {
   position: absolute;
-  top: 5px;
-  left: 18px;
+  top: 2px;
+  right: 2px;
   flex: none;
   width: 7px;
   height: 7px;
@@ -1117,6 +1136,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .dc-collab-live-dot,
+  .dc-collab-stack .dc-collab-knocking,
   .dc-scene-face,
   .dc-scene-seat .dc-scene-face,
   .dc-scene-tie,

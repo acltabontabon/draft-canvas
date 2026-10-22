@@ -20,7 +20,8 @@ test('web saving uses local autosave and portable export/import even when native
   await expect(page.getByLabel('Diagram title')).toHaveValue('Portable export');
   await expect(page.locator('.dc-node')).toHaveCount(4);
 
-  await page.getByRole('button', { name: 'Export', exact: true }).click();
+  await page.getByRole('button', { name: 'Share', exact: true }).click();
+  await page.getByRole('menuitem', { name: /^Export/ }).click();
   const dialog = page.getByRole('dialog', { name: /export/i });
   await dialog.locator('[data-mode="document"]').click();
   const download = page.waitForEvent('download');

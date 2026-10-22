@@ -10,8 +10,11 @@ canvas is theirs alone again.
 
 ## Start a session
 
-1. Open the canvas and press **Collaborate** (the people icon in the toolbar), or run
+1. Open the canvas, press **Share** at the top right and choose **Draw together, live**, or run
    **Collaborate…** from the command palette (`⌘K`).
+
+   ![The Share panel under the toolbar's Share button: Draw together, live; Export; and Copy read-only link, each with a one-line description.](../media/guides/share-panel.png)
+
 2. Write your name on the name tag — it's shown next to your cursor — and choose **who can join**:
    - **Anyone with the link** (the default) works between different homes and offices. A public
      STUN server helps your browsers find a route to each other, and Draft Canvas's relay lets people
@@ -31,8 +34,8 @@ and Join dialogs alike. Your own STUN server, if you'd rather not use the defaul
 
 ![The lock opened: a "Private by design" note saying the diagram goes straight between browsers, encrypted, that the relay and STUN server see IP addresses but never the diagram, and a link to use your own STUN server.](../media/guides/collab-privacy.png)
 
-The toolbar now shows **Live** and how many people are in the session, and the people themselves
-appear in a column at the top right of the canvas.
+The toolbar now shows everyone's faces beside **Share**, with a breathing dot while the session is
+live, and the people themselves appear in a column at the top right of the canvas.
 
 ## Invite people
 
@@ -107,7 +110,8 @@ editable copy** when the session ends, or ask the owner to export it.
 
 ## What the owner controls
 
-Hover a face in the people column, or open **Live** in the toolbar, to manage each person.
+Hover a face in the people column, or press the faces beside **Share** in the toolbar, to manage each
+person.
 
 - **Can edit / Can view** changes what each person may do, at once. A viewer sees every change live
   but can't make any.
@@ -128,7 +132,7 @@ A session holds the owner and up to 10 collaborators.
 ## Desktop: share on your local network
 
 The desktop app can also share over the local network, for a room where everyone is on the same
-Wi-Fi. While a session runs, open it from the toolbar and turn on **Also share on this network**. You
+Wi-Fi. While a session runs, press the faces beside **Share** and turn on **Also share on this network**. You
 get a single link like `http://192.168.1.20:52814/#join=lan.…` that people on the network open in a
 browser — no reply code, and no relay: the desktop app serves the editor to them itself. Each person
 who opens it asks to join and waits at the door like anyone else, until you let them in or not.

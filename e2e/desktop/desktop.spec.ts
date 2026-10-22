@@ -867,7 +867,8 @@ test('exports go through the shell’s Save dialog, and cancelling one is not a 
   await expect(page.locator('.dc-editor')).toBeVisible();
   await drawService(page);
 
-  await page.getByRole('button', { name: 'Export', exact: true }).click();
+  await page.getByRole('button', { name: 'Share', exact: true }).click();
+  await page.getByRole('menuitem', { name: /^Export/ }).click();
   const dialog = page.getByRole('dialog', { name: 'Export' });
   await expect(dialog).toBeVisible();
   // A first-ever Export opens on Image; the document is what carries the diagram itself.
@@ -890,7 +891,8 @@ test('cancelling an export’s Save dialog leaves the export dialog as it was, w
   await expect(page.locator('.dc-editor')).toBeVisible();
   await page.evaluate(() => window.__shell.cancelNextExport());
 
-  await page.getByRole('button', { name: 'Export', exact: true }).click();
+  await page.getByRole('button', { name: 'Share', exact: true }).click();
+  await page.getByRole('menuitem', { name: /^Export/ }).click();
   const dialog = page.getByRole('dialog', { name: 'Export' });
   await dialog.locator('[data-mode="document"]').click();
   await page.getByRole('button', { name: 'Export document' }).click();

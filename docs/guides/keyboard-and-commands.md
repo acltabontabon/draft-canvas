@@ -1,6 +1,7 @@
 # Keyboard shortcuts and the command palette
 
-Press `?` for the full shortcut list, or `⌘K` to find a command.
+Press `?` for the full shortcut list, or `⌘K` to find a command (it is also first in the toolbar's
+**More** menu).
 On Windows and Linux, use `Ctrl` for `⌘` and `Alt` for `⌥`.
 Single-letter shortcuts work while the canvas has focus, outside text fields and dialogs.
 

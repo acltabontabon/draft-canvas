@@ -71,7 +71,8 @@ test.describe('accessibility (axe)', () => {
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog', { name: 'Commands' })).toBeHidden();
 
-    await page.getByRole('button', { name: 'Export', exact: true }).click();
+    await page.getByRole('button', { name: 'Share', exact: true }).click();
+    await page.getByRole('menuitem', { name: /^Export/ }).click();
     await expect(page.getByRole('dialog').first()).toBeVisible();
     await scan(page, 'export dialog');
   });

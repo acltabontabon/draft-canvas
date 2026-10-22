@@ -57,6 +57,10 @@ const SPECS = {
   shortcuts: { title: 'Keyboard shortcuts', commandId: 'shortcuts' },
   about: { title: 'About Draft Canvas', commandId: 'about' },
   more: { title: 'More' },
+  share: {
+    title: 'Share',
+    description: 'Draw together live, export a copy, or send a read-only link.',
+  },
   collaborate: {
     title: 'Collaborate',
     commandId: 'collaborate',

@@ -56,7 +56,8 @@ async function peersConnect(page: Page, browserName: string): Promise<boolean> {
 }
 
 async function startSession(owner: Page): Promise<string> {
-  await owner.getByRole('button', { name: 'Collaborate', exact: true }).click();
+  await owner.getByRole('button', { name: 'Share', exact: true }).click();
+  await owner.getByRole('menuitem', { name: /^Draw together, live/ }).click();
   const dialog = owner.getByRole('dialog', { name: 'Collaborate' });
   await dialog.getByLabel('Your name').fill('Olive');
   // A session link goes through the relay, so the owner picks "Anyone with the link" — with a STUN server

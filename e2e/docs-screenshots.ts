@@ -215,7 +215,18 @@ async function collabScreenshots(browser: Browser, page: Page) {
   // The owner's own pointer rests on empty canvas, so no shape wears hover handles in the pictures.
   const rest = async () => page.mouse.move(VIEWPORT.width - 60, VIEWPORT.height - 120);
 
-  await page.getByRole('button', { name: 'Collaborate', exact: true }).click();
+  await page.getByRole('button', { name: 'Share', exact: true }).click();
+  // The Share panel with the toolbar above it: every way the diagram reaches someone, spelled out.
+  const panel = page.getByRole('menu', { name: 'Share' });
+  await expect(panel).toBeVisible();
+  await page.waitForTimeout(400);
+  const menuBox = await box(panel);
+  await page.screenshot({
+    path: join(OUT, 'share-panel.png'),
+    clip: { x: menuBox.x - 24, y: 0, width: VIEWPORT.width - menuBox.x + 24, height: menuBox.y + menuBox.height + 16 },
+  });
+  log('  share-panel.png');
+  await page.getByRole('menuitem', { name: /^Draw together, live/ }).click();
   const dialog = page.getByRole('dialog', { name: 'Collaborate' });
   await dialog.getByLabel('Your name').fill('Ada');
   // The dialogs are taller than the guides' usual window: show each whole, unscrolled.

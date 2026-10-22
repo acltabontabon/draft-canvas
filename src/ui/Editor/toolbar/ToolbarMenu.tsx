@@ -6,6 +6,7 @@ import {
   type PlacementPoint,
 } from '../../../canvas/popoverPlacement';
 import { isEditableTarget } from '../../../lib/isEditableTarget';
+import { Icon, type IconName } from '../../common/Icon';
 
 export interface ToolbarMenuItem {
   id: string;
@@ -14,6 +15,10 @@ export interface ToolbarMenuItem {
   /** A badge the collapsed trigger is also showing — repeated on the row so opening the menu
    *  says *which* item was asking for attention. */
   dot?: 'new' | 'update';
+  /** A picture for the row, in a soft tile — for menus whose rows are choices rather than commands. */
+  icon?: IconName;
+  /** One plain line under the label: what the row does, for someone who has never used it. */
+  detail?: string;
   onSelect: () => void;
 }
 
@@ -26,6 +31,10 @@ interface ToolbarMenuProps {
   trigger: HTMLElement | null;
   items: ToolbarMenuItem[];
   onDismiss: () => void;
+  /** A heading above the rows (not a row itself, and never highlighted). */
+  heading?: string;
+  /** An extra class, for a menu dressed differently from the overflow menu. */
+  className?: string;
 }
 
 /** `popoverPlacement`'s math only needs a space that maps to itself — the anchor is already in
@@ -48,7 +57,7 @@ const GAP = 6;
  * dismissal behaviour but different rows (this one has badge dots and key caps, which a
  * canvas right-click never needs), and a shared abstraction would have to grow both.
  */
-export function ToolbarMenu({ label = 'More', anchorRect, trigger, items, onDismiss }: ToolbarMenuProps) {
+export function ToolbarMenu({ label = 'More', anchorRect, trigger, items, onDismiss, heading, className }: ToolbarMenuProps) {
   const panel = useRef<HTMLDivElement>(null);
   const [measuredSize, setMeasuredSize] = useState({ width: 0, height: 0 });
 
@@ -165,13 +174,18 @@ export function ToolbarMenu({ label = 'More', anchorRect, trigger, items, onDism
   return (
     <div
       ref={panel}
-      className="dc-context-menu dc-toolbar-menu"
+      className={['dc-context-menu dc-toolbar-menu', className].filter(Boolean).join(' ')}
       role="menu"
       aria-label={label}
       aria-activedescendant={`dc-toolbar-menu-item-${highlight}`}
       tabIndex={-1}
       style={{ transform }}
     >
+      {heading && (
+        <div className="dc-toolbar-menu-heading" role="presentation">
+          {heading}
+        </div>
+      )}
       {items.map((item, index) => (
         <button
           key={item.id}
@@ -182,13 +196,26 @@ export function ToolbarMenu({ label = 'More', anchorRect, trigger, items, onDism
           // shortcuts question mark" helps nobody. `aria-keyshortcuts` is what conveys this.
           aria-keyshortcuts={item.shortcut}
           className="dc-context-menu-item dc-toolbar-menu-item"
+          data-item={item.id}
           data-highlighted={index === highlight ? 'true' : undefined}
           onPointerMove={() => {
             if (highlightRef.current !== index) setHighlight(index);
           }}
           onClick={item.onSelect}
         >
-          <span className="dc-context-menu-title">{item.label}</span>
+          {item.icon && (
+            <span className="dc-toolbar-menu-icon" aria-hidden="true">
+              <Icon name={item.icon} />
+            </span>
+          )}
+          {item.detail ? (
+            <span className="dc-toolbar-menu-text">
+              <span className="dc-context-menu-title">{item.label}</span>
+              <span className="dc-toolbar-menu-detail">{item.detail}</span>
+            </span>
+          ) : (
+            <span className="dc-context-menu-title">{item.label}</span>
+          )}
           {item.dot && (
             <>
               <span

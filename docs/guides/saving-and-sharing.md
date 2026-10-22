@@ -33,7 +33,7 @@ Deleting a project moves its diagrams to **Unorganized**.
 
 ## Export a file
 
-Open **Export** (`⌘⇧E` / `Ctrl+Shift+E`):
+Open **Share → Export** (`⌘⇧E` / `Ctrl+Shift+E`):
 
 | Choose | Output | Use it for |
 | --- | --- | --- |
@@ -105,10 +105,10 @@ See the [Mermaid import reference](../reference/mermaid-import.md) for mappings 
 
 | Send | How | Recipient gets |
 | --- | --- | --- |
-| Link | **Copy share link** in `⌘K` or **Export → Document** | A read-only snapshot; **Make an editable copy** saves their own version |
+| Link | **Share → Copy read-only link**, **Copy share link** in `⌘K`, or **Export → Document** | A read-only snapshot; **Make an editable copy** saves their own version |
 | File | **Document → Editable** or **Encrypted** | A diagram they can reopen |
 | Picture | **Image**, or **Copy as image** | A PNG or SVG; editing requires an embedded diagram |
-| Live session | **Collaborate** in the toolbar | The canvas itself, edited together in real time; see [Collaborating live](collaborating.md) |
+| Live session | **Share → Draw together, live** | The canvas itself, edited together in real time; see [Collaborating live](collaborating.md) |
 
 Share links contain the whole document after the `#`; nothing is uploaded.
 Anyone with the link can read it. Links do not expire, and later edits do not update them.
