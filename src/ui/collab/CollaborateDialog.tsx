@@ -1,7 +1,8 @@
-import { lazy, Suspense, useEffect, useId, useRef, useState } from 'react';
+import { lazy, Suspense, useId, useRef, useState } from 'react';
 import { DEFAULT_STUN, peerConnectionsAvailable } from '../../collab/connect';
 import { MAX_COLLABORATORS, type PeerView, type Role } from '../../collab/protocol';
-import { leaveSessionKeepingView, removeCollaborator, restoreSessionStart, setCollaboratorRole, startHosting, stopHosting } from '../../store/collabBridge';
+import { leaveSessionKeepingView, setCollaboratorRole, startHosting, stopHosting } from '../../store/collabBridge';
+import { removePerson, undoPersonChanges } from './peerActions';
 import { useShallow } from 'zustand/react/shallow';
 import { useCollabStore } from '../../store/collabStore';
 import { useUiStore } from '../../store/uiStore';
@@ -93,20 +94,18 @@ function Start() {
   return (
     <div className="dc-collab dc-collab-centred">
       <SessionScene owner={{ name: name.trim(), color: 0, you: true }} people={[]} privacy={privacy} />
-      <div className="dc-collab-hero">
-        <h3 className="dc-collab-title">Draw together, live</h3>
-        <ol className="dc-collab-how" aria-label="How it works">
-          <li>
-            <span aria-hidden="true">1</span>Share one link
-          </li>
-          <li>
-            <span aria-hidden="true">2</span>They ask to join
-          </li>
-          <li>
-            <span aria-hidden="true">3</span>You let them in
-          </li>
-        </ol>
-      </div>
+      {/* How it works, as a little timeline in the scene's own dashed line — no heading needed. */}
+      <ol className="dc-collab-how" aria-label="How it works">
+        <li>
+          <span aria-hidden="true">1</span>Share one link
+        </li>
+        <li>
+          <span aria-hidden="true">2</span>They ask to join
+        </li>
+        <li>
+          <span aria-hidden="true">3</span>You let them in
+        </li>
+      </ol>
       {!available && (
         <p className="dc-collab-error" role="alert">
           This browser can’t make direct connections, so it can’t host a session. Try a current Chrome, Edge, Firefox or
@@ -128,7 +127,7 @@ function Start() {
             checked={!network.localOnly}
             icon="globe"
             title="Anyone with the link"
-            detail="From any home or office. You still decide who gets in."
+            detail="Any home or office. You decide who gets in."
             onSelect={() => setNetwork({ ...network, localOnly: false })}
           />
           <Choice
@@ -136,7 +135,7 @@ function Start() {
             checked={network.localOnly}
             icon="lock"
             title="Only my network"
-            detail="Same Wi‑Fi or office network. No link — you invite people one at a time."
+            detail="Same Wi‑Fi only. You invite people one by one."
             onSelect={() => setNetwork({ ...network, localOnly: true })}
           />
         </fieldset>
@@ -225,43 +224,11 @@ function Hosting({ onClose }: { onClose: () => void }) {
         >
           End session
         </Button>
-        <Restore />
         <Button variant="solid" onClick={onClose}>
           Done
         </Button>
       </div>
     </div>
-  );
-}
-
-/**
- * The way back from an editor who did damage: their edits never enter the owner's undo history, so
- * this puts the canvas back as it was when the session started. A second click confirms; the restore
- * itself can be undone like any edit.
- */
-function Restore() {
-  const [armed, setArmed] = useState(false);
-  useEffect(() => {
-    if (!armed) return;
-    const timer = setTimeout(() => setArmed(false), 4000);
-    return () => clearTimeout(timer);
-  }, [armed]);
-  return (
-    <Button
-      variant={armed ? 'danger' : 'quiet'}
-      icon="undo"
-      className="dc-collab-restore"
-      title="Puts the canvas back exactly as it was when you started the session — everyone’s changes since, yours included. Undo brings them back."
-      onClick={() => {
-        if (!armed) return setArmed(true);
-        setArmed(false);
-        const notify = useUiStore.getState().notify;
-        if (restoreSessionStart()) notify('Restored to how the canvas was when the session started. Undo brings the changes back.');
-        else notify('Nothing to restore — the canvas is as it was when the session started.');
-      }}
-    >
-      {armed ? 'Click again to undo everyone’s changes' : 'Restore session start'}
-    </Button>
   );
 }
 
@@ -403,6 +370,7 @@ export function KnockRow({ id, name, admitting }: { id: string; name: string; ad
 
 function Person({ peer }: { peer: PeerView }) {
   const create = useInviteStore((state) => state.create);
+  const authored = useCollabStore((state) => state.authors[peer.id] === true);
   const gone = peer.link === 'gone';
   const role: Role = peer.role === 'owner' ? 'editor' : peer.role;
   return (
@@ -425,7 +393,12 @@ function Person({ peer }: { peer: PeerView }) {
             <option value="viewer">{ROLE_LABELS.viewer}</option>
           </select>
         )}
-        <Button variant="quiet" icon="close" aria-label={`Remove ${peer.name} from the session`} onClick={() => removeCollaborator(peer.id)} />
+        {authored && (
+          <Button variant="quiet" icon="undo" title={`Takes back everything ${peer.name} changed this session, unless someone has changed or built on it since. Undo brings it back.`} onClick={() => undoPersonChanges(peer.id, peer.name)}>
+            Undo changes
+          </Button>
+        )}
+        <Button variant="quiet" icon="close" aria-label={`Remove ${peer.name} from the session`} onClick={() => removePerson(peer.id, peer.name)} />
       </span>
     </li>
   );

@@ -50,6 +50,8 @@ export interface CollabState {
    * own choice ("Only my network"): no relay is contacted at all.
    */
   rendezvous: 'off' | 'local' | 'connecting' | 'open' | 'unavailable';
+  /** The owner's: who has changed the canvas this session, by peer id — whose changes can be taken back. */
+  authors: Readonly<Record<string, true>>;
 }
 
 export interface KnockView {
@@ -78,6 +80,7 @@ export const COLLAB_AT_REST: CollabState = {
   lanKnocks: [],
   sessionLink: null,
   rendezvous: 'off',
+  authors: {},
 };
 
 export const useCollabStore = create<CollabState>(() => COLLAB_AT_REST);

@@ -14,6 +14,7 @@
 import type { DraftDocument } from '../document/types';
 import { CURRENT_VERSION } from '../document/types';
 import { ByteBudget, CLOSE_GRACE_MS, GONE_MS, HEARTBEAT_MS, HELLO_TIMEOUT_MS, HOLD_RETRY_MS, RateLimit, REAL_CLOCK, SILENT_MS, type Clock } from './clock';
+import { Authorship } from './authorship';
 import { HostCore, HOST_ORIGIN, type Commit, type PeerLedger } from './hostCore';
 import {
   encode,
@@ -52,6 +53,8 @@ export interface HostEnvironment {
 export interface HostEvents {
   peers(peers: PeerView[]): void;
   presence(peerId: string, presence: Presence | null): void;
+  /** `peerId` changed the canvas for the first time this session: their changes can now be taken back. */
+  authored?(peerId: string): void;
 }
 
 /** Ids and secrets: unguessable, from the platform's random source. */
@@ -120,11 +123,11 @@ interface Held {
 export class HostSession {
   readonly core: HostCore;
   /**
-   * The file as it was when the session started. Collaborators' edits never join the owner's undo
-   * history (undo takes back only one's own work), so this is how the owner recovers from an editor
-   * who did damage: one restore, itself an ordinary undoable edit.
+   * Who changed what. Collaborators' edits never join the owner's undo history (undo takes back only
+   * one's own work), so this is how the owner recovers from an editor whose changes went wrong: take
+   * back that one person's changes, as an ordinary undoable edit, and nobody else's.
    */
-  readonly startFile: DraftDocument;
+  readonly authorship = new Authorship();
   /**
    * This session's own id. Never sent by a collaborator, only to one: a collaborator reconnecting
    * compares it, so an invite to some other session can't receive their unsent edits.
@@ -150,7 +153,6 @@ export class HostSession {
     this.owner = owner;
     this.clock = clock;
     this.core = new HostCore(env.readFile());
-    this.startFile = this.core.file;
     this.scheduleHeartbeat();
   }
 
@@ -381,8 +383,12 @@ export class HostSession {
 
   private applyPatch(slot: Slot, clientSeq: number, changes: unknown): void {
     this.commitLocal();
+    const before = this.core.file;
     const outcome = this.core.receivePatch(slot.info.id, slot.ledger, clientSeq, changes);
     if (outcome.commit) {
+      const first = !this.authorship.has(slot.info.id);
+      this.authorship.record(slot.info.id, before, this.core.file);
+      if (first) this.events.authored?.(slot.info.id);
       // Same turn as the busy check that let this through, so the editor takes it.
       this.env.applyRemote(this.core.file);
       this.broadcast({ t: 'commit', ...outcome.commit });

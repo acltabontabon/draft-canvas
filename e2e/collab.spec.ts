@@ -180,8 +180,13 @@ test('two browsers edit one canvas live, and the owner stays in charge', async (
   await owner.keyboard.press(process.platform === 'darwin' ? 'Meta+z' : 'Control+z');
   await expect.poll(async () => (await labels(guest.page)).length, { timeout: 10_000 }).toBe(2);
 
-  // Removing them ends their session, and their screen says why.
+  // Taking back Gus's changes removes the Queue he added — on both sides — and nothing of the owner's.
   await owner.getByRole('button', { name: /^Live session/ }).click();
+  await dialog.getByRole('button', { name: 'Undo changes' }).click();
+  await expect.poll(async () => (await labels(guest.page)).length, { timeout: 10_000 }).toBe(1);
+  await expect.poll(async () => (await labels(owner)).length).toBe(1);
+
+  // Removing them ends their session, and their screen says why.
   await dialog.getByRole('button', { name: 'Remove Gus from the session' }).click();
   await expect(guest.page.getByRole('status').filter({ hasText: 'removed you' })).toBeVisible();
   await guest.page.context().close();

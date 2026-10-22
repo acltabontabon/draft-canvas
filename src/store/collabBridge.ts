@@ -177,6 +177,7 @@ export function startHosting(options: HostOptions): HostSession {
         useCollabStore.setState({ peers: others });
       },
       presence: setPresenceOf,
+      authored: (peerId: string) => useCollabStore.setState((state) => ({ authors: { ...state.authors, [peerId]: true } })),
     },
     { name: options.name },
   );
@@ -217,14 +218,24 @@ export function removeCollaborator(peerId: string): void {
   host?.remove(peerId);
 }
 
+/** What taking back one person's changes came to, for the owner to be told. */
+export type UndoChangesOutcome = 'done' | 'partial' | 'nothing' | 'blocked';
+
 /**
- * Puts the shared canvas back as it was when the session started — everyone's changes since,
- * the owner's included — as one undoable edit that reaches every collaborator like any other.
+ * Takes back everything `peerId` changed this session, where nobody has changed it since and nobody
+ * built on it — the owner's way back from one collaborator's edits going wrong, since those never
+ * enter the owner's own undo history. One undoable edit, reaching everyone like any other.
  */
-export function restoreSessionStart(): boolean {
-  if (!host || host.isEnded || !onSharedCanvas()) return false;
-  const start = host.startFile;
-  return useEditorStore.getState().applyToFile('Restore to session start', (file) => withLocalView(start, file));
+export function undoChangesOf(peerId: string, name: string): UndoChangesOutcome {
+  if (!host || host.isEnded || !onSharedCanvas() || isBusy()) return 'nothing';
+  // Anything typed here and not yet shared goes into the session first, so it counts as the owner's.
+  host.commitLocal();
+  const current = readFile();
+  const result = host.authorship.revert(peerId, current);
+  if (result.file === current) return result.blocked ? 'blocked' : 'nothing';
+  const reverted = result.file;
+  if (!useEditorStore.getState().applyToFile(`Undo ${name}’s changes`, (file) => withLocalView(reverted, file))) return 'nothing';
+  return result.partial || result.kept ? 'partial' : 'done';
 }
 
 /**

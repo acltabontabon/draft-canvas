@@ -6,7 +6,7 @@ import { createDocument, createEdge, createNode } from '../../src/document/facto
 import { addEdges, addNodes, removeElements, updateNode } from '../../src/document/operations';
 import type { DraftDocument } from '../../src/document/types';
 import { PRODUCT } from '../../src/product';
-import { __resetCollabBridge, attachCollaborator, joinSession, restoreSessionStart, setCollaboratorRole, startHosting } from '../../src/store/collabBridge';
+import { __resetCollabBridge, attachCollaborator, joinSession, setCollaboratorRole, startHosting, undoChangesOf } from '../../src/store/collabBridge';
 import { useCollabStore } from '../../src/store/collabStore';
 import { __resetClipboardSync, __resetInteraction, fileOf, useEditorStore } from '../../src/store/editorStore';
 import { useUiStore } from '../../src/store/uiStore';
@@ -180,17 +180,37 @@ describe('hosting from the editor', () => {
     expect(store.getState().document.nodes.some((node) => node.id === 'n_a')).toBe(false);
   });
 
-  it('puts the canvas back as it was when the session started, as one undoable edit', () => {
+  it('takes back one collaborator’s changes — and only theirs — as one undoable edit', () => {
+    const gus = guest.session.id!;
+    expect(useCollabStore.getState().authors[gus]).toBeUndefined();
     guest.edit((file) => removeElements(file, ['n_a', 'n_b']));
     settle(pump);
     expect(store.getState().document.nodes).toHaveLength(0);
-    expect(restoreSessionStart()).toBe(true);
+    expect(useCollabStore.getState().authors[gus]).toBe(true);
+    // The owner's own edit since is the owner's, and stays.
+    store.getState().addNode({ type: 'note', x: 0, y: 200, text: 'Owner note' });
     settle(pump);
-    expect(store.getState().document.nodes.map((node) => node.id).sort()).toEqual(['n_a', 'n_b']);
-    expect(guest.state.file!.nodes.map((node) => node.id).sort()).toEqual(['n_a', 'n_b']);
+
+    expect(undoChangesOf(gus, 'Gus')).toBe('done');
+    settle(pump);
+    const texts = () => store.getState().document.nodes.map((node) => node.text).sort();
+    expect(texts()).toEqual(['A', 'B', 'Owner note']);
+    expect(sharedContent(guest.state.file!)).toEqual(sharedContent(fileOf(store.getState())));
+    // An ordinary undo step: undo puts Gus's changes back.
     store.getState().undo();
     settle(pump);
-    expect(store.getState().document.nodes).toHaveLength(0);
+    expect(texts()).toEqual(['Owner note']);
+  });
+
+  it('leaves a collaborator’s shape that the owner has built on', () => {
+    const gus = guest.session.id!;
+    guest.edit((file) => addNodes(file, [createNode({ id: 'n_g', type: 'service', text: 'Gus', x: 0, y: 300 })]));
+    settle(pump);
+    store.getState().setDocument(addEdges(fileOf(store.getState()), [createEdge({ id: 'e_owner', source: 'n_a', target: 'n_g' })]));
+    settle(pump);
+    expect(undoChangesOf(gus, 'Gus')).toBe('blocked');
+    expect(store.getState().document.nodes.some((node) => node.id === 'n_g')).toBe(true);
+    expect(undoChangesOf('nobody', 'Nobody')).toBe('nothing');
   });
 
   it('ends the session when the owner opens a different canvas', () => {

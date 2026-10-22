@@ -3,7 +3,8 @@ import { useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { indexOf, pathOf } from '../../collab/fileIndex';
 import type { PeerView, Presence, Role } from '../../collab/protocol';
-import { answerKnock, removeCollaborator, setCollaboratorRole } from '../../store/collabBridge';
+import { answerKnock, setCollaboratorRole } from '../../store/collabBridge';
+import { removePerson, undoPersonChanges } from './peerActions';
 import { useCollabStore, type KnockView } from '../../store/collabStore';
 import { fileOf, useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
@@ -136,6 +137,7 @@ function DockPerson({ peer, presence, owner, presenting }: { peer: PeerView; pre
   const myRoom = useEditorStore((state) => state.path[state.path.length - 1] ?? '');
   const elsewhere = presence !== undefined && presence.room !== myRoom;
   const typing = presence?.editing != null;
+  const authored = useCollabStore((state) => state.authors[peer.id] === true);
   const where = !presence ? 'Away from the canvas' : elsewhere ? `Inside ${roomName(presence.room)}` : presence.pointer ? 'Here with you' : 'In this view';
   const glyph = presenting ? 'present' : typing ? 'pencil' : elsewhere ? 'down' : null;
 
@@ -182,7 +184,10 @@ function DockPerson({ peer, presence, owner, presenting }: { peer: PeerView; pre
                 <option value="editor">{ROLE_LABELS.editor}</option>
                 <option value="viewer">{ROLE_LABELS.viewer}</option>
               </select>
-              <Button variant="quiet" icon="close" aria-label={`Remove ${peer.name} from the session`} onClick={() => removeCollaborator(peer.id)} />
+              {authored && (
+                <Button variant="quiet" icon="undo" aria-label={`Undo ${peer.name}’s changes`} title={`Undo ${peer.name}’s changes`} onClick={() => undoPersonChanges(peer.id, peer.name)} />
+              )}
+              <Button variant="quiet" icon="close" aria-label={`Remove ${peer.name} from the session`} onClick={() => removePerson(peer.id, peer.name)} />
             </>
           )}
         </span>

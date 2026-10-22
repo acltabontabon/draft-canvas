@@ -110,13 +110,15 @@ Hover a face in the people column, or open **Live** in the toolbar, to manage ea
 
 - **Can edit / Can view** changes what each person may do, at once. A viewer sees every change live
   but can't make any.
-- **Remove** takes someone out of the session. Their copy stops updating and tells them why.
+- **Undo changes** takes back everything one person changed this session, and nobody else's work.
+  It appears beside anyone who has changed something. Your own undo only ever takes back your own
+  edits, so this is the way back when a collaborator's edits went wrong. Anything someone else has
+  changed or built on since stays as it is, and the take-back is one edit that undo can reverse.
+- **Remove** takes someone out of the session. Their copy stops updating and tells them why. If
+  they had changed the canvas, the notice offers **Undo their changes** too.
 - **Coming back.** If someone's connection drops, their page knocks again on its own and they are back
   in their place — same colour, same role — without you being asked twice. For someone who joined by a
   direct invite, **Re-invite** beside their name creates an invite that gives them back their place.
-- **Restore session start**, at the bottom of the Collaborate dialog, puts the canvas back exactly as it was
-  when you started the session — everyone's changes since, yours included. Use it if an edit you
-  can't undo went wrong; undo brings the changes back.
 - **End session** disconnects everyone. Closing the tab, opening another canvas or reloading also ends
   it. Your canvas is saved as usual throughout.
 

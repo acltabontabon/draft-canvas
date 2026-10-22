@@ -18,7 +18,8 @@ the release notes and the in-app What's New are generated from here. See
 - **Live collaboration** — edit one canvas together in real time. Start a session, share one link,
   and let people in as they ask to join. Everyone's browser connects straight to yours: your diagram
   never passes through a server, and your copy stays the one that's saved. See who's here and where,
-  each other's cursors and selections, follow the presenter, decide who can edit, and undo only your
+  each other's cursors and selections, follow the presenter, decide who can edit, take back any one
+  person's changes, and undo only your
   own changes. <!-- highlight -->
 - **Rich text** — Text shapes are written in Markdown: headings, bold and italic, highlights,
   inline code, syntax-highlighted code blocks and diffs, lists and checklists, tables, quotes,

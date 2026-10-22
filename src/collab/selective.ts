@@ -35,12 +35,41 @@ export interface SelectiveStep {
  * entry touched. Undo passes `(entry.after, entry.before)`; redo the other way round.
  */
 export function revertKeys(current: DraftDocument, from: DraftDocument, to: DraftDocument, keys: readonly string[]): SelectiveStep {
-  const wanted = new Set(keys);
-  const changes = diffFile(from, to, { implied: true }).filter((change) => wanted.has(keyOf(change)));
+  return revertEach(current, keys.map((key) => ({ key, left: from, found: to })));
+}
+
+/** One thing to take back: `key`, from what an edit left there to what it found there. */
+export interface KeyRevert {
+  key: string;
+  /** The file just after the last edit that touched `key`. */
+  left: DraftDocument;
+  /** The file just before the first edit that touched it. */
+  found: DraftDocument;
+}
+
+/**
+ * `revertKeys` for things touched at different times — one person's edits across a session, each
+ * shape with its own before and after. The same rules: only where `current` still holds what was
+ * left, and nothing that would take away something outside `reverts` (another person's connector to
+ * a shape being un-added).
+ */
+export function revertEach(current: DraftDocument, reverts: readonly KeyRevert[]): SelectiveStep {
+  const wanted = new Set(reverts.map((revert) => revert.key));
+  // One diff per pair of files, however many keys share it.
+  const diffs = new Map<DraftDocument, Map<DraftDocument, Change[]>>();
+  const diffOf = (left: DraftDocument, found: DraftDocument) => {
+    let byFound = diffs.get(left);
+    if (!byFound) diffs.set(left, (byFound = new Map()));
+    let changes = byFound.get(found);
+    if (!changes) byFound.set(found, (changes = diffFile(left, found, { implied: true })));
+    return changes;
+  };
   const kept: Change[] = [];
   let partial = false;
-  for (const change of changes) {
-    if (stillAsLeft(current, from, keyOf(change))) kept.push(change);
+  for (const revert of reverts) {
+    const changes = diffOf(revert.left, revert.found).filter((change) => keyOf(change) === revert.key);
+    if (changes.length === 0) continue;
+    if (stillAsLeft(current, revert.left, revert.key)) kept.push(...changes);
     else partial = true;
   }
   if (kept.length === 0) return { file: current, partial, blocked: false };
