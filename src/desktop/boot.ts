@@ -1,7 +1,9 @@
 import { setFileSaver } from '../export/download';
 import { registerDesktopHost } from '../host/hostInfo';
 import { logDiagnostic } from '../lib/diagnostics';
+import { useEditorStore } from '../store/editorStore';
 import { useUiStore } from '../store/uiStore';
+import { ARRANGE_FAILED, notifyLoadFailure } from '../ui/common/notifyLoadFailure';
 import { DesktopError, type DesktopApi } from './api';
 import { createHostLink } from './channel';
 import { dispatchEditCommand } from './commands';
@@ -34,6 +36,19 @@ const ui: DesktopUi = {
   openSettings: () => desktopStore.update({ settingsOpen: true }),
   notify: (message, action) => useUiStore.getState().notify(message, 'info', action),
   editCommand: dispatchEditCommand,
+  canvasCommand: (command) => {
+    const ui = useUiStore.getState();
+    if (command === 'canvas-settings') return ui.setSettingsOpen(true);
+    if (command === 'find-replace') return ui.setFindReplaceOpen(true);
+    if (command === 'commands') return ui.setCommandPaletteOpen(true);
+    void useEditorStore
+      .getState()
+      .arrangeRoom()
+      .then((moved) => {
+        if (moved) useUiStore.getState().requestFit();
+      })
+      .catch((error: unknown) => notifyLoadFailure(error, ARRANGE_FAILED));
+  },
   openRename: () => {
     const { doc } = desktopStore.getSnapshot();
     if (doc.kind === 'file') {

@@ -1339,16 +1339,102 @@ kbd {
  * trailing cluster outgrew a `minmax(0, …)` track that was allowed to be narrower than it, and,
  * being `justify-self: end`, spilled out of its left edge on top of the rail.
  */
+/* The header is no bar at all: the sheet runs under it to the top of the window (see the canvas rule
+   below), and its three pieces lie on the sheet as paper islands. Only the islands take the pointer;
+   between them a press reaches the canvas, so you can pan and draw right up to the top edge. */
 .dc-toolbar {
+  position: relative;
+  z-index: var(--dc-z-bar);
   display: grid;
   grid-template-columns: minmax(max-content, 1fr) minmax(0, auto) minmax(max-content, 1fr);
-  align-items: center;
+  align-items: start;
   gap: 22px;
-  min-height: var(--dc-bar-height);
-  padding: 7px 10px;
-  border-bottom: 1px solid var(--dc-border);
-  background: var(--dc-surface);
+  height: var(--dc-bar-height);
+  padding: 6px 10px;
+  background: transparent;
   flex-shrink: 0;
+  pointer-events: none;
+}
+
+.dc-toolbar > * {
+  pointer-events: auto;
+}
+
+/* The sheet under the header. The canvas keeps its own box — below the header, so fitting, centring
+   and every overlay are unchanged — but the drawing is not cut off at its top edge: it shows up into
+   the header's band, behind the islands, with the dotted ground under it. Shapes there stay
+   clickable between the islands. Not while presenting, when there is no header. */
+.dc-editor {
+  background: var(--dc-canvas);
+}
+
+.dc-editor:not([data-mode='present']) .dc-canvas .react-flow {
+  /* React Flow sets `overflow: hidden` inline; the clip keeps the sides and bottom cut as before. */
+  overflow: visible !important;
+  clip-path: inset(calc(-1 * var(--dc-bar-height)) 0 0 0);
+}
+
+.dc-editor:not([data-mode='present']) .dc-canvas .react-flow__background {
+  top: calc(-1 * var(--dc-bar-height));
+  height: calc(100% + var(--dc-bar-height));
+}
+
+/* The islands. The lead is not one: the mark and the diagram's name are written on the sheet, like the
+   title block of a drawing, with only a frosted wash behind them so the name stays legible when the
+   diagram passes underneath. */
+.dc-toolbar-lead {
+  gap: 6px;
+  padding: 3px 10px 3px 3px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--dc-canvas) 74%, transparent);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+.dc-toolbar .dc-brand-mark {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  justify-content: center;
+  border-radius: 9px;
+  transition: transform 160ms var(--dc-ease-out);
+}
+
+.dc-brand-tile {
+  fill: #14161a;
+  stroke: color-mix(in srgb, var(--dc-text) 16%, transparent);
+  stroke-width: 1;
+}
+
+.dc-toolbar .dc-brand-mark:hover:not(:disabled) {
+  background: none;
+  transform: translateX(-1px) rotate(-4deg);
+}
+
+/* The name, written the way Home writes "A clearer picture.": the same italic serif, and the same
+   double stroke in teal under it, inked once as the diagram opens. */
+.dc-title-field {
+  position: relative;
+  display: inline-flex;
+}
+
+.dc-toolbar .dc-title-input {
+  font-family: 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Georgia, serif;
+  font-size: 17px;
+  font-style: italic;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+}
+
+.dc-title-field .dc-title-stroke {
+  left: 6px;
+  bottom: -2px;
+  width: calc(100% - 12px);
+  height: 6px;
+}
+
+.dc-title-field .dc-title-stroke path {
+  stroke-width: 2.4;
 }
 
 /* ---- document identity: the quiet anchor -------------------------------- */
@@ -1362,8 +1448,9 @@ kbd {
 }
 
 .dc-title-input {
-  /* Keep a readable column; longer titles grow the toolbar vertically. */
-  min-width: 120px;
+  /* Sized to the name (`DiagramTitleField`), up to a readable column; longer names wrap, and their
+     island grows downward over the sheet. */
+  min-width: 72px;
   max-width: 240px;
   width: clamp(120px, 18vw, 240px);
   box-sizing: border-box;
@@ -1508,6 +1595,125 @@ kbd {
   color: var(--dc-selection);
 }
 
+/* ---- the tools, as Draft Canvas draws them ------------------------------
+
+   The rail is a strip of the canvas's own dotted ground. Tools are ink drawings of their shapes
+   (`ToolGlyph`): graphite while idle, the product's teal while in hand — when the picture draws
+   itself in and the tool writes its name beside it in the annotation (mono) face. Each tool's key
+   is an annotation too, shown only while a hand (or keyboard focus) is in the rail. */
+
+.dc-create-rail {
+  border-radius: 10px;
+  background: var(--dc-surface);
+  box-shadow: var(--dc-island-shadow);
+}
+
+.dc-create-rail .dc-tool {
+  position: relative;
+  gap: 0;
+  height: 30px;
+  padding: 0 7px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: color-mix(in srgb, var(--dc-text) 62%, transparent);
+}
+
+.dc-tool-glyph {
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.45;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  overflow: visible;
+}
+
+/* The name, written beside the picture only while the tool is in hand. */
+.dc-tool-name {
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  font-family: var(--dc-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  transition: max-width 220ms var(--dc-ease-out), opacity 160ms ease, margin 220ms var(--dc-ease-out);
+}
+
+.dc-create-rail .dc-tool[data-active='true'] {
+  border-color: color-mix(in srgb, var(--dc-selection) 40%, transparent);
+  background: color-mix(in srgb, var(--dc-canvas) 70%, var(--dc-selection-soft));
+  color: var(--dc-selection);
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--dc-selection) 22%, transparent);
+}
+
+.dc-tool[data-active='true'] .dc-tool-name {
+  max-width: 120px;
+  margin-left: 7px;
+  opacity: 1;
+}
+
+/* In hand, the picture inks itself in, the way the home page's drawing does. Its own dashes (the
+   Boundary's frame) are left as drawn. */
+.dc-tool[data-active='true'] .dc-tool-glyph :not([stroke-dasharray]) {
+  stroke-dasharray: 64;
+  stroke-dashoffset: 64;
+  animation: dc-tool-ink 560ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes dc-tool-ink {
+  to { stroke-dashoffset: 0; }
+}
+
+/* The key, as an annotation in the corner — only while a hand or keyboard focus is in the rail. */
+.dc-tool-key {
+  position: absolute;
+  right: 2px;
+  bottom: 0;
+  color: var(--dc-text-faint);
+  font-family: var(--dc-mono);
+  font-size: 8.5px;
+  font-weight: 600;
+  line-height: 1;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms ease;
+}
+
+.dc-create-rail:hover .dc-tool-key,
+.dc-create-rail:has(:focus-visible) .dc-tool-key {
+  opacity: 1;
+}
+
+.dc-tool[data-active='true'] .dc-tool-key {
+  opacity: 0;
+}
+
+/* The mark's elbow connector, joining one family of tools to the next. */
+.dc-rail-link {
+  flex: none;
+  margin: 0 -2px;
+  color: color-mix(in srgb, var(--dc-text) 32%, transparent);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-tool[data-active='true'] .dc-tool-glyph :not([stroke-dasharray]) {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+
+  .dc-tool-name {
+    transition: none;
+  }
+}
+
 /* ---- workspace: what you do to the canvas -------------------------------
 
    Two control classes, and nothing in between. A *capability* (Flows, Present) is a glyph plus a
@@ -1516,21 +1722,52 @@ kbd {
    of the bar read as three unrelated systems. Grouping is spacing only: 2px inside a cluster
    against 18px between them, no separators. */
 
+/* The right-hand island: the story (Present, with its flow, and the Flows glyph) and Share as one
+   capsule, Share its filled end — two neighbouring pills each with teal in them fought for the eye. */
 .dc-toolbar-trail {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 4px;
   min-width: 0;
   justify-self: end;
+  padding: 2px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-pill);
+  background: var(--dc-surface);
+  box-shadow: var(--dc-island-shadow);
 }
 
 .dc-toolbar-history,
 .dc-toolbar-modes,
+.dc-toolbar-share,
 .dc-toolbar-utilities {
   display: flex;
   align-items: center;
   gap: 2px;
   min-width: 0;
+}
+
+/* The people in a live session, then Share: a little further apart than the icons around them. */
+.dc-toolbar-share {
+  gap: 8px;
+}
+
+/* Share is the one filled button on the bar: the one thing that takes the diagram anywhere. */
+.dc-share-button {
+  height: 28px;
+  padding: 0 14px;
+  border-radius: var(--dc-radius-pill);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+/* Open, it stays filled — a pressed look, not the faded one a disabled button wears. */
+.dc-button.dc-share-button[data-active='true'],
+.dc-button.dc-share-button[data-active='true']:hover:not(:disabled) {
+  background: var(--dc-selection);
+  color: var(--dc-canvas);
+  box-shadow: 0 0 0 3px var(--dc-selection-soft);
 }
 
 /* --- capabilities --- */
@@ -1572,8 +1809,45 @@ kbd {
   white-space: nowrap;
 }
 
-.dc-flow-toggle {
-  min-width: 0;
+/* The story control: Present and the Flows panel's glyph, joined into one outlined pill and parted by
+   a hairline, so they read as one thing — play this story, or open the stories. */
+.dc-story {
+  gap: 0;
+}
+
+.dc-story .dc-toolbar-mode {
+  height: 28px;
+  border: 0;
+  border-radius: 0;
+}
+
+.dc-story .dc-story-play {
+  padding: 0 10px 0 11px;
+  border-radius: var(--dc-radius-pill) 0 0 var(--dc-radius-pill);
+}
+
+.dc-story .dc-story-flows {
+  position: relative;
+  width: 32px;
+  padding: 0;
+  justify-content: center;
+  border-radius: 0 var(--dc-radius-pill) var(--dc-radius-pill) 0;
+}
+
+.dc-story-flows::before {
+  content: '';
+  position: absolute;
+  top: 7px;
+  bottom: 7px;
+  left: 0;
+  border-left: 1px solid var(--dc-border);
+}
+
+/* The flow's name inside Present: it is what Present will walk through. In ink, not teal — Share
+   is the one accent on this side. */
+.dc-story-play .dc-flow-toggle-title {
+  color: var(--dc-text);
+  font-weight: 500;
 }
 
 .dc-flow-toggle-sep {
@@ -1582,14 +1856,10 @@ kbd {
 
 .dc-flow-toggle-title {
   max-width: 150px;
+  overflow: hidden;
   font-weight: 400;
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-
-.dc-flow-toggle {
-  height: auto;
-  min-height: 30px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 /* --- utilities --- */
@@ -1677,6 +1947,11 @@ kbd {
   width: 28px;
   padding: 0;
   justify-content: center;
+  }
+
+  .dc-story .dc-story-play {
+  width: 32px;
+  padding: 0;
   }
 }
 
@@ -5830,22 +6105,27 @@ button.dc-open-points-main:focus-visible .dc-open-points-kind {
 /* A diagram opened from a share link (`uiStore.readOnly`): one slim strip across the top of the
    canvas, over it rather than in the flow, so the camera and every popover measure the same pane
    they always do. */
+/* A note pinned under the header, the same paper as its islands rather than a strip across the sheet. */
 .dc-read-only-banner {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
+  top: 6px;
+  left: 50%;
   z-index: 5;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 4px 12px;
-  border-bottom: 1px solid var(--dc-border);
-  background: var(--dc-surface-raised);
+  max-width: calc(100% - 24px);
+  padding: 3px 6px 3px 14px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-pill);
+  background: var(--dc-surface);
+  box-shadow: var(--dc-island-shadow);
   color: var(--dc-text-muted);
   font-size: 12.5px;
   line-height: 1.5;
+  transform: translateX(-50%);
+  white-space: nowrap;
 }
 
 .dc-read-only-banner .dc-button {

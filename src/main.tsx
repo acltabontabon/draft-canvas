@@ -15,10 +15,14 @@ const container = document.getElementById('root');
 if (!container) throw new Error('Missing #root element.');
 
 // In the desktop app the shell is up before the first paint, so the first thing shown is Home or
-// the file the OS opened. `__DESKTOP__` is false in the web build, which drops all of this.
+// the file the OS opened. `__DESKTOP__` is false in the web build, which drops all of this. The same
+// build opened from a LAN link, in someone else's browser, has no shell: it runs as the web app.
 if (__DESKTOP__) {
-  const { bootDesktop } = await import('./desktop/boot');
-  await bootDesktop();
+  const { insideDesktopShell } = await import('./desktop/tauri/shell');
+  if (insideDesktopShell()) {
+    const { bootDesktop } = await import('./desktop/boot');
+    await bootDesktop();
+  }
 }
 
 createRoot(container).render(

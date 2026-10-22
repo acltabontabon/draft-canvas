@@ -1,7 +1,8 @@
 # Draft Canvas — agent instructions
 
 Draft Canvas is a local-first React + TypeScript SPA built with Vite. The same editor ships on the
-web and in a Tauri 2 desktop app. No backend, accounts or network calls in editor code.
+web and in a Tauri 2 desktop app. No backend or accounts; the only network code is owner-hosted live
+collaboration in `src/collab/transport/`.
 
 Make focused changes. Keep updates and final responses brief: what changed, what was checked, and
 any blocker. Complete authorized work without unnecessary confirmation.
@@ -41,8 +42,10 @@ The reasoning behind these rules is in [Architecture](docs/reference/architectur
   its display list; do not add a separate JSX renderer for a node type.
 - Wrap text only in `src/render/text/layout.ts`. The DOM renders the lines it produces.
 - No network calls, dynamic code execution or webfonts in `src/`. The privacy test rejects `fetch`,
-  `XMLHttpRequest`, `WebSocket`, `EventSource`, `sendBeacon`, `eval` and `new Function`. The offline
-  service worker may fetch same-origin app assets and updates, never diagrams or IndexedDB content.
+  `XMLHttpRequest`, `EventSource`, `sendBeacon`, `eval` and `new Function` everywhere, and
+  `WebSocket`, `RTCPeerConnection` and `RTCDataChannel` outside `src/collab/transport/`, which only
+  `src/collab/` may import. The offline service worker may fetch same-origin app assets and updates,
+  never diagrams or IndexedDB content.
 - Only `src/desktop/tauri/` imports `@tauri-apps/*`. Other code uses `DesktopApi` in
   `src/desktop/api.ts`; desktop-only code stays behind `__DESKTOP__`.
 - Use `localStorage` only for tiny preferences through `src/lib/preferences.ts`. Documents use IndexedDB.
@@ -96,6 +99,18 @@ The reasoning behind these rules is in [Architecture](docs/reference/architectur
   `useFlowPlayback` judges against the requested camera. A presenter's pan sets `framing: 'manual'`;
   guided framing stays off until requested again.
 
+### Live collaboration
+
+- `src/collab/` is React-free and store-free: it imports `document/` and `depth/` only (and its own
+  `transport/`). The editor meets it in `store/collabBridge.ts`; session state for the UI lives in the
+  transient `store/collabStore.ts`, never saved, undone or exported.
+- The owner's file is the single authority. Every incoming change goes through `collab/sanitize.ts`,
+  in both directions. A root-level `DraftDocument` field must be handled by `collab/diff.ts` and
+  `collab/apply.ts`, or listed as not shared in `tests/collab/untrusted.test.ts`.
+- Remote changes enter the editor only through `editorStore.applyRemote`: no history entry, and never
+  while a gesture is held (the session waits). While shared, history entries record `keys` and undo is
+  selective (`collab/selective.ts`). A guest's copy is opened with `openCollaborative` and never autosaved.
+
 ### Agent integration
 
 - Agent previews stay in `uiStore.agentPreview` and `desktop/agentActivity.ts`, never the document,
@@ -118,7 +133,7 @@ The reasoning behind these rules is in [Architecture](docs/reference/architectur
 Dependencies flow `ui/` → `canvas/` → `document/`; storage and export consume the document model.
 Library and editor are states of `src/App.tsx`, with no router. Keep the editor's Vite `base: './'`.
 
-`depth/`, `layout/` and `starters/` import only `document/`. `continuation/` also imports `render/text`;
+`depth/`, `layout/` and `starters/` import only `document/`. `collab/` imports `document/` and `depth/`. `continuation/` also imports `render/text`;
 `openPoints/` also imports `depth/`. `agent/` may consume these and rendering/export helpers, never UI
 or store modules. `depth/c4.ts` shares C4 role and scope derivation with the editor and agent.
 

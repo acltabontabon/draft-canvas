@@ -37,10 +37,10 @@ jobs:
         with:
           node-version: 22.14.0
           cache: npm
-      - run: npm ci
+      - run: npm ci --no-audit --no-fund
         timeout-minutes: 5
       # Keep the site's dependencies available to the same unit suite as before.
-      - run: npm ci
+      - run: npm ci --no-audit --no-fund
         timeout-minutes: 5
         working-directory: www
       - run: npm run lint

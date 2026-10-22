@@ -11,6 +11,7 @@ Pages as a change-of-address page.
 | `draftcanvas.dev/docs/` | The guides, and the reference a user reads | `docs/`, rendered by `www/scripts/docs.mjs` |
 | `app.draftcanvas.dev/` | The editor | `dist/`, unchanged |
 | `www.draftcanvas.dev/` | A redirect to the apex | `www/cloudflare/www.js` |
+| `relay.draftcanvas.dev` | The live-collaboration relay ([below](#the-collaboration-relay)) | `www/cloudflare/relay.js` |
 | `acltabontabon.com/draft-canvas/` | The moved-house page; every other old path forwards | `www/legacy/` |
 | `acltabontabon.com/draft-canvas/editor/` | The editor, kept so saved diagrams can move | `dist/`, unchanged |
 
@@ -97,8 +98,8 @@ The reel's one still, `www/public/stills/source-evidence.jpg`, is the 1.14.0 rel
 
 ## Deploying
 
-`pages.yml` is the only workflow that deploys. It deploys `site/`, `app/` and the `www.` redirect to
-Cloudflare with Wrangler, and only once that succeeds publishes `legacy/` to GitHub Pages. Release tags start `release.yml`, which completes
+`pages.yml` is the only workflow that deploys. It deploys the relay, `app/`, `site/` and the `www.`
+redirect to Cloudflare with Wrangler, in that order, and only once that succeeds publishes `legacy/` to GitHub Pages. Release tags start `release.yml`, which completes
 reusable CI and desktop acceptance before calling Pages with the verified web artifact. Pages
 checks its recorded commit and promotes those same bytes. It also runs on demand and through
 `workflow_call`; `pages-site.yml` calls it on a push to `main` that touches `www/`, so a rewritten
@@ -131,8 +132,60 @@ secrets:
   Scripts › Edit**, **Zone › Workers Routes › Edit**, **Zone › DNS › Edit** and **Zone › Zone ›
   Read**.
 
+The relay's Durable Object needs no further permission: **Workers Scripts › Edit** covers it, and
+its migration in `relay.jsonc` is applied by the same `wrangler deploy`.
+
+Wrangler itself is pinned by `www/cloudflare/package.json` and its lockfile, which travel with the
+verified artifact: the deploy runs `npm ci` there and then `npx --no-install wrangler`, so it never
+fetches a version by name, and the release audits that lockfile with the others. To move to a new
+Wrangler, change the version there and run `npm install --package-lock-only` in `www/cloudflare/`.
+No other job installs it.
+
 `app.headers` becomes the editor's `_headers`. It must never set `Cross-Origin-Opener-Policy`: the
 handoff below talks to the old tab through `window.opener`, which that header severs.
+
+### The collaboration relay
+
+`relay.draftcanvas.dev` lets a [live session](../guides/collaborating.md)'s owner let people in
+without trading reply codes by hand. The owner's browser and the joiner's exchange a knock and then
+the WebRTC offer and answer through it, and once they connect directly it has nothing more to do.
+
+- **It sees only ciphertext and room ids.** Both browsers encrypt every message with a key kept in
+  the invite link's fragment, which never reaches any server. The relay sees a random 128-bit room
+  id, its sockets' origins and IP addresses as any web server does, and the size and timing of
+  messages it cannot read.
+- **It keeps almost nothing.** One Durable Object per room holds its open sockets in memory and
+  through hibernation, so a waiting room costs nothing. No message is stored, nothing about rooms or
+  their messages is logged, and Worker observability is off in `relay.jsonc`. The one stored value is
+  the room's owner claim: the SHA-256 of a secret the owner's browser presents in the WebSocket
+  handshake (`Sec-WebSocket-Protocol: draft-canvas.relay.v1, host.<secret>`, never in the link or URL).
+  Any later host connection must present the same secret or is closed with 4003; the claim is deleted
+  when the room's 12-hour lifetime ends.
+- **Limits:** one owner and 32 joining sockets per room; text frames only, with at most 16,384
+  characters of data; 30 messages per 10 seconds per socket; a room closes after 15 minutes without a
+  message, and after 12 hours in any case. Only the pages in `ALLOWED_ORIGINS` may connect — the web
+  editor and the desktop app.
+
+The contract is in `www/cloudflare/relay-room.js`, which holds every rule and no Cloudflare code.
+`www/cloudflare/relay.js` adapts it to Durable Objects, and `scripts/dev-relay.mjs` to a plain Node
+server with no dependencies, for development and the e2e suite:
+
+```bash
+node scripts/dev-relay.mjs --port 8791    # prints "relay listening on 8791"
+```
+
+`npm run dev` points the editor at `ws://localhost:8791`, and the dev relay admits any
+`http://localhost:*` or `http://127.0.0.1:*` page as well as the production origins.
+`tests/relay-room.test.ts` covers the rules and `tests/dev-relay.test.ts` the dev relay on the wire.
+
+Builds take the relay from `VITE_COLLAB_RELAY` (default `wss://relay.draftcanvas.dev`), which also
+goes into the web build's `connect-src`. The hosted relay refuses other origins, so a self-hosted
+editor built with the default falls back to reply codes. It can use a relay of its own — run
+`relay.js` as a Worker of your own, or anything that keeps the same contract — by building with
+`VITE_COLLAB_RELAY=wss://relay.example.com npm run build`, and adding its page's origin to that
+relay's `ALLOWED_ORIGINS`. Building with `VITE_COLLAB_RELAY=` (empty) leaves the relay out, and its
+CSP; invites then fall back to copying reply codes by hand. The desktop app's CSP is fixed in
+`src-tauri/tauri.conf.json`, so a desktop build with another relay needs it added there too.
 
 ### The old address
 

@@ -121,3 +121,18 @@ still contains no agent UI.
 
 **Modules.** `src/desktop/ui/DesktopHome.tsx`, `DesktopStatus.tsx`, `ProposalPanel.tsx`,
 `src/desktop/agentActivity.ts`, `docs/guides/connect-an-ai-agent.md`.
+
+## F. Live collaboration, hosted by the owner
+
+**Scope.** Several people edit one canvas at once with no Draft Canvas server: the owner's editor hosts
+the session and keeps the only saved copy. Browsers connect over WebRTC, signalled by hand (an invite
+link and a reply code); the desktop app can also serve a local network link. Collaborators see each
+other's cursors and selections and can follow the presenter; the owner decides who can edit.
+
+**Acceptance.** Concurrent edits converge on every copy, checked by property tests over random
+interleavings and by a two-browser end-to-end run; a malformed or malicious peer can neither corrupt
+the owner's file nor make a collaborator write into their own Library; undo during a session never
+removes another person's work; a dropped collaborator rejoins with unsent edits intact.
+
+**Modules.** `src/collab/` (sync core, sessions, transports), `src/store/collabBridge.ts`,
+`src/store/collabStore.ts`, `src/ui/collab/`, `src-tauri/src/collab/`, `docs/guides/collaborating.md`.

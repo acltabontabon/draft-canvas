@@ -25,6 +25,7 @@ fn desktop_wire_types_match_rust() {
         crate::updater::Snapshot::decl(&config),
         crate::state::MenuCommand::decl(&config),
         crate::state::HostEvent::decl(&config),
+        crate::collab::Started::decl(&config),
     ];
     let generated = format!(
         "// Generated from Rust by npm run desktop:bindings. Do not edit.\n{}\n",

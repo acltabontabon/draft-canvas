@@ -8,7 +8,8 @@ import { openGallery } from './library';
  * same steps the guides describe, so a UI change that breaks a guide's walkthrough fails here
  * instead of leaving a stale picture: nothing is faked and nothing reaches into the store.
  *
- * Runs its own dev server on a port of its own (never 5180, which the e2e suite shares, and never
+ * Runs its own dev server, and the dev collaboration relay (`scripts/dev-relay.mjs`) it points at, on
+ * ports of their own (never 5180, which the e2e suite shares, and never
  * a name-based kill: this working copy is used by several sessions at once), in a light theme, and
  * a clean browser profile, so the Library it captures holds only what this script drew.
  *
@@ -18,6 +19,7 @@ import { openGallery } from './library';
  *   npx tsx e2e/docs-screenshots.ts --theme dark --out <directory>
  *   npx tsx e2e/docs-screenshots.ts --technology-only
  *   npx tsx e2e/docs-screenshots.ts --rich-text-only
+ *   npx tsx e2e/docs-screenshots.ts --collab-only
  *
  * The guides' own set is what you get with no arguments, unchanged.
  */
@@ -26,7 +28,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { chromium, expect, type Locator, type Page } from '@playwright/test';
+import { chromium, expect, type Browser, type Locator, type Page } from '@playwright/test';
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -38,6 +40,7 @@ function flag(name: string): string | undefined {
 const THEME = flag('theme') === 'dark' ? 'dark' : 'light';
 const OUT = join(REPO_ROOT, flag('out') ?? 'docs/media/guides');
 const PORT = 5391;
+const RELAY_PORT = 8991;
 const URL = `http://localhost:${PORT}`;
 const VIEWPORT = { width: 1200, height: 640 };
 
@@ -67,6 +70,7 @@ async function startServer(): Promise<() => Promise<void>> {
     cwd: REPO_ROOT,
     stdio: 'pipe',
     detached: true,
+    env: { ...process.env, VITE_COLLAB_RELAY: `ws://localhost:${RELAY_PORT}` },
   });
   let exited = false;
   child.once('exit', () => {
@@ -183,6 +187,104 @@ async function palette(page: Page, query: string) {
   await expect(page.getByRole('dialog')).toBeHidden();
 }
 
+/** The dev relay the session link knocks through, on a port of its own; resolves to its stop. */
+async function startRelay(): Promise<() => void> {
+  const child = spawn('node', ['scripts/dev-relay.mjs', '--port', String(RELAY_PORT)], { cwd: REPO_ROOT, stdio: 'pipe' });
+  await new Promise<void>((resolve, reject) => {
+    child.stdout!.on('data', (chunk: Buffer) => chunk.toString().includes('relay listening') && resolve());
+    child.once('exit', () => reject(new Error(`The dev relay exited. Is port ${RELAY_PORT} in use?`)));
+  });
+  return () => void child.kill('SIGTERM');
+}
+
+/**
+ * Collaborating: the owner starts a session, a second browser knocks with the session link, the owner
+ * lets them in, and each sees the other's pointer and selection. A real session between two contexts.
+ */
+async function collabScreenshots(browser: Browser, page: Page) {
+  log('collaborating');
+  await page.getByRole('button', { name: 'New canvas' }).first().click();
+  await expect(page.locator('.dc-editor')).toBeVisible();
+  await page.locator(CANVAS).click({ position: { x: 8, y: 8 } });
+  await palette(page, 'Microservices');
+  await expect(page.locator('.dc-node').first()).toBeVisible();
+  await page.getByLabel('Diagram title').fill('Shop platform');
+  await page.keyboard.press('Enter');
+  await page.locator(CANVAS).click({ position: { x: 8, y: 8 } });
+  await palette(page, 'Fit to view');
+  // The owner's own pointer rests on empty canvas, so no shape wears hover handles in the pictures.
+  const rest = async () => page.mouse.move(VIEWPORT.width - 60, VIEWPORT.height - 120);
+
+  await page.getByRole('button', { name: 'Share', exact: true }).click();
+  // The Share panel with the toolbar above it: every way the diagram reaches someone, spelled out.
+  const panel = page.getByRole('menu', { name: 'Share' });
+  await expect(panel).toBeVisible();
+  await page.waitForTimeout(400);
+  const menuBox = await box(panel);
+  await page.screenshot({
+    path: join(OUT, 'share-panel.png'),
+    clip: { x: menuBox.x - 24, y: 0, width: VIEWPORT.width - menuBox.x + 24, height: menuBox.y + menuBox.height + 16 },
+  });
+  log('  share-panel.png');
+  await page.getByRole('menuitem', { name: /^Draw together, live/ }).click();
+  const dialog = page.getByRole('dialog', { name: 'Collaborate' });
+  await dialog.getByLabel('Your name').fill('Ada');
+  // The dialogs are taller than the guides' usual window: show each whole, unscrolled.
+  const tall = { width: VIEWPORT.width, height: 1100 };
+  await page.setViewportSize(tall);
+  await page.waitForTimeout(900); // the scene draws itself in
+  await shotDialog(page, 'collab-start');
+  // The privacy seal, opened: what leaves the browser, and the STUN server setting.
+  await dialog.getByRole('button', { name: 'How your diagram stays private' }).click();
+  await shotDialog(page, 'collab-privacy');
+  // A STUN server nothing answers (TEST-NET-1): the two browsers on this machine need none.
+  await dialog.getByText('Use your own STUN server').click();
+  await dialog.getByLabel('Server').fill('stun:192.0.2.1:3478');
+  await dialog.getByRole('button', { name: 'Start session' }).click();
+  const link = dialog.getByRole('textbox', { name: 'Session link' });
+  await expect(link).toHaveValue(/#join=2\./, { timeout: 15_000 });
+  await page.mouse.move(8, 8);
+  await page.getByRole('dialog').evaluate((element) => element.querySelector('.dc-modal-body')?.scrollTo(0, 0));
+  await page.waitForTimeout(900);
+  await shotDialog(page, 'collab-session');
+  const sessionLink = await link.inputValue();
+  await page.keyboard.press('Escape');
+  await page.setViewportSize(VIEWPORT);
+
+  const guestContext = await browser.newContext({ viewport: tall, deviceScaleFactor: 2, colorScheme: THEME });
+  const guest = await guestContext.newPage();
+  try {
+    await guest.goto(sessionLink);
+    const join = guest.getByRole('dialog', { name: 'Join a live session' });
+    await join.getByLabel('Your name').fill('Grace');
+    await guest.waitForTimeout(900);
+    await shotDialog(guest, 'collab-join');
+    await join.getByRole('button', { name: 'Ask to join' }).click();
+    await guest.setViewportSize(VIEWPORT);
+    await expect(page.getByRole('group', { name: 'Grace is asking to join' })).toBeVisible({ timeout: 15_000 });
+    await rest();
+    await shot(page, 'collab-door');
+
+    await page.getByRole('group', { name: 'Grace is asking to join' }).getByRole('button', { name: 'Let in' }).click();
+    await expect(guest.locator('.dc-editor')).toBeVisible({ timeout: 30_000 });
+    // Framed like the owner's view, so Grace's pointer lands where the picture can show it.
+    await guest.locator(CANVAS).click({ position: { x: 8, y: 8 } });
+    await palette(guest, 'Fit to view');
+    await guest.waitForTimeout(600);
+    const held = await box(guest.locator('.dc-node', { hasText: 'Capability B Service' }));
+    await guest.mouse.click(held.x + held.width / 2, held.y + 10);
+    await guest.mouse.move(held.x + held.width + 30, held.y + held.height + 24, { steps: 4 });
+    await expect(page.locator('.dc-presence-cursor').filter({ hasText: 'Grace' })).toBeVisible({ timeout: 10_000 });
+    await rest();
+    await shot(page, 'collab-live');
+  } finally {
+    await guestContext.close();
+  }
+  await page.getByRole('button', { name: /^Live session/ }).click();
+  await dialog.getByRole('button', { name: 'End session' }).click();
+  await page.keyboard.press('Escape');
+}
+
 async function technologyScreenshots(page: Page) {
   await page.getByRole('button', { name: 'New canvas' }).first().click();
   await expect(page.locator('.dc-editor')).toBeVisible();
@@ -274,8 +376,11 @@ async function richTextScreenshots(page: Page) {
 async function main() {
   mkdirSync(OUT, { recursive: true });
   log(`${THEME} theme -> ${OUT}`);
+  const stopRelay = await startRelay();
   const stop = await startServer();
-  const browser = await chromium.launch();
+  // Chromium hides this machine's addresses from WebRTC behind mDNS names; the two browsers of the
+  // collaboration pictures connect over plain host addresses instead.
+  const browser = await chromium.launch({ args: ['--disable-features=WebRtcHideLocalIpsWithMdns'] });
   try {
     const context = await browser.newContext({
       viewport: VIEWPORT,
@@ -292,6 +397,10 @@ async function main() {
     }
     if (process.argv.includes('--rich-text-only')) {
       await richTextScreenshots(page);
+      return;
+    }
+    if (process.argv.includes('--collab-only')) {
+      await collabScreenshots(browser, page);
       return;
     }
 
@@ -486,10 +595,14 @@ async function main() {
     await page.getByRole('button', { name: /Back to your diagrams/ }).click();
     await openGallery(page);
     await richTextScreenshots(page);
+    await page.getByRole('button', { name: /Back to your diagrams/ }).click();
+    await openGallery(page);
+    await collabScreenshots(browser, page);
     await context.close();
   } finally {
     await browser.close();
     await stop();
+    stopRelay();
   }
 }
 

@@ -13,6 +13,9 @@ npm install
 npm run dev        # http://localhost:5180
 ```
 
+To try live collaboration's session links, also run `npm run dev:relay` in a second terminal: the
+dev server points at that local relay. Direct invites work without it.
+
 Desktop development also needs Rust and Tauri prerequisites; see [Building the desktop app](docs/guides/desktop.md#building-it-yourself).
 For the landing page, run `npm ci` inside `www/` once, then `npm run site:dev` from the root.
 
@@ -21,6 +24,7 @@ For the landing page, run `npm ci` inside `www/` once, then `npm run site:dev` f
 | Command | Purpose |
 | --- | --- |
 | `npm run dev` | Start the editor |
+| `npm run dev:relay` | Start the local collaboration relay that `npm run dev` uses |
 | `npm run check` | Lint, type-check, build and run unit tests for code changes |
 | `npm run desktop:dev` | Start the desktop app |
 | `npm run desktop:check` | Check the desktop build, Rust code and versions |

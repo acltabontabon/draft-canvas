@@ -990,6 +990,19 @@ describe('from the app', () => {
     expect(h.ui.editCommand).toHaveBeenNthCalledWith(1, 'undo');
     expect(h.ui.editCommand).toHaveBeenNthCalledWith(2, 'select-all');
   });
+
+  it('runs the diagram’s menu items (Commands, Arrange, Find and Replace, Canvas Settings) only with a diagram open', async () => {
+    await h.controller.start();
+    h.store.update({ doc: { kind: 'none' } });
+    h.hostEvent({ type: 'menu', command: 'arrange' });
+    await h.settle();
+    expect(h.ui.canvasCommand).not.toHaveBeenCalled();
+
+    h.store.update({ doc: { kind: 'quick', dirty: false } });
+    for (const command of ['commands', 'arrange', 'find-replace', 'canvas-settings'] as const) h.hostEvent({ type: 'menu', command });
+    await h.settle();
+    expect(vi.mocked(h.ui.canvasCommand).mock.calls.map(([command]) => command)).toEqual(['commands', 'arrange', 'find-replace', 'canvas-settings']);
+  });
 });
 
 describe('start-up', () => {

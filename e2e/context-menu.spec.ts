@@ -483,14 +483,14 @@ test.describe('context menu — keyboard-only operation', () => {
     await expect(page.locator('.dc-node-editor')).toHaveCount(0);
   });
 
-  test("keys pressed in the toolbar's More menu stay in the menu", async ({ page }) => {
+  test("keys pressed in the Help menu stay in the menu", async ({ page }) => {
     await newCanvas(page, 'Toolbar menu key leak');
     await create(page, 'Service', { x: 400, y: 300 });
     const node = page.locator('.dc-node').first();
     await node.click();
     const before = await page.locator('.react-flow__node').first().evaluate((el) => (el as HTMLElement).style.transform);
 
-    await page.getByRole('button', { name: 'More', exact: true }).click();
+    await page.getByRole('button', { name: 'Help', exact: true }).click();
     await expect(page.locator('.dc-toolbar-menu')).toBeVisible();
     await page.keyboard.press('ArrowDown');
     await page.keyboard.press('ArrowDown');

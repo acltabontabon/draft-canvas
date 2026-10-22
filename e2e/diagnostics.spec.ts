@@ -5,7 +5,7 @@ test('a diagnostic report is previewed locally and the downloaded bytes match th
   await expect(page.getByRole('button', { name: 'Troubleshooting' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'New canvas', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'New canvas', exact: true }).click();
-  const trigger = page.getByRole('button', { name: /^More/ });
+  const trigger = page.getByRole('button', { name: /^Help/ });
   await trigger.click();
   await page.getByRole('menuitem', { name: 'Diagnostic report…' }).click();
   const preview = page.getByRole('textbox', { name: 'Diagnostic report contents' });
@@ -25,7 +25,7 @@ test('a diagnostic report is previewed locally and the downloaded bytes match th
   await expect(trigger).toBeFocused();
 });
 
-test('the editor opens diagnostics from More while About keeps only the licences link', async ({ page }) => {
+test('the editor opens diagnostics from Help while About keeps only the licences link', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'About Draft Canvas' }).first().click();
   const about = page.getByRole('dialog', { name: 'About', exact: true });
@@ -33,9 +33,9 @@ test('the editor opens diagnostics from More while About keeps only the licences
   await expect(about.getByRole('button', { name: 'Diagnostic report…' })).toHaveCount(0);
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'New canvas', exact: true }).click();
-  await page.getByRole('button', { name: /^More/ }).click();
+  await page.getByRole('button', { name: /^Help/ }).click();
   await page.getByRole('menuitem', { name: 'Diagnostic report…' }).click();
   await expect(page.getByRole('textbox', { name: 'Diagnostic report contents' })).toBeVisible();
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('button', { name: /^More/ })).toBeFocused();
+  await expect(page.getByRole('button', { name: /^Help/ })).toBeFocused();
 });

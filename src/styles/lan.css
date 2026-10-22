@@ -1,0 +1,180 @@
+/*
+ * "Also share on this network" (`ui/collab/LanShare.tsx`), inside the Collaborate dialog. Builds on
+ * collab.css's section, hint, copy-row and code styles; only the switch and the parts unique to the
+ * panel are here.
+ */
+
+.dc-lan-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.dc-lan-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.dc-lan-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* ----------------------------------------------------------------- switch -- */
+
+.dc-lan-switch {
+  position: relative;
+  flex: none;
+  width: 34px;
+  height: 20px;
+  margin-top: 1px;
+  padding: 0;
+  border: 1px solid var(--dc-border-strong);
+  border-radius: var(--dc-radius-pill);
+  background: var(--dc-surface-raised);
+  cursor: pointer;
+  transition: background-color 160ms var(--dc-ease-out), border-color 160ms var(--dc-ease-out);
+}
+
+.dc-lan-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--dc-text-muted);
+  transition: transform 160ms var(--dc-ease-out), background-color 160ms var(--dc-ease-out);
+}
+
+.dc-lan-switch[aria-checked='true'] {
+  border-color: var(--dc-selection);
+  background: var(--dc-selection);
+}
+
+.dc-lan-switch[aria-checked='true'] .dc-lan-thumb {
+  background: var(--dc-surface);
+  transform: translateX(14px);
+}
+
+.dc-lan-switch:hover:not(:disabled) {
+  border-color: var(--dc-text-faint);
+}
+
+.dc-lan-switch[aria-checked='true']:hover:not(:disabled) {
+  border-color: var(--dc-selection);
+}
+
+.dc-lan-switch:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 2px;
+}
+
+.dc-lan-switch:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+/* ------------------------------------------------------------------- body -- */
+
+.dc-lan-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dc-lan-others {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dc-lan-addresses {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 0 6px;
+  padding: 0;
+  list-style: none;
+}
+
+.dc-lan-addresses li {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+}
+
+.dc-lan-addresses code {
+  overflow: hidden;
+  color: var(--dc-text-muted);
+  font-family: var(--dc-mono);
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.dc-lan-status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dc-lan-status {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--dc-text-muted);
+  font-size: 12.5px;
+}
+
+.dc-lan-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dc-selection);
+  animation: dc-lan-breathe 2.4s ease-in-out infinite;
+}
+
+@keyframes dc-lan-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+.dc-lan-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: var(--dc-radius-sm);
+  background: color-mix(in srgb, #e3a33b 12%, transparent);
+  color: var(--dc-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.dc-lan-warning svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-top: 2px;
+  color: #c98a2b;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-lan-switch,
+  .dc-lan-thumb {
+    transition: none;
+  }
+
+  .dc-lan-dot {
+    animation: none;
+  }
+}

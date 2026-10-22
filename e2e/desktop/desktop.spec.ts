@@ -106,6 +106,8 @@ test('Projects browses folders in-app, cancels without linking, and adds the sel
 
 test('explorer filters and pages folders, navigates history, and recovers from unreadable locations', async ({ page }) => {
   await page.goto('/');
+  // The menu event below is dropped if it beats host_ready; Home renders after that handshake.
+  await expect(page.getByRole('button', { name: 'New Quick Draft' })).toBeVisible();
   const text = await documentText(page, 'Topology', 3);
   await page.evaluate((text) => window.__shell.seed({ explorer: [
     { name: 'Studio', path: '~/Documents/Studio', diagrams: [
@@ -783,6 +785,8 @@ test('Home’s dotted canvas is quieter in dark mode, and exactly as it was in l
 
 test('renames the open file in place, from the File menu', async ({ page }) => {
   await page.goto('/');
+  // The open event below is dropped if it beats host_ready; Home renders after that handshake.
+  await expect(page.getByRole('button', { name: 'New Quick Draft' })).toBeVisible();
   const text = await documentText(page, 'Payments', 1);
   const handle = await page.evaluate((text) => window.__shell.addFile('payments', text), text);
   await page.evaluate(
@@ -867,7 +871,8 @@ test('exports go through the shell’s Save dialog, and cancelling one is not a 
   await expect(page.locator('.dc-editor')).toBeVisible();
   await drawService(page);
 
-  await page.getByRole('button', { name: 'Export', exact: true }).click();
+  await page.getByRole('button', { name: 'Share', exact: true }).click();
+  await page.getByRole('menuitem', { name: /^Export/ }).click();
   const dialog = page.getByRole('dialog', { name: 'Export' });
   await expect(dialog).toBeVisible();
   // A first-ever Export opens on Image; the document is what carries the diagram itself.
@@ -890,7 +895,8 @@ test('cancelling an export’s Save dialog leaves the export dialog as it was, w
   await expect(page.locator('.dc-editor')).toBeVisible();
   await page.evaluate(() => window.__shell.cancelNextExport());
 
-  await page.getByRole('button', { name: 'Export', exact: true }).click();
+  await page.getByRole('button', { name: 'Share', exact: true }).click();
+  await page.getByRole('menuitem', { name: /^Export/ }).click();
   const dialog = page.getByRole('dialog', { name: 'Export' });
   await dialog.locator('[data-mode="document"]').click();
   await page.getByRole('button', { name: 'Export document' }).click();

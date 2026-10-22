@@ -5,6 +5,8 @@ import type { AgentEditorReply, AgentEditorRequest } from '../host/agentBridge';
 import type { CommandMessage, LoadMessage, ToHostMessage } from '../host/embeddedHost';
 import type { AgentHost } from './agent';
 import { agentActivity } from './agentActivity';
+import { dispatchCollabLanEvent, lanRelayOf } from './collabLan';
+import type { LanRelay } from '../collab/lan';
 import { confirmWrite, takeWrite, type AgentWrite } from './agentWrites';
 import { logDiagnostic } from '../lib/diagnostics';
 import { isRecord } from '../lib/isRecord';
@@ -47,7 +49,11 @@ export interface DesktopUi {
   openRename(): void;
   /** Undo, Redo and Select All from the native Edit menu: see `dispatchEditCommand`. */
   editCommand(command: 'undo' | 'redo' | 'select-all'): void;
+  /** What acts on the open diagram, from the menu bar (it used to sit behind the toolbar's ⋯). */
+  canvasCommand(command: CanvasMenuCommand): void;
 }
+
+export type CanvasMenuCommand = 'canvas-settings' | 'find-replace' | 'commands' | 'arrange';
 
 interface Clock {
   setTimeout(run: () => void, ms: number): unknown;
@@ -317,7 +323,17 @@ export class DesktopController {
       case 'agent-changed':
         for (const listener of this.proposalListeners) listener();
         return void this.refreshAgent();
+      case 'collab-lan-open':
+      case 'collab-lan-message':
+      case 'collab-lan-close':
+      case 'collab-lan-stopped':
+        return dispatchCollabLanEvent(event);
     }
+  }
+
+  /** The shell's LAN relay, for network sharing (`ui/collab/LanShare.tsx`); its events come back through `collabLan.ts`. */
+  lanRelay(): LanRelay {
+    return lanRelayOf(this.api);
   }
 
   // ─── AI agents ──────────────────────────────────────────────────────────────────────
@@ -516,6 +532,13 @@ export class DesktopController {
       case 'redo':
       case 'select-all':
         return this.ui.editCommand(command);
+      case 'canvas-settings':
+      case 'find-replace':
+      case 'commands':
+      case 'arrange':
+        // Only with a diagram open: Home has nothing for them to act on.
+        if (this.store.getSnapshot().doc.kind === 'none') return;
+        return this.ui.canvasCommand(command);
     }
   }
 

@@ -13,7 +13,8 @@ export interface DiagnosticContext {
 // Every tag `logDiagnostic` is called with in `src/`. They are constants in the code, never user
 // data; a tag missing here reports as 'other', which says nothing about where a failure happened.
 const OPERATIONS = new Set([
-  'about-panel', 'adopt-document', 'app-shell', 'autosave', 'canvas-render', 'create-project',
+  'about-panel', 'adopt-document', 'app-shell', 'autosave', 'canvas-render', 'collab-invite', 'collab-knock',
+  'collab-panel', 'collab-relay', 'collab-session', 'create-project',
   'delete-document', 'delete-project', 'delete-project-refresh', 'duplicate-document', 'export-panel',
   'file-explorer', 'library-backfill', 'library-dialog', 'library-startup', 'library-visibility-refresh',
   'load-editor', 'load-starters', 'load-technology-icon', 'load-technology-icons', 'move-document-to-project',

@@ -68,6 +68,10 @@ import { minResizeSizeFor, snapResize } from './resizeSnap';
 import { AgentPreviewLayer, ProposalPreviewLayer } from './AgentPreviewLayer';
 import { ContinuationGhost } from './ContinuationGhost';
 import { RoomFrame } from './RoomFrame';
+import { PresenceLayer } from './PresenceLayer';
+import { FollowPrompt } from '../ui/collab/FollowPrompt';
+import { stopFollowingOnGesture } from '../ui/collab/presence/useFollowPresenter';
+import { useLivePresence } from '../ui/collab/presence/useLivePresence';
 import { useContinuation } from './useContinuation';
 
 /**
@@ -568,6 +572,10 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
     // room left behind — overriding the camera it had just restored).
     else void setViewport(state.document.viewport, { duration });
   }, [path, fitView, setViewport]);
+
+  // A live session's presence and presenter-following. After the effect above on purpose: a
+  // follower's camera for a room they were just taken to has to land after that room's own.
+  useLivePresence(path);
 
   // The same `state.width`/`state.height` `useCommandContext.ts`'s `viewWidth`/`viewHeight` read —
   // zero until the pane's own `ResizeObserver` has measured it, which is exactly the "layout is
@@ -1971,7 +1979,11 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   // which come with no event): guided framing stands down until asked back (`resumeFraming`). Judged
   // when the camera actually moves, not when a gesture starts: in Present every plain click starts
   // one, and clicking an attachment chip to reveal its note turned framing off.
-  const onMove = useCallback((event: MouseEvent | TouchEvent | null) => presenterMovedCamera(event), []);
+  // A collaborator's own gesture lets go of a presenter they follow, the same way.
+  const onMove = useCallback((event: MouseEvent | TouchEvent | null) => {
+    presenterMovedCamera(event);
+    stopFollowingOnGesture(event);
+  }, []);
 
   const onMoveEnd = useCallback(
     (event: unknown, viewport: { x: number; y: number; zoom: number }) => {
@@ -2170,6 +2182,9 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
           {/* A pending proposal's reviewed result (desktop only), while `ProposalPanel` shows it. */}
           <ProposalPreviewLayer />
 
+          {/* Other people in a live session: their pointers and what they hold. Never exported. */}
+          <PresenceLayer />
+
           {interactive && attachTarget && (
             <div
               className="dc-attach-affordance"
@@ -2191,8 +2206,13 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
  */
 export const Canvas = memo(function Canvas(props: CanvasProps) {
   return (
-    <EdgeLabelRoot>
-      <CanvasBody {...props} />
-    </EdgeLabelRoot>
+    <>
+      <EdgeLabelRoot>
+        <CanvasBody {...props} />
+      </EdgeLabelRoot>
+      {/* Beside the canvas, not in it: the canvas's own press handlers (a touch long-press opens its
+          context menu, a tap deselects) must never see a press on this offer's buttons. */}
+      <FollowPrompt />
+    </>
   );
 });

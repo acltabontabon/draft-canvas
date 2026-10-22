@@ -1,0 +1,1448 @@
+/*
+ * Live collaboration: the people in a session, the toolbar's view of it, and the Collaborate and
+ * Join dialogs. Imported by the toolbar control, so it ships with the editor; the dialogs themselves
+ * load only when opened.
+ *
+ * Peer colours are a second cue, never the only one — every badge carries initials, every cursor a
+ * name. Each palette is tuned for its theme: deep hues under white initials on light, light hues
+ * under dark initials on dark, both past 4.5:1.
+ */
+:root {
+  --dc-peer-ink: #0f1115;
+  --dc-peer-0: #5fd6c9;
+  --dc-peer-1: #a5b4fc;
+  --dc-peer-2: #f9a8d4;
+  --dc-peer-3: #fcd34d;
+  --dc-peer-4: #86efac;
+  --dc-peer-5: #c4b5fd;
+  --dc-peer-6: #7dd3fc;
+  --dc-peer-7: #fca5a5;
+}
+
+:root[data-theme='light'] {
+  --dc-peer-ink: #ffffff;
+  --dc-peer-0: #0f766e;
+  --dc-peer-1: #4f46e5;
+  --dc-peer-2: #be185d;
+  --dc-peer-3: #b45309;
+  --dc-peer-4: #15803d;
+  --dc-peer-5: #7c3aed;
+  --dc-peer-6: #0369a1;
+  --dc-peer-7: #b91c1c;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    --dc-peer-ink: #ffffff;
+    --dc-peer-0: #0f766e;
+    --dc-peer-1: #4f46e5;
+    --dc-peer-2: #be185d;
+    --dc-peer-3: #b45309;
+    --dc-peer-4: #15803d;
+    --dc-peer-5: #7c3aed;
+    --dc-peer-6: #0369a1;
+    --dc-peer-7: #b91c1c;
+  }
+}
+
+[data-peer-color='0'] { --dc-peer: var(--dc-peer-0); }
+[data-peer-color='1'] { --dc-peer: var(--dc-peer-1); }
+[data-peer-color='2'] { --dc-peer: var(--dc-peer-2); }
+[data-peer-color='3'] { --dc-peer: var(--dc-peer-3); }
+[data-peer-color='4'] { --dc-peer: var(--dc-peer-4); }
+[data-peer-color='5'] { --dc-peer: var(--dc-peer-5); }
+[data-peer-color='6'] { --dc-peer: var(--dc-peer-6); }
+[data-peer-color='7'] { --dc-peer: var(--dc-peer-7); }
+
+/* ------------------------------------------------------------------ badge -- */
+
+.dc-peer-badge {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--dc-radius-pill);
+  background: var(--dc-peer, var(--dc-text-faint));
+  color: var(--dc-peer-ink);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  -webkit-user-select: none;
+  user-select: none;
+  transition: opacity 200ms ease, filter 200ms ease;
+}
+
+.dc-peer-badge[data-size='small'] {
+  width: 20px;
+  height: 20px;
+  font-size: 8.5px;
+  /* A ring in the bar's own colour separates overlapping badges in the stack. */
+  box-shadow: 0 0 0 2px var(--dc-surface);
+}
+
+.dc-peer-badge[data-link='reconnecting'] {
+  opacity: 0.55;
+}
+
+.dc-peer-badge[data-link='gone'] {
+  opacity: 0.35;
+  filter: grayscale(1);
+}
+
+.dc-peer-more {
+  background: var(--dc-surface-raised);
+  color: var(--dc-text-muted);
+  box-shadow: 0 0 0 2px var(--dc-surface), inset 0 0 0 1px var(--dc-border);
+}
+
+/* -------------------------------------------------------- toolbar control -- */
+
+/* The faces of a live session, piled up beside Share. */
+.dc-collab-control {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 6px 0 4px;
+  border: 0;
+  border-radius: var(--dc-radius-pill);
+  background: none;
+  color: var(--dc-text-muted);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.dc-collab-control:hover,
+.dc-collab-control[data-active='true'] {
+  background: var(--dc-surface-hover);
+  color: var(--dc-text);
+}
+
+.dc-collab-control:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 1px;
+}
+
+.dc-collab-stack .dc-collab-more {
+  background: var(--dc-surface-raised);
+  color: var(--dc-text-muted);
+}
+
+/* Someone at the door, in the pile: no colour yet, a dashed ring that breathes. */
+.dc-collab-stack .dc-collab-knocking {
+  border: 1.5px dashed var(--dc-selection);
+  background: var(--dc-surface);
+  color: var(--dc-text);
+  animation: dc-collab-breathe 1.8s ease-in-out infinite;
+}
+
+.dc-collab-stack {
+  display: inline-flex;
+  align-items: center;
+}
+
+.dc-collab-stack > .dc-peer-badge {
+  position: relative;
+}
+
+/* Each badge tucks under the one before it, so the leading initials — yours — stay whole. */
+.dc-collab-stack > .dc-peer-badge + .dc-peer-badge {
+  margin-left: -5px;
+}
+
+.dc-collab-stack > .dc-peer-badge:nth-child(1) { z-index: 5; }
+.dc-collab-stack > .dc-peer-badge:nth-child(2) { z-index: 4; }
+.dc-collab-stack > .dc-peer-badge:nth-child(3) { z-index: 3; }
+.dc-collab-stack > .dc-peer-badge:nth-child(4) { z-index: 2; }
+.dc-collab-stack > .dc-peer-badge:nth-child(5) { z-index: 1; }
+
+/* Someone at the door, seen from the bar. */
+.dc-collab-waiting-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--dc-selection);
+  box-shadow: 0 0 0 2px var(--dc-surface);
+  animation: dc-collab-breathe 1.8s ease-in-out infinite;
+}
+
+/* A live session says so with a small breathing dot on the pile's shoulder. */
+.dc-collab-live-dot {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--dc-canvas);
+  background: var(--dc-selection);
+  animation: dc-collab-breathe 2.4s ease-in-out infinite;
+}
+
+.dc-collab-control[data-status='reconnecting'] .dc-collab-live-dot,
+.dc-collab-control[data-status='joining'] .dc-collab-live-dot {
+  background: #e3a33b;
+}
+
+.dc-collab-control[data-status='ended'] .dc-collab-live-dot {
+  background: var(--dc-text-faint);
+  animation: none;
+}
+
+@keyframes dc-collab-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+/* ----------------------------------------------------------------- dialog -- */
+
+.dc-collab {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.dc-collab-lead {
+  margin: 0;
+  color: var(--dc-text-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.dc-collab-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.dc-collab-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.dc-collab-field input,
+.dc-collab-code {
+  height: 32px;
+  min-width: 0;
+  padding: 0 10px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-sm);
+  background: var(--dc-canvas);
+  color: var(--dc-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.dc-collab-field input:focus-visible,
+.dc-collab-code:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: -1px;
+}
+
+.dc-collab-field input {
+  max-width: 280px;
+}
+
+.dc-collab-code {
+  flex: 1;
+  font-family: var(--dc-mono);
+  font-size: 12px;
+  text-overflow: ellipsis;
+}
+
+.dc-collab-code[aria-invalid='true'] {
+  border-color: var(--dc-danger);
+}
+
+.dc-collab-hint {
+  margin: 0;
+  color: var(--dc-text-faint);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.dc-collab-error {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: var(--dc-radius-sm);
+  background: color-mix(in srgb, var(--dc-danger) 12%, transparent);
+  color: var(--dc-danger);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.dc-collab-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.dc-collab-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dc-collab-section + .dc-collab-section {
+  padding-top: 16px;
+  border-top: 1px solid var(--dc-border);
+}
+
+.dc-collab-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--dc-text-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.dc-collab-count {
+  padding: 1px 6px;
+  border-radius: var(--dc-radius-pill);
+  background: var(--dc-surface-raised);
+  color: var(--dc-text-muted);
+  font-size: 10.5px;
+  letter-spacing: 0;
+}
+
+.dc-collab-people {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dc-collab-person {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 3px 4px 3px 2px;
+  border-radius: var(--dc-radius-sm);
+}
+
+.dc-collab-person:hover {
+  background: var(--dc-surface-hover);
+}
+
+.dc-collab-person-name {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* The people as a table: a dashed thread runs down through everyone's badge, the same line that ties
+   people to the canvas in the scene, and ends at the next empty seat. */
+.dc-collab-table {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dc-collab-table::before {
+  content: '';
+  position: absolute;
+  top: 20px;
+  bottom: 20px;
+  left: 14px;
+  border-left: 1.5px dashed var(--dc-border-strong);
+}
+
+/* Each badge sits on the thread, not under it. */
+.dc-collab-table .dc-peer-badge,
+.dc-collab-seat-ring {
+  position: relative;
+  box-shadow: 0 0 0 3px var(--dc-surface);
+}
+
+.dc-collab-pill {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px 2px 6px;
+  border-radius: var(--dc-radius-pill);
+  background: var(--dc-selection-soft);
+  color: var(--dc-selection);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.dc-collab-seat {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 3px 4px 3px 2px;
+}
+
+.dc-collab-seat-ring {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border: 1.5px dashed var(--dc-text-faint);
+  border-radius: 50%;
+  background: var(--dc-surface);
+  animation: dc-collab-breathe 2.8s ease-in-out infinite;
+}
+
+.dc-collab-seat-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.dc-collab-seat-title {
+  color: var(--dc-text-muted);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.dc-collab-seat-meta {
+  color: var(--dc-text-faint);
+  font-size: 12px;
+}
+
+.dc-collab-person-meta {
+  flex: none;
+  color: var(--dc-text-faint);
+  font-size: 12px;
+}
+
+.dc-collab-person-meta[data-link='reconnecting'] {
+  color: #c98a2b;
+}
+
+/* The controls hug the person they belong to — a row, not a table stretched to the dialog's edge. */
+.dc-collab-person-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 4px;
+}
+
+.dc-collab-invite-start {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dc-collab-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: dc-collab-step;
+}
+
+.dc-collab-step {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-left: 30px;
+  counter-increment: dc-collab-step;
+}
+
+.dc-collab-step::before {
+  content: counter(dc-collab-step);
+  position: absolute;
+  top: -1px;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--dc-border-strong);
+  border-radius: 50%;
+  color: var(--dc-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  transition: background-color 200ms ease, border-color 200ms ease, color 200ms ease;
+}
+
+.dc-collab-step[data-done='true']::before {
+  content: '✓';
+  border-color: var(--dc-selection);
+  background: var(--dc-selection-soft);
+  color: var(--dc-selection);
+}
+
+.dc-collab-step-label {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.dc-collab-copy-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+}
+
+.dc-collab-steps-single {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dc-collab-step-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.dc-collab-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--dc-border);
+}
+
+.dc-collab-footer > :only-child {
+  margin-left: auto;
+}
+
+/* ------------------------------------------------------------------ scene -- */
+
+/* The session as a picture (`SessionScene`): a canvas sheet, its owner on the left, everyone else on
+   the right, each tied to the sheet by a line in their colour and pointing at something on it. One
+   coordinate space — the SVG's 480×150 — places the drawing and the seats laid over it. */
+.dc-scene {
+  position: relative;
+  width: 100%;
+  max-width: 440px;
+  aspect-ratio: 480 / 150;
+  align-self: center;
+  margin: -4px 0 -2px;
+}
+
+.dc-scene-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.dc-scene-under {
+  fill: var(--dc-surface-raised);
+  stroke: var(--dc-border);
+}
+
+.dc-scene-sheet {
+  fill: var(--dc-canvas);
+  stroke: var(--dc-border-strong);
+  stroke-width: 1;
+}
+
+/* The little diagram draws itself in, once, the way the home screen's sketch does. */
+.dc-scene-ink {
+  fill: none;
+  stroke: var(--dc-text-faint);
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: dc-scene-ink 900ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.dc-scene-shape {
+  fill: var(--dc-surface);
+  stroke: var(--dc-text-muted);
+  animation-delay: 120ms;
+}
+
+.dc-scene-label {
+  stroke: var(--dc-border-strong);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  opacity: 0;
+  animation: dc-scene-appear 300ms ease 700ms forwards;
+}
+
+/* What each person has selected: a soft outline in their colour, like the rings on the canvas. */
+.dc-scene-held {
+  fill: none;
+  stroke: var(--dc-peer);
+  stroke-width: 2;
+  opacity: 0;
+  animation: dc-scene-appear 300ms ease 900ms forwards;
+}
+
+.dc-scene-tie {
+  fill: none;
+  stroke: var(--dc-border-strong);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-dasharray: 1.5 5;
+}
+
+.dc-scene-tie[data-peer-color] {
+  stroke: var(--dc-peer);
+}
+
+.dc-scene-tie[data-state='live'],
+.dc-scene-tie:not([data-state]) {
+  stroke-dasharray: none;
+  opacity: 0.75;
+}
+
+.dc-scene-tie[data-state='empty'] {
+  opacity: 0.6;
+}
+
+.dc-scene-tie[data-state='knocking'],
+.dc-scene-tie[data-state='joining'],
+.dc-scene-tie[data-state='reconnecting'] {
+  animation: dc-scene-travel 1s linear infinite;
+}
+
+.dc-scene-tie[data-state='knocking'] {
+  stroke: var(--dc-selection);
+}
+
+/* Pointers wander a little around where they rest, each at its own pace. */
+.dc-scene-pointer {
+  transform: translate(var(--dc-scene-x), var(--dc-scene-y));
+  animation: dc-scene-drift 8s ease-in-out infinite;
+}
+
+.dc-scene-pointer path {
+  fill: var(--dc-peer);
+  stroke: var(--dc-canvas);
+  stroke-width: 1.2;
+  stroke-linejoin: round;
+}
+
+.dc-scene-seat {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  transform: translate(-50%, -15px);
+}
+
+.dc-scene-face {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--dc-peer, var(--dc-surface-raised));
+  box-shadow: 0 0 0 2.5px var(--dc-surface), 0 2px 6px rgb(0 0 0 / 12%);
+  color: var(--dc-peer-ink);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  animation: dc-scene-pop 360ms cubic-bezier(0.3, 1.4, 0.5, 1) both;
+}
+
+.dc-scene-face svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* An empty seat: room for someone, breathing gently. */
+.dc-scene-seat[data-state='empty'] .dc-scene-face {
+  background: transparent;
+  border: 1.5px dashed var(--dc-border-strong);
+  box-shadow: none;
+  animation: dc-collab-breathe 2.8s ease-in-out infinite;
+}
+
+/* Arriving or knocking: no colour yet, just their initials in a dashed ring. */
+.dc-scene-seat[data-state='arriving'] .dc-scene-face,
+.dc-scene-seat[data-state='knocking'] .dc-scene-face {
+  background: var(--dc-surface);
+  border: 1.5px dashed var(--dc-text-faint);
+  box-shadow: none;
+  color: var(--dc-text-muted);
+}
+
+.dc-scene-seat[data-state='knocking'] .dc-scene-face {
+  border-color: var(--dc-selection);
+  color: var(--dc-text);
+  animation: dc-scene-knock 1.6s ease-in-out infinite;
+}
+
+.dc-scene-seat[data-state='joining'] .dc-scene-face {
+  animation: dc-collab-breathe 1.2s ease-in-out infinite;
+}
+
+.dc-scene-seat[data-state='reconnecting'] .dc-scene-face {
+  opacity: 0.55;
+}
+
+.dc-scene-knock {
+  position: absolute;
+  top: -6px;
+  right: -8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--dc-selection);
+  box-shadow: 0 0 0 2px var(--dc-surface);
+  color: var(--dc-surface);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.dc-scene-name {
+  max-width: 76px;
+  overflow: hidden;
+  color: var(--dc-text-muted);
+  font-size: 10.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+@keyframes dc-scene-ink {
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes dc-scene-appear {
+  to { opacity: 1; }
+}
+
+@keyframes dc-scene-travel {
+  to { stroke-dashoffset: -13; }
+}
+
+@keyframes dc-scene-pop {
+  from { transform: scale(0.6); opacity: 0; }
+}
+
+@keyframes dc-scene-knock {
+  0%, 100% { transform: translateY(0); }
+  12% { transform: translateY(-2px) rotate(-6deg); }
+  24% { transform: translateY(0) rotate(4deg); }
+  36% { transform: translateY(0); }
+}
+
+@keyframes dc-scene-drift {
+  0%, 100% { transform: translate(var(--dc-scene-x), var(--dc-scene-y)); }
+  30% { transform: translate(calc(var(--dc-scene-x) + 9px), calc(var(--dc-scene-y) - 6px)); }
+  62% { transform: translate(calc(var(--dc-scene-x) - 7px), calc(var(--dc-scene-y) + 5px)); }
+}
+
+/* The privacy seal: a lock pressed onto the canvas's corner like wax on a letter. The note it opens
+   is the only place the dialogs explain what stays private; nobody has to read it to get going. */
+.dc-scene-layer {
+  position: absolute;
+  inset: 0;
+}
+
+.dc-scene-seal-anchor {
+  position: absolute;
+  z-index: 2;
+  transform: translate(-50%, -50%);
+}
+
+.dc-scene-seal {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--dc-selection) 70%, white), var(--dc-selection) 70%);
+  box-shadow: 0 0 0 3px var(--dc-canvas), 0 0 0 4px color-mix(in srgb, var(--dc-selection) 35%, transparent), 0 3px 8px rgb(0 0 0 / 18%);
+  color: var(--dc-canvas);
+  cursor: pointer;
+  transform: rotate(-8deg);
+  transition: transform 160ms ease, box-shadow 160ms ease;
+  animation: dc-scene-pop 420ms cubic-bezier(0.3, 1.4, 0.5, 1) 900ms both;
+}
+
+.dc-scene-seal svg {
+  width: 13px;
+  height: 13px;
+}
+
+.dc-scene-seal:hover,
+.dc-scene-seal[aria-expanded='true'] {
+  transform: rotate(0deg) scale(1.08);
+}
+
+.dc-scene-seal:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 4px;
+}
+
+.dc-scene-note {
+  position: absolute;
+  top: calc(100% + 12px);
+  right: -44px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  width: min(310px, 80vw);
+  padding: 12px 14px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-lg);
+  background: var(--dc-surface);
+  box-shadow: var(--dc-shadow-panel);
+  color: var(--dc-text);
+  font-size: 12.5px;
+  line-height: 1.5;
+  text-align: left;
+  animation: dc-scene-unfold 180ms ease-out both;
+}
+
+/* The bubble's tail, pointing back up at the seal. */
+.dc-scene-note::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  right: 50px;
+  width: 10px;
+  height: 10px;
+  border-top: 1px solid var(--dc-border);
+  border-left: 1px solid var(--dc-border);
+  background: var(--dc-surface);
+  transform: rotate(45deg);
+}
+
+.dc-scene-note-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--dc-selection);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.dc-scene-note .dc-collab-field {
+  align-self: stretch;
+}
+
+@keyframes dc-scene-unfold {
+  from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+}
+
+/* --------------------------------------------------------------- name tag -- */
+
+/* A conference sticker: a coloured band that says what it is, and the name written underneath. */
+.dc-nametag {
+  display: inline-flex;
+  flex-direction: column;
+  align-self: center;
+  min-width: 210px;
+  overflow: hidden;
+  border: 1.5px solid var(--dc-selection);
+  border-radius: 12px;
+  background: var(--dc-canvas);
+  box-shadow: 0 2px 0 color-mix(in srgb, var(--dc-selection) 25%, transparent), 0 6px 18px rgb(0 0 0 / 8%);
+  transform: rotate(-1.2deg);
+  transition: transform 160ms ease;
+}
+
+.dc-nametag:focus-within {
+  transform: rotate(0deg);
+}
+
+.dc-nametag-lead {
+  padding: 4px 12px 3px;
+  background: var(--dc-selection);
+  color: var(--dc-canvas);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.dc-nametag input {
+  width: auto;
+  min-width: 0;
+  padding: 6px 14px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--dc-text);
+  font: inherit;
+  font-size: 17px;
+  font-weight: 600;
+  text-align: center;
+  outline: none;
+}
+
+.dc-nametag input::placeholder {
+  color: var(--dc-text-faint);
+  font-weight: 500;
+}
+
+/* Focus shows on the tag itself: a second ring around the sticker. */
+.dc-nametag:has(input:focus-visible) {
+  box-shadow: 0 0 0 3px var(--dc-selection-soft), 0 6px 18px rgb(0 0 0 / 8%);
+}
+
+/* ------------------------------------------------------------ centred page -- */
+
+.dc-collab-centred {
+  text-align: center;
+}
+
+.dc-collab-centred .dc-collab-form {
+  align-items: center;
+  gap: 14px;
+}
+
+.dc-collab-centred .dc-collab-choice {
+  width: 100%;
+}
+
+.dc-collab-centred .dc-collab-choice legend {
+  width: 100%;
+  margin-bottom: 8px;
+  color: var(--dc-text-muted);
+  text-align: center;
+}
+
+.dc-collab-centred .dc-collab-option {
+  text-align: left;
+}
+
+.dc-collab-go {
+  min-width: 190px;
+  height: 36px;
+  justify-content: center;
+  font-size: 13.5px;
+}
+
+/* ------------------------------------------------------------ hero, cards -- */
+
+.dc-collab-how {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  width: 100%;
+  max-width: 420px;
+  align-self: center;
+  margin: -10px 0 0;
+  padding: 0;
+  color: var(--dc-text-muted);
+  font-size: 12px;
+  line-height: 1.3;
+  list-style: none;
+}
+
+.dc-collab-how li {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  text-align: center;
+}
+
+/* The dashed tie from one step to the next, the same line that ties people to the canvas above. */
+.dc-collab-how li + li::before {
+  content: '';
+  position: absolute;
+  top: 9px;
+  right: calc(50% + 15px);
+  left: calc(-50% + 15px);
+  border-top: 1.5px dashed var(--dc-border-strong);
+}
+
+.dc-collab-how span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  background: var(--dc-selection-soft);
+  box-shadow: 0 0 0 3px var(--dc-surface);
+  color: var(--dc-selection);
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+/* The last step is the one that lands: filled in. */
+.dc-collab-how li:last-child span {
+  background: var(--dc-selection);
+  color: var(--dc-canvas);
+}
+
+.dc-collab-choice {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.dc-collab-choice legend {
+  margin-bottom: 6px;
+  padding: 0;
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.dc-collab-option {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 9px 11px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius);
+  background: var(--dc-surface);
+  cursor: pointer;
+  transition: border-color 140ms ease, background-color 140ms ease, box-shadow 140ms ease;
+}
+
+.dc-collab-option:hover {
+  border-color: var(--dc-border-strong);
+}
+
+.dc-collab-option[data-checked='true'] {
+  border-color: var(--dc-selection);
+  background: var(--dc-selection-soft);
+  box-shadow: 0 0 0 1px var(--dc-selection);
+}
+
+/* The radio itself stays in the accessibility tree and takes focus; the card is what's seen. */
+.dc-collab-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.dc-collab-option:has(input:focus-visible) {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 2px;
+}
+
+.dc-collab-option > svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--dc-text-muted);
+}
+
+.dc-collab-option[data-checked='true'] > svg {
+  color: var(--dc-selection);
+}
+
+.dc-collab-option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dc-collab-option-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.dc-collab-option-detail {
+  color: var(--dc-text-muted);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+/* A card for the one thing to do next: invite people, or let them in. */
+.dc-collab-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-lg);
+  background: var(--dc-surface);
+}
+
+.dc-collab-card-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.dc-collab-door {
+  border-color: var(--dc-selection);
+  box-shadow: 0 0 0 1px var(--dc-selection-soft);
+}
+
+.dc-collab-ticket .dc-collab-code {
+  height: 34px;
+}
+
+.dc-collab-textbutton {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--dc-selection);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.dc-collab-textbutton:hover {
+  text-decoration-color: currentColor;
+}
+
+.dc-collab-waiting {
+  text-align: center;
+}
+
+@media (max-width: 520px) {
+  .dc-collab-choice {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-collab-live-dot,
+  .dc-collab-stack .dc-collab-knocking,
+  .dc-scene-face,
+  .dc-scene-seat .dc-scene-face,
+  .dc-scene-tie,
+  .dc-scene-pointer,
+  .dc-scene-seal,
+  .dc-scene-note,
+  .dc-collab-seat-ring {
+    animation: none !important;
+  }
+
+  .dc-scene-ink {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+
+  .dc-scene-label,
+  .dc-scene-held {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+/* ------------------------------------------------------------------- dock -- */
+
+/* The people in a session, at the canvas's edge: a column of faces that each open a card. */
+.dc-dock {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: var(--dc-z-chrome);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-pill);
+  background: color-mix(in srgb, var(--dc-surface) 88%, transparent);
+  box-shadow: var(--dc-shadow-panel);
+  backdrop-filter: blur(6px);
+  animation: dc-dock-in 260ms var(--dc-ease-out);
+}
+
+.dc-dock-empty {
+  flex-direction: row;
+  padding: 4px 12px 4px 4px;
+}
+
+.dc-dock-tip {
+  color: var(--dc-text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.dc-dock-invite {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1.5px dashed var(--dc-border-strong);
+  border-radius: 50%;
+  background: none;
+  color: var(--dc-text-muted);
+  cursor: pointer;
+}
+
+.dc-dock-invite:hover,
+.dc-dock-invite:focus-visible {
+  border-color: var(--dc-selection);
+  color: var(--dc-selection);
+}
+
+.dc-dock-item {
+  position: relative;
+  display: flex;
+}
+
+.dc-dock-face {
+  position: relative;
+  display: inline-flex;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+  transition: transform 160ms var(--dc-ease-out);
+}
+
+.dc-dock-face .dc-peer-badge {
+  width: 30px;
+  height: 30px;
+  font-size: 11px;
+  /* A ring in their own colour, a hair off the face — the dock's signature. */
+  box-shadow: 0 0 0 2px var(--dc-surface), 0 0 0 3.5px var(--dc-peer, var(--dc-border-strong));
+}
+
+.dc-dock-face:hover,
+.dc-dock-face:focus-visible {
+  transform: scale(1.08);
+}
+
+.dc-dock-face:focus-visible {
+  outline: none;
+}
+
+.dc-dock-face:focus-visible .dc-peer-badge {
+  box-shadow: 0 0 0 2px var(--dc-surface), 0 0 0 4px var(--dc-selection);
+}
+
+/* What they are doing, as a tiny glyph on the face's corner. */
+.dc-dock-glyph {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--dc-peer, var(--dc-text-muted));
+  color: var(--dc-peer-ink);
+  box-shadow: 0 0 0 2px var(--dc-surface);
+  font-size: 9px;
+  font-weight: 800;
+}
+
+/* The question mark sits outside the ring, clear of the initials it would otherwise cover. */
+.dc-dock-glyph-knock {
+  right: -7px;
+  bottom: -5px;
+}
+
+/* Someone at the door: a dashed ring that breathes until they are answered. */
+.dc-dock-knock .dc-dock-face .dc-peer-badge {
+  background: var(--dc-surface-raised);
+  color: var(--dc-text);
+  box-shadow: 0 0 0 2px var(--dc-surface);
+  outline: 1.5px dashed var(--dc-selection);
+  outline-offset: 2px;
+  animation: dc-collab-breathe 1.8s ease-in-out infinite;
+}
+
+.dc-dock-glyph-knock {
+  background: var(--dc-selection);
+  color: var(--dc-canvas);
+}
+
+.dc-dock-knock[data-admitting='true'] .dc-peer-badge {
+  animation: none;
+  outline-style: solid;
+}
+
+/* The card opens to the left of a face on hover or keyboard focus, and stays while used. */
+.dc-dock-card {
+  position: absolute;
+  top: 50%;
+  right: calc(100% + 12px);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 190px;
+  padding: 10px 12px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius);
+  background: var(--dc-surface);
+  box-shadow: var(--dc-shadow-panel);
+  opacity: 0;
+  visibility: hidden;
+  transform: translate(6px, -50%);
+  transition: opacity 140ms ease, transform 160ms var(--dc-ease-out), visibility 0s linear 160ms;
+}
+
+/* A bridge over the gap, so moving the pointer from face to card doesn't close it. */
+.dc-dock-card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 100%;
+  width: 14px;
+}
+
+.dc-dock-item:hover .dc-dock-card,
+.dc-dock-item:focus-within .dc-dock-card,
+.dc-dock-knock .dc-dock-card {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(0, -50%);
+  transition: opacity 140ms ease, transform 160ms var(--dc-ease-out), visibility 0s;
+}
+
+/* A knock's card is open from the start — it's a question waiting for an answer — but quiet
+   until hovered, so it doesn't shout over the drawing. */
+.dc-dock-knock:not(:hover, :focus-within) .dc-dock-card {
+  opacity: 0.92;
+}
+
+.dc-dock-card-name {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.dc-dock-card-meta {
+  color: var(--dc-text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.dc-dock-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.dc-dock-card-actions:empty {
+  display: none;
+}
+
+.dc-dock-item[data-link='reconnecting'] .dc-dock-face {
+  opacity: 0.55;
+}
+
+@keyframes dc-dock-in {
+  from { opacity: 0; transform: translateX(8px); }
+}
+
+
+.dc-collab-direct > summary {
+  font-size: 12.5px;
+}
+
+.dc-collab-direct[open] {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--dc-border);
+}
+
+.dc-knock-seat .dc-peer-badge {
+  background: var(--dc-surface-raised);
+  color: var(--dc-text);
+  outline: 1.5px dashed var(--dc-selection);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-dock,
+  .dc-dock-knock .dc-dock-face .dc-peer-badge {
+    animation: none;
+  }
+}
+
+/* Everyone at the door, on one card beside the top of the dock. */
+.dc-dock-door {
+  position: absolute;
+  top: 0;
+  right: calc(100% + 12px);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 250px;
+  padding: 10px 12px 8px;
+  border: 1px solid color-mix(in srgb, var(--dc-selection) 45%, var(--dc-border));
+  border-radius: var(--dc-radius);
+  background: var(--dc-surface);
+  box-shadow: var(--dc-shadow-panel);
+  animation: dc-dock-in 220ms var(--dc-ease-out);
+}
+
+.dc-dock-door-title {
+  margin-bottom: 4px;
+  color: var(--dc-selection);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.dc-dock-door-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 0;
+}
+
+.dc-dock-door-row + .dc-dock-door-row {
+  border-top: 1px solid var(--dc-border);
+}
+
+.dc-dock-door-row .dc-dock-card-actions {
+  margin-top: 4px;
+}
+
+.dc-dock-knock .dc-dock-face {
+  cursor: default;
+}
+
+.dc-dock-card-warning {
+  max-width: 240px;
+  color: #c98a2b;
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+

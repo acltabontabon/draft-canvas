@@ -146,6 +146,12 @@ export interface DocumentSession {
    * saved, never autosaved — it is not in the library until `makeEditableCopy` puts a copy there.
    */
   openShared: (document: DraftDocument) => Promise<void>;
+  /**
+   * Shows the owner's file in a collaboration session this person joined: never stored or autosaved,
+   * like a shared diagram — it is the owner's file, kept equal by the session — but editable unless
+   * the owner made them view-only (`collabBridge` sets that). Leaving the canvas leaves the session.
+   */
+  openCollaborative: (document: DraftDocument) => Promise<boolean>;
   /** Copies the shared diagram on screen into the library, under a fresh id, and opens that copy editable. */
   makeEditableCopy: () => Promise<void>;
   /** Resolves `true` once the canvas is closed, `false` when unsaved work kept it open. */
@@ -223,6 +229,9 @@ export function useDocumentSession(): DocumentSession {
     sharedRef.current = false;
     useUiStore.getState().setReadOnly(null);
     clearShareFragment();
+    // A collaborator's copy leaving the screen is leaving the session. Loaded with the editor, which
+    // a collaborator's copy always is by now, so this never pulls the editor into the Library.
+    void import('./collabBridge').then((bridge) => bridge.leaveSession());
   }, []);
 
   useEffect(() => {
@@ -542,6 +551,30 @@ export function useDocumentSession(): DocumentSession {
       editorStore.useEditorStore.getState().setDocument(document);
       arriveWith(document, { reopening: false });
       setOpenId(document.metadata.id);
+    },
+    [mayLeaveCurrent, notify, setOpenId],
+  );
+
+  const openCollaborative = useCallback(
+    async (document: DraftDocument) => {
+      const request = (navigation.current += 1);
+      if (!(await mayLeaveCurrent(null)) || request !== navigation.current) return false;
+      let editorStore: EditorStoreModule;
+      try {
+        editorStore = await loadEditorStore();
+      } catch (error) {
+        logDiagnostic(error, { operation: 'load-editor', documentId: document.metadata.id });
+        const notice = loadFailureNotice(error, 'The editor could not be loaded. Check your connection and try again.');
+        notify(notice.message, 'error', notice.action);
+        return false;
+      }
+      if (request !== navigation.current) return false;
+      // As `openShared`: marked first, so autosave never touches the owner's file from here.
+      sharedRef.current = true;
+      editorStore.useEditorStore.getState().setDocument(document);
+      arriveWith(document, { reopening: false });
+      setOpenId(document.metadata.id);
+      return true;
     },
     [mayLeaveCurrent, notify, setOpenId],
   );
@@ -989,6 +1022,7 @@ export function useDocumentSession(): DocumentSession {
     newDocument,
     adoptDocument,
     openShared,
+    openCollaborative,
     makeEditableCopy,
     closeDocument,
     resolveConflict,

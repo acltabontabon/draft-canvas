@@ -29,6 +29,8 @@ import { backOut, lookInside } from '../ui/Editor/depthNavigation';
 import { inheritedLevel, LEVEL_HINTS, LEVEL_LABELS } from '../depth/level';
 import { fileOf, fileWithLiveViewport, ownsData, viewLevel } from '../store/editorStore';
 import { pointer, type UiStore } from '../store/uiStore';
+import { useCollabStore } from '../store/collabStore';
+import { leaveSessionKeepingView, stopHosting } from '../store/collabBridge';
 import { SOURCE_FORMAT_INFO, SOURCE_FORMATS } from '../export/source/formats';
 import type { CopyResult } from '../export/clipboard';
 // Type-only: `contextMenu.ts` builds its menus from this module, so a value import would be a cycle.
@@ -767,6 +769,15 @@ export function canvasCommands(ctx: CommandContext): Command[] {
             },
           },
         ]),
+    {
+      id: 'collaborate',
+      title: useCollabStore.getState().role === 'off' ? 'Collaborate…' : 'Live session…',
+      group: 'canvas',
+      keywords: ['collaborate', 'live', 'invite', 'share', 'together', 'real time', 'multiplayer', 'session', 'people'],
+      hint: useCollabStore.getState().role === 'off' ? 'Edit together, live — your diagram never goes through a server' : 'People, invites and roles',
+      run: (inner) => inner.ui.setCollabOpen(true),
+    },
+    ...collabCommands(),
     {
       id: 'settings',
       title: 'Canvas settings…',
@@ -1863,6 +1874,63 @@ export function starterCommands(): Command[] {
 }
 
 /**
+ * A live session's own commands, offered only while they apply: the owner copies the session link or
+ * ends the session; a collaborator leaves, or follows (or stops following) whoever is presenting.
+ * Each calls the session's own action (`store/collabBridge.ts`, `store/collabStore.ts`).
+ */
+function collabCommands(): Command[] {
+  const collab = useCollabStore.getState();
+  const commands: Command[] = [];
+  if (collab.role === 'host') {
+    if (collab.sessionLink) {
+      const link = collab.sessionLink;
+      commands.push({
+        id: 'copy-session-link',
+        title: 'Copy session link',
+        group: 'canvas',
+        keywords: ['invite', 'collaborate', 'live', 'share', 'join'],
+        hint: 'Anyone who opens it asks to join',
+        run: (inner) => {
+          void navigator.clipboard
+            ?.writeText(link)
+            .then(() => inner.ui.notify('Session link copied. Anyone who opens it asks to join.'))
+            .catch(() => inner.ui.setCollabOpen(true));
+        },
+      });
+    }
+    commands.push({
+      id: 'end-session',
+      title: 'End live session',
+      group: 'canvas',
+      keywords: ['stop', 'collaborate', 'live', 'disconnect'],
+      run: (inner) => {
+        stopHosting('ended');
+        inner.ui.notify('Session ended. The canvas is just yours again.');
+      },
+    });
+  }
+  if (collab.role === 'guest' && collab.status !== 'ended') {
+    commands.push({
+      id: 'leave-session',
+      title: 'Leave live session',
+      group: 'canvas',
+      keywords: ['exit', 'collaborate', 'live', 'disconnect'],
+      run: () => leaveSessionKeepingView(),
+    });
+    if (collab.presenter) {
+      commands.push({
+        id: 'follow-presenter',
+        title: collab.following ? 'Stop following the presenter' : 'Follow the presenter',
+        group: 'canvas',
+        keywords: ['presentation', 'camera', 'live', 'follow'],
+        run: () => useCollabStore.setState({ following: !useCollabStore.getState().following }),
+      });
+    }
+  }
+  return commands;
+}
+
+/**
  * The top-level commands a shared (read-only) diagram still offers: looking, moving the camera,
  * presenting, copying out and the app's own panels and dialogs — nothing that writes the document.
  * An allowlist rather than a per-command flag, so a command added later is hidden from a shared
@@ -1905,6 +1973,11 @@ const READ_SAFE_COMMANDS: ReadonlySet<string> = new Set([
   'copy-source',
   'copy-share-link',
   // The app's own panels and dialogs (Canvas settings hides the document's Background itself).
+  // Collaborate is how a view-only collaborator sees who is here and leaves; following and leaving
+  // change only this copy's own view and session, never the document.
+  'collaborate',
+  'leave-session',
+  'follow-presenter',
   'settings',
   'outline',
   'shortcuts',

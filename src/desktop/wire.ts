@@ -50,9 +50,10 @@ dismissed: boolean,
  * Why the last install didn't go ahead (they chose to keep working), if it just happened.
  */
 held: string | null, error: Failure | null, };
-export type MenuCommand = "save" | "save-as" | "open" | "open-project" | "new-canvas" | "reveal" | "revert" | "rename" | "settings" | "about" | "shortcuts" | "undo" | "redo" | "select-all";
+export type MenuCommand = "save" | "save-as" | "open" | "open-project" | "new-canvas" | "reveal" | "revert" | "rename" | "settings" | "about" | "shortcuts" | "undo" | "redo" | "select-all" | "canvas-settings" | "find-replace" | "commands" | "arrange";
 export type HostEvent = { "type": "open", handle: string, name: string, displayPath: string, } | { "type": "new-quick-draft" } | { "type": "menu", command: MenuCommand, } | { "type": "quit-requested" } | { "type": "update-requested" } | { "type": "update", snapshot: Snapshot, } | { "type": "window-focused" } | { "type": "disk-changed" } | { "type": "recents-changed" } | { "type": "notice", message: string, } | { "type": "agent-request", id: number, tool: string, args: unknown, context: unknown, } | { "type": "agent-file-written", id: number, handle: string | null, displayPath: string, stamp: string,
 /**
  * A new diagram (nothing to undo); otherwise a change to an existing one.
  */
-created: boolean, } | { "type": "agent-changed" };
+created: boolean, } | { "type": "agent-changed" } | { "type": "collab-lan-open", connId: string, } | { "type": "collab-lan-message", connId: string, text: string, } | { "type": "collab-lan-close", connId: string, reason: string, } | { "type": "collab-lan-stopped", reason: string, };
+export type CollabLanStarted = { port: number, addresses: Array<string>, };

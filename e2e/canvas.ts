@@ -57,7 +57,11 @@ export async function create(page: Page, tool: string, at: { x: number; y: numbe
     await expect(page.locator('.dc-element-inspector, .dc-edge-inspector')).toHaveCount(0);
   }
   await page.getByRole('button', { name: tool, exact: true }).click();
-  // Off the button again before clicking, as a hand would be: its tooltip can sit on the point.
+  // Off the button before clicking, as a hand would be — and clear of its tooltip first, which hangs
+  // below the tool and stays open while the pointer is over it: a point under the dock would land in
+  // the tooltip, not on the canvas.
+  await page.mouse.move(box.x + 4, box.y + box.height - 4);
+  await page.locator('.dc-tooltip').first().waitFor({ state: 'detached', timeout: 2_000 }).catch(() => undefined);
   await page.mouse.move(point.x, point.y);
   await pane.click({ position: at });
   // Naming is requested by creation and consumed by the node's mount effect. An immediate

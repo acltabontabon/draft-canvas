@@ -39,6 +39,12 @@ pub enum MenuCommand {
     Undo,
     Redo,
     SelectAll,
+    /// The open diagram's own settings (background, personality), not the app's.
+    CanvasSettings,
+    FindReplace,
+    /// The command palette.
+    Commands,
+    Arrange,
 }
 
 /// What Rust tells the page on its own account (`HostEvent` in `api.ts`).
@@ -97,6 +103,26 @@ pub enum HostEvent {
     /// Agent access was switched on or off, or its connections changed: Settings looks again. Also
     /// sent when an agent submits a proposal: the review panel lists them again.
     AgentChanged,
+    /// A guest on the local network joined the shared canvas (`collab/`). Always before any of its
+    /// messages.
+    CollabLanOpen {
+        conn_id: String,
+    },
+    /// A guest's text frame, exactly as it arrived.
+    CollabLanMessage {
+        conn_id: String,
+        text: String,
+    },
+    /// A guest left, once per `CollabLanOpen`: `closed` (by the guest), `timeout`, `congested`,
+    /// `too-large`, `binary`, `error`, `token-changed`, `server-stopped`, or the page's own reason.
+    CollabLanClose {
+        conn_id: String,
+        reason: String,
+    },
+    /// The local network server stopped: `stopped` (asked to), `window-closed` or `reload`.
+    CollabLanStopped {
+        reason: String,
+    },
 }
 
 struct Bus {

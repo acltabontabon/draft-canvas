@@ -9,7 +9,7 @@ import { newCanvas } from './canvas';
  */
 
 async function openShortcutSheet(page: Page) {
-  await page.getByRole('button', { name: 'More', exact: true }).click();
+  await page.getByRole('button', { name: 'Help', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Keyboard shortcuts' }).click();
 }
 
@@ -26,13 +26,13 @@ test.describe('Modal focus behavior', () => {
 
   test('closing the keyboard shortcuts sheet returns focus to whatever opened it', async ({ page }) => {
     await newCanvas(page, 'Modal focus return');
-    const trigger = page.getByRole('button', { name: 'More', exact: true });
+    const trigger = page.getByRole('button', { name: 'Help', exact: true });
     await openShortcutSheet(page);
     await expect(page.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeVisible();
 
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeHidden();
-    // The sheet now opens from the overflow menu, so "whatever opened it" is that trigger.
+    // The sheet opens from the Help menu, so "whatever opened it" is that trigger.
     await expect(trigger).toBeFocused();
   });
 

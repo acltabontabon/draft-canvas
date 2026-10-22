@@ -29,10 +29,20 @@ export default defineConfig({
     { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
     { name: 'webkit', use: { ...devices['Desktop Safari'] } },
   ].filter((project) => !process.env.PLAYWRIGHT_BROWSER || project.name === process.env.PLAYWRIGHT_BROWSER),
-  webServer: {
-    command: 'npm run dev -- --port 5180 --strictPort',
-    url: 'http://localhost:5180',
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-  },
+  webServer: [
+    // Live collaboration's rendezvous relay, which `npm run dev` points the app at
+    // (`__COLLAB_RELAY__`): the knock-and-let-in tests in `collab.spec.ts` go through it.
+    {
+      command: 'node scripts/dev-relay.mjs --port 8791',
+      url: 'http://localhost:8791/health',
+      reuseExistingServer: !process.env.CI,
+      timeout: 30_000,
+    },
+    {
+      command: 'npm run dev -- --port 5180 --strictPort',
+      url: 'http://localhost:5180',
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+    },
+  ],
 });

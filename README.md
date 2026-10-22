@@ -23,6 +23,7 @@ Sketch an idea. Explore the detail. Walk through the flow.
 - **Draw with meaning.** Sketch services, data stores and queues with connectors that describe how they relate.
 - **Keep the overview clear.** Draw the detail inside a shape, from a system overview down to individual components.
 - **Tell the story.** Present flows step by step. Attach notes and mark open questions.
+- **Draw together, live.** Share one link and edit a canvas with others in real time. Your browser hosts the session: no account, and your diagram never passes through a server.
 - **Keep ideas moving.** Draw from the keyboard, accept suggestions, or begin with a ready-made architecture starter.
 - **Take your work with you.** Import Mermaid flowcharts. Export images, editable files and architecture source, or share read-only links.
 - **Draw with your coding agent.** Connect an MCP-compatible agent to the desktop app to draw a whole repository or revise a diagram.

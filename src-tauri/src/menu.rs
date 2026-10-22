@@ -106,6 +106,10 @@ pub fn action_for_id(id: &str) -> Option<Action> {
         "app:undo" => menu_event(MenuCommand::Undo),
         "app:redo" => menu_event(MenuCommand::Redo),
         "app:select-all" => menu_event(MenuCommand::SelectAll),
+        "app:canvas-settings" => menu_event(MenuCommand::CanvasSettings),
+        "app:find-replace" => menu_event(MenuCommand::FindReplace),
+        "app:commands" => menu_event(MenuCommand::Commands),
+        "app:arrange" => menu_event(MenuCommand::Arrange),
         "app:shortcuts" => menu_event(MenuCommand::Shortcuts),
         "app:about" => menu_event(MenuCommand::About),
         "app:settings" | "tray:settings" => menu_event(MenuCommand::Settings),
@@ -118,8 +122,9 @@ pub fn action_for_id(id: &str) -> Option<Action> {
 }
 
 /// The menu bar. macOS gets its app menu (About, Settings, Services, Hide, Quit) and a View menu with
-/// full screen; Windows and Linux fold About into Help, put Quit in File, and have no View menu because
-/// the native full-screen item doesn't exist there.
+/// what acts on the open diagram (Commands, Arrange Diagram, Canvas Settings) and full screen; Windows
+/// and Linux fold About into Help, put Quit in File, and have no View menu because the native
+/// full-screen item doesn't exist there, so the diagram's items end Edit instead.
 pub fn app_menu(platform: Platform) -> Vec<Spec> {
     let mac = platform == Platform::Macos;
     let reveal_text = match platform {
@@ -171,7 +176,7 @@ pub fn app_menu(platform: Platform) -> Vec<Spec> {
         file.push(item("app:quit", "Quit", Some("CmdOrCtrl+Q")));
     }
 
-    let edit = vec![
+    let mut edit = vec![
         item("app:undo", "Undo", Some("CmdOrCtrl+Z")),
         item("app:redo", "Redo", Some("CmdOrCtrl+Shift+Z")),
         Spec::Separator,
@@ -179,7 +184,21 @@ pub fn app_menu(platform: Platform) -> Vec<Spec> {
         Spec::Predefined(Predefined::Copy),
         Spec::Predefined(Predefined::Paste),
         item("app:select-all", "Select All", Some("CmdOrCtrl+A")),
+        Spec::Separator,
+        // No accelerator: the canvas has its own chord for it (⌘⌥F), which the webview hears first.
+        item("app:find-replace", "Find and Replace\u{2026}", None),
     ];
+    // What acts on the open diagram: in View on macOS, beside full screen; Windows and Linux have no
+    // View menu, so it ends Edit there. ⌘K is the canvas's own, and stays out of the menu's way.
+    let diagram = vec![
+        item("app:commands", "Commands\u{2026}", None),
+        item("app:arrange", "Arrange Diagram", None),
+        item("app:canvas-settings", "Canvas Settings\u{2026}", None),
+    ];
+    if !mac {
+        edit.push(Spec::Separator);
+        edit.extend(diagram.clone());
+    }
 
     let mut help = vec![
         item("app:shortcuts", "Keyboard Shortcuts", None),
@@ -212,10 +231,10 @@ pub fn app_menu(platform: Platform) -> Vec<Spec> {
     bar.push(submenu("File", file));
     bar.push(submenu("Edit", edit));
     if mac {
-        bar.push(submenu(
-            "View",
-            vec![Spec::Predefined(Predefined::Fullscreen)],
-        ));
+        let mut view = diagram;
+        view.push(Spec::Separator);
+        view.push(Spec::Predefined(Predefined::Fullscreen));
+        bar.push(submenu("View", view));
     }
     bar.push(submenu("Help", help));
     bar
@@ -516,9 +535,18 @@ mod tests {
         assert!(items(submenu_items(&bar, "File"))
             .iter()
             .all(|(id, ..)| *id != "app:quit"));
+        let view = submenu_items(&bar, "View");
+        assert_eq!(find(view, "app:commands").0, "Commands\u{2026}");
+        assert_eq!(find(view, "app:arrange").0, "Arrange Diagram");
         assert_eq!(
-            submenu_items(&bar, "View"),
-            [Spec::Predefined(Predefined::Fullscreen)]
+            find(view, "app:canvas-settings").0,
+            "Canvas Settings\u{2026}"
+        );
+        assert_eq!(view.last(), Some(&Spec::Predefined(Predefined::Fullscreen)));
+        // The canvas has its own chord for Find and Replace, so the menu takes none.
+        assert_eq!(
+            find(submenu_items(&bar, "Edit"), "app:find-replace"),
+            ("Find and Replace\u{2026}", None)
         );
         assert!(items(submenu_items(&bar, "Help"))
             .iter()
@@ -541,6 +569,16 @@ mod tests {
             find(submenu_items(&bar, "File"), "app:reveal").0,
             "Reveal in File Explorer"
         );
+        // No View menu here: the diagram's items end Edit.
+        let edit = submenu_items(&bar, "Edit");
+        for id in [
+            "app:find-replace",
+            "app:commands",
+            "app:arrange",
+            "app:canvas-settings",
+        ] {
+            assert!(items(edit).iter().any(|(item, ..)| *item == id), "{id}");
+        }
         assert_eq!(
             find(submenu_items(&bar, "Help"), "app:about").0,
             "About Draft Canvas"

@@ -1,14 +1,10 @@
-import { useCallback, useRef, useState } from 'react';
 import { useEditorStore } from '../../../store/editorStore';
 import { useUiStore } from '../../../store/uiStore';
-import { PRODUCT } from '../../../product';
-import { openLink } from '../../../host/openLink';
-import { useUnreadReleaseNotes } from '../../common/useUnreadReleaseNotes';
 import { Button } from '../../common/Button';
-import { ARRANGE_FAILED, notifyLoadFailure } from '../../common/notifyLoadFailure';
 import { Tooltip } from '../../common/Tooltip';
 import { FindReplaceHost } from '../FindReplaceDialog';
-import { ToolbarMenu, type ToolbarMenuItem } from './ToolbarMenu';
+import { CollabControl } from '../../collab/CollabControl';
+import { ShareButton } from './ShareButton';
 import { toolbarLabel, toolbarTooltip } from './toolbarTooltips';
 
 interface ToolbarActionsProps {
@@ -17,172 +13,43 @@ interface ToolbarActionsProps {
 }
 
 /**
- * Everything you do to the workspace, in three weights.
- *
- * History and utilities are quiet icons; Flows and Present carry words because they are modes you
- * enter, not commands you fire. The app-level utilities behind `More` are the ones you touch
- * once a session — folding them up is what stops the right edge reading as an icon train, and the
- * trigger inherits their badges so nothing gets quietly buried.
+ * The header's right side holds only what you reach for while explaining a system: the story
+ * (Present, with the Flows panel beside it) and Share, with a live session's faces. Everything else
+ * found a better place — undo and redo beside the zoom controls, help (shortcuts, guides, About)
+ * behind the "?" in the status bar, and what acts on the whole diagram (Arrange, Find and replace,
+ * Canvas settings) a right-click on the canvas away; all of it in ⌘K, and on the desktop in the
+ * menu bar.
  */
 export function ToolbarActions({ onPresent, onExport }: ToolbarActionsProps) {
-  const setShortcutsOpen = useUiStore((state) => state.setShortcutsOpen);
-  const setAboutOpen = useUiStore((state) => state.setAboutOpen);
-  const setSettingsOpen = useUiStore((state) => state.setSettingsOpen);
-  const setFindReplaceOpen = useUiStore((state) => state.setFindReplaceOpen);
   const readOnly = useUiStore((state) => Boolean(state.readOnly));
+  const collaborative = useUiStore((state) => state.readOnly?.collaborative === true);
   const flowPanelOpen = useUiStore((state) => state.flowPanelOpen);
   const setFlowPanelOpen = useUiStore((state) => state.setFlowPanelOpen);
   const activeFlowTitle = useEditorStore((state) =>
     state.selectedFlowId ? state.document.flows.find((flow) => flow.id === state.selectedFlowId)?.title : undefined,
   );
-  const updateReady = useUiStore((state) => state.updateReady);
-  // The notes themselves load only once the app has moved past the version last seen.
-  const hasUnreadNotes = useUnreadReleaseNotes();
-  const setCommandPaletteOpen = useUiStore((state) => state.setCommandPaletteOpen);
-  const undo = useEditorStore((state) => state.undo);
-  const redo = useEditorStore((state) => state.redo);
-  const past = useEditorStore((state) => state.history.past.length);
-  const future = useEditorStore((state) => state.history.future.length);
-
-  const moreRef = useRef<HTMLButtonElement>(null);
-  // The element as well as its rect: the menu needs the rect to place itself and the element to
-  // tell its own trigger apart from an outside click. Captured in the handler rather than read
-  // off the ref during render.
-  const [menu, setMenu] = useState<{ rect: DOMRect; trigger: HTMLElement } | null>(null);
-  const closeMenu = useCallback(() => {
-    setMenu(null);
-    // Focus goes back to the trigger, not to the top of the document — the menu was opened from
-    // here and keyboard users need to still be here afterwards.
-    moreRef.current?.focus();
-  }, []);
-
-  const aboutState = updateReady ? 'update ready' : hasUnreadNotes ? "what's new" : undefined;
-  // The badges the folded-away items were carrying have to surface somewhere, or moving About
-  // into a menu would silently hide "an update is ready". Update outranks unread.
-  const escalatedDot = updateReady ? 'update' : hasUnreadNotes ? 'new' : undefined;
-  const moreState = aboutState;
-
-  const menuItems: ToolbarMenuItem[] = [
-    {
-      id: 'settings',
-      label: toolbarLabel('settings'),
-      onSelect: () => {
-        closeMenu();
-        setSettingsOpen(true);
-      },
-    },
-    {
-      id: 'help',
-      label: toolbarLabel('help'),
-      onSelect: () => {
-        closeMenu();
-        openLink(PRODUCT.links.docs);
-      },
-    },
-    {
-      id: 'shortcuts',
-      label: toolbarLabel('shortcuts'),
-      shortcut: toolbarTooltip('shortcuts').shortcut,
-      onSelect: () => {
-        closeMenu();
-        setShortcutsOpen(true);
-      },
-    },
-    {
-      id: 'about',
-      label: toolbarLabel('about'),
-      dot: updateReady ? 'update' : hasUnreadNotes ? 'new' : undefined,
-      onSelect: () => {
-        closeMenu();
-        setAboutOpen(true);
-      },
-    },
-    ...(!__DESKTOP__ ? [
-      {
-        id: 'diagnostics',
-        label: 'Diagnostic report…',
-        onSelect: () => {
-          closeMenu();
-          useUiStore.getState().setDiagnosticsOpen(true);
-        },
-      },
-    ] : []),
-    // The two document-wide edits, after the app-level utilities so the rows above keep their
-    // places under the keyboard. Both are palette commands too: each row only names the store
-    // action the command names. A shared diagram can't be edited, so it offers neither.
-    ...(readOnly ? [] : [{
-      id: 'arrange',
-      label: toolbarLabel('arrange'),
-      onSelect: () => {
-        closeMenu();
-        // No camera up here (the toolbar renders without React Flow in its tests), so the fit is
-        // asked for through the UI store and answered by the status bar's zoom controls.
-        void useEditorStore
-          .getState()
-          .arrangeRoom()
-          .then((moved) => {
-            if (moved) useUiStore.getState().requestFit();
-          })
-          .catch((error: unknown) => notifyLoadFailure(error, ARRANGE_FAILED));
-      },
-    },
-    {
-      id: 'find-replace',
-      label: toolbarLabel('findReplace'),
-      shortcut: toolbarTooltip('findReplace').shortcut,
-      onSelect: () => {
-        closeMenu();
-        setFindReplaceOpen(true);
-      },
-    }]),
-  ];
 
   return (
     <div className="dc-toolbar-trail">
-      <div className="dc-toolbar-history">
-        <Tooltip content={toolbarTooltip('undo')}>
+      {/* The story, in one joined control: Present plays it — the active flow's name riding inside,
+          since that is what Present will walk through — and the flow glyph beside it opens the
+          Flows panel, tinted while it is open. Two words and a loose flow name used to sit here as
+          three separate things. Present is momentary, so it has no active state to fake. */}
+      <div className="dc-toolbar-modes dc-story" role="group" aria-label="Flows and presenting">
+        <Tooltip content={toolbarTooltip('present')}>
           {(tip) => (
             <Button
-              icon="undo"
-              variant="quiet"
-              disabled={past === 0}
-              onClick={undo}
-              aria-label={toolbarLabel('undo')}
-              {...tip}
-            />
-          )}
-        </Tooltip>
-        <Tooltip content={toolbarTooltip('redo')}>
-          {(tip) => (
-            <Button
-              icon="redo"
-              variant="quiet"
-              disabled={future === 0}
-              onClick={redo}
-              aria-label={toolbarLabel('redo')}
-              {...tip}
-            />
-          )}
-        </Tooltip>
-      </div>
-
-      {/* Modes you enter, not commands you fire. Both are built the same way — glyph, then word,
-          one composed control — so they read as siblings rather than as two systems that happen to
-          sit next to each other. Flows can be persistently on and takes the tint; Present is
-          momentary, so it deliberately has no active state to fake. */}
-      <div className="dc-toolbar-modes">
-        <Tooltip content={toolbarTooltip('flows')}>
-          {(tip) => (
-            <Button
-              icon="flow"
+              icon="present"
               variant="ghost"
-              active={flowPanelOpen}
-              className="dc-toolbar-mode dc-flow-toggle"
-              onClick={() => setFlowPanelOpen(!flowPanelOpen)}
-              aria-label={toolbarLabel('flows')}
+              className="dc-toolbar-mode dc-story-play"
+              // Wrapped, never passed straight through: `onPresent` takes an optional flow id,
+              // and a bare `onClick={onPresent}` hands it the click event instead — truthy, so
+              // the presentation would start on a flow that doesn't exist and quietly do nothing.
+              onClick={() => onPresent()}
+              aria-label={toolbarLabel('present')}
               {...tip}
             >
-              <span className="dc-mode-label">Flows</span>
+              <span className="dc-mode-label">Present</span>
               {activeFlowTitle && (
                 <>
                   <span className="dc-flow-toggle-sep" aria-hidden="true">
@@ -194,84 +61,30 @@ export function ToolbarActions({ onPresent, onExport }: ToolbarActionsProps) {
             </Button>
           )}
         </Tooltip>
-        <Tooltip content={toolbarTooltip('present')}>
+        <Tooltip content={toolbarTooltip('flows')}>
           {(tip) => (
             <Button
-              icon="present"
+              icon="flow"
               variant="ghost"
-              className="dc-toolbar-mode"
-              // Wrapped, never passed straight through: `onPresent` takes an optional flow id,
-              // and a bare `onClick={onPresent}` hands it the click event instead — truthy, so
-              // the presentation would start on a flow that doesn't exist and quietly do nothing.
-              onClick={() => onPresent()}
-              aria-label={toolbarLabel('present')}
-              {...tip}
-            >
-              <span className="dc-mode-label">Present</span>
-            </Button>
-          )}
-        </Tooltip>
-      </div>
-
-      <div className="dc-toolbar-utilities">
-        <Tooltip content={toolbarTooltip('commands')}>
-          {(tip) => (
-            <Button
-              icon="search"
-              variant="quiet"
-              onClick={() => setCommandPaletteOpen(true)}
-              aria-label={toolbarLabel('commands')}
+              active={flowPanelOpen}
+              // `dc-flow-toggle`: the Flows panel hands focus back here when it closes.
+              className="dc-toolbar-mode dc-story-flows dc-flow-toggle"
+              onClick={() => setFlowPanelOpen(!flowPanelOpen)}
+              aria-label={toolbarLabel('flows')}
               {...tip}
             />
           )}
         </Tooltip>
-        <Tooltip content={toolbarTooltip('export')}>
-          {(tip) => (
-            <Button
-              icon="export"
-              variant="quiet"
-              onClick={onExport}
-              aria-label={toolbarLabel('export')}
-              {...tip}
-            />
-          )}
-        </Tooltip>
-        <span className="dc-badge-anchor">
-          <Tooltip content={toolbarTooltip('more')}>
-            {(tip) => (
-              <Button
-                ref={moreRef}
-                icon="more"
-                variant="quiet"
-                active={menu !== null}
-                aria-haspopup="menu"
-                aria-expanded={menu !== null}
-                onClick={(event) => {
-                  const trigger = event.currentTarget;
-                  setMenu((open) => (open ? null : { rect: trigger.getBoundingClientRect(), trigger }));
-                }}
-                aria-label={moreState ? `${toolbarLabel('more')} — ${moreState}` : toolbarLabel('more')}
-                {...tip}
-              />
-            )}
-          </Tooltip>
-          {escalatedDot === 'update' ? (
-            <span className="dc-update-dot" aria-hidden="true" />
-          ) : (
-            escalatedDot === 'new' && <span className="dc-new-dot" aria-hidden="true" />
-          )}
-        </span>
       </div>
 
-      {menu && (
-        <ToolbarMenu
-          anchorRect={menu.rect}
-          trigger={menu.trigger}
-          items={menuItems}
-          onDismiss={closeMenu}
-        />
-      )}
-      {/* The dialog lives with the menu row that opens it; the host also owns the ⌘H chord. */}
+      {/* Who is here (a live session's faces), then the one filled button: how the diagram
+          reaches anyone else. */}
+      <div className="dc-toolbar-share">
+        {(!readOnly || collaborative) && <CollabControl />}
+        <ShareButton onExport={onExport} />
+      </div>
+
+      {/* The dialog lives with the toolbar; the host also owns the ⌘H chord. */}
       <FindReplaceHost />
     </div>
   );

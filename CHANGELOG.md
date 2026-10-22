@@ -15,6 +15,12 @@ the release notes and the in-app What's New are generated from here. See
 
 #### Added
 
+- **Live collaboration** — edit one canvas together in real time. Start a session, share one link,
+  and let people in as they ask to join. Everyone's browser connects straight to yours: your diagram
+  never passes through a server, and your copy stays the one that's saved. See who's here and where,
+  each other's cursors and selections, follow the presenter, decide who can edit, take back any one
+  person's changes, and undo only your
+  own changes. <!-- highlight -->
 - **Rich text** — Text shapes are written in Markdown: headings, bold and italic, highlights,
   inline code, syntax-highlighted code blocks and diffs, lists and checklists, tables, quotes,
   GitHub-style callouts and coloured words, drawn the same on the canvas and in every export. A
@@ -29,6 +35,12 @@ the release notes and the in-app What's New are generated from here. See
 
 #### Changed
 
+- **A calmer editor** — the header floats on the canvas, so the drawing runs to the top of the
+  window. The Draft Canvas mark takes you back to your diagrams, beside the diagram's name. The tools
+  are small drawings of their shapes, and the one in hand shows its name. **Present** and **Flows**
+  are one control, and **Share** holds drawing together live, exporting and a read-only link. Undo,
+  redo and **?** for help sit with zoom at the bottom right; tidy up, find and replace and canvas
+  settings are a right-click on the canvas away. <!-- highlight -->
 - An Actor's name follows its kind: switch a new User to Device and it becomes "Device". A name
   you typed stays.
 
@@ -72,8 +84,16 @@ the release notes and the in-app What's New are generated from here. See
 
 ### Desktop
 
+#### Added
+
+- **Share on your local network** — during a live session, the desktop app can share with everyone
+  on the same network through one link they open in a browser, with no reply code. Meant for a
+  trusted network: that link's traffic isn't encrypted.
+
 #### Changed
 
+- The menu bar has **Find and Replace…**, **Commands…**, **Arrange Diagram** and **Canvas Settings…**
+  (in View on macOS, at the end of Edit on Windows and Linux).
 - AI agents no longer take focus from the field you're typing in, wait while you trace a flow, and
   no longer hold up saving on large projects.
 - The proposals panel checks proposals in the background, and only when something needs it.

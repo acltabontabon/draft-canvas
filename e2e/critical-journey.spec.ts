@@ -203,7 +203,8 @@ test.describe('Draft Canvas', () => {
 
     /* --- export ------------------------------------------------------------ */
 
-    await page.getByRole('button', { name: 'Export', exact: true }).click();
+    await page.getByRole('button', { name: 'Share', exact: true }).click();
+    await page.getByRole('menuitem', { name: /^Export/ }).click();
     const exportDialog = page.getByRole('dialog', { name: 'Export' });
     await expect(exportDialog).toBeVisible();
 
@@ -226,7 +227,8 @@ test.describe('Draft Canvas', () => {
 
     /* --- PNG and SVG -------------------------------------------------------- */
 
-    await page.getByRole('button', { name: 'Export', exact: true }).click();
+    await page.getByRole('button', { name: 'Share', exact: true }).click();
+    await page.getByRole('menuitem', { name: /^Export/ }).click();
     // Image/PNG is this session's first-ever default, so PNG is already selected here.
     await exportDialog.locator('[data-mode="image"]').click();
     const pngDownload = page.waitForEvent('download');
@@ -238,7 +240,8 @@ test.describe('Draft Canvas', () => {
     expect(pngBytes.subarray(0, 8)).toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
     expect(pngBytes.byteLength).toBeGreaterThan(2000);
 
-    await page.getByRole('button', { name: 'Export', exact: true }).click();
+    await page.getByRole('button', { name: 'Share', exact: true }).click();
+    await page.getByRole('menuitem', { name: /^Export/ }).click();
     await exportDialog.locator('[data-value="svg"]').click();
     const svgDownload = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Export SVG' }).click();

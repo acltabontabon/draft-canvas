@@ -260,7 +260,7 @@ function parseAttachments(
 /** Node types that may own a room. Narrower than what the app offers "Look inside" on: a Service
  *  retyped to a Data Store must keep its contents (`depth/tree.ts`'s `canCreateInside` is the
  *  narrower, authoring-time rule), but a Note claiming to have an inside is a hand-edited file. */
-const CAN_HOLD_INSIDE: readonly DraftNodeType[] = ['service', 'component', 'database', 'queue', 'actor'];
+export const CAN_HOLD_INSIDE: readonly DraftNodeType[] = ['service', 'component', 'database', 'queue', 'actor'];
 
 /**
  * One room waiting to be validated, held over rather than recursed into on the spot.

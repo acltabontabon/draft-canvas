@@ -5,6 +5,7 @@ name: Deploy the web
 #   Cloudflare    https://draftcanvas.dev/         the landing page and docs (dist-web/site)
 #                 https://app.draftcanvas.dev/     the editor (dist-web/app — the same dist/ as always)
 #                 https://www.draftcanvas.dev/     a redirect to the apex
+#                 wss://relay.draftcanvas.dev/     the live-collaboration relay (www/cloudflare/relay.js)
 #   GitHub Pages  https://acltabontabon.com/draft-canvas/   the old front door (dist-web/legacy): a
 #                 moved-house page, old links forwarded, and the editor kept at /editor/ so diagrams
 #                 saved at that origin can be handed to the new one.
@@ -104,9 +105,9 @@ jobs:
       - name: Patch the released editor's source-map build dependency
         if: github.ref_type != 'tag' || inputs.release-tag != ''
         run: npm update source-map-js --package-lock-only --ignore-scripts
-      - run: npm ci
+      - run: npm ci --no-audit --no-fund
       # The site has its own lockfile and shares no dependency with the app on purpose.
-      - run: npm ci
+      - run: npm ci --no-audit --no-fund
         working-directory: www
       # Builds the editor, builds the site, and assembles dist-web/ — failing loudly if either
       # half is missing a file the deploy needs.
@@ -116,6 +117,9 @@ jobs:
       - run: npm audit --audit-level=high
       - run: npm audit --audit-level=high
         working-directory: www
+      # The deploy's own tooling (Wrangler), pinned by its lockfile.
+      - run: npm audit --audit-level=high
+        working-directory: www/cloudflare
       - name: Record the assembled source
         id: source
         env:
@@ -168,7 +172,7 @@ jobs:
         run: |
           git fetch --no-tags --depth=1 origin "$CONTROL_COMMIT"
           git checkout FETCH_HEAD -- playwright.dist.config.ts playwright.web.config.ts e2e/web-deploy.spec.ts scripts/stage-subpath.mjs scripts/serve-web.mjs
-      - run: npm ci
+      - run: npm ci --no-audit --no-fund
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: verified-site-${{ github.run_id }}
@@ -206,16 +210,23 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 22.14.0
-      # The editor first, so the site never links to an editor that is not there yet; the www.
-      # redirect last. Each config names its custom domain, and Wrangler creates its DNS record.
-      - name: Deploy app.draftcanvas.dev, draftcanvas.dev and www.
+      # The relay first, so a new editor never points at a relay that is not there yet; then the
+      # editor, so the site never links to an editor that is not there yet; the www. redirect last.
+      # Each config names its custom domain, and Wrangler creates its DNS record. The relay's config
+      # also carries its Durable Object migration, which Wrangler applies on the same deploy.
+      # Wrangler comes from the verified artifact's own lockfile (www/cloudflare/package-lock.json),
+      # integrity-checked, never fetched by name; `--no-install` refuses anything not installed.
+      - name: Install the pinned Wrangler
+        working-directory: dist-web/cloudflare
+        run: npm ci --no-audit --no-fund
+      - name: Deploy relay.draftcanvas.dev, app.draftcanvas.dev, draftcanvas.dev and www.
         working-directory: dist-web/cloudflare
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          for config in app site www; do
-            npx --yes wrangler@4.149.0 deploy --config "$config.jsonc"
+          for config in relay app site www; do
+            npx --no-install wrangler deploy --config "$config.jsonc"
           done
 
   deploy:

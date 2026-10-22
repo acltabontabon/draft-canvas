@@ -16,6 +16,7 @@ import { PersonalityProvider } from './ui/personality/PersonalityProvider';
 import { logDiagnostic } from './lib/diagnostics';
 import { reloadApp } from './lib/serviceWorker';
 import { retirePreferences } from './lib/preferences';
+import { clearJoinFragment, joinPayloadFromHash } from './lib/joinFragment';
 import { useUiStore } from './store/uiStore';
 
 // The editor is most of the app's code, and the Library is what every visit opens on — so the
@@ -23,6 +24,8 @@ import { useUiStore } from './store/uiStore';
 // is up (see `Shell`) so opening a canvas never waits on the network. The offline Service Worker
 // precaches it either way.
 const loadEditor = () => import('./ui/Editor/EditorScreen');
+// Only for a page opened from an invite link: the collaboration code stays out of everyone else's load.
+const JoinChunk = retryableLazy(() => import('./ui/collab/JoinDialog').then((module) => ({ default: module.JoinDialog })));
 // Retryable: `lazy()` alone remembers a failed fetch for good, so after one offline open (or a deploy
 // that replaced the chunk under an old tab) every later open would crash the same way.
 const EditorChunk = retryableLazy(() => loadEditor().then((module) => ({ default: module.EditorRoute })));
@@ -86,6 +89,22 @@ function Shell() {
     }
   }, [exampleRequested, session]);
 
+  // An invite link (`#join=…`): read once, taken off the address, and offered as a dialog. The web
+  // app only — an invite opens in a browser, never in the desktop app's own window.
+  const joinInvite = useUiStore((state) => state.joinInvite);
+  useEffect(() => {
+    if (hostKind()) return;
+    const arrive = () => {
+      const payload = joinPayloadFromHash(window.location.hash);
+      if (payload === null) return;
+      clearJoinFragment();
+      useUiStore.getState().setJoinInvite(payload);
+    };
+    arrive();
+    window.addEventListener('hashchange', arrive);
+    return () => window.removeEventListener('hashchange', arrive);
+  }, []);
+
   // Keys older builds left behind (a pinned theme, the old Learn mode's hints) — see
   // `RETIRED_PREFERENCE_KEYS`. Documents are never touched: they live in IndexedDB.
   useEffect(() => retirePreferences(), []);
@@ -134,6 +153,11 @@ function Shell() {
           The file’s text isn’t a valid diagram right now. The canvas shows its last valid version and won’t
           change the file until the text is fixed.
         </p>
+      )}
+      {joinInvite !== null && (
+        <Suspense fallback={null}>
+          <JoinChunk.Component session={session} invite={joinInvite} />
+        </Suspense>
       )}
       <Toasts />
       <LiveAnnouncer />

@@ -8,6 +8,7 @@ Commands and code locations. See [Contributing](../../CONTRIBUTING.md) for setup
 | Command | Purpose |
 | --- | --- |
 | `npm run dev` | Editor dev server on :5180 |
+| `npm run dev:relay` | Local collaboration relay on :8791, which the dev server uses for session links |
 | `npm run build` | Type-check and build into `dist/` |
 | `npm run lint` | Run oxlint |
 | `npm test` | Unit and integration tests |
@@ -119,15 +120,16 @@ their code runs. This keeps manual runs from executing unmerged code in the defa
 | `src/nodes/`, `src/edges/`, `src/render/` | Drawing, text layout and rendering |
 | `src/storage/`, `src/export/`, `src/host/` | Persistence, exports and host interfaces |
 | `src/depth/`, `src/agent/`, `src/layout/` | Rooms, agent operations and layout |
+| `src/collab/` | Live collaboration: sync, sessions, rendezvous; network code only in `src/collab/transport/` |
 | `src/desktop/` | Desktop screens, controller and Tauri adapter |
-| `src-tauri/` | Native Rust shell |
+| `src-tauri/` | Native Rust shell; `src-tauri/src/collab/` is the LAN relay for live sessions |
 | `src-tauri/mcp/` | Bundled MCP connector |
 | `skills/draft-canvas/` | Agent skill the desktop app installs for Claude Code, Codex, Cursor, Gemini CLI and Junie |
-| `www/` | Separate landing-page project and lockfile |
+| `www/` | Separate landing-page project and lockfile; `www/cloudflare/` holds the collaboration relay |
 | `tests/` | Unit and integration tests |
 | `e2e/` | Browser specs; `e2e/desktop/` uses a fake shell |
 | `benchmark/` | Performance and comparison harnesses |
-| `scripts/` | Build, code generation and release tooling |
+| `scripts/` | Build, code generation and release tooling; `scripts/dev-relay.mjs` is the local relay |
 | `docs/` | Guides, reference and media |
 | `public/` | Static editor assets |
 
@@ -147,3 +149,4 @@ The untracked `demo/` harness is optional; its lint and type-check entries are i
 | Export saving | `src/export/download.ts` (`setFileSaver`) |
 | Browser autosave | `src/store/useDocumentSession.ts` → `src/storage/autosave.ts` |
 | Desktop saving | `src/desktop/controller.ts` → `src/desktop/tauri/api.ts` → `src-tauri/src/commands/documents.rs` |
+| Live collaboration | `src/store/collabBridge.ts` (the editor's side) → `src/collab/` → `src/collab/transport/` |

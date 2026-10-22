@@ -61,6 +61,8 @@ const PATHS = {
   flow: 'M4 7h4a3 3 0 0 1 3 3v4a3 3 0 0 0 3 3h4 M15 14l3 3-3 3',
   sliders: 'M4 7h9 M17 7h3 M15 5v4 M4 17h3 M11 17h9 M9 15v4',
   // Two shapes and the connector an agent drew between them — the product's own vocabulary again.
+  // Collaboration: two people, the second a step behind — someone you're working with.
+  people: 'M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z M3 20a6 6 0 0 1 12 0 M15.5 4.3a3.5 3.5 0 0 1 0 6.4 M17.5 14.2A6 6 0 0 1 21 20',
   agent: 'M3 4h7v6H3z M14 14h7v6h-7z M6.5 10v3a2 2 0 0 0 2 2H14 M17.5 4.5v2 M16.5 5.5h2',
   refresh: 'M20 11a8 8 0 0 0-14.3-4.9 M4 4v4h4 M4 13a8 8 0 0 0 14.3 4.9 M20 20v-4h-4',
   alert: 'M12 3l9.5 17h-19z M12 10v4.5 M12 17.5h.01',

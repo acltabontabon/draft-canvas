@@ -13,6 +13,16 @@ choose **Try an example**, then **Play explanation**.
 
 The web app saves locally as you draw. On desktop, press `⌘S` to save a Quick Draft as a file.
 
+### Find your way around
+
+- **Top left:** the Draft Canvas mark takes you back to your diagrams; click the name to rename it.
+- **Top centre:** the tools. Each is a small drawing of its shape; hover one for its name and key.
+- **Top right:** **Present**, the **Flows** glyph beside it, and **Share** — draw together live,
+  export, or copy a read-only link.
+- **Bottom right:** undo and redo, zoom, and **?** for help: commands, shortcuts and the guides.
+- **Right-click the canvas** for what acts on the whole diagram: tidy the layout, find and replace,
+  and canvas settings. Everything is also in `⌘K`.
+
 ## Draw Service → Queue → Worker
 
 1. Move your pointer over the canvas and press `S`. Type `Orders API`, then press `Enter`.
@@ -45,7 +55,7 @@ for the options.
 
 1. Click the API-to-queue connector and choose **Add to flow**. Name it `Place an order`.
 2. Click the queue-to-worker connector and choose **Add to Place an order**.
-3. Open **Flows** (`F`) to check the order or edit step captions.
+3. Open **Flows** (`F`, the glyph beside **Present**) to check the order or edit step captions.
 4. Click **Present** (`⌘Enter`). Press `→` or `Space` to advance, `←` to go back,
    and `Esc` to return to editing.
 
@@ -56,7 +66,7 @@ The [presentation guide](flows-and-presentation.md) covers tracing, camera contr
 
 ## Export it
 
-Open **Export** (`⌘⇧E`) and choose:
+Open **Share → Export** (`⌘⇧E`) and choose:
 
 | Choose | Use it for |
 | --- | --- |

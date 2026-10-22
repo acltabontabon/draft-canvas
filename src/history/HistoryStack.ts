@@ -1,3 +1,4 @@
+import { changeKeys } from '../collab/selective';
 import { samePath, viewOf } from '../depth/tree';
 import type { DraftDocument } from '../document/types';
 
@@ -47,6 +48,19 @@ export interface HistoryEntry {
   /** See `FlowSessionSnapshot`. Only ever set by `deleteFlow`. */
   flowSessionBefore?: FlowSessionSnapshot;
   flowSessionAfter?: FlowSessionSnapshot;
+  /**
+   * What this edit touched (`collab/selective.ts`'s `changeKeys`), recorded only while others are
+   * editing the file too. Their edits land between yours, so `before` and `after` of a coalesced
+   * entry stop being "your edit" alone; undo then takes back just these.
+   */
+  keys?: readonly string[];
+  /**
+   * Someone else's edit landed after this one was recorded. Its snapshots no longer hold their
+   * work, so putting one back whole would take that work away — even once the session has ended.
+   * Such an entry only ever steps selectively (`collab/selective.ts`), and never absorbs a later
+   * edit recorded without keys.
+   */
+  crossed?: true;
 }
 
 export interface HistoryState {
@@ -81,6 +95,8 @@ export function pushEntry(
     entry.coalesceKey !== undefined &&
     top.coalesceKey === entry.coalesceKey &&
     samePath(top.path, entry.path) &&
+    // Coalesced, it would span someone else's edit with no keys to tell theirs from this one.
+    !(top.crossed && entry.keys === undefined) &&
     entry.at - top.at < COALESCE_WINDOW_MS;
 
   if (canCoalesce) {
@@ -95,6 +111,9 @@ export function pushEntry(
       selectionAfter: entry.selectionAfter,
       at: entry.at,
     };
+    // `top.after` is still exactly what that edit left, so its keys can be worked out late — an
+    // entry recorded just before a session started coalescing with one recorded just after.
+    if (entry.keys) merged.keys = [...new Set([...(top.keys ?? changeKeys(top.before, top.after)), ...entry.keys])];
     return { past: [...history.past.slice(0, -1), merged], future: [] };
   }
 
@@ -143,6 +162,18 @@ function equivalent(a: unknown, b: unknown, depth: number): boolean {
   return aKeys.every(
     (key) => Object.hasOwn(b, key) && equivalent((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key], depth - 1),
   );
+}
+
+/**
+ * `history` with every entry marked as crossed by someone else's edit (see `HistoryEntry.crossed`).
+ * The same object when there is nothing new to mark, so a busy session costs nothing per edit.
+ */
+export function markCrossed(history: HistoryState): HistoryState {
+  const mark = (entries: HistoryEntry[]) =>
+    entries.every((entry) => entry.crossed) ? entries : entries.map((entry): HistoryEntry => (entry.crossed ? entry : { ...entry, crossed: true }));
+  const past = mark(history.past);
+  const future = mark(history.future);
+  return past === history.past && future === history.future ? history : { past, future };
 }
 
 export function undo(history: HistoryState): {

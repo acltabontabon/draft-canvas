@@ -37,7 +37,8 @@ async function importDocument(page: Page) {
 }
 
 async function openExport(page: Page) {
-  await page.getByRole('button', { name: 'Export', exact: true }).click();
+  await page.getByRole('button', { name: 'Share', exact: true }).click();
+  await page.getByRole('menuitem', { name: /^Export/ }).click();
   const dialog = page.getByRole('dialog', { name: 'Export' });
   await expect(dialog).toBeVisible();
   return dialog;

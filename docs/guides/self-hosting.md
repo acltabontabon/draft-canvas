@@ -32,5 +32,9 @@ deploy `dist-web/`.
 Each browser profile and origin has its own diagrams. Export before changing hosts or clearing
 site data; see [saving and sharing](saving-and-sharing.md).
 
+[Live sessions](collaborating.md) work from a self-hosted copy too: they run between browsers, not
+through your server. The hosted relay only admits app.draftcanvas.dev and the desktop app, so people
+join your copy by direct invite unless you run [your own relay](../reference/website.md#the-collaboration-relay).
+
 Deploy the whole build together. An offline copy may stay on the previous version until its
 service worker updates. Save or export current work before accepting a reload.

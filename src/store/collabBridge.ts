@@ -1,0 +1,423 @@
+/**
+ * Where a collaboration session meets the editor: one host or guest session at a time, fed by the
+ * editor's commits and writing the session's files back through `applyRemote`.
+ *
+ * The session engines (`collab/hostSession.ts`, `collab/guestSession.ts`) know nothing about stores;
+ * this is the one place that does. It keeps `collabStore` current for the interface, watches the
+ * editor for edits to send, and ends the session when the canvas on screen stops being the shared one.
+ */
+import { HOST_ORIGIN } from '../collab/hostCore';
+import { idsUnique, withinLimits } from '../collab/limits';
+import { GuestSession, type GuestStatus } from '../collab/guestSession';
+import { HostSession } from '../collab/hostSession';
+import { withLocalView } from '../collab/localView';
+import type { EndReason, FollowState, PeerView, Presence, RejectReason, Role } from '../collab/protocol';
+import type { CollabTransport } from '../collab/connect';
+import type { DraftDocument } from '../document/types';
+import { announce } from '../lib/announce';
+import { logDiagnostic } from '../lib/diagnostics';
+import { PRODUCT } from '../product';
+import { COLLAB_AT_REST, useCollabStore, type SessionStatus } from './collabStore';
+import { fileOf, isInteracting, useEditorStore } from './editorStore';
+import { useUiStore } from './uiStore';
+
+/** How often edits made during a held gesture (a slider, a resize) are sent: often enough to watch. */
+const GESTURE_SEND_MS = 50;
+
+let host: HostSession | null = null;
+let guest: GuestSession | null = null;
+let stopWatching: (() => void) | null = null;
+let sharedDocumentId: string | null = null;
+/**
+ * Set once the shared canvas is really the one on screen: at once for the owner, and for a
+ * collaborator only after their copy has finished opening. An id alone is not proof — a collaborator
+ * can hold their own stored copy of the owner's diagram under the same id (exported, then imported),
+ * and until `openCollaborative` has replaced it, writing to "the canvas with that id" would write
+ * into their Library.
+ */
+let sharedCanvasOpen = false;
+let gestureTimer: ReturnType<typeof setTimeout> | null = null;
+let applyingRemote = false;
+let removePageListener: (() => void) | null = null;
+
+/**
+ * Whether the canvas on screen is the shared one. A collaborator's copy opens asynchronously, and
+ * until it is on screen the editor holds some other canvas — possibly one of this person's own,
+ * autosaved — which the session must never write into.
+ */
+function onSharedCanvas(): boolean {
+  return sharedCanvasOpen && sharedDocumentId !== null && useEditorStore.getState().document.metadata.id === sharedDocumentId;
+}
+
+function isBusy(): boolean {
+  const ui = useUiStore.getState();
+  return !onSharedCanvas() || isInteracting() || ui.interactionActive || ui.flowTrace !== null;
+}
+
+function readFile(): DraftDocument {
+  return fileOf(useEditorStore.getState());
+}
+
+function applyRemote(file: DraftDocument): boolean {
+  if (!onSharedCanvas()) return false;
+  applyingRemote = true;
+  try {
+    return useEditorStore.getState().applyRemote(file);
+  } finally {
+    applyingRemote = false;
+  }
+}
+
+/**
+ * Sends the editor's edits as they are committed — at once, or every `GESTURE_SEND_MS` while a
+ * gesture streams them — and ends the session if a different canvas replaces the shared one.
+ */
+function watchEdits(send: () => void, onReplaced: () => void): () => void {
+  const flush = () => {
+    if (gestureTimer !== null) clearTimeout(gestureTimer);
+    gestureTimer = null;
+    send();
+  };
+  // Until the shared canvas has been on screen, a different one there is the one being left, not a
+  // replacement — and nothing on it is an edit to share.
+  let seen = onSharedCanvas();
+  const unsubscribe = useEditorStore.subscribe((state, prev) => {
+    if (state.document.metadata.id !== sharedDocumentId) {
+      if (seen) onReplaced();
+      return;
+    }
+    if (!seen) {
+      seen = true;
+      return;
+    }
+    if (applyingRemote) return;
+    if (state.revision === prev.revision && state.document.metadata.title === prev.document.metadata.title) return;
+    if (!isBusy()) return flush();
+    gestureTimer ??= setTimeout(flush, GESTURE_SEND_MS);
+  });
+  return () => {
+    unsubscribe();
+    if (gestureTimer !== null) clearTimeout(gestureTimer);
+    gestureTimer = null;
+  };
+}
+
+function onPageLeave(handler: () => void): () => void {
+  if (typeof window === 'undefined') return () => {};
+  window.addEventListener('pagehide', handler);
+  return () => window.removeEventListener('pagehide', handler);
+}
+
+function cleanUp(): void {
+  stopWatching?.();
+  stopWatching = null;
+  removePageListener?.();
+  removePageListener = null;
+  sharedDocumentId = null;
+  sharedCanvasOpen = false;
+}
+
+/**
+ * Says who came and went, for a screen reader as for anyone not looking at the people column — read
+ * off the change in the list, so a reconnect that changes nothing says nothing.
+ */
+function announcePeers(next: readonly PeerView[]): void {
+  const before = new Map(useCollabStore.getState().peers.filter((peer) => peer.link !== 'gone').map((peer) => [peer.id, peer]));
+  const after = next.filter((peer) => peer.link !== 'gone');
+  for (const peer of after) if (!before.has(peer.id)) announce(`${peer.name} joined the session.`);
+  for (const [id, peer] of before) if (!after.some((other) => other.id === id)) announce(`${peer.name} left the session.`);
+  for (const peer of after) {
+    const was = before.get(peer.id);
+    if (was && was.role !== peer.role && peer.role !== 'owner') announce(`${peer.name} ${peer.role === 'editor' ? 'can now edit' : 'can now only view'}.`);
+  }
+}
+
+/** Ends that point at a fault rather than a choice, for the local diagnostic report (no content, no names). */
+const FAULTS: ReadonlySet<EndReason> = new Set(['protocol', 'timeout', 'too-large', 'version']);
+
+function setPresenceOf(peerId: string, presence: Presence | null): void {
+  useCollabStore.setState((state) => {
+    if (presence === null) {
+      if (!(peerId in state.presence)) return state;
+      const { [peerId]: _gone, ...rest } = state.presence;
+      return { presence: rest };
+    }
+    return { presence: { ...state.presence, [peerId]: presence } };
+  });
+}
+
+/* ------------------------------------------------------------------ host -- */
+
+export interface HostOptions {
+  /** The owner's name as collaborators see it. */
+  name: string;
+  /** A desktop LAN session's secret, checked on every hello. */
+  token?: string;
+}
+
+/** Starts sharing the canvas on screen. Idempotent while a session is running. */
+export function startHosting(options: HostOptions): HostSession {
+  if (host && !host.isEnded) return host;
+  if (guest) throw new Error('Leave the session you joined before sharing a canvas of your own.');
+  const editor = useEditorStore.getState();
+  sharedDocumentId = editor.document.metadata.id;
+  sharedCanvasOpen = true;
+  const token = options.token;
+  host = new HostSession(
+    {
+      readFile,
+      applyRemote,
+      isBusy,
+      appVersion: PRODUCT.version,
+      ...(token === undefined ? {} : { checkToken: (candidate: string | undefined) => candidate !== undefined && constantTimeEqual(candidate, token) }),
+    },
+    {
+      peers: (peers: PeerView[]) => {
+        const others = peers.filter((peer) => peer.id !== HOST_ORIGIN);
+        announcePeers(others);
+        useCollabStore.setState({ peers: others });
+      },
+      presence: setPresenceOf,
+      authored: (peerId: string, name: string) => useCollabStore.setState((state) => ({ authors: { ...state.authors, [peerId]: name } })),
+    },
+    { name: options.name },
+  );
+  useCollabStore.setState({ ...COLLAB_AT_REST, role: 'host', status: 'live', access: 'owner', selfId: HOST_ORIGIN, selfName: options.name });
+  const session = host;
+  stopWatching = watchEdits(
+    () => session.commitLocal(),
+    () => stopHosting('document-changed'),
+  );
+  removePageListener = onPageLeave(() => stopHosting('owner-left'));
+  return session;
+}
+
+export function stopHosting(reason: EndReason = 'ended'): void {
+  if (!host) return;
+  const session = host;
+  host = null;
+  session.end(reason);
+  cleanUp();
+  useCollabStore.setState(COLLAB_AT_REST);
+}
+
+export function hostSession(): HostSession | null {
+  return host && !host.isEnded ? host : null;
+}
+
+/** A collaborator's connection, from an accepted invite or the LAN server. */
+export function attachCollaborator(transport: CollabTransport, role: Role, reuse?: string, requireKey?: boolean): void {
+  if (!host || host.isEnded) return transport.close('ended');
+  host.attach(transport, { role, ...(reuse === undefined ? {} : { reuse }), ...(requireKey ? { requireKey } : {}) });
+}
+
+export function setCollaboratorRole(peerId: string, role: Role): void {
+  host?.setRole(peerId, role);
+}
+
+export function removeCollaborator(peerId: string): void {
+  host?.remove(peerId);
+}
+
+/** What taking back one person's changes came to, for the owner to be told. */
+export type UndoChangesOutcome = 'done' | 'partial' | 'nothing' | 'blocked' | 'too-large';
+
+/**
+ * Takes back everything `peerId` changed this session, where nobody has changed it since and nobody
+ * built on it — the owner's way back from one collaborator's edits going wrong, since those never
+ * enter the owner's own undo history. One undoable edit, reaching everyone like any other.
+ */
+export function undoChangesOf(peerId: string, name: string): UndoChangesOutcome {
+  if (!host || host.isEnded || !onSharedCanvas() || isBusy()) return 'nothing';
+  // Anything typed here and not yet shared goes into the session first, so it counts as the owner's.
+  host.commitLocal();
+  const current = readFile();
+  const result = host.authorship.revert(peerId, current);
+  if (result.file === current) return result.blocked ? 'blocked' : 'nothing';
+  const reverted = result.file;
+  // Bringing back what they deleted, after others have added their own, could pass the limits —
+  // the same check every collaborator's patch gets.
+  if (!withinLimits(reverted) || !idsUnique(reverted)) return 'too-large';
+  if (!useEditorStore.getState().applyToFile(`Undo ${name}’s changes`, (file) => withLocalView(reverted, file))) return 'nothing';
+  return result.partial || result.kept ? 'partial' : 'done';
+}
+
+/**
+ * Answers a knock: lets that person in as `role`, or (`null`) turns them away. The waiting room lives
+ * in the collaboration chunk (`ui/collab/lobbyStore.ts`), which registers itself here, so the dock
+ * on the canvas can answer without loading any of it.
+ */
+let knockHandler: ((id: string, role: Role | null) => void) | null = null;
+/** The same, for people at the door who came by the desktop's local network link (`lan:` ids). */
+let lanKnockHandler: ((id: string, role: Role | null) => void) | null = null;
+
+export function setKnockHandler(handler: ((id: string, role: Role | null) => void) | null): void {
+  knockHandler = handler;
+}
+
+export function setLanKnockHandler(handler: ((id: string, role: Role | null) => void) | null): void {
+  lanKnockHandler = handler;
+}
+
+export function answerKnock(id: string, role: Role | null): void {
+  if (id.startsWith('lan:')) lanKnockHandler?.(id, role);
+  else knockHandler?.(id, role);
+}
+
+/** What the owner is showing while presenting, for collaborators who follow. */
+export function publishPresenter(state: FollowState | null): void {
+  host?.setFollow(state);
+}
+
+/** Compares two secrets in time that does not depend on where they first differ. */
+function constantTimeEqual(a: string, b: string): boolean {
+  let diff = a.length ^ b.length;
+  for (let i = 0; i < Math.max(a.length, b.length); i += 1) diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
+  return diff === 0;
+}
+
+/* ----------------------------------------------------------------- guest -- */
+
+export interface JoinOptions {
+  name: string;
+  token?: string;
+  /**
+   * Opens the owner's file in the editor as a collaborator's copy — never stored, never autosaved.
+   * Resolves `false` when the canvas on screen could not be left (unsaved work kept it open).
+   */
+  open(file: DraftDocument): Promise<boolean>;
+  /** The connection dropped: the caller reconnects (LAN) or offers to ask for a new invite (WebRTC). */
+  lost?(): void;
+}
+
+const REJECTIONS: Record<RejectReason, string> = {
+  'view-only': 'Your change was not applied — the owner has made you view-only.',
+  malformed: 'Your change could not be applied and was undone.',
+  limits: 'Your change was not applied — the diagram is at its size limit.',
+};
+
+export function joinSession(transport: CollabTransport, options: JoinOptions): GuestSession {
+  if (host && !host.isEnded) throw new Error('Stop sharing your canvas before joining someone else’s.');
+  guest?.leave();
+  cleanUp();
+  const ui = useUiStore.getState();
+  let title = '';
+  const setAccess = (access: Role) => {
+    const before = useCollabStore.getState().access;
+    if (before !== access && useCollabStore.getState().status === 'live') announce(access === 'editor' ? 'The owner let you edit.' : 'The owner made you view-only.');
+    useCollabStore.setState({ access });
+    useUiStore.getState().setReadOnly(access === 'viewer' ? { sharedTitle: title, collaborative: true } : null);
+  };
+  const session: GuestSession = new GuestSession(
+    {
+      readFile,
+      applyRemote,
+      isBusy,
+      appVersion: PRODUCT.version,
+      name: options.name,
+      ...(options.token === undefined ? {} : { token: options.token }),
+      open(file, access) {
+        title = file.metadata.title;
+        sharedDocumentId = file.metadata.id;
+        sharedCanvasOpen = false;
+        stopWatching?.();
+        stopWatching = null;
+        void options.open(file).then((opened) => {
+          if (guest !== session) return;
+          if (!opened) {
+            useUiStore.getState().notify('Left the session — the canvas you were on has unsaved changes. Save or export it, then open the invite again.', 'error');
+            return leaveSession();
+          }
+          // Only now is the canvas on screen the collaborator's copy, never saved anywhere.
+          sharedCanvasOpen = true;
+          stopWatching = watchEdits(
+            () => session.localChanged(),
+            () => leaveSession(),
+          );
+          setAccess(access);
+          // Commits that arrived while the canvas was opening waited for it.
+          session.drainHeld();
+        });
+      },
+      setAccess,
+    },
+    {
+      status(status: GuestStatus, reason?: EndReason) {
+        const mapped: SessionStatus = status;
+        useCollabStore.setState({ status: mapped, endReason: reason ?? null, ...(status === 'ended' ? { presence: {}, presenter: null, following: false } : {}) });
+        if (status === 'ended') {
+          if (reason) announce(`The live session ended.`, { assertive: true });
+          if (reason && FAULTS.has(reason)) logDiagnostic(new Error('collab ended'), { operation: 'collab-session' });
+          // What is on screen stays — every unconfirmed edit included — but it is nobody's file now.
+          if (onSharedCanvas()) useUiStore.getState().setReadOnly({ sharedTitle: title, collaborative: true });
+          cleanUp();
+          guest = null;
+        } else if (status === 'reconnecting') {
+          options.lost?.();
+        }
+      },
+      joined: (selfId: string, access: Role, color?: number) => useCollabStore.setState({ selfId, access, ...(color === undefined ? {} : { selfColor: color }) }),
+      peers: (peers: PeerView[]) => {
+        announcePeers(peers);
+        useCollabStore.setState({ peers });
+      },
+      presence: setPresenceOf,
+      presenter: (state: FollowState | null) => useCollabStore.setState({ presenter: state }),
+      rejected: (reason: RejectReason) => ui.notify(REJECTIONS[reason], 'error'),
+      unconfirmed: (count: number) => useCollabStore.setState({ unconfirmed: count }),
+      tooLarge: () => ui.notify('That change is too large to share live, so it was undone. Smaller edits still go through.', 'error'),
+    },
+  );
+  guest = session;
+  useCollabStore.setState({ ...COLLAB_AT_REST, role: 'guest', status: 'joining', access: 'viewer', selfName: options.name });
+  removePageListener = onPageLeave(() => leaveSession());
+  session.connect(transport);
+  return session;
+}
+
+/** A new connection to the same owner after a drop (a LAN reconnect, or a re-invite). */
+export function reconnectSession(transport: CollabTransport): void {
+  if (!guest || guest.isEnded) return transport.close('ended');
+  guest.connect(transport);
+}
+
+/**
+ * Leaves on purpose, keeping what's on screen: read-only, with the banner's way to keep a copy —
+ * left editable, it would look like a canvas that saves, and it saves nowhere.
+ */
+export function leaveSessionKeepingView(): void {
+  const keep = onSharedCanvas();
+  const title = useEditorStore.getState().document.metadata.title;
+  leaveSession();
+  if (keep) useUiStore.getState().setReadOnly({ sharedTitle: title, collaborative: true });
+  useUiStore.getState().notify('You left the session. Make an editable copy to keep what you see.');
+}
+
+/** Leaves on purpose — or, after the owner ended it, puts the session's leftovers away. */
+export function leaveSession(): void {
+  const session = guest;
+  guest = null;
+  // First, so the goodbye's own "ended" can't mark whatever canvas comes next read-only.
+  cleanUp();
+  session?.leave();
+  if (useCollabStore.getState().role === 'guest') useCollabStore.setState(COLLAB_AT_REST);
+}
+
+export function guestSession(): GuestSession | null {
+  return guest && !guest.isEnded ? guest : null;
+}
+
+/** This person's own pointer and selection, for everyone else in the session. */
+export function publishPresence(presence: Presence): void {
+  if (host && !host.isEnded) host.setPresence(presence);
+  else if (guest && !guest.isEnded) guest.setPresence(presence);
+}
+
+/** Test seam: drops whatever session a test left running. */
+export function __resetCollabBridge(): void {
+  host?.end('ended');
+  guest?.leave();
+  host = guest = null;
+  cleanUp();
+  useCollabStore.setState(COLLAB_AT_REST);
+}

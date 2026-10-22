@@ -23,6 +23,7 @@
   },
   "scripts": {
     "dev": "vite",
+    "dev:relay": "node scripts/dev-relay.mjs --port 8791",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "site:dev": "npm --prefix www run dev",

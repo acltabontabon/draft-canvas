@@ -161,6 +161,7 @@ import {
   EMPTY_SELECTION,
   canRedo,
   canUndo,
+  markCrossed,
   pushEntry,
   redo as redoStack,
   undo as undoStack,
@@ -170,6 +171,9 @@ import {
   type Selection,
 } from '../history/HistoryStack';
 import type { SaveState } from '../storage/autosave';
+import { changeKeys, revertKeys } from '../collab/selective';
+import { withLocalView } from '../collab/localView';
+import { isSharedEditing, useCollabStore } from './collabStore';
 import type { SharedMetadata } from '../storage/DraftRepository';
 
 export type EditorMode = 'edit' | 'present';
@@ -347,6 +351,15 @@ export interface EditorStore {
    * can't fold into it.
    */
   applyToFile: (label: string, recipe: (file: DraftDocument) => DraftDocument, expectedRevision?: number) => boolean;
+  /**
+   * The file as a collaboration session says it now is — somebody else's edit, or the owner's
+   * answer to one of this person's own. Not an edit made here: no undo step, and it lands on a
+   * read-only collaborator's copy too. Every room keeps this person's own camera, they stay in the
+   * room they are in while it exists, and anything on screen pointing at something now gone (the
+   * selection, a menu, a popover) lets go of it. `false` while a gesture is held, when the session
+   * waits and tries again.
+   */
+  applyRemote: (file: DraftDocument) => boolean;
 
   /* Interactions (drag, resize) collapse into one undo entry */
   beginInteraction: (label: string) => void;
@@ -1089,6 +1102,79 @@ export function roomFor(nodeCount: number, edgeCount: number, flowCount = 0): bo
   return false;
 }
 
+/** The history fields for an entry, while edits are shared: what it touched, for selective undo. */
+function sharedKeys(before: DraftDocument, after: DraftDocument): Pick<HistoryEntry, 'keys'> {
+  return isSharedEditing() ? { keys: changeKeys(before, after) } : {};
+}
+
+/** The selection without anything `document` no longer holds — checked by id, not by count: a remote
+ *  change that adds one shape and removes another leaves the counts equal. */
+function selectionThatExists(document: DraftDocument, selection: Selection): Selection {
+  if (selection.nodes.length === 0 && selection.edges.length === 0) return selection;
+  const nodes = selection.nodes.filter((id) => nodeIndex(document.nodes).has(id));
+  const edges = selection.edges.filter((id) => edgeIndex(document.edges).has(id));
+  return nodes.length === selection.nodes.length && edges.length === selection.edges.length ? selection : { nodes, edges };
+}
+
+/**
+ * Closes what is open on an element somebody else just removed: a menu, a quick-connect from it, an
+ * open-point popover beside it, a pending request to start editing it. Editing here closes these by
+ * the same gesture that removes the element; an edit from elsewhere has no gesture to do it.
+ */
+function closeWhatPointsAtRemoved(document: DraftDocument): void {
+  const ui = useUiStore.getState();
+  const nodes = nodeIndex(document.nodes);
+  const edges = edgeIndex(document.edges);
+  const gone = (target: { kind: string; id?: string } | undefined) =>
+    target !== undefined && ((target.kind === 'node' && !nodes.has(target.id!)) || (target.kind === 'edge' && !edges.has(target.id!)));
+  const patch: Partial<ReturnType<typeof useUiStore.getState>> = {};
+  if (ui.contextMenu && gone(ui.contextMenu.target)) patch.contextMenu = null;
+  if (ui.quickConnect?.source !== undefined && !nodes.has(ui.quickConnect.source)) patch.quickConnect = null;
+  if (ui.openPointPopover && gone(ui.openPointPopover.anchor)) patch.openPointPopover = null;
+  if (ui.editRequestId !== null && !nodes.has(ui.editRequestId) && !edges.has(ui.editRequestId)) patch.editRequestId = null;
+  if (Object.keys(patch).length > 0) useUiStore.setState(patch);
+}
+
+/**
+ * Undo or redo while edits are shared: only what the entry touched, and only where nobody has
+ * changed it since — see `collab/selective.ts`. Stands the person where the change was, as a
+ * snapshot undo does.
+ */
+function selectiveStep(set: SetEditorState, get: GetEditorState, direction: 'undo' | 'redo'): void {
+  const state = get();
+  const step = direction === 'undo' ? undoStack(state.history) : redoStack(state.history);
+  const entry = step.entry;
+  if (!entry) return;
+  const current = fileOf(state);
+  const keys = entry.keys ?? changeKeys(entry.before, entry.after);
+  const result = direction === 'undo' ? revertKeys(current, entry.after, entry.before, keys) : revertKeys(current, entry.before, entry.after, keys);
+  const notify = useUiStore.getState().notify;
+  if (result.blocked) {
+    // Dropped rather than kept: left on the stack it would block every step behind it.
+    const { past, future } = state.history;
+    set({ history: direction === 'undo' ? { past: past.slice(0, -1), future } : { past, future: future.slice(1) } });
+    notify(`Couldn't ${direction} "${entry.label}" — someone else has built on it since.`);
+    return;
+  }
+  if (result.file === current) {
+    set({ history: step.history });
+    notify(`Nothing left to ${direction} in "${entry.label}" — someone else changed it since.`);
+    return;
+  }
+  restoreSnapshot(set, get, {
+    history: step.history,
+    file: result.file,
+    path: entry.path,
+    selection: direction === 'undo' ? entry.selectionBefore : entry.selectionAfter,
+    flowSession: direction === 'undo' ? entry.flowSessionBefore : entry.flowSessionAfter,
+  });
+  const after = get();
+  const selection = selectionThatExists(after.document, after.selection);
+  if (selection !== after.selection) set({ selection });
+  if (result.partial) notify(`Part of "${entry.label}" was changed by someone else since, and was left as they made it.`);
+  quietIfOneConnector(get().selection);
+}
+
 type SetEditorState = (
   partial: Partial<EditorStore> | ((state: EditorStore) => Partial<EditorStore>),
 ) => void;
@@ -1257,6 +1343,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // back a shape you deleted two rooms ago, and it carries the path so it can take you there.
     const fileBefore = fileOf(state);
     const fileAfter = fileOf({ ...state, document: next });
+    const keys = sharedKeys(fileBefore, fileAfter);
     set((s) => ({
       document: next,
       selection: selectionAfter,
@@ -1273,6 +1360,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         coalesceKey: options?.coalesceKey,
         flowSessionBefore: options?.flowSessionBefore,
         flowSessionAfter: options?.flowSessionAfter,
+        ...keys,
       }),
     }));
     closeStaleAttachmentDetail(next);
@@ -1298,6 +1386,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const document = room ?? nextFile;
     const cleared = moved ? resetViewSession() : undefined;
     const selectionAfter = cleared ? EMPTY_SELECTION : selectionIn(document, state.document, state.selection);
+    const keys = sharedKeys(file, nextFile);
     set((s) => ({
       ...(cleared ?? {}),
       document,
@@ -1315,7 +1404,40 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         selectionBefore: s.selection,
         selectionAfter,
         at: Date.now(),
+        ...keys,
       }),
+    }));
+    closeStaleAttachmentDetail(document);
+    return true;
+  },
+
+  applyRemote(incoming) {
+    // A held gesture owns the document until it ends; the session waits for it.
+    if (interaction) return false;
+    const state = get();
+    const current = fileOf(state);
+    const shared = withLocalView(incoming, current);
+    if (shared === current) return true;
+    const nextFile = touch(shared);
+    const path = resolvePath(nextFile, state.path);
+    const room = path.length > 0 ? viewOf(nextFile, path) : undefined;
+    const inside = room !== undefined;
+    const moved = inside ? pathKey(path) !== pathKey(state.path) : state.path.length > 0;
+    const document = room ?? nextFile;
+    // Outside the updater, as everywhere else: these write the UI store.
+    const cleared = moved ? resetViewSession() : undefined;
+    if (!cleared) closeWhatPointsAtRemoved(document);
+    set((s) => ({
+      ...(cleared ?? reconcileSessionState(document, s)),
+      document,
+      path: inside ? path : ROOT_PATH,
+      outer: inside ? nextFile : null,
+      ...(moved ? { liveViewport: null } : {}),
+      selection: cleared ? EMPTY_SELECTION : selectionThatExists(document, s.selection),
+      revision: s.revision + 1,
+      // Someone else's edit now sits between every recorded step and the file: undo stays
+      // selective for all of them, during the session and after it.
+      history: markCrossed(s.history),
     }));
     closeStaleAttachmentDetail(document);
     return true;
@@ -1349,15 +1471,18 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // conflict) already discarded the gesture's baseline; recording it against the room we are
     // standing in now would write the old room's shapes at the new room's address.
     if (!samePath(active.path, state.path)) return;
+    const after = fileOf(state);
+    const keys = sharedKeys(active.file, after);
     set((s) => ({
       history: pushEntry(s.history, {
         label: label ?? active.label,
         before: active.file,
-        after: fileOf(s),
+        after,
         path: active.path,
         selectionBefore: active.selection,
         selectionAfter: s.selection,
         at: Date.now(),
+        ...keys,
       }),
     }));
   },
@@ -2804,6 +2929,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // Mid-gesture (a drag or resize still held), swapping the document out from under it would
     // fold the restored state into the gesture's own entry and clear the redo stack.
     if (interaction) return;
+    if (isSharedEditing() || state.history.past.at(-1)?.crossed) return selectiveStep(set, get, 'undo');
     const { history, entry } = undoStack(state.history);
     if (!entry) return;
     restoreSnapshot(set, get, {
@@ -2823,6 +2949,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (useUiStore.getState().flowTrace) return;
     const state = get();
     if (interaction) return;
+    if (isSharedEditing() || state.history.future[0]?.crossed) return selectiveStep(set, get, 'redo');
     const { history, entry } = redoStack(state.history);
     if (!entry) return;
     restoreSnapshot(set, get, {
@@ -2854,6 +2981,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   adoptStoredMetadata(documentId, shared) {
     const { document, history } = get();
     if (document.metadata.id !== documentId) return;
+    // A collaborator's copy carries the owner's document id but is not stored here: a Library entry
+    // of the same id in this browser (the owner's own tab, say) is a different copy, not this one.
+    if (useCollabStore.getState().role === 'guest') return;
     // An undo step still being built — a held drag, or a burst that keeps coalescing — took its
     // `before` ahead of this adoption, and would end with `before`/`after` disagreeing on the title,
     // which `carryAdoptedMetadata` reads as this editor's own rename: undo would put the old title
@@ -3021,6 +3151,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const nextFile = at.length === 0 ? after : embed(file, at, after);
     const room = viewOf(nextFile, state.path);
     if (!room) return;
+    const keys = sharedKeys(file, nextFile);
     set((s) => ({
       document: room,
       outer: nextFile,
@@ -3033,6 +3164,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         selectionBefore: s.selection,
         selectionAfter: s.selection,
         at: Date.now(),
+        ...keys,
       }),
     }));
   },

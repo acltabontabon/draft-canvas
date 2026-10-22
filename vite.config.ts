@@ -1,7 +1,7 @@
 /// <reference types="vitest/config" />
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { defineConfig, type Plugin } from 'vite';
+import { defineConfig, loadEnv, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import { whatsNew } from './scripts/changelog.mjs';
@@ -44,18 +44,45 @@ function appVersion(desktop: boolean): string {
 }
 
 /**
+ * Where live collaboration's relay is (`__COLLAB_RELAY__`): the WebSocket address an owner and the
+ * people joining them use to trade a few end-to-end-encrypted messages — a knock, then the WebRTC
+ * offer and answer — before they connect directly. `VITE_COLLAB_RELAY` overrides it, from the
+ * environment or a `.env` file; set it to nothing for a build with no relay, where invites fall back
+ * to copying reply codes by hand. Unset, a production build uses relay.draftcanvas.dev and the dev
+ * server the local one, `npm run dev:relay` (`scripts/dev-relay.mjs`, port 8791).
+ *
+ * A path is allowed (a relay behind a reverse proxy); the app appends `/r/<room>` to it.
+ */
+function collabRelay(mode: string, command: 'serve' | 'build'): string {
+  const configured = loadEnv(mode, process.cwd(), 'VITE_COLLAB_RELAY').VITE_COLLAB_RELAY;
+  const relay = (configured ?? (command === 'serve' ? 'ws://localhost:8791' : 'wss://relay.draftcanvas.dev')).trim();
+  if (relay === '') return '';
+  let url: URL;
+  try {
+    url = new URL(relay);
+  } catch {
+    throw new Error(`VITE_COLLAB_RELAY must be a ws:// or wss:// URL, not "${relay}".`);
+  }
+  if ((url.protocol !== 'wss:' && url.protocol !== 'ws:') || url.search || url.hash || url.username || url.password) {
+    throw new Error(`VITE_COLLAB_RELAY must be a ws:// or wss:// URL with no query, fragment or credentials, not "${relay}".`);
+  }
+  return `${url.origin}${url.pathname.replace(/\/+$/, '')}`;
+}
+
+/**
  * The privacy promise, enforced by the browser rather than by good intentions.
  *
- * `connect-src 'self'` means no fetch, XHR, WebSocket or beacon can reach any
- * other origin — if a dependency ever tried to phone home with canvas content,
- * the browser would refuse. The one same-origin exception is the offline
- * Service Worker (Phase 6): it fetches its own precached shell assets and
- * checks for a newer build of the app itself, never anything you've drawn.
+ * `connect-src` names `'self'` and the collaboration relay, and nothing else: no fetch, XHR,
+ * WebSocket or beacon can reach any other origin — if a dependency ever tried to phone home with
+ * canvas content, the browser would refuse. The relay only ever carries messages the two browsers
+ * have already encrypted with a key it never sees. The one same-origin exception is the offline
+ * Service Worker (Phase 6): it fetches its own precached shell assets and checks for a newer build
+ * of the app itself, never anything you've drawn.
  *
  * It is injected only into the production build: the same directive would block
  * Vite's hot-reload socket during development.
  */
-const CONTENT_SECURITY_POLICY = [
+const contentSecurityPolicyFor = (relay: string) => [
   "default-src 'self'",
   "script-src 'self'",
   // 'unsafe-inline' for styles stays: React Flow positions nodes, edges and its viewport through
@@ -66,7 +93,7 @@ const CONTENT_SECURITY_POLICY = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob:",
   "font-src 'self'",
-  "connect-src 'self'",
+  relay ? `connect-src 'self' ${new URL(relay).origin}` : "connect-src 'self'",
   "form-action 'none'",
   "base-uri 'self'",
   "object-src 'none'",
@@ -94,7 +121,7 @@ function thirdPartyLicenses(): Plugin {
   };
 }
 
-function contentSecurityPolicy(): Plugin {
+function contentSecurityPolicy(relay: string): Plugin {
   return {
     name: 'draft-canvas:csp',
     apply: 'build',
@@ -103,7 +130,7 @@ function contentSecurityPolicy(): Plugin {
       handler: (html) =>
         html.replace(
           '<head>',
-          `<head>\n    <meta http-equiv="Content-Security-Policy" content="${CONTENT_SECURITY_POLICY}" />`,
+          `<head>\n    <meta http-equiv="Content-Security-Policy" content="${contentSecurityPolicyFor(relay)}" />`,
         ),
     },
   };
@@ -150,6 +177,7 @@ function workerSafeEntities(): Plugin {
 // installer, and `__DESKTOP__` true so the web build can drop the desktop code entirely.
 export default defineConfig(({ mode, command }) => {
   const desktop = mode === 'desktop';
+  const relay = collabRelay(mode, command);
   return {
     base: './',
     // The dev server pre-bundles the highlighter once for the page and the agent's worker alike, and a
@@ -158,7 +186,11 @@ export default defineConfig(({ mode, command }) => {
     ...(command === 'serve'
       ? { resolve: { alias: { 'decode-named-character-reference': fileURLToPath(new URL('./node_modules/decode-named-character-reference/index.js', import.meta.url)) } } }
       : {}),
-    define: { __DESKTOP__: JSON.stringify(desktop), __APP_VERSION__: JSON.stringify(appVersion(desktop)) },
+    define: {
+      __DESKTOP__: JSON.stringify(desktop),
+      __APP_VERSION__: JSON.stringify(appVersion(desktop)),
+      __COLLAB_RELAY__: JSON.stringify(relay),
+    },
     plugins: [
       react(),
       thirdPartyLicenses(),
@@ -166,7 +198,7 @@ export default defineConfig(({ mode, command }) => {
       ...(desktop
         ? [withoutServiceWorker()]
         : [
-            contentSecurityPolicy(),
+            contentSecurityPolicy(relay),
             // Offline app-shell caching (Phase 6). `generateSW` means Workbox builds
             // the whole Service Worker from this config — no hand-written SW source,
             // so the plugin stays a devDependency and no new runtime dependency is

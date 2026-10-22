@@ -35,6 +35,9 @@ import { centerOf } from '../../lib/math';
 import { logDiagnostic } from '../../lib/diagnostics';
 import { flowFitViewNodes, hasSomethingToFit, roomFor, useEditorStore, viewLevel } from '../../store/editorStore';
 import { pointer, useUiStore, type ContextMenuTarget } from '../../store/uiStore';
+import { useCollabStore } from '../../store/collabStore';
+import { END_MESSAGES } from '../collab/collabCopy';
+import { PresenceDock } from '../collab/PresenceDock';
 import type { DocumentSession } from '../../store/useDocumentSession';
 import { useFlowPlayback } from '../../presentation/useFlowPlayback';
 import { presentationScope, revealIn } from '../../presentation/presentationAttachments';
@@ -68,6 +71,7 @@ import { PRODUCT } from '../../product';
 
 // Export (its panels, previews, and exporters) is a sizeable slice of the editor that most sessions
 // never open — fetched the first time it is, then kept mounted so its in-session choices survive.
+const CollaborateChunk = retryableLazy(() => import('../collab/CollaborateDialog').then((module) => ({ default: module.CollaborateDialog })));
 const ExportDialogChunk = retryableLazy(() => import('./ExportDialog').then((module) => ({ default: module.ExportDialog })));
 // Proposal review is desktop-only (an AI agent's own feature); `__DESKTOP__` drops it from the web
 // build entirely, the same way `App.tsx` gates every other desktop-only chunk.
@@ -150,6 +154,17 @@ function EditorScreen({ session }: { session: DocumentSession }) {
   const readOnly = useUiStore((state) => state.readOnly);
   const setExportOpen = useUiStore((state) => state.setExportOpen);
   const setShortcutsOpen = useUiStore((state) => state.setShortcutsOpen);
+  const collabOpen = useUiStore((state) => state.collabOpen);
+  const collabStatus = useCollabStore((state) => state.status);
+  const collabEnd = useCollabStore((state) => state.endReason);
+  const onCollabFailed = useCallback((error: Error, componentStack: string) => {
+    logDiagnostic(error, { operation: 'collab-panel' }, componentStack);
+    CollaborateChunk.reset();
+    const ui = useUiStore.getState();
+    ui.setCollabOpen(false);
+    const notice = loadFailureNotice(error, 'Collaborate couldn’t open. Check your connection and try again.');
+    ui.notify(notice.message, 'error', notice.action);
+  }, []);
   const exportOpen = useUiStore((state) => state.exportOpen);
   const [exportMounted, setExportMounted] = useState(exportOpen);
   if (exportOpen && !exportMounted) setExportMounted(true);
@@ -532,13 +547,22 @@ function EditorScreen({ session }: { session: DocumentSession }) {
         <div className="dc-editor-canvas">
           {readOnly && !presenting && (
             <div className="dc-read-only-banner" role="status">
-              <span>Shared diagram — read only</span>
+              <span>
+                {!readOnly.collaborative
+                  ? 'Shared diagram — read only'
+                  : collabStatus === 'ended' && collabEnd
+                    ? END_MESSAGES[collabEnd]
+                    : collabStatus === 'ended' || collabStatus === 'idle'
+                      ? 'You left the session — this copy isn’t saved anywhere'
+                      : 'Live session — view only. The owner can let you edit.'}
+              </span>
               <span aria-hidden="true">·</span>
               <Button variant="quiet" onClick={() => void session.makeEditableCopy()}>
                 Make an editable copy
               </Button>
             </div>
           )}
+          <PresenceDock />
           <ErrorBoundary
             key={canvasInstanceKey}
             message="Something went wrong while rendering this canvas."
@@ -650,6 +674,13 @@ function EditorScreen({ session }: { session: DocumentSession }) {
         <PanelBoundary onError={onExportFailed}>
           <Suspense fallback={null}>
             <ExportDialogChunk.Component />
+          </Suspense>
+        </PanelBoundary>
+      )}
+      {collabOpen && (
+        <PanelBoundary onError={onCollabFailed}>
+          <Suspense fallback={null}>
+            <CollaborateChunk.Component />
           </Suspense>
         </PanelBoundary>
       )}

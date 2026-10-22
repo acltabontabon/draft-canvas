@@ -1,5 +1,5 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 /**
@@ -27,16 +27,42 @@ function sourceFiles(dir: string): string[] {
   return out;
 }
 
-/** Every way a browser can talk to a server. */
+/**
+ * Every way a browser can talk to a server. Any mention in code counts — `fetch?.(`, `fetch.call`, an
+ * alias or a `Reflect.apply` all start from the name — but not in a comment, so prose explaining why
+ * something never fetches doesn't trip it.
+ */
 const NETWORK_APIS: [string, RegExp][] = [
-  ['fetch', /\bfetch\s*\(/],
+  ['fetch', /\bfetch\b/],
   ['XMLHttpRequest', /\bXMLHttpRequest\b/],
-  ['WebSocket', /\bnew\s+WebSocket\b/],
-  ['EventSource', /\bnew\s+EventSource\b/],
+  ['EventSource', /\bEventSource\b/],
   ['sendBeacon', /\bsendBeacon\b/],
-  ['importScripts', /\bimportScripts\s*\(/],
+  ['importScripts', /\bimportScripts\b/],
+  ['WebTransport', /\bWebTransport\b/],
+  ['WebSocketStream', /\bWebSocketStream\b/],
   ['dynamic remote import', /\bimport\s*\(\s*['"`]https?:/],
 ];
+
+/** Source with its comments removed (a `//` inside a URL's `://` is left alone). */
+function code(file: string): string {
+  return readFileSync(file, 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:\\])\/\/.*$/gm, '$1');
+}
+
+/**
+ * The ways collaboration talks to a peer. Any mention counts, not only a constructor call: a type,
+ * a `globalThis` lookup or an alias is how such a call starts. They are allowed in exactly one
+ * place, `src/collab/transport/`, which hands the rest of the app whole messages and nothing else.
+ * Collaboration is opt-in and peer-to-peer; diagrams still never reach a server.
+ */
+const PEER_APIS: [string, RegExp][] = [
+  // Vendor-prefixed names too (`webkitRTCPeerConnection`): the same API under another spelling.
+  ['RTCPeerConnection', /\b\w*RTCPeerConnection\b/],
+  ['RTCDataChannel', /\b\w*RTCDataChannel\b/],
+  ['WebSocket', /\bWebSocket\b/],
+];
+const TRANSPORT_DIR = join(SRC, 'collab', 'transport') + sep;
 
 /** Ways code could be built from a string at runtime. */
 const EVAL_APIS: [string, RegExp][] = [
@@ -52,8 +78,38 @@ describe('nothing on the canvas can reach a network', () => {
     expect(files.length).toBeGreaterThan(20);
   });
 
+  it('catches the ways around a call-shaped pattern', () => {
+    const caught = (text: string) => NETWORK_APIS.some(([, pattern]) => pattern.test(text));
+    for (const sneaky of ['fetch?.(url)', 'fetch.call(null, url)', 'Reflect.apply(fetch, null, [url])', 'const get = fetch;', 'new globalThis.EventSource(u)', 'new WebTransport(u)', 'new WebSocketStream(u)']) {
+      expect(caught(sneaky), sneaky).toBe(true);
+    }
+  });
+
   it.each(NETWORK_APIS)('uses no %s anywhere in src/', (_name, pattern) => {
-    const offenders = files.filter((file) => pattern.test(readFileSync(file, 'utf8')));
+    const offenders = files.filter((file) => pattern.test(code(file)));
+    expect(offenders.map((file) => relative(ROOT, file))).toEqual([]);
+  });
+
+  it.each(PEER_APIS)('uses %s only in src/collab/transport/', (_name, pattern) => {
+    const offenders = files.filter((file) => !file.startsWith(TRANSPORT_DIR) && pattern.test(readFileSync(file, 'utf8')));
+    expect(offenders.map((file) => relative(ROOT, file))).toEqual([]);
+  });
+
+  it('allows peer connections in exactly one directory, and it is in use', () => {
+    // The allowlist above is a single prefix; this keeps it from quietly covering nothing.
+    expect(files.some((file) => file.startsWith(TRANSPORT_DIR) && /\bRTCPeerConnection\b/.test(readFileSync(file, 'utf8')))).toBe(true);
+  });
+
+  it('is reached only from src/collab/', () => {
+    const collab = join(SRC, 'collab') + sep;
+    const SPECIFIER = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)['"`]([^'"`]+)['"`]/g;
+    const offenders = files.filter((file) => {
+      if (file.startsWith(collab)) return false;
+      return [...readFileSync(file, 'utf8').matchAll(SPECIFIER)].some(([, specifier]) => {
+        if (!specifier!.startsWith('.')) return false;
+        return (resolve(dirname(file), specifier!) + sep).startsWith(TRANSPORT_DIR);
+      });
+    });
     expect(offenders.map((file) => relative(ROOT, file))).toEqual([]);
   });
 

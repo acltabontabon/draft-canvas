@@ -1,6 +1,7 @@
 mod agent;
 #[cfg(test)]
 mod bindings;
+mod collab;
 mod commands;
 mod dialogs;
 mod docio;
@@ -108,6 +109,10 @@ pub fn run() {
             commands::agent::agent_proposal_get,
             commands::agent::agent_proposal_begin_accept,
             commands::agent::agent_proposal_resolve,
+            commands::collab::collab_lan_start,
+            commands::collab::collab_lan_stop,
+            commands::collab::collab_lan_send,
+            commands::collab::collab_lan_close,
         ])
         .setup(lifecycle::setup)
         .build(tauri::generate_context!())
@@ -123,6 +128,7 @@ pub fn run() {
     };
     app.manage(AppState::new(&config_dir, &data_dir));
     app.manage(std::sync::Arc::new(agent::Agent::new(&data_dir)));
+    app.manage(collab::Relay::for_app(app.handle()));
 
     app.run(lifecycle::on_run_event);
 }

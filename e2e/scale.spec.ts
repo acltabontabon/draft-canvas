@@ -114,7 +114,8 @@ test('stays workable with 100 nodes and 180 connections', async ({ page }) => {
   await expect(page.locator('.dc-node')).toHaveCount(100);
 
   // And it still exports.
-  await page.getByRole('button', { name: 'Export', exact: true }).click();
+  await page.getByRole('button', { name: 'Share', exact: true }).click();
+  await page.getByRole('menuitem', { name: /^Export/ }).click();
   const exportDialog = page.getByRole('dialog', { name: 'Export' });
   await exportDialog.locator('[data-mode="image"]').click();
   await exportDialog.locator('[data-value="svg"]').click();

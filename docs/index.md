@@ -15,6 +15,7 @@ Start with [Getting started](guides/getting-started.md): draw, present and expor
 | [Keyboard shortcuts](guides/keyboard-and-commands.md) | Shortcuts and commands |
 | [Accessibility](guides/accessibility.md) | Outline, screen readers and touch |
 | [Saving and sharing](guides/saving-and-sharing.md) | Backups, files, images and links |
+| [Collaborating live](guides/collaborating.md) | Edit one canvas together, live |
 | [Desktop app](guides/desktop.md) | Quick Drafts, files and folders |
 | [AI agents](guides/connect-an-ai-agent.md) | Setup and diagram requests |
 | [Self-hosting](guides/self-hosting.md) | Build and serve the web editor |

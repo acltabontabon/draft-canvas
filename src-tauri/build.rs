@@ -64,6 +64,10 @@ const COMMANDS: &[&str] = &[
     "agent_proposal_get",
     "agent_proposal_begin_accept",
     "agent_proposal_resolve",
+    "collab_lan_start",
+    "collab_lan_stop",
+    "collab_lan_send",
+    "collab_lan_close",
 ];
 
 fn main() {

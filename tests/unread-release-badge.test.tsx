@@ -5,7 +5,7 @@ import { PRODUCT } from '../src/product';
 import { useEditorStore } from '../src/store/editorStore';
 import type { DocumentSession } from '../src/store/useDocumentSession';
 import { useUiStore } from '../src/store/uiStore';
-import { Toolbar } from '../src/ui/Editor/Toolbar';
+import { HelpMenu } from '../src/ui/Editor/HelpMenu';
 import { LibraryScreen } from '../src/ui/Library/LibraryScreen';
 
 /**
@@ -25,6 +25,7 @@ function stubSession(overrides: Partial<DocumentSession> = {}): DocumentSession 
     newDocument: vi.fn(async () => {}),
     adoptDocument: async () => {},
     openShared: async () => {},
+    openCollaborative: async () => false,
     makeEditableCopy: async () => {},
     closeDocument: async () => true,
     resolveConflict: async () => {},
@@ -40,18 +41,6 @@ function stubSession(overrides: Partial<DocumentSession> = {}): DocumentSession 
     moveDocumentToProject: async () => {},
     ...overrides,
   };
-}
-
-function renderToolbar() {
-  render(
-    <Toolbar
-      title="Untitled canvas"
-      onTitleChange={() => {}}
-      onBack={() => {}}
-      onPresent={() => {}}
-      onExport={() => {}}
-    />,
-  );
 }
 
 beforeEach(() => {
@@ -73,30 +62,30 @@ describe('unread release indicator', () => {
 
   // About now lives behind the toolbar's More menu, so the state has to survive one level of
   // folding: the collapsed trigger says something is waiting, and the row inside says what.
-  it('toolbar More trigger inherits the unread state of the About item it hides', () => {
-    renderToolbar();
-    expect(screen.getByRole('button', { name: /^More.*what's new/i })).toBeInTheDocument();
+  it('the editor’s Help button inherits the unread state of the About item it holds', () => {
+    render(<HelpMenu />);
+    expect(screen.getByRole('button', { name: /^Help.*what's new/i })).toBeInTheDocument();
   });
 
-  it('toolbar About control reflects unread state once the More menu is open', async () => {
+  it('the About row reflects unread state once the Help menu is open', async () => {
     const user = userEvent.setup();
-    renderToolbar();
-    await user.click(screen.getByRole('button', { name: /^More/ }));
+    render(<HelpMenu />);
+    await user.click(screen.getByRole('button', { name: /^Help/ }));
     // The row names its own flag too, not only the collapsed trigger.
     expect(screen.getByRole('menuitem', { name: /^About Draft Canvas\s*— new$/ })).toBeInTheDocument();
-    expect(screen.getByRole('menu', { name: 'More' })).toBeInTheDocument();
+    expect(screen.getByRole('menu', { name: 'Help' })).toBeInTheDocument();
   });
 
-  it('an update ready to install outranks unread notes on the toolbar trigger', () => {
+  it('an update ready to install outranks unread notes on the Help button', () => {
     useUiStore.setState({ updateReady: true });
-    renderToolbar();
-    expect(screen.getByRole('button', { name: /^More.*update ready/i })).toBeInTheDocument();
+    render(<HelpMenu />);
+    expect(screen.getByRole('button', { name: /^Help.*update ready/i })).toBeInTheDocument();
   });
 
-  it('the toolbar trigger says nothing when there is nothing waiting', () => {
+  it('the Help button says nothing when there is nothing waiting', () => {
     useUiStore.getState().markProductReleaseSeen();
-    renderToolbar();
-    expect(screen.getByRole('button', { name: 'More' })).toBeInTheDocument();
+    render(<HelpMenu />);
+    expect(screen.getByRole('button', { name: 'Help' })).toBeInTheDocument();
   });
 
   it('is not shown once the release has been acknowledged', () => {
