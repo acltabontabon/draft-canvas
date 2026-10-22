@@ -6,17 +6,12 @@ import { starterShape } from './starterShape';
 
 /**
  * One starter, shown as the thing it will draw: its own topology (derived from the catalog — see
- * `starterShape.ts`) with its name under it. No card, no border, no description competing for
- * attention — the shape says what it is.
+ * `starterShape.ts`) with its name under it. Each surface supplies its own framing.
  *
- * Shared by the home screen's shelf and the editor's empty canvas so the two surfaces cannot
- * drift. The only difference between them is the patch of dot grid behind the drawing, which the
- * empty canvas turns off: there it sits on the real canvas instead.
+ * Shared by Home, the empty canvas and the full collection, so their drawings cannot drift.
  *
- * `describe` is for the Browse-all dialog, the one surface where every starter is on screen at
- * once: the description is laid out under the name but only shown on hover or focus, so it reads
- * as the tile answering a question rather than thirteen captions competing. Always laid out, so
- * revealing it never moves a row.
+ * `describe` adds a visible caption in the full collection; the smaller shelves keep it as a
+ * screen-reader description.
  */
 export function StarterTile({
   starter,

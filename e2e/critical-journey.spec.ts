@@ -473,6 +473,17 @@ test.describe('Draft Canvas', () => {
     const menu = page.getByRole('menu', { name: 'Add element' });
     await expect(menu).toBeVisible();
 
+    // Tiny logical nodes clipped fixed-size details (a database became half an arch). The menu
+    // must scale full shapes into icons, with all their artwork inside the SVG's visible frame.
+    for (const preview of await menu.locator('.dc-shape-preview').all()) {
+      expect(await preview.evaluate((element: SVGSVGElement) => {
+        const frame = element.viewBox.baseVal;
+        const shape = element.getBBox();
+        return shape.width > 0 && shape.height > 0 && shape.x >= frame.x - 2 && shape.y >= frame.y - 2
+          && shape.x + shape.width <= frame.x + frame.width + 2 && shape.y + shape.height <= frame.y + frame.height + 2;
+      })).toBe(true);
+    }
+
     await menu.getByRole('menuitem', { name: 'Service' }).click();
     await expect(page.locator('.dc-node[data-type="service"]')).toHaveCount(1);
     await expect(page.getByText('Start drawing.')).toBeHidden();

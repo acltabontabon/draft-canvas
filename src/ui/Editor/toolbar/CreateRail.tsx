@@ -25,8 +25,8 @@ import { ToolGlyph } from './ToolGlyph';
  * It is drawn the way Draft Canvas draws: the tools sit on a strip of the canvas's own dotted
  * ground, idle ones in graphite; the one in hand turns to the product's teal ink, draws itself in, and
  * writes its name in the mono face a drawing's annotations use. The three families — interaction,
- * annotation, architecture — are joined by the logo's own elbow connector, not walled off by
- * dividers (a divider between every pair is what made the old bar read as an inventory).
+ * annotation, architecture — are separated by quiet hairlines, so the group boundaries cannot be
+ * mistaken for another drawing tool.
  */
 export function CreateRail() {
   const armed = useUiStore((state) => state.armed);
@@ -153,9 +153,9 @@ export function CreateRail() {
           )}
         </Tooltip>
       </div>
-      <RailLink />
+      <span className="dc-rail-separator" aria-hidden="true" />
       <div className="dc-create-family">{PRESETS.map(toolButton)}</div>
-      <RailLink />
+      <span className="dc-rail-separator" aria-hidden="true" />
       <div className="dc-create-family">{DEV_PRESETS.map(toolButton)}</div>
       {more.start && (
         <button type="button" className="dc-create-rail-more" data-side="start" tabIndex={-1} aria-label="Show earlier tools" onClick={() => page(-1)}>
@@ -186,15 +186,5 @@ function ToolContent({ id, label, shortcut }: { id: string; label: string; short
         </span>
       )}
     </>
-  );
-}
-
-/** The elbow connector from the Draft Canvas mark, small, joining one family of tools to the next. */
-function RailLink() {
-  return (
-    <svg className="dc-rail-link" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
-      <path d="M2.5 5h5.5v6h5.5" />
-      <circle cx="2.5" cy="5" r="1.1" fill="currentColor" stroke="none" />
-    </svg>
   );
 }

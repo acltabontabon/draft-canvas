@@ -94,6 +94,18 @@ test.describe('architecture starters', () => {
     await expect(page.locator('.dc-edge-condition-input')).toHaveCount(0);
   });
 
+  test('an armed drawing tool can place a shape where the starter choices were', async ({ page }) => {
+    await page.setViewportSize({ width: 800, height: 560 });
+    await newCanvas(page, 'Draw through starters');
+    const starters = page.getByRole('group', { name: 'Suggested starters', exact: true });
+    const tile = (await starters.getByRole('button').first().boundingBox())!;
+    await page.getByRole('button', { name: 'Service', exact: true }).click();
+    await page.mouse.click(tile.x + tile.width / 2, tile.y + tile.height / 2);
+    await expect(page.locator('.dc-node')).toHaveCount(1);
+    await expect(page.locator('.dc-node[data-type="service"]')).toHaveCount(1);
+    await expect(starters).toBeHidden();
+  });
+
   test('the blank canvas offers them too, and stops offering once there is anything', async ({
     page,
   }) => {
@@ -101,9 +113,36 @@ test.describe('architecture starters', () => {
     const starters = page.getByRole('group', { name: 'Suggested starters', exact: true });
     await expect(starters).toBeVisible();
 
+    const browse = page.getByRole('button', { name: 'View all starters', exact: true });
+    await browse.focus();
+    await page.keyboard.press('Enter');
+    const collection = page.getByRole('dialog', { name: 'All starters', exact: true });
+    await expect(collection).toBeVisible();
+    await expect(collection.getByRole('button', { name: /^Start from / })).toHaveCount(13);
+    await page.keyboard.press('Escape');
+    await expect(browse).toBeFocused();
+    await expect(starters).toBeVisible();
+
+    await page.keyboard.press('ControlOrMeta+k');
+    await expect(page.getByRole('dialog', { name: 'Commands' })).toBeVisible();
+    await page.keyboard.press('Escape');
+
     await starters.getByRole('button', { name: 'Start from Event-Driven', exact: true }).click();
     await expect(page.locator('.dc-node')).toHaveCount(9);
     await expect(starters).toBeHidden();
+  });
+
+  test('the full collection inserts a nonfeatured starter and undoes in one step', async ({ page }) => {
+    await newCanvas(page, 'Browse all starters');
+    await page.getByRole('button', { name: 'View all starters', exact: true }).click();
+    const collection = page.getByRole('dialog', { name: 'All starters', exact: true });
+    await collection.getByRole('button', { name: 'Start from Transactional Outbox', exact: true }).click();
+    await expect(collection).toBeHidden();
+    await expect(page.locator('.dc-node').first()).toBeVisible();
+    await expect(page.getByRole('group', { name: 'Suggested starters', exact: true })).toBeHidden();
+    await page.keyboard.press('ControlOrMeta+z');
+    await expect(page.locator('.dc-node')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'View all starters', exact: true })).toBeVisible();
   });
 
   test('a second starter lands clear of the first, and both survive a reload', async ({ page }) => {

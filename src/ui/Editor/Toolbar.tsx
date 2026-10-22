@@ -1,3 +1,5 @@
+import { useLayoutEffect, useRef } from 'react';
+import { BrandMark } from '../common/BrandMark';
 import { Button } from '../common/Button';
 import { Tooltip, TooltipGroup } from '../common/Tooltip';
 import { CreateRail } from './toolbar/CreateRail';
@@ -31,12 +33,32 @@ export function Toolbar({
   onExport,
   readOnly = false,
 }: ToolbarProps) {
+  const headerRef = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    const header = headerRef.current;
+    const editor = header?.closest<HTMLElement>('.dc-editor');
+    if (!header || !editor) return;
+    // Wrapped names grow the header. Extend the dotted sheet beneath its actual height too;
+    // a fixed bar-height left a blank strip behind the title's second line.
+    const update = (height: number) => editor.style.setProperty('--dc-toolbar-height', `${height}px`);
+    update(header.getBoundingClientRect().height);
+    if (typeof ResizeObserver === 'undefined') return () => editor.style.removeProperty('--dc-toolbar-height');
+    const observer = new ResizeObserver(([entry]) => {
+      update(entry?.borderBoxSize?.[0]?.blockSize ?? header.getBoundingClientRect().height);
+    });
+    observer.observe(header);
+    return () => {
+      observer.disconnect();
+      editor.style.removeProperty('--dc-toolbar-height');
+    };
+  }, []);
+
   return (
     <TooltipGroup>
       {/* Three grid tracks, not `space-between`: the outer two are equal fractions, so the rail
           holds a stable optical centre instead of sliding left and right as the canvas title or
           the active flow's name changes length. */}
-      <header className="dc-toolbar">
+      <header ref={headerRef} className="dc-toolbar">
         <div className="dc-toolbar-lead">
           {onBack && (
             <Tooltip content={toolbarTooltip('back')}>
@@ -56,17 +78,5 @@ export function Toolbar({
         <ToolbarActions onPresent={onPresent} onExport={onExport} />
       </header>
     </TooltipGroup>
-  );
-}
-
-/** The Draft Canvas mark — two boxes and the connector between them — as the app and installers draw it. */
-function BrandMark() {
-  return (
-    <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true" focusable="false">
-      <rect className="dc-brand-tile" width="32" height="32" rx="8" />
-      <rect x="6" y="8" width="11" height="7" rx="2" fill="none" stroke="#5fd6c9" strokeWidth="2" />
-      <rect x="15" y="18" width="11" height="7" rx="2" fill="none" stroke="#8b9099" strokeWidth="2" />
-      <path d="M11.5 15.5v3.5h4" fill="none" stroke="#5fd6c9" strokeWidth="1.6" />
-    </svg>
   );
 }

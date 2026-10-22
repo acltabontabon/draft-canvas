@@ -32,6 +32,7 @@ export function DiagramTitleField({ title, onTitleChange, readOnly = false }: Di
   const localTitleRef = useRef(title);
   const editingTitleRef = useRef(false);
   const dirtyTitleRef = useRef(false);
+  const wrapperRef = useRef<HTMLSpanElement>(null);
   const fieldRef = useRef<HTMLTextAreaElement>(null);
   const setLocalTitleValue = (value: string) => {
     localTitleRef.current = value;
@@ -50,7 +51,7 @@ export function DiagramTitleField({ title, onTitleChange, readOnly = false }: Di
     // On its own island the name hugs its text, up to the column's width, rather than leaving an
     // empty run after a short name.
     const width = titleWidth(field, localTitle);
-    if (width !== null) field.style.width = `${width}px`;
+    if (width !== null && wrapperRef.current) wrapperRef.current.style.width = `${width}px`;
     field.style.height = 'auto';
     field.style.height = `${Math.max(28, field.scrollHeight + 2)}px`;
   }, [localTitle]);
@@ -59,20 +60,29 @@ export function DiagramTitleField({ title, onTitleChange, readOnly = false }: Di
     const field = fieldRef.current;
     if (!field || typeof ResizeObserver === 'undefined') return;
     let width = field.getBoundingClientRect().width;
+    let frame: number | undefined;
     const observer = new ResizeObserver(() => {
       const nextWidth = field.getBoundingClientRect().width;
       if (nextWidth === width) return;
       width = nextWidth;
-      field.style.height = 'auto';
-      field.style.height = `${Math.max(28, field.scrollHeight + 2)}px`;
+      // Changing the observed box during notification caused ResizeObserver loop errors when
+      // a wrapped name also grew the header. Let the width settle before fitting its lines.
+      if (frame !== undefined) cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        field.style.height = 'auto';
+        field.style.height = `${Math.max(28, field.scrollHeight + 2)}px`;
+      });
     });
     observer.observe(field);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      if (frame !== undefined) cancelAnimationFrame(frame);
+    };
   }, []);
 
   return (
     // Written like Home's headline — the same italic serif, underlined by the same hand.
-    <span className="dc-title-field">
+    <span ref={wrapperRef} className="dc-title-field">
       <textarea
         ref={fieldRef}
         rows={1}
@@ -122,7 +132,7 @@ export function DiagramTitleField({ title, onTitleChange, readOnly = false }: Di
 
 /** The narrowest and widest the name's field may be, in px. */
 const TITLE_MIN = 72;
-const TITLE_MAX = 240;
+const TITLE_MAX = 560;
 let measure: CanvasRenderingContext2D | null | undefined;
 
 /** How wide `field` needs to be to show `text` on one line — or `null` where text can't be measured. */

@@ -1,12 +1,54 @@
 import { openGallery } from './library';
 import { expect, test, type Page } from '@playwright/test';
-import { create, newCanvas } from './canvas';
+import { cameraAtRest, create, newCanvas, nextFrames } from './canvas';
 
 async function command(page: Page, name: string) {
   await page.keyboard.press('ControlOrMeta+k');
   await page.getByRole('dialog', { name: 'Commands' }).getByRole('combobox').fill(name);
   await page.keyboard.press('Enter');
 }
+
+test('panning and zooming stay inside the canvas without scrolling the page or chrome', async ({ page }) => {
+  await newCanvas(page, 'Canvas bounds');
+  await create(page, 'Service', { x: 400, y: 300 });
+  await page.keyboard.press('Escape');
+  await cameraAtRest(page);
+
+  const toolbar = page.locator('.dc-toolbar');
+  const status = page.locator('.dc-status');
+  const toolbarBounds = await toolbar.boundingBox();
+  const statusBounds = await status.boundingBox();
+  const viewport = page.locator('.react-flow__viewport');
+  const transform = () => viewport.evaluate((element: HTMLElement) => element.style.transform);
+  const pageIsContained = () => page.evaluate(() => {
+    const root = document.scrollingElement!;
+    return root.scrollWidth <= innerWidth && root.scrollHeight <= innerHeight && scrollX === 0 && scrollY === 0;
+  });
+
+  await expect.poll(pageIsContained).toBe(true);
+  const beforePan = await transform();
+  const canvas = (await page.locator('.dc-canvas').boundingBox())!;
+  await page.mouse.move(canvas.x + 80, canvas.y + 100);
+  await page.mouse.down({ button: 'middle' });
+  await page.mouse.move(canvas.x + canvas.width - 100, canvas.y + canvas.height - 100, { steps: 12 });
+  await page.mouse.up({ button: 'middle' });
+  await expect.poll(transform).not.toBe(beforePan);
+  await cameraAtRest(page);
+  await expect.poll(pageIsContained).toBe(true);
+
+  const beforeZoom = await transform();
+  await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
+  await expect.poll(transform).not.toBe(beforeZoom);
+  await cameraAtRest(page);
+  await expect.poll(pageIsContained).toBe(true);
+
+  // Native scrolling and focus must never displace the toolbar or status bar with the drawing.
+  await page.evaluate(() => window.scrollTo(500, 500));
+  await nextFrames(page);
+  await expect.poll(pageIsContained).toBe(true);
+  expect(await toolbar.boundingBox()).toEqual(toolbarBounds);
+  expect(await status.boundingBox()).toEqual(statusBounds);
+});
 
 test('the library folder trigger toggles its menu closed', async ({ page }) => {
   await newCanvas(page, 'Menu toggle');
@@ -88,15 +130,42 @@ test('a scrollable inspector menu keeps its keyboard highlight visible', async (
 });
 
 test('long diagram and project names stay readable in narrow layouts', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
   const title = 'LongDiagramName'.repeat(12);
   await newCanvas(page, title);
-  for (const width of [1280, 768, 375]) {
+  let wideTitleWidth = 0;
+  for (const width of [1920, 1280, 768, 375]) {
     await page.setViewportSize({ width, height: 800 });
     const field = page.getByLabel('Diagram title');
     await expect(field).toHaveValue(title);
     await expect.poll(() => field.evaluate((element) => element.scrollHeight <= element.clientHeight + 1)).toBe(true);
     await expect.poll(() => page.locator('.dc-toolbar').evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+    await expect.poll(() => page.locator('.dc-toolbar').evaluate((element) => {
+      const header = element.getBoundingClientRect();
+      const title = element.querySelector('.dc-title-field')!.getBoundingClientRect();
+      const lead = element.querySelector('.dc-toolbar-lead')!.getBoundingClientRect();
+      const rail = element.querySelector('.dc-create-rail')!.getBoundingClientRect();
+      const trail = element.querySelector('.dc-toolbar-trail')!.getBoundingClientRect();
+      const canvas = document.querySelector('.dc-canvas')!.getBoundingClientRect();
+      const separate = (a: DOMRect, b: DOMRect) => a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top;
+      return title.bottom <= header.bottom && title.right <= lead.right && separate(lead, rail) && separate(lead, trail) && separate(rail, trail) && canvas.top >= header.bottom;
+    })).toBe(true);
+    const titleWidth = (await field.boundingBox())!.width;
+    if (width === 1920) {
+      wideTitleWidth = titleWidth;
+      expect(wideTitleWidth).toBeGreaterThan(400);
+    }
+    if (width === 375) expect(titleWidth).toBeLessThan(wideTitleWidth);
   }
+  await page.setViewportSize({ width: 375, height: 450 });
+  await expect(page.getByRole('button', { name: 'View all starters', exact: true })).toBeVisible();
+  await expect.poll(() => page.locator('.dc-empty-stage').evaluate((element) => {
+    const stage = element.getBoundingClientRect();
+    const canvas = document.querySelector('.dc-canvas')!.getBoundingClientRect();
+    return stage.top >= canvas.top && stage.bottom <= canvas.bottom;
+  })).toBe(true);
+  expect(errors).toEqual([]);
   await page.getByRole('button', { name: 'Back to your diagrams' }).click();
   await openGallery(page);
   const name = page.locator('.dc-library-item-title');
