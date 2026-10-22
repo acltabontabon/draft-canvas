@@ -71,14 +71,14 @@ See the [Mermaid import reference](../reference/mermaid-import.md).
 
 | Send | How | Recipient gets |
 | --- | --- | --- |
-| Link | **Copy share link** in `⌘K` or **Share → Export → Share** | A protected, view-only snapshot in Guided reader or Focus view |
+| Link | **Share → Share read-only link**, or **Copy share link** in `⌘K` | A protected, view-only snapshot in Guided reader or Focus view |
 | File | **Document → Editable** or **Encrypted** | A diagram they can reopen |
 | Picture | **Image**, or **Copy as image** | A PNG or SVG; editing requires an embedded diagram |
 | Live session | **Share → Draw together, live** | A shared canvas; see [Collaborating live](collaborating.md) |
 
 ### Create a protected link
 
-1. Open **Share → Export → Share**. **Require a passphrase** is on by default.
+1. Choose **Share → Share read-only link**. **Require a passphrase** is on by default.
 2. Choose **Start at**: the diagram overview, current level or a playable Flow.
 3. Enter and confirm a passphrase of at least eight characters. A long, unique phrase is safer.
 4. Choose **Copy protected link**, then send the passphrase separately.
@@ -122,7 +122,7 @@ resolution notes. Browsing never changes the snapshot.
 
 ![Focus view with a pending item and attachment browsing controls.](../media/guides/share-focus-view.png)
 
-Run **Share from here…** or **Copy share link** in `⌘K`, or use **Start at** in **Export & share → Share**.
+Run **Share from here…** or **Copy share link** in `⌘K`, or use **Start at** in **Share → Export → Share**.
 It defaults to the selected playable Flow, then the current level, then the overview.
 A Flow link starts at its introduction; the reader chooses when to advance.
 

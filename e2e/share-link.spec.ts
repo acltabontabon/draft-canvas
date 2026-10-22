@@ -58,7 +58,8 @@ test('a diagram without Flows opens in Focus view with the actual fixed shapes',
   await create(page, 'Data Store', { x: 600, y: 300 });
   await expect(page.locator('.dc-node')).toHaveCount(2);
   const originalShape = await page.locator('.dc-node[data-type="database"] .dc-node-surface').innerHTML();
-  await runCommand(page, 'Copy share link');
+  await page.getByRole('button', { name: 'Share', exact: true }).click();
+  await page.getByRole('menuitem', { name: /^Share read-only link/ }).click();
   const dialog = page.getByRole('dialog', { name: 'Export & share' });
   await expect(dialog.getByRole('checkbox', { name: /Require a passphrase/ })).toBeChecked();
   await dialog.getByRole('checkbox', { name: /Require a passphrase/ }).uncheck();

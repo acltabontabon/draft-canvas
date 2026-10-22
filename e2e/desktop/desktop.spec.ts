@@ -85,7 +85,8 @@ test('desktop sharing creates a protected public editor link and supports manual
   await page.goto('/');
   await page.getByRole('button', { name: 'New Quick Draft' }).click();
   await drawService(page);
-  await page.getByRole('button', { name: 'Export', exact: true }).click();
+  await page.getByRole('button', { name: 'Share', exact: true }).click();
+  await page.getByRole('menuitem', { name: /^Share read-only link/ }).click();
   const dialog = page.getByRole('dialog', { name: 'Export & share' });
   await dialog.getByText('Share', { exact: true }).click();
   await expect(dialog.getByRole('checkbox', { name: /Require a passphrase/ })).toBeChecked();

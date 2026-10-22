@@ -622,7 +622,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   }, [path, openFitDocumentId, document, openFitWidth, openFitHeight, setViewport]);
 
   const tracing = useUiStore((state) => state.flowTrace !== null);
-  const sharedReadOnly = useUiStore((state) => state.readOnly !== null);
+  const sharedReadOnly = useUiStore((state) => state.readOnly !== null && !state.readOnly.collaborative);
   const interactive = mode === 'edit' && !tracing && !sharedReadOnly;
   useContinuation(interactive);
 

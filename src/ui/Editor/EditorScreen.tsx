@@ -964,7 +964,8 @@ export function useKeyboard({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (isEditableTarget(event.target) || useUiStore.getState().flowTrace || useUiStore.getState().readOnly) return;
+      const readOnly = useUiStore.getState().readOnly;
+      if (isEditableTarget(event.target) || useUiStore.getState().flowTrace || (readOnly && !readOnly.collaborative)) return;
 
       // While the command palette is up it owns the keyboard outright — even if focus has
       // somehow left its input, a stray "t" must never spawn a Text node behind it.
