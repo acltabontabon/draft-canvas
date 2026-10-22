@@ -381,14 +381,19 @@ describe(`a document with ${NODE_COUNT} nodes and ~${EDGE_COUNT} edges`, () => {
    * may quietly turn into a whole-canvas layout pass.
    */
   it('places and builds every starter against a full document within budget', () => {
+    const nodeCounts: number[] = [];
     const started = performance.now();
     for (let i = 0; i < 20; i += 1) {
       for (const starter of ARCHITECTURE_STARTERS) {
         const origin = freeOriginFor(doc, starterSize(starter));
-        expect(buildStarter(starter, origin).nodes.length).toBeGreaterThan(0);
+        nodeCounts.push(buildStarter(starter, origin).nodes.length);
       }
     }
-    expect(performance.now() - started).toBeLessThan(200);
+    const elapsed = performance.now() - started;
+    // Measure placement/building, not hundreds of Vitest matcher calls: assertion overhead pushed
+    // this over 200 ms under CI coverage even though the starter workload itself was within budget.
+    for (const count of nodeCounts) expect(count).toBeGreaterThan(0);
+    expect(elapsed).toBeLessThan(200);
   });
 
   it('reuses the routing plan for an unchanged (nodes, edges) pair', () => {
