@@ -57,6 +57,7 @@ Not bundled in the apps.
 | [jsdom](https://github.com/jsdom/jsdom) and [fake-indexeddb](https://github.com/dumbmatter/fakeIndexedDB) | Test environments |
 | [fast-check](https://github.com/dubzzz/fast-check) and [Proptest](https://github.com/proptest-rs/proptest) | Generated test cases |
 | [Mermaid](https://github.com/mermaid-js/mermaid) | Checking Mermaid import and export in tests |
+| [DOMPurify](https://github.com/cure53/DOMPurify) | HTML sanitization used by Mermaid in tests |
 | [ELK.js](https://github.com/kieler/elkjs) and [Ajv](https://github.com/ajv-validator/ajv) | Layout comparison harness; agent schema tests |
 | [tempfile](https://github.com/Stebalien/tempfile), [muda](https://github.com/tauri-apps/muda) and [tokio-tungstenite](https://github.com/snapview/tokio-tungstenite) | Rust tests: temp folders, menu shortcut parsing, relay client |
 | [Wrangler](https://github.com/cloudflare/workers-sdk) | Cloudflare deploys of the website and relay |
