@@ -1,10 +1,10 @@
 # Contributing to Draft Canvas
 
-Keep changes focused and preserve the editor's local-first behavior.
+Keep changes focused and the editor local-first.
 
-## Running it locally
+## Setup
 
-Use **Node 22.14 or later** and **npm**. No backend or environment variables are needed.
+Needs **Node 22.14+** and **npm**. No backend or environment variables.
 
 ```bash
 git clone https://github.com/acltabontabon/draft-canvas.git
@@ -13,62 +13,90 @@ npm install
 npm run dev        # http://localhost:5180
 ```
 
-To try live collaboration's session links, also run `npm run dev:relay` in a second terminal: the
-dev server points at that local relay. Direct invites work without it.
+- **Collaboration session links:** also run `npm run dev:relay` (local relay on :8791). Direct invites work without it.
+- **Desktop app:** install Rust and the Tauri prerequisites first; see [Building it yourself](docs/guides/desktop.md#building-it-yourself).
+- **Website:** run `npm ci` in `www/` once, then `npm run site:dev` from the root.
 
-Desktop development also needs Rust and Tauri prerequisites; see [Building the desktop app](docs/guides/desktop.md#building-it-yourself).
-For the landing page, run `npm ci` inside `www/` once, then `npm run site:dev` from the root.
-
-## Common commands
+## Commands
 
 | Command | Purpose |
 | --- | --- |
-| `npm run dev` | Start the editor |
-| `npm run dev:relay` | Start the local collaboration relay that `npm run dev` uses |
-| `npm run check` | Lint, type-check, build and run unit tests for code changes |
-| `npm run desktop:dev` | Start the desktop app |
-| `npm run desktop:check` | Check the desktop build, Rust code and versions |
-| `npm run site:dev` | Start the landing page |
+| `npm run dev` | Editor on :5180 |
+| `npm run check` | Lint, tooling type-check, build and unit tests |
+| `npm run desktop:dev` | Desktop app with hot reload |
+| `npm run desktop:check` | Desktop build, Rust checks and version check |
+| `npm run site:dev` | Website on :5280 |
 
-The full command list, repository map and specialized checks are in the [development reference](docs/reference/development.md).
+All scripts and CI behavior: [development reference](docs/reference/development.md).
 
 ## Which checks for which change
 
-- **Docs only:** check formatting, links, anchors and referenced images. No tests, builds, lint or benchmarks unless requested. Preview rendered docs when layout matters.
-- **Code, scripts or configuration:** run `npm run check` and focused checks for the changed behavior.
-- **Browser coverage:** full Chromium, Firefox and WebKit suites run in CI. Run focused local browser checks only when needed. `npm run check:full` is optional unless requested or needed for an issue.
+- **Docs only:** check formatting, links, anchors and images (`npx vitest run tests/docs.test.ts`).
+  No builds, lint or benchmarks unless asked.
+- **Code, scripts or configuration:** `npm run check`, plus focused checks for what changed:
 
-For example:
+  ```bash
+  npx vitest run tests/history.test.ts
+  PLAYWRIGHT_BROWSER=chromium npx playwright test e2e/editing.spec.ts
+  ```
 
-```bash
-npx vitest run tests/history.test.ts
-PLAYWRIGHT_BROWSER=chromium npx playwright test e2e/editing.spec.ts
-```
+- **Desktop or agent code:** `npm run desktop:check`; for agent changes also `npm run e2e:mcp`.
+- **Browsers:** CI runs the full Chromium, Firefox and WebKit suites. `npm run check:full` is optional.
 
-Report the checks actually performed; do not claim pending CI has passed.
+Report only checks you ran; pending CI has not passed.
+
+## Repository map
+
+| Path | Contents |
+| --- | --- |
+| `src/document/`, `src/depth/` | File model (operations, validation, migrations); rooms inside shapes |
+| `src/store/`, `src/history/` | Editor and transient UI state; undo |
+| `src/canvas/`, `src/ui/` | Canvas interaction and controls |
+| `src/nodes/`, `src/edges/`, `src/render/` | Drawing, connector routing and text layout |
+| `src/commands/` | Command palette, context menus and jump targets |
+| `src/presentation/`, `src/sequence/` | Presentation camera and callouts; sequence export |
+| `src/starters/`, `src/continuation/`, `src/openPoints/` | Starters, next-step suggestions, open points |
+| `src/storage/`, `src/crypto/`, `src/export/`, `src/import/`, `src/share/` | Persistence, exports, Mermaid import, share links |
+| `src/collab/` | Live collaboration; network code only in `src/collab/transport/` |
+| `src/agent/`, `src/layout/` | Agent operations and automatic layout |
+| `src/host/`, `src/desktop/` | Host interfaces; desktop screens, controller and Tauri adapter |
+| `src-tauri/` | Native Rust shell; `src/collab/` is the LAN relay, `mcp/` the MCP sidecar |
+| `skills/draft-canvas/` | Agent skill installed by the desktop app |
+| `www/` | Website (own lockfile); `www/cloudflare/` has deploy config and the rendezvous relay |
+| `tests/`, `e2e/` | Unit tests; browser specs (`e2e/desktop/` uses a fake shell) |
+| `benchmark/`, `scripts/` | Performance harnesses; build, CI and release tooling |
+| `docs/` | Guides, reference and media |
+
+Entry points and host wiring: [development reference](docs/reference/development.md#entry-points-and-host-wiring).
 
 ## Conventions
 
-Use npm, 2-space indentation, single quotes, semicolons and trailing commas. Use oxlint, not Prettier.
-Comments explain why; preserve comments recording past bugs.
-
-Read [AGENTS.md](AGENTS.md) before changing core code. The [architecture reference](docs/reference/architecture.md)
-explains the module boundaries. For UI changes, check both themes and keyboard access, plus presentation
-or drawing styles when affected.
+- npm, 2-space indentation, single quotes, semicolons, trailing commas. oxlint, not Prettier.
+- Comments explain why. Keep comments that record past bugs.
+- Read [AGENTS.md](AGENTS.md) before changing core code; [Architecture](docs/reference/architecture.md)
+  explains the boundaries.
+- UI changes: check both themes, keyboard access, and presentation or drawing styles when affected.
+- New or updated dependency, copied code or asset: add credits and notices in the same PR
+  ([third-party attribution](docs/reference/third-party.md#maintaining-attributions)).
 
 ## Submitting a change
 
-When adding or updating a dependency, copied source or asset, follow the
-[third-party attribution guidance](docs/reference/third-party.md#maintaining-attributions).
-Include credits and required notices in the same PR as the integration.
-
-1. Discuss schema changes, new concepts or other large changes in an issue before writing code.
+1. Discuss schema changes, new concepts or other large changes in an issue first.
 2. Fork, branch and make one focused change.
-3. Follow the checks above and fix relevant failures.
-4. Update guides when behavior changes. Add user-facing changes under `CHANGELOG.md`'s `[Unreleased]`
-   section using Shared, Desktop or Web; see the [release reference](docs/reference/releases.md#release-notes) for the format.
-5. Open a PR against `main` explaining what changed, why and how you checked it.
+3. Run the checks above.
+4. Update guides when behavior changes. Add user-facing changes under `[Unreleased]` in `CHANGELOG.md`
+   (Shared, Desktop or Web); see [release notes](docs/reference/releases.md#release-notes).
+5. Open a PR against `main`: what changed, why, and how you checked it.
 
-For bugs, include the platform, version and steps to reproduce; attach a small `.draftcanvas` example
-if useful, after checking it contains nothing private. Feature requests should explain the problem.
-Report security concerns privately as described in [SECURITY.md](SECURITY.md).
+**Bugs:** include platform, version and steps to reproduce. Attach a small `.draftcanvas` file if it
+helps and contains nothing private. **Feature requests:** describe the problem.
+**Security:** report privately; see [SECURITY.md](SECURITY.md).
+
+## Releases
+
+1. Turn `[Unreleased]` in `CHANGELOG.md` into `## [X.Y.Z] - YYYY-MM-DD` and add a fresh `[Unreleased]`.
+2. Set `X.Y.Z` in `package.json` and its lockfile (the desktop app takes its version from here).
+3. Preview notes with `npm run release:notes -- vX.Y.Z` and `npm run release:whats-new -- desktop`.
+4. Push the commit, then the `vX.Y.Z` tag. CI verifies, packages and publishes.
+
+Full steps and checks: [Releases](docs/reference/releases.md).

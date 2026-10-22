@@ -1,42 +1,62 @@
 # Development reference
 
-Commands and code locations. See [Contributing](../../CONTRIBUTING.md) for setup and verification,
-[AGENTS.md](../../AGENTS.md) for implementation rules, and [Architecture](architecture.md) for design principles.
+Scripts, CI behavior and host wiring. Setup, the repository map and which checks to run are in
+[Contributing](../../CONTRIBUTING.md); implementation rules in [AGENTS.md](../../AGENTS.md).
 
 ## Commands
+
+### Editor and website
 
 | Command | Purpose |
 | --- | --- |
 | `npm run dev` | Editor dev server on :5180 |
-| `npm run dev:relay` | Local collaboration relay on :8791, which the dev server uses for session links |
+| `npm run dev:relay` | Local collaboration relay on :8791, used by the dev server for session links |
 | `npm run build` | Type-check and build into `dist/` |
-| `npm run lint` | Run oxlint |
-| `npm test` | Unit and integration tests |
-| `npm run test:watch` | Watch unit tests |
+| `npm run site:dev` | Website dev server on :5280 |
+| `npm run build:web` | Assemble editor and website into `dist-web/` |
+| `npm run site:preview` | Build, stage and serve `dist-web/` the way it is hosted |
+
+### Checks and tests
+
+| Command | Purpose |
+| --- | --- |
 | `npm run check` | Lint, tooling type-check, build and unit tests |
-| `npm run check:full` | Optional full local verification |
-| `npm run e2e:install` | Install browser drivers once |
+| `npm run check:full` | `check` plus every browser suite (optional) |
+| `npm run lint` | oxlint |
+| `npm test` / `npm run test:watch` | Unit and integration tests |
+| `npm run test:coverage` | Unit tests with V8 coverage |
+| `npm run e2e:install` | Install Playwright browsers once |
 | `npm run e2e` | Editor browser suite |
 | `npm run e2e:offline` | Offline production-build suite |
 | `npm run e2e:web` | Assembled web deployment suite |
-| `npm run site:dev` | Landing page dev server on :5280 |
-| `npm run build:web` | Assemble editor and website into `dist-web/` |
-| `npm run desktop:dev` | Desktop app with hot reload |
+| `npm run audit:npm` / `npm run audit:rust` | Dependency advisory audits |
+
+### Desktop and agents
+
+| Command | Purpose |
+| --- | --- |
+| `npm run desktop:dev` | Desktop app with hot reload (web side on :5198) |
 | `npm run desktop:build` | Build a desktop installer |
-| `npm run desktop:check` | Desktop build, Rust checks and version check |
-| `npm run desktop:rust` | Rust checks; requires the desktop web build |
-| `npm run e2e:desktop` | Desktop browser suite with a fake shell |
+| `npm run desktop:check` | Desktop web build, Rust checks and version check |
+| `npm run desktop:rust` | `cargo fmt`, `clippy` and tests; needs the desktop web build |
+| `npm run desktop:bindings` | Regenerate `src/desktop/wire.ts` from Rust payloads |
+| `npm run e2e:desktop` | Desktop browser suite against a fake shell (no Rust needed) |
 | `npm run e2e:mcp` | Real MCP sidecar to editor round trip; run after `desktop:check` |
-| `npm run agent:schemas` | Regenerate MCP tool schemas |
-| `npm run icons:generate` | Regenerate the full technology index, lazy artwork groups and logo notices |
-| `npm run icons:check` | Verify the generated icon assets match the pinned Simple Icons package |
+| `npm run agent:schemas` | Regenerate `src-tauri/mcp/tools.json` from `src/agent/schema.ts` |
+
+### Generated files and performance
+
+| Command | Purpose |
+| --- | --- |
+| `npm run icons:generate` / `icons:check` | Regenerate or verify the Simple Icons catalog |
+| `npm run licenses` / `licenses:check` | Regenerate or verify `THIRD_PARTY_LICENSES.txt` |
 | `npm run perf` | Measure diagram loading and memory |
-| `npm run perf:publish` | Update generated performance tables |
+| `npm run perf:check` | Interaction and lifecycle budgets (the release gate) |
+| `npm run perf:publish` | Update the generated tables in [Performance](performance.md) |
+| `npm run adoption:compare` | ELK/Ajv comparison harness; see [Library adoption](library-adoption.md) |
 | `npx tsx e2e/docs-screenshots.ts` | Regenerate guide screenshots |
 
-### Focused browser and unit checks
-
-Full browser suites run in CI; use focused local checks when needed for code changes.
+## Focused checks
 
 ```bash
 npx vitest run tests/history.test.ts
@@ -44,99 +64,44 @@ npx vitest run -t 'coalesces'
 PLAYWRIGHT_BROWSER=chromium npx playwright test e2e/editing.spec.ts
 ```
 
-To investigate a Firefox failure without retries:
+Reproduce a flaky Firefox test without retries:
 
 ```bash
 PLAYWRIGHT_BROWSER=firefox npx playwright test e2e/look-inside.spec.ts \
   -g 'the depth map opens' --repeat-each=10 --retries=0 --trace=retain-on-failure
-npx playwright test --project=firefox --last-failed --trace=retain-on-failure
 npx playwright show-trace 'test-results/<failed-test>/trace.zip'
 ```
 
-Wait for the required UI state rather than adding fixed sleeps. Editor specs use the dev server;
-offline and deployment specs use production builds. Desktop browser specs do not need Rust.
-`desktop:check` builds the web bundle before running Rust checks. For agent changes, also run
-`npm run e2e:mcp` after `desktop:check`; regenerate schemas when their source changes and preview
-the agent gallery when layout changes.
+- Wait for UI state; never add fixed sleeps.
+- Editor specs use the dev server (Playwright reuses one already on :5180). Offline and deployment
+  specs use production builds.
+- The optional, untracked `demo/` harness is type-checked only when present.
 
-CI splits the editor suite across three jobs per browser, with one worker per job. A passing retry
-still fails CI. Browser jobs run directly on hosted Ubuntu runners and install the selected
-browser and system dependencies with the Playwright version from the tested source's lockfile.
-Coverage runs independently of artifact production; browser checks start when the built artifact
-is ready.
-The final `verify` job requires all applicable checks, including shared verification, desktop
-acceptance and security. Performance budgets are required for tagged release verification; ordinary
-PR and `main` runs skip benchmarks.
-The standalone Performance workflow still supports manual measurements.
+## CI
 
-CI is the only PR/main entry point. Lint, tooling typechecks and the unit suite with coverage run
-once through `shared-checks.yml`; web builds/browser tests and desktop browser/native jobs remain
-separate. Desktop frontend checks consume the same-run web
-artifact for the desktop-code isolation check instead of rebuilding it.
+`ci.yml` is the entry point for pull requests and `main`.
 
-Desktop checks run for shared `src/`, Rust, desktop tests/configuration, root dependencies and
-workflow/planner changes. Web-only and documentation changes skip native runners. Missing comparison
-history, manual runs and reusable release callers enable desktop checks. Standalone desktop previews
-and rebuilds call `desktop-ci.yml` with shared verification enabled and build their own web artifact.
-The unified release caller already completed both shared and desktop acceptance, so packaging does
-not repeat them.
+- **Shared checks** (`shared-checks.yml`): lint, tooling type-check, unit tests with coverage, once.
+- **Browsers:** the editor suite runs in three shards per browser. CI retries once but
+  `--fail-on-flaky-tests` fails a test that passes only on retry.
+- **Desktop** (`desktop-ci.yml`): runs when `src/`, `src-tauri/`, desktop tests, root package or
+  build config, workflows or CI scripts change (`scripts/ci-plan.mjs`).
+- **Docs only:** changes limited to `docs/**/*.md`, `docs/media/` images and video, `README.md`,
+  `CONTRIBUTING.md`, `AGENTS.md`, `CODE_OF_CONDUCT.md` and `SECURITY.md` run workflow validation, doc
+  link checks and the site build only. `CHANGELOG.md` is compiled into the editor, so it runs full CI.
+- **`verify`** is the final required job. Performance budgets run only for tagged releases.
+- Manual runs, release callers (`full-checks: true`) and missing history always run everything.
 
-Pull requests and pushes to `main` that change only `docs/` Markdown/media or `README.md`,
-`CONTRIBUTING.md`, `AGENTS.md`, `CODE_OF_CONDUCT.md` and `SECURITY.md` run workflow validation,
-documentation link/anchor/image checks and the site build. They skip editor builds, coverage, browser
-suites, audits and benchmarks. Everything else (including `CHANGELOG.md`, which feeds the editor)
-runs full CI. Renames include both paths; missing comparison history falls back to full CI. Manual
-runs and reusable callers (including releases) run all correctness checks by default. Tagged releases
-also require the performance gate. Keep `full-checks: true` for release callers. Jobs and dependency
-installation steps have explicit time limits.
+### Reusing a PR run on `main`
 
-After a merge to `main`, unified CI can reuse a completed successful PR run from this
-repository. Each PR run records its tested merge revision and scope in a small evidence artifact.
-CI resolves that commit independently and compares its entire Git tree with the landed commit,
-including workflows, tests and lockfiles. The PR must be merged into `main` at that exact revision;
-matching the PR head alone is insufficient. A docs-only result cannot replace full verification.
-Evidence also records desktop scope; a run that skipped desktop checks cannot satisfy a landed
-change requiring them.
-Reused runs link to the original verification in the source job summary. CI still validates
-workflows and runs applicable security audits because advisories can change without source changes.
+After a merge, CI may reuse a successful PR run instead of re-testing (`scripts/ci-reuse.mjs`):
 
-Missing or expired evidence, unavailable API/history, failed or unfinished PR runs, changed trees,
-fork PRs and direct pushes use the normal checks described above. Forced pushes, manual runs and
-release callers also use fresh verification; release builds never consume PR artifacts. Evidence
-expires after seven days and is specific to a workflow run attempt.
+- The PR must be merged at the exact revision its run tested, with an identical Git tree.
+- Its evidence artifact must cover the same scope (full, desktop). It expires after 7 days.
+- Fork PRs, direct and forced pushes, manual runs and releases always verify fresh.
+- Workflow validation and security audits still run.
 
-Reusable CI and historical Pages builds validate alternate sources with `scripts/verify-source.mjs`
-from the workflow's checkout. Selected revisions must belong to the default branch's history before
-their code runs. This keeps manual runs from executing unmerged code in the default branch's cache scope.
-
-## Repository map
-
-| Path | Contents |
-| --- | --- |
-| `src/` | Shared React + TypeScript editor |
-| `src/document/` | Model, operations, validation and migrations |
-| `src/store/` | Editor and transient UI state |
-| `src/canvas/`, `src/ui/` | Canvas interactions and controls |
-| `src/nodes/`, `src/edges/`, `src/render/` | Drawing, text layout and rendering |
-| `src/storage/`, `src/export/`, `src/host/` | Persistence, exports and host interfaces |
-| `src/depth/`, `src/agent/`, `src/layout/` | Rooms, agent operations and layout |
-| `src/collab/` | Live collaboration: sync, sessions, rendezvous; network code only in `src/collab/transport/` |
-| `src/desktop/` | Desktop screens, controller and Tauri adapter |
-| `src-tauri/` | Native Rust shell; `src-tauri/src/collab/` is the LAN relay for live sessions |
-| `src-tauri/mcp/` | Bundled MCP connector |
-| `skills/draft-canvas/` | Agent skill the desktop app installs for Claude Code, Codex, Cursor, Gemini CLI and Junie |
-| `www/` | Separate landing-page project and lockfile; `www/cloudflare/` holds the collaboration relay |
-| `tests/` | Unit and integration tests |
-| `e2e/` | Browser specs; `e2e/desktop/` uses a fake shell |
-| `benchmark/` | Performance and comparison harnesses |
-| `scripts/` | Build, code generation and release tooling; `scripts/dev-relay.mjs` is the local relay |
-| `docs/` | Guides, reference and media |
-| `public/` | Static editor assets |
-
-At the root, `index.html` starts the editor. Build `dist/` for static self-hosting; see the
-[self-hosting guide](../guides/self-hosting.md).
-Playwright configs select editor, offline, web deployment or desktop suites.
-The untracked `demo/` harness is optional; its lint and type-check entries are inactive when absent.
+`scripts/verify-source.mjs` refuses to check out a revision that is not on the default branch's history.
 
 ## Entry points and host wiring
 
@@ -149,4 +114,7 @@ The untracked `demo/` harness is optional; its lint and type-check entries are i
 | Export saving | `src/export/download.ts` (`setFileSaver`) |
 | Browser autosave | `src/store/useDocumentSession.ts` → `src/storage/autosave.ts` |
 | Desktop saving | `src/desktop/controller.ts` → `src/desktop/tauri/api.ts` → `src-tauri/src/commands/documents.rs` |
-| Live collaboration | `src/store/collabBridge.ts` (the editor's side) → `src/collab/` → `src/collab/transport/` |
+| Live collaboration | `src/store/collabBridge.ts` → `src/collab/` → `src/collab/transport/` |
+| Collaboration relay address | `VITE_COLLAB_RELAY` (see `vite.config.ts`); empty disables session links |
+
+Build `dist/` for static hosting; see [Self-hosting](../guides/self-hosting.md).

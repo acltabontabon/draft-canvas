@@ -1,57 +1,43 @@
 # Explain a system at different levels
 
-Keep the overview small. Draw detail in a **room** inside a Service or Component,
-then use **Look inside** to explore it.
+Keep the overview small and draw detail in a **room** inside a Service or Component.
 
 Shortcuts use Mac keys. On Windows and Linux, use `Ctrl` for `⌘`.
-
-## Draw the overview
-
-Start with the people, system and external services your audience needs to see.
 
 ![Shop overview: Customer, Shop and Payment provider.](../media/guides/depth-overview.png)
 
 ## Look inside a shape
 
-1. Select a Service or Component and press `⌘↓`, or choose **Look inside** from its context menu.
-2. Draw its detail on the empty canvas: services, stores, queues or components.
-3. Press `⌘↑` to return. `Esc` also goes out when nothing is selected.
+1. Select a Service or Component and press `⌘↓`, or right-click → **Look inside**.
+2. Draw its detail on the empty canvas.
+3. Press `⌘↑` to go back out. `Esc` also works when nothing is selected.
 
-You can repeat this inside another shape, up to three rooms below the top canvas.
-A Port cannot have a room. Empty rooms disappear when their last shape is deleted.
+Rooms nest three levels deep. A Port has no room. A room disappears with its last shape.
 
-## Tell the canvas what level it's showing
+## Set the view level
 
-Run **View level…** from `⌘K`:
+Run **View level…** from `⌘K`, or click the level chip in the status bar:
 
 | Level | Shows |
 | --- | --- |
 | **System context** | People, this system and external systems |
 | **Containers** | Apps, services and data stores |
 | **Components** | Parts inside a container |
-| **Nothing in particular** | A drawing with no level-specific suggestions |
+| **Nothing in particular** | No level-specific suggestions |
 
-Set the top level first. Rooms inside a System context view default to Containers;
-rooms inside Containers default to Components. A room's own setting overrides that default.
-Draft Canvas may offer to set System context when you first look inside an overview.
+A room defaults to one level finer than the canvas outside it (System context → Containers →
+Components) unless you set its own. Levels only shape suggestions; they never block anything.
 
-Levels guide suggestions; they never prevent a shape or connection.
+## Move between rooms
 
-## Find your way around
-
-Open **Depth** in the canvas's top-left corner. Click a plane to go up, enter another room,
-or explore below. Hovering a plane highlights its owner.
+Open **Depth** at the top left of the canvas and click a plane: up, across to a sibling room, or
+down. It appears once any room exists.
 
 ![The Depth control showing the overview above the current Shop room.](../media/guides/depth-map.png)
 
-The control appears when a room exists, and always while inside one.
-Click the level chip in the status bar to change **View level…**.
+## Present and export
 
-## Present and export at a level
-
-- `⌘↓` and `⌘↑` also work during presentation.
-- Inside a room, **Image** and **Source** exports let you choose the current room or whole canvas.
-- A `.draftcanvas` file always includes every room. Copying or deleting a shape includes its room.
-
-Everything stays in one file. Document limits count across all rooms;
-see the [schema reference](../reference/schema.md).
+- `⌘↓` and `⌘↑` work while presenting.
+- Inside a room, **Image** and **Source** exports offer the room or **The whole canvas**.
+- A `.draftcanvas` file holds every room; copying or deleting a shape includes its room.
+  [Limits](../reference/schema.md) count across all rooms.

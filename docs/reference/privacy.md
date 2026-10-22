@@ -1,134 +1,97 @@
 # Privacy
 
-Draft Canvas does not upload diagrams, send telemetry or require an account. Editing works locally.
-Exports, share links, live sessions and optional coding agents can carry content elsewhere when you use them.
+No account, telemetry or diagram backend. Diagrams leave your device only when you export, share,
+collaborate or connect a coding agent.
 
 ## What is stored, and where
 
 ### Browser storage
 
-The web app stores diagrams in the browser profile for the origin serving it. Copies in different
-browsers or devices do not sync.
+Web diagrams stay in this browser profile and do not sync.
 
 | Location | Contents |
 | --- | --- |
-| IndexedDB `draft-canvas` → `documents` | Titles, timestamps, counts and topology thumbnails |
-| IndexedDB `draft-canvas` → `bodies` | Full diagrams, including text, code, rooms, flows, settings and viewport |
-| IndexedDB `draft-canvas` → `projects` | Library folder names |
-| IndexedDB `draft-canvas` → `backgroundImages` | Canvas background images as blobs |
-| IndexedDB `draft-canvas` → `fileAssociations` | Dormant development-build links; unused and never exported |
-| IndexedDB `draft-canvas-keys` → `keys` | Legacy encryption keys, read only for older diagrams |
-| Cache Storage | Offline app assets, never diagrams |
-| localStorage | UI preferences, recent command ids, export choices and backup/release timestamps |
-| sessionStorage | Unsaved edits stashed during reload, removed after restoration |
+| IndexedDB `draft-canvas` | Stores `bodies`, `documents` (titles, thumbnails), `projects` (folders), `backgroundImages`; `fileAssociations` is unused |
+| IndexedDB `draft-canvas-keys` | Legacy encryption key for diagrams saved before 1.12 |
+| Cache Storage | Offline app files, never diagrams |
+| localStorage | Short preferences, such as theme, export choices and live-session name |
+| sessionStorage | Unsaved edits held across a reload, removed once restored |
 
-Diagrams are **plain records since 1.12**. Older bodies remain AES-256-GCM encrypted until next
-saved, using the key left in the same profile; new profiles do not create legacy keys. Anyone with
-access to your browser storage can read current diagrams. See [Security](../../SECURITY.md#browser-storage)
-for the encryption boundaries.
-
-If IndexedDB is unavailable, the status bar says **In memory only**. Undo history, selection,
-presentation and previews also remain in memory. Closing the tab discards in-memory state.
+- Diagrams are plain records since 1.12; anyone with access to the profile can read them. Older ones
+  stay encrypted until next saved. See [Security](../../SECURITY.md#browser-storage).
+- Without IndexedDB, the status bar says **In memory only** and closing the tab loses the work.
 
 ### The desktop app
 
-Desktop diagrams are ordinary `.draftcanvas` files in locations you choose. Background images are
-written beside their diagrams. The app keeps recent file/folder lists, settings and plain-text
-recovery copies in its own data folder; recovery copies are removed when saved or discarded.
-It uses files rather than the web Library, and the two do not sync.
-
-Native file access is limited to files and folders you select or open through the OS, plus the
-app's own storage. Optional agent access extends this to project folders you explicitly allow.
+- Diagrams are `.draftcanvas` files where you save them, with background images beside them.
+- The app's data folder holds recent files, settings and recovery copies, removed once saved or
+  discarded.
+- It reads only files and folders you pick, plus folders you allow for agents.
 
 ## What leaves your machine
 
-Draft Canvas has no diagram backend, analytics or automatic error reporting. It uses system fonts.
-The editor's network restrictions are enforced by source checks and the production Content Security Policy.
+No analytics, error reporting or webfonts. The Content-Security-Policy blocks other connections.
 
-- **Web delivery:** the browser fetches app assets. The offline service worker may fetch updated
-  assets from the same origin; it does not read diagrams or IndexedDB content.
-- **Desktop updates:** the native updater contacts GitHub for update checks and downloads, without
-  sending diagrams. Automatic checks can be disabled; downloads and installation require your action.
-  See [Desktop updates](desktop-updates.md).
-- **External links:** opening a link hands it to your browser.
+- **Web app:** the service worker fetches app updates from the same address, never diagrams.
+- **Desktop updates:** checks go to GitHub with no diagram data; downloads only when you ask. See
+  [Desktop updates](desktop-updates.md).
 
 ## Exports and imports
 
-Files are generated, read, validated and decrypted locally. Imports read only files you choose;
-no import or export passes through a server.
+Both run locally.
 
-Plain `.draftcanvas` files and ZIP backups expose their contents to anyone who receives them.
-PNG and SVG exports can include the full editable diagram when that option is enabled.
-A `.dcenc` export encrypts the diagram with a passphrase you choose. Draft Canvas does not store or
-recover that passphrase, and encrypting an export does not encrypt the browser copy.
+- Anyone can read `.draftcanvas` files, ZIP backups and PNG/SVG exports that embed the diagram.
+- A `.dcenc` export is encrypted with your passphrase, which is never stored or recoverable. It does
+  not encrypt the Library copy.
 
 ## Share links
 
-A share link carries the diagram's text, code and nested rooms as compressed data after the URL's
-`#`. That fragment is not sent to the app host. Background images are excluded.
+The diagram travels after the link's `#`, which is never sent to the app's host. Background images
+are left out.
 
-- Anyone with the link can read the diagram. Links have no password, expiration or revocation.
-- Browsers, messages and other places you paste the link may retain copies.
-- Opening a link is read-only and does not save it. **Make an editable copy** creates a new Library entry.
-- Links are capped at 32 KB of encoded payload; larger diagrams need a file export.
+- Anyone with the link can read it, including wherever it was pasted. No password, expiry or revocation.
+- Links open read-only; **Make an editable copy** saves one. The limit is 32 KB of encoded data.
 
-Use a `.dcenc` export for protected sharing. See [Saving and sharing](../guides/saving-and-sharing.md).
+For protected sharing, use `.dcenc`. See [Saving and sharing](../guides/saving-and-sharing.md).
 
 ## Live collaboration
 
-A live session sends the diagram only to the people in it. The owner's editor hosts the session;
-nothing passes through a Draft Canvas server, and the owner's copy is the only one saved.
+Only session members receive the diagram, and only the owner's copy is saved.
 
-- **Draft Canvas collects no diagrams, live or otherwise.** A session's diagram travels only between
-  the people in it.
-- **Browser sessions** use WebRTC data channels, encrypted end to end by DTLS between the two
-  browsers. To find a route between networks, each browser asks a STUN server (by default
-  `stun.cloudflare.com`, or one you name) for its public address; the STUN server sees IP addresses,
-  never diagram content. The owner decides for everyone: a collaborator's browser asks a STUN server
-  only when the owner's connection offer shows the owner asked one.
-- **Only my network** contacts no STUN server and no relay, on the owner's side or any
-  collaborator's: people join by direct invite (or the desktop's local network link), and nothing
-  leaves your network.
-- **The rendezvous relay** (`relay.draftcanvas.dev`) lets someone holding a session link ask to join
-  and receive the owner's answer before the two browsers connect. It passes along a few small
-  messages — the joiner's name and connection details — every one encrypted with a key that exists
-  only in the session link's `#` fragment, which is never sent to it. It sees a random room id, IP
-  addresses and timing; it cannot read the messages and never receives the diagram. It stores no
-  messages, diagrams or names — only, for each room, the SHA-256 of a secret the owner's browser made
-  (never in the link), so nobody else can host the room; that is deleted within 12 hours.
-  Self-hosted builds can point at their own relay or none (`VITE_COLLAB_RELAY`); without one, direct
-  invites still work.
-- **Direct invite links and reply codes** carry connection details — including the network addresses each
-  browser found — after the URL's `#`, which is not sent to the app's host. An invite works once,
-  for one person, and expires after 30 minutes. The page takes it off the address as soon as it is read.
-- **The desktop app's local network link** serves the editor and relays the session over plain HTTP
-  and WebSocket on your local network, authenticated by a random 128-bit token in the link. That
-  traffic is **not encrypted**: use it on a network you trust or through a VPN.
-- **A collaborator's copy** is never written to their browser storage. They keep the diagram only by
-  making an editable copy, which then lives in their own Library like any other diagram.
-- **Presence** — names you type, pointer positions, selections — goes to the session's members and is
-  never stored. Your name is kept as a preference in this browser for next time.
+| Part | Sees or carries |
+| --- | --- |
+| Browser connection | WebRTC, encrypted end to end |
+| STUN (`stun.cloudflare.com` or yours) | IP addresses, to find a route; collaborators use one only if the owner does |
+| Relay (`relay.draftcanvas.dev`) | Encrypted join messages, a room id, IP addresses. Never the diagram. |
+| **Only my network** | No STUN and no relay |
+| Invite links, reply codes | Network addresses after the `#`; one use, 30 minutes |
+| Desktop local network link | Plain HTTP with a 128-bit token. **Not encrypted.** |
+| Presence | Names, pointers, selections; never stored |
+
+- The relay's key exists only in the link's `#`. It stores only a hash of the owner's secret, for 12 hours at most.
+- Collaborators' copies are never saved unless they choose **Make an editable copy**.
 
 ## Optional AI agents
 
-Agent access is off by default and limited to allowed project folders. The connector uses a local
-socket or pipe, not a network port. **Your coding agent may send diagram content to its own AI
-provider**, just as it does with code; Draft Canvas does not control that provider.
+Off by default and limited to folders you allow.
 
-The local `agent/ledger.jsonl` stores request ids, fingerprints, receipts and file paths, not diagram
-content. Resolved entries are kept for up to seven days, capped at 2,000 entries; unresolved entries
-are kept for thirty days. A connection secret is removed when access is turned off. See [Agent security](agent-integration.md#security).
+**Your coding agent may send diagram content to its AI provider**, as it does with code.
+
+`agent/ledger.jsonl` keeps request ids, fingerprints, receipts and paths, not content: resolved
+entries up to 7 days (at most 2,000), unresolved 30 days. See [Agent security](agent-integration.md#security).
 
 ## Storage limits and backups
 
-Clearing site data deletes browser diagrams, and private windows may discard storage on close.
-Browser quotas can stop saving; the app reports the failure so you can export your work.
-Keep portable backups of diagrams you want to retain.
+- Clearing site data, or closing a private window, can delete browser diagrams.
+- The app requests persistent storage; browsers may refuse, so eviction stays possible.
+- A full quota stops saving, and the app says so. Keep backups.
 
 ## Optional local diagnostic report
 
-Open **Troubleshooting** on the web home screen, **More → Diagnostic report…** in the web editor,
-or **Settings → Support** on desktop to preview up to twenty recent failure categories, timestamps,
-versions and optional element counts. It excludes raw errors, stacks, diagram content, identifiers,
-URLs and file paths. The report stays in memory until reload; downloading saves a local JSON file
-and never uploads it. See [Local diagnostic reports](reliability.md#local-diagnostic-reports).
+**Help → Diagnostic report…** in the web editor, or **Settings → Support** on desktop.
+
+- Up to 20 recent failure categories, times, versions and optional element counts.
+- No error text, content, identifiers, URLs or paths.
+- In memory until reload. **Download report** saves a local file; nothing is uploaded.
+
+See [Local diagnostic reports](reliability.md#local-diagnostic-reports).

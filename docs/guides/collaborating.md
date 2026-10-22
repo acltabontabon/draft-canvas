@@ -1,165 +1,114 @@
 # Collaborating live
 
-Edit one canvas with other people at the same time. Everyone sees each other's changes as they make
-them, along with where the others are pointing and what they have selected.
+Edit one canvas together and see each other's changes, pointers and selections as they happen.
 
-There is still no account, and **Draft Canvas never receives your diagram**. The person who starts the
-session — the **owner** — hosts it from their own browser tab or desktop app. Collaborators connect
-straight to the owner, and the owner's copy stays the one that is saved. When the session ends, the
-canvas is theirs alone again.
+- No account. **Draft Canvas never receives your diagram.**
+- The person who starts the session, the **owner**, hosts it from their own tab or desktop app.
+  Their copy is the one that is saved.
+- A session holds the owner and up to 10 collaborators.
 
 ## Start a session
 
-1. Open the canvas, press **Share** at the top right and choose **Draw together, live**, or run
-   **Collaborate…** from the command palette (`⌘K`).
+1. Choose **Share → Draw together, live**, or run **Collaborate…** in `⌘K`.
+2. Write your name on the name tag. Others see it beside your pointer.
+3. Choose who can join:
+   - **Anyone with the link** (default): works across different networks. You get a session link,
+     and people ask to join.
+   - **Only my network**: nothing outside your network is contacted. There is no session link; you
+     invite people one at a time, and they must be on your network.
+4. Choose **Start session**.
 
-   ![The Share panel under the toolbar's Share button: Draw together, live; Export; and Copy read-only link, each with a one-line description.](../media/guides/share-panel.png)
+![The Collaborate dialog before a session, with the name tag, the two network choices and Start session.](../media/guides/collab-start.png)
 
-2. Write your name on the name tag — it's shown next to your cursor — and choose **who can join**:
-   - **Anyone with the link** (the default) works between different homes and offices. A public
-     STUN server helps your browsers find a route to each other, and Draft Canvas's relay lets people
-     ask to join (below). Both see IP addresses; neither ever sees the diagram.
-   - **Only my network** contacts nothing outside your network — no STUN server and no relay, for
-     you or anyone who joins. There is no session link then: you invite people directly, one at a
-     time, and they must be on the same network as you.
-3. Press **Start session**. With **Anyone with the link**, your **session link** is ready a moment
-   later.
-
-Collaborators don't choose: their browser follows yours, asking a STUN server only if you did.
-
-![The Collaborate dialog before a session: a sketch of a shared canvas with your face beside it, three empty seats and a lock on the canvas's corner, the steps "Share one link, They ask to join, You let them in", a "Hello, my name is" name tag reading "Ada", and two choices — Anyone with the link, Only my network — above the Start session button.](../media/guides/collab-start.png)
-
-**What stays private** is one click away: press the lock on the sketched canvas, in the Collaborate
-and Join dialogs alike. Your own STUN server, if you'd rather not use the default, is set there too.
-
-![The lock opened: a "Private by design" note saying the diagram goes straight between browsers, encrypted, that the relay and STUN server see IP addresses but never the diagram, and a link to use your own STUN server.](../media/guides/collab-privacy.png)
-
-The toolbar now shows everyone's faces beside **Share**, with a breathing dot while the session is
-live, and the people themselves appear in a column at the top right of the canvas.
+The lock on the dialog's sketch explains what stays private, and lets you set your own STUN server.
 
 ## Invite people
 
-Send everyone the same **session link** — **Copy link**, or **Share** it where your device has a
-share sheet. Whoever opens it types their own name and asks to join. They appear at the top of the
-people column, ringed and waiting, with a card that says who wants to join: choose **Can edit** or
-**Can view** and press **Let in**, or **Deny**. The same question waits at the top of the
-Collaborate dialog, and if you're presenting, a notice with **Let in** pops up too.
+Send the **session link** (**Copy link**). Each person opens it, writes their name and asks to join.
 
-![The Collaborate dialog during a session: the sketch of the shared canvas with your face and empty seats, an Invite people card with the session link and a Copy link button, and Ada listed as owner.](../media/guides/collab-session.png)
+Their request appears at the top of the people column on your canvas, and in the Collaborate
+dialog. Choose **Can edit** or **Can view**, then **Let in**, or **Deny**.
 
-![The owner's canvas with a card at the top right reading "Wants to join: Grace", a Can edit choice, Let in and Deny, beside Grace's dashed, waiting face in the people column.](../media/guides/collab-door.png)
+![A join request on the owner's canvas: "Wants to join: Grace", with Can edit, Let in and Deny.](../media/guides/collab-door.png)
 
-Only people with the link can ask, and only the people you let in get in. The link stops working
-when the session ends; a new session gets a new link.
+The link stops working when the session ends. A new session gets a new link.
 
-### What the relay does — and doesn't
-
-Letting someone in takes a few small messages between their browser and yours before the two can
-connect directly. A small relay run by Draft Canvas passes those along. It is **not** where your
-diagram goes:
-
-- **Your diagram never passes through the relay.** Once you let someone in, the diagram travels
-  directly between your browsers, encrypted end to end.
-- **The relay can't read what it passes along.** Those messages — a name, connection details — are
-  encrypted with a key that exists only in the session link, after the `#`, which browsers never send
-  to any server. The relay sees a random room number, scrambled text, and — like any server you
-  connect to — the IP addresses and timing of the connections.
-- **Nothing of yours is stored.** The relay keeps no messages, no diagrams and no names. The one
-  thing it remembers about a room is a fingerprint of a secret only the owner's browser has, so that
-  nobody else holding the link can take the owner's place — and it forgets that too within 12 hours.
-
-If the relay can't be reached — you're offline, or a network blocks it — the Collaborate dialog
-switches to inviting one person directly, which needs no relay at all (you can also pick
-**Invite one person directly** under the link yourself): you send a one-time link, and they
-send you back a reply code to paste.
+If the link does not work for someone, choose **Invite one person directly** under it. You send
+them a one-time link; they send back a reply code for you to paste.
 
 ## Join a session
 
-Open the link you were sent. Write your name on the name tag — the one others will see — and press **Ask to join**.
-Keep the page open: it says when the owner has seen you, and the canvas opens as soon as they let
-you in.
+1. Open the link you were sent.
+2. Write your name and choose **Ask to join**.
+3. Keep the page open. The canvas opens when the owner lets you in.
 
-![The Join a live session dialog: the sketch of the owner's canvas with your initials waiting at a seat, a short explanation, a "Hello, my name is" name tag reading "Grace", and the Ask to join button.](../media/guides/collab-join.png)
+![The Join a live session dialog with a name tag and Ask to join.](../media/guides/collab-join.png)
 
-If you were sent a direct invite instead, you get a reply code, already copied to your
-clipboard where your browser allows it; send it back to the person who invited you.
+With a direct invite, you get a reply code instead (copied for you where the browser allows). Send
+it back to the owner.
 
-Your copy is never saved in your browser. To keep the diagram after the session, use **Make an
-editable copy** when the session ends, or ask the owner to export it.
+Your copy is never saved. To keep the diagram afterwards, choose **Make an editable copy** when the
+session ends, or ask the owner for an export.
 
 ## Working together
 
-![The owner's canvas with Grace in the session: her face in the people column, her named pointer beside Capability B Service, and that shape outlined in her colour because she has it selected.](../media/guides/collab-live.png)
+![The owner's canvas with Grace's face in the people column, her named pointer, and her selection outlined in her colour.](../media/guides/collab-live.png)
 
-- **Edits** land for everyone as they are committed — a shape dropped, a name typed, a connector
-  drawn. While you are in the middle of dragging or resizing, other people's edits wait and arrive
-  the moment you let go, so nothing jumps out from under your pointer.
-- **Undo** takes back only what *you* did. If someone has changed the same thing since, it stays as
-  they left it; if someone has built on your edit — a connector to the shape you added, a shape inside
-  it — undo leaves your edit in place and says why. That holds after the session ends too: undo never
-  takes away what others added while they were here.
-- **Who's here.** The people column at the top right of the canvas shows everyone in the session,
-  each in their own colour, with a small mark when they are typing, presenting or looking inside
-  another shape. Hover or focus a face to see where they are, and press **Find** to go there.
-- **Cursors and selections.** On the canvas you see each person's pointer with their name, and a soft
-  outline around what they have selected — in the room you are both looking at.
-- **Follow the presenter.** When the owner presents, collaborators are offered **Follow**: their view
-  moves through the presentation with the owner's. Moving the canvas yourself stops following.
-- **Two people, one shape.** If two people change the same shape at the same moment, the last change
-  to reach the owner wins for that shape. Everything else each of you did is kept.
+- **Edits** reach everyone when committed. Changes from others wait while you drag or resize.
+- **Undo** takes back only your own edits. If someone changed or built on the same thing since,
+  their work stays and Draft Canvas says why.
+- **People column** (top right): everyone in the session, each in a colour. Hover a face to see
+  where they are; **Find** takes you there.
+- **Pointers and selections** show for people in the same room as you.
+- **Follow**: when the owner presents, collaborators can follow along. Moving the canvas stops
+  following.
+- **Same shape, same moment**: the last change to reach the owner wins for that shape.
 
-## What the owner controls
+## Owner controls
 
-Hover a face in the people column, or press the faces beside **Share** in the toolbar, to manage each
-person.
+Hover a face in the people column, or open the faces beside **Share** in the toolbar.
 
-- **Can edit / Can view** changes what each person may do, at once. A viewer sees every change live
-  but can't make any.
-- **Undo changes** takes back everything one person changed this session, and nobody else's work.
-  It appears beside anyone who has changed something, and stays there after they leave. Your own undo only ever takes back your own
-  edits, so this is the way back when a collaborator's edits went wrong. Anything someone else has
-  changed or built on since stays as it is, and the take-back is one edit that undo can reverse.
-- **Remove** takes someone out of the session. Their copy stops updating and tells them why. If
-  they had changed the canvas, the notice offers **Undo their changes** too.
-- **Coming back.** If someone's connection drops, their page knocks again on its own and they are back
-  in their place — same colour, same role — without you being asked twice. For someone who joined by a
-  direct invite, **Re-invite** beside their name creates an invite that gives them back their place.
-- **End session** disconnects everyone. Closing the tab, opening another canvas or reloading also ends
-  it. Your canvas is saved as usual throughout.
+| Control | Does |
+| --- | --- |
+| **Can edit** / **Can view** | Changes what that person may do, at once |
+| **Undo changes** | Takes back everything that person changed this session, even after they leave; one undo reverses it |
+| **Remove** | Takes them out of the session; offers **Undo their changes** if they edited |
+| **Re-invite** | Makes a new direct invite for someone who joined by one |
+| **End session** | Disconnects everyone |
 
-A session holds the owner and up to 10 collaborators.
+Closing the tab, reloading or opening another canvas also ends the session. Your canvas keeps
+saving as usual. A collaborator whose connection drops rejoins on their own, in the same role.
 
 ## Desktop: share on your local network
 
-The desktop app can also share over the local network, for a room where everyone is on the same
-Wi-Fi. While a session runs, press the faces beside **Share** and turn on **Also share on this network**. You
-get a single link like `http://192.168.1.20:52814/#join=lan.…` that people on the network open in a
-browser — no reply code, and no relay: the desktop app serves the editor to them itself. Each person
-who opens it asks to join and waits at the door like anyone else, until you let them in or not.
+For a room on the same Wi-Fi, the desktop app can serve the editor itself:
 
-Traffic over the local network link is **not encrypted** — anyone on the same network who can watch
-traffic could read the diagram. Use it on a network you trust, or through a VPN such as Tailscale.
-The link stops working when you turn sharing off or end the session. Invite links work from the
-desktop app too: they open in the collaborator's browser at app.draftcanvas.dev.
+1. During a session, open the faces beside **Share**.
+2. Turn on **Also share on this network**.
+3. Send the `http://…` link. People open it in a browser and ask to join as usual.
+
+**Local network traffic is not encrypted.** Use it only on a network you trust, or over a VPN.
+The link stops when you turn it off or end the session.
 
 ## If something goes wrong
 
-| What you see | What to do |
+| Message | What to do |
 | --- | --- |
-| **Couldn't connect** | You may be on networks that block direct connections (some offices and hotels do). Make sure the owner chose **Anyone with the link** (collaborators follow the owner's choice), try another network, or use the desktop app's local network link in the same room. |
-| **Couldn't reach the owner automatically** | The relay can't be reached from here. Ask the owner for a direct invite: **Collaborate → Invite one person directly**. |
-| **The owner isn't in the session right now** | Keep the page open; it asks again as soon as they're back. |
+| **Couldn't connect** | Some networks block direct connections. Make sure the owner chose **Anyone with the link**, try another network, or use the desktop app's local network link. |
+| **Couldn't reach the owner automatically** | Ask the owner for a direct invite: **Collaborate → Invite one person directly**. |
+| **The owner isn't in the session right now** | Keep the page open; it asks again when they return. |
 | **This invite has expired** | Ask for a new link. |
-| **Reconnecting…** | The connection dropped. Your edits wait and are sent when it recovers. If it doesn't, ask the owner to **Re-invite** you. |
-| **Your copy of Draft Canvas and the owner's don't match** | Whoever is behind updates (reload the web app, or update the desktop app). |
-| **This diagram is too large to share live** | The diagram is past what a session carries (16 MB). Share an export instead. |
+| **Reconnecting…** | Your edits are sent when the connection recovers. If it does not, ask the owner to **Re-invite** you. |
+| **Your copy of Draft Canvas and the owner's don't match** | Whoever is behind updates the app. |
+| **This diagram is too large to share live** | The limit is 16 MB. Share an export instead. |
 
 ## Privacy
 
-What you draw travels only between the people in the session, encrypted end to end on WebRTC
-connections. Nothing is uploaded to Draft Canvas, and Draft Canvas collects no diagrams: the relay
-that lets people knock only ever passes along encrypted introductions, as above. A STUN server sees
-the IP addresses of the people connecting; direct invite links and reply codes contain them too, so
-send links only to the people you mean to invite. The desktop local network link is the exception to encryption, as above. See
-[Privacy](../reference/privacy.md#live-collaboration) and the
-[security notes](../../SECURITY.md#live-collaboration).
+- The diagram travels directly between browsers, encrypted end to end.
+- With **Anyone with the link**, a small Draft Canvas relay passes along encrypted join requests
+  and a public STUN server helps browsers find each other. Both see IP addresses, never the diagram.
+- Direct invite links and reply codes contain IP addresses: send them only to the people you mean.
+- The desktop local network link is the one unencrypted option.
+
+Details: [Privacy](../reference/privacy.md#live-collaboration) and
+[Security](../../SECURITY.md#live-collaboration).

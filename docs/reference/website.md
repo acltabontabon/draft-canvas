@@ -1,233 +1,156 @@
 # The website
 
-Draft Canvas lives at `https://draftcanvas.dev/`, and the editor has an origin of its own at
-`https://app.draftcanvas.dev/`. Both come out of one build, are verified as one artifact, and are
-served from Cloudflare. The old address, `https://acltabontabon.com/draft-canvas/`, stays on GitHub
-Pages as a change-of-address page.
+One verified build serves every address. Cloudflare hosts `draftcanvas.dev`; GitHub Pages hosts the
+old address.
 
-| URL | What it is | Where it comes from |
+| URL | What it is | Source |
 | --- | --- | --- |
-| `draftcanvas.dev/` | The landing page | `www/` |
-| `draftcanvas.dev/docs/` | The guides, and the reference a user reads | `docs/`, rendered by `www/scripts/docs.mjs` |
+| `draftcanvas.dev/` | Landing page | `www/` |
+| `draftcanvas.dev/docs/` | Guides and user-facing reference | `docs/`, rendered by `www/scripts/docs.mjs` |
 | `app.draftcanvas.dev/` | The editor | `dist/`, unchanged |
-| `www.draftcanvas.dev/` | A redirect to the apex | `www/cloudflare/www.js` |
-| `relay.draftcanvas.dev` | The live-collaboration relay ([below](#the-collaboration-relay)) | `www/cloudflare/relay.js` |
-| `acltabontabon.com/draft-canvas/` | The moved-house page; every other old path forwards | `www/legacy/` |
-| `acltabontabon.com/draft-canvas/editor/` | The editor, kept so saved diagrams can move | `dist/`, unchanged |
+| `www.draftcanvas.dev/` | Redirect to the apex | `www/cloudflare/www.js` |
+| `relay.draftcanvas.dev` | Live-collaboration relay ([below](#the-collaboration-relay)) | `www/cloudflare/relay.js` |
+| `acltabontabon.com/draft-canvas/` | Change-of-address page; other old paths forward | `www/legacy/` |
+| `acltabontabon.com/draft-canvas/editor/` | The editor, kept so old diagrams can move | `dist/`, unchanged |
 
 ## The source
 
-`www/` is a self-contained Vite project: its own `package.json`, its own lockfile, plain JavaScript
-and one stylesheet, and no dependency shared with the app. That is deliberate rather than tidy —
-`tests/privacy.test.ts` fails the build on a `fetch` anywhere in `src/`, and the site does not live
-in `src/`, so the two cannot leak into each other by accident.
+`www/` is a separate Vite project (own lockfile, plain JavaScript, one stylesheet) sharing no
+dependency with the app.
 
 ```bash
-npm run site:dev        # the site alone, on :5280, with hot reload
-npm run build:web       # builds the editor, builds the site, assembles dist-web/
-npm run site:preview    # the above, each site served as it is hosted (ports 4174, 4175, 4176)
-npm run e2e:web         # the checks that only make sense against the assembled artifact
+npm run site:dev        # site only, :5280, hot reload
+npm run build:web       # editor + site, assembled into dist-web/
+npm run site:preview    # build:web, then serve each host as deployed (:4174 site, :4175 editor, :4176 old address)
+npm run e2e:web         # checks against the assembled artifact
 ```
 
-`npm run site:preview` is the one that matters before shipping. `scripts/serve-web.mjs` serves the
-site and the editor each at the root of a port of its own, and the old address under its real
-`/draft-canvas/` prefix. It redirects a directory URL missing its trailing slash exactly as both
-hosts do — because with a relative `base`, a page served at `/draft-canvas` would resolve
-`./assets/*` against the origin root and load nothing at all — and answers a missing path with each
-host's 404 page, which on the old address is what forwards old links.
+Run `site:preview` before shipping: `scripts/serve-web.mjs` mimics the hosts' trailing-slash
+redirects and 404 pages.
 
-The page is a drafting sheet: white paper and ink in a light theme, the same sheet under a lamp in a
-dark one, with the product's teal accent from `src/styles/tokens.css`. The shapes drawn in
-`www/index.html` follow `src/nodes/describe.ts`: an API carries its socket notch and a Worker its
-second card, because that is what they look like in the editor. There are no webfonts, for the same
-reason the app has none; the headings use the system serif.
+Shapes in `www/index.html` match `src/nodes/describe.ts`, the accent comes from
+`src/styles/tokens.css`, and there are no webfonts.
 
 ## The build
 
-`vite.config.js` in `www/` does two things worth knowing about:
-
-- **`__VERSION__` becomes the app's version**, read from the root `package.json` at build time. The
-  desktop download links are built from it, so cutting a release updates them with nothing to edit.
-- **The Content-Security-Policy is generated**, including a SHA-256 hash of the one inline script on
-  the page, computed from the bytes that end up in the output. It ships `connect-src 'none'`: the
-  page cannot reach any other origin, including github.com.
-
-`scripts/assemble-web.mjs` puts the builds together into `dist-web/` — `site/` (`www/dist/`), `app/`
-(`dist/`), `legacy/` (`www/legacy/` with `dist/` under `editor/`) and `cloudflare/` (the Wrangler
-configs from `www/cloudflare/`) — and then asserts that each is deployable. `dist/` itself is untouched, which is
-what lets static self-hosting, the offline e2e suite and the desktop build go on consuming it.
+- `www/vite.config.js` replaces `__VERSION__` with the root `package.json` version for download links.
+- It generates the CSP, hashing the one inline script, with `connect-src 'none'`.
+- `scripts/assemble-web.mjs` builds `dist-web/` from `site/` (`www/dist/`), `app/` (`dist/`),
+  `legacy/` (`www/legacy/` plus `dist/` under `editor/`) and `cloudflare/` (Wrangler configs), then
+  checks each part. `dist/` is left unchanged.
 
 ## The documentation
 
-`docs/` is still the one copy of the documentation anybody edits. It reads on GitHub as it always
-has, and `tests/docs.test.ts` checks its links there. The site build also renders it into pages under
-`/docs/`, so someone who clicks Docs on the landing page, or Documentation in the app,
-reads it on the site instead of in a code repository.
+`docs/` is the only copy of the docs. The site build renders it under `/docs/`.
 
-- **What is published.** `docs/index.md`, every guide in `docs/guides/`, and the reference documents
-  a user lands on from a guide (`PUBLISHED_REFERENCE` in `www/scripts/docs.mjs`: privacy and agent
-  integration). The rest of `docs/reference/` is for people changing the code, so a link to it, or
-  to the README, CONTRIBUTING or a source file, goes to GitHub.
-- **The sidebar** is the guides and reference that `docs/index.md` lists in its tables, in that order
-  and under the names it gives them. A new guide shows up in the sidebar once the index lists it.
-- **Links are checked as they are rewritten.** A link to a page, a `#section` or an image that the
-  build did not publish fails `npm run site:build`. Heading ids follow GitHub's rule, the same one
-  `tests/docs.test.ts` uses, so an anchor that works on GitHub works here too.
-- **No script.** The pages are static HTML that share the landing page's stylesheet, under the same
-  generated CSP. Navigation on a phone is a plain `<details>`.
-- **Which docs ship.** `pages.yml` builds from the release tag, so the docs on the site always
-  describe the editor at `app.draftcanvas.dev`. A fix to a guide goes live with the next release,
-  not on the push.
+- **Published:** `docs/index.md`, every guide, and `PUBLISHED_REFERENCE` in `www/scripts/docs.mjs`
+  (privacy and agent integration). Links to anything else go to GitHub.
+- **Sidebar:** the rows of the tables in `docs/index.md`, in order. A new guide appears once listed
+  there.
+- **Link checks:** a link to an unpublished page, anchor or image fails `npm run site:build`. Anchors
+  use GitHub's slug rule, as in `tests/docs.test.ts`.
+- **Release timing:** pages ship from the release tag, so doc changes go live with the next release.
 
-`npm run site:dev` renders a page on every request, so an edited guide shows on a refresh at
-`http://localhost:5280/docs/`.
+With `npm run site:dev`, refresh `http://localhost:5280/docs/` to see an edit.
 
 ## Media
 
-| Command | What it regenerates |
+| Command | Regenerates |
 | --- | --- |
-| `npm --prefix www run art` | The hero's pencil-and-ink drawing, written into `www/index.html` |
-| `npm --prefix www run clips` | The five short demo clips, cut from `docs/media/demo.mp4` with ffmpeg |
-| `npx tsx e2e/og-diagram.ts --base <dev server>` | `www/scripts/og-diagram.png`, the share card's diagram, rendered in the real editor from `og-diagram.json` |
-| `npm --prefix www run social` | `og-image.png`, from that diagram and the stylesheet, and the Apple touch icon |
+| `npm --prefix www run art` | Hero drawing in `www/index.html` (seeded, so repeatable) |
+| `npm --prefix www run clips` | The five demo clips in `www/public/clips/`, cut from `docs/media/demo.mp4` with ffmpeg |
+| `npx tsx e2e/og-diagram.ts --base <dev server>` | `www/scripts/og-diagram.png`, rendered in the editor from `og-diagram.json` |
+| `npm --prefix www run social` | `og-image.png` and the Apple touch icon |
 
-All four commit their output, so a deploy needs neither ffmpeg nor a browser download. The hero is
-seeded, so a re-run draws the same pencil strokes; run `social` after it so the share card matches.
-The reel's one still, `www/public/stills/source-evidence.jpg`, is the 1.14.0 release screenshot
-`docs/media/releases/v1.14.0/source-evidence.png` at 1600×900.
+Outputs are committed, so deploys need neither ffmpeg nor a browser. Run `social` after `art`.
 
 ## Deploying
 
-`pages.yml` is the only workflow that deploys. It deploys the relay, `app/`, `site/` and the `www.`
-redirect to Cloudflare with Wrangler, in that order, and only once that succeeds publishes `legacy/` to GitHub Pages. Release tags start `release.yml`, which completes
-reusable CI and desktop acceptance before calling Pages with the verified web artifact. Pages
-checks its recorded commit and promotes those same bytes. It also runs on demand and through
-`workflow_call`; `pages-site.yml` calls it on a push to `main` that touches `www/`, so a rewritten
-sentence does not have to wait for a release. Calls share the `pages` concurrency group.
+`pages.yml` is the only deploy workflow.
 
-Site-only publication waits when `package.json` names a version newer than the latest published
-stable release. A release-preparation push can update media while the newest available editor is
-still the previous version; deploying that combination would reuse the tagged release's Pages
-deployment identifier for different contents. The tagged release owns that publication instead.
+1. Cloudflare first, with Wrangler: relay, `app/`, `site/`, then the `www.` redirect.
+2. Then `legacy/` to GitHub Pages, only if Cloudflare succeeded.
 
-The editor half only ever changes on a release or an explicit withdrawal. For site-only changes,
-`pages.yml` checks out the newest stable `vX.Y.Z`, lays the commit's `www/` and
-`scripts/assemble-web.mjs` over it, builds once, and tests that combined artifact in all three
-browser engines before publication. Tests use the selected release's documentation and journeys.
-So `app.draftcanvas.dev` never serves unreleased code, and download links carry a released version.
+Triggers (all share the `pages` concurrency group):
 
-For withdrawal, run the current workflow from `main` with `release-tag` naming the last good
-editor tag; its revision must belong to the default branch's history and pass verification. Follow
-[the compatibility and recovery procedure](reliability.md#withdrawal-and-recovery-procedure) before
-putting an older editor in front of documents saved by a newer one.
+- **Release:** `release.yml` passes the verified artifact after CI and desktop acceptance.
+- **Site change:** `pages-site.yml` calls it on a push to `main` touching `www/`,
+  `scripts/assemble-web.mjs` or either Pages workflow. It waits (skips) while `package.json` names a
+  version that is not the latest published release; that release's deploy publishes it instead.
+- **On demand:** run it from `main`.
+
+Off a release tag, `pages.yml` builds the newest stable `vX.Y.Z` with this commit's `www/` and
+`scripts/assemble-web.mjs` laid over it, and tests it in Chromium, Firefox and WebKit. So the editor
+and docs change only on a release.
+
+**Withdrawal:** run `pages.yml` from `main` with `release-tag` set to the last good tag. Follow
+[the recovery procedure](reliability.md#withdrawal-and-recovery-procedure) first.
 
 ### Cloudflare
 
-Each config in `www/cloudflare/` names its custom domain, and `wrangler deploy` creates the DNS record
-and certificate for it, so the zone needs no hand-made records. The deploy needs two repository
-secrets:
+Each config in `www/cloudflare/` names its custom domain; `wrangler deploy` creates the DNS record and
+certificate. Repository secrets:
 
-- `CLOUDFLARE_ACCOUNT_ID` — the account that holds the `draftcanvas.dev` zone.
-- `CLOUDFLARE_API_TOKEN` — a token limited to that account and zone, with **Account › Workers
-  Scripts › Edit**, **Zone › Workers Routes › Edit**, **Zone › DNS › Edit** and **Zone › Zone ›
-  Read**.
+- `CLOUDFLARE_ACCOUNT_ID`: the account holding the `draftcanvas.dev` zone.
+- `CLOUDFLARE_API_TOKEN`: limited to that account and zone, with **Account › Workers Scripts › Edit**,
+  **Zone › Workers Routes › Edit**, **Zone › DNS › Edit** and **Zone › Zone › Read**.
 
-The relay's Durable Object needs no further permission: **Workers Scripts › Edit** covers it, and
-its migration in `relay.jsonc` is applied by the same `wrangler deploy`.
+The relay's Durable Object needs nothing more; its migration in `relay.jsonc` applies on deploy.
 
-Wrangler itself is pinned by `www/cloudflare/package.json` and its lockfile, which travel with the
-verified artifact: the deploy runs `npm ci` there and then `npx --no-install wrangler`, so it never
-fetches a version by name, and the release audits that lockfile with the others. To move to a new
-Wrangler, change the version there and run `npm install --package-lock-only` in `www/cloudflare/`.
-No other job installs it.
+Wrangler is pinned in `www/cloudflare/package.json` and its lockfile (`npm ci`, then
+`npx --no-install wrangler`). To upgrade, change the version and run `npm install --package-lock-only`
+there.
 
-`app.headers` becomes the editor's `_headers`. It must never set `Cross-Origin-Opener-Policy`: the
-handoff below talks to the old tab through `window.opener`, which that header severs.
+`app.headers` becomes the editor's `_headers`. Never set `Cross-Origin-Opener-Policy` there: it
+breaks the old-address handoff, which uses `window.opener`.
 
 ### The collaboration relay
 
-`relay.draftcanvas.dev` lets a [live session](../guides/collaborating.md)'s owner let people in
-without trading reply codes by hand. The owner's browser and the joiner's exchange a knock and then
-the WebRTC offer and answer through it, and once they connect directly it has nothing more to do.
+The relay carries a [live session](../guides/collaborating.md)'s knock, offer and answer until the
+browsers connect directly.
 
-- **It sees only ciphertext and room ids.** Both browsers encrypt every message with a key kept in
-  the invite link's fragment, which never reaches any server. The relay sees a random 128-bit room
-  id, its sockets' origins and IP addresses as any web server does, and the size and timing of
-  messages it cannot read.
-- **It keeps almost nothing.** One Durable Object per room holds its open sockets in memory and
-  through hibernation, so a waiting room costs nothing. No message is stored, nothing about rooms or
-  their messages is logged, and Worker observability is off in `relay.jsonc`. The one stored value is
-  the room's owner claim: the SHA-256 of a secret the owner's browser presents in the WebSocket
-  handshake (`Sec-WebSocket-Protocol: draft-canvas.relay.v1, host.<secret>`, never in the link or URL).
-  Any later host connection must present the same secret or is closed with 4003; the claim is deleted
-  when the room's 12-hour lifetime ends.
-- **Limits:** one owner and 32 joining sockets per room; text frames only, with at most 16,384
-  characters of data; 30 messages per 10 seconds per socket; a room closes after 15 minutes without a
-  message, and after 12 hours in any case. Only the pages in `ALLOWED_ORIGINS` may connect — the web
-  editor and the desktop app.
+- **Sees:** encrypted messages, a random 128-bit room id, origins, IP addresses, sizes and timing.
+- **Stores:** only the owner claim, a SHA-256 of the secret in the handshake
+  (`Sec-WebSocket-Protocol: draft-canvas.relay.v1, host.<secret>`); another host is closed with 4003.
+  No logging; observability is off in `relay.jsonc`.
+- **Limits:** one owner and 32 joining sockets per room; text frames with at most 16,384 characters
+  of data; 30 messages per 10 seconds per socket; 60 new sockets per minute per address. A room closes
+  after 15 idle minutes, or 12 hours at most.
+- **Origins:** only `ALLOWED_ORIGINS`; by default the web editor and the desktop app.
 
-The contract is in `www/cloudflare/relay-room.js`, which holds every rule and no Cloudflare code.
-`www/cloudflare/relay.js` adapts it to Durable Objects, and `scripts/dev-relay.mjs` to a plain Node
-server with no dependencies, for development and the e2e suite:
+Code:
 
-```bash
-node scripts/dev-relay.mjs --port 8791    # prints "relay listening on 8791"
-```
+- `www/cloudflare/relay-room.js`: every rule, no Cloudflare code. Tested by `tests/relay-room.test.ts`.
+- `www/cloudflare/relay.js`: the Durable Object adapter.
+- `scripts/dev-relay.mjs`: a Node relay for development and e2e (`npm run dev:relay`, port 8791),
+  also admitting `http://localhost:*` and `http://127.0.0.1:*`. Tested by `tests/dev-relay.test.ts`.
 
-`npm run dev` points the editor at `ws://localhost:8791`, and the dev relay admits any
-`http://localhost:*` or `http://127.0.0.1:*` page as well as the production origins.
-`tests/relay-room.test.ts` covers the rules and `tests/dev-relay.test.ts` the dev relay on the wire.
+Builds read `VITE_COLLAB_RELAY` (default `wss://relay.draftcanvas.dev`; `ws://localhost:8791` under
+`npm run dev`; empty for none) and add it to the CSP's `connect-src`.
 
-Builds take the relay from `VITE_COLLAB_RELAY` (default `wss://relay.draftcanvas.dev`), which also
-goes into the web build's `connect-src`. The hosted relay refuses other origins, so a self-hosted
-editor built with the default falls back to reply codes. It can use a relay of its own — run
-`relay.js` as a Worker of your own, or anything that keeps the same contract — by building with
-`VITE_COLLAB_RELAY=wss://relay.example.com npm run build`, and adding its page's origin to that
-relay's `ALLOWED_ORIGINS`. Building with `VITE_COLLAB_RELAY=` (empty) leaves the relay out, and its
-CSP; invites then fall back to copying reply codes by hand. The desktop app's CSP is fixed in
-`src-tauri/tauri.conf.json`, so a desktop build with another relay needs it added there too.
+- **Your own relay:** deploy `relay.js` as your own Worker, or anything with the same contract, and
+  set `ALLOWED_ORIGINS` to your editor's origin. Build with `VITE_COLLAB_RELAY=wss://…`; see
+  [Self-hosting](../guides/self-hosting.md#live-sessions).
+- **Desktop:** its CSP is fixed in `src-tauri/tauri.conf.json`; add another relay there too.
 
 ### The old address
 
-The apex `acltabontabon.com` belongs to `acltabontabon.github.io`, and GitHub applies a user site's
-custom domain to every project site of the same account, so this repository is served at
-`/draft-canvas/` without a `CNAME` of its own. Keep it that way: giving this repository a custom
-domain would make GitHub redirect the old address away — and with it the only editor that can still
-read diagrams saved there.
+`acltabontabon.com` belongs to `acltabontabon.github.io`; GitHub serves this project under it at
+`/draft-canvas/`. Never give this repository a custom domain: GitHub would redirect the old address,
+and its editor, away.
 
 ## The move to draftcanvas.dev
 
-Browsers keep IndexedDB per origin, so diagrams drawn at `acltabontabon.com/draft-canvas/editor/`
-cannot be seen from `app.draftcanvas.dev`. Nothing was redirected away for that reason.
+IndexedDB is per origin, so diagrams saved at `acltabontabon.com/draft-canvas/editor/` are invisible
+to `app.draftcanvas.dev`.
 
-**The old front door stays.** `www/legacy/` is a static change-of-address page with no build step:
-the new addresses on a forwarding label, and — when the browser has drawn there before — the way to
-bring those diagrams along, first. Its `404.html` forwards every other old path to the same path on
-`draftcanvas.dev` (`/editor/…` to the app), so old links to the docs keep working.
-
-**The diagrams move tab to tab.** The editor at the old address shows a notice with **Bring my
-diagrams**. It opens `app.draftcanvas.dev/#handoff`, waits for that tab to say it is ready, and posts
-it a Library backup (`storage/backup.ts`) — the same ZIP **Back up** downloads — with
-`postMessage`. Each side names the other's exact origin as the target and checks the origin and the
-window of every message it accepts; nothing goes over the network. The new tab restores the backup,
-which never overwrites (a taken id arrives as a copy), and answers with what it restored. The
-protocol is `src/storage/handoff.ts`; **Back up** there and **Restore** here is the manual route.
-
-## How the earlier move to /editor/ was made safe
-
-The editor answered at `/draft-canvas/` for a long time, so moving it had to leave three things
-working.
-
-**Saved diagrams.** Nothing was migrated, because nothing needed to be: the IndexedDB databases
-(`draft-canvas`, `draft-canvas-keys`) and the `draft-canvas.` preference prefix are plain constants,
-so they are per-origin and the path never entered into them. `tests/privacy.test.ts` keeps it that
-way — a key built from `location.pathname` or `import.meta.env.BASE_URL` fails the build.
-
-**The old service worker.** It had scope over the whole path and answered *every* navigation under it
-with the precached editor shell, so left alone it would go on serving the old app at the landing
-page's address. `www/legacy/sw.js` replaces it at its own URL, skips its own wait, deletes only the
-caches whose names contain its scope — which is how Workbox names them and how nothing else on this
-shared origin is named — and unregisters itself. It does not claim clients or reload anything: a tab
-still running the old editor keeps running it until it navigates. So a returning visitor may see one
-stale editor load at `/draft-canvas/` before the worker retires. Their work is autosaved throughout,
-and the next visit is the landing page.
+- **Change-of-address page:** `www/legacy/` has no build step. Its `404.html` forwards other old
+  paths to the same path on `draftcanvas.dev` (`/editor/…` to the app).
+- **Handoff:** the old editor shows **Bring my diagrams**. It opens `app.draftcanvas.dev/#handoff` and
+  sends a Library backup with `postMessage`; both sides check the exact origin and window. The new tab
+  restores it without overwriting (taken ids arrive as copies). Protocol: `src/storage/handoff.ts`.
+  Manual route: **Back up** on the old address, **Restore** on the new.
+- **Path-independent storage:** database names and the `draft-canvas.` preference prefix never derive
+  from the path; `tests/privacy.test.ts` enforces it. That is why the editor could move to `/editor/`.
+- **Old service worker:** `www/legacy/sw.js` replaces the one that served the editor at
+  `/draft-canvas/`, deletes only its own caches and unregisters.

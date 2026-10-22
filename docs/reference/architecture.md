@@ -1,140 +1,146 @@
 # Architecture
 
-Draft Canvas centers on a portable document. The editor, presentation and exports are views of that
-model, built to help someone explain software without spending the meeting arranging a diagram.
-
-Implementation rules are in [AGENTS.md](../../AGENTS.md); module wiring and commands are in the
+Why the code is shaped this way. Rules: [AGENTS.md](../../AGENTS.md). Scripts and wiring:
 [development reference](development.md).
 
 ## Principles
 
-| Principle | Purpose |
-| --- | --- |
-| **The document is the product** | Keep files usable beyond any framework or rendering library. |
-| **Local-first** | Editing requires no account or server; diagrams stay on the device. |
-| **The owner hosts** | Collaboration connects people to the owner's copy; no service ever holds or sees a diagram. |
-| **Shared rendering** | Keep the canvas and exported images visually consistent. |
-| **Model meaning, not technology** | Use architectural roles; technology names belong in labels. |
-| **Suggest, never block** | Offer useful defaults without forbidding a valid design. |
-| **Derive instead of duplicate** | Compute views and suggestions from existing content. |
-| **Deterministic assistance** | The same diagram and selection produce the same suggestions. |
-| **Degrade without destroying** | Preserve usable content and report what cannot be recovered. |
-| **One action per capability** | Menus, shortcuts and the palette call the same operation. |
+- **The document is the product.** Files outlive any framework or renderer.
+- **Local-first.** No account or server; diagrams stay on the device.
+- **The owner hosts.** Collaborators connect to the owner's copy; no service holds a diagram.
+- **Shared rendering.** Canvas and exports draw from the same description.
+- **Model meaning, not technology.** Shapes are roles; technology names are labels.
+- **Suggest, never block.** Offer defaults; never forbid a valid design.
+- **Derive, don't duplicate.** Views and suggestions are computed from content, deterministically.
+- **Degrade without destroying.** Keep usable content; report what is lost.
+- **One action per capability.** Menus, shortcuts and the palette call the same operation.
 
 ## Shape of the system
 
 <!-- Drawn in Draft Canvas: ../media/reference/architecture.json, rendered by e2e/og-diagram.ts. -->
 ![UI and canvas edits through editor state and history and draws with rendering; editor state, rendering, and storage and export all depend on the document model.](../media/reference/architecture.png)
 
-Dependencies point toward the document model. It contains plain, serializable data and has no React
-or React Flow dependency. Framework changes therefore do not dictate the file format.
+Dependencies point toward `src/document/`, which is plain data with no React or React Flow.
+
+| Module | Imports only |
+| --- | --- |
+| `document/` | `lib/` |
+| `depth/`, `starters/` | `document/` |
+| `layout/` | `document/`, `edges/bundles` |
+| `collab/` | `document/`, `depth/`, `lib/`, its own `transport/` |
+| `continuation/` | `document/`, `edges/routing`, `edges/clearance`, `render/text` |
+| `openPoints/` | `document/`, `depth/`, `render/` |
+| `agent/` | the above plus rendering and export; never UI or store |
+
+Library and editor are two states of `src/App.tsx` with no router, so the build works from any path.
 
 ## The document model
 
-A document is a tree of graphs: a shape can own the architecture inside it. Ownership makes copying
-and deleting a shape carry its detail along, and prevents cyclic room references. The editor works
-through a lens on the current room, keeping ordinary editing independent of navigation depth.
-
-Operations return new documents while sharing unchanged elements. This makes snapshot history
-practical and lets consumers identify changes without comparing every field.
+- A document is a tree of graphs: a shape can own a room with the detail inside it. Copy and delete
+  carry the room along, and cycles cannot exist.
+- The editor edits the current room through a lens, so operations ignore depth.
+- Operations return new documents that reuse unchanged elements, which keeps snapshot history cheap.
+- Notes and code on a shape or connector are an embedded `attachments` array on the host, not graph
+  nodes: they have no position, z-order or parent.
 
 ## The canvas boundary
 
-The store owns committed content; the canvas holds a gesture's temporary state until it finishes.
-One completed gesture creates one undo entry, and continuous edits such as typing coalesce.
-Camera movement can be saved without becoming a content edit or an undo step.
+- The store owns content; React Flow is a controlled view. The document is not written during a drag.
+- One gesture is one undo entry. Continuous edits such as typing coalesce.
+- Camera moves are saved but are never content edits or undo steps.
 
 ## One renderer
 
-Shapes and text use shared drawing descriptions for the canvas and image exports. Selection,
-handles and other interactive chrome stay outside that drawing, so they cannot leak into exports.
-Drawing styles parameterize the same renderer rather than introducing separate implementations.
+Shapes and text are pure display lists (`nodes/describe.ts`, `render/text/layout.ts`) shared by canvas
+and export. Selection, handles and other chrome are React and CSS only, so they never reach an export.
+Drawing styles are parameters of that renderer and a device preference, not document data.
 
-Connectors remain a consistency seam: their screen and export renderers are separate.
+## The two seams
+
+| Seam | Failure mode |
+| --- | --- |
+| Two independent connector renderers: `canvas/DraftEdgeView.tsx` and `edges/describe.ts` | A badge, dash or chip added to one is missing from the other. `edges/kindStyle.ts` and `e2e/line-jumps.spec.ts` cover part of it. |
+| Side effects in a React state updater | Development mode runs updaters twice; this once recorded every drag twice. |
 
 ## Relationship model
 
-A single capability matrix describes likely relationships between endpoint categories. Connector
-defaults, the relation picker, starters and suggestions use it, keeping their interpretation aligned.
+One sparse capability matrix, keyed by both endpoints' categories, says what a connection probably
+means. Connector defaults, the relation picker, starters and suggestions all read it. An unlisted
+pairing stays free; an unusual one gets guidance, not rejection. Rules: [Semantics](semantics.md).
 
-The matrix is deliberately sparse. An unspecified pairing retains full freedom, and an unusual
-connection receives guidance rather than rejection. Detailed rules are in [Semantics](semantics.md).
+## Connector routing
+
+- **Semantic graph vs. routing graph.** Spines, bundles and line jumps are presentation: never nodes,
+  never saved, no effect on semantics.
+- Routing never moves an anchor the user chose. **Tidy connectors** clears only route modes and bends.
+- Spine geometry is relative to the hub, so it follows a drag without writing the document.
+- The connection target shows where a release will land before the pointer is released.
 
 ## Flows and presentation
 
-Flows order references to existing connectors, allowing several stories to share one diagram.
-Presentation and sequence exports read those authored steps; they do not simulate execution or
-infer outcomes. Playback, emphasis and camera guidance are transient, and the presenter can take
-over the camera without changing the diagram.
+- A flow orders references to existing connectors; several flows share one diagram.
+- A step usually names a connector. A frame step spotlights shapes without one.
+- A selected flow acts as a lighter lens, except during presentation or focus, or when empty.
+- Playback, emphasis and camera guidance are never saved, undone or exported. A presenter's pan takes
+  the camera until guidance is requested again.
+- Sequence export writes every playable flow to one Mermaid or PlantUML file. The text is the product.
+- Nothing infers timing, outcomes or execution.
+
+## Command surface
+
+`commands/registry.ts` derives commands from selection, mode and document on demand. Each calls one
+existing store action. The context menu (`commands/contextMenu.ts`) is a flat, curated subset of the
+same commands, sometimes with shorter labels, minus any that open a follow-up picker (a
+`CommandStage`, such as **Connect to…**).
 
 ## Derived capabilities
 
-Starters produce ordinary diagram content. Continuation suggestions use the selected shape and its
-neighborhood. Commands expose existing actions, and sequence exports read existing flows. These
-capabilities reuse the model rather than creating parallel representations to keep synchronized.
-
-Open points are annotations attached by element id, so one question can concern several elements
-without changing their geometry or semantics. View levels derive how rooms are shown while keeping
-the underlying tree intact.
+- **Starters** create ordinary nodes, edges and flows. `commands/` names a store action, the store
+  composes `document/` operations, and `starters/` is data.
+- **Continuation** ranks next shapes from the selection's neighborhood; only high confidence shows unprompted.
+- **Open points** attach to element ids; they never affect geometry, routing or semantics.
+- **View levels** change how rooms are shown, not the tree.
 
 ## Persistence and the storage boundary
 
-The editor sees plain documents; storage owns reading, writing and recovery. Browser storage keeps
-summaries separate from diagram bodies so the library can list documents without loading every canvas.
-Desktop storage uses ordinary files and recovery copies for unsaved work.
+- The editor sees plain documents; storage owns reading, writing and recovery.
+- Browser storage keeps summaries apart from bodies, so the library lists without loading canvases.
+- Desktop storage uses ordinary files plus recovery copies.
+- Content writes check for intervening changes. Camera-only saves never conflict.
+- Reading never rewrites. Unreadable data is kept, never replaced with an empty diagram.
 
-Content writes detect intervening changes before replacing stored data. Camera-only saves avoid
-content conflicts. Reading a document does not rewrite it, and unreadable data is preserved rather
-than silently replaced with an empty diagram. Storage failures are reported instead of hidden.
-
-Storage formats and older encrypted records are covered in [Privacy](privacy.md); the threat model
-and encryption boundaries are in [Security](../../SECURITY.md).
+**Encrypted storage.** Builds 1.0–1.11 encrypted browser bodies. Current builds write plain records and
+only decrypt old ones, in `crypto/documentCipher.ts` and `crypto/keyStore.ts`, called only by
+`storage/IndexedDbRepository.ts`. The passphrase export is separate. See [Privacy](privacy.md) and
+[Security](../../SECURITY.md).
 
 ## Untrusted input and schema evolution
 
-Files, clipboard content and stored records pass through one migration and validation boundary
-before reaching the editor. Recoverable defects are repaired with a report; unsupported newer
-formats are refused explicitly. The goal is to retain valid work without trusting incoming data.
-See [Document schema](schema.md) for the format and migration contract.
+Files, clipboard, stored records and collaboration changes pass one migrate-and-validate boundary.
+Recoverable defects are repaired and reported; newer formats are refused by name. See
+[Document schema](schema.md).
 
 ## Desktop
 
-The desktop app hosts the same editor. The browser owns its IndexedDB documents; the desktop shell
-owns file access, saving and recovery. Keeping native capabilities behind a host interface makes
-shared editing independent of the platform and lets the desktop screens run against a fake shell.
-
-Optional agent access uses the same document operations and commit boundary. Permissions limit its
-scope, retries and cancellation must not create duplicate or late edits, and previews remain
-provisional until committed. Agent edits join the same undo history as manual edits. Protocol and
-permission details are in [Agent integration](agent-integration.md).
+The desktop shell owns files, saving and recovery. The editor reaches it only through `DesktopApi`,
+so desktop screens also run against a fake shell. Agent edits use the same operations, stay
+provisional until committed, and join the normal undo history ([Agent integration](agent-integration.md)).
 
 ## Live collaboration
 
-Collaboration keeps the file model intact by keeping one file. The person who starts a session hosts
-it: their editor holds the authoritative copy and saves it as always, and collaborators connect to
-that editor — over a WebRTC data channel from any browser, or through the desktop app's local network
-relay. There is no merge library and no shared database. To let people in by approval rather than by
-copying codes, a stateless rendezvous relay ([`relay.js`](../../www/cloudflare/relay.js)) passes along the few messages
-two browsers need before they connect — sealed with a key held only in the session link's fragment
-(`collab/rendezvous.ts`, `collab/lobby.ts`). It never carries the diagram and keeps nothing but a fingerprint of the owner's room secret, for 12 hours at most; without it,
-direct invites still connect people by hand.
-
-Collaborators send changes element by element, keyed by the ids every element already has
-(`collab/diff.ts`). The owner checks each change as strictly as an imported file (`collab/sanitize.ts`),
-applies it, removes references concurrent edits left dangling (`collab/repair.ts`), and broadcasts the
-resulting diff as a numbered commit. Each collaborator keeps the owner's confirmed file plus their own
-unconfirmed changes on top (`collab/replica.ts`), so edits show at once and settle when the owner's
-answer arrives. Applying the diff of two versions to the first reproduces the second exactly; that
-property, tested over random concurrent histories, is what keeps every copy equal to the owner's.
-
-The same pressures that shape solo editing shape the session: a gesture in progress holds incoming
-changes until it ends, undo reverts only what that person's edit touched and refuses to take away
-work somebody built on it, and cameras, selection and presence never enter the document. Network
-access is confined to `collab/transport/`, which nothing outside `collab/` may import.
+- The session owner's editor holds the authoritative file and saves it as usual. Others connect over
+  WebRTC, or through the desktop app's LAN relay.
+- A stateless rendezvous relay ([`relay.js`](../../www/cloudflare/relay.js)) forwards only the
+  connection handshake, sealed with a key from the link's fragment. It keeps a fingerprint of the room
+  secret for at most 12 hours. Direct invites work without it.
+- Changes travel per element id (`collab/diff.ts`). The owner sanitizes each like an import
+  (`collab/sanitize.ts`), repairs dangling references (`collab/repair.ts`) and broadcasts a numbered commit.
+- Collaborators show the confirmed file plus their pending changes (`collab/replica.ts`). Property
+  tests check that every copy converges on the owner's.
+- A held gesture delays incoming changes. Undo reverts only your own edit, never work built on it.
+  Cameras, selection and presence never enter the document.
 
 ## Deliberately not built
 
 Accounts, cloud sync, a hosted collaboration service, cloud-provider icon packs, standalone image
-nodes and a built-in AI generation service remain outside the editor's scope. Optional local agent
-integration, Mermaid import and owner-hosted live sessions extend how a diagram is authored without
-adding an editor backend.
+nodes, a built-in AI generation service.

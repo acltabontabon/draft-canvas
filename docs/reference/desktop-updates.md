@@ -1,183 +1,129 @@
 # Desktop updates
 
-How Draft Canvas Desktop updates itself, and the one-time setup a maintainer does before the first
-release that can be updated from. For what a person sees, see [Draft Canvas Desktop](../guides/desktop.md#updates).
+What users see is in [Draft Canvas Desktop](../guides/desktop.md#updates).
 
 ## How it works
 
 <!-- Drawn in Draft Canvas: ../media/reference/desktop-updates.json, rendered by e2e/og-diagram.ts. -->
-![The updater inside Draft Canvas Desktop reads the channel manifest from the update feed on GitHub Releases, offers you a newer version, and when you choose Update and restart asks the quit conversation before replacing the app.](../media/reference/desktop-updates.png)
+![The desktop updater reads the channel manifest on GitHub Releases, offers a newer version, and quits safely before replacing the app.](../media/reference/desktop-updates.png)
 
-1. **Look.** 15 seconds after launch, then daily, the updater reads
-   `github.com/…/releases/download/desktop-updates/<channel>.json`.
-2. **Offer.** If it lists something newer — and, for a stable install, not a prerelease — the update
-   is *Available*. Otherwise the app is up to date.
-3. **Download.** *Download* fetches it and checks its signature; it is then *Ready*.
-4. **Restart.** *Update and restart* starts the quit conversation: anything unsaved is kept, and a
-   file with changes is asked about. *Cancel* keeps working, and the update stays ready.
-5. **Replace.** The app is replaced and relaunched.
+1. **Check.** 15 seconds after launch, then daily, the app reads
+   `github.com/acltabontabon/draft-canvas/releases/download/desktop-updates/<channel>.json`.
+2. **Offer.** A newer version shows **Update available**.
+3. **Download.** **Download** fetches the package and verifies its signature.
+4. **Restart.** **Update and restart** runs the quit flow: unsaved work is kept and changed files are
+   asked about.
 
-The rules behind it:
+- Only checking is automatic. Settings has **Check for updates automatically** (on by default).
+- The updater is Rust (`src-tauri/src/updater/`). The page has no updater permission; it calls the
+  `update_*` commands. Installing uses the quit flow (`quit.rs`, `Purpose::Update`).
+- A downloaded update lives in memory, so a restart re-downloads and re-verifies it.
+- Nobody is downgraded. The installed version picks the channel:
 
-- **Looking is all it does on its own.** Downloading and installing are always asked for. Settings has
-  *Check for updates automatically* (on by default) and *Check for updates*.
-- **Everything is in Rust** (`src-tauri/src/updater/`). The page has no updater permission in its
-  capability file; it calls five commands (`update_status`, `update_check`, `update_download`,
-  `update_install`, `update_dismiss`) and draws the snapshot they return.
-- **Nothing unsaved is lost to a restart.** Installing asks the page exactly what quitting asks it
-  (`quit.rs`, `Purpose::Update`), and a quit that arrives while the app is being replaced waits.
-- **A downloaded update lives in memory only.** After a restart it is found and downloaded again, so
-  "ready" is never shown for a file nothing re-verified.
-- **Who is offered what.** Only something newer, compared by semver precedence; nobody is ever
-  downgraded. There's no channel setting: an install's channel follows from its own version.
+| Installed | Reads | Is offered |
+| --- | --- | --- |
+| a prerelease (any `-suffix`) | `alpha.json` | the newest newer version, prerelease or release |
+| a release | `stable.json` | newer releases only |
 
-| Installed                 | Reads         | Is offered                                                    |
-| ------------------------- | ------------- | ------------------------------------------------------------- |
-| a prerelease (`-alpha.1`, `-beta.2` — any suffix) | `alpha.json`  | the newest release of any kind: a newer alpha, or the release it led up to |
-| a release                 | `stable.json` | newer releases only, never a prerelease                       |
-
-Windows updates use the signed NSIS `.exe` directly, and macOS updates use `.app.tar.gz`. The
-updater's optional legacy `zip` feature is disabled: neither format needs it, and it would pull in
-vulnerable ZIP extraction code. Keep `rustls-tls` and `system-proxy` enabled.
+Windows updates use the signed NSIS `.exe`; macOS updates use `.app.tar.gz`. Keep the updater
+plugin's `zip` feature off (it pulls in vulnerable ZIP code) and `rustls-tls` and `system-proxy` on.
 
 ## Versions
 
-The desktop app ships in every Draft Canvas release: tag `vX.Y.Z`, where `X.Y.Z` is `package.json`'s — one
-version for the web app and desktop, one GitHub release. A desktop preview ahead of a release is tagged
-`desktop-vX.Y.Z-alpha.N`, and may lead `package.json` — `desktop-v1.10.0-alpha.1` while the web app is at 1.9.4
-— though its `X.Y.Z` can't be older. The release workflow builds the app as the tag's version either way. Every
-version needs a dated `## [X.Y.Z] - YYYY-MM-DD` section in `CHANGELOG.md`, previews included.
+- A release is tag `vX.Y.Z`, matching `package.json`; web and desktop share it.
+- A desktop preview is `desktop-vX.Y.Z-<suffix>` (for example `-alpha.1`). Its `X.Y.Z` may lead
+  `package.json`, never trail it.
+- Every version needs a dated `CHANGELOG.md` section. See [Releases](releases.md).
 
 ## The three kinds of signing
 
-1. **Update signing (Tauri / minisign)** — what this document is about: a keypair we generate. The
-   private half signs every update package in CI; the public half is compiled into the app, which refuses
-   any package that doesn't verify against it or wasn't signed for the version the manifest announces
-   (`requireSignedVersion`).
-2. **macOS code signing / notarization** — ad-hoc signed and not notarized today. The release workflow
-   is ready for the real thing: with the secrets below in place, `desktop-release.yml`'s "Prepare OS
-   signing" step names the identity to the bundler and `tauri-action` imports the certificate and
-   notarizes. Needed (an Apple Developer Program membership, paid): `APPLE_CERTIFICATE` (a Developer ID
-   Application certificate exported as base64 `.p12`), `APPLE_CERTIFICATE_PASSWORD`,
-   `APPLE_SIGNING_IDENTITY` (`Developer ID Application: Name (TEAMID)`), and for notarization
-   `APPLE_ID`, `APPLE_PASSWORD` (an app-specific password) and `APPLE_TEAM_ID`.
-3. **Windows Authenticode** — unsigned today. With `WINDOWS_CERTIFICATE` (a code-signing certificate as
-   base64 `.pfx`) and `WINDOWS_CERTIFICATE_PASSWORD` set, the same step imports it on the runner and
-   the bundler signs the installer by thumbprint (SHA-256, DigiCert timestamp). An OV or EV certificate
-   is bought from a CA; SmartScreen reputation still builds up over time.
+| Kind | Status | Secrets |
+| --- | --- | --- |
+| Update signing (Tauri minisign) | In use. The app refuses packages not signed by its built-in key for the announced version (`requireSignedVersion`). | `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` |
+| macOS code signing and notarization | Not configured; builds are ad-hoc signed | `APPLE_CERTIFICATE` (base64 `.p12`), `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID` |
+| Windows Authenticode | Not configured; installers are unsigned | `WINDOWS_CERTIFICATE` (base64 `.pfx`), `WINDOWS_CERTIFICATE_PASSWORD` |
 
-Neither is configured. Nothing in the workflow disables a check when the secrets are missing: the
-build is then exactly what it always was. Once either set exists, the sentence in
-`scripts/release-notes.mjs` and the README that says installers are unsigned has to change with it.
+- `desktop-release.yml`'s **Prepare OS signing** step uses OS signing secrets when present; without
+  them nothing is skipped.
+- When OS signing is added, update the "not signed or notarized" text in `scripts/release-notes.mjs`.
 
-Because the app downloads the package itself, an update doesn't meet the Gatekeeper or SmartScreen
-prompt a first manual install does. That is how the file arrives, not something bypassed.
+## Update key setup
 
-## Setting it up (once)
+The public key is in `src-tauri/tauri.conf.json` (`plugins.updater.pubkey`). For a new key:
 
-**1. Generate the keypair.**
+1. `npx tauri signer generate -w ~/.tauri/draft-canvas-updater.key` and choose a password.
+2. Back up the private key **and** its password offline. Installed copies accept only this key; losing
+   it means everyone reinstalls by hand. Never commit it.
+3. Put the `.pub` contents in `plugins.updater.pubkey`.
+4. Add `TAURI_SIGNING_PRIVATE_KEY` (file contents) and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` as
+   Actions secrets.
 
-```bash
-npx tauri signer generate -w ~/.tauri/draft-canvas-updater.key
-```
-
-Choose a password. This writes the private key and `draft-canvas-updater.key.pub`.
-
-**2. Back both up** — the private key file *and* its password, somewhere offline and durable. Lose
-either and no future release can be signed with this key; because the public key is compiled into
-every installed copy, **no installed copy would ever accept an update signed with another one**, and
-everyone would have to reinstall by hand. Never commit it or paste it anywhere public.
-
-**3. Put the public key in the app.** Paste the contents of `draft-canvas-updater.key.pub` into
-`src-tauri/tauri.conf.json` as `plugins.updater.pubkey`, replacing the `UNSET: …` placeholder, and
-commit it. Until then, builds say updates are unavailable, and the release workflow refuses to run.
-
-**4. Give CI the private key.** Repository → *Settings → Secrets and variables → Actions*:
-
-| Secret                               | Value                              |
-| ------------------------------------ | ---------------------------------- |
-| `TAURI_SIGNING_PRIVATE_KEY`          | the contents of the private key file |
-| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | the password from step 1           |
-
-`node scripts/update-manifest.mjs check-config` says whether the checkout is ready.
+`node scripts/update-manifest.mjs check-config` reports readiness; releases fail without the secret
+or a real key.
 
 ## What a release does
 
-`desktop-release.yml` — called by `release.yml` for a `vX.Y.Z` release, after it has created the release,
-or run by a `desktop-vX.Y.Z-alpha.N` tag, which makes its own prerelease:
+`desktop-release.yml` runs when `release.yml` calls it for `vX.Y.Z`, or on a `desktop-v…` tag (which
+creates its own prerelease):
 
-1. **verify** — the tag, version and changelog agree; the signing secret exists; the key in
-   `tauri.conf.json` is real, the endpoint is the channel template, and `requireSignedVersion` is on.
-2. **build** — with `src-tauri/tauri.updater.conf.json`: the installers **and** the signed update
-   packages (`Draft-Canvas_X.Y.Z_macOS_arm64.app.tar.gz`, its `_macOS_x64` twin, and the Windows
-   installer, each with a `.sig`).
-   Each signature is checked on the machine that made it, against the app's key and this version.
-3. **publish** — `latest.json` is built from the signatures and verified against the packages
-   themselves: every platform, every address this release's, every signature valid for the exact bytes.
-   Only then is it uploaded (and a preview's draft made public).
-4. **channels** (`desktop-update-pointer.yml`) — downloads `latest.json` and every package from the
-   public addresses installed copies will use, verifies them again, and only then copies it to the rolling
-   `desktop-updates` release as `stable.json` and `alpha.json` (a release) or `alpha.json` only (a
-   prerelease) — and only where it's newer than what's there.
+1. **verify:** tag, version, changelog, signing secret and updater config agree.
+2. **build:** installers plus signed update packages (`src-tauri/tauri.updater.conf.json`):
+   `Draft-Canvas_X.Y.Z_macOS_arm64.app.tar.gz`, `…_macOS_x64.app.tar.gz` and
+   `Draft-Canvas_X.Y.Z_Windows_x64.exe`, each with a `.sig`.
+3. **publish:** builds and verifies `latest.json`, uploads it, and takes the release out of draft.
+4. **channels** (`desktop-update-pointer.yml`): re-verifies from the public addresses, then moves the
+   rolling `desktop-updates` release forward: `stable.json` and `alpha.json` for a release,
+   `alpha.json` for a prerelease.
 
 ### If the channels job fails
 
-The release is out and its installers work, but nobody is offered it yet. Fix the cause and run
-**Actions → Desktop update channels → Run workflow** with the tag. No rebuild.
+Nobody is offered the release yet. Fix the cause and run **Actions → Desktop update channels** with
+the tag. No rebuild.
 
 ### Withdrawing a bad release
 
-Run **Desktop update channels** with an older tag and *force*. Further checks then see that release. It
-doesn't downgrade anyone already on the bad one — nothing is ever downgraded — so the real fix is a
-newer release.
+Run **Desktop update channels** with an older tag and **force**. Nobody is downgraded, so also ship a
+fix.
 
 ## Testing an update locally
 
-With a throwaway key and a local server; nothing is published.
-
 1. `npx tauri signer generate --ci -p "" -w /tmp/dc-e2e.key`
-2. An overlay config outside the repository, `e2e.conf.json`, with `"version"` set to an old version,
-   `plugins.updater.pubkey` the throwaway public key, `endpoints` `["http://127.0.0.1:8787/{{channel}}.json"]`,
-   `dangerousInsecureTransportProtocol: true`, and `bundle.createUpdaterArtifacts: true`. Use another
-   `identifier` and `productName` so it can't touch a real install.
-3. Build it (`TAURI_SIGNING_PRIVATE_KEY=/tmp/dc-e2e.key TAURI_SIGNING_PRIVATE_KEY_PASSWORD= npx tauri
-   build --bundles app --config e2e.conf.json`), copy the `.app` to a writable folder, then build again
-   with a newer `"version"`.
-4. Put the newer build's `.app.tar.gz` and `.sig` in a folder under the release names (copy the `.sig`
-   under the Windows name too — the builder wants every platform), then
-   `node scripts/update-manifest.mjs build <newer> <folder> --base-url http://127.0.0.1:8787 > <folder>/stable.json`
-   (name it `alpha.json` when the older build is a prerelease)
-   and `python3 -m http.server 8787 --bind 127.0.0.1 --directory <folder>`.
-5. Open the older copy. About 15 seconds later the chip says *Update available*; Download, then
-   *Update and restart*, and it reopens as the newer version.
+2. Write `e2e.conf.json` outside the repository: an old `"version"`, the throwaway pubkey,
+   `endpoints: ["http://127.0.0.1:8787/{{channel}}.json"]`, `dangerousInsecureTransportProtocol: true`,
+   `bundle.createUpdaterArtifacts: true`, and its own `identifier` and `productName`.
+3. Build:
+   `TAURI_SIGNING_PRIVATE_KEY=/tmp/dc-e2e.key TAURI_SIGNING_PRIVATE_KEY_PASSWORD= npx tauri build --bundles app --config e2e.conf.json`.
+   Copy the `.app` to a writable folder, then build again with a newer `"version"`.
+4. Put the newer `.app.tar.gz` and `.sig` in a folder under their release names (also copy the `.sig`
+   under the Windows name), then run:
+
+   ```bash
+   node scripts/update-manifest.mjs build <newer> <folder> --base-url http://127.0.0.1:8787 > <folder>/stable.json
+   python3 -m http.server 8787 --bind 127.0.0.1 --directory <folder>
+   ```
+
+   Name the manifest `alpha.json` if the older build is a prerelease.
+5. Open the older copy. After about 15 seconds, **Download**, then **Update and restart**.
 
 ## Homebrew releases
 
-The Release orchestrator calls `.github/workflows/homebrew.yml` after stable desktop publication.
-Drafts and prereleases do not update the cask. Pages and updater channels run independently;
-a Homebrew failure does not retract a release.
+`release.yml` calls `.github/workflows/homebrew.yml` after a stable desktop release (not
+prereleases). A failure does not affect the release, Pages or update channels.
 
-The job verifies both published DMGs against `SHA256SUMS.txt`, runs Homebrew style and audit
-checks, then updates only `Casks/draft-canvas.rb` in
-[the shared tap](https://github.com/acltabontabon/homebrew-tap). Other casks are untouched.
-Older versions are refused, concurrent pushes are retried, and identical output creates no commit.
+It verifies both DMGs against `SHA256SUMS.txt`, runs Homebrew style and audit, and updates only
+`Casks/draft-canvas.rb` in [the tap](https://github.com/acltabontabon/homebrew-tap). Older versions
+are refused.
 
 ### Credentials
 
-1. Create a dedicated Ed25519 deploy key for Draft Canvas.
-2. Add its public key to `acltabontabon/homebrew-tap` as a write-enabled deploy key.
-3. Save its private key as the `HOMEBREW_TAP_DEPLOY_KEY` Actions secret on
-   `acltabontabon/draft-canvas`. Pass it only to the Homebrew reusable workflow.
+1. Create an Ed25519 deploy key for Draft Canvas.
+2. Add the public key to `acltabontabon/homebrew-tap` with write access.
+3. Save the private key as the `HOMEBREW_TAP_DEPLOY_KEY` Actions secret here.
 
-The normal `GITHUB_TOKEN` cannot push to the tap. Missing credentials fail the workflow.
-Never commit private keys or secret values.
+`GITHUB_TOKEN` cannot push to the tap; missing credentials fail the workflow.
 
 ### Retry and recovery
 
-Run **Actions → Homebrew** with the published stable tag, including after a manual desktop rebuild.
-The workflow uses its current source and can refresh same-version installer checksums.
-It preserves newer casks and skips releases older than the latest published stable version.
-
-Fix verification or audit failures before retrying. Do not bypass checksum or Gatekeeper checks.
-Withdrawals and intentional rollbacks need a reviewed tap correction; they do not downgrade
-installed copies. See [release recovery](reliability.md#withdrawal-and-recovery-procedure).
+Run **Actions → Homebrew** with the stable tag, also after a manual desktop rebuild. Fix failures
+first; never bypass checksums. A rollback needs a reviewed tap fix; see
+[release recovery](reliability.md#withdrawal-and-recovery-procedure).

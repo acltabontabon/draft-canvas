@@ -1,60 +1,39 @@
 # Shapes, connectors and boundaries
 
-Add a shape, choose its kind, then connect it. Draft Canvas suggests relationship labels
-from the shapes at each end.
+Shortcuts use Mac keys. On Windows and Linux, use `Ctrl` for `⌘` and `Alt` for `⌥`.
 
-Shortcuts use Mac keys. On Windows and Linux, use `Ctrl` for `⌘`.
+## Shapes and kinds
 
-## Pick the right kind
-
-Press a shape's key to add it. Select it to choose a kind in its toolbar.
+Press a key to add a shape. Select it to choose a kind in its toolbar.
 
 | Shape | Key | Kinds |
 | --- | --- | --- |
-| Service | `S` | Service, API, Worker, External System, Scheduler, Gateway |
-| Data Store | `D` | Database, SQL, NoSQL, Cache, File system, Object storage, Search index, Table |
+| Service | `S` | Generic, API, Worker, External, Scheduler, Gateway |
+| Data Store | `D` | Generic, SQL, NoSQL, Cache, File System, Object Storage, Search Index, Table |
 | Queue | `Q` | Queue, Topic, Stream |
 | Actor | `A` | Human, System, Device, Group, Third Party, AI Agent |
-| Component | `M` | Component, Module, Adapter, Port |
+| Component | `M` | Generic, Module, Adapter, Port |
+| Junction | `J` | |
+| Boundary | `B` | See [Boundaries](#boundaries) |
+| Text / Note / Code | `T` / `N` / `C` | |
 
-Use **External System** for a service you do not own. Actors start borderless;
-**Actor frame → Framed** adds an outlined card.
+Use **External** for a service you do not own. **Actor frame → Framed** outlines an actor.
 
-Use **AI Agent** for an automated participant. Actor connectors can express *asks*, *delegates to*
-and *escalates to*. Changing a kind updates inferred relationships; manually chosen relationships stay.
+## Names and technology
 
-## Technology and description
-
-Select a shape, then **⋯ → Edit details…**. Enter a **Technology** and **Description**.
-Choose a technology suggestion with the arrow keys and `Enter`, or keep your own text.
-Aliases such as `Postgres` and versioned names such as `Rust 1.90` work.
+- Rename: double-click, or select and press `Enter`.
+- A label cut short? Run **Fit shapes to text** from `⌘K`.
+- Technology: **⋯ → Edit details…** → **Technology**. `Postgres` or `Rust 1.90` work; the shape
+  shows a matching icon.
 
 ![Technology suggestions for PostgreSQL.](../media/guides/technology-suggestions.png)
 
-A technology icon appears beside the shape. Click it for the full name and version.
-Custom or mixed stacks use a generic icon. Clear the field to remove it.
-Icons are bundled locally and included in image exports.
+## Connect shapes
 
-## Keep names readable
-
-Double-click a shape, or select it and press `Enter`, to rename it.
-`Enter` commits; `Esc` cancels. Shapes grow to fit new names.
-
-For an older label that is shortened, select the shape and run **Fit shapes to text**
-from `⌘K`. It expands the shape without moving it.
-
-## Say what the arrow means
-
-Drag from a shape's edge dot onto another shape. Drop on empty space to create and connect
-a new shape instead. For a keyboard route, select a shape and run **Connect to…** from `⌘K`.
-
-Click a connector to change its relationship. Labels read in the arrow's direction:
-`Orders API → orders` says *sends command to*.
-The [semantics reference](../reference/semantics.md#the-capability-matrix) lists the rules.
-
-- Hold `Shift` and click to select several shapes or connectors.
-- Drag a selected connector's endpoint to change its target or attachment side; `Esc` cancels.
-- When connectors share one label, click it again to cycle through them.
+- Drag from a shape's edge dot onto another shape, or onto empty space to create one.
+- Keyboard: select a shape and run **Connect to…** from `⌘K`.
+- Click a connector to change its relationship
+  ([rules](../reference/semantics.md#the-capability-matrix)). Drag its end to reconnect it.
 
 ## Bend a connector by hand
 
@@ -62,47 +41,29 @@ Select a connector, then:
 
 | Style | Edit the route |
 | --- | --- |
-| **Stepped** | Drag a bar on a straight run sideways. Snap it level to remove a jog. |
-| **Straight / Curved** | Drag a faint dot to add a bend; drag a square to move it; double-click a square to remove it. |
+| **Stepped** | Drag a bar on a straight run sideways. |
+| **Straight / Curved** | Drag a faint dot to add a bend, drag a square to move it, double-click a square to remove it. |
 
-Each drag is one undo step. Right-click → **Reset route** restores automatic routing.
-**Tidy connectors** in `⌘K` resets all routes.
+Right-click → **Reset route** restores automatic routing. **Tidy connectors** (`⌘K`) resets all.
 
 ## Sync, async and the reply
 
-For a connector between services, open **Interaction** in its popover:
+Between two services, the connector's **Interaction** section sets **HTTP** or **Generic Call**,
+and **Sync** (caller waits) or **Async** (shown with a break mark). Under **Response**, add a reply
+line and its label, or click **Guess**. Async has no reply.
 
-- Choose **HTTP** or **Generic Call**.
-- **Sync** means the caller waits. **Async** means it carries on, shown by a break mark.
-- Turn **Response** on for a reply and enter its label, or use **Guess**. Switching to Async removes the reply.
+## More connector tools
 
-The context menu also offers **Make asynchronous** and **Make synchronous**.
-
-## Put a note or payload on a connector
-
-Right-click a connector to attach a Note or Code shape. Or drag an existing one onto the line
-and hold until it docks. Click the chip to read it; drag it off to detach it.
-
-## Mark the failure path
-
-Select a Queue and choose **Add DLQ** from its popover, context menu or `⌘K`.
-This adds a dead-letter queue and a *dead-letters to* connector.
-Click the connector to set delivery attempts; the default is three.
-For a Topic, put the DLQ on each subscriber's queue.
-
-## Branch through a junction
-
-Press `J` to add a Junction for a shared route. Connect through it as usual;
-relationships still describe the shapes on either side.
-Right-click an existing bundle and choose **Convert to junction** to convert it.
+- **Attach note** / **Attach code** (right-click), or drag a note onto the line and hold.
+- **Add DLQ** on a Queue adds a dead-letter queue; click its connector to set delivery attempts.
+- A Junction (`J`) shares a route. Right-click a bundle → **Convert to junction**.
 
 ## Boundaries
 
-Select shapes and press `⌘G`, or press `B` for an empty boundary and drag shapes in.
-Moving, copying or deleting a boundary includes its contents.
-Choose its kind and colour in the toolbar:
+Select shapes and press `⌘G`, or press `B` and drag shapes in. Contents move, copy and delete
+with the boundary. Pick a kind and colour in its toolbar:
 
-| Kind | Use it for |
+| Kind | For |
 | --- | --- |
 | Boundary | A general frame |
 | Group | Shapes that belong together for this explanation |
@@ -111,35 +72,30 @@ Choose its kind and colour in the toolbar:
 | Network | A network scope |
 | Deployment | A runtime or hosting scope |
 
-Kinds change the outline and header; they do not enforce architecture rules.
+Kinds change the look only.
 
 ## Write rich text
 
-Press `T` for a Text shape. Double-click it or press `Enter` to edit its Markdown;
-the format bar edits selected words. Canvas and exports show the formatted result.
+Press `T`, then `Enter` to edit Markdown. **Aa** sets font, alignment and background
+(**Card**, **Marker**, **Banner**).
 
 | Write | Get |
 | --- | --- |
-| `# Title`, `## Section`, `### Detail` | Headings |
-| `**bold**`, `_italic_`, `~~struck~~`, `==highlighted==` | Emphasis |
-| `` `code` ``; a fenced code block with a language such as `ts` or `diff` | Inline or highlighted code |
-| `- item`, `1. step`, `- [ ] todo`, `- [x] done` | Lists and checklists |
-| `> quote`; `> [!WARNING]` | Quotes and callouts (NOTE, TIP, IMPORTANT, WARNING, CAUTION) |
-| `\| A \| B \|` followed by `\| --- \| --- \|` | A table |
-| `---` | A divider |
-| `[words](https://…)`; `[words]{.rose}` | A link; coloured words |
+| `#`, `##`, `###` | Headings |
+| `**bold**`, `_italic_`, `~~struck~~`, `==highlight==` | Emphasis |
+| `` `code` ``, fenced block with a language | Code |
+| `- item`, `1. step`, `- [ ] todo` | Lists |
+| `> quote`, `> [!WARNING]` | Quote, callout (NOTE, TIP, IMPORTANT, WARNING, CAUTION) |
+| `\| A \| B \|` + `\| --- \| --- \|` | Table |
+| `---` | Divider |
+| `[words](https://…)`, `[words]{.rose}` | Link, coloured words |
 
 ![A Text shape's Markdown editor and format bar.](../media/guides/rich-text-editing.png)
 
-While editing, `⌘B` / `⌘I` / `⌘E` / `⌘⇧X` / `⌘⇧H` / `⌘K` apply bold, italic, code,
-strikethrough, highlight or a link. `⌘⇧8` / `⌘⇧7` / `⌘⇧9` create bulleted, numbered or checklists;
-`⌘⌥1`–`⌘⌥3` create headings. On Windows and Linux, use `Alt` for `⌥`.
+| Keys while editing | Does |
+| --- | --- |
+| `⌘B` `⌘I` `⌘E` `⌘⇧X` `⌘⇧H` `⌘K` | Bold, italic, code, strikethrough, highlight, link |
+| `⌘⇧8` `⌘⇧7` `⌘⇧9` | Bulleted, numbered, checklist |
+| `⌘⌥1`–`⌘⌥3` | Heading 1–3 |
 
-In a list, `Enter` adds the next item; on an empty item it ends the list. `Tab` nests items.
-A single line break stays a new line; a blank line starts a paragraph.
-
-Use **Aa** to choose Sans, Serif, Mono or Hand fonts, alignment and a background:
-**Card**, **Marker** or **Banner**. Backgrounds use the shape's colour.
 [Preview formatting examples.](../media/guides/rich-text.png)
-
-Next: [look inside a shape](depth.md) or [present a flow](flows-and-presentation.md).

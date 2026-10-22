@@ -1,139 +1,131 @@
 # Document schema and versioning
 
-This document exists so the migration contract can be audited rather than trusted blindly — it
-describes what `CURRENT_VERSION` actually promises, how a file moves between versions, and how
-untrusted input is treated on the way in. The source of truth is always the code cited below; if
-this drifts from it, trust the code.
+The migration and validation contract for `.draftcanvas` files. If this drifts from the code, the
+code wins.
 
-## The version field
+## The file
 
-Every `.draftcanvas` file (and everything in IndexedDB's `bodies` store) carries a `version:
-number` and a `format: "draft-canvas"` marker. `CURRENT_VERSION` is declared in
-`src/document/types.ts`, currently **21**. A file missing the marker, or whose `version` isn't a
-finite integer, is treated as version 1 — the oldest shape the app has ever written.
+A document (`DraftDocument` in `src/document/types.ts`) is JSON with these root fields:
 
-## The migration funnel
+| Field | Contents |
+| --- | --- |
+| `format` | Always `"draft-canvas"` |
+| `version` | Format version, currently **21** (`CURRENT_VERSION`) |
+| `metadata` | `id`, `title`, `createdAt`, `updatedAt`, optional `projectId` |
+| `nodes`, `edges`, `flows`, `viewport` | The top-level graph |
+| `settings` | Canvas settings, including the background |
+| `openPoints` | Unsettled questions attached to elements. Root only |
+| `level` | Optional `ViewLevel` |
 
-`src/document/migrate.ts` is documented in its own header as **the single funnel for
-document-version handling** — nothing else in the codebase may branch on `version`. It holds one
-`Migration` function per version transition, each taking a v(n)-shaped object and returning a
-v(n+1)-shaped one:
+A node may own a room (`DraftNode.inside`): its own `nodes`, `edges`, `flows`, `viewport` and
+optional `level`. A document is a tree of graphs, nested at most 3 levels below the root.
 
-| Transition | Function | What changed |
+The same shape is stored in IndexedDB's `bodies` store.
+
+## Versions and migrations
+
+`src/document/migrate.ts` is the only code that reads `version`. `MIGRATIONS[n]` upgrades a
+version-`n` document to `n + 1`. `migrateToCurrent` runs the chain:
+
+- A missing or non-integer `version` is treated as 1.
+- A version newer than `CURRENT_VERSION` throws `UnsupportedVersionError`, naming both versions.
+- A gap in the chain throws `Missing migration from document format v${v} to v${v + 1}.`
+
+Rules for a new version:
+
+- Bump `CURRENT_VERSION` and add exactly one entry, even a no-op.
+- A migration that touches nodes, edges or flows must reach every room: write it for one graph and
+  wrap it with `everyRoom` (built on `mapGraphs`).
+- A new field that an older build's validation would strip still needs a version bump, so the older
+  build refuses the file instead of silently writing back a stripped copy.
+
+| Transition | Migration | Change |
 | --- | --- | --- |
-| v1 → v2 | `migrateSequenceToFlows` | A single document-wide numbered walkthrough (`edge.sequence`) becomes one named Flow — order moves into `flow.steps`, edges lose `sequence`. |
-| v2 → v3 | `migrateAnchors` | Connector anchor sides/offsets, previously re-derived live on every load, are computed once and persisted. A dangling edge is left for `validate.ts` to drop, as always. |
-| v3 → v4 | `migrateFlowAccent` | Structural no-op — v3 has no per-flow accent to backfill. Exists only so every version has an entry. |
-| v4 → v5 | `migrateBackground` | Structural no-op — v4 has no canvas-background concept; `normalizeDocument` fills in a clean, disabled default. |
-| v5 → v6 | `migrateResponse` | Structural no-op — v5 has no request/response connector concept. |
-| v6 → v7 | `migrateCardAndRoundedToNote` | Retypes any `card`/`rounded` node or attachment to `note` (the generic free-text type), leaving text/position/size/accent untouched. |
-| v7 → v8 | `migrateHasResponse` | Introduces `hasResponse: true` for any edge that already had `response` text, so its reply line keeps rendering exactly as before. |
-| v8 → v9 | `migrateAddProjectId` | Structural no-op — absent `metadata.projectId` already means Unorganized. |
-| v9 → v10 | `migrateAddRouteMode` | Structural no-op — absent `routeMode` already means Smart Routing. Exists so a v9 file can't be confused with a pre-v9 one. |
-| v10 → v11 | `migrateBffToApi` | The `bff` Service kind is gone — a Backend for Frontend is a role, not a runtime primitive — so any `serviceKind: 'bff'` becomes `'api'`. |
-| v11 → v12 | `migrateAddInsides` | Structural no-op — a v11 node simply has no `inside`, which is what absent already means. The version still moves because a v11 build's whitelist would strip the rooms out of a v12 file and write the stripped version back; refusing it by name is the only safe reading. |
-| v12 → v13 | `migrateAddActions` | Structural no-op — a v12 file simply has no canvas-level `actions`, which is what absent already means. Root-only, so deliberately *not* wrapped in `everyRoom`. The version still moves for v12's own reason: an older build's whitelist would strip the actions out of a v13 file and write the stripped version back. |
-| v13 → v14 | `migrateProjectsToWrites` | The `projects` relationship is gone — a projection's write into a read store is a write — so any `semantic: 'projects'` becomes `'writes'`, keeping whether it was inferred or chosen and any label. |
-| v14 → v15 | `migrateAddC4Text` | Structural no-op — a v14 node simply has no `description` or `technology` (C4 text, kept only on services, data stores, queues, actors and components). The version still moves so an older build refuses a v15 file by name instead of its whitelist silently dropping the text, and writing the stripped file back. |
-| v15 → v16 | `migrateAddOpenPoints` | Structural no-op — a v15 file simply has no canvas-level `openPoints` (what the discussion has not settled yet, attached to the shapes and connectors it concerns). Root-only, so not wrapped in `everyRoom`. The version moves for the same reason v13's did: an older build's whitelist would strip the points and write the stripped file back. |
-| v16 → v17 | `migrateActionsToNotes` | The canvas-level `actions` list (v13–v16, the Takeaways feature) is gone. Each action becomes a note: one anchored to a shape or connector that still exists — at the root or inside any room — becomes a note attachment on it (`Action: …` / `Done: …`); the rest are gathered into one `Actions` note node below the diagram, one ☐/☑ line each, split only past the note text limit. Root-only entry, so not wrapped in `everyRoom`, but it walks rooms itself to resolve anchors. Fresh ids are minted for everything it creates. |
-| v17 → v18 | `migrateReadsWritesLabel` | Adds the `readsWrites` relationship (a service and the store it owns, read and written over one connector — now the Service → Database default). A `writes` connector whose hand-typed label says "reads / writes" (any case or spacing) becomes `readsWrites` with the label cleared, so the caption is the connector's own and reverses correctly; any other label, and any other relationship, is left exactly as it was. Wrapped in `everyRoom`. |
-| v18 → v19 | Optional evidence | Elements and relationships can carry bounded repository-relative source evidence with an observed/inferred basis. The transition is a no-op; older graphs keep their meaning, and evidence is validated independently in every room on import. |
-| v19 → v20 | `migrateAddWaypoints` | Structural no-op — a v19 connector has no `waypoints` (the bends the user dragged it through), which is what absent already means: routed automatically. The version moves so an older build refuses a v20 file by name instead of its whitelist silently straightening every bent connector and, where edits save straight back to disk, writing that over the original. |
-| v20 → v21 | `migrateTextToMarkdown` | A Text node's `text` becomes Markdown. Every Text node and every Text attachment, in every room, has its words escaped (`escapeLegacyText`): characters Markdown would read as syntax get a backslash where they would act, leading indentation becomes no-break spaces, and a blank line holds one no-break space, so a v20 diagram reads exactly as typed. Notes, code and every other node keep their text unchanged. |
+| v1 → v2 | `migrateSequenceToFlows` | `edge.sequence` becomes one named Flow |
+| v2 → v3 | `migrateAnchors` | Connector anchor sides and offsets are persisted |
+| v3 → v4 | `migrateFlowAccent` | No-op (per-flow accent) |
+| v4 → v5 | `migrateBackground` | No-op (canvas background) |
+| v5 → v6 | `migrateResponse` | No-op (connector response) |
+| v6 → v7 | `migrateCardAndRoundedToNote` | `card` and `rounded` nodes and attachments become `note` |
+| v7 → v8 | `migrateHasResponse` | `hasResponse: true` on edges that already had `response` text |
+| v8 → v9 | `migrateAddProjectId` | No-op (`metadata.projectId`) |
+| v9 → v10 | `migrateAddRouteMode` | No-op (`routeMode`) |
+| v10 → v11 | `migrateBffToApi` | `serviceKind: 'bff'` becomes `'api'` |
+| v11 → v12 | `migrateAddInsides` | No-op (`DraftNode.inside`) |
+| v12 → v13 | `migrateAddActions` | No-op (root `actions`, since removed) |
+| v13 → v14 | `migrateProjectsToWrites` | `semantic: 'projects'` becomes `'writes'` |
+| v14 → v15 | `migrateAddC4Text` | No-op (`description`, `technology`) |
+| v15 → v16 | `migrateAddOpenPoints` | No-op (root `openPoints`) |
+| v16 → v17 | `migrateActionsToNotes` | Root `actions` become note attachments on their target, or lines in one `Actions` note |
+| v17 → v18 | `migrateReadsWritesLabel` | A `writes` connector labelled "reads / writes" becomes `readsWrites` with the label cleared |
+| v18 → v19 | identity | No-op (optional source evidence) |
+| v19 → v20 | `migrateAddWaypoints` | No-op (connector `waypoints`) |
+| v20 → v21 | `migrateTextToMarkdown` | Text node and Text attachment `text` is escaped so it reads the same as Markdown |
 
-Several of these are deliberate **structural no-ops**: versions where the on-disk shape didn't
-actually need to change, but an entry is still required. `migrateToCurrent` walks the chain from a
-file's own version up to `CURRENT_VERSION`, and a **missing** entry for any step throws
-(`Missing migration from document format v${v} to v${v + 1}.`) — a gap in the chain is a hard
-failure at load time, never a silent skip. This is also why bumping `CURRENT_VERSION` always means
-adding exactly one new entry, even one that does nothing yet, rather than leaving room for later.
+Wrapped in `everyRoom`: the migrations from v1, v2, v6, v7, v10, v13, v17 and v20. `migrateActionsToNotes` is
+root-only but walks rooms itself to resolve anchors.
 
-Since v12, a node may own the architecture that runs inside it (`DraftNode.inside`), so a document
-is a tree of graphs rather than one. **A migration that touches nodes, edges or flows must reach
-every room**, not just the document's own graph — `migrate.ts`'s `mapGraphs` helper walks them all
-and is there to be used.
+## Validation
 
-A file whose `version` is **greater than** `CURRENT_VERSION` — saved by a newer build than the one
-currently reading it — is rejected outright via `UnsupportedVersionError`, which names both
-versions in its message. Older builds never guess at a shape they've never seen.
+`parseDocument()` in `src/document/validate.ts` is the only way a document enters the app: file
+open and import, IndexedDB load, decrypted `.dcenc` import and clipboard paste
+(`src/document/clipboardCodec.ts`). Policy: repair, don't reject.
 
-## The untrusted-input boundary
+Rejected outright:
 
-`src/document/validate.ts`'s `parseDocument()` is the one place a `.draftcanvas` file (or an
-IndexedDB record, or a `.dcenc` file after decryption — an encrypted export is deliberately not
-treated as more trusted than a plain one) is turned into a `DraftDocument` the rest of the app can
-assume is well-formed. Its policy is **repair, don't reject**, applied only after
-`migrateToCurrent` has run:
+- Input over `maxFileBytes` (24 MB).
+- Invalid JSON, or a missing `"draft-canvas"` format marker.
+- A newer `version`.
 
-- A file over `LIMITS.maxFileBytes` (24 MB), invalid JSON, or missing the `format` marker is
-  rejected with a clear error — there's nothing safe to repair.
-- Every other field is re-validated regardless of what the migration chain produced: enums are
-  whitelisted against closed sets (node/edge kinds, accents, sides, boundary presets, node
-  variants), free text is stripped of control characters and length-clamped, and numeric fields
-  (`x`, `y`, `width`, `height`, `zoom`, …) are coerced to finite values via `clamp`/`finite`
-  helpers — a `NaN`, `Infinity`, or wrong-typed value never reaches the live document.
-- A room (`DraftNode.inside`) is validated by these same rules, one level at a time, with three
-  additions of its own: nesting stops at `maxInsideDepth` (3 below the document), ids stay unique
-  across the whole file rather than per room, and `maxNodes`/`maxEdges` are one allowance spent
-  outermost-first — an enormous file loses its deepest detail, never the overview. A room left
-  with no shapes is dropped, since a room exists exactly when it holds something.
-- Collections over their `LIMITS` cap (`maxNodes: 5000`, `maxEdges: 10000`,
-  `maxAttachmentsPerNode: 12`, `maxAttachmentsPerEdge: 4`, `maxFlows: 50`, `maxStepsPerFlow: 200`, `maxActions: 100`, `maxOpenPoints: 200`,
-  `maxExtraMembersPerStep: 40`, …) are truncated, not rejected, and the truncation is reported back
-  as a repair the caller can show the user.
-- Dangling references (an edge whose source/target no longer exists, a `parentId` pointing at a
-  boundary that isn't there, a flow step referencing a missing edge) are dropped rather than kept
-  as landmines for later code to trip over. An open point's `targets` are resolved *after* every
-  room is in — ids are unique file-wide, so a valid target may point into a room that hasn't been
-  validated yet.
+Repaired, after migration, and reported to the caller:
 
-`openPoints` is read at the root only. A room carrying one is ignored rather than merged upward: a
-room is a room, but the meeting is the file. An open point's `targets` are resolved after every room
-is in; an attachment to something gone is dropped, and a point left with no target is dropped with
-it: a marker on nothing is a lie the canvas could never draw. A point shared across several elements keeps the
-ones that remain.
+- Enums are checked against closed sets; invalid values fall back or are dropped.
+- Text has control characters stripped and is length-clamped.
+- Numbers are coerced to finite values and clamped.
+- Collections over their limit are truncated. `maxNodes` and `maxEdges` are one allowance across
+  the file, spent outermost first.
+- Dangling references are dropped: edges to missing nodes, missing `parentId` boundaries, flow
+  steps to missing edges.
+- Rooms deeper than `maxInsideDepth` are dropped. A room with no shapes is dropped. Ids are unique
+  across the whole file.
+- `openPoints` is read at the root only. Targets are resolved after every room is loaded; a
+  missing target is dropped, and a point with no targets left is dropped.
 
-The same `parseDocument()` funnel backs every entry point that reads a document from outside the
-live session: file import, IndexedDB load, secure (`.dcenc`) import, and clipboard paste
-(`src/document/clipboardCodec.ts`) — there is no second, less-careful path.
+## Limits
 
-## Round-tripping
+From `LIMITS` in `src/document/limits.ts`:
 
-`serializeDocument`/`deserializeDocument` (`src/export/project.ts`) write and read the same JSON
-shape `parseDocument` validates — export is not treated as pre-sanitized data on the way back in.
-`tests/serialization.test.ts` and `tests/migrate.test.ts` are the regression suite for this
-contract: the former asserts a rich document (attachments, boundaries, flows, connector details)
-survives a full export/import cycle unchanged, the latter exercises every version transition,
-idempotency, and the chain-completeness invariant above.
+| Limit | Value |
+| --- | --- |
+| `maxFileBytes` | 24 MB |
+| `maxNodes` / `maxEdges` | 5,000 / 10,000 |
+| `maxInsideDepth` | 3 |
+| `maxAttachmentsPerNode` / `maxAttachmentsPerEdge` | 12 / 4 |
+| `maxFlows` / `maxStepsPerFlow` / `maxExtraMembersPerStep` | 50 / 200 / 40 |
+| `maxOpenPoints` / `maxOpenPointTargets` | 200 / 40 |
+| `maxWaypointsPerEdge` | 32 |
+| `maxTitleLength` / `maxLabelLength` | 200 / 500 |
+| `maxTextLength` / `maxCodeLength` | 20,000 / 200,000 |
+| `maxDescriptionLength` / `maxTechnologyLength` | 280 / 60 |
+| `maxEmbeddedBackgroundBytes` | 2 MB |
 
-The bytes are canonical, not just the shape. `src/export/canonical.ts` writes every object in the
-file — nodes, edges, flows and their steps, attachments, settings, open points, and every room under
-a node's `inside`, recursively — with its keys in the order `src/document/types.ts` declares them
-(`id` first), a key the interface doesn't name after those, sorted, and no key at all for an
-`undefined` value. How an object came to be (a factory, a spread in an operation, a migration, a
-validation pass on import) leaves no trace in the file, so the same diagram serializes to the same
-bytes, a `git diff` of a `.draftcanvas` file shows only what changed, and the desktop can tell
-"unchanged" by comparing text. `tests/serialization.test.ts` holds a starter's serialize → parse →
-serialize to identical bytes and a document with its keys shuffled to the same bytes as one without.
+## Serialization
 
-One optional field carries binary data: `settings.background.image` (`EmbeddedBackgroundImage`), the
-canvas background as a base64 data URI with its natural size, written only by a `.draftcanvas`
-export and only when the image is at most `LIMITS.maxEmbeddedBackgroundBytes`. It is a property of
-the file in transit: import stores the bytes in the image store and drops the field, so no saved
-document ever holds it, and validation drops anything that isn't a well-formed image data URI of
-that size. Being optional, it needed no version bump.
+- `serializeDocument` / `deserializeDocument` (`src/export/project.ts`) write and read the shape
+  `parseDocument` validates. Exported files are not trusted on the way back in.
+- Bytes are canonical (`src/export/canonical.ts`): keys in the order `types.ts` declares them (`id`
+  first), unknown keys after them sorted, `undefined` values omitted. The same diagram always
+  writes the same bytes, so `git diff` shows only real changes.
+- Tests: `tests/serialization.test.ts` (round trip and canonical bytes), `tests/migrate.test.ts`
+  (every transition, idempotency, chain completeness).
 
-A `text` node's `text` is Markdown from v21 (`src/render/text/markdown.ts`): headings, emphasis,
-inline and fenced code, lists, task lists, tables, quotes, GitHub-style callouts, `==highlight==` and
-`[words]{.accent}` spans. It may also carry `textFont: 'sans' | 'serif' | 'mono' | 'hand'` and
-`textBackground: 'card' | 'marker' | 'banner'`, beside the existing `textRole`, `textAlign`, `textBold`
-and `textItalic`. Absent means the role's own face and no background. Validation drops invalid values
-and strips both fields from other node types. Every other node's `text` stays plain text.
+## Optional fields without a version bump
 
-Actors may carry `actorFrame: 'borderless' | 'framed'`. New actors explicitly use `borderless`;
-an absent field preserves the framed appearance of existing diagrams. Validation drops invalid
-values and strips the field from other node types. This optional appearance setting changes no
-dimensions, routing or semantics, so it needs no version bump; older builds ignore it and render
-the actor with a frame. `tests/actor-frame.test.ts` covers validation and round-tripping, including
-actors inside rooms.
+| Field | Notes |
+| --- | --- |
+| `settings.background.image` | Base64 image data URI written only by `.draftcanvas` export, up to `maxEmbeddedBackgroundBytes`. Import moves it to the image store and drops the field. |
+| `textFont`, `textBackground` | Text nodes only. `sans`, `serif`, `mono`, `hand`; `card`, `marker`, `banner`. Absent: the role's face, no background. |
+| `actorFrame` | Actors only. `borderless` or `framed`. New actors are `borderless`; absent renders framed. |
+
+Since v21, a Text node's `text` is Markdown (`src/render/text/markdown.ts`). Every other node's
+`text` is plain.
