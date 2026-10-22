@@ -29,7 +29,7 @@ describe('THIRD_PARTY_LICENSES.txt', () => {
 
   it('names the production closure, not the development tools', () => {
     for (const name of ['vitest', 'oxlint', 'typescript', '@playwright/test']) {
-      expect(text).not.toMatch(new RegExp(`^### ${name.replace(/[/@]/g, '\\$&')} `, 'm'));
+      expect(text).not.toMatch(new RegExp(`^### ${name.replace(/[.*+?^${}()|[\]\\/@]/g, '\\$&')} `, 'm'));
     }
     const shipped = Object.entries(lock.packages).filter(([path, entry]) => path.startsWith('node_modules/') && !entry.dev && entry.version);
     expect(shipped.length).toBeGreaterThan(5);

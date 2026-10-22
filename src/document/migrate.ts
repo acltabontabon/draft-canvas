@@ -617,7 +617,7 @@ export function migrateToCurrent(raw: Record<string, unknown>): {
   let doc = raw;
   const applied: number[] = [];
   for (let v = version; v < CURRENT_VERSION; v += 1) {
-    const migration = MIGRATIONS[v];
+    const migration = Object.hasOwn(MIGRATIONS, v) ? MIGRATIONS[v] : undefined;
     if (!migration) {
       throw new Error(`Missing migration from document format v${v} to v${v + 1}.`);
     }

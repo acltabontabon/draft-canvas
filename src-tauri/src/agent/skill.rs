@@ -496,6 +496,10 @@ mod tests {
             "6",
             "bb862773b28eb8ac532113d51b08292c3d8a690032ada8f571c5018af366083e",
         ),
+        (
+            "7",
+            "a582a5524f3ebd64b9f7aaba753dc75210069bc23d867b29d881eb60dfdbcdb2",
+        ),
     ];
 
     #[test]

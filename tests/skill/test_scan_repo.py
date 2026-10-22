@@ -219,6 +219,17 @@ class StaysUpright(unittest.TestCase):
         self.assertEqual(len(data['units']), 20)
         self.assertLess(elapsed, 5.0)
 
+    def test_a_manifest_without_a_name_does_not_backtrack(self) -> None:
+        started = time.perf_counter()
+        found = scan.parse_k8s('kind: Deployment\nmetadata:\n' + ' \n' * 40 + 'spec: {}\n')
+        self.assertLess(time.perf_counter() - started, 1.0)
+        self.assertEqual(found, [('Deployment', '?', None)])
+
+    def test_a_manifest_name_survives_labels_blank_lines_and_crlf(self) -> None:
+        manifest = 'kind: Deployment\nmetadata:\n  labels:\n    app: x\n\n  name: "api"\nspec:\n  image: a/b:1\n'
+        self.assertEqual(scan.parse_k8s(manifest), [('Deployment', 'api', 'a/b:1')])
+        self.assertEqual(scan.parse_k8s(manifest.replace('\n', '\r\n')), [('Deployment', 'api', 'a/b:1')])
+
 
 class CommandLine(unittest.TestCase):
     def test_json_is_valid_and_a_missing_folder_is_refused(self) -> None:

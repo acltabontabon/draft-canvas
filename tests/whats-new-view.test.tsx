@@ -6,6 +6,9 @@ import { applicableReleases, PRODUCT_RELEASES } from '../src/releases/productRel
 import { useUiStore } from '../src/store/uiStore';
 import { AboutDialog } from '../src/ui/common/AboutDialog';
 
+/** A version as literal regex text: prereleases carry more than dots (`1.12.0-beta.1+build`). */
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 /**
  * About → What's New → Release History → Release Detail: one modal, four internal views, never
  * a modal on a modal. `back` retraces the path actually taken to get there — Detail returns to
@@ -97,7 +100,7 @@ describe('AboutDialog — What\'s New', () => {
 
     const recent = applicableReleases(PRODUCT.version).slice(1, 4);
     for (const release of recent) {
-      expect(screen.getByRole('button', { name: new RegExp(`v${release.version.replace(/\./g, '\\.')}`) })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: new RegExp(`v${escapeRegExp(release.version)}`) })).toBeInTheDocument();
     }
     expect(screen.getByRole('button', { name: /View release history/i })).toBeInTheDocument();
   });
@@ -108,7 +111,7 @@ describe('AboutDialog — What\'s New', () => {
     await user.click(screen.getByRole('button', { name: /What's New/i }));
 
     const recent = applicableReleases(PRODUCT.version)[1]!;
-    await user.click(screen.getByRole('button', { name: new RegExp(`v${recent.version.replace(/\./g, '\\.')}`) }));
+    await user.click(screen.getByRole('button', { name: new RegExp(`v${escapeRegExp(recent.version)}`) }));
 
     expect(screen.getByRole('heading', { name: `v${recent.version}` })).toBeInTheDocument();
     expect(screen.getByText(recent.highlights[0]!.title, { exact: false })).toBeInTheDocument();
@@ -121,7 +124,7 @@ describe('AboutDialog — What\'s New', () => {
 
     const latest = applicableReleases(PRODUCT.version)[0]!;
     const recent = applicableReleases(PRODUCT.version)[1]!;
-    await user.click(screen.getByRole('button', { name: new RegExp(`v${recent.version.replace(/\./g, '\\.')}`) }));
+    await user.click(screen.getByRole('button', { name: new RegExp(`v${escapeRegExp(recent.version)}`) }));
     await user.click(screen.getByRole('button', { name: "Back to What's New" }));
 
     // Back to the top-level What's New view for the CURRENT release, not the row just visited.
@@ -136,10 +139,10 @@ describe('AboutDialog — What\'s New', () => {
 
     const all = applicableReleases(PRODUCT.version);
     for (const release of all) {
-      expect(screen.getByRole('button', { name: new RegExp(`v${release.version.replace(/\./g, '\\.')}`) })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: new RegExp(`v${escapeRegExp(release.version)}`) })).toBeInTheDocument();
     }
     // The newest release is the one actually installed/represented — one restrained indicator.
-    const currentRow = screen.getByRole('button', { name: new RegExp(`v${all[0]!.version.replace(/\./g, '\\.')}.*Current`) });
+    const currentRow = screen.getByRole('button', { name: new RegExp(`v${escapeRegExp(all[0]!.version)}.*Current`) });
     expect(currentRow).toBeInTheDocument();
   });
 
@@ -150,7 +153,7 @@ describe('AboutDialog — What\'s New', () => {
     await user.click(screen.getByRole('button', { name: /View release history/i }));
 
     const target = applicableReleases(PRODUCT.version).at(-1)!; // the oldest one, only reachable via history
-    await user.click(screen.getByRole('button', { name: new RegExp(`v${target.version.replace(/\./g, '\\.')}`) }));
+    await user.click(screen.getByRole('button', { name: new RegExp(`v${escapeRegExp(target.version)}`) }));
     expect(screen.getByRole('heading', { name: `v${target.version}` })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Back to Release History' }));
@@ -188,7 +191,7 @@ describe('AboutDialog — What\'s New', () => {
     render(<AboutDialog />);
     await user.click(screen.getByRole('button', { name: /What's New/i }));
     await user.click(screen.getByRole('button', { name: /View release history/i }));
-    await user.click(screen.getByRole('button', { name: new RegExp(`v${patch.version.replace(/\./g, '\\.')}`) }));
+    await user.click(screen.getByRole('button', { name: new RegExp(`v${escapeRegExp(patch.version)}`) }));
 
     const compactHighlight = patch.highlights.find((h) => !h.description)!;
     expect(screen.getByText(compactHighlight.title, { exact: false })).toBeInTheDocument();

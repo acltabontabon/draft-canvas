@@ -178,16 +178,16 @@ function codePoint(entity: string, code: string): string {
   return value <= 0x10ffff ? String.fromCodePoint(value) : entity;
 }
 
+const NAMED_ENTITIES: Record<string, string> = { quot: '"', amp: '&', lt: '<', gt: '>' };
+
+/**
+ * One pass, so a decoded `&` never starts another entity: chained replaces turned `&amp;lt;` into `<`.
+ * `&?` keeps `&#65;` whole; matching `#65;` alone left a stray `&`.
+ */
 function decodeEntities(text: string): string {
-  return text
-    .replace(/#quot;/g, '"')
-    .replace(/&quot;/g, '"')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    // `&#65;` before `#65;`: the other way round the shorter pattern ate the entity's tail and left a stray `&`.
-    .replace(/&#(\d+);/g, codePoint)
-    .replace(/#(\d+);/g, codePoint);
+  return text.replace(/&(quot|amp|lt|gt);|#quot;|&?#(\d+);/g, (entity, name?: string, code?: string) =>
+    name ? NAMED_ENTITIES[name]! : code ? codePoint(entity, code) : '"',
+  );
 }
 
 /** Label text as the diagram shows it: quotes and backticks off, `<br>` a line break, other tags gone. */
@@ -198,7 +198,12 @@ function cleanLabel(raw: string, unsupported: Unsupported): string {
   text = text.replace(/<br\s*\/?>/gi, '\n');
   if (/<[a-z][^>]*>/i.test(text)) {
     unsupported.add('HTML in labels (tags removed)');
-    text = text.replace(/<\/?[a-z][^>]*>/gi, '');
+    // Until nothing changes: removing a tag can join its neighbours into a new one (`<<b>i>`).
+    let previous;
+    do {
+      previous = text;
+      text = text.replace(/<\/?[a-z][^>]*>/gi, '');
+    } while (text !== previous);
   }
   return decodeEntities(text)
     .split('\n')
