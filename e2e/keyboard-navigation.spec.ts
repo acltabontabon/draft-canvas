@@ -11,20 +11,20 @@ import { newCanvas, nextFrames } from './canvas';
 
 /**
  * The blank canvas's starter block is the one part of its empty state that takes clicks, so a node
- * placed on a starter while the canvas is still empty opens that architecture instead of creating
- * anything. Only the first creation in a test is ever exposed to it (the empty state goes the
- * moment anything exists), and this asks the page what would actually receive the click rather
- * than guessing from a rectangle — gaps between the drawings are fine, and so is the layer on its
- * way out, which has already stopped taking pointer events.
+ * placed on a starter while the canvas is still empty would open that architecture instead of
+ * creating anything. Arming a tool hands the whole canvas back to drawing, so this asks the page
+ * what would actually receive the click only once the tool is armed — checking before arming
+ * failed on any point the starter block happened to cover, though the click itself never lands
+ * there. The layer on its way out has already stopped taking pointer events.
  */
 async function createNode(page: Page, tool: string, at: { x: number; y: number }) {
+  await page.getByRole('button', { name: tool, exact: true }).click();
   const pane = (await page.locator('.react-flow__pane').boundingBox())!;
   const blocked = await page.evaluate(
     ([x, y]) => document.elementFromPoint(x, y)?.closest('.dc-empty')?.className ?? null,
     [pane.x + at.x, pane.y + at.y],
   );
   expect(blocked, `(${at.x}, ${at.y}) lands on the blank canvas's empty state — move it clear`).toBeNull();
-  await page.getByRole('button', { name: tool, exact: true }).click();
   await page.locator('.react-flow__pane').click({ position: at });
 }
 
@@ -59,10 +59,7 @@ async function selectedText(page: Page) {
 test.describe('spatial navigation (Alt+Arrow)', () => {
   test('moves the selection in each of the four directions', async ({ page }) => {
     await newCanvas(page, 'Spatial nav — four directions');
-    // A cross around a center node, spaced well apart so direction scoring is unambiguous. West
-    // goes down first purely because it is the one arm that already sits clear of the blank
-    // canvas's starter block — creating it removes the empty state, and the rest of the cross
-    // (Center included) can then be placed wherever the geometry wants it.
+    // A cross around a center node, spaced well apart so direction scoring is unambiguous.
     await createNode(page, 'Service', { x: 300, y: 400 });
     await labelNode(page, 0, 'West');
     await createNode(page, 'Service', { x: 700, y: 250 });
