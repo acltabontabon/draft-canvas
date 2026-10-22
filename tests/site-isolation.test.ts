@@ -83,6 +83,14 @@ describe('the landing page and the app stay apart', () => {
     expect(editorHtml).not.toMatch(/styles\.css/);
   });
 
+  it('keeps the editor out of search results, pointing crawlers at its own address', () => {
+    // Pinned here rather than only in e2e/web-deploy.spec.ts: a site-only deploy pairs this
+    // commit's tests with the latest release's editor, which can predate a change of address.
+    const editorHtml = readFileSync(join(ROOT, 'index.html'), 'utf8');
+    expect(editorHtml).toMatch(/<meta\s+name="robots"\s+content="[^"]*noindex/);
+    expect(editorHtml).toContain('<link rel="canonical" href="https://app.draftcanvas.dev/" />');
+  });
+
   it('keeps the desktop entry point pointed at bundled files, not the page', () => {
     const tauri = JSON.parse(readFileSync(join(ROOT, 'src-tauri/tauri.conf.json'), 'utf8'));
     // Bundled files, never a URL: the desktop app must open with no network at all.
