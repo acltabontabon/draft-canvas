@@ -174,6 +174,9 @@ function useHostScene(): ScenePerson[] {
 
 function Hosting({ onClose }: { onClose: () => void }) {
   const peers = useCollabStore((state) => state.peers);
+  const authors = useCollabStore((state) => state.authors);
+  // People who changed the canvas and have gone: their changes can still be taken back.
+  const departed = Object.entries(authors).filter(([id]) => !peers.some((peer) => peer.id === id));
   const selfName = useCollabStore((state) => state.selfName);
   const scene = useHostScene();
   const present = peers.filter((peer) => peer.link !== 'gone');
@@ -209,6 +212,18 @@ function Hosting({ onClose }: { onClose: () => void }) {
             </li>
             {peers.map((peer) => (
               <Person key={peer.id} peer={peer} />
+            ))}
+            {departed.map(([id, name]) => (
+              <li key={id} className="dc-collab-person" data-link="gone">
+                <PeerBadge name={name} color={7} link="gone" />
+                <span className="dc-collab-person-name">{name}</span>
+                <span className="dc-collab-person-meta">Left</span>
+                <span className="dc-collab-person-controls">
+                  <Button variant="quiet" icon="undo" title={`Takes back everything ${name} changed this session, unless someone has changed or built on it since. Undo brings it back.`} onClick={() => undoPersonChanges(id, name)}>
+                    Undo changes
+                  </Button>
+                </span>
+              </li>
             ))}
           </ul>
           {!full && <EmptySeat first={present.length === 0} room={MAX_COLLABORATORS - present.length} />}
@@ -389,7 +404,7 @@ export function KnockRow({ id, name, admitting }: { id: string; name: string; ad
 
 function Person({ peer }: { peer: PeerView }) {
   const create = useInviteStore((state) => state.create);
-  const authored = useCollabStore((state) => state.authors[peer.id] === true);
+  const authored = useCollabStore((state) => state.authors[peer.id] !== undefined);
   const gone = peer.link === 'gone';
   const role: Role = peer.role === 'owner' ? 'editor' : peer.role;
   return (

@@ -101,11 +101,20 @@
 /* -------------------------------------------------------- toolbar control -- */
 
 .dc-collab-control {
-  gap: 7px;
+  position: relative;
+  gap: 5px;
   height: 28px;
-  padding: 0 9px 0 5px;
+  padding: 0 7px 0 6px;
   color: var(--dc-text-muted);
   font-size: 12.5px;
+}
+
+.dc-collab-control .dc-collab-count {
+  padding: 0;
+  background: none;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .dc-collab-control:hover:not(:disabled) {
@@ -143,12 +152,16 @@
   animation: dc-collab-breathe 1.8s ease-in-out infinite;
 }
 
-/* A live session says so with a small breathing dot ahead of the word. */
+/* A live session says so with a small breathing dot on the people glyph's shoulder. */
 .dc-collab-live-dot {
+  position: absolute;
+  top: 5px;
+  left: 18px;
   flex: none;
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--dc-canvas);
   background: var(--dc-selection);
   animation: dc-collab-breathe 2.4s ease-in-out infinite;
 }

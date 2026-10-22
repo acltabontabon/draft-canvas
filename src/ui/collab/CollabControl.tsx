@@ -8,15 +8,16 @@ import { toolbarLabel, toolbarTooltip } from '../Editor/toolbar/toolbarTooltips'
 
 /**
  * The toolbar's view of a live session: a quiet "people" button before one starts; while one runs,
- * a small "Live" pill with how many are here, a dot when someone is waiting to join, and a word when
- * the connection is in trouble. Either way it opens the Collaborate dialog. Static and tiny — the dialog and everything that connects stay
- * in their own chunk until someone asks for them.
+ * the same people glyph lit by a breathing dot, with how many are here, a second dot when someone is
+ * waiting to join, and a word only when the connection is in trouble. Either way it opens the
+ * Collaborate dialog. Static and tiny — the dialog and everything that connects stay in their own
+ * chunk until someone asks for them.
  */
 export function CollabControl() {
   const open = useUiStore((state) => state.collabOpen);
   const setOpen = useUiStore((state) => state.setCollabOpen);
   const { role, status, peers, knocks } = useCollabStore(
-    useShallow((state) => ({ role: state.role, status: state.status, peers: state.peers, knocks: state.knocks.length })),
+    useShallow((state) => ({ role: state.role, status: state.status, peers: state.peers, knocks: state.knocks.length + state.lanKnocks.length })),
   );
 
   if (role === 'off') {
@@ -37,10 +38,10 @@ export function CollabControl() {
 
   // The people themselves are on the canvas (`PresenceDock`); the bar only says a session is live.
   return (
-    <Button variant="ghost" className="dc-collab-control" active={open} aria-haspopup="dialog" aria-label={label} data-status={status} onClick={() => setOpen(true)}>
-      {/* Its own glyph, not the label's: below 1320px the word folds away and the dot stays. */}
+    <Button icon="people" variant="ghost" className="dc-collab-control" active={open} aria-haspopup="dialog" aria-label={label} data-status={status} onClick={() => setOpen(true)}>
+      {/* The glyph lights up: a dot on the people icon says "live" without a word for it. */}
       <span className="dc-collab-live-dot" aria-hidden="true" />
-      <span className="dc-mode-label">{trouble ?? 'Live'}</span>
+      {trouble && <span className="dc-mode-label">{trouble}</span>}
       <span className="dc-collab-count" aria-hidden="true">
         {people}
       </span>

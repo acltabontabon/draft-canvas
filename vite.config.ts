@@ -49,7 +49,7 @@ function appVersion(desktop: boolean): string {
  * offer and answer — before they connect directly. `VITE_COLLAB_RELAY` overrides it, from the
  * environment or a `.env` file; set it to nothing for a build with no relay, where invites fall back
  * to copying reply codes by hand. Unset, a production build uses relay.draftcanvas.dev and the dev
- * server the local one, `node scripts/dev-relay.mjs` (port 8791).
+ * server the local one, `npm run dev:relay` (`scripts/dev-relay.mjs`, port 8791).
  *
  * A path is allowed (a relay behind a reverse proxy); the app appends `/r/<room>` to it.
  */

@@ -93,7 +93,8 @@ editable copy** when the session ends, or ask the owner to export it.
   the moment you let go, so nothing jumps out from under your pointer.
 - **Undo** takes back only what *you* did. If someone has changed the same thing since, it stays as
   they left it; if someone has built on your edit — a connector to the shape you added, a shape inside
-  it — undo leaves your edit in place and says why.
+  it — undo leaves your edit in place and says why. That holds after the session ends too: undo never
+  takes away what others added while they were here.
 - **Who's here.** The people column at the top right of the canvas shows everyone in the session,
   each in their own colour, with a small mark when they are typing, presenting or looking inside
   another shape. Hover or focus a face to see where they are, and press **Find** to go there.
@@ -111,7 +112,7 @@ Hover a face in the people column, or open **Live** in the toolbar, to manage ea
 - **Can edit / Can view** changes what each person may do, at once. A viewer sees every change live
   but can't make any.
 - **Undo changes** takes back everything one person changed this session, and nobody else's work.
-  It appears beside anyone who has changed something. Your own undo only ever takes back your own
+  It appears beside anyone who has changed something, and stays there after they leave. Your own undo only ever takes back your own
   edits, so this is the way back when a collaborator's edits went wrong. Anything someone else has
   changed or built on since stays as it is, and the take-back is one edit that undo can reverse.
 - **Remove** takes someone out of the session. Their copy stops updating and tells them why. If

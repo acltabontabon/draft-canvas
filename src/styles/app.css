@@ -1526,11 +1526,54 @@ kbd {
 
 .dc-toolbar-history,
 .dc-toolbar-modes,
+.dc-toolbar-share,
 .dc-toolbar-utilities {
   display: flex;
   align-items: center;
   gap: 2px;
   min-width: 0;
+}
+
+/* The trailing actions in one capsule, answering the create rail on the left: the same hairline
+   border and canvas fill, groups parted by short hairlines rather than by gaps. */
+.dc-toolbar-capsule {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding: 2px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-sm);
+  background: var(--dc-canvas);
+}
+
+.dc-toolbar-capsule > * {
+  padding: 0 4px;
+}
+
+.dc-toolbar-capsule > * + * {
+  position: relative;
+}
+
+.dc-toolbar-capsule > * + *::before {
+  content: '';
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  left: 0;
+  border-left: 1px solid var(--dc-border);
+}
+
+.dc-toolbar-capsule > :first-child {
+  padding-left: 0;
+}
+
+.dc-toolbar-capsule > :last-child {
+  padding-right: 0;
+}
+
+/* The same height as the create rail's buttons, so the two capsules line up. */
+.dc-toolbar-capsule .dc-button {
+  height: 26px;
 }
 
 /* --- capabilities --- */
@@ -1598,6 +1641,7 @@ kbd {
    width drifts with the glyph inside it; these are pinned to 28x28 so undo, redo, commands,
    export and more are interchangeable slots. */
 .dc-toolbar-history .dc-button,
+.dc-toolbar-share .dc-button:not(.dc-collab-control),
 .dc-toolbar-utilities .dc-button {
   width: 28px;
   height: 28px;
@@ -1607,6 +1651,7 @@ kbd {
 }
 
 .dc-toolbar-history .dc-button:hover:not(:disabled),
+.dc-toolbar-share .dc-button:hover:not(:disabled),
 .dc-toolbar-utilities .dc-button:hover:not(:disabled) {
   background: var(--dc-surface-hover);
   color: var(--dc-text);
