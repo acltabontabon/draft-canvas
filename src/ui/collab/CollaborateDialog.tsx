@@ -196,17 +196,23 @@ function Hosting({ onClose }: { onClose: () => void }) {
         <h3 id="dc-collab-people" className="dc-collab-heading">
           In this session <span className="dc-collab-count">{present.length + 1}</span>
         </h3>
-        <ul className="dc-collab-people">
-          <li className="dc-collab-person">
-            <PeerBadge name={selfName} color={0} />
-            <span className="dc-collab-person-name">{selfName}</span>
-            <span className="dc-collab-person-meta">You · owner</span>
-          </li>
-          {peers.map((peer) => (
-            <Person key={peer.id} peer={peer} />
-          ))}
-        </ul>
-        {present.length === 0 && <p className="dc-collab-hint">Nobody else yet. People you let in appear here, and you can change what they can do at any time.</p>}
+        {/* The table from the scene, as a list: one dashed thread through everyone, ending in an empty seat. */}
+        <div className="dc-collab-table">
+          <ul className="dc-collab-people">
+            <li className="dc-collab-person">
+              <PeerBadge name={selfName} color={0} />
+              <span className="dc-collab-person-name">{selfName}</span>
+              <span className="dc-collab-pill">
+                <Icon name="pencil" size={11} />
+                You · owner
+              </span>
+            </li>
+            {peers.map((peer) => (
+              <Person key={peer.id} peer={peer} />
+            ))}
+          </ul>
+          {!full && <EmptySeat first={present.length === 0} room={MAX_COLLABORATORS - present.length} />}
+        </div>
       </section>
       {LanShare && (
         <Suspense fallback={null}>
@@ -228,6 +234,19 @@ function Hosting({ onClose }: { onClose: () => void }) {
           Done
         </Button>
       </div>
+    </div>
+  );
+}
+
+/** The next free seat at the table: where someone you let in will sit, breathing like the scene's. */
+function EmptySeat({ first, room }: { first: boolean; room: number }) {
+  return (
+    <div className="dc-collab-seat">
+      <span className="dc-collab-seat-ring" aria-hidden="true" />
+      <span className="dc-collab-seat-text">
+        <span className="dc-collab-seat-title">{first ? 'Seats fill as you let people in' : `Room for ${room} more`}</span>
+        {first && <span className="dc-collab-seat-meta">You can change what each person can do at any time.</span>}
+      </span>
     </div>
   );
 }

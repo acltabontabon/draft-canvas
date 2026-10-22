@@ -316,6 +316,79 @@
   text-overflow: ellipsis;
 }
 
+/* The people as a table: a dashed thread runs down through everyone's badge, the same line that ties
+   people to the canvas in the scene, and ends at the next empty seat. */
+.dc-collab-table {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dc-collab-table::before {
+  content: '';
+  position: absolute;
+  top: 20px;
+  bottom: 20px;
+  left: 14px;
+  border-left: 1.5px dashed var(--dc-border-strong);
+}
+
+/* Each badge sits on the thread, not under it. */
+.dc-collab-table .dc-peer-badge,
+.dc-collab-seat-ring {
+  position: relative;
+  box-shadow: 0 0 0 3px var(--dc-surface);
+}
+
+.dc-collab-pill {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px 2px 6px;
+  border-radius: var(--dc-radius-pill);
+  background: var(--dc-selection-soft);
+  color: var(--dc-selection);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.dc-collab-seat {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 3px 4px 3px 2px;
+}
+
+.dc-collab-seat-ring {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border: 1.5px dashed var(--dc-text-faint);
+  border-radius: 50%;
+  background: var(--dc-surface);
+  animation: dc-collab-breathe 2.8s ease-in-out infinite;
+}
+
+.dc-collab-seat-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.dc-collab-seat-title {
+  color: var(--dc-text-muted);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.dc-collab-seat-meta {
+  color: var(--dc-text-faint);
+  font-size: 12px;
+}
+
 .dc-collab-person-meta {
   flex: none;
   color: var(--dc-text-faint);
@@ -1036,7 +1109,8 @@
   .dc-scene-tie,
   .dc-scene-pointer,
   .dc-scene-seal,
-  .dc-scene-note {
+  .dc-scene-note,
+  .dc-collab-seat-ring {
     animation: none !important;
   }
 
