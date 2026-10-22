@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { isCanvasEmpty } from '../../document/operations';
-import { MOD_SYMBOL } from '../../lib/platform';
-import { PRIMARY_STARTERS, type ArchitectureStarter, type StarterId } from '../../starters';
+import { MOD_SYMBOL, plainShortcut } from '../../lib/platform';
+import { PRIMARY_STARTERS, type StarterId } from '../../starters';
 import { fileOf, useEditorStore, viewLevel } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
 import { ownerAt, viewOf } from '../../depth/tree';
 import { looksLikeSystemOverview } from '../../depth/level';
 import { displayNameFor } from '../../document/factory';
 import { StarterTile } from '../Library/StarterTile';
+import { InkedWords } from '../Library/InkedWords';
 import { prefersReducedMotion } from '../../lib/motion';
+import { StarterPicker } from './StarterPicker';
 
 interface EmptyStateProps {
   /** Runs the palette's own starter command — see `EditorScreen`. */
@@ -18,31 +20,19 @@ interface EmptyStateProps {
 /** How long the layer lingers after the canvas stops being empty, matching `canvas.css`. */
 const EXIT_MS = 170;
 
-/** Three, then the rest, stepped — a composition rather than a strip of icons. Pairs were drawn for
- *  four starters, and five of them left the last one alone on a third row. The home screen splits
- *  the same five 3 + 2. */
-const ROWS: ArchitectureStarter[][] = [PRIMARY_STARTERS.slice(0, 3), PRIMARY_STARTERS.slice(3)].filter((row) => row.length > 0);
-
 /**
- * The zero-element canvas: what to press on the left, the primary starters on the right as the
- * topologies they will draw. The same five the home screen offers, so the two surfaces cannot
- * drift, and no browser behind them — the rest of the catalog is a name away in the palette.
+ * A quiet invitation above five small architecture sketches. `StarterTile` draws the catalog's
+ * real topologies; the full collection is a click away, or searchable in the command palette.
  *
- * The starters are the argument this file used to have with itself. They were plain text on the
- * grounds that thumbnails would turn a blank canvas into a template picker — a real risk, and the
- * answer is curation rather than refusing to draw. Five suggestions is not a gallery.
- *
- * `StarterTile` is the home screen's, unchanged but for the patch of dot grid behind each drawing,
- * which `canvas.css` turns off: here they sit on the real canvas, which is the better version of
- * that effect and the reason they read as drawings on the page rather than controls above it.
- *
- * Only the starters take pointer events; everything else is `aria-hidden` decoration over a canvas
- * that must stay double-clickable everywhere else.
+ * Only the controls take pointer events; the surrounding copy is decoration over a canvas that
+ * must stay double-clickable everywhere else.
  */
 export function EmptyState({ onInsertStarter }: EmptyStateProps) {
   const empty = useEditorStore((state) => isCanvasEmpty(state.document));
   const mode = useEditorStore((state) => state.mode);
-  const visible = empty && mode === 'edit';
+  const armed = useUiStore((state) => state.armed);
+  // Choosing a tool hands the whole canvas back to drawing, including the space under the cards.
+  const visible = empty && mode === 'edit' && armed === null;
   /** The shape whose inside this is, when the canvas is showing one. */
   const insideOf = useEditorStore((state) => {
     if (state.path.length === 0) return null;
@@ -138,66 +128,44 @@ function ContextOffer() {
 }
 
 function EmptyCanvas({ onInsertStarter, leaving }: EmptyStateProps & { leaving: boolean }) {
+  const [allStartersOpen, setAllStartersOpen] = useState(false);
   return (
     <>
       <div className="dc-empty" data-leaving={leaving ? 'true' : undefined}>
-        <span className="dc-empty-crops" aria-hidden="true">
-          <span data-at="nw" />
-          <span data-at="ne" />
-          <span data-at="se" />
-          <span data-at="sw" />
-        </span>
-
         <div className="dc-empty-stage">
           <div className="dc-empty-start" aria-hidden="true">
-            <p className="dc-empty-title">Start drawing.</p>
-            <p className="dc-empty-hint">Double-click anywhere, or use the toolbar.</p>
+            <p className="dc-empty-title">Start <em><InkedWords>drawing.</InkedWords></em></p>
+            <p className="dc-empty-hint">Double-click anywhere to add your first shape.</p>
             <p className="dc-empty-keys">
-              <span className="dc-empty-key">
-                <kbd>N</kbd> note
-              </span>
-              <span className="dc-empty-key">
-                <kbd>C</kbd> code
-              </span>
-              <span className="dc-empty-key">
-                <kbd>S</kbd> service
-              </span>
-              <span className="dc-empty-key">
-                <kbd>{MOD_SYMBOL}</kbd>
-                <kbd>K</kbd> commands
-              </span>
-              <span className="dc-empty-key">
-                <kbd>?</kbd> shortcuts
-              </span>
+              <span className="dc-empty-key"><kbd>S</kbd> service</span>
+              <span className="dc-empty-key"><kbd>N</kbd> note</span>
+              <span className="dc-empty-key"><kbd>C</kbd> code</span>
             </p>
           </div>
 
           <div className="dc-empty-pick">
-            <p className="dc-empty-pick-label" aria-hidden="true">
-              Or start from an architecture
-            </p>
+            <p className="dc-empty-pick-label" aria-hidden="true">Or borrow a starting point</p>
             <div className="dc-empty-rows" role="group" aria-label="Suggested starters">
-              {ROWS.map((row, i) => (
-                <div key={i} className="dc-empty-row">
-                  {row.map((starter, j) => (
-                    <StarterTile
-                      key={starter.id}
-                      starter={starter}
-                      index={i * 2 + j}
-                      onStart={onInsertStarter}
-                    />
-                  ))}
-                </div>
+              {PRIMARY_STARTERS.map((starter, index) => (
+                <StarterTile key={starter.id} starter={starter} index={index} onStart={onInsertStarter} />
               ))}
             </div>
-            <button type="button" className="dc-example-link" onClick={() => useUiStore.getState().requestExample()}>Try an example</button>
-            <p className="dc-empty-more" aria-hidden="true">
-              More in the palette: <kbd>{MOD_SYMBOL}</kbd>
-              <kbd>K</kbd>, then a name
-            </p>
+            <div className="dc-empty-footer">
+              <button type="button" className="dc-empty-action" onClick={() => setAllStartersOpen(true)}>View all starters</button>
+              <p className="dc-empty-shortcut" aria-hidden="true">or <kbd>{plainShortcut(`${MOD_SYMBOL} K`)}</kbd> to search</p>
+            </div>
           </div>
         </div>
       </div>
+      {allStartersOpen && !leaving && (
+        <StarterPicker
+          onClose={() => setAllStartersOpen(false)}
+          onStart={(id) => {
+            setAllStartersOpen(false);
+            onInsertStarter(id);
+          }}
+        />
+      )}
     </>
   );
 }

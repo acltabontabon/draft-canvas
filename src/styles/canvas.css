@@ -2586,26 +2586,59 @@
   z-index: var(--dc-z-bar);
   display: flex;
   flex-direction: column;
-  min-width: 132px;
-  padding: 4px;
+  min-width: 210px;
+  max-width: calc(100vw - 24px);
+  padding: 6px;
   border: 1px solid var(--dc-border);
-  border-radius: var(--dc-radius);
-  background: var(--dc-surface);
+  border-radius: 12px;
+  background: var(--dc-surface-raised);
   box-shadow: var(--dc-shadow-panel);
+}
+
+.dc-quick-connect-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 5px 9px 9px;
+  color: var(--dc-text-faint);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.dc-quick-connect-heading kbd {
+  padding: 1px 3px;
+  border: 1px solid var(--dc-border);
+  border-radius: 3px;
+  background: none;
+  box-shadow: none;
+  font: 9px/1.25 var(--dc-mono);
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .dc-quick-connect-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
+  gap: 12px;
+  min-height: 38px;
+  padding: 6px 9px;
   border: 0;
-  border-radius: var(--dc-radius-sm);
+  border-radius: 7px;
   background: none;
   color: var(--dc-text);
   font: inherit;
+  font-size: 12.5px;
+  line-height: 20px;
   text-align: left;
   cursor: pointer;
+}
+
+.dc-quick-connect-label {
+  flex: 1;
+  font-weight: 500;
 }
 
 .dc-quick-connect-item:hover,
@@ -2871,24 +2904,13 @@
 
 /* ---------------------------------------------------------- empty state -- */
 
-/*
- * The blank canvas, composed rather than centred.
- *
- * The home screen draws a small sheet — crop marks, a patch of dot grid, a "New canvas" pill —
- * and fans a connector off it to the starters. Clicking that sheet puts you inside it, so this
- * screen is the same drawing at the scale of the whole pane: the crop marks move to the corners,
- * the drawn dot grid gives way to the real one, and what is left is a start block, a connector
- * captioned "or cheat a little", and four starters drawn as the topologies they will make.
- *
- * Everything here is a flex row of three: the instruction, a gutter wide enough for the connector
- * and its caption, and the starters. Centring that row as one unit is what puts the headline left
- * of the pane's middle and the starters right of it — the asymmetry is the composition's, not an
- * offset someone typed in.
- */
+/* The blank canvas: one invitation, then a small shelf of real architecture sketches.
+ * Only the choices receive pointer events; the space around them remains drawing ground. */
 
 .dc-empty {
   position: absolute;
   inset: 0;
+  container-type: size;
   z-index: 1;
   display: grid;
   place-items: center;
@@ -2964,25 +2986,15 @@
 
 .dc-empty-stage {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 56px;
-  max-width: 100%;
-  padding: 0 32px;
-  /* Optically centred, not mathematically: the composition's weight sits low (names under
-  drawings), so lifting it off the true middle is what makes it look centred. */
-  margin-bottom: 5vh;
+  width: min(820px, calc(100% - 56px));
+  margin-bottom: 3vh;
+  text-align: center;
 }
 
-/* ---- the blank path ---- */
-
 .dc-empty-start {
-  flex: none;
-  /*
-   * Capped so the five legends break 3 + 2 — the three keys that draw something, then the two
-   * that open something. A wider cap fits four on the first line and orphans the fifth, and any
-   * slack past the longest line becomes dead space between the instruction and the connector.
-   */
-  max-width: 272px;
+  max-width: 480px;
 }
 
 .dc-empty-title {
@@ -2994,6 +3006,14 @@
   line-height: 1.25;
 }
 
+.dc-empty-start .dc-empty-title {
+  font-family: 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Georgia, serif;
+  font-size: clamp(34px, 4vw, 48px);
+  font-weight: 400;
+  letter-spacing: -0.04em;
+  line-height: 1.15;
+}
+
 .dc-empty-hint {
   margin: 7px 0 0;
   color: var(--dc-text-muted);
@@ -3001,91 +3021,218 @@
   line-height: 1.45;
 }
 
-/*
- * Legends, not keys. The app's `kbd` is a raised cap, which is right in a menu and wrong on an
- * empty canvas — at this size and weight a row of them reads as five small buttons. Flat, mono
- * and outlined, they read as the annotation on a drawing instead.
- */
+.dc-empty-start .dc-empty-hint {
+  margin-top: 16px;
+  font-size: 13px;
+}
+
+/* Three small annotations teach the first keystroke without resembling another toolbar. */
 .dc-empty-keys {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 14px;
-  margin: 20px 0 0;
+  justify-content: center;
+  gap: 5px 18px;
+  margin: 14px 0 0;
   color: var(--dc-text-faint);
-  font-size: 11.5px;
-  line-height: 22px;
+  font-size: 11px;
+  line-height: 20px;
 }
 
-/* Each legend wraps as one piece — a key orphaned from its word is the fastest way to make a
-   careful row look accidental. */
 .dc-empty-key {
   white-space: nowrap;
 }
 
-.dc-empty-keys kbd + kbd {
-  margin-left: 2px;
-}
-
 .dc-empty-keys kbd {
   min-width: 0;
-  padding: 1px 5px;
-  border: 1px solid var(--dc-border);
-  border-bottom-width: 1px;
-  border-radius: 3px;
+  padding: 0;
+  border: 0;
   background: none;
+  box-shadow: none;
   color: var(--dc-text-muted);
-  font-family: var(--dc-mono);
-  font-size: 10.5px;
-}
-
-/* ---- the connector ---- */
-
-/* ---- the starters ---- */
-
-.dc-empty-more {
-  margin: 12px 0 0;
-  color: var(--dc-text-faint);
-  font-size: 12px;
-}
-
-.dc-empty-more kbd {
-  font: 600 10.5px/1 var(--dc-mono);
-  padding: 1px 4px;
-  border: 1px solid var(--dc-border);
-  border-radius: 4px;
+  font: 600 10px/1 var(--dc-mono);
 }
 
 .dc-empty-pick {
-  flex: none;
-  pointer-events: auto;
+  width: 100%;
+  margin-top: 32px;
+}
+
+.dc-empty .dc-empty-pick-label {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 0 0 16px;
+  color: var(--dc-text-faint);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.dc-empty-pick-label::before,
+.dc-empty-pick-label::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--dc-border);
 }
 
 .dc-empty-rows {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
 }
 
-.dc-empty-row {
-  display: flex;
-  gap: 16px;
+/* A small paper sample is unmistakably a choice, while its drawing stays the catalog's own. */
+.dc-empty .dc-starter {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 6px;
+  border: 1px solid var(--dc-border);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--dc-surface) 76%, transparent);
+  pointer-events: auto;
+  transition: background 140ms ease, border-color 140ms ease, transform 160ms var(--dc-ease-out);
 }
 
-/* A step, not a grid. Two rows flush left square up into a block and start reading as a panel;
-   indenting the second makes the pair a drawing, and gives the connector's two branches different
-   lengths — which is what a fan-out on the canvas actually looks like. */
-.dc-empty-row:nth-child(2) {
-  margin-left: 22px;
+.dc-empty .dc-starter:hover,
+.dc-empty .dc-starter:focus-visible {
+  border-color: var(--dc-selection);
+  background: var(--dc-surface);
+  transform: translateY(-3px);
 }
 
-/*
- * The one thing the home screen's tile does that this one must not: paint its own patch of dot
- * grid. There is a real grid under this one — React Flow's, at a different pitch, panning and
- * zooming — and two grids beating against each other is the whole reason these tiles would
- * otherwise look stuck on top of the canvas rather than drawn on it.
- */
-.dc-empty .dc-starter-swatch::before {
+.dc-empty .dc-starter:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 3px;
+}
+
+.dc-empty .dc-starter-swatch {
+  width: 100%;
+  height: 80px;
+}
+
+.dc-empty .dc-starter-glyph {
+  width: 100%;
+  max-width: 144px;
+  height: auto;
+  max-height: 76px;
+}
+
+.dc-empty .dc-starter-name {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* The real canvas supplies the dots; the paper's edge supplies the hover and focus feedback. */
+.dc-empty .dc-starter-swatch::before,
+.dc-empty .dc-chrome {
   display: none;
+}
+
+.dc-empty-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  margin-top: 14px;
+}
+
+.dc-empty-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 28px;
+  margin: 0;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 3px;
+  background: none;
+  color: var(--dc-text-faint);
+  font: 11px/20px var(--dc-font);
+  cursor: pointer;
+  pointer-events: auto;
+  transition: color 140ms ease;
+}
+
+.dc-empty-action:hover {
+  color: var(--dc-text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.dc-empty-shortcut {
+  margin: 0;
+  color: var(--dc-text-faint);
+  font-size: 10px;
+}
+
+.dc-empty-shortcut kbd {
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--dc-text-faint);
+  font: 500 10px/1.4 var(--dc-mono);
+}
+
+.dc-starter-picker-section + .dc-starter-picker-section {
+  margin-top: 24px;
+}
+
+.dc-starter-picker-section h3 {
+  margin: 0 0 12px;
+  color: var(--dc-text-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.dc-starter-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr));
+  gap: 12px;
+}
+
+.dc-starter-picker .dc-starter {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 8px;
+  border: 1px solid var(--dc-border);
+  border-radius: 8px;
+  background: var(--dc-canvas);
+}
+
+.dc-starter-picker .dc-starter:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 2px;
+}
+
+.dc-starter-picker .dc-starter:hover {
+  border-color: var(--dc-selection);
+}
+
+.dc-starter-picker .dc-starter-swatch,
+.dc-starter-picker .dc-starter-glyph {
+  width: 100%;
+  max-width: 144px;
+}
+
+.dc-starter-picker .dc-starter-swatch {
+  margin: 0 auto;
+}
+
+.dc-starter-picker .dc-starter-swatch::before,
+.dc-starter-picker .dc-chrome {
+  display: none;
+}
+
+.dc-starter-picker .dc-starter-description {
+  margin-top: 5px;
+  opacity: 1;
+  transform: none;
+  font-size: 11px;
 }
 
 /* ---- arrival and exit -------------------------------------------------- */
@@ -3093,8 +3240,8 @@
 /*
  * Leaving. The fade is a courtesy; the pointer-events kill is not — it lands on the same render
  * the canvas stops being empty, so a click aimed at freshly inserted content can never be caught
- * by a tile that is still on screen. `.dc-empty-pick` is named explicitly because it is the one
- * child that opts back in, and `pointer-events` would otherwise let it keep doing so.
+ * by a tile that is still on screen. The controls are named explicitly because they opt back in
+ * to pointer events and would otherwise keep receiving them.
  */
 .dc-empty[data-leaving='true'] {
   opacity: 0;
@@ -3102,7 +3249,8 @@
 }
 
 .dc-empty[data-leaving='true'],
-.dc-empty[data-leaving='true'] .dc-empty-pick {
+.dc-empty[data-leaving='true'] .dc-starter,
+.dc-empty[data-leaving='true'] .dc-empty-action {
   pointer-events: none;
 }
 
@@ -3111,6 +3259,12 @@
   .dc-empty *::before,
   .dc-empty *::after {
   animation: none !important;
+  transition: none !important;
+  }
+
+  .dc-empty .dc-starter:hover,
+  .dc-empty .dc-starter:focus-visible {
+  transform: none;
   }
 
   .dc-empty[data-leaving='true'] {
@@ -3118,51 +3272,117 @@
   }
 }
 
-/* ---- responsive ------------------------------------------------------- */
-
-/*
- * Below the wide breakpoint the same diagram rotates rather than reflowing: start block, a short
- * stem captioned "or cheat a little", then the *same* 2×2 underneath. Flattening the starters into
- * one row of four is the one thing that must not happen — lined up at that size they stop being a
- * composition and start being a toolbar.
- */
-@media (max-width: 1139px) {
+/* Keep the five choices together on small screens, in two balanced rows. */
+@media (max-width: 639px) {
   .dc-empty-stage {
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  margin-bottom: 3vh;
+  width: calc(100% - 40px);
+  margin-bottom: 0;
   }
 
-  .dc-empty-start {
-  max-width: 272px;
-  }
-
-  .dc-empty-row:nth-child(2) {
-  margin-left: 0;
-  }
-
-  /* Rows of three and two: centred on each other, as the home screen's grid is. */
   .dc-empty-rows {
-  align-items: center;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+  }
+
+  .dc-empty .dc-starter {
+  grid-column: span 2;
+  padding: 8px 4px;
+  }
+
+  .dc-empty .dc-starter:nth-child(4) {
+  grid-column: 2 / span 2;
+  }
+
+  .dc-empty .dc-starter:nth-child(5) {
+  grid-column: 4 / span 2;
+  }
+
+  .dc-empty .dc-starter-swatch {
+  height: 62px;
+  }
+
+  .dc-empty .dc-starter-name {
+  font-size: 11px;
+  line-height: 16px;
   }
 
   .dc-empty-pick {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  margin-top: 24px;
   }
-}
 
-/* One row of three is still a composition; five crammed into this width is not — the palette
-   (⌘K) names the rest. */
-@media (max-width: 759px) {
   .dc-empty-crops {
   display: none;
   }
+}
 
-  .dc-empty-row:nth-child(2) {
+@media (max-height: 599px) {
+  .dc-empty-keys {
   display: none;
+  }
+
+  .dc-empty-start .dc-empty-title {
+  font-size: 30px;
+  }
+
+  .dc-empty-start .dc-empty-hint {
+  margin-top: 10px;
+  font-size: 12px;
+  }
+
+  .dc-empty-pick {
+  margin-top: 20px;
+  }
+
+  .dc-empty .dc-empty-pick-label {
+  margin-bottom: 12px;
+  }
+
+  .dc-empty .dc-starter {
+  padding: 6px 4px;
+  }
+
+  .dc-empty .dc-starter-swatch {
+  height: 48px;
+  }
+
+  .dc-empty .dc-starter-glyph {
+  max-height: 44px;
+  }
+
+  .dc-empty-footer {
+  margin-top: 12px;
+  }
+}
+
+/* A wrapped title can leave less drawing room than the window height suggests. Keep the full
+   collection reachable, but fold the decorative shelf before it spills over the status bar. */
+@container (max-height: 280px) {
+  .dc-empty-stage {
+  margin-bottom: 0;
+  }
+
+  .dc-empty-keys,
+  .dc-empty-rows,
+  .dc-empty .dc-empty-pick-label {
+  display: none;
+  }
+
+  .dc-empty-pick {
+  margin-top: 14px;
+  }
+
+  .dc-empty-footer {
+  margin-top: 0;
+  }
+}
+
+@container (max-height: 180px) {
+  .dc-empty-start {
+  display: none;
+  }
+
+  .dc-empty-pick {
+  margin-top: 0;
   }
 }
 
@@ -4072,8 +4292,9 @@
 }
 
 .dc-quick-connect-item .dc-shape-preview {
-  width: 30px;
-  height: 20px;
+  display: block;
+  width: 34px;
+  height: 24px;
   flex: none;
 }
 
@@ -4681,9 +4902,6 @@
    resizer stays mounted, and only this hides its controls. The inspectors once went by names no
    element carried (`dc-edge-popover`, `dc-element-popover`, `dc-node-resizer`). */
 .dc-editor[data-tracing] :is(.dc-flow-panel, .dc-inspector, .dc-edge-inspector, .dc-element-inspector, .react-flow__resize-control) { display: none; }
-
-/* Inherit the picker's pointer state: its fading empty layer must let clicks through. */
-.dc-example-link { color: var(--dc-text); background: transparent; border: 0; text-decoration: underline; cursor: pointer; margin: 12px 0; }
 
 /* Tracing keeps connector hit bands active while editing gestures are suspended. */
 .dc-editor[data-tracing] .dc-edge-hit { pointer-events: stroke; cursor: pointer; }

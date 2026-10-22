@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useToolbarHeight } from './useToolbarHeight';
 import { useUiStore } from '../store/uiStore';
+import { minSizeFor } from '../document/factory';
 import {
   anchorsForRect,
   placementTransform,
@@ -185,6 +186,10 @@ export function QuickConnectMenu({
       tabIndex={-1}
       style={{ transform }}
     >
+      <div className="dc-quick-connect-heading" aria-hidden="true">
+        <span>Add to canvas</span>
+        <kbd>esc</kbd>
+      </div>
       {note && (
         <p id="dc-quick-connect-note" className="dc-quick-connect-note">
           {note}
@@ -203,11 +208,17 @@ export function QuickConnectMenu({
             onPointerEnter={() => setHighlighted(index)}
             onClick={() => onSelect(item)}
           >
-            <ShapePreview node={item.node} width={30} height={20} />
-            <span>{item.label}</span>
+            <QuickConnectShape node={item.node} />
+            <span className="dc-quick-connect-label">{item.label}</span>
           </button>
         </div>
       ))}
     </div>
   );
+}
+
+/** Fixed-pixel details need a real node's logical size; CSS alone scales the result to an icon. */
+function QuickConnectShape({ node }: { node: QuickConnectItem['node'] }) {
+  const size = minSizeFor(node.type);
+  return <ShapePreview node={node} width={size.width} height={size.height} />;
 }

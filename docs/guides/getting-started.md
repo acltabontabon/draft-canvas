@@ -14,6 +14,12 @@ The web app saves in your browser as you draw; on desktop, `⌘S` saves a file. 
 the top; **Present**, **Flows** and **Share** at the top right. `⌘K` finds any command and `?` lists
 shortcuts.
 
+On a blank canvas, double-click anywhere to choose your first shape, or pick one of the five
+architecture sketches for a starting point.
+**View all starters** opens the full collection; `⌘K` searches for a starter or command by name.
+
+![The blank canvas with drawing hints and five architecture starting points.](../media/guides/empty-canvas.png)
+
 ## Draw Service → Queue → Worker
 
 1. Point at the canvas and press `S`. Type `Orders API`, then `Enter`.

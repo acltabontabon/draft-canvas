@@ -35,6 +35,10 @@ the release notes and the in-app What's New are generated from here. See
 
 #### Changed
 
+- The blank canvas has a centered heading with an inked underline and a tidy row of architecture
+  sketches. **View all starters** opens the full collection, with a subtle keyboard search hint.
+- Long diagram titles use more space on wide screens, and the header grows to hold wrapped lines
+  clear of the drawing and other controls.
 - **A calmer editor** — the header floats on the canvas, so the drawing runs to the top of the
   window. The Draft Canvas mark takes you back to your diagrams, beside the diagram's name. The tools
   are small drawings of their shapes, and the one in hand shows its name. **Present** and **Flows**
@@ -68,6 +72,12 @@ the release notes and the in-app What's New are generated from here. See
 
 #### Fixed
 
+- Home and About use the same Draft Canvas logo as the canvas, including its dark tile and teal
+  connector.
+- Toolbar separators use quiet vertical lines so they no longer resemble connector tools.
+- Panning and zooming the canvas no longer create horizontal or vertical page scrollbars.
+- The Add to canvas picker has clearer spacing and complete shape previews, including Data Store,
+  Queue and Actor icons that used to be clipped.
 - Shared diagrams offer only what they can do: no Arrange, Find & Replace, Tidy connectors,
   background image or other edits in the command palette and right-click menus.
 - While presenting, clicking or panning no longer saves the camera into the diagram, a camera you

@@ -10,25 +10,9 @@ import {
   type ProductReleaseHighlight,
 } from '../../releases/productReleases';
 import { useUiStore } from '../../store/uiStore';
+import { BrandMark } from './BrandMark';
 import { Icon, type IconName } from './Icon';
 import { Modal } from './Modal';
-
-/**
- * The product's identity, not its documentation.
- *
- * Reuses the same node-and-connector mark as the favicon (`index.html`) so
- * the "brand" is one shape defined twice, not two shapes that happen to
- * agree today.
- */
-function Mark() {
-  return (
-    <svg className="dc-about-mark" viewBox="0 0 32 32" width="26" height="26" aria-hidden="true">
-      <rect x="6" y="8" width="11" height="7" rx="2" className="dc-about-mark-a" />
-      <rect x="15" y="18" width="11" height="7" rx="2" className="dc-about-mark-b" />
-      <path d="M11.5 15.5v3.5h4" className="dc-about-mark-a" />
-    </svg>
-  );
-}
 
 /** A loose thought finding its way into a diagram, drawn in the margin rather than behind the copy. */
 function MarginSketch() {
@@ -296,7 +280,7 @@ function AboutDialogBody() {
           <div className="dc-about-intro">
             <MarginSketch />
             <div className="dc-about-brand">
-              <Mark />
+              <BrandMark />
               <h3 className="dc-about-name" ref={headingRef} tabIndex={-1}>
                 {PRODUCT.name}
               </h3>

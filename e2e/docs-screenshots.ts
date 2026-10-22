@@ -20,6 +20,7 @@ import { openGallery } from './library';
  *   npx tsx e2e/docs-screenshots.ts --technology-only
  *   npx tsx e2e/docs-screenshots.ts --rich-text-only
  *   npx tsx e2e/docs-screenshots.ts --collab-only
+ *   npx tsx e2e/docs-screenshots.ts --empty-canvas-only
  *
  * The guides' own set is what you get with no arguments, unchanged.
  */
@@ -391,6 +392,12 @@ async function main() {
     const page = await context.newPage();
     await page.goto(URL);
 
+    if (process.argv.includes('--empty-canvas-only')) {
+      await page.getByRole('button', { name: 'New canvas', exact: true }).click();
+      await expect(page.locator('.dc-editor')).toBeVisible();
+      await shot(page, 'empty-canvas');
+      return;
+    }
     if (process.argv.includes('--technology-only')) {
       await technologyScreenshots(page);
       return;
@@ -411,6 +418,7 @@ async function main() {
     await page.setViewportSize(VIEWPORT);
     await page.getByRole('button', { name: 'New canvas' }).first().click();
     await expect(page.locator('.dc-editor')).toBeVisible();
+    await shot(page, 'empty-canvas');
     const title = page.getByLabel('Diagram title');
     await title.fill('Order processing');
     await title.blur();

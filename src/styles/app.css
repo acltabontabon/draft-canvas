@@ -177,7 +177,7 @@ kbd {
   letter-spacing: -0.01em;
 }
 
-.dc-brand-mark {
+.dc-brand-logo {
   flex-shrink: 0;
   fill: none;
   stroke-width: 2;
@@ -185,17 +185,10 @@ kbd {
   stroke-linejoin: round;
 }
 
-.dc-brand-mark-lead,
-.dc-brand-mark-edge {
-  stroke: var(--dc-selection);
-}
-
-.dc-brand-mark-edge {
-  stroke-width: 1.6;
-}
-
-.dc-brand-mark-follow {
-  stroke: var(--dc-text-faint);
+.dc-brand-tile {
+  fill: #14161a;
+  stroke: color-mix(in srgb, var(--dc-text) 16%, transparent);
+  stroke-width: 1;
 }
 
 .dc-brand-about {
@@ -1246,6 +1239,9 @@ kbd {
   display: flex;
   flex-direction: column;
   height: 100%;
+  /* The drawing extends under the floating toolbar, but its transformed viewport must never
+     enlarge or scroll the page. Unlike hidden, clip cannot scroll the chrome when a tool focuses. */
+  overflow: clip;
 }
 
 /* The editor's chunk arriving (see `App.tsx`) — the canvas ground, never a flash of the page's. Its
@@ -1349,8 +1345,8 @@ kbd {
   grid-template-columns: minmax(max-content, 1fr) minmax(0, auto) minmax(max-content, 1fr);
   align-items: start;
   gap: 22px;
-  height: var(--dc-bar-height);
-  padding: 6px 10px;
+  min-height: var(--dc-bar-height);
+  padding: 5px 10px;
   background: transparent;
   flex-shrink: 0;
   pointer-events: none;
@@ -1371,12 +1367,12 @@ kbd {
 .dc-editor:not([data-mode='present']) .dc-canvas .react-flow {
   /* React Flow sets `overflow: hidden` inline; the clip keeps the sides and bottom cut as before. */
   overflow: visible !important;
-  clip-path: inset(calc(-1 * var(--dc-bar-height)) 0 0 0);
+  clip-path: inset(calc(-1 * var(--dc-toolbar-height, var(--dc-bar-height))) 0 0 0);
 }
 
 .dc-editor:not([data-mode='present']) .dc-canvas .react-flow__background {
-  top: calc(-1 * var(--dc-bar-height));
-  height: calc(100% + var(--dc-bar-height));
+  top: calc(-1 * var(--dc-toolbar-height, var(--dc-bar-height)));
+  height: calc(100% + var(--dc-toolbar-height, var(--dc-bar-height)));
 }
 
 /* The islands. The lead is not one: the mark and the diagram's name are written on the sheet, like the
@@ -1400,12 +1396,6 @@ kbd {
   transition: transform 160ms var(--dc-ease-out);
 }
 
-.dc-brand-tile {
-  fill: #14161a;
-  stroke: color-mix(in srgb, var(--dc-text) 16%, transparent);
-  stroke-width: 1;
-}
-
 .dc-toolbar .dc-brand-mark:hover:not(:disabled) {
   background: none;
   transform: translateX(-1px) rotate(-4deg);
@@ -1416,6 +1406,8 @@ kbd {
 .dc-title-field {
   position: relative;
   display: inline-flex;
+  min-width: 72px;
+  max-width: clamp(180px, 24vw, 560px);
 }
 
 .dc-toolbar .dc-title-input {
@@ -1449,10 +1441,9 @@ kbd {
 
 .dc-title-input {
   /* Sized to the name (`DiagramTitleField`), up to a readable column; longer names wrap, and their
-     island grows downward over the sheet. */
-  min-width: 72px;
-  max-width: 240px;
-  width: clamp(120px, 18vw, 240px);
+     header makes room for every line rather than spilling into the drawing. */
+  min-width: 0;
+  width: 100%;
   box-sizing: border-box;
   resize: none;
   height: 28px;
@@ -1552,8 +1543,8 @@ kbd {
    used to, but it faded the chevron too — and alone it told a reader there was more without saying
    how to get to it. */
 
-/* Interaction | annotation | architecture. The 10px between families against 1px within one is
-   the whole grouping mechanism — no dividers. */
+/* Interaction | annotation | architecture: tight spacing within a family, with wider gaps and
+   quiet hairlines between families. */
 .dc-create-family {
   display: flex;
   align-items: center;
@@ -1691,16 +1682,14 @@ kbd {
   opacity: 0;
 }
 
-/* The mark's elbow connector, joining one family of tools to the next. */
-.dc-rail-link {
+/* A short hairline separates tool groups without looking like one of the diagram's connectors. */
+.dc-rail-separator {
   flex: none;
-  margin: 0 -2px;
-  color: color-mix(in srgb, var(--dc-text) 32%, transparent);
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.4;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+  width: 1px;
+  height: 16px;
+  margin: 0 5px;
+  background: var(--dc-border);
+  pointer-events: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1971,8 +1960,8 @@ kbd {
   padding: 0 6px;
   }
 
-  .dc-title-input {
-  max-width: 170px;
+  .dc-title-field {
+  max-width: clamp(120px, 22vw, 300px);
   }
 }
 
@@ -4917,22 +4906,9 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   gap: 10px;
 }
 
-.dc-about-mark {
+.dc-about-brand .dc-brand-logo {
   width: 28px;
   height: 28px;
-  flex-shrink: 0;
-}
-
-.dc-about-mark-a {
-  fill: none;
-  stroke: var(--dc-selection);
-  stroke-width: 2;
-}
-
-.dc-about-mark-b {
-  fill: none;
-  stroke: var(--dc-text-faint);
-  stroke-width: 2;
 }
 
 .dc-about-name {
@@ -5517,7 +5493,7 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   grid-area: rail;
   }
 
-  .dc-title-input {
+  .dc-title-field {
   min-width: 0;
   max-width: 42vw;
   }
