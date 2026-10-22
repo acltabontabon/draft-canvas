@@ -1023,7 +1023,9 @@ test('Settings fits a compact window and keeps every page accessible in both the
   await expect(page.getByRole('button', { name: 'New Quick Draft' })).toBeVisible();
   const settings = await openSettings(page);
   for (const theme of ['light', 'dark'] as const) {
-    await page.emulateMedia({ colorScheme: theme });
+    // Reduced motion turns off the tabs' 90 ms colour transition: checked straight after the theme
+    // changed, a tab still fading between the two themes' greys measured 3.34:1.
+    await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
     await expect(page.locator(':root')).toHaveAttribute('data-theme', theme);
     for (const category of ['General', 'AI agents', 'Updates', 'Support']) {
       await settings.getByRole('tab', { name: category, exact: true }).click();
