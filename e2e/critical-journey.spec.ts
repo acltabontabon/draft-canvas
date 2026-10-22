@@ -197,7 +197,9 @@ test.describe('Draft Canvas', () => {
 
     await reopenAfterReload(page, 'Payment Flow');
     await expect(page.locator('.dc-editor')).toBeVisible();
-    expect(await nodeCount(page)).toBe(4);
+    // Retried: the editor shows before the reopened canvas's shapes have mounted, and a slow
+    // runner (WebKit in CI) counted none.
+    await expect(page.locator('.dc-node')).toHaveCount(4);
     await expect(page.locator('.dc-edge-line')).toHaveCount(1);
     await expect(page.getByLabel('Diagram title')).toHaveValue('Payment Flow');
 
@@ -268,7 +270,8 @@ test.describe('Draft Canvas', () => {
     await page.setInputFiles('input[type="file"]', projectPath);
     await expect(page.locator('.dc-editor')).toBeVisible();
 
-    expect(await nodeCount(page)).toBe(4);
+    // Retried, as after the reload: the imported shapes mount after the editor shows.
+    await expect(page.locator('.dc-node')).toHaveCount(4);
     await expect(page.locator('.dc-edge-line')).toHaveCount(1);
     await expect(page.getByLabel('Diagram title')).toHaveValue('Payment Flow');
 
