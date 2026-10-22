@@ -117,6 +117,9 @@ jobs:
       - run: npm audit --audit-level=high
       - run: npm audit --audit-level=high
         working-directory: www
+      # The deploy's own tooling (Wrangler), pinned by its lockfile.
+      - run: npm audit --audit-level=high
+        working-directory: www/cloudflare
       - name: Record the assembled source
         id: source
         env:
@@ -211,6 +214,11 @@ jobs:
       # editor, so the site never links to an editor that is not there yet; the www. redirect last.
       # Each config names its custom domain, and Wrangler creates its DNS record. The relay's config
       # also carries its Durable Object migration, which Wrangler applies on the same deploy.
+      # Wrangler comes from the verified artifact's own lockfile (www/cloudflare/package-lock.json),
+      # integrity-checked, never fetched by name; `--no-install` refuses anything not installed.
+      - name: Install the pinned Wrangler
+        working-directory: dist-web/cloudflare
+        run: npm ci --no-audit --no-fund
       - name: Deploy relay.draftcanvas.dev, app.draftcanvas.dev, draftcanvas.dev and www.
         working-directory: dist-web/cloudflare
         env:
@@ -218,7 +226,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           for config in relay app site www; do
-            npx --yes wrangler@4.149.0 deploy --config "$config.jsonc"
+            npx --no-install wrangler deploy --config "$config.jsonc"
           done
 
   deploy:

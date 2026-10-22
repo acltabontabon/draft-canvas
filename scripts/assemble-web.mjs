@@ -55,8 +55,11 @@ insist(!existsSync(join(out, 'legacy', 'editor')), 'www/legacy/ already contains
 cpSync(editorBuild, join(out, 'legacy', 'editor'), { recursive: true });
 
 mkdirSync(join(out, 'cloudflare'));
+// The deploy tooling's manifest and lockfile go with the configs, so the deploy installs the pinned
+// Wrangler from the lockfile rather than fetching a version by name.
+const deployFiles = new Set(['package.json', 'package-lock.json']);
 for (const name of readdirSync(cloudflareSource)) {
-  if (name.endsWith('.jsonc') || name.endsWith('.js')) cpSync(join(cloudflareSource, name), join(out, 'cloudflare', name));
+  if (name.endsWith('.jsonc') || name.endsWith('.js') || deployFiles.has(name)) cpSync(join(cloudflareSource, name), join(out, 'cloudflare', name));
 }
 
 // What each site has to contain to work at all. Every one of these fails silently in production
@@ -80,6 +83,8 @@ const required = [
   ['cloudflare/relay.jsonc', 'the deploy config for relay.draftcanvas.dev'],
   ['cloudflare/relay.js', 'the collaboration relay the editor connects to'],
   ['cloudflare/relay-room.js', "the relay's rules, which relay.js imports"],
+  ['cloudflare/package.json', 'the manifest that pins Wrangler for the deploy'],
+  ['cloudflare/package-lock.json', 'the lockfile the deploy installs Wrangler from'],
 ];
 for (const [path, what] of required) {
   insist(existsSync(join(out, path)), `dist-web/${path} is missing — ${what}.`);

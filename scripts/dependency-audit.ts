@@ -68,13 +68,13 @@ function main(): void {
   const exceptions = JSON.parse(readFileSync(policyAt < 0 ? '.github/advisory-exceptions.json' : process.argv[policyAt + 1]!, 'utf8')) as Exception[];
   if (!Array.isArray(exceptions)) throw new Error('Advisory exceptions must be an array.');
   mkdirSync('audit-results', { recursive: true });
-  const targets = ecosystem === 'npm' ? ['.', 'www'] : ['.'];
+  const targets = ecosystem === 'npm' ? ['.', 'www', 'www/cloudflare'] : ['.'];
   for (const cwd of targets) {
     const result = spawnSync(ecosystem === 'npm' ? 'npm' : 'cargo', ecosystem === 'npm'
       ? ['audit', '--json'] : ['audit', '--json', '--file', 'src-tauri/Cargo.lock'], { cwd, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 });
     if (result.error || result.signal || result.status === null || result.status > 1) throw new Error(`Audit tool failed: ${result.error?.message ?? result.stderr}`);
     const report: unknown = JSON.parse(result.stdout);
-    writeFileSync(`audit-results/${ecosystem}-${cwd === '.' ? 'app' : 'site'}.json`, result.stdout);
+    writeFileSync(`audit-results/${ecosystem}-${cwd === '.' ? 'app' : cwd === 'www' ? 'site' : 'deploy'}.json`, result.stdout);
     const findings = findingsOf(ecosystem, report);
     if (result.status !== 0 && findings.length === 0 && ecosystem === 'cargo') throw new Error(`RustSec scan failed: ${result.stderr}`);
     const blocked = unaccepted(findings, exceptions);

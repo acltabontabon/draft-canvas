@@ -135,6 +135,12 @@ secrets:
 The relay's Durable Object needs no further permission: **Workers Scripts › Edit** covers it, and
 its migration in `relay.jsonc` is applied by the same `wrangler deploy`.
 
+Wrangler itself is pinned by `www/cloudflare/package.json` and its lockfile, which travel with the
+verified artifact: the deploy runs `npm ci` there and then `npx --no-install wrangler`, so it never
+fetches a version by name, and the release audits that lockfile with the others. To move to a new
+Wrangler, change the version there and run `npm install --package-lock-only` in `www/cloudflare/`.
+No other job installs it.
+
 `app.headers` becomes the editor's `_headers`. It must never set `Cross-Origin-Opener-Policy`: the
 handoff below talks to the old tab through `window.opener`, which that header severs.
 
