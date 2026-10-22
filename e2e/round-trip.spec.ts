@@ -110,7 +110,7 @@ function content(file: Json): Json {
 async function exportDocument(page: Page): Promise<Json> {
   await page.getByRole('button', { name: 'Share', exact: true }).click();
   await page.getByRole('menuitem', { name: /^Export/ }).click();
-  const dialog = page.getByRole('dialog', { name: 'Export' });
+  const dialog = page.getByRole('dialog', { name: 'Export & share' });
   await dialog.locator('[data-mode="document"]').click();
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export document' }).click();

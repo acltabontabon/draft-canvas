@@ -28,7 +28,8 @@ describe('complete example and shared starting points', () => {
     if (!('url' in encoded)) throw new Error('Expected link');
     const decoded = await decodeShareLink(new URL(encoded.url).hash);
     expect(decoded?.ok).toBe(true);
-    expect(decoded?.start).toEqual(start);
+    if (!decoded?.ok) throw new Error('Expected shared diagram');
+    expect(decoded.start).toEqual({ path: [decoded.document.nodes[0]!.id], flowId: decoded.document.nodes[0]!.inside!.flows[0]!.id });
     expect(serializeDocument(file)).toBe(before);
   });
 

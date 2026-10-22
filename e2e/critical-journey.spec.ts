@@ -205,7 +205,7 @@ test.describe('Draft Canvas', () => {
 
     await page.getByRole('button', { name: 'Share', exact: true }).click();
     await page.getByRole('menuitem', { name: /^Export/ }).click();
-    const exportDialog = page.getByRole('dialog', { name: 'Export' });
+    const exportDialog = page.getByRole('dialog', { name: 'Export & share' });
     await expect(exportDialog).toBeVisible();
 
     // Fresh session: Export opens on its first-ever default (Image/PNG) — switch to Document.

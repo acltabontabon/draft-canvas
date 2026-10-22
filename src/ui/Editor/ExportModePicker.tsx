@@ -1,12 +1,13 @@
 import { Icon, type IconName } from '../common/Icon';
 import type { ExportMode } from './exportTypes';
 
-const MODE_ORDER: ExportMode[] = ['document', 'image', 'sequence'];
+const MODE_ORDER: ExportMode[] = ['share', 'document', 'image', 'sequence'];
 
 // The label is the only thing rendered — `hint` exists purely to give screen-reader users the
 // same "what formats live here" context a sighted user gets from the panel a click away, without
 // printing it as a second, visually-duplicated subtitle under every card.
 const MODE_META: Record<ExportMode, { label: string; hint: string; icon: IconName }> = {
+  share: { label: 'Share', hint: 'read-only link, with optional passphrase', icon: 'link' },
   document: { label: 'Document', hint: 'editable or encrypted', icon: 'file' },
   image: { label: 'Image', hint: 'PNG or SVG', icon: 'image' },
   sequence: { label: 'Source', hint: 'Mermaid, PlantUML, C4, Structurizr or draw.io text', icon: 'code' },

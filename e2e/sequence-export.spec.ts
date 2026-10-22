@@ -131,13 +131,13 @@ async function importDocument(page: Page, doc: unknown, fileName: string) {
 async function openExport(page: Page) {
   await page.getByRole('button', { name: 'Share', exact: true }).click();
   await page.getByRole('menuitem', { name: /^Export/ }).click();
-  await expect(page.getByRole('dialog', { name: 'Export' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Export & share' })).toBeVisible();
 }
 
 /** Export opens on whatever mode was last used (persisted); these tests always want Source. */
 async function openSourceExport(page: Page) {
   await openExport(page);
-  const dialog = page.getByRole('dialog', { name: 'Export' });
+  const dialog = page.getByRole('dialog', { name: 'Export & share' });
   await dialog.locator('[data-mode="sequence"]').click();
   return dialog;
 }
@@ -159,7 +159,7 @@ test.describe('Sequence Diagram export', () => {
 
   test('opens from the keyboard with ⌘⇧E — the chord extensions leave alone — and ⌘E too', async ({ page }) => {
     await importDocument(page, sagaDocument(), 'saga.draftcanvas');
-    const dialog = page.getByRole('dialog', { name: 'Export' });
+    const dialog = page.getByRole('dialog', { name: 'Export & share' });
     for (const chord of ['ControlOrMeta+Shift+E', 'ControlOrMeta+e']) {
       await page.locator('.react-flow__pane').click({ position: { x: 20, y: 20 } });
       await page.keyboard.press(chord);
@@ -230,7 +230,7 @@ test.describe('Sequence Diagram export', () => {
   test('is fully reachable by keyboard: switch to Source, change format, export, close', async ({ page }) => {
     await importDocument(page, sagaDocument(), 'saga.draftcanvas');
     await page.keyboard.press('Meta+e');
-    const dialog = page.getByRole('dialog', { name: 'Export' });
+    const dialog = page.getByRole('dialog', { name: 'Export & share' });
     await expect(dialog).toBeVisible();
 
     // The mode picker and the Format segmented control are both real `<input type="radio">`
@@ -259,13 +259,13 @@ test.describe('Sequence Diagram export', () => {
     expect(file.suggestedFilename()).toBe('payment-saga.puml');
 
     // The dialog closes itself on a successful export.
-    await expect(page.getByRole('dialog', { name: 'Export' })).toHaveCount(0);
+    await expect(page.getByRole('dialog', { name: 'Export & share' })).toHaveCount(0);
   });
 
   test('the mode picker is arrow-key navigable', async ({ page }) => {
     await importDocument(page, sagaDocument(), 'saga.draftcanvas');
     await openExport(page);
-    const dialog = page.getByRole('dialog', { name: 'Export' });
+    const dialog = page.getByRole('dialog', { name: 'Export & share' });
 
     await dialog.getByRole('radio', { name: /Document/ }).focus();
     await page.keyboard.press('ArrowRight');

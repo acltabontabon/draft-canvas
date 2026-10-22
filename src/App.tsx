@@ -18,6 +18,7 @@ import { reloadApp } from './lib/serviceWorker';
 import { retirePreferences } from './lib/preferences';
 import { clearJoinFragment, joinPayloadFromHash } from './lib/joinFragment';
 import { useUiStore } from './store/uiStore';
+import { SharedUnlockScreen } from './ui/Editor/SharedUnlockScreen';
 
 // The editor is most of the app's code, and the Library is what every visit opens on — so the
 // editor arrives as its own chunk (React Flow included), fetched in the background once the Library
@@ -136,7 +137,9 @@ function Shell() {
           logDiagnostic(error, { operation: 'app-shell', documentId: session.openId }, componentStack);
         }}
       >
-        {session.openId ? (
+        {session.sharedLink?.locked ? (
+          <SharedUnlockScreen link={session.sharedLink} ready={session.ready} />
+        ) : session.openId ? (
           <Suspense fallback={<div className="dc-editor-loading" aria-busy="true" />}>
             <EditorChunk.Component session={session} />
           </Suspense>

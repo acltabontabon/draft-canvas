@@ -1,9 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDocument, createEdge, createNode } from '../src/document/factory';
 import { addEdges, addNodes, setTitle } from '../src/document/operations';
 import type { DraftDocument } from '../src/document/types';
 import { decodeShareLink, encodeShareLink, MAX_SHARE_PAYLOAD_BYTES, sharePayloadFromHash } from '../src/share/link';
-import { copyShareLink, SHARE_LINK_COPIED } from '../src/share/copy';
+import { copyPreparedShareLink, copyShareLink, SHARE_LINK_COPIED } from '../src/share/copy';
+import { registerDesktopHost } from '../src/host/hostInfo';
+import { PBKDF2_ITERATIONS } from '../src/crypto/passphraseExport';
 
 /**
  * A share link is the whole diagram in a fragment: deflated, base64url-encoded, versioned, capped.
@@ -36,7 +38,8 @@ describe('encodeShareLink', () => {
     expect(result.document.metadata.title).toBe('Checkout');
     expect(result.document.nodes.map((n) => n.type)).toEqual(['service', 'database']);
     expect(result.document.edges).toHaveLength(1);
-    expect(result.document.edges[0]?.source).toBe(source.nodes[0]?.id);
+    expect(result.document.edges[0]?.source).toBe(result.document.nodes[0]?.id);
+    expect(result.document.edges[0]?.target).toBe(result.document.nodes[1]?.id);
     expect(result.repairs).toEqual([]);
   });
 
@@ -107,7 +110,7 @@ describe('decodeShareLink', () => {
   });
 
   it('refuses a payload from a format it does not know', async () => {
-    const result = await decodeShareLink('#d=2.AAAA');
+    const result = await decodeShareLink('#d=3.AAAA');
     expect(result?.ok).toBe(false);
     if (result?.ok !== false) return;
     expect(result.error).toMatch(/newer version/);
@@ -141,6 +144,7 @@ describe('decodeShareLink', () => {
 });
 
 describe('copyShareLink', () => {
+  afterEach(() => registerDesktopHost(null));
   beforeEach(() => {
     window.history.replaceState(null, '', '/');
   });
@@ -149,10 +153,23 @@ describe('copyShareLink', () => {
     const writeText = vi.fn(async (_text: string) => {});
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
     const notify = vi.fn();
-    await copyShareLink(diagram(), notify);
+    const ready = vi.fn();
+    expect(await copyShareLink(diagram(), notify, undefined, undefined, ready)).toBe(true);
     expect(writeText).toHaveBeenCalledTimes(1);
     expect(writeText.mock.calls[0]?.[0]).toMatch(/#d=1\./);
+    expect(ready).toHaveBeenCalledWith(writeText.mock.calls[0]![0]);
     expect(notify).toHaveBeenCalledWith(SHARE_LINK_COPIED);
+  });
+
+  it('starts a retry before yielding the click and reuses the generated URL', async () => {
+    const writeText = vi.fn(async (_text: string) => {});
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    const notify = vi.fn();
+    const copying = copyPreparedShareLink('https://app.draftcanvas.dev/#d=2.already-generated', notify, true);
+    expect(writeText).toHaveBeenCalledWith('https://app.draftcanvas.dev/#d=2.already-generated');
+    expect(notify).not.toHaveBeenCalled();
+    expect(await copying).toBe(true);
+    expect(notify).toHaveBeenCalledWith('Protected link copied. Send the passphrase separately.');
   });
 
   it('falls back to a prompt holding the link when the clipboard refuses', async () => {
@@ -167,5 +184,76 @@ describe('copyShareLink', () => {
     expect(prompt.mock.calls[0]?.[1]).toMatch(/#d=1\./);
     expect(notify).not.toHaveBeenCalled();
     prompt.mockRestore();
+  });
+
+  it('creates public editor links on desktop and offers a manual copy when the webview refuses its clipboard', async () => {
+    registerDesktopHost({ channel: { kind: 'desktop', start: () => () => {}, post: () => {} }, returnHome: () => {} });
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: vi.fn(async () => { throw new Error('denied'); }) }, configurable: true });
+    const manual = vi.fn();
+    const notify = vi.fn();
+    await copyShareLink(diagram(), notify, undefined, 'separate long passphrase', manual);
+    expect(manual).toHaveBeenCalledTimes(1);
+    const url = new URL(manual.mock.calls[0]![0]);
+    expect(url.origin).toBe('https://app.draftcanvas.dev');
+    expect(url.pathname).toBe('/');
+    expect(url.hash).toMatch(/^#d=2\./);
+    expect(notify).not.toHaveBeenCalled();
+  });
+});
+
+describe('protected share links', () => {
+  const phrase = 'copper river orbit lantern';
+
+  it('encrypts all rooms and starting metadata, and opens only with the passphrase', async () => {
+    const source = diagram();
+    source.nodes[0] = { ...source.nodes[0]!, inside: { nodes: [createNode({ type: 'component', x: 0, y: 0, text: 'Private handler' })], edges: [], flows: [], viewport: source.viewport } };
+    const start = { path: [source.nodes[0]!.id] };
+    const encoded = await encodeShareLink(source, BASE, start, phrase);
+    if (!('url' in encoded)) throw new Error('Expected link');
+    const hash = new URL(encoded.url).hash;
+    expect(hash).toMatch(/^#d=2\.[A-Za-z0-9_-]+$/);
+    expect(encoded.url).not.toContain(phrase);
+    expect(hash).not.toContain('start=');
+    expect(hash).not.toContain(source.nodes[0]!.id);
+    const locked = await decodeShareLink(hash);
+    expect(locked).toMatchObject({ ok: false, needsPassphrase: true });
+    expect(locked).not.toHaveProperty('document');
+    const wrong = await decodeShareLink(hash, 'wrong passphrase');
+    expect(wrong).toMatchObject({ ok: false, needsPassphrase: true });
+    expect(wrong).not.toHaveProperty('document');
+    const opened = await decodeShareLink(hash, phrase);
+    expect(opened?.ok).toBe(true);
+    if (!opened?.ok) throw new Error('Expected document');
+    expect(opened.document.nodes[0]).toMatchObject({ type: source.nodes[0]!.type, x: 0, y: 0, width: source.nodes[0]!.width, height: source.nodes[0]!.height });
+    expect(opened.document.nodes[0]!.inside!.nodes[0]!.text).toBe('Private handler');
+    expect(opened.document.metadata.id).not.toBe(source.metadata.id);
+    expect(opened.start).toEqual({ path: [opened.document.nodes[0]!.id] });
+    expect(opened.protected).toBe(true);
+    // Unauthenticated starting metadata outside the encrypted envelope cannot redirect the reader.
+    expect((await decodeShareLink(`${hash}&start=${encodeURIComponent('{"path":[]}')}`, phrase))?.start).toEqual(opened.start);
+  });
+
+  it('randomizes encryption and refuses tampering and expensive malformed headers', async () => {
+    const first = await encodeShareLink(diagram(), BASE, undefined, phrase);
+    const second = await encodeShareLink(diagram(), BASE, undefined, phrase);
+    if (!('url' in first) || !('url' in second)) throw new Error('Expected links');
+    expect(first.url).not.toBe(second.url);
+    const hash = new URL(first.url).hash;
+    const payload = sharePayloadFromHash(hash)!.slice(2);
+    const binary = atob(payload.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - payload.length % 4) % 4));
+    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+    expect(new DataView(bytes.buffer).getUint32(0)).toBe(PBKDF2_ITERATIONS);
+    const hashOf = () => `#d=2.${btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')}`;
+    bytes[40] = bytes[40]! ^ 1;
+    const damaged = await decodeShareLink(hashOf(), phrase);
+    expect(damaged).toMatchObject({ ok: false, needsPassphrase: true });
+    new DataView(bytes.buffer).setUint32(0, 0xffffffff);
+    expect(await decodeShareLink(hashOf(), phrase)).toMatchObject({ ok: false, error: 'This protected share link is damaged.' });
+    expect(await decodeShareLink(`#d=2.${'A'.repeat(MAX_SHARE_PAYLOAD_BYTES + 1)}`, phrase)).toMatchObject({ ok: false });
+  });
+
+  it('refuses an empty or short protection passphrase instead of making an unprotected link', async () => {
+    await expect(encodeShareLink(diagram(), BASE, undefined, '')).rejects.toThrow(/at least 8/);
+    await expect(encodeShareLink(diagram(), BASE, undefined, 'short')).rejects.toThrow(/at least 8/);
   });
 });

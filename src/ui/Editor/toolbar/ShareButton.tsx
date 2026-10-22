@@ -1,9 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { hostKind } from '../../../host/hostInfo';
-import { copyShareLink } from '../../../share';
 import { useCollabStore } from '../../../store/collabStore';
-import { fileWithLiveViewport, useEditorStore } from '../../../store/editorStore';
+import { useEditorStore } from '../../../store/editorStore';
 import { useUiStore } from '../../../store/uiStore';
 import { Button } from '../../common/Button';
 import { Tooltip } from '../../common/Tooltip';
@@ -56,18 +54,13 @@ export function ShareButton({ onExport }: { onExport: () => void }) {
       detail: 'An image, an editable file, or architecture source',
       onSelect: choose(onExport),
     },
-    // The web app only: the desktop app's address is its own window, not a page anyone else can open.
-    ...(hostKind()
-      ? []
-      : [
-          {
-            id: 'link',
-            icon: 'link' as const,
-            label: 'Copy read-only link',
-            detail: 'The whole diagram travels inside the link — nothing is uploaded',
-            onSelect: choose(() => void copyShareLink(fileWithLiveViewport(useEditorStore.getState()), useUiStore.getState().notify)),
-          },
-        ]),
+    {
+      id: 'link',
+      icon: 'link' as const,
+      label: 'Share read-only link',
+      detail: 'Create a protected snapshot for Guided reader or Focus view',
+      onSelect: choose(() => useUiStore.getState().requestShareFromHere()),
+    },
   ];
 
   return (

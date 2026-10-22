@@ -7,7 +7,7 @@ import type { DraftDocument, DraftSummary, Project } from '../document/types';
 import { adoptEmbeddedBackground } from '../export/background';
 import { hostKind } from '../host/hostInfo';
 import { clearDocUrl, docIdFromLocation, pushDocUrl, replaceDocUrl } from '../lib/documentUrl';
-import { clearShareFragment, decodeShareLink, sharePayloadFromHash } from '../share';
+import { clearShareFragment, decodeShareLink, sharePayloadFromHash, shareLinkIsProtected } from '../share';
 import { holdOpen, openAnywhere } from '../storage/openPresence';
 import { stashForReload, takeReloadStash } from '../storage/reloadStash';
 import { logDiagnostic } from '../lib/diagnostics';
@@ -130,6 +130,13 @@ export function arriveWith(document: DraftDocument, context: { reopening: boolea
 }
 
 export interface DocumentSession {
+  /** A protected link lives in memory only; locking discards its decrypted document. */
+  sharedLink?: {
+    locked: boolean;
+    unlock: (passphrase: string) => Promise<string | null>;
+    lock: () => void;
+    dismiss: () => void;
+  };
   ready: boolean;
   repository: DraftRepository | null;
   /** False when the browser refused persistent storage; the UI says so plainly. */
@@ -222,9 +229,19 @@ export function useDocumentSession(): DocumentSession {
    * real, stored document on screen clears it through `leaveShared`.
    */
   const sharedRef = useRef(false);
+  const [protectedShareHash, setProtectedShareHash] = useState<string | null>(() =>
+    !hostKind() && shareLinkIsProtected(window.location.hash) ? window.location.hash : null,
+  );
+  const [shareLocked, setShareLocked] = useState(protectedShareHash !== null);
+  const shareAttempt = useRef(0);
+  const openedShareHash = useRef<string | null>(null);
   /** This tab's hold on the open canvas — see `openPresence.ts`. */
   const openHold = useRef<{ id: string; release: () => Promise<void> } | null>(null);
   const leaveShared = useCallback(() => {
+    shareAttempt.current += 1;
+    openedShareHash.current = null;
+    setProtectedShareHash(null);
+    setShareLocked(false);
     if (!sharedRef.current) return;
     sharedRef.current = false;
     useUiStore.getState().setReadOnly(null);
@@ -549,6 +566,7 @@ export function useDocumentSession(): DocumentSession {
       sharedRef.current = true;
       useUiStore.getState().setReadOnly({ sharedTitle: document.metadata.title });
       editorStore.useEditorStore.getState().setDocument(document);
+      editorStore.useEditorStore.getState().setMode('present');
       arriveWith(document, { reopening: false });
       setOpenId(document.metadata.id);
     },
@@ -580,23 +598,36 @@ export function useDocumentSession(): DocumentSession {
   );
 
   /** The address carries a share payload: decode it as an import, then show it read-only. */
-  const openFromShareHash = useCallback(async () => {
+  const openFromShareHash = useCallback(async (passphrase?: string): Promise<string | null> => {
+    const hash = window.location.hash;
+    openedShareHash.current = hash;
+    const attempt = ++shareAttempt.current;
     let result: Awaited<ReturnType<typeof decodeShareLink>>;
     try {
-      result = await decodeShareLink(window.location.hash);
+      result = await decodeShareLink(hash, passphrase);
     } catch (error) {
       logDiagnostic(error, { operation: 'open-share-link' });
       result = { ok: false, error: 'This share link could not be read in this browser.' };
     }
-    if (!result) return;
+    if (attempt !== shareAttempt.current || window.location.hash !== hash) return null;
+    if (!result) return null;
     if (!result.ok) {
+      if ('needsPassphrase' in result) {
+        setProtectedShareHash(hash);
+        setShareLocked(true);
+        return passphrase === undefined ? null : result.error;
+      }
+      setProtectedShareHash(null);
+      setShareLocked(false);
       clearShareFragment();
       notify(`This share link could not be opened. ${result.error}`, 'error');
-      return;
+      return result.error;
     }
     await openShared(result.document);
     const { useEditorStore } = await loadEditorStore();
-    if (useEditorStore.getState().document.metadata.id !== result.document.metadata.id) return;
+    if (useEditorStore.getState().document.metadata.id !== result.document.metadata.id) return 'The diagram could not be opened.';
+    setProtectedShareHash(result.protected ? hash : null);
+    setShareLocked(false);
     if (result.start) {
       for (const id of result.start.path) useEditorStore.getState().enterInside(id);
       if (result.start.flowId) {
@@ -606,7 +637,28 @@ export function useDocumentSession(): DocumentSession {
     }
     if (result.startWarning) notify(result.startWarning);
     if (result.repairs.length > 0) notify(`Opened with repairs: ${result.repairs.join(' ')}`);
+    return null;
   }, [notify, openShared]);
+
+  const lockShared = useCallback(() => {
+    shareAttempt.current += 1;
+    setShareLocked(true);
+    // Clear the file, selection and undo history before showing the unlock screen. Neither the
+    // passphrase nor the decrypted diagram is cached for the next unlock.
+    editorStoreModule?.useEditorStore.getState().setDocument(createDocument());
+    sharedRef.current = false;
+    useUiStore.getState().setReadOnly(null);
+    setOpenId(null);
+  }, [setOpenId]);
+
+  const dismissSharedLock = useCallback(() => {
+    shareAttempt.current += 1;
+    setProtectedShareHash(null);
+    setShareLocked(false);
+    openedShareHash.current = null;
+    clearShareFragment();
+    if (openIdRef.current && !sharedRef.current) replaceDocUrl(openIdRef.current);
+  }, []);
 
   const adoptDocument = useCallback(
     async (incoming: DraftDocument, options?: { fresh?: boolean }) => {
@@ -708,6 +760,7 @@ export function useDocumentSession(): DocumentSession {
     // A shared diagram has nothing to flush and nothing stored to prune: it simply leaves the screen.
     if (sharedRef.current) {
       leaveShared();
+      editorStoreModule?.useEditorStore.getState().setDocument(createDocument());
       setOpenId(null);
       await refreshLibrary().catch((error: unknown) => logDiagnostic(error, { operation: 'refresh-library' }));
       return true;
@@ -777,6 +830,7 @@ export function useDocumentSession(): DocumentSession {
     arrived.current = true;
     // A share link first: it carries the diagram itself, so there is no library row to look for.
     if (sharePayloadFromHash(window.location.hash) !== null) {
+      // oxlint-disable-next-line react/set-state-in-effect -- the address is an external source; a protected link must open its unlock screen.
       void openFromShareHash().finally(() => {
         arrivalSettled.current = true;
       });
@@ -811,7 +865,7 @@ export function useDocumentSession(): DocumentSession {
       // A share link pasted into the address bar of a tab already on the app is a same-document
       // navigation: no reload, so the arrival effect above never sees it — this does.
       if (sharePayloadFromHash(window.location.hash) !== null) {
-        if (!sharedRef.current) void openFromShareHash();
+        if (openedShareHash.current !== window.location.hash) void openFromShareHash();
         return;
       }
       const id = docIdFromLocation();
@@ -1013,6 +1067,7 @@ export function useDocumentSession(): DocumentSession {
   }, [openId, refreshLibrary, refreshProjects, repository]);
 
   const session: DocumentSession = {
+    sharedLink: protectedShareHash ? { locked: shareLocked, unlock: openFromShareHash, lock: lockShared, dismiss: dismissSharedLock } : undefined,
     ready,
     repository,
     durable: repository?.durable ?? true,

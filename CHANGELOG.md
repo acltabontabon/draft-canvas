@@ -41,6 +41,21 @@ the release notes and the in-app What's New are generated from here. See
   are one control, and **Share** holds drawing together live, exporting and a read-only link. Undo,
   redo and **?** for help sit with zoom at the bottom right; tidy up, find and replace and canvas
   settings are a right-click on the canvas away. <!-- highlight -->
+- **Guided sharing** — share from desktop or web into a dedicated reader with the actual diagram,
+  fixed shapes, level navigation and Flow playback. Export & share has its own Share tab and real
+  diagram preview; passphrase protection is on by default, with encryption and unlocking kept local.
+  Desktop links open at `app.draftcanvas.dev`. Generated links remain available to copy or open
+  directly in Guided reader when a browser's clipboard is unavailable or isolated.
+  Diagrams and levels without a playable Flow open in Focus view, with more canvas space and
+  navigation and inspection controls under Contents instead of an empty walkthrough or permanent
+  sidebar. Guided reader uses the same open canvas, with a compact manual control bar and an
+  optional step selector. Refined attachment markers open one readable card beside its shape or
+  connector in both readers, with previous/next browsing across levels. Cards sit below the diagram
+  on small screens. Notes, decisions, code, pending items and resolutions remain easy to inspect.
+  Flow steps advance only on reader input and reveal the relevant detail for that step.
+  Self-contained links compact snapshot identities before compression, keeping all diagram content
+  local. Link preparation runs in a background worker, with stage feedback and cancellation.
+
 - An Actor's name follows its kind: switch a new User to Device and it becomes "Device". A name
   you typed stays.
 

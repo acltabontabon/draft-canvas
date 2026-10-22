@@ -6102,10 +6102,8 @@ button.dc-open-points-main:focus-visible .dc-open-points-kind {
   opacity: 0.75;
 }
 
-/* A diagram opened from a share link (`uiStore.readOnly`): one slim strip across the top of the
-   canvas, over it rather than in the flow, so the camera and every popover measure the same pane
-   they always do. */
-/* A note pinned under the header, the same paper as its islands rather than a strip across the sheet. */
+/* The editable example’s slim notice sits over the canvas, so the camera and popovers keep
+   measuring the same pane. Shared diagrams use the dedicated reader. */
 .dc-read-only-banner {
   position: absolute;
   top: 6px;
@@ -6134,15 +6132,4 @@ button.dc-open-points-main:focus-visible .dc-open-points-kind {
 
 .dc-title-input[readonly] {
   cursor: default;
-}
-
-/* The Export dialog's "Copy share link", under the document formats: the one export that produces
-   no file, so it sits apart from the format picker rather than pretending to be a third kind. */
-.dc-export-share {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  padding-top: 12px;
-  border-top: 1px solid var(--dc-border);
 }

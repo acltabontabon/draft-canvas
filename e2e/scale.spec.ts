@@ -116,7 +116,7 @@ test('stays workable with 100 nodes and 180 connections', async ({ page }) => {
   // And it still exports.
   await page.getByRole('button', { name: 'Share', exact: true }).click();
   await page.getByRole('menuitem', { name: /^Export/ }).click();
-  const exportDialog = page.getByRole('dialog', { name: 'Export' });
+  const exportDialog = page.getByRole('dialog', { name: 'Export & share' });
   await exportDialog.locator('[data-mode="image"]').click();
   await exportDialog.locator('[data-value="svg"]').click();
   const download = page.waitForEvent('download');

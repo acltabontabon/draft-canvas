@@ -1,7 +1,8 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DraftDocument } from '../src/document/types';
+import * as shareCompression from '../src/share/compress';
 
 // Node's own experimental `globalThis.localStorage` shadows jsdom's in this environment — the
 // same in-memory fake `tests/personality-preference.test.tsx` uses stands in for
@@ -51,7 +52,109 @@ async function switchMode(user: ReturnType<typeof userEvent.setup>, name: RegExp
 
 beforeEach(() => {
   prefs.clear();
-  useUiStore.setState({ exportOpen: true, exportSelectionRequested: false });
+  useUiStore.setState({ exportOpen: true, exportSelectionRequested: false, shareFromHere: false });
+});
+
+describe('ExportDialog — protected sharing', () => {
+  it('shows real preparation progress and cancels without producing a stale link or clipboard write', async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn(async (_text: string) => {});
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    const compression = vi.spyOn(shareCompression, 'compressShare').mockImplementationOnce((_json, _protected, options) => new Promise((_resolve, reject) => {
+      options!.onProgress?.('compressing');
+      options!.signal!.addEventListener('abort', () => reject(new DOMException('Cancelled', 'AbortError')), { once: true });
+    }));
+    try {
+      useEditorStore.setState({ document: withFlow(), path: [], outer: null, selection: { nodes: [], edges: [] }, selectedFlowId: null });
+      useUiStore.setState({ shareFromHere: true, toasts: [] });
+      renderDialog();
+      await user.click(screen.getByRole('checkbox', { name: /Require a passphrase/ }));
+      await user.click(screen.getByRole('button', { name: 'Copy share link' }));
+      const progress = await screen.findByRole('progressbar', { name: 'Preparing share link' });
+      expect(progress).toHaveAttribute('aria-valuetext', 'Compressing the link…');
+      expect(progress).not.toHaveAttribute('aria-valuenow');
+      await user.click(screen.getByRole('button', { name: 'Cancel' }));
+      expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Copy share link' })).toBeEnabled();
+      expect(screen.queryByRole('link', { name: 'Open Guided reader' })).not.toBeInTheDocument();
+      expect(writeText).not.toHaveBeenCalled();
+      expect(useUiStore.getState().toasts).toEqual([]);
+      await user.click(screen.getByRole('button', { name: 'Copy share link' }));
+      expect(await screen.findByRole('link', { name: 'Open Guided reader' })).toBeVisible();
+      expect(writeText).toHaveBeenCalledOnce();
+    } finally {
+      compression.mockRestore();
+    }
+  });
+
+  it('keeps a generated link visible after a successful clipboard write and copies the same link on retry', async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn(async (_text: string) => {});
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    useEditorStore.setState({ document: withFlow(), path: [], outer: null, selection: { nodes: [], edges: [] }, selectedFlowId: null });
+    useUiStore.setState({ shareFromHere: true });
+    renderDialog();
+    await user.type(screen.getByLabelText('Passphrase', { exact: true }), 'a unique long phrase');
+    await user.type(screen.getByLabelText('Confirm passphrase'), 'a unique long phrase');
+    await user.click(screen.getByRole('button', { name: 'Copy protected link' }));
+    const reader = await screen.findByRole('link', { name: 'Open Guided reader' });
+    const url = reader.getAttribute('href')!;
+    expect(url).toMatch(/#d=2\./);
+    expect(screen.getByRole('textbox', { name: 'Share link' })).toHaveValue(url);
+    expect(reader).toHaveAttribute('target', '_blank');
+    await user.click(screen.getByRole('button', { name: 'Copy link' }));
+    expect(writeText.mock.calls).toEqual([[url], [url]]);
+    await user.keyboard('{Escape}');
+    act(() => useUiStore.setState({ exportOpen: true, shareFromHere: true }));
+    expect(screen.queryByRole('textbox', { name: 'Share link' })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Passphrase', { exact: true })).toHaveValue('');
+  });
+
+  it('offers a selectable link and reader when clipboard access is refused, then permits a direct retry', async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn<(text: string) => Promise<void>>(async () => { throw new Error('Clipboard denied'); });
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    useEditorStore.setState({ document: withFlow(), path: [], outer: null, selection: { nodes: [], edges: [] }, selectedFlowId: null });
+    useUiStore.setState({ shareFromHere: true, toasts: [] });
+    renderDialog();
+    await user.click(screen.getByRole('checkbox', { name: /Require a passphrase/ }));
+    await user.click(screen.getByRole('button', { name: 'Copy share link' }));
+    const link = await screen.findByRole('textbox', { name: 'Share link' });
+    expect(await screen.findByRole('status')).toHaveTextContent('The clipboard is unavailable.');
+    expect(screen.getByRole('link', { name: 'Open Guided reader' })).toHaveAttribute('href', (link as HTMLTextAreaElement).value);
+    expect(useUiStore.getState().toasts).toEqual([]);
+    writeText.mockImplementation(async () => {});
+    await user.click(screen.getByRole('button', { name: 'Copy link' }));
+    expect(screen.queryByText(/The clipboard is unavailable/)).not.toBeInTheDocument();
+    expect(writeText.mock.calls[0]).toEqual(writeText.mock.calls[1]);
+  });
+
+  it('opens sharing with protection enabled, requires matching passphrases and clears them on close', async () => {
+    const user = userEvent.setup();
+    useEditorStore.setState({ document: withFlow(), path: [], outer: null, selection: { nodes: [], edges: [] }, selectedFlowId: null });
+    useUiStore.setState({ shareFromHere: true });
+    renderDialog();
+    expect(screen.getByRole('radio', { name: /Share —/ })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: /Require a passphrase/ })).toBeChecked();
+    const copy = screen.getByRole('button', { name: 'Copy protected link' });
+    expect(copy).toBeDisabled();
+    await user.type(screen.getByLabelText('Passphrase', { exact: true }), 'a unique long phrase');
+    await user.type(screen.getByLabelText('Confirm passphrase'), 'a different phrase');
+    expect(copy).toBeDisabled();
+    expect(screen.getByText('Passphrases don’t match.')).toBeVisible();
+    await user.clear(screen.getByLabelText('Confirm passphrase'));
+    await user.type(screen.getByLabelText('Confirm passphrase'), 'a unique long phrase');
+    expect(copy).toBeEnabled();
+    expect([...prefs.values()].join(' ')).not.toContain('a unique long phrase');
+    await user.keyboard('{Escape}');
+    act(() => useUiStore.setState({ exportOpen: true, shareFromHere: true }));
+    expect(screen.getByLabelText('Passphrase', { exact: true })).toHaveValue('');
+    expect(screen.getByLabelText('Confirm passphrase')).toHaveValue('');
+    expect(screen.getByRole('button', { name: 'Copy protected link' })).toBeDisabled();
+    await user.type(screen.getByLabelText('Passphrase', { exact: true }), 'phrase for the old document');
+    act(() => useEditorStore.getState().setDocument(withoutFlows()));
+    expect(screen.getByLabelText('Passphrase', { exact: true })).toHaveValue('');
+  });
 });
 
 describe('ExportDialog — mode picker', () => {

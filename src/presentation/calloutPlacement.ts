@@ -23,6 +23,8 @@ export type CalloutPlacementName = 'above' | 'below' | 'above-right' | 'above-le
 
 export interface CalloutPlacementInput {
   kind: 'edge' | 'node';
+  /** Reader markers are centred over the host, rather than wearing its top-right corner. */
+  centeredMarker?: boolean;
   /** The chip or badge the thread leaves from. */
   marker: Box;
   /** What the callout is about: the node's own box, or the marker itself for a connector. */
@@ -96,11 +98,11 @@ function candidateOrigin(name: CalloutPlacementName, input: Omit<CalloutPlacemen
     // A node's badge sits at its top-right corner, so "upper right" starts just over the badge and
     // opens outward; a connector has no corner, so its diagonal steps fully clear of the marker.
     case 'above-right':
-      return kind === 'node'
+      return kind === 'node' && !input.centeredMarker
         ? { x: marker.x - CALLOUT_GAP, y: aboveY }
         : { x: marker.x + marker.width + CALLOUT_GAP, y: marker.y - CALLOUT_GAP - size.height };
     case 'above-left':
-      return kind === 'node'
+      return kind === 'node' && !input.centeredMarker
         ? { x: marker.x + marker.width + CALLOUT_GAP - size.width, y: aboveY }
         : { x: marker.x - CALLOUT_GAP - size.width, y: marker.y - CALLOUT_GAP - size.height };
     case 'right':
@@ -170,7 +172,7 @@ function candidateRect(name: CalloutPlacementName, input: Omit<CalloutPlacementI
 }
 
 const orderFor = (input: Omit<CalloutPlacementInput, 'soft'>): CalloutPlacementName[] =>
-  input.kind === 'node' ? NODE_ORDER : input.preferBelow ? EDGE_ORDER_BELOW : EDGE_ORDER;
+  input.kind === 'node' && !input.centeredMarker ? NODE_ORDER : input.preferBelow ? EDGE_ORDER_BELOW : EDGE_ORDER;
 const floats = (input: Omit<CalloutPlacementInput, 'soft'>): boolean =>
   input.bounds.width >= MIN_FLOATING_WIDTH &&
   input.size.width <= input.bounds.width &&

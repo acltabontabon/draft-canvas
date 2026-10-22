@@ -3,6 +3,8 @@
  * ordered, and the route a flow's opening names. No React — testable on their own, and kept out
  * of the component file so it exports components alone.
  */
+import { categoryOf } from '../document/connectorSemantics';
+import { effectiveConnectorText } from '../document/edgeSemantics';
 import { displayNameFor } from '../document/factory';
 import type { DraftFlow, DraftNode } from '../document/types';
 import type { FlowPlaybackStep } from './useFlowPlayback';
@@ -48,4 +50,36 @@ export function orderedWithVariants(flows: readonly DraftFlow[]): { flow: DraftF
     }
   }
   return rows;
+}
+
+export interface StepStory {
+  /** "Orders API → Payments", or the spotlit shapes of a frame step. */
+  headline: string;
+  from?: string;
+  to?: string;
+  /** The step's own caption, else what the connector says on the canvas. */
+  caption?: string;
+}
+
+/** The words a step is told with — every one already on the canvas or in the flow. */
+export function describeFlowStep(step: FlowPlaybackStep, nodes: ReadonlyMap<string, DraftNode>): StepStory {
+  const primary = step.edge;
+  if (!primary) {
+    const named = step.extraNodes.map((node) => displayNameFor(node)).join(', ');
+    return { headline: named || 'Frame', caption: step.caption };
+  }
+  const source = nodes.get(primary.source);
+  const target = nodes.get(primary.target);
+  const from = source ? displayNameFor(source) : 'Untitled';
+  const to = target ? displayNameFor(target) : 'Untitled';
+  // `primary.label` alone left the caption silent on every connector whose meaning comes from its
+  // relationship rather than typed text — see `effectiveConnectorText`.
+  const caption =
+    step.caption ||
+    effectiveConnectorText(primary, {
+      source: source ? categoryOf(source) : undefined,
+      target: target ? categoryOf(target) : undefined,
+    }) ||
+    undefined;
+  return { headline: `${from} to ${to}`, from, to, caption };
 }
