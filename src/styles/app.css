@@ -1375,11 +1375,10 @@ kbd {
   height: calc(100% + var(--dc-toolbar-height, var(--dc-bar-height)));
 }
 
-/* The islands. The lead is not one: the mark and the diagram's name are written on the sheet, like the
+/* The islands. The lead is not one: the back arrow and diagram's name sit on the sheet, like the
    title block of a drawing, with only a frosted wash behind them so the name stays legible when the
    diagram passes underneath. */
 .dc-toolbar-lead {
-  gap: 6px;
   padding: 3px 10px 3px 3px;
   border-radius: 12px;
   background: color-mix(in srgb, var(--dc-canvas) 74%, transparent);
@@ -1387,18 +1386,28 @@ kbd {
   backdrop-filter: blur(6px);
 }
 
-.dc-toolbar .dc-brand-mark {
-  width: 30px;
-  height: 30px;
+.dc-toolbar .dc-toolbar-back {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  align-self: flex-start;
   padding: 0;
   justify-content: center;
-  border-radius: 9px;
-  transition: transform 160ms var(--dc-ease-out);
+  border-radius: var(--dc-radius-sm);
+  background: none;
+  color: var(--dc-text-muted);
 }
 
-.dc-toolbar .dc-brand-mark:hover:not(:disabled) {
-  background: none;
-  transform: translateX(-1px) rotate(-4deg);
+.dc-toolbar .dc-toolbar-back svg {
+  width: 18px;
+  height: 18px;
+  /* The italic title's ink sits below its line-box centre, especially its descenders. */
+  transform: translateY(1.5px);
+}
+
+.dc-toolbar .dc-toolbar-back:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--dc-surface-hover) 60%, transparent);
+  color: var(--dc-text);
 }
 
 /* The name, written the way Home writes "A clearer picture.": the same italic serif, and the same
@@ -1411,6 +1420,7 @@ kbd {
 }
 
 .dc-toolbar .dc-title-input {
+  padding-left: 4px;
   font-family: 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Georgia, serif;
   font-size: 17px;
   font-style: italic;
@@ -1419,9 +1429,9 @@ kbd {
 }
 
 .dc-title-field .dc-title-stroke {
-  left: 6px;
+  left: 4px;
   bottom: -2px;
-  width: calc(100% - 12px);
+  width: calc(100% - 10px);
   height: 6px;
 }
 
@@ -1434,7 +1444,7 @@ kbd {
 .dc-toolbar-lead {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 0;
   min-width: 0;
   justify-self: start;
 }

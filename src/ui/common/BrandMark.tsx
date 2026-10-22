@@ -1,4 +1,4 @@
-/** Shared by Home and the canvas so the product mark keeps the same drawing and colours. */
+/** Shared by Home and About so the product mark keeps the same drawing and colours. */
 export function BrandMark() {
   return (
     <svg className="dc-brand-logo" viewBox="0 0 32 32" width="26" height="26" aria-hidden="true" focusable="false">

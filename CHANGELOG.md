@@ -40,7 +40,7 @@ the release notes and the in-app What's New are generated from here. See
 - Long diagram titles use more space on wide screens, and the header grows to hold wrapped lines
   clear of the drawing and other controls.
 - **A calmer editor** — the header floats on the canvas, so the drawing runs to the top of the
-  window. The Draft Canvas mark takes you back to your diagrams, beside the diagram's name. The tools
+  window. A back arrow takes you to your diagrams, beside the diagram's name. The tools
   are small drawings of their shapes, and the one in hand shows its name. **Present** and **Flows**
   are one control, and **Share** holds drawing together live, exporting and a read-only link. Undo,
   redo and **?** for help sit with zoom at the bottom right; tidy up, find and replace and canvas
@@ -72,8 +72,8 @@ the release notes and the in-app What's New are generated from here. See
 
 #### Fixed
 
-- Home and About use the same Draft Canvas logo as the canvas, including its dark tile and teal
-  connector.
+- The canvas no longer gains a border glow when it receives keyboard focus or shapes are deleted.
+- Home and About share the same Draft Canvas logo, including its dark tile and teal connector.
 - Toolbar separators use quiet vertical lines so they no longer resemble connector tools.
 - Panning and zooming the canvas no longer create horizontal or vertical page scrollbars.
 - The Add to canvas picker has clearer spacing and complete shape previews, including Data Store,

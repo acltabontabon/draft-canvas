@@ -48,12 +48,20 @@ export function CreateRail() {
       setMore((current) => (current.start === start && current.end === end ? current : { start, end }));
     };
     update();
+    let frame: number | undefined;
+    const onResize = () => {
+      // Overflow chevrons change the rail's intrinsic width. Adding them inside its resize
+      // notification caused another layout cycle while narrow title/header tracks were settling.
+      if (frame !== undefined) cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(update);
+    };
     // Absent in a test DOM; the rail's size then never changes anyway.
-    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(update);
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(onResize);
     observer?.observe(rail);
     rail.addEventListener('scroll', update, { passive: true });
     return () => {
       observer?.disconnect();
+      if (frame !== undefined) cancelAnimationFrame(frame);
       rail.removeEventListener('scroll', update);
     };
   }, []);

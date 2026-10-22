@@ -407,7 +407,7 @@ test.describe('Draft Canvas', () => {
     await expect(page.locator('.dc-node')).toHaveCount(3);
   });
 
-  test('the canvas is one Tab stop, not one per node, and shows a focus ring only from real keyboard focus', async ({
+  test('the canvas is one Tab stop, with keyboard feedback on shapes and no border after deletion', async ({
     page,
     browserName,
   }) => {
@@ -443,19 +443,26 @@ test.describe('Draft Canvas', () => {
     // the automation's call, and Playwright's Firefox may not make it; the ring itself is checked
     // wherever the canvas is marked as keyboard-focused.
     const keyboardFocused = await page.locator('.dc-canvas').evaluate((el) => el.matches(':focus-visible'));
-    if (browserName === 'firefox' && !keyboardFocused) {
-      test.info().annotations.push({ type: 'note', description: 'Firefox under Playwright did not mark the Tab-focused canvas :focus-visible.' });
-      return;
-    }
-    expect(keyboardFocused).toBe(true);
+    expect(keyboardFocused || browserName === 'firefox').toBe(true);
     // Selected from the keyboard too: a mouse click ends keyboard focus in Firefox (as
     // `:focus-visible` allows), so the ring is checked on the path it exists for.
     await page.keyboard.press('ControlOrMeta+a');
-    const afterKeyboardFocus = await page
-      .locator('.dc-node[data-selected="true"]')
-      .first()
-      .evaluate((el) => getComputedStyle(el, '::after').boxShadow);
-    expect(afterKeyboardFocus).not.toBe('none');
+    if (keyboardFocused) {
+      const afterKeyboardFocus = await page
+        .locator('.dc-node[data-selected="true"]')
+        .first()
+        .evaluate((el) => getComputedStyle(el, '::after').boxShadow);
+      expect(afterKeyboardFocus).not.toBe('none');
+    } else {
+      test.info().annotations.push({ type: 'note', description: 'Firefox under Playwright did not mark the Tab-focused canvas :focus-visible.' });
+    }
+
+    await page.keyboard.press('Delete');
+    await expect(page.locator('.dc-node')).toHaveCount(0);
+    const canvas = page.locator('.dc-canvas');
+    await expect(canvas).toBeFocused();
+    await expect(canvas).toHaveCSS('box-shadow', 'none');
+    await expect(canvas).toHaveCSS('outline-style', 'none');
   });
 
   test('double-clicking empty canvas opens a type picker, and choosing a type creates it', async ({ page }) => {
