@@ -81,12 +81,12 @@ async function deriveExportKey(
   );
 }
 
-export async function encryptForExport(document: unknown, passphrase: string): Promise<string> {
+/** Binary payloads (compressed share links) use the same authenticated encryption as files. */
+export async function encryptExportBytes(plaintext: Uint8Array<ArrayBuffer>, passphrase: string): Promise<SecureExportEnvelope> {
   const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTES));
   const iterations = PBKDF2_ITERATIONS;
   const key = await deriveExportKey(passphrase, salt, iterations);
   const iv = crypto.getRandomValues(new Uint8Array(IV_BYTES));
-  const plaintext = new TextEncoder().encode(JSON.stringify(document));
   const ciphertext = await crypto.subtle.encrypt({ name: AES_GCM, iv }, key, plaintext);
 
   const envelope: SecureExportEnvelope = {
@@ -98,6 +98,11 @@ export async function encryptForExport(document: unknown, passphrase: string): P
     iv: toBase64(iv),
     ciphertext: toBase64(ciphertext),
   };
+  return envelope;
+}
+
+export async function encryptForExport(document: unknown, passphrase: string): Promise<string> {
+  const envelope = await encryptExportBytes(new TextEncoder().encode(JSON.stringify(document)), passphrase);
   return `${JSON.stringify(envelope, null, 2)}\n`;
 }
 
@@ -130,13 +135,10 @@ function isSecureExportEnvelope(value: unknown): value is SecureExportEnvelope {
  * failure looks identical either way, and there is no safe way to tell a
  * user "your passphrase was close" without weakening the guarantee.
  */
-export async function decryptFromExport(text: string, passphrase: string): Promise<DecryptExportResult> {
-  let envelope: unknown;
-  try {
-    envelope = JSON.parse(text);
-  } catch {
-    return { ok: false, error: 'That file is not valid JSON.' };
-  }
+export async function decryptExportBytes(
+  envelope: unknown,
+  passphrase: string,
+): Promise<{ ok: true; bytes: Uint8Array<ArrayBuffer> } | { ok: false; error: string }> {
   if (!isSecureExportEnvelope(envelope)) {
     return { ok: false, error: 'That file is not a Draft Canvas secure export.' };
   }
@@ -164,7 +166,23 @@ export async function decryptFromExport(text: string, passphrase: string): Promi
   try {
     const key = await deriveExportKey(passphrase, salt, envelope.iterations);
     const plaintext = await crypto.subtle.decrypt({ name: AES_GCM, iv }, key, ciphertext);
-    return { ok: true, document: JSON.parse(new TextDecoder().decode(plaintext)) };
+    return { ok: true, bytes: new Uint8Array(plaintext) };
+  } catch {
+    return { ok: false, error: 'Incorrect passphrase, or this file is corrupted.' };
+  }
+}
+
+export async function decryptFromExport(text: string, passphrase: string): Promise<DecryptExportResult> {
+  let envelope: unknown;
+  try {
+    envelope = JSON.parse(text);
+  } catch {
+    return { ok: false, error: 'That file is not valid JSON.' };
+  }
+  const result = await decryptExportBytes(envelope, passphrase);
+  if (!result.ok) return result;
+  try {
+    return { ok: true, document: JSON.parse(new TextDecoder().decode(result.bytes)) };
   } catch {
     return { ok: false, error: 'Incorrect passphrase, or this file is corrupted.' };
   }

@@ -20,6 +20,8 @@ const PATHS = {
   keyboard: 'M3 7h18v10H3z M7 11h.01 M11 11h.01 M15 11h.01 M8 14h8',
   lock: 'M6 11h12v9H6z M9 11V8a3 3 0 0 1 6 0v3',
   play: 'M7 4l12 8-12 8z',
+  pause: 'M8 5v14 M16 5v14',
+  layers: 'M12 3l9 5-9 5-9-5z M3 12l9 5 9-5 M3 16l9 5 9-5',
   file: 'M6 3h8l4 4v14H6z M14 3v4h4',
   upload: 'M12 20V9 M8 13l4-4 4 4 M4 5h16',
   alignLeft: 'M4 6h16 M4 12h10 M4 18h13',

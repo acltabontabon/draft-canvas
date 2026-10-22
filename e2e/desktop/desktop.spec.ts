@@ -78,6 +78,32 @@ test('opens on its own Home, not the browser’s library', async ({ page }) => {
   await expect(page.getByPlaceholder('Search diagrams…')).toHaveCount(0);
 });
 
+test('desktop sharing creates a protected public editor link and supports manual copying', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async () => { throw new Error('Clipboard denied'); } } });
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'New Quick Draft' }).click();
+  await drawService(page);
+  await page.getByRole('button', { name: 'Export', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Export & share' });
+  await dialog.getByText('Share', { exact: true }).click();
+  await expect(dialog.getByRole('checkbox', { name: /Require a passphrase/ })).toBeChecked();
+  await dialog.getByLabel('Passphrase', { exact: true }).fill('copper river orbit lantern');
+  await dialog.getByLabel('Confirm passphrase').fill('copper river orbit lantern');
+  await dialog.getByRole('button', { name: 'Copy protected link' }).click();
+  const manual = dialog.getByRole('textbox', { name: 'Share link', exact: true });
+  await expect(manual).toBeVisible();
+  await expect(dialog.getByText(/The clipboard is unavailable/)).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Copy link', exact: true })).toBeEnabled();
+  await expect(dialog.getByRole('link', { name: 'Open Guided reader' })).toHaveAttribute('href', await manual.inputValue());
+  const link = new URL(await manual.inputValue());
+  expect(link.origin).toBe('https://app.draftcanvas.dev');
+  expect(link.pathname).toBe('/');
+  expect(link.hash).toMatch(/^#d=2\./);
+  expect(link.href).not.toContain('copper');
+});
+
 test('Projects browses folders in-app, cancels without linking, and adds the selected folder', async ({ page }) => {
   await page.goto('/');
   const text = await documentText(page, 'Overview', 2);
@@ -883,7 +909,7 @@ test('exports go through the shell’s Save dialog, and cancelling one is not a 
 
   await page.getByRole('button', { name: 'Share', exact: true }).click();
   await page.getByRole('menuitem', { name: /^Export/ }).click();
-  const dialog = page.getByRole('dialog', { name: 'Export' });
+  const dialog = page.getByRole('dialog', { name: 'Export & share' });
   await expect(dialog).toBeVisible();
   // A first-ever Export opens on Image; the document is what carries the diagram itself.
   await dialog.locator('[data-mode="document"]').click();
@@ -907,7 +933,7 @@ test('cancelling an export’s Save dialog leaves the export dialog as it was, w
 
   await page.getByRole('button', { name: 'Share', exact: true }).click();
   await page.getByRole('menuitem', { name: /^Export/ }).click();
-  const dialog = page.getByRole('dialog', { name: 'Export' });
+  const dialog = page.getByRole('dialog', { name: 'Export & share' });
   await dialog.locator('[data-mode="document"]').click();
   await page.getByRole('button', { name: 'Export document' }).click();
 

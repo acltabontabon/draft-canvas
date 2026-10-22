@@ -1,12 +1,13 @@
 import { act, render, waitFor } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createDocument } from '../src/document/factory';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createDocument, createNode } from '../src/document/factory';
 import type { DraftDocument } from '../src/document/types';
 import { useEditorStore } from '../src/store/editorStore';
 import { useUiStore } from '../src/store/uiStore';
 import { useDocumentSession, type DocumentSession } from '../src/store/useDocumentSession';
 import { __setRepository, type DraftRepository } from '../src/storage';
 import { stashForReload } from '../src/storage/reloadStash';
+import { encodeShareLink } from '../src/share/link';
 
 /** A minimal, fully-stubbed `DraftRepository` — every method resolves with a
  *  harmless default; a test overrides only the method it needs to control or
@@ -80,6 +81,41 @@ describe('useDocumentSession — startup failure', () => {
     const session = renderSession(stubRepository());
     await waitFor(() => expect(session().ready).toBe(true));
     expect(errorToastShown()).toBe(false);
+  });
+});
+
+describe('protected shared diagram lifecycle', () => {
+  afterEach(() => { window.history.replaceState(null, '', '/'); useUiStore.getState().setReadOnly(null); });
+
+  it('reveals nothing before unlock, never saves the snapshot, and discards the decrypted diagram when locked', async () => {
+    const source = { ...createDocument('Private architecture'), nodes: [createNode({ type: 'database', x: 0, y: 0, text: 'Private orders' })] };
+    const encoded = await encodeShareLink(source, window.location.href, undefined, 'separate copper river phrase');
+    if (!('url' in encoded)) throw new Error('Expected link');
+    window.history.replaceState(null, '', encoded.url);
+    useEditorStore.getState().setDocument(createDocument());
+    const save = vi.fn(async () => {});
+    const session = renderSession(stubRepository({ save }));
+    await waitFor(() => expect(session().ready).toBe(true));
+    expect(session().sharedLink?.locked).toBe(true);
+    expect(session().openId).toBeNull();
+    expect(useEditorStore.getState().document.nodes).toHaveLength(0);
+    await act(async () => { expect(await session().sharedLink!.unlock('wrong phrase')).toMatch(/Incorrect passphrase/); });
+    expect(session().sharedLink?.locked).toBe(true);
+    await act(async () => { expect(await session().sharedLink!.unlock('separate copper river phrase')).toBeNull(); });
+    expect(session().sharedLink?.locked).toBe(false);
+    expect(useEditorStore.getState().document.nodes[0]?.text).toBe('Private orders');
+    expect(useEditorStore.getState().mode).toBe('present');
+    expect(useUiStore.getState().readOnly).not.toBeNull();
+    expect(save).not.toHaveBeenCalled();
+    act(() => session().sharedLink!.lock());
+    expect(session().sharedLink?.locked).toBe(true);
+    expect(session().openId).toBeNull();
+    expect(useEditorStore.getState().document.nodes).toHaveLength(0);
+    expect(useEditorStore.getState().history.past).toHaveLength(0);
+    expect(window.location.hash).toMatch(/^#d=2\./);
+    await act(async () => { await session().sharedLink!.unlock('separate copper river phrase'); });
+    expect(useEditorStore.getState().document.nodes[0]?.text).toBe('Private orders');
+    expect(save).not.toHaveBeenCalled();
   });
 });
 

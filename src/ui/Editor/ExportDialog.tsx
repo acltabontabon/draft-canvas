@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   backgroundTravels,
   collectLevels,
@@ -30,11 +30,16 @@ import {
   writeSourceFormatPreference,
 } from './exportPreferences';
 import { fileOf, fileWithLiveViewport, useEditorStore } from '../../store/editorStore';
-import { ownerAt } from '../../depth/tree';
+import { ownerAt, viewOf } from '../../depth/tree';
 import { displayNameFor } from '../../document/factory';
 import { useUiStore } from '../../store/uiStore';
-import { hostKind } from '../../host/hostInfo';
-import { ShareStartPicker } from './ShareStartPicker';
+import { copyPreparedShareLink, copyShareLink } from '../../share';
+import { collectRooms } from '../../export/rooms';
+import { flowIsPlayable } from '../../document/flow';
+import { ExportSharePanel, type ShareChoice } from './ExportSharePanel';
+import { ExportShareResult } from './ExportShareResult';
+import { ExportShareProgress } from './ExportShareProgress';
+import type { ShareStage } from '../../share/compress';
 import { usePersonality } from '../personality/usePersonality';
 import { useTheme } from '../theme/useTheme';
 import { Button } from '../common/Button';
@@ -62,7 +67,7 @@ const EXPORT_PNG_SCALE_PREFERENCE = 'export-png-scale';
 function readExportModePreference(): ExportMode {
   const value = readPreference(EXPORT_MODE_PREFERENCE);
   // 'animated' (the retired GIF export) reads as the default, like any other stale value.
-  return value === 'document' || value === 'image' || value === 'sequence' ? value : 'image';
+  return value === 'share' || value === 'document' || value === 'image' || value === 'sequence' ? value : 'image';
 }
 
 function readDocumentFormatPreference(): DocumentFormat {
@@ -153,8 +158,37 @@ export function ExportDialog() {
     };
   }, [open, document]);
   const [busy, setBusy] = useState(false);
-  const [securePromptOpen, setSecurePromptOpen] = useState(false);
+  const [protectedLink, setProtectedLink] = useState(true);
+  const [passphrase, setPassphrase] = useState('');
+  const [confirmation, setConfirmation] = useState('');
+  const [shareChoice, setShareChoice] = useState<string | null>(null);
+  const [shareLink, setShareLink] = useState<string | null>(null);
+  const [shareCopyFailed, setShareCopyFailed] = useState(false);
+  const [shareStage, setShareStage] = useState<ShareStage | null>(null);
+  const shareAttempt = useRef(0);
+  const shareAbort = useRef<AbortController | null>(null);
   const running = useRef(false);
+  const shareSessionId = useEditorStore((state) => state.document.metadata.id);
+  // Formats may survive a close; secrets and generated links must not survive any close or file
+  // switch, including one requested externally rather than through this dialog's Close button.
+  /* oxlint-disable react/set-state-in-effect -- clear sensitive transient state before the next paint after an external session change. */
+  useLayoutEffect(() => {
+    shareAttempt.current += 1;
+    shareAbort.current?.abort();
+    shareAbort.current = null;
+    running.current = false;
+    setBusy(false);
+    setShareStage(null);
+    setPassphrase('');
+    setConfirmation('');
+    setShareLink(null);
+    setShareCopyFailed(false);
+    setShareChoice(null);
+    setProtectedLink(true);
+  }, [open, shareSessionId]);
+  /* oxlint-enable react/set-state-in-effect */
+  useEffect(() => () => { shareAttempt.current += 1; shareAbort.current?.abort(); }, []);
+  const [securePromptOpen, setSecurePromptOpen] = useState(false);
   const [sourceFormat, setSourceFormat] = useState<SourceFormat>(readSourceFormatPreference);
   // Per image format, remembered: a few kilobytes of text inside an SVG is nothing, so it is on by
   // default there; a PNG is usually meant as just a picture, so it is off until asked for.
@@ -170,7 +204,7 @@ export function ExportDialog() {
   // A selection belongs to the room it was made in, so it means nothing about the whole file.
   const effectiveSelectionOnly = (selectionOnly || selectionRequested) && !scopeIsWhole;
   const shareRequested = useUiStore((state) => state.shareFromHere);
-  const effectiveMode: ExportMode = shareRequested ? 'document' : selectionRequested ? 'image' : mode;
+  const effectiveMode: ExportMode = shareRequested ? 'share' : selectionRequested ? 'image' : mode;
 
   const close = () => {
     requestExportSelection(false);
@@ -178,12 +212,20 @@ export function ExportDialog() {
     // disabled, and a later single selection would export only that.
     setSelectionOnly(false);
     setEveryLevel(false);
+    setPassphrase('');
+    setConfirmation('');
+    setProtectedLink(true);
+    setShareChoice(null);
+    setShareLink(null);
     setOpen(false);
   };
 
   if (!open || !document || !selection) return null;
 
   const setMode = (next: ExportMode) => {
+    setPassphrase('');
+    setConfirmation('');
+    setShareLink(null);
     setModeState(next);
     writePreference(EXPORT_MODE_PREFERENCE, next);
     requestExportSelection(false);
@@ -250,9 +292,28 @@ export function ExportDialog() {
 
   const title = document.metadata.title;
   const onlyKey = only ? selection.nodes.join(',') : '';
+  const shareFile = fileOf(useEditorStore.getState());
+  const rooms = effectiveMode === 'share' ? collectRooms(shareFile) : [];
+  const shareChoices: ShareChoice[] = [{ key: 'overview', label: 'Diagram overview' }];
+  if (inRoom) shareChoices.push({ key: 'current', label: 'Current level', start: { path: [...useEditorStore.getState().path] } });
+  for (const room of rooms) {
+    for (const flow of room.document.flows) {
+      if (flowIsPlayable(room.document, flow)) shareChoices.push({ key: flow.id, label: `${flow.title} — ${room.owners.map(displayNameFor).join(' / ') || 'Diagram overview'}`, start: { path: [...room.path], flowId: flow.id } });
+    }
+  }
+  const chosenShare = shareChoices.find((choice) => choice.key === shareChoice)
+    ?? shareChoices.find((choice) => choice.key === selectedFlowId)
+    ?? shareChoices.find((choice) => choice.key === (inRoom ? 'current' : 'overview'))!;
+  const sharePreview = viewOf(shareFile, chosenShare.start?.path ?? []) ?? shareFile;
 
   const artifact: { fileName: string; visual: ArtifactVisual; empty?: boolean } =
-    effectiveMode === 'document'
+    effectiveMode === 'share'
+      ? { fileName: shareFile.metadata.title || 'Untitled diagram', visual: {
+          type: 'thumbnail', document: sharePreview, theme: name,
+          options: { theme: name, preset, selectedFlowId: chosenShare.start?.flowId }, onlyKey: '',
+          describe: () => `View only · ${count(rooms.length, 'level')} · ${count(countPlayableFlows(shareFile), 'Flow')}`,
+        } }
+      : effectiveMode === 'document'
       ? documentFormat === 'editable'
         ? {
             fileName: fileNameFor(title),
@@ -327,8 +388,58 @@ export function ExportDialog() {
     }
   };
 
+  const runShare = async () => {
+    if (running.current) return;
+    const attempt = ++shareAttempt.current;
+    const controller = new AbortController();
+    shareAbort.current = controller;
+    running.current = true;
+    setBusy(true);
+    setShareStage('preparing');
+    try {
+      setShareLink(null);
+      setShareCopyFailed(false);
+      const copied = await copyShareLink(fileWithLiveViewport(useEditorStore.getState()), notify, chosenShare.start, protectedLink ? passphrase : undefined, (url) => {
+        if (attempt === shareAttempt.current) setShareLink(url);
+      }, { signal: controller.signal, onProgress: (stage) => { if (attempt === shareAttempt.current) setShareStage(stage); } });
+      if (attempt === shareAttempt.current) setShareCopyFailed(!copied);
+    } finally {
+      if (attempt === shareAttempt.current) {
+        running.current = false;
+        shareAbort.current = null;
+        setShareStage(null);
+        setBusy(false);
+      }
+    }
+  };
+  const cancelShare = () => {
+    shareAttempt.current += 1;
+    shareAbort.current?.abort();
+    shareAbort.current = null;
+    running.current = false;
+    setShareStage(null);
+    setShareLink(null);
+    setBusy(false);
+  };
+  const runShareCopy = async () => {
+    if (running.current || !shareLink) return;
+    running.current = true;
+    setBusy(true);
+    try {
+      // No encryption or compression before this write: Safari requires a fresh user gesture.
+      const copied = await copyPreparedShareLink(shareLink, notify, protectedLink);
+      setShareCopyFailed(!copied);
+    } finally {
+      running.current = false;
+      setBusy(false);
+    }
+  };
   const cta =
-    effectiveMode === 'document'
+    effectiveMode === 'share'
+      ? shareLink
+        ? { label: 'Copy link', disabled: busy, onClick: () => void runShareCopy() }
+        : { label: protectedLink ? 'Copy protected link' : 'Copy share link', disabled: busy || (protectedLink && (passphrase.length < 8 || passphrase !== confirmation)), onClick: () => void runShare() }
+      : effectiveMode === 'document'
       ? documentFormat === 'editable'
         ? {
             label: 'Export document',
@@ -397,10 +508,10 @@ export function ExportDialog() {
 
   return (
     <Modal
-      title="Export"
-      width={640}
+      title="Export & share"
+      width={700}
       className="dc-modal-export"
-      onClose={close}
+      onClose={busy ? () => {} : close}
       footer={
         <div className="dc-export-footer">
           <span
@@ -408,7 +519,9 @@ export function ExportDialog() {
             title={`Nothing about this diagram leaves ${__DESKTOP__ ? 'this computer' : 'your browser'} during export.`}
           >
             <Icon name="lock" size={13} />
-            Generated locally on your device.
+            {effectiveMode === 'share'
+              ? `${protectedLink ? 'Encrypted' : 'Created'} locally. Nothing uploaded.`
+              : 'Generated locally on your device.'}
           </span>
           <span className="dc-export-footer-actions">
             {copy && (
@@ -416,29 +529,25 @@ export function ExportDialog() {
                 Copy
               </Button>
             )}
-            <Button variant="solid" icon="export" disabled={cta.disabled} aria-busy={busy || undefined} onClick={cta.onClick}>
-              {busy ? 'Exporting…' : cta.label}
+            <Button variant="solid" icon={effectiveMode === 'share' ? 'copy' : 'export'} disabled={cta.disabled} aria-busy={busy || undefined} onClick={cta.onClick}>
+              {busy ? effectiveMode === 'share' ? shareLink ? 'Copying…' : 'Creating link…' : 'Exporting…' : cta.label}
             </Button>
           </span>
         </div>
       }
     >
-      <ExportModePicker mode={effectiveMode} onChange={(next) => { useUiStore.setState({ shareFromHere: false }); setMode(next); }} />
+      <ExportModePicker mode={effectiveMode} onChange={(next) => { if (busy) return; useUiStore.setState({ shareFromHere: false }); setMode(next); }} />
 
-      <div className="dc-export-body">
+      <div className="dc-export-body" data-share={effectiveMode === 'share' ? 'true' : undefined}>
         <div className="dc-export-config" key={effectiveMode}>
-          {effectiveMode === 'document' && (
-            <>
-              <ExportDocumentPanel format={documentFormat} onChange={setDocumentFormat} />
-              {/* The web app only — see the matching command in `commands/registry.ts`. The whole
-                  file goes into the link, every room, which is why this ignores the room scope. */}
-              {!hostKind() && (
-                <ShareStartPicker />
-              )}
-            </>
-          )}
+          {effectiveMode === 'share' && (busy && shareStage
+            ? <ExportShareProgress stage={shareStage} onCancel={cancelShare} />
+            : shareLink
+            ? <ExportShareResult url={shareLink} protectedLink={protectedLink} copyFailed={shareCopyFailed} busy={busy} onEdit={() => { setShareLink(null); setShareCopyFailed(false); }} />
+            : <ExportSharePanel choices={shareChoices} choice={chosenShare.key} onChoice={setShareChoice} protectedLink={protectedLink} onProtectedLink={(value) => { setProtectedLink(value); setPassphrase(''); setConfirmation(''); }} passphrase={passphrase} onPassphrase={setPassphrase} confirmation={confirmation} onConfirmation={setConfirmation} busy={busy} />)}
+          {effectiveMode === 'document' && <ExportDocumentPanel format={documentFormat} onChange={setDocumentFormat} />}
 
-          {inRoom && effectiveMode !== 'document' && (
+          {inRoom && effectiveMode !== 'document' && effectiveMode !== 'share' && (
             <ExportScope whole={wholeCanvas} roomName={roomName} onChange={setWholeCanvas} />
           )}
 
@@ -481,7 +590,10 @@ export function ExportDialog() {
             />
           )}
         </div>
-        <ExportArtifact fileName={artifact.fileName} visual={artifact.visual} empty={artifact.empty} />
+        <div className="dc-export-artifact-column">
+          {effectiveMode === 'share' && <span className="dc-share-preview-label">Recipient view</span>}
+          <ExportArtifact fileName={artifact.fileName} visual={artifact.visual} empty={artifact.empty} />
+        </div>
       </div>
 
       {securePromptOpen && (

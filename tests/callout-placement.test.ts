@@ -51,6 +51,21 @@ const inside = (rect: Box, outer: Box) =>
   rect.y + rect.height <= outer.y + outer.height + 0.01;
 
 describe('placeCallout for a connector', () => {
+  it('clears neighbouring shapes when a reader marker is centred above its node', () => {
+    const host = { x: 552, y: 383, width: 176, height: 68 };
+    const queue = { x: 232, y: 383, width: 140, height: 48 };
+    const database = { x: 896, y: 395, width: 120, height: 90 };
+    const cardSize = { width: 294, height: 185 };
+    const result = placeCallout({
+      kind: 'node', centeredMarker: true, marker: { x: 600, y: 345, width: 80, height: 28 }, host,
+      avoid: [host], soft: [queue, database], exclusions: [], size: cardSize,
+      bounds: { x: 16, y: 167, width: 1248, height: 426 },
+    });
+    const card = { x: result.x, y: result.y, ...cardSize };
+    for (const shape of [host, queue, database]) expect(overlapArea(card, shape)).toBe(0);
+    expect(inside(card, { x: 16, y: 167, width: 1248, height: 426 })).toBe(true);
+  });
+
   it('sits above the marker with a short vertical thread when there is room', () => {
     const result = placeCallout(edgeInput());
     expect(result.placement).toBe('above');

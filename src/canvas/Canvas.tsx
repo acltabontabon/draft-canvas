@@ -108,6 +108,15 @@ const NO_GUIDES: Guide[] = [];
 const PAN_WITH_MIDDLE_BUTTON = [1];
 const MULTI_SELECT_KEYS = ['Meta', 'Shift', 'Control'];
 
+// Reader clicks inspect existing elements; they never enable React Flow's drag/edit projection.
+function selectSharedNode(_event: unknown, node: { id: string }): void {
+  useEditorStore.getState().setSelection({ nodes: [node.id], edges: [] });
+}
+
+function selectSharedEdge(_event: unknown, edge: { id: string }): void {
+  useEditorStore.getState().setSelection({ nodes: [], edges: [edge.id] });
+}
+
 /** Ties the capsule that was under the cursor to the chip it just became: the new chip plays the
  *  same one-shot arrival the accepted-continuation nodes do, and the marker expires on its own. */
 /** The screen point a drag started from, whichever kind of event React Flow handed over. Null for
@@ -613,7 +622,8 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   }, [path, openFitDocumentId, document, openFitWidth, openFitHeight, setViewport]);
 
   const tracing = useUiStore((state) => state.flowTrace !== null);
-  const interactive = mode === 'edit' && !tracing;
+  const sharedReadOnly = useUiStore((state) => state.readOnly !== null);
+  const interactive = mode === 'edit' && !tracing && !sharedReadOnly;
   useContinuation(interactive);
 
   useZoomVariable();
@@ -2055,6 +2065,8 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onSelectionChange={onSelectionChange}
+        onNodeClick={sharedReadOnly ? selectSharedNode : undefined}
+        onEdgeClick={sharedReadOnly ? selectSharedEdge : undefined}
         onNodeDragStart={onNodeDragStart}
         onNodeDragStop={onNodeDragStop}
         onNodeContextMenu={onNodeContextMenu}

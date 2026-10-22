@@ -67,7 +67,7 @@ test('tracing works from the Outline and Escape discards the preview', async ({ 
   expect(await page.evaluate(async () => (await import('/src/store/editorStore.ts')).useEditorStore.getState().document.flows.length)).toBe(1);
 });
 
-test('Share from here opens the chosen flow introduction read-only', async ({ page, context }) => {
+test('Share from here opens the chosen flow introduction read-only', async ({ page, context }, testInfo) => {
   await example(page);
   await command(page, 'Share from here');
   await expect(page.getByRole('combobox', { name: 'Start at' })).toBeVisible();
@@ -79,11 +79,35 @@ test('Share from here opens the chosen flow introduction read-only', async ({ pa
     return result.url;
   });
   const reader = await context.newPage();
+  await reader.emulateMedia({ reducedMotion: 'reduce' });
   await reader.goto(url);
+  await reader.bringToFront();
   await expect(reader.locator('.dc-editor')).toHaveAttribute('data-mode', 'present');
   expect(await reader.evaluate(async () => (await import('/src/store/editorStore.ts')).useEditorStore.getState().flowPlayback.stage)).toBe('opening');
   await reader.keyboard.press('Escape');
-  await expect(reader.getByRole('button', { name: 'Make an editable copy' })).toBeVisible();
+  await expect(reader.getByRole('button', { name: 'Start walkthrough', exact: true })).toBeVisible();
+  await expect(reader.locator('.dc-shared-reader')).toBeVisible();
+  await expect(reader.getByRole('complementary', { name: 'Diagram contents' })).toBeHidden();
+  expect((await reader.locator('.dc-reader-canvas').boundingBox())!.width).toBeGreaterThan(reader.viewportSize()!.width * 0.9);
+  await reader.getByRole('button', { name: 'Browse walkthrough steps', exact: true }).click();
+  await expect(reader.getByRole('region', { name: 'Walkthrough steps' })).toBeVisible();
+  await reader.locator('.dc-reader-steps button').first().click();
+  await expect(reader.getByRole('region', { name: 'Walkthrough steps' })).toHaveCount(0);
+  await expect(reader.locator('.dc-reader-position')).toHaveText('1 / 3');
+  await expect(reader.getByRole('button', { name: /Play flow|Pause/ })).toHaveCount(0);
+  await reader.waitForTimeout(3500); // Past the retired autoplay interval: steps only move on input.
+  await expect(reader.locator('.dc-reader-position')).toHaveText('1 / 3');
+  await reader.getByRole('button', { name: 'Next', exact: true }).click();
+  await expect(reader.locator('.dc-reader-position')).toHaveText('2 / 3');
+  await reader.screenshot({ path: testInfo.outputPath('guided-reader-flow.png') });
+  await reader.getByRole('button', { name: 'Next', exact: true }).click();
+  await expect(reader.locator('.dc-reader-position')).toHaveText('3 / 3');
+  await reader.getByRole('button', { name: 'Finish', exact: true }).click();
+  await expect(reader.getByRole('heading', { name: 'Walkthrough complete', exact: true })).toBeVisible();
+  await reader.getByRole('button', { name: 'Start again', exact: true }).click();
+  await expect(reader.locator('.dc-reader-position')).toHaveText('1 / 3');
+  await reader.getByRole('button', { name: 'Back', exact: true }).click();
+  await expect(reader.getByRole('button', { name: 'Start walkthrough', exact: true })).toBeVisible();
   await reader.close();
 });
 
@@ -100,7 +124,7 @@ test('Arrange selection leaves a fixed neighbor in place', async ({ page }) => {
   expect(await page.evaluate(async () => JSON.stringify((await import('/src/store/editorStore.ts')).useEditorStore.getState().document.nodes.slice(2)))).toBe(before);
 });
 
-test('a nested flow link opens its room and an editable copy leaves sharing behind', async ({ page, context }) => {
+test('a nested flow link opens its room and lets the reader return to the overview', async ({ page, context }) => {
   await example(page);
   const shared = await page.evaluate(async () => {
     const editor = (await import('/src/store/editorStore.ts')).useEditorStore.getState();
@@ -116,11 +140,22 @@ test('a nested flow link opens its room and an editable copy leaves sharing behi
   const reader = await context.newPage();
   await reader.goto(shared.url);
   await expect(reader.locator('.dc-editor')).toHaveAttribute('data-mode', 'present');
-  expect(await reader.evaluate(async () => (await import('/src/store/editorStore.ts')).useEditorStore.getState().path)).toEqual([shared.owner]);
+  await expect(reader.locator('.dc-shared-reader')).toHaveAttribute('data-reading-mode', 'guided');
+  expect(await reader.evaluate(async () => (await import('/src/store/editorStore.ts')).useEditorStore.getState().path.length)).toBe(1);
+  await expect(reader.getByRole('navigation', { name: 'Current level' })).toContainText('Order system');
   await reader.keyboard.press('Escape');
-  await reader.getByRole('button', { name: 'Make an editable copy' }).click();
+  await reader.getByRole('button', { name: 'Overview', exact: true }).click();
+  await expect.poll(() => reader.evaluate(async () => (await import('/src/store/editorStore.ts')).useEditorStore.getState().path.length)).toBe(0);
+  await expect(reader.locator('.dc-node')).toHaveCount(1);
+  await expect(reader.locator('.dc-shared-reader')).toHaveAttribute('data-reading-mode', 'focus');
+  await expect(reader.getByRole('region', { name: 'Focus view' })).toBeVisible();
+  await expect(reader.getByRole('region', { name: 'Flow walkthrough' })).toHaveCount(0);
+  await reader.getByRole('button', { name: 'Contents', exact: true }).click();
+  await reader.getByRole('button', { name: 'Order system', exact: true }).click();
+  await expect(reader.locator('.dc-shared-reader')).toHaveAttribute('data-reading-mode', 'guided');
+  await expect(reader.getByRole('region', { name: 'Flow walkthrough' })).toBeVisible();
   await expect(reader.getByRole('button', { name: 'Make an editable copy' })).toHaveCount(0);
-  expect(new URL(reader.url()).hash).not.toContain('start=');
+  expect(new URL(reader.url()).hash).toContain('start=');
   expect(await page.getByLabel('Diagram title').inputValue()).toBe('Order processing');
   await reader.close();
 });

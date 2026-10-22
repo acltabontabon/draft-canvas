@@ -46,13 +46,29 @@ Both run locally.
 
 ## Share links
 
-The diagram travels after the link's `#`, which is never sent to the app's host. Background images
-are left out.
+A share link carries the whole diagram after the URL's `#`, including text, code and nested rooms.
+The fragment is not sent to the app host. Background images are excluded. Desktop links point to
+`app.draftcanvas.dev`, where they open in a browser.
 
-- Anyone with the link can read it, including wherever it was pasted. No password, expiry or revocation.
-- Links open read-only; **Make an editable copy** saves one. The limit is 32 KB of encoded data.
+Before compression, shared snapshots receive compact internal ids, with every connection, nested
+level, Flow, attachment and open-point reference updated together. The original document is not
+changed. Labels, notes, code, source evidence, geometry and styling are retained. File identity and
+timestamps are assigned afresh on arrival, as with older links. Packing and compression run locally;
+there is no short-link service, upload or remote lookup. Existing links remain readable.
 
-For protected sharing, use `.dcenc`. See [Saving and sharing](../guides/saving-and-sharing.md).
+- **Require a passphrase** is enabled by default. The compressed diagram and its starting metadata
+  are encrypted locally with AES-256-GCM and a PBKDF2-SHA-256 key (600,000 iterations, a fresh
+  16-byte salt and a fresh 12-byte IV per link). The passphrase and key are not included in the URL,
+  saved or sent to a server. Decryption happens locally after the recipient enters the passphrase.
+- With protection off, anyone with the link can read the diagram. Existing unprotected links remain readable.
+- Neither kind of link expires or can be revoked. Browsers and messages may retain copies.
+  A recipient can save or capture content after unlocking it; read-only controls are not copy protection.
+- Guided reader fixes shape positions, allows navigation and Flow playback, and never saves the
+  snapshot into the Library. **Lock** discards the decrypted document and its undo history.
+- Links are capped at 32 KB of encoded payload; larger diagrams need a file export.
+
+Send the passphrase separately from the link. A forgotten passphrase cannot be recovered. For
+larger protected diagrams, use a `.dcenc` export. See [Saving and sharing](../guides/saving-and-sharing.md).
 
 ## Live collaboration
 

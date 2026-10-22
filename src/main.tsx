@@ -8,6 +8,7 @@ import { useUiStore } from './store/uiStore';
 import '@xyflow/react/dist/base.css';
 import './styles/tokens.css';
 import './styles/app.css';
+import './styles/share.css';
 // `canvas.css` is not here: it styles only the editor, so `EditorScreen` imports it and it ships in
 // the editor's lazy chunk instead of holding up the Library's first paint.
 

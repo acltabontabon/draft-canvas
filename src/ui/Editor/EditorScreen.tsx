@@ -52,6 +52,7 @@ import { DepthTransition } from './DepthTransition';
 import { EmptyState } from './EmptyState';
 import { FlowBar } from './FlowBar';
 import { FlowPanel } from './FlowPanel';
+import { SharedReader } from './SharedReader';
 import { FocusIndicator } from './FocusIndicator';
 import { dragCarriesImport, importDroppedFile, insertMermaidText, looksLikeMermaid } from './importIntoEditor';
 import { CanvasSettingsDialog } from './CanvasSettingsDialog';
@@ -149,8 +150,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
 
   const armed = useUiStore((state) => state.armed);
   const arm = useUiStore((state) => state.arm);
-  // A diagram that came by share link: the store refuses every edit while this is set, and the
-  // banner below is how you turn it into a diagram of your own.
+  // Shared diagrams use the dedicated reader; the store also refuses document edits throughout.
   const readOnly = useUiStore((state) => state.readOnly);
   const setExportOpen = useUiStore((state) => state.setExportOpen);
   const setShortcutsOpen = useUiStore((state) => state.setShortcutsOpen);
@@ -206,7 +206,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
   const editorDocument = useEditorStore((state) => (menuOpen ? state.document : null));
 
   const theme = useThemeValue();
-  const playback = useFlowPlayback();
+  const playback = useFlowPlayback({ reader: readOnly !== null && !readOnly.collaborative });
   const { fitView, getViewport, setViewport, screenToFlowPosition, flowToScreenPosition } = useReactFlow();
 
   // Bumped to force a clean remount of the boundary + Canvas below, e.g. from
@@ -520,6 +520,16 @@ function EditorScreen({ session }: { session: DocumentSession }) {
   const onEmptyCanvasMenu = useCallback<NonNullable<CanvasProps['onEmptyCanvasMenu']>>(
     (flowPosition, screenPosition) => setQuickConnect({ flowPosition, screenPosition }),
     [setQuickConnect],
+  );
+
+  if (readOnly && !readOnly.collaborative) return (
+    <SharedReader session={session} playback={playback}>
+      <ErrorBoundary key={canvasInstanceKey} message="This diagram could not be rendered." actions={[{ label: 'Reload canvas', onClick: () => setCanvasInstanceKey((key) => key + 1) }]}>
+        <Canvas />
+      </ErrorBoundary>
+      <DepthAnnouncer />
+      <DepthTransition />
+    </SharedReader>
   );
 
   return (
@@ -954,7 +964,7 @@ export function useKeyboard({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (isEditableTarget(event.target) || useUiStore.getState().flowTrace) return;
+      if (isEditableTarget(event.target) || useUiStore.getState().flowTrace || useUiStore.getState().readOnly) return;
 
       // While the command palette is up it owns the keyboard outright — even if focus has
       // somehow left its input, a stray "t" must never spawn a Text node behind it.

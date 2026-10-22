@@ -52,8 +52,6 @@ export function warmCopyExports(): void {
 import { readEditableImagePreference } from '../ui/Editor/exportPreferences';
 import { systemTheme } from '../ui/theme/systemTheme';
 import { ARRANGE_FAILED, notifyLoadFailure } from '../ui/common/notifyLoadFailure';
-import { hostKind } from '../host/hostInfo';
-import { copyShareLink } from '../share';
 import { focusBounds, focusNodes } from './search';
 import { ARCHITECTURE_STARTERS } from '../starters';
 import type { StarterCategory } from '../starters';
@@ -753,22 +751,14 @@ export function canvasCommands(ctx: CommandContext): Command[] {
       run: (inner) => inner.ui.setExportOpen(true),
     },
     ...copyExportCommands(),
-    // The web app only: the desktop app's address is its own window, not a page anyone else can open.
-    ...(hostKind()
-      ? []
-      : [
-          {
-            id: 'copy-share-link',
-            title: 'Copy share link',
-            group: 'canvas' as const,
-            keywords: ['share', 'link', 'url', 'read only', 'send', 'clipboard'],
-            hint: 'Read-only · the whole diagram is in the link',
-            // The whole file, every room — a link that opened into one room would lose the rest.
-            run: (inner: CommandContext) => {
-              void copyShareLink(fileWithLiveViewport(inner.editor), inner.ui.notify);
-            },
-          },
-        ]),
+    {
+      id: 'copy-share-link',
+      title: 'Copy share link',
+      group: 'canvas',
+      keywords: ['share', 'link', 'url', 'read only', 'send', 'clipboard', 'passphrase'],
+      hint: 'Read-only snapshot · optional passphrase',
+      run: (inner) => inner.ui.requestShareFromHere(),
+    },
     {
       id: 'collaborate',
       title: useCollabStore.getState().role === 'off' ? 'Collaborate…' : 'Live session…',
@@ -2042,7 +2032,7 @@ function editCommands(ctx: CommandContext): Command[] {
     ...flowCommands(ctx),
     ...openPointCommands(ctx),
     ...viewCommands(ctx),
-    ...(!hostKind() ? [{ id: 'share-from-here', title: 'Share from here…', group: 'canvas' as const, run: (inner: CommandContext) => inner.ui.requestShareFromHere() }] : []),
+    { id: 'share-from-here', title: 'Share from here…', group: 'canvas' as const, run: (inner: CommandContext) => inner.ui.requestShareFromHere() },
     ...arrangeSelectionCommands(ctx),
     ...canvasCommands(ctx),
   ];

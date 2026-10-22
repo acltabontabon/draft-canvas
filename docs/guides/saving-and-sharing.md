@@ -69,21 +69,66 @@ See the [Mermaid import reference](../reference/mermaid-import.md).
 
 ## Share a diagram
 
-| Send | How |
-| --- | --- |
-| Read-only link (web) | **Share → Copy read-only link**, or **Copy share link** in `⌘K` |
-| File | **Export → Document** |
-| Picture | **Export → Image**, or **Copy as image** |
-| Live session | **Share → Draw together, live**; see [Collaborating live](collaborating.md) |
+| Send | How | Recipient gets |
+| --- | --- | --- |
+| Link | **Copy share link** in `⌘K` or **Share → Export → Share** | A protected, view-only snapshot in Guided reader or Focus view |
+| File | **Document → Editable** or **Encrypted** | A diagram they can reopen |
+| Picture | **Image**, or **Copy as image** | A PNG or SVG; editing requires an embedded diagram |
+| Live session | **Share → Draw together, live** | A shared canvas; see [Collaborating live](collaborating.md) |
 
-A share link carries the whole diagram, every room, after the `#`; nothing is uploaded.
+### Create a protected link
 
-- Anyone with the link can read it. Links never expire and do not update.
-- The recipient can choose **Make an editable copy** to keep their own.
-- Up to 32 KB compressed, without background images. For larger or private diagrams, send a file.
+1. Open **Share → Export → Share**. **Require a passphrase** is on by default.
+2. Choose **Start at**: the diagram overview, current level or a playable Flow.
+3. Enter and confirm a passphrase of at least eight characters. A long, unique phrase is safer.
+4. Choose **Copy protected link**, then send the passphrase separately.
 
-To pick where reading starts, run **Share from here…** in `⌘K`, or use **Start at** in
-**Export → Document**: **Diagram overview**, **Current level** or a flow.
+Desktop links open in the browser at `app.draftcanvas.dev`. The completed link stays visible if
+copying is unavailable; **Copy link** retries, and **Open Guided reader** opens the recipient view.
+Turn protection off to create a link anyone can open.
+
+![Share tab with passphrase protection and an actual diagram preview.](../media/guides/export-share.png)
+
+Preparation compresses the snapshot locally, using a background worker for larger diagrams.
+A progress bar names the current stage; **Cancel** stops preparation. Protected links are encrypted
+on your device and unlocked on the recipient's device. Draft Canvas never stores or recovers the
+passphrase. **Lock** discards an unlocked diagram from memory and asks for its passphrase again.
+
+Links contain every room after the `#`; nothing is uploaded. Later edits do not update them.
+They have no expiry or revocation, and someone who unlocks a diagram can save or capture its content.
+Browsers and messages may keep the link. The compressed limit is 32 KB; export a file if the diagram
+is too large. Background images are omitted.
+
+### Read a shared diagram
+
+The reader uses the actual shapes and connectors. Shapes stay fixed; recipients can pan, zoom,
+fit the diagram and inspect details. **Contents** holds the existing levels and shapes.
+There are no editing, download or editable-copy controls.
+
+**Guided reader** has a compact manual walkthrough. Choose **Start walkthrough**, then **Back** or
+**Next**; open the step count to choose a step or switch Flows. Nothing advances automatically.
+A level without a playable Flow opens in **Focus view**, with no walkthrough controls.
+
+![Guided reader with a selected Flow step and its attachment.](../media/guides/share-guided-reader.png)
+
+**Attachments** opens one card beside its shape or connector. Diagram markers show notes,
+decisions, code and pending items. The card's previous and next arrows browse details across
+levels; related-element links show the other shapes a shared point concerns. A Flow step reveals
+its relevant detail. Close a card at any time. On smaller or shorter screens, cards sit below the
+diagram, clear of the shapes and walkthrough controls.
+
+Pending items keep their Tentative, Awaiting input or Parked status. Resolved points retain their
+resolution notes. Browsing never changes the snapshot.
+
+![Focus view with a pending item and attachment browsing controls.](../media/guides/share-focus-view.png)
+
+Run **Share from here…** or **Copy share link** in `⌘K`, or use **Start at** in **Export & share → Share**.
+It defaults to the selected playable Flow, then the current level, then the overview.
+A Flow link starts at its introduction; the reader chooses when to advance.
+
+The starting point changes where reading begins. **Every room is still shared.**
+An unavailable level or Flow falls back to the overview with a notice. Older unprotected links
+also open in the reader. Starting metadata counts toward the link-size limit.
 
 ## If something looks wrong
 

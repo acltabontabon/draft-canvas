@@ -127,6 +127,7 @@ export interface FlowPlaybackController {
  * camera is decided before that chrome has necessarily laid out, so it reserves the room up front.
  */
 export const PRESENTATION_INSETS: Insets = { top: 64, right: 40, bottom: 128, left: 40 };
+const READER_INSETS: Insets = { top: 32, right: 32, bottom: 32, left: 32 };
 /** The step caption's footprint the corner choice keeps clear (`.dc-present-caption`). */
 export const CAPTION_SIZE = { width: 360, height: 132 };
 /** The opening and closing card's footprint (`.dc-present-card`): its column, or its row. */
@@ -163,7 +164,8 @@ const RESIZE_MS = 240;
  * reads, slides when it has to, and cuts only when it must — and it never fights a presenter who
  * has taken the camera by hand (`uiStore.presentation.framing`).
  */
-export function useFlowPlayback(): FlowPlaybackController {
+export function useFlowPlayback({ reader = false }: { reader?: boolean } = {}): FlowPlaybackController {
+  const insets = reader ? READER_INSETS : PRESENTATION_INSETS;
   // Every field but `phase`: the response pulse writes it twice per reply step, and a whole-object
   // subscription re-rendered `EditorScreen` and rebuilt this controller (and the keyboard listener
   // keyed on it) for each write. Nothing here reads `phase`.
@@ -273,15 +275,15 @@ export function useFlowPlayback(): FlowPlaybackController {
       // A camera the presenter took by hand moves only for a step that left the screen; anything
       // else just reseats the caption (`frameManualStep`), so Re-centre stays on offer.
       const manual = ui.presentation.framing === 'manual' && !fresh;
-      let frame = (manual ? frameManualStep : frameStep)(composed.bounds, cameraNow(), view, PRESENTATION_INSETS);
+      let frame = (manual ? frameManualStep : frameStep)(composed.bounds, cameraNow(), view, insets);
       // Re-centre promised a frame, not a verdict: compose the step afresh even if the camera the
       // presenter left would have done.
-      if (fresh && view.width > 0 && view.height > 0) frame = { camera: composeStep(composed.bounds, view, PRESENTATION_INSETS), kind: 'fit' };
+      if (fresh && view.width > 0 && view.height > 0) frame = { camera: composeStep(composed.bounds, view, insets), kind: 'fit' };
       // Settling out of the opening is a guided move; a hand on the camera keeps it.
       if (settle && !manual && flow && view.width > 0 && view.height > 0) {
         const whole = flowOverviewBounds(document.nodes, document.edges, flow);
-        const centred = whole ? frameOverview(whole, view, PRESENTATION_INSETS) : null;
-        if (centred && frameStep(composed.bounds, centred, view, PRESENTATION_INSETS).kind === 'stay') {
+        const centred = whole ? frameOverview(whole, view, insets) : null;
+        if (centred && frameStep(composed.bounds, centred, view, insets).kind === 'stay') {
           frame = { camera: centred, kind: 'fit' };
         }
       }
@@ -289,10 +291,10 @@ export function useFlowPlayback(): FlowPlaybackController {
       else if (ui.presentation.framing === 'overview') ui.setPresentation({ framing: 'guided' });
       ui.setPresentation({
         focus: composed.bounds,
-        captionCorner: captionCornerFor(screenRectOf(composed.bounds, frame.camera), view, PRESENTATION_INSETS, CAPTION_SIZE),
+        captionCorner: captionCornerFor(screenRectOf(composed.bounds, frame.camera), view, insets, CAPTION_SIZE),
       });
     },
-    [cameraNow, flow, moveTo, routeBoxesFor, viewHeight, viewWidth],
+    [cameraNow, flow, insets, moveTo, routeBoxesFor, viewHeight, viewWidth],
   );
 
   /** Frame the whole flow, for the opening, the closing and the Overview action. */
@@ -307,10 +309,10 @@ export function useFlowPlayback(): FlowPlaybackController {
       }
       const view = { width: viewWidth, height: viewHeight };
       // The Overview action (a step kept) shows no card, so the whole safe area is the picture.
-      moveTo(frameOverview(bounds, view, framing === 'overview' ? PRESENTATION_INSETS : overviewInsets(view)), ms, framing);
+      moveTo(frameOverview(bounds, view, reader || framing === 'overview' ? insets : overviewInsets(view)), ms, framing);
       ui.setPresentation({ focus: bounds, captionCorner: 'bottom-left' });
     },
-    [moveTo, viewHeight, viewWidth],
+    [insets, moveTo, reader, viewHeight, viewWidth],
   );
 
   const goTo = useCallback(

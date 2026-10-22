@@ -1,14 +1,11 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from 'react';
 import { useStore, useStoreApi } from '@xyflow/react';
-import { categoryOf } from '../../document/connectorSemantics';
-import { effectiveConnectorText } from '../../document/edgeSemantics';
-import { displayNameFor } from '../../document/factory';
 import type { DraftEdge, DraftFlow, DraftNode } from '../../document/types';
 import { isActivatableTarget, isEditableTarget, overlayAboveCanvasIsOpen } from '../../lib/isEditableTarget';
 import { count } from '../../lib/plural';
 import { edgeIndex, nodeIndex } from '../../store/selectors';
 import { crossedBoundaries } from '../../presentation/composition';
-import { orderedWithVariants, routeOf } from '../../presentation/flowChrome';
+import { describeFlowStep as describeStep, orderedWithVariants, routeOf, type StepStory } from '../../presentation/flowChrome';
 import { captionCornerFor, screenRectOf } from '../../presentation/framing';
 import {
   describePresentationSubject,
@@ -386,38 +383,6 @@ export function FlowBar({ playback }: { playback: FlowPlaybackController }) {
       </div>
     </>
   );
-}
-
-interface StepStory {
-  /** "Orders API → Payments", or the spotlit shapes of a frame step. */
-  headline: string;
-  from?: string;
-  to?: string;
-  /** The step's own caption, else what the connector says on the canvas. */
-  caption?: string;
-}
-
-/** The words a step is told with — every one already on the canvas or in the flow. */
-function describeStep(step: FlowPlaybackStep, nodes: ReadonlyMap<string, DraftNode>): StepStory {
-  const primary = step.edge;
-  if (!primary) {
-    const named = step.extraNodes.map((node) => displayNameFor(node)).join(', ');
-    return { headline: named || 'Frame', caption: step.caption };
-  }
-  const source = nodes.get(primary.source);
-  const target = nodes.get(primary.target);
-  const from = source ? displayNameFor(source) : 'Untitled';
-  const to = target ? displayNameFor(target) : 'Untitled';
-  // `primary.label` alone left the caption silent on every connector whose meaning comes from its
-  // relationship rather than typed text — see `effectiveConnectorText`.
-  const caption =
-    step.caption ||
-    effectiveConnectorText(primary, {
-      source: source ? categoryOf(source) : undefined,
-      target: target ? categoryOf(target) : undefined,
-    }) ||
-    undefined;
-  return { headline: `${from} to ${to}`, from, to, caption };
 }
 
 /** The connector's own semantics, as chips — shown, never inferred beyond what the edge says. */
