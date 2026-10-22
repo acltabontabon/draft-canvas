@@ -278,6 +278,24 @@ async fn close_of(guest: &mut Guest) -> (u16, String) {
     }
 }
 
+/// The close a guest gets for being cut off mid-flood or mid-frame (`rate`, `too-large`). The relay
+/// stops reading such a guest, and Windows resets a socket dropped with bytes still unread, which can
+/// cost the guest the close queued ahead of the reset — so there, a reset in its place passes. The
+/// app's own guests never get here (they keep to both limits), and what the page is told is asserted
+/// separately, on every platform.
+async fn assert_cut_off(guest: &mut Guest, code: u16, reason: &str) {
+    match next(guest).await {
+        Some(Message::Close(Some(frame))) => {
+            assert_eq!(
+                (u16::from(frame.code), frame.reason.as_str()),
+                (code, reason)
+            );
+        }
+        None if cfg!(windows) => {}
+        other => panic!("expected a close, got {other:?}"),
+    }
+}
+
 // ─── Files ──────────────────────────────────────────────────────────────────────────────────────
 
 #[tokio::test(flavor = "multi_thread")]
@@ -581,10 +599,7 @@ async fn a_frame_over_the_limit_or_a_binary_one_closes_the_guest() {
         .await;
     assert_eq!(heard, MAX_GUEST_TEXT, "exactly the limit gets through");
     let _ = big.send(Message::text(at_limit + "x")).await;
-    assert_eq!(
-        close_of(&mut big).await,
-        (u16::from(CloseCode::Size), "too-large".to_string())
-    );
+    assert_cut_off(&mut big, u16::from(CloseCode::Size), "too-large").await;
     assert_eq!(events.closed(&id).await, "too-large");
     assert_eq!(
         events.heard(&id).len(),
@@ -606,10 +621,7 @@ async fn a_frame_over_the_limit_or_a_binary_one_closes_the_guest() {
             break;
         }
     }
-    assert_eq!(
-        close_of(&mut pieces).await,
-        (u16::from(CloseCode::Size), "too-large".to_string())
-    );
+    assert_cut_off(&mut pieces, u16::from(CloseCode::Size), "too-large").await;
     assert_eq!(events.closed(&id).await, "too-large");
     assert!(events.heard(&id).is_empty());
 
@@ -770,7 +782,7 @@ async fn a_guest_sending_past_its_budget_is_closed_as_rate() {
     let mut chatty = guest(port).await;
     let id = events.opened(0).await;
     flood(&mut chatty, || Message::text("{}"), 4 * burst).await;
-    assert_eq!(close_of(&mut chatty).await, (1008, "rate".to_string()));
+    assert_cut_off(&mut chatty, 1008, "rate").await;
     assert_eq!(events.closed(&id).await, "rate");
     let heard = events.heard(&id).len();
     assert!((burst..2 * burst).contains(&heard), "heard {heard}");
@@ -779,7 +791,7 @@ async fn a_guest_sending_past_its_budget_is_closed_as_rate() {
     let mut pinging = guest(port).await;
     let id = events.opened(1).await;
     flood(&mut pinging, || Message::Ping(Vec::new().into()), 4 * burst).await;
-    assert_eq!(close_of(&mut pinging).await, (1008, "rate".to_string()));
+    assert_cut_off(&mut pinging, 1008, "rate").await;
     assert_eq!(events.closed(&id).await, "rate");
 
     // Bytes: two of the largest messages back to back, then not a third.
@@ -787,7 +799,7 @@ async fn a_guest_sending_past_its_budget_is_closed_as_rate() {
     let id = events.opened(2).await;
     let largest = "b".repeat(MAX_GUEST_TEXT);
     flood(&mut bulky, || Message::text(largest.clone()), 3).await;
-    assert_eq!(close_of(&mut bulky).await, (1008, "rate".to_string()));
+    assert_cut_off(&mut bulky, 1008, "rate").await;
     assert_eq!(events.closed(&id).await, "rate");
     assert_eq!(events.heard(&id).len(), 2);
 
@@ -841,7 +853,7 @@ async fn traffic_within_the_budget_reaches_the_page() {
     }
     assert!(!events.is_closed(&id));
     flood(&mut steady, || Message::text("tick"), 200).await;
-    assert_eq!(close_of(&mut steady).await, (1008, "rate".to_string()));
+    assert_cut_off(&mut steady, 1008, "rate").await;
     relay.stop("stopped").await;
 }
 
