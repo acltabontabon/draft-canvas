@@ -134,20 +134,39 @@ export function checkRequest({ method, url, upgrade, origin, protocols }, { orig
 }
 
 /**
+ * What one client's connections are counted under: its address, or for IPv6 the /64 it is in. An IPv6
+ * client is usually handed a whole /64 and can take a fresh address from it for every connection.
+ */
+export function clientKey(address) {
+  const text = String(address ?? '').trim().toLowerCase();
+  if (!text.includes(':')) return text || 'unknown';
+  const bare = text.replace(/^\[|\]$/g, '').split('%')[0];
+  const mapped = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/.exec(bare);
+  if (mapped) return mapped[1];
+  const halves = bare.split('::');
+  if (halves.length > 2) return bare;
+  const left = halves[0] ? halves[0].split(':') : [];
+  const right = halves[1] ? halves[1].split(':') : [];
+  const groups = halves.length === 1 ? left : [...left, ...Array(Math.max(0, 8 - left.length - right.length)).fill('0'), ...right];
+  return `${groups.slice(0, 4).map((group) => (parseInt(group, 16) || 0).toString(16)).join(':')}::/64`;
+}
+
+/**
  * Whether `address` may open another socket now: at most `LIMITS.connectsPerMinute` a minute, across
- * every room. `seen` maps addresses to their recent connection times; old entries are dropped as they
- * pass. Cloudflare enforces the same budget with a rate-limiting binding; the dev relay uses this.
+ * every room. `seen` maps clients (`clientKey`) to their recent connection times; old entries are
+ * dropped as they pass. Cloudflare enforces the same budget with a rate-limiting binding; the dev relay uses this.
  */
 export function connectionAllowed(seen, address, now) {
+  const key = clientKey(address);
   const since = now - 60_000;
-  const recent = (seen.get(address) ?? []).filter((at) => at > since);
+  const recent = (seen.get(key) ?? []).filter((at) => at > since);
   if (seen.size > 10_000) for (const [key, times] of seen) if (!times.some((at) => at > since)) seen.delete(key);
   if (recent.length >= LIMITS.connectsPerMinute) {
-    seen.set(address, recent);
+    seen.set(key, recent);
     return false;
   }
   recent.push(now);
-  seen.set(address, recent);
+  seen.set(key, recent);
   return true;
 }
 

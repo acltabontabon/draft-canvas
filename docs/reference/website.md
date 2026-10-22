@@ -115,8 +115,8 @@ browsers connect directly.
   Each owner connection or departure renews the claim for 12 hours.
   No logging; observability is off in `relay.jsonc`.
 - **Limits:** one owner and 32 joining sockets per room; text frames with at most 16,384 characters
-  of data; 30 messages per 10 seconds per socket; 60 new sockets per minute per address. A room closes
-  after 15 idle minutes, or 12 hours at most.
+  of data; 30 messages per 10 seconds per socket; 60 new sockets per minute per address (per /64 for
+  IPv6). A room closes after 15 idle minutes, or 12 hours at most.
 - **Origins:** only `ALLOWED_ORIGINS`; by default the web editor and the desktop app.
 
 Code:

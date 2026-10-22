@@ -3,6 +3,7 @@
  * which nothing outside `collab/` may import (`tests/privacy.test.ts`). The interface asks for an
  * invite or answers one; it never touches a peer connection itself.
  */
+import { MAX_GUEST_MESSAGE_BYTES } from './protocol';
 import { CollabCodeError, decodeInvite, invitePayloadFromHash, inviteFragment, INVITE_LIFETIME_MS } from './transport/invite';
 import type { CollabTransport, IceConfig } from './transport/types';
 import { createHostOffer, joinFromInvite, peerConnectionsAvailable, type HostOffer, type JoinResult } from './transport/webrtc';
@@ -64,7 +65,7 @@ export function relayUrl(): string | null {
 
 /** A new invite for one person: its link, and where to paste their reply. */
 export function createInvite(preferences: ConnectionPreferences): Promise<HostOffer> {
-  return createHostOffer(iceConfig(preferences));
+  return createHostOffer(iceConfig(preferences), { maxMessageBytes: MAX_GUEST_MESSAGE_BYTES });
 }
 
 /**

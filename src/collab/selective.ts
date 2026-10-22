@@ -10,7 +10,7 @@
  */
 import type { DraftDocument } from '../document/types';
 import { applyChanges } from './apply';
-import { keyOf, ROOT_ROOM, type Change } from './changes';
+import { keyOf, ROOT_ROOM, type Change, type Collection, type RoomId } from './changes';
 import { diffFile, nodeValue, wireSettings } from './diff';
 import { sameExcept, sameValue } from './equal';
 import { indexOf } from './fileIndex';
@@ -65,21 +65,101 @@ export function revertEach(current: DraftDocument, reverts: readonly KeyRevert[]
     return changes;
   };
   const kept: Change[] = [];
+  const arrivals: Arrival[] = [];
   let partial = false;
   for (const revert of reverts) {
     const changes = diffOf(revert.left, revert.found).filter((change) => keyOf(change) === revert.key);
     if (changes.length === 0) continue;
-    if (sameAt(current, revert.left, revert.key)) kept.push(...changes);
-    else partial = true;
+    if (!sameAt(current, revert.left, revert.key)) {
+      partial = true;
+      continue;
+    }
+    kept.push(...changes);
+    const arrival = arrivalOf(current, revert.found, revert.key);
+    if (arrival) arrivals.push(arrival);
   }
   if (kept.length === 0) return { file: current, partial, blocked: false };
 
-  const result = repairReferences(applyChanges(current, kept));
+  const placed = placeArrivals(applyChanges(current, kept), arrivals);
+  for (const key of placed.keys) wanted.add(key);
+  const result = repairReferences(placed.file);
   // Anything else the step would change is somebody else's work hanging off it: a connector to the
   // shape being un-added (repair), a shape put inside it (its room goes with it).
   const extra = changeKeys(current, result).filter((key) => !wanted.has(key));
   if (extra.length > 0) return { file: current, partial, blocked: true };
   return { file: result, partial, blocked: false };
+}
+
+/** Something a revert brings back into a list it is not in now: undeleted, or moved back to its room. */
+interface Arrival {
+  id: string;
+  room: RoomId;
+  collection: Collection;
+  /** The file it comes back from, which says where in the list it was. */
+  found: DraftDocument;
+}
+
+const COLLECTION_OF = { node: 'nodes', edge: 'edges', flow: 'flows' } as const;
+
+function arrivalOf(current: DraftDocument, found: DraftDocument, key: string): Arrival | null {
+  const colon = key.indexOf(':');
+  const kind = key.slice(0, colon);
+  const id = key.slice(colon + 1);
+  if (kind === 'point') {
+    const back = found.openPoints.some((point) => point.id === id) && !current.openPoints.some((point) => point.id === id);
+    return back ? { id, room: ROOT_ROOM, collection: 'points', found } : null;
+  }
+  if (kind !== 'node' && kind !== 'edge' && kind !== 'flow') return null;
+  const collection = COLLECTION_OF[kind];
+  const was = indexOf(found)[collection].get(id);
+  if (!was || indexOf(current)[collection].get(id)?.room === was.room) return null;
+  return { id, room: was.room, collection, found };
+}
+
+function idsIn(file: DraftDocument, room: RoomId, collection: Collection): string[] | null {
+  if (collection === 'points') return room === ROOT_ROOM ? file.openPoints.map((point) => point.id) : null;
+  return indexOf(file).rooms.get(room)?.graph[collection].map((item) => item.id) ?? null;
+}
+
+/**
+ * Puts what a revert brought back where it was in its list, rather than at the end where adding
+ * leaves it: a list's order is the Flows panel's order, and which connector draws over which. It goes
+ * just after the nearest one before it that is still there, so a reorder somebody else made since
+ * stands. The order keys this touches are part of the revert.
+ */
+function placeArrivals(file: DraftDocument, arrivals: readonly Arrival[]): { file: DraftDocument; keys: string[] } {
+  const lists = new Map<string, { room: RoomId; collection: Collection; ids: string[]; arrivals: Arrival[] }>();
+  for (const arrival of arrivals) {
+    const key = `order:${arrival.room}:${arrival.collection}`;
+    let list = lists.get(key);
+    if (!list) {
+      const ids = idsIn(file, arrival.room, arrival.collection);
+      if (!ids) continue;
+      lists.set(key, (list = { room: arrival.room, collection: arrival.collection, ids, arrivals: [] }));
+    }
+    list.arrivals.push(arrival);
+  }
+  const changes: Change[] = [];
+  for (const [key, list] of lists) {
+    const ids = [...list.ids];
+    // In the order they had, so each can follow one placed just before it.
+    const ordered = list.arrivals
+      .map((arrival) => ({ arrival, was: idsIn(arrival.found, list.room, list.collection) ?? [] }))
+      .sort((a, b) => a.was.indexOf(a.arrival.id) - b.was.indexOf(b.arrival.id));
+    for (const { arrival, was } of ordered) {
+      const from = ids.indexOf(arrival.id);
+      const at = was.indexOf(arrival.id);
+      if (from === -1 || at === -1) continue;
+      ids.splice(from, 1);
+      const previous = was.slice(0, at).reverse().find((id) => ids.includes(id));
+      const following = previous === undefined ? was.slice(at + 1).find((id) => ids.includes(id)) : undefined;
+      const index = previous !== undefined ? ids.indexOf(previous) + 1 : following !== undefined ? ids.indexOf(following) : ids.length;
+      ids.splice(index, 0, arrival.id);
+    }
+    if (sameValue(ids, list.ids)) lists.delete(key);
+    else changes.push({ kind: 'order', room: list.room, collection: list.collection, ids });
+  }
+  return changes.length === 0 ? { file, keys: [] } : { file: applyChanges(file, changes), keys: [...lists.keys()] };
 }
 
 /** Whether `current` still holds, for `key`, exactly what `left` holds — the edit's result untouched. */

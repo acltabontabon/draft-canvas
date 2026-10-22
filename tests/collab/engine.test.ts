@@ -8,8 +8,9 @@ import { HostSession } from '../../src/collab/hostSession';
 import { encode, MAX_COLLABORATORS, PROTOCOL_VERSION, type PeerView } from '../../src/collab/protocol';
 import { changeKeys, revertKeys } from '../../src/collab/selective';
 import { indexOf } from '../../src/collab/fileIndex';
-import { createDocument, createNode } from '../../src/document/factory';
-import { addNodes, updateNode } from '../../src/document/operations';
+import { createDocument, createEdge, createNode } from '../../src/document/factory';
+import { addFlow, createFlow, deleteFlow } from '../../src/document/flow';
+import { addEdges, addNodes, removeElements, updateNode } from '../../src/document/operations';
 import { CURRENT_VERSION, type DraftDocument } from '../../src/document/types';
 import { PRODUCT } from '../../src/product';
 import { loopbackPair, randomEdit, rngFrom, seededFile } from './support';
@@ -215,6 +216,32 @@ describe('coming back', () => {
     expect(owner.peers.filter((peer) => peer.role !== 'owner')).toHaveLength(1);
   });
 
+  it('starts coming back as soon as the link degrades, not when the transport gives up', () => {
+    // A network change strands an ICE restart signalled over the channel itself, so a session-link
+    // guest's way back (`relayGuest.ts`, through the session's `lost`) must not wait for the 20 s close.
+    const clock = manualClock();
+    const { host } = ownerOf(base(), clock);
+    const first = loopbackPair();
+    host.attach(first.a, { role: 'editor' });
+    let degrade: (() => void) | null = null;
+    const watched: typeof first.b = {
+      ...first.b,
+      get state() {
+        return first.b.state;
+      },
+      onState(listener) {
+        degrade = () => listener('degraded', 'disconnected');
+        return first.b.onState(listener);
+      },
+    };
+    const guest = guestOf(clock);
+    guest.session.connect(watched);
+    settle(first.pump);
+    expect(guest.state.statuses.at(-1)).toBe('live');
+    degrade!();
+    expect(guest.state.statuses.at(-1)).toBe('reconnecting');
+  });
+
   it('closes the connection a reconnect replaces, so it can’t hold a second place', () => {
     const clock = manualClock();
     const { host } = ownerOf(base(), clock);
@@ -374,6 +401,50 @@ describe('a quiet or abusive connection', () => {
     expect(owner.peers.filter((peer) => peer.role !== 'owner' && peer.link !== 'gone')).toHaveLength(0);
   });
 
+  it('answers a ping flood with a few pongs', () => {
+    const clock = manualClock();
+    const { host } = ownerOf(base(), clock);
+    const { a, b, pump, sent } = loopbackPair();
+    host.attach(a, { role: 'editor' });
+    b.send(encode({ t: 'hello', v: PROTOCOL_VERSION, app: PRODUCT.version, doc: CURRENT_VERSION, name: 'Loud' }), 'commit');
+    settle(pump);
+    for (let n = 1; n <= 50; n += 1) b.send(encode({ t: 'ping', n }), 'commit');
+    settle(pump);
+    expect(sent.a.filter((text) => text.startsWith('{"t":"pong"'))).toHaveLength(5);
+    clock.advance(1000);
+    b.send(encode({ t: 'ping', n: 51 }), 'commit');
+    settle(pump);
+    expect(sent.a.filter((text) => text.startsWith('{"t":"pong"'))).toHaveLength(6);
+  });
+
+  it('stops keeping one collaborator’s patches past what a held gesture may hold, and sends a fresh copy after it', () => {
+    const clock = manualClock();
+    let busy = true;
+    const { host, state: owner } = ownerOf(base(), clock, { isBusy: () => busy });
+    const { a, b, pump, sent } = loopbackPair();
+    host.attach(a, { role: 'editor' });
+    b.send(encode({ t: 'hello', v: PROTOCOL_VERSION, app: PRODUCT.version, doc: CURRENT_VERSION, name: 'Busy' }), 'commit');
+    settle(pump);
+    // Within the patch rate, for longer than anyone holds a drag: more than the owner keeps.
+    for (let i = 1; i <= 4200; i += 1) {
+      b.send(encode({ t: 'patch', clientSeq: i, changes: [{ kind: 'title', value: `t${i}` }] }), 'commit');
+      if (i % 20 === 0) {
+        settle(pump);
+        clock.advance(400);
+      }
+    }
+    settle(pump);
+    expect(owner.peers.find((peer) => peer.role !== 'owner')?.link).toBe('live');
+    expect(sent.a.some((text) => text.startsWith('{"t":"snapshot"'))).toBe(false);
+
+    busy = false;
+    clock.advance(1000);
+    settle(pump);
+    // None of theirs was applied out of order; they were sent a copy, which makes them send again.
+    expect(owner.file.metadata.title).toBe('Engine');
+    expect(sent.a.filter((text) => text.startsWith('{"t":"snapshot"'))).toHaveLength(1);
+  });
+
   it('asks for a fresh copy when a commit goes missing', () => {
     const clock = manualClock();
     const { host, state: owner } = ownerOf(base(), clock);
@@ -462,6 +533,28 @@ describe('a lost fresh copy', () => {
     settle(pump);
     expect(guest.state.file!.nodes[0]!.text).toBe('two');
   });
+});
+
+it('selective undo of a delete puts the element back where it was in its list', () => {
+  const a = createNode({ type: 'service', x: 0, y: 0, text: 'A' });
+  const b = createNode({ type: 'service', x: 200, y: 0, text: 'B' });
+  let f0 = addNodes(createDocument('Order'), [a, b]);
+  f0 = addEdges(f0, ['one', 'two', 'three'].map((label) => createEdge({ source: a.id, target: b.id, label })));
+  for (const title of ['First', 'Second', 'Third']) f0 = addFlow(f0, createFlow({ title }));
+  const middleEdge = f0.edges[1]!.id;
+  const middleFlow = f0.flows[1]!.id;
+
+  // The owner deletes the middle connector and the middle flow; a collaborator then adds a flow.
+  const f1 = deleteFlow(removeElements(f0, [], [middleEdge]), middleFlow);
+  const f2 = addFlow(f1, createFlow({ title: 'Theirs' }));
+
+  const step = revertKeys(f2, f1, f0, changeKeys(f0, f1));
+  expect(step.blocked).toBe(false);
+  expect(step.file.edges.map((edge) => edge.label)).toEqual(['one', 'two', 'three']);
+  expect(step.file.flows.map((flow) => flow.title)).toEqual(['First', 'Second', 'Third', 'Theirs']);
+  // Redo takes them out again, leaving the collaborator's flow where it is.
+  const redo = revertKeys(step.file, f0, f1, changeKeys(f0, f1));
+  expect(redo.file.flows.map((flow) => flow.title)).toEqual(['First', 'Third', 'Theirs']);
 });
 
 /**

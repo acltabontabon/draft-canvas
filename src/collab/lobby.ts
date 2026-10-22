@@ -13,7 +13,7 @@
  * the place is theirs with its private key before giving it back (`HostSession.attach`'s `requireKey`).
  */
 import { followOwner, iceConfig, type ConnectionPreferences } from './connect';
-import { readName, type Role } from './protocol';
+import { MAX_GUEST_MESSAGE_BYTES, readName, type Role } from './protocol';
 import {
   greetingStatement,
   newExchange,
@@ -242,7 +242,7 @@ export class HostLobby {
     knock.admitting = role;
     this.changed();
     try {
-      const offer = await createHostOffer(iceConfig(this.network));
+      const offer = await createHostOffer(iceConfig(this.network), { maxMessageBytes: MAX_GUEST_MESSAGE_BYTES });
       if (this.ended || this.knocks.get(id) !== knock) return offer.cancel();
       knock.offer = offer;
       const box = await seal(knock.pair, 'to-guest', { invite: offer.invitePayload });

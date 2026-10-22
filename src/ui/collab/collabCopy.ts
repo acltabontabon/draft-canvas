@@ -15,6 +15,9 @@ export function takenNameKeys(state: { selfName: string; peers: readonly { name:
 /** Said beside a knock wearing the name of someone already here: names are whatever each person typed. */
 export const LOOKALIKE_WARNING = 'Someone here already goes by this name — make sure it’s who you expect.';
 
+/** Said beside a knock from someone coming back to the place they had, over the local network. */
+export const RETURNING_NOTE = 'Back after their connection dropped.';
+
 /** What a person sees when a session ends, by reason — always with what they can do next. */
 export const END_MESSAGES: Record<EndReason, string> = {
   'owner-left': 'The owner closed the canvas, so the session ended.',

@@ -65,6 +65,7 @@ export function checkRequest(
   options: { origins: readonly string[]; loopback?: boolean },
 ): Verdict;
 export function secretDigest(secret: string): Promise<string>;
+export function clientKey(address: string | null | undefined): string;
 export function connectionAllowed(seen: Map<string, number[]>, address: string, now: number): boolean;
 export interface OwnerClaim {
   digest: string;

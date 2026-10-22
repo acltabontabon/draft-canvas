@@ -2,11 +2,10 @@ import { useId, useRef, useState, useSyncExternalStore } from 'react';
 import { linkLabel, startLanSharing, type CollabTransport, type LanSharing } from '../../collab/lan';
 import { getDesktopController } from '../../desktop/useDesktop';
 import { hostKind } from '../../host/hostInfo';
-import { holdAtDoor, type AtTheDoor } from '../../collab/door';
+import { holdAtDoor, returningPlace, type AtTheDoor } from '../../collab/door';
 import { announce } from '../../lib/announce';
 import type { Role } from '../../collab/protocol';
-import { sameSecret } from '../../collab/rendezvous';
-import { attachCollaborator, hostSession, setLanKnockHandler } from '../../store/collabBridge';
+import { attachCollaborator, hostSession, setCollaboratorRole, setLanKnockHandler } from '../../store/collabBridge';
 import { useCollabStore } from '../../store/collabStore';
 import { useUiStore } from '../../store/uiStore';
 import { Button } from '../common/Button';
@@ -59,30 +58,35 @@ function setConnected(count: number): void {
 }
 
 /** People waiting at the door who came by the local network link, by their `lan:` id. */
-const waiting = new Map<string, AtTheDoor>();
+const waiting = new Map<string, { door: AtTheDoor; back: { peer: string; role: Role } | null }>();
 const MAX_WAITING = 12;
 
 function publishWaiting(): void {
-  useCollabStore.setState({ lanKnocks: [...waiting.entries()].map(([id, door]) => ({ id, name: door.name, at: Date.now() })) });
+  useCollabStore.setState({
+    lanKnocks: [...waiting.entries()].map(([id, { door, back }]) => ({ id, name: door.name, at: Date.now(), ...(back ? { returning: back.role } : {}) })),
+  });
+}
+
+function placeOf(door: AtTheDoor): { peer: string; role: Role } | null {
+  const session = hostSession();
+  return session ? returningPlace(door, (peer) => session.waitingPlace(peer, true)) : null;
 }
 
 /**
  * Someone on the network opened the link: they wait at the same door as anyone knocking through the
  * relay, and the owner lets them in or not — a link (and a network) can reach people the owner
- * didn't mean to invite. Coming back after a drop with their place's key, they go straight back in;
- * the session checks that key itself before giving the place back.
+ * didn't mean to invite. Coming back after a drop is no exception: the hello carrying their place's
+ * key crosses the network in clear, so someone listening could replay it once they drop. The knock
+ * says they are back and offers the role they had; let in, they take their own place again.
  */
 async function admitAtDoor(transport: CollabTransport, run: number): Promise<void> {
   const door = await holdAtDoor(transport);
   if (!door || run !== generation) return void door?.refuse();
-  const back = door.returning ? hostSession()?.waitingPlace(door.returning.peer) : null;
-  if (back && door.returning && sameSecret(back.key, door.returning.key)) {
-    return attachCollaborator(door.admit(), back.role, door.returning.peer, true);
-  }
   if (waiting.size >= MAX_WAITING) return door.refuse();
   const id = `lan:${crypto.getRandomValues(new Uint32Array(2)).join('')}`;
-  waiting.set(id, door);
-  announce(`${door.name} is asking to join.`);
+  const back = placeOf(door);
+  waiting.set(id, { door, back });
+  announce(back ? `${door.name} is back and asking to join.` : `${door.name} is asking to join.`);
   door.onGone(() => {
     waiting.delete(id);
     publishWaiting();
@@ -91,18 +95,23 @@ async function admitAtDoor(transport: CollabTransport, run: number): Promise<voi
 }
 
 function answerAtDoor(id: string, role: Role | null): void {
-  const door = waiting.get(id);
-  if (!door) return;
+  const knock = waiting.get(id);
+  if (!knock) return;
   waiting.delete(id);
   publishWaiting();
-  if (role) attachCollaborator(door.admit(), role);
-  else door.refuse();
+  if (!role) return knock.door.refuse();
+  // Checked again: the place may have been forgotten, or removed, while they waited.
+  const back = placeOf(knock.door);
+  if (!back) return attachCollaborator(knock.door.admit(), role);
+  // Their place, with the role the owner chose now: it may be less than it had.
+  setCollaboratorRole(back.peer, role);
+  attachCollaborator(knock.door.admit(), role, back.peer, true);
 }
 
 setLanKnockHandler(answerAtDoor);
 
 function clearWaiting(): void {
-  for (const door of waiting.values()) door.refuse();
+  for (const { door } of waiting.values()) door.refuse();
   waiting.clear();
   publishWaiting();
 }

@@ -18,9 +18,24 @@ import type { CollabTransport, IceConfig, SendPriority, TransportState } from '.
  * attempts an ICE restart, exchanging the new offer and answer over the still-open DataChannel as
  * control frames. If it has not recovered within 20 s, the transport closes.
  *
+ * That restart travels the path that just failed, so it only helps when packets cross again by
+ * themselves (a Wi‑Fi blip); after a real network change (Wi‑Fi to cellular) its offer never arrives.
+ * Recovery from that does not wait for it: a 'degraded' transport makes the session 'reconnecting'
+ * at once, and a guest who joined by session link knocks again through the relay as returning
+ * (`ui/collab/relayGuest.ts`), which gives their place back even while the old link still looks up
+ * on the owner's side. A guest who came by direct invite has no other way back, which is why the 20 s
+ * is not shorter: it is their chance for the path to return. Signalling the restart through the relay
+ * instead would keep every guest's relay socket open for the whole session, for what a fresh
+ * knock already does.
+ *
  * Close reasons, as `onState` reports them: 'connect-timeout', 'reconnect-timeout', 'failed',
  * 'peer-closed', 'queue-overflow', 'cancelled', or whatever the caller passed to `close`.
  * Degraded reasons: 'disconnected' and 'congested'.
+ *
+ * A caller's `close` is graceful: the transport reads 'closed' at once, but what was already sent —
+ * a goodbye, the reason a session ended — keeps draining for up to `CLOSE_DRAIN_MS` before the
+ * connection is torn down. Closing the peer connection at once would discard it, and the other side
+ * would see a lost connection instead of the reason.
  */
 
 export const ICE_GATHER_TIMEOUT_MS = 5_000;
@@ -33,6 +48,8 @@ export const BUFFER_LOW_WATERMARK = 256 * 1024;
 export const BUFFER_HIGH_WATERMARK = 1024 * 1024;
 /** Unsent commits past this mean the peer is not reading at all; holding more would only grow. */
 export const MAX_QUEUED_BYTES = 64 * 1024 * 1024;
+/** How long a closed transport keeps sending what it had queued before it lets the connection go. */
+export const CLOSE_DRAIN_MS = 2_000;
 
 type PeerConnectionCtor = new (configuration: RTCConfiguration) => RTCPeerConnection;
 
@@ -43,6 +60,8 @@ export interface WebRtcOptions {
   now?: () => number;
   /** Frames the peer sent that could not be read, dropped rather than delivered. */
   onDrop?: (reason: DropReason, detail: string) => void;
+  /** The largest message the peer may send: the owner's side takes far less from a collaborator than the transport's cap. */
+  maxMessageBytes?: number;
 }
 
 export interface HostOffer {
@@ -74,7 +93,7 @@ export function peerConnectionsAvailable(): boolean {
 export async function createHostOffer(config: IceConfig, opts: WebRtcOptions = {}): Promise<HostOffer> {
   const now = opts.now ?? Date.now;
   const pc = new (peerConnectionCtor(opts))(rtcConfiguration(config));
-  const transport = new WebRtcTransport(pc, 'host', opts.onDrop);
+  const transport = new WebRtcTransport(pc, 'host', opts);
   let invitePayload: string;
   let expiresAt: number;
   const nonce = newNonce();
@@ -115,7 +134,7 @@ export async function joinFromInvite(payload: string, config: IceConfig, opts: W
   const now = opts.now ?? Date.now;
   const invite = decodeInvite(payload, now());
   const pc = new (peerConnectionCtor(opts))(rtcConfiguration(config));
-  const transport = new WebRtcTransport(pc, 'guest', opts.onDrop);
+  const transport = new WebRtcTransport(pc, 'guest', opts);
   try {
     try {
       await pc.setRemoteDescription({ type: 'offer', sdp: expandSdp(invite.offer) });
@@ -225,13 +244,16 @@ class WebRtcTransport implements CollabTransport {
   private congested = false;
   private congestionTimer: ReturnType<typeof setTimeout> | null = null;
   private recoveryTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Set by a graceful close while the queue drains: the reason, and the cap on how long it may take. */
+  private closing: { reason: string; timer: ReturnType<typeof setTimeout> } | null = null;
+  private released = false;
   private restartGeneration = 0;
   private waiters: { resolve(transport: CollabTransport): void; reject(error: Error): void; timer: ReturnType<typeof setTimeout> }[] = [];
 
-  constructor(pc: RTCPeerConnection, role: Role, onDrop?: (reason: DropReason, detail: string) => void) {
+  constructor(pc: RTCPeerConnection, role: Role, opts: Pick<WebRtcOptions, 'onDrop' | 'maxMessageBytes'> = {}) {
     this.pc = pc;
     this.role = role;
-    this.onDrop = onDrop;
+    this.onDrop = opts.onDrop;
     // Pre-negotiated on both sides: no in-band channel announcement to wait for or lose.
     this.channel = pc.createDataChannel('draft-canvas', { negotiated: true, id: 0, ordered: true });
     this.channel.binaryType = 'arraybuffer';
@@ -239,10 +261,11 @@ class WebRtcTransport implements CollabTransport {
     this.reassembler = new Reassembler({
       onMessage: (text, kind) => this.receive(text, kind),
       onDrop: (reason, detail) => this.lostFrame(reason, detail),
+      ...(opts.maxMessageBytes === undefined ? {} : { maxMessageBytes: opts.maxMessageBytes }),
     });
     const options = { signal: this.lifetime.signal };
     this.channel.addEventListener('open', () => this.onOpen(), options);
-    this.channel.addEventListener('close', () => this.close('peer-closed'), options);
+    this.channel.addEventListener('close', () => this.teardown('peer-closed'), options);
     this.channel.addEventListener('message', (event) => this.reassembler.push(event.data), options);
     this.channel.addEventListener('bufferedamountlow', () => this.pump(), options);
     pc.addEventListener('connectionstatechange', () => this.onConnectionState(), options);
@@ -287,10 +310,27 @@ class WebRtcTransport implements CollabTransport {
 
   close(reason = 'closed'): void {
     if (this.current === 'closed') return;
+    if (this.channel.readyState !== 'open' || (this.queuedBytes === 0 && this.channel.bufferedAmount === 0)) return this.teardown(reason);
+    // Closed to whoever used it from now on, while its last messages leave.
+    this.closing = { reason, timer: setTimeout(() => this.teardown(reason), CLOSE_DRAIN_MS) };
+    this.setState('closed', reason);
+    this.messageListeners.clear();
+    this.stateListeners.clear();
+    // Woken when the browser's buffer is empty, not just low: then everything has been handed on.
+    this.channel.bufferedAmountLowThreshold = 0;
+    this.pump();
+  }
+
+  /** Lets the connection go at once, with whatever was still queued. */
+  private teardown(reason: string): void {
+    if (this.released) return;
+    this.released = true;
     this.lifetime.abort();
     this.clearCongestionTimer();
     if (this.recoveryTimer !== null) clearTimeout(this.recoveryTimer);
     this.recoveryTimer = null;
+    if (this.closing) clearTimeout(this.closing.timer);
+    this.closing = null;
     this.reassembler.dispose();
     this.queue = [];
     this.head = 0;
@@ -315,7 +355,7 @@ class WebRtcTransport implements CollabTransport {
     if (this.current === 'closed') return Promise.reject(new Error('The connection is closed.'));
     if (this.everOpen) return Promise.resolve(this);
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => this.close('connect-timeout'), timeoutMs);
+      const timer = setTimeout(() => this.teardown('connect-timeout'), timeoutMs);
       this.waiters.push({ resolve, reject, timer });
     });
   }
@@ -351,11 +391,11 @@ class WebRtcTransport implements CollabTransport {
       this.queue.push(frame);
     }
     this.queuedBytes += frame.length;
-    if (this.queuedBytes > MAX_QUEUED_BYTES) this.close('queue-overflow');
+    if (this.queuedBytes > MAX_QUEUED_BYTES) this.teardown('queue-overflow');
   }
 
   private pump(): void {
-    if (this.current === 'closed') return;
+    if (this.released) return;
     while (this.head < this.queue.length && this.channel.readyState === 'open' && this.channel.bufferedAmount <= BUFFER_HIGH_WATERMARK) {
       const frame = this.queue[this.head]!;
       try {
@@ -372,6 +412,10 @@ class WebRtcTransport implements CollabTransport {
       this.queue = [];
       this.head = 0;
       this.clearCongestionTimer();
+      if (this.closing) {
+        if (this.channel.bufferedAmount === 0) this.teardown(this.closing.reason);
+        return;
+      }
       if (this.congested) {
         this.congested = false;
         this.refresh();
@@ -382,7 +426,7 @@ class WebRtcTransport implements CollabTransport {
       this.queue = this.queue.slice(this.head);
       this.head = 0;
     }
-    if (this.congestionTimer === null && !this.congested) {
+    if (this.congestionTimer === null && !this.congested && !this.closing) {
       this.congestionTimer = setTimeout(() => {
         this.congestionTimer = null;
         this.congested = true;
@@ -397,6 +441,13 @@ class WebRtcTransport implements CollabTransport {
   }
 
   private onConnectionState(): void {
+    // Draining a graceful close: a connection that is going away takes the rest with it.
+    if (this.closing) {
+      const state = this.pc.connectionState;
+      if (state === 'disconnected' || state === 'failed' || state === 'closed') this.teardown(this.closing.reason);
+      else this.pump();
+      return;
+    }
     switch (this.pc.connectionState) {
       case 'connected':
         this.iceLost = false;
@@ -416,10 +467,10 @@ class WebRtcTransport implements CollabTransport {
         // the reply; the owner's own checks revive them once it is applied. The connect timeout
         // decides that case. After the first open, failure is final.
         if (!this.everOpen && this.role === 'guest') return;
-        this.close('failed');
+        this.teardown('failed');
         return;
       case 'closed':
-        this.close('peer-closed');
+        this.teardown('peer-closed');
         return;
       default:
         return;
@@ -430,7 +481,7 @@ class WebRtcTransport implements CollabTransport {
     if (this.recoveryTimer !== null) return;
     this.recoveryTimer = setTimeout(() => {
       this.recoveryTimer = null;
-      this.close('reconnect-timeout');
+      this.teardown('reconnect-timeout');
     }, ICE_RESTART_GIVE_UP_MS);
     // Only the owner offers, so the two sides never restart into each other.
     if (this.role === 'host') void this.restartIce();
@@ -481,6 +532,7 @@ class WebRtcTransport implements CollabTransport {
   }
 
   private receive(text: string, kind: FrameKind): void {
+    if (this.current === 'closed') return;
     if (kind === 'control') {
       const control = parseControl(text);
       if (!control) return this.reportDrop('malformed', 'unreadable control frame');
@@ -514,7 +566,7 @@ class WebRtcTransport implements CollabTransport {
    */
   private lostFrame(reason: DropReason, detail: string): void {
     this.reportDrop(reason, detail);
-    this.close(`dropped-${reason}`);
+    this.teardown(`dropped-${reason}`);
   }
 
   private refresh(): void {

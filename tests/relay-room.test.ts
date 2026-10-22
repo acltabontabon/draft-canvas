@@ -9,7 +9,9 @@ import {
   checkOwner,
   renewClaim,
   checkRequest,
+  clientKey,
   closePeer,
+  connectionAllowed,
   deadline,
   departed,
   guestTag,
@@ -126,6 +128,25 @@ describe('relay requests', () => {
     expect(request({ protocols: `${PROTOCOL}, host.short` })).toMatchObject({ kind: 'reject', status: 401 });
     // A guest presenting a host secret is not a guest of ours.
     expect(request({ url: `/r/${ROOM}?role=guest`, protocols: `${PROTOCOL}, host.${SECRET}` })).toMatchObject({ kind: 'reject', status: 401 });
+  });
+});
+
+describe('connections per client', () => {
+  it('counts an IPv6 client by its /64, which it can take a fresh address from each time', () => {
+    expect(clientKey('2001:db8:1:2:aaaa::1')).toBe('2001:db8:1:2::/64');
+    expect(clientKey('2001:DB8:1:2:ffff:ffff:ffff:ffff')).toBe('2001:db8:1:2::/64');
+    expect(clientKey('2001:db8::1')).toBe('2001:db8:0:0::/64');
+    expect(clientKey('[fe80::1%en0]')).toBe('fe80:0:0:0::/64');
+    expect(clientKey('::ffff:192.0.2.7')).toBe('192.0.2.7');
+    expect(clientKey('192.0.2.7')).toBe('192.0.2.7');
+    expect(clientKey(null)).toBe('unknown');
+  });
+
+  it('holds a whole /64 to one client’s budget', () => {
+    const seen = new Map<string, number[]>();
+    for (let i = 0; i < LIMITS.connectsPerMinute; i += 1) expect(connectionAllowed(seen, `2001:db8:1:2::${i.toString(16)}`, 1000)).toBe(true);
+    expect(connectionAllowed(seen, '2001:db8:1:2:ffff::9', 1000)).toBe(false);
+    expect(connectionAllowed(seen, '2001:db8:1:3::1', 1000)).toBe(true);
   });
 });
 

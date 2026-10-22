@@ -16,6 +16,7 @@ import {
   admission,
   checkOwner,
   checkRequest,
+  clientKey,
   CLOSE,
   PROTOCOL,
   secretDigest,
@@ -61,8 +62,7 @@ export default {
     }
     // One address can't open sockets without end, across rooms: each costs a Durable Object wake-up.
     if (env.CONNECTIONS) {
-      const address = request.headers.get('cf-connecting-ip') ?? 'unknown';
-      const { success } = await env.CONNECTIONS.limit({ key: address });
+      const { success } = await env.CONNECTIONS.limit({ key: clientKey(request.headers.get('cf-connecting-ip')) });
       if (!success) return new Response('too many connections\n', { status: 429, headers: { 'content-type': 'text/plain; charset=utf-8', 'retry-after': '60', ...SECURITY_HEADERS } });
     }
     const room = env.ROOMS.get(env.ROOMS.idFromName(verdict.room));

@@ -10,7 +10,7 @@ import { fileOf, useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
 import { Button } from '../common/Button';
 import { Icon } from '../common/Icon';
-import { LOOKALIKE_WARNING, nameKey, ROLE_LABELS, takenNameKeys } from './collabCopy';
+import { LOOKALIKE_WARNING, nameKey, RETURNING_NOTE, ROLE_LABELS, takenNameKeys } from './collabCopy';
 import { PeerBadge } from './PeerBadge';
 
 /**
@@ -96,11 +96,11 @@ function Door({ knocks }: { knocks: readonly KnockView[] }) {
 }
 
 function DoorRow({ knock, lookalike }: { knock: KnockView; lookalike: boolean }) {
-  const [role, setRole] = useState<Role>('editor');
+  const [role, setRole] = useState<Role>(knock.returning ?? 'editor');
   return (
     <div className="dc-dock-door-row" role="group" aria-label={`${knock.name} is asking to join`}>
       <span className="dc-dock-card-name">{knock.name}</span>
-      {!knock.admitting && <span className="dc-dock-card-meta">Let them in to draw with you, or just to watch.</span>}
+      {!knock.admitting && <span className="dc-dock-card-meta">{knock.returning ? RETURNING_NOTE : 'Let them in to draw with you, or just to watch.'}</span>}
       {lookalike && (
         <span className="dc-dock-card-warning" role="note">
           {LOOKALIKE_WARNING}

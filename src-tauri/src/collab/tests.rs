@@ -579,6 +579,43 @@ async fn the_eleventh_guest_waits_for_someone_to_leave() {
     relay.stop("stopped").await;
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn one_address_cannot_hold_every_http_connection() {
+    let (_, relay, port) = started(Limits::default()).await;
+    let mut idle = Vec::new();
+    for _ in 0..super::server::MAX_HTTP_CONNECTIONS_PER_PEER {
+        idle.push(TcpStream::connect(("127.0.0.1", port)).await.unwrap());
+    }
+    // One more from the same address is closed unanswered.
+    let mut extra = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
+    let _ = extra
+        .write_all(format!("GET / HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n\r\n").as_bytes())
+        .await;
+    let mut raw = Vec::new();
+    let _ = timeout(WAIT, extra.read_to_end(&mut raw)).await.unwrap();
+    assert!(raw.is_empty());
+    // A place given back is a place to use again.
+    drop(idle.pop());
+    let reply = timeout(WAIT, async {
+        loop {
+            let mut stream = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
+            let request =
+                format!("GET / HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n");
+            let _ = stream.write_all(request.as_bytes()).await;
+            let mut raw = Vec::new();
+            let _ = stream.read_to_end(&mut raw).await;
+            if !raw.is_empty() {
+                return raw;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .unwrap();
+    assert!(reply.starts_with(b"HTTP/1.1 200"));
+    relay.stop("stopped").await;
+}
+
 // ─── Frames ─────────────────────────────────────────────────────────────────────────────────────
 
 #[tokio::test(flavor = "multi_thread")]

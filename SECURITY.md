@@ -74,6 +74,8 @@ size-capped before parsing, prototype keys refused, and validated like an import
   pose as the owner. The relay keeps a SHA-256 of an owner-only secret until 12 hours after the owner was last connected and refuses
   any host without it.
 - **Rejoining** needs an HMAC from the place's private resume key, bound to the room and knock.
+  Over the local network link the key travels in clear, so someone coming back knocks again and the
+  owner lets them in.
 - **Direct invites** are single-use, expire after 30 minutes and pin the owner's DTLS fingerprint.
 - **Desktop local network link.** A 128-bit token, compared in constant time. Cross-origin requests,
   non-IP `Host` headers and public addresses are refused; 100.64.0.0/10 counts as local (VPNs).

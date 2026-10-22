@@ -10,7 +10,7 @@ import { Button } from '../common/Button';
 import { Icon, type IconName } from '../common/Icon';
 import { Modal } from '../common/Modal';
 import { canShareLink, copyText, looksLikeCode, pasteText, shareLink } from './clipboard';
-import { END_MESSAGES, LINK_LABELS, LOOKALIKE_WARNING, nameKey, readConnectionPreferences, readDisplayName, ROLE_LABELS, takenNameKeys, writeConnectionPreferences, writeDisplayName } from './collabCopy';
+import { END_MESSAGES, LINK_LABELS, LOOKALIKE_WARNING, nameKey, readConnectionPreferences, readDisplayName, RETURNING_NOTE, ROLE_LABELS, takenNameKeys, writeConnectionPreferences, writeDisplayName } from './collabCopy';
 import { useInviteStore } from './inviteStore';
 import { openLobby } from './lobbyStore';
 import { answerKnock } from '../../store/collabBridge';
@@ -367,15 +367,15 @@ function Knocks() {
       </h3>
       <ul className="dc-collab-people">
         {knocks.map((knock) => (
-          <KnockRow key={knock.id} id={knock.id} name={knock.name} admitting={knock.admitting} />
+          <KnockRow key={knock.id} id={knock.id} name={knock.name} admitting={knock.admitting} returning={knock.returning} />
         ))}
       </ul>
     </section>
   );
 }
 
-export function KnockRow({ id, name, admitting }: { id: string; name: string; admitting?: Role }) {
-  const [role, setRole] = useState<Role>('editor');
+export function KnockRow({ id, name, admitting, returning }: { id: string; name: string; admitting?: Role; returning?: Role }) {
+  const [role, setRole] = useState<Role>(returning ?? 'editor');
   // As the dock says it: a knock wearing the name of someone already here.
   const lookalike = useCollabStore(useShallow(takenNameKeys)).includes(nameKey(name));
   return (
@@ -384,6 +384,7 @@ export function KnockRow({ id, name, admitting }: { id: string; name: string; ad
         <PeerBadge name={name} color={7} />
       </span>
       <span className="dc-collab-person-name">{name}</span>
+      {returning && !admitting && <span className="dc-collab-person-meta">{RETURNING_NOTE}</span>}
       {lookalike && (
         <span className="dc-collab-person-meta dc-collab-lookalike" role="note">
           {LOOKALIKE_WARNING}
