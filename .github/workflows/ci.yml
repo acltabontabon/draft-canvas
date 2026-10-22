@@ -208,19 +208,15 @@ jobs:
           git checkout FETCH_HEAD -- playwright.dist.config.ts playwright.web.config.ts
       - run: npm ci --no-audit --no-fund
         timeout-minutes: 5
-      # A runner's in-region apt mirror sometimes crawls: WebKit's ~180 system packages once fetched
-      # 10 in five minutes, twice on one shard, while the other shards took half a minute. Past four
-      # minutes, the mirror is dropped and the rest comes from the main archive; what was already
-      # fetched stays in apt's cache, and an install cut off mid-way is configured before the retry.
+      # The runner's in-region apt mirror (azure.archive.ubuntu.com) can crawl for hours: it once
+      # fetched 10 of WebKit's ~180 system packages in five minutes, on Chromium and WebKit shards
+      # alike. The install skips it for the archive and security mirrors listed after it, and a
+      # stalled download times out and retries instead of holding the step until its limit.
       - name: Install the selected browser and system dependencies
         run: |
-          if ! timeout 240 npx playwright install --with-deps "$PLAYWRIGHT_BROWSER"; then
-            echo "::warning::The apt mirror was too slow; retrying from archive.ubuntu.com"
-            sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt
-            grep -q . /etc/apt/apt-mirrors.txt || echo 'http://archive.ubuntu.com/ubuntu/' | sudo tee /etc/apt/apt-mirrors.txt
-            sudo dpkg --configure -a || { sleep 10; sudo dpkg --configure -a; }
-            npx playwright install --with-deps "$PLAYWRIGHT_BROWSER"
-          fi
+          sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt
+          printf 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n' | sudo tee /etc/apt/apt.conf.d/99ci-network > /dev/null
+          npx playwright install --with-deps "$PLAYWRIGHT_BROWSER"
         timeout-minutes: 10
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:

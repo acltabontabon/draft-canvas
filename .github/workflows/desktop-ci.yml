@@ -82,7 +82,11 @@ jobs:
             echo "::error::The web bundle contains desktop code."
             exit 1
           fi
-      - run: npx playwright install --with-deps chromium webkit
+      # Skips the runner's in-region apt mirror, which can crawl for hours; see the e2e job in ci.yml.
+      - run: |
+          sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt
+          printf 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n' | sudo tee /etc/apt/apt.conf.d/99ci-network > /dev/null
+          npx playwright install --with-deps chromium webkit
       # Chromium and WebKit: the engines the desktop shell actually embeds (WebView2, WebKitGTK/WKWebView).
       - run: PLAYWRIGHT_BROWSER=chromium npm run e2e:desktop -- --fail-on-flaky-tests
       - run: PLAYWRIGHT_BROWSER=webkit npm run e2e:desktop -- --fail-on-flaky-tests
