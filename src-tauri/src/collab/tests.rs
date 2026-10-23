@@ -153,6 +153,23 @@ async fn started(limits: Limits) -> (Arc<Events>, Relay, u16) {
     (events, relay, started.port)
 }
 
+fn shared_for_counting(limits: Limits) -> Arc<Shared> {
+    Arc::new(Shared {
+        port: 0,
+        limits,
+        sink: Arc::new(Events::default()),
+        assets: files(),
+        token: Mutex::new(parse_token(TOKEN).unwrap()),
+        session: AtomicU64::new(0),
+        conns: Mutex::new(HashMap::new()),
+        slots: AtomicUsize::new(0),
+        by_address: Mutex::new(HashMap::new()),
+        http_connections: Arc::new(Semaphore::new(server::MAX_HTTP_CONNECTIONS)),
+        shutdown: watch::channel(false).0,
+        drained: Notify::new(),
+    })
+}
+
 struct Reply {
     status: u16,
     headers: Vec<(String, String)>,
@@ -602,6 +619,133 @@ async fn one_address_cannot_hold_every_guest_place() {
     assert_eq!(events.closed(&first).await, "closed");
     guests.push(guest(port).await);
     events.opened(per_address).await;
+    relay.stop("stopped").await;
+}
+
+#[test]
+fn ula_addresses_in_one_64_cannot_hold_every_guest_place() {
+    for network in ["fc12:3456:789a:bcde", "fd12:3456:789a:bcde"] {
+        let shared = shared_for_counting(Limits::default());
+        let mut slots = Vec::new();
+        for n in 1..=MAX_GUESTS_PER_ULA_PREFIX {
+            let ip = format!("{network}::{n}").parse().unwrap();
+            slots.push(shared.reserve(0, ip).expect("a place within the /64 bound"));
+        }
+        let next = format!("{network}::ffff").parse().unwrap();
+        assert!(
+            shared.reserve(0, next).is_none(),
+            "another address, same /64"
+        );
+        let other = "fd12:3456:789a:bcdf::1".parse().unwrap();
+        let _other = shared.reserve(0, other).expect("another /64 still fits");
+        drop(slots.pop());
+        let last = shared.reserve(0, next).expect("a place was given back");
+        assert!(shared.reserve(0, next).is_none(), "the /64 is full again");
+        drop(last);
+        drop(slots);
+        assert_eq!(
+            lock(&shared.by_address).len(),
+            1,
+            "only the other /64 stays"
+        );
+    }
+}
+
+#[test]
+fn ipv4_and_loopback_keep_their_guest_limits() {
+    for address in ["192.168.1.2", "127.0.0.1", "::1"] {
+        let shared = shared_for_counting(Limits {
+            guests_per_address: MAX_CONNECTIONS,
+            ..Limits::default()
+        });
+        let ip = address.parse().unwrap();
+        let slots: Vec<_> = (0..MAX_CONNECTIONS)
+            .map(|_| shared.reserve(0, ip).expect("no ULA /64 bound"))
+            .collect();
+        assert!(shared.reserve(0, ip).is_none());
+        drop(slots);
+        assert!(shared.reserve(0, ip).is_some());
+    }
+}
+
+#[test]
+fn http_places_are_shared_and_returned_across_listeners() {
+    let shared = shared_for_counting(Limits::default());
+    let v4 = shared.clone();
+    let v6 = shared.clone();
+    let mut held = Vec::new();
+    for n in 0..server::MAX_HTTP_CONNECTIONS {
+        let listener = if n % 2 == 0 { &v4 } else { &v6 };
+        held.push(
+            listener
+                .http_connections
+                .clone()
+                .try_acquire_owned()
+                .unwrap(),
+        );
+    }
+    for listener in [&v4, &v6] {
+        assert!(listener
+            .http_connections
+            .clone()
+            .try_acquire_owned()
+            .is_err());
+    }
+    drop(held.pop());
+    let last = v6.http_connections.clone().try_acquire_owned().unwrap();
+    assert!(v4.http_connections.clone().try_acquire_owned().is_err());
+    drop(last);
+    assert!(v4.http_connections.clone().try_acquire_owned().is_ok());
+    drop(held);
+    assert_eq!(
+        shared.http_connections.available_permits(),
+        server::MAX_HTTP_CONNECTIONS
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn both_http_listeners_enforce_the_shared_total() {
+    let (_, relay, port) = started(Limits::default()).await;
+    let shared = lock(&relay.current).as_ref().unwrap().clone();
+    let held = shared
+        .http_connections
+        .clone()
+        .try_acquire_many_owned(server::MAX_HTTP_CONNECTIONS as u32)
+        .unwrap();
+    let mut addresses = vec![IpAddr::V4(Ipv4Addr::LOCALHOST)];
+    if relay.life.lock().await.as_ref().unwrap().ipv6 {
+        addresses.push(IpAddr::V6(Ipv6Addr::LOCALHOST));
+    }
+    for ip in &addresses {
+        let mut stream = TcpStream::connect((*ip, port)).await.unwrap();
+        let _ = stream.write_all(b"GET / HTTP/1.1\r\n").await;
+        let mut raw = Vec::new();
+        let _ = timeout(WAIT, stream.read_to_end(&mut raw)).await.unwrap();
+        assert!(
+            raw.is_empty(),
+            "{ip} must refuse when the shared pool is full"
+        );
+    }
+    drop(held);
+    for ip in addresses {
+        let mut stream = TcpStream::connect((ip, port)).await.unwrap();
+        stream
+            .write_all(
+                format!("GET / HTTP/1.1\r\nHost: localhost:{port}\r\nConnection: close\r\n\r\n")
+                    .as_bytes(),
+            )
+            .await
+            .unwrap();
+        let mut raw = Vec::new();
+        timeout(WAIT, stream.read_to_end(&mut raw))
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(
+            raw.starts_with(b"HTTP/1.1 200"),
+            "{ip} can use returned places"
+        );
+    }
     relay.stop("stopped").await;
 }
 

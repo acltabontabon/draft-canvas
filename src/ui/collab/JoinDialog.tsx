@@ -75,13 +75,15 @@ export function JoinDialog({ session, invite }: { session: DocumentSession; invi
   // Whether this dialog is still the one on screen: a second invite opened over it replaces it, and an
   // attempt still being prepared then (no cancel to call yet) must not join over the newer one.
   const current = useRef(true);
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    // Set on every mount, not only the first: development mode mounts twice, and a dialog left marked
+    // gone by the first unmount abandoned every join it started.
+    current.current = true;
+    return () => {
       current.current = false;
       cancelJoin.current?.();
-    },
-    [],
-  );
+    };
+  }, []);
 
   const beginLan = (token: string, trimmed: string) => {
     // Like a knock: the owner lets each person on the network in, or not.

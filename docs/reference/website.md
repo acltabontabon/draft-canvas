@@ -163,7 +163,8 @@ browsers connect directly.
   No logging; observability is off in `relay.jsonc`.
 - **Limits:** one owner and 32 joining sockets per room, at most 4 of them from one address (per /64
   for IPv6); text frames with at most 16,384 characters of data; 30 messages per 10 seconds per
-  socket, and the owner that much for every joining socket, since it answers each of them; 60 new
+  socket, and the owner that much for every joining socket, since it answers each of them (past it,
+the owner's frames are dropped, never its socket); 60 new
   sockets per minute per address. A room closes after 15 idle minutes, or 12 hours at most. The
   owner's own reconnect replaces a socket the relay still thinks is open.
 - **Origins:** only `ALLOWED_ORIGINS`; by default the web editor and the desktop app.

@@ -265,6 +265,14 @@ export function undoChangesOf(peerId: string, name: string): UndoChangesOutcome 
 }
 
 /**
+ * Whether some of `peerId`'s earliest changes are no longer remembered (a long session of theirs), so
+ * taking their changes back leaves those as they are — said beside whatever `undoChangesOf` answers.
+ */
+export function changesForgottenOf(peerId: string): boolean {
+  return host !== null && !host.isEnded && host.authorship.forgotten(peerId);
+}
+
+/**
  * Answers a knock: lets that person in as `role`, or (`null`) turns them away. The waiting room lives
  * in the collaboration chunk (`ui/collab/lobbyStore.ts`), which registers itself here, so the dock
  * on the canvas can answer without loading any of it.

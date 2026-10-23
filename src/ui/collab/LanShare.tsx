@@ -58,8 +58,11 @@ function setConnected(count: number): void {
 }
 
 /** People waiting at the door who came by the local network link, by their `lan:` id. */
-const waiting = new Map<string, { door: AtTheDoor; back: { peer: string; role: Role } | null }>();
-const MAX_WAITING = 12;
+const waiting = new Map<string, { door: AtTheDoor; back: { peer: string; role: Role } | null; timer: ReturnType<typeof setTimeout> }>();
+/** No more than the shell's `MAX_CONNECTIONS` in `src-tauri/src/collab/mod.rs`. */
+const MAX_WAITING = 10;
+/** A hello keeps the connection alive; an unanswered knock must still give its place back. */
+const WAITING_TIMEOUT_MS = 5 * 60_000;
 
 function publishWaiting(): void {
   useCollabStore.setState({
@@ -87,9 +90,11 @@ async function admitAtDoor(transport: CollabTransport, run: number): Promise<voi
   if (waiting.size >= MAX_WAITING) return door.refuse();
   const id = `lan:${crypto.getRandomValues(new Uint32Array(2)).join('')}`;
   const back = placeOf(door);
-  waiting.set(id, { door, back });
+  const timer = setTimeout(() => answerAtDoor(id, null), WAITING_TIMEOUT_MS);
+  waiting.set(id, { door, back, timer });
   announce(back ? `${door.name} is back and asking to join.` : `${door.name} is asking to join.`);
   door.onGone(() => {
+    clearTimeout(timer);
     waiting.delete(id);
     publishWaiting();
   });
@@ -99,6 +104,7 @@ async function admitAtDoor(transport: CollabTransport, run: number): Promise<voi
 function answerAtDoor(id: string, role: Role | null): void {
   const knock = waiting.get(id);
   if (!knock) return;
+  clearTimeout(knock.timer);
   waiting.delete(id);
   publishWaiting();
   if (!role) return knock.door.refuse();
@@ -113,7 +119,10 @@ function answerAtDoor(id: string, role: Role | null): void {
 setLanKnockHandler(answerAtDoor);
 
 function clearWaiting(): void {
-  for (const { door } of waiting.values()) door.refuse();
+  for (const { door, timer } of waiting.values()) {
+    clearTimeout(timer);
+    door.refuse();
+  }
   waiting.clear();
   publishWaiting();
 }

@@ -397,6 +397,18 @@ describe('relay limits', () => {
     expect(guests.every((guest) => guest.sent.filter((frame) => (frame as { data?: string }).data?.startsWith('seen')).length === 6)).toBe(true);
   });
 
+  it('drops what the owner sends past its budget, but never closes the owner', () => {
+    const room = new FakeRoom();
+    const host = room.host();
+    const guest = room.guest();
+    for (let i = 0; i < LIMITS.rateMessages * 3; i++) room.send(host, { to: tagOf(guest), data: `reply ${i}` }, 0);
+    expect(host.closed).toBeNull();
+    expect(guest.sent.filter((frame) => (frame as { data?: string }).data?.startsWith('reply'))).toHaveLength(LIMITS.rateMessages);
+    // The budget comes back as before.
+    room.send(host, { to: tagOf(guest), data: 'later' }, LIMITS.rateWindowMs);
+    expect(guest.sent.at(-1)).toEqual({ from: 'host', data: 'later' });
+  });
+
   it('counts bad and undeliverable frames against the rate too', () => {
     const room = new FakeRoom();
     const guest = room.guest();

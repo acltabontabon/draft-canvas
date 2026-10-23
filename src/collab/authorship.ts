@@ -19,10 +19,24 @@ interface Touch extends KeyRevert {
 export interface PersonRevert extends SelectiveStep {
   /** Some of their changes had to stay: someone else built on them. */
   kept: boolean;
+  /** Some of their earliest changes are no longer remembered (`MAX_VERSIONS_PER_PERSON`), so stay as they are. */
+  forgotten: boolean;
 }
+
+/**
+ * Distinct versions of the file one person's touches may hold. Files share structure, but each
+ * version keeps its own lists — and a collaborator touching new things patch after patch made the
+ * owner keep a version per patch, without end, until the tab ran out of memory. Past it, their
+ * oldest touches go: taking their changes back then says some had to stay.
+ */
+const MAX_VERSIONS_PER_PERSON = 64;
 
 export class Authorship {
   private readonly people = new Map<string, Map<string, Touch>>();
+  /** How many of each person's touches hold each file version, for `MAX_VERSIONS_PER_PERSON`. */
+  private readonly versions = new Map<string, Map<DraftDocument, number>>();
+  /** People some of whose touches were let go: their changes can no longer all be taken back. */
+  private readonly trimmed = new Set<string>();
   private order = 0;
 
   /** `person` took the file from `before` to `after`. */
@@ -35,21 +49,65 @@ export class Authorship {
     for (const key of keys) {
       const touch = touches.get(key);
       if (touch) {
+        this.release(person, touch);
         // Someone else changed it since this person last did: what this person made before is
         // already gone, and taking their changes back must land on that other person's version
         // (or keep the owner's deletion), not reach past it to the very first.
         if (!sameAt(before, touch.left, key)) touch.found = before;
         touch.left = after;
         touch.order = this.order;
+        // Back where they found it (made, then deleted): nothing of theirs to take back, or to keep.
+        if (sameAt(touch.found, touch.left, key)) {
+          touches.delete(key);
+          continue;
+        }
+        this.retain(person, touch);
       } else {
-        touches.set(key, { key, found: before, left: after, order: this.order });
+        const fresh = { key, found: before, left: after, order: this.order };
+        touches.set(key, fresh);
+        this.retain(person, fresh);
       }
     }
+    this.trim(person, touches);
+  }
+
+  private retain(person: string, touch: Touch): void {
+    let held = this.versions.get(person);
+    if (!held) this.versions.set(person, (held = new Map()));
+    for (const file of new Set([touch.found, touch.left])) held.set(file, (held.get(file) ?? 0) + 1);
+  }
+
+  private release(person: string, touch: Touch): void {
+    const held = this.versions.get(person);
+    if (!held) return;
+    for (const file of new Set([touch.found, touch.left])) {
+      const count = (held.get(file) ?? 0) - 1;
+      if (count <= 0) held.delete(file);
+      else held.set(file, count);
+    }
+  }
+
+  /** Lets go of `person`'s oldest touches until the versions they hold are well inside the bound. */
+  private trim(person: string, touches: Map<string, Touch>): void {
+    const held = this.versions.get(person);
+    if (!held || held.size <= MAX_VERSIONS_PER_PERSON) return;
+    const oldest = [...touches.values()].sort((a, b) => a.order - b.order);
+    for (const touch of oldest) {
+      if (held.size <= MAX_VERSIONS_PER_PERSON / 2) break;
+      touches.delete(touch.key);
+      this.release(person, touch);
+    }
+    this.trimmed.add(person);
+  }
+
+  /** Whether some of `person`'s earliest touches were let go (`MAX_VERSIONS_PER_PERSON`). */
+  forgotten(person: string): boolean {
+    return this.trimmed.has(person);
   }
 
   /** Whether `person` has changed anything this session. */
   has(person: string): boolean {
-    return (this.people.get(person)?.size ?? 0) > 0;
+    return (this.people.get(person)?.size ?? 0) > 0 || this.trimmed.has(person);
   }
 
   /**
@@ -59,9 +117,10 @@ export class Authorship {
    */
   revert(person: string, current: DraftDocument): PersonRevert {
     const touches = [...(this.people.get(person)?.values() ?? [])];
-    if (touches.length === 0) return { file: current, partial: false, blocked: false, kept: false };
+    const forgotten = this.trimmed.has(person);
+    if (touches.length === 0) return { file: current, partial: false, blocked: false, kept: false, forgotten };
     const whole = revertEach(current, touches);
-    if (!whole.blocked) return { ...whole, kept: false };
+    if (!whole.blocked) return { ...whole, kept: false, forgotten };
 
     // Newest first: their connector to their own shape goes before the shape does.
     const byEdit = new Map<number, Touch[]>();
@@ -75,10 +134,12 @@ export class Authorship {
       else file = step.file;
       partial ||= step.partial;
     }
-    return { file, partial, blocked: file === current, kept };
+    return { file, partial, blocked: file === current, kept, forgotten };
   }
 
   forget(person: string): void {
     this.people.delete(person);
+    this.versions.delete(person);
+    this.trimmed.delete(person);
   }
 }

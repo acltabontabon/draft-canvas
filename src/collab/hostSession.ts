@@ -386,6 +386,10 @@ export class HostSession {
       // A new key with every welcome there: whoever read the last one off the network has a key that
       // no longer opens anything.
       if (mayClaim) slot.key = randomToken(16);
+    } else if (mayClaim && !keyMatches) {
+      // Claimed on the owner's word alone (a Re-invite, opened by whoever had it first): a new key, so
+      // the place's old one — and whoever holds this one — can't keep coming back unasked.
+      slot.key = randomToken(16);
     }
     // Anything the owner did since the last broadcast goes out first, so the snapshot and the
     // commits after it agree — and before this connection is listed, so it isn't sent a commit

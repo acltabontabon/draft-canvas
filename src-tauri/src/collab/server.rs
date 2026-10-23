@@ -23,7 +23,7 @@ use tokio::task::JoinSet;
 
 /// Plain HTTP connections at once (a browser opens several to load the app). Upgraded WebSockets
 /// leave this count and are bound by `MAX_CONNECTIONS` instead.
-const MAX_HTTP_CONNECTIONS: usize = 64;
+pub(super) const MAX_HTTP_CONNECTIONS: usize = 64;
 /// Of those, from one address: a browser loading the app opens about six. One machine on the network
 /// can't take every place and keep the people the link was sent to from loading the page.
 pub(super) const MAX_HTTP_CONNECTIONS_PER_PEER: usize = 16;
@@ -35,7 +35,7 @@ const MAX_HEADER_BYTES: usize = 64 * 1024;
 /// such connections keep everyone else from loading the app or reconnecting. A browser just opens
 /// another connection. An upgrade to a WebSocket finishes the connection's own future, so a socket is
 /// never cut by this.
-const HTTP_CONNECTION_LIFETIME: Duration = Duration::from_secs(120);
+const HTTP_CONNECTION_LIFETIME: Duration = Duration::from_secs(30);
 /// After a failed accept (out of file descriptors, say), a pause instead of a hot loop.
 const ACCEPT_BACKOFF: Duration = Duration::from_millis(100);
 
@@ -61,19 +61,20 @@ pub(super) async fn serve(listener: TcpListener, shared: Arc<Shared>) {
                     continue;
                 }
                 while connections.try_join_next().is_some() {}
-                if connections.len() >= MAX_HTTP_CONNECTIONS {
-                    continue;
-                }
                 peers.retain(|_, held| Arc::strong_count(held) > 1);
                 let held = peers.entry(peer.ip()).or_default();
                 if Arc::strong_count(held) > MAX_HTTP_CONNECTIONS_PER_PEER {
                     continue;
                 }
+                let Ok(permit) = shared.http_connections.clone().try_acquire_owned() else {
+                    continue;
+                };
                 let held = held.clone();
                 // Who is asking, for the guest-places-per-address limit at the upgrade.
                 let router = router.clone().layer(Extension(Peer(peer.ip())));
                 connections.spawn(async move {
                     let _held = held;
+                    let _permit = permit;
                     serve_connection(stream, router).await;
                 });
             }

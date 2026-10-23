@@ -377,7 +377,13 @@ export function received(peers, peer, text, now) {
   const budget = state.role === 'host' ? LIMITS.rateMessages * Math.max(1, guestsOf(peers).length) : LIMITS.rateMessages;
   const refill = ((now - state.at) * budget) / LIMITS.rateWindowMs;
   const tokens = Math.min(budget, state.tokens + Math.max(0, refill));
-  if (tokens < 1) return closePeer(peers, peer, CLOSE.rate);
+  if (tokens < 1) {
+    // The owner past its budget loses the frame, never its socket: closed, every knock at its door
+    // was forgotten and the room went quiet — which link holders knocking in a burst could repeat at
+    // will. (Its budget already grows with the guests it answers.)
+    if (state.role === 'host') return peer.write({ ...state, tokens, at: now });
+    return closePeer(peers, peer, CLOSE.rate);
+  }
   state = { ...state, tokens: tokens - 1, at: now };
 
   const frame = readFrame(text);

@@ -27,7 +27,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use subtle::ConstantTimeEq;
 use tauri::{AppHandle, Manager};
-use tokio::sync::{mpsc, watch, Notify};
+use tokio::sync::{mpsc, watch, Notify, Semaphore};
 use tokio::task::JoinHandle;
 
 /// The subprotocol a guest asks for, beside its token; the one echoed back.
@@ -36,6 +36,9 @@ pub const PROTOCOL: &str = "draft-canvas.collab.v1";
 pub const SOCKET_PATH: &str = "/collab";
 /// Guests at once. The 11th is turned away until someone leaves.
 pub const MAX_CONNECTIONS: usize = 10;
+/// ULA addresses in one /64 can all belong to one machine; changing addresses must not take every
+/// guest place. Leave room for several people on the same subnet, and places for another subnet.
+const MAX_GUESTS_PER_ULA_PREFIX: usize = 6;
 /// The largest text frame the page may send a guest: a whole diagram (a snapshot) with room to spare.
 pub const MAX_TEXT: usize = 16 * 1024 * 1024;
 /// The largest text message a guest may send the page. Keep it equal to `MAX_GUEST_MESSAGE_BYTES` in
@@ -204,6 +207,8 @@ pub(crate) struct Shared {
     slots: AtomicUsize,
     /// Of those, how many each address holds (`Limits::guests_per_address`).
     by_address: Mutex<HashMap<IpAddr, usize>>,
+    /// Both listeners draw from this pool; IPv6 must not double the plain HTTP allowance.
+    http_connections: Arc<Semaphore>,
     pub(crate) shutdown: watch::Sender<bool>,
     drained: Notify,
 }
@@ -247,6 +252,16 @@ impl Shared {
         let held = by_address.get(&address).copied().unwrap_or(0);
         if held >= self.limits.guests_per_address {
             return None;
+        }
+        if let Some(prefix) = net::ula_prefix(address) {
+            let held: usize = by_address
+                .iter()
+                .filter(|(ip, _)| net::ula_prefix(**ip) == Some(prefix))
+                .map(|(_, count)| *count)
+                .sum();
+            if held >= MAX_GUESTS_PER_ULA_PREFIX {
+                return None;
+            }
         }
         // A bounded increment, spelled out: `fetch_update` is deprecated from Rust 1.99 (renamed
         // `try_update`, which the 1.88 floor in Cargo.toml doesn't have), and CI denies warnings.
@@ -414,6 +429,7 @@ impl Relay {
             conns: Mutex::new(HashMap::new()),
             slots: AtomicUsize::new(0),
             by_address: Mutex::new(HashMap::new()),
+            http_connections: Arc::new(Semaphore::new(server::MAX_HTTP_CONNECTIONS)),
             shutdown: watch::channel(false).0,
             drained: Notify::new(),
         });

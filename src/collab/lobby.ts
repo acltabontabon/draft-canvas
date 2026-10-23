@@ -39,6 +39,11 @@ const RECONNECT_MS = [1_000, 2_000, 5_000, 10_000, 20_000, 30_000];
 
 /** Knocks waiting at once; more are told the door is full until some are answered. */
 export const MAX_KNOCKS = 12;
+/** The relay's budget for one socket (`LIMITS.rateMessages` per `rateWindowMs` in `relay-room.js`). */
+const RELAY_BUDGET = 30;
+const RELAY_WINDOW_MS = 10_000;
+/** Replies waiting at once past which a "busy" is not queued. */
+const MAX_QUEUED_REPLIES = 12;
 /** Relay tags and returning proofs remembered as spent, at most; past it the oldest are forgotten. */
 const MAX_REMEMBERED = 1024;
 
@@ -53,6 +58,8 @@ export const ANSWER_TIMEOUT_MS = 60_000;
  * the connection's own. Past it the owner has given up on them too.
  */
 export const JOIN_TIMEOUT_MS = ANSWER_TIMEOUT_MS + CONNECT_TIMEOUT_MS;
+/** How long a knock waits to be greeted: the owner greets every knock it hears at once (paced, `toGuest`). */
+export const GREETING_TIMEOUT_MS = 30_000;
 
 export interface Knocking {
   /** The relay's tag for their socket — how the owner addresses them. */
@@ -95,6 +102,11 @@ export class HostLobby {
   private retry: ReturnType<typeof setTimeout> | null = null;
   private key: CryptoKey | null = null;
   private readonly knocks = new Map<string, KnockState>();
+  /** What waits to be said to knockers, and the budget it is paced by (`toGuest`). */
+  private outgoing: { id: string; data: string; busy: boolean }[] = [];
+  private tokens = RELAY_BUDGET;
+  private refilledAt = Date.now();
+  private pacing: ReturnType<typeof setTimeout> | null = null;
   /** Knocks whose key exchange is still being worked out; they count toward the door's limit. */
   private readonly pendingKnocks = new Set<string>();
   /**
@@ -161,6 +173,10 @@ export class HostLobby {
       }
       if (state !== 'closed') return;
       this.relay = null;
+      // Said to knockers the relay no longer holds: they knock again when it is back — and are heard,
+      // even one whose refusal was still waiting to go out.
+      this.outgoing = [];
+      this.turnedAway.clear();
       for (const id of [...this.knocks.keys()]) this.forget(id);
       // Refused as not the owner: someone else's room, and nothing to retry.
       if (reason === 'not-owner') return this.events.status('unavailable');
@@ -182,6 +198,36 @@ export class HostLobby {
     });
   }
 
+  /**
+   * Everything the owner says to a knocker, kept inside the relay's budget for one socket
+   * (`RELAY_BUDGET`): past it the relay drops the owner's frames, and a greeting lost there left
+   * someone at "Knocking…" for good. A "busy" waits behind any greeting, and is let go when many are
+   * already waiting — a knocker who misses one knocks again.
+   */
+  private toGuest(id: string, data: string, busy = false): void {
+    if (busy && this.outgoing.length >= MAX_QUEUED_REPLIES) return;
+    this.outgoing.push({ id, data, busy });
+    this.pumpOutgoing();
+  }
+
+  private pumpOutgoing(): void {
+    const now = Date.now();
+    this.tokens = Math.min(RELAY_BUDGET, this.tokens + ((now - this.refilledAt) * RELAY_BUDGET) / RELAY_WINDOW_MS);
+    this.refilledAt = now;
+    while (this.tokens >= 1 && this.outgoing.length > 0) {
+      const next = this.outgoing.findIndex((item) => !item.busy);
+      const [item] = this.outgoing.splice(next === -1 ? 0 : next, 1);
+      this.relay?.send(item!.id, item!.data);
+      this.tokens -= 1;
+    }
+    if (this.outgoing.length > 0 && this.pacing === null && !this.ended) {
+      this.pacing = setTimeout(() => {
+        this.pacing = null;
+        this.pumpOutgoing();
+      }, RELAY_WINDOW_MS / RELAY_BUDGET);
+    }
+  }
+
   list(): Knocking[] {
     return [...this.knocks.values()].map(({ id, name, at, admitting }) => ({ id, name, at, ...(admitting ? { admitting } : {}) }));
   }
@@ -196,8 +242,11 @@ export class HostLobby {
     if (message.t === 'knock') {
       if (this.knocks.has(from) || this.pendingKnocks.has(from) || this.turnedAway.has(from)) return;
       if (this.knocks.size + this.pendingKnocks.size >= MAX_KNOCKS) {
-        // Said, not left unanswered: ignored, a knocker waited at "Knocking…" for good.
-        this.relay?.send(from, await seal(this.key!, 'to-guest', { t: 'busy' }));
+        // Said, not left unanswered: ignored, a knocker waited at "Knocking…" for good. Once per
+        // socket: a real knocker's page gives up on hearing it, and answering every knock again let a
+        // few link holders spend the owner's relay budget for them.
+        remember(this.turnedAway, from);
+        this.toGuest(from, await seal(this.key!, 'to-guest', { t: 'busy' }), true);
         return;
       }
       // The exchange is worked out before the knock takes a place at the door: a key that isn't a real
@@ -223,7 +272,7 @@ export class HostLobby {
       this.knocks.set(from, knock);
       // Tell them they've been seen, and hand over this side of their private exchange — signed, so
       // they know it is the owner the link names and not someone else holding the link.
-      this.relay?.send(
+      this.toGuest(
         from,
         await seal(this.key!, 'to-guest', { t: 'seen', owner: this.owner, publicKey: exchange.publicKey, ownerKey: this.identity.publicKey, signature }),
       );
@@ -280,14 +329,13 @@ export class HostLobby {
       if (this.ended || this.knocks.get(id) !== knock) return offer.cancel();
       knock.offer = offer;
       const box = await seal(knock.pair, 'to-guest', { invite: offer.invitePayload });
-      this.relay?.send(id, await seal(this.key!, 'to-guest', { t: 'offer', box }));
+      this.toGuest(id, await seal(this.key!, 'to-guest', { t: 'offer', box }));
       knock.timer = setTimeout(() => {
         if (this.knocks.get(id) !== knock) return;
         this.events.failed(knock.name, 'timeout');
         this.forget(id);
         // Told, so they stop waiting for a connection nobody is going to make.
-        const relay = this.relay;
-        if (knock.pair && relay) void this.closed(knock.pair, 'timeout').then((data) => relay.send(id, data), () => {});
+        if (knock.pair) void this.closed(knock.pair, 'timeout').then((data) => this.toGuest(id, data), () => {});
       }, ANSWER_TIMEOUT_MS);
     } catch {
       this.events.failed(knock.name, 'offer');
@@ -299,7 +347,7 @@ export class HostLobby {
     const knock = this.knocks.get(id);
     if (!knock) return;
     remember(this.turnedAway, id);
-    if (knock.pair) this.relay?.send(id, await this.closed(knock.pair, 'denied'));
+    if (knock.pair) this.toGuest(id, await this.closed(knock.pair, 'denied'));
     this.forget(id);
   }
 
@@ -315,6 +363,11 @@ export class HostLobby {
     const relay = this.relay;
     this.ended = true;
     if (this.retry !== null) clearTimeout(this.retry);
+    if (this.pacing !== null) clearTimeout(this.pacing);
+    // Greetings still waiting go first, past the budget: without one, a knocker can't read the
+    // "ended" sealed for the pair its greeting sets up, and would wait for an owner who has gone.
+    for (const item of this.outgoing) if (!item.busy) relay?.send(item.id, item.data);
+    this.outgoing = [];
     for (const knock of waiting) this.drop(knock.id);
     if (this.key && relay) {
       await Promise.all(waiting.map(async (knock) => (knock.pair ? relay.send(knock.id, await this.closed(knock.pair, 'ended')) : false)));
@@ -379,6 +432,7 @@ export async function knock(
   let joining = false;
   let cancelJoin: (() => void) | null = null;
   let joinTimer: ReturnType<typeof setTimeout> | null = null;
+  let greetTimer: ReturnType<typeof setTimeout> | null = null;
   /** The owner's messages, read one at a time in the order they came. */
   let inbox: Promise<void> = Promise.resolve();
   let resolve!: (transport: CollabTransport | null) => void;
@@ -388,6 +442,7 @@ export async function knock(
     if (settled) return;
     settled = true;
     if (joinTimer !== null) clearTimeout(joinTimer);
+    if (greetTimer !== null) clearTimeout(greetTimer);
     // A connection still being made for this knock is nobody's now.
     if (!result) cancelJoin?.();
     if (status) onStatus(status);
@@ -398,6 +453,12 @@ export async function knock(
   const sendKnock = async () => {
     if (knocked) return;
     knocked = true;
+    // Greeted at once by an owner who heard it; nothing back means the owner's door had no room for
+    // the answer (a "busy" it couldn't send) — said so, rather than "Knocking…" for good.
+    if (greetTimer !== null) clearTimeout(greetTimer);
+    greetTimer = setTimeout(() => {
+      if (!pair && !settled) finish({ kind: 'busy' }, null);
+    }, GREETING_TIMEOUT_MS);
     const returning = person.returning ? { peer: person.returning.peer, proof: await returningProof(person.returning.key, link, exchange.publicKey) } : null;
     relay.send('host', await seal(key, 'to-host', { t: 'knock', name, publicKey: exchange.publicKey, ...(returning ? { returning } : {}) }));
   };
@@ -415,6 +476,8 @@ export async function knock(
         // The owner left (or dropped) before answering: knock again when they're back.
         knocked = false;
         pair = null;
+        if (greetTimer !== null) clearTimeout(greetTimer);
+        greetTimer = null;
         onStatus({ kind: 'no-owner' });
       }
       return;

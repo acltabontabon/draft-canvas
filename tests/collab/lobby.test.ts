@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { HostLobby, knock, type LobbyStatus } from '../../src/collab/lobby';
+import { GREETING_TIMEOUT_MS, HostLobby, knock, type LobbyStatus } from '../../src/collab/lobby';
 import { newOwnerIdentity, newSessionLink } from '../../src/collab/rendezvous';
 
 /** A WebSocket that records how it was opened and lets the test decide what happens to it. */
@@ -202,5 +202,57 @@ describe('the door, against squatters', () => {
     expect(lobby.list()).toHaveLength(11);
     await lobby.close();
     vi.unstubAllGlobals();
+  });
+});
+
+describe('what the owner says at the door', () => {
+  it('stays inside the relay’s budget, so nothing it says is dropped there, and every greeting still goes', async () => {
+    vi.useFakeTimers();
+    FakeSocket.made = [];
+    vi.stubGlobal('WebSocket', FakeSocket);
+    const identity = await newOwnerIdentity();
+    const lobby = new HostLobby(newSessionLink(identity), identity, 'wss://relay.example', 'Olive', { localOnly: true, server: '' }, {
+      status: () => {},
+      knocks: () => {},
+      admitted: () => {},
+      isReturning: () => null,
+      failed: () => {},
+    });
+    await lobby.open();
+    const socket = FakeSocket.made[0]!;
+    socket.fire('open');
+    const say = (lobby as unknown as { toGuest(id: string, data: string, busy?: boolean): void }).toGuest.bind(lobby);
+    for (let i = 0; i < 20; i += 1) say(`g_busy${i}`, 'busy', true);
+    for (let i = 0; i < 25; i += 1) say(`g_greet${i}`, 'seen');
+    // At once: no more than the relay allows one socket.
+    expect(socket.sent.length).toBeLessThanOrEqual(30);
+    await vi.advanceTimersByTimeAsync(20_000);
+    const to = socket.sent.map((text) => (JSON.parse(text) as { to: string }).to);
+    // Every greeting went, ahead of the "busy" replies, and the excess "busy" replies were let go.
+    for (let i = 0; i < 25; i += 1) expect(to).toContain(`g_greet${i}`);
+    expect(to.filter((id) => id.startsWith('g_busy')).length).toBeLessThanOrEqual(20);
+    await lobby.close();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+});
+
+describe('a knock nobody greets', () => {
+  it('says the door is busy after a while, rather than knocking for good', async () => {
+    vi.useFakeTimers();
+    FakeSocket.made = [];
+    vi.stubGlobal('WebSocket', FakeSocket);
+    const identity = await newOwnerIdentity();
+    const statuses: string[] = [];
+    await knock(newSessionLink(identity), 'wss://relay.example', { name: 'Gus' }, '', (status) => statuses.push(status.kind));
+    const socket = FakeSocket.made[0]!;
+    socket.fire('open');
+    socket.fire('message', { data: JSON.stringify({ event: 'host', present: true }) });
+    await vi.waitFor(() => expect(socket.sent).toHaveLength(1));
+    // The owner's answer never comes (its "busy" was let go).
+    await vi.advanceTimersByTimeAsync(GREETING_TIMEOUT_MS + 100);
+    expect(statuses.at(-1)).toBe('busy');
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
   });
 });

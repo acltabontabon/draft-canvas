@@ -84,10 +84,12 @@ size-capped before parsing, prototype keys refused, and validated like an import
   non-IP `Host` headers and public addresses are refused; 100.64.0.0/10 counts as local (VPNs).
 - **Roles** are enforced by the owner; a viewer's changes are refused.
 - **Limits.** 10 collaborators; 4 MB per collaborator message, 16 MB from the owner; per-connection
-  rate and byte budgets. Collaborators can't grow the file past 10 MB, so it always reopens. Code
-  highlighting, Markdown parsing, nested groups and selection rings have bounded cost, so one
-  collaborator can't stall the owner's tab. Relay limits, including 4 guest sockets per client in a
-  room, are in [Website](docs/reference/website.md#the-collaboration-relay).
+  rate and byte budgets, and at most 1,000 moves a patch. Collaborators can't grow the file past
+  about 15 MB as it is saved (indented), so it always reopens and a fresh copy still fits one
+  message. Code highlighting, Markdown parsing, nested groups, selection rings and the owner's record
+  of who changed what have bounded cost, so one collaborator can't stall the owner's tab. Relay
+  limits, including 4 guest sockets per client in a room, are in
+  [Website](docs/reference/website.md#the-collaboration-relay).
 - **Framing.** The hosted editor and the local network page refuse to be framed by other sites.
 - **Connection candidates** naming loopback, unspecified, multicast or 169.254.0.0/16 addresses, or
   any DNS name, are dropped from invites and from ICE restarts.
