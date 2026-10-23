@@ -137,6 +137,8 @@ provisional until committed, and join the normal undo history ([Agent integratio
   (`collab/sanitize.ts`), repairs dangling references (`collab/repair.ts`) and broadcasts a numbered commit.
 - Collaborators show the confirmed file plus their pending changes (`collab/replica.ts`). Property
   tests check that every copy converges on the owner's.
+- Every fresh copy sent to a collaborator (joining, reconnecting, after a gap) starts a new epoch. The
+  owner drops patches from before it; the collaborator resends whatever is unconfirmed as one patch.
 - A held gesture delays incoming changes. Undo reverts only your own edit, never work built on it.
   Cameras, selection and presence never enter the document.
 

@@ -2,15 +2,16 @@
 //! until the page closes it; text the page sends goes out in order; and a ping every few seconds
 //! finds a guest that has quietly gone.
 
-use super::{new_conn, Ends, Kill, Limits, Outbound, Rate, Shared, Slot};
+use super::{new_conn, Ends, Kill, Limits, Outbound, Proving, Rate, Shared};
 use crate::state::HostEvent;
 use crate::util::lock;
 use axum::body::Bytes;
 use axum::extract::ws::{CloseFrame, Message, WebSocket};
 use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
+use std::net::IpAddr;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, watch};
 use tokio::time::timeout;
@@ -22,12 +23,15 @@ const CLOSE_GRACE: Duration = Duration::from_secs(2);
 const CLOSE_REPLY_WAIT: Duration = Duration::from_secs(1);
 /// A close frame's reason is at most 123 bytes.
 const MAX_CLOSE_REASON: usize = 123;
+/// How long a guest has to answer the challenge: its page does so at once.
+const PROOF_TIMEOUT: Duration = Duration::from_secs(5);
 
 const NORMAL: u16 = 1000;
 const GOING_AWAY: u16 = 1001;
 const UNSUPPORTED: u16 = 1003;
 const POLICY: u16 = 1008;
 const TOO_BIG: u16 = 1009;
+const TRY_AGAIN_LATER: u16 = 1013;
 
 /// How a connection ended: the reason the page is told and, when the guest should be told too,
 /// the close code to send it.
@@ -59,9 +63,64 @@ pub(super) async fn stopped(shutdown: &mut watch::Receiver<bool>) {
 }
 
 /// The page hears `collab-lan-open` before any message from the guest, and exactly one
-/// `collab-lan-close` after the last.
-pub(super) async fn run(socket: WebSocket, slot: Slot) {
-    let shared = slot.shared().clone();
+/// `collab-lan-close` after the last — and nothing at all of a guest that doesn't prove the token.
+///
+/// The proof: the guest is sent a nonce never used again, and answers with the token's HMAC of it
+/// (`proof_for`). The token itself never crosses the network, which anyone on it can read: someone
+/// listening learns nothing that would let them in, or take a guest's place. Only then does the
+/// connection take a guest place, and the guest is told it is in (`ready`) before anything else.
+pub(super) async fn run(
+    mut socket: WebSocket,
+    shared: Arc<Shared>,
+    proving: Proving,
+    session: u64,
+    address: IpAddr,
+) {
+    let nonce = uuid::Uuid::new_v4().simple().to_string();
+    let answer = timeout(PROOF_TIMEOUT, async {
+        let challenge = format!(r#"{{"t":"challenge","nonce":"{nonce}"}}"#);
+        socket.send(Message::Text(challenge.into())).await.ok()?;
+        loop {
+            match socket.recv().await? {
+                Ok(Message::Text(text)) => return Some(text.to_string()),
+                Ok(Message::Ping(_) | Message::Pong(_)) => continue,
+                _ => return None,
+            }
+        }
+    })
+    .await
+    .ok()
+    .flatten();
+    let proved = answer
+        .as_deref()
+        .and_then(read_proof)
+        .is_some_and(|mac| shared.session() == session && shared.proof_matches(&nonce, &mac));
+    drop(proving);
+    if !proved {
+        let _ = timeout(
+            CLOSE_GRACE,
+            socket.send(close_frame("unauthorized", POLICY)),
+        )
+        .await;
+        return;
+    }
+    let Some(slot) = shared.reserve(session, address) else {
+        let _ = timeout(
+            CLOSE_GRACE,
+            socket.send(close_frame("full", TRY_AGAIN_LATER)),
+        )
+        .await;
+        return;
+    };
+    if timeout(
+        CLOSE_GRACE,
+        socket.send(Message::Text(r#"{"t":"ready"}"#.into())),
+    )
+    .await
+    .map_or(true, |sent| sent.is_err())
+    {
+        return;
+    }
     let id = uuid::Uuid::new_v4().simple().to_string();
     let (conn, ends) = new_conn(&shared.limits);
     if !shared.register(&id, conn, slot.session()) {
@@ -83,6 +142,20 @@ pub(super) async fn run(socket: WebSocket, slot: Slot) {
         reason,
     });
     drop(slot);
+}
+
+/// The guest's answer to the challenge, `{"t":"proof","mac":"<64 hex>"}`, as its MAC.
+fn read_proof(text: &str) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_str(text).ok()?;
+    if value.get("t")?.as_str()? != "proof" {
+        return None;
+    }
+    let mac = value.get("mac")?.as_str()?;
+    (mac.len() == 64
+        && mac
+            .bytes()
+            .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase()))
+    .then(|| mac.to_string())
 }
 
 async fn drive(socket: WebSocket, shared: &Shared, id: &str, ends: Ends) -> String {
@@ -336,13 +409,25 @@ async fn send(
         biased;
         () = stopped(shutdown) => Some(End::close("server-stopped", GOING_AWAY)),
         (reason, code) = killed(kill) => Some(End::close(reason, code)),
-        sent = timeout(limits.send_timeout, sink.send(message)) => match sent {
+        sent = timeout(send_deadline(limits, &message), sink.send(message)) => match sent {
             Ok(Ok(())) => None,
             Ok(Err(_)) => Some(End::quiet("error")),
             // Its socket is full and nothing more is getting through.
             Err(_) => Some(End::close("congested", POLICY)),
         },
     }
+}
+
+/// How long one frame may take to leave: `send_timeout`, and more for a large one. A whole diagram
+/// for a guest on a slow but working link (busy Wi‑Fi, several people joining at once) is not a guest
+/// that stopped reading; a guest that did still stalls well within this.
+fn send_deadline(limits: &Limits, message: &Message) -> Duration {
+    let len = match message {
+        Message::Text(text) => text.as_str().len(),
+        _ => 0,
+    };
+    // 64 KiB a second is the slowest link still treated as moving.
+    limits.send_timeout + Duration::from_millis(len as u64 / 64)
 }
 
 /// Resolves with the reason once something asked for this connection to end now.

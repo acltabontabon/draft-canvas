@@ -42,7 +42,7 @@ export function lanRelayOf(api: Pick<DesktopApi, 'collabLanStart' | 'collabLanSt
   return {
     start: (token) => api.collabLanStart({ token }),
     stop: (token) => api.collabLanStop(token === undefined ? undefined : { token }),
-    send: (connId, text) => api.collabLanSend(connId, text),
+    send: (connId, text, priority) => (priority === 'presence' ? api.collabLanSend(connId, text, { presence: true }) : api.collabLanSend(connId, text)),
     close: (connId, reason) => api.collabLanClose(connId, reason),
     subscribe: onCollabLanEvent,
   };

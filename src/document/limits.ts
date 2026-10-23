@@ -17,6 +17,12 @@ export const LIMITS = {
    * a validator or a renderer into the ground.
    */
   maxInsideDepth: 3,
+  /**
+   * Boundaries inside boundaries, in one room. Far past any real diagram; without it a chain of
+   * thousands made every check of the grouping walk all of it for every shape — a collaborator's one
+   * edit could make each later edit cost the owner most of a second.
+   */
+  maxGroupDepth: 32,
   maxTitleLength: 200,
   maxTextLength: 20_000,
   maxCodeLength: 200_000,

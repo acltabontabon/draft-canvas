@@ -159,7 +159,9 @@ function Shell() {
       )}
       {joinInvite !== null && (
         <Suspense fallback={null}>
-          <JoinChunk.Component session={session} invite={joinInvite} />
+          {/* Keyed by the invite: a second link opened over the dialog starts a dialog of its own, and the
+              first one's attempt is cancelled as it unmounts — not finished under the second's name. */}
+          <JoinChunk.Component key={joinInvite} session={session} invite={joinInvite} />
         </Suspense>
       )}
       <Toasts />

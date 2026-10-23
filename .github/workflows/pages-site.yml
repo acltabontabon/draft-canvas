@@ -7,8 +7,8 @@ name: Deploy site changes
 # release tags and silently stop deploying releases. This calls pages.yml instead of repeating it,
 # so there is one definition of the deploy, and they share its `pages` concurrency group, so they
 # queue behind each other rather than racing. Called from here, pages.yml builds the landing page
-# from this commit and the editor from the latest vX.Y.Z release: a site edit never ships
-# unreleased editor code.
+# from this commit and the editor from the latest vX.Y.Z release, and deploys only the landing page
+# and the www. redirect: a site edit never ships unreleased editor code, relay or app headers.
 
 on:
   push:

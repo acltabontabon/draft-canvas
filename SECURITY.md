@@ -73,15 +73,34 @@ size-capped before parsing, prototype keys refused, and validated like an import
 - **Owner identity.** The link carries the owner's signing-key fingerprint, so a link holder cannot
   pose as the owner. The relay keeps a SHA-256 of an owner-only secret until 12 hours after the owner was last connected and refuses
   any host without it.
-- **Rejoining** needs an HMAC from the place's private resume key, bound to the room and knock.
-  Over the local network link the key travels in clear, so someone coming back knocks again and the
-  owner lets them in.
+- **Rejoining** needs an HMAC from the place's private resume key, bound to the room and knock, and
+  over the connection itself to the owner's DTLS fingerprint; the owner proves the key back. The key
+  never crosses a peer connection, so rejoining through someone else's invite gives them nothing.
+  Over the local network link the key travels in clear, so someone coming back knocks again, the
+  owner lets them in, and the key changes with every welcome. A claim on a place still in use is
+  shown as someone new.
 - **Direct invites** are single-use, expire after 30 minutes and pin the owner's DTLS fingerprint.
-- **Desktop local network link.** A 128-bit token, compared in constant time. Cross-origin requests,
+- **Desktop local network link.** A 128-bit token that never crosses the network: it stays in the
+  link's `#`, and the guest's page answers a fresh challenge with an HMAC of it before it gets a
+  place. Someone reading the Wi-Fi learns nothing that lets them join. Connections still proving
+  are few and short-lived (8 at once, 2 per address, 5 seconds), and when every page connection is
+  in use, the oldest of whoever holds the most is closed to make room. Cross-origin requests,
   non-IP `Host` headers and public addresses are refused; 100.64.0.0/10 counts as local (VPNs).
 - **Roles** are enforced by the owner; a viewer's changes are refused.
 - **Limits.** 10 collaborators; 4 MB per collaborator message, 16 MB from the owner; per-connection
-  rate and byte budgets. Relay limits are in [Website](docs/reference/website.md#the-collaboration-relay).
+  rate and byte budgets, and at most 1,000 moves a patch. Collaborators can't grow the file past
+  about 15 MB as it is saved (indented), so it always reopens and a fresh copy still fits one
+  message. Code highlighting, Markdown parsing, nested groups, selection rings and the owner's record
+  of who changed what have bounded cost, so one collaborator can't stall the owner's tab. Relay
+  limits, including 4 guest sockets per client in a room, are in
+  [Website](docs/reference/website.md#the-collaboration-relay).
+- **Framing.** The hosted editor and the local network page refuse to be framed by other sites.
+- **Connection candidates** naming loopback, unspecified, multicast or 169.254.0.0/16 addresses, or
+  any DNS name, are dropped from invites and from ICE restarts.
 - **Not protected.** An unused invite works for whoever holds it until it expires, so send invites
-  like passwords. The local network link is plain HTTP. Editors can change anything they can see; the
-  owner can take one person's edits back with **Undo changes**.
+  like passwords. The local network link is plain HTTP: someone who can change traffic on the network
+  can change the page a guest loads. Editors can change anything they can see; the owner can take one
+  person's edits back with **Undo changes**.
+- **Agents.** While you host, the agent tools that read a diagram mark what collaborators wrote
+  (`fromCollaborators`), so your agent treats it as untrusted data rather than instructions. A guest's
+  copy is never visible to agents.

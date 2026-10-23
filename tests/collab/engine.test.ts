@@ -64,7 +64,7 @@ function ownerOf(file: DraftDocument, clock: Clock, extra: Partial<ConstructorPa
   return { host, state };
 }
 
-function guestOf(clock: Clock, options: { token?: string; name?: string; busy?: () => boolean } = {}) {
+function guestOf(clock: Clock, options: { name?: string; busy?: () => boolean } = {}) {
   const state = { file: null as DraftDocument | null, statuses: [] as string[], reasons: [] as (string | undefined)[] };
   const events: GuestEvents = {
     status: (status, reason) => {
@@ -93,7 +93,6 @@ function guestOf(clock: Clock, options: { token?: string; name?: string; busy?: 
       setAccess: () => {},
       appVersion: PRODUCT.version,
       name: options.name ?? 'Guest',
-      ...(options.token === undefined ? {} : { token: options.token }),
     },
     events,
     clock,
@@ -124,24 +123,6 @@ describe('the handshake', () => {
       settle(pump);
       expect(heard).toEqual([encode({ t: 'end', reason: 'version' })]);
     }
-  });
-
-  it('refuses a LAN connection without the session’s secret', () => {
-    const clock = manualClock();
-    const { host } = ownerOf(base(), clock, { checkToken: (token) => token === 'secret' });
-    const wrong = loopbackPair();
-    host.attach(wrong.a, { role: 'editor' });
-    const intruder = guestOf(clock, { token: 'guess' });
-    intruder.session.connect(wrong.b);
-    settle(wrong.pump);
-    expect(intruder.state.reasons.at(-1)).toBe('unauthorized');
-
-    const right = loopbackPair();
-    host.attach(right.a, { role: 'editor' });
-    const friend = guestOf(clock, { token: 'secret' });
-    friend.session.connect(right.b);
-    settle(right.pump);
-    expect(friend.state.statuses.at(-1)).toBe('live');
   });
 
   it('closes a connection that never says hello', () => {
@@ -333,7 +314,7 @@ describe('coming back', () => {
   });
 });
 
-it('refuses a welcome from a different session, so unsent edits never go to it', () => {
+it('refuses a welcome from a different session, so unsent edits never go to it, and keeps reconnecting', () => {
   const clock = manualClock();
   const first = ownerOf(base(), clock);
   const pair = loopbackPair();
@@ -351,8 +332,15 @@ it('refuses a welcome from a different session, so unsent edits never go to it',
   other.host.attach(stranger.a, { role: 'editor' });
   guest.session.connect(stranger.b);
   settle(stranger.pump);
-  expect(guest.state.reasons.at(-1)).toBe('unauthorized');
   expect(other.state.file.nodes[0]!.text).toBe('A');
+  expect(stranger.b.state).toBe('closed');
+  // That link is closed; the session itself carries on, and comes back with its edit by its own owner.
+  expect(guest.session.isEnded).toBe(false);
+  const back = loopbackPair();
+  first.host.attach(back.a, { role: 'editor' });
+  guest.session.connect(back.b);
+  settle(back.pump);
+  expect(first.state.file.nodes[0]!.text).toBe('Unsent');
 });
 
 it('still lets someone in after many others have dropped', () => {
@@ -555,6 +543,20 @@ it('selective undo of a delete puts the element back where it was in its list', 
   // Redo takes them out again, leaving the collaborator's flow where it is.
   const redo = revertKeys(step.file, f0, f1, changeKeys(f0, f1));
   expect(redo.file.flows.map((flow) => flow.title)).toEqual(['First', 'Third', 'Theirs']);
+});
+
+it('selective undo refuses to take away a connector somebody else changed, even one the undone edit added', () => {
+  const a = createNode({ type: 'service', x: 0, y: 0, text: 'A' });
+  const f0 = addNodes(createDocument('Theirs'), [a]);
+  const added = createNode({ type: 'service', x: 0, y: 300, text: 'X' });
+  const edge = createEdge({ source: added.id, target: a.id });
+  // One step adds a shape and a connector from it; somebody else then labels the connector.
+  const f1 = addEdges(addNodes(f0, [added]), [edge]);
+  const f2 = { ...f1, edges: f1.edges.map((item) => (item.id === edge.id ? { ...item, label: 'Theirs now' } : item)) };
+
+  const step = revertKeys(f2, f1, f0, changeKeys(f0, f1));
+  expect(step).toMatchObject({ blocked: true, partial: true });
+  expect(step.file).toBe(f2);
 });
 
 /**

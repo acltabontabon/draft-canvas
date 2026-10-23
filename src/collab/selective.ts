@@ -54,7 +54,10 @@ export interface KeyRevert {
  * a shape being un-added).
  */
 export function revertEach(current: DraftDocument, reverts: readonly KeyRevert[]): SelectiveStep {
-  const wanted = new Set(reverts.map((revert) => revert.key));
+  // What the step may change: the keys it takes back, never one left alone because somebody changed
+  // it since — repair taking that away (their relabelled connector to a shape being un-added) is
+  // exactly the work of theirs a step must not remove.
+  const wanted = new Set<string>();
   // One diff per pair of files, however many keys share it.
   const diffs = new Map<DraftDocument, Map<DraftDocument, Change[]>>();
   const diffOf = (left: DraftDocument, found: DraftDocument) => {
@@ -69,11 +72,15 @@ export function revertEach(current: DraftDocument, reverts: readonly KeyRevert[]
   let partial = false;
   for (const revert of reverts) {
     const changes = diffOf(revert.left, revert.found).filter((change) => keyOf(change) === revert.key);
-    if (changes.length === 0) continue;
+    if (changes.length === 0) {
+      wanted.add(revert.key);
+      continue;
+    }
     if (!sameAt(current, revert.left, revert.key)) {
       partial = true;
       continue;
     }
+    wanted.add(revert.key);
     kept.push(...changes);
     const arrival = arrivalOf(current, revert.found, revert.key);
     if (arrival) arrivals.push(arrival);

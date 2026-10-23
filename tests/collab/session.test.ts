@@ -6,7 +6,7 @@ import { createDocument, createEdge, createNode } from '../../src/document/facto
 import { addEdges, addNodes, removeElements, updateNode } from '../../src/document/operations';
 import type { DraftDocument } from '../../src/document/types';
 import { PRODUCT } from '../../src/product';
-import { __resetCollabBridge, attachCollaborator, joinSession, removeCollaborator, setCollaboratorRole, startHosting, undoChangesOf } from '../../src/store/collabBridge';
+import { __resetCollabBridge, attachCollaborator, joinSession, leaveSession, mayResumeVia, reconnectSession, removeCollaborator, replaceKeeper, setCollaboratorRole, startHosting, stopHosting, undoChangesOf } from '../../src/store/collabBridge';
 import { useCollabStore } from '../../src/store/collabStore';
 import { __resetClipboardSync, __resetInteraction, fileOf, useEditorStore } from '../../src/store/editorStore';
 import { useUiStore } from '../../src/store/uiStore';
@@ -252,11 +252,34 @@ describe('hosting from the editor', () => {
     const gus = guest.session.id!;
     guest.edit((file) => addNodes(file, [createNode({ id: 'n_g', type: 'service', text: 'Gus', x: 0, y: 300 })]));
     settle(pump);
-    store.getState().setDocument(addEdges(fileOf(store.getState()), [createEdge({ id: 'e_owner', source: 'n_a', target: 'n_g' })]));
+    // As the desktop shell reloads the shared file after an outside edit: the same canvas, kept.
+    store.getState().setDocument(addEdges(fileOf(store.getState()), [createEdge({ id: 'e_owner', source: 'n_a', target: 'n_g' })]), { keepPath: true });
     settle(pump);
     expect(undoChangesOf(gus, 'Gus')).toBe('blocked');
     expect(store.getState().document.nodes.some((node) => node.id === 'n_g')).toBe(true);
     expect(undoChangesOf('nobody', 'Nobody')).toBe('nothing');
+  });
+
+  it('ends the session when another file with the same id takes the canvas’s place, sending none of it', () => {
+    const before = sharedContent(guest.session.local!);
+    // A share link (or an import) of this very diagram, opened by the owner: same id, not the shared file.
+    store.getState().setDocument({ ...addNodes(createDocument('Old export'), [createNode({ type: 'note', x: 0, y: 0, text: 'Stale' })]), metadata: { ...fileOf(store.getState()).metadata, title: 'Old export' } });
+    settle(pump);
+    expect(useCollabStore.getState().role).toBe('off');
+    expect(guest.state.status).toBe('ended');
+    expect(sharedContent(guest.session.local!)).toEqual(before);
+  });
+
+  it('stays shared when the desktop shell reloads the same file after an outside edit', () => {
+    store.getState().setDocument(updateNode(fileOf(store.getState()), 'n_a', { text: 'Edited outside' }), { keepPath: true });
+    settle(pump);
+    expect(useCollabStore.getState().role).toBe('host');
+    expect(guest.state.file!.nodes.find((node) => node.id === 'n_a')!.text).toBe('Edited outside');
+  });
+
+  it('says the session is over, not that nothing is left, when asked to take changes back after it ended', () => {
+    stopHosting('ended');
+    expect(undoChangesOf('anyone', 'Anyone')).toBe('ended');
   });
 
   it('ends the session when the owner opens a different canvas', () => {
@@ -356,6 +379,72 @@ describe('joining from the editor', () => {
     expect(useCollabStore.getState()).toMatchObject({ status: 'ended', endReason: 'owner-left' });
     expect(useUiStore.getState().readOnly).toMatchObject({ collaborative: true });
   });
+
+  it('leaves the session, sending nothing, when a file with the copy’s id is dropped onto it', async () => {
+    await opened();
+    const before = sharedContent(ownerFile);
+    // An export of the owner's diagram, imported: same id, older content.
+    store.getState().setDocument({ ...createDocument('Old export'), metadata: { ...ownerFile.metadata, title: 'Old export' } });
+    settle(pump);
+    expect(sharedContent(ownerFile)).toEqual(before);
+    expect(useCollabStore.getState().role).toBe('off');
+    // The imported file is this person's own now: not read-only.
+    expect(useUiStore.getState().readOnly).toBeNull();
+  });
+
+  it('can’t undo while view-only: nothing changes that the owner would never hear about', async () => {
+    await opened();
+    store.getState().addNode({ type: 'note', x: 0, y: 400, text: 'From the guest' });
+    settle(pump);
+    const [peer] = owner.peers().filter((candidate) => candidate.role !== 'owner');
+    owner.setRole(peer!.id, 'viewer');
+    settle(pump);
+    const shown = sharedContent(fileOf(store.getState()));
+    store.getState().undo();
+    expect(sharedContent(fileOf(store.getState()))).toEqual(shown);
+    owner.setRole(peer!.id, 'editor');
+    settle(pump);
+    store.getState().addNode({ type: 'note', x: 0, y: 600, text: 'Later' });
+    settle(pump);
+    expect(ownerFile.nodes.map((node) => node.text)).toEqual(expect.arrayContaining(['From the guest', 'Later']));
+  });
+});
+
+describe('a session that ends while the collaborator’s copy is still opening', () => {
+  it('leaves the copy, once it opens, read-only rather than looking like a canvas that saves', async () => {
+    vi.useFakeTimers();
+    __resetCollabBridge();
+    resetEditor(createDocument('Mine'));
+    let ownerFile = addNodes(createDocument('Owner’s'), [createNode({ id: 'n_o', type: 'service', x: 0, y: 0, text: 'Owner' })]);
+    const owner = new HostSession(
+      { readFile: () => ownerFile, applyRemote: (file) => ((ownerFile = file), true), isBusy: () => false, appVersion: PRODUCT.version },
+      { peers: () => {}, presence: () => {} },
+      { name: 'Owner' },
+    );
+    const pair = loopbackPair();
+    owner.attach(pair.a, { role: 'editor' });
+    let finishOpening: () => void = () => {};
+    joinSession(pair.b, {
+      name: 'Guest',
+      open: (file) =>
+        new Promise<boolean>((resolve) => {
+          finishOpening = () => {
+            store.getState().setDocument(file);
+            resolve(true);
+          };
+        }),
+    });
+    settle(pair.pump);
+    owner.end('owner-left');
+    settle(pair.pump);
+    finishOpening();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(store.getState().document.metadata.id).toBe(ownerFile.metadata.id);
+    expect(useUiStore.getState().readOnly).toMatchObject({ collaborative: true });
+    __resetCollabBridge();
+    vi.useRealTimers();
+  });
 });
 
 describe('a collaborator holding their own copy of the owner’s diagram', () => {
@@ -430,6 +519,73 @@ describe('a role changed while the collaborator’s copy is still opening', () =
     await Promise.resolve();
     expect(useCollabStore.getState().access).toBe('viewer');
     expect(useUiStore.getState().readOnly).toMatchObject({ collaborative: true });
+    owner.end();
+  });
+});
+
+describe('what keeps a collaborator’s session reconnecting', () => {
+  function setup() {
+    vi.useFakeTimers();
+    __resetCollabBridge();
+    resetEditor(createDocument('Mine'));
+    let ownerFile = addNodes(createDocument('Owner’s'), [createNode({ id: 'n_o', type: 'service', x: 0, y: 0, text: 'Owner' })]);
+    const owner = new HostSession(
+      { readFile: () => ownerFile, applyRemote: (file) => ((ownerFile = file), true), isBusy: () => false, appVersion: PRODUCT.version },
+      { peers: () => {}, presence: () => {} },
+      { name: 'Owner' },
+    );
+    const pair = loopbackPair();
+    owner.attach(pair.a, { role: 'editor' });
+    const keeper = { lost: vi.fn(), stop: vi.fn() };
+    const lost = vi.fn();
+    joinSession(pair.b, { name: 'Guest', open: async (file) => (store.getState().setDocument(file), true), keeper, lost });
+    settle(pair.pump);
+    return { owner, pair, keeper, lost };
+  }
+
+  afterEach(() => {
+    __resetCollabBridge();
+    vi.useRealTimers();
+  });
+
+  it('may be picked up by the owner’s Re-invite, never by a link to another session', async () => {
+    const { pair } = setup();
+    await Promise.resolve();
+    pair.drop();
+    expect(mayResumeVia(null)).toBe(true);
+    expect(mayResumeVia('room:other:owner')).toBe(false);
+  });
+
+  it('is stopped when the session is left, so it can never pick up the next one', () => {
+    const { owner, keeper } = setup();
+    leaveSession();
+    expect(keeper.stop).toHaveBeenCalledTimes(1);
+    owner.end();
+  });
+
+  it('is stopped when the session ends, and replaced — never doubled — by a rejoin’s own', () => {
+    const { owner, pair, keeper } = setup();
+    const next = { lost: vi.fn(), stop: vi.fn() };
+    replaceKeeper(next);
+    expect(keeper.stop).toHaveBeenCalledTimes(1);
+    owner.end('owner-left');
+    settle(pair.pump);
+    expect(next.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it('hears of a drop once, not again when a reconnect under way says "reconnecting" itself', async () => {
+    const { owner, pair, keeper, lost } = setup();
+    await Promise.resolve();
+    await Promise.resolve();
+    pair.drop();
+    expect(lost).toHaveBeenCalledTimes(1);
+    expect(keeper.lost).toHaveBeenCalledTimes(1);
+    // The rejoin's own connection: still reconnecting, and no second knock.
+    const back = loopbackPair();
+    owner.attach(back.a, { role: 'editor' });
+    reconnectSession(back.b);
+    expect(lost).toHaveBeenCalledTimes(1);
+    expect(keeper.lost).toHaveBeenCalledTimes(1);
     owner.end();
   });
 });

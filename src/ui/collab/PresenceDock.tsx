@@ -10,7 +10,7 @@ import { fileOf, useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
 import { Button } from '../common/Button';
 import { Icon } from '../common/Icon';
-import { LOOKALIKE_WARNING, nameKey, RETURNING_NOTE, ROLE_LABELS, takenNameKeys } from './collabCopy';
+import { isLookalike, LOOKALIKE_WARNING, returningNote, ROLE_LABELS } from './collabCopy';
 import { PeerBadge } from './PeerBadge';
 
 /**
@@ -83,24 +83,24 @@ function KnockSeat({ knock }: { knock: KnockView }) {
  * knocking at once never stack one question over the other's buttons.
  */
 function Door({ knocks }: { knocks: readonly KnockView[] }) {
-  // Names are whatever each person typed: a knock wearing the name of someone already here is said to.
-  const taken = useCollabStore(useShallow(takenNameKeys));
   return (
     <div className="dc-dock-door" role="region" aria-label="Waiting to join">
       <span className="dc-dock-door-title">{knocks.length === 1 ? 'Wants to join' : `${knocks.length} want to join`}</span>
       {knocks.map((knock) => (
-        <DoorRow key={knock.id} knock={knock} lookalike={taken.includes(nameKey(knock.name))} />
+        <DoorRow key={knock.id} knock={knock} />
       ))}
     </div>
   );
 }
 
-function DoorRow({ knock, lookalike }: { knock: KnockView; lookalike: boolean }) {
+function DoorRow({ knock }: { knock: KnockView }) {
   const [role, setRole] = useState<Role>(knock.returning ?? 'editor');
+  // Names are whatever each person typed: a knock wearing a name already taken is said to.
+  const lookalike = useCollabStore((state) => isLookalike(state, knock));
   return (
     <div className="dc-dock-door-row" role="group" aria-label={`${knock.name} is asking to join`}>
       <span className="dc-dock-card-name">{knock.name}</span>
-      {!knock.admitting && <span className="dc-dock-card-meta">{knock.returning ? RETURNING_NOTE : 'Let them in to draw with you, or just to watch.'}</span>}
+      {!knock.admitting && <span className="dc-dock-card-meta">{knock.returning ? returningNote(knock.id) : 'Let them in to draw with you, or just to watch.'}</span>}
       {lookalike && (
         <span className="dc-dock-card-warning" role="note">
           {LOOKALIKE_WARNING}

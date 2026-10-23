@@ -17,6 +17,7 @@ import { loadStarters } from '../starters/load';
 import { Autosave } from '../storage/autosave';
 import { getRepository, reconcileMetadata, type DraftRepository } from '../storage';
 import { IndexedDbRepository, onStorageSuperseded } from '../storage/IndexedDbRepository';
+import { useCollabStore } from './collabStore';
 import { useUiStore } from './uiStore';
 
 type EditorStoreModule = typeof import('./editorStore');
@@ -221,6 +222,12 @@ export function useDocumentSession(): DocumentSession {
   const setOpenId = useCallback((id: string | null) => {
     openIdRef.current = id;
     setOpenIdState(id);
+    // Closing the canvas you are sharing (Home, Back, deleting it) ends the session. Left running, it
+    // took collaborators' edits into a file that no longer saved, and reopening the canvas then sent
+    // the stored copy back out over them. Already loaded while hosting, so this pulls in nothing.
+    if (id === null && useCollabStore.getState().role === 'host') {
+      void import('./collabBridge').then((bridge) => bridge.stopHosting('owner-left'));
+    }
   }, []);
   const notify = useUiStore((state) => state.notify);
   /**
@@ -899,6 +906,14 @@ export function useDocumentSession(): DocumentSession {
         const saved = await controller.resolveConflict('keep', fileWithLiveViewport(useEditorStore.getState()));
         if (!saved) notify('Your changes still could not be saved to this browser. Export the diagram to keep a copy.', 'error');
         return;
+      }
+      // Sharing this canvas: the other tab's copy is a different file to everyone in the session, and
+      // loading it reloads the same canvas, which a session takes for an outside edit to share — it
+      // went out over every collaborator's work, with no undo. The session ends first.
+      if (useCollabStore.getState().role === 'host') {
+        const bridge = await import('./collabBridge');
+        bridge.stopHosting('ended');
+        notify('The live session ended: loading the other tab’s copy replaces what everyone in it did since.');
       }
       await controller.resolveConflict('discard');
       const stillStored = await repository?.has(openId).catch(() => false);

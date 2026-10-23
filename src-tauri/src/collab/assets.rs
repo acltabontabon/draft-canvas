@@ -2,7 +2,8 @@
 //! ever served, found by its exact name: no directory listings, no "nearest match", nothing outside
 //! the bundle.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+use std::sync::Mutex;
 use tauri::AppHandle;
 
 /// Longer request paths are refused before they are looked at.
@@ -22,6 +23,10 @@ pub struct Bundled {
     /// development, where the resolver reads the built `dist-desktop` folder instead of a bundle and
     /// has no such fallback.
     keys: Option<HashSet<String>>,
+    /// Files already read. The resolver decompresses a file (and rewrites the page's policy) on every
+    /// read, on the runtime the guests' sockets share: anyone on the network could otherwise keep it
+    /// busy asking for the largest file again and again. At most the bundle itself, once.
+    read: Mutex<HashMap<String, Vec<u8>>>,
 }
 
 impl Bundled {
@@ -34,19 +39,30 @@ impl Bundled {
         Self {
             app: app.clone(),
             keys: (!keys.is_empty()).then_some(keys),
+            read: Mutex::new(HashMap::new()),
         }
     }
 }
 
 impl AssetSource for Bundled {
     fn get(&self, key: &str) -> Option<Vec<u8>> {
-        if self.keys.as_ref().is_some_and(|keys| !keys.contains(key)) {
+        let Some(keys) = &self.keys else {
+            // Development: the built folder can change under the running app, so read it each time.
+            return self
+                .app
+                .asset_resolver()
+                .get(key.to_string())
+                .map(|asset| asset.bytes);
+        };
+        if !keys.contains(key) {
             return None;
         }
-        self.app
-            .asset_resolver()
-            .get(key.to_string())
-            .map(|asset| asset.bytes)
+        if let Some(bytes) = crate::util::lock(&self.read).get(key) {
+            return Some(bytes.clone());
+        }
+        let bytes = self.app.asset_resolver().get(key.to_string())?.bytes;
+        crate::util::lock(&self.read).insert(key.to_string(), bytes.clone());
+        Some(bytes)
     }
 }
 

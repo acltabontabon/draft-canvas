@@ -16,6 +16,7 @@ import {
   inviteFragment,
   invitePayloadFromHash,
   newNonce,
+  withSafeCandidates,
   type CompactSdp,
   type CollabCodeReason,
 } from '../src/collab/transport/invite';
@@ -128,6 +129,23 @@ describe('the compact session description', () => {
     }
     expect(expandSdp(compactSdp(CHROME_OFFER))).toContain('a=candidate:3 1 udp 1677729535 203.0.113.7 61094 typ srflx raddr 0.0.0.0 rport 0\r\n');
     expect(expandSdp(compactSdp(FIREFOX_ANSWER))).toContain('typ host tcptype active\r\n');
+  });
+
+  it('takes a name to look up out of a description the peer wrote (an ICE restart), and nothing else', () => {
+    const named = CHROME_OFFER.replace('udp 1677729535 203.0.113.7 61094', 'udp 1677729535 tracker.example.com 61094');
+    const safe = withSafeCandidates(named);
+    expect(safe).not.toContain('tracker.example.com');
+    expect(compactSdp(safe).candidates).toEqual(compactSdp(CHROME_OFFER).candidates.filter((candidate) => candidate.type !== 'srflx'));
+    // Everything else is left as the browser wrote it.
+    expect(safe.split('\r\n').filter((line) => !line.startsWith('a=candidate:'))).toEqual(named.split('\r\n').filter((line) => !line.startsWith('a=candidate:')));
+  });
+
+  it('never points this browser at loopback, a metadata service or multicast, whatever the other side wrote', () => {
+    for (const address of ['127.0.0.1', '0.0.0.0', '169.254.169.254', '224.0.0.251', '::1', '::', 'ff02::1', '::ffff:127.0.0.1']) {
+      const sdp = CHROME_OFFER.replace('udp 1677729535 203.0.113.7 61094', `udp 1677729535 ${address} 61094`);
+      expect(compactSdp(sdp).candidates.some((candidate) => candidate.type === 'srflx'), address).toBe(false);
+      expect(withSafeCandidates(sdp), address).not.toContain(` ${address} 61094`);
+    }
   });
 
   it('refuses a description without a data channel section', () => {
@@ -262,10 +280,17 @@ describe('decoding untrusted codes', () => {
 
   it('round-trips any description it can represent', () => {
     const iceString = (min: number, max: number) => fc.string({ unit: fc.constantFrom(...'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'), minLength: min, maxLength: max });
+    // Only addresses a peer may be pointed at: never loopback, unspecified, multicast or 169.254/16.
     const address = fc.oneof(
-      fc.ipV4(),
+      fc.ipV4().filter((ip) => {
+        const [a, b] = ip.split('.').map(Number) as [number, number];
+        return a !== 0 && a !== 127 && !(a === 169 && b === 254) && a < 224;
+      }),
       fc.uuid({ version: 4 }).map((uuid) => `${uuid}.local`),
-      fc.array(fc.integer({ min: 0, max: 0xffff }), { minLength: 8, maxLength: 8 }).map((groups) => groups.map((g) => g.toString(16)).join(':')),
+      fc
+        .array(fc.integer({ min: 0, max: 0xffff }), { minLength: 8, maxLength: 8 })
+        .filter((groups) => groups[0]! < 0xff00 && groups.slice(0, 5).some((g) => g !== 0))
+        .map((groups) => groups.map((g) => g.toString(16)).join(':')),
     );
     const candidate = fc.record({
       type: fc.constantFrom('host', 'srflx', 'prflx', 'relay'),

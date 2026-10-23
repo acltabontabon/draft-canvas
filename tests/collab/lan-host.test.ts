@@ -238,6 +238,17 @@ describe('startLanSharing', () => {
     expect(relay.stop).not.toHaveBeenCalled();
   });
 
+  it('ignores the late stop of the session before it, sharing turned off and straight back on', async () => {
+    const { relay, emit, listeners } = fakeRelay();
+    const onStopped = vi.fn();
+    const sharing = await startLanSharing(relay, { onTransport: () => {}, onStopped });
+    emit({ type: 'collab-lan-stopped', reason: 'stopped', token: 'f'.repeat(32) });
+    expect(onStopped).not.toHaveBeenCalled();
+    expect(listeners.size).toBe(1);
+    emit({ type: 'collab-lan-stopped', reason: 'window-closed', token: sharing.token });
+    expect(onStopped).toHaveBeenCalledWith('window-closed');
+  });
+
   it('passes on the shell’s refusal and leaves nothing listening', async () => {
     const { relay, listeners } = fakeRelay();
     relay.start.mockRejectedValueOnce(new Error('The port is in use.'));

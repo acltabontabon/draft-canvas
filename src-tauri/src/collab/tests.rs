@@ -153,6 +153,26 @@ async fn started(limits: Limits) -> (Arc<Events>, Relay, u16) {
     (events, relay, started.port)
 }
 
+fn shared_for_counting(limits: Limits) -> Arc<Shared> {
+    Arc::new(Shared {
+        port: 0,
+        limits,
+        sink: Arc::new(Events::default()),
+        assets: files(),
+        token: Mutex::new(parse_token(TOKEN).unwrap()),
+        session: AtomicU64::new(0),
+        conns: Mutex::new(HashMap::new()),
+        slots: AtomicUsize::new(0),
+        by_address: Mutex::new(HashMap::new()),
+        http_connections: Arc::new(Semaphore::new(server::MAX_HTTP_CONNECTIONS)),
+        proving: Mutex::new(HashMap::new()),
+        http_open: Mutex::new(HashMap::new()),
+        http_ids: std::sync::atomic::AtomicU64::new(0),
+        shutdown: watch::channel(false).0,
+        drained: Notify::new(),
+    })
+}
+
 struct Reply {
     status: u16,
     headers: Vec<(String, String)>,
@@ -241,13 +261,34 @@ async fn connect(port: u16, upgrade: Upgrade<'_>) -> Result<Guest, u16> {
         );
     }
     match tokio_tungstenite::connect_async(request).await {
-        Ok((guest, response)) => {
+        Ok((mut guest, response)) => {
             assert_eq!(
                 response.headers()["sec-websocket-protocol"],
                 PROTOCOL,
                 "the protocol is echoed, never the token"
             );
-            Ok(guest)
+            // The challenge, answered as the page does with the token the protocols name (a test's
+            // way of saying which token this guest holds; the server ignores it in the header).
+            let token = upgrade
+                .protocols
+                .and_then(|offered| offered.split(',').map(str::trim).nth(1))
+                .unwrap_or("");
+            let Some(Message::Text(challenge)) = next(&mut guest).await else {
+                panic!("a challenge first");
+            };
+            let challenge: serde_json::Value = serde_json::from_str(&challenge).unwrap();
+            let nonce = challenge["nonce"].as_str().unwrap().to_string();
+            let mac = super::hex(&super::proof_for(token.as_bytes(), &nonce));
+            guest
+                .send(Message::text(format!(r#"{{"t":"proof","mac":"{mac}"}}"#)))
+                .await
+                .unwrap();
+            match next(&mut guest).await {
+                Some(Message::Text(ready)) if ready.as_str() == r#"{"t":"ready"}"# => Ok(guest),
+                Some(Message::Close(Some(frame))) if frame.reason == "unauthorized" => Err(401),
+                Some(Message::Close(Some(frame))) if frame.reason == "full" => Err(503),
+                other => panic!("expected ready or a refusal, got {other:?}"),
+            }
         }
         Err(tokio_tungstenite::tungstenite::Error::Http(response)) => {
             Err(response.status().as_u16())
@@ -469,6 +510,8 @@ fn the_policy_is_the_web_builds_own() {
         .position(|d| d.starts_with("font-src"))
         .expect("font-src");
     directives.insert(font + 1, "connect-src 'self'");
+    // A header can also refuse framing, which a `<meta>` policy can't.
+    directives.push("frame-ancestors 'none'");
     assert_eq!(content_security_policy(None), directives.join("; "));
     assert_eq!(
         content_security_policy(Some("10.0.0.2:5000")),
@@ -514,7 +557,7 @@ async fn the_sessions_token_lets_a_guest_in_and_text_goes_both_ways_verbatim() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_wrong_or_missing_token_is_refused_before_the_upgrade() {
+async fn a_wrong_or_missing_token_is_refused_and_never_reaches_the_page() {
     let (events, relay, port) = started(Limits::default()).await;
     let offered = [
         None,
@@ -564,7 +607,12 @@ async fn only_a_page_this_server_served_may_open_the_socket() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn the_eleventh_guest_waits_for_someone_to_leave() {
-    let (events, relay, port) = started(Limits::default()).await;
+    // Every guest here comes from loopback, so one address may hold every place.
+    let (events, relay, port) = started(Limits {
+        guests_per_address: MAX_CONNECTIONS,
+        ..Limits::default()
+    })
+    .await;
     let mut guests = Vec::new();
     for _ in 0..MAX_CONNECTIONS {
         guests.push(guest(port).await);
@@ -576,6 +624,152 @@ async fn the_eleventh_guest_waits_for_someone_to_leave() {
     assert_eq!(events.closed(&first).await, "closed");
     guests.push(guest(port).await);
     events.opened(MAX_CONNECTIONS).await;
+    relay.stop("stopped").await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn one_address_cannot_hold_every_guest_place() {
+    let (events, relay, port) = started(Limits::default()).await;
+    let per_address = Limits::default().guests_per_address;
+    let mut guests = Vec::new();
+    for _ in 0..per_address {
+        guests.push(guest(port).await);
+    }
+    assert_eq!(connect(port, Upgrade::ok(port)).await.err(), Some(503));
+    // A place given back is free again for the same address.
+    let first = events.opened(0).await;
+    let mut leaving = guests.remove(0);
+    leaving.close(None).await.unwrap();
+    assert_eq!(events.closed(&first).await, "closed");
+    guests.push(guest(port).await);
+    events.opened(per_address).await;
+    relay.stop("stopped").await;
+}
+
+#[test]
+fn ula_addresses_in_one_64_cannot_hold_every_guest_place() {
+    for network in ["fc12:3456:789a:bcde", "fd12:3456:789a:bcde"] {
+        let shared = shared_for_counting(Limits::default());
+        let mut slots = Vec::new();
+        for n in 1..=MAX_GUESTS_PER_ULA_PREFIX {
+            let ip = format!("{network}::{n}").parse().unwrap();
+            slots.push(shared.reserve(0, ip).expect("a place within the /64 bound"));
+        }
+        let next = format!("{network}::ffff").parse().unwrap();
+        assert!(
+            shared.reserve(0, next).is_none(),
+            "another address, same /64"
+        );
+        let other = "fd12:3456:789a:bcdf::1".parse().unwrap();
+        let _other = shared.reserve(0, other).expect("another /64 still fits");
+        drop(slots.pop());
+        let last = shared.reserve(0, next).expect("a place was given back");
+        assert!(shared.reserve(0, next).is_none(), "the /64 is full again");
+        drop(last);
+        drop(slots);
+        assert_eq!(
+            lock(&shared.by_address).len(),
+            1,
+            "only the other /64 stays"
+        );
+    }
+}
+
+#[test]
+fn ipv4_and_loopback_keep_their_guest_limits() {
+    for address in ["192.168.1.2", "127.0.0.1", "::1"] {
+        let shared = shared_for_counting(Limits {
+            guests_per_address: MAX_CONNECTIONS,
+            ..Limits::default()
+        });
+        let ip = address.parse().unwrap();
+        let slots: Vec<_> = (0..MAX_CONNECTIONS)
+            .map(|_| shared.reserve(0, ip).expect("no ULA /64 bound"))
+            .collect();
+        assert!(shared.reserve(0, ip).is_none());
+        drop(slots);
+        assert!(shared.reserve(0, ip).is_some());
+    }
+}
+
+#[test]
+fn http_places_are_shared_and_returned_across_listeners() {
+    let shared = shared_for_counting(Limits::default());
+    let v4 = shared.clone();
+    let v6 = shared.clone();
+    let mut held = Vec::new();
+    for n in 0..server::MAX_HTTP_CONNECTIONS {
+        let listener = if n % 2 == 0 { &v4 } else { &v6 };
+        held.push(
+            listener
+                .http_connections
+                .clone()
+                .try_acquire_owned()
+                .unwrap(),
+        );
+    }
+    for listener in [&v4, &v6] {
+        assert!(listener
+            .http_connections
+            .clone()
+            .try_acquire_owned()
+            .is_err());
+    }
+    drop(held.pop());
+    let last = v6.http_connections.clone().try_acquire_owned().unwrap();
+    assert!(v4.http_connections.clone().try_acquire_owned().is_err());
+    drop(last);
+    assert!(v4.http_connections.clone().try_acquire_owned().is_ok());
+    drop(held);
+    assert_eq!(
+        shared.http_connections.available_permits(),
+        server::MAX_HTTP_CONNECTIONS
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn both_http_listeners_enforce_the_shared_total() {
+    let (_, relay, port) = started(Limits::default()).await;
+    let shared = lock(&relay.current).as_ref().unwrap().clone();
+    let held = shared
+        .http_connections
+        .clone()
+        .try_acquire_many_owned(server::MAX_HTTP_CONNECTIONS as u32)
+        .unwrap();
+    let mut addresses = vec![IpAddr::V4(Ipv4Addr::LOCALHOST)];
+    if relay.life.lock().await.as_ref().unwrap().ipv6 {
+        addresses.push(IpAddr::V6(Ipv6Addr::LOCALHOST));
+    }
+    for ip in &addresses {
+        let mut stream = TcpStream::connect((*ip, port)).await.unwrap();
+        let _ = stream.write_all(b"GET / HTTP/1.1\r\n").await;
+        let mut raw = Vec::new();
+        let _ = timeout(WAIT, stream.read_to_end(&mut raw)).await.unwrap();
+        assert!(
+            raw.is_empty(),
+            "{ip} must refuse when the shared pool is full"
+        );
+    }
+    drop(held);
+    for ip in addresses {
+        let mut stream = TcpStream::connect((ip, port)).await.unwrap();
+        stream
+            .write_all(
+                format!("GET / HTTP/1.1\r\nHost: localhost:{port}\r\nConnection: close\r\n\r\n")
+                    .as_bytes(),
+            )
+            .await
+            .unwrap();
+        let mut raw = Vec::new();
+        timeout(WAIT, stream.read_to_end(&mut raw))
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(
+            raw.starts_with(b"HTTP/1.1 200"),
+            "{ip} can use returned places"
+        );
+    }
     relay.stop("stopped").await;
 }
 
@@ -731,6 +925,31 @@ async fn a_guest_too_slow_to_keep_up_is_closed_as_congested() {
         tokio::time::sleep(Duration::from_millis(2)).await;
     }
     assert_eq!(events.closed(&id).await, "congested");
+    relay.stop("stopped").await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn presence_for_a_guest_who_is_behind_is_dropped_not_queued_until_they_are_closed() {
+    let (events, relay, port) = started(Limits::default()).await;
+    let _slow = guest(port).await;
+    let id = events.opened(0).await;
+    // A whole diagram on its way to a guest on a slow link: far past the presence watermark.
+    let chunk = "z".repeat(256 * 1024);
+    for _ in 0..40 {
+        relay.send(&id, chunk.clone()).unwrap();
+    }
+    // Everyone's pointers keep coming meanwhile: more messages than the queue holds.
+    for _ in 0..4 * Limits::default().queue_messages {
+        relay.send_presence(&id, "p".repeat(512)).unwrap();
+    }
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    assert!(
+        !events
+            .all()
+            .iter()
+            .any(|e| matches!(e, HostEvent::CollabLanClose { conn_id, .. } if *conn_id == id)),
+        "still connected: the presence was dropped, not queued"
+    );
     relay.stop("stopped").await;
 }
 
@@ -956,7 +1175,8 @@ async fn starting_twice_is_the_same_server_and_stopping_twice_says_so_once() {
     assert_eq!(
         stopped,
         vec![HostEvent::CollabLanStopped {
-            reason: "stopped".into()
+            reason: "stopped".into(),
+            token: TOKEN.into(),
         }]
     );
     assert!(
@@ -1001,6 +1221,7 @@ async fn stopping_closes_every_guest_before_saying_the_server_stopped() {
     let stopped = position(&|e| {
         *e == HostEvent::CollabLanStopped {
             reason: "window-closed".into(),
+            token: TOKEN.into(),
         }
     });
     for id in [&a_id, &b_id] {
@@ -1156,12 +1377,13 @@ fn only_local_network_peers_are_served() {
         "100.70.0.1",
         "::1",
         "fd12::7",
-        "fe80::1",
         "::ffff:192.168.1.30",
     ] {
         assert!(net::local_peer(local.parse().unwrap()), "{local} is local");
     }
     for remote in [
+        // Link-local IPv6: no browser arrives from it, and any client can mint more.
+        "fe80::1",
         "8.8.8.8",
         "203.0.113.9",
         "2001:db8::5",
@@ -1191,4 +1413,123 @@ fn content_types_follow_the_extension() {
         "application/octet-stream"
     );
     assert_eq!(assets::cache_control("/favicon.svg"), "no-cache");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn connections_that_cannot_prove_the_token_take_no_guest_place_and_never_reach_the_page() {
+    let (events, relay, port) = started(Limits {
+        guests_per_address: MAX_CONNECTIONS,
+        ..Limits::default()
+    })
+    .await;
+    // Someone on the network without the token: the header carries none, and they can't answer.
+    let mut silent = Vec::new();
+    for _ in 0..super::MAX_PROVING_PER_ADDRESS {
+        let mut request = format!("ws://127.0.0.1:{port}/collab")
+            .into_client_request()
+            .unwrap();
+        let headers = request.headers_mut();
+        headers.insert(
+            "Origin",
+            HeaderValue::from_str(&format!("http://127.0.0.1:{port}")).unwrap(),
+        );
+        headers.insert("Sec-WebSocket-Protocol", HeaderValue::from_static(PROTOCOL));
+        let (guest, _) = tokio_tungstenite::connect_async(request).await.unwrap();
+        silent.push(guest);
+    }
+    // One more from the same address waits for no place at all.
+    assert_eq!(connect(port, Upgrade::ok(port)).await.err(), Some(503));
+    // Every guest place is still free for those who can prove it, once the silent ones give up.
+    for guest in &mut silent {
+        assert!(
+            matches!(next(guest).await, Some(Message::Text(_))),
+            "the challenge"
+        );
+        assert_eq!(close_of(guest).await, (1008, "unauthorized".to_string()));
+    }
+    let mut guests = Vec::new();
+    for _ in 0..MAX_CONNECTIONS {
+        guests.push(guest(port).await);
+    }
+    events.opened(MAX_CONNECTIONS - 1).await;
+    assert_eq!(
+        events
+            .all()
+            .iter()
+            .filter(|e| matches!(e, HostEvent::CollabLanOpen { .. }))
+            .count(),
+        MAX_CONNECTIONS,
+        "the page heard only those who proved the token"
+    );
+    relay.stop("stopped").await;
+}
+
+#[test]
+fn the_proof_is_hmac_sha256_of_the_context_and_nonce() {
+    // Worked out independently (Python's `hmac`). `tests/collab/sha256.test.ts` reads the same file,
+    // so the two ends can never disagree about what a right answer is. In a file rather than here,
+    // where code scanning takes a fixed test nonce for one used in earnest.
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../tests/fixtures/collab/lan-proof.json");
+    let vector: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let field = |name: &str| vector[name].as_str().unwrap().to_owned();
+    assert_eq!(
+        super::hex(&super::proof_for(
+            field("token").as_bytes(),
+            &field("nonce")
+        )),
+        field("proof")
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_full_page_pool_makes_room_from_whoever_holds_the_most() {
+    let shared = shared_for_counting(Limits::default());
+    let heavy: std::net::IpAddr = "192.168.1.66".parse().unwrap();
+    let light: std::net::IpAddr = "192.168.1.7".parse().unwrap();
+    let newcomer: std::net::IpAddr = "192.168.1.9".parse().unwrap();
+    let mut held = Vec::new();
+    for _ in 0..4 {
+        let task = tokio::spawn(std::future::pending::<()>());
+        let id = shared.next_http_id();
+        shared.track_http(heavy, id, task.abort_handle());
+        held.push(task);
+    }
+    let light_task = tokio::spawn(std::future::pending::<()>());
+    shared.track_http(light, shared.next_http_id(), light_task.abort_handle());
+
+    // Someone holding nothing yet: the oldest of the heaviest holder's goes, nobody else's.
+    assert!(shared.evict_for(newcomer));
+    assert!(held.remove(0).await.unwrap_err().is_cancelled());
+    assert!(!light_task.is_finished());
+    // The heaviest holder never evicts anyone to take more for itself.
+    assert!(!shared.evict_for(heavy));
+    for task in held {
+        task.abort();
+    }
+    light_task.abort();
+}
+
+/// A connection can end between its spawn and being tracked, untracking itself before its entry
+/// exists. Counted, such leftovers made eviction close a connection already gone: no place came
+/// free, and the newcomer was turned away.
+#[tokio::test]
+async fn connections_already_ended_are_never_chosen_to_make_room() {
+    let shared = shared_for_counting(Limits::default());
+    let heavy: std::net::IpAddr = "192.168.1.66".parse().unwrap();
+    let light: std::net::IpAddr = "192.168.1.7".parse().unwrap();
+    let newcomer: std::net::IpAddr = "192.168.1.9".parse().unwrap();
+    for _ in 0..4 {
+        let task = tokio::spawn(std::future::pending::<()>());
+        shared.track_http(heavy, shared.next_http_id(), task.abort_handle());
+        task.abort();
+        let _ = task.await;
+    }
+    let light_task = tokio::spawn(std::future::pending::<()>());
+    shared.track_http(light, shared.next_http_id(), light_task.abort_handle());
+
+    assert!(!shared.evict_for(newcomer));
+    assert!(!light_task.is_finished());
+    light_task.abort();
 }

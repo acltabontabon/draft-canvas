@@ -9,6 +9,8 @@ export interface SocketState {
   role: 'host' | 'guest';
   /** The relay-assigned guest tag; `null` for the host. */
   tag: string | null;
+  /** The client's `clientKey`, for the per-client guest limit; `null` when unknown. */
+  client: string | null;
   tokens: number;
   at: number;
   bad: number;
@@ -33,6 +35,7 @@ export const LIMITS: {
   readonly maxData: number;
   readonly maxFrame: number;
   readonly maxGuests: number;
+  readonly maxGuestsPerClient: number;
   readonly rateMessages: number;
   readonly rateWindowMs: number;
   readonly maxBadFrames: number;
@@ -43,6 +46,7 @@ export const LIMITS: {
 
 export const CLOSE: {
   readonly hostTaken: Close;
+  readonly replaced: Close;
   readonly notOwner: Close;
   readonly roomFull: Close;
   readonly congested: Close;
@@ -80,8 +84,9 @@ export function renewClaim(claim: OwnerClaim | null | undefined, now: number): O
 export function guestTag(random?: (bytes: Uint8Array) => Uint8Array): string;
 export function uniqueGuestTag(peers: Peer[], random?: (bytes: Uint8Array) => Uint8Array): string;
 export function live(peers: Peer[]): Peer[];
-export function admission(peers: Peer[], role: 'host' | 'guest'): Close | null;
-export function openState(peers: Peer[], role: 'host' | 'guest', tag: string | null, now: number): SocketState;
+export function admission(peers: Peer[], role: 'host' | 'guest', client?: string | null): Close | null;
+export function admitHost(peers: Peer[], owner: ReturnType<typeof checkOwner>): Close | null;
+export function openState(peers: Peer[], role: 'host' | 'guest', tag: string | null, now: number, client?: string | null): SocketState;
 export const events: {
   ready(): string;
   host(present: boolean): string;

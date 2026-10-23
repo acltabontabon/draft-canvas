@@ -119,9 +119,12 @@ pub enum HostEvent {
         conn_id: String,
         reason: String,
     },
-    /// The local network server stopped: `stopped` (asked to), `window-closed` or `reload`.
+    /// The local network server stopped: `stopped` (asked to), `window-closed` or `reload`. `token`
+    /// is the session it was running, which the page made: a stop finishing late (sharing turned off
+    /// and straight back on) must not end the session started after it.
     CollabLanStopped {
         reason: String,
+        token: String,
     },
 }
 

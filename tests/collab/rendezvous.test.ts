@@ -42,6 +42,8 @@ describe('sealing', () => {
     const flipped = sealed.slice(0, -2) + (sealed.at(-2) === 'A' ? 'B' : 'A') + sealed.at(-1);
     expect(await unseal(key, 'to-host', flipped)).toBeNull();
     expect(await unseal(key, 'to-host', 'not base64!')).toBeNull();
+    // A length no base64 has: refused, never thrown (a relay's junk would be an unhandled rejection).
+    expect(await unseal(key, 'to-host', 'A'.repeat(4 * 12 + 1))).toBeNull();
   });
 
   it('gives the owner and the knocker the same pair key, which nobody else in the room can derive', async () => {

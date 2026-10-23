@@ -759,6 +759,13 @@ async function writeSystemClipboard(text: string): Promise<boolean> {
 }
 
 let interaction: Interaction | null = null;
+/**
+ * Every `setDocument`, and those that opened a canvas rather than reloading the one on screen
+ * (`keepPath`: the desktop shell after an outside edit). An id alone can't say the canvas is the same
+ * one — an import keeps its id, and so does a share link of a diagram you hold — and a live session
+ * must not take a different file put in its place for an edit to share (`collabBridge`).
+ */
+const documentLoads = { all: 0, openings: 0 };
 /** The last system-clipboard text `syncClipboardFromSystem` has already
  *  applied, so an unchanged clipboard doesn't keep resetting `pasteRepeat`. */
 let lastSystemClipboardText: string | null = null;
@@ -1288,6 +1295,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   liveViewport: null,
 
   setDocument(document, options) {
+    documentLoads.all += 1;
+    if (!options?.keepPath) documentLoads.openings += 1;
     interaction = null;
     // Popovers, menus and one-shot requests aimed at the previous contents: node ids survive a
     // reload of the same file (the desktop shell reopens it on every outside change), so an open
@@ -2924,7 +2933,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   undo() {
-    if (useUiStore.getState().flowTrace) return;
+    // Read-only takes undo too: a collaborator the owner made view-only undoing here would change a
+    // copy the owner never hears about, and the next edit once they may edit again sends it all.
+    if (useUiStore.getState().flowTrace || useUiStore.getState().readOnly) return;
     const state = get();
     // Mid-gesture (a drag or resize still held), swapping the document out from under it would
     // fold the restored state into the gesture's own entry and clear the redo stack.
@@ -2946,7 +2957,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   redo() {
-    if (useUiStore.getState().flowTrace) return;
+    if (useUiStore.getState().flowTrace || useUiStore.getState().readOnly) return;
     const state = get();
     if (interaction) return;
     if (isSharedEditing() || state.history.future[0]?.crossed) return selectiveStep(set, get, 'redo');
@@ -3049,7 +3060,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         // highlighted, so it just reads as a stray mark on one box. It is put
         // back on the way out: presenting is a way of looking at the diagram,
         // not a thing that should cost you your place in it.
-        selection: entering ? EMPTY_SELECTION : leaving ? (s.editReturn?.selection ?? s.selection) : s.selection,
+        // What it was, less anything gone since — a collaborator may have deleted it meanwhile.
+        selection: entering ? EMPTY_SELECTION : leaving && s.editReturn ? selectionThatExists(s.document, s.editReturn.selection) : s.selection,
         // Captured on the way in and spent on the way out, in the one place every entry and every
         // one of the six exits already passes through.
         editReturn: entering ? { selection: s.selection, viewport: viewport ?? null } : leaving ? null : s.editReturn,
@@ -3196,6 +3208,11 @@ function shallowEqualDocument(a: DraftDocument, b: DraftDocument): boolean {
     a.level === b.level &&
     a.metadata.title === b.metadata.title
   );
+}
+
+/** How many times a canvas has been put in the store: see `documentLoads`. */
+export function documentLoadCount(kind: 'all' | 'openings'): number {
+  return documentLoads[kind];
 }
 
 /** Whether a drag or resize is in progress — an outside edit waits rather than joining it. */

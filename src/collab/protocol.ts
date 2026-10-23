@@ -10,7 +10,8 @@
 import { isRecord } from '../lib/isRecord';
 import { LIMITS } from '../document/limits';
 
-export const PROTOCOL_VERSION = 1;
+/** 2: per-collaborator epochs (`Resend`) and resume proofs. A copy speaking another is refused at the hello. */
+export const PROTOCOL_VERSION = 2;
 
 /**
  * The largest message either end sends or accepts — the transports' own cap (`transport/chunk.ts`,
@@ -35,6 +36,20 @@ export function exceedsMessageLimit(text: string, max = MAX_MESSAGE_BYTES): bool
  * cap that keeps one peer from tying up the owner's tab is far below the transports' own.
  */
 export const MAX_GUEST_MESSAGE_BYTES = 4 * 1024 * 1024;
+
+/**
+ * Moves one collaborator's patch may carry, and how many a second, with a burst: each move costs the
+ * owner a pass over the file. The owner refuses past them (`too-much`); a collaborator resending
+ * offline work splits and paces it to stay inside them.
+ */
+export const MAX_MOVES_PER_PATCH = 1000;
+export const MOVE_RATE = 400;
+export const MOVE_BURST = 2000;
+
+/** How many moves `changes` holds, read as the owner reads an untrusted patch. */
+export function movesIn(changes: unknown): number {
+  return Array.isArray(changes) ? changes.filter((change) => isRecord(change) && change.kind === 'move').length : 0;
+}
 
 export const MAX_NAME_LENGTH = 40;
 
@@ -87,7 +102,7 @@ export interface FollowState {
   step: number | null;
 }
 
-export type RejectReason = 'view-only' | 'malformed' | 'limits';
+export type RejectReason = 'view-only' | 'malformed' | 'limits' | 'too-much';
 
 export type EndReason =
   | 'owner-left'
@@ -111,25 +126,44 @@ export interface HelloMessage {
   /** The newest document schema this copy reads (`CURRENT_VERSION`). */
   doc: number;
   name: string;
-  /** A desktop LAN session's secret. WebRTC sessions are authenticated by the connection itself. */
-  token?: string;
-  /** Present when reconnecting: who this was, the secret it was given to prove it, and the last commit it applied. */
-  resume?: { peer: string; key: string; seq: number };
+  /**
+   * Present when reconnecting: who this was, and the last commit it applied, with the secret it was
+   * given to prove it — as `proof` (`resumeProof`) over a connection with a `binding`, and as the
+   * `key` itself only over one without (the local network socket, where it is exposed anyway).
+   */
+  resume?: { peer: string; seq: number; key?: string; proof?: string };
 }
 
 export type GuestMessage =
   | HelloMessage
-  | { t: 'patch'; clientSeq: number; changes: unknown }
+  /**
+   * `epoch` is the owner's count of fresh copies this collaborator has taken in (`Resend`): a patch
+   * sent before the latest was taken in is already part of the one patch sent after it.
+   */
+  | { t: 'patch'; clientSeq: number; changes: unknown; epoch?: number }
   | { t: 'resync' }
   | { t: 'presence'; presence: Presence }
   | { t: 'ping'; n: number }
   | { t: 'pong'; n: number }
   | { t: 'bye' };
 
+/**
+ * What comes with every fresh copy of the file sent to one collaborator: the newest of their patches
+ * the owner has handled (in the copy, or refused), and a new epoch. From the copy on, the owner takes
+ * only patches marked with that epoch, and the collaborator sends everything it still has
+ * unconfirmed as one patch so marked — so a patch in flight when the copy was made can never be
+ * applied out of order, and nothing is sent twice. Absent from an older owner's messages.
+ */
+export interface Resend {
+  handled?: number;
+  epoch?: number;
+}
+
 export type HostMessage =
   /** `key` is this collaborator's alone: peer ids are visible to everyone, so reclaiming one after a drop takes the key too. */
-  | { t: 'welcome'; v: number; session: string; peer: string; key: string; role: Role; seq: number; snapshot: unknown; peers: PeerInfo[] }
-  | { t: 'snapshot'; seq: number; snapshot: unknown }
+  /** `proof` answers a resume made by proof: the owner's `resumeProof`, so the collaborator knows it is the session they left. */
+  | ({ t: 'welcome'; v: number; session: string; peer: string; key: string; role: Role; seq: number; snapshot: unknown; peers: PeerInfo[]; proof?: string } & Resend)
+  | ({ t: 'snapshot'; seq: number; snapshot: unknown } & Resend)
   | { t: 'commit'; seq: number; changes: unknown; origin: string; clientSeq?: number }
   | { t: 'ack'; clientSeq: number; rejected?: RejectReason }
   | { t: 'peers'; peers: PeerInfo[] }
@@ -274,7 +308,7 @@ function readFollow(value: unknown): FollowState | null {
 }
 
 const END_REASONS: readonly EndReason[] = ['owner-left', 'ended', 'removed', 'version', 'full', 'unauthorized', 'protocol', 'timeout', 'document-changed', 'too-large', 'denied'];
-const REJECT_REASONS: readonly RejectReason[] = ['view-only', 'malformed', 'limits'];
+const REJECT_REASONS: readonly RejectReason[] = ['view-only', 'malformed', 'limits', 'too-much'];
 
 /** A message from a collaborator, as the host reads it. */
 export function readGuestMessage(value: unknown): GuestMessage | null {
@@ -284,21 +318,22 @@ export function readGuestMessage(value: unknown): GuestMessage | null {
       const name = readName(value.name);
       if (!isInt(value.v, 1) || typeof value.app !== 'string' || value.app.length > 40 || !isInt(value.doc, 1) || !name) return null;
       const hello: HelloMessage = { t: 'hello', v: value.v, app: value.app, doc: value.doc, name };
-      if (value.token !== undefined) {
-        if (typeof value.token !== 'string' || value.token.length > 128) return null;
-        hello.token = value.token;
-      }
       if (value.resume !== undefined) {
         if (!isRecord(value.resume)) return null;
         const peer = readId(value.resume.peer);
-        const key = readId(value.resume.key);
-        if (!peer || !key || !isInt(value.resume.seq)) return null;
-        hello.resume = { peer, key, seq: value.resume.seq };
+        const key = value.resume.key === undefined ? undefined : readId(value.resume.key);
+        const proof = value.resume.proof === undefined ? undefined : readProof(value.resume.proof);
+        // One way of proving it, never both.
+        if (!peer || !isInt(value.resume.seq) || (key === undefined) === (proof === undefined) || key === null || proof === null) return null;
+        hello.resume = { peer, seq: value.resume.seq, ...(key === undefined ? {} : { key }), ...(proof === undefined ? {} : { proof }) };
       }
       return hello;
     }
-    case 'patch':
-      return isInt(value.clientSeq, 1) && Array.isArray(value.changes) ? { t: 'patch', clientSeq: value.clientSeq, changes: value.changes } : null;
+    case 'patch': {
+      if (!isInt(value.clientSeq, 1) || !Array.isArray(value.changes)) return null;
+      if (value.epoch !== undefined && !isInt(value.epoch, 1)) return null;
+      return { t: 'patch', clientSeq: value.clientSeq, changes: value.changes, ...(value.epoch === undefined ? {} : { epoch: value.epoch as number }) };
+    }
     case 'resync':
       return { t: 'resync' };
     case 'presence': {
@@ -315,6 +350,17 @@ export function readGuestMessage(value: unknown): GuestMessage | null {
   }
 }
 
+/** A `resumeProof`: an HMAC-SHA-256, base64url. */
+function readProof(value: unknown): string | null {
+  return typeof value === 'string' && /^[A-Za-z0-9_-]{43}$/.test(value) ? value : null;
+}
+
+/** Both of `Resend`'s fields or neither: one alone would be read as the other's absence. */
+function readResend(value: Record<string, unknown>): Resend | null {
+  if (value.handled === undefined && value.epoch === undefined) return {};
+  return isInt(value.handled) && isInt(value.epoch, 1) ? { handled: value.handled, epoch: value.epoch } : null;
+}
+
 /** A message from the owner, as a collaborator reads it. */
 export function readHostMessage(value: unknown): HostMessage | null {
   if (!isRecord(value)) return null;
@@ -325,11 +371,15 @@ export function readHostMessage(value: unknown): HostMessage | null {
       const key = readId(value.key);
       const role = readRole(value.role);
       const peers = readPeers(value.peers);
-      if (!isInt(value.v, 1) || !session || !peer || !key || !role || !isInt(value.seq) || !peers || !isRecord(value.snapshot)) return null;
-      return { t: 'welcome', v: value.v, session, peer, key, role, seq: value.seq, snapshot: value.snapshot, peers };
+      const resend = readResend(value);
+      const proof = value.proof === undefined ? undefined : readProof(value.proof);
+      if (!isInt(value.v, 1) || !session || !peer || !key || !role || !isInt(value.seq) || !peers || !isRecord(value.snapshot) || !resend || proof === null) return null;
+      return { t: 'welcome', v: value.v, session, peer, key, role, seq: value.seq, snapshot: value.snapshot, peers, ...resend, ...(proof === undefined ? {} : { proof }) };
     }
-    case 'snapshot':
-      return isInt(value.seq) && isRecord(value.snapshot) ? { t: 'snapshot', seq: value.seq, snapshot: value.snapshot } : null;
+    case 'snapshot': {
+      const resend = readResend(value);
+      return isInt(value.seq) && isRecord(value.snapshot) && resend ? { t: 'snapshot', seq: value.seq, snapshot: value.snapshot, ...resend } : null;
+    }
     case 'commit': {
       const origin = readId(value.origin);
       if (!isInt(value.seq, 1) || !origin || !Array.isArray(value.changes)) return null;

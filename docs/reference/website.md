@@ -68,7 +68,8 @@ Outputs are committed, so deploys need neither ffmpeg nor a browser. Run `social
 
 `pages.yml` is the only deploy workflow.
 
-1. Cloudflare first, with Wrangler: relay, `app/`, `site/`, then the `www.` redirect.
+1. Cloudflare first, with Wrangler: relay, `app/`, `site/`, then the `www.` redirect. The relay and
+   `app/` only for a release or a withdrawal; otherwise just `site/` and the redirect.
 2. Then `legacy/` to GitHub Pages, only if Cloudflare succeeded.
 
 Triggers (all share the `pages` concurrency group):
@@ -77,11 +78,13 @@ Triggers (all share the `pages` concurrency group):
 - **Site change:** `pages-site.yml` calls it on a push to `main` touching `www/`,
   `scripts/assemble-web.mjs` or either Pages workflow. It waits (skips) while `package.json` names a
   version that is not the latest published release; that release's deploy publishes it instead.
-- **On demand:** run it from `main`.
+- **On demand:** run it from `main` (site only, unless `release-tag` is set).
 
 Off a release tag, `pages.yml` builds the newest stable `vX.Y.Z` with this commit's `www/` and
-`scripts/assemble-web.mjs` laid over it, and tests it in Chromium, Firefox and WebKit. So the editor
-and docs change only on a release.
+`scripts/assemble-web.mjs` laid over it, and tests it in Chromium, Firefox and WebKit. The relay and
+the editor's hosting (`relay*.js`, `relay.jsonc`, `app.jsonc`, `app.headers`) come from the release
+wherever it has them, and are not deployed. So the editor, docs, relay and the editor's headers change
+only on a release; a push touching `www/cloudflare/` waits for the next one.
 
 **Withdrawal:** run `pages.yml` from `main` with `release-tag` set to the last good tag. Follow
 [the recovery procedure](reliability.md#withdrawal-and-recovery-procedure) first.
@@ -158,9 +161,12 @@ browsers connect directly.
   (`Sec-WebSocket-Protocol: draft-canvas.relay.v1, host.<secret>`); another host is closed with 4003.
   Each owner connection or departure renews the claim for 12 hours.
   No logging; observability is off in `relay.jsonc`.
-- **Limits:** one owner and 32 joining sockets per room; text frames with at most 16,384 characters
-  of data; 30 messages per 10 seconds per socket; 60 new sockets per minute per address (per /64 for
-  IPv6). A room closes after 15 idle minutes, or 12 hours at most.
+- **Limits:** one owner and 32 joining sockets per room, at most 4 of them from one address (per /64
+  for IPv6); text frames with at most 16,384 characters of data; 30 messages per 10 seconds per
+  socket, and the owner that much for every joining socket, since it answers each of them (past it,
+the owner's frames are dropped, never its socket); 60 new
+  sockets per minute per address. A room closes after 15 idle minutes, or 12 hours at most. The
+  owner's own reconnect replaces a socket the relay still thinks is open.
 - **Origins:** only `ALLOWED_ORIGINS`; by default the web editor and the desktop app.
 
 Code:

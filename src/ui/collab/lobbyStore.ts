@@ -10,7 +10,7 @@ import { useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
 import { announce } from '../../lib/announce';
 import { logDiagnostic } from '../../lib/diagnostics';
-import { nameKey, readConnectionPreferences, takenNameKeys } from './collabCopy';
+import { isLookalike, readConnectionPreferences } from './collabCopy';
 
 /**
  * The owner's waiting room, for as long as a session runs: one session link for everyone, a knock
@@ -75,7 +75,7 @@ function start(owner: string, url: string, identity: Awaited<ReturnType<typeof n
         if (useEditorStore.getState().mode === 'present' && !knock.admitting) {
           // No one-click "Let in" for a name someone here already has: that is for the door card,
           // where the owner sees the warning beside the question.
-          if (takenNameKeys(useCollabStore.getState()).includes(nameKey(knock.name))) {
+          if (isLookalike(useCollabStore.getState(), knock)) {
             useUiStore.getState().notify(`${knock.name} wants to join — someone here already goes by that name. Check who it is before letting them in.`);
           } else {
             useUiStore.getState().notify(`${knock.name} wants to join`, 'info', { label: 'Let in', run: () => void current.allow(knock.id, 'editor') });
@@ -86,7 +86,7 @@ function start(owner: string, url: string, identity: Awaited<ReturnType<typeof n
     admitted: (transport, role, reuse) => attachCollaborator(transport, role, reuse, reuse !== undefined),
     // A knock proves the place's key without carrying it, so a place whose link only looks up from
     // here (it dropped on their side first) is theirs to take back — not a stranger at the door.
-    isReturning: (peerId) => hostSession()?.waitingPlace(peerId, true) ?? null,
+    isReturning: (peerId) => hostSession()?.waitingPlace(peerId, { evenIfLive: true }) ?? null,
     failed: (name, reason) => {
       logDiagnostic(new Error(reason), { operation: 'collab-knock' });
       useUiStore

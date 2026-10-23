@@ -77,6 +77,9 @@ export function useFollowPresenter(path: DepthPath): void {
       if (pathKey(editor.path) !== pathKey(presenter.path)) {
         walked.current = true;
         walkTo(presenter.path);
+        // A walk that went nowhere (a drag held, a shape not here yet) leaves no room change to
+        // claim: still set, it would take the person's own next one for following's and pull them back.
+        if (pathKey(useEditorStore.getState().path) === pathKey(editor.path)) walked.current = false;
         return;
       }
       const { width, height } = storeApi.getState();

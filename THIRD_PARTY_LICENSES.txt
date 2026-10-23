@@ -9848,7 +9848,7 @@ ICU 1.8.1 to ICU 57.1 © 1995-2016 International Business Machines Corporation a
 
 (no licence file in the package; see its registry page)
 
-### tokio 1.53.1 — MIT
+### tokio 1.54.1 — MIT
 
 MIT License
 

@@ -18,7 +18,7 @@ import { announce } from '../lib/announce';
 import { logDiagnostic } from '../lib/diagnostics';
 import { PRODUCT } from '../product';
 import { COLLAB_AT_REST, useCollabStore, type SessionStatus } from './collabStore';
-import { fileOf, isInteracting, useEditorStore } from './editorStore';
+import { documentLoadCount, fileOf, isInteracting, useEditorStore } from './editorStore';
 import { useUiStore } from './uiStore';
 
 /** How often edits made during a held gesture (a slider, a resize) are sent: often enough to watch. */
@@ -36,6 +36,13 @@ let sharedDocumentId: string | null = null;
  * into their Library.
  */
 let sharedCanvasOpen = false;
+/**
+ * Which load put the shared canvas in the store (`documentLoadCount`): an import or a share link can
+ * bring a diagram with the very same id, and that file is not the session's. The owner's counts only
+ * openings, so the desktop shell reloading the shared file after an outside edit stays shared; a
+ * collaborator's copy only ever arrives once.
+ */
+let sharedLoad: { kind: 'all' | 'openings'; count: number } | null = null;
 let gestureTimer: ReturnType<typeof setTimeout> | null = null;
 let applyingRemote = false;
 let removePageListener: (() => void) | null = null;
@@ -46,7 +53,15 @@ let removePageListener: (() => void) | null = null;
  * autosaved — which the session must never write into.
  */
 function onSharedCanvas(): boolean {
-  return sharedCanvasOpen && sharedDocumentId !== null && useEditorStore.getState().document.metadata.id === sharedDocumentId;
+  return sharedCanvasOpen && isSharedCanvas(useEditorStore.getState().document.metadata.id);
+}
+
+function isSharedCanvas(id: string): boolean {
+  return sharedDocumentId !== null && id === sharedDocumentId && sharedLoad !== null && documentLoadCount(sharedLoad.kind) === sharedLoad.count;
+}
+
+function markSharedLoad(kind: 'all' | 'openings'): void {
+  sharedLoad = { kind, count: documentLoadCount(kind) };
 }
 
 function isBusy(): boolean {
@@ -82,7 +97,7 @@ function watchEdits(send: () => void, onReplaced: () => void): () => void {
   // replacement — and nothing on it is an edit to share.
   let seen = onSharedCanvas();
   const unsubscribe = useEditorStore.subscribe((state, prev) => {
-    if (state.document.metadata.id !== sharedDocumentId) {
+    if (!isSharedCanvas(state.document.metadata.id)) {
       if (seen) onReplaced();
       return;
     }
@@ -115,6 +130,7 @@ function cleanUp(): void {
   removePageListener = null;
   sharedDocumentId = null;
   sharedCanvasOpen = false;
+  sharedLoad = null;
 }
 
 /**
@@ -151,8 +167,6 @@ function setPresenceOf(peerId: string, presence: Presence | null): void {
 export interface HostOptions {
   /** The owner's name as collaborators see it. */
   name: string;
-  /** A desktop LAN session's secret, checked on every hello. */
-  token?: string;
 }
 
 /** Starts sharing the canvas on screen. Idempotent while a session is running. */
@@ -164,14 +178,13 @@ export function startHosting(options: HostOptions): HostSession {
   const editor = useEditorStore.getState();
   sharedDocumentId = editor.document.metadata.id;
   sharedCanvasOpen = true;
-  const token = options.token;
+  markSharedLoad('openings');
   host = new HostSession(
     {
       readFile,
       applyRemote,
       isBusy,
       appVersion: PRODUCT.version,
-      ...(token === undefined ? {} : { checkToken: (candidate: string | undefined) => candidate !== undefined && constantTimeEqual(candidate, token) }),
     },
     {
       peers: (peers: PeerView[]) => {
@@ -207,6 +220,14 @@ export function hostSession(): HostSession | null {
   return host && !host.isEnded ? host : null;
 }
 
+/** Session provenance stays with the owner's live canvas, never a saved file or a guest's copy. */
+export function collaboratorTouches(): { key: string; by: string }[] {
+  const session = hostSession();
+  if (!session || !onSharedCanvas()) return [];
+  const { authors } = useCollabStore.getState();
+  return session.authorship.touches().map(({ key, person }) => ({ key, by: authors[person] ?? person }));
+}
+
 /** A collaborator's connection, from an accepted invite or the LAN server. */
 export function attachCollaborator(transport: CollabTransport, role: Role, reuse?: string, requireKey?: boolean): void {
   if (!host || host.isEnded) return transport.close('ended');
@@ -222,7 +243,7 @@ export function removeCollaborator(peerId: string): void {
 }
 
 /** What taking back one person's changes came to, for the owner to be told. */
-export type UndoChangesOutcome = 'done' | 'partial' | 'nothing' | 'blocked' | 'too-large';
+export type UndoChangesOutcome = 'done' | 'partial' | 'nothing' | 'blocked' | 'too-large' | 'busy' | 'ended';
 
 /**
  * Takes back everything `peerId` changed this session, where nobody has changed it since and nobody
@@ -230,7 +251,10 @@ export type UndoChangesOutcome = 'done' | 'partial' | 'nothing' | 'blocked' | 't
  * enter the owner's own undo history. One undoable edit, reaching everyone like any other.
  */
 export function undoChangesOf(peerId: string, name: string): UndoChangesOutcome {
-  if (!host || host.isEnded || !onSharedCanvas() || isBusy()) return 'nothing';
+  // Said as it is: "nothing left of theirs" was the answer to a session already over, and to an
+  // owner mid-drag, alike.
+  if (!host || host.isEnded || !onSharedCanvas()) return 'ended';
+  if (isBusy()) return 'busy';
   // Anything typed here and not yet shared goes into the session first, so it counts as the owner's.
   host.commitLocal();
   const current = readFile();
@@ -242,6 +266,14 @@ export function undoChangesOf(peerId: string, name: string): UndoChangesOutcome 
   if (!withinLimits(reverted) || !idsUnique(reverted)) return 'too-large';
   if (!useEditorStore.getState().applyToFile(`Undo ${name}’s changes`, (file) => withLocalView(reverted, file))) return 'nothing';
   return result.partial || result.kept ? 'partial' : 'done';
+}
+
+/**
+ * Whether some of `peerId`'s earliest changes are no longer remembered (a long session of theirs), so
+ * taking their changes back leaves those as they are — said beside whatever `undoChangesOf` answers.
+ */
+export function changesForgottenOf(peerId: string): boolean {
+  return host !== null && !host.isEnded && host.authorship.forgotten(peerId);
 }
 
 /**
@@ -271,18 +303,15 @@ export function publishPresenter(state: FollowState | null): void {
   host?.setFollow(state);
 }
 
-/** Compares two secrets in time that does not depend on where they first differ. */
-function constantTimeEqual(a: string, b: string): boolean {
-  let diff = a.length ^ b.length;
-  for (let i = 0; i < Math.max(a.length, b.length); i += 1) diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
-  return diff === 0;
-}
-
 /* ----------------------------------------------------------------- guest -- */
 
 export interface JoinOptions {
   name: string;
-  token?: string;
+  /**
+   * The session the link names, where it names one (`room:` and owner for a session link, `lan:` and
+   * token for the local network): a later link may pick this session back up only if it names the same.
+   */
+  via?: string;
   /**
    * Opens the owner's file in the editor as a collaborator's copy — never stored, never autosaved.
    * Resolves `false` when the canvas on screen could not be left (unsaved work kept it open).
@@ -290,18 +319,41 @@ export interface JoinOptions {
   open(file: DraftDocument): Promise<boolean>;
   /** The connection dropped: the caller reconnects (LAN) or offers to ask for a new invite (WebRTC). */
   lost?(): void;
+  /**
+   * What keeps reconnecting this session (the local network link's): told when the connection drops,
+   * and stopped when the session ends or is left, so it can never pick up a later one.
+   */
+  keeper?: SessionKeeper;
+}
+
+export interface SessionKeeper {
+  lost(): void;
+  stop(): void;
+}
+
+/** The current guest session's keeper, if it has one: see `JoinOptions.keeper`. */
+let keeper: SessionKeeper | null = null;
+
+/**
+ * Hands the session a new keeper, stopping the one it had: "Rejoin" on the local network link makes
+ * its own, and two at once closed each other's connections for good.
+ */
+export function replaceKeeper(next: SessionKeeper | null): void {
+  const previous = keeper;
+  keeper = next;
+  if (previous && previous !== next) previous.stop();
 }
 
 const REJECTIONS: Record<RejectReason, string> = {
   'view-only': 'Your change was not applied — the owner has made you view-only.',
   malformed: 'Your change could not be applied and was undone.',
   limits: 'Your change was not applied — the diagram is at its size limit.',
+  'too-much': 'Your change was not applied — it moved too much at once. Try it in smaller steps.',
 };
 
 export function joinSession(transport: CollabTransport, options: JoinOptions): GuestSession {
   if (host && !host.isEnded) throw new Error('Stop sharing your canvas before joining someone else’s.');
-  guest?.leave();
-  cleanUp();
+  leaveSession();
   const ui = useUiStore.getState();
   let title = '';
   const setAccess = (access: Role) => {
@@ -318,21 +370,29 @@ export function joinSession(transport: CollabTransport, options: JoinOptions): G
       isBusy,
       appVersion: PRODUCT.version,
       name: options.name,
-      ...(options.token === undefined ? {} : { token: options.token }),
       open(file) {
         title = file.metadata.title;
         sharedDocumentId = file.metadata.id;
         sharedCanvasOpen = false;
+        sharedLoad = null;
         stopWatching?.();
         stopWatching = null;
         void options.open(file).then((opened) => {
-          if (guest !== session) return;
+          if (guest !== session) {
+            // The session ended (or another replaced it) while the copy was opening. It is on screen
+            // now, and nobody's file: read-only with the way to keep a copy, never left to look editable.
+            if (opened && useEditorStore.getState().document.metadata.id === file.metadata.id) {
+              useUiStore.getState().setReadOnly({ sharedTitle: title, collaborative: true });
+            }
+            return;
+          }
           if (!opened) {
             useUiStore.getState().notify('Left the session — the canvas you were on has unsaved changes. Save or export it, then open the invite again.', 'error');
             return leaveSession();
           }
           // Only now is the canvas on screen the collaborator's copy, never saved anywhere.
           sharedCanvasOpen = true;
+          markSharedLoad('all');
           stopWatching = watchEdits(
             () => session.localChanged(),
             () => leaveSession(),
@@ -348,6 +408,7 @@ export function joinSession(transport: CollabTransport, options: JoinOptions): G
     },
     {
       status(status: GuestStatus, reason?: EndReason) {
+        const was = useCollabStore.getState().status;
         const mapped: SessionStatus = status;
         useCollabStore.setState({ status: mapped, endReason: reason ?? null, ...(status === 'ended' ? { peers: [], presence: {}, presenter: null, following: false } : {}) });
         if (status === 'ended') {
@@ -357,8 +418,12 @@ export function joinSession(transport: CollabTransport, options: JoinOptions): G
           if (onSharedCanvas()) useUiStore.getState().setReadOnly({ sharedTitle: title, collaborative: true });
           cleanUp();
           guest = null;
-        } else if (status === 'reconnecting') {
+          replaceKeeper(null);
+        } else if (status === 'reconnecting' && was !== 'reconnecting') {
+          // Only on going from live to dropped: a reconnect under way says "reconnecting" again, and
+          // answering that with another knock raced the rejoin it was part of.
           options.lost?.();
+          keeper?.lost();
         }
       },
       joined: (selfId: string, access: Role, color?: number) => useCollabStore.setState({ selfId, access, ...(color === undefined ? {} : { selfColor: color }) }),
@@ -371,13 +436,34 @@ export function joinSession(transport: CollabTransport, options: JoinOptions): G
       rejected: (reason: RejectReason) => ui.notify(REJECTIONS[reason], 'error'),
       unconfirmed: (count: number) => useCollabStore.setState({ unconfirmed: count }),
       tooLarge: () => ui.notify('That change is too large to share live, so it was undone. Smaller edits still go through.', 'error'),
+      refusedLink: () => {
+        // The link opened was for some other session; this one carries on reconnecting.
+        useUiStore.getState().setJoinInvite(null);
+        ui.notify('That invite is for a different session. Yours is still reconnecting — ask its owner for a new invite if it doesn’t come back.', 'error');
+      },
     },
   );
   guest = session;
+  joinedVia = options.via ?? null;
+  replaceKeeper(options.keeper ?? null);
   useCollabStore.setState({ ...COLLAB_AT_REST, role: 'guest', status: 'joining', access: 'viewer', selfName: options.name });
   removePageListener = onPageLeave(() => leaveSession());
   session.connect(transport);
   return session;
+}
+
+let joinedVia: string | null = null;
+
+/**
+ * Whether a link may pick the dropped session back up. A session link or local network link must name
+ * this session. A direct invite names none: it is how the owner's Re-invite brings anyone back, so it
+ * may pick up any session but a local network one (whose own reconnecting it would fight) — and the
+ * resume proof keeps one from anyone else from taking the place, or passing for this session. Any
+ * other link joins its own session, and leaves this one be.
+ */
+export function mayResumeVia(via: string | null): boolean {
+  if (guest === null || guest.isEnded || useCollabStore.getState().status !== 'reconnecting') return false;
+  return via === joinedVia || (via === null && !joinedVia?.startsWith('lan:'));
 }
 
 /** A new connection to the same owner after a drop (a LAN reconnect, or a re-invite). */
@@ -390,22 +476,31 @@ export function reconnectSession(transport: CollabTransport): void {
  * Leaves on purpose, keeping what's on screen: read-only, with the banner's way to keep a copy —
  * left editable, it would look like a canvas that saves, and it saves nowhere.
  */
-export function leaveSessionKeepingView(notice: { message: string; tone?: 'error' } = { message: 'You left the session. Make an editable copy to keep what you see.' }): void {
-  const keep = onSharedCanvas();
-  const title = useEditorStore.getState().document.metadata.title;
+export function leaveSessionKeepingView(
+  notice: { message: string; tone?: 'error' } = {
+    // As the banner offers it: over the local network link's plain-http page, an export.
+    message: typeof window !== 'undefined' && !window.isSecureContext ? 'You left the session. Export a copy to keep what you see.' : 'You left the session. Make an editable copy to keep what you see.',
+  },
+): void {
   leaveSession();
-  if (keep) useUiStore.getState().setReadOnly({ sharedTitle: title, collaborative: true });
   useUiStore.getState().notify(notice.message, notice.tone);
 }
 
-/** Leaves on purpose — or, after the owner ended it, puts the session's leftovers away. */
+/**
+ * Leaves on purpose — or, after the owner ended it, puts the session's leftovers away. A copy still
+ * on screen stays, read-only: whichever way the session goes (joining another that then fails, a
+ * dialog closed mid-rejoin), it must never be left looking like a canvas that saves.
+ */
 export function leaveSession(): void {
   const session = guest;
+  const keep = onSharedCanvas() ? useEditorStore.getState().document.metadata.title : null;
   guest = null;
+  replaceKeeper(null);
   // First, so the goodbye's own "ended" can't mark whatever canvas comes next read-only.
   cleanUp();
   session?.leave();
   if (useCollabStore.getState().role === 'guest') useCollabStore.setState(COLLAB_AT_REST);
+  if (keep !== null) useUiStore.getState().setReadOnly({ sharedTitle: keep, collaborative: true });
 }
 
 export function guestSession(): GuestSession | null {

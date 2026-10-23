@@ -249,14 +249,11 @@ describe('HostCore', () => {
     expect(outcome.ack?.rejected).toBe('malformed');
   });
 
-  it('replays recent commits to a reconnecting peer, or asks for a snapshot', () => {
+  it('numbers the owner’s own commits in order', () => {
     const host = new HostCore(base());
-    host.commitLocal({ ...host.file, metadata: { ...host.file.metadata, title: 'One' } });
-    host.commitLocal({ ...host.file, metadata: { ...host.file.metadata, title: 'Two' } });
-    expect(host.since(0)?.map((commit) => commit.seq)).toEqual([1, 2]);
-    expect(host.since(2)).toEqual([]);
-    expect(host.since(5)).toBeNull();
-    expect(host.since(0)![0]!.origin).toBe(HOST_ORIGIN);
+    expect(host.commitLocal({ ...host.file, metadata: { ...host.file.metadata, title: 'One' } })).toMatchObject({ seq: 1, origin: HOST_ORIGIN });
+    expect(host.commitLocal({ ...host.file, metadata: { ...host.file.metadata, title: 'Two' } })).toMatchObject({ seq: 2, origin: HOST_ORIGIN });
+    expect(host.seq).toBe(2);
   });
 });
 

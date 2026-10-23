@@ -12,6 +12,9 @@ use tauri::State;
 #[serde(rename_all = "camelCase")]
 struct SendMeta {
     conn_id: String,
+    /// Presence, which the relay drops rather than queues for a guest who is behind.
+    #[serde(default)]
+    presence: bool,
 }
 
 /// Starts the server (or answers the one running) with the page's token for this session.
@@ -45,7 +48,11 @@ pub async fn collab_lan_send(
     let text = std::str::from_utf8(bytes)
         .map_err(|_| AppError::bad_request("a guest message isn't UTF-8"))?
         .to_owned();
-    relay.send(&meta.conn_id, text)
+    if meta.presence {
+        relay.send_presence(&meta.conn_id, text)
+    } else {
+        relay.send(&meta.conn_id, text)
+    }
 }
 
 #[tauri::command]

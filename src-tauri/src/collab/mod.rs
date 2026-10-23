@@ -20,15 +20,15 @@ pub use assets::{AssetSource, Bundled};
 use crate::errors::{AppError, ErrorKind};
 use crate::state::{AppState, HostEvent};
 use crate::util::lock;
-use std::collections::HashMap;
-use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
+use std::collections::{HashMap, VecDeque};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use subtle::ConstantTimeEq;
 use tauri::{AppHandle, Manager};
-use tokio::sync::{mpsc, watch, Notify};
-use tokio::task::JoinHandle;
+use tokio::sync::{mpsc, watch, Notify, Semaphore};
+use tokio::task::{AbortHandle, JoinHandle};
 
 /// The subprotocol a guest asks for, beside its token; the one echoed back.
 pub const PROTOCOL: &str = "draft-canvas.collab.v1";
@@ -36,6 +36,15 @@ pub const PROTOCOL: &str = "draft-canvas.collab.v1";
 pub const SOCKET_PATH: &str = "/collab";
 /// Guests at once. The 11th is turned away until someone leaves.
 pub const MAX_CONNECTIONS: usize = 10;
+/// Connections still answering the challenge (`socket::run`): no guest place yet, a few at once, and
+/// fewer from one address — so connections that can't answer can't keep out those that can.
+pub const MAX_PROVING: usize = 8;
+pub const MAX_PROVING_PER_ADDRESS: usize = 2;
+/// What a guest's answer to the challenge is an HMAC of, after the nonce (`proof_for`).
+pub const PROOF_CONTEXT: &str = "draft-canvas lan v1|";
+/// ULA addresses in one /64 can all belong to one machine; changing addresses must not take every
+/// guest place. Leave room for several people on the same subnet, and places for another subnet.
+const MAX_GUESTS_PER_ULA_PREFIX: usize = 6;
 /// The largest text frame the page may send a guest: a whole diagram (a snapshot) with room to spare.
 pub const MAX_TEXT: usize = 16 * 1024 * 1024;
 /// The largest text message a guest may send the page. Keep it equal to `MAX_GUEST_MESSAGE_BYTES` in
@@ -45,6 +54,10 @@ pub const MAX_TEXT: usize = 16 * 1024 * 1024;
 pub const MAX_GUEST_TEXT: usize = 4 * 1024 * 1024;
 /// The page makes a 128-bit token and sends it as 32 lowercase hex characters.
 const TOKEN_LEN: usize = 32;
+/// Above this much text waiting for one guest, presence for them is dropped rather than queued (the
+/// page's own `LAN_PRESENCE_BACKLOG_BYTES`): only this side knows what is really still waiting, and
+/// pointers from several people would otherwise fill the queue until the guest was closed as `congested`.
+pub const PRESENCE_BACKLOG: usize = 64 * 1024;
 /// How long `stop` waits for every guest to be sent its close before saying the server stopped: a
 /// close that takes all of `socket`'s grace, then all of the wait for the guest's answer, with room.
 const DRAIN_TIMEOUT: Duration = Duration::from_secs(4);
@@ -73,6 +86,10 @@ pub struct Limits {
     /// refuse what it is never given a chance to look at, so a flood stops here.
     pub inbound_bytes: Rate,
     pub inbound_messages: Rate,
+    /// Guest places one address may hold at once. Anyone with the link (or who read it off the
+    /// network) could otherwise open all `MAX_CONNECTIONS`, wait at the door, and keep everyone
+    /// else out; a person on two devices or in a few tabs still fits.
+    pub guests_per_address: usize,
 }
 
 impl Default for Limits {
@@ -96,6 +113,7 @@ impl Default for Limits {
                 per_second: 60,
                 burst: 240,
             },
+            guests_per_address: 3,
         }
     }
 }
@@ -193,6 +211,15 @@ pub(crate) struct Shared {
     /// Connections being upgraded or open, counted before the upgrade is accepted so that eleven
     /// simultaneous requests can't all slip past the cap.
     slots: AtomicUsize,
+    /// Of those, how many each address holds (`Limits::guests_per_address`).
+    by_address: Mutex<HashMap<IpAddr, usize>>,
+    /// Both listeners draw from this pool; IPv6 must not double the plain HTTP allowance.
+    http_connections: Arc<Semaphore>,
+    /// Connections answering the challenge, by address (`MAX_PROVING`).
+    proving: Mutex<HashMap<IpAddr, usize>>,
+    /// Plain HTTP connections open, by address, oldest first: what `evict_for` chooses from.
+    http_open: Mutex<HashMap<IpAddr, VecDeque<(u64, AbortHandle)>>>,
+    http_ids: AtomicU64,
     pub(crate) shutdown: watch::Sender<bool>,
     drained: Notify,
 }
@@ -202,6 +229,84 @@ impl Shared {
     pub(crate) fn token_is(&self, offered: &[u8]) -> bool {
         let token = lock(&self.token);
         offered.len() == TOKEN_LEN && bool::from(offered.ct_eq(&token[..]))
+    }
+
+    /// The token, as the page wrote it (lowercase hex, checked by `parse_token`).
+    fn token_text(&self) -> String {
+        String::from_utf8_lossy(&lock(&self.token)[..]).into_owned()
+    }
+
+    /// Whether `mac` (hex) is this session's answer to `nonce`: `proof_for` with the token, compared in
+    /// constant time. The token itself never crosses the network — only a proof of it, for a nonce
+    /// that is never asked again.
+    pub(crate) fn proof_matches(&self, nonce: &str, mac: &str) -> bool {
+        let expected = hex(&proof_for(&lock(&self.token)[..], nonce));
+        mac.len() == expected.len() && bool::from(mac.as_bytes().ct_eq(expected.as_bytes()))
+    }
+
+    /// An id for a plain HTTP connection about to be served (`track_http`).
+    pub(crate) fn next_http_id(&self) -> u64 {
+        self.http_ids.fetch_add(1, Ordering::SeqCst)
+    }
+
+    /// A connection that ends between its spawn and this call untracks itself first, so its entry
+    /// would stay: finished ones are dropped here and before every eviction, never counted or chosen.
+    pub(crate) fn track_http(&self, address: IpAddr, id: u64, handle: AbortHandle) {
+        let mut open = lock(&self.http_open);
+        let held = open.entry(address).or_default();
+        held.retain(|(_, handle)| !handle.is_finished());
+        if !handle.is_finished() {
+            held.push_back((id, handle));
+        }
+        if held.is_empty() {
+            open.remove(&address);
+        }
+    }
+
+    pub(crate) fn untrack_http(&self, address: IpAddr, id: u64) {
+        let mut open = lock(&self.http_open);
+        if let Some(held) = open.get_mut(&address) {
+            held.retain(|(held, _)| *held != id);
+            if held.is_empty() {
+                open.remove(&address);
+            }
+        }
+    }
+
+    /// The pool of plain HTTP connections is full and `address` wants one: the oldest connection of
+    /// whoever holds the most is closed, if they hold more than `address` would — so a few machines
+    /// holding connections open can't keep everyone else from loading the page. Whether one was.
+    pub(crate) fn evict_for(&self, address: IpAddr) -> bool {
+        let mut open = lock(&self.http_open);
+        open.retain(|_, held| {
+            held.retain(|(_, handle)| !handle.is_finished());
+            !held.is_empty()
+        });
+        let own = open.get(&address).map_or(0, VecDeque::len);
+        let Some((&heaviest, held)) = open.iter_mut().max_by_key(|(_, held)| held.len()) else {
+            return false;
+        };
+        if held.len() <= own + 1 {
+            return false;
+        }
+        if let Some((_, handle)) = held.pop_front() {
+            handle.abort();
+        }
+        if held.is_empty() {
+            open.remove(&heaviest);
+        }
+        true
+    }
+
+    /// A place among the connections still answering the challenge, or `None` when there is none.
+    pub(crate) fn reserve_proving(self: &Arc<Self>, address: IpAddr) -> Option<Proving> {
+        let mut proving = lock(&self.proving);
+        let held = proving.get(&address).copied().unwrap_or(0);
+        if held >= MAX_PROVING_PER_ADDRESS || proving.values().sum::<usize>() >= MAX_PROVING {
+            return None;
+        }
+        proving.insert(address, held + 1);
+        Some(Proving(self.clone(), address))
     }
 
     /// The session a request is authorized in: read before its token is checked.
@@ -225,7 +330,23 @@ impl Shared {
         *self.shutdown.borrow()
     }
 
-    pub(crate) fn reserve(self: &Arc<Self>, session: u64) -> Option<Slot> {
+    pub(crate) fn reserve(self: &Arc<Self>, session: u64, address: IpAddr) -> Option<Slot> {
+        // The address's count is held while the overall one is taken, so the two agree.
+        let mut by_address = lock(&self.by_address);
+        let held = by_address.get(&address).copied().unwrap_or(0);
+        if held >= self.limits.guests_per_address {
+            return None;
+        }
+        if let Some(prefix) = net::ula_prefix(address) {
+            let held: usize = by_address
+                .iter()
+                .filter(|(ip, _)| net::ula_prefix(**ip) == Some(prefix))
+                .map(|(_, count)| *count)
+                .sum();
+            if held >= MAX_GUESTS_PER_ULA_PREFIX {
+                return None;
+            }
+        }
         // A bounded increment, spelled out: `fetch_update` is deprecated from Rust 1.99 (renamed
         // `try_update`, which the 1.88 floor in Cargo.toml doesn't have), and CI denies warnings.
         let mut n = self.slots.load(Ordering::SeqCst);
@@ -237,10 +358,12 @@ impl Shared {
                 .slots
                 .compare_exchange_weak(n, n + 1, Ordering::SeqCst, Ordering::SeqCst)
             {
-                Ok(_) => return Some(Slot(self.clone(), session)),
+                Ok(_) => break,
                 Err(current) => n = current,
             }
         }
+        by_address.insert(address, held + 1);
+        Some(Slot(self.clone(), session, address))
     }
 
     /// Takes a freshly upgraded connection onto the books, unless the server is stopping. The check
@@ -281,14 +404,45 @@ impl Shared {
     }
 }
 
+/// A place among the connections answering the challenge, given back once they have (or haven't).
+pub(crate) struct Proving(Arc<Shared>, IpAddr);
+
+impl Drop for Proving {
+    fn drop(&mut self) {
+        let mut proving = lock(&self.0.proving);
+        if let Some(held) = proving.get_mut(&self.1) {
+            *held -= 1;
+            if *held == 0 {
+                proving.remove(&self.1);
+            }
+        }
+    }
+}
+
+/// HMAC-SHA-256 of `PROOF_CONTEXT` and `nonce`, keyed with the session token (`sha2` alone: the
+/// construction is four lines, and the page computes the same in `transport/sha256.ts`).
+pub(crate) fn proof_for(token: &[u8], nonce: &str) -> [u8; 32] {
+    use sha2::{Digest, Sha256};
+    let mut block = [0u8; 64];
+    block[..token.len().min(64)].copy_from_slice(&token[..token.len().min(64)]);
+    let mut inner = Sha256::new();
+    inner.update(block.map(|b| b ^ 0x36));
+    inner.update(PROOF_CONTEXT.as_bytes());
+    inner.update(nonce.as_bytes());
+    let mut outer = Sha256::new();
+    outer.update(block.map(|b| b ^ 0x5c));
+    outer.update(inner.finalize());
+    outer.finalize().into()
+}
+
+pub(crate) fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
 /// A place among the `MAX_CONNECTIONS`, given back when the connection ends or its upgrade fails.
-pub(crate) struct Slot(Arc<Shared>, u64);
+pub(crate) struct Slot(Arc<Shared>, u64, IpAddr);
 
 impl Slot {
-    pub(crate) fn shared(&self) -> &Arc<Shared> {
-        &self.0
-    }
-
     /// The session the connection was authorized in.
     pub(crate) fn session(&self) -> u64 {
         self.1
@@ -297,6 +451,15 @@ impl Slot {
 
 impl Drop for Slot {
     fn drop(&mut self) {
+        {
+            let mut by_address = lock(&self.0.by_address);
+            if let Some(held) = by_address.get_mut(&self.2) {
+                *held -= 1;
+                if *held == 0 {
+                    by_address.remove(&self.2);
+                }
+            }
+        }
         self.0.slots.fetch_sub(1, Ordering::SeqCst);
         self.0.drained.notify_waiters();
     }
@@ -380,22 +543,33 @@ impl Relay {
             session: AtomicU64::new(0),
             conns: Mutex::new(HashMap::new()),
             slots: AtomicUsize::new(0),
+            by_address: Mutex::new(HashMap::new()),
+            http_connections: Arc::new(Semaphore::new(server::MAX_HTTP_CONNECTIONS)),
+            proving: Mutex::new(HashMap::new()),
+            http_open: Mutex::new(HashMap::new()),
+            http_ids: AtomicU64::new(0),
             shutdown: watch::channel(false).0,
             drained: Notify::new(),
         });
         let ipv6 = listeners
             .iter()
             .any(|l| l.local_addr().is_ok_and(|a: SocketAddr| a.is_ipv6()));
-        let mut tasks = Vec::with_capacity(listeners.len());
-        for listener in listeners {
-            let listener = tokio::net::TcpListener::from_std(listener).map_err(|_| {
+        // Every listener is taken over before any starts serving: one failing after another had
+        // started would leave that one running, with nothing on the books to stop it.
+        let listeners = listeners
+            .into_iter()
+            .map(tokio::net::TcpListener::from_std)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| {
                 AppError::new(
                     ErrorKind::Io,
                     "Draft Canvas couldn't start sharing on your network.",
                 )
             })?;
-            tasks.push(tokio::spawn(server::serve(listener, shared.clone())));
-        }
+        let tasks = listeners
+            .into_iter()
+            .map(|listener| tokio::spawn(server::serve(listener, shared.clone())))
+            .collect();
         *lock(&self.current) = Some(shared.clone());
         let running = Running {
             shared,
@@ -436,6 +610,7 @@ impl Relay {
             return;
         };
         lock(&self.current).take();
+        let token = running.shared.token_text();
         running.shared.begin_stop();
         // Each listener task owns its socket: once it has returned, the port is free again.
         for listener in running.listeners {
@@ -444,6 +619,7 @@ impl Relay {
         let _ = tokio::time::timeout(DRAIN_TIMEOUT, running.shared.drained()).await;
         self.sink.emit(HostEvent::CollabLanStopped {
             reason: reason.to_string(),
+            token,
         });
     }
 
@@ -488,6 +664,20 @@ impl Relay {
             }
         }
         Ok(())
+    }
+
+    /// `send` for presence (pointers, selections): dropped, not queued, while the guest is behind.
+    /// Fresh presence follows soon enough; a backlog of stale presence only delays what matters.
+    pub fn send_presence(&self, conn_id: &str, text: String) -> Result<(), AppError> {
+        let behind = lock(&self.current).as_ref().is_some_and(|shared| {
+            lock(&shared.conns)
+                .get(conn_id)
+                .is_some_and(|conn| conn.queued.load(Ordering::SeqCst) > PRESENCE_BACKLOG)
+        });
+        if behind {
+            return Ok(());
+        }
+        self.send(conn_id, text)
     }
 
     /// Closes one guest once everything already sent to it has gone. Nothing more from the guest

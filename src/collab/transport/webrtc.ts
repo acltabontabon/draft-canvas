@@ -1,5 +1,5 @@
 import { encodeFrames, Reassembler, MAX_CHUNK_BYTES, MIN_CHUNK_BYTES, type DropReason, type FrameKind } from './chunk';
-import { CollabCodeError, compactSdp, decodeInvite, decodeReply, encodeInvite, encodeReply, expandSdp, newNonce } from './invite';
+import { CollabCodeError, compactSdp, decodeInvite, decodeReply, encodeInvite, encodeReply, expandSdp, fingerprintText, newNonce, withSafeCandidates } from './invite';
 import type { CollabTransport, IceConfig, SendPriority, TransportState } from './types';
 
 /**
@@ -102,7 +102,9 @@ export async function createHostOffer(config: IceConfig, opts: WebRtcOptions = {
     await pc.setLocalDescription(await pc.createOffer());
     await gathering.wait(ICE_GATHER_TIMEOUT_MS);
     if (transport.state === 'closed') throw new Error('The invite was cancelled.');
-    ({ payload: invitePayload, expiresAt } = encodeInvite({ nonce, issuedAt: now(), offer: compactSdp(localSdp(pc)) }));
+    const offer = compactSdp(localSdp(pc));
+    transport.binding = fingerprintText(offer.fingerprint);
+    ({ payload: invitePayload, expiresAt } = encodeInvite({ nonce, issuedAt: now(), offer }));
   } catch (error) {
     transport.close('cancelled');
     throw error;
@@ -135,6 +137,8 @@ export async function joinFromInvite(payload: string, config: IceConfig, opts: W
   const invite = decodeInvite(payload, now());
   const pc = new (peerConnectionCtor(opts))(rtcConfiguration(config));
   const transport = new WebRtcTransport(pc, 'guest', opts);
+  // The owner's certificate, as the browser will hold the connection to it.
+  transport.binding = fingerprintText(invite.offer.fingerprint);
   try {
     try {
       await pc.setRemoteDescription({ type: 'offer', sdp: expandSdp(invite.offer) });
@@ -270,6 +274,9 @@ class WebRtcTransport implements CollabTransport {
     this.channel.addEventListener('bufferedamountlow', () => this.pump(), options);
     pc.addEventListener('connectionstatechange', () => this.onConnectionState(), options);
   }
+
+  /** See `CollabTransport.binding`: the owner's certificate fingerprint, set once it is known. */
+  binding: string | undefined = undefined;
 
   get state(): TransportState {
     return this.current;
@@ -503,7 +510,8 @@ class WebRtcTransport implements CollabTransport {
 
   private async answerRestart(control: Control): Promise<void> {
     try {
-      await this.pc.setRemoteDescription({ type: 'offer', sdp: control.sdp });
+      // Held to an invite's rules: the peer writes this, and the browser would look up any name in it.
+      await this.pc.setRemoteDescription({ type: 'offer', sdp: withSafeCandidates(control.sdp) });
       const gathering = watchGathering(this.pc, this.lifetime.signal);
       await this.pc.setLocalDescription(await this.pc.createAnswer());
       await gathering.wait(ICE_GATHER_TIMEOUT_MS);
@@ -518,7 +526,7 @@ class WebRtcTransport implements CollabTransport {
     // A late answer to an earlier attempt would be applied against the wrong offer.
     if (control.gen !== this.restartGeneration || this.pc.signalingState !== 'have-local-offer') return;
     try {
-      await this.pc.setRemoteDescription({ type: 'answer', sdp: control.sdp });
+      await this.pc.setRemoteDescription({ type: 'answer', sdp: withSafeCandidates(control.sdp) });
     } catch {
       this.reportDrop('malformed', 'ICE restart answer was refused');
     }

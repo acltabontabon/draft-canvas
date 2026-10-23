@@ -144,7 +144,10 @@ pub fn local_peer(ip: IpAddr) -> bool {
         }
         IpAddr::V6(v6) => match v6.to_ipv4_mapped() {
             Some(v4) => local_peer(IpAddr::V4(v4)),
-            None => v6.is_loopback() || is_unique_local_v6(v6) || is_link_local_v6(v6),
+            // Not fe80::/10: a browser can't be given the zone to open one, so only a hand-written
+            // client arrives from there — and it can make up any number of such addresses to get
+            // round every per-address limit.
+            None => v6.is_loopback() || is_unique_local_v6(v6),
         },
     }
 }
@@ -163,6 +166,18 @@ fn is_link_local_v6(ip: Ipv6Addr) -> bool {
 /// fc00::/7.
 fn is_unique_local_v6(ip: Ipv6Addr) -> bool {
     ip.segments()[0] & 0xfe00 == 0xfc00
+}
+
+/// The /64 shared by ULA addresses. IPv4 and loopback keep their per-address limits alone.
+pub(super) fn ula_prefix(ip: IpAddr) -> Option<[u16; 4]> {
+    let IpAddr::V6(ip) = ip else {
+        return None;
+    };
+    if !is_unique_local_v6(ip) {
+        return None;
+    }
+    let [a, b, c, d, ..] = ip.segments();
+    Some([a, b, c, d])
 }
 
 /// VPN tunnels, virtual machine and container bridges, Apple's peer-to-peer links. macOS and Linux

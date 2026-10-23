@@ -355,7 +355,7 @@ export interface DesktopApi {
   collabLanStop(options?: { token: string }): Promise<void>;
   /** Queues text for one guest, in order. A guest that has left is quietly nothing; one too slow
    *  to keep up is closed as `congested`. At most 16 MiB of UTF-8. */
-  collabLanSend(connId: string, text: string): Promise<void>;
+  collabLanSend(connId: string, text: string, options?: { presence?: boolean }): Promise<void>;
   /** Closes one guest once everything already sent to it has gone. */
   collabLanClose(connId: string, reason: string): Promise<void>;
 }

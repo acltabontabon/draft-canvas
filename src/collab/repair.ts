@@ -16,6 +16,7 @@ import { mapRooms, type Graph } from '../depth/tree';
 import { pruneFlowSteps } from '../document/flow';
 import { pruneOpenPoints } from '../document/openPoints';
 import type { DraftDocument, DraftEdge, DraftFlow, DraftNode } from '../document/types';
+import { withinGroupDepth } from '../document/validate';
 import { indexOf } from './fileIndex';
 
 export function repairReferences(file: DraftDocument): DraftDocument {
@@ -57,14 +58,9 @@ function repairParents(nodes: DraftNode[]): DraftNode[] {
 function parentIsValid(node: DraftNode, byId: Map<string, DraftNode>): boolean {
   const parent = byId.get(node.parentId!);
   if (!parent || parent.id === node.id || parent.type !== 'group') return false;
-  const seen = new Set<string>([node.id]);
-  let cursor: DraftNode | undefined = parent;
-  while (cursor) {
-    if (seen.has(cursor.id)) return false;
-    seen.add(cursor.id);
-    cursor = cursor.parentId === undefined ? undefined : byId.get(cursor.parentId);
-  }
-  return true;
+  // Bounded, as validation is: a chain past the limit, or a loop, goes — and checking costs at most
+  // the limit per shape, however long a chain a collaborator built.
+  return withinGroupDepth(node, byId);
 }
 
 function repairFlows(flows: DraftFlow[], nodeIds: ReadonlySet<string>, edgeIds: ReadonlySet<string>): DraftFlow[] {

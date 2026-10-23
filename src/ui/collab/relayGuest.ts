@@ -34,6 +34,9 @@ function untilBackOrGivenUp(pending: Awaited<ReturnType<typeof knock>>, deadline
     const unsubscribe = useCollabStore.subscribe((state) => {
       if (state.status !== 'reconnecting') stop();
     });
+    // Back already, while the knock was being made: nothing to wait for (left, it sat at the owner's
+    // door for two minutes and was let in to a place already filled).
+    if (useCollabStore.getState().status !== 'reconnecting') stop();
     pending.transport.then(settle, () => settle(null));
   });
 }
