@@ -206,6 +206,61 @@ describe('edits across a fresh copy', () => {
     expect(textOf(owner.file, 'n_b')).toBe('After re-invite');
   });
 
+  it('brings unconfirmed edits along when the owner has forgotten the place, rather than dropping them unsaid', () => {
+    const clock = manualClock();
+    const { host, state: owner } = ownerOf(base(), clock);
+    const first = loopbackPair();
+    host.attach(first.a, { role: 'editor' });
+    const guest = guestOf(clock);
+    guest.session.connect(first.b);
+    settle(first.pump);
+    const id = guest.session.id!;
+    first.drop();
+    guest.state.file = updateNode(guest.state.file!, 'n_a', { text: 'Made offline' });
+    guest.session.localChanged();
+    // Eleven others come and go meanwhile: the owner keeps only the ten most recent dropped places.
+    for (let i = 0; i < 11; i += 1) {
+      clock.advance(10);
+      const other = loopbackPair();
+      host.attach(other.a, { role: 'editor' });
+      guestOf(clock).session.connect(other.b);
+      settle(other.pump);
+      other.drop();
+    }
+    const back = loopbackPair();
+    host.attach(back.a, { role: 'editor' });
+    guest.session.connect(back.b);
+    settle(back.pump);
+
+    expect(guest.session.id).not.toBe(id);
+    expect(textOf(owner.file, 'n_a')).toBe('Made offline');
+    expect(textOf(guest.state.file!, 'n_a')).toBe('Made offline');
+  });
+
+  it('asks for a fresh copy instead of holding commits without end through a very long drag', () => {
+    const clock = manualClock();
+    let busy = false;
+    const { host, state: owner } = ownerOf(base(), clock);
+    const { a, b, pump } = loopbackPair();
+    host.attach(a, { role: 'editor' });
+    const guest = guestOf(clock, () => busy);
+    guest.session.connect(b);
+    settle(pump);
+    busy = true;
+    for (let i = 1; i <= 5000; i += 1) {
+      owner.file = { ...owner.file, metadata: { ...owner.file.metadata, title: `t${i}` } };
+      host.commitLocal();
+      settle(pump);
+    }
+    expect((guest.session as unknown as { held: unknown[] }).held.length).toBeLessThanOrEqual(4096);
+    busy = false;
+    clock.advance(500);
+    settle(pump);
+    clock.advance(500);
+    settle(pump);
+    expect(guest.state.file!.metadata.title).toBe('t5000');
+  });
+
   it('never applies a patch in flight past the copy sent after a long gesture, ahead of the ones it dropped', () => {
     const clock = manualClock();
     let busy = true;

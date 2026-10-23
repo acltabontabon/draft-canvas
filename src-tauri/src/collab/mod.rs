@@ -21,7 +21,7 @@ use crate::errors::{AppError, ErrorKind};
 use crate::state::{AppState, HostEvent};
 use crate::util::lock;
 use std::collections::HashMap;
-use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -77,6 +77,10 @@ pub struct Limits {
     /// refuse what it is never given a chance to look at, so a flood stops here.
     pub inbound_bytes: Rate,
     pub inbound_messages: Rate,
+    /// Guest places one address may hold at once. Anyone with the link (or who read it off the
+    /// network) could otherwise open all `MAX_CONNECTIONS`, wait at the door, and keep everyone
+    /// else out; a person on two devices or in a few tabs still fits.
+    pub guests_per_address: usize,
 }
 
 impl Default for Limits {
@@ -100,6 +104,7 @@ impl Default for Limits {
                 per_second: 60,
                 burst: 240,
             },
+            guests_per_address: 3,
         }
     }
 }
@@ -197,6 +202,8 @@ pub(crate) struct Shared {
     /// Connections being upgraded or open, counted before the upgrade is accepted so that eleven
     /// simultaneous requests can't all slip past the cap.
     slots: AtomicUsize,
+    /// Of those, how many each address holds (`Limits::guests_per_address`).
+    by_address: Mutex<HashMap<IpAddr, usize>>,
     pub(crate) shutdown: watch::Sender<bool>,
     drained: Notify,
 }
@@ -234,7 +241,13 @@ impl Shared {
         *self.shutdown.borrow()
     }
 
-    pub(crate) fn reserve(self: &Arc<Self>, session: u64) -> Option<Slot> {
+    pub(crate) fn reserve(self: &Arc<Self>, session: u64, address: IpAddr) -> Option<Slot> {
+        // The address's count is held while the overall one is taken, so the two agree.
+        let mut by_address = lock(&self.by_address);
+        let held = by_address.get(&address).copied().unwrap_or(0);
+        if held >= self.limits.guests_per_address {
+            return None;
+        }
         // A bounded increment, spelled out: `fetch_update` is deprecated from Rust 1.99 (renamed
         // `try_update`, which the 1.88 floor in Cargo.toml doesn't have), and CI denies warnings.
         let mut n = self.slots.load(Ordering::SeqCst);
@@ -246,10 +259,12 @@ impl Shared {
                 .slots
                 .compare_exchange_weak(n, n + 1, Ordering::SeqCst, Ordering::SeqCst)
             {
-                Ok(_) => return Some(Slot(self.clone(), session)),
+                Ok(_) => break,
                 Err(current) => n = current,
             }
         }
+        by_address.insert(address, held + 1);
+        Some(Slot(self.clone(), session, address))
     }
 
     /// Takes a freshly upgraded connection onto the books, unless the server is stopping. The check
@@ -291,7 +306,7 @@ impl Shared {
 }
 
 /// A place among the `MAX_CONNECTIONS`, given back when the connection ends or its upgrade fails.
-pub(crate) struct Slot(Arc<Shared>, u64);
+pub(crate) struct Slot(Arc<Shared>, u64, IpAddr);
 
 impl Slot {
     pub(crate) fn shared(&self) -> &Arc<Shared> {
@@ -306,6 +321,15 @@ impl Slot {
 
 impl Drop for Slot {
     fn drop(&mut self) {
+        {
+            let mut by_address = lock(&self.0.by_address);
+            if let Some(held) = by_address.get_mut(&self.2) {
+                *held -= 1;
+                if *held == 0 {
+                    by_address.remove(&self.2);
+                }
+            }
+        }
         self.0.slots.fetch_sub(1, Ordering::SeqCst);
         self.0.drained.notify_waiters();
     }
@@ -389,6 +413,7 @@ impl Relay {
             session: AtomicU64::new(0),
             conns: Mutex::new(HashMap::new()),
             slots: AtomicUsize::new(0),
+            by_address: Mutex::new(HashMap::new()),
             shutdown: watch::channel(false).0,
             drained: Notify::new(),
         });

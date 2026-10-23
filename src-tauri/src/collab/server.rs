@@ -9,6 +9,7 @@ use axum::extract::State;
 use axum::http::{header, HeaderMap, HeaderValue, Method, StatusCode, Uri};
 use axum::response::{IntoResponse, Response};
 use axum::routing::any;
+use axum::Extension;
 use axum::Router;
 use hyper::server::conn::http1;
 use hyper_util::rt::{TokioIo, TokioTimer};
@@ -69,7 +70,8 @@ pub(super) async fn serve(listener: TcpListener, shared: Arc<Shared>) {
                     continue;
                 }
                 let held = held.clone();
-                let router = router.clone();
+                // Who is asking, for the guest-places-per-address limit at the upgrade.
+                let router = router.clone().layer(Extension(Peer(peer.ip())));
                 connections.spawn(async move {
                     let _held = held;
                     serve_connection(stream, router).await;
@@ -215,10 +217,15 @@ fn authorized(headers: &HeaderMap, shared: &Shared) -> bool {
     protocol && token
 }
 
+/// The address a connection came from.
+#[derive(Clone, Copy)]
+struct Peer(IpAddr);
+
 /// Checked in order, cheapest first, and all before the upgrade is accepted: the server's own
 /// name, a page this server served, the session's token, a well-formed upgrade, a free place.
 async fn upgrade(
     State(shared): State<Arc<Shared>>,
+    Extension(Peer(address)): Extension<Peer>,
     headers: HeaderMap,
     upgrade: Result<WebSocketUpgrade, WebSocketUpgradeRejection>,
 ) -> Response {
@@ -245,7 +252,7 @@ async fn upgrade(
     if shared.stopping() {
         return plain(StatusCode::SERVICE_UNAVAILABLE, "Stopping", host);
     }
-    let Some(slot) = shared.reserve(session) else {
+    let Some(slot) = shared.reserve(session, address) else {
         return plain(StatusCode::SERVICE_UNAVAILABLE, "Too many guests", host);
     };
     // A failed upgrade drops the callback, and the slot with it. Both limits bound only what the

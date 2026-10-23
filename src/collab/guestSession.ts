@@ -32,7 +32,7 @@ import {
   type Resend,
   type Role,
 } from './protocol';
-import { Replica } from './replica';
+import { Replica, type PendingPatch } from './replica';
 import { sanitizeChanges } from './sanitize';
 import type { CollabTransport } from './transport/types';
 
@@ -67,6 +67,13 @@ export interface GuestEvents {
 
 type Inbound = Extract<HostMessage, { t: 'commit' | 'ack' | 'snapshot' }>;
 
+/**
+ * What may wait for a gesture here to end. A drag can be held as long as a mouse button can, while a
+ * busy session keeps committing; past this the waiting commits are dropped and a fresh copy asked for
+ * once the gesture ends, which is the same file for far less memory.
+ */
+const MAX_HELD = 4096;
+
 function resendOf(message: Resend): Resend {
   return message.handled === undefined || message.epoch === undefined ? {} : { handled: message.handled, epoch: message.epoch };
 }
@@ -88,6 +95,8 @@ export class GuestSession {
   private pingCount = 0;
   /** After a gap in the commits: everything until a fresh snapshot is ignored. */
   private awaitingSnapshot = false;
+  /** Commits held for a gesture overflowed and were dropped: a fresh copy is asked for once it ends. */
+  private heldOut = false;
   /** The epoch of the last fresh copy taken in, for every patch sent after it (`Resend`); `null` from an older owner. */
   private epoch: number | null = null;
   private ended = false;
@@ -178,6 +187,17 @@ export class GuestSession {
     this.events.unconfirmed(this.replica.pending.length);
   }
 
+  /** Everything still unconfirmed, as one patch — or, too large to carry, given up and said so. */
+  private sendOrDrop(patch: PendingPatch | null): void {
+    if (!patch || !this.replica) return;
+    if (exceedsMessageLimit(encode({ t: 'patch', clientSeq: patch.clientSeq, changes: patch.changes, ...(this.epoch === null ? {} : { epoch: this.epoch }) }), MAX_GUEST_MESSAGE_BYTES)) {
+      this.replica.discardPending();
+      this.events.tooLarge();
+      return;
+    }
+    this.sendPatch(patch);
+  }
+
   private sendPatch(patch: { clientSeq: number; changes: unknown }): void {
     this.send({ t: 'patch', clientSeq: patch.clientSeq, changes: patch.changes, ...(this.epoch === null ? {} : { epoch: this.epoch }) });
   }
@@ -202,8 +222,14 @@ export class GuestSession {
       case 'ack':
       case 'snapshot':
         if (!this.replica && message.t !== 'snapshot') return;
-        if (this.held.length > 0 || this.env.isBusy()) {
-          this.held.push(message);
+        if (this.held.length > 0 || this.heldOut || this.env.isBusy()) {
+          if (this.heldOut) return this.scheduleHold();
+          if (this.held.length >= MAX_HELD) {
+            this.held.length = 0;
+            this.heldOut = true;
+          } else {
+            this.held.push(message);
+          }
           this.scheduleHold();
           return;
         }
@@ -241,11 +267,15 @@ export class GuestSession {
     if (this.sessionId !== null && message.session !== this.sessionId) return this.finish('unauthorized');
     this.sessionId = message.session;
     const resuming = this.replica !== null && this.selfId === message.peer;
+    // Back, but as someone new: the owner forgot this place (more people dropped meanwhile than it
+    // keeps). What is on screen and not yet confirmed comes along rather than vanishing unsaid.
+    const unconfirmed = this.replica && !resuming ? diffFile(this.replica.confirmed, this.env.readFile()) : [];
     this.selfId = message.peer;
     this.key = message.key;
     this.access = message.role;
     this.awaitingSnapshot = false;
     this.held.length = 0;
+    this.heldOut = false;
     if (resuming) {
       this.env.setAccess(message.role);
       // Taken in like any snapshot: after a gesture under way has ended, and after the edits on screen
@@ -258,7 +288,11 @@ export class GuestSession {
       // A fresh page given an old place back numbers its patches on from where that place left off.
       if (message.handled !== undefined) this.replica.rebase(message.handled);
       this.epoch = message.epoch ?? null;
-      this.env.open(parsed.document, message.role);
+      if (unconfirmed.length > 0) {
+        if (message.role === 'editor') this.sendOrDrop(this.replica.propose(unconfirmed));
+        else this.events.rejected('view-only');
+      }
+      this.env.open(this.replica.local, message.role);
     }
     this.events.joined(message.peer, message.role, message.peers.find((peer) => peer.id === message.peer)?.color);
     this.events.peers(message.peers.filter((peer) => peer.id !== message.peer).map((peer) => ({ ...peer, link: 'live' as const })));
@@ -281,13 +315,7 @@ export class GuestSession {
         // Everything still unconfirmed goes as one patch, in the new epoch: the owner has dropped any
         // sent before the copy, so none can land out of order — and one patch can't trip a rate limit.
         this.epoch = message.epoch;
-        const patch = replica.rebase(message.handled);
-        if (patch && exceedsMessageLimit(encode({ t: 'patch', clientSeq: patch.clientSeq, changes: patch.changes, epoch: message.epoch }), MAX_GUEST_MESSAGE_BYTES)) {
-          replica.discardPending();
-          this.events.tooLarge();
-        } else if (patch) {
-          this.sendPatch(patch);
-        }
+        this.sendOrDrop(replica.rebase(message.handled));
       } else {
         // An older owner skips any of these it already applied (it remembers each patch number).
         for (const patch of replica.pending) this.sendPatch(patch);
@@ -335,7 +363,13 @@ export class GuestSession {
   /** Applies what waited for a gesture to end, in the order it arrived. */
   drainHeld(): void {
     while (this.held.length > 0 && !this.env.isBusy()) this.apply(this.held.shift()!);
-    if (this.held.length > 0) this.scheduleHold();
+    if (this.heldOut && !this.env.isBusy()) {
+      this.heldOut = false;
+      // Anything the gesture made goes into the replica first, as `apply` does, then a fresh copy.
+      this.localChanged();
+      this.resync();
+    }
+    if (this.held.length > 0 || this.heldOut) this.scheduleHold();
   }
 
   private scheduleHeartbeat(): void {
@@ -369,6 +403,7 @@ export class GuestSession {
     if (this.resyncTimer !== null) this.clock.clearTimeout(this.resyncTimer);
     this.holdTimer = this.heartbeatTimer = this.resyncTimer = null;
     this.held.length = 0;
+    this.heldOut = false;
     this.events.status('ended', reason);
   }
 

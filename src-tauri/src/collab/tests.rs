@@ -564,7 +564,12 @@ async fn only_a_page_this_server_served_may_open_the_socket() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn the_eleventh_guest_waits_for_someone_to_leave() {
-    let (events, relay, port) = started(Limits::default()).await;
+    // Every guest here comes from loopback, so one address may hold every place.
+    let (events, relay, port) = started(Limits {
+        guests_per_address: MAX_CONNECTIONS,
+        ..Limits::default()
+    })
+    .await;
     let mut guests = Vec::new();
     for _ in 0..MAX_CONNECTIONS {
         guests.push(guest(port).await);
@@ -576,6 +581,25 @@ async fn the_eleventh_guest_waits_for_someone_to_leave() {
     assert_eq!(events.closed(&first).await, "closed");
     guests.push(guest(port).await);
     events.opened(MAX_CONNECTIONS).await;
+    relay.stop("stopped").await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn one_address_cannot_hold_every_guest_place() {
+    let (events, relay, port) = started(Limits::default()).await;
+    let per_address = Limits::default().guests_per_address;
+    let mut guests = Vec::new();
+    for _ in 0..per_address {
+        guests.push(guest(port).await);
+    }
+    assert_eq!(connect(port, Upgrade::ok(port)).await.err(), Some(503));
+    // A place given back is free again for the same address.
+    let first = events.opened(0).await;
+    let mut leaving = guests.remove(0);
+    leaving.close(None).await.unwrap();
+    assert_eq!(events.closed(&first).await, "closed");
+    guests.push(guest(port).await);
+    events.opened(per_address).await;
     relay.stop("stopped").await;
 }
 

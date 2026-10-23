@@ -27,9 +27,6 @@ export interface Commit {
 
 export const HOST_ORIGIN = 'host';
 
-/** How many recent commits are kept for a collaborator reconnecting after a short drop. */
-export const REPLAY_CAPACITY = 512;
-
 export interface PatchOutcome {
   /** Set when the patch changed the file: the commit to send to everyone, the sender included. */
   commit?: Commit;
@@ -46,7 +43,6 @@ export interface PeerLedger {
 export class HostCore {
   private current: DraftDocument;
   private seqNo = 0;
-  private readonly recent: Commit[] = [];
 
   constructor(file: DraftDocument) {
     this.current = file;
@@ -98,19 +94,13 @@ export class HostCore {
     return { commit: this.record({ seq: this.seqNo + 1, changes, origin, clientSeq }) };
   }
 
-  /** The commits after `seq`, or `null` when they are no longer all held (send a snapshot instead). */
-  since(seq: number): Commit[] | null {
-    if (seq === this.seqNo) return [];
-    if (seq > this.seqNo) return null;
-    const first = this.recent[0];
-    if (!first || first.seq > seq + 1) return null;
-    return this.recent.filter((commit) => commit.seq > seq);
-  }
-
+  /**
+   * Nothing is kept for replaying: a collaborator coming back is always sent a fresh copy (`Resend`),
+   * and the hundreds of commits a replay buffer held — a pasted diagram each, as like as not — were
+   * memory no one read.
+   */
   private record(commit: Commit): Commit {
     this.seqNo = commit.seq;
-    this.recent.push(commit);
-    if (this.recent.length > REPLAY_CAPACITY) this.recent.shift();
     return commit;
   }
 }
