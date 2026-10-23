@@ -516,8 +516,8 @@ function migrateAddWaypoints(doc: Record<string, unknown>): Record<string, unkno
  * frozen copy, like `nearestSides`: what a v20 file meant can't change when the live parser does.
  *
  * - Every character Markdown could read as syntax is backslash-escaped where it could act: emphasis,
- *   code, highlight and link punctuation anywhere; list, heading and quote markers at a line's start;
- *   the `://` that would turn an address into a link.
+ *   code, highlight and link punctuation anywhere; list, heading, quote and table-delimiter marks at
+ *   a line's start; the `://` that would turn an address into a link.
  * - Leading indentation becomes no-break spaces, which Markdown keeps, so an indented line stays
  *   indented instead of starting a list or losing its offset.
  * - A blank line becomes a line holding one no-break space, so the gap stays one line tall rather
@@ -530,7 +530,9 @@ export function escapeLegacyText(text: string): string {
       if (line.trim() === '') return '\u00a0';
       const indent = /^[ \t]*/.exec(line)![0];
       let rest = line.slice(indent.length).replace(/[\\`*_~=[\]<>|&!]/g, '\\$&').replace(/:\/\//g, '\\://');
-      if (/^(?:#|[-+](?:\s|$|-)|>)/.test(rest)) rest = `\\${rest}`;
+      // A leading `:` or `-` can open a table's delimiter row even without pipes: "a\n:-" and
+      // "a\n-:" were each a one-column table.
+      if (/^[#>:+-]/.test(rest)) rest = `\\${rest}`;
       rest = rest.replace(/^(\d+)([.)])(?=\s|$)/, '$1\\$2');
       return indent.replace(/\t/g, '    ').replace(/ /g, '\u00a0') + rest;
     })

@@ -185,7 +185,7 @@ describe('v21: plain text written before Markdown reads the same', () => {
       .join('\n');
 
   it('escapes what Markdown would act on, so the words come out exactly as typed', () => {
-    for (const legacy of ['- not a list', '# not a heading', '1. not numbered', 'a *b* _c_ `d` ~~e~~ ==f==', '> not quoted', '---', '| a | b |', 'https://example.com', '[x]{.rose} [y](z)', 'C:\\path\\to']) {
+    for (const legacy of ['- not a list', '# not a heading', '1. not numbered', 'a *b* _c_ `d` ~~e~~ ==f==', '> not quoted', '---', '| a | b |', 'https://example.com', '[x]{.rose} [y](z)', 'C:\\path\\to', 'a\n:-', 'a\n-:', 'a\n:-:']) {
       expect(plainOf(escapeLegacyText(legacy))).toBe(legacy);
     }
   });
