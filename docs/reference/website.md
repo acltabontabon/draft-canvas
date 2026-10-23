@@ -101,8 +101,11 @@ Wrangler is pinned in `www/cloudflare/package.json` and its lockfile (`npm ci`, 
 `npx --no-install wrangler`). To upgrade, change the version and run `npm install --package-lock-only`
 there.
 
-`app.headers` becomes the editor's `_headers`. Never set `Cross-Origin-Opener-Policy` there: it
-breaks the old-address handoff, which uses `window.opener`.
+`app.headers` becomes the editor's `_headers`. It prevents framing with an HTTP CSP
+`frame-ancestors 'none'` directive and `X-Frame-Options: DENY` for older browsers. This header policy
+adds to the editor's build-generated CSP meta tag; `frame-ancestors` cannot be enforced through a
+meta tag. Never set `Cross-Origin-Opener-Policy` there: it breaks the old-address handoff, which uses
+`window.opener`.
 
 ### The collaboration relay
 
