@@ -180,7 +180,11 @@ function chooseArrangement(
     // their gap — so the same arrangement without one is judged beside it, and the better kept.
     const alone = keepDirection && hasLabelledTrunk(candidate.placed) && !pastDeadline() ? judge({ ...layout, fans: 'unlabelled' }) : undefined;
     if (alone) keep(alone);
-    if (isCleanCandidate({ report: candidate.found, fit: candidate.fit }) || (alone && isCleanCandidate({ report: alone.found, fit: alone.fit }))) break;
+    // A trunk on a side other connectors use too can lose the same way: judged against the
+    // arrangement that keeps labelled trunks to sides of their own.
+    const unshared = keepDirection && hasSharedSideTrunk(candidate.placed) && !pastDeadline() ? judge({ ...layout, fans: 'unshared' }) : undefined;
+    if (unshared) keep(unshared);
+    if ([candidate, alone, unshared].some((c) => c && isCleanCandidate({ report: c.found, fit: c.fit }))) break;
   }
   // Readable is not the same as legible: a clean arrangement can still send connectors the width of
   // the canvas. When the reading direction was left to us and a clean result came early, the other
@@ -193,7 +197,9 @@ function chooseArrangement(
   // A crowded drill-down can have several siblings. Compare its unbundled alternative once, on
   // the best layout, rather than doubling every attempt before the overview can even be planned.
   if (best && !keepDirection && hasLabelledTrunk(best.placed) && !pastDeadline()) {
-    keep(judge({ ...best.layout, fans: 'unlabelled' }));
+    const found = best as Candidate;
+    keep(judge({ ...found.layout, fans: 'unlabelled' }));
+    if (hasSharedSideTrunk(found.placed) && !pastDeadline()) keep(judge({ ...found.layout, fans: 'unshared' }));
   }
   const repaired = tried - 1;
   if (!best) throw new AgentError('INTERNAL', 'Nothing was laid out.');
@@ -272,6 +278,18 @@ function isBetterArrangement(a: Candidate, b: Candidate, preferred?: LayoutSpec[
 export function hasLabelledTrunk(room: { nodes: readonly DraftNode[]; edges: readonly DraftEdge[] }): boolean {
   const plan = routingPlan(room.nodes, room.edges, 'transient');
   return room.edges.some((e) => e.label && plan.spineFor(e.id));
+}
+
+/** Whether a labelled trunk leaves (or reaches) a shape by a side other connectors there use too. */
+export function hasSharedSideTrunk(room: { nodes: readonly DraftNode[]; edges: readonly DraftEdge[] }): boolean {
+  const plan = routingPlan(room.nodes, room.edges, 'transient');
+  const sideAt = (edge: DraftEdge, node: string) => (edge.source === node ? edge.sourceAnchor?.side : edge.target === node ? edge.targetAnchor?.side : undefined);
+  return room.edges.some((edge) => {
+    const spine = edge.label ? plan.spineFor(edge.id) : undefined;
+    if (!spine) return false;
+    const hub = spine.hub === 'source' ? edge.source : edge.target;
+    return room.edges.some((other) => other.id !== edge.id && plan.spineFor(other.id)?.id !== spine.id && sideAt(other, hub) === spine.hubSide);
+  });
 }
 
 /** What a receipt says about legibility: the counts, and which connectors or notes to look at. */

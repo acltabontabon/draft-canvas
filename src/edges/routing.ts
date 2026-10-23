@@ -972,10 +972,20 @@ function buildSpinePath(
   // the mirror image — each member has its own run up to the trunk and shares
   // everything from there into the hub.
   const fanOut = spine.hub === 'source';
-  const branchFrom = fanOut ? leave : from;
-  const branchTo = fanOut ? to : enter;
   const stemFrom = fanOut ? from : leave;
   const stemTo = fanOut ? enter : to;
+  // A branch reaching past the nearest far node — through a layer of other shapes, to a node
+  // further on — keeps its label in the corridor the trunk stands in, level with its siblings',
+  // rather than at its own middle, out among the shapes it passes.
+  const outward = spine.hubSide === 'right' || spine.hubSide === 'bottom' ? 1 : -1;
+  const corridorEnd = trunk - outward * spine.trunkGap + outward * spine.corridor;
+  const inCorridor = (p: { x: number; y: number }) => {
+    const along = verticalTrunk ? p.x : p.y;
+    if ((along - corridorEnd) * outward <= 0) return p;
+    return verticalTrunk ? { x: corridorEnd, y: p.y } : { x: p.x, y: corridorEnd };
+  };
+  const branchFrom = fanOut ? leave : inCorridor(from);
+  const branchTo = fanOut ? inCorridor(to) : enter;
 
   return {
     d: roundedStepPath(dedupePoints([from, enter, leave, to]), 10),

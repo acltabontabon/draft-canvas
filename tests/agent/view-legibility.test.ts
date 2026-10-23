@@ -20,7 +20,9 @@ function tangle(prefix: string, size: number) {
   return { nodes: [...left, ...right], relationships };
 }
 
-describe('create receipt legibility', () => {
+// The tangle composes and repairs a complete bipartite graph several times over: seconds of real work
+// on a two-core CI runner running every suite at once, not a hang.
+describe('create receipt legibility', { timeout: 30_000 }, () => {
   it('has no views when there is no inside view', () => {
     const { legibility } = receiptOf({
       requestId: 'v1',

@@ -108,6 +108,9 @@ the release notes and the in-app What's New are generated from here. See
 - Tooltips no longer stay closed when you hover back onto a button quickly.
 - An agent's or proposal's preview draws connectors with their bends, side by side when parallel,
   and with their reply line.
+- An agent's diagram where two services call the same set of others (a frontend and a checkout
+  service, both calling cart, catalog, currency and shipping) is no longer refused or drawn as a
+  tangle: each caller's calls share one trunk, running straight past the other caller.
 - The status bar says "Saved" only once every edit is saved.
 
 ### Desktop

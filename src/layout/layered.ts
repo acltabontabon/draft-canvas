@@ -150,6 +150,9 @@ const TRUNK_SHARE = 0.62;
 const BRANCH_AIR = 16;
 /** How far off its feeder's line a box may be and still be moved onto it. */
 const STRAIGHTEN = 28;
+/** How hard a long edge's corridor and the box it reaches pull on each other when a short edge
+ *  arrives there too — above the main path's 8, so the two line up even against it. */
+const CORRIDOR_PULL = 12;
 
 export class LayoutError extends Error {
   constructor(message: string) {
@@ -774,6 +777,15 @@ function layerComponent(ids: string[], edges: LiftedEdge[], env: Env): Block {
     fanOut.set(e.source, (fanOut.get(e.source) ?? 0) + 1);
     fanIn.set(e.target, (fanIn.get(e.target) ?? 0) + 1);
   }
+  // A trunk's branch runs straight off the trunk at the height it arrives at. A long one, into a box
+  // something in the layer just before also feeds (two callers fanning out to the same services, one
+  // a layer further on), has to pass the layer it skips at exactly that height, and can't step
+  // sideways in the last gap, where the short edge comes in. Its corridor lines up with the box
+  // instead (see `corridors` below).
+  const corridorEdges = new Set(dag.filter((e) => e.bundled && !reversed.has(e.id) && get(rank, e.target) - get(rank, e.source) > 1 && (fanIn.get(e.target) ?? 0) > 0).map((e) => e.id));
+  const corridors: { target: string; dummies: string[] }[] = [];
+  // Shapes a trunk's branch reaches, by the layer the trunk leaves from.
+  const trunkInto = new Set(dag.filter((e) => e.bundled && !reversed.has(e.id)).map((e) => `${get(rank, e.source)}\u0000${e.target}`));
   for (const e of dag) {
     const from = get(rank, e.source);
     const to = get(rank, e.target);
@@ -783,7 +795,11 @@ function layerComponent(ids: string[], edges: LiftedEdge[], env: Env): Block {
     // A branch off a shared trunk carries its caption at the branch's middle, and the trunk takes
     // `TRUNK_SHARE` of the gap: the branch must be as long as the caption and its clearance.
     const branch = e.bundled && label > 0 ? Math.ceil((label + BRANCH_AIR) / (1 - TRUNK_SHARE)) : 0;
-    if (to > from) gapLabel[from] = Math.max(at(gapLabel, from), label + trunk, branch);
+    // A lone connector into a shape a trunk's branch also reaches from this layer crosses that trunk
+    // in the gap, its caption at the gap's middle: the gap must be wide enough for the trunk, past
+    // the middle (`TRUNK_SHARE`), to clear the caption.
+    const beside = !e.bundled && label > 0 && trunkInto.has(`${from}\u0000${e.target}`) ? Math.ceil((label / 2 + BRANCH_AIR) / (TRUNK_SHARE - 0.5)) - CAPTION_AIR : 0;
+    if (to > from) gapLabel[from] = Math.max(at(gapLabel, from), label + trunk, branch, beside);
     // A return (reversed for layering) is drawn as a detour around the boxes, not along the reading
     // line, so it barely pulls: otherwise a reply from the far side drags its target off the line
     // it starts, and the forward connector turns into a jog for the sake of the return.
@@ -796,15 +812,19 @@ function layerComponent(ids: string[], edges: LiftedEdge[], env: Env): Block {
     const into = (env.endLine(e.target, e.targetEnd) ?? get(slots, e.target).lead) - get(slots, e.target).lead;
     let previous = e.source;
     let shift = out;
+    const corridor = corridorEdges.has(e.id);
+    const dummies: string[] = [];
     for (let r = from + 1; r < to; r += 1) {
       const id = `\u0000${e.id}:${r}`;
       slots.set(id, { dummy: true, along: 0, across: DUMMY_THICKNESS, lead: DUMMY_THICKNESS / 2 });
       rank.set(id, r);
-      links.push({ from: previous, to: id, weight: (e.primary ? 8 : 2) * pull, shift });
+      links.push({ from: previous, to: id, weight: (e.primary ? 8 : corridor && previous !== e.source ? CORRIDOR_PULL : 2) * pull, shift });
+      dummies.push(id);
       previous = id;
       shift = 0;
     }
-    links.push({ from: previous, to: e.target, weight: (e.primary ? 8 : previous === e.source ? 1 : 2) * pull, shift: shift - into });
+    links.push({ from: previous, to: e.target, weight: (e.primary ? 8 : corridor ? CORRIDOR_PULL : previous === e.source ? 1 : 2) * pull, shift: shift - into });
+    if (corridor) corridors.push({ target: e.target, dummies });
   }
 
   // 5. Order within layers.
@@ -959,6 +979,22 @@ function layerComponent(ids: string[], edges: LiftedEdge[], env: Env): Block {
       const solved = isotonic(desired, weights, gaps);
       layer.forEach((id, i) => centre.set(id, at(solved, i)));
     }
+  }
+
+  // A corridor ends level with the box it reaches (see `corridorEdges`), so the connector runs one
+  // straight line through every layer it skips: each layer it skips makes room for it there, its
+  // shapes moving aside as little as they can. Before straightening, which then carries whatever
+  // moved along with its own neighbours.
+  const pinned = new Map<string, number>();
+  for (const { target, dummies } of corridors) for (const id of dummies) pinned.set(id, get(centre, target));
+  for (const layer of layers) {
+    if (!layer.some((id) => pinned.has(id))) continue;
+    const solved = isotonic(
+      layer.map((id) => pinned.get(id) ?? get(centre, id)),
+      layer.map((id) => (pinned.has(id) ? 1e4 : 1)),
+      layer.slice(1).map((id, i) => separation(at(layer, i), id)),
+    );
+    layer.forEach((id, i) => centre.set(id, at(solved, i)));
   }
 
   // Straighten: a box a few pixels off the line of the one thing feeding it is moved onto that line
