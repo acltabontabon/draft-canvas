@@ -1466,14 +1466,20 @@ async fn connections_that_cannot_prove_the_token_take_no_guest_place_and_never_r
 
 #[test]
 fn the_proof_is_hmac_sha256_of_the_context_and_nonce() {
-    // Worked out independently (Python's `hmac`); `tests/collab/sha256.test.ts` holds the page to the
-    // same value, so the two ends can never disagree about what a right answer is.
+    // Worked out independently (Python's `hmac`). `tests/collab/sha256.test.ts` reads the same file,
+    // so the two ends can never disagree about what a right answer is. In a file rather than here,
+    // where code scanning takes a fixed test nonce for one used in earnest.
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../tests/fixtures/collab/lan-proof.json");
+    let vector: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let field = |name: &str| vector[name].as_str().unwrap().to_owned();
     assert_eq!(
         super::hex(&super::proof_for(
-            TOKEN.as_bytes(),
-            "00112233445566778899aabbccddeeff"
+            field("token").as_bytes(),
+            &field("nonce")
         )),
-        "9c655a981740086b45b9b187671c0fa22819e4604acd9a04bdf1bdf9d2309797"
+        field("proof")
     );
 }
 

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { hmacSha256Hex, sha256 } from '../../src/collab/transport/sha256';
+import { PROOF_CONTEXT } from '../../src/collab/transport/socket';
+import lanProof from '../fixtures/collab/lan-proof.json';
 
 const hex = (bytes: Uint8Array) => Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
 const utf8 = (text: string) => new TextEncoder().encode(text);
@@ -21,9 +23,7 @@ describe('the page’s own SHA-256, for an insecure context without crypto.subtl
 
   it('makes RFC 4231’s HMACs, and the same proof the desktop’s server expects', () => {
     expect(hmacSha256Hex('Jefe', 'what do ya want for nothing?')).toBe('5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843');
-    // `proof_for` in src-tauri/src/collab/mod.rs, held to the same value there.
-    expect(hmacSha256Hex('0123456789abcdef0123456789abcdef', 'draft-canvas lan v1|00112233445566778899aabbccddeeff')).toBe(
-      '9c655a981740086b45b9b187671c0fa22819e4604acd9a04bdf1bdf9d2309797',
-    );
+    // `proof_for` in src-tauri/src/collab/mod.rs is held to the same file.
+    expect(hmacSha256Hex(lanProof.token, PROOF_CONTEXT + lanProof.nonce)).toBe(lanProof.proof);
   });
 });
