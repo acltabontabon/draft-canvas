@@ -144,7 +144,10 @@ pub fn local_peer(ip: IpAddr) -> bool {
         }
         IpAddr::V6(v6) => match v6.to_ipv4_mapped() {
             Some(v4) => local_peer(IpAddr::V4(v4)),
-            None => v6.is_loopback() || is_unique_local_v6(v6) || is_link_local_v6(v6),
+            // Not fe80::/10: a browser can't be given the zone to open one, so only a hand-written
+            // client arrives from there — and it can make up any number of such addresses to get
+            // round every per-address limit.
+            None => v6.is_loopback() || is_unique_local_v6(v6),
         },
     }
 }

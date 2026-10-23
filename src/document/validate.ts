@@ -90,6 +90,19 @@ export type NormalizeResult =
 
 const finite = (value: unknown, fallback: number): number => (isFiniteNumber(value) ? value : fallback);
 
+/**
+ * Whether `node`'s chain of boundaries ends within `LIMITS.maxGroupDepth` steps. Walked no further
+ * than that, so a hostile chain costs no more; a loop never ends, and fails it too.
+ */
+export function withinGroupDepth(node: { parentId?: string }, byId: ReadonlyMap<string, { parentId?: string }>): boolean {
+  let cursor = node.parentId;
+  for (let depth = 0; cursor; depth += 1) {
+    if (depth >= LIMITS.maxGroupDepth) return false;
+    cursor = byId.get(cursor)?.parentId;
+  }
+  return true;
+}
+
 function text(value: unknown, max: number): string | undefined {
   return typeof value === 'string' ? cleanText(value, max) : undefined;
 }
@@ -613,6 +626,14 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
       }
       visited.add(cursor.id);
       cursor = cursor.parentId ? byId.get(cursor.parentId) : undefined;
+    }
+  }
+  // Nested too deep: the link that takes it past the limit goes. In list order, each walk bounded, so
+  // it costs at most the limit per node — and the same rule as live repair (`collab/repair.ts`).
+  for (const node of nodes) {
+    if (node.parentId && !withinGroupDepth(node, byId)) {
+      delete node.parentId;
+      droppedParents += 1;
     }
   }
 

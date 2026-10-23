@@ -159,3 +159,48 @@ describe('the knocker’s side', () => {
     vi.unstubAllGlobals();
   });
 });
+
+describe('the door, against squatters', () => {
+  it('tells a knock the door is full rather than leaving it waiting, and ignores knocks from a socket it turned away', async () => {
+    FakeSocket.made = [];
+    vi.stubGlobal('WebSocket', FakeSocket);
+    const rendezvous = await import('../../src/collab/rendezvous');
+    const identity = await newOwnerIdentity();
+    const link = newSessionLink(identity);
+    const lobby = new HostLobby(link, identity, 'wss://relay.example', 'Olive', { localOnly: true, server: '' }, {
+      status: () => {},
+      knocks: () => {},
+      admitted: () => {},
+      isReturning: () => null,
+      failed: () => {},
+    });
+    await lobby.open();
+    const socket = FakeSocket.made[0]!;
+    socket.fire('open');
+    const key = await rendezvous.roomKey(link);
+    const knockFrom = async (tag: string, name: string) => {
+      const exchange = await rendezvous.newExchange();
+      socket.fire('message', { data: JSON.stringify({ from: tag, data: await rendezvous.seal(key, 'to-host', { t: 'knock', name, publicKey: exchange.publicKey }) }) });
+    };
+    const tag = (n: number) => `g_${String(n).padStart(12, '0')}`;
+    for (let n = 0; n < 12; n += 1) await knockFrom(tag(n), `Squatter ${n}`);
+    await vi.waitFor(() => expect(lobby.list()).toHaveLength(12));
+
+    // The thirteenth hears the door is full.
+    await knockFrom(tag(12), 'Ada');
+    await vi.waitFor(async () => {
+      const toAda = socket.sent.map((text) => JSON.parse(text) as { to: string; data: string }).filter((frame) => frame.to === tag(12));
+      expect(toAda).toHaveLength(1);
+      expect(await rendezvous.unseal(key, 'to-guest', toAda[0]!.data)).toEqual({ t: 'busy' });
+    });
+
+    // Turned away, the same socket knocking again is ignored: it can't take its place back at once.
+    await lobby.deny(tag(0));
+    expect(lobby.list()).toHaveLength(11);
+    await knockFrom(tag(0), 'Squatter 0');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(lobby.list()).toHaveLength(11);
+    await lobby.close();
+    vi.unstubAllGlobals();
+  });
+});

@@ -113,8 +113,12 @@ export interface HelloMessage {
   name: string;
   /** A desktop LAN session's secret. WebRTC sessions are authenticated by the connection itself. */
   token?: string;
-  /** Present when reconnecting: who this was, the secret it was given to prove it, and the last commit it applied. */
-  resume?: { peer: string; key: string; seq: number };
+  /**
+   * Present when reconnecting: who this was, and the last commit it applied, with the secret it was
+   * given to prove it — as `proof` (`resumeProof`) over a connection with a `binding`, and as the
+   * `key` itself only over one without (the local network socket, where it is exposed anyway).
+   */
+  resume?: { peer: string; seq: number; key?: string; proof?: string };
 }
 
 export type GuestMessage =
@@ -144,7 +148,8 @@ export interface Resend {
 
 export type HostMessage =
   /** `key` is this collaborator's alone: peer ids are visible to everyone, so reclaiming one after a drop takes the key too. */
-  | ({ t: 'welcome'; v: number; session: string; peer: string; key: string; role: Role; seq: number; snapshot: unknown; peers: PeerInfo[] } & Resend)
+  /** `proof` answers a resume made by proof: the owner's `resumeProof`, so the collaborator knows it is the session they left. */
+  | ({ t: 'welcome'; v: number; session: string; peer: string; key: string; role: Role; seq: number; snapshot: unknown; peers: PeerInfo[]; proof?: string } & Resend)
   | ({ t: 'snapshot'; seq: number; snapshot: unknown } & Resend)
   | { t: 'commit'; seq: number; changes: unknown; origin: string; clientSeq?: number }
   | { t: 'ack'; clientSeq: number; rejected?: RejectReason }
@@ -307,9 +312,11 @@ export function readGuestMessage(value: unknown): GuestMessage | null {
       if (value.resume !== undefined) {
         if (!isRecord(value.resume)) return null;
         const peer = readId(value.resume.peer);
-        const key = readId(value.resume.key);
-        if (!peer || !key || !isInt(value.resume.seq)) return null;
-        hello.resume = { peer, key, seq: value.resume.seq };
+        const key = value.resume.key === undefined ? undefined : readId(value.resume.key);
+        const proof = value.resume.proof === undefined ? undefined : readProof(value.resume.proof);
+        // One way of proving it, never both.
+        if (!peer || !isInt(value.resume.seq) || (key === undefined) === (proof === undefined) || key === null || proof === null) return null;
+        hello.resume = { peer, seq: value.resume.seq, ...(key === undefined ? {} : { key }), ...(proof === undefined ? {} : { proof }) };
       }
       return hello;
     }
@@ -334,6 +341,11 @@ export function readGuestMessage(value: unknown): GuestMessage | null {
   }
 }
 
+/** A `resumeProof`: an HMAC-SHA-256, base64url. */
+function readProof(value: unknown): string | null {
+  return typeof value === 'string' && /^[A-Za-z0-9_-]{43}$/.test(value) ? value : null;
+}
+
 /** Both of `Resend`'s fields or neither: one alone would be read as the other's absence. */
 function readResend(value: Record<string, unknown>): Resend | null {
   if (value.handled === undefined && value.epoch === undefined) return {};
@@ -351,8 +363,9 @@ export function readHostMessage(value: unknown): HostMessage | null {
       const role = readRole(value.role);
       const peers = readPeers(value.peers);
       const resend = readResend(value);
-      if (!isInt(value.v, 1) || !session || !peer || !key || !role || !isInt(value.seq) || !peers || !isRecord(value.snapshot) || !resend) return null;
-      return { t: 'welcome', v: value.v, session, peer, key, role, seq: value.seq, snapshot: value.snapshot, peers, ...resend };
+      const proof = value.proof === undefined ? undefined : readProof(value.proof);
+      if (!isInt(value.v, 1) || !session || !peer || !key || !role || !isInt(value.seq) || !peers || !isRecord(value.snapshot) || !resend || proof === null) return null;
+      return { t: 'welcome', v: value.v, session, peer, key, role, seq: value.seq, snapshot: value.snapshot, peers, ...resend, ...(proof === undefined ? {} : { proof }) };
     }
     case 'snapshot': {
       const resend = readResend(value);

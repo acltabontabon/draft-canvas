@@ -90,6 +90,18 @@ export async function returningProof(resumeKey: string, link: SessionLink, knock
   return toBase64Url(new Uint8Array(mac));
 }
 
+/**
+ * Proof of a place's resume key over one connection, by `side`: the collaborator's that the place is
+ * theirs, the owner's that it is the session they left. Over the connection's `binding` (the owner's
+ * certificate, which the browser checks), so the key itself never crosses a connection — one opened
+ * by someone else's invite learns nothing it could use — and a proof made for one is no use on another.
+ */
+export async function resumeProof(resumeKey: string, side: 'guest' | 'owner', session: string, binding: string): Promise<string> {
+  const key = await crypto.subtle.importKey('raw', ENCODER.encode(resumeKey), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const mac = await crypto.subtle.sign('HMAC', key, ENCODER.encode(`draft-canvas resume v1|${side}|${session}|${binding}`));
+  return toBase64Url(new Uint8Array(mac));
+}
+
 /** Compares two strings in time that doesn't depend on where they first differ. */
 export function sameSecret(a: string, b: string): boolean {
   let diff = a.length ^ b.length;
@@ -237,7 +249,11 @@ export interface Answer {
 }
 
 export type ToHost = Knock | Answer | { t: 'cancel' };
-export type ToGuest = Seen | Offer | Closed;
+/**
+ * `busy`: the door is full, try again shortly. Sealed with the room key only, so not proof it came
+ * from the owner — but the relay lets no one else address a guest, and it can already drop a knock.
+ */
+export type ToGuest = Seen | Offer | Closed | { t: 'busy' };
 
 const KEY = /^[A-Za-z0-9_-]{87}$/;
 /** A P-256 ECDSA signature as WebCrypto writes it: 64 bytes, IEEE P1363. */
@@ -278,6 +294,7 @@ export function readToGuest(value: unknown): ToGuest | null {
   }
   if (value.t === 'offer') return typeof value.box === 'string' && BOX.test(value.box) ? { t: 'offer', box: value.box } : null;
   if (value.t === 'closed') return typeof value.box === 'string' && BOX.test(value.box) ? { t: 'closed', box: value.box } : null;
+  if (value.t === 'busy') return { t: 'busy' };
   return null;
 }
 

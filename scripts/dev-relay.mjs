@@ -24,6 +24,7 @@ import {
   admitHost,
   checkOwner,
   checkRequest,
+  clientKey,
   connectionAllowed,
   closePeer,
   deadline,
@@ -326,7 +327,7 @@ export function startRelay({ port = 8791, host = '127.0.0.1', origins = parseOri
       refused = admitHost(peers, owner);
       if (!refused) claims.set(room, owner.claim);
     } else {
-      refused = admission(peers, role);
+      refused = admission(peers, role, clientKey(socket.remoteAddress ?? 'unknown'));
     }
     if (refused) {
       connection.close(refused.code, refused.reason);
@@ -334,7 +335,7 @@ export function startRelay({ port = 8791, host = '127.0.0.1', origins = parseOri
     }
     if (!rooms.has(room)) rooms.set(room, new Set());
     rooms.get(room).add(connection);
-    connection.write(openState(peers, role, role === 'guest' ? uniqueGuestTag(peers) : null, Date.now()));
+    connection.write(openState(peers, role, role === 'guest' ? uniqueGuestTag(peers) : null, Date.now(), clientKey(socket.remoteAddress ?? 'unknown')));
     opened(relay.peers(room), connection);
     schedule(room);
     connection.drain();

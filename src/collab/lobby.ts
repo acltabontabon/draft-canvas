@@ -37,8 +37,15 @@ import { CONNECT_TIMEOUT_MS, createHostOffer, joinFromInvite, type HostOffer } f
 /** Waits between attempts to get the waiting room back on the relay after its connection drops. */
 const RECONNECT_MS = [1_000, 2_000, 5_000, 10_000, 20_000, 30_000];
 
-/** Knocks waiting at once; more are turned away until some are answered. */
+/** Knocks waiting at once; more are told the door is full until some are answered. */
 export const MAX_KNOCKS = 12;
+/** Relay tags and returning proofs remembered as spent, at most; past it the oldest are forgotten. */
+const MAX_REMEMBERED = 1024;
+
+function remember(set: Set<string>, value: string): void {
+  set.add(value);
+  if (set.size > MAX_REMEMBERED) set.delete(set.values().next().value!);
+}
 /** How long a let-in knocker has to answer before the offer is withdrawn. */
 export const ANSWER_TIMEOUT_MS = 60_000;
 /**
@@ -90,6 +97,18 @@ export class HostLobby {
   private readonly knocks = new Map<string, KnockState>();
   /** Knocks whose key exchange is still being worked out; they count toward the door's limit. */
   private readonly pendingKnocks = new Set<string>();
+  /**
+   * Relay tags turned away or that walked away: a knock from one again is ignored. A real knocker's
+   * page closes its socket when it is refused or cancels, so only someone parking knocks — or
+   * knocking and cancelling to make the owner greet them over and over — knocks again on the same one.
+   */
+  private readonly turnedAway = new Set<string>();
+  /**
+   * Returning proofs already used to let someone straight back in. A proof doesn't change between
+   * knocks, so the relay could otherwise replay a captured one and have the owner open connections
+   * to nobody, unasked. Used again, it is an ordinary knock the owner answers.
+   */
+  private readonly spentProofs = new Set<string>();
   private ended = false;
   private readonly link: SessionLink;
   private readonly identity: OwnerIdentity;
@@ -175,7 +194,12 @@ export class HostLobby {
     const message = readToHost(await unseal(this.key!, 'to-host', data));
     if (!message || this.ended) return;
     if (message.t === 'knock') {
-      if (this.knocks.has(from) || this.pendingKnocks.has(from) || this.knocks.size + this.pendingKnocks.size >= MAX_KNOCKS) return;
+      if (this.knocks.has(from) || this.pendingKnocks.has(from) || this.turnedAway.has(from)) return;
+      if (this.knocks.size + this.pendingKnocks.size >= MAX_KNOCKS) {
+        // Said, not left unanswered: ignored, a knocker waited at "Knocking…" for good.
+        this.relay?.send(from, await seal(this.key!, 'to-guest', { t: 'busy' }));
+        return;
+      }
       // The exchange is worked out before the knock takes a place at the door: a key that isn't a real
       // point on the curve fails here and leaves nothing behind (it could otherwise fill the door with
       // knocks nobody can see or answer).
@@ -227,6 +251,7 @@ export class HostLobby {
         this.events.failed(knock.name, 'connect');
       }
     } else if (message.t === 'cancel') {
+      remember(this.turnedAway, from);
       this.forget(from);
     }
   }
@@ -237,9 +262,11 @@ export class HostLobby {
    */
   private async returningRole(returning: { peer: string; proof: string }, knockerKey: string): Promise<Role | null> {
     const place = this.events.isReturning(returning.peer);
-    if (!place) return null;
+    if (!place || this.spentProofs.has(returning.proof)) return null;
     const expected = await returningProof(place.key, this.link, knockerKey);
-    return sameSecret(expected, returning.proof) ? place.role : null;
+    if (!sameSecret(expected, returning.proof)) return null;
+    remember(this.spentProofs, returning.proof);
+    return place.role;
   }
 
   /** Lets a knocker in with `role`: their connection is prepared and sent to them alone. */
@@ -271,6 +298,7 @@ export class HostLobby {
   async deny(id: string): Promise<void> {
     const knock = this.knocks.get(id);
     if (!knock) return;
+    remember(this.turnedAway, id);
     if (knock.pair) this.relay?.send(id, await this.closed(knock.pair, 'denied'));
     this.forget(id);
   }
@@ -322,6 +350,8 @@ export type KnockStatus =
   | { kind: 'joining'; owner: string }
   | { kind: 'denied' }
   | { kind: 'ended' }
+  /** The owner's door is full: too many people waiting at once. */
+  | { kind: 'busy' }
   | { kind: 'unavailable' };
 
 /**
@@ -405,6 +435,8 @@ export async function knock(
       owner = message.owner;
       pair = await exchange.pairWith(message.publicKey, link);
       onStatus({ kind: 'waiting', owner });
+    } else if (message.t === 'busy') {
+      if (!joining) finish({ kind: 'busy' }, null);
     } else if (message.t === 'closed' && pair) {
       const opened = await unseal(pair, 'to-guest', message.box);
       const reason = typeof opened === 'object' && opened !== null ? (opened as { reason?: unknown }).reason : undefined;

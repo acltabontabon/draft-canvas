@@ -567,9 +567,18 @@ function EditorScreen({ session }: { session: DocumentSession }) {
                       : 'Live session — view only. The owner can let you edit.'}
               </span>
               <span aria-hidden="true">·</span>
-              <Button variant="quiet" onClick={() => void session.makeEditableCopy()}>
-                Make an editable copy
-              </Button>
+              {readOnly.collaborative && !window.isSecureContext ? (
+                // Opened from the owner's local network link, a plain-http address: a copy kept in this
+                // browser there could be read by whatever answers at that address next. An export is
+                // the person's own file.
+                <Button variant="quiet" onClick={() => setExportOpen(true)}>
+                  Export a copy
+                </Button>
+              ) : (
+                <Button variant="quiet" onClick={() => void session.makeEditableCopy()}>
+                  Make an editable copy
+                </Button>
+              )}
             </div>
           )}
           <PresenceDock />

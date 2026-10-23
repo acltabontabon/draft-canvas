@@ -10,7 +10,7 @@ import { Button } from '../common/Button';
 import { Icon, type IconName } from '../common/Icon';
 import { Modal } from '../common/Modal';
 import { canShareLink, copyText, looksLikeCode, pasteText, shareLink } from './clipboard';
-import { END_MESSAGES, LINK_LABELS, LOOKALIKE_WARNING, nameKey, readConnectionPreferences, readDisplayName, RETURNING_NOTE, ROLE_LABELS, takenNameKeys, writeConnectionPreferences, writeDisplayName } from './collabCopy';
+import { END_MESSAGES, isLookalike, LINK_LABELS, LOOKALIKE_WARNING, readConnectionPreferences, readDisplayName, returningNote, ROLE_LABELS, writeConnectionPreferences, writeDisplayName } from './collabCopy';
 import { useInviteStore } from './inviteStore';
 import { openLobby } from './lobbyStore';
 import { answerKnock } from '../../store/collabBridge';
@@ -377,14 +377,14 @@ function Knocks() {
 export function KnockRow({ id, name, admitting, returning }: { id: string; name: string; admitting?: Role; returning?: Role }) {
   const [role, setRole] = useState<Role>(returning ?? 'editor');
   // As the dock says it: a knock wearing the name of someone already here.
-  const lookalike = useCollabStore(useShallow(takenNameKeys)).includes(nameKey(name));
+  const lookalike = useCollabStore((state) => isLookalike(state, { id, name }));
   return (
     <li className="dc-collab-person dc-collab-knock" data-admitting={admitting ? 'true' : undefined}>
       <span className="dc-knock-seat" aria-hidden="true">
         <PeerBadge name={name} color={7} />
       </span>
       <span className="dc-collab-person-name">{name}</span>
-      {returning && !admitting && <span className="dc-collab-person-meta">{RETURNING_NOTE}</span>}
+      {returning && !admitting && <span className="dc-collab-person-meta">{returningNote(id)}</span>}
       {lookalike && (
         <span className="dc-collab-person-meta dc-collab-lookalike" role="note">
           {LOOKALIKE_WARNING}
@@ -625,7 +625,7 @@ function Joined({ onClose }: { onClose: () => void }) {
       )}
       {status === 'ended' && endReason ? (
         <p className="dc-collab-error" role="status">
-          {END_MESSAGES[endReason]} What you see stays on screen; make an editable copy to keep it.
+          {END_MESSAGES[endReason]} What you see stays on screen; keep a copy from the banner above the canvas.
         </p>
       ) : status === 'reconnecting' ? (
         <p className="dc-collab-hint" role="status">

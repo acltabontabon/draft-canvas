@@ -301,6 +301,11 @@ export interface JoinOptions {
   name: string;
   token?: string;
   /**
+   * The session the link names, where it names one (`room:` and owner for a session link, `lan:` and
+   * token for the local network): a later link may pick this session back up only if it names the same.
+   */
+  via?: string;
+  /**
    * Opens the owner's file in the editor as a collaborator's copy — never stored, never autosaved.
    * Resolves `false` when the canvas on screen could not be left (unsaved work kept it open).
    */
@@ -399,10 +404,22 @@ export function joinSession(transport: CollabTransport, options: JoinOptions): G
     },
   );
   guest = session;
+  joinedVia = options.via ?? null;
   useCollabStore.setState({ ...COLLAB_AT_REST, role: 'guest', status: 'joining', access: 'viewer', selfName: options.name });
   removePageListener = onPageLeave(() => leaveSession());
   session.connect(transport);
   return session;
+}
+
+let joinedVia: string | null = null;
+
+/**
+ * Whether a link may pick the dropped session back up: one that names a session must name this one.
+ * A link to someone else's session joins that one instead, and leaves this one be. (A direct invite
+ * names nothing; the resume proof is what keeps one from anyone else from taking the place.)
+ */
+export function mayResumeVia(via: string | null): boolean {
+  return guest !== null && !guest.isEnded && useCollabStore.getState().status === 'reconnecting' && (via === null || via === joinedVia);
 }
 
 /** A new connection to the same owner after a drop (a LAN reconnect, or a re-invite). */

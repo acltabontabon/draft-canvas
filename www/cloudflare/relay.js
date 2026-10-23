@@ -70,6 +70,8 @@ export default {
     // the Worker has already validated it.
     const headers = new Headers(request.headers);
     headers.set('x-relay-role', verdict.role);
+    // Who it is, as the per-client limits count them; Cloudflare sets the address, never the client.
+    headers.set('x-relay-client', clientKey(request.headers.get('cf-connecting-ip')));
     // The room never sees a host's secret, only its digest.
     headers.delete('sec-websocket-protocol');
     if (verdict.secret) headers.set('x-relay-owner', await secretDigest(verdict.secret));
@@ -123,6 +125,7 @@ export class RelayRoom extends DurableObject {
 
   async fetch(request) {
     const role = request.headers.get('x-relay-role');
+    const clientId = request.headers.get('x-relay-client');
     if (role !== 'host' && role !== 'guest') return new Response(null, { status: 400 });
     const [client, server] = Object.values(new WebSocketPair());
     const answered = { status: 101, webSocket: client, headers: { 'sec-websocket-protocol': PROTOCOL } };
@@ -134,7 +137,7 @@ export class RelayRoom extends DurableObject {
       refused = admitHost(peers, owner);
       if (!refused) await this.ctx.storage.put('owner', owner.claim);
     } else {
-      refused = admission(peers, role);
+      refused = admission(peers, role, clientId);
     }
     if (refused) {
       // Accepted without hibernation only to say why: the socket never joins the room.
@@ -145,7 +148,7 @@ export class RelayRoom extends DurableObject {
     const tag = role === 'guest' ? uniqueGuestTag(peers) : null;
     const now = Date.now();
     this.ctx.acceptWebSocket(server, tag ? [role, tag] : [role]);
-    server.serializeAttachment(openState(peers, role, tag, now));
+    server.serializeAttachment(openState(peers, role, tag, now, clientId));
     const room = [...peers, this.#peer(server)];
     opened(room, this.#peer(server));
     // A newcomer resets the idle clock, so the next look is never earlier than the one set before.

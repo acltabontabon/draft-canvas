@@ -276,12 +276,22 @@ function blocksOf(tokens: Token[], indent: number, frames: Frame[], out: RichBlo
 /** One entry per distinct source a pass over a large diagram meets — the same sizing as layout's. */
 const cache = new Lru<string, RichBlock[]>(LIMITS.maxNodes);
 
+/**
+ * Inline markers past which a source is shown as written rather than parsed. The parser's emphasis
+ * and link matching costs time that grows with the square of how many there are (20,000 characters
+ * of `_*a` took three seconds), and a shared diagram's text is written by whoever is in the session.
+ * Real writing uses a handful.
+ */
+const MAX_INLINE_MARKERS = 1000;
+const INLINE_MARKER = /[*_~[\]`<]/g;
+
 /** The block model for `source`. Pure and cached; the result is shared, so never mutate it. */
 export function parseMarkdown(source: string): RichBlock[] {
   const cached = cache.get(source);
   if (cached) return cached;
   const blocks: RichBlock[] = [];
   try {
+    if ((source.match(INLINE_MARKER)?.length ?? 0) > MAX_INLINE_MARKERS) throw new Error('Too many inline markers to parse.');
     blocksOf(parser.lexer(source.replace(/\r\n?/g, '\n')), 0, [], blocks);
   } catch {
     // The parser is a library; a source it chokes on must still show its words.

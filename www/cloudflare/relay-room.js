@@ -28,6 +28,11 @@ export const LIMITS = Object.freeze({
   maxFrame: 17 * 1024,
   /** Guest sockets per room; the next one is closed with 4002. */
   maxGuests: 32,
+  /**
+   * Of those, from one client (`clientKey`): someone holding the link could otherwise take every
+   * place, or park a knock in each, and keep everyone the link was sent to from getting in.
+   */
+  maxGuestsPerClient: 4,
   /** Token bucket: this many messages… */
   rateMessages: 30,
   /** …per this many milliseconds, refilled continuously. */
@@ -248,9 +253,12 @@ export function uniqueGuestTag(peers, random) {
  * Whether a new socket in `role` may join the room as it stands: `null`, or the close it gets.
  * Call it before the new socket is counted among `peers`.
  */
-export function admission(peers, role) {
+export function admission(peers, role, client = null) {
   if (role === 'host') return hostOf(peers) ? CLOSE.hostTaken : null;
-  return guestsOf(peers).length >= LIMITS.maxGuests ? CLOSE.roomFull : null;
+  const guests = guestsOf(peers);
+  if (guests.length >= LIMITS.maxGuests) return CLOSE.roomFull;
+  if (client !== null && guests.filter((guest) => guest.read().client === client).length >= LIMITS.maxGuestsPerClient) return CLOSE.roomFull;
+  return null;
 }
 
 /**
@@ -272,12 +280,13 @@ export function admitHost(peers, owner) {
  * A new socket's state. The room's birth time travels with every socket (there is no other place to
  * keep it through hibernation), so a newcomer inherits the earliest one still in the room.
  */
-export function openState(peers, role, tag, now) {
+export function openState(peers, role, tag, now, client = null) {
   const others = live(peers);
   const born = others.length > 0 ? Math.min(...others.map((peer) => peer.read().born)) : now;
   return {
     role,
     tag: role === 'guest' ? tag : null,
+    client,
     tokens: LIMITS.rateMessages,
     at: now,
     bad: 0,
@@ -362,8 +371,12 @@ export function received(peers, peer, text, now) {
   if (typeof text !== 'string') return closePeer(peers, peer, CLOSE.binary);
   if (text.length > LIMITS.maxFrame) return closePeer(peers, peer, CLOSE.tooLarge);
 
-  const refill = ((now - state.at) * LIMITS.rateMessages) / LIMITS.rateWindowMs;
-  const tokens = Math.min(LIMITS.rateMessages, state.tokens + Math.max(0, refill));
+  // The host answers every guest, so its budget is one guest's for each guest in the room: on one
+  // guest's budget, a few link holders knocking and cancelling made the owner's greetings use it up,
+  // and the relay closed the owner instead of them.
+  const budget = state.role === 'host' ? LIMITS.rateMessages * Math.max(1, guestsOf(peers).length) : LIMITS.rateMessages;
+  const refill = ((now - state.at) * budget) / LIMITS.rateWindowMs;
+  const tokens = Math.min(budget, state.tokens + Math.max(0, refill));
   if (tokens < 1) return closePeer(peers, peer, CLOSE.rate);
   state = { ...state, tokens: tokens - 1, at: now };
 

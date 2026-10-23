@@ -48,7 +48,9 @@ With a direct invite, you get a reply code instead (copied for you where the bro
 it back to the owner.
 
 Your copy is never saved. To keep the diagram afterwards, choose **Make an editable copy** when the
-session ends, or ask the owner for an export.
+session ends, or ask the owner for an export. Joined over a desktop's local network link, you get
+**Export a copy** instead: a copy kept in the browser at that plain `http://` address could be read
+by whatever answers there later.
 
 ## Working together
 

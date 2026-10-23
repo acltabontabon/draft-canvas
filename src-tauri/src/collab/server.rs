@@ -117,6 +117,8 @@ pub(super) fn content_security_policy(host: Option<&str>) -> String {
         "form-action 'none'",
         "base-uri 'self'",
         "object-src 'none'",
+        // Never inside another page's frame, which could lay its own buttons over the guest's.
+        "frame-ancestors 'none'",
     ]
     .join("; ")
 }
@@ -136,6 +138,7 @@ fn secure(mut response: Response, host: Option<&str>) -> Response {
         header::REFERRER_POLICY,
         HeaderValue::from_static("no-referrer"),
     );
+    headers.insert(header::X_FRAME_OPTIONS, HeaderValue::from_static("DENY"));
     response
 }
 

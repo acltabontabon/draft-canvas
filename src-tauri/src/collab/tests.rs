@@ -469,6 +469,8 @@ fn the_policy_is_the_web_builds_own() {
         .position(|d| d.starts_with("font-src"))
         .expect("font-src");
     directives.insert(font + 1, "connect-src 'self'");
+    // A header can also refuse framing, which a `<meta>` policy can't.
+    directives.push("frame-ancestors 'none'");
     assert_eq!(content_security_policy(None), directives.join("; "));
     assert_eq!(
         content_security_policy(Some("10.0.0.2:5000")),
@@ -1207,12 +1209,13 @@ fn only_local_network_peers_are_served() {
         "100.70.0.1",
         "::1",
         "fd12::7",
-        "fe80::1",
         "::ffff:192.168.1.30",
     ] {
         assert!(net::local_peer(local.parse().unwrap()), "{local} is local");
     }
     for remote in [
+        // Link-local IPv6: no browser arrives from it, and any client can mint more.
+        "fe80::1",
         "8.8.8.8",
         "203.0.113.9",
         "2001:db8::5",

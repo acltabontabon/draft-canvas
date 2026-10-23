@@ -42,11 +42,11 @@ const ROOM = 'AbCdEfGhIjKlMnOpQrStU_';
 class FakeRoom {
   peers: FakePeer[] = [];
 
-  join(role: 'host' | 'guest', now = 0): FakePeer | { code: number; reason: string } {
+  join(role: 'host' | 'guest', now = 0, client: string | null = null): FakePeer | { code: number; reason: string } {
     const open = this.open();
-    const refused = admission(open, role);
+    const refused = admission(open, role, client);
     if (refused) return refused;
-    let state: SocketState = openState(open, role, role === 'guest' ? uniqueGuestTag(open) : null, now);
+    let state: SocketState = openState(open, role, role === 'guest' ? uniqueGuestTag(open) : null, now, client);
     const peer: FakePeer = {
       sent: [],
       closed: null,
@@ -375,6 +375,26 @@ describe('relay limits', () => {
     room.send(guest, { to: 'host', data: 'one too many' }, 335);
     expect(guest.closed).toEqual({ code: 1008, reason: 'rate' });
     expect(host.sent.at(-2)).toEqual({ from: tagOf(guest), data: 'refilled' });
+  });
+
+  it('lets one client hold only a few guest places, so a link holder can’t fill the room', () => {
+    const room = new FakeRoom();
+    for (let i = 0; i < LIMITS.maxGuestsPerClient; i++) expect(room.join('guest', 0, '203.0.113.9')).toHaveProperty('read');
+    expect(room.join('guest', 0, '203.0.113.9')).toEqual(CLOSE.roomFull);
+    // Everyone else still gets in.
+    expect(room.join('guest', 0, '198.51.100.4')).toHaveProperty('read');
+  });
+
+  it('gives the host one guest’s budget for every guest, so answering knocks can’t get it closed', () => {
+    const room = new FakeRoom();
+    const host = room.host();
+    const guests = Array.from({ length: 6 }, () => room.guest());
+    // The owner greets each knock: far more than one socket's 30, all at once.
+    for (let round = 0; round < 6; round++) {
+      for (const guest of guests) room.send(host, { to: tagOf(guest), data: `seen ${round}` }, 10_000);
+    }
+    expect(host.closed).toBeNull();
+    expect(guests.every((guest) => guest.sent.filter((frame) => (frame as { data?: string }).data?.startsWith('seen')).length === 6)).toBe(true);
   });
 
   it('counts bad and undeliverable frames against the rate too', () => {

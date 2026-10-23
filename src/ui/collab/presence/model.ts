@@ -106,6 +106,10 @@ export function peersInRoom(
   return shown;
 }
 
+/** Shapes and connectors ringed for one person's selection, and for everyone's together. */
+export const MAX_HELD_DRAWN_EACH = 40;
+export const MAX_HELD_DRAWN = 120;
+
 /** Who holds each shape or connector, in peer order — what the rings are drawn from. */
 export interface Holdings {
   nodes: Map<string, PeerPresence[]>;
@@ -123,9 +127,17 @@ export function holdingsOf(shown: readonly PeerPresence[]): Holdings {
     if (!list) into.set(id, [peer]);
     else if (!list.includes(peer)) list.push(peer);
   };
+  let budget = MAX_HELD_DRAWN;
   for (const peer of shown) {
-    for (const id of peer.presence.selection.nodes) add(nodes, id, peer);
-    for (const id of peer.presence.selection.edges) add(edges, id, peer);
+    // Each ring is a traced silhouette, redrawn on every presence update; a selection of hundreds,
+    // sent many times a second, would keep this person's canvas redrawing. Past the first few the
+    // rest go unringed — presence says where someone works, not everything they hold.
+    const allowance = Math.min(budget, MAX_HELD_DRAWN_EACH);
+    const heldNodes = peer.presence.selection.nodes.slice(0, allowance);
+    const heldEdges = peer.presence.selection.edges.slice(0, allowance - heldNodes.length);
+    budget -= heldNodes.length + heldEdges.length;
+    for (const id of heldNodes) add(nodes, id, peer);
+    for (const id of heldEdges) add(edges, id, peer);
     const typing = peer.presence.editing;
     if (typing !== null) {
       // Typing in a shape holds it, selected or not.

@@ -15,7 +15,7 @@ import type { DraftDocument } from '../document/types';
 import { CURRENT_VERSION } from '../document/types';
 import { ByteBudget, CLOSE_GRACE_MS, GONE_MS, HEARTBEAT_MS, HELLO_TIMEOUT_MS, HOLD_RETRY_MS, RateLimit, REAL_CLOCK, SILENT_MS, type Clock } from './clock';
 import { Authorship } from './authorship';
-import { sameSecret } from './rendezvous';
+import { resumeProof, sameSecret } from './rendezvous';
 import { HostCore, HOST_ORIGIN, type Commit, type PeerLedger } from './hostCore';
 import {
   encode,
@@ -133,7 +133,18 @@ interface Pending {
   timer: unknown;
   release: () => void;
   bad: number;
+  /** Its hello's resume proof is being checked: a second hello waits for nothing. */
+  checking?: boolean;
 }
+
+/** A resume proof that checked out, for `welcome`: the key it was made with, and the owner's answer. */
+interface Proven {
+  key: string;
+  answer: string;
+}
+
+/** Keys of places forgotten (`MAX_GONE_PLACES`), kept so their people can still prove who they are. */
+const MAX_RETIRED_KEYS = 64;
 
 interface Held {
   slot: Slot;
@@ -158,6 +169,8 @@ export class HostSession {
   readonly id = randomToken(16);
   private readonly slots = new Map<string, Slot>();
   private readonly pending = new Set<Pending>();
+  /** Forgotten places' keys, by peer id: see `MAX_RETIRED_KEYS`. */
+  private readonly retired = new Map<string, string>();
   private readonly held: Held[] = [];
   private heldBytes = 0;
   /** Collaborators whose patches no longer fit while a gesture holds them: sent a fresh copy after it. */
@@ -263,10 +276,28 @@ export class HostSession {
       if (pending.bad > 3) this.refuse(pending, 'protocol');
       return;
     }
-    this.welcome(pending, message);
+    if (pending.checking) return;
+    const proof = message.resume?.proof;
+    if (proof === undefined) return this.welcome(pending, message, null);
+    pending.checking = true;
+    void this.check(pending.transport, message.resume!.peer, proof).then(
+      (proven) => {
+        if (!this.ended && this.pending.has(pending)) this.welcome(pending, message, proven);
+      },
+      () => this.refuse(pending, 'protocol'),
+    );
   }
 
-  private welcome(pending: Pending, hello: HelloMessage): void {
+  /** Whether `proof` was made with `peer`'s key over this very connection; the owner's answer if so. */
+  private async check(transport: CollabTransport, peer: string, proof: string): Promise<Proven | null> {
+    const binding = transport.binding;
+    const key = this.slots.get(peer)?.key ?? this.retired.get(peer);
+    if (binding === undefined || key === undefined) return null;
+    const [theirs, answer] = await Promise.all([resumeProof(key, 'guest', this.id, binding), resumeProof(key, 'owner', this.id, binding)]);
+    return sameSecret(theirs, proof) ? { key, answer } : null;
+  }
+
+  private welcome(pending: Pending, hello: HelloMessage, proven: Proven | null): void {
     if (hello.v !== PROTOCOL_VERSION || majorOf(hello.app) !== majorOf(this.env.appVersion) || hello.doc < CURRENT_VERSION) {
       return this.refuse(pending, 'version');
     }
@@ -275,13 +306,18 @@ export class HostSession {
     // Coming back: the same place, colour, role and patch numbering. A re-invite names exactly one
     // place, which the owner chose to give back; otherwise reclaiming one takes that place's key.
     const claimed = pending.reuse !== undefined ? this.slots.get(pending.reuse) : hello.resume && this.slots.get(hello.resume.peer);
-    // A key read off the local network proves nothing: only a place the owner named (`reuse`) is given back.
+    // Over a connection that names its far end, only a proof made over it counts; the key itself, only
+    // where there is nothing to bind a proof to (the local network socket). A key read off the local
+    // network proves nothing either way: only a place the owner named (`reuse`) is given back.
+    const resume = hello.resume;
     const keyMatches =
-      hello.resume !== undefined &&
+      resume !== undefined &&
       claimed !== undefined &&
       (!claimed.keyExposed || pending.reuse !== undefined) &&
-      hello.resume.peer === claimed.info.id &&
-      sameSecret(hello.resume.key, claimed.key);
+      resume.peer === claimed.info.id &&
+      (proven !== null
+        ? proven.key === claimed.key
+        : resume.key !== undefined && pending.transport.binding === undefined && sameSecret(resume.key, claimed.key));
     // The key proves it is them even over a link this side still thinks is up: the old one may be
     // mid-restart, or already dead on their side, and refusing left them shut out of their own place.
     const mayClaim = claimed !== undefined && (keyMatches || (claimed.link !== 'live' && pending.reuse !== undefined && !pending.requireKey));
@@ -322,7 +358,12 @@ export class HostSession {
       slot.info = { ...slot.info, name: hello.name };
     }
     // The welcome below carries the key; over a plain socket, anyone on the network can read it.
-    if (pending.transport.kind === 'socket') slot.keyExposed = true;
+    if (pending.transport.kind === 'socket') {
+      slot.keyExposed = true;
+      // A new key with every welcome there: whoever read the last one off the network has a key that
+      // no longer opens anything.
+      if (mayClaim) slot.key = randomToken(16);
+    }
     // Anything the owner did since the last broadcast goes out first, so the snapshot and the
     // commits after it agree — and before this connection is listed, so it isn't sent a commit
     // ahead of its welcome, which a returning copy would read as a gap.
@@ -334,6 +375,8 @@ export class HostSession {
       session: this.id,
       peer: slot.info.id,
       key: slot.key,
+      // Proof for proof: this is the session they left, not one someone else's invite opened.
+      ...(proven ? { proof: proven.answer } : {}),
       role: slot.ledger.role,
       seq: this.core.seq,
       snapshot: this.core.snapshot(),
@@ -642,7 +685,11 @@ export class HostSession {
 
   private pruneGone(): void {
     const gone = [...this.slots.values()].filter((slot) => slot.link === 'gone').sort((a, b) => (a.goneAt ?? 0) - (b.goneAt ?? 0));
-    for (const slot of gone.slice(0, Math.max(0, gone.length - MAX_GONE_PLACES))) this.slots.delete(slot.info.id);
+    for (const slot of gone.slice(0, Math.max(0, gone.length - MAX_GONE_PLACES))) {
+      this.slots.delete(slot.info.id);
+      this.retired.set(slot.info.id, slot.key);
+      if (this.retired.size > MAX_RETIRED_KEYS) this.retired.delete(this.retired.keys().next().value!);
+    }
   }
 
   private peersChanged(): void {

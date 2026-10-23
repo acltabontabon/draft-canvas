@@ -2,9 +2,29 @@ import type { EndReason, LinkState, Role } from '../../collab/protocol';
 import { readPreference, writePreference } from '../../lib/preferences';
 import type { ConnectionPreferences } from '../../collab/connect';
 
-/** How two names compare for "is this the same person's name": case- and accent-blind. */
+/**
+ * Letters from other scripts drawn the same as Latin ones, and Latin pairs easily read as each other:
+ * "Аlice" with a Cyrillic А, "AIice" with a capital i. Not every confusable Unicode knows — the ones a
+ * name is likeliest to be dressed in. Lower case, as `nameKey` compares.
+ */
+const LOOKALIKES: Record<string, string> = {
+  // Cyrillic
+  а: 'a', в: 'b', е: 'e', ё: 'e', з: '3', і: 'l', ї: 'l', ј: 'j', к: 'k', м: 'm', н: 'h', о: 'o', р: 'p', с: 'c', т: 't', у: 'y', х: 'x', ѕ: 's', ԁ: 'd', һ: 'h', ӏ: 'l', ԛ: 'q', ԝ: 'w', ь: 'b',
+  // Greek
+  α: 'a', β: 'b', ε: 'e', η: 'n', ι: 'l', κ: 'k', μ: 'u', ν: 'v', ο: 'o', ρ: 'p', τ: 't', υ: 'u', χ: 'x', ω: 'w', ζ: 'z',
+  // Latin and digits read as one another
+  i: 'l', '1': 'l', '|': 'l', '0': 'o', '5': 's',
+};
+
+/**
+ * How two names compare for "is this the same person's name": blind to case, accents, look-alike
+ * letters from other scripts, and spacing — a warning, so a false alarm is cheap and a miss is not.
+ */
 export function nameKey(name: string): string {
-  return name.normalize('NFKD').replace(/\p{M}/gu, '').toLocaleLowerCase();
+  const plain = name.normalize('NFKD').replace(/\p{M}/gu, '').toLocaleLowerCase().replace(/rn/g, 'm');
+  return Array.from(plain, (letter) => LOOKALIKES[letter] ?? letter)
+    .join('')
+    .replace(/[\s._-]+/g, '');
 }
 
 /** The names of everyone in the session (this person included), as `nameKey`s. */
@@ -12,11 +32,32 @@ export function takenNameKeys(state: { selfName: string; peers: readonly { name:
   return [state.selfName, ...state.peers.filter((peer) => peer.link !== 'gone').map((peer) => peer.name)].map(nameKey);
 }
 
+/**
+ * Whether someone at the door goes by a name like one already taken: by anyone in the session, or by
+ * anyone else waiting — two knocks both saying "Alice" can't both be her.
+ */
+export function isLookalike(
+  state: { selfName: string; peers: readonly { name: string; link: string }[]; knocks: readonly { id: string; name: string }[]; lanKnocks: readonly { id: string; name: string }[] },
+  knock: { id: string; name: string },
+): boolean {
+  const key = nameKey(knock.name);
+  if (takenNameKeys(state).includes(key)) return true;
+  return [...state.knocks, ...state.lanKnocks].some((other) => other.id !== knock.id && nameKey(other.name) === key);
+}
+
 /** Said beside a knock wearing the name of someone already here: names are whatever each person typed. */
 export const LOOKALIKE_WARNING = 'Someone here already goes by this name — make sure it’s who you expect.';
 
-/** Said beside a knock from someone coming back to the place they had, over the local network. */
+/** Said beside a knock from someone coming back to the place they had. */
 export const RETURNING_NOTE = 'Back after their connection dropped.';
+
+/** The same over the local network, where the proof travels in clear and anyone there could say so. */
+export const LAN_RETURNING_NOTE = 'Says they’re back after a drop. Anyone on this network could say so: check it’s them.';
+
+/** Which of the two a knock gets: `lan:` ids came by the local network link. */
+export function returningNote(knockId: string): string {
+  return knockId.startsWith('lan:') ? LAN_RETURNING_NOTE : RETURNING_NOTE;
+}
 
 /** What a person sees when a session ends, by reason — always with what they can do next. */
 export const END_MESSAGES: Record<EndReason, string> = {

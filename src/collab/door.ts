@@ -84,7 +84,7 @@ export function holdAtDoor(transport: CollabTransport, timeoutMs = DOOR_HELLO_MS
       const resume = hello!.message.resume;
       return {
         name: hello!.message.name,
-        ...(resume ? { returning: { peer: resume.peer, key: resume.key } } : {}),
+        ...(resume?.key ? { returning: { peer: resume.peer, key: resume.key } } : {}),
         admit() {
           decided = true;
           release();

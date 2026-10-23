@@ -82,6 +82,11 @@ export interface CompactSdp {
   candidates: CompactCandidate[];
 }
 
+/** A DTLS fingerprint as one line of text, the same at both ends of the connection it names. */
+export function fingerprintText(fingerprint: CompactSdp['fingerprint']): string {
+  return `${fingerprint.algorithm} ${Array.from(fingerprint.bytes, (byte) => byte.toString(16).padStart(2, '0')).join(':')}`;
+}
+
 const HASHES: [HashAlgorithm, number][] = [['sha-1', 20], ['sha-224', 28], ['sha-256', 32], ['sha-384', 48], ['sha-512', 64]];
 const SETUPS: DtlsSetup[] = ['actpass', 'active', 'passive'];
 const CANDIDATE_TYPES: CandidateType[] = ['host', 'srflx', 'prflx', 'relay'];
@@ -227,7 +232,7 @@ function parseCandidate(value: string): CompactCandidate | null {
   // A browser offers only IP addresses and mDNS names; a DNS name would have the other side's browser
   // look it up, telling whoever runs that name's server it is there.
   const kind = addressKind(address);
-  if (kind === null || kind === 'hostname') return null;
+  if (kind === null || kind === 'hostname' || !reachable(address)) return null;
   let tcpType: TcpType | undefined;
   for (let i = 8; i + 1 < parts.length; i += 2) {
     if (parts[i] === 'tcptype' && TCP_TYPES.includes(parts[i + 1] as TcpType)) tcpType = parts[i + 1] as TcpType;
@@ -247,6 +252,30 @@ function addressKind(address: string): AddressKind | null {
   if (MDNS_PATTERN.test(address)) return 'mdns';
   if (HOSTNAME_PATTERN.test(address)) return 'hostname';
   return null;
+}
+
+/**
+ * Whether a peer may be told to try `address`. Loopback, unspecified and multicast are never where a
+ * peer is; IPv4 link-local is where cloud metadata services listen. A description written by the other
+ * side could otherwise point this browser's connection checks — UDP and TCP — at services on this
+ * very machine or network that were never part of the session.
+ */
+function reachable(address: string): boolean {
+  const v6 = parseIpv6(address);
+  if (v6) {
+    if (v6.every((byte, i) => byte === (i === 15 ? 1 : 0)) || v6.every((byte) => byte === 0)) return false;
+    if (v6[0] === 0xff) return false;
+    // An IPv4 address written as IPv6 (`::ffff:127.0.0.1`) is held to the IPv4 rules.
+    const mapped = v6.slice(0, 10).every((byte) => byte === 0) && v6[10] === 0xff && v6[11] === 0xff;
+    return mapped ? reachableV4(v6.slice(12)) : true;
+  }
+  const v4 = parseIpv4(address);
+  return v4 ? reachableV4(v4) : true;
+}
+
+function reachableV4(bytes: Uint8Array): boolean {
+  const [a, b] = [bytes[0]!, bytes[1]!];
+  return a !== 0 && a !== 127 && !(a === 169 && b === 254) && a < 224;
 }
 
 function normalizeAddress(address: string): string {

@@ -179,7 +179,7 @@ export function sharedContent(file: DraftDocument): unknown {
  * Two connected ends whose messages wait until `pump` delivers them, in order — so a test decides
  * exactly when the other side hears anything, and nothing re-enters a session mid-call.
  */
-export function loopbackPair(kind: CollabTransport['kind'] = 'loopback'): { a: CollabTransport; b: CollabTransport; pump: () => number; drop: () => void; sent: { a: string[]; b: string[] } } {
+export function loopbackPair(kind: CollabTransport['kind'] = 'loopback', binding?: string): { a: CollabTransport; b: CollabTransport; pump: () => number; drop: () => void; sent: { a: string[]; b: string[] } } {
   const queue: { to: 'a' | 'b'; text: string }[] = [];
   const sent = { a: [] as string[], b: [] as string[] };
   const ends = { a: makeEnd('a'), b: makeEnd('b') };
@@ -200,6 +200,7 @@ export function loopbackPair(kind: CollabTransport['kind'] = 'loopback'): { a: C
       stateListeners,
       transport: {
         kind,
+        ...(binding === undefined ? {} : { binding }),
         get state(): TransportState {
           return end.state;
         },

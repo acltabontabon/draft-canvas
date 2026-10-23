@@ -75,6 +75,13 @@ export type CodeLine = CodeToken[];
 
 /** Above this, highlighting costs more than it is worth; the card renders plain. */
 const MAX_HIGHLIGHT_LINES = 2000;
+/**
+ * The same, by length: some grammars backtrack in time that grows with the square of a line's length
+ * (a 60 KB line of `1e1e…` took 13 s in TypeScript's number pattern, on the main thread), and a
+ * shared diagram's code is written by whoever is in the session. Real snippets are far inside both.
+ */
+const MAX_HIGHLIGHT_LINE_CHARS = 500;
+const MAX_HIGHLIGHT_CHARS = 30_000;
 
 /** Keyed by the code itself: a key of its length and a 32-bit hash let two different snippets of
  *  the same length collide, and a card then drew the other snippet's lines. The string is the one the
@@ -90,7 +97,7 @@ export function tokenizeCode(code: string, language: CodeLanguage): CodeLine[] {
 
 function computeLines(code: string, language: CodeLanguage): CodeLine[] {
   const rawLines = code.split('\n');
-  if (rawLines.length > MAX_HIGHLIGHT_LINES) {
+  if (rawLines.length > MAX_HIGHLIGHT_LINES || code.length > MAX_HIGHLIGHT_CHARS || rawLines.some((line) => line.length > MAX_HIGHLIGHT_LINE_CHARS)) {
     return rawLines.map((line) => [{ text: expandTabs(line), scope: null }]);
   }
   if (language === 'log') return rawLines.map(highlightLogLine);

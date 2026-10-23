@@ -69,7 +69,9 @@ function publishWaiting(): void {
 
 function placeOf(door: AtTheDoor): { peer: string; role: Role } | null {
   const session = hostSession();
-  return session ? returningPlace(door, (peer) => session.waitingPlace(peer, { evenIfLive: true, exposed: true })) : null;
+  // Only a place whose person is gone: the key travels in clear here, so a claim on a place still in
+  // use is someone who read it off the network, not them — shown as anyone new, never as "back".
+  return session ? returningPlace(door, (peer) => session.waitingPlace(peer, { exposed: true })) : null;
 }
 
 /**

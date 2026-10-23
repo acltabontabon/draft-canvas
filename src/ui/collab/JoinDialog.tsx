@@ -6,7 +6,7 @@ import { readSessionPayload, rendezvousAvailable } from '../../collab/rendezvous
 import { logDiagnostic } from '../../lib/diagnostics';
 import { rejoinByRelay } from './relayGuest';
 import { keepLanGuestConnected, lanTokenFromPayload, openLanGuest } from '../../collab/lan';
-import { guestSession, joinSession, leaveSession, leaveSessionKeepingView, reconnectSession } from '../../store/collabBridge';
+import { guestSession, joinSession, leaveSession, leaveSessionKeepingView, mayResumeVia, reconnectSession } from '../../store/collabBridge';
 import { useCollabStore } from '../../store/collabStore';
 import { useUiStore } from '../../store/uiStore';
 import type { DocumentSession } from '../../store/useDocumentSession';
@@ -44,11 +44,13 @@ export function JoinDialog({ session, invite }: { session: DocumentSession; invi
   const notify = useUiStore((state) => state.notify);
   const status = useCollabStore((state) => state.status);
   const endReason = useCollabStore((state) => state.endReason);
-  const resuming = guestSession() !== null && status === 'reconnecting';
   // A desktop owner's local network link: one link, no reply code, no STUN.
   const lanToken = lanTokenFromPayload(invite);
   // A session link: knock, and the owner lets you in.
   const sessionLink = readSessionPayload(invite);
+  // A link naming another session joins that one: "Rejoin" is only for the session this copy left.
+  const via = lanToken ? `lan:${lanToken}` : sessionLink ? `room:${sessionLink.room}:${sessionLink.owner}` : null;
+  const resuming = status === 'reconnecting' && mayResumeVia(via);
 
   const close = () => {
     cancelJoin.current?.();
@@ -85,7 +87,7 @@ export function JoinDialog({ session, invite }: { session: DocumentSession; invi
         }),
     });
     if (resuming) return reconnectSession(transport);
-    joinSession(transport, { name: trimmed, token, open: session.openCollaborative, lost: keeper.lost });
+    joinSession(transport, { name: trimmed, token, via: `lan:${token}`, open: session.openCollaborative, lost: keeper.lost });
   };
 
   const beginKnock = async (link: NonNullable<typeof sessionLink>, trimmed: string) => {
@@ -109,7 +111,7 @@ export function JoinDialog({ session, invite }: { session: DocumentSession; invi
     setStage({ kind: 'joining' });
     if (resuming) return reconnectSession(transport);
     leaveSession();
-    joinSession(transport, { name: trimmed, open: session.openCollaborative, lost: rejoinByRelay(link, relay, trimmed, stunServer) });
+    joinSession(transport, { name: trimmed, via: `room:${link.room}:${link.owner}`, open: session.openCollaborative, lost: rejoinByRelay(link, relay, trimmed, stunServer) });
   };
 
   const begin = async () => {
@@ -150,7 +152,7 @@ export function JoinDialog({ session, invite }: { session: DocumentSession; invi
     }
     cancelJoin.current = null;
     setStage({ kind: 'joining' });
-    if (guestSession() && useCollabStore.getState().status === 'reconnecting') {
+    if (mayResumeVia(null)) {
       reconnectSession(connected);
       return;
     }
@@ -271,8 +273,10 @@ function KnockProgress({ status, onCancel }: { status: KnockStatus; onCancel: ()
               ? 'The owner didn’t let you in.'
               : status.kind === 'ended'
                 ? 'That session has ended.'
-                : 'Couldn’t reach the owner automatically. Ask them for a direct invite: Collaborate → Invite one person directly.';
-  const settled = status.kind === 'denied' || status.kind === 'ended' || status.kind === 'unavailable';
+                : status.kind === 'busy'
+                  ? 'Too many people are waiting to join right now. Try again in a minute.'
+                  : 'Couldn’t reach the owner automatically. Ask them for a direct invite: Collaborate → Invite one person directly.';
+  const settled = status.kind === 'denied' || status.kind === 'ended' || status.kind === 'busy' || status.kind === 'unavailable';
   return (
     <div className="dc-collab-steps-single">
       <p className={settled ? 'dc-collab-error' : 'dc-collab-hint dc-collab-waiting'} role={settled ? 'alert' : undefined} aria-live="polite">

@@ -13,7 +13,7 @@ import type { DraftDocument } from '../document/types';
 import type { Change } from './changes';
 import { diffFile, wireSettings } from './diff';
 import type { RejectReason, Role } from './protocol';
-import { idsUnique, withinLimits } from './limits';
+import { growthOf, idsUnique, jsonBytes, MAX_SHARED_FILE_BYTES, withinLimits } from './limits';
 import { applyPatch } from './replica';
 import { sanitizeChanges } from './sanitize';
 
@@ -43,9 +43,17 @@ export interface PeerLedger {
 export class HostCore {
   private current: DraftDocument;
   private seqNo = 0;
+  /**
+   * The current file's size as UTF-8 JSON — exactly, while `sizeExact`, or else an upper bound — kept
+   * up to date change by change, so checking a patch against `MAX_SHARED_FILE_BYTES` never costs a
+   * whole-file serialisation (a hostile collaborator could ask for one per patch).
+   */
+  private size: number;
+  private sizeExact = true;
 
   constructor(file: DraftDocument) {
     this.current = file;
+    this.size = jsonBytes(file);
   }
 
   get file(): DraftDocument {
@@ -69,6 +77,9 @@ export class HostCore {
    */
   commitLocal(next: DraftDocument): Commit | null {
     const changes = diffFile(this.current, next);
+    const growth = growthOf(this.current, changes);
+    this.size += growth.bytes;
+    this.sizeExact &&= growth.exact;
     this.current = next;
     if (changes.length === 0) return null;
     return this.record({ seq: this.seqNo + 1, changes, origin: HOST_ORIGIN });
@@ -89,8 +100,23 @@ export class HostCore {
     if (!idsUnique(candidate)) return { ack: { clientSeq, rejected: 'malformed' } };
 
     const changes = diffFile(this.current, candidate);
+    if (changes.length === 0) {
+      this.current = candidate;
+      return { ack: { clientSeq } };
+    }
+    const growth = growthOf(this.current, changes);
+    if (this.size + growth.bytes > MAX_SHARED_FILE_BYTES) {
+      // Only an upper bound so far: measure once, and keep the measure — a refused patch leaves the
+      // file as it was, so the next one is checked against the exact size for nothing.
+      if (!this.sizeExact) {
+        this.size = jsonBytes(this.current);
+        this.sizeExact = true;
+      }
+      if (growth.bytes > 0 && this.size + growth.bytes > MAX_SHARED_FILE_BYTES) return { ack: { clientSeq, rejected: 'limits' } };
+    }
+    this.size += growth.bytes;
+    this.sizeExact &&= growth.exact;
     this.current = candidate;
-    if (changes.length === 0) return { ack: { clientSeq } };
     return { commit: this.record({ seq: this.seqNo + 1, changes, origin, clientSeq }) };
   }
 

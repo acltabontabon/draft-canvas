@@ -14,7 +14,7 @@ import type { DraftDocument } from '../document/types';
 import { CURRENT_VERSION } from '../document/types';
 import { parseDocument } from '../document/validate';
 import { CLOSE_GRACE_MS, GONE_MS, HEARTBEAT_MS, HOLD_RETRY_MS, REAL_CLOCK, RESYNC_RETRY_MS, SILENT_MS, type Clock } from './clock';
-import { diffFile } from './diff';
+import { diffFile, wireSettings } from './diff';
 import {
   encode,
   exceedsMessageLimit,
@@ -25,6 +25,7 @@ import {
   type EndReason,
   type FollowState,
   type GuestMessage,
+  type HelloMessage,
   type HostMessage,
   type PeerView,
   type Presence,
@@ -33,6 +34,7 @@ import {
   type Role,
 } from './protocol';
 import { Replica, type PendingPatch } from './replica';
+import { resumeProof, sameSecret } from './rendezvous';
 import { sanitizeChanges } from './sanitize';
 import type { CollabTransport } from './transport/types';
 
@@ -74,6 +76,18 @@ type Inbound = Extract<HostMessage, { t: 'commit' | 'ack' | 'snapshot' }>;
  */
 const MAX_HELD = 4096;
 
+/**
+ * A fresh copy of the owner's file, held to what a change may carry: a file's checks, and no embedded
+ * background image — which no change ever carries, and which would otherwise surface only later, in
+ * this person's editable copy or an export of it.
+ */
+function readSnapshot(snapshot: unknown): ReturnType<typeof parseDocument> {
+  const parsed = parseDocument(snapshot);
+  if (!parsed.ok) return parsed;
+  const settings = wireSettings(parsed.document.settings);
+  return settings === parsed.document.settings ? parsed : { ...parsed, document: { ...parsed.document, settings } };
+}
+
 function resendOf(message: Resend): Resend {
   return message.handled === undefined || message.epoch === undefined ? {} : { handled: message.handled, epoch: message.epoch };
 }
@@ -97,6 +111,9 @@ export class GuestSession {
   private awaitingSnapshot = false;
   /** Commits held for a gesture overflowed and were dropped: a fresh copy is asked for once it ends. */
   private heldOut = false;
+  /** Whether this connection's welcome must carry the owner's proof (`connect`), and what it must be. */
+  private expectProof = false;
+  private ownerProof: string | null = null;
   /** The epoch of the last fresh copy taken in, for every patch sent after it (`Resend`); `null` from an older owner. */
   private epoch: number | null = null;
   private ended = false;
@@ -158,15 +175,39 @@ export class GuestSession {
       offState();
     };
     this.events.status(this.replica ? 'reconnecting' : 'joining');
-    this.send({
+    const hello: HelloMessage = {
       t: 'hello',
       v: PROTOCOL_VERSION,
       app: this.env.appVersion,
       doc: CURRENT_VERSION,
       name: this.env.name,
-      ...(this.env.token === undefined ? {} : { token: this.env.token }),
-      ...(this.selfId && this.key && this.replica ? { resume: { peer: this.selfId, key: this.key, seq: this.replica.seq } } : {}),
-    });
+      // The local network secret is for the local network server: never handed to a peer connection,
+      // which may be one an invite from anyone opened.
+      ...(this.env.token === undefined || transport.kind === 'webrtc' ? {} : { token: this.env.token }),
+    };
+    this.ownerProof = null;
+    this.expectProof = false;
+    const peer = this.selfId;
+    const key = this.key;
+    const session = this.sessionId;
+    const binding = transport.binding;
+    if (peer && key && this.replica && session && binding !== undefined) {
+      // Coming back over a connection that names its far end: proved, not said. The key itself would
+      // be handed to whoever made this invite — "Rejoin" on a link from someone else gave them the
+      // place — and the owner's answer shows it really is the session this copy belongs to.
+      const seq = this.replica.seq;
+      this.expectProof = true;
+      void Promise.all([resumeProof(key, 'guest', session, binding), resumeProof(key, 'owner', session, binding)]).then(
+        ([mine, theirs]) => {
+          if (this.transport !== transport || this.ended) return;
+          this.ownerProof = theirs;
+          this.send({ ...hello, resume: { peer, seq, proof: mine } });
+        },
+        () => this.finish('protocol'),
+      );
+    } else {
+      this.send({ ...hello, ...(peer && key && this.replica ? { resume: { peer, key, seq: this.replica.seq } } : {}) });
+    }
     this.scheduleHeartbeat();
   }
 
@@ -260,11 +301,13 @@ export class GuestSession {
 
   private welcome(message: Extract<HostMessage, { t: 'welcome' }>): void {
     if (message.v !== PROTOCOL_VERSION) return this.finish('version');
-    const parsed = parseDocument(message.snapshot);
+    const parsed = readSnapshot(message.snapshot);
     if (!parsed.ok) return this.finish('protocol');
     // A welcome from a different session (an invite to someone else's, opened while this one was
     // reconnecting) is not this session: unsent edits must not go to it.
     if (this.sessionId !== null && message.session !== this.sessionId) return this.finish('unauthorized');
+    // Anyone who was in the session knows its id: only the owner can answer a proof with one of its own.
+    if (this.expectProof && !(message.proof !== undefined && this.ownerProof !== null && sameSecret(message.proof, this.ownerProof))) return this.finish('unauthorized');
     this.sessionId = message.session;
     const resuming = this.replica !== null && this.selfId === message.peer;
     // Back, but as someone new: the owner forgot this place (more people dropped meanwhile than it
@@ -307,7 +350,7 @@ export class GuestSession {
     this.localChanged();
     const replica = this.replica;
     if (message.t === 'snapshot') {
-      const parsed = parseDocument(message.snapshot);
+      const parsed = readSnapshot(message.snapshot);
       if (!parsed.ok || !replica) return this.finish('protocol');
       replica.reset(parsed.document, message.seq);
       this.awaitingSnapshot = false;
