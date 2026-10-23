@@ -1,0 +1,105 @@
+1
+00:00:00,900 --> 00:00:03,225
+Every design meeting needs a diagram.
+
+2
+00:00:03,400 --> 00:00:05,363
+Twenty minutes of boxes and arrows.
+
+3
+00:00:05,550 --> 00:00:07,129
+Five minutes of explaining.
+
+4
+00:00:07,900 --> 00:00:09,927
+Draft Canvas was built to flip that.
+
+5
+00:00:11,550 --> 00:00:13,534
+Sketch a service and a data store.
+
+6
+00:00:13,900 --> 00:00:15,564
+Every shape has a real type.
+
+7
+00:00:16,250 --> 00:00:17,701
+This store is SQL.
+
+8
+00:00:18,780 --> 00:00:21,212
+Add a queue, and the arrows label
+themselves.
+
+9
+00:00:24,863 --> 00:00:25,951
+Draw it yourself…
+
+10
+00:00:26,263 --> 00:00:28,418
+or hand the pencil to your coding agent.
+
+11
+00:00:29,663 --> 00:00:33,204
+It reads your code and draws the
+architecture, pass by pass.
+
+12
+00:00:35,300 --> 00:00:37,945
+Ask for a cleaner layout — it fixes that
+too.
+
+13
+00:00:40,500 --> 00:00:42,804
+Now, the part that matters: explaining it.
+
+14
+00:00:43,150 --> 00:00:47,822
+Start with the whole system, then step
+inside any service, down to its components.
+
+15
+00:00:49,330 --> 00:00:51,783
+Then present the flow, one step at a time.
+
+16
+00:00:52,600 --> 00:00:54,968
+So the whole room follows the same request.
+
+17
+00:00:58,530 --> 00:01:00,173
+Work on it together, live.
+
+18
+00:01:02,300 --> 00:01:04,156
+Every change lands on your copy.
+
+19
+00:01:04,930 --> 00:01:09,431
+And take it anywhere: flows to Mermaid,
+architecture to draw.io.
+
+20
+00:01:10,600 --> 00:01:11,560
+No account.
+
+21
+00:01:11,750 --> 00:01:12,753
+No tracking.
+
+22
+00:01:13,350 --> 00:01:14,630
+Saved on your device.
+
+23
+00:01:15,300 --> 00:01:16,751
+Free and open source.
+
+24
+00:01:18,233 --> 00:01:23,566
+So, the next design meeting: five minutes of
+boxes and arrows — and twenty of explaining!
+
+25
+00:01:24,533 --> 00:01:26,048
+Draw less. Explain more.
