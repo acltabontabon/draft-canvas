@@ -1010,7 +1010,7 @@ test('an update is offered quietly, and nothing happens to it until it is asked 
 });
 
 /** Opens Settings the way the menu does, on the page named. */
-async function openSettings(page: Page, category?: 'General' | 'AI agents' | 'Updates' | 'Support') {
+async function openSettings(page: Page, category?: 'General' | 'Canvas' | 'AI agents' | 'Updates' | 'Support') {
   await page.evaluate(() => window.__shell.emit({ type: 'menu', command: 'settings' }));
   const settings = page.getByRole('dialog', { name: 'Settings' });
   if (category) await settings.getByRole('tab', { name: category }).click();
@@ -1027,7 +1027,7 @@ test('Settings fits a compact window and keeps every page accessible in both the
     // changed, a tab still fading between the two themes' greys measured 3.34:1.
     await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
     await expect(page.locator(':root')).toHaveAttribute('data-theme', theme);
-    for (const category of ['General', 'AI agents', 'Updates', 'Support']) {
+    for (const category of ['General', 'Canvas', 'AI agents', 'Updates', 'Support']) {
       await settings.getByRole('tab', { name: category, exact: true }).click();
       const panel = settings.getByRole('tabpanel', { name: category, exact: true });
       await expect(panel).toBeVisible();
@@ -1036,6 +1036,43 @@ test('Settings fits a compact window and keeps every page accessible in both the
       expect(result.violations).toEqual([]);
     }
   }
+});
+
+test('Canvas settings is a page of Settings, however it is asked for', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'New Quick Draft' })).toBeVisible();
+
+  // On Home: this device's drawing style and suggestions, and no diagram to give a background.
+  let settings = await openSettings(page, 'Canvas');
+  let panel = settings.getByRole('tabpanel', { name: 'Canvas', exact: true });
+  await panel.getByRole('radio', { name: /^Sketch/ }).check();
+  await expect(page.locator(':root')).toHaveAttribute('data-personality', 'sketch');
+  await expect(panel.getByRole('switch', { name: 'Suggest the next move while drawing' })).toBeChecked();
+  await expect(panel.getByText('Open a diagram to give it a background.')).toBeVisible();
+  await settings.getByRole('button', { name: 'Close', exact: true }).click();
+
+  await page.getByRole('button', { name: 'New Quick Draft' }).click();
+  await expect(page.locator(CANVAS)).toBeVisible();
+  const canvasPage = async () => {
+    settings = page.getByRole('dialog', { name: 'Settings' });
+    await expect(settings.getByRole('tab', { name: 'Canvas', exact: true })).toHaveAttribute('aria-selected', 'true');
+    panel = settings.getByRole('tabpanel', { name: 'Canvas', exact: true });
+    await expect(panel.getByRole('button', { name: 'Choose image…', exact: true })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Canvas settings' })).toHaveCount(0);
+    await settings.getByRole('button', { name: 'Close', exact: true }).click();
+    await expect(settings).toBeHidden();
+  };
+  // The menu bar's Canvas Settings…, the status bar's button and ⌘K all land on the same page.
+  await page.evaluate(() => window.__shell.emit({ type: 'menu', command: 'canvas-settings' }));
+  await canvasPage();
+  await page.getByRole('button', { name: 'Canvas settings', exact: true }).click();
+  await canvasPage();
+  await page.keyboard.press('ControlOrMeta+k');
+  await expect(page.getByRole('dialog', { name: 'Commands' })).toBeVisible();
+  await page.keyboard.type('Canvas settings');
+  await expect(page.getByRole('option', { selected: true })).toContainText('Canvas settings');
+  await page.keyboard.press('Enter');
+  await canvasPage();
 });
 
 test('Settings has the update switch, and turning it off tells the shell', async ({ page }) => {
@@ -1116,6 +1153,8 @@ test('Settings moves between pages by keyboard, shows one agent setup at a time,
     .toContainEqual({ closeBehavior: 'quit' });
 
   await general.focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(settings.getByRole('tab', { name: 'Canvas' })).toBeFocused();
   await page.keyboard.press('ArrowDown');
   const agents = settings.getByRole('tab', { name: 'AI agents' });
   await expect(agents).toBeFocused();

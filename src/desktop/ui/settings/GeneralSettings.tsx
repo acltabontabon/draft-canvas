@@ -1,6 +1,6 @@
 import type { CloseBehavior } from '../../api';
 import { useDesktopController, useDesktopState } from '../../useDesktop';
-import { ChoiceRow, SettingsPage, SettingsSection } from './layout';
+import { ChoiceRow, SettingsPage, SettingsSection } from '../../../ui/settings/layout';
 
 /** Settings → General: what closing the window does. */
 export function GeneralSettings() {

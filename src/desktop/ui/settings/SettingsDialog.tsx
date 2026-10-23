@@ -1,18 +1,15 @@
-import { useId, useRef, type ComponentType, type KeyboardEvent } from 'react';
-import { Icon, type IconName } from '../../../ui/common/Icon';
-import { Modal } from '../../../ui/common/Modal';
+import { SettingsDialog, type SettingsCategory as SettingsCategoryEntry } from '../../../ui/settings/SettingsDialog';
 import { desktopStore, type SettingsCategory } from '../../store';
 import { useDesktopController, useDesktopState } from '../../useDesktop';
 import { RenameFileDialog } from '../RenameFileDialog';
 import { UpdatePanel } from '../Updates';
 import { DesktopExplorer } from '../DesktopExplorer';
 import { AgentSettings } from './AgentSettings';
+import { CanvasSettingsPage } from './CanvasSettingsPage';
 import { GeneralSettings } from './GeneralSettings';
 import { SupportSettings } from './SupportSettings';
 import { UpdateSettings } from './UpdateSettings';
 import '../desktop.css';
-import '../../../ui/Library/library-theme.css';
-import '../../../ui/Library/project-dialog.css';
 import './settings.css';
 
 /**
@@ -23,7 +20,7 @@ import './settings.css';
 export function DesktopSettings() {
   return (
     <>
-      <SettingsDialog />
+      <DesktopSettingsDialog />
       <RenameTargetDialog />
       <UpdatePanel />
       <DesktopExplorer />
@@ -50,91 +47,24 @@ function RenameTargetDialog() {
   return <RenameFileDialog currentName={name} onSubmit={(newStem) => controller.renameProjectFile(project, relPath, newStem)} onClose={onClose} />;
 }
 
-/** Every page of Settings, in rail order. A new page is one entry here and a component built from `layout.tsx`. */
-interface Category {
-  id: SettingsCategory;
-  label: string;
-  icon: IconName;
-  Page: ComponentType;
-}
-
-const CATEGORIES: readonly [Category, ...Category[]] = [
+/** Every page of Settings, in rail order. */
+const CATEGORIES: readonly [SettingsCategoryEntry<SettingsCategory>, ...SettingsCategoryEntry<SettingsCategory>[]] = [
   { id: 'general', label: 'General', icon: 'sliders', Page: GeneralSettings },
+  { id: 'canvas', label: 'Canvas', icon: 'pencil', Page: CanvasSettingsPage },
   { id: 'agents', label: 'AI agents', icon: 'agent', Page: AgentSettings },
   { id: 'updates', label: 'Updates', icon: 'refresh', Page: UpdateSettings },
   { id: 'support', label: 'Support', icon: 'help', Page: SupportSettings },
 ];
 
-const KEY_STEP: Record<string, number> = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 };
-
-/** A rail of pages beside the one showing. The page is the only thing that scrolls. */
-function SettingsDialog() {
+function DesktopSettingsDialog() {
   const { settingsOpen, settingsCategory } = useDesktopState();
-  const baseId = useId();
-  const tabs = useRef<(HTMLButtonElement | null)[]>([]);
   if (!settingsOpen) return null;
-
-  const index = Math.max(
-    0,
-    CATEGORIES.findIndex((category) => category.id === settingsCategory),
-  );
-  const current = CATEGORIES[index] ?? CATEGORIES[0];
-  const select = (next: number) => {
-    const category = CATEGORIES[next];
-    if (!category) return;
-    desktopStore.update({ settingsCategory: category.id });
-    tabs.current[next]?.focus();
-  };
-  // Selection follows focus: moving along the rail shows each page, as a native settings window does.
-  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    const last = CATEGORIES.length - 1;
-    const step = KEY_STEP[event.key];
-    const next = step !== undefined ? (index + step + CATEGORIES.length) % CATEGORIES.length : event.key === 'Home' ? 0 : event.key === 'End' ? last : null;
-    if (next === null) return;
-    event.preventDefault();
-    select(next);
-  };
-
   return (
-    <Modal title="Settings" onClose={() => desktopStore.update({ settingsOpen: false })} width={900} className="dc-modal-settings dc-project-dialog">
-      <nav className="dc-prefs-rail" aria-label="Settings">
-        <div role="tablist" aria-label="Settings category" aria-orientation="vertical" onKeyDown={onKeyDown}>
-          {CATEGORIES.map((category, i) => {
-            const selected = i === index;
-            return (
-              <button
-                key={category.id}
-                ref={(element) => {
-                  tabs.current[i] = element;
-                }}
-                type="button"
-                role="tab"
-                id={`${baseId}-tab-${category.id}`}
-                className="dc-prefs-tab"
-                aria-selected={selected}
-                aria-controls={`${baseId}-panel`}
-                tabIndex={selected ? 0 : -1}
-                // Opening Settings puts focus on the page it opens at, so arrows move along the rail at once.
-                autoFocus={selected}
-                onClick={() => select(i)}
-              >
-                <Icon name={category.icon} size={16} />
-                <span>{category.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      </nav>
-      <div
-        // Keyed by page, so each one opens at its top rather than wherever the last one was scrolled to.
-        key={current.id}
-        role="tabpanel"
-        id={`${baseId}-panel`}
-        aria-labelledby={`${baseId}-tab-${current.id}`}
-        className="dc-prefs-panel"
-      >
-        <current.Page />
-      </div>
-    </Modal>
+    <SettingsDialog
+      categories={CATEGORIES}
+      current={settingsCategory}
+      onSelect={(id) => desktopStore.update({ settingsCategory: id })}
+      onClose={() => desktopStore.update({ settingsOpen: false })}
+    />
   );
 }

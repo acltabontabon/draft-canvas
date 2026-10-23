@@ -1,11 +1,10 @@
 import { useEffect, useId, useRef, useState, type CSSProperties, type InputHTMLAttributes, type ReactNode } from 'react';
-import { Icon } from '../../../ui/common/Icon';
-import { useEditorStore } from '../../../store/editorStore';
+import { Icon } from '../common/Icon';
+import { useEditorStore } from '../../store/editorStore';
 
 /**
- * The few pieces every Settings page is built from, so a new setting is a row in an existing section
- * and a new page is one entry in `SettingsDialog`'s list — never new layout. Presentation only: each
- * page reads the desktop store and calls the controller itself.
+ * The few pieces every Settings page is built from, on the desktop and the web, so a new setting is a row in an existing section and a new page is one entry in
+ * `SettingsDialog`'s list, never new layout. Presentation only: each page reads its own store.
  */
 
 export function SettingsPage({ title, lead, children }: { title: string; lead?: ReactNode; children: ReactNode }) {
@@ -89,10 +88,12 @@ interface ChoiceRowProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'ty
   toggle?: boolean;
   /** How far in a nested row sits. */
   depth?: number;
+  /** A picture of the choice (a drawing style), at the end of the row. */
+  aside?: ReactNode;
 }
 
 /** A checkbox, radio or switch with its label, the whole row a click target. */
-export function ChoiceRow({ type, label, detail, description, toggle, depth, ...input }: ChoiceRowProps) {
+export function ChoiceRow({ type, label, detail, description, toggle, depth, aside, ...input }: ChoiceRowProps) {
   const id = useId();
   const labelledBy = detail ? `${id}-label ${id}-detail` : `${id}-label`;
   return (
@@ -124,6 +125,7 @@ export function ChoiceRow({ type, label, detail, description, toggle, depth, ...
           </span>
         )}
       </span>
+      {aside && <span className="dc-prefs-aside">{aside}</span>}
     </label>
   );
 }
@@ -137,6 +139,24 @@ export function SettingRow({ label, description, control }: { label: ReactNode; 
         {description && <span className="dc-prefs-description">{description}</span>}
       </div>
       <div className="dc-prefs-control">{control}</div>
+    </div>
+  );
+}
+
+/** An amount from 0 to 100 percent: the label and its current value above a slider across the row. */
+export function RangeRow({ label, value, disabled, onChange }: { label: string; value: number; disabled?: boolean; onChange: (value: number) => void }) {
+  const id = useId();
+  return (
+    <div className="dc-prefs-row dc-prefs-range">
+      <div className="dc-prefs-range-head">
+        <label htmlFor={id} className="dc-prefs-label">
+          {label}
+        </label>
+        <output htmlFor={id} className="dc-prefs-range-value">
+          {value}%
+        </output>
+      </div>
+      <input id={id} type="range" min={0} max={100} value={value} disabled={disabled} onChange={(event) => onChange(Number(event.target.value))} />
     </div>
   );
 }

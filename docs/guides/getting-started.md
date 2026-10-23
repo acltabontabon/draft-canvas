@@ -61,5 +61,12 @@ Open **Share → Export** (`⌘⇧E`):
 | **Document → Editable** | A `.draftcanvas` file to reopen or send |
 | **Source** | Mermaid or PlantUML from your flows, or architecture source |
 
+## Make it yours
+
+The sliders button at the bottom right opens **Settings → Canvas**: a **Clean**, **Draft** or
+**Sketch** drawing style, the next-shape suggestions, and a
+background image for the open diagram. The first two are for this device; the background is saved
+with the diagram.
+
 Next: [saving and sharing](saving-and-sharing.md), [starters](examples.md),
 [looking inside a service](depth.md) and [open points](open-points.md).

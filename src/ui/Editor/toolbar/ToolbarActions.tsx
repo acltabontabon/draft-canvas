@@ -16,9 +16,9 @@ interface ToolbarActionsProps {
  * The header's right side holds only what you reach for while explaining a system: the story
  * (Present, with the Flows panel beside it) and Share, with a live session's faces. Everything else
  * found a better place — undo and redo beside the zoom controls, help (shortcuts, guides, About)
- * behind the "?" in the status bar, and what acts on the whole diagram (Arrange, Find and replace,
- * Canvas settings) a right-click on the canvas away; all of it in ⌘K, and on the desktop in the
- * menu bar.
+ * behind the "?" in the status bar with Canvas settings beside it, and what acts on the whole
+ * diagram (Arrange, Find and replace) a right-click on the canvas away; all of it in ⌘K, and on the
+ * desktop in the menu bar.
  */
 export function ToolbarActions({ onPresent, onExport }: ToolbarActionsProps) {
   const readOnly = useUiStore((state) => Boolean(state.readOnly));

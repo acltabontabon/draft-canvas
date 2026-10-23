@@ -64,9 +64,10 @@ For coding agents, see [Connect an AI agent](connect-an-ai-agent.md).
 
 ## Settings
 
-**Settings…** (`⌘,`) has four pages: **General** (closing the window), **AI agents**, **Updates**
-and **Support** (a diagnostic report with no diagram content or file paths, never sent
-automatically). Licences are under **About Draft Canvas**.
+**Settings…** (`⌘,`) has five pages: **General** (closing the window), **Canvas** (drawing style,
+next-shape suggestions and the open diagram's background), **AI agents**, **Updates** and **Support**
+(a diagnostic report with no diagram content or file paths, never sent automatically).
+**Canvas Settings…** in the menu bar and the sliders button in the status bar open it at **Canvas**. Licences are under **About Draft Canvas**.
 
 ## Updates
 

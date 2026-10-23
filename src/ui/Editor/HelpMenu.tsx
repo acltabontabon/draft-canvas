@@ -31,11 +31,35 @@ export function HistoryControls() {
 }
 
 /**
+ * Canvas settings — drawing style, Intent Continuation and the diagram's background — one click from
+ * the corner where the app's other controls are; on the desktop, Settings opens at its Canvas page.
+ * A right-click on the canvas and ⌘K reach it too, but neither is where anyone looks for settings.
+ */
+export function CanvasSettingsButton() {
+  const open = useUiStore((state) => state.settingsOpen);
+  return (
+    <Tooltip content={toolbarTooltip('settings')}>
+      {(tip) => (
+        <Button
+          icon="sliders"
+          variant="quiet"
+          active={open}
+          aria-haspopup="dialog"
+          onClick={() => useUiStore.getState().setSettingsOpen(true)}
+          aria-label={toolbarLabel('settings')}
+          {...tip}
+        />
+      )}
+    </Tooltip>
+  );
+}
+
+/**
  * Help, in the corner where people look for it: the command palette, the shortcut sheet, the guides,
  * and About — which carries the dot when an update is ready or there is something new, so the "?"
  * carries it too. These used to sit behind a ⋯ in the header, beside things that act on the
- * diagram; the canvas's own actions (Arrange, Find and replace, Canvas settings) are now a
- * right-click on the canvas away, and in ⌘K.
+ * diagram; the canvas's own actions (Arrange, Find and replace) are now a right-click on the canvas
+ * away, and in ⌘K, and Canvas settings has its own button beside this one.
  */
 export function HelpMenu() {
   const ref = useRef<HTMLButtonElement>(null);

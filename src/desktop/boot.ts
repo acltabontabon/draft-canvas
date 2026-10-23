@@ -84,6 +84,13 @@ export async function bootDesktop(): Promise<void> {
     registerDesktopHost({ channel, returnHome: () => void controller.returnHome() });
     setFileSaver(fileSaverFor(api));
     await controller.start();
+    // Canvas settings is a page of Settings here, not a dialog of its own: however it is asked for
+    // (⌘K, the canvas's right-click, the status bar, the menu bar), Settings opens at that page.
+    useUiStore.subscribe((state) => {
+      if (!state.settingsOpen) return;
+      state.setSettingsOpen(false);
+      desktopStore.update({ settingsOpen: true, settingsCategory: 'canvas' });
+    });
   } catch (error) {
     logDiagnostic(error, { operation: 'desktop-boot' });
     setDesktopController(null);

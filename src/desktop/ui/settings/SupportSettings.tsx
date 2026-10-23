@@ -1,5 +1,5 @@
 import { DiagnosticReport } from '../../../ui/common/DiagnosticReport';
-import { SettingsPage, SettingsSection } from './layout';
+import { SettingsPage, SettingsSection } from '../../../ui/settings/layout';
 
 export function SupportSettings() {
   return (
