@@ -156,7 +156,8 @@ describe('the size cap’s bookkeeping, against a collaborator', () => {
     expect((host as unknown as { size: number }).size).toBeLessThan(fileBytes(host.file) + 64 * 1024);
     const grow = host.receivePatch('p', ledger, ++seq, [{ kind: 'node', id: 'n_new', room: '', value: createNode({ id: 'n_new', type: 'note', text: 'Still fine', x: 0, y: 900 }) }]);
     expect(grow.commit).toBeDefined();
-  });
+    // 200 rounds of 300 moves: about 2s alone, past the 5s default under the full suite's load.
+  }, 30_000);
 });
 
 describe('the owner’s own file', () => {
