@@ -1,0 +1,20 @@
+1
+00:00:00,250 --> 00:00:01,338
+Draw it yourself…
+
+2
+00:00:02,300 --> 00:00:04,455
+or hand the pencil to your coding agent.
+
+3
+00:00:05,100 --> 00:00:08,641
+It reads your code and draws the
+architecture, pass by pass.
+
+4
+00:00:13,600 --> 00:00:14,645
+Draft Canvas.
+
+5
+00:00:14,800 --> 00:00:16,315
+Draw less. Explain more.
