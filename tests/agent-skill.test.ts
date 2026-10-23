@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { CROWDED_BOUNDARY, CROWDED_VIEW } from '../src/agent/advice';
 import { CONTRACT_VERSION } from '../src/agent/capabilities';
+import { CREATE_FIELDS, ROOM_FIELDS } from '../src/agent/fields';
 import { ELEMENT_TYPE_NAMES, GROUP_KINDS, NOTE_FORM_NAMES, resolveType } from '../src/agent/vocabulary';
 import { ACCENTS, CODE_LANGUAGES, CONNECTOR_KINDS, EDGE_SEMANTICS } from '../src/document/types';
 import { skillPairingsJson } from '../scripts/agent-schemas';
@@ -33,6 +34,17 @@ describe('the agent skill', () => {
     expect(pythonSet('GROUP_KINDS')).toEqual(Object.keys(GROUP_KINDS).sort());
     expect(pythonSet('NOTE_KINDS')).toEqual([...NOTE_FORM_NAMES].sort());
     expect(pythonSet('LANGUAGES')).toEqual([...CODE_LANGUAGES].sort());
+  });
+
+  it('allows exactly the fields a create request may carry', () => {
+    // An unknown field refuses the whole request, after the checker called it ready to send.
+    expect(pythonSet('REQUEST_FIELDS')).toEqual([...CREATE_FIELDS.request].sort());
+    expect(pythonSet('ROOM_FIELDS')).toEqual([...ROOM_FIELDS].sort());
+    expect(pythonSet('GROUP_FIELDS')).toEqual([...CREATE_FIELDS.group].sort());
+    expect(pythonSet('ELEMENT_FIELDS')).toEqual([...CREATE_FIELDS.element].sort());
+    expect(pythonSet('RELATIONSHIP_FIELDS')).toEqual([...CREATE_FIELDS.relationship].sort());
+    expect(pythonSet('FLOW_FIELDS')).toEqual([...CREATE_FIELDS.flow].sort());
+    expect(pythonSet('NOTE_FIELDS')).toEqual([...CREATE_FIELDS.note].sort());
   });
 
   it('knows the meanings each pair of element types takes, as the editor does', () => {

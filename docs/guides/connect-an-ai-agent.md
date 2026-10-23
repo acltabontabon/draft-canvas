@@ -35,10 +35,16 @@ updates with Draft Canvas. An edited copy is kept until you click **Replace skil
 
 Open your agent in the repository and ask:
 
-> Use the Draft Canvas skill to draw this repository's architecture. Show the main request
-> path as a presentation flow, put service details inside their shapes, and cite source files.
+> Use the Draft Canvas skill to diagram this repository's architecture as C4 views, down to
+> components where the code has real logic. Read the code before you draw, cite source files and
+> mark anything inferred. Make the main request path a presentation flow, with variants for the
+> failure paths the code handles, and leave open questions as notes. Render every view and fix what
+> reads badly before you finish.
 
-Ask it to mark inferences and open questions. Draft Canvas shows source evidence but does not check it.
+The skill picks the C4 levels from the size of the system: a context view with the containers
+inside once there are more than about eight, and a component view for the container that does the
+main path's work. Draft Canvas shows source evidence but does not check it, so read the inferred
+parts and open questions first.
 
 ![A storefront diagram with services, stores, an event stream and workers.](../media/guides/agent-skill-example.png)
 

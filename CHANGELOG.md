@@ -108,6 +108,9 @@ the release notes and the in-app What's New are generated from here. See
 - Tooltips no longer stay closed when you hover back onto a button quickly.
 - An agent's or proposal's preview draws connectors with their bends, side by side when parallel,
   and with their reply line.
+- An agent's diagram where two services call the same set of others (a frontend and a checkout
+  service, both calling cart, catalog, currency and shipping) is no longer refused or drawn as a
+  tangle: each caller's calls share one trunk, running straight past the other caller.
 - The status bar says "Saved" only once every edit is saved.
 
 ### Desktop
@@ -126,6 +129,10 @@ the release notes and the in-app What's New are generated from here. See
   Updates and Support.
 - AI agents no longer take focus from the field you're typing in, wait while you trace a flow, and
   no longer hold up saving on large projects.
+- The agent skill draws a repository at every C4 level it needs: a component view for the service
+  that does the main path's work, each view's main flow first, failure variants only for paths the
+  code handles, and evidence lines that point at the code they cite. It no longer draws a store
+  from a library's dependencies, or one database shared by services that each have their own.
 - The proposals panel checks proposals in the background, and only when something needs it.
 - Editing a large diagram does less work per keystroke, and exporting a large image writes faster.
 - Home rescans less: not for a rebuilt `dist`, `build` or `node_modules` folder, and recent files no

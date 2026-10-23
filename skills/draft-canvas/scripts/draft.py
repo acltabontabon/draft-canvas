@@ -73,6 +73,7 @@ class Draft:
         self.ids: dict[str, str] = {}  # every name an element goes by (slugged) → its id
         self.relationships: list[dict] = []
         self.pairs: set[tuple[str, str]] = set()
+        self.made = 0
 
     def evidence(self, *paths: str | None) -> list[dict]:
         seen = []
@@ -112,7 +113,9 @@ class Draft:
         if not source or not target or source == target or (source, target) in self.pairs:
             return
         self.pairs.add((source, target))
-        self.relationships.append({'id': f'r{len(self.relationships) + 1}', 'from': source, 'to': target, 'label': TODO_LABEL, **extra})
+        # Counted, not the list's length: a relationship can be taken out again (split_driver_stores).
+        self.made += 1
+        self.relationships.append({'id': f'r{self.made}', 'from': source, 'to': target, 'label': TODO_LABEL, **extra})
 
 
 def build(data: dict) -> tuple[dict, dict]:
@@ -176,6 +179,7 @@ def build(data: dict) -> tuple[dict, dict]:
         if channels and broker and target == d.ids.get(slug(broker['name'])):
             continue
         d.connect(source, target)
+    split_driver_stores(d, [s for s in signals if s['category'] == 'store'])
     settle_roles(d)
     entry = entry_point(d)
     gateway = next((n['id'] for n in d.nodes if n['type'] == 'gateway'), None)
@@ -186,6 +190,35 @@ def build(data: dict) -> tuple[dict, dict]:
     # Reading order, which the layout follows: who comes in, where, then what that calls.
     d.nodes.sort(key=lambda n: ORDER.get(n['type'], 6 if n['type'] != 'external-system' else 7) if n['id'] != entry else 1.5)
     return shape(data, d)
+
+
+def split_driver_stores(d: Draft, stores: list[dict]) -> None:
+    """A store known only from client libraries is one per program that uses it. Two services with a
+    Postgres driver say nothing about sharing one database, and a shared box drawn on that guess
+    became a hub every line had to cross; nothing deploys it, so each owner's is drawn beside it."""
+    for store in stores:
+        if not store['evidence'] or not all('(dep ' in e for e in store['evidence']):
+            continue
+        sid = d.ids.get(slug(store['name']))
+        callers = sorted({r['from'] for r in d.relationships if r['to'] == sid})
+        if not sid or len(callers) < 2:
+            continue
+        shared = next(n for n in d.nodes if n['id'] == sid)
+        at = d.nodes.index(shared)
+        d.nodes.remove(shared)
+        d.relationships = [r for r in d.relationships if r['to'] != sid]
+        d.pairs = {(a, b) for a, b in d.pairs if b != sid}
+        for caller in callers:
+            owner = next(n for n in d.nodes if n['id'] == caller)
+            node = {**shared, 'id': f'{caller}.{sid}', 'label': f'{owner["label"].removesuffix(" Service")} Store'[:60]}
+            node.pop('evidence', None)
+            if owner.get('evidence'):
+                # Only the owner's driver dependency says it is there: the agent confirms it in code.
+                node['evidence'] = [
+                    {**owner['evidence'][0], 'basis': 'inferred', 'explanation': f'{shared["label"]} driver in its dependencies'}
+                ]
+            d.nodes.insert(at, node)
+            d.connect(caller, node['id'])
 
 
 def settle_roles(d: Draft) -> None:
