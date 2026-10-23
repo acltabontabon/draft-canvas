@@ -18,7 +18,7 @@ import { announce } from '../lib/announce';
 import { logDiagnostic } from '../lib/diagnostics';
 import { PRODUCT } from '../product';
 import { COLLAB_AT_REST, useCollabStore, type SessionStatus } from './collabStore';
-import { fileOf, isInteracting, useEditorStore } from './editorStore';
+import { documentLoadCount, fileOf, isInteracting, useEditorStore } from './editorStore';
 import { useUiStore } from './uiStore';
 
 /** How often edits made during a held gesture (a slider, a resize) are sent: often enough to watch. */
@@ -36,6 +36,13 @@ let sharedDocumentId: string | null = null;
  * into their Library.
  */
 let sharedCanvasOpen = false;
+/**
+ * Which load put the shared canvas in the store (`documentLoadCount`): an import or a share link can
+ * bring a diagram with the very same id, and that file is not the session's. The owner's counts only
+ * openings, so the desktop shell reloading the shared file after an outside edit stays shared; a
+ * collaborator's copy only ever arrives once.
+ */
+let sharedLoad: { kind: 'all' | 'openings'; count: number } | null = null;
 let gestureTimer: ReturnType<typeof setTimeout> | null = null;
 let applyingRemote = false;
 let removePageListener: (() => void) | null = null;
@@ -46,7 +53,15 @@ let removePageListener: (() => void) | null = null;
  * autosaved — which the session must never write into.
  */
 function onSharedCanvas(): boolean {
-  return sharedCanvasOpen && sharedDocumentId !== null && useEditorStore.getState().document.metadata.id === sharedDocumentId;
+  return sharedCanvasOpen && isSharedCanvas(useEditorStore.getState().document.metadata.id);
+}
+
+function isSharedCanvas(id: string): boolean {
+  return sharedDocumentId !== null && id === sharedDocumentId && sharedLoad !== null && documentLoadCount(sharedLoad.kind) === sharedLoad.count;
+}
+
+function markSharedLoad(kind: 'all' | 'openings'): void {
+  sharedLoad = { kind, count: documentLoadCount(kind) };
 }
 
 function isBusy(): boolean {
@@ -82,7 +97,7 @@ function watchEdits(send: () => void, onReplaced: () => void): () => void {
   // replacement — and nothing on it is an edit to share.
   let seen = onSharedCanvas();
   const unsubscribe = useEditorStore.subscribe((state, prev) => {
-    if (state.document.metadata.id !== sharedDocumentId) {
+    if (!isSharedCanvas(state.document.metadata.id)) {
       if (seen) onReplaced();
       return;
     }
@@ -115,6 +130,7 @@ function cleanUp(): void {
   removePageListener = null;
   sharedDocumentId = null;
   sharedCanvasOpen = false;
+  sharedLoad = null;
 }
 
 /**
@@ -164,6 +180,7 @@ export function startHosting(options: HostOptions): HostSession {
   const editor = useEditorStore.getState();
   sharedDocumentId = editor.document.metadata.id;
   sharedCanvasOpen = true;
+  markSharedLoad('openings');
   const token = options.token;
   host = new HostSession(
     {
@@ -300,8 +317,7 @@ const REJECTIONS: Record<RejectReason, string> = {
 
 export function joinSession(transport: CollabTransport, options: JoinOptions): GuestSession {
   if (host && !host.isEnded) throw new Error('Stop sharing your canvas before joining someone else’s.');
-  guest?.leave();
-  cleanUp();
+  leaveSession();
   const ui = useUiStore.getState();
   let title = '';
   const setAccess = (access: Role) => {
@@ -323,16 +339,25 @@ export function joinSession(transport: CollabTransport, options: JoinOptions): G
         title = file.metadata.title;
         sharedDocumentId = file.metadata.id;
         sharedCanvasOpen = false;
+        sharedLoad = null;
         stopWatching?.();
         stopWatching = null;
         void options.open(file).then((opened) => {
-          if (guest !== session) return;
+          if (guest !== session) {
+            // The session ended (or another replaced it) while the copy was opening. It is on screen
+            // now, and nobody's file: read-only with the way to keep a copy, never left to look editable.
+            if (opened && useEditorStore.getState().document.metadata.id === file.metadata.id) {
+              useUiStore.getState().setReadOnly({ sharedTitle: title, collaborative: true });
+            }
+            return;
+          }
           if (!opened) {
             useUiStore.getState().notify('Left the session — the canvas you were on has unsaved changes. Save or export it, then open the invite again.', 'error');
             return leaveSession();
           }
           // Only now is the canvas on screen the collaborator's copy, never saved anywhere.
           sharedCanvasOpen = true;
+          markSharedLoad('all');
           stopWatching = watchEdits(
             () => session.localChanged(),
             () => leaveSession(),
@@ -391,21 +416,24 @@ export function reconnectSession(transport: CollabTransport): void {
  * left editable, it would look like a canvas that saves, and it saves nowhere.
  */
 export function leaveSessionKeepingView(notice: { message: string; tone?: 'error' } = { message: 'You left the session. Make an editable copy to keep what you see.' }): void {
-  const keep = onSharedCanvas();
-  const title = useEditorStore.getState().document.metadata.title;
   leaveSession();
-  if (keep) useUiStore.getState().setReadOnly({ sharedTitle: title, collaborative: true });
   useUiStore.getState().notify(notice.message, notice.tone);
 }
 
-/** Leaves on purpose — or, after the owner ended it, puts the session's leftovers away. */
+/**
+ * Leaves on purpose — or, after the owner ended it, puts the session's leftovers away. A copy still
+ * on screen stays, read-only: whichever way the session goes (joining another that then fails, a
+ * dialog closed mid-rejoin), it must never be left looking like a canvas that saves.
+ */
 export function leaveSession(): void {
   const session = guest;
+  const keep = onSharedCanvas() ? useEditorStore.getState().document.metadata.title : null;
   guest = null;
   // First, so the goodbye's own "ended" can't mark whatever canvas comes next read-only.
   cleanUp();
   session?.leave();
   if (useCollabStore.getState().role === 'guest') useCollabStore.setState(COLLAB_AT_REST);
+  if (keep !== null) useUiStore.getState().setReadOnly({ sharedTitle: keep, collaborative: true });
 }
 
 export function guestSession(): GuestSession | null {

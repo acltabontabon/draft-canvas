@@ -557,6 +557,20 @@ it('selective undo of a delete puts the element back where it was in its list', 
   expect(redo.file.flows.map((flow) => flow.title)).toEqual(['First', 'Third', 'Theirs']);
 });
 
+it('selective undo refuses to take away a connector somebody else changed, even one the undone edit added', () => {
+  const a = createNode({ type: 'service', x: 0, y: 0, text: 'A' });
+  const f0 = addNodes(createDocument('Theirs'), [a]);
+  const added = createNode({ type: 'service', x: 0, y: 300, text: 'X' });
+  const edge = createEdge({ source: added.id, target: a.id });
+  // One step adds a shape and a connector from it; somebody else then labels the connector.
+  const f1 = addEdges(addNodes(f0, [added]), [edge]);
+  const f2 = { ...f1, edges: f1.edges.map((item) => (item.id === edge.id ? { ...item, label: 'Theirs now' } : item)) };
+
+  const step = revertKeys(f2, f1, f0, changeKeys(f0, f1));
+  expect(step).toMatchObject({ blocked: true, partial: true });
+  expect(step.file).toBe(f2);
+});
+
 /**
  * Whatever a collaborator did after the owner's edit, undoing the owner's edit leaves everything only
  * the collaborator touched exactly as they left it, and removes nothing they touched at all. (An

@@ -86,7 +86,7 @@ function start(owner: string, url: string, identity: Awaited<ReturnType<typeof n
     admitted: (transport, role, reuse) => attachCollaborator(transport, role, reuse, reuse !== undefined),
     // A knock proves the place's key without carrying it, so a place whose link only looks up from
     // here (it dropped on their side first) is theirs to take back — not a stranger at the door.
-    isReturning: (peerId) => hostSession()?.waitingPlace(peerId, true) ?? null,
+    isReturning: (peerId) => hostSession()?.waitingPlace(peerId, { evenIfLive: true }) ?? null,
     failed: (name, reason) => {
       logDiagnostic(new Error(reason), { operation: 'collab-knock' });
       useUiStore

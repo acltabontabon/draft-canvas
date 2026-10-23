@@ -195,13 +195,30 @@ describe('the dev relay over WebSockets', () => {
   it('turns away a second host while the first is connected', async () => {
     const room = newRoom();
     const host = await Client.open(room, 'host');
-    const intruder = new Client(room, 'host');
+    const intruder = new Client(room, 'host', ORIGIN, randomBytes(32).toString('base64url'));
     expect(await intruder.closed).toEqual({ code: 4001, reason: 'host-taken' });
     host.ws.close();
     await host.closed;
     const replacement = await Client.open(room, 'host');
     expect(await replacement.next()).toEqual({ event: 'ready' });
     replacement.ws.close();
+  });
+
+  it('lets the owner back in over a socket the relay still thinks is open, and guests hear them return', async () => {
+    const room = newRoom();
+    const stale = await Client.open(room, 'host');
+    expect(await stale.next()).toEqual({ event: 'ready' });
+    const guest = await Client.open(room, 'guest');
+    expect(await guest.next()).toEqual({ event: 'host', present: true });
+    // The owner's laptop slept: no close reached the relay, and the owner connects again.
+    const back = await Client.open(room, 'host');
+    expect(await back.next()).toEqual({ event: 'ready' });
+    expect(await stale.closed).toEqual({ code: 4004, reason: 'replaced' });
+    // Gone and back, so whoever was waiting knocks again.
+    expect(await guest.next()).toEqual({ event: 'host', present: false });
+    expect(await guest.next()).toEqual({ event: 'host', present: true });
+    back.ws.close();
+    guest.ws.close();
   });
 
   it('closes on binary frames and on frames past the size limit', async () => {

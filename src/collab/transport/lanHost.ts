@@ -23,11 +23,13 @@ export type LanRelayEvent =
   | { type: 'collab-lan-open'; connId: string }
   | { type: 'collab-lan-message'; connId: string; text: string }
   | { type: 'collab-lan-close'; connId: string; reason: string }
-  | { type: 'collab-lan-stopped'; reason: string };
+  /** `token` names the session that stopped; absent from an older shell. */
+  | { type: 'collab-lan-stopped'; reason: string; token?: string };
 
 /** The two commands a connection needs: `DesktopApi.collabLanSend` and `collabLanClose`. */
 export interface LanRelayLink {
-  send(connId: string, text: string): Promise<void>;
+  /** `presence` lets the shell drop it, rather than queue it, for a guest who is behind. */
+  send(connId: string, text: string, priority?: SendPriority): Promise<void>;
   close(connId: string, reason: string): Promise<void>;
 }
 
@@ -67,7 +69,7 @@ class LanConnection implements CollabTransport {
   private current: TransportState = 'open';
   private readonly messageListeners = new Set<(message: string) => void>();
   private readonly stateListeners = new Set<(state: TransportState, reason?: string) => void>();
-  private queue: { text: string; bytes: number }[] = [];
+  private queue: { text: string; bytes: number; priority: SendPriority }[] = [];
   private head = 0;
   private backlogBytes = 0;
   private sending = false;
@@ -101,7 +103,7 @@ class LanConnection implements CollabTransport {
       throw new RangeError(`A collaboration message may be at most ${MAX_MESSAGE_BYTES} bytes.`);
     }
     if (priority === 'presence' && (this.congested || this.backlogBytes > LAN_PRESENCE_BACKLOG_BYTES)) return false;
-    this.queue.push({ text: message, bytes });
+    this.queue.push({ text: message, bytes, priority });
     this.backlogBytes += bytes;
     if (this.backlogBytes > LAN_MAX_QUEUED_BYTES) {
       this.close('queue-overflow');
@@ -166,7 +168,7 @@ class LanConnection implements CollabTransport {
     this.head++;
     this.sending = true;
     this.watchBacklog();
-    this.call(() => this.link.send(this.connId, entry.text)).then(
+    this.call(() => this.link.send(this.connId, entry.text, entry.priority)).then(
       () => {
         this.sending = false;
         // Still counted while in flight; a backlog dropped meanwhile was already zeroed.

@@ -15,6 +15,7 @@ import type { DraftDocument } from '../document/types';
 import { CURRENT_VERSION } from '../document/types';
 import { ByteBudget, CLOSE_GRACE_MS, GONE_MS, HEARTBEAT_MS, HELLO_TIMEOUT_MS, HOLD_RETRY_MS, RateLimit, REAL_CLOCK, SILENT_MS, type Clock } from './clock';
 import { Authorship } from './authorship';
+import { sameSecret } from './rendezvous';
 import { HostCore, HOST_ORIGIN, type Commit, type PeerLedger } from './hostCore';
 import {
   encode,
@@ -34,6 +35,7 @@ import {
   type PeerInfo,
   type PeerView,
   type Presence,
+  type Resend,
   type Role,
 } from './protocol';
 import type { CollabTransport } from './transport/types';
@@ -108,6 +110,14 @@ interface Slot {
   release: () => void;
   /** When the connection dropped, for keeping only the most recent dropped places. */
   goneAt?: number;
+  /**
+   * Set once the key has crossed a link anyone nearby could read (the desktop's local network link
+   * is plain `ws://`). From then on the key alone is no proof: only the owner, choosing to let them
+   * back in, gives the place back.
+   */
+  keyExposed: boolean;
+  /** Fresh copies of the file sent to them so far: their patches must carry the latest (`Resend`). */
+  epoch: number;
 }
 
 /** Dropped places kept for coming back; older ones are forgotten, so joining and dropping can't grow the list forever. */
@@ -130,6 +140,7 @@ interface Held {
   clientSeq: number;
   changes: unknown;
   bytes: number;
+  epoch?: number;
 }
 
 export class HostSession {
@@ -179,10 +190,14 @@ export class HostSession {
    * The role a returning collaborator's place had, if that place is waiting for them — for the lobby to
    * let them straight back in. `evenIfLive` also offers a place whose link still looks up here (they
    * may have lost it first): only for a caller that never sees the key itself, just a proof of it.
+   * A place whose key has crossed the local network in clear is offered only with `exposed`, to a
+   * caller that still asks the owner (the LAN door): someone who read it there could otherwise knock
+   * through the relay with it and be let straight in.
    */
-  waitingPlace(peerId: string, evenIfLive = false): { role: Role; key: string } | null {
+  waitingPlace(peerId: string, options: { evenIfLive?: boolean; exposed?: boolean } = {}): { role: Role; key: string } | null {
     const slot = this.slots.get(peerId);
-    return slot && (evenIfLive || slot.link !== 'live') ? { role: slot.ledger.role, key: slot.key } : null;
+    if (!slot || (slot.keyExposed && !options.exposed)) return null;
+    return options.evenIfLive || slot.link !== 'live' ? { role: slot.ledger.role, key: slot.key } : null;
   }
 
   /** Everyone in the session, the owner first. */
@@ -260,7 +275,13 @@ export class HostSession {
     // Coming back: the same place, colour, role and patch numbering. A re-invite names exactly one
     // place, which the owner chose to give back; otherwise reclaiming one takes that place's key.
     const claimed = pending.reuse !== undefined ? this.slots.get(pending.reuse) : hello.resume && this.slots.get(hello.resume.peer);
-    const keyMatches = hello.resume !== undefined && claimed !== undefined && hello.resume.peer === claimed.info.id && hello.resume.key === claimed.key;
+    // A key read off the local network proves nothing: only a place the owner named (`reuse`) is given back.
+    const keyMatches =
+      hello.resume !== undefined &&
+      claimed !== undefined &&
+      (!claimed.keyExposed || pending.reuse !== undefined) &&
+      hello.resume.peer === claimed.info.id &&
+      sameSecret(hello.resume.key, claimed.key);
     // The key proves it is them even over a link this side still thinks is up: the old one may be
     // mid-restart, or already dead on their side, and refusing left them shut out of their own place.
     const mayClaim = claimed !== undefined && (keyMatches || (claimed.link !== 'live' && pending.reuse !== undefined && !pending.requireKey));
@@ -293,16 +314,20 @@ export class HostSession {
         budget: new ByteBudget(this.clock, BYTE_RATE, BYTE_BURST),
         presence: null,
         release: () => {},
+        keyExposed: false,
+        epoch: 0,
       };
       this.slots.set(slot.info.id, slot);
     } else {
       slot.info = { ...slot.info, name: hello.name };
     }
-    this.connect(slot, pending.transport);
-
+    // The welcome below carries the key; over a plain socket, anyone on the network can read it.
+    if (pending.transport.kind === 'socket') slot.keyExposed = true;
     // Anything the owner did since the last broadcast goes out first, so the snapshot and the
-    // commits after it agree.
+    // commits after it agree — and before this connection is listed, so it isn't sent a commit
+    // ahead of its welcome, which a returning copy would read as a gap.
     this.commitLocal();
+    this.connect(slot, pending.transport);
     this.send(slot, {
       t: 'welcome',
       v: PROTOCOL_VERSION,
@@ -312,6 +337,7 @@ export class HostSession {
       role: slot.ledger.role,
       seq: this.core.seq,
       snapshot: this.core.snapshot(),
+      ...this.resend(slot),
       // Only people still in the session: dropped places are kept for coming back, and listing them
       // here could push the list past what a collaborator accepts (`MAX_COLLABORATORS + 1`).
       peers: this.peers()
@@ -374,11 +400,13 @@ export class HostSession {
     switch (message.t) {
       case 'patch':
         if (!slot.patches.take()) return this.disconnect(slot, 'protocol');
+        // Sent before their latest fresh copy reached them: it is part of the one patch they send after.
+        if (message.epoch !== undefined && message.epoch !== slot.epoch) return;
         // Not kept, and not acknowledged: the fresh copy after the gesture has them sent again.
         if (this.heldOut.has(slot)) return;
         if (this.held.length > 0 || this.env.isBusy()) {
           if (this.held.length >= MAX_HELD_PATCHES || this.heldBytes + bytes > MAX_HELD_BYTES) return this.holdOut(slot);
-          this.held.push({ slot, clientSeq: message.clientSeq, changes: message.changes, bytes });
+          this.held.push({ slot, clientSeq: message.clientSeq, changes: message.changes, bytes, ...(message.epoch === undefined ? {} : { epoch: message.epoch }) });
           this.heldBytes += bytes;
           this.scheduleHold();
           return;
@@ -392,9 +420,7 @@ export class HostSession {
         return;
       case 'resync':
         if (!slot.resyncs.take()) return;
-        this.commitLocal();
-        this.send(slot, { t: 'snapshot', seq: this.core.seq, snapshot: this.core.snapshot() });
-        return;
+        return this.sendCopy(slot);
       case 'ping':
         if (slot.pings.take()) this.send(slot, { t: 'pong', n: message.n });
         return;
@@ -455,15 +481,34 @@ export class HostSession {
     while (this.held.length > 0 && !this.env.isBusy()) {
       const next = this.held.shift()!;
       this.heldBytes -= next.bytes;
-      if (this.slots.get(next.slot.info.id) === next.slot) this.applyPatch(next.slot, next.clientSeq, next.changes);
+      // A fresh copy sent meanwhile (they asked for one) already has this patch coming again with it.
+      const current = next.epoch === undefined || next.epoch === next.slot.epoch;
+      if (current && this.slots.get(next.slot.info.id) === next.slot) this.applyPatch(next.slot, next.clientSeq, next.changes);
     }
     if (this.held.length === 0 && this.heldOut.size > 0 && !this.env.isBusy()) {
       // A snapshot makes a collaborator send every patch it still has unconfirmed.
-      this.commitLocal();
-      for (const slot of this.heldOut) if (this.slots.get(slot.info.id) === slot) this.send(slot, { t: 'snapshot', seq: this.core.seq, snapshot: this.core.snapshot() });
-      this.heldOut.clear();
+      for (const slot of [...this.heldOut]) {
+        this.heldOut.delete(slot);
+        if (this.slots.get(slot.info.id) === slot) this.sendCopy(slot);
+      }
     }
     if (this.held.length > 0 || this.heldOut.size > 0) this.scheduleHold();
+  }
+
+  /** A fresh copy of the file for one collaborator, with whatever the owner did just before it. */
+  private sendCopy(slot: Slot): void {
+    this.commitLocal();
+    this.send(slot, { t: 'snapshot', seq: this.core.seq, snapshot: this.core.snapshot(), ...this.resend(slot) });
+  }
+
+  /**
+   * Starts `slot`'s next epoch, for a fresh copy about to be sent to them: from here on their patches
+   * from before it are dropped, since they come again as one with the epoch this returns.
+   */
+  private resend(slot: Slot): Required<Resend> {
+    slot.epoch += 1;
+    this.heldOut.delete(slot);
+    return { handled: slot.ledger.lastClientSeq, epoch: slot.epoch };
   }
 
   /** The owner's own edit (or undo, or anything else that changed the file here). */

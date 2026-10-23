@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { HostLobby, type LobbyStatus } from '../../src/collab/lobby';
+import { HostLobby, knock, type LobbyStatus } from '../../src/collab/lobby';
 import { newOwnerIdentity, newSessionLink } from '../../src/collab/rendezvous';
 
 /** A WebSocket that records how it was opened and lets the test decide what happens to it. */
@@ -16,7 +16,10 @@ class FakeSocket {
   addEventListener(type: string, listener: (event: unknown) => void) {
     this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]);
   }
-  send() {}
+  readonly sent: string[] = [];
+  send(data: string) {
+    this.sent.push(data);
+  }
   close() {}
   fire(type: string, event: unknown = {}) {
     for (const listener of this.listeners.get(type) ?? []) listener(event);
@@ -124,5 +127,35 @@ describe('the door, against junk', () => {
     await lobby.close();
     vi.unstubAllGlobals();
     vi.useRealTimers();
+  });
+});
+
+describe('the knocker’s side', () => {
+  it('reads an offer that comes right behind the greeting, not before the greeting’s key exists', async () => {
+    FakeSocket.made = [];
+    vi.stubGlobal('WebSocket', FakeSocket);
+    const rendezvous = await import('../../src/collab/rendezvous');
+    const identity = await newOwnerIdentity();
+    const link = newSessionLink(identity);
+    const key = await rendezvous.roomKey(link);
+    const statuses: string[] = [];
+    await knock(link, 'wss://relay.example', { name: 'Gus' }, '', (status) => statuses.push(status.kind));
+    const socket = FakeSocket.made[0]!;
+    socket.fire('open');
+    socket.fire('message', { data: JSON.stringify({ event: 'host', present: true }) });
+    await vi.waitFor(() => expect(socket.sent).toHaveLength(1));
+    const knocked = (await rendezvous.unseal(key, 'to-host', (JSON.parse(socket.sent[0]!) as { data: string }).data)) as { publicKey: string };
+
+    const exchange = await rendezvous.newExchange();
+    const pair = await exchange.pairWith(knocked.publicKey, link);
+    const signature = await identity.sign(rendezvous.greetingStatement(link, knocked.publicKey, exchange.publicKey, 'Olive'));
+    const seen = await rendezvous.seal(key, 'to-guest', { t: 'seen', owner: 'Olive', publicKey: exchange.publicKey, ownerKey: identity.publicKey, signature });
+    const offer = await rendezvous.seal(key, 'to-guest', { t: 'offer', box: await rendezvous.seal(pair, 'to-guest', { invite: '1.AAAA' }) });
+    // Back to back, as a busy page takes them off the socket.
+    socket.fire('message', { data: JSON.stringify({ from: 'host', data: seen }) });
+    socket.fire('message', { data: JSON.stringify({ from: 'host', data: offer }) });
+    await vi.waitFor(() => expect(statuses).toContain('joining'));
+    expect(statuses.indexOf('waiting')).toBeLessThan(statuses.indexOf('joining'));
+    vi.unstubAllGlobals();
   });
 });

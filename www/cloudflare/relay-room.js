@@ -49,6 +49,7 @@ const HOST_SECRET = /^host\.([A-Za-z0-9_-]{43})$/;
 
 export const CLOSE = Object.freeze({
   hostTaken: Object.freeze({ code: 4001, reason: 'host-taken' }),
+  replaced: Object.freeze({ code: 4004, reason: 'replaced' }),
   notOwner: Object.freeze({ code: 4003, reason: 'not-owner' }),
   roomFull: Object.freeze({ code: 4002, reason: 'room-full' }),
   binary: Object.freeze({ code: 1003, reason: 'binary' }),
@@ -250,6 +251,21 @@ export function uniqueGuestTag(peers, random) {
 export function admission(peers, role) {
   if (role === 'host') return hostOf(peers) ? CLOSE.hostTaken : null;
   return guestsOf(peers).length >= LIMITS.maxGuests ? CLOSE.roomFull : null;
+}
+
+/**
+ * Whether a host may take the room, given `checkOwner`'s answer for it. The owner coming back while
+ * the relay still holds their previous socket — a laptop that slept, a network that changed without
+ * a goodbye, which no close ever reports — takes the room back: that socket is closed, and guests
+ * hear the host go and come back, so they knock again. Anyone else is turned away while a host is
+ * connected, even with a claim of their own (the owner's may have run out during a long session).
+ */
+export function admitHost(peers, owner) {
+  const host = hostOf(peers);
+  if (host && owner.verdict !== 'owner') return CLOSE.hostTaken;
+  if (owner.verdict === 'not-owner') return CLOSE.notOwner;
+  if (host) closePeer(peers, host, CLOSE.replaced);
+  return null;
 }
 
 /**

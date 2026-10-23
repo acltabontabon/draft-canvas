@@ -336,13 +336,25 @@ async fn send(
         biased;
         () = stopped(shutdown) => Some(End::close("server-stopped", GOING_AWAY)),
         (reason, code) = killed(kill) => Some(End::close(reason, code)),
-        sent = timeout(limits.send_timeout, sink.send(message)) => match sent {
+        sent = timeout(send_deadline(limits, &message), sink.send(message)) => match sent {
             Ok(Ok(())) => None,
             Ok(Err(_)) => Some(End::quiet("error")),
             // Its socket is full and nothing more is getting through.
             Err(_) => Some(End::close("congested", POLICY)),
         },
     }
+}
+
+/// How long one frame may take to leave: `send_timeout`, and more for a large one. A whole diagram
+/// for a guest on a slow but working link (busy Wi‑Fi, several people joining at once) is not a guest
+/// that stopped reading; a guest that did still stalls well within this.
+fn send_deadline(limits: &Limits, message: &Message) -> Duration {
+    let len = match message {
+        Message::Text(text) => text.as_str().len(),
+        _ => 0,
+    };
+    // 64 KiB a second is the slowest link still treated as moving.
+    limits.send_timeout + Duration::from_millis(len as u64 / 64)
 }
 
 /// Resolves with the reason once something asked for this connection to end now.

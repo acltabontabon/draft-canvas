@@ -76,7 +76,7 @@ Hover a face in the people column, or open the faces beside **Share** in the too
 | **Re-invite** | Makes a new direct invite for someone who joined by one |
 | **End session** | Disconnects everyone |
 
-Closing the tab, reloading or opening another canvas also ends the session. Your canvas keeps
+Closing the canvas or the tab, reloading or opening another canvas also ends the session. Your canvas keeps
 saving as usual. A collaborator whose connection drops rejoins on their own, in the same role —
 except over the desktop local network link, where they ask to join again and you let them back in.
 

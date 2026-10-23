@@ -119,17 +119,33 @@ export interface HelloMessage {
 
 export type GuestMessage =
   | HelloMessage
-  | { t: 'patch'; clientSeq: number; changes: unknown }
+  /**
+   * `epoch` is the owner's count of fresh copies this collaborator has taken in (`Resend`): a patch
+   * sent before the latest was taken in is already part of the one patch sent after it.
+   */
+  | { t: 'patch'; clientSeq: number; changes: unknown; epoch?: number }
   | { t: 'resync' }
   | { t: 'presence'; presence: Presence }
   | { t: 'ping'; n: number }
   | { t: 'pong'; n: number }
   | { t: 'bye' };
 
+/**
+ * What comes with every fresh copy of the file sent to one collaborator: the newest of their patches
+ * the owner has handled (in the copy, or refused), and a new epoch. From the copy on, the owner takes
+ * only patches marked with that epoch, and the collaborator sends everything it still has
+ * unconfirmed as one patch so marked — so a patch in flight when the copy was made can never be
+ * applied out of order, and nothing is sent twice. Absent from an older owner's messages.
+ */
+export interface Resend {
+  handled?: number;
+  epoch?: number;
+}
+
 export type HostMessage =
   /** `key` is this collaborator's alone: peer ids are visible to everyone, so reclaiming one after a drop takes the key too. */
-  | { t: 'welcome'; v: number; session: string; peer: string; key: string; role: Role; seq: number; snapshot: unknown; peers: PeerInfo[] }
-  | { t: 'snapshot'; seq: number; snapshot: unknown }
+  | ({ t: 'welcome'; v: number; session: string; peer: string; key: string; role: Role; seq: number; snapshot: unknown; peers: PeerInfo[] } & Resend)
+  | ({ t: 'snapshot'; seq: number; snapshot: unknown } & Resend)
   | { t: 'commit'; seq: number; changes: unknown; origin: string; clientSeq?: number }
   | { t: 'ack'; clientSeq: number; rejected?: RejectReason }
   | { t: 'peers'; peers: PeerInfo[] }
@@ -297,8 +313,11 @@ export function readGuestMessage(value: unknown): GuestMessage | null {
       }
       return hello;
     }
-    case 'patch':
-      return isInt(value.clientSeq, 1) && Array.isArray(value.changes) ? { t: 'patch', clientSeq: value.clientSeq, changes: value.changes } : null;
+    case 'patch': {
+      if (!isInt(value.clientSeq, 1) || !Array.isArray(value.changes)) return null;
+      if (value.epoch !== undefined && !isInt(value.epoch, 1)) return null;
+      return { t: 'patch', clientSeq: value.clientSeq, changes: value.changes, ...(value.epoch === undefined ? {} : { epoch: value.epoch as number }) };
+    }
     case 'resync':
       return { t: 'resync' };
     case 'presence': {
@@ -315,6 +334,12 @@ export function readGuestMessage(value: unknown): GuestMessage | null {
   }
 }
 
+/** Both of `Resend`'s fields or neither: one alone would be read as the other's absence. */
+function readResend(value: Record<string, unknown>): Resend | null {
+  if (value.handled === undefined && value.epoch === undefined) return {};
+  return isInt(value.handled) && isInt(value.epoch, 1) ? { handled: value.handled, epoch: value.epoch } : null;
+}
+
 /** A message from the owner, as a collaborator reads it. */
 export function readHostMessage(value: unknown): HostMessage | null {
   if (!isRecord(value)) return null;
@@ -325,11 +350,14 @@ export function readHostMessage(value: unknown): HostMessage | null {
       const key = readId(value.key);
       const role = readRole(value.role);
       const peers = readPeers(value.peers);
-      if (!isInt(value.v, 1) || !session || !peer || !key || !role || !isInt(value.seq) || !peers || !isRecord(value.snapshot)) return null;
-      return { t: 'welcome', v: value.v, session, peer, key, role, seq: value.seq, snapshot: value.snapshot, peers };
+      const resend = readResend(value);
+      if (!isInt(value.v, 1) || !session || !peer || !key || !role || !isInt(value.seq) || !peers || !isRecord(value.snapshot) || !resend) return null;
+      return { t: 'welcome', v: value.v, session, peer, key, role, seq: value.seq, snapshot: value.snapshot, peers, ...resend };
     }
-    case 'snapshot':
-      return isInt(value.seq) && isRecord(value.snapshot) ? { t: 'snapshot', seq: value.seq, snapshot: value.snapshot } : null;
+    case 'snapshot': {
+      const resend = readResend(value);
+      return isInt(value.seq) && isRecord(value.snapshot) && resend ? { t: 'snapshot', seq: value.seq, snapshot: value.snapshot, ...resend } : null;
+    }
     case 'commit': {
       const origin = readId(value.origin);
       if (!isInt(value.seq, 1) || !origin || !Array.isArray(value.changes)) return null;

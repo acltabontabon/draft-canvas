@@ -735,6 +735,31 @@ async fn a_guest_too_slow_to_keep_up_is_closed_as_congested() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn presence_for_a_guest_who_is_behind_is_dropped_not_queued_until_they_are_closed() {
+    let (events, relay, port) = started(Limits::default()).await;
+    let _slow = guest(port).await;
+    let id = events.opened(0).await;
+    // A whole diagram on its way to a guest on a slow link: far past the presence watermark.
+    let chunk = "z".repeat(256 * 1024);
+    for _ in 0..40 {
+        relay.send(&id, chunk.clone()).unwrap();
+    }
+    // Everyone's pointers keep coming meanwhile: more messages than the queue holds.
+    for _ in 0..4 * Limits::default().queue_messages {
+        relay.send_presence(&id, "p".repeat(512)).unwrap();
+    }
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    assert!(
+        !events
+            .all()
+            .iter()
+            .any(|e| matches!(e, HostEvent::CollabLanClose { conn_id, .. } if *conn_id == id)),
+        "still connected: the presence was dropped, not queued"
+    );
+    relay.stop("stopped").await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn the_page_may_still_send_a_guest_a_whole_diagram() {
     let (events, relay, port) = started(Limits::default()).await;
     let mut guest = guest(port).await;
@@ -956,7 +981,8 @@ async fn starting_twice_is_the_same_server_and_stopping_twice_says_so_once() {
     assert_eq!(
         stopped,
         vec![HostEvent::CollabLanStopped {
-            reason: "stopped".into()
+            reason: "stopped".into(),
+            token: TOKEN.into(),
         }]
     );
     assert!(
@@ -1001,6 +1027,7 @@ async fn stopping_closes_every_guest_before_saying_the_server_stopped() {
     let stopped = position(&|e| {
         *e == HostEvent::CollabLanStopped {
             reason: "window-closed".into(),
+            token: TOKEN.into(),
         }
     });
     for id in [&a_id, &b_id] {

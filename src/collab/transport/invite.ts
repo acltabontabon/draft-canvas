@@ -197,6 +197,18 @@ function parseFingerprint(value: string): CompactSdp['fingerprint'] | null {
   return bytes.length === entry[1] ? { algorithm: entry[0], bytes } : null;
 }
 
+/**
+ * `sdp` without the candidates an invite would never carry — a DNS name for the browser to look up,
+ * anything unreadable. For the descriptions that travel outside an invite: an ICE restart's, which
+ * the other side writes and this side's browser would otherwise act on as given.
+ */
+export function withSafeCandidates(sdp: string): string {
+  return sdp
+    .split(/\r?\n/)
+    .filter((line) => !line.startsWith('a=candidate:') || parseCandidate(line.slice('a=candidate:'.length)) !== null)
+    .join('\r\n');
+}
+
 /** `candidate:<foundation> <component> <transport> <priority> <address> <port> typ <type> ...` */
 function parseCandidate(value: string): CompactCandidate | null {
   const parts = value.trim().split(/\s+/);

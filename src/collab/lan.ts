@@ -122,7 +122,11 @@ export async function startLanSharing(relay: LanRelay, options: LanSharingOption
     },
   });
   const unsubscribe = relay.subscribe((event) => {
-    if (!stopped) host.handle(event);
+    if (stopped) return;
+    // A stop finishing late for the session before this one (sharing turned off and straight back
+    // on) is not this one's: it would end it, and its own stop would then stop the server just started.
+    if (event.type === 'collab-lan-stopped' && event.token !== undefined && event.token !== token) return;
+    host.handle(event);
   });
   let started: { port: number; addresses: string[] };
   try {

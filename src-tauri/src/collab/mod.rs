@@ -45,6 +45,10 @@ pub const MAX_TEXT: usize = 16 * 1024 * 1024;
 pub const MAX_GUEST_TEXT: usize = 4 * 1024 * 1024;
 /// The page makes a 128-bit token and sends it as 32 lowercase hex characters.
 const TOKEN_LEN: usize = 32;
+/// Above this much text waiting for one guest, presence for them is dropped rather than queued (the
+/// page's own `LAN_PRESENCE_BACKLOG_BYTES`): only this side knows what is really still waiting, and
+/// pointers from several people would otherwise fill the queue until the guest was closed as `congested`.
+pub const PRESENCE_BACKLOG: usize = 64 * 1024;
 /// How long `stop` waits for every guest to be sent its close before saying the server stopped: a
 /// close that takes all of `socket`'s grace, then all of the wait for the guest's answer, with room.
 const DRAIN_TIMEOUT: Duration = Duration::from_secs(4);
@@ -202,6 +206,11 @@ impl Shared {
     pub(crate) fn token_is(&self, offered: &[u8]) -> bool {
         let token = lock(&self.token);
         offered.len() == TOKEN_LEN && bool::from(offered.ct_eq(&token[..]))
+    }
+
+    /// The token, as the page wrote it (lowercase hex, checked by `parse_token`).
+    fn token_text(&self) -> String {
+        String::from_utf8_lossy(&lock(&self.token)[..]).into_owned()
     }
 
     /// The session a request is authorized in: read before its token is checked.
@@ -386,16 +395,22 @@ impl Relay {
         let ipv6 = listeners
             .iter()
             .any(|l| l.local_addr().is_ok_and(|a: SocketAddr| a.is_ipv6()));
-        let mut tasks = Vec::with_capacity(listeners.len());
-        for listener in listeners {
-            let listener = tokio::net::TcpListener::from_std(listener).map_err(|_| {
+        // Every listener is taken over before any starts serving: one failing after another had
+        // started would leave that one running, with nothing on the books to stop it.
+        let listeners = listeners
+            .into_iter()
+            .map(tokio::net::TcpListener::from_std)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| {
                 AppError::new(
                     ErrorKind::Io,
                     "Draft Canvas couldn't start sharing on your network.",
                 )
             })?;
-            tasks.push(tokio::spawn(server::serve(listener, shared.clone())));
-        }
+        let tasks = listeners
+            .into_iter()
+            .map(|listener| tokio::spawn(server::serve(listener, shared.clone())))
+            .collect();
         *lock(&self.current) = Some(shared.clone());
         let running = Running {
             shared,
@@ -436,6 +451,7 @@ impl Relay {
             return;
         };
         lock(&self.current).take();
+        let token = running.shared.token_text();
         running.shared.begin_stop();
         // Each listener task owns its socket: once it has returned, the port is free again.
         for listener in running.listeners {
@@ -444,6 +460,7 @@ impl Relay {
         let _ = tokio::time::timeout(DRAIN_TIMEOUT, running.shared.drained()).await;
         self.sink.emit(HostEvent::CollabLanStopped {
             reason: reason.to_string(),
+            token,
         });
     }
 
@@ -488,6 +505,20 @@ impl Relay {
             }
         }
         Ok(())
+    }
+
+    /// `send` for presence (pointers, selections): dropped, not queued, while the guest is behind.
+    /// Fresh presence follows soon enough; a backlog of stale presence only delays what matters.
+    pub fn send_presence(&self, conn_id: &str, text: String) -> Result<(), AppError> {
+        let behind = lock(&self.current).as_ref().is_some_and(|shared| {
+            lock(&shared.conns)
+                .get(conn_id)
+                .is_some_and(|conn| conn.queued.load(Ordering::SeqCst) > PRESENCE_BACKLOG)
+        });
+        if behind {
+            return Ok(());
+        }
+        self.send(conn_id, text)
     }
 
     /// Closes one guest once everything already sent to it has gone. Nothing more from the guest

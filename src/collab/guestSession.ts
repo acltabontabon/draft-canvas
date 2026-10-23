@@ -29,6 +29,7 @@ import {
   type PeerView,
   type Presence,
   type RejectReason,
+  type Resend,
   type Role,
 } from './protocol';
 import { Replica } from './replica';
@@ -66,6 +67,10 @@ export interface GuestEvents {
 
 type Inbound = Extract<HostMessage, { t: 'commit' | 'ack' | 'snapshot' }>;
 
+function resendOf(message: Resend): Resend {
+  return message.handled === undefined || message.epoch === undefined ? {} : { handled: message.handled, epoch: message.epoch };
+}
+
 export class GuestSession {
   private replica: Replica | null = null;
   private transport: CollabTransport | null = null;
@@ -83,6 +88,8 @@ export class GuestSession {
   private pingCount = 0;
   /** After a gap in the commits: everything until a fresh snapshot is ignored. */
   private awaitingSnapshot = false;
+  /** The epoch of the last fresh copy taken in, for every patch sent after it (`Resend`); `null` from an older owner. */
+  private epoch: number | null = null;
   private ended = false;
   private readonly env: GuestEnvironment;
   private readonly events: GuestEvents;
@@ -167,8 +174,12 @@ export class GuestSession {
       return;
     }
     const patch = this.replica.propose(changes)!;
-    this.send({ t: 'patch', clientSeq: patch.clientSeq, changes: patch.changes });
+    this.sendPatch(patch);
     this.events.unconfirmed(this.replica.pending.length);
+  }
+
+  private sendPatch(patch: { clientSeq: number; changes: unknown }): void {
+    this.send({ t: 'patch', clientSeq: patch.clientSeq, changes: patch.changes, ...(this.epoch === null ? {} : { epoch: this.epoch }) });
   }
 
   setPresence(presence: Presence): void {
@@ -240,10 +251,13 @@ export class GuestSession {
       // Taken in like any snapshot: after a gesture under way has ended, and after the edits on screen
       // since the drop are in the replica. Reset while a drag still held the old file, the editor kept
       // it, and the next local diff sent the owner's offline work back out as this person's deletions.
-      this.held.push({ t: 'snapshot', seq: message.seq, snapshot: message.snapshot });
+      this.held.push({ t: 'snapshot', seq: message.seq, snapshot: message.snapshot, ...resendOf(message) });
       this.drainHeld();
     } else {
       this.replica = new Replica(parsed.document, message.seq);
+      // A fresh page given an old place back numbers its patches on from where that place left off.
+      if (message.handled !== undefined) this.replica.rebase(message.handled);
+      this.epoch = message.epoch ?? null;
       this.env.open(parsed.document, message.role);
     }
     this.events.joined(message.peer, message.role, message.peers.find((peer) => peer.id === message.peer)?.color);
@@ -263,8 +277,21 @@ export class GuestSession {
       if (!parsed.ok || !replica) return this.finish('protocol');
       replica.reset(parsed.document, message.seq);
       this.awaitingSnapshot = false;
-      // The owner skips any of these it already applied (it remembers each patch number).
-      for (const patch of replica.pending) this.send({ t: 'patch', clientSeq: patch.clientSeq, changes: patch.changes });
+      if (message.handled !== undefined && message.epoch !== undefined) {
+        // Everything still unconfirmed goes as one patch, in the new epoch: the owner has dropped any
+        // sent before the copy, so none can land out of order — and one patch can't trip a rate limit.
+        this.epoch = message.epoch;
+        const patch = replica.rebase(message.handled);
+        if (patch && exceedsMessageLimit(encode({ t: 'patch', clientSeq: patch.clientSeq, changes: patch.changes, epoch: message.epoch }), MAX_GUEST_MESSAGE_BYTES)) {
+          replica.discardPending();
+          this.events.tooLarge();
+        } else if (patch) {
+          this.sendPatch(patch);
+        }
+      } else {
+        // An older owner skips any of these it already applied (it remembers each patch number).
+        for (const patch of replica.pending) this.sendPatch(patch);
+      }
     } else if (message.t === 'ack') {
       replica!.acknowledge(message.clientSeq);
       if (message.rejected) this.events.rejected(message.rejected);

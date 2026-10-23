@@ -16,6 +16,7 @@
 import type { DraftDocument } from '../document/types';
 import { applyChanges } from './apply';
 import type { Change } from './changes';
+import { diffFile } from './diff';
 import { repairReferences } from './repair';
 import { withinLimits } from './limits';
 
@@ -105,6 +106,29 @@ export class Replica {
   reset(snapshot: DraftDocument, seq: number): void {
     this.confirmedFile = snapshot;
     this.confirmedSeq = seq;
+    this.localFile = undefined;
+  }
+
+  /**
+   * After a fresh copy that says which of this person's patches the owner has handled: those are
+   * dropped, numbering carries on above the owner's count (a fresh page given back an old place
+   * starts from it), and whatever is still unconfirmed becomes one patch — the difference between
+   * the copy and what is on screen — numbered as the newest. `null` when nothing is left to send.
+   */
+  rebase(handled: number): PendingPatch | null {
+    this.acknowledge(handled);
+    const local = this.local;
+    this.lastClientSeq = Math.max(this.lastClientSeq, handled);
+    if (this.queue.length === 0) return null;
+    const changes = diffFile(this.confirmedFile, local);
+    this.queue = changes.length === 0 ? [] : [{ clientSeq: this.lastClientSeq, changes }];
+    this.localFile = this.queue.length === 0 ? this.confirmedFile : local;
+    return this.queue[0] ?? null;
+  }
+
+  /** Unconfirmed edits given up (too large to send): `local` is the confirmed file again. */
+  discardPending(): void {
+    this.queue = [];
     this.localFile = undefined;
   }
 }

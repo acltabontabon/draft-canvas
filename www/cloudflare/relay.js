@@ -14,10 +14,10 @@
 import { DurableObject } from 'cloudflare:workers';
 import {
   admission,
+  admitHost,
   checkOwner,
   checkRequest,
   clientKey,
-  CLOSE,
   PROTOCOL,
   secretDigest,
   closePeer,
@@ -127,12 +127,14 @@ export class RelayRoom extends DurableObject {
     const [client, server] = Object.values(new WebSocketPair());
     const answered = { status: 101, webSocket: client, headers: { 'sec-websocket-protocol': PROTOCOL } };
     const peers = this.#room();
-    let refused = admission(peers, role);
-    if (!refused && role === 'host') {
+    let refused;
+    if (role === 'host') {
       const digest = request.headers.get('x-relay-owner');
       const owner = digest ? checkOwner(await this.ctx.storage.get('owner'), digest, Date.now()) : { verdict: 'not-owner' };
-      if (owner.verdict === 'not-owner') refused = CLOSE.notOwner;
-      else await this.ctx.storage.put('owner', owner.claim);
+      refused = admitHost(peers, owner);
+      if (!refused) await this.ctx.storage.put('owner', owner.claim);
+    } else {
+      refused = admission(peers, role);
     }
     if (refused) {
       // Accepted without hibernation only to say why: the socket never joins the room.

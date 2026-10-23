@@ -69,7 +69,7 @@ function publishWaiting(): void {
 
 function placeOf(door: AtTheDoor): { peer: string; role: Role } | null {
   const session = hostSession();
-  return session ? returningPlace(door, (peer) => session.waitingPlace(peer, true)) : null;
+  return session ? returningPlace(door, (peer) => session.waitingPlace(peer, { evenIfLive: true, exposed: true })) : null;
 }
 
 /**

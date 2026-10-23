@@ -17,6 +17,7 @@ import { loadStarters } from '../starters/load';
 import { Autosave } from '../storage/autosave';
 import { getRepository, reconcileMetadata, type DraftRepository } from '../storage';
 import { IndexedDbRepository, onStorageSuperseded } from '../storage/IndexedDbRepository';
+import { useCollabStore } from './collabStore';
 import { useUiStore } from './uiStore';
 
 type EditorStoreModule = typeof import('./editorStore');
@@ -221,6 +222,12 @@ export function useDocumentSession(): DocumentSession {
   const setOpenId = useCallback((id: string | null) => {
     openIdRef.current = id;
     setOpenIdState(id);
+    // Closing the canvas you are sharing (Home, Back, deleting it) ends the session. Left running, it
+    // took collaborators' edits into a file that no longer saved, and reopening the canvas then sent
+    // the stored copy back out over them. Already loaded while hosting, so this pulls in nothing.
+    if (id === null && useCollabStore.getState().role === 'host') {
+      void import('./collabBridge').then((bridge) => bridge.stopHosting('owner-left'));
+    }
   }, []);
   const notify = useUiStore((state) => state.notify);
   /**

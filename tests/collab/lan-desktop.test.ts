@@ -41,7 +41,7 @@ describe('the shell’s LAN events', () => {
     h.hostEvent({ type: 'collab-lan-open', connId: 'c1' });
     h.hostEvent({ type: 'collab-lan-message', connId: 'c1', text: '{"t":"hello"}' });
     h.hostEvent({ type: 'collab-lan-close', connId: 'c1', reason: 'closed' });
-    h.hostEvent({ type: 'collab-lan-stopped', reason: 'window-closed' });
+    h.hostEvent({ type: 'collab-lan-stopped', reason: 'window-closed', token: '0'.repeat(32) });
     h.hostEvent({ type: 'recents-changed' });
     off();
     h.hostEvent({ type: 'collab-lan-open', connId: 'c2' });
@@ -68,6 +68,10 @@ describe('the shell’s LAN events', () => {
 
     expect(messages).toEqual(['hello']);
     expect(h.api.collabLanSend).toHaveBeenCalledWith('c1', 'welcome');
+    // Presence is marked, so the shell can drop it for a guest who is behind.
+    transports[0]!.send('pointer', 'presence');
+    await h.settle();
+    expect(h.api.collabLanSend).toHaveBeenLastCalledWith('c1', 'pointer', { presence: true });
 
     await sharing.stop();
     expect(transports[0]!.state).toBe('closed');

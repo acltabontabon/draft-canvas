@@ -180,9 +180,10 @@ export async function seal(key: CryptoKey, direction: Direction, value: unknown)
 /** The value sealed in `text`, or `null` for anything that doesn't open — wrong key, wrong direction, tampered, too big. */
 export async function unseal(key: CryptoKey, direction: Direction, text: string): Promise<unknown> {
   if (typeof text !== 'string' || text.length > MAX_SEALED || !/^[A-Za-z0-9_-]+$/.test(text)) return null;
-  const bytes = fromBase64Url(text);
-  if (bytes.length < 12 + 16) return null;
   try {
+    // Inside: some lengths are not base64 at all, and decoding them throws.
+    const bytes = fromBase64Url(text);
+    if (bytes.length < 12 + 16) return null;
     const plain = await crypto.subtle.decrypt(
       { name: 'AES-GCM', iv: bytes.slice(0, 12) as BufferSource, additionalData: ENCODER.encode(direction) },
       key,

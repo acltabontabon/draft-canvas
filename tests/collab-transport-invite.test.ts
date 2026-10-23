@@ -16,6 +16,7 @@ import {
   inviteFragment,
   invitePayloadFromHash,
   newNonce,
+  withSafeCandidates,
   type CompactSdp,
   type CollabCodeReason,
 } from '../src/collab/transport/invite';
@@ -128,6 +129,15 @@ describe('the compact session description', () => {
     }
     expect(expandSdp(compactSdp(CHROME_OFFER))).toContain('a=candidate:3 1 udp 1677729535 203.0.113.7 61094 typ srflx raddr 0.0.0.0 rport 0\r\n');
     expect(expandSdp(compactSdp(FIREFOX_ANSWER))).toContain('typ host tcptype active\r\n');
+  });
+
+  it('takes a name to look up out of a description the peer wrote (an ICE restart), and nothing else', () => {
+    const named = CHROME_OFFER.replace('udp 1677729535 203.0.113.7 61094', 'udp 1677729535 tracker.example.com 61094');
+    const safe = withSafeCandidates(named);
+    expect(safe).not.toContain('tracker.example.com');
+    expect(compactSdp(safe).candidates).toEqual(compactSdp(CHROME_OFFER).candidates.filter((candidate) => candidate.type !== 'srflx'));
+    // Everything else is left as the browser wrote it.
+    expect(safe.split('\r\n').filter((line) => !line.startsWith('a=candidate:'))).toEqual(named.split('\r\n').filter((line) => !line.startsWith('a=candidate:')));
   });
 
   it('refuses a description without a data channel section', () => {

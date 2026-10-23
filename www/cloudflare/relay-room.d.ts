@@ -43,6 +43,7 @@ export const LIMITS: {
 
 export const CLOSE: {
   readonly hostTaken: Close;
+  readonly replaced: Close;
   readonly notOwner: Close;
   readonly roomFull: Close;
   readonly congested: Close;
@@ -81,6 +82,7 @@ export function guestTag(random?: (bytes: Uint8Array) => Uint8Array): string;
 export function uniqueGuestTag(peers: Peer[], random?: (bytes: Uint8Array) => Uint8Array): string;
 export function live(peers: Peer[]): Peer[];
 export function admission(peers: Peer[], role: 'host' | 'guest'): Close | null;
+export function admitHost(peers: Peer[], owner: ReturnType<typeof checkOwner>): Close | null;
 export function openState(peers: Peer[], role: 'host' | 'guest', tag: string | null, now: number): SocketState;
 export const events: {
   ready(): string;

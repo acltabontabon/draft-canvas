@@ -1,5 +1,5 @@
 import { encodeFrames, Reassembler, MAX_CHUNK_BYTES, MIN_CHUNK_BYTES, type DropReason, type FrameKind } from './chunk';
-import { CollabCodeError, compactSdp, decodeInvite, decodeReply, encodeInvite, encodeReply, expandSdp, newNonce } from './invite';
+import { CollabCodeError, compactSdp, decodeInvite, decodeReply, encodeInvite, encodeReply, expandSdp, newNonce, withSafeCandidates } from './invite';
 import type { CollabTransport, IceConfig, SendPriority, TransportState } from './types';
 
 /**
@@ -503,7 +503,8 @@ class WebRtcTransport implements CollabTransport {
 
   private async answerRestart(control: Control): Promise<void> {
     try {
-      await this.pc.setRemoteDescription({ type: 'offer', sdp: control.sdp });
+      // Held to an invite's rules: the peer writes this, and the browser would look up any name in it.
+      await this.pc.setRemoteDescription({ type: 'offer', sdp: withSafeCandidates(control.sdp) });
       const gathering = watchGathering(this.pc, this.lifetime.signal);
       await this.pc.setLocalDescription(await this.pc.createAnswer());
       await gathering.wait(ICE_GATHER_TIMEOUT_MS);
@@ -518,7 +519,7 @@ class WebRtcTransport implements CollabTransport {
     // A late answer to an earlier attempt would be applied against the wrong offer.
     if (control.gen !== this.restartGeneration || this.pc.signalingState !== 'have-local-offer') return;
     try {
-      await this.pc.setRemoteDescription({ type: 'answer', sdp: control.sdp });
+      await this.pc.setRemoteDescription({ type: 'answer', sdp: withSafeCandidates(control.sdp) });
     } catch {
       this.reportDrop('malformed', 'ICE restart answer was refused');
     }

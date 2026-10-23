@@ -79,6 +79,8 @@ export const useInviteStore = create<InviteState>((set, get) => ({
         set({ stage: { ...stage, error: error.message } });
         return;
       }
+      // Spent or failed: its connection is released, not left open until the page closes.
+      current.cancel();
       offer = null;
       logDiagnostic(error, { operation: 'collab-invite' });
       const message =

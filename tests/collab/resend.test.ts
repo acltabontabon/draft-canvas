@@ -1,0 +1,244 @@
+import { describe, expect, it } from 'vitest';
+import type { Clock } from '../../src/collab/clock';
+import { GuestSession, type GuestEvents } from '../../src/collab/guestSession';
+import { HostSession } from '../../src/collab/hostSession';
+import type { PeerView } from '../../src/collab/protocol';
+import { createDocument, createNode } from '../../src/document/factory';
+import { addNodes, updateNode } from '../../src/document/operations';
+import type { DraftDocument } from '../../src/document/types';
+import { PRODUCT } from '../../src/product';
+import { loopbackPair } from './support';
+
+/**
+ * Edits that cross a fresh copy of the file — a reconnect, a re-invite, a copy sent after the owner's
+ * long gesture — each reach the owner once, in order: none skipped as a repeat, none applied twice.
+ */
+
+function manualClock(): Clock & { advance(ms: number): void } {
+  let now = 0;
+  let next = 1;
+  const timers = new Map<number, { at: number; run: () => void }>();
+  return {
+    now: () => now,
+    setTimeout(run, ms) {
+      const id = next++;
+      timers.set(id, { at: now + ms, run });
+      return id;
+    },
+    clearTimeout(handle) {
+      timers.delete(handle as number);
+    },
+    advance(ms) {
+      const until = now + ms;
+      for (;;) {
+        const due = [...timers.entries()].filter(([, timer]) => timer.at <= until).sort((a, b) => a[1].at - b[1].at)[0];
+        if (!due) break;
+        timers.delete(due[0]);
+        now = due[1].at;
+        due[1].run();
+      }
+      now = until;
+    },
+  };
+}
+
+function ownerOf(file: DraftDocument, clock: Clock, isBusy: () => boolean = () => false) {
+  const state = { file, peers: [] as PeerView[] };
+  const host = new HostSession(
+    { readFile: () => state.file, applyRemote: (next) => ((state.file = next), true), isBusy, appVersion: PRODUCT.version },
+    { peers: (peers) => (state.peers = peers), presence: () => {} },
+    { name: 'Owner' },
+    clock,
+  );
+  return { host, state };
+}
+
+function guestOf(clock: Clock, busy: () => boolean = () => false) {
+  const state = { file: null as DraftDocument | null, ended: null as string | null, tooLarge: 0 };
+  const events: GuestEvents = {
+    status: (status, reason) => {
+      if (status === 'ended') state.ended = reason ?? 'ended';
+    },
+    joined: () => {},
+    peers: () => {},
+    presence: () => {},
+    presenter: () => {},
+    rejected: () => {},
+    unconfirmed: () => {},
+    tooLarge: () => (state.tooLarge += 1),
+  };
+  const session = new GuestSession(
+    {
+      readFile: () => state.file!,
+      applyRemote: (file) => (busy() ? false : ((state.file = file), true)),
+      isBusy: busy,
+      open: (file) => (state.file = file),
+      setAccess: () => {},
+      appVersion: PRODUCT.version,
+      name: 'Guest',
+    },
+    events,
+    clock,
+  );
+  return { session, state };
+}
+
+const settle = (pump: () => number) => {
+  for (let i = 0; i < 50 && pump() > 0; i += 1);
+};
+
+const base = () =>
+  addNodes(createDocument('Resend'), [
+    createNode({ id: 'n_a', type: 'service', text: 'A', x: 0, y: 0 }),
+    createNode({ id: 'n_b', type: 'service', text: 'B', x: 300, y: 0 }),
+  ]);
+
+const textOf = (file: DraftDocument, id: string) => file.nodes.find((node) => node.id === id)?.text;
+
+describe('edits across a fresh copy', () => {
+  it('keeps an edit made offline when a newer one is sent first after reconnecting', () => {
+    const clock = manualClock();
+    const { host, state: owner } = ownerOf(base(), clock);
+    const first = loopbackPair();
+    host.attach(first.a, { role: 'editor' });
+    const guest = guestOf(clock);
+    guest.session.connect(first.b);
+    settle(first.pump);
+
+    first.drop();
+    guest.state.file = updateNode(guest.state.file!, 'n_a', { text: 'Made offline' });
+    guest.session.localChanged();
+    // Still waiting on the bridge's gesture timer when the welcome lands.
+    guest.state.file = updateNode(guest.state.file!, 'n_b', { text: 'Unsent' });
+
+    const second = loopbackPair();
+    host.attach(second.a, { role: 'editor' });
+    guest.session.connect(second.b);
+    settle(second.pump);
+    clock.advance(500);
+    settle(second.pump);
+
+    expect(textOf(owner.file, 'n_a')).toBe('Made offline');
+    expect(textOf(owner.file, 'n_b')).toBe('Unsent');
+    expect(guest.state.file).toEqual(owner.file);
+  });
+
+  it('keeps an edit made offline when a held drag streams newer ones before the welcome is taken in', () => {
+    const clock = manualClock();
+    let busy = false;
+    const { host, state: owner } = ownerOf(base(), clock);
+    const first = loopbackPair();
+    host.attach(first.a, { role: 'editor' });
+    const guest = guestOf(clock, () => busy);
+    guest.session.connect(first.b);
+    settle(first.pump);
+
+    first.drop();
+    guest.state.file = updateNode(guest.state.file!, 'n_a', { text: 'Made offline' });
+    guest.session.localChanged();
+    busy = true;
+    const second = loopbackPair();
+    host.attach(second.a, { role: 'editor' });
+    guest.session.connect(second.b);
+    settle(second.pump);
+    guest.state.file = updateNode(guest.state.file!, 'n_b', { x: 99 });
+    guest.session.localChanged();
+    settle(second.pump);
+    busy = false;
+    clock.advance(500);
+    settle(second.pump);
+
+    expect(textOf(owner.file, 'n_a')).toBe('Made offline');
+    expect(owner.file.nodes.find((node) => node.id === 'n_b')?.x).toBe(99);
+  });
+
+  it('sends hundreds of offline edits as one patch rather than tripping the rate limit', () => {
+    const clock = manualClock();
+    const { host, state: owner } = ownerOf(base(), clock);
+    const first = loopbackPair();
+    host.attach(first.a, { role: 'editor' });
+    const guest = guestOf(clock);
+    guest.session.connect(first.b);
+    settle(first.pump);
+    first.drop();
+    // Fifteen seconds of dragging while the link is down, flushed every 50 ms.
+    for (let i = 1; i <= 300; i += 1) {
+      clock.advance(50);
+      guest.state.file = updateNode(guest.state.file!, 'n_a', { x: i });
+      guest.session.localChanged();
+    }
+    const second = loopbackPair();
+    host.attach(second.a, { role: 'editor' });
+    guest.session.connect(second.b);
+    settle(second.pump);
+
+    expect(guest.state.ended).toBeNull();
+    expect(owner.file.nodes.find((node) => node.id === 'n_a')?.x).toBe(300);
+    expect(second.sent.b.filter((text) => text.includes('"t":"patch"'))).toHaveLength(1);
+  });
+
+  it('numbers a re-invited fresh page on from where its place left off', () => {
+    const clock = manualClock();
+    const { host, state: owner } = ownerOf(base(), clock);
+    const first = loopbackPair();
+    host.attach(first.a, { role: 'editor' });
+    const guest = guestOf(clock);
+    guest.session.connect(first.b);
+    settle(first.pump);
+    const id = guest.session.id!;
+    for (let i = 1; i <= 3; i += 1) {
+      guest.state.file = updateNode(guest.state.file!, 'n_a', { x: i });
+      guest.session.localChanged();
+      settle(first.pump);
+    }
+    // They closed the tab; the owner re-invites them to their place.
+    first.drop();
+    const again = loopbackPair();
+    host.attach(again.a, { role: 'editor', reuse: id });
+    const fresh = guestOf(clock);
+    fresh.session.connect(again.b);
+    settle(again.pump);
+    expect(fresh.session.id).toBe(id);
+    fresh.state.file = updateNode(fresh.state.file!, 'n_b', { text: 'After re-invite' });
+    fresh.session.localChanged();
+    settle(again.pump);
+
+    expect(textOf(owner.file, 'n_b')).toBe('After re-invite');
+  });
+
+  it('never applies a patch in flight past the copy sent after a long gesture, ahead of the ones it dropped', () => {
+    const clock = manualClock();
+    let busy = true;
+    const { host, state: owner } = ownerOf(base(), clock, () => busy);
+    const { a, b, pump } = loopbackPair();
+    host.attach(a, { role: 'editor' });
+    const guest = guestOf(clock);
+    guest.session.connect(b);
+    settle(pump);
+
+    // The owner holds a gesture for so long that this person's patches stop being kept.
+    guest.state.file = addNodes(guest.state.file!, [createNode({ id: 'n_x', type: 'note', text: 'X', x: 0, y: 400 })]);
+    guest.session.localChanged();
+    for (let i = 1; i <= 4200; i += 1) {
+      guest.state.file = { ...guest.state.file!, metadata: { ...guest.state.file!.metadata, title: `t${i}` } };
+      guest.session.localChanged();
+      if (i % 20 === 0) {
+        settle(pump);
+        clock.advance(400);
+      }
+    }
+    settle(pump);
+    busy = false;
+    // The gesture ends: a fresh copy goes out — and their next edit is already on the wire.
+    clock.advance(1000);
+    guest.state.file = { ...guest.state.file!, metadata: { ...guest.state.file!.metadata, title: 'final' } };
+    guest.session.localChanged();
+    settle(pump);
+    clock.advance(1000);
+    settle(pump);
+
+    expect(owner.file.nodes.some((node) => node.id === 'n_x')).toBe(true);
+    expect(owner.file.metadata.title).toBe('final');
+    expect(guest.state.file).toEqual(owner.file);
+  });
+});

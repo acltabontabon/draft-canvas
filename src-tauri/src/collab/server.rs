@@ -29,6 +29,12 @@ pub(super) const MAX_HTTP_CONNECTIONS_PER_PEER: usize = 16;
 /// A request whose headers haven't arrived by now is dropped, so idle sockets can't pile up.
 const HEADER_TIMEOUT: Duration = Duration::from_secs(10);
 const MAX_HEADER_BYTES: usize = 64 * 1024;
+/// The longest a plain HTTP connection lives. Only the header has its own timeout; a client that asks
+/// for the largest file and never reads the reply would otherwise hold its place for good, and a few
+/// such connections keep everyone else from loading the app or reconnecting. A browser just opens
+/// another connection. An upgrade to a WebSocket finishes the connection's own future, so a socket is
+/// never cut by this.
+const HTTP_CONNECTION_LIFETIME: Duration = Duration::from_secs(120);
 /// After a failed accept (out of file descriptors, say), a pause instead of a hot loop.
 const ACCEPT_BACKOFF: Duration = Duration::from_millis(100);
 
@@ -80,10 +86,10 @@ async fn serve_connection(stream: TcpStream, router: Router) {
         .timer(TokioTimer::new())
         .header_read_timeout(HEADER_TIMEOUT)
         .max_buf_size(MAX_HEADER_BYTES);
-    let _ = builder
+    let connection = builder
         .serve_connection(TokioIo::new(stream), TowerToHyperService::new(router))
-        .with_upgrades()
-        .await;
+        .with_upgrades();
+    let _ = tokio::time::timeout(HTTP_CONNECTION_LIFETIME, connection).await;
 }
 
 pub(super) fn router(shared: Arc<Shared>) -> Router {

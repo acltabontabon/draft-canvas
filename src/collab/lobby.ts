@@ -32,7 +32,7 @@ import {
 } from './rendezvous';
 import { openRelay, type RelayChannel } from './transport/relay';
 import type { CollabTransport } from './transport/types';
-import { createHostOffer, joinFromInvite, type HostOffer } from './transport/webrtc';
+import { CONNECT_TIMEOUT_MS, createHostOffer, joinFromInvite, type HostOffer } from './transport/webrtc';
 
 /** Waits between attempts to get the waiting room back on the relay after its connection drops. */
 const RECONNECT_MS = [1_000, 2_000, 5_000, 10_000, 20_000, 30_000];
@@ -41,6 +41,11 @@ const RECONNECT_MS = [1_000, 2_000, 5_000, 10_000, 20_000, 30_000];
 export const MAX_KNOCKS = 12;
 /** How long a let-in knocker has to answer before the offer is withdrawn. */
 export const ANSWER_TIMEOUT_MS = 60_000;
+/**
+ * How long a knocker who was let in keeps trying to connect: the owner's wait for the answer, then
+ * the connection's own. Past it the owner has given up on them too.
+ */
+export const JOIN_TIMEOUT_MS = ANSWER_TIMEOUT_MS + CONNECT_TIMEOUT_MS;
 
 export interface Knocking {
   /** The relay's tag for their socket — how the owner addresses them. */
@@ -217,6 +222,8 @@ export class HostLobby {
         if (this.ended) return transport.close('ended');
         this.events.admitted(transport, role, reuse);
       } catch {
+        // A reply that didn't decode, or answered something else, leaves the offer's connection open.
+        offer.cancel();
         this.events.failed(knock.name, 'connect');
       }
     } else if (message.t === 'cancel') {
@@ -251,6 +258,9 @@ export class HostLobby {
         if (this.knocks.get(id) !== knock) return;
         this.events.failed(knock.name, 'timeout');
         this.forget(id);
+        // Told, so they stop waiting for a connection nobody is going to make.
+        const relay = this.relay;
+        if (knock.pair && relay) void this.closed(knock.pair, 'timeout').then((data) => relay.send(id, data), () => {});
       }, ANSWER_TIMEOUT_MS);
     } catch {
       this.events.failed(knock.name, 'offer');
@@ -266,7 +276,7 @@ export class HostLobby {
   }
 
   /** A refusal or an ending, sealed under that knocker's pair key: nobody else can say it to them. */
-  private async closed(pair: CryptoKey, reason: 'denied' | 'ended'): Promise<string> {
+  private async closed(pair: CryptoKey, reason: 'denied' | 'ended' | 'timeout'): Promise<string> {
     return seal(this.key!, 'to-guest', { t: 'closed', box: await seal(pair, 'to-guest', { reason }) });
   }
 
@@ -338,12 +348,18 @@ export async function knock(
   /** Answering an offer: the connection settles it now, not the relay (the owner may already be opening it). */
   let joining = false;
   let cancelJoin: (() => void) | null = null;
+  let joinTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The owner's messages, read one at a time in the order they came. */
+  let inbox: Promise<void> = Promise.resolve();
   let resolve!: (transport: CollabTransport | null) => void;
   const transport = new Promise<CollabTransport | null>((done) => (resolve = done));
 
   const finish = (status: KnockStatus | null, result: CollabTransport | null) => {
     if (settled) return;
     settled = true;
+    if (joinTimer !== null) clearTimeout(joinTimer);
+    // A connection still being made for this knock is nobody's now.
+    if (!result) cancelJoin?.();
     if (status) onStatus(status);
     relay.close();
     resolve(result);
@@ -374,50 +390,61 @@ export async function knock(
       return;
     }
     if (event.kind !== 'message' || event.from !== 'host') return;
-    void (async () => {
-      const message = readToGuest(await unseal(key, 'to-guest', event.data));
-      if (!message || settled) return;
-      if (message.t === 'seen') {
-        // Only the owner the link names may greet: anyone else holding the link is ignored.
-        if (!(await verifyOwner(link, message.ownerKey, greetingStatement(link, exchange.publicKey, message.publicKey, message.owner), message.signature))) return;
-        owner = message.owner;
-        pair = await exchange.pairWith(message.publicKey, link);
-        onStatus({ kind: 'waiting', owner });
-      } else if (message.t === 'closed' && pair) {
-        const opened = await unseal(pair, 'to-guest', message.box);
-        const reason = typeof opened === 'object' && opened !== null ? (opened as { reason?: unknown }).reason : undefined;
-        if (reason === 'denied') finish({ kind: 'denied' }, null);
-        else if (reason === 'ended') finish({ kind: 'ended' }, null);
-      } else if (message.t === 'offer' && pair) {
-        const opened = await unseal(pair, 'to-guest', message.box);
-        const invite = typeof opened === 'object' && opened !== null ? (opened as { invite?: unknown }).invite : undefined;
-        if (typeof invite !== 'string' || joining) return;
-        joining = true;
-        onStatus({ kind: 'joining', owner });
-        try {
-          const answer = await joinFromInvite(invite, followOwner(invite, stunServer));
-          cancelJoin = answer.cancel;
-          if (settled) return answer.cancel();
-          relay.send('host', await seal(key, 'to-host', { t: 'answer', box: await seal(pair, 'to-host', { reply: answer.replyCode }) }));
-          const connected = await answer.transport;
-          // Cancelled while it connected: nobody is waiting for it any more.
-          if (settled) connected.close('cancelled');
-          else finish(null, connected);
-        } catch {
-          finish({ kind: 'unavailable' }, null);
-        }
-      }
-    })();
+    // In order: the offer can come right behind the greeting, and must not be read before the
+    // greeting's exchange has made the key it is sealed with. Nothing here is left unhandled.
+    const data = event.data;
+    inbox = inbox.then(() => receive(data)).catch(() => {});
   });
+
+  const receive = async (data: string) => {
+    const message = readToGuest(await unseal(key, 'to-guest', data));
+    if (!message || settled) return;
+    if (message.t === 'seen') {
+      // Only the owner the link names may greet: anyone else holding the link is ignored.
+      if (!(await verifyOwner(link, message.ownerKey, greetingStatement(link, exchange.publicKey, message.publicKey, message.owner), message.signature))) return;
+      owner = message.owner;
+      pair = await exchange.pairWith(message.publicKey, link);
+      onStatus({ kind: 'waiting', owner });
+    } else if (message.t === 'closed' && pair) {
+      const opened = await unseal(pair, 'to-guest', message.box);
+      const reason = typeof opened === 'object' && opened !== null ? (opened as { reason?: unknown }).reason : undefined;
+      if (reason === 'denied') finish({ kind: 'denied' }, null);
+      else if (reason === 'ended') finish({ kind: 'ended' }, null);
+      else if (reason === 'timeout') finish({ kind: 'unavailable' }, null);
+    } else if (message.t === 'offer' && pair) {
+      const opened = await unseal(pair, 'to-guest', message.box);
+      const invite = typeof opened === 'object' && opened !== null ? (opened as { invite?: unknown }).invite : undefined;
+      if (typeof invite !== 'string' || joining) return;
+      // Not awaited: the owner's later messages (a refusal, the session ending) are still read meanwhile.
+      void join(invite, pair);
+    }
+  };
+
+  const join = async (invite: string, sealedWith: CryptoKey) => {
+    joining = true;
+    onStatus({ kind: 'joining', owner });
+    joinTimer = setTimeout(() => finish({ kind: 'unavailable' }, null), JOIN_TIMEOUT_MS);
+    try {
+      const answer = await joinFromInvite(invite, followOwner(invite, stunServer));
+      cancelJoin = answer.cancel;
+      if (settled) return answer.cancel();
+      const box = await seal(sealedWith, 'to-host', { reply: answer.replyCode });
+      // An answer that never left (the relay dropped meanwhile) is a connection that never comes.
+      if (!relay.send('host', await seal(key, 'to-host', { t: 'answer', box }))) return finish({ kind: 'unavailable' }, null);
+      const connected = await answer.transport;
+      // Cancelled while it connected: nobody is waiting for it any more.
+      if (settled) connected.close('cancelled');
+      else finish(null, connected);
+    } catch {
+      finish({ kind: 'unavailable' }, null);
+    }
+  };
 
   return {
     transport,
     cancel() {
       if (settled) return;
-      void seal(key, 'to-host', { t: 'cancel' }).then((data) => relay.send('host', data)).finally(() => {
-        cancelJoin?.();
-        finish(null, null);
-      });
+      void seal(key, 'to-host', { t: 'cancel' }).then((data) => relay.send('host', data)).finally(() => finish(null, null));
     },
   };
 }

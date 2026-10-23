@@ -5,6 +5,8 @@ import { HostSession } from '../../src/collab/hostSession';
 import { createDocument, createNode } from '../../src/document/factory';
 import { addNodes } from '../../src/document/operations';
 import type { DraftDocument } from '../../src/document/types';
+import { PROTOCOL_VERSION } from '../../src/collab/protocol';
+import { CURRENT_VERSION } from '../../src/document/types';
 import { PRODUCT } from '../../src/product';
 import { loopbackPair } from './support';
 
@@ -87,7 +89,7 @@ describe('the local network door', () => {
       { peers: (next) => (peers = next), presence: () => {} },
       { name: 'Owner' },
     );
-    const first = loopbackPair();
+    const first = loopbackPair('socket');
     const knocking = holdAtDoor(first.a);
     const neighbour = guest(first.b);
     settle(first.pump);
@@ -111,10 +113,10 @@ describe('the local network door', () => {
     const door = (await atDoor)!;
     // Held at the door, not in the session: the place is still empty.
     expect(peers.find((peer) => peer.id === placeId)?.link).toBe('gone');
-    const back = returningPlace(door, (peer) => host.waitingPlace(peer, true));
+    const back = returningPlace(door, (peer) => host.waitingPlace(peer, { evenIfLive: true, exposed: true }));
     expect(back).toEqual({ peer: placeId, role: 'editor' });
     // A wrong key is just a new person knocking.
-    expect(returningPlace({ ...door, returning: { peer: placeId, key: 'f'.repeat(32) } }, (peer) => host.waitingPlace(peer, true))).toBeNull();
+    expect(returningPlace({ ...door, returning: { peer: placeId, key: 'f'.repeat(32) } }, (peer) => host.waitingPlace(peer, { evenIfLive: true, exposed: true }))).toBeNull();
 
     // The owner lets them in, but only to watch: their old place, with the role chosen now (as `LanShare` does).
     host.setRole(back!.peer, 'viewer');
@@ -122,6 +124,38 @@ describe('the local network door', () => {
     await Promise.resolve();
     settle(replay.pump);
     expect(peers.find((peer) => peer.id === placeId)).toMatchObject({ role: 'viewer', link: 'live' });
+    host.end();
+  });
+
+  it('never takes a key that crossed the local network as proof anywhere else', async () => {
+    let owner = addNodes(createDocument('LAN'), [createNode({ type: 'service', x: 0, y: 0, text: 'A' })]);
+    let peers: { id: string; role: string; link: string }[] = [];
+    const host = new HostSession(
+      { readFile: () => owner, applyRemote: (file) => ((owner = file), true), isBusy: () => false, appVersion: PRODUCT.version },
+      { peers: (next) => (peers = next), presence: () => {} },
+      { name: 'Owner' },
+    );
+    const lan = loopbackPair('socket');
+    const neighbour = guest(lan.b);
+    host.attach(lan.a, { role: 'editor' });
+    settle(lan.pump);
+    const placeId = neighbour.session.id!;
+    const key = neighbour.session.resumeKey!;
+    expect(peers.find((peer) => peer.id === placeId)?.role).toBe('editor');
+
+    // Their welcome crossed the Wi‑Fi in clear. The relay's door must not let the key in unasked…
+    expect(host.waitingPlace(placeId, { evenIfLive: true })).toBeNull();
+    expect(host.waitingPlace(placeId, { evenIfLive: true, exposed: true })).toEqual({ role: 'editor', key });
+
+    // …and a direct invite for a viewer, replaying it, is a new person with the invite's role, not a takeover.
+    const invited = loopbackPair('webrtc');
+    host.attach(invited.a, { role: 'viewer' });
+    invited.b.send(JSON.stringify({ t: 'hello', v: PROTOCOL_VERSION, app: PRODUCT.version, doc: CURRENT_VERSION, name: 'Mallory', resume: { peer: placeId, key, seq: 0 } }), 'commit');
+    settle(invited.pump);
+    const welcome = invited.sent.a.map((text) => JSON.parse(text) as { t: string; peer?: string; role?: string }).find((message) => message.t === 'welcome');
+    expect(welcome).toMatchObject({ role: 'viewer' });
+    expect(welcome?.peer).not.toBe(placeId);
+    expect(peers.find((peer) => peer.id === placeId)).toMatchObject({ role: 'editor', link: 'live' });
     host.end();
   });
 
