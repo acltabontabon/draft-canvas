@@ -34,12 +34,12 @@ export class RateLimit {
     this.at = clock.now();
   }
 
-  take(): boolean {
+  take(count = 1): boolean {
     const now = this.clock.now();
     this.tokens = Math.min(this.burst, this.tokens + ((now - this.at) / 1000) * this.rate);
     this.at = now;
-    if (this.tokens < 1) return false;
-    this.tokens -= 1;
+    if (this.tokens < count) return false;
+    this.tokens -= count;
     return true;
   }
 }

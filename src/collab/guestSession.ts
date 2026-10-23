@@ -14,11 +14,16 @@ import type { DraftDocument } from '../document/types';
 import { CURRENT_VERSION } from '../document/types';
 import { parseDocument } from '../document/validate';
 import { CLOSE_GRACE_MS, GONE_MS, HEARTBEAT_MS, HOLD_RETRY_MS, REAL_CLOCK, RESYNC_RETRY_MS, SILENT_MS, type Clock } from './clock';
+import type { Change } from './changes';
 import { diffFile, wireSettings } from './diff';
 import {
   encode,
   exceedsMessageLimit,
   MAX_GUEST_MESSAGE_BYTES,
+  MAX_MOVES_PER_PATCH,
+  MOVE_BURST,
+  MOVE_RATE,
+  movesIn,
   parseWire,
   PROTOCOL_VERSION,
   readHostMessage,
@@ -65,9 +70,22 @@ export interface GuestEvents {
   unconfirmed(count: number): void;
   /** An edit made here was too big to share live, and was taken back. */
   tooLarge(): void;
+  /**
+   * A link opened to pick this session back up reached some other session (or one that couldn't
+   * prove it is this one): that connection is closed and this session carries on reconnecting.
+   */
+  refusedLink?(): void;
 }
 
 type Inbound = Extract<HostMessage, { t: 'commit' | 'ack' | 'snapshot' }>;
+
+function patchBytes(patch: PendingPatch): number {
+  return encode({ t: 'patch', clientSeq: patch.clientSeq, changes: patch.changes }).length;
+}
+
+/** Unconfirmed work resent at once after a fresh copy, then this many bytes a second: under the owner's budget for a collaborator. */
+const RESEND_BURST_BYTES = 6 * 1024 * 1024;
+const RESEND_RATE_BYTES = 768 * 1024;
 
 /**
  * What may wait for a gesture here to end. A drag can be held as long as a mouse button can, while a
@@ -111,6 +129,11 @@ export class GuestSession {
   private awaitingSnapshot = false;
   /** Commits held for a gesture overflowed and were dropped: a fresh copy is asked for once it ends. */
   private heldOut = false;
+  /** Patches waiting their turn behind a paced resend (`sendOrDrop`), in the order they must go. */
+  private outbox: PendingPatch[] = [];
+  private outboxTimer: unknown = null;
+  /** Whether this connection's hello has gone: until then nothing else is sent on it (`send`). */
+  private greeted = false;
   /** Whether this connection's welcome must carry the owner's proof (`connect`), and what it must be. */
   private expectProof = false;
   private ownerProof: string | null = null;
@@ -187,6 +210,7 @@ export class GuestSession {
     };
     this.ownerProof = null;
     this.expectProof = false;
+    this.greeted = false;
     const peer = this.selfId;
     const key = this.key;
     const session = this.sessionId;
@@ -218,25 +242,70 @@ export class GuestSession {
     if (changes.length === 0) return;
     // Measured before it is recorded: an edit too big to carry would otherwise sit unconfirmed
     // forever, on screen here and nowhere else.
-    if (exceedsMessageLimit(encode({ t: 'patch', clientSeq: 1, changes }), MAX_GUEST_MESSAGE_BYTES)) {
+    // And no more moves than the owner takes in one: refused there, it would be undone all the same.
+    if (!this.fits(changes)) {
       this.env.applyRemote(this.replica.local);
       this.events.tooLarge();
       return;
     }
     const patch = this.replica.propose(changes)!;
-    this.sendPatch(patch);
+    // Behind anything older still waiting its turn: a newer patch arriving first made the owner take
+    // the older ones for repeats.
+    if (this.outbox.length > 0) this.outbox.push(patch);
+    else this.sendPatch(patch);
     this.events.unconfirmed(this.replica.pending.length);
   }
 
-  /** Everything still unconfirmed, as one patch — or, too large to carry, given up and said so. */
-  private sendOrDrop(patch: PendingPatch | null): void {
-    if (!patch || !this.replica) return;
-    if (exceedsMessageLimit(encode({ t: 'patch', clientSeq: patch.clientSeq, changes: patch.changes, ...(this.epoch === null ? {} : { epoch: this.epoch }) }), MAX_GUEST_MESSAGE_BYTES)) {
-      this.replica.discardPending();
+  /** Whether `changes` fit in one patch: the message, and the moves the owner takes in one. */
+  private readonly fits = (changes: unknown): boolean =>
+    movesIn(changes) <= MAX_MOVES_PER_PATCH &&
+    !exceedsMessageLimit(encode({ t: 'patch', clientSeq: Number.MAX_SAFE_INTEGER, changes, epoch: Number.MAX_SAFE_INTEGER }), MAX_GUEST_MESSAGE_BYTES);
+
+  /**
+   * Everything still unconfirmed (`Replica.rebase`'s patches) — or, a piece too large to carry even
+   * alone, all of it given up and said so. Paced under the owner's byte budget for a collaborator
+   * (`BYTE_BURST` then `BYTE_RATE` in `hostSession.ts`): sent at once, megabytes of offline work got
+   * this person disconnected for flooding.
+   */
+  private sendOrDrop(patches: readonly PendingPatch[]): void {
+    const replica = this.replica;
+    if (!replica || patches.length === 0) return;
+    if (!patches.every((patch) => this.fits(patch.changes))) {
+      replica.discardPending();
       this.events.tooLarge();
       return;
     }
-    this.sendPatch(patch);
+    let sent = 0;
+    let moved = 0;
+    for (const patch of patches) {
+      sent += patchBytes(patch);
+      moved += movesIn(patch.changes);
+      if (this.outbox.length === 0 && sent <= RESEND_BURST_BYTES && moved <= MOVE_BURST) this.sendPatch(patch);
+      else this.outbox.push(patch);
+    }
+    this.scheduleOutbox();
+  }
+
+  /** The next patch waiting its turn, once the bytes before it have had time to be taken in. */
+  private scheduleOutbox(): void {
+    if (this.outboxTimer !== null || this.outbox.length === 0 || this.ended) return;
+    this.outboxTimer = this.clock.setTimeout(
+      () => {
+        this.outboxTimer = null;
+        const patch = this.outbox.shift();
+        if (patch && this.replica?.pending.includes(patch)) this.sendPatch(patch);
+        this.scheduleOutbox();
+      },
+      // Whichever of the owner's budgets it needs longer to be inside: bytes, or moves.
+      Math.max(patchBytes(this.outbox[0]!) / RESEND_RATE_BYTES, movesIn(this.outbox[0]!.changes) / MOVE_RATE) * 1000,
+    );
+  }
+
+  /** A fresh copy makes everything still waiting go again with it (`Replica.rebase`): none of it is sent as it was. */
+  private clearOutbox(): void {
+    this.outbox = [];
+    if (this.outboxTimer !== null) this.clock.clearTimeout(this.outboxTimer);
+    this.outboxTimer = null;
   }
 
   private sendPatch(patch: { clientSeq: number; changes: unknown }): void {
@@ -305,14 +374,20 @@ export class GuestSession {
     if (!parsed.ok) return this.finish('protocol');
     // A welcome from a different session (an invite to someone else's, opened while this one was
     // reconnecting) is not this session: unsent edits must not go to it.
-    if (this.sessionId !== null && message.session !== this.sessionId) return this.finish('unauthorized');
+    if (this.sessionId !== null && message.session !== this.sessionId) return this.refuseLink();
     // Anyone who was in the session knows its id: only the owner can answer a proof with one of its own.
-    if (this.expectProof && !(message.proof !== undefined && this.ownerProof !== null && sameSecret(message.proof, this.ownerProof))) return this.finish('unauthorized');
+    if (this.expectProof && !(message.proof !== undefined && this.ownerProof !== null && sameSecret(message.proof, this.ownerProof))) return this.refuseLink();
     this.sessionId = message.session;
     const resuming = this.replica !== null && this.selfId === message.peer;
     // Back, but as someone new: the owner forgot this place (more people dropped meanwhile than it
     // keeps). What is on screen and not yet confirmed comes along rather than vanishing unsaid.
-    const unconfirmed = this.replica && !resuming ? diffFile(this.replica.confirmed, this.env.readFile()) : [];
+    // Kept as the separate edits they were, so a resend can still split them into patches that fit.
+    const unconfirmed: Change[][] = [];
+    if (this.replica && !resuming) {
+      for (const patch of this.replica.pending) unconfirmed.push(patch.changes);
+      const unsent = diffFile(this.replica.local, this.env.readFile());
+      if (unsent.length > 0) unconfirmed.push(unsent);
+    }
     this.selfId = message.peer;
     this.key = message.key;
     this.access = message.role;
@@ -331,9 +406,12 @@ export class GuestSession {
       // A fresh page given an old place back numbers its patches on from where that place left off.
       if (message.handled !== undefined) this.replica.rebase(message.handled);
       this.epoch = message.epoch ?? null;
+      this.clearOutbox();
       if (unconfirmed.length > 0) {
-        if (message.role === 'editor') this.sendOrDrop(this.replica.propose(unconfirmed));
-        else this.events.rejected('view-only');
+        if (message.role === 'editor') {
+          for (const changes of unconfirmed) this.replica.propose(changes);
+          this.sendOrDrop(this.replica.rebase(message.handled ?? 0, this.fits));
+        } else this.events.rejected('view-only');
       }
       this.env.open(this.replica.local, message.role);
     }
@@ -341,6 +419,21 @@ export class GuestSession {
     this.events.peers(message.peers.filter((peer) => peer.id !== message.peer).map((peer) => ({ ...peer, link: 'live' as const })));
     this.events.status('live');
     this.events.unconfirmed(this.replica!.pending.length);
+  }
+
+  /**
+   * A connection meant to pick this session up that reached another (someone else's invite, opened
+   * while reconnecting). Nothing more goes over it; ending the session there ended the real one too.
+   */
+  private refuseLink(): void {
+    const transport = this.transport;
+    this.release();
+    this.release = () => {};
+    this.transport = null;
+    this.expectProof = false;
+    transport?.close('unauthorized');
+    this.events.status('reconnecting');
+    this.events.refusedLink?.();
   }
 
   private apply(message: Inbound): void {
@@ -355,10 +448,11 @@ export class GuestSession {
       replica.reset(parsed.document, message.seq);
       this.awaitingSnapshot = false;
       if (message.handled !== undefined && message.epoch !== undefined) {
+        this.clearOutbox();
         // Everything still unconfirmed goes as one patch, in the new epoch: the owner has dropped any
         // sent before the copy, so none can land out of order — and one patch can't trip a rate limit.
         this.epoch = message.epoch;
-        this.sendOrDrop(replica.rebase(message.handled));
+        this.sendOrDrop(replica.rebase(message.handled, this.fits));
       } else {
         // An older owner skips any of these it already applied (it remembers each patch number).
         for (const patch of replica.pending) this.sendPatch(patch);
@@ -447,10 +541,15 @@ export class GuestSession {
     this.holdTimer = this.heartbeatTimer = this.resyncTimer = null;
     this.held.length = 0;
     this.heldOut = false;
+    this.clearOutbox();
     this.events.status('ended', reason);
   }
 
   private send(message: GuestMessage, priority: 'commit' | 'presence' = 'commit'): void {
+    // Nothing goes ahead of the hello on a new connection: the owner reads the first message as it,
+    // and a patch there (one made while a resume proof was being worked out) closed the connection.
+    if (!this.greeted && message.t !== 'hello') return;
+    if (message.t === 'hello') this.greeted = true;
     this.transport?.send(encode(message), priority);
   }
 }

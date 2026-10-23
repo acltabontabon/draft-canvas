@@ -16,6 +16,7 @@ import { CURRENT_VERSION } from '../document/types';
 import { ByteBudget, CLOSE_GRACE_MS, GONE_MS, HEARTBEAT_MS, HELLO_TIMEOUT_MS, HOLD_RETRY_MS, RateLimit, REAL_CLOCK, SILENT_MS, type Clock } from './clock';
 import { Authorship } from './authorship';
 import { resumeProof, sameSecret } from './rendezvous';
+import { repairReferences } from './repair';
 import { HostCore, HOST_ORIGIN, type Commit, type PeerLedger } from './hostCore';
 import {
   encode,
@@ -23,6 +24,10 @@ import {
   majorOf,
   MAX_GUEST_MESSAGE_BYTES,
   MAX_COLLABORATORS,
+  MAX_MOVES_PER_PATCH,
+  MOVE_BURST,
+  MOVE_RATE,
+  movesIn,
   parseWire,
   PROTOCOL_VERSION,
   readGuestMessage,
@@ -106,6 +111,7 @@ interface Slot {
   resyncs: RateLimit;
   pings: RateLimit;
   budget: ByteBudget;
+  moves: RateLimit;
   presence: Presence | null;
   release: () => void;
   /** When the connection dropped, for keeping only the most recent dropped places. */
@@ -143,8 +149,12 @@ interface Proven {
   answer: string;
 }
 
-/** Keys of places forgotten (`MAX_GONE_PLACES`), kept so their people can still prove who they are. */
-const MAX_RETIRED_KEYS = 64;
+/**
+ * Keys of places forgotten (`MAX_GONE_PLACES`), kept so their people can still prove who they are —
+ * forgotten too soon, an approved reinvite was refused. Every place is one the owner let in, so this
+ * is far more than a session sees; it is only a bound.
+ */
+const MAX_RETIRED_KEYS = 4096;
 
 interface Held {
   slot: Slot;
@@ -171,6 +181,8 @@ export class HostSession {
   private readonly pending = new Set<Pending>();
   /** Forgotten places' keys, by peer id: see `MAX_RETIRED_KEYS`. */
   private readonly retired = new Map<string, string>();
+  /** Epochs handed out this session, for `resend`. */
+  private epochs = 0;
   private readonly held: Held[] = [];
   private heldBytes = 0;
   /** Collaborators whose patches no longer fit while a gesture holds them: sent a fresh copy after it. */
@@ -191,7 +203,10 @@ export class HostSession {
     this.events = events;
     this.owner = owner;
     this.clock = clock;
-    this.core = new HostCore(env.readFile());
+    // The first copy anyone gets is held to the same rules as every commit after it (`commitLocal`).
+    const file = env.readFile();
+    const repaired = repairReferences(file);
+    this.core = new HostCore(repaired !== file && !env.isBusy() && env.applyRemote(repaired) ? repaired : file);
     this.scheduleHeartbeat();
   }
 
@@ -269,6 +284,9 @@ export class HostSession {
   }
 
   private receivePending(pending: Pending, text: string): void {
+    // A hello's proof is being checked: whatever comes meanwhile was sent before its welcome, and is
+    // sent again after it (a patch, in the new epoch) — not a reason to close the connection.
+    if (pending.checking) return;
     if (text.length > MAX_HELLO_BYTES) return this.refuse(pending, 'protocol');
     const message = readGuestMessage(parseWire(text));
     if (!message || message.t !== 'hello') {
@@ -322,7 +340,11 @@ export class HostSession {
     // mid-restart, or already dead on their side, and refusing left them shut out of their own place.
     const mayClaim = claimed !== undefined && (keyMatches || (claimed.link !== 'live' && pending.reuse !== undefined && !pending.requireKey));
     let slot: Slot | undefined;
-    if (pending.reuse !== undefined && !mayClaim) return this.refuse(pending, 'unauthorized');
+    // Let back in to a place that has since been forgotten (more people dropped while they connected
+    // than places are kept): a new place, as the owner's choice stands — given unasked, only if they
+    // still prove the forgotten place's key.
+    const vanished = pending.reuse !== undefined && claimed === undefined && (!pending.requireKey || (proven !== null && resume?.peer === pending.reuse));
+    if (pending.reuse !== undefined && !mayClaim && !vanished) return this.refuse(pending, 'unauthorized');
     // A place being reclaimed counts once, as the connection now claiming it.
     if (this.occupied() - (mayClaim && claimed.link !== 'gone' ? 1 : 0) > MAX_COLLABORATORS) return this.refuse(pending, 'full');
     if (mayClaim) {
@@ -348,6 +370,7 @@ export class HostSession {
         resyncs: new RateLimit(this.clock, RESYNC_RATE, RESYNC_BURST),
         pings: new RateLimit(this.clock, PING_RATE, PING_BURST),
         budget: new ByteBudget(this.clock, BYTE_RATE, BYTE_BURST),
+        moves: new RateLimit(this.clock, MOVE_RATE, MOVE_BURST),
         presence: null,
         release: () => {},
         keyExposed: false,
@@ -479,7 +502,11 @@ export class HostSession {
   private applyPatch(slot: Slot, clientSeq: number, changes: unknown): void {
     this.commitLocal();
     const before = this.core.file;
-    const outcome = this.core.receivePatch(slot.info.id, slot.ledger, clientSeq, changes);
+    // Each move costs a pass over the file: bounded per patch and per second, so moves by the
+    // thousand can't hold the owner's tab for most of a second each.
+    const moves = movesIn(changes);
+    const tooMuch = moves > MAX_MOVES_PER_PATCH || (moves > 0 && !slot.moves.take(moves));
+    const outcome = this.core.receivePatch(slot.info.id, slot.ledger, clientSeq, changes, tooMuch ? 'too-much' : undefined);
     if (outcome.commit) {
       const first = !this.authorship.has(slot.info.id);
       this.authorship.record(slot.info.id, before, this.core.file);
@@ -549,7 +576,10 @@ export class HostSession {
    * from before it are dropped, since they come again as one with the epoch this returns.
    */
   private resend(slot: Slot): Required<Resend> {
-    slot.epoch += 1;
+    // From one count for the whole session, never per place: a new place starting again at 1 took a
+    // patch its person sent under an old place's epoch 1 as current, and their next edits for repeats.
+    this.epochs += 1;
+    slot.epoch = this.epochs;
     this.heldOut.delete(slot);
     return { handled: slot.ledger.lastClientSeq, epoch: slot.epoch };
   }
@@ -557,7 +587,17 @@ export class HostSession {
   /** The owner's own edit (or undo, or anything else that changed the file here). */
   commitLocal(): Commit | null {
     if (this.ended) return null;
-    const commit = this.core.commitLocal(this.env.readFile());
+    let file = this.env.readFile();
+    // Held to the rules every collaborator checks each commit by (`Replica.receiveCommit`). The
+    // editor can make what they refuse — boundaries nested past `maxGroupDepth` — and each copy then
+    // asked for a fresh one, which dropped what the owner kept. Repaired here, the owner's own canvas
+    // included; mid-gesture, it waits for the gesture to end.
+    const repaired = repairReferences(file);
+    if (repaired !== file) {
+      if (this.env.isBusy() || !this.env.applyRemote(repaired)) return null;
+      file = repaired;
+    }
+    const commit = this.core.commitLocal(file);
     if (commit) this.broadcast({ t: 'commit', ...commit });
     return commit;
   }

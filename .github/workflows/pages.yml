@@ -61,6 +61,7 @@ jobs:
       contents: read
     outputs:
       editor-revision: ${{ steps.source.outputs.editor-revision }}
+      relay-released: ${{ steps.release.outputs.relay-released }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -71,6 +72,7 @@ jobs:
       # and stamp the site's download links with a package.json version that has no installers yet.
       # So off a tag, check out the newest stable vX.Y.Z and lay this commit's www/ (and the script that assembles it) over it.
       - name: Build the editor from the latest release
+        id: release
         if: github.ref_type != 'tag' || inputs.release-tag != ''
         env:
           RELEASE_TAG: ${{ inputs.release-tag }}
@@ -100,12 +102,18 @@ jobs:
           # relay is half of the protocol the released editor speaks. From the release too, wherever it
           # has them — so the tests that run below match, and a withdrawal puts back that release's
           # relay. The deploy step only deploys them for a release or a withdrawal.
+          relay_released=true
           for file in relay.js relay-room.js relay-room.d.ts relay.jsonc app.jsonc app.headers; do
             if git cat-file -e "$revision:www/cloudflare/$file" 2>/dev/null; then
               git checkout "$revision" -- "www/cloudflare/$file"
+            elif [[ "$file" == relay* ]]; then
+              relay_released=false
+            else
+              echo "::notice::$tag has no www/cloudflare/$file; keeping main's $file for app hosting."
             fi
           done
-          echo "::notice::Editor, relay and app hosting from $tag, landing page from ${site:0:7}."
+          echo "relay-released=$relay_released" >> "$GITHUB_OUTPUT"
+          echo "::notice::Editor from $tag, landing page from ${site:0:7}."
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 22.14.0
@@ -240,10 +248,17 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           RELEASE: ${{ inputs.artifact-name != '' || github.ref_type == 'tag' || inputs.release-tag != '' }}
+          RELAY_RELEASED: ${{ needs.build.outputs.relay-released }}
+          RELEASE_TAG: ${{ inputs.release-tag }}
         run: |
           configs="site www"
           if [ "$RELEASE" = "true" ]; then
-            configs="relay app site www"
+            configs="app site www"
+            if [ "$RELAY_RELEASED" != "false" ]; then
+              configs="relay $configs"
+            else
+              echo "::notice::$RELEASE_TAG has no relay; the live relay was left as is."
+            fi
           else
             echo "::notice::Site-only deploy: the relay and app.draftcanvas.dev stay as the last release left them."
           fi

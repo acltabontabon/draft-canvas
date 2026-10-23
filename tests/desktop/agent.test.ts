@@ -13,6 +13,7 @@ import { __resetAgentBases, agentTiming } from '../../src/desktop/agent';
 import { __resetAgentWrites } from '../../src/desktop/agentWrites';
 import { agentActivity } from '../../src/desktop/agentActivity';
 import { useUiStore } from '../../src/store/uiStore';
+import { COLLAB_AT_REST, useCollabStore } from '../../src/store/collabStore';
 import { watchTyping } from '../../src/lib/recentTyping';
 import { withPhysChunk } from '../../src/render/png/phys';
 import { createHarness, decoder, type Harness } from './harness';
@@ -77,7 +78,7 @@ async function request(tool: string, args: Record<string, unknown>, context: Rec
   const event: HostEvent = { type: 'agent-request', id, tool, args, context };
   await h.hostEvent(event);
   for (let i = 0; i < 1000 && !h.agent.responses.has(id); i += 1) await new Promise((r) => setTimeout(r, 5));
-  return h.agent.responses.get(id) as { ok: boolean; value?: Record<string, unknown>; error?: { code: string }; applied?: boolean };
+  return h.agent.responses.get(id) as { ok: boolean; value?: Record<string, unknown>; error?: { code: string; message?: string }; applied?: boolean };
 }
 
 async function openOrders() {
@@ -97,6 +98,7 @@ const addMailer = (expectedRevision: string, extra: Record<string, unknown> = {}
 
 beforeEach(async () => {
   __resetInteraction();
+  useCollabStore.setState(COLLAB_AT_REST);
   __resetAgentWrites();
   __resetAgentBases();
   agentTiming.busyWaitMs = 8_000;
@@ -525,13 +527,108 @@ describe('agent requests on desktop', () => {
       useEditorStore.getState().apply('Rename', (doc) => ({ ...doc, nodes: doc.nodes.map((n) => (n.id === 'api' ? { ...n, text: 'Mine' } : n)) }));
       return true;
     });
-    const out = await request('update_diagram', addMailer(currentRevision()), { handle, open: true });
+    const args = addMailer(currentRevision());
+    const out = await request('update_diagram', { ...args, ops: [...args.ops, { op: 'update', id: 'api', set: { label: 'Agent API' } }] }, { handle, open: true });
     expect(out.error?.code).toBe('REVISION_CONFLICT');
     const doc = fileOf(useEditorStore.getState());
     expect(doc.nodes.find((n) => n.id === 'api')?.text).toBe('Mine');
     expect(doc.nodes.map((n) => n.id)).not.toContain('mail');
     expect(agentActivity.snapshot()).toEqual([]);
     expect(useUiStore.getState().agentPreview).toBeNull();
+  });
+
+  it.each([false, true])('preserves collaborator edits during approval (already rebasing: %s)', async (explicitRebase) => {
+    const handle = await openOrders();
+    useCollabStore.setState({ role: 'host', status: 'live' });
+    const read = await request('read_diagram', {}, { handle, open: true, diagramId: 'd_orders000001' });
+    const rename = (id: string, text: string) => {
+      const file = fileOf(useEditorStore.getState());
+      expect(useEditorStore.getState().applyRemote({ ...file, nodes: file.nodes.map((n) => n.id === id ? { ...n, text } : n) })).toBe(true);
+      h.edit(serializeDocument(fileOf(useEditorStore.getState())));
+    };
+    if (explicitRebase) rename('db', 'Shared store');
+    h.api.agentGate.mockImplementationOnce(async () => {
+      // Approval still sees only the collaborator's work; the agent preview has not been committed.
+      expect(fileOf(useEditorStore.getState()).nodes.some((n) => n.id === 'mail')).toBe(false);
+      if (!explicitRebase) rename('db', 'Shared store');
+      rename('api', 'Shared API');
+      return true;
+    });
+    const out = await request('update_diagram', addMailer(String(read.value!.revision), explicitRebase ? { onConflict: 'rebase' } : {}), { handle, open: true });
+    expect(out.ok).toBe(true);
+    expect(out.value).toMatchObject({ applied: true, rebased: true, added: 2 });
+    expect(fileOf(useEditorStore.getState()).nodes.map((n) => [n.id, n.text])).toEqual(expect.arrayContaining([
+      ['api', 'Shared API'], ['db', 'Shared store'], ['mail', 'Mailer'],
+    ]));
+    useEditorStore.getState().undo();
+    expect(fileOf(useEditorStore.getState()).nodes.map((n) => [n.id, n.text])).toEqual([
+      ['api', 'Shared API'], ['db', 'Shared store'],
+    ]);
+    expect(agentActivity.snapshot()).toEqual([]);
+    expect(useUiStore.getState().agentPreview).toBeNull();
+  });
+
+  it('checks another collaborator patch that arrives during a commit rebase', async () => {
+    const handle = await openOrders();
+    useCollabStore.setState({ role: 'host', status: 'live' });
+    const deliver = h.link.deliver;
+    let commits = 0;
+    h.link.deliver = (message) => {
+      const typed = message as CommandMessage;
+      if (typed.type === 'draft-canvas:command' && typed.command === 'agent' && typed.request?.kind === 'commit') {
+        commits += 1;
+        if (commits <= 2) {
+          const file = fileOf(useEditorStore.getState());
+          useEditorStore.getState().applyRemote({ ...file, nodes: file.nodes.map((n) => n.id === 'db' ? { ...n, text: `Shared store ${commits}` } : n) });
+          h.edit(serializeDocument(fileOf(useEditorStore.getState())));
+        }
+      }
+      deliver(message);
+    };
+    const out = await request('update_diagram', addMailer(currentRevision()), { handle, open: true });
+    expect(out.ok).toBe(true);
+    expect(commits).toBe(3);
+    expect(fileOf(useEditorStore.getState()).nodes.find((n) => n.id === 'db')?.text).toBe('Shared store 2');
+    expect(fileOf(useEditorStore.getState()).nodes.some((n) => n.id === 'mail')).toBe(true);
+  });
+
+  it.each(['before', 'during'])('names a real collaborator overlap %s approval without blaming the person', async (when) => {
+    const handle = await openOrders();
+    useCollabStore.setState({ role: 'host', status: 'live' });
+    const read = await request('read_diagram', {}, { handle, open: true, diagramId: 'd_orders000001' });
+    const rename = () => {
+      const file = fileOf(useEditorStore.getState());
+      useEditorStore.getState().applyRemote({ ...file, nodes: file.nodes.map((n) => n.id === 'api' ? { ...n, text: 'Collaborator API' } : n) });
+      h.edit(serializeDocument(fileOf(useEditorStore.getState())));
+    };
+    if (when === 'before') rename();
+    else h.api.agentGate.mockImplementationOnce(async () => { rename(); return true; });
+    const out = await request('update_diagram', {
+      requestId: `overlap-${when}`, diagramId: 'd_orders000001', expectedRevision: read.value!.revision, onConflict: 'rebase',
+      ops: [{ op: 'update', id: 'api', set: { label: 'Agent API' } }],
+    }, { handle, open: true });
+    expect(out.error?.code).toBe('REVISION_CONFLICT');
+    expect(out.error?.message).toContain('Someone changed');
+    expect(fileOf(useEditorStore.getState()).nodes.find((n) => n.id === 'api')?.text).toBe('Collaborator API');
+    expect(useUiStore.getState().agentPreview).toBeNull();
+  });
+
+  it('refuses a rebase that would cascade into a collaborator connector added during approval', async () => {
+    const handle = await openOrders();
+    useCollabStore.setState({ role: 'host', status: 'live' });
+    h.api.agentGate.mockImplementationOnce(async () => {
+      const file = fileOf(useEditorStore.getState());
+      useEditorStore.getState().applyRemote({ ...file, edges: [...file.edges, { ...file.edges[0]!, id: 'shared-connector' }] });
+      h.edit(serializeDocument(fileOf(useEditorStore.getState())));
+      return true;
+    });
+    const out = await request('update_diagram', {
+      requestId: 'cascade-at-gate', diagramId: 'd_orders000001', expectedRevision: currentRevision(), ops: [{ op: 'remove', ids: ['api'] }],
+    }, { handle, open: true });
+    expect(out.error?.code).toBe('REVISION_CONFLICT');
+    expect(out.error?.message).toContain('what someone added');
+    expect(fileOf(useEditorStore.getState()).nodes.some((n) => n.id === 'api')).toBe(true);
+    expect(fileOf(useEditorStore.getState()).edges.some((e) => e.id === 'shared-connector')).toBe(true);
   });
 
   it('changes nothing when the person cancels before the gate — for an edit and for a new diagram', async () => {

@@ -907,6 +907,14 @@ export function useDocumentSession(): DocumentSession {
         if (!saved) notify('Your changes still could not be saved to this browser. Export the diagram to keep a copy.', 'error');
         return;
       }
+      // Sharing this canvas: the other tab's copy is a different file to everyone in the session, and
+      // loading it reloads the same canvas, which a session takes for an outside edit to share — it
+      // went out over every collaborator's work, with no undo. The session ends first.
+      if (useCollabStore.getState().role === 'host') {
+        const bridge = await import('./collabBridge');
+        bridge.stopHosting('ended');
+        notify('The live session ended: loading the other tab’s copy replaces what everyone in it did since.');
+      }
       await controller.resolveConflict('discard');
       const stillStored = await repository?.has(openId).catch(() => false);
       if (stillStored) {

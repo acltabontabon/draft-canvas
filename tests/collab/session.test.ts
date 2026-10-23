@@ -6,7 +6,7 @@ import { createDocument, createEdge, createNode } from '../../src/document/facto
 import { addEdges, addNodes, removeElements, updateNode } from '../../src/document/operations';
 import type { DraftDocument } from '../../src/document/types';
 import { PRODUCT } from '../../src/product';
-import { __resetCollabBridge, attachCollaborator, joinSession, removeCollaborator, setCollaboratorRole, startHosting, undoChangesOf } from '../../src/store/collabBridge';
+import { __resetCollabBridge, attachCollaborator, joinSession, leaveSession, mayResumeVia, reconnectSession, removeCollaborator, replaceKeeper, setCollaboratorRole, startHosting, stopHosting, undoChangesOf } from '../../src/store/collabBridge';
 import { useCollabStore } from '../../src/store/collabStore';
 import { __resetClipboardSync, __resetInteraction, fileOf, useEditorStore } from '../../src/store/editorStore';
 import { useUiStore } from '../../src/store/uiStore';
@@ -277,6 +277,11 @@ describe('hosting from the editor', () => {
     expect(guest.state.file!.nodes.find((node) => node.id === 'n_a')!.text).toBe('Edited outside');
   });
 
+  it('says the session is over, not that nothing is left, when asked to take changes back after it ended', () => {
+    stopHosting('ended');
+    expect(undoChangesOf('anyone', 'Anyone')).toBe('ended');
+  });
+
   it('ends the session when the owner opens a different canvas', () => {
     store.getState().setDocument(createDocument('Something else'));
     settle(pump);
@@ -514,6 +519,73 @@ describe('a role changed while the collaborator’s copy is still opening', () =
     await Promise.resolve();
     expect(useCollabStore.getState().access).toBe('viewer');
     expect(useUiStore.getState().readOnly).toMatchObject({ collaborative: true });
+    owner.end();
+  });
+});
+
+describe('what keeps a collaborator’s session reconnecting', () => {
+  function setup() {
+    vi.useFakeTimers();
+    __resetCollabBridge();
+    resetEditor(createDocument('Mine'));
+    let ownerFile = addNodes(createDocument('Owner’s'), [createNode({ id: 'n_o', type: 'service', x: 0, y: 0, text: 'Owner' })]);
+    const owner = new HostSession(
+      { readFile: () => ownerFile, applyRemote: (file) => ((ownerFile = file), true), isBusy: () => false, appVersion: PRODUCT.version },
+      { peers: () => {}, presence: () => {} },
+      { name: 'Owner' },
+    );
+    const pair = loopbackPair();
+    owner.attach(pair.a, { role: 'editor' });
+    const keeper = { lost: vi.fn(), stop: vi.fn() };
+    const lost = vi.fn();
+    joinSession(pair.b, { name: 'Guest', open: async (file) => (store.getState().setDocument(file), true), keeper, lost });
+    settle(pair.pump);
+    return { owner, pair, keeper, lost };
+  }
+
+  afterEach(() => {
+    __resetCollabBridge();
+    vi.useRealTimers();
+  });
+
+  it('may be picked up by the owner’s Re-invite, never by a link to another session', async () => {
+    const { pair } = setup();
+    await Promise.resolve();
+    pair.drop();
+    expect(mayResumeVia(null)).toBe(true);
+    expect(mayResumeVia('room:other:owner')).toBe(false);
+  });
+
+  it('is stopped when the session is left, so it can never pick up the next one', () => {
+    const { owner, keeper } = setup();
+    leaveSession();
+    expect(keeper.stop).toHaveBeenCalledTimes(1);
+    owner.end();
+  });
+
+  it('is stopped when the session ends, and replaced — never doubled — by a rejoin’s own', () => {
+    const { owner, pair, keeper } = setup();
+    const next = { lost: vi.fn(), stop: vi.fn() };
+    replaceKeeper(next);
+    expect(keeper.stop).toHaveBeenCalledTimes(1);
+    owner.end('owner-left');
+    settle(pair.pump);
+    expect(next.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it('hears of a drop once, not again when a reconnect under way says "reconnecting" itself', async () => {
+    const { owner, pair, keeper, lost } = setup();
+    await Promise.resolve();
+    await Promise.resolve();
+    pair.drop();
+    expect(lost).toHaveBeenCalledTimes(1);
+    expect(keeper.lost).toHaveBeenCalledTimes(1);
+    // The rejoin's own connection: still reconnecting, and no second knock.
+    const back = loopbackPair();
+    owner.attach(back.a, { role: 'editor' });
+    reconnectSession(back.b);
+    expect(lost).toHaveBeenCalledTimes(1);
+    expect(keeper.lost).toHaveBeenCalledTimes(1);
     owner.end();
   });
 });

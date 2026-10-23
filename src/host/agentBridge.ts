@@ -7,7 +7,7 @@
  *   a field being typed in, a presentation on screen).
  * - **commit** — apply this new file as one undo step, *if* the revision is still the one the change
  *   was computed against. A manual edit made while the agent's layout was running bumps the revision,
- *   so it turns into a conflict here instead of being overwritten.
+ *   so the caller gets the current file to check for overlap and rebase instead of overwriting it.
  */
 
 import type { DraftDocument } from '../document/types';
@@ -30,7 +30,8 @@ export type AgentEditorReply =
    *  `selection`: what they currently have selected, in that same room — read_selection's source. */
   | { kind: 'snapshot'; file: DraftDocument; revision: string; path: string[]; selection: Selection; busy?: string }
   | { kind: 'committed'; revision: string }
-  | { kind: 'refused'; code: 'REVISION_CONFLICT' | 'BUSY'; revision: string; reason?: string };
+  | { kind: 'refused'; code: 'REVISION_CONFLICT'; revision: string; file: DraftDocument }
+  | { kind: 'refused'; code: 'BUSY'; revision: string; reason?: string };
 
 export function currentRevision(): string {
   return `o:${EPOCH}.${useEditorStore.getState().revision}`;
@@ -70,7 +71,7 @@ export function handleAgentRequest(request: AgentEditorRequest): AgentEditorRepl
     };
   }
   const revision = currentRevision();
-  if (request.expectedRevision !== revision) return { kind: 'refused', code: 'REVISION_CONFLICT', revision };
+  if (request.expectedRevision !== revision) return { kind: 'refused', code: 'REVISION_CONFLICT', revision, file: fileWithLiveViewport(state) };
   const busy = busyReason();
   if (busy) return { kind: 'refused', code: 'BUSY', revision, reason: busy };
   const applied = state.applyToFile(request.label, () => request.file);

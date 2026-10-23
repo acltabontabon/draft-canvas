@@ -112,18 +112,47 @@ export class Replica {
   /**
    * After a fresh copy that says which of this person's patches the owner has handled: those are
    * dropped, numbering carries on above the owner's count (a fresh page given back an old place
-   * starts from it), and whatever is still unconfirmed becomes one patch — the difference between
-   * the copy and what is on screen — numbered as the newest. `null` when nothing is left to send.
+   * starts from it), and whatever is still unconfirmed becomes as few patches as `fits` allows —
+   * one, unless together they are too large for a message: then each covers a run of the edits, in
+   * order, numbered as the newest in it. Empty when nothing is left to send.
    */
-  rebase(handled: number): PendingPatch | null {
+  rebase(handled: number, fits: (changes: Change[]) => boolean = () => true): PendingPatch[] {
     this.acknowledge(handled);
     const local = this.local;
     this.lastClientSeq = Math.max(this.lastClientSeq, handled);
-    if (this.queue.length === 0) return null;
-    const changes = diffFile(this.confirmedFile, local);
-    this.queue = changes.length === 0 ? [] : [{ clientSeq: this.lastClientSeq, changes }];
-    this.localFile = this.queue.length === 0 ? this.confirmedFile : local;
-    return this.queue[0] ?? null;
+    if (this.queue.length === 0) return [];
+    const whole = diffFile(this.confirmedFile, local);
+    if (whole.length === 0) {
+      this.queue = [];
+      this.localFile = this.confirmedFile;
+      return [];
+    }
+    if (fits(whole)) {
+      this.queue = [{ clientSeq: this.lastClientSeq, changes: whole }];
+      this.localFile = local;
+      return this.queue;
+    }
+    // Squashed into one, edits that each went out on their own (a dozen large snippets pasted
+    // offline) no longer fit a message: as many runs as it takes, each its own patch.
+    const runs: PendingPatch[] = [];
+    let base = this.confirmedFile;
+    let file = base;
+    let newest = 0;
+    for (const patch of this.queue) {
+      const next = applyPatch(file, patch.changes);
+      if (file !== base && !fits(diffFile(base, next))) {
+        const changes = diffFile(base, file);
+        if (changes.length > 0) runs.push({ clientSeq: newest, changes });
+        base = file;
+      }
+      file = next;
+      newest = patch.clientSeq;
+    }
+    const rest = diffFile(base, file);
+    if (rest.length > 0) runs.push({ clientSeq: newest, changes: rest });
+    this.queue = runs;
+    this.localFile = file;
+    return runs;
   }
 
   /** Unconfirmed edits given up (too large to send): `local` is the confirmed file again. */

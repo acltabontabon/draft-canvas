@@ -333,7 +333,7 @@ describe('coming back', () => {
   });
 });
 
-it('refuses a welcome from a different session, so unsent edits never go to it', () => {
+it('refuses a welcome from a different session, so unsent edits never go to it, and keeps reconnecting', () => {
   const clock = manualClock();
   const first = ownerOf(base(), clock);
   const pair = loopbackPair();
@@ -351,8 +351,15 @@ it('refuses a welcome from a different session, so unsent edits never go to it',
   other.host.attach(stranger.a, { role: 'editor' });
   guest.session.connect(stranger.b);
   settle(stranger.pump);
-  expect(guest.state.reasons.at(-1)).toBe('unauthorized');
   expect(other.state.file.nodes[0]!.text).toBe('A');
+  expect(stranger.b.state).toBe('closed');
+  // That link is closed; the session itself carries on, and comes back with its edit by its own owner.
+  expect(guest.session.isEnded).toBe(false);
+  const back = loopbackPair();
+  first.host.attach(back.a, { role: 'editor' });
+  guest.session.connect(back.b);
+  settle(back.pump);
+  expect(first.state.file.nodes[0]!.text).toBe('Unsent');
 });
 
 it('still lets someone in after many others have dropped', () => {

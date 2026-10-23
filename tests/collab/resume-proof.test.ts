@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { GuestSession, type GuestEvents } from '../../src/collab/guestSession';
 import { HostSession } from '../../src/collab/hostSession';
-import { encode, type PeerView } from '../../src/collab/protocol';
+import { encode, PROTOCOL_VERSION, type PeerView } from '../../src/collab/protocol';
 import { createDocument, createNode } from '../../src/document/factory';
 import { addNodes, updateNode } from '../../src/document/operations';
 import type { DraftDocument } from '../../src/document/types';
@@ -130,11 +130,62 @@ describe('coming back over a connection with a binding', () => {
 
     // And her own welcome, dressed as the session Vic left (its id is no secret), is refused.
     mallory.a.send(
-      encode({ t: 'welcome', v: 1, session: sessionId, peer: id, key: 'k'.repeat(32), role: 'editor', seq: 99, snapshot: base(), peers: [] }),
+      encode({ t: 'welcome', v: PROTOCOL_VERSION, session: sessionId, peer: id, key: 'k'.repeat(32), role: 'editor', seq: 99, snapshot: base(), peers: [] }),
       'commit',
     );
     await settle(mallory.pump);
-    expect(vic.state.ended).toBe('unauthorized');
+    // Her connection is dropped; Vic's session carries on reconnecting, its edits never sent to her.
+    expect(mallory.b.state).toBe('closed');
+    expect(vic.state.ended).toBeNull();
+    expect(mallory.sent.b.some((text) => text.includes('"t":"patch"'))).toBe(false);
     expect(state.file.nodes[0]!.text).toBe('A');
+  });
+
+  it('keeps the connection when an edit arrives while the owner is still checking the proof', async () => {
+    const { host, state } = owner(base());
+    const first = loopbackPair('webrtc', 'sha-256 aa');
+    host.attach(first.a, { role: 'editor' });
+    const vic = collaborator();
+    vic.session.connect(first.b);
+    await settle(first.pump);
+    first.drop();
+
+    const back = loopbackPair('webrtc', 'sha-256 bb');
+    host.attach(back.a, { role: 'editor' });
+    vic.session.connect(back.b);
+    // An edit made at once, while the proof is still being worked out: never sent ahead of the hello.
+    vic.state.file = updateNode(vic.state.file!, 'n_a', { text: 'Right away' });
+    vic.session.localChanged();
+    expect(back.sent.b).toHaveLength(0);
+    await settle(back.pump);
+    // And one arriving while the owner checks (a hand-made client): ignored, not a protocol error.
+    expect(vic.state.ended).toBeNull();
+    expect(state.file.nodes[0]!.text).toBe('Right away');
+  });
+
+  it('lets someone whose place was forgotten long ago back in by proof', async () => {
+    const { host, state } = owner(base());
+    const first = loopbackPair('webrtc', 'sha-256 aa');
+    host.attach(first.a, { role: 'editor' });
+    const vic = collaborator();
+    vic.session.connect(first.b);
+    await settle(first.pump);
+    first.drop();
+    vic.state.file = updateNode(vic.state.file!, 'n_a', { text: 'Made offline' });
+    vic.session.localChanged();
+    // Many others come and go meanwhile: their place is long forgotten.
+    for (let i = 0; i < 80; i += 1) {
+      const other = loopbackPair();
+      host.attach(other.a, { role: 'viewer' });
+      other.b.send(encode({ t: 'hello', v: PROTOCOL_VERSION, app: PRODUCT.version, doc: state.file.version, name: `Visitor ${i}` }), 'commit');
+      other.pump();
+      other.drop();
+    }
+    const back = loopbackPair('webrtc', 'sha-256 cc');
+    host.attach(back.a, { role: 'editor' });
+    vic.session.connect(back.b);
+    await settle(back.pump);
+    expect(vic.state.ended).toBeNull();
+    expect(state.file.nodes[0]!.text).toBe('Made offline');
   });
 });

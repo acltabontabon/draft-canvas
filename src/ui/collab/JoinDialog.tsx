@@ -1,12 +1,13 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { answerInvite, CollabCodeError, peerConnectionsAvailable, relayUrl, type CollabTransport } from '../../collab/connect';
+import type { GuestSession } from '../../collab/guestSession';
 import { knock, type KnockStatus } from '../../collab/lobby';
 import { readName } from '../../collab/protocol';
 import { readSessionPayload, rendezvousAvailable } from '../../collab/rendezvous';
 import { logDiagnostic } from '../../lib/diagnostics';
 import { rejoinByRelay } from './relayGuest';
 import { keepLanGuestConnected, lanTokenFromPayload, openLanGuest } from '../../collab/lan';
-import { guestSession, joinSession, leaveSession, leaveSessionKeepingView, mayResumeVia, reconnectSession } from '../../store/collabBridge';
+import { guestSession, joinSession, leaveSession, leaveSessionKeepingView, mayResumeVia, reconnectSession, replaceKeeper } from '../../store/collabBridge';
 import { useCollabStore } from '../../store/collabStore';
 import { useUiStore } from '../../store/uiStore';
 import type { DocumentSession } from '../../store/useDocumentSession';
@@ -71,23 +72,39 @@ export function JoinDialog({ session, invite }: { session: DocumentSession; invi
       ? { kind: 'failed', message: END_MESSAGES[endReason] }
       : stage;
 
-  useEffect(() => () => cancelJoin.current?.(), []);
+  // Whether this dialog is still the one on screen: a second invite opened over it replaces it, and an
+  // attempt still being prepared then (no cancel to call yet) must not join over the newer one.
+  const current = useRef(true);
+  useEffect(
+    () => () => {
+      current.current = false;
+      cancelJoin.current?.();
+    },
+    [],
+  );
 
   const beginLan = (token: string, trimmed: string) => {
     // Like a knock: the owner lets each person on the network in, or not.
     setStage({ kind: 'knocking', status: { kind: 'waiting', owner: 'the owner' } });
     const transport = openLanGuest(token);
+    // Only ever this session's: a keeper still retrying after its session ended picked up the next
+    // one the person joined, and sent that session's key to this one's owner in clear.
+    let mine: GuestSession | null = resuming ? guestSession() : null;
     const keeper = keepLanGuestConnected(token, transport, {
       reconnect: reconnectSession,
-      wanted: () => guestSession() !== null,
+      wanted: () => mine !== null && guestSession() === mine,
       gaveUp: (why) =>
         leaveSessionKeepingView({
           message: why === 'stopped' ? 'The owner stopped sharing on this network.' : 'Couldn’t reach the owner’s computer. Check you’re on the same network, then open the link again.',
           tone: 'error',
         }),
     });
-    if (resuming) return reconnectSession(transport);
-    joinSession(transport, { name: trimmed, token, via: `lan:${token}`, open: session.openCollaborative, lost: keeper.lost });
+    if (resuming) {
+      // One keeper per session: this one takes over from the one already retrying.
+      replaceKeeper(keeper);
+      return reconnectSession(transport);
+    }
+    mine = joinSession(transport, { name: trimmed, token, via: `lan:${token}`, open: session.openCollaborative, keeper });
   };
 
   const beginKnock = async (link: NonNullable<typeof sessionLink>, trimmed: string) => {
@@ -104,10 +121,12 @@ export function JoinDialog({ session, invite }: { session: DocumentSession; invi
       setStage({ kind: 'knocking', status: { kind: 'unavailable' } });
       return;
     }
+    if (!current.current) return pending.cancel();
     cancelJoin.current = pending.cancel;
     const transport = await pending.transport;
     cancelJoin.current = null;
     if (!transport) return;
+    if (!current.current) return transport.close('cancelled');
     setStage({ kind: 'joining' });
     if (resuming) return reconnectSession(transport);
     leaveSession();
@@ -132,6 +151,7 @@ export function JoinDialog({ session, invite }: { session: DocumentSession; invi
     let transport: Promise<CollabTransport>;
     try {
       const answer = await answerInvite(invite, stunServer);
+      if (!current.current) return answer.cancel();
       cancelJoin.current = answer.cancel;
       transport = answer.transport;
       // Straight onto the clipboard when the browser allows it (the Join click is still recent):
@@ -151,6 +171,7 @@ export function JoinDialog({ session, invite }: { session: DocumentSession; invi
       return;
     }
     cancelJoin.current = null;
+    if (!current.current) return connected.close('cancelled');
     setStage({ kind: 'joining' });
     if (mayResumeVia(null)) {
       reconnectSession(connected);

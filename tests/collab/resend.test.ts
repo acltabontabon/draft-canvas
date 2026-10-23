@@ -5,7 +5,7 @@ import { HostSession } from '../../src/collab/hostSession';
 import type { PeerView } from '../../src/collab/protocol';
 import { createDocument, createNode } from '../../src/document/factory';
 import { addNodes, updateNode } from '../../src/document/operations';
-import type { DraftDocument } from '../../src/document/types';
+import type { DraftDocument, DraftInside } from '../../src/document/types';
 import { PRODUCT } from '../../src/product';
 import { loopbackPair } from './support';
 
@@ -259,6 +259,172 @@ describe('edits across a fresh copy', () => {
     clock.advance(500);
     settle(pump);
     expect(guest.state.file!.metadata.title).toBe('t5000');
+  });
+
+  it('sends offline work too large for one message as several, paced, and loses none of it', () => {
+    const clock = manualClock();
+    const { host, state: owner } = ownerOf(base(), clock);
+    const first = loopbackPair();
+    host.attach(first.a, { role: 'editor' });
+    const guest = guestOf(clock);
+    guest.session.connect(first.b);
+    settle(first.pump);
+    first.drop();
+    // Two dozen large snippets pasted while away: each fits a message, together they don't.
+    for (let i = 0; i < 24; i += 1) {
+      guest.state.file = addNodes(guest.state.file!, [createNode({ id: `n_code${i}`, type: 'code', x: i * 300, y: 600, code: `${i}`.padEnd(190_000, 'x') })]);
+      guest.session.localChanged();
+    }
+    const second = loopbackPair();
+    host.attach(second.a, { role: 'editor' });
+    guest.session.connect(second.b);
+    for (let i = 0; i < 20; i += 1) {
+      settle(second.pump);
+      clock.advance(1000);
+    }
+    settle(second.pump);
+
+    expect(guest.state.ended).toBeNull();
+    expect(guest.state.tooLarge).toBe(0);
+    expect(owner.file.nodes.filter((node) => node.id.startsWith('n_code'))).toHaveLength(24);
+    expect(guest.state.file).toEqual(owner.file);
+  });
+
+  it('never lets a new edit overtake unconfirmed work still being paced out', () => {
+    const clock = manualClock();
+    const { host, state: owner } = ownerOf(base(), clock);
+    const first = loopbackPair();
+    host.attach(first.a, { role: 'editor' });
+    const guest = guestOf(clock);
+    guest.session.connect(first.b);
+    settle(first.pump);
+    first.drop();
+    for (let batch = 0; batch < 4; batch += 1) {
+      const notes = Array.from({ length: 90 }, (_, i) => createNode({ id: `big_${batch}_${i}`, type: 'note', text: 'q'.repeat(19_500), x: i, y: batch * 100 }));
+      guest.state.file = addNodes(guest.state.file!, notes);
+      guest.session.localChanged();
+    }
+    const second = loopbackPair();
+    host.attach(second.a, { role: 'editor' });
+    guest.session.connect(second.b);
+    settle(second.pump);
+    // A quick rename right after the welcome, while the rest of the offline work waits its turn.
+    guest.state.file = updateNode(guest.state.file!, 'n_a', { text: 'Renamed after reconnect' });
+    guest.session.localChanged();
+    for (let i = 0; i < 30; i += 1) {
+      settle(second.pump);
+      clock.advance(1000);
+    }
+    expect(owner.file.nodes.filter((node) => node.id.startsWith('big_'))).toHaveLength(360);
+    expect(textOf(owner.file, 'n_a')).toBe('Renamed after reconnect');
+    expect(guest.state.file).toEqual(owner.file);
+  });
+
+  it('keeps every edit after rejoining as someone new, one made before the welcome included', () => {
+    const clock = manualClock();
+    const { host, state: owner } = ownerOf(base(), clock);
+    const first = loopbackPair();
+    host.attach(first.a, { role: 'editor' });
+    const guest = guestOf(clock);
+    guest.session.connect(first.b);
+    settle(first.pump);
+    for (let i = 1; i <= 50; i += 1) {
+      guest.state.file = { ...guest.state.file!, metadata: { ...guest.state.file!.metadata, title: `t${i}` } };
+      guest.session.localChanged();
+      settle(first.pump);
+    }
+    first.drop();
+    // Reconnecting, an edit made while the hello is on its way — and the place is forgotten meanwhile.
+    const second = loopbackPair();
+    host.attach(second.a, { role: 'editor' });
+    guest.session.connect(second.b);
+    guest.state.file = addNodes(guest.state.file!, [createNode({ id: 'w_pre', type: 'note', text: 'pre', x: 0, y: 200 })]);
+    guest.session.localChanged();
+    for (let i = 0; i < 11; i += 1) {
+      clock.advance(10);
+      const other = loopbackPair();
+      host.attach(other.a, { role: 'editor' });
+      guestOf(clock).session.connect(other.b);
+      settle(other.pump);
+      other.drop();
+    }
+    settle(second.pump);
+    for (let i = 1; i <= 10; i += 1) {
+      guest.state.file = addNodes(guest.state.file!, [createNode({ id: `w_after_${i}`, type: 'note', text: `after ${i}`, x: 0, y: 300 + i })]);
+      guest.session.localChanged();
+      settle(second.pump);
+    }
+    const ids = owner.file.nodes.map((node) => node.id);
+    expect(ids).toContain('w_pre');
+    for (let i = 1; i <= 10; i += 1) expect(ids).toContain(`w_after_${i}`);
+    expect(guest.state.file).toEqual(owner.file);
+  });
+
+  it('splits and paces offline moves to stay inside what the owner takes in one patch, and loses none', () => {
+    const clock = manualClock();
+    const notes = Array.from({ length: 1200 }, (_, i) => createNode({ id: `m_${i}`, type: 'note', text: `m${i}`, x: i, y: 0 }));
+    const { host, state: owner } = ownerOf(addNodes(base(), [createNode({ id: 'box', type: 'service', text: 'Box', x: 0, y: 400 }), ...notes]), clock);
+    const first = loopbackPair();
+    host.attach(first.a, { role: 'editor' });
+    const guest = guestOf(clock);
+    guest.session.connect(first.b);
+    settle(first.pump);
+    first.drop();
+    // Two edits while away, each moving 600 notes into the box: each fits, together they don't.
+    for (const half of [notes.slice(0, 600), notes.slice(600)]) {
+      const moving = new Set(half.map((note) => note.id));
+      const file = guest.state.file!;
+      const box = file.nodes.find((node) => node.id === 'box')!;
+      const inside: DraftInside = box.inside ?? { nodes: [], edges: [], flows: [], viewport: { x: 0, y: 0, zoom: 1 } };
+      guest.state.file = {
+        ...file,
+        nodes: file.nodes.filter((node) => !moving.has(node.id)).map((node) => (node.id === 'box' ? { ...node, inside: { ...inside, nodes: [...inside.nodes, ...file.nodes.filter((n) => moving.has(n.id))] } } : node)),
+      };
+      guest.session.localChanged();
+    }
+    const second = loopbackPair();
+    host.attach(second.a, { role: 'editor' });
+    guest.session.connect(second.b);
+    for (let i = 0; i < 10; i += 1) {
+      settle(second.pump);
+      clock.advance(1000);
+    }
+    expect(second.sent.a.some((text) => text.includes('"rejected"'))).toBe(false);
+    expect(owner.file.nodes.find((node) => node.id === 'box')!.inside?.nodes).toHaveLength(1200);
+    expect(guest.state.file).toEqual(owner.file);
+  });
+
+  it('keeps large offline work whole when it comes back as someone new', () => {
+    const clock = manualClock();
+    const { host, state: owner } = ownerOf(base(), clock);
+    const first = loopbackPair();
+    host.attach(first.a, { role: 'editor' });
+    const guest = guestOf(clock);
+    guest.session.connect(first.b);
+    settle(first.pump);
+    first.drop();
+    for (let i = 0; i < 24; i += 1) {
+      guest.state.file = addNodes(guest.state.file!, [createNode({ id: `n_code${i}`, type: 'code', x: i * 300, y: 600, code: `${i}`.padEnd(190_000, 'x') })]);
+      guest.session.localChanged();
+    }
+    // Others come and go meanwhile: the place is forgotten.
+    for (let i = 0; i < 11; i += 1) {
+      clock.advance(10);
+      const other = loopbackPair();
+      host.attach(other.a, { role: 'editor' });
+      guestOf(clock).session.connect(other.b);
+      settle(other.pump);
+      other.drop();
+    }
+    const second = loopbackPair();
+    host.attach(second.a, { role: 'editor' });
+    guest.session.connect(second.b);
+    for (let i = 0; i < 20; i += 1) {
+      settle(second.pump);
+      clock.advance(1000);
+    }
+    expect(guest.state.tooLarge).toBe(0);
+    expect(owner.file.nodes.filter((node) => node.id.startsWith('n_code'))).toHaveLength(24);
   });
 
   it('never applies a patch in flight past the copy sent after a long gesture, ahead of the ones it dropped', () => {

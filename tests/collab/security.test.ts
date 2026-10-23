@@ -93,6 +93,112 @@ describe('a collaborator can’t stall the owner’s tab', () => {
   });
 });
 
+describe('the size cap, against contents moved out of a shape removed in the same edit', () => {
+  it('still counts what was moved out, so the cap can’t be stepped round', () => {
+    const host = new HostCore(createDocument('Out'));
+    const ledger = { role: 'editor' as const, lastClientSeq: 0 };
+    let seq = 0;
+    let refused = false;
+    for (let round = 0; round < 80 && !refused; round += 1) {
+      // A shape with a large snippet inside it…
+      const owner = createNode({ id: `box_${round}`, type: 'service', text: 'Box', x: round * 10, y: 0 });
+      const snippet = { id: `code_${round}`, type: 'code', x: 0, y: 0, width: 240, height: 160, z: 0, code: 'x'.repeat(190_000), language: 'plaintext' };
+      host.receivePatch('p', ledger, ++seq, [{ kind: 'node', id: owner.id, room: '', value: owner }]);
+      const into = host.receivePatch('p', ledger, ++seq, [{ kind: 'node', id: snippet.id, room: owner.id, value: snippet }]);
+      if (into.ack?.rejected === 'limits') refused = true;
+      // …then the snippet moved out and the shape removed, in one edit.
+      host.receivePatch('p', ledger, ++seq, [
+        { kind: 'move', target: 'node', id: snippet.id, room: '' },
+        { kind: 'node', id: owner.id, room: '', value: null },
+      ]);
+    }
+    expect(refused).toBe(true);
+    expect(new TextEncoder().encode(JSON.stringify(host.file)).byteLength).toBeLessThanOrEqual(MAX_SHARED_FILE_BYTES);
+  });
+});
+
+describe('moves', () => {
+  it('refuses a patch of thousands of moves rather than spending most of a second on it', () => {
+    const notes = Array.from({ length: 4000 }, (_, i) => createNode({ id: `m_${i}`, type: 'note', text: `m${i}`, x: i, y: 0 }));
+    let file = addNodes(createDocument('Moves'), [createNode({ id: 'box', type: 'service', text: 'Box', x: 0, y: 0 }), ...notes]);
+    const host = new HostSession({ readFile: () => file, applyRemote: (next) => ((file = next), true), isBusy: () => false, appVersion: PRODUCT.version }, { peers: () => {}, presence: () => {} }, { name: 'Owner' });
+    const { a, b, pump, sent } = loopbackPair();
+    host.attach(a, { role: 'editor' });
+    b.send(encode({ t: 'hello', v: PROTOCOL_VERSION, app: PRODUCT.version, doc: file.version, name: 'Gus' }), 'commit');
+    pump();
+    const welcome = JSON.parse(sent.a.find((text) => text.includes('"t":"welcome"'))!) as { epoch: number };
+    const moves = notes.map((note) => ({ kind: 'move', target: 'node', id: note.id, room: 'box' }));
+    let spent = 0;
+    spent = time(() => {
+      b.send(encode({ t: 'patch', clientSeq: 1, changes: moves, epoch: welcome.epoch }), 'commit');
+      pump();
+    });
+    expect(spent).toBeLessThan(300);
+    expect(sent.a.some((text) => text.includes('"rejected":"too-much"'))).toBe(true);
+    expect(file.nodes.some((node) => node.id === 'm_0')).toBe(true);
+    host.end();
+  });
+});
+
+describe('the size cap’s bookkeeping, against a collaborator', () => {
+  it('can’t be inflated by moving shapes in and out of a room until every edit is refused', () => {
+    const notes = Array.from({ length: 300 }, (_, i) => createNode({ id: `n${i}`, type: 'note', text: `n${i}`, x: i, y: 0 }));
+    const host = new HostCore(addNodes(createDocument('Churn'), [createNode({ id: 'box', type: 'service', text: 'Box', x: 0, y: 0 }), ...notes]));
+    const ledger = { role: 'editor' as const, lastClientSeq: 0 };
+    let seq = 0;
+    for (let round = 0; round < 200; round += 1) {
+      const room = round % 2 === 0 ? 'box' : '';
+      host.receivePatch('p', ledger, ++seq, notes.map((note) => ({ kind: 'move', target: 'node', id: note.id, room })));
+    }
+    const real = new TextEncoder().encode(JSON.stringify(host.file)).byteLength;
+    expect((host as unknown as { size: number }).size).toBeLessThan(real + 64 * 1024);
+    const grow = host.receivePatch('p', ledger, ++seq, [{ kind: 'node', id: 'n_new', room: '', value: createNode({ id: 'n_new', type: 'note', text: 'Still fine', x: 0, y: 900 }) }]);
+    expect(grow.commit).toBeDefined();
+  });
+});
+
+describe('the owner’s own file', () => {
+  it('nests boundaries no deeper than every copy accepts, so owner and collaborators stay the same', () => {
+    const chain = Array.from({ length: LIMITS.maxGroupDepth + 1 }, (_, i) =>
+      createNode({ id: `g${i}`, type: 'group', x: 0, y: 0, ...(i > 0 ? { parentId: `g${i - 1}` } : {}) }),
+    );
+    let file: DraftDocument = { ...createDocument('Deep'), nodes: chain };
+    const host = new HostSession({ readFile: () => file, applyRemote: (next) => ((file = next), true), isBusy: () => false, appVersion: PRODUCT.version }, { peers: () => {}, presence: () => {} }, { name: 'Owner' });
+    const { a, b, pump } = loopbackPair();
+    let copy: DraftDocument | null = null;
+    const guest = new GuestSession(
+      { readFile: () => copy!, applyRemote: (next) => ((copy = next), true), isBusy: () => false, open: (next) => (copy = next), setAccess: () => {}, appVersion: PRODUCT.version, name: 'Gus' },
+      { status: () => {}, joined: () => {}, peers: () => {}, presence: () => {}, presenter: () => {}, rejected: () => {}, unconfirmed: () => {}, tooLarge: () => {} },
+    );
+    host.attach(a, { role: 'editor' });
+    guest.connect(b);
+    for (let i = 0; i < 10; i += 1) pump();
+    // The owner wraps the whole chain in one more boundary: one past the limit.
+    file = { ...file, nodes: [createNode({ id: 'outer', type: 'group', x: 0, y: 0 }), ...file.nodes.map((node) => (node.id === 'g0' ? { ...node, parentId: 'outer' } : node))] };
+    host.commitLocal();
+    for (let i = 0; i < 10; i += 1) pump();
+    expect(repairReferences(file)).toBe(file);
+    expect(copy!.nodes).toEqual(file.nodes);
+    guest.leave();
+    host.end();
+  });
+});
+
+describe('the size cap’s bookkeeping', () => {
+  it('counts a reorder or a move as no growth, so they are never refused near the cap', () => {
+    const nodes = Array.from({ length: 40 }, (_, i) => createNode({ id: `n${i}`, type: 'code', x: i * 10, y: 0, code: 'x'.repeat(10) }));
+    const host = new HostCore({ ...createDocument('Near'), nodes });
+    const ledger = { role: 'editor' as const, lastClientSeq: 0 };
+    // Many reorders in a row: each the same bytes as before.
+    for (let seq = 1; seq <= 400; seq += 1) {
+      const ids = host.file.nodes.map((node) => node.id).reverse();
+      const outcome = host.receivePatch('p', ledger, seq, [{ kind: 'order', room: '', collection: 'nodes', ids }]);
+      expect(outcome.ack?.rejected).toBeUndefined();
+    }
+    expect((host as unknown as { size: number }).size).toBe(new TextEncoder().encode(JSON.stringify(host.file)).byteLength);
+  });
+});
+
 describe('names at the door', () => {
   it('reads look-alike letters from other scripts, and look-alike Latin, as the same name', () => {
     expect(nameKey('Аlice')).toBe(nameKey('Alice'));

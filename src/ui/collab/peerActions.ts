@@ -16,6 +16,10 @@ export function undoPersonChanges(peerId: string, name: string): void {
       return notify(`Nothing of ${name}’s is left to take back.`);
     case 'too-large':
       return notify(`Taking back ${name}’s changes would make this diagram too large.`, 'error');
+    case 'busy':
+      return notify(`Finish what you’re doing on the canvas, then take back ${name}’s changes.`);
+    case 'ended':
+      return notify(`The session has ended, so ${name}’s changes can’t be taken back on their own any more. Undo still steps back through your own edits.`);
   }
 }
 

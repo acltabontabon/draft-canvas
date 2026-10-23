@@ -77,7 +77,7 @@ export class HostCore {
    */
   commitLocal(next: DraftDocument): Commit | null {
     const changes = diffFile(this.current, next);
-    const growth = growthOf(this.current, changes);
+    const growth = growthOf(this.current, next, changes);
     this.size += growth.bytes;
     this.sizeExact &&= growth.exact;
     this.current = next;
@@ -85,10 +85,12 @@ export class HostCore {
     return this.record({ seq: this.seqNo + 1, changes, origin: HOST_ORIGIN });
   }
 
-  receivePatch(origin: string, ledger: PeerLedger, clientSeq: number, rawChanges: unknown): PatchOutcome {
+  /** `refused`: the session turned this patch down already (`HostSession`'s limits); it is answered so. */
+  receivePatch(origin: string, ledger: PeerLedger, clientSeq: number, rawChanges: unknown, refused?: RejectReason): PatchOutcome {
     if (clientSeq <= ledger.lastClientSeq) return { ack: { clientSeq } };
     ledger.lastClientSeq = clientSeq;
     if (ledger.role !== 'editor') return { ack: { clientSeq, rejected: 'view-only' } };
+    if (refused) return { ack: { clientSeq, rejected: refused } };
 
     const sanitized = sanitizeChanges(rawChanges);
     if (!sanitized.ok) return { ack: { clientSeq, rejected: 'malformed' } };
@@ -104,7 +106,7 @@ export class HostCore {
       this.current = candidate;
       return { ack: { clientSeq } };
     }
-    const growth = growthOf(this.current, changes);
+    const growth = growthOf(this.current, candidate, changes);
     if (this.size + growth.bytes > MAX_SHARED_FILE_BYTES) {
       // Only an upper bound so far: measure once, and keep the measure — a refused patch leaves the
       // file as it was, so the next one is checked against the exact size for nothing.

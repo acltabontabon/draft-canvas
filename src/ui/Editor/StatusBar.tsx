@@ -103,6 +103,9 @@ function LiveStatus({ role }: { role: 'host' | 'guest' }) {
 
 export function StatusBar({ durable, presenting = false, onResolveConflict }: StatusBarProps) {
   const collab = useCollabStore((state) => state.role);
+  // A collaborator's copy left on screen after the session: still nobody's file, whatever this tab
+  // last saved before it.
+  const leftCopy = useUiStore((state) => state.readOnly?.collaborative === true);
   const save = useEditorStore((state) => state.save);
   const nodeCount = useEditorStore((state) => state.document.nodes.length);
   const edgeCount = useEditorStore((state) => state.document.edges.length);
@@ -125,6 +128,13 @@ export function StatusBar({ durable, presenting = false, onResolveConflict }: St
     <footer className="dc-status">
       {collab === 'guest' ? (
         <LiveStatus role="guest" />
+      ) : leftCopy ? (
+        <div className="dc-status-left">
+          <span className="dc-save" data-status="saved">
+            <Icon name="people" /> Not saved
+          </span>
+          <span className="dc-muted dc-status-hint">This copy isn’t saved anywhere — keep a copy from the banner above the canvas.</span>
+        </div>
       ) : __DESKTOP__ && hostKind() === 'desktop' ? (
         <DesktopStatus />
       ) : (

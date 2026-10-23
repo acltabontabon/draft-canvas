@@ -55,6 +55,7 @@ import { agentActivity } from './agentActivity';
 import { forgetPendingWrite, rememberPendingWrite } from './agentWrites';
 import type { AgentContext, DesktopApi, Handle, HostEvent } from './api';
 import { BaseSnapshots, overlapOf, rebasedOverlapOf } from '../agent/rebase';
+import { useCollabStore } from '../store/collabStore';
 
 /** What the handler needs from the controller — kept narrow so this stays testable on its own. */
 export interface AgentHost {
@@ -497,6 +498,20 @@ const conflict = (currentRevision: string) =>
     details: { currentRevision },
   });
 
+/** Re-runs of an approved change on a file that moved meanwhile, before it is a conflict. */
+const MAX_COMMIT_REBASES = 5;
+
+function overlappingConflict(currentRevision: string, overlapping: string[], cascading = false) {
+  const who = useCollabStore.getState().role === 'host' ? 'someone' : 'the person';
+  const message = cascading
+    ? `On the current revision, that change would also remove or alter what ${who} added since. Nothing changed.`
+    : `${who === 'someone' ? 'Someone' : 'The person'} changed some of the same elements since that revision. Nothing changed.`;
+  return new AgentError('REVISION_CONFLICT', message, {
+    hint: 'Read the diagram again and rebuild the change on the current revision. Don\'t create a replacement diagram.',
+    details: { currentRevision, overlapping: overlapping.slice(0, 20) },
+  });
+}
+
 async function update(api: DesktopApi, host: AgentHost, event: Request) {
   const { args, context } = event;
   const expected = typeof args.expectedRevision === 'string' ? args.expectedRevision : undefined;
@@ -521,7 +536,7 @@ async function update(api: DesktopApi, host: AgentHost, event: Request) {
   const snapshot = await calmSnapshot(host);
   if (snapshot.kind !== 'snapshot') throw new AgentError('INTERNAL', 'The editor did not answer.');
   if (snapshot.busy) throw new AgentError('BUSY', `${snapshot.busy} Nothing changed; try again in a moment with the same requestId.`, { retryable: true });
-  const wasClean = host.isClean();
+  let wasClean = host.isClean();
   const accepted = expected === snapshot.revision || (wasClean && expected === fileRevision(open.stamp));
   const path = args.previewId !== undefined && args.view === undefined
     ? readPreview(args.previewId, context.diagramId ?? '', context.session ?? '', handOut(host, snapshot)).path
@@ -533,23 +548,19 @@ async function update(api: DesktopApi, host: AgentHost, event: Request) {
     const base = args.onConflict === 'rebase' ? bases.get(expected) : undefined;
     if (!base) throw conflict(current);
     // Worked out against what the agent read, to see what it would change; applied below to what is
-    // there now only if the person changed none of the same things since.
+    // there now only if nobody changed any of the same things since.
     const onBase = await runOffThread({ kind: 'update', file: base, path, ops: args.ops, layout: args.layout, scope: args.scope });
     if (onBase.kind !== 'update') throw new AgentError('INTERNAL', 'The edit could not be worked out.');
     const shared = overlapOf(base, snapshot.file, onBase.file);
     if (shared.length > 0) {
-      throw new AgentError('REVISION_CONFLICT', 'The person changed some of the same elements since that revision. Nothing changed.', {
-        hint: 'Read the diagram again and rebuild the change on the current revision. Don\'t create a replacement diagram.',
-        details: { currentRevision: current, overlapping: shared.slice(0, 20) },
-      });
+      throw overlappingConflict(current, shared);
     }
     rebased = true;
     rebasedFrom = base;
   }
 
   // 3. The change, worked out and checked in full (on a worker thread) before anything is touched.
-  // The person may keep editing meanwhile; the commit below re-checks the revision, so an edit made
-  // in the meantime turns this into a conflict rather than being overwritten.
+  // People may keep editing meanwhile; the commit below checks overlap again before rebasing.
   const startView = viewOf(snapshot.file, path);
   agentActivity.begin({
     id: event.id,
@@ -559,7 +570,7 @@ async function update(api: DesktopApi, host: AgentHost, event: Request) {
     path,
     ...(startView ? { base: { nodes: startView.nodes, edges: startView.edges } } : {}),
   });
-  const result = await candidateOrUpdate(event, snapshot.file, path, handOut(host, snapshot), api);
+  let result = await candidateOrUpdate(event, snapshot.file, path, handOut(host, snapshot), api);
   if (result.kind !== 'update') throw new AgentError('INTERNAL', 'The edit could not be worked out.');
   if (result.problems.length) throw layoutConstrained(result);
   // The check above compared the batch against the file it was written for; re-run on the current one
@@ -567,10 +578,7 @@ async function update(api: DesktopApi, host: AgentHost, event: Request) {
   // open point on it, a shape put inside it). That is a conflict too, never a silent deletion.
   const undone = rebasedFrom ? rebasedOverlapOf(rebasedFrom, snapshot.file, result.file) : [];
   if (undone.length > 0) {
-    throw new AgentError('REVISION_CONFLICT', 'On the current revision, that change would also remove or alter what the person added since. Nothing changed.', {
-      hint: 'Read the diagram again and rebuild the change on the current revision. Don\'t create a replacement diagram.',
-      details: { currentRevision: handOut(host, snapshot), overlapping: undone.slice(0, 20) },
-    });
+    throw overlappingConflict(handOut(host, snapshot), undone, true);
   }
   const title = result.file.metadata.title;
   const base = { diagramId: context.diagramId, title, ...(path.length ? { view: { path } } : {}), ...(rebased ? { rebased: true } : {}) };
@@ -580,15 +588,37 @@ async function update(api: DesktopApi, host: AgentHost, event: Request) {
 
   // 4. The gate, then the commit (which re-checks the revision in the same step as the change).
   await passGate(api, event.id);
-  const committed = await host.askEditor({ kind: 'commit', expectedRevision: snapshot.revision, file: result.file, label: 'Agent edit' });
-  if (committed.kind === 'refused') {
-    if (committed.code === 'BUSY') throw new AgentError('BUSY', `${committed.reason ?? 'The editor is busy.'} Nothing changed.`, { retryable: true });
-    throw conflict(committed.revision);
+  let commitBase = snapshot;
+  let committed: Extract<AgentEditorReply, { kind: 'committed' }>;
+  for (let attempt = 0; ; attempt += 1) {
+    const reply = await host.askEditor({ kind: 'commit', expectedRevision: commitBase.revision, file: result.file, label: 'Agent edit' });
+    if (reply.kind === 'committed') {
+      committed = reply;
+      break;
+    }
+    if (reply.kind !== 'refused') throw new AgentError('INTERNAL', 'The editor did not answer.');
+    if (reply.code === 'BUSY') throw new AgentError('BUSY', `${reply.reason ?? 'The editor is busy.'} Nothing changed.`, { retryable: true });
+    // Bounded: in a busy live session the file can keep moving under every re-run, and the agent is
+    // better told to try again than kept here.
+    if (attempt >= MAX_COMMIT_REBASES) throw conflict(reply.revision);
+    // Candidates promise an exact preview. Ordinary edits can be re-run without overwriting work
+    // that arrived during layout or approval, including another patch during the re-run itself.
+    if (args.previewId !== undefined) throw conflict(reply.revision);
+    const shared = overlapOf(commitBase.file, reply.file, result.file);
+    if (shared.length > 0) throw overlappingConflict(reply.revision, shared);
+    const rerun = await runOffThread({ kind: 'update', file: reply.file, path, ops: args.ops, layout: args.layout, scope: args.scope });
+    if (rerun.kind !== 'update') throw new AgentError('INTERNAL', 'The edit could not be worked out.');
+    const undone = rebasedOverlapOf(commitBase.file, reply.file, rerun.file);
+    if (undone.length > 0) throw overlappingConflict(reply.revision, undone, true);
+    if (rerun.problems.length) throw layoutConstrained(rerun);
+    wasClean = wasClean && host.isClean();
+    commitBase = { ...snapshot, revision: reply.revision, file: reply.file };
+    result = rerun;
+    rebased = true;
   }
-  if (committed.kind !== 'committed') throw new AgentError('INTERNAL', 'The editor did not answer.');
 
   // 5. Durability.
-  const receipt = { ...base, applied: true, where: 'editor', undo: 'editor', ...receiptCounts(result) };
+  const receipt = { ...base, title: result.file.metadata.title, ...(rebased ? { rebased: true } : {}), applied: true, where: 'editor', undo: 'editor', ...receiptCounts(result) };
   if (!wasClean) {
     bases.remember(committed.revision, result.file);
     return { ...receipt, revision: committed.revision, persisted: false, state: 'applied-unsaved', note: 'Applied in the editor. The person has unsaved changes of their own, so saving is theirs; a recovery copy covers it meanwhile.' };

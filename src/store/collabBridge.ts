@@ -239,7 +239,7 @@ export function removeCollaborator(peerId: string): void {
 }
 
 /** What taking back one person's changes came to, for the owner to be told. */
-export type UndoChangesOutcome = 'done' | 'partial' | 'nothing' | 'blocked' | 'too-large';
+export type UndoChangesOutcome = 'done' | 'partial' | 'nothing' | 'blocked' | 'too-large' | 'busy' | 'ended';
 
 /**
  * Takes back everything `peerId` changed this session, where nobody has changed it since and nobody
@@ -247,7 +247,10 @@ export type UndoChangesOutcome = 'done' | 'partial' | 'nothing' | 'blocked' | 't
  * enter the owner's own undo history. One undoable edit, reaching everyone like any other.
  */
 export function undoChangesOf(peerId: string, name: string): UndoChangesOutcome {
-  if (!host || host.isEnded || !onSharedCanvas() || isBusy()) return 'nothing';
+  // Said as it is: "nothing left of theirs" was the answer to a session already over, and to an
+  // owner mid-drag, alike.
+  if (!host || host.isEnded || !onSharedCanvas()) return 'ended';
+  if (isBusy()) return 'busy';
   // Anything typed here and not yet shared goes into the session first, so it counts as the owner's.
   host.commitLocal();
   const current = readFile();
@@ -312,12 +315,36 @@ export interface JoinOptions {
   open(file: DraftDocument): Promise<boolean>;
   /** The connection dropped: the caller reconnects (LAN) or offers to ask for a new invite (WebRTC). */
   lost?(): void;
+  /**
+   * What keeps reconnecting this session (the local network link's): told when the connection drops,
+   * and stopped when the session ends or is left, so it can never pick up a later one.
+   */
+  keeper?: SessionKeeper;
+}
+
+export interface SessionKeeper {
+  lost(): void;
+  stop(): void;
+}
+
+/** The current guest session's keeper, if it has one: see `JoinOptions.keeper`. */
+let keeper: SessionKeeper | null = null;
+
+/**
+ * Hands the session a new keeper, stopping the one it had: "Rejoin" on the local network link makes
+ * its own, and two at once closed each other's connections for good.
+ */
+export function replaceKeeper(next: SessionKeeper | null): void {
+  const previous = keeper;
+  keeper = next;
+  if (previous && previous !== next) previous.stop();
 }
 
 const REJECTIONS: Record<RejectReason, string> = {
   'view-only': 'Your change was not applied — the owner has made you view-only.',
   malformed: 'Your change could not be applied and was undone.',
   limits: 'Your change was not applied — the diagram is at its size limit.',
+  'too-much': 'Your change was not applied — it moved too much at once. Try it in smaller steps.',
 };
 
 export function joinSession(transport: CollabTransport, options: JoinOptions): GuestSession {
@@ -378,6 +405,7 @@ export function joinSession(transport: CollabTransport, options: JoinOptions): G
     },
     {
       status(status: GuestStatus, reason?: EndReason) {
+        const was = useCollabStore.getState().status;
         const mapped: SessionStatus = status;
         useCollabStore.setState({ status: mapped, endReason: reason ?? null, ...(status === 'ended' ? { peers: [], presence: {}, presenter: null, following: false } : {}) });
         if (status === 'ended') {
@@ -387,8 +415,12 @@ export function joinSession(transport: CollabTransport, options: JoinOptions): G
           if (onSharedCanvas()) useUiStore.getState().setReadOnly({ sharedTitle: title, collaborative: true });
           cleanUp();
           guest = null;
-        } else if (status === 'reconnecting') {
+          replaceKeeper(null);
+        } else if (status === 'reconnecting' && was !== 'reconnecting') {
+          // Only on going from live to dropped: a reconnect under way says "reconnecting" again, and
+          // answering that with another knock raced the rejoin it was part of.
           options.lost?.();
+          keeper?.lost();
         }
       },
       joined: (selfId: string, access: Role, color?: number) => useCollabStore.setState({ selfId, access, ...(color === undefined ? {} : { selfColor: color }) }),
@@ -401,10 +433,16 @@ export function joinSession(transport: CollabTransport, options: JoinOptions): G
       rejected: (reason: RejectReason) => ui.notify(REJECTIONS[reason], 'error'),
       unconfirmed: (count: number) => useCollabStore.setState({ unconfirmed: count }),
       tooLarge: () => ui.notify('That change is too large to share live, so it was undone. Smaller edits still go through.', 'error'),
+      refusedLink: () => {
+        // The link opened was for some other session; this one carries on reconnecting.
+        useUiStore.getState().setJoinInvite(null);
+        ui.notify('That invite is for a different session. Yours is still reconnecting — ask its owner for a new invite if it doesn’t come back.', 'error');
+      },
     },
   );
   guest = session;
   joinedVia = options.via ?? null;
+  replaceKeeper(options.keeper ?? null);
   useCollabStore.setState({ ...COLLAB_AT_REST, role: 'guest', status: 'joining', access: 'viewer', selfName: options.name });
   removePageListener = onPageLeave(() => leaveSession());
   session.connect(transport);
@@ -414,12 +452,15 @@ export function joinSession(transport: CollabTransport, options: JoinOptions): G
 let joinedVia: string | null = null;
 
 /**
- * Whether a link may pick the dropped session back up: one that names a session must name this one.
- * A link to someone else's session joins that one instead, and leaves this one be. (A direct invite
- * names nothing; the resume proof is what keeps one from anyone else from taking the place.)
+ * Whether a link may pick the dropped session back up. A session link or local network link must name
+ * this session. A direct invite names none: it is how the owner's Re-invite brings anyone back, so it
+ * may pick up any session but a local network one (whose own reconnecting it would fight) — and the
+ * resume proof keeps one from anyone else from taking the place, or passing for this session. Any
+ * other link joins its own session, and leaves this one be.
  */
 export function mayResumeVia(via: string | null): boolean {
-  return guest !== null && !guest.isEnded && useCollabStore.getState().status === 'reconnecting' && (via === null || via === joinedVia);
+  if (guest === null || guest.isEnded || useCollabStore.getState().status !== 'reconnecting') return false;
+  return via === joinedVia || (via === null && !joinedVia?.startsWith('lan:'));
 }
 
 /** A new connection to the same owner after a drop (a LAN reconnect, or a re-invite). */
@@ -432,7 +473,12 @@ export function reconnectSession(transport: CollabTransport): void {
  * Leaves on purpose, keeping what's on screen: read-only, with the banner's way to keep a copy —
  * left editable, it would look like a canvas that saves, and it saves nowhere.
  */
-export function leaveSessionKeepingView(notice: { message: string; tone?: 'error' } = { message: 'You left the session. Make an editable copy to keep what you see.' }): void {
+export function leaveSessionKeepingView(
+  notice: { message: string; tone?: 'error' } = {
+    // As the banner offers it: over the local network link's plain-http page, an export.
+    message: typeof window !== 'undefined' && !window.isSecureContext ? 'You left the session. Export a copy to keep what you see.' : 'You left the session. Make an editable copy to keep what you see.',
+  },
+): void {
   leaveSession();
   useUiStore.getState().notify(notice.message, notice.tone);
 }
@@ -446,6 +492,7 @@ export function leaveSession(): void {
   const session = guest;
   const keep = onSharedCanvas() ? useEditorStore.getState().document.metadata.title : null;
   guest = null;
+  replaceKeeper(null);
   // First, so the goodbye's own "ended" can't mark whatever canvas comes next read-only.
   cleanUp();
   session?.leave();

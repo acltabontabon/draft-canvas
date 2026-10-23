@@ -10,7 +10,8 @@
 import { isRecord } from '../lib/isRecord';
 import { LIMITS } from '../document/limits';
 
-export const PROTOCOL_VERSION = 1;
+/** 2: per-collaborator epochs (`Resend`) and resume proofs. A copy speaking another is refused at the hello. */
+export const PROTOCOL_VERSION = 2;
 
 /**
  * The largest message either end sends or accepts — the transports' own cap (`transport/chunk.ts`,
@@ -35,6 +36,20 @@ export function exceedsMessageLimit(text: string, max = MAX_MESSAGE_BYTES): bool
  * cap that keeps one peer from tying up the owner's tab is far below the transports' own.
  */
 export const MAX_GUEST_MESSAGE_BYTES = 4 * 1024 * 1024;
+
+/**
+ * Moves one collaborator's patch may carry, and how many a second, with a burst: each move costs the
+ * owner a pass over the file. The owner refuses past them (`too-much`); a collaborator resending
+ * offline work splits and paces it to stay inside them.
+ */
+export const MAX_MOVES_PER_PATCH = 1000;
+export const MOVE_RATE = 400;
+export const MOVE_BURST = 2000;
+
+/** How many moves `changes` holds, read as the owner reads an untrusted patch. */
+export function movesIn(changes: unknown): number {
+  return Array.isArray(changes) ? changes.filter((change) => isRecord(change) && change.kind === 'move').length : 0;
+}
 
 export const MAX_NAME_LENGTH = 40;
 
@@ -87,7 +102,7 @@ export interface FollowState {
   step: number | null;
 }
 
-export type RejectReason = 'view-only' | 'malformed' | 'limits';
+export type RejectReason = 'view-only' | 'malformed' | 'limits' | 'too-much';
 
 export type EndReason =
   | 'owner-left'
@@ -295,7 +310,7 @@ function readFollow(value: unknown): FollowState | null {
 }
 
 const END_REASONS: readonly EndReason[] = ['owner-left', 'ended', 'removed', 'version', 'full', 'unauthorized', 'protocol', 'timeout', 'document-changed', 'too-large', 'denied'];
-const REJECT_REASONS: readonly RejectReason[] = ['view-only', 'malformed', 'limits'];
+const REJECT_REASONS: readonly RejectReason[] = ['view-only', 'malformed', 'limits', 'too-much'];
 
 /** A message from a collaborator, as the host reads it. */
 export function readGuestMessage(value: unknown): GuestMessage | null {
