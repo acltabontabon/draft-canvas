@@ -214,7 +214,9 @@ def split_driver_stores(d: Draft, stores: list[dict]) -> None:
             node.pop('evidence', None)
             if owner.get('evidence'):
                 # Only the owner's driver dependency says it is there: the agent confirms it in code.
-                node['evidence'] = [{**owner['evidence'][0], 'basis': 'inferred', 'explanation': f'{shared["label"]} driver in its dependencies'}]
+                node['evidence'] = [
+                    {**owner['evidence'][0], 'basis': 'inferred', 'explanation': f'{shared["label"]} driver in its dependencies'}
+                ]
             d.nodes.insert(at, node)
             d.connect(caller, node['id'])
 

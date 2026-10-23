@@ -185,11 +185,43 @@ LABEL_STYLE = {
 LEVELS = {'context', 'container', 'component'}
 # What each object of a create request may carry (the app's `CREATE_FIELDS`, src/agent/fields.ts): the
 # app refuses the whole request over one unknown field, such as evidence on a note.
-REQUEST_FIELDS = {'requestId', 'title', 'project', 'starter', 'level', 'nodes', 'relationships', 'groups', 'flows', 'notes', 'layout', 'open', 'allowDuplicateTitle', 'fallbackType'}
+REQUEST_FIELDS = {
+    'requestId',
+    'title',
+    'project',
+    'starter',
+    'level',
+    'nodes',
+    'relationships',
+    'groups',
+    'flows',
+    'notes',
+    'layout',
+    'open',
+    'allowDuplicateTitle',
+    'fallbackType',
+}
 ROOM_FIELDS = {'level', 'nodes', 'relationships', 'groups', 'flows', 'notes'}
 GROUP_FIELDS = {'id', 'label', 'kind', 'parent'}
 ELEMENT_FIELDS = {'id', 'type', 'label', 'description', 'technology', 'group', 'color', 'attachments', 'inside', 'evidence', 'place'}
-RELATIONSHIP_FIELDS = {'id', 'from', 'to', 'label', 'semantic', 'kind', 'directed', 'async', 'condition', 'color', 'lineStyle', 'response', 'deliveryAttempts', 'attachments', 'evidence', 'route'}
+RELATIONSHIP_FIELDS = {
+    'id',
+    'from',
+    'to',
+    'label',
+    'semantic',
+    'kind',
+    'directed',
+    'async',
+    'condition',
+    'color',
+    'lineStyle',
+    'response',
+    'deliveryAttempts',
+    'attachments',
+    'evidence',
+    'route',
+}
 FLOW_FIELDS = {'id', 'title', 'color', 'variantOf', 'steps'}
 NOTE_FIELDS = {'id', 'text', 'kind', 'code', 'language', 'about', 'near', 'attach', 'style'}
 
@@ -332,7 +364,7 @@ RUNS = CAN_HAVE_INSIDE - {'external-system', 'component', 'module', 'adapter', '
 NARROWER = {'context': 'container', 'container': 'component', 'component': 'component'}
 
 
-def check_depth(views: list['View'], r: Report):
+def check_depth(views: list[View], r: Report):
     """C4 depth: a system of several containers gets a component view of the one doing the work."""
     containers = [(v, n) for v in views if v.level == 'container' for n in v.nodes if n.get('type') in RUNS]
     if len(containers) < 3 or any(v.level == 'component' for v in views):
@@ -343,7 +375,7 @@ def check_depth(views: list['View'], r: Report):
     busiest = ', '.join(f'"{i}"' for i in sorted(calls, key=calls.get, reverse=True)[:2])
     r.warn(
         'views',
-        f'{len(containers)} containers and no component view — give the container that holds the main path\'s '
+        f"{len(containers)} containers and no component view — give the container that holds the main path's "
         f'logic (the busiest callers: {busiest}) an inside view: level "component", its 5–10 parts',
     )
     for v in views:

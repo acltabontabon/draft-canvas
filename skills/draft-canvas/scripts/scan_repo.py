@@ -247,9 +247,11 @@ KNOWN: dict[str, tuple[str, str, str]] = {
 
 DEP_SIGNALS: list[tuple[str, str]] = [
     (
-        r'pg|postgres|pg-promise|psycopg2?(-binary)?|psycopg(\[.*\])?|asyncpg|org\.postgresql:postgresql|github\.com/lib/pq|github\.com/jackc/pgx(/v\d)?|npgsql.*|@neondatabase/serverless|@vercel/postgres|pgx|tokio-postgres|postgresql'
-        # Wrappers that bring the driver with them: a lock file lists the driver only as transitive.
-        r'|langchain-postgres|langchain-google-alloydb-pg|google-cloud-alloydb-connector(\[.*\])?|pgvector',
+        (
+            r'pg|postgres|pg-promise|psycopg2?(-binary)?|psycopg(\[.*\])?|asyncpg|org\.postgresql:postgresql|github\.com/lib/pq|github\.com/jackc/pgx(/v\d)?|npgsql.*|@neondatabase/serverless|@vercel/postgres|pgx|tokio-postgres|postgresql'
+            # Wrappers that bring the driver with them: a lock file lists the driver only as transitive.
+            r'|langchain-postgres|langchain-google-alloydb-pg|google-cloud-alloydb-connector(\[.*\])?|pgvector'
+        ),
         'postgres',
     ),
     (
@@ -730,7 +732,7 @@ def parse_manifest(rel: str, text: str) -> dict | None:
         # (google-cloud-storage pulled in by a vector-store library once drew a bucket nobody used).
         compiled = re.search(r'^\s*#\s+via\b', text, re.M) is not None
         pending: str | None = None
-        for raw in text.splitlines() + ['']:
+        for raw in [*text.splitlines(), '']:
             line = raw.strip()
             if compiled and pending is not None and line.startswith('#'):
                 if re.search(r'(?:^#\s+via|^#)\s+-[rc]\s', line):

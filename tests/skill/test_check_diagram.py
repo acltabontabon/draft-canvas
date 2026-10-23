@@ -232,13 +232,17 @@ class Warns(unittest.TestCase):
         for line, expected in cases.items():
             with self.subTest(line=line), TempRepo({'app.py': source}) as root:
                 r = checker.Report()
-                checker.check_evidence({'evidence': [{'path': 'app.py', 'basis': 'observed', 'line': line, 'symbol': 'handle'}]}, 'api', r, str(root))
+                checker.check_evidence(
+                    {'evidence': [{'path': 'app.py', 'basis': 'observed', 'line': line, 'symbol': 'handle'}]}, 'api', r, str(root)
+                )
                 self.assertEqual(len(r.warnings), len(expected), r.warnings)
                 for text in expected:
                     self.assertIn(text, r.warnings[0])
         with TempRepo({'app.py': source}) as root:
             r = checker.Report()
-            checker.check_evidence({'evidence': [{'path': 'app.py', 'basis': 'observed', 'line': 1, 'symbol': 'helper'}]}, 'api', r, str(root))
+            checker.check_evidence(
+                {'evidence': [{'path': 'app.py', 'basis': 'observed', 'line': 1, 'symbol': 'helper'}]}, 'api', r, str(root)
+            )
         self.assertIn('line 1 comes before "helper" first appears in app.py (line 9)', '\n'.join(r.warnings))
 
     def test_a_system_of_containers_needs_a_component_view_and_its_main_flow_inside(self) -> None:
@@ -264,7 +268,13 @@ class Warns(unittest.TestCase):
                 {'id': 'shop', 'type': 'service', 'label': 'Shop', 'description': 'Sells things.', 'inside': body},
             ],
             'relationships': [{'id': 'c.r1', 'from': 'c.user', 'to': 'shop', 'label': 'Buys'}],
-            'flows': [{'id': 'glance', 'title': 'At a glance', 'steps': [{'spotlight': ['shop'], 'caption': 'The shop.'}, {'relationship': 'c.r1', 'caption': 'A purchase.'}]}],
+            'flows': [
+                {
+                    'id': 'glance',
+                    'title': 'At a glance',
+                    'steps': [{'spotlight': ['shop'], 'caption': 'The shop.'}, {'relationship': 'c.r1', 'caption': 'A purchase.'}],
+                }
+            ],
         }
         # The inside of a context view's system is its container view without saying so.
         warnings = '\n'.join(report(context).warnings)
