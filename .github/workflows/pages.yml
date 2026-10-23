@@ -23,7 +23,9 @@ name: Deploy the web
 # Releases call this only after verification and desktop acceptance. This is the only workflow that deploys. pages-site.yml calls it rather than building its own
 # copy, so there is exactly one definition of what gets published. On a release tag both halves
 # come from that tag; anywhere else the landing page comes from the commit and the editor from the
-# latest vX.Y.Z (see the first step), so the editor only ever changes on a release.
+# latest vX.Y.Z (see the first step), so the editor only ever changes on a release. The relay and
+# app.draftcanvas.dev are deployed only for a release (or a withdrawal to one): off a release this
+# publishes the landing page and the www. redirect alone.
 
 on:
   workflow_dispatch:
@@ -94,7 +96,16 @@ jobs:
           git rm -rq --cached --ignore-unmatch www
           rm -rf www
           git checkout "$site" -- www scripts/assemble-web.mjs
-          echo "::notice::Editor from $tag, landing page from ${site:0:7}."
+          # The relay and the editor's hosting (its config and headers) belong with the editor: the
+          # relay is half of the protocol the released editor speaks. From the release too, wherever it
+          # has them — so the tests that run below match, and a withdrawal puts back that release's
+          # relay. The deploy step only deploys them for a release or a withdrawal.
+          for file in relay.js relay-room.js relay-room.d.ts relay.jsonc app.jsonc app.headers; do
+            if git cat-file -e "$revision:www/cloudflare/$file" 2>/dev/null; then
+              git checkout "$revision" -- "www/cloudflare/$file"
+            fi
+          done
+          echo "::notice::Editor, relay and app hosting from $tag, landing page from ${site:0:7}."
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 22.14.0
@@ -220,13 +231,23 @@ jobs:
       - name: Install the pinned Wrangler
         working-directory: dist-web/cloudflare
         run: npm ci --no-audit --no-fund
+      # The relay and app.draftcanvas.dev change only with a release (or a withdrawal to one). A
+      # site-only push deploys the landing page and the www. redirect, and leaves both as the last
+      # release put them — even when the push touched www/cloudflare/.
       - name: Deploy relay.draftcanvas.dev, app.draftcanvas.dev, draftcanvas.dev and www.
         working-directory: dist-web/cloudflare
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          RELEASE: ${{ inputs.artifact-name != '' || github.ref_type == 'tag' || inputs.release-tag != '' }}
         run: |
-          for config in relay app site www; do
+          configs="site www"
+          if [ "$RELEASE" = "true" ]; then
+            configs="relay app site www"
+          else
+            echo "::notice::Site-only deploy: the relay and app.draftcanvas.dev stay as the last release left them."
+          fi
+          for config in $configs; do
             npx --no-install wrangler deploy --config "$config.jsonc"
           done
 

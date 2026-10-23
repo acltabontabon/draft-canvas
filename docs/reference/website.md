@@ -68,7 +68,8 @@ Outputs are committed, so deploys need neither ffmpeg nor a browser. Run `social
 
 `pages.yml` is the only deploy workflow.
 
-1. Cloudflare first, with Wrangler: relay, `app/`, `site/`, then the `www.` redirect.
+1. Cloudflare first, with Wrangler: relay, `app/`, `site/`, then the `www.` redirect. The relay and
+   `app/` only for a release or a withdrawal; otherwise just `site/` and the redirect.
 2. Then `legacy/` to GitHub Pages, only if Cloudflare succeeded.
 
 Triggers (all share the `pages` concurrency group):
@@ -77,11 +78,13 @@ Triggers (all share the `pages` concurrency group):
 - **Site change:** `pages-site.yml` calls it on a push to `main` touching `www/`,
   `scripts/assemble-web.mjs` or either Pages workflow. It waits (skips) while `package.json` names a
   version that is not the latest published release; that release's deploy publishes it instead.
-- **On demand:** run it from `main`.
+- **On demand:** run it from `main` (site only, unless `release-tag` is set).
 
 Off a release tag, `pages.yml` builds the newest stable `vX.Y.Z` with this commit's `www/` and
-`scripts/assemble-web.mjs` laid over it, and tests it in Chromium, Firefox and WebKit. So the editor
-and docs change only on a release.
+`scripts/assemble-web.mjs` laid over it, and tests it in Chromium, Firefox and WebKit. The relay and
+the editor's hosting (`relay*.js`, `relay.jsonc`, `app.jsonc`, `app.headers`) come from the release
+wherever it has them, and are not deployed. So the editor, docs, relay and the editor's headers change
+only on a release; a push touching `www/cloudflare/` waits for the next one.
 
 **Withdrawal:** run `pages.yml` from `main` with `release-tag` set to the last good tag. Follow
 [the recovery procedure](reliability.md#withdrawal-and-recovery-procedure) first.
