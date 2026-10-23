@@ -219,6 +219,38 @@ class StaysUpright(unittest.TestCase):
         self.assertEqual(len(data['units']), 20)
         self.assertLess(elapsed, 5.0)
 
+    def test_only_direct_dependencies_count_from_a_lock_file(self) -> None:
+        files = {
+            # pip-compile: the bucket SDK and the driver come in through a library; only the library's
+            # own signal (an AlloyDB/Postgres wrapper) and the Gemini wrapper are the code's choices.
+            'assistant/requirements.txt': (
+                'flask==3.1\n    # via -r requirements.in\n'
+                'google-cloud-storage==3.4.0\n    # via langchain-google-alloydb-pg\n'
+                'asyncpg==0.30\n    # via\n    #   google-cloud-alloydb-connector\n'
+                'langchain-google-alloydb-pg==0.13.0\n    # via -r requirements.in\n'
+                'google-genai==1.56.0\n    # via langchain-google-genai\n'
+                'langchain-google-genai==4.1.2\n    # via\n    #   -r requirements.in\n'
+            ),
+            'assistant/app.py': 'from flask import Flask\napp = Flask(__name__)\n',
+            'catalog/go.mod': (
+                'module example.com/catalog\n\ngo 1.22\n\nrequire (\n\tgithub.com/jackc/pgx/v5 v5.7.0\n'
+                '\tgithub.com/redis/go-redis/v9 v9.5.0 // indirect\n)\n'
+            ),
+            'catalog/main.go': 'package main\nfunc main() {}\n',
+            'plain/requirements.txt': 'pymongo>=4\n# a comment\n',
+        }
+        with TempRepo(files) as root:
+            data = survey(root)
+        found = {s['key']: s['evidence'] for s in data['signals']}
+        self.assertNotIn('gcs', found)
+        self.assertNotIn('redis', found)
+        self.assertIn('gemini', found)
+        self.assertEqual(
+            sorted(e for e in found['postgres']),
+            ['assistant (dep langchain-google-alloydb-pg)', 'catalog (dep github.com/jackc/pgx/v5)'],
+        )
+        self.assertIn('mongodb', found)
+
     def test_a_manifest_without_a_name_does_not_backtrack(self) -> None:
         started = time.perf_counter()
         found = scan.parse_k8s('kind: Deployment\nmetadata:\n' + ' \n' * 40 + 'spec: {}\n')

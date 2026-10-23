@@ -15,8 +15,17 @@ plus the stores, queues and topics it owns (each queue counts: it is an element 
 | A system of more than ~8 containers | `context`: people, the system as one `service`, externals | the system's containers (no group needed: the view *is* the system) | components of the 1–3 key containers |
 | Several systems in one monorepo | `context`: one `service` per system, people, shared externals | each system's containers | key components |
 
-Draft Canvas advises splitting a boundary that holds more than 8 elements, and a view past ~15
-elements reads poorly; these thresholds keep you under both. Rooms nest at most three deep.
+The ~8 counts what the system runs and owns; a view's ~15 counts every element in it, people and
+externals drawn again included. Draft Canvas advises splitting a boundary that holds more than 8
+elements, and a view past ~15 elements reads poorly; these thresholds keep you under both. Rooms nest
+at most three deep.
+
+**Which containers get a component view.** The one that holds the main request path's logic always
+does: it orchestrates calls to the others, owns the business rules, or is a codebase with modules of
+its own (an API with controllers, services and repositories). Add up to two more on the same test. A
+container that only forwards a call, wraps one library or serves one endpoint does not — its
+description says enough. Draw its 5–10 parts, the containers and externals it calls again around them,
+and the main request through them as that view's first flow.
 
 A context view earns its place with what surrounds the system: people in different roles, external
 systems. When there is nothing around it but one kind of user, a context view is two boxes and an
@@ -88,18 +97,32 @@ A flow is the presentation: each step plays one relationship with its caption.
   (publish → two consumers), list one branch fully, then the other; the checker accepts a step that
   starts anywhere the story has already been. A relationship is a step at most once per flow, but may
   appear in several flows.
-- **Open with a spotlight:** `{spotlight: [ids], caption}` framing the actors and the entry point,
-  one sentence on what this flow shows.
+- **A call made twice** over one relationship (get the cart, later empty it; quote shipping, later
+  ship): step the relationship at the first call, and light it again at the second with
+  `{spotlight: ["<relationship id>"], caption: "Empties the cart."}`. Don't draw a second
+  relationship for it — one per direction — and don't fold both calls into one caption.
+- **Open with a spotlight:** `{spotlight: [ids], caption}` framing the actors and the entry point —
+  including where the first step starts — one sentence on what this flow shows.
 - **Caption every step** with what happens there in this request, present tense, ≤ 80 characters:
   "Order and outbox row commit in one transaction." Not the relationship's label again.
 - **`highlight`** lights extra elements with a step (the cache consulted, the boundary entered).
-- **Failure paths are variants:** `variantOf` the main flow, its own colour (`rose`, `amber`), only
-  when the code has the path (a retry policy, a DLQ, a compensation, a circuit breaker fallback).
-- **Inside views get their own flow** for their main use case. `layout.primaryFlow` only reaches the
-  top view; if an inside view's main path comes out bent, see the playbook's
+- **Failure paths are variants:** `variantOf` the main flow (in the same view), its own colour
+  (`rose`, `amber`), only for a path the code takes on purpose: a retry policy, a DLQ, a compensation,
+  a circuit-breaker fallback, or a rejection the caller turns into its own outcome (a declined card
+  shown as an error page), or an error deliberately swallowed so the request still succeeds (a
+  confirmation email that fails without failing the order). An error that is only returned up the
+  stack is a sentence in a step's caption, not a variant. Start the variant at the step where the paths
+  part — the same relationship as in the main flow, which is where presenting lands when the presenter
+  switches with `Shift+F` — with an opening spotlight before it; there is no need to repeat everything
+  earlier. End on a `{spotlight: [ids], caption}` of where it lands ("The shopper sees the payment
+  error.") — never step a relationship backwards to show the reply.
+- **Each view's main flow comes first in that view's flows.** The top view's is also
+  `layout.primaryFlow`; an inside view is laid out around its first flow when it is created. Under a
+  context view the main request path is the container view's first flow, and a component view's first
+  flow is the same request one level down. If an inside view still comes out bent, see the playbook's
   [straightening an inside view](mcp-playbook.md#straighten-an-inside-view).
-- At a context level, a short "at a glance" flow (person → system → providers) gives the
-  presentation an opening before the presenter steps inside (`⌘↓`).
+- At a context level, a short "at a glance" flow (person → system → providers) is the top view's
+  `primaryFlow` and gives the presentation an opening before the presenter steps inside (`⌘↓`).
 
 ## Notes and code
 

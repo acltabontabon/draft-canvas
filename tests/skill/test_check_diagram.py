@@ -161,7 +161,7 @@ class Refuses(unittest.TestCase):
         with TempRepo(REPO) as root, patch.object(checker, 'open', return_value=Chunked(b'xxPlaceOrder\n'), create=True):
             r = checker.Report()
             checker.check_evidence(
-                {'evidence': [{'path': 'main.go', 'basis': 'observed', 'symbol': 'PlaceOrder', 'line': 2}]}, 'api', r, str(root)
+                {'evidence': [{'path': 'main.go', 'basis': 'observed', 'symbol': 'PlaceOrder', 'line': 1}]}, 'api', r, str(root)
             )
         self.assertEqual((r.errors, r.warnings), ([], []))
 
@@ -220,6 +220,62 @@ class Warns(unittest.TestCase):
             'has one member',
         ):
             self.assertIn(expected, warnings)
+
+    def test_an_evidence_line_must_point_at_the_code_it_cites(self) -> None:
+        source = '@app.route("/")\ndef handle():\n    pass\n\n\n\n\n\ndef helper():\n    handle()\n'
+        cases = {
+            # A decorator just above the symbol, or a line inside its body, is a fair pointer.
+            1: [],
+            10: [],
+            4: ['line 4 of app.py is blank'],
+        }
+        for line, expected in cases.items():
+            with self.subTest(line=line), TempRepo({'app.py': source}) as root:
+                r = checker.Report()
+                checker.check_evidence({'evidence': [{'path': 'app.py', 'basis': 'observed', 'line': line, 'symbol': 'handle'}]}, 'api', r, str(root))
+                self.assertEqual(len(r.warnings), len(expected), r.warnings)
+                for text in expected:
+                    self.assertIn(text, r.warnings[0])
+        with TempRepo({'app.py': source}) as root:
+            r = checker.Report()
+            checker.check_evidence({'evidence': [{'path': 'app.py', 'basis': 'observed', 'line': 1, 'symbol': 'helper'}]}, 'api', r, str(root))
+        self.assertIn('line 1 comes before "helper" first appears in app.py (line 9)', '\n'.join(r.warnings))
+
+    def test_a_system_of_containers_needs_a_component_view_and_its_main_flow_inside(self) -> None:
+        inner = minimal()
+        inner['nodes'][1:1] = [
+            {'id': 'web', 'type': 'service', 'label': 'Web', 'description': 'Serves pages.', 'technology': 'Go'},
+            {'id': 'worker', 'type': 'worker', 'label': 'Mailer', 'description': 'Sends mail.', 'technology': 'Go'},
+        ]
+        inner['relationships'] += [
+            {'id': 'r3', 'from': 'api', 'to': 'worker', 'label': 'Queues mail'},
+            {'id': 'r4', 'from': 'web', 'to': 'api', 'label': 'Calls'},
+        ]
+        container = report(inner).warnings
+        self.assertTrue(any('3 containers and no component view' in w and '"api"' in w for w in container), container)
+
+        body = {k: inner[k] for k in ('nodes', 'relationships')}
+        context = {
+            'title': 'Shop',
+            'level': 'context',
+            'layout': {'primaryFlow': 'glance'},
+            'nodes': [
+                {'id': 'c.user', 'type': 'person', 'label': 'Shopper'},
+                {'id': 'shop', 'type': 'service', 'label': 'Shop', 'description': 'Sells things.', 'inside': body},
+            ],
+            'relationships': [{'id': 'c.r1', 'from': 'c.user', 'to': 'shop', 'label': 'Buys'}],
+            'flows': [{'id': 'glance', 'title': 'At a glance', 'steps': [{'spotlight': ['shop'], 'caption': 'The shop.'}, {'relationship': 'c.r1', 'caption': 'A purchase.'}]}],
+        }
+        # The inside of a context view's system is its container view without saying so.
+        warnings = '\n'.join(report(context).warnings)
+        self.assertIn('no component view', warnings)
+        self.assertIn('the container view has no flow', warnings)
+
+        next(n for n in body['nodes'] if n['id'] == 'api')['inside'] = {
+            'nodes': [{'id': 'api.http', 'type': 'component', 'label': 'Handlers', 'description': 'Routes.'}],
+            'relationships': [],
+        }
+        self.assertNotIn('no component view', '\n'.join(report(context).warnings))
 
 
 class CommandLine(unittest.TestCase):

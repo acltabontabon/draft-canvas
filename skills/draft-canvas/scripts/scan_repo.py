@@ -247,7 +247,9 @@ KNOWN: dict[str, tuple[str, str, str]] = {
 
 DEP_SIGNALS: list[tuple[str, str]] = [
     (
-        r'pg|postgres|pg-promise|psycopg2?(-binary)?|psycopg(\[.*\])?|asyncpg|org\.postgresql:postgresql|github\.com/lib/pq|github\.com/jackc/pgx(/v\d)?|npgsql.*|@neondatabase/serverless|@vercel/postgres|pgx|tokio-postgres|postgresql',
+        r'pg|postgres|pg-promise|psycopg2?(-binary)?|psycopg(\[.*\])?|asyncpg|org\.postgresql:postgresql|github\.com/lib/pq|github\.com/jackc/pgx(/v\d)?|npgsql.*|@neondatabase/serverless|@vercel/postgres|pgx|tokio-postgres|postgresql'
+        # Wrappers that bring the driver with them: a lock file lists the driver only as transitive.
+        r'|langchain-postgres|langchain-google-alloydb-pg|google-cloud-alloydb-connector(\[.*\])?|pgvector',
         'postgres',
     ),
     (
@@ -334,7 +336,7 @@ DEP_SIGNALS: list[tuple[str, str]] = [
     (r'firebase|firebase-admin|@react-native-firebase/.*', 'firebase'),
     (r'openai|@ai-sdk/openai|langchain-openai|@langchain/openai', 'openai'),
     (r'@anthropic-ai/sdk|anthropic|@ai-sdk/anthropic|langchain-anthropic|@langchain/anthropic', 'anthropic'),
-    (r'@google/generative-ai|@google/genai|google-generativeai|google-genai', 'gemini'),
+    (r'@google/generative-ai|@google/genai|google-generativeai|google-genai|langchain-google-genai|@langchain/google-genai', 'gemini'),
     (r'cohere(-ai)?', 'cohere'),
     (r'analytics-node|@segment/.*|segment-analytics-python|analytics-python', 'segment'),
     (r'mixpanel(-browser)?', 'mixpanel'),
@@ -723,10 +725,25 @@ def parse_manifest(rel: str, text: str) -> dict | None:
         lang = 'Python'
         if '-dev' in base or '-test' in base or 'dev' in base.split('.')[0][12:]:
             return None
-        for raw in text.splitlines():
+        # A pip-compile lock says why each pin is there: `# via -r requirements.in` is a direct
+        # dependency, `# via some-package` a transitive one, which says nothing about what the code calls
+        # (google-cloud-storage pulled in by a vector-store library once drew a bucket nobody used).
+        compiled = re.search(r'^\s*#\s+via\b', text, re.M) is not None
+        pending: str | None = None
+        for raw in text.splitlines() + ['']:
             line = raw.strip()
+            if compiled and pending is not None and line.startswith('#'):
+                if re.search(r'(?:^#\s+via|^#)\s+-[rc]\s', line):
+                    deps.append(pending)
+                    pending = None
+                continue
+            pending = None
             if line and not line.startswith(('#', '-')):
-                deps.append(re.split(r'[<>=!~;\s\[]', line, maxsplit=1)[0])
+                dep = re.split(r'[<>=!~;\s\[]', line, maxsplit=1)[0]
+                if compiled:
+                    pending = dep
+                else:
+                    deps.append(dep)
     elif base == 'Pipfile':
         lang = 'Python'
         deps.extend(re.findall(r'^\s*([A-Za-z0-9_.-]+)\s*=', section(text, 'packages'), re.M))
@@ -741,7 +758,8 @@ def parse_manifest(rel: str, text: str) -> dict | None:
         lang = 'Go'
         m = re.search(r'^module\s+(\S+)', text, re.M)
         name = m.group(1).rsplit('/', 1)[-1] if m else None
-        deps.extend(re.findall(r'^\s*(?:require\s+)?([a-z0-9.\-]+\.[a-z]{2,}/[^\s]+)\s+v', text, re.M))
+        # `// indirect` requirements are other modules' dependencies, not calls this code makes.
+        deps.extend(re.findall(r'^\s*(?:require\s+)?([a-z0-9.\-]+\.[a-z]{2,}/[^\s]+)\s+v[^\s]*\s*$', text, re.M))
     elif base == 'pom.xml':
         lang = 'Java/Kotlin'
         body = re.sub(r'<parent>.*?</parent>', '', text, flags=re.S)

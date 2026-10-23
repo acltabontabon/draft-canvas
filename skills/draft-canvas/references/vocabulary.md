@@ -34,9 +34,11 @@ signals that point to each one.
 | A repository/gateway/client class that adapts to infrastructure | `adapter` | `JPA repository` · `Stripe SDK` |
 | An interface the core defines and adapters implement | `port` | `Java interface` |
 
-Redis is the usual trap: used with `GET/SET/EXPIRE` it is a `cache`; used for BullMQ/Sidekiq/RQ it is
-the broker behind a `queue`; with `XADD`/`XREAD` it is a `stream`. Draw what the code does with it,
-and give it one element per role it plays.
+Redis is the usual trap: used with `GET/SET/EXPIRE` in front of another store it is a `cache`; when it
+is the only place the data lives (a cart, sessions kept nowhere else) it is the store itself — a
+`nosql-database` with `technology: "Redis"`; used for BullMQ/Sidekiq/RQ it is the broker behind a
+`queue`; with `XADD`/`XREAD` it is a `stream`. Draw what the code does with it, and give it one
+element per role it plays.
 
 A local SQLite file in a CLI is still a `sql-database`. An ORM (Prisma, SQLAlchemy, Hibernate) is not
 an element — it is the `technology` of the component that uses it, or of the adapter.

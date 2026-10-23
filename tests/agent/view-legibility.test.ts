@@ -58,5 +58,30 @@ describe('create receipt legibility', () => {
     const inside = legibility.views?.find((v) => v.view.join('/') === 'sys');
     expect(inside?.crossings).toBeGreaterThanOrEqual(6);
     expect(advisories?.some((a) => a.startsWith('Inside sys: The arrangement has'))).toBe(true);
-  });
+    // Without a flow of its own, naming its main path is the advice.
+    expect(advisories?.find((a) => a.startsWith('Inside sys:'))).toContain('name the main path as a flow');
+    // Repairing a tangle this size takes a few seconds, more with other test files running alongside.
+  }, 20_000);
+
+  it('does not ask an inside view for the main flow it was already laid out around', () => {
+    const inner = tangle('t', 4);
+    const { advisories } = receiptOf({
+      requestId: 'v4',
+      title: 'Tangled inside, with its path',
+      layout: { allowDegraded: true },
+      nodes: [
+        { id: 'user', type: 'person', label: 'User' },
+        {
+          id: 'sys',
+          type: 'service',
+          label: 'System',
+          inside: { level: 'container', ...inner, flows: [{ id: 'main', title: 'Main', steps: ['te00', 'te11'] }] },
+        },
+      ],
+      relationships: [{ id: 'uses', from: 'user', to: 'sys', label: 'Uses' }],
+    });
+    const inside = advisories?.find((a) => a.startsWith('Inside sys: The arrangement has'));
+    expect(inside).toBeDefined();
+    expect(inside).not.toContain('name the main path');
+  }, 20_000);
 });

@@ -107,6 +107,26 @@ class Drafts(unittest.TestCase):
         self.assertEqual(request['groups'], [])
         self.assertIn(('tiny', 'postgresql'), {(r['from'], r['to']) for r in request['relationships']})
 
+    def test_a_store_known_only_from_drivers_is_one_per_owner(self) -> None:
+        files = {
+            'cart/package.json': json.dumps({'name': 'cart', 'dependencies': {'express': '4', 'pg': '8'}}),
+            'cart/server.js': "app.get('/', h)\n",
+            'catalog/go.mod': 'module example.com/catalog\n\nrequire github.com/jackc/pgx/v5 v5.7.0\n',
+            'catalog/main.go': 'package main\nfunc main() {}\n',
+            'web/package.json': json.dumps({'name': 'web', 'dependencies': {'express': '4'}}),
+            'web/server.js': "app.get('/', h)\n",
+        }
+        request, _, _ = build(files)
+        view = view_of(request)
+        stores = {n['id']: n for n in view['nodes'] if n['type'] == 'sql-database'}
+        self.assertEqual(sorted(stores), ['cart.postgresql', 'catalog.postgresql'])
+        self.assertEqual(stores['cart.postgresql']['label'], 'Cart Store')
+        self.assertEqual({e['basis'] for n in stores.values() for e in n.get('evidence', [])}, {'inferred'})
+        links = {(r['from'], r['to']) for r in view['relationships']}
+        self.assertTrue({('cart', 'cart.postgresql'), ('catalog', 'catalog.postgresql')} <= links)
+        ids = [r['id'] for r in view['relationships']]
+        self.assertEqual(len(ids), len(set(ids)))
+
     def test_ids_are_unique_and_valid_however_names_collide(self) -> None:
         files = {
             'docker-compose.yml': 'services:\n  orders:\n    build: .\n  Orders:\n    build: .\n  "9lives":\n    build: .\n',

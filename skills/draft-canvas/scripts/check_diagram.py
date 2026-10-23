@@ -183,6 +183,15 @@ LABEL_STYLE = {
     'color': {'neutral', 'teal', 'blue', 'violet', 'amber', 'rose', 'green'},
 }
 LEVELS = {'context', 'container', 'component'}
+# What each object of a create request may carry (the app's `CREATE_FIELDS`, src/agent/fields.ts): the
+# app refuses the whole request over one unknown field, such as evidence on a note.
+REQUEST_FIELDS = {'requestId', 'title', 'project', 'starter', 'level', 'nodes', 'relationships', 'groups', 'flows', 'notes', 'layout', 'open', 'allowDuplicateTitle', 'fallbackType'}
+ROOM_FIELDS = {'level', 'nodes', 'relationships', 'groups', 'flows', 'notes'}
+GROUP_FIELDS = {'id', 'label', 'kind', 'parent'}
+ELEMENT_FIELDS = {'id', 'type', 'label', 'description', 'technology', 'group', 'color', 'attachments', 'inside', 'evidence', 'place'}
+RELATIONSHIP_FIELDS = {'id', 'from', 'to', 'label', 'semantic', 'kind', 'directed', 'async', 'condition', 'color', 'lineStyle', 'response', 'deliveryAttempts', 'attachments', 'evidence', 'route'}
+FLOW_FIELDS = {'id', 'title', 'color', 'variantOf', 'steps'}
+NOTE_FIELDS = {'id', 'text', 'kind', 'code', 'language', 'about', 'near', 'attach', 'style'}
 
 # Hard limits (the app refuses past these) and soft ones (past these it still draws, but reads worse).
 MAX = {
@@ -232,6 +241,7 @@ class View:
         self.path = path
         self.body = body
         self.depth = depth
+        self.level = 'container'
         self.nodes: list[dict] = [n for n in body.get('nodes') or [] if isinstance(n, dict)]
         self.rels: list[dict] = [r for r in body.get('relationships') or [] if isinstance(r, dict)]
         self.groups: list[dict] = [g for g in body.get('groups') or [] if isinstance(g, dict)]
@@ -267,8 +277,11 @@ def check(request: dict, repo: str | None) -> Report:
     views: list[View] = []
     seen_ids: dict[str, str] = {}
 
-    def collect(path: str, body: dict, depth: int):
+    def collect(path: str, body: dict, depth: int, outer: str | None):
         view = View(path, body, depth)
+        # As the app derives it: a view without a level of its own is one step below the view around it.
+        own = body.get('level') if body.get('level') in LEVELS else None
+        view.level = own or (NARROWER[outer] if outer else 'container')
         views.append(view)
         for n in view.nodes:
             inside = n.get('inside')
@@ -276,9 +289,9 @@ def check(request: dict, repo: str | None) -> Report:
                 if depth >= 3:
                     r.error(f'{path} › {n.get("id")}.inside', 'nesting goes at most 3 views down')
                 else:
-                    collect(f'{path} › {n.get("id")}', inside, depth + 1)
+                    collect(f'{path} › {n.get("id")}', inside, depth + 1, view.level)
 
-    collect('top', request, 0)
+    collect('top', request, 0, None)
     for where, value in placeholders(request):
         r.error(where, f'still a placeholder ({value[:60]!r}) — replace it with what the code shows, or remove the item')
 
@@ -311,14 +324,56 @@ def check(request: dict, repo: str | None) -> Report:
     ALL_NODE_IDS.update(i for v in views for i in v.node_ids if isinstance(i, str))
     for view in views:
         check_view(view, r, repo, request, is_top=view.depth == 0, primary=primary)
+    check_depth(views, r)
     return r
+
+
+RUNS = CAN_HAVE_INSIDE - {'external-system', 'component', 'module', 'adapter', 'software-system', 'system'}
+NARROWER = {'context': 'container', 'container': 'component', 'component': 'component'}
+
+
+def check_depth(views: list['View'], r: Report):
+    """C4 depth: a system of several containers gets a component view of the one doing the work."""
+    containers = [(v, n) for v in views if v.level == 'container' for n in v.nodes if n.get('type') in RUNS]
+    if len(containers) < 3 or any(v.level == 'component' for v in views):
+        return
+    calls = {}
+    for v, n in containers:
+        calls[n.get('id')] = sum(1 for rel in v.rels if rel.get('from') == n.get('id'))
+    busiest = ', '.join(f'"{i}"' for i in sorted(calls, key=calls.get, reverse=True)[:2])
+    r.warn(
+        'views',
+        f'{len(containers)} containers and no component view — give the container that holds the main path\'s '
+        f'logic (the busiest callers: {busiest}) an inside view: level "component", its 5–10 parts',
+    )
+    for v in views:
+        if v.depth == 0 and v.level == 'context':
+            inner = [w for w in views if w.depth == 1 and w.level == 'container']
+            if inner and not any(w.flows for w in inner):
+                r.warn(inner[0].path, 'the container view has no flow — the main request path belongs here, first in its flows')
 
 
 ALL_NODE_IDS: set[str] = set()
 
 
+def unknown_fields(item: dict, allowed: set[str], where: str, r: Report):
+    extra = sorted(k for k in item if k not in allowed)
+    if extra:
+        r.error(where, f'unknown field(s) {", ".join(extra)} — the app refuses the whole request over one')
+
+
 def check_view(view: View, r: Report, repo: str | None, request: dict, is_top: bool, primary: str | None):
     p = view.path
+    unknown_fields(view.body, REQUEST_FIELDS if is_top else ROOM_FIELDS, p, r)
+    for kind, items, allowed in (
+        ('element', view.nodes, ELEMENT_FIELDS),
+        ('relationship', view.rels, RELATIONSHIP_FIELDS),
+        ('group', view.groups, GROUP_FIELDS),
+        ('flow', view.flows, FLOW_FIELDS),
+        ('note', view.notes, NOTE_FIELDS),
+    ):
+        for item in items:
+            unknown_fields(item, allowed, f'{p} {kind} {item.get("id")}', r)
     level = view.body.get('level')
     if not is_top and level is not None and level not in LEVELS:
         r.error(f'{p}.level', f'"{level}" is not one of {sorted(LEVELS)}')
@@ -703,22 +758,38 @@ def check_evidence(item: dict, where: str, r: Report, repo: str | None):
         # `Orders.place`, `orders::place`, `place()`: the last name is what the file must contain.
         name = re.split(r'[.:#/\\]+', re.sub(r'\(.*\)$', '', symbol.strip()))[-1].encode() if symbol else b''
         if os.path.isfile(source) and (line is not None or name):
-            lines, found, carry = 1, False, b''
+            # In bounded chunks (a minified bundle is one enormous line), keeping per line only what the
+            # checks need: whether the cited line has anything on it, and where the symbol shows up.
+            lines, first, before, text, tail, blank = 1, None, False, False, b'', False
+            keep = len(name) - 1 if len(name) > 1 else 0
             try:
                 with open(source, 'rb') as fh:
                     while chunk := fh.read(65536):
-                        lines += chunk.count(b'\n')
-                        if name:
-                            found = found or name in carry + chunk
-                            carry = (carry + chunk)[-len(name) + 1 :] if len(name) > 1 else b''
-                        if line is None and found:
+                        for i, piece in enumerate(chunk.split(b'\n')):
+                            if i:
+                                blank = blank or (lines == line and not text)
+                                lines, text, tail = lines + 1, False, b''
+                            text = text or bool(piece.strip())
+                            if name and first is None and name in tail + piece:
+                                first = lines
+                            if name and not before and line is not None and lines <= line and name in tail + piece:
+                                before = True
+                            tail = (tail + piece)[-keep:] if keep else b''
+                        if line is None and first is not None:
                             break
+                    blank = blank or (lines == line and not text)
             except OSError:
                 continue
             if line is not None and line > lines:
                 r.error(where, f'evidence line {line} is past the end of {path} ({lines} lines)')
-            if name and not found:
+            elif line is not None and blank:
+                r.warn(where, f'evidence line {line} of {path} is blank — point at the code itself')
+            if name and not first:
                 r.warn(where, f'evidence symbol "{symbol}" does not appear in {path} — cite a name you saw there')
+            elif name and line is not None and line <= lines and not before and first - line > 3:
+                # A line inside the symbol's body is fine, and so is its decorator or doc comment just above;
+                # a line well above its first mention is a wrong pointer.
+                r.warn(where, f'evidence line {line} comes before "{symbol}" first appears in {path} (line {first}) — check the line')
 
 
 def load_pairings() -> dict:

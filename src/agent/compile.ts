@@ -82,7 +82,9 @@ function composeWithin(raw: unknown, diagramId: string, report: Report): Compose
   // can act on in this same turn (see `advice.ts`). An inside view's advice says which view it is about.
   const advice = [
     ...(spec.starter ? [] : adviceFor(spec, legibility, used.primaryFlow)),
-    ...(spec.starter ? [] : insides.flatMap(({ path, room, legibility: l }) => adviceFor(room, l).map((a) => `Inside ${path.join(' ▸ ')}: ${a}`))),
+    // Judged against the inside view's own main path, which it was laid out around: advice to name one
+    // when it already leads the view sent agents looking for a primaryFlow they had already given.
+    ...(spec.starter ? [] : insides.flatMap(({ path, room, legibility: l }) => adviceFor(room, l, mainFlowOf(room)?.id).map((a) => `Inside ${path.join(' ▸ ')}: ${a}`))),
     ...levelAdvisories(document.nodes, document.level),
     ...placed.advisories,
   ];
@@ -106,13 +108,18 @@ function composeWithin(raw: unknown, diagramId: string, report: Report): Compose
   };
 }
 
+/** An inside view's main path: its first flow that is not a variant and walks a relationship. */
+function mainFlowOf(room: RoomSpec) {
+  return room.flows.find((flow) => !flow.variantOf && flow.steps.some((step) => step.relationship));
+}
+
 /** Each inside view has its own main path; root viewport and flow ids do not describe it. */
 function planInsideViews(room: RoomSpec, layout: LayoutSpec, ctx: ReturnType<typeof measureContext>, rooms: Map<RoomSpec, PlacedRoom>): void {
   for (const node of room.nodes) {
     if (!node.inside) continue;
     const inner = node.inside;
     const { primaryFlow: _outerFlow, viewport: _outerViewport, ...shared } = layout;
-    const primary = inner.flows.find((flow) => !flow.variantOf && flow.steps.some((step) => step.relationship));
+    const primary = mainFlowOf(inner);
     const local: LayoutSpec = { ...shared, ...(primary ? { primaryFlow: primary.id } : {}) };
     planInsideViews(inner, local, ctx, rooms);
     const { candidate } = chooseArrangement(inner, local, ctx, (choice) => placeRoom(inner, choice, ctx, undefined, rooms), silent, false);

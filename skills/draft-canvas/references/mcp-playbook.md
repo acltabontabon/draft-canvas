@@ -54,8 +54,9 @@ afterwards, so get it right before the first `create_diagram`.
 
 ### Straighten an inside view
 
-`layout.primaryFlow` reaches only the top view. When an inside view's main path comes out bent, try
-the fix as a preview, look, and apply only if it is better:
+`layout.primaryFlow` names the top view's main path; a create lays each inside view out around its
+first flow. When an inside view's main path still comes out bent, or an update bent it, try the fix as
+a preview, look, and apply only if it is better:
 
 ```json
 preview_diagram({ "diagramId": "…", "expectedRevision": "…", "view": { "inside": ["storefront"] },
