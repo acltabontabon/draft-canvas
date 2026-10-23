@@ -871,9 +871,11 @@ async fn a_frame_over_the_limit_or_a_binary_one_closes_the_guest() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_guest_that_stops_answering_pings_is_dropped() {
+    // A window the answering guest's reader can't miss on a loaded runner: at 300ms a stalled task on
+    // CI's macOS runner let it go quiet long enough to be dropped too.
     let limits = Limits {
-        ping_every: Duration::from_millis(50),
-        pong_timeout: Duration::from_millis(300),
+        ping_every: Duration::from_millis(100),
+        pong_timeout: Duration::from_millis(1500),
         ..Limits::default()
     };
     let (events, relay, port) = started(limits).await;
@@ -891,7 +893,7 @@ async fn a_guest_that_stops_answering_pings_is_dropped() {
     let _asleep = guest(port).await;
     let asleep_id = events.opened(1).await;
     assert_eq!(events.closed(&asleep_id).await, "timeout");
-    tokio::time::sleep(Duration::from_millis(400)).await;
+    tokio::time::sleep(Duration::from_millis(500)).await;
     assert!(
         !events.all().iter().any(
             |e| matches!(e, HostEvent::CollabLanClose { conn_id, .. } if *conn_id == awake_id)
