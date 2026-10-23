@@ -1,11 +1,14 @@
 import { MAX_MESSAGE_BYTES } from './chunk';
+import { hmacSha256Hex } from './sha256';
 import type { CollabTransport, SendPriority, TransportState } from './types';
 
 /**
  * A collaborator's connection to the desktop app's LAN relay (`src-tauri/src/collab/`): one browser
- * WebSocket to `/collab` on the address the page itself was served from, offering two subprotocols,
- * `draft-canvas.collab.v1` and the session's token. The relay refuses the upgrade without both, so a
- * wrong or stale token never opens — the browser only sees the connection fail.
+ * WebSocket to `/collab` on the address the page itself was served from, offering the subprotocol
+ * `draft-canvas.collab.v1`. The token is never sent — the network is plain, and anyone on it could
+ * read it. The relay sends a challenge, a nonce never used again; this answers with the token's HMAC
+ * of it (`PROOF_CONTEXT`), and only once the relay says `ready` is the connection open. A wrong or
+ * stale token is closed `unauthorized`; no room, `full`.
  *
  * Each application message is one text frame; the relay never sends binary, and anything that is
  * not text is ignored. Messages sent while the socket is still connecting wait for it to open.
@@ -21,6 +24,8 @@ import type { CollabTransport, SendPriority, TransportState } from './types';
  */
 
 export const LAN_PROTOCOL = 'draft-canvas.collab.v1';
+/** What the token's proof is an HMAC of, before the relay's nonce (`proof_for` in the shell). */
+export const PROOF_CONTEXT = 'draft-canvas lan v1|';
 export const LAN_SOCKET_PATH = '/collab';
 /** A LAN answers in milliseconds; a machine that has gone to sleep never answers at all. */
 export const SOCKET_CONNECT_TIMEOUT_MS = 10_000;
@@ -112,10 +117,15 @@ class SocketTransport implements CollabTransport {
   private connectTimer: unknown = null;
   private drainTimer: unknown = null;
   private degradeTimer: unknown = null;
+  /** Kept only to answer the relay's challenge; never sent. */
+  private readonly token: string;
+  /** Opened, and answering the challenge: not yet in, so nothing else is sent or heard. */
+  private proving = false;
 
   constructor(url: string, token: string, options: SocketTransportOptions) {
     this.clock = options.clock ?? realClock;
-    this.socket = (options.socket ?? browserSocket)(url, [LAN_PROTOCOL, token]);
+    this.token = token;
+    this.socket = (options.socket ?? browserSocket)(url, [LAN_PROTOCOL]);
     const listen = { signal: this.lifetime.signal };
     this.socket.addEventListener('open', () => this.onOpen(), listen);
     this.socket.addEventListener('message', (event) => this.onFrame(event as MessageEvent), listen);
@@ -189,10 +199,30 @@ class SocketTransport implements CollabTransport {
 
   private onOpen(): void {
     if (this.current === 'closed') return;
-    if (this.connectTimer !== null) this.clock.clearTimeout(this.connectTimer);
-    this.connectTimer = null;
     // The relay answers with exactly the protocol it was offered; anything else isn't the relay.
     if (this.socket.protocol !== LAN_PROTOCOL) return this.close('protocol');
+    // In only once the challenge is answered: the connect timeout still runs meanwhile.
+    this.proving = true;
+  }
+
+  /** The relay's challenge, then its `ready`: anything else before them isn't the relay. */
+  private prove(text: string): void {
+    let message: unknown;
+    try {
+      message = JSON.parse(text);
+    } catch {
+      return this.close('protocol');
+    }
+    const t = typeof message === 'object' && message !== null ? (message as { t?: unknown }).t : undefined;
+    const nonce = t === 'challenge' ? (message as { nonce?: unknown }).nonce : undefined;
+    if (typeof nonce === 'string' && /^[0-9a-f]{32}$/.test(nonce)) {
+      this.socket.send(JSON.stringify({ t: 'proof', mac: hmacSha256Hex(this.token, PROOF_CONTEXT + nonce) }));
+      return;
+    }
+    if (t !== 'ready') return this.close('protocol');
+    this.proving = false;
+    if (this.connectTimer !== null) this.clock.clearTimeout(this.connectTimer);
+    this.connectTimer = null;
     this.everOpen = true;
     this.setState('open');
     this.pump();
@@ -200,6 +230,8 @@ class SocketTransport implements CollabTransport {
 
   private onFrame(event: MessageEvent): void {
     if (this.current === 'closed' || typeof event.data !== 'string') return;
+    if (this.proving) return this.prove(event.data);
+    if (!this.everOpen) return this.close('protocol');
     for (const listener of [...this.messageListeners]) {
       try {
         listener(event.data);
@@ -212,6 +244,7 @@ class SocketTransport implements CollabTransport {
   private onClose(event: CloseEvent): void {
     if (this.current === 'closed') return;
     this.release();
+    // A close while proving names why (`unauthorized`, `full`); one with no reason before then never got through.
     const reason = event.reason || (this.everOpen ? (event.code === 1009 ? 'too-large' : 'connection-lost') : 'unreachable');
     this.finish(reason);
   }

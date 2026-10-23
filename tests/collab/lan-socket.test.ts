@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MAX_MESSAGE_BYTES } from '../../src/collab/protocol';
 import {
   LAN_PROTOCOL,
+  PROOF_CONTEXT,
   SOCKET_CONNECT_TIMEOUT_MS,
   SOCKET_DEGRADE_MS,
   SOCKET_HIGH_WATERMARK,
@@ -11,9 +12,11 @@ import {
   openSocketTransport,
   type SocketLike,
 } from '../../src/collab/transport/socket';
+import { hmacSha256Hex } from '../../src/collab/transport/sha256';
 import type { TransportState } from '../../src/collab/transport/types';
 
 const TOKEN = '0123456789abcdef0123456789abcdef';
+const NONCE = '00112233445566778899aabbccddeeff';
 
 /** Just enough of a browser WebSocket: the test plays the relay's side. */
 class FakeSocket extends EventTarget implements SocketLike {
@@ -37,8 +40,17 @@ class FakeSocket extends EventTarget implements SocketLike {
     this.closedWith = { code, reason };
     this.readyState = 3;
   }
-  /** The relay accepts the upgrade. */
+  /** The relay accepts the upgrade, challenges, checks the answer and lets the guest in. */
   accept(protocol = LAN_PROTOCOL): void {
+    this.upgrade(protocol);
+    if (protocol !== LAN_PROTOCOL) return;
+    this.frame(JSON.stringify({ t: 'challenge', nonce: NONCE }));
+    const proof = JSON.parse(this.sent.shift()!) as { t: string; mac: string };
+    expect(proof).toEqual({ t: 'proof', mac: hmacSha256Hex(TOKEN, PROOF_CONTEXT + NONCE) });
+    this.frame(JSON.stringify({ t: 'ready' }));
+  }
+  /** Only the upgrade: the challenge is the test's to send. */
+  upgrade(protocol = LAN_PROTOCOL): void {
     this.readyState = 1;
     this.protocol = protocol;
     this.dispatchEvent(new Event('open'));
@@ -79,13 +91,39 @@ afterEach(() => {
 });
 
 describe('LAN socket transport', () => {
-  it('connects to the page’s own relay, offering the protocol and the token', () => {
+  it('connects to the page’s own relay offering only the protocol — never the token, which anyone on the network could read', () => {
     expect(lanSocketUrl({ protocol: 'http:', host: '192.168.1.20:49152' })).toBe('ws://192.168.1.20:49152/collab');
     expect(lanSocketUrl({ protocol: 'https:', host: '[fd00::5]:8443' })).toBe('wss://[fd00::5]:8443/collab');
     const { socket, transport } = open();
-    expect(socket.protocols).toEqual([LAN_PROTOCOL, TOKEN]);
+    expect(socket.protocols).toEqual([LAN_PROTOCOL]);
     expect(transport.kind).toBe('socket');
     expect(transport.state).toBe('connecting');
+  });
+
+  it('proves the token for the relay’s nonce, and is open only once the relay says it is in', () => {
+    const { transport, socket, states } = open();
+    transport.send('hello', 'commit');
+    socket.upgrade();
+    // Upgraded, but not in: nothing of the session's is sent while the challenge is answered.
+    expect(transport.state).toBe('connecting');
+    socket.frame(JSON.stringify({ t: 'challenge', nonce: NONCE }));
+    expect(socket.sent).toEqual([JSON.stringify({ t: 'proof', mac: hmacSha256Hex(TOKEN, PROOF_CONTEXT + NONCE) })]);
+    expect(socket.sent.join('')).not.toContain(TOKEN);
+    socket.frame(JSON.stringify({ t: 'ready' }));
+    expect(states).toEqual([['open', undefined]]);
+    expect(socket.sent.at(-1)).toBe('hello');
+  });
+
+  it('reports the relay’s refusal of a wrong token, and a relay that skips the challenge as not the relay', () => {
+    const refused = open();
+    refused.socket.upgrade();
+    refused.socket.frame(JSON.stringify({ t: 'challenge', nonce: NONCE }));
+    refused.socket.drop(1008, 'unauthorized');
+    expect(refused.states).toEqual([['closed', 'unauthorized']]);
+    const impostor = open();
+    impostor.socket.upgrade();
+    impostor.socket.frame(JSON.stringify({ t: 'welcome' }));
+    expect(impostor.states).toEqual([['closed', 'protocol']]);
   });
 
   it('holds commits until it opens, drops presence meanwhile, then sends in order', () => {

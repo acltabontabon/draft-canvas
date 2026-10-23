@@ -25,7 +25,7 @@ function render(document: DraftDocument, format: SequenceFormat): string {
   return format === 'mermaid' ? toMermaid(model) : toPlantUml(model);
 }
 
-function playableCount(document: DraftDocument): number {
+export function playableCount(document: DraftDocument): number {
   return document.flows.filter((flow) => flowIsPlayable(document, flow)).length;
 }
 

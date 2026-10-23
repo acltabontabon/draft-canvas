@@ -81,7 +81,7 @@ Only session members receive the diagram, and only the owner's copy is saved.
 | Relay (`relay.draftcanvas.dev`) | Encrypted join messages, a room id, IP addresses. Never the diagram. |
 | **Only my network** | No STUN and no relay |
 | Invite links, reply codes | Network addresses after the `#`; one use, 30 minutes |
-| Desktop local network link | Plain HTTP with a 128-bit token. **Not encrypted.** |
+| Desktop local network link | Plain HTTP; the 128-bit token is proved, never sent. **Not encrypted.** |
 | Presence | Names, pointers, selections; never stored |
 
 - The relay's key exists only in the link's `#`. It stores only a hash of the owner's secret, until 12 hours after the owner was last connected.

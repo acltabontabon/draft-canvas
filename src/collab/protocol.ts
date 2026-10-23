@@ -126,8 +126,6 @@ export interface HelloMessage {
   /** The newest document schema this copy reads (`CURRENT_VERSION`). */
   doc: number;
   name: string;
-  /** A desktop LAN session's secret. WebRTC sessions are authenticated by the connection itself. */
-  token?: string;
   /**
    * Present when reconnecting: who this was, and the last commit it applied, with the secret it was
    * given to prove it — as `proof` (`resumeProof`) over a connection with a `binding`, and as the
@@ -320,10 +318,6 @@ export function readGuestMessage(value: unknown): GuestMessage | null {
       const name = readName(value.name);
       if (!isInt(value.v, 1) || typeof value.app !== 'string' || value.app.length > 40 || !isInt(value.doc, 1) || !name) return null;
       const hello: HelloMessage = { t: 'hello', v: value.v, app: value.app, doc: value.doc, name };
-      if (value.token !== undefined) {
-        if (typeof value.token !== 'string' || value.token.length > 128) return null;
-        hello.token = value.token;
-      }
       if (value.resume !== undefined) {
         if (!isRecord(value.resume)) return null;
         const peer = readId(value.resume.peer);

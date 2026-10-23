@@ -36,6 +36,8 @@ const MAX_HEADER_BYTES: usize = 64 * 1024;
 /// another connection. An upgrade to a WebSocket finishes the connection's own future, so a socket is
 /// never cut by this.
 const HTTP_CONNECTION_LIFETIME: Duration = Duration::from_secs(30);
+/// How long a newcomer waits for the connection closed to make room for it to let go of its place.
+const EVICTION_WAIT: Duration = Duration::from_millis(200);
 /// After a failed accept (out of file descriptors, say), a pause instead of a hot loop.
 const ACCEPT_BACKOFF: Duration = Duration::from_millis(100);
 
@@ -66,19 +68,42 @@ pub(super) async fn serve(listener: TcpListener, shared: Arc<Shared>) {
                 if Arc::strong_count(held) > MAX_HTTP_CONNECTIONS_PER_PEER {
                     continue;
                 }
-                let Ok(permit) = shared.http_connections.clone().try_acquire_owned() else {
-                    continue;
+                let permit = match shared.http_connections.clone().try_acquire_owned() {
+                    Ok(permit) => permit,
+                    // Full: room is made by closing the oldest of whoever holds the most, never
+                    // by turning away someone who holds fewer.
+                    Err(_) if shared.evict_for(peer.ip()) => {
+                        match tokio::time::timeout(EVICTION_WAIT, shared.http_connections.clone().acquire_owned()).await {
+                            Ok(Ok(permit)) => permit,
+                            _ => continue,
+                        }
+                    }
+                    Err(_) => continue,
                 };
                 let held = held.clone();
                 // Who is asking, for the guest-places-per-address limit at the upgrade.
                 let router = router.clone().layer(Extension(Peer(peer.ip())));
-                connections.spawn(async move {
+                let id = shared.next_http_id();
+                let address = peer.ip();
+                let tracked = shared.clone();
+                let handle = connections.spawn(async move {
                     let _held = held;
                     let _permit = permit;
+                    let _tracked = Untrack(tracked, address, id);
                     serve_connection(stream, router).await;
                 });
+                shared.track_http(address, id, handle);
             }
         }
+    }
+}
+
+/// Takes a connection off `Shared::http_open` when it ends, however it ends (closed, aborted).
+struct Untrack(Arc<Shared>, IpAddr, u64);
+
+impl Drop for Untrack {
+    fn drop(&mut self) {
+        self.0.untrack_http(self.1, self.2);
     }
 }
 
@@ -199,8 +224,7 @@ async fn file(
     secure(response, host)
 }
 
-/// The subprotocols a guest offered, `Sec-WebSocket-Protocol: draft-canvas.collab.v1, <token>`
-/// (one header or several), trimmed.
+/// The subprotocols a guest offered (one header or several), trimmed.
 fn offered_protocols(headers: &HeaderMap) -> impl Iterator<Item = &[u8]> {
     headers
         .get_all(header::SEC_WEBSOCKET_PROTOCOL)
@@ -209,16 +233,11 @@ fn offered_protocols(headers: &HeaderMap) -> impl Iterator<Item = &[u8]> {
         .map(<[u8]>::trim_ascii)
 }
 
-/// Whether the guest asked for this protocol and offered this session's token. Every offered value
-/// is compared in full, so how far a wrong guess got can't be timed.
-fn authorized(headers: &HeaderMap, shared: &Shared) -> bool {
-    let mut protocol = false;
-    let mut token = false;
-    for offered in offered_protocols(headers) {
-        protocol |= offered == PROTOCOL.as_bytes();
-        token |= shared.token_is(offered);
-    }
-    protocol && token
+/// Whether the guest asked for this protocol. The session's token is not offered here: a header
+/// crosses the network in clear, and anyone on it could read the token off a guest's upgrade. The
+/// guest proves it after the upgrade instead, answering a challenge (`socket::run`).
+fn offers_protocol(headers: &HeaderMap) -> bool {
+    offered_protocols(headers).any(|offered| offered == PROTOCOL.as_bytes())
 }
 
 /// The address a connection came from.
@@ -226,7 +245,8 @@ fn authorized(headers: &HeaderMap, shared: &Shared) -> bool {
 struct Peer(IpAddr);
 
 /// Checked in order, cheapest first, and all before the upgrade is accepted: the server's own
-/// name, a page this server served, the session's token, a well-formed upgrade, a free place.
+/// name, a page this server served, the protocol, a well-formed upgrade, a place to answer the
+/// challenge in. The token, and a guest place, come after (`socket::run`).
 async fn upgrade(
     State(shared): State<Arc<Shared>>,
     Extension(Peer(address)): Extension<Peer>,
@@ -244,9 +264,9 @@ async fn upgrade(
     if !same_origin {
         return plain(StatusCode::FORBIDDEN, "Forbidden", host);
     }
-    // Read before the token is checked: a token change in between leaves this request in the old session.
+    // Read before the token is proved: a token change in between leaves this request in the old session.
     let session = shared.session();
-    if !authorized(&headers, &shared) {
+    if !offers_protocol(&headers) {
         return plain(StatusCode::UNAUTHORIZED, "Unauthorized", host);
     }
     let upgrade = match upgrade {
@@ -256,16 +276,16 @@ async fn upgrade(
     if shared.stopping() {
         return plain(StatusCode::SERVICE_UNAVAILABLE, "Stopping", host);
     }
-    let Some(slot) = shared.reserve(session, address) else {
+    let Some(proving) = shared.reserve_proving(address) else {
         return plain(StatusCode::SERVICE_UNAVAILABLE, "Too many guests", host);
     };
-    // A failed upgrade drops the callback, and the slot with it. Both limits bound only what the
+    // A failed upgrade drops the callback, and the place with it. Both limits bound only what the
     // guest sends, checked as each frame's header arrives and as fragments add up, before the rest
     // is buffered. The page's sends to the guest are bounded by `MAX_TEXT` in `Relay::send` instead.
     let response = upgrade
         .protocols([PROTOCOL])
         .max_message_size(MAX_GUEST_TEXT)
         .max_frame_size(MAX_GUEST_TEXT)
-        .on_upgrade(move |ws| socket::run(ws, slot));
+        .on_upgrade(move |ws| socket::run(ws, shared, proving, session, address));
     secure(response, host)
 }

@@ -53,8 +53,6 @@ export interface GuestEnvironment {
   setAccess(access: Role): void;
   appVersion: string;
   name: string;
-  /** A desktop LAN session's secret. */
-  token?: string;
 }
 
 export type GuestStatus = 'joining' | 'live' | 'reconnecting' | 'ended';
@@ -204,9 +202,6 @@ export class GuestSession {
       app: this.env.appVersion,
       doc: CURRENT_VERSION,
       name: this.env.name,
-      // The local network secret is for the local network server: never handed to a peer connection,
-      // which may be one an invite from anyone opened.
-      ...(this.env.token === undefined || transport.kind === 'webrtc' ? {} : { token: this.env.token }),
     };
     this.ownerProof = null;
     this.expectProof = false;

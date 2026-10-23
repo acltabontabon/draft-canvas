@@ -80,7 +80,11 @@ size-capped before parsing, prototype keys refused, and validated like an import
   owner lets them in, and the key changes with every welcome. A claim on a place still in use is
   shown as someone new.
 - **Direct invites** are single-use, expire after 30 minutes and pin the owner's DTLS fingerprint.
-- **Desktop local network link.** A 128-bit token, compared in constant time. Cross-origin requests,
+- **Desktop local network link.** A 128-bit token that never crosses the network: it stays in the
+  link's `#`, and the guest's page answers a fresh challenge with an HMAC of it before it gets a
+  place. Someone reading the Wi-Fi learns nothing that lets them join. Connections still proving
+  are few and short-lived (8 at once, 2 per address, 5 seconds), and when every page connection is
+  in use, the oldest of whoever holds the most is closed to make room. Cross-origin requests,
   non-IP `Host` headers and public addresses are refused; 100.64.0.0/10 counts as local (VPNs).
 - **Roles** are enforced by the owner; a viewer's changes are refused.
 - **Limits.** 10 collaborators; 4 MB per collaborator message, 16 MB from the owner; per-connection
@@ -94,5 +98,9 @@ size-capped before parsing, prototype keys refused, and validated like an import
 - **Connection candidates** naming loopback, unspecified, multicast or 169.254.0.0/16 addresses, or
   any DNS name, are dropped from invites and from ICE restarts.
 - **Not protected.** An unused invite works for whoever holds it until it expires, so send invites
-  like passwords. The local network link is plain HTTP. Editors can change anything they can see; the
-  owner can take one person's edits back with **Undo changes**.
+  like passwords. The local network link is plain HTTP: someone who can change traffic on the network
+  can change the page a guest loads. Editors can change anything they can see; the owner can take one
+  person's edits back with **Undo changes**.
+- **Agents.** While you host, the agent tools that read a diagram mark what collaborators wrote
+  (`fromCollaborators`), so your agent treats it as untrusted data rather than instructions. A guest's
+  copy is never visible to agents.

@@ -20,7 +20,7 @@ pub use assets::{AssetSource, Bundled};
 use crate::errors::{AppError, ErrorKind};
 use crate::state::{AppState, HostEvent};
 use crate::util::lock;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -28,7 +28,7 @@ use std::time::Duration;
 use subtle::ConstantTimeEq;
 use tauri::{AppHandle, Manager};
 use tokio::sync::{mpsc, watch, Notify, Semaphore};
-use tokio::task::JoinHandle;
+use tokio::task::{AbortHandle, JoinHandle};
 
 /// The subprotocol a guest asks for, beside its token; the one echoed back.
 pub const PROTOCOL: &str = "draft-canvas.collab.v1";
@@ -36,6 +36,12 @@ pub const PROTOCOL: &str = "draft-canvas.collab.v1";
 pub const SOCKET_PATH: &str = "/collab";
 /// Guests at once. The 11th is turned away until someone leaves.
 pub const MAX_CONNECTIONS: usize = 10;
+/// Connections still answering the challenge (`socket::run`): no guest place yet, a few at once, and
+/// fewer from one address — so connections that can't answer can't keep out those that can.
+pub const MAX_PROVING: usize = 8;
+pub const MAX_PROVING_PER_ADDRESS: usize = 2;
+/// What a guest's answer to the challenge is an HMAC of, after the nonce (`proof_for`).
+pub const PROOF_CONTEXT: &str = "draft-canvas lan v1|";
 /// ULA addresses in one /64 can all belong to one machine; changing addresses must not take every
 /// guest place. Leave room for several people on the same subnet, and places for another subnet.
 const MAX_GUESTS_PER_ULA_PREFIX: usize = 6;
@@ -209,6 +215,11 @@ pub(crate) struct Shared {
     by_address: Mutex<HashMap<IpAddr, usize>>,
     /// Both listeners draw from this pool; IPv6 must not double the plain HTTP allowance.
     http_connections: Arc<Semaphore>,
+    /// Connections answering the challenge, by address (`MAX_PROVING`).
+    proving: Mutex<HashMap<IpAddr, usize>>,
+    /// Plain HTTP connections open, by address, oldest first: what `evict_for` chooses from.
+    http_open: Mutex<HashMap<IpAddr, VecDeque<(u64, AbortHandle)>>>,
+    http_ids: AtomicU64,
     pub(crate) shutdown: watch::Sender<bool>,
     drained: Notify,
 }
@@ -223,6 +234,79 @@ impl Shared {
     /// The token, as the page wrote it (lowercase hex, checked by `parse_token`).
     fn token_text(&self) -> String {
         String::from_utf8_lossy(&lock(&self.token)[..]).into_owned()
+    }
+
+    /// Whether `mac` (hex) is this session's answer to `nonce`: `proof_for` with the token, compared in
+    /// constant time. The token itself never crosses the network — only a proof of it, for a nonce
+    /// that is never asked again.
+    pub(crate) fn proof_matches(&self, nonce: &str, mac: &str) -> bool {
+        let expected = hex(&proof_for(&lock(&self.token)[..], nonce));
+        mac.len() == expected.len() && bool::from(mac.as_bytes().ct_eq(expected.as_bytes()))
+    }
+
+    /// An id for a plain HTTP connection about to be served (`track_http`).
+    pub(crate) fn next_http_id(&self) -> u64 {
+        self.http_ids.fetch_add(1, Ordering::SeqCst)
+    }
+
+    /// A connection that ends between its spawn and this call untracks itself first, so its entry
+    /// would stay: finished ones are dropped here and before every eviction, never counted or chosen.
+    pub(crate) fn track_http(&self, address: IpAddr, id: u64, handle: AbortHandle) {
+        let mut open = lock(&self.http_open);
+        let held = open.entry(address).or_default();
+        held.retain(|(_, handle)| !handle.is_finished());
+        if !handle.is_finished() {
+            held.push_back((id, handle));
+        }
+        if held.is_empty() {
+            open.remove(&address);
+        }
+    }
+
+    pub(crate) fn untrack_http(&self, address: IpAddr, id: u64) {
+        let mut open = lock(&self.http_open);
+        if let Some(held) = open.get_mut(&address) {
+            held.retain(|(held, _)| *held != id);
+            if held.is_empty() {
+                open.remove(&address);
+            }
+        }
+    }
+
+    /// The pool of plain HTTP connections is full and `address` wants one: the oldest connection of
+    /// whoever holds the most is closed, if they hold more than `address` would — so a few machines
+    /// holding connections open can't keep everyone else from loading the page. Whether one was.
+    pub(crate) fn evict_for(&self, address: IpAddr) -> bool {
+        let mut open = lock(&self.http_open);
+        open.retain(|_, held| {
+            held.retain(|(_, handle)| !handle.is_finished());
+            !held.is_empty()
+        });
+        let own = open.get(&address).map_or(0, VecDeque::len);
+        let Some((&heaviest, held)) = open.iter_mut().max_by_key(|(_, held)| held.len()) else {
+            return false;
+        };
+        if held.len() <= own + 1 {
+            return false;
+        }
+        if let Some((_, handle)) = held.pop_front() {
+            handle.abort();
+        }
+        if held.is_empty() {
+            open.remove(&heaviest);
+        }
+        true
+    }
+
+    /// A place among the connections still answering the challenge, or `None` when there is none.
+    pub(crate) fn reserve_proving(self: &Arc<Self>, address: IpAddr) -> Option<Proving> {
+        let mut proving = lock(&self.proving);
+        let held = proving.get(&address).copied().unwrap_or(0);
+        if held >= MAX_PROVING_PER_ADDRESS || proving.values().sum::<usize>() >= MAX_PROVING {
+            return None;
+        }
+        proving.insert(address, held + 1);
+        Some(Proving(self.clone(), address))
     }
 
     /// The session a request is authorized in: read before its token is checked.
@@ -320,14 +404,45 @@ impl Shared {
     }
 }
 
+/// A place among the connections answering the challenge, given back once they have (or haven't).
+pub(crate) struct Proving(Arc<Shared>, IpAddr);
+
+impl Drop for Proving {
+    fn drop(&mut self) {
+        let mut proving = lock(&self.0.proving);
+        if let Some(held) = proving.get_mut(&self.1) {
+            *held -= 1;
+            if *held == 0 {
+                proving.remove(&self.1);
+            }
+        }
+    }
+}
+
+/// HMAC-SHA-256 of `PROOF_CONTEXT` and `nonce`, keyed with the session token (`sha2` alone: the
+/// construction is four lines, and the page computes the same in `transport/sha256.ts`).
+pub(crate) fn proof_for(token: &[u8], nonce: &str) -> [u8; 32] {
+    use sha2::{Digest, Sha256};
+    let mut block = [0u8; 64];
+    block[..token.len().min(64)].copy_from_slice(&token[..token.len().min(64)]);
+    let mut inner = Sha256::new();
+    inner.update(block.map(|b| b ^ 0x36));
+    inner.update(PROOF_CONTEXT.as_bytes());
+    inner.update(nonce.as_bytes());
+    let mut outer = Sha256::new();
+    outer.update(block.map(|b| b ^ 0x5c));
+    outer.update(inner.finalize());
+    outer.finalize().into()
+}
+
+pub(crate) fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
 /// A place among the `MAX_CONNECTIONS`, given back when the connection ends or its upgrade fails.
 pub(crate) struct Slot(Arc<Shared>, u64, IpAddr);
 
 impl Slot {
-    pub(crate) fn shared(&self) -> &Arc<Shared> {
-        &self.0
-    }
-
     /// The session the connection was authorized in.
     pub(crate) fn session(&self) -> u64 {
         self.1
@@ -430,6 +545,9 @@ impl Relay {
             slots: AtomicUsize::new(0),
             by_address: Mutex::new(HashMap::new()),
             http_connections: Arc::new(Semaphore::new(server::MAX_HTTP_CONNECTIONS)),
+            proving: Mutex::new(HashMap::new()),
+            http_open: Mutex::new(HashMap::new()),
+            http_ids: AtomicU64::new(0),
             shutdown: watch::channel(false).0,
             drained: Notify::new(),
         });

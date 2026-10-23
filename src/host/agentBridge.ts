@@ -17,6 +17,7 @@ import { typedWithin } from '../lib/recentTyping';
 import { fileWithLiveViewport, isInteracting, useEditorStore } from '../store/editorStore';
 import { useUiStore } from '../store/uiStore';
 import { useCollabStore } from '../store/collabStore';
+import { collaboratorTouches } from '../store/collabBridge';
 
 /** Changes once per page load, so a revision from before a reload or restart can never match. */
 const EPOCH = Math.random().toString(36).slice(2, 8);
@@ -28,7 +29,7 @@ export type AgentEditorRequest =
 export type AgentEditorReply =
   /** `path`: the room the person is looking at (element ids from the top), `[]` at the top.
    *  `selection`: what they currently have selected, in that same room — read_selection's source. */
-  | { kind: 'snapshot'; file: DraftDocument; revision: string; path: string[]; selection: Selection; busy?: string }
+  | { kind: 'snapshot'; file: DraftDocument; revision: string; path: string[]; selection: Selection; collaboratorTouches?: { key: string; by: string }[]; busy?: string }
   | { kind: 'committed'; revision: string }
   | { kind: 'refused'; code: 'REVISION_CONFLICT'; revision: string; file: DraftDocument }
   | { kind: 'refused'; code: 'BUSY'; revision: string; reason?: string };
@@ -61,12 +62,14 @@ export function handleAgentRequest(request: AgentEditorRequest): AgentEditorRepl
   const state = useEditorStore.getState();
   if (request.kind === 'snapshot') {
     const busy = busyReason();
+    const touches = collaboratorTouches();
     return {
       kind: 'snapshot',
       file: fileWithLiveViewport(state),
       revision: currentRevision(),
       path: [...state.path],
       selection: { nodes: [...state.selection.nodes], edges: [...state.selection.edges] },
+      ...(touches.length ? { collaboratorTouches: touches } : {}),
       ...(busy ? { busy } : {}),
     };
   }

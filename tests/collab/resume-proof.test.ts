@@ -54,7 +54,6 @@ function collaborator() {
       setAccess: () => {},
       appVersion: PRODUCT.version,
       name: 'Vic',
-      token: '0123456789abcdef0123456789abcdef',
     },
     events,
   );
@@ -93,7 +92,7 @@ describe('coming back over a connection with a binding', () => {
     const hello = JSON.parse(back.sent.b[0]!) as { resume: Record<string, unknown>; token?: string };
     expect(hello.resume).toMatchObject({ peer: id, proof: expect.any(String) });
     expect(hello.resume.key).toBeUndefined();
-    // Never the local network secret, over a peer connection.
+    // No secret of the local network's in a hello, ever: it is proved to the desktop's server instead.
     expect(hello.token).toBeUndefined();
     expect(vic.session.id).toBe(id);
     expect(vic.state.ended).toBeNull();

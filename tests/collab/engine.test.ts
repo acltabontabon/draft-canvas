@@ -64,7 +64,7 @@ function ownerOf(file: DraftDocument, clock: Clock, extra: Partial<ConstructorPa
   return { host, state };
 }
 
-function guestOf(clock: Clock, options: { token?: string; name?: string; busy?: () => boolean } = {}) {
+function guestOf(clock: Clock, options: { name?: string; busy?: () => boolean } = {}) {
   const state = { file: null as DraftDocument | null, statuses: [] as string[], reasons: [] as (string | undefined)[] };
   const events: GuestEvents = {
     status: (status, reason) => {
@@ -93,7 +93,6 @@ function guestOf(clock: Clock, options: { token?: string; name?: string; busy?: 
       setAccess: () => {},
       appVersion: PRODUCT.version,
       name: options.name ?? 'Guest',
-      ...(options.token === undefined ? {} : { token: options.token }),
     },
     events,
     clock,
@@ -124,24 +123,6 @@ describe('the handshake', () => {
       settle(pump);
       expect(heard).toEqual([encode({ t: 'end', reason: 'version' })]);
     }
-  });
-
-  it('refuses a LAN connection without the session’s secret', () => {
-    const clock = manualClock();
-    const { host } = ownerOf(base(), clock, { checkToken: (token) => token === 'secret' });
-    const wrong = loopbackPair();
-    host.attach(wrong.a, { role: 'editor' });
-    const intruder = guestOf(clock, { token: 'guess' });
-    intruder.session.connect(wrong.b);
-    settle(wrong.pump);
-    expect(intruder.state.reasons.at(-1)).toBe('unauthorized');
-
-    const right = loopbackPair();
-    host.attach(right.a, { role: 'editor' });
-    const friend = guestOf(clock, { token: 'secret' });
-    friend.session.connect(right.b);
-    settle(right.pump);
-    expect(friend.state.statuses.at(-1)).toBe('live');
   });
 
   it('closes a connection that never says hello', () => {

@@ -106,7 +106,8 @@ export function JoinDialog({ session, invite }: { session: DocumentSession; invi
       replaceKeeper(keeper);
       return reconnectSession(transport);
     }
-    mine = joinSession(transport, { name: trimmed, token, via: `lan:${token}`, open: session.openCollaborative, keeper });
+    // The token is proved to the desktop's server when the socket opens (`openLanGuest`), never sent.
+    mine = joinSession(transport, { name: trimmed, via: `lan:${token}`, open: session.openCollaborative, keeper });
   };
 
   const beginKnock = async (link: NonNullable<typeof sessionLink>, trimmed: string) => {

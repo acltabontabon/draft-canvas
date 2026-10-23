@@ -167,8 +167,6 @@ function setPresenceOf(peerId: string, presence: Presence | null): void {
 export interface HostOptions {
   /** The owner's name as collaborators see it. */
   name: string;
-  /** A desktop LAN session's secret, checked on every hello. */
-  token?: string;
 }
 
 /** Starts sharing the canvas on screen. Idempotent while a session is running. */
@@ -181,14 +179,12 @@ export function startHosting(options: HostOptions): HostSession {
   sharedDocumentId = editor.document.metadata.id;
   sharedCanvasOpen = true;
   markSharedLoad('openings');
-  const token = options.token;
   host = new HostSession(
     {
       readFile,
       applyRemote,
       isBusy,
       appVersion: PRODUCT.version,
-      ...(token === undefined ? {} : { checkToken: (candidate: string | undefined) => candidate !== undefined && constantTimeEqual(candidate, token) }),
     },
     {
       peers: (peers: PeerView[]) => {
@@ -222,6 +218,14 @@ export function stopHosting(reason: EndReason = 'ended'): void {
 
 export function hostSession(): HostSession | null {
   return host && !host.isEnded ? host : null;
+}
+
+/** Session provenance stays with the owner's live canvas, never a saved file or a guest's copy. */
+export function collaboratorTouches(): { key: string; by: string }[] {
+  const session = hostSession();
+  if (!session || !onSharedCanvas()) return [];
+  const { authors } = useCollabStore.getState();
+  return session.authorship.touches().map(({ key, person }) => ({ key, by: authors[person] ?? person }));
 }
 
 /** A collaborator's connection, from an accepted invite or the LAN server. */
@@ -299,18 +303,10 @@ export function publishPresenter(state: FollowState | null): void {
   host?.setFollow(state);
 }
 
-/** Compares two secrets in time that does not depend on where they first differ. */
-function constantTimeEqual(a: string, b: string): boolean {
-  let diff = a.length ^ b.length;
-  for (let i = 0; i < Math.max(a.length, b.length); i += 1) diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
-  return diff === 0;
-}
-
 /* ----------------------------------------------------------------- guest -- */
 
 export interface JoinOptions {
   name: string;
-  token?: string;
   /**
    * The session the link names, where it names one (`room:` and owner for a session link, `lan:` and
    * token for the local network): a later link may pick this session back up only if it names the same.
@@ -374,7 +370,6 @@ export function joinSession(transport: CollabTransport, options: JoinOptions): G
       isBusy,
       appVersion: PRODUCT.version,
       name: options.name,
-      ...(options.token === undefined ? {} : { token: options.token }),
       open(file) {
         title = file.metadata.title;
         sharedDocumentId = file.metadata.id;

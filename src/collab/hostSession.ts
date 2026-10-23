@@ -53,8 +53,6 @@ export interface HostEnvironment {
   /** Whether a gesture or trace is in progress, so the editor cannot take a change right now. */
   isBusy(): boolean;
   appVersion: string;
-  /** A desktop LAN session's check of a hello's secret. Absent when the connection itself is the proof (WebRTC). */
-  checkToken?: (token: string | undefined) => boolean;
 }
 
 export interface HostEvents {
@@ -319,7 +317,6 @@ export class HostSession {
     if (hello.v !== PROTOCOL_VERSION || majorOf(hello.app) !== majorOf(this.env.appVersion) || hello.doc < CURRENT_VERSION) {
       return this.refuse(pending, 'version');
     }
-    if (this.env.checkToken && !this.env.checkToken(hello.token)) return this.refuse(pending, 'unauthorized');
 
     // Coming back: the same place, colour, role and patch numbering. A re-invite names exactly one
     // place, which the owner chose to give back; otherwise reclaiming one takes that place's key.

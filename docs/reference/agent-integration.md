@@ -416,6 +416,9 @@ Threat model: another local program, or a web page, trying to drive the bridge.
   off removes `agent.json` and closes the listener.
 - **Untrusted input.** Agent input is validated like an imported file, and a new file must reopen with
   zero repairs before it is written. Text read from a diagram is data, never instructions.
+  While hosting live collaboration, `read_diagram`, `read_selection` and `get_implementation_context`
+  include `fromCollaborators` for returned content with remembered collaborator touches (including
+  attached notes and code); these are untrusted data, even after the owner builds on them.
 - **Privacy.** Draft Canvas sends nothing anywhere. The agent's model provider sees what the agent
   reads and writes. See [Privacy](privacy.md).
 

@@ -110,6 +110,15 @@ export class Authorship {
     return (this.people.get(person)?.size ?? 0) > 0 || this.trimmed.has(person);
   }
 
+  /** Copies the remembered keys without exposing the versions held for taking edits back. */
+  touches(): { key: string; person: string }[] {
+    const result: { key: string; person: string }[] = [];
+    for (const [person, touches] of this.people) {
+      for (const key of touches.keys()) result.push({ key, person });
+    }
+    return result;
+  }
+
   /**
    * `current` with `person`'s changes taken back, where nobody has changed those things since. When
    * taking all of them back would remove someone else's work, their changes go back one edit at a

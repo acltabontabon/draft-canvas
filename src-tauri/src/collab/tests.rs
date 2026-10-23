@@ -165,6 +165,9 @@ fn shared_for_counting(limits: Limits) -> Arc<Shared> {
         slots: AtomicUsize::new(0),
         by_address: Mutex::new(HashMap::new()),
         http_connections: Arc::new(Semaphore::new(server::MAX_HTTP_CONNECTIONS)),
+        proving: Mutex::new(HashMap::new()),
+        http_open: Mutex::new(HashMap::new()),
+        http_ids: std::sync::atomic::AtomicU64::new(0),
         shutdown: watch::channel(false).0,
         drained: Notify::new(),
     })
@@ -258,13 +261,34 @@ async fn connect(port: u16, upgrade: Upgrade<'_>) -> Result<Guest, u16> {
         );
     }
     match tokio_tungstenite::connect_async(request).await {
-        Ok((guest, response)) => {
+        Ok((mut guest, response)) => {
             assert_eq!(
                 response.headers()["sec-websocket-protocol"],
                 PROTOCOL,
                 "the protocol is echoed, never the token"
             );
-            Ok(guest)
+            // The challenge, answered as the page does with the token the protocols name (a test's
+            // way of saying which token this guest holds; the server ignores it in the header).
+            let token = upgrade
+                .protocols
+                .and_then(|offered| offered.split(',').map(str::trim).nth(1))
+                .unwrap_or("");
+            let Some(Message::Text(challenge)) = next(&mut guest).await else {
+                panic!("a challenge first");
+            };
+            let challenge: serde_json::Value = serde_json::from_str(&challenge).unwrap();
+            let nonce = challenge["nonce"].as_str().unwrap().to_string();
+            let mac = super::hex(&super::proof_for(token.as_bytes(), &nonce));
+            guest
+                .send(Message::text(format!(r#"{{"t":"proof","mac":"{mac}"}}"#)))
+                .await
+                .unwrap();
+            match next(&mut guest).await {
+                Some(Message::Text(ready)) if ready.as_str() == r#"{"t":"ready"}"# => Ok(guest),
+                Some(Message::Close(Some(frame))) if frame.reason == "unauthorized" => Err(401),
+                Some(Message::Close(Some(frame))) if frame.reason == "full" => Err(503),
+                other => panic!("expected ready or a refusal, got {other:?}"),
+            }
         }
         Err(tokio_tungstenite::tungstenite::Error::Http(response)) => {
             Err(response.status().as_u16())
@@ -533,7 +557,7 @@ async fn the_sessions_token_lets_a_guest_in_and_text_goes_both_ways_verbatim() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_wrong_or_missing_token_is_refused_before_the_upgrade() {
+async fn a_wrong_or_missing_token_is_refused_and_never_reaches_the_page() {
     let (events, relay, port) = started(Limits::default()).await;
     let offered = [
         None,
@@ -1389,4 +1413,117 @@ fn content_types_follow_the_extension() {
         "application/octet-stream"
     );
     assert_eq!(assets::cache_control("/favicon.svg"), "no-cache");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn connections_that_cannot_prove_the_token_take_no_guest_place_and_never_reach_the_page() {
+    let (events, relay, port) = started(Limits {
+        guests_per_address: MAX_CONNECTIONS,
+        ..Limits::default()
+    })
+    .await;
+    // Someone on the network without the token: the header carries none, and they can't answer.
+    let mut silent = Vec::new();
+    for _ in 0..super::MAX_PROVING_PER_ADDRESS {
+        let mut request = format!("ws://127.0.0.1:{port}/collab")
+            .into_client_request()
+            .unwrap();
+        let headers = request.headers_mut();
+        headers.insert(
+            "Origin",
+            HeaderValue::from_str(&format!("http://127.0.0.1:{port}")).unwrap(),
+        );
+        headers.insert("Sec-WebSocket-Protocol", HeaderValue::from_static(PROTOCOL));
+        let (guest, _) = tokio_tungstenite::connect_async(request).await.unwrap();
+        silent.push(guest);
+    }
+    // One more from the same address waits for no place at all.
+    assert_eq!(connect(port, Upgrade::ok(port)).await.err(), Some(503));
+    // Every guest place is still free for those who can prove it, once the silent ones give up.
+    for guest in &mut silent {
+        assert!(
+            matches!(next(guest).await, Some(Message::Text(_))),
+            "the challenge"
+        );
+        assert_eq!(close_of(guest).await, (1008, "unauthorized".to_string()));
+    }
+    let mut guests = Vec::new();
+    for _ in 0..MAX_CONNECTIONS {
+        guests.push(guest(port).await);
+    }
+    events.opened(MAX_CONNECTIONS - 1).await;
+    assert_eq!(
+        events
+            .all()
+            .iter()
+            .filter(|e| matches!(e, HostEvent::CollabLanOpen { .. }))
+            .count(),
+        MAX_CONNECTIONS,
+        "the page heard only those who proved the token"
+    );
+    relay.stop("stopped").await;
+}
+
+#[test]
+fn the_proof_is_hmac_sha256_of_the_context_and_nonce() {
+    // Worked out independently (Python's `hmac`); `tests/collab/sha256.test.ts` holds the page to the
+    // same value, so the two ends can never disagree about what a right answer is.
+    assert_eq!(
+        super::hex(&super::proof_for(
+            TOKEN.as_bytes(),
+            "00112233445566778899aabbccddeeff"
+        )),
+        "9c655a981740086b45b9b187671c0fa22819e4604acd9a04bdf1bdf9d2309797"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_full_page_pool_makes_room_from_whoever_holds_the_most() {
+    let shared = shared_for_counting(Limits::default());
+    let heavy: std::net::IpAddr = "192.168.1.66".parse().unwrap();
+    let light: std::net::IpAddr = "192.168.1.7".parse().unwrap();
+    let newcomer: std::net::IpAddr = "192.168.1.9".parse().unwrap();
+    let mut held = Vec::new();
+    for _ in 0..4 {
+        let task = tokio::spawn(std::future::pending::<()>());
+        let id = shared.next_http_id();
+        shared.track_http(heavy, id, task.abort_handle());
+        held.push(task);
+    }
+    let light_task = tokio::spawn(std::future::pending::<()>());
+    shared.track_http(light, shared.next_http_id(), light_task.abort_handle());
+
+    // Someone holding nothing yet: the oldest of the heaviest holder's goes, nobody else's.
+    assert!(shared.evict_for(newcomer));
+    assert!(held.remove(0).await.unwrap_err().is_cancelled());
+    assert!(!light_task.is_finished());
+    // The heaviest holder never evicts anyone to take more for itself.
+    assert!(!shared.evict_for(heavy));
+    for task in held {
+        task.abort();
+    }
+    light_task.abort();
+}
+
+/// A connection can end between its spawn and being tracked, untracking itself before its entry
+/// exists. Counted, such leftovers made eviction close a connection already gone: no place came
+/// free, and the newcomer was turned away.
+#[tokio::test]
+async fn connections_already_ended_are_never_chosen_to_make_room() {
+    let shared = shared_for_counting(Limits::default());
+    let heavy: std::net::IpAddr = "192.168.1.66".parse().unwrap();
+    let light: std::net::IpAddr = "192.168.1.7".parse().unwrap();
+    let newcomer: std::net::IpAddr = "192.168.1.9".parse().unwrap();
+    for _ in 0..4 {
+        let task = tokio::spawn(std::future::pending::<()>());
+        shared.track_http(heavy, shared.next_http_id(), task.abort_handle());
+        task.abort();
+        let _ = task.await;
+    }
+    let light_task = tokio::spawn(std::future::pending::<()>());
+    shared.track_http(light, shared.next_http_id(), light_task.abort_handle());
+
+    assert!(!shared.evict_for(newcomer));
+    assert!(!light_task.is_finished());
+    light_task.abort();
 }
