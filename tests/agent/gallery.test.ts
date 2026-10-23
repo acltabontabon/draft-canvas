@@ -118,6 +118,37 @@ describe('layout gallery', { timeout: 30_000 }, () => {
     expect(viewOf(doc, ['web'])?.flows.map((flow) => flow.id)).toEqual(['w.edit', 'w.conflict']);
   });
 
+  it('26: two callers fanning out to the same services draw as two trunks, not a tangle', () => {
+    const entry = GALLERY.find((g) => g.id === '26-shared-fan-out')! as { request: Record<string, unknown> };
+    // As sent, with nothing degraded: it used to be refused (two of checkout's lines on top of each
+    // other) and, accepted anyway, crossed itself 13 times.
+    const { receipt } = compose({ requestId: 'g', ...entry.request }, 'd_gallery00001');
+    expect(receipt.degraded).toBeUndefined();
+    const { doc } = galleryDocument(entry as GalleryCase);
+    const inside = viewOf(doc, ['system'])!;
+    expect(legibilityOf(inside.nodes, inside.edges).crossings).toBeLessThanOrEqual(4);
+    const plan = routingPlan(inside.nodes, inside.edges, 'transient');
+    const trunkOf = (ids: string[]) => new Set(ids.map((id) => plan.spineFor(id)?.id));
+    // The frontend's six gRPC calls share one trunk beside its main-path call and its HTTP call, each
+    // branch running straight through the checkout column into the service it reaches.
+    const frontend = ['r-fe-cart', 'r-fe-cat', 'r-fe-cur', 'r-fe-ship', 'r-fe-rec', 'r-fe-ad'];
+    expect(trunkOf(frontend).size).toBe(1);
+    expect(trunkOf(frontend).has(undefined)).toBe(false);
+    for (const id of ['r-fe-co', 'r-fe-asst']) expect(plan.spineFor(id), id).toBeUndefined();
+    for (const id of frontend) {
+      const edge = inside.edges.find((e) => e.id === id)!;
+      expect(bendsOf(drawnRoute(edge, inside.nodes, inside.edges)!.points), id).toBeLessThanOrEqual(2);
+    }
+    // The main path's own steps out of checkout fan out together, on a trunk of their own.
+    const checkout = ['r-co-cart', 'r-co-cat', 'r-co-cur', 'r-co-ship', 'r-co-pay', 'r-co-mail'];
+    expect(trunkOf(checkout).size).toBe(1);
+    expect(trunkOf(checkout).has(undefined)).toBe(false);
+    expect(trunkOf([...frontend, ...checkout]).size).toBe(2);
+    // The main path into checkout stays one straight line.
+    const placesOrder = inside.edges.find((e) => e.id === 'r-fe-co')!;
+    expect(bendsOf(drawnRoute(placesOrder, inside.nodes, inside.edges)!.points)).toBe(0);
+  });
+
   it('22/23: the batch view is told to ungroup its externals, and the advised edit hangs them beside their caller', () => {
     // As sent: the hub worker's calls to three externals ran the width of the canvas, through its own
     // boundary, because the boundary gathering them could only be placed after it.

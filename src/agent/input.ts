@@ -236,9 +236,10 @@ export interface LayoutSpec {
   viewport?: [number, number];
   /** Internal to repair (never read from a request): see `LayoutInput.ties`. */
   ties?: 'align' | 'balance';
-  /** Internal (never read from a request): `unlabelled` keeps labelled connectors off shared trunks —
-   *  the arrangement compared against one with them (see `AnchorOptions.fans`). */
-  fans?: 'all' | 'unlabelled';
+  /** Internal (never read from a request): `unlabelled` keeps labelled connectors off shared trunks,
+   *  `unshared` keeps them off trunks on a side other connectors use too — arrangements compared
+   *  against one with them (see `AnchorOptions.fans`). */
+  fans?: 'all' | 'unshared' | 'unlabelled';
 }
 
 export interface StarterSpec {

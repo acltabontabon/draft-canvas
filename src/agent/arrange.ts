@@ -29,7 +29,7 @@ import type { DescribeContext } from '../nodes/describe';
 import type { Problems } from './errors';
 import type { LayoutSpec, Reader } from './input';
 import { anchorRectOf, arrangeParts, captionSizer, placeBlock, sizeToFit } from './place';
-import { clearlyBetterDirection, hasLabelledTrunk, JOG_COST } from './compile';
+import { clearlyBetterDirection, hasLabelledTrunk, hasSharedSideTrunk, JOG_COST } from './compile';
 import { legibilityCost, legibilityOf } from './legibility';
 import { checkFit, checkQuality, isBetterCandidate, isCleanCandidate, renderedBoundsOf, smallestFontPresent, type FitReport, type QualityReport } from './quality';
 import { drawnRoute, overlaps, pastDeadline, repairAnchors, segmentHitsBox } from './route';
@@ -188,7 +188,10 @@ export function arrangeView(view: DraftDocument, request: ArrangeRequest, ctx: D
   // (`compile.ts` does the same for a new diagram): errors decide first, then legibility.
   if (best && request.move !== false && !pastDeadline() && hasLabelledTrunk(best.arranged.view)) {
     const alone = judge({ ...best.layout, fans: 'unlabelled' });
+    const shared = hasSharedSideTrunk(best.arranged.view);
     if (alone && (betterByErrors(alone, best) || (tied(alone, best) && cost(alone) < cost(best)))) best = alone;
+    const unshared = shared && !pastDeadline() ? judge({ ...best.layout, fans: 'unshared' }) : undefined;
+    if (unshared && (betterByErrors(unshared, best) || (tied(unshared, best) && cost(unshared) < cost(best)))) best = unshared;
   }
   // The other reading direction, for a whole-view cleanup that left the direction to us: kept only
   // when it reads clearly better, never over a few pixels — the diagram a person is looking at

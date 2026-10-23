@@ -492,8 +492,10 @@ export function arrangeParts(parts: RoomParts, layout: LayoutSpec, ctx: Describe
   if (layout.fans !== 'unlabelled') {
     const fans = new Map<string, string[]>();
     for (const edge of edges) {
-      if (!edge.label || primaryEdges.has(edge.id)) continue;
-      for (const key of [`s\u0000${edge.source}\u0000${compatibilityKey(edge)}`, `t\u0000${edge.target}\u0000${compatibilityKey(edge)}`]) fans.set(key, [...(fans.get(key) ?? []), edge.id]);
+      if (!edge.label) continue;
+      // The main path's own steps bundle only with each other (see `assignAnchors`).
+      const main = primaryEdges.has(edge.id) ? '\u0000main' : '';
+      for (const key of [`s\u0000${edge.source}\u0000${compatibilityKey(edge)}${main}`, `t\u0000${edge.target}\u0000${compatibilityKey(edge)}${main}`]) fans.set(key, [...(fans.get(key) ?? []), edge.id]);
     }
     for (const ids of fans.values()) if (ids.length >= MIN_LABELLED_FAN) for (const id of ids) bundled.add(id);
   }

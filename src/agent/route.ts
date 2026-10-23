@@ -161,6 +161,10 @@ export function routeGeometry(edge: DraftEdge, nodes: readonly DraftNode[], edge
 /** Longer than a connector's stub off its shape (20) — two leaving one point share that much. */
 export const SHARED_RUN = 30;
 
+/** How far apart two parallel runs may be and still read as one line: under a lane's spacing (10),
+ *  over the couple of pixels two lines a few pixels apart blur into at any zoom. */
+const SAME_LINE = 6;
+
 /** The longest stretch two polylines draw along the same horizontal or vertical line. */
 export function sharedRun(a: readonly Point[], b: readonly Point[]): number {
   let longest = 0;
@@ -168,11 +172,11 @@ export function sharedRun(a: readonly Point[], b: readonly Point[]): number {
     const [a0, a1] = [a[i - 1] as Point, a[i] as Point];
     for (let j = 1; j < b.length; j += 1) {
       const [b0, b1] = [b[j - 1] as Point, b[j] as Point];
-      if (Math.abs(a0.y - a1.y) < 1 && Math.abs(b0.y - b1.y) < 1 && Math.abs(a0.y - b0.y) < 2) {
+      if (Math.abs(a0.y - a1.y) < 1 && Math.abs(b0.y - b1.y) < 1 && Math.abs(a0.y - b0.y) < SAME_LINE) {
         const lo = Math.max(Math.min(a0.x, a1.x), Math.min(b0.x, b1.x));
         const hi = Math.min(Math.max(a0.x, a1.x), Math.max(b0.x, b1.x));
         longest = Math.max(longest, hi - lo);
-      } else if (Math.abs(a0.x - a1.x) < 1 && Math.abs(b0.x - b1.x) < 1 && Math.abs(a0.x - b0.x) < 2) {
+      } else if (Math.abs(a0.x - a1.x) < 1 && Math.abs(b0.x - b1.x) < 1 && Math.abs(a0.x - b0.x) < SAME_LINE) {
         const lo = Math.max(Math.min(a0.y, a1.y), Math.min(b0.y, b1.y));
         const hi = Math.min(Math.max(a0.y, a1.y), Math.max(b0.y, b1.y));
         longest = Math.max(longest, hi - lo);

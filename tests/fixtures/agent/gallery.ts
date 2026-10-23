@@ -643,5 +643,80 @@ export const GALLERY: GalleryCase[] = [
     kind: 'create',
     request: readmeArchitecture as Json,
   },
+  {
+    // The README prompt run on GoogleCloudPlatform/microservices-demo, as the agent sent it: inside
+    // the system, the frontend and the checkout orchestrator both call the same four services. Laid
+    // out as two independent fans, the frontend's eight lines ran as a tangled bus through the
+    // checkout column (13 crossings) and two of checkout's ran on top of each other: refused.
+    id: '26-shared-fan-out',
+    title: 'Container view: two callers fanning out to the same services',
+    kind: 'create',
+    request: {
+      title: 'Online Boutique',
+      level: 'context',
+      layout: { primaryFlow: 'glance' },
+      nodes: [
+        n('user', 'person', 'Shopper', { description: 'Browses the boutique and buys products.' }),
+        n('system', 'service', 'Online Boutique', {
+          description: 'Web shop where users browse, add to cart and buy.',
+          inside: {
+            level: 'container',
+            nodes: [
+              n('c.user', 'person', 'Shopper', { description: 'Browses the boutique and buys products.' }),
+              n('frontend', 'api', 'Frontend', { technology: 'Go, gorilla/mux', description: 'Serves the website and turns page requests into gRPC calls.' }),
+              n('checkout', 'api', 'Checkout Service', { technology: 'Go, gRPC', description: 'Prices the cart, then charges, ships and confirms the order.' }),
+              n('cart', 'api', 'Cart Service', { technology: 'C#, ASP.NET Core, gRPC', description: "Keeps each session's cart items." }),
+              n('catalog', 'api', 'Product Catalog', { technology: 'Go, gRPC', description: 'Lists, looks up and searches products.' }),
+              n('currency', 'api', 'Currency Service', { technology: 'Node.js, gRPC', description: 'Converts money using a stored rate table.' }),
+              n('shipping', 'api', 'Shipping Service', { technology: 'Go, gRPC', description: 'Quotes a flat shipping cost and issues tracking ids.' }),
+              n('payment', 'api', 'Payment Service', { technology: 'Node.js, gRPC', description: 'Validates a card and returns a transaction id.' }),
+              n('email', 'api', 'Email Service', { technology: 'Python, gRPC', description: 'Accepts order confirmations; sends nothing in dummy mode.' }),
+              n('recommendation', 'service', 'Recommendation Service', { technology: 'Python, gRPC', description: 'Suggests up to five random products not in the cart.' }),
+              n('ad', 'service', 'Ad Service', { technology: 'Java, gRPC', description: 'Returns text ads for category keywords, else random ones.' }),
+              n('redis', 'nosql-database', 'Cart Store', { technology: 'Redis', description: 'Holds the serialised cart per session id.' }),
+              n('assistant', 'api', 'Shopping Assistant', { technology: 'Python, Flask, LangChain', description: 'Answers room-photo questions using Gemini and a vector search.' }),
+              n('c.alloydb', 'sql-database', 'Product Vector Store', { technology: 'AlloyDB', description: 'Holds product embeddings for similarity search.' }),
+              n('c.gemini', 'external-system', 'Google Gemini API', { technology: 'Gemini 1.5 Flash', description: 'Describes room images and writes product advice.' }),
+            ],
+            relationships: [
+              r('r-user-fe', 'c.user', 'frontend', 'Browses and orders', { semantic: 'http', kind: 'sync' }),
+              r('r-fe-co', 'frontend', 'checkout', 'Places order', { semantic: 'grpc', kind: 'sync', response: true }),
+              r('r-fe-cart', 'frontend', 'cart', 'Reads and edits cart', { semantic: 'grpc', kind: 'sync' }),
+              r('r-fe-cat', 'frontend', 'catalog', 'Reads products', { semantic: 'grpc', kind: 'sync' }),
+              r('r-fe-cur', 'frontend', 'currency', 'Converts prices', { semantic: 'grpc', kind: 'sync' }),
+              r('r-fe-ship', 'frontend', 'shipping', 'Quotes shipping', { semantic: 'grpc', kind: 'sync' }),
+              r('r-fe-rec', 'frontend', 'recommendation', 'Asks for suggestions', { semantic: 'grpc', kind: 'sync' }),
+              r('r-fe-ad', 'frontend', 'ad', 'Fetches an ad', { semantic: 'grpc', kind: 'sync' }),
+              r('r-fe-asst', 'frontend', 'assistant', 'Relays chat message', { semantic: 'http', kind: 'sync' }),
+              r('r-co-cart', 'checkout', 'cart', 'Reads and empties cart', { semantic: 'grpc', kind: 'sync' }),
+              r('r-co-cat', 'checkout', 'catalog', 'Looks up product', { semantic: 'grpc', kind: 'sync' }),
+              r('r-co-cur', 'checkout', 'currency', 'Converts to user currency', { semantic: 'grpc', kind: 'sync' }),
+              r('r-co-ship', 'checkout', 'shipping', 'Quotes and ships', { semantic: 'grpc', kind: 'sync' }),
+              r('r-co-pay', 'checkout', 'payment', 'Charges card', { semantic: 'grpc', kind: 'sync' }),
+              r('r-co-mail', 'checkout', 'email', 'Sends confirmation', { semantic: 'grpc', kind: 'sync' }),
+              r('r-rec-cat', 'recommendation', 'catalog', 'Lists products', { semantic: 'grpc', kind: 'sync' }),
+              r('r-cart-redis', 'cart', 'redis', 'Reads and writes carts', { semantic: 'readsWrites' }),
+              r('r-asst-gem', 'assistant', 'c.gemini', 'Describes room, advises', { semantic: 'http', kind: 'sync' }),
+              r('r-asst-db', 'assistant', 'c.alloydb', 'Searches product vectors', { semantic: 'reads' }),
+            ],
+            flows: [
+              {
+                id: 'checkout-flow',
+                title: 'Place an order',
+                steps: ['r-user-fe', 'r-fe-co', 'r-co-cart', 'r-co-cat', 'r-co-cur', 'r-co-ship', 'r-co-pay', 'r-co-mail'],
+              },
+              { id: 'browse', title: 'Browse the store', steps: ['r-user-fe', 'r-fe-cat', 'r-fe-cur', 'r-fe-cart', 'r-fe-rec', 'r-rec-cat', 'r-fe-ad'] },
+            ],
+          },
+        }),
+        n('gemini', 'external-system', 'Google Gemini API', { description: 'Writes advice for the optional shopping assistant.' }),
+      ],
+      relationships: [
+        r('t1', 'user', 'system', 'Shops', { semantic: 'http', kind: 'sync' }),
+        r('t2', 'system', 'gemini', 'Asks for product advice', { semantic: 'http', kind: 'sync' }),
+      ],
+      flows: [{ id: 'glance', title: 'Shopping', steps: ['t1', 't2'] }],
+    },
+  },
 ];
 
