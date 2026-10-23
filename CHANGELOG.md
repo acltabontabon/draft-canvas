@@ -168,6 +168,7 @@ the release notes and the in-app What's New are generated from here. See
 
 #### Fixed
 
+- The hosted editor blocks embedding in other pages to prevent clickjacking.
 - Backups and restores keep background images.
 - A refresh with unsaved edits keeps them even if saving them fails at first, or the diagram was
   renamed in another tab.

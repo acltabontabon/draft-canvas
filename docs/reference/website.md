@@ -101,8 +101,52 @@ Wrangler is pinned in `www/cloudflare/package.json` and its lockfile (`npm ci`, 
 `npx --no-install wrangler`). To upgrade, change the version and run `npm install --package-lock-only`
 there.
 
-`app.headers` becomes the editor's `_headers`. Never set `Cross-Origin-Opener-Policy` there: it
-breaks the old-address handoff, which uses `window.opener`.
+`app.headers` becomes the editor's `_headers`. It prevents framing with an HTTP CSP
+`frame-ancestors 'none'` directive and `X-Frame-Options: DENY` for older browsers. This header policy
+adds to the editor's build-generated CSP meta tag; `frame-ancestors` cannot be enforced through a
+meta tag. Never set `Cross-Origin-Opener-Policy` there: it breaks the old-address handoff, which uses
+`window.opener`.
+
+### Edge TLS policy
+
+The editor is a **Worker custom domain** (`www/cloudflare/app.jsonc`), not a Cloudflare Pages
+hostname. Cloudflare terminates visitor TLS before serving the Worker; HTTP headers and Wrangler's
+`compatibility_date` do not select TLS versions.
+
+The intended edge policy is **minimum TLS 1.2, with TLS 1.3 enabled**. TLS 1.0 and 1.1 must be refused;
+TLS 1.2 remains available for compatibility and supported clients negotiate TLS 1.3. These are
+Cloudflare zone settings, managed separately from the repository's deploy. See Cloudflare's
+[minimum TLS version](https://developers.cloudflare.com/ssl/edge-certificates/additional-options/minimum-tls/)
+and [TLS 1.3](https://developers.cloudflare.com/ssl/edge-certificates/additional-options/tls-13/) references.
+
+**Review the scope before applying:** the free zone setting affects every proxied hostname in
+`draftcanvas.dev`, including the apex, `app`, `www`, `relay` and any others. Clients that only support
+TLS 1.0 or 1.1 lose access. Per-hostname minimum TLS requires Advanced Certificate Manager; if other
+hostnames need a different policy, review that option instead of changing the whole zone. Existing
+hostname overrides can take precedence over the zone setting.
+
+After approval, an operator with access to the `draftcanvas.dev` zone should:
+
+1. Review the zone's hostnames, existing TLS overrides and client compatibility. Record the existing
+   **Minimum TLS Version** and **TLS 1.3** values before changing them.
+2. Open **SSL/TLS → Edge Certificates** in that zone. Set **Minimum TLS Version** to **TLS 1.2**.
+   Keep **TLS 1.3** enabled, or switch it **On** if disabled. Leave other TLS and cipher settings alone.
+3. Check the zone settings with `node scripts/check-cloudflare-tls.mjs`. Supply `CLOUDFLARE_ZONE_ID`
+   and a separate `CLOUDFLARE_TLS_API_TOKEN` through the environment. Restrict this token to
+   `draftcanvas.dev`, with **Zone › Zone › Read** and **Zone › Zone Settings › Read** permissions.
+   The checker makes only GET requests, rejects a different zone, and exits nonzero for a policy
+   mismatch or failed read. Do not broaden the deployment token's permissions for this check.
+4. Request a fresh [SSL Labs assessment](https://www.ssllabs.com/ssltest/analyze.html?d=app.draftcanvas.dev).
+   On every reported IPv4/IPv6 endpoint, confirm TLS 1.0/1.1 are rejected and TLS 1.2/1.3 are supported.
+   Verify affected site and relay clients still connect. A successful settings check alone does not
+   prove the effective policy at each hostname or edge.
+5. After deploying header changes, request a fresh
+   [HTTP Observatory scan](https://developer.mozilla.org/en-US/observatory/analyze?host=app.draftcanvas.dev)
+   and confirm the framing check passes. TLS settings and HTTP header deployment are separate steps.
+
+Neither the read-only checker nor the normal deploy applies the zone TLS policy. If a compatibility
+issue requires rollback, an operator can restore the recorded values in **Edge Certificates**;
+restoring a minimum below 1.2 also restores support for the older protocols.
 
 ### The collaboration relay
 
