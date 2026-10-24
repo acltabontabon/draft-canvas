@@ -54,6 +54,17 @@ The tag runs [release.yml](../../.github/workflows/release.yml): full CI, a draf
 [website](website.md) deploys and, for stable tags, [Homebrew](desktop-updates.md#homebrew-releases)
 updates.
 
+## Editorial updates after publication
+
+A launch page can be curated as an illustrated tour, with the tagged changelog and README linked
+for the complete notes. Keep setup steps and privacy boundaries accurate: distinguish encrypted
+peer collaboration from the unencrypted desktop LAN option, and explain the agent provider's access
+to diagram context and permitted code. Give informative images descriptive alt text.
+
+Commit new media separately and pin its public URLs to that media commit. Keep the published release
+tag and installer assets in place. Preview the Markdown with GitHub's renderer before editing the
+published notes with `gh release edit`, then inspect the live page, animations, links and narrow layouts.
+
 ## Desktop previews
 
 Tag `desktop-vX.Y.Z-alpha.N` or `-beta.N`, with a dated changelog section. `X.Y.Z` may equal or lead
