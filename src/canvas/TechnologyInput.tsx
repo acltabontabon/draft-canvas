@@ -88,7 +88,9 @@ export function TechnologyInput({ value, onCommit, onConfirm, autoFocus }: {
           spellCheck={false}
           autoComplete="off"
           autoFocus={autoFocus}
-          onFocus={() => { setOpen(true); setActive(0); }}
+          // Opened by a click, by typing or by an arrow key, never by focus alone: arriving here from
+          // Edit details or Tab opened the list over the rest of the panel, its source evidence too.
+          onPointerDown={() => { setOpen(true); setActive(0); }}
           onChange={(event) => { setDraft(event.currentTarget.value); setOpen(true); setActive(0); }}
           onBlur={() => {
             setOpen(false);

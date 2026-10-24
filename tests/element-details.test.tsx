@@ -104,6 +104,9 @@ describe('element details shortcut', () => {
     mount('Spring Boot 3');
     fireEvent.click(screen.getByRole('button', { name: 'Technology: Spring Boot 3, edit' }));
     const field = screen.getByRole('combobox', { name: 'Technology' });
+    // Focus alone leaves the list shut, so it never covers the panel; an arrow opens it.
+    expect(field).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.keyDown(field, { key: 'ArrowDown' });
     expect(field).toHaveAttribute('aria-expanded', 'true');
     fireEvent.keyDown(field, { key: 'Escape' });
     expect(field).toHaveAttribute('aria-expanded', 'false');
