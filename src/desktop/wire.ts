@@ -78,7 +78,12 @@ room: Array<string>, agent: AgentKind, mode: ApplyMode,
  * so the agent can skip reading it again (a read is a round trip, and its whole answer). False
  * whenever the page can't be sure.
  */
-unchanged?: boolean, };
+unchanged?: boolean,
+/**
+ * The view as read_diagram would answer it, read by the page as the turn was sent, so the agent's
+ * first call needn't be a read. JSON text; left out when it was too big or couldn't be read.
+ */
+snapshot?: string, };
 export type ToolStatus = "in-progress" | "completed" | "failed";
 export type StopReason = { "kind": "end-turn" } | { "kind": "cancelled" } | { "kind": "max-turns" } | { "kind": "refusal" } | { "kind": "failed", message: string, };
 export type Usage = { input: number, cached: number, output: number, };

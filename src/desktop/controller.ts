@@ -1807,6 +1807,13 @@ export class DesktopController {
     }
   }
 
+  /** The open diagram's view as a companion turn carries it (`agent.ts`'s `turnSnapshot`). */
+  async companionSnapshot(diagramId: string, room: readonly string[]): Promise<string | null> {
+    this.agentModule ??= import('./agent');
+    const { turnSnapshot } = await this.agentModule;
+    return turnSnapshot(this.agentHost, diagramId, room);
+  }
+
   async companionCancel(runId: string): Promise<void> {
     try {
       await this.api.companionCancel(runId);

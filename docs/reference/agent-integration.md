@@ -198,12 +198,15 @@ tool call, tool update and stopped). Each agent is a `Backend` (locate, sign-in,
 | Agent | Command (prompt on stdin) | Kept to Draft Canvas by |
 | --- | --- | --- |
 | Claude Code 2.1.295+ | `claude -p --output-format stream-json`, `--resume` for later turns | `--tools ""`, `--strict-mcp-config` with only Draft Canvas, `--allowedTools mcp__draft-canvas__*`, hooks off |
-| Codex 0.163.0+ | `codex exec --json`, `codex exec resume <thread>` for later turns | `--disable shell_tool`, `sandbox_mode="read-only"`, `approval_policy="never"`, `mcp_servers` replaced by Draft Canvas only |
+| Codex 0.163.0+ | `codex exec --json`, `codex exec resume <thread>` for later turns | `--disable shell_tool` (and `unified_exec`), `sandbox_mode="read-only"`, `approval_policy="never"`, `mcp_servers` replaced by Draft Canvas only, its tools pre-approved |
 
-The brief (`BRIEF`) goes in as Claude Code's whole system prompt (replacing its coding one) or Codex's
-`developer_instructions`; each turn's prompt starts with a `<draft-canvas-context>` block: the diagram,
-the view, the selection, which tool makes changes, a proposal of this conversation still waiting for
-review, and on a follow-up whether the diagram is unchanged since the last turn (then it isn't read again). Each run's
+The brief (`BRIEF`) goes in as the agent's whole system prompt, replacing its coding one: Claude Code's
+`--system-prompt`, Codex's `model_instructions_file` (the run folder's `brief.md`). Each turn's prompt
+starts with a `<draft-canvas-context>` block: the diagram, the view, the selection, which tool makes
+changes, a proposal of this conversation still waiting for review, the view itself as `read_diagram`
+answers it (read by the page through the agent host as the turn is sent, up to 40,000 characters, `<`
+escaped), and on a follow-up whether the diagram is unchanged since the last turn (then neither the view
+nor a read is needed). Each run's
 connector carries `DRAFT_CANVAS_RUN` (the run id) and `DRAFT_CANVAS_AGENT_DIR` (the starting app's own
 agent folder). The bridge holds a run's calls to its policy (`agent/runs.rs`):
 
@@ -213,12 +216,21 @@ agent folder). The bridge holds a run's calls to its policy (`agent/runs.rs`):
   submits a proposal, tagged with its `run`.
 - Stopping the run, or turning agent access off, ends it: calls not yet committed fail with `CANCELLED`.
 
-**Tokens.** A run's connector serves a lean tool set (`src-tauri/mcp/src/main.rs`'s `lean`): only the
-tools the run may call, without `render_diagram` or `read_selection`, without output schemas or the
-bounds the app checks anyway, and without nested inside views in an element. Its whole list goes with
-every model call, so this halves each call for Claude Code (31.8k → 15.4k tokens with 2.1.310; Codex
-loads MCP schemas on demand). The brief keeps calls few: one read, `get_capabilities` only when a change
-is refused for an unknown type, no preview before a proposal, no read after a change.
+**Tokens.** Every model call of a turn resends the agent's instructions and tools, so each is kept small
+and calls are kept few:
+
+- A run's connector serves a lean tool set (`src-tauri/mcp/src/main.rs`'s `lean`): only the tools the
+  run may call, without `render_diagram` or `read_selection`, output schemas, the bounds the app checks
+  anyway, or nested inside views in an element. Claude Code 2.1.310: 31.8k → 15.4k tokens a call.
+- Codex runs with the features that bring tools of their own turned off (browser, computer use, image
+  generation, sub-agents, plugins, apps, skill search, `unified_exec`; only those `codex features list`
+  reports) and web search off. Codex 0.163.0: 17.3k → 6.3k tokens a call.
+- The view comes with the turn, so a question is one call. Measured on a 15-element diagram: a question
+  64.9k → 19.1k tokens with Claude Code; a change 174k → 43k with Codex.
+- The brief: no read when the view came with the turn, `get_capabilities` only when a change is refused
+  for an unknown type, no preview before a proposal, no read after a change.
+- Small talk (a whole message of only "hello", "thanks", "ok", "bye", "how are you") is answered by Nodi
+  itself (`nodiLines.ts`'s `smallTalkOf`): no run, no tokens.
 
 The agent's session id is kept per diagram and agent in `companion/sessions.json`; the conversation
 shown is the page's, in memory only. Replies may name parts as `[[id]]`; the companion shows their names

@@ -125,6 +125,10 @@ pub async fn companion_send(app: AppHandle, request: PromptRequest) -> Result<()
             &companion::mcp_config(&sidecar, &request.run_id, agent.dir()),
             Subject::Preferences,
         );
+        // The brief as a file too, for an agent that reads its instructions from one (Codex).
+        let brief_file = run_dir.join("brief.md");
+        let written = written
+            .and_then(|()| write_private(&brief_file, BRIEF.as_bytes(), Subject::Preferences));
         if let Err(error) = written {
             let _ = std::fs::remove_dir_all(&run_dir);
             return Err(error);
@@ -140,6 +144,7 @@ pub async fn companion_send(app: AppHandle, request: PromptRequest) -> Result<()
             server: &sidecar,
             server_env: &server_env,
             brief: BRIEF,
+            brief_file: &brief_file,
             session: match &resume {
                 Some(session) => SessionArg::Resume(session),
                 None => SessionArg::New(&fresh),

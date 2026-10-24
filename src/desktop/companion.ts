@@ -34,6 +34,8 @@ export interface Turn {
   proposalId: string | null;
   /** What the person decided about the turn's proposal, once they have. */
   outcome: 'accepted' | 'rejected' | null;
+  /** Answered by Nodi itself, with no agent run (`smallTalkOf`): nothing was spent on it. */
+  local?: true;
 }
 
 export interface Conversation {
@@ -333,6 +335,13 @@ export const companion = {
     conversations.set(diagramId, { ...conversation, turns: turns.slice(-KEEP_TURNS), ...(earlier ? { earlier } : {}), ...(agent ? { agent } : {}) });
     runs.set(runId, diagramId);
     changed();
+  },
+
+  /** A turn Nodi answers itself, with no agent run: small talk, whole at once, costing nothing. */
+  answer(diagramId: string, prompt: string, reply: string): void {
+    const runId = `local-${crypto.randomUUID()}`;
+    companion.begin(diagramId, runId, prompt, null);
+    update(runId, (turn) => ({ ...turn, reply, stop: { kind: 'end-turn' }, local: true }));
   },
 
   apply(runId: string, event: RunEvent): void {

@@ -586,6 +586,7 @@ pub(crate) mod tests {
             server: Path::new("/App/draft-canvas-mcp"),
             server_env: &[],
             brief: "BRIEF",
+            brief_file: Path::new("/run/brief.md"),
             session: SessionArg::New("s-new"),
         };
         let args = args(&spec);

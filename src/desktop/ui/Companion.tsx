@@ -21,7 +21,7 @@ import { CHANNEL_MS, CHANNELS, channelClock, type Channel, type Mood } from './m
 import { CHIP_HEIGHT, chipPlace, revealViewport, type Box } from './chipPlace';
 import { canCreateInside, hasInside } from '../../depth/tree';
 import { lookInside } from '../../ui/Editor/depthNavigation';
-import { arrivalLine, blockedFolderOf, clockLines, diagramLines, failLine, doorOf, openers, restingLine, seedOf, setupStepsOf, smallHours, snagOf, type Look, type SetupStep, type SnagStep } from './nodiLines';
+import { arrivalLine, blockedFolderOf, clockLines, RUN_SALT, smallTalkOf, diagramLines, failLine, doorOf, openers, restingLine, seedOf, setupStepsOf, smallHours, snagOf, type Look, type SetupStep, type SnagStep } from './nodiLines';
 import { PointPins } from './PointPins';
 import { ProposalHistory } from './ProposalHistory';
 import { countsLabel, useProposalReview } from './useProposalReview';
@@ -80,6 +80,8 @@ function pointsOf(turn: Turn | null, here: ReadonlySet<string>) {
   return reply ? replyPoints(numberedBlocks(replyBlocks(reply), (id) => here.has(id))) : [];
 }
 
+/** How many times each diagram has opened this app run, so each opening gets its own hello. */
+const opened = new Map<string, number>();
 /** Diagrams Nodi has greeted this app run: the greeting pops up once on arrival, then on hover. */
 const greeted = new Set<string>();
 /** The latest finished turn the person has had open, by diagram: one finished since is news. */
@@ -360,9 +362,18 @@ export function Companion() {
   const showsCost = /api/i.test(agent?.signIn.method ?? '');
   const spent = spentOn(conversations.get(diagramId));
 
+  // Between Send and the turn starting (its view is read first): a second Enter is not a second turn.
+  const sending = useRef(false);
   const send = (text = draft) => {
     const prompt = text.trim();
-    if (!prompt || running || blocker) return;
+    if (!prompt || running || blocker || sending.current) return;
+    // Small talk is Nodi's own to answer: no agent run, no tokens.
+    const own = smallTalkOf(prompt, seedOf(diagramId) + turns.length);
+    if (own) {
+      setDraft('');
+      companion.answer(diagramId, prompt, own);
+      return;
+    }
     const scoped = includeSelection && hasSelection;
     const kind = agent?.agent ?? 'claude-code';
     const request: PromptRequest = {
@@ -377,7 +388,17 @@ export function Companion() {
       unchanged: unchangedSinceLastTurn(diagramId, useEditorStore.getState().document, room, kind, turns.length > 0),
     };
     setDraft('');
-    void controller.companionSend(request, scoped ? about : null);
+    sending.current = true;
+    void (async () => {
+      try {
+        // The view up front, so the agent's first call is its answer rather than a read; not when it
+        // has the view from last turn already.
+        const snapshot = request.unchanged ? null : await controller.companionSnapshot(diagramId, room).catch(() => null);
+        await controller.companionSend(snapshot ? { ...request, snapshot } : request, scoped ? about : null);
+      } finally {
+        sending.current = false;
+      }
+    })();
   };
 
   const onKey = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -485,6 +506,12 @@ export function Companion() {
   // Each time Nodi pipes up on a hover, a new line from its repertoire: only once the last one has
   // gone, so coming back while it lingers never swaps the line being read.
   const [visits, setVisits] = useState(0);
+  // Closed after a look, Nodi has something new to say next time, not the line it opened on.
+  const wasExpanded = useRef(expanded);
+  useEffect(() => {
+    if (wasExpanded.current && !expanded) setVisits((n) => n + 1);
+    wasExpanded.current = expanded;
+  }, [expanded]);
   const leftAt = useRef(0);
   // On a diagram's first opening this app run, Nodi walks on from the canvas's edge, then greets.
   const [arriving, setArriving] = useState(() => !greeted.has(diagramId) && !prefersReducedMotion());
@@ -561,6 +588,7 @@ export function Companion() {
   // The hello itself, about this diagram as it opened: worked out once per diagram, so it doesn't
   // change under the reader as the diagram does.
   const hello = useMemo(() => {
+    opened.set(diagramId, (opened.get(diagramId) ?? 0) + 1);
     const { document: view, outer } = useEditorStore.getState();
     const file = outer ?? view;
     const shapes = view.nodes.filter((n) => !['note', 'text', 'code', 'group', 'ellipse'].includes(n.type));
@@ -578,7 +606,9 @@ export function Companion() {
         insides,
         now: new Date(),
       },
-      seedOf(diagramId),
+      // A new hello each time it opens, and each time the app runs: the same diagram used to open
+      // to the same line, every time.
+      seedOf(diagramId) + RUN_SALT + (opened.get(diagramId) ?? 0),
     );
   }, [diagramId]);
   useEffect(() => {
@@ -608,7 +638,7 @@ export function Companion() {
     // What the message would be about: the selection, unless the person left it out.
     selected: about,
     selectedKind: about ? onlyKind : null,
-    seed: seedOf(diagramId) + (wandering === 'goodbye' || (returned && (peeking || helloHeld)) ? trips : visits),
+    seed: seedOf(diagramId) + (wandering === 'goodbye' || (returned && (peeking || helloHeld)) ? trips : RUN_SALT + visits),
     diagram: setupSteps.length ? [`Psst, boss. ${agentName} can’t find me outside this box yet. Open me: it’s one click.`, ...aboutDiagram] : aboutDiagram,
     runSeed: seedOf(last?.runId ?? diagramId),
     clock,
@@ -617,6 +647,23 @@ export function Companion() {
     returning: returned && (peeking || helloHeld),
     arrival: peeking || helloHeld ? hello : undefined,
   });
+  // The line the bubble says. While it is up, whatever Nodi has to say now; once it starts to go (the
+  // hello's five seconds are up, the pointer has left), the line it was saying stays until it has
+  // gone, instead of being typed over with the next line on its way out.
+  const bubbleUp = resting.stays || peeking || hovered;
+  const [said, setSaid] = useState(resting);
+  const latest = useRef(resting);
+  latest.current = resting;
+  useEffect(() => {
+    if (bubbleUp) {
+      setSaid(latest.current);
+      return;
+    }
+    const timer = setTimeout(() => setSaid(latest.current), SAY_GONE_MS);
+    return () => clearTimeout(timer);
+  }, [bubbleUp, resting.text, resting.tone, resting.hint]);
+  // Up, the current line at once (no frame of the old one); going, the one it was saying.
+  const line = bubbleUp ? resting : said;
   // Opened from rest: the pointer was over the bubble, which goes from under it without a leave, so
   // the hover is put down here or Nodi would keep talking after the conversation closes.
   const openFromRest = () => {
@@ -672,18 +719,18 @@ export function Companion() {
             <button
               type="button"
               className="dc-companion-say"
-              data-tone={resting.tone}
-              data-shown={resting.stays || peeking || hovered ? 'true' : undefined}
-              aria-label={`Nodi: ${resting.text} ${resting.hint}`}
+              data-tone={line.tone}
+              data-shown={bubbleUp ? 'true' : undefined}
+              aria-label={`Nodi: ${line.text} ${line.hint}`}
               onClick={openFromRest}
             >
               {/* Who is talking, as a game's dialogue box says it: a nameplate on the box's edge. */}
               <span className="dc-companion-say-name" aria-hidden="true">
                 Nodi
               </span>
-              <Typed key={resting.text} text={resting.text} />
+              <Typed key={line.text} text={line.text} />
               <span className="dc-companion-say-hint" aria-hidden="true">
-                {resting.hint}
+                {line.hint}
               </span>
             </button>
           )}
@@ -751,6 +798,8 @@ export function Companion() {
               >
                 <Icon name="pencil" />
               </button>
+{/* Only once an agent has run: Nodi's own replies leave no session to carry on. */}
+              {turns.some((t) => !t.local) && (
               <button
                 type="button"
                 aria-label="Continue in Terminal"
@@ -761,6 +810,7 @@ export function Companion() {
                   &gt;_
                 </span>
               </button>
+              )}
             </span>
           )}
           {blocker ? (

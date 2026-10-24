@@ -128,7 +128,42 @@ const GREETINGS = [
   'I counted your services three times and got three answers. Eventual consistency, boss.',
   'Distributed tracing: watch one request visit eleven services and achieve nothing, boss.',
   'There are two hard things: cache invalidation, naming things and off-by-one errors.',
+  // More of the same affliction.
+  'I tried to find the source of truth, boss. There are four. They disagree.',
+  'Someone wrote “we’ll fix it later” in 2019, boss. It is later.',
+  'The staging environment is lying to you, boss. It always has. It’s staging.',
+  'I ran the numbers on your diagram, boss. Then I ran away from them.',
+  'Every box here is someone’s pager, boss. Some boxes are your pager twice.',
+  'Your architecture has a single point of failure, boss. I’m not saying it’s you. I’m not not saying it.',
+  'Boss, if this diagram were a microservice, I’d have rate-limited it by now.',
+  'I put a timeout on my patience, boss. It’s 30 seconds. Same as your API.',
+  'Boss, the arrows on this diagram have trust issues. I relate.',
+  'Fun fact, boss: “temporary workaround” has a half-life of nine years.',
+  'The on-call rotation is just you, boss. I checked. Twice. You were on call both times.',
+  'Load tested? Sure, boss. By the users. In production. On launch day.',
+  'I’d tell you a UDP joke, boss, but you might not get it.',
+  'I’d tell you a TCP joke, boss, but I’d keep asking if you got it.',
+  'Somewhere a JSON payload just became 4 MB, boss. Nobody knows why. It’s yours now.',
+  'Kubernetes fixed one problem, boss, and invited forty of its friends.',
+  'The cloud is just someone else’s computer, boss. That someone is having a bad day.',
+  'Rollback plan, boss? “Pray” is not a rollback plan. I asked the pager.',
+  'Your diagram has more arrows than my dating life, boss. Also more retries.',
+  'Every system is eventually consistent, boss. Some of them eventually never.',
+  'Monitoring dashboard: 47 graphs, all green, and the site is down. Classic, boss.',
+  'I’ve seen things, boss. Cron jobs scheduled for February 30th.',
+  'Boss, the database is fine. The database is always fine. Until the backup restore.',
+  'A senior engineer once told me “it depends”, boss. It still depends.',
+  'I calculated your uptime, boss. It was 99.9%. The other 0.1% was a Friday.',
+  'Feature request from the logs, boss: “please stop”.',
+  'Somebody named a service “helper”, boss. It does everything. Nobody knows what.',
+  'I respect a good diagram, boss. This one has potential. And a gateway. Mostly potential.',
+  'Remember: the S in IoT stands for security, boss.',
+  'The best time to add a dead-letter queue was before the incident, boss. The second best is now.',
 ];
+
+/** A different start for each run of the app: otherwise a diagram greets with the same lines, in
+ *  the same order, every time it is opened. */
+export const RUN_SALT = Math.floor(Math.random() * 1_000_000);
 
 const SELECTED = [
   'Want me to look at {it}, boss?',
@@ -318,6 +353,11 @@ export function arrivalLine(at: Arrival, seed: number): string {
         `A blank ${title}, boss. Zero bugs. Enjoy it while it lasts.`,
         `${title}: empty. The most reliable architecture there is. Shall we ruin it?`,
         `Fresh canvas, boss. Every outage starts somewhere. Usually here.`,
+        `A brand new ${title}, boss! I love the smell of an empty canvas in the morning.`,
+        `Nothing here yet, boss. No services, no queues, no pager. Paradise. Let’s fix that.`,
+        `Empty canvas, boss. Draw one box and I’ll tell you three ways it fails.`,
+        `Blank page, boss. Every legacy system started exactly like this. Be gentle.`,
+        `Hi boss! New diagram, new mistakes. I’m so excited.`,
       ],
       seed,
     ));
@@ -328,6 +368,18 @@ export function arrivalLine(at: Arrival, seed: number): string {
     `${title}, ${when}. Let’s see what changed since you last looked. Probably everything.`,
     `${title} is open. Somewhere, a pager just got nervous.`,
     `${title} again, boss? Unfinished business, or unfinished business?`,
+    `Boss! You’re back! I kept ${title} warm. Nothing caught fire. That I know of.`,
+    `Oh hi boss. ${title}. I was just, uh, definitely not reorganizing your arrows.`,
+    `Welcome back to ${title}, boss. Please keep your hands inside the boundaries at all times.`,
+    `${title}, boss. I missed you. I missed the diagram more, but I missed you.`,
+    `Boss is in the building! ${title} is open. Act natural, everyone.`,
+    `${title}! My favourite diagram. Don’t tell the others, boss.`,
+    `Hey boss. ${title} looks exactly how you left it. Suspicious, honestly.`,
+    `Reporting for duty, boss. ${title} is loaded, my pixels are caffeinated, the pager is asleep.`,
+    `${title} is open and so are my opinions, boss. Brace.`,
+    `Ah, ${title}. The one with the ${connectors === 1 ? 'arrow' : 'arrows'}. I’ve been thinking about ${connectors === 1 ? 'it' : 'them'}, boss.`,
+    `Boss, ${title} called while you were gone. I said you were in a meeting. Were you? It doesn’t matter.`,
+    `${title}, round two. Or seven. I stopped counting, boss.`,
   ];
   if (shapes >= 20) lines.push(`${title}: ${shapes} parts. A big one, boss. Coffee first?`);
   if (shapes > 0 && shapes <= 4) lines.push(`${title}: ${shapes} ${shapes === 1 ? 'part' : 'parts'}. Small, boss. Small is how the big ones start.`);
@@ -542,6 +594,123 @@ export function setupStepsOf(
     steps.push({ kind: 'skill', target, label: 'Update the drawing skill', why: `${agent.name}’s drawing skill is from an older Draft Canvas, boss. Mine’s newer. Obviously.` });
   }
   return steps;
+}
+
+/**
+ * Small talk Nodi answers itself, with no agent run: a whole message of only a greeting, a thanks,
+ * an okay, a goodbye or a how-are-you. Even trimmed, one model call costs an agent thousands of
+ * tokens (its instructions and tools go with every call), which is a lot for "hello". Anything more
+ * — a question, a name, a second clause — goes to the agent as before.
+ */
+const SMALL_TALK: { words: RegExp; replies: readonly string[] }[] = [
+  {
+    words: /^(hi|hello|hey|heya|hiya|yo|sup|howdy|hola|good (morning|afternoon|evening)|morning|hi there|hello there|hey there|hey nodi|hi nodi|hello nodi)$/,
+    replies: [
+      'Hey boss! Ask me anything about this diagram: what breaks first, what’s missing, or what to add.',
+      'Boss! Good to see you. What are we breaking, I mean building, today?',
+      'Hello, boss. I’ve been staring at this diagram. Ask me what I found.',
+    ],
+  },
+  {
+    words: /^(thanks|thank you|thx|ty|cheers|thanks nodi|thank you nodi|thanks a lot|much appreciated|appreciate it)$/,
+    replies: ['Anytime, boss. Put it on my tab.', 'You’re welcome, boss. I accept payment in green CI runs.', 'Happy to help, boss. Mostly.'],
+  },
+  {
+    words: /^(ok|okay|k|kk|cool|nice|great|awesome|got it|sounds good|perfect|lol|haha|lmao|yep|yes|yup|sure|alright|all right)$/,
+    replies: ['Noted, boss.', 'Cool cool cool. I’ll be here.', 'Great. Say the word when you want more.'],
+  },
+  {
+    words: /^(bye|goodbye|see you|see ya|later|good night|gn|night|cya)$/,
+    replies: ['Later, boss. I’ll keep an eye on the queues.', 'Bye, boss. Don’t deploy on the way out.', 'Night, boss. The pager and I will hold the fort.'],
+  },
+  {
+    words: /^(whats your name|what is your name|who are you|what are you|your name|who is this|whos this|who am i talking to)$/,
+    replies: [
+      'Nodi, boss. NOH-dee, after nodes. I live in this corner and have opinions about your architecture.',
+      'I’m Nodi, boss. Part pixel, part pager, all yours. I run on your own coding agent.',
+      'Nodi. Your diagram’s companion, boss. I read the boxes so you don’t have to read the logs.',
+    ],
+  },
+  {
+    words: /^(how old are you|whats your age|what is your age|when were you born|when is your birthday)$/,
+    replies: [
+      'Old enough to remember a server room, boss. Young enough to deny it.',
+      'Born the first time someone drew a box and an arrow, boss. So: ancient, and also v1.',
+      'I don’t age, boss. I just accumulate technical debt.',
+    ],
+  },
+  {
+    words: /^(are you (an )?ai|are you (a )?bot|are you real|are you human|are you a robot|are you alive)$/,
+    replies: [
+      'I’m Nodi, boss: pixels on top, your own coding agent underneath. Very real. Somewhat sentient about queues.',
+      'A robot made of a sheet of paper and opinions, boss. The thinking is your agent’s; the attitude is mine.',
+    ],
+  },
+  {
+    words: /^(what can you do|what do you do|help|help me|how do you work|how does this work)$/,
+    replies: [
+      'I read this diagram with your agent and talk about it, boss: walk you through it, find what breaks first, draw a change for you to accept or reject. Ask away.',
+      'Ask me anything about the diagram, boss: risks, what’s missing, how a request travels. Ask for a change and I’ll put it on the canvas for you to accept.',
+    ],
+  },
+  {
+    words: /^(good job|well done|nice work|great job|youre funny|youre the best|i love you|love you|you rock|youre awesome)$/,
+    replies: ['Stop it, boss. My pixels are blushing.', 'I know, boss. But it’s nice to hear it from a human.', 'Put it in my performance review, boss. In bold.'],
+  },
+  {
+    words: /^(sorry|my bad|oops|apologies)$/,
+    replies: ['No harm done, boss. I’ve seen worse. I’ve caused worse.', 'Forgiven, boss. The pager, however, never forgets.'],
+  },
+  {
+    words: /^(tell me a joke|joke|make me laugh|say something funny)$/,
+    replies: [
+      'There are 10 kinds of people, boss: those who read binary and those still counting.',
+      'Why did the microservice break up with the monolith, boss? It needed space. And forty more deployments.',
+      'A QA engineer walks into a bar, boss. Orders a beer. Orders -1 beers. Orders a lizard. The bar catches fire.',
+    ],
+  },
+  {
+    words: /^(are you there|you there|hello are you there|anyone there|ping)$/,
+    replies: ['Pong, boss. Latency: emotional.', 'Here, boss. Always. Even when I pretend to go for coffee.'],
+  },
+  {
+    words: /^(how are you|how are you doing|hows it going|how is it going|whats up|what is up|you ok|you good)$/,
+    replies: ['Zero errors and mild existential dread, boss. You?', 'Running fine, boss. Unlike that one service. You know the one.', 'Never better, boss. Well. Better since you opened the diagram.'],
+  },
+];
+
+/** Nodi's own answer to `text` when it is only small talk, else null (send it to the agent). */
+export function smallTalkOf(text: string, seed: number): string | null {
+  const said = text
+    .toLowerCase()
+    .replace(/[’']/g, '')
+    .replace(/[^a-z\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/ boss$/, '');
+  if (!said || said.split(' ').length > 6) return null;
+  const talk = SMALL_TALK.find((t) => t.words.test(said)) ?? SMALL_TALK.find((t) => typoOf(said, t.words));
+  return talk ? pick(talk.replies, seed) : null;
+}
+
+/** A small talk phrase with one typo in it ("how hold are you"): only for phrases long enough that one
+ *  letter can't turn them into something else, and only when a single word is one letter off. */
+function typoOf(said: string, words: RegExp): boolean {
+  if (said.length < 10) return false;
+  const parts = said.split(' ');
+  return parts.some((part, i) => {
+    for (let at = 0; at <= part.length; at += 1) {
+      // One letter dropped, or one letter added, in this word.
+      const variants = [part.slice(0, at) + part.slice(at + 1)];
+      for (const letter of 'abcdefghijklmnopqrstuvwxyz') variants.push(part.slice(0, at) + letter + part.slice(at));
+      for (const variant of variants) {
+        if (variant === part) continue;
+        const tried = [...parts.slice(0, i), variant, ...parts.slice(i + 1)].join(' ').trim();
+        if (words.test(tried)) return true;
+      }
+    }
+    return false;
+  });
 }
 
 /** A stable small number from a string (a diagram or run id), for the seeds. */

@@ -43,7 +43,8 @@ then it says what is missing and offers the fix: **Let Nodi in** turns agent acc
 
 1. Click Nodi, its speech bubble, or press ⌘J (Ctrl+J). Select shapes first to ask about them; the
    selection shows in the message box, and × asks about the whole view instead.
-2. Pick one of Nodi's suggestions (**Walk me through it**, **What breaks first?**, …) or type.
+2. Pick one of Nodi's suggestions (**Walk me through it**, **What breaks first?**, …) or type. A plain
+   "hello", "thanks" or "ok" Nodi answers itself, without running your agent, so it costs no tokens.
 3. Read the answer in the bubble, which holds the whole conversation; past two turns, the earlier
    ones fold behind one line. On its top edge, the pencil starts a new conversation and `>_` copies a
    command that continues it in your agent's own terminal UI.

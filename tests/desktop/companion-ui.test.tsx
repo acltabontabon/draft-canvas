@@ -35,6 +35,7 @@ function fakeController() {
     companionContinue: vi.fn(async () => "cd '/work' && 'claude' '--resume' 's-1'"),
     companionSend: vi.fn(async (request: PromptRequest, about: string | null) => companion.begin(request.diagramId, request.runId, request.text, about)),
     companionCancel: vi.fn(async () => {}),
+    companionSnapshot: vi.fn(async (): Promise<string | null> => null),
     companionForget: vi.fn(async (diagramId: string) => companion.clear(diagramId)),
     refreshCompanionProposals: vi.fn(async () => {}),
     refreshAgent: vi.fn(async () => {}),
@@ -121,6 +122,43 @@ describe('the companion', () => {
     expect(controller.companionSend.mock.calls[0]![0]).toMatchObject({ text: 'Explain this diagram' });
   });
 
+  it('sends the view with the turn, read as it was sent, so the agent needn’t read it first', async () => {
+    controller.companionSnapshot.mockResolvedValue('{"revision":"o:1.1","elements":[]}');
+    useUiStore.setState({ companionOpen: true });
+    mount();
+    await settle();
+    const input = screen.getByLabelText('Message Claude Code');
+    fireEvent.change(input, { target: { value: 'What breaks first?' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    // A second Enter while it is read is not a second turn.
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await settle();
+    expect(controller.companionSnapshot).toHaveBeenCalledWith(doc.metadata.id, []);
+    expect(controller.companionSend).toHaveBeenCalledTimes(1);
+    expect(controller.companionSend.mock.calls[0]![0]).toMatchObject({ text: 'What breaks first?', snapshot: '{"revision":"o:1.1","elements":[]}' });
+  });
+
+  it('answers small talk itself, without running the agent', async () => {
+    useUiStore.setState({ companionOpen: true });
+    mount();
+    await settle();
+    const input = screen.getByLabelText('Message Claude Code');
+    fireEvent.change(input, { target: { value: 'hello' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await settle();
+    expect(controller.companionSend).not.toHaveBeenCalled();
+    // Nodi's own reply, in the conversation, with nothing spent.
+    expect(screen.getByRole('region', { name: /Conversation with/ }).textContent).toMatch(/boss/i);
+    expect(screen.queryByText(/new tokens/)).toBeNull();
+    // Nothing to carry on in a terminal: no agent has run.
+    expect(screen.queryByRole('button', { name: 'Continue in Terminal' })).toBeNull();
+    // A real question still goes to the agent.
+    fireEvent.change(input, { target: { value: 'hello, what breaks first?' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await settle();
+    expect(controller.companionSend).toHaveBeenCalledTimes(1);
+  });
+
   describe('taking a break', () => {
     async function start() {
       vi.useFakeTimers();
@@ -136,6 +174,22 @@ describe('the companion', () => {
 
     const tripSeed = () => seedOf(doc.metadata.id) + 1;
     const say = () => document.querySelector('.dc-companion-say');
+
+    it('keeps saying its hello while the bubble goes, instead of typing the next line over it', async () => {
+      vi.useFakeTimers();
+      // A diagram not yet greeted this run, so there is a hello to say.
+      useEditorStore.setState({ document: { ...doc, metadata: { ...doc.metadata, id: 'd_hello00001' } } });
+      await act(async () => { mount(); });
+      await advance(2200);
+      const hello = say()?.getAttribute('aria-label');
+      expect(say()?.getAttribute('data-shown')).toBe('true');
+      // Its five seconds are up: the bubble starts to go, with the hello still in it.
+      await advance(5000);
+      expect(say()?.getAttribute('data-shown')).toBeNull();
+      expect(say()?.getAttribute('aria-label')).toBe(hello);
+      await advance(1000);
+      expect(say()?.getAttribute('aria-label')).toBe(hello);
+    });
 
     it('says goodbye after idle, walks right, and walks back on a key with a return greeting', async () => {
       await start();

@@ -54,7 +54,9 @@ impl Backend for Codex {
 
     fn command(&self, spec: &RunSpec) -> Command {
         let mut command = Command::new(spec.program);
-        command.args(args(spec)).current_dir(spec.work_dir);
+        command
+            .args(args(spec, &features(spec.program)))
+            .current_dir(spec.work_dir);
         if let Some(path) = clients::path_with(spec.program.parent()) {
             command.env("PATH", path);
         }
@@ -70,12 +72,67 @@ impl Backend for Codex {
     }
 }
 
+/// Codex features that put tools of their own into every model call (a browser, computer use, image
+/// generation, sub-agents, plugins and apps, skill search, a second shell…), none of which a canvas run
+/// can use. Off, a call went from 17.3k tokens to 6.3k before the agent did anything (measured with
+/// codex-cli 0.163.0, with web search off too). Only the ones this Codex has are named: it refuses
+/// to start on a feature it doesn't know, and the list changes from version to version.
+const NOT_FOR_A_CANVAS: &[&str] = &[
+    "apps",
+    "browser_use",
+    "browser_use_external",
+    "computer_use",
+    "goals",
+    "image_generation",
+    "in_app_browser",
+    "multi_agent",
+    "plugins",
+    "realtime_conversation",
+    "remote_plugin",
+    "skill_search",
+    "sleep_tool",
+    "tool_suggest",
+    "unified_exec",
+    "view_image",
+    "worktrees",
+];
+
+/// The features this Codex has (`codex features list`), asked once per program per app run.
+fn features(program: &Path) -> HashSet<String> {
+    static KNOWN: std::sync::OnceLock<
+        std::sync::Mutex<std::collections::HashMap<std::path::PathBuf, HashSet<String>>>,
+    > = std::sync::OnceLock::new();
+    let known = KNOWN.get_or_init(Default::default);
+    if let Some(found) = known.lock().ok().and_then(|k| k.get(program).cloned()) {
+        return found;
+    }
+    let found = quick(program, &["features", "list"])
+        .map(|out| features_of(&out))
+        .unwrap_or_default();
+    if let Ok(mut k) = known.lock() {
+        k.insert(program.to_path_buf(), found.clone());
+    }
+    found
+}
+
+/// `browser_use   stable   true` → `browser_use`, one per line.
+fn features_of(text: &str) -> HashSet<String> {
+    text.lines()
+        .filter_map(|line| line.split_whitespace().next())
+        .filter(|name| {
+            name.chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+        })
+        .map(str::to_string)
+        .collect()
+}
+
 /// Everything but the prompt, which goes on stdin (`-`) so it never shows in a process list.
 ///
 /// Sessions are kept (no `--ephemeral`): a conversation's next turn resumes the thread. Settings that
 /// `codex exec resume` has no flag for are given as `-c` overrides, so a first turn and a resumed one
 /// run under exactly the same rules.
-fn args(spec: &RunSpec) -> Vec<String> {
+fn args(spec: &RunSpec, available: &HashSet<String>) -> Vec<String> {
     let mut args = vec!["exec".to_string()];
     if let SessionArg::Resume(_) = spec.session {
         args.push("resume".into());
@@ -96,16 +153,25 @@ fn args(spec: &RunSpec) -> Vec<String> {
         ]
         .map(String::from),
     );
+    for feature in NOT_FOR_A_CANVAS.iter().filter(|f| available.contains(**f)) {
+        args.push("--disable".into());
+        args.push((*feature).to_string());
+    }
+    // No web search: its tool goes with every call, and a canvas run answers from the diagram.
+    args.push("-c".into());
+    args.push(r#"web_search="disabled""#.into());
     // Replacing the whole table keeps the person's other servers out of the run.
     args.push("-c".into());
     args.push(format!(
         "mcp_servers={}",
         server_table(spec.server, spec.server_env)
     ));
+    // The brief instead of Codex's own instructions, which are about coding in a repository (and a
+    // further 2.5k tokens a call), not beside them.
     args.push("-c".into());
     args.push(format!(
-        "developer_instructions={}",
-        toml_string(spec.brief)
+        "model_instructions_file={}",
+        toml_string(&spec.brief_file.to_string_lossy())
     ));
     if let SessionArg::Resume(thread) = spec.session {
         args.push(thread.to_string());
@@ -401,15 +467,20 @@ mod tests {
 
     fn spec_args(session: SessionArg) -> Vec<String> {
         let env = vec![("DRAFT_CANVAS_RUN", "run-1".to_string())];
-        args(&RunSpec {
-            program: Path::new("/bin/codex"),
-            work_dir: Path::new("/work"),
-            mcp_config: Path::new("/run/mcp.json"),
-            server: Path::new("/App/draft-canvas-mcp"),
-            server_env: &env,
-            brief: "Say \"hi\".\nThen stop.",
-            session,
-        })
+        let available = features_of("browser_use   stable   true\nunified_exec   stable   true\nshell_tool   stable   true\n");
+        args(
+            &RunSpec {
+                program: Path::new("/bin/codex"),
+                work_dir: Path::new("/work"),
+                mcp_config: Path::new("/run/mcp.json"),
+                server: Path::new("/App/draft-canvas-mcp"),
+                server_env: &env,
+                brief: "Say \"hi\".\nThen stop.",
+                brief_file: Path::new("/run/brief.md"),
+                session,
+            },
+            &available,
+        )
     }
 
     #[test]
@@ -427,13 +498,18 @@ mod tests {
         assert!(servers.parse::<toml_edit::DocumentMut>().is_ok());
         let brief = args
             .iter()
-            .find(|a| a.starts_with("developer_instructions="))
+            .find(|a| a.starts_with("model_instructions_file="))
             .unwrap();
         let parsed: toml_edit::DocumentMut = brief.parse().unwrap();
         assert_eq!(
-            parsed["developer_instructions"].as_str(),
-            Some("Say \"hi\".\nThen stop.")
+            parsed["model_instructions_file"].as_str(),
+            Some("/run/brief.md")
         );
+        // The tool-bringing features off, the ones this Codex has; none it doesn't (it would refuse).
+        assert!(args.windows(2).any(|w| w == ["--disable", "browser_use"]));
+        assert!(args.windows(2).any(|w| w == ["--disable", "unified_exec"]));
+        assert!(!args.windows(2).any(|w| w == ["--disable", "computer_use"]));
+        assert!(args.contains(&r#"web_search="disabled""#.to_string()));
         assert_eq!(args.last().map(String::as_str), Some("-"));
         assert!(!args.contains(&"--ephemeral".to_string()));
     }

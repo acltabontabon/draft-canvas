@@ -61,6 +61,11 @@ pub struct PromptRequest {
     #[serde(default)]
     #[ts(optional)]
     pub unchanged: Option<bool>,
+    /// The view as read_diagram would answer it, read by the page as the turn was sent, so the agent's
+    /// first call needn't be a read. JSON text; left out when it was too big or couldn't be read.
+    #[serde(default)]
+    #[ts(optional)]
+    pub snapshot: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ts_rs::TS)]

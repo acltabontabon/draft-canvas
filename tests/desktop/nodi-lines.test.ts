@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createEdge, createNode } from '../../src/document/factory';
-import { arrivalLine, blockedFolderOf, clockLines, diagramLines, doorOf, goodbyeLine, openers, restingLine, returnLine, seedOf, setupStepsOf, smallHours, snagOf } from '../../src/desktop/ui/nodiLines';
+import { arrivalLine, blockedFolderOf, smallTalkOf, clockLines, diagramLines, doorOf, goodbyeLine, openers, restingLine, returnLine, seedOf, setupStepsOf, smallHours, snagOf } from '../../src/desktop/ui/nodiLines';
 
 /** What Nodi says from rest: the one thing worth knowing, most pressing first. */
 
@@ -52,13 +52,15 @@ describe('Nodi at rest', () => {
   it('says hello about the diagram that just opened, not a line from anywhere', () => {
     const now = new Date(2026, 9, 21, 10, 0);
     const at = { title: 'Library System', shapes: 7, connectors: 13, flows: 0, openPoints: 2, insides: 1, now };
-    const hellos = new Set([0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((seed) => arrivalLine(at, seed)));
+    const hellos = new Set(Array.from({ length: 60 }, (_, seed) => arrivalLine(at, seed)));
+    // Plenty of them: the same diagram opened again says something else.
+    expect(hellos.size).toBeGreaterThan(15);
     for (const hello of hellos) expect(hello).toMatch(/Library System|Fresh canvas/);
     expect([...hellos].some((h) => h.includes('2 open points waiting'))).toBe(true);
     expect([...hellos].some((h) => h.includes('bigger on the inside'))).toBe(true);
     expect(arrivalLine({ ...at, shapes: 0, connectors: 0 }, 0)).toMatch(/blank|empty|Fresh canvas/i);
     // Grammar that holds for one, and a lower-case title still starts the line with a capital.
-    const one = new Set([0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((seed) => arrivalLine({ ...at, insides: 1 }, seed)));
+    const one = new Set(Array.from({ length: 60 }, (_, seed) => arrivalLine({ ...at, insides: 1 }, seed)));
     expect([...one].some((h) => h.includes('One part has a whole diagram in it.'))).toBe(true);
     for (let seed = 0; seed < 10; seed += 1) expect(arrivalLine({ ...at, title: 'orders' }, seed)).toMatch(/^[^a-z]/);
     // While it says hello, the hello is what it says.
@@ -303,5 +305,23 @@ describe('what Nodi says about the time', () => {
     expect(restingLine({ ...quiet, poked: true })).toMatchObject({ tone: 'poked', stays: true });
     // News still wins.
     expect(restingLine({ ...quiet, poked: true, unseen: true }).tone).toBe('done');
+  });
+});
+
+describe('small talk Nodi answers itself', () => {
+  it('answers a greeting, a thanks, an okay, a goodbye or a how-are-you, however it is typed', () => {
+    for (const said of ['hello', 'Hello!', 'hey boss', 'Hi there 👋', 'good morning', 'thanks', 'Thank you!!', 'ok', 'lol', 'bye', 'How are you?', 'what’s up', 'whats your name', 'Who are you?', 'how old are you?', 'how hold are you?', 'are you an AI?', 'what can you do', 'tell me a joke', 'good job', 'you there?']) {
+      expect(smallTalkOf(said, 0), said).toMatch(/\w/);
+    }
+  });
+
+  it('says its own name, whatever runs it', () => {
+    for (let seed = 0; seed < 3; seed += 1) expect(smallTalkOf('what’s your name?', seed)).toMatch(/Nodi/);
+  });
+
+  it('sends anything more to the agent', () => {
+    for (const said of ['hello, what breaks first?', 'hi can you add a cache', 'thanks, now add a queue', 'ok do it', 'why', 'explain this', 'hey what is this service for', 'how old is the database', 'what can you do with the queue', 'help me add a cache', '']) {
+      expect(smallTalkOf(said, 0), said).toBeNull();
+    }
   });
 });
