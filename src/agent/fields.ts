@@ -13,6 +13,16 @@ export const SET_FIELDS = {
   attachment: ['label', 'text', 'kind', 'code', 'language', 'about', 'attach'],
   openPoint: ['kind', 'context', 'resolved', 'resolution', 'about'],
 } as const;
+/** What each object of a create request (and of an `add` op) may carry. The skill's checker
+ *  (`skills/draft-canvas/scripts/check_diagram.py`) restates these; `tests/agent-skill.test.ts` keeps it so. */
+export const CREATE_FIELDS = {
+  request: ['requestId', 'title', 'project', 'starter', ...ROOM_FIELDS, 'layout', 'open', 'allowDuplicateTitle', 'fallbackType'],
+  group: ['id', 'label', 'kind', 'parent'],
+  element: ['id', 'type', 'label', 'description', 'technology', 'group', 'color', 'attachments', 'inside', 'evidence', 'place'],
+  relationship: ['id', 'from', 'to', 'label', 'semantic', 'kind', 'directed', 'async', 'condition', 'color', 'lineStyle', 'response', 'deliveryAttempts', 'attachments', 'evidence', 'route'],
+  flow: ['id', 'title', 'color', 'variantOf', 'steps'],
+  note: ['id', 'text', 'kind', 'code', 'language', 'about', 'near', 'attach', 'style'],
+} as const;
 export const OP_FIELDS: Record<string, readonly string[]> = {
   add: ['op', ...ROOM_FIELDS, 'openPoints'],
   update: ['op', 'id', 'set'],

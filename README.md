@@ -52,8 +52,11 @@ Works with Claude Code, Codex, Cursor, Gemini CLI, Junie or any MCP client.
 3. Click **Add to…** for your agent, then **Install skill**. Start a new agent session.
 4. Ask:
 
-   > Use the Draft Canvas skill to draw this repository's architecture, with a flow for
-   > the main request path and source references for the important parts.
+   > Use the Draft Canvas skill to diagram this repository's architecture as C4 views, down to
+   > components where the code has real logic. Read the code before you draw, cite source files
+   > and mark anything inferred. Make the main request path a presentation flow, with variants for
+   > the failure paths the code handles, and leave open questions as notes. Render every view and
+   > fix what reads badly before you finish.
 
 Ask again to refresh the same diagram when the code changes.
 [Setup and troubleshooting](docs/guides/connect-an-ai-agent.md)

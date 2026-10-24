@@ -2,7 +2,7 @@
 name: draft-canvas
 description: Draws a codebase's architecture as a detailed, editable Draft Canvas diagram — C4 views with look-inside drill-downs, presentation flows of the real request path, notes, code snippets and source evidence — through the Draft Canvas desktop app's MCP tools. Use when someone asks to diagram, draw, map, visualize or explain the architecture of a repository, service or system in Draft Canvas, to turn a codebase into a diagram, or to refresh such a diagram after the code changed.
 metadata:
-  version: "8"
+  version: "9"
   contract: "3"
   requires: Draft Canvas Desktop with agent access on (MCP server draft-canvas)
 ---
@@ -45,8 +45,9 @@ from [example-create.json](references/example-create.json).
 
 ## 2. Make it true
 
-Open the **read next** files and follow calls only as far as you need — about 15–40 reads for a typical
-system (fan out to sub-agents per deployable on a big monorepo, if you can). Then edit `request.json`:
+Open the **read next** files and follow calls only as far as you need — about 15–40 files for a typical
+system, searches not counted (fan out to sub-agents per deployable on a big monorepo, if you can). Then
+edit `request.json`:
 
 - **Confirm every element** in code. Delete what isn't there or isn't architecture (dev tools, test
   rigs, observability); add what the survey missed. A survey finding is a hint, not a fact.
@@ -56,16 +57,26 @@ system (fan out to sub-agents per deployable on a big monorepo, if you can). The
   ([vocabulary.md](references/vocabulary.md) maps code to them).
 - **Sharpen the evidence**: add `symbol` and `line` for what you read; `basis: "inferred"` for what you
   concluded without seeing it.
-- **Shape**, if the draft's doesn't fit what you learned
-  ([modeling.md](references/modeling.md#pick-the-views)): up to ~8 parts read as one container view;
-  more, with people or providers around them, open on a context view with the containers inside. Give
-  the 1–3 containers with real logic a component view (`inside`, `level: "component"`). One store per
-  owning service when services own separate schemas.
+- **C4 levels** ([modeling.md](references/modeling.md#pick-the-views)). The draft picks the top view
+  from the count; change it if what you learned says otherwise — up to ~8 containers read as one
+  container view, more open on a context view with the containers inside. Then, always: give the
+  container that holds the main path's logic — the one that orchestrates calls, owns the business
+  rules or has modules of its own — a component view (`inside`, `level: "component"`, 5–10 parts),
+  and up to two more if they earn it. A system of three or more containers without one is unfinished.
+  One store per owning service when services own separate schemas.
 - **Flows — the presentation.** The main request path in code order: open with
-  `{spotlight: [ids], caption}`, then one step per relationship with a caption saying what happens
-  there; name it in `layout.primaryFlow`. One `variantOf` flow per failure path the code really has
-  (retry → dead letter, compensation). Never invent an order.
-- **Notes, three to eight**, each with an `about`: `decision` (a choice the code or an ADR makes),
+  `{spotlight: [ids], caption}`, then one step per call with a caption saying what happens there. It
+  lives in the view where its calls are: in the top view, name it in `layout.primaryFlow`; under a
+  context view, list it **first** in the container view's flows (the app lays each inside view out
+  around its first flow) and give the top view a short "at a glance" flow as `primaryFlow`. A
+  component view gets its own flow, first, for the same request one level down. A call made twice
+  over one relationship (get the cart … empty the cart): step it the first time, and light it again
+  later with `{spotlight: ["<relationship id>"], caption}` — never a second relationship in the same
+  direction. One `variantOf` flow per failure path the code handles on purpose — retry, dead letter,
+  compensation, fallback, a rejection the caller shows — not every error that merely propagates; start
+  it where the paths part and end it with a `{spotlight}` on where the failure lands, never by stepping
+  a relationship backwards. Never invent an order.
+- **Notes, three to eight in the whole diagram**, each with an `about`: `decision` (a choice the code or an ADR makes),
   `warning` (a risk you can see), `question` (what the code can't tell you), `code` (≤ 15 lines that say
   more than a sentence). A `label` is Markdown — a legend, an endpoint table, a runbook checklist or a
   `> [!WARNING]` callout — and, placed beside its element (`attach: false`), takes a `style`
@@ -105,8 +116,9 @@ symbols that don't exist.
   you found; don't invent a dead-letter queue the code doesn't have.
 - **`render_diagram`** each view (`view: {inside: [ids…]}`) and judge it as a reader would: main path
   in one direction, labels on one or two lines, nothing floating.
-- `layout.primaryFlow` only straightens the top view. For a bent inside view, `preview_diagram` it with
-  `{op: "arrange", primaryFlow}`, render the preview, and apply it only if it reads better.
+- An inside view is laid out around its first flow when it is created. If one still comes out bent, or
+  after you changed it, `preview_diagram` it with `{op: "arrange", primaryFlow}`, render the preview,
+  and apply it only if it reads better.
 
 Every follow-up is `update_diagram` on the same `diagramId` with the last `revision` and a fresh
 `requestId`; after `REVISION_CONFLICT`, read again and rebuild the change — never create a new diagram

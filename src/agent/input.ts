@@ -34,7 +34,7 @@ import { Problems } from './errors';
 import { starterFor, starterIds } from './starter';
 import { isEvidence, EVIDENCE_LIMIT } from '../document/evidence';
 import type { SourceEvidence } from '../document/types';
-import { ROOM_FIELDS } from './fields';
+import { CREATE_FIELDS, ROOM_FIELDS } from './fields';
 import { readPlace, readRoute, type PlaceSpec, type RouteSpec } from './placement';
 import { GROUP_KINDS, LINE_STYLE_NAMES, NOTE_FORM_NAMES, NOTE_KIND_NAMES, resolveType, suggestTypes, type LineStyleName, type NativeShape } from './vocabulary';
 
@@ -236,9 +236,10 @@ export interface LayoutSpec {
   viewport?: [number, number];
   /** Internal to repair (never read from a request): see `LayoutInput.ties`. */
   ties?: 'align' | 'balance';
-  /** Internal (never read from a request): `unlabelled` keeps labelled connectors off shared trunks —
-   *  the arrangement compared against one with them (see `AnchorOptions.fans`). */
-  fans?: 'all' | 'unlabelled';
+  /** Internal (never read from a request): `unlabelled` keeps labelled connectors off shared trunks,
+   *  `unshared` keeps them off trunks on a side other connectors use too — arrangements compared
+   *  against one with them (see `AnchorOptions.fans`). */
+  fans?: 'all' | 'unshared' | 'unlabelled';
 }
 
 export interface StarterSpec {
@@ -392,7 +393,7 @@ export function readRoom(r: Reader, raw: Json, path: string, ctx: RoomContext): 
   const groups: GroupSpec[] = [];
   r.array(raw.groups, `${path}/groups`, AGENT_LIMITS.groupsPerRequest).forEach((g, i) => {
     const at = `${path}/groups/${i}`;
-    const item = r.object(g, at, ['id', 'label', 'kind', 'parent']);
+    const item = r.object(g, at, CREATE_FIELDS.group);
     if (!item) return;
     const id = r.newId(item.id, `${at}/id`, ctx.taken);
     const label = r.text(item.label, `${at}/label`, AGENT_LIMITS.groupLabelLength, { required: true, singleLine: true });
@@ -425,7 +426,7 @@ export function readRoom(r: Reader, raw: Json, path: string, ctx: RoomContext): 
   const nodes: NodeSpec[] = [];
   r.array(raw.nodes, `${path}/nodes`, AGENT_LIMITS.nodesPerRequest).forEach((n, i) => {
     const at = `${path}/nodes/${i}`;
-    const item = r.object(n, at, ['id', 'type', 'label', 'description', 'technology', 'group', 'color', 'attachments', 'inside', 'evidence', 'place']);
+    const item = r.object(n, at, CREATE_FIELDS.element);
     if (!item) return;
     const id = r.newId(item.id, `${at}/id`, ctx.taken);
     const typeWord = typeof item.type === 'string' ? item.type : '';
@@ -492,7 +493,7 @@ export function readRoom(r: Reader, raw: Json, path: string, ctx: RoomContext): 
   const pairs = new Map<string, RelationshipSpec[]>();
   r.array(raw.relationships, `${path}/relationships`, AGENT_LIMITS.relationshipsPerRequest).forEach((e, i) => {
     const at = `${path}/relationships/${i}`;
-    const item = r.object(e, at, ['id', 'from', 'to', 'label', 'semantic', 'kind', 'directed', 'async', 'condition', 'color', 'lineStyle', 'response', 'deliveryAttempts', 'attachments', 'evidence', 'route']);
+    const item = r.object(e, at, CREATE_FIELDS.relationship);
     if (!item) return;
     const id = r.newId(item.id, `${at}/id`, ctx.taken);
     const from = typeof item.from === 'string' ? item.from : undefined;
@@ -551,7 +552,7 @@ export function readRoom(r: Reader, raw: Json, path: string, ctx: RoomContext): 
   const flows: FlowSpec[] = [];
   r.array(raw.flows, `${path}/flows`, AGENT_LIMITS.flowsPerRequest).forEach((f, i) => {
     const at = `${path}/flows/${i}`;
-    const item = r.object(f, at, ['id', 'title', 'color', 'variantOf', 'steps']);
+    const item = r.object(f, at, CREATE_FIELDS.flow);
     if (!item) return;
     const flow = readFlow(r, item, at, ctx.taken, lightable);
     if (flow) flows.push(flow);
@@ -568,7 +569,7 @@ export function readRoom(r: Reader, raw: Json, path: string, ctx: RoomContext): 
   const notes: NoteSpec[] = [];
   r.array(raw.notes, `${path}/notes`, AGENT_LIMITS.notesPerRequest).forEach((n, i) => {
     const at = `${path}/notes/${i}`;
-    const item = r.object(n, at, ['id', 'text', 'kind', 'code', 'language', 'about', 'near', 'attach', 'style']);
+    const item = r.object(n, at, CREATE_FIELDS.note);
     if (!item) return;
     const id = r.newId(item.id, `${at}/id`, ctx.taken);
     const body = readNoteBody(r, item, at);
@@ -843,7 +844,7 @@ function readViewport(r: Reader, value: unknown, path: string): [number, number]
 export function readCreate(raw: unknown): CreateSpec {
   const problems = new Problems();
   const r = new Reader(problems);
-  const body = r.object(raw, '', ['requestId', 'title', 'project', 'starter', ...ROOM_FIELDS, 'layout', 'open', 'allowDuplicateTitle', 'fallbackType']) ?? {};
+  const body = r.object(raw, '', CREATE_FIELDS.request) ?? {};
   const title = r.text(body.title, '/title', LIMITS.maxTitleLength, { required: true, singleLine: true }) ?? 'Untitled diagram';
   const taken = new Set<string>();
   let starter: StarterSpec | undefined;

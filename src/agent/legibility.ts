@@ -89,8 +89,8 @@ function runsOf(points: readonly Point[]): Point[] {
 
 /** Proper crossings between two orthogonal polylines: a horizontal run of one through a vertical run
  *  of the other, away from either's ends (two connectors leaving one handle don't "cross"). */
-function crossingsBetween(a: readonly Point[], b: readonly Point[]): number {
-  let count = 0;
+function crossingsBetween(a: readonly Point[], b: readonly Point[]): Point[] {
+  const out: Point[] = [];
   const margin = 4;
   for (let i = 1; i < a.length; i += 1) {
     const [a0, a1] = [a[i - 1]!, a[i]!];
@@ -100,10 +100,10 @@ function crossingsBetween(a: readonly Point[], b: readonly Point[]): number {
       if (!h0 || !h1 || !v0 || !v1) continue;
       const x = v0.x;
       const y = h0.y;
-      if (x > Math.min(h0.x, h1.x) + margin && x < Math.max(h0.x, h1.x) - margin && y > Math.min(v0.y, v1.y) + margin && y < Math.max(v0.y, v1.y) - margin) count += 1;
+      if (x > Math.min(h0.x, h1.x) + margin && x < Math.max(h0.x, h1.x) - margin && y > Math.min(v0.y, v1.y) + margin && y < Math.max(v0.y, v1.y) - margin) out.push({ x, y });
     }
   }
-  return count;
+  return out;
 }
 
 /**
@@ -131,16 +131,21 @@ export function legibilityOf(nodes: readonly DraftNode[], edges: readonly DraftE
     }
     return { points, left, right, top, bottom, spine: route.spine };
   });
-  let crossings = 0;
+  // A trunk is drawn once, however many members run along it: a line across it crosses it in one
+  // place, not once per member. Each place is counted once per pair of lines as drawn — a connector
+  // or a whole trunk.
+  const places = new Set<string>();
   for (let i = 0; i < runs.length; i += 1) {
     const a = runs[i]!;
     for (let j = i + 1; j < runs.length; j += 1) {
       const b = runs[j]!;
       if (a.spine && a.spine === b.spine) continue;
       if (a.right < b.left || b.right < a.left || a.bottom < b.top || b.bottom < a.top) continue;
-      crossings += crossingsBetween(a.points, b.points);
+      const lines = [a.spine ?? `#${i}`, b.spine ?? `#${j}`].sort().join('\u0000');
+      for (const p of crossingsBetween(a.points, b.points)) places.add(`${lines}\u0000${Math.round(p.x)}\u0000${Math.round(p.y)}`);
     }
   }
+  const crossings = places.size;
   const groups = nodes.filter((n) => n.type === 'group');
   const detours: string[] = [];
   const throughBoundaries: string[] = [];
