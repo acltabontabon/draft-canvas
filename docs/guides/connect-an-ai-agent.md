@@ -48,7 +48,15 @@ then it says what is missing and offers the fix: **Let Nodi in** turns agent acc
    ("how many queues?", "where is billing?"), where the file is saved, which folders agents can use, and
    the app's own commands ("export", "present", "tidy connectors"), offered as buttons. Ask "what can
    you do?" for the list.
-3. Read the answer in the bubble, which holds the whole conversation; past two turns, the earlier
+
+   ![Nodi answering "What can you do?" itself, with buttons.](../media/guides/nodi-help.png)
+
+3. While the agent works, one line says what it is doing, and Nodi's screen shows what it watches
+   meanwhile.
+
+   ![Nodi thinking: one live line, a feed on its screen.](../media/guides/nodi-thinking.png)
+
+4. Read the answer in the bubble, which holds the whole conversation; past two turns, the earlier
    ones fold behind one line. On its top edge, the pencil starts a new conversation and `>_` copies a
    command that continues it in your agent's own terminal UI.
 
