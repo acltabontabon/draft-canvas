@@ -1,85 +1,82 @@
 WEBVTT
 
 1
-00:00:00.900 --> 00:00:03.225
+00:00:00.900 --> 00:00:03.289
 Every design meeting needs a diagram.
 
 2
-00:00:03.400 --> 00:00:05.363
-Twenty minutes of boxes and arrows.
+00:00:03.500 --> 00:00:06.423
+So we spend twenty minutes drawing boxes and
+arrows…
 
 3
-00:00:05.550 --> 00:00:07.129
-Five minutes of explaining.
+00:00:06.700 --> 00:00:09.068
+and we're left with five minutes to explain
+them.
 
 4
-00:00:07.900 --> 00:00:09.927
-Draft Canvas was built to flip that.
+00:00:10.400 --> 00:00:13.173
+That's why we built Draft Canvas: to flip
+that.
 
 5
-00:00:11.333 --> 00:00:12.933
-The arrows label themselves.
+00:00:13.770 --> 00:00:17.610
+Now your coding agent can sit right beside
+you, on the canvas.
 
 6
-00:00:16.753 --> 00:00:17.841
-Draw it yourself…
+00:00:19.670 --> 00:00:20.651
+Meet Nodi!
 
 7
-00:00:18.153 --> 00:00:20.308
-or hand the pencil to your coding agent.
+00:00:21.970 --> 00:00:25.127
+Ask what could go wrong, and it answers on
+your diagram.
 
 8
-00:00:20.803 --> 00:00:24.344
-It reads your code and draws the
-architecture, pass by pass.
+00:00:27.670 --> 00:00:29.697
+Ask for a change. You decide.
 
 9
-00:00:26.600 --> 00:00:29.245
-Ask for a cleaner layout — it fixes that
-too.
+00:00:30.270 --> 00:00:34.302
+Compare before and after. Nothing changes
+until you accept it.
 
 10
-00:00:29.450 --> 00:00:31.754
-Now, the part that matters: explaining it.
+00:00:36.870 --> 00:00:39.750
+And now, the part that matters most:
+explaining it.
 
 11
-00:00:31.900 --> 00:00:36.572
-Start with the whole system, then step
-inside any service, down to its components.
+00:00:41.270 --> 00:00:45.537
+Start with the whole system, then step into
+a service, down to its components.
 
 12
-00:00:36.750 --> 00:00:38.563
-Present the flow, step by step.
+00:00:46.070 --> 00:00:48.353
+Then present the flow, step by step.
 
 13
-00:00:40.900 --> 00:00:42.543
-Work on it together, live.
+00:00:50.200 --> 00:00:52.312
+Your architecture stays on your device.
 
 14
-00:00:42.700 --> 00:00:45.153
-Take it anywhere — even draw.io.
+00:00:52.550 --> 00:00:54.897
+Your agent is the one you already use.
 
 15
-00:00:45.990 --> 00:00:46.950
-No account.
+00:00:55.100 --> 00:00:56.871
+And every decision is yours.
 
 16
-00:00:47.120 --> 00:00:48.123
-No tracking.
-
-17
-00:00:48.670 --> 00:00:49.950
-Saved on your device.
-
-18
-00:00:50.620 --> 00:00:52.071
+00:00:57.100 --> 00:00:58.572
 Free and open source.
 
-19
-00:00:52.250 --> 00:00:57.583
+17
+00:00:59.460 --> 00:01:05.156
 So, the next design meeting: five minutes of
 boxes and arrows — and twenty of explaining!
 
-20
-00:00:58.066 --> 00:00:59.581
+18
+00:01:05.270 --> 00:01:06.977
 Draw less. Explain more.
