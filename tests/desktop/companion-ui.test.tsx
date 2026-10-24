@@ -276,6 +276,12 @@ describe('the companion', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
     expect(controller.companionCancel).toHaveBeenCalledWith('r1');
 
+    // Words that come first don't end the turn: it still says it is working, below them.
+    act(() => {
+      companion.apply('r1', { type: 'tool-call-update', id: 't1', status: 'completed', error: null });
+      companion.apply('r1', { type: 'message-chunk', text: 'I’ll review the modules, then propose what’s missing.\n\n' });
+    });
+    expect(screen.getByText('Thinking')).toBeTruthy();
     act(() => {
       companion.apply('r1', { type: 'message-chunk', text: 'I proposed a cache.\n\n- **Cache-aside**: reads first\n- Invalidate on write' });
       companion.apply('r1', { type: 'stopped', reason: { kind: 'end-turn' }, summary: null, costMicroUsd: 1, usage: null });

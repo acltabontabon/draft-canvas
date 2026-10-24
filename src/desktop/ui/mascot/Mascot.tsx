@@ -1,8 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { frame, HEIGHT, WIDTH, type Mood } from './pixels';
-
-/** How often the mascot moves: a few frames a second is all pixel motion needs. */
-const FRAME_MS = 150;
+import { frame, FRAME_MS, HEIGHT, WIDTH, type Mood } from './pixels';
 
 const LABEL: Record<Mood, string> = {
   idle: 'Nodi, ready',

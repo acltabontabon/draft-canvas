@@ -1,6 +1,6 @@
 import { reviewView, type ReviewCode } from '../../agent/review';
 import { canCreateInside, hasInside } from '../../depth/tree';
-import { categoryOf } from '../../document/connectorSemantics';
+import { categoryOf, type NodeCategory } from '../../document/connectorSemantics';
 import type { DraftEdge, DraftNode } from '../../document/types';
 import type { AgentClient, AgentClientSetup, AgentSkillSetup, AgentSkillTarget } from '../api';
 
@@ -43,8 +43,12 @@ export interface RestingState {
   runSeed: number;
   /** What Nodi can say about the time and day (`clockLines`), mixed in with the greetings. */
   clock?: readonly string[];
+  /** What kind of part the selection is, when it is one shape. */
+  selectedKind?: NodeCategory | null;
   /** Poked too many times in a row: Nodi says so, over anything but news. */
   poked?: boolean;
+  /** Nodi's hello, while it is saying hello on the diagram's opening (`arrivalLine`). */
+  arrival?: string;
 }
 
 /** An invitation now and then, and in between, what a companion who has seen too many incidents
@@ -103,7 +107,88 @@ const SELECTED = [
   '{it} looks fine. That’s what worries me, boss.',
   'Ah, {it}. What has it done this time?',
   'Of all the boxes, boss, you picked {it}. Interesting.',
+  '{it}. Bold choice. Want me to poke it?',
+  '{it}, huh? Ask me what breaks first.',
+  'If {it} goes down at 3am, who gets the call, boss? Asking for a friend. The friend is you.',
+  'Careful with {it}, boss. Something depends on it. Something always does.',
+  '{it}: load-bearing, or decorative? Let’s find out.',
+  'Click me and I’ll tell you what {it} is hiding.',
+  '{it} again? You two should get a room. A server room.',
+  'I’d interview {it} before trusting it with prod, boss.',
+  'Honest review of {it}, or the polite one? I only do honest, boss.',
+  '{it} has a story, boss. Want to hear how it ends?',
 ];
+
+/** What a part of a kind tends to have coming, said about the one selected: the same `{it}`. */
+const SELECTED_BY_KIND: Partial<Record<NodeCategory, readonly string[]>> = {
+  database: [
+    '{it} holds the data, boss. Which means {it} holds the grudges.',
+    'Is {it} backed up, boss? Ever restored? Those are different questions.',
+    'Everyone writes to {it} eventually. That’s how it starts.',
+    'A schema change on {it} on a Friday? I’ll get the popcorn.',
+  ],
+  cache: [
+    '{it}: fast, until it’s wrong. Want me to check the invalidation, boss?',
+    '{it} is lying to you, boss. Only slightly, and only sometimes.',
+    'What happens when {it} restarts cold? I know. You won’t like it.',
+  ],
+  queue: [
+    '{it} delivers at least once, boss. Which means twice.',
+    'Messages go into {it}. Where do the bad ones go, boss?',
+    '{it} is quiet. Too quiet.',
+    'Who drains {it} when the consumers die, boss?',
+  ],
+  deadLetter: ['{it}: where messages go to be forgotten. Is anyone watching it, boss?', '{it} is full of regrets, boss. Want me to read them out?'],
+  external: [
+    '{it} is someone else’s problem, boss. Until it’s down.',
+    '{it} will change its API on a Tuesday without telling you.',
+    'What’s the timeout on calls to {it}, boss? Please don’t say “the default”.',
+  ],
+  gateway: ['{it}: the front door. Who rate-limits the door, boss?', 'Everything walks through {it}, boss. I hope it has good shoes.'],
+  worker: [
+    '{it} runs while you sleep, boss. Does it finish while you sleep?',
+    'If {it} crashes halfway, does it start over, or charge someone twice?',
+    '{it} and daylight saving time. Name a worse couple, boss.',
+  ],
+  service: [
+    '{it} does a lot, boss. Want me to look inside?',
+    'How many things call {it}? I counted. You won’t like it.',
+    '{it} has one job, boss. Let’s check it only has one.',
+  ],
+  actor: [
+    '{it} will click that button twice, boss. Plan for it.',
+    '{it} doesn’t read error messages. Nobody does. Design for it.',
+    '{it} is the reason any of this exists, boss. Be nice to {it}.',
+  ],
+  agent: ['{it} is an AI agent, boss. Smallest permissions that work. Ask me how I know.'],
+  objectStorage: ['{it} is where files go to live forever, boss. Who pays for forever?', 'Please tell me {it} isn’t a public bucket, boss.'],
+  searchIndex: ['{it} is a copy of the truth, boss. How far behind is it?'],
+  port: ['{it} is a promise, boss. Who keeps it?'],
+  device: ['{it} will go offline at the worst moment, boss. Queue things up.'],
+  junction: ['{it} splits the flow, boss. Where does each path end up?'],
+};
+const KIND_ALIAS: Partial<Record<NodeCategory, NodeCategory>> = { topic: 'queue', stream: 'queue', scheduler: 'worker', component: 'service', fileSystem: 'objectStorage' };
+
+/** For a selection of several things ("3 shapes") or a shape with no name: lines that read right
+ *  whatever stands in for `{it}`. */
+const SELECTED_MANY = [
+  'Want me to look at {it}, boss?',
+  '{it}? I have thoughts.',
+  'Ooh, {it}. Want my take, boss?',
+  '{it} at once? Ambitious, boss.',
+  'Shall I go through {it}, boss? Gently. Or not.',
+];
+
+/** The line about the selection: a new one for each shape, and each time Nodi pipes up about it;
+ *  half the time about what that kind of part has coming, when Nodi knows its kind. */
+function selectedLine(name: string, kind: NodeCategory | null | undefined, seed: number): string {
+  const at = seed + seedOf(name);
+  const many = /^\d+ /.test(name) || name === 'the selected shape';
+  const own = kind && !many ? (SELECTED_BY_KIND[KIND_ALIAS[kind] ?? kind] ?? []) : [];
+  const line = many ? pick(SELECTED_MANY, at) : own.length && Math.abs(at) % 2 === 1 ? pick(own, Math.floor(at / 2)) : pick(SELECTED, at);
+  return upperFirst(line.replaceAll('{it}', name));
+}
+
 
 const WORKING = ['On it, boss… {step}.', 'Rummaging through your choices, boss… {step}.', 'Don’t unplug me, boss… {step}.', 'Pretending this is fine… {step}.', 'Whistling innocently… {step}.'];
 
@@ -174,6 +259,56 @@ export function clockLines(now: Date): string[] {
   return lines;
 }
 
+/** What Nodi knows about the diagram just opened, for its hello. */
+export interface Arrival {
+  title: string;
+  shapes: number;
+  connectors: number;
+  flows: number;
+  openPoints: number;
+  /** How many shapes hold a diagram of their own. */
+  insides: number;
+  now: Date;
+}
+
+/**
+ * Nodi's hello when a diagram opens: about this diagram — its name, its size, what is waiting in it —
+ * not a line from the general repertoire that could have been said anywhere. The pick is the
+ * diagram's own (`seed`), so reopening it in the same mood says the same, and another diagram something else.
+ */
+export function arrivalLine(at: Arrival, seed: number): string {
+  const title = at.title.trim().slice(0, 40) || 'this one';
+  const { shapes, connectors } = at;
+  const hour = at.now.getHours();
+  const when = hour < 5 ? 'at this hour' : hour < 12 ? 'this morning' : hour < 17 ? 'this afternoon' : 'this evening';
+  if (shapes === 0) {
+    return upperFirst(pick(
+      [
+        `A blank ${title}, boss. Zero bugs. Enjoy it while it lasts.`,
+        `${title}: empty. The most reliable architecture there is. Shall we ruin it?`,
+        `Fresh canvas, boss. Every outage starts somewhere. Usually here.`,
+      ],
+      seed,
+    ));
+  }
+  const lines: string[] = [
+    `Back in ${title}, boss. ${shapes} ${shapes === 1 ? 'part' : 'parts'}, ${connectors} ${connectors === 1 ? 'arrow' : 'arrows'}. I counted. Twice.`,
+    `Oh, ${title}. I remember this one. It remembers you too.`,
+    `${title}, ${when}. Let’s see what changed since you last looked. Probably everything.`,
+    `${title} is open. Somewhere, a pager just got nervous.`,
+    `${title} again, boss? Unfinished business, or unfinished business?`,
+  ];
+  if (shapes >= 20) lines.push(`${title}: ${shapes} parts. A big one, boss. Coffee first?`);
+  if (shapes > 0 && shapes <= 4) lines.push(`${title}: ${shapes} ${shapes === 1 ? 'part' : 'parts'}. Small, boss. Small is how the big ones start.`);
+  if (connectors === 0 && shapes > 1) lines.push(`${title} has ${shapes} parts and not one arrow, boss. A very peaceful architecture.`);
+  if (at.openPoints > 0) lines.push(`${title} has ${at.openPoints === 1 ? 'an open point' : `${at.openPoints} open points`} waiting, boss. ${at.openPoints === 1 ? 'It' : 'They'} missed you.`);
+  if (at.flows > 0) lines.push(`${title} has ${at.flows === 1 ? 'a flow' : `${at.flows} flows`} to present, boss. Want a rehearsal?`);
+  else if (connectors >= 3) lines.push(`${title}: plenty of arrows, no flows yet. Nobody knows which way the request goes, boss. Except me. Maybe.`);
+  if (at.insides > 0) lines.push(`${title} is bigger on the inside, boss. ${at.insides === 1 ? 'One part has a whole diagram in it.' : `${at.insides} parts have a whole diagram in them.`}`);
+  if (hour < 5) lines.push(`Opening ${title} ${when}, boss? Bold. I’ll keep the pager away.`);
+  return upperFirst(pick(lines, seed));
+}
+
 /** Whether it is the small hours, when Nodi dozes between messages. */
 export function smallHours(now: Date): boolean {
   return now.getHours() < 5;
@@ -188,7 +323,8 @@ export function restingLine(state: RestingState): RestingLine {
   if (state.waiting) return { tone: 'waiting', text: pick(WAITING, runSeed), hint: 'Show me', stays: true };
   if (state.unseen) return { tone: 'done', text: pick(DONE, runSeed), hint: 'Open', stays: true };
   if (state.poked) return { tone: 'poked', text: pick(POKED, seed), hint: 'Click to chat', stays: true };
-  if (state.selected) return { tone: 'selected', text: upperFirst(pick(SELECTED, seed).replace('{it}', state.selected)), hint: 'Ask me', stays: false };
+  if (state.arrival) return { tone: 'greet', text: state.arrival, hint: 'Click to chat', stays: false };
+  if (state.selected) return { tone: 'selected', text: selectedLine(state.selected, state.selectedKind, seed), hint: 'Ask me', stays: false };
   // Every other greeting is about this diagram, when Nodi has something to say about it; of the
   // rest, every third is about the time of day, when Nodi was told it.
   const about = state.diagram ?? [];

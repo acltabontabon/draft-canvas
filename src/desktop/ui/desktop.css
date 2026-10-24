@@ -1630,9 +1630,14 @@
   color: var(--dc-text);
 }
 
-/* The step under way trails off as it goes. */
-.dc-companion-activity[data-running='true'] > span:last-child::after {
+/* The step under way trails off as it goes (after the spinner, the label). */
+.dc-companion-activity[data-running='true'] > span:nth-child(2)::after {
   content: '…';
+}
+
+.dc-companion-aside {
+  margin-left: -3px;
+  color: var(--dc-text-muted);
 }
 
 .dc-companion-activity[data-status='failed'] > svg {

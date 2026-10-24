@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { RunEvent } from '../../src/desktop/api';
 import { activityOf, applyRunEvent, companion, newTokens, newTurn, numberedBlocks, partsIn, replyBlocks, replyOf, replyPoints, spentOn, stepText, stopMessage, tokenCount } from '../../src/desktop/companion';
-import { frame, HEIGHT, ROWS, WIDTH } from '../../src/desktop/ui/mascot/pixels';
+import { CHANNEL_TICKS, CHANNELS, channelAt, channelFrame, frame, HEIGHT, ROWS, WIDTH } from '../../src/desktop/ui/mascot/pixels';
 import { createHarness } from './harness';
 
 /**
@@ -281,6 +281,19 @@ describe('the mascot', () => {
         expect(runs.at(-1)!.y).toBe(HEIGHT - 1);
       }
     }
+  });
+
+  it('watches something on its own screen while it thinks, a channel at a time, never a blank one', () => {
+    for (const channel of CHANNELS) {
+      for (let t = 0; t < CHANNEL_TICKS; t += 1) {
+        const lit = channelFrame(channel, t);
+        expect(lit.length, `${channel} at ${t}`).toBeGreaterThan(0);
+        expect(lit.every(([x, y]) => x >= 5 && x <= 18 && y >= 7 && y <= 12)).toBe(true);
+      }
+    }
+    expect(CHANNELS.map((_, i) => channelAt(i * CHANNEL_TICKS))).toEqual([...CHANNELS]);
+    // The frame held still under reduced motion has something on it too.
+    expect(channelFrame(channelAt(0), 0).length).toBeGreaterThan(0);
   });
 
   it('shows how it feels in its face: red when cross, pink when pleased, a Z when it dozes', () => {

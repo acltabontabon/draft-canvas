@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createEdge, createNode } from '../../src/document/factory';
-import { blockedFolderOf, clockLines, diagramLines, doorOf, openers, restingLine, seedOf, setupStepsOf, smallHours, snagOf } from '../../src/desktop/ui/nodiLines';
+import { arrivalLine, blockedFolderOf, clockLines, diagramLines, doorOf, openers, restingLine, seedOf, setupStepsOf, smallHours, snagOf } from '../../src/desktop/ui/nodiLines';
 
 /** What Nodi says from rest: the one thing worth knowing, most pressing first. */
 
@@ -9,9 +9,44 @@ const quiet = { blocked: false, working: null, waiting: false, unseen: false, se
 describe('Nodi at rest', () => {
   it('greets, and offers to look at what is selected', () => {
     expect(restingLine(quiet)).toMatchObject({ tone: 'greet', text: 'Boss, need a hand?', stays: false });
-    expect(restingLine({ ...quiet, selected: 'Orders database' })).toMatchObject({ text: 'Want me to look at Orders database, boss?', stays: false });
+    expect(restingLine({ ...quiet, selected: 'Orders database' })).toMatchObject({ tone: 'selected', text: expect.stringContaining('Orders database'), stays: false });
     // A line that starts with the name still starts with a capital.
-    expect(restingLine({ ...quiet, selected: 'orders', seed: 2 }).text).toBe('Orders? I have thoughts.');
+    for (let seed = 0; seed < 40; seed += 1) expect(restingLine({ ...quiet, selected: 'orders', seed }).text).toMatch(/^[^a-z]/);
+  });
+
+  it('reads right for several things selected, or a shape with no name', () => {
+    for (let seed = 0; seed < 20; seed += 1) {
+      for (const many of ['2 shapes', '3 selected items', 'the selected shape']) {
+        expect(restingLine({ ...quiet, selected: many, seed }).text).not.toMatch(/\ba (2|3|the) /);
+      }
+    }
+  });
+
+  it('has something new to say about each shape, and each time, about what its kind has coming', () => {
+    const shapes = ['Orders database', 'Membership module', 'Notification module', 'Catalog', 'Billing', 'Loans'];
+    expect(new Set(shapes.map((name) => restingLine({ ...quiet, selected: name }).text.replace(name, '{it}'))).size).toBeGreaterThan(3);
+    const again = new Set([0, 1, 2, 3, 4, 5, 6, 7].map((seed) => restingLine({ ...quiet, selected: 'Membership module', seed }).text));
+    expect(again.size).toBeGreaterThanOrEqual(6);
+    // A database selected hears about databases some of the time.
+    const db = [0, 1, 2, 3, 4, 5, 6, 7].map((seed) => restingLine({ ...quiet, selected: 'Orders database', selectedKind: 'database', seed }).text);
+    expect(db.some((line) => /backed up|grudges|schema change|writes to/.test(line))).toBe(true);
+  });
+
+  it('says hello about the diagram that just opened, not a line from anywhere', () => {
+    const now = new Date(2026, 9, 21, 10, 0);
+    const at = { title: 'Library System', shapes: 7, connectors: 13, flows: 0, openPoints: 2, insides: 1, now };
+    const hellos = new Set([0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((seed) => arrivalLine(at, seed)));
+    for (const hello of hellos) expect(hello).toMatch(/Library System|Fresh canvas/);
+    expect([...hellos].some((h) => h.includes('2 open points waiting'))).toBe(true);
+    expect([...hellos].some((h) => h.includes('bigger on the inside'))).toBe(true);
+    expect(arrivalLine({ ...at, shapes: 0, connectors: 0 }, 0)).toMatch(/blank|empty|Fresh canvas/i);
+    // Grammar that holds for one, and a lower-case title still starts the line with a capital.
+    const one = new Set([0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((seed) => arrivalLine({ ...at, insides: 1 }, seed)));
+    expect([...one].some((h) => h.includes('One part has a whole diagram in it.'))).toBe(true);
+    for (let seed = 0; seed < 10; seed += 1) expect(arrivalLine({ ...at, title: 'orders' }, seed)).toMatch(/^[^a-z]/);
+    // While it says hello, the hello is what it says.
+    expect(restingLine({ ...quiet, arrival: 'HELLO' }).text).toBe('HELLO');
+    expect(restingLine({ ...quiet, arrival: 'HELLO', unseen: true }).tone).toBe('done');
   });
 
   it('keeps saying what is under way, waiting or unread until it no longer is', () => {

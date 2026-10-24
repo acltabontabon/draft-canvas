@@ -314,6 +314,8 @@ test('at rest Nodi speaks up: a greeting on arrival, what it is doing, and news 
   await expect(say).toHaveAttribute('data-tone', 'greet');
   await expect(say).toContainText('Click to chat');
   await expect(say).toHaveAccessibleName(/^Nodi: /);
+  // The hello is about the diagram that just opened.
+  await expect(say).toHaveAccessibleName(/Order processing/);
   await page.waitForTimeout(1500);
   await page.screenshot({ path: test.info().outputPath('nodi-greeting.png') });
 

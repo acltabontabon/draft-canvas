@@ -6,6 +6,7 @@ import { SegmentedControl } from '../../ui/common/SegmentedControl';
 import { MOD_SYMBOL } from '../../lib/platform';
 import { readPreference, writePreference } from '../../lib/preferences';
 import { walkGraphs } from '../../depth/tree';
+import { categoryOf } from '../../document/connectorSemantics';
 import { boundsOf } from '../../document/geometry';
 import type { DraftDocument, DraftEdge, DraftNode } from '../../document/types';
 import { useEditorStore } from '../../store/editorStore';
@@ -15,11 +16,11 @@ import { activityOf, companion, newTokens, numberedBlocks, partsIn, replyBlocks,
 import { useDesktopController, useDesktopState } from '../useDesktop';
 import { useNodiShown } from '../nodiShown';
 import { Mascot } from './mascot/Mascot';
-import type { Mood } from './mascot/pixels';
+import { CHANNEL_TICKS, CHANNELS, FRAME_MS as MASCOT_FRAME_MS, type Channel, type Mood } from './mascot/pixels';
 import { CHIP_HEIGHT, chipPlace, revealViewport, type Box } from './chipPlace';
 import { canCreateInside, hasInside } from '../../depth/tree';
 import { lookInside } from '../../ui/Editor/depthNavigation';
-import { blockedFolderOf, clockLines, diagramLines, failLine, doorOf, openers, restingLine, seedOf, setupStepsOf, smallHours, snagOf, type Look, type SetupStep, type SnagStep } from './nodiLines';
+import { arrivalLine, blockedFolderOf, clockLines, diagramLines, failLine, doorOf, openers, restingLine, seedOf, setupStepsOf, smallHours, snagOf, type Look, type SetupStep, type SnagStep } from './nodiLines';
 import { PointPins } from './PointPins';
 import { ProposalHistory } from './ProposalHistory';
 import { countsLabel, useProposalReview } from './useProposalReview';
@@ -131,6 +132,13 @@ export function Companion() {
     if (s.selection.nodes.length !== 1) return '';
     const node = s.document.nodes.find((n) => n.id === s.selection.nodes[0]);
     return node?.text?.split('\n')[0]?.trim().slice(0, 40) ?? '';
+  });
+  // And its kind, so what Nodi says about it can be about what that kind of part has coming.
+  const onlyKind = useEditorStore((s) => {
+    if (s.selection.nodes.length !== 1 || s.selection.edges.length) return null;
+    const node = s.document.nodes.find((n) => n.id === s.selection.nodes[0]);
+    // (A junction is an ellipse, and has lines of its own.)
+    return node && !['group', 'note', 'text', 'code'].includes(node.type) ? categoryOf(node) : null;
   });
   const names = useMemo(() => {
     const out = new Map<string, string>();
@@ -472,6 +480,37 @@ export function Companion() {
   // On a diagram's first opening this app run, Nodi walks on from the canvas's edge, then greets.
   const [arriving, setArriving] = useState(() => !greeted.has(diagramId) && !prefersReducedMotion());
   const [peeking, setPeeking] = useState(() => !greeted.has(diagramId));
+  // Read under the pointer when its five seconds are up, the hello stays until the bubble goes,
+  // rather than being typed over with another line mid-read.
+  const [helloHeld, setHelloHeld] = useState(false);
+  useEffect(() => {
+    if (hovered || !helloHeld) return;
+    const timer = setTimeout(() => setHelloHeld(false), SAY_GONE_MS);
+    return () => clearTimeout(timer);
+  }, [hovered, helloHeld]);
+  // The hello itself, about this diagram as it opened: worked out once per diagram, so it doesn't
+  // change under the reader as the diagram does.
+  const hello = useMemo(() => {
+    const { document: view, outer } = useEditorStore.getState();
+    const file = outer ?? view;
+    const shapes = view.nodes.filter((n) => !['note', 'text', 'code', 'group', 'ellipse'].includes(n.type));
+    let insides = 0;
+    walkGraphs(file, (graph) => {
+      insides += graph.nodes.filter(hasInside).length;
+    });
+    return arrivalLine(
+      {
+        title: file.metadata.title,
+        shapes: shapes.length,
+        connectors: view.edges.length,
+        flows: view.flows.length,
+        openPoints: file.openPoints?.filter((p) => !p.resolved).length ?? 0,
+        insides,
+        now: new Date(),
+      },
+      seedOf(diagramId),
+    );
+  }, [diagramId]);
   useEffect(() => {
     greeted.add(diagramId);
   }, [diagramId]);
@@ -498,11 +537,13 @@ export function Companion() {
     unseen,
     // What the message would be about: the selection, unless the person left it out.
     selected: about,
+    selectedKind: about ? onlyKind : null,
     seed: seedOf(diagramId) + visits,
     diagram: setupSteps.length ? [`Psst, boss. ${agentName} can’t find me outside this box yet. Open me: it’s one click.`, ...aboutDiagram] : aboutDiagram,
     runSeed: seedOf(last?.runId ?? diagramId),
     clock,
     poked,
+    arrival: peeking || helloHeld ? hello : undefined,
   });
   // Opened from rest: the pointer was over the bubble, which goes from under it without a leave, so
   // the hover is put down here or Nodi would keep talking after the conversation closes.
@@ -533,6 +574,7 @@ export function Companion() {
           // kept up by it stayed under a pointer long gone. News is said without either.
           onMouseEnter={() => {
             setHovered(true);
+            if (peeking) setHelloHeld(true);
             if (!resting.stays && !peeking && performance.now() - leftAt.current > SAY_GONE_MS) {
               setVisits((n) => n + 1);
               setClockAt(new Date());
@@ -828,24 +870,11 @@ function TurnView({ turn, pinned }: { turn: Turn; pinned: boolean }) {
         <p>{turn.prompt}</p>
       </div>
       {/* One line, not a list: the step under way while it runs, then what it did, each kind once. */}
-      {activity.now ? (
-        <p className="dc-companion-activity" data-running="true">
-          <span className="dc-companion-spinner" aria-hidden="true" />
-          <span>{activity.now}</span>
+      {turn.stop !== null && activity.done.length > 0 && (
+        <p className="dc-companion-activity">
+          <Icon name="check" />
+          <span>{activity.done.join(' · ')}</span>
         </p>
-      ) : turn.stop === null ? (
-        // Between steps: thinking, until the reply itself is coming in, which says so on its own.
-        !reply && <p className="dc-companion-activity" data-running="true">
-          <span className="dc-companion-spinner" aria-hidden="true" />
-          <span>Thinking</span>
-        </p>
-      ) : (
-        activity.done.length > 0 && (
-          <p className="dc-companion-activity">
-            <Icon name="check" />
-            <span>{activity.done.join(' · ')}</span>
-          </p>
-        )
       )}
       {activity.snag && (
         <p className="dc-companion-activity" data-status="failed">
@@ -856,6 +885,9 @@ function TurnView({ turn, pinned }: { turn: Turn; pinned: boolean }) {
         </p>
       )}
       {reply && <ReplyText text={reply} pinned={pinned} />}
+      {/* Still at it: below whatever it has said so far, so words that arrive first ("I'll review the
+          modules, then…") never look like the end of the turn. */}
+      {turn.stop === null && <Working now={activity.now} />}
       {pinned && turn.stop !== null && reply && <Doors reply={reply} />}
       {(turn.stop?.kind === 'failed' || turn.stop?.kind === 'refusal') && <p className="dc-companion-quip">{failLine(seedOf(turn.runId))}</p>}
       {stopped && <p className="dc-companion-stopped">{stopped}</p>}
@@ -872,6 +904,43 @@ function TurnView({ turn, pinned }: { turn: Turn; pinned: boolean }) {
       )}
       {turn.outcome === 'rejected' && <p className="dc-companion-stopped">Rejected. The diagram is unchanged.</p>}
     </article>
+  );
+}
+
+/** What Nodi's screen is on while the agent thinks, said as a joke beside the honest "Thinking". */
+const THINKING_ASIDES: Record<Channel, string | readonly string[]> = {
+  typing: '',
+  feed: 'and scrolling Reddit, a little',
+  show: 'one more episode on Netflix',
+  likes: 'liking Instagram posts about microservices',
+  swipe: 'just one more TikTok',
+  dating: ['swiping on Tinder for a database that commits', 'on Bumble, waiting for the API to make the first move'],
+  pong: 'and winning at pong',
+  reading: 'reading the comments on Facebook',
+  music: 'lo-fi beats on Spotify',
+  coffee: 'coffee first',
+};
+
+/**
+ * The live line while a turn runs: the step under way, or "Thinking" between steps, with an aside
+ * that changes as Nodi's screen does (`pixels.ts`'s channels, the same order and pace).
+ */
+function Working({ now }: { now: string | null }) {
+  const [channel, setChannel] = useState(0);
+  useEffect(() => {
+    if (now || prefersReducedMotion()) return;
+    const timer = window.setInterval(() => setChannel((c) => c + 1), CHANNEL_TICKS * MASCOT_FRAME_MS);
+    return () => window.clearInterval(timer);
+  }, [now]);
+  // A channel with more than one aside says the next one each time round.
+  const said = THINKING_ASIDES[CHANNELS[channel % CHANNELS.length]!];
+  const aside = now ? '' : typeof said === 'string' ? said : said[Math.floor(channel / CHANNELS.length) % said.length]!;
+  return (
+    <p className="dc-companion-activity" data-running="true">
+      <span className="dc-companion-spinner" aria-hidden="true" />
+      <span>{now ?? 'Thinking'}</span>
+      {aside && <span className="dc-companion-aside">({aside})</span>}
+    </p>
   );
 }
 
