@@ -1740,7 +1740,7 @@
             "technology": {
               "type": "string",
               "maxLength": 60,
-              "description": "C4 technology, e.g. \"Spring Boot\", \"PostgreSQL 16\"."
+              "description": "One product, as named, e.g. \"Spring Boot 3\": shows its logo."
             },
             "group": {
               "type": "string",
@@ -3780,7 +3780,7 @@
             "technology": {
               "type": "string",
               "maxLength": 60,
-              "description": "C4 technology, e.g. \"Spring Boot\", \"PostgreSQL 16\"."
+              "description": "One product, as named, e.g. \"Spring Boot 3\": shows its logo."
             },
             "group": {
               "type": "string",

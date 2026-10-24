@@ -8,10 +8,10 @@ import { readPreference, writePreference } from '../../lib/preferences';
 import { walkGraphs } from '../../depth/tree';
 import { categoryOf } from '../../document/connectorSemantics';
 import { boundsOf } from '../../document/geometry';
-import type { DraftDocument, DraftEdge, DraftNode } from '../../document/types';
+import type { DraftDocument } from '../../document/types';
 import { useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
-import type { AgentClientSetup, AgentInfo, AgentSkillSetup, ApplyMode, PromptRequest, Proposal } from '../api';
+import type { AgentClientSetup, AgentInfo, AgentSkillSetup, ApplyMode, CodeFolder, CodeGrant, PromptRequest, Proposal } from '../api';
 import { activityOf, companion, newTokens, numberedBlocks, partsIn, replyBlocks, replyOf, replyPoints, spentOn, stepText, stopMessage, tokenCount, type ReplyEntry, type Spent, type Turn } from '../companion';
 import { useDesktopController, useDesktopState } from '../useDesktop';
 import { useNodiShown } from '../nodiShown';
@@ -69,12 +69,21 @@ const PointingContext = createContext<Pointing | null>(null);
 function partNamesOf(file: DraftDocument, view: DraftDocument): Map<string, string> {
   const names = new Map<string, string>();
   const line = (text: string | undefined) => text?.split('\n')[0]?.trim().slice(0, 48) || undefined;
-  const add = (nodes: readonly DraftNode[], edges: readonly DraftEdge[]) => {
+  const add = ({ nodes, edges, flows }: Pick<DraftDocument, 'nodes' | 'edges' | 'flows'>) => {
     for (const node of nodes) names.set(node.id, line(node.text) ?? (node.type === 'group' ? 'Boundary' : 'Shape'));
     for (const edge of edges) names.set(edge.id, line(edge.label) ?? `${names.get(edge.source) ?? '?'} → ${names.get(edge.target) ?? '?'}`);
+    // Flows and their steps too: a reply about a story names them, and they came out as a part
+    // "not in this diagram".
+    for (const flow of flows ?? []) {
+      names.set(flow.id, line(flow.title) ?? 'A flow');
+      flow.steps.forEach((step, i) => {
+        names.set(step.id, line(step.caption) ?? (step.edgeId ? names.get(step.edgeId) : undefined) ?? `Step ${i + 1} of ${line(flow.title) ?? 'a flow'}`);
+      });
+    }
   };
-  walkGraphs(file, (graph) => add(graph.nodes, graph.edges));
-  add(view.nodes, view.edges);
+  walkGraphs(file, add);
+  add(view);
+  for (const point of file.openPoints ?? []) names.set(point.id, line(point.context) ?? 'An open point');
   return names;
 }
 
@@ -85,6 +94,10 @@ function pointsOf(turn: Turn | null, here: ReadonlySet<string>) {
   return reply ? replyPoints(numberedBlocks(replyBlocks(reply), (id) => here.has(id))) : [];
 }
 
+/** How many times the box has opened on each diagram this app run. Kept here, not in the
+ *  component, which mounts again with each opening of the editor: its general suggestions come
+ *  on the first open only, and stayed on every open while counted per mount. */
+const boxOpens = new Map<string, number>();
 /** How many times each diagram has opened this app run, so each opening gets its own hello. */
 const opened = new Map<string, number>();
 /** Diagrams Nodi has greeted this app run: the greeting pops up once on arrival, then on hover. */
@@ -429,6 +442,8 @@ export function Companion({ buildCommandContext }: { buildCommandContext?: () =>
       setDraft('');
       companion.answer(diagramId, prompt, own ?? local!.text, local?.actions);
       if (local?.reveal) pointing.reveal(local.reveal);
+      // Plainly asked for: done at once, no button to press.
+      if (local?.run) runAction({ kind: 'command', id: local.run, label: local.text });
       return;
     }
     // Only an agent could answer this, and there is none: Nodi says so, and what it can still do.
@@ -570,6 +585,27 @@ export function Companion({ buildCommandContext }: { buildCommandContext?: () =>
   // Each time Nodi pipes up on a hover, a new line from its repertoire: only once the last one has
   // gone, so coming back while it lingers never swaps the line being read.
   const [visits, setVisits] = useState(0);
+  // The questions Nodi offers when the box opens: the first time on a diagram, and whenever
+  // something is selected (they are about it then); otherwise behind one "Ideas" link, so a box
+  // opened to type isn't the same three suggestions every time.
+  const [ideasWanted, setIdeasWanted] = useState(false);
+  const [openNumber, setOpenNumber] = useState(0);
+  // Counted once per open and diagram: a ref, so development's doubled effects don't make it the
+  // second.
+  const counted = useRef<string | null>(null);
+  useLayoutEffect(() => {
+    if (!expanded) {
+      counted.current = null;
+      setIdeasWanted(false);
+      return;
+    }
+    if (counted.current === diagramId) return;
+    counted.current = diagramId;
+    const opens = (boxOpens.get(diagramId) ?? 0) + 1;
+    boxOpens.set(diagramId, opens);
+    setOpenNumber(opens);
+  }, [expanded, diagramId]);
+  const ideasShown = ideasWanted || about !== null || openNumber <= 1;
   // Closed after a look, Nodi has something new to say next time, not the line it opened on.
   const wasExpanded = useRef(expanded);
   useEffect(() => {
@@ -929,6 +965,9 @@ export function Companion({ buildCommandContext }: { buildCommandContext?: () =>
                 {turns.slice(folded).map((turn) => (
                   <TurnView key={turn.runId} turn={turn} pinned={turn === last} onAction={runAction} />
                 ))}
+                {last && last.stop !== null && last.steps.some((step) => step.tool === 'ask_to_read_code') && (
+                  <CodeAsk key={last.runId} diagramId={diagramId} turn={last} onAllowed={send} />
+                )}
               </section>
               {/* Said once a turn ends, for someone who stayed in the composer and can't see the reply arrive. */}
               <p className="dc-sr-only" role="status">
@@ -961,15 +1000,21 @@ export function Companion({ buildCommandContext }: { buildCommandContext?: () =>
               ) : (
                 <>
                   <Typed key={resting.text} text={resting.text} />
-                  <ul className="dc-companion-options" aria-label="Ask Nodi">
-                    {openers(about, seedOf(diagramId) + visits, look).map((option) => (
-                      <li key={option.label}>
-                        <button type="button" onClick={() => (option.enter ? void lookInside(option.enter) : send(option.prompt))}>
-                          {option.label}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
+                  {ideasShown ? (
+                    <ul className="dc-companion-options" aria-label="Ask Nodi">
+                      {openers(about, seedOf(diagramId) + visits, look).map((option) => (
+                        <li key={option.label}>
+                          <button type="button" onClick={() => (option.enter ? void lookInside(option.enter) : send(option.prompt))}>
+                            {option.label}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <button type="button" className="dc-companion-link dc-companion-ideas" onClick={() => setIdeasWanted(true)}>
+                      Ideas
+                    </button>
+                  )}
                 </>
               )}
               {/* Set apart from the questions: what would make the agent better outside this box,
@@ -1145,6 +1190,90 @@ function TurnView({ turn, pinned, onAction }: { turn: Turn; pinned: boolean; onA
         </ul>
       )}
     </article>
+  );
+}
+
+/** How the person answered each run that asked to read the code, this app run: answered once, the
+ *  card stays answered, however often the box is opened again. */
+const codeAnswered = new Map<string, 'yes' | 'no'>();
+
+/**
+ * Nodi asking to read the project, after a reply that needed the code: the agent can't read a file
+ * until the person says so here, and what they allow is one folder, read-only, with secrets left out
+ * (`src-tauri/src/agent/code.rs`). Yes asks the same question again, with the code.
+ */
+function CodeAsk({ diagramId, turn, onAllowed }: { diagramId: string; turn: Turn; onAllowed: (prompt: string) => void }) {
+  const controller = useDesktopController();
+  const [folder, setFolder] = useState<CodeFolder | null | undefined>(undefined);
+  const [answer, setAnswer] = useState(() => codeAnswered.get(turn.runId) ?? null);
+  useEffect(() => {
+    let live = true;
+    void controller.companionCode(diagramId).then((found) => live && setFolder(found));
+    return () => {
+      live = false;
+    };
+  }, [controller, diagramId]);
+  const answered = (said: 'yes' | 'no') => {
+    codeAnswered.set(turn.runId, said);
+    setAnswer(said);
+  };
+  const allow = async (grant: CodeGrant) => {
+    if (!(await controller.companionAllowCode(diagramId, grant))) return;
+    answered('yes');
+    onAllowed(turn.prompt);
+  };
+  const choose = async () => {
+    const chosen = await controller.companionChooseCode(diagramId);
+    if (chosen) setFolder(chosen);
+  };
+  if (answer === 'no') return <p className="dc-companion-hint">Fair, boss. I’ll stick to the diagram.</p>;
+  if (answer === 'yes' || folder === undefined) return null;
+  return (
+    <div className="dc-companion-ask" role="group" aria-label="Let Nodi read the code">
+      {folder ? (
+        <p>
+          Can I read the code in <strong title={folder.displayPath}>{folder.name}</strong>, boss? Only reading: nothing gets changed, and secrets stay out.
+        </p>
+      ) : (
+        <p>I can’t tell where this diagram’s code lives, boss. Show me?</p>
+      )}
+      <ul className="dc-companion-options dc-companion-actions" aria-label="Your answer">
+        {folder?.allowed ? (
+          <li>
+            <button
+              type="button"
+              onClick={() => {
+                answered('yes');
+                onAllowed(turn.prompt);
+              }}
+            >
+              Ask again, with the code
+            </button>
+          </li>
+        ) : folder ? (
+          <>
+            <li>
+              <button type="button" onClick={() => void allow('now')}>
+                Just for now
+              </button>
+            </li>
+            <li>
+              <button type="button" onClick={() => void allow('always')}>
+                Always for this folder
+              </button>
+            </li>
+          </>
+        ) : null}
+        <li>
+          <button type="button" onClick={() => answered('no')}>
+            No
+          </button>
+        </li>
+      </ul>
+      <button type="button" className="dc-companion-link" onClick={() => void choose()}>
+        {folder ? 'Another folder…' : 'Choose the folder…'}
+      </button>
+    </div>
   );
 }
 
@@ -1443,6 +1572,18 @@ function inline(text: string, entry: ReplyEntry | null): ReactNode[] {
   });
 }
 
+/** `f_due_date-reminder2` → "due date reminder 2": an id's own words, short prefixes and all. */
+function wordsOfId(id: string): string {
+  const words = id
+    .replace(/^[a-z]{1,2}_(?=.)/i, '')
+    .replace(/([a-z])([A-Z0-9])/g, '$1 $2')
+    .split(/[_\-\s.:]+/)
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+  return words.length > 1 ? words : 'that part';
+}
+
 /**
  * A part the reply names, by the name the diagram gives it: hovering lights it on the canvas, clicking
  * brings it into view. A part of another view is named but points at nothing here; an id the diagram
@@ -1452,10 +1593,12 @@ function inline(text: string, entry: ReplyEntry | null): ReactNode[] {
 function PartChip({ id, entry }: { id: string; entry: ReplyEntry | null }) {
   const pointing = useContext(PointingContext);
   const name = pointing?.names.get(id);
+  // Not a part Nodi knows (removed since, or a slip of the agent's): its id said as words, muted, the
+  // nearest thing to what was meant. "Something not in this diagram" read as Nodi losing the plot.
   if (!pointing || !name) {
     return (
-      <span className="dc-companion-part" data-missing="true">
-        something not in this diagram
+      <span className="dc-companion-part" data-missing="true" title="Not in this diagram any more">
+        {wordsOfId(id)}
       </span>
     );
   }

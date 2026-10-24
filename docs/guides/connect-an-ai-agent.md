@@ -88,6 +88,12 @@ switches to **Apply changes directly**, where changes land at once and Undo take
 
 - **What runs:** your own CLI, signed in as you, in the background. It gets the Draft Canvas tools for
   this one diagram and nothing else: no shell, no file access, no other MCP servers, no hooks.
+- **Reading your code:** when a question needs the code ("how are retries done?"), Nodi asks in the
+  chat before anything is read: **Just for now** (until you quit), **Always for this folder**, or
+  **No**. **Another folder…** picks the project when it isn't the repository the diagram is saved in.
+  Draft Canvas reads that one folder for the agent, read-only, leaving out `.git`, dependency and
+  build folders and secrets such as `.env` and keys. Folders allowed always are listed under
+  **Settings → AI agents → Code Nodi may read**, where **Stop** takes one back.
 - **Two agents:** with both installed, the name under the message box switches between them. Each
   diagram keeps one conversation per agent; the pencil starts over.
 - **What it uses:** the line under the message box shows the conversation's new tokens, and with an

@@ -3,17 +3,20 @@
 
 use super::agent::connectable_sidecar;
 use super::run_blocking;
+use crate::agent::code::candidate_folder;
 use crate::agent::proposals::ProposalStatus;
 use crate::agent::runs::RunPolicy;
 use crate::agent::scope::{self, enabled_projects};
 use crate::agent::Agent;
 use crate::companion::protocol::{
-    AgentInfo, AgentKind, ApplyMode, Availability, PromptRequest, RunSnapshot,
+    AgentInfo, AgentKind, ApplyMode, Availability, CodeFolder, CodeGrant, PromptRequest,
+    RunSnapshot,
 };
 use crate::companion::{self, Companion, Launch, RunSpec, SessionArg, BRIEF};
 use crate::docio::write_private;
 use crate::errors::{AppError, ErrorKind, Subject};
 use crate::state::AppState;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tauri::{AppHandle, Manager, State};
 
@@ -80,6 +83,118 @@ fn open_diagram(
     Ok(diagram)
 }
 
+/// The project folder `diagram`'s code is in: the one the person chose for it, else the repository
+/// it is saved in (or its own folder), canonical, so a grant can't be reached by another spelling.
+fn code_folder_of(state: &AppState, diagram_id: &str, file: &Path) -> PathBuf {
+    let chosen = state
+        .settings
+        .get()
+        .code_folder_of
+        .get(diagram_id)
+        .map(PathBuf::from);
+    let folder = chosen
+        .filter(|f| f.is_dir())
+        .unwrap_or_else(|| candidate_folder(file, crate::paths::home_dir().as_deref()));
+    dunce::canonicalize(&folder).unwrap_or(folder)
+}
+
+/// Whether runs may read `folder`, and for how long.
+fn code_grant(state: &AppState, companion: &Companion, folder: &Path) -> Option<CodeGrant> {
+    let path = folder.to_string_lossy();
+    if state.settings.get().code_folders.iter().any(|f| *f == path) {
+        Some(CodeGrant::Always)
+    } else if companion.code_allowed_now(folder) {
+        Some(CodeGrant::Now)
+    } else {
+        None
+    }
+}
+
+fn code_info(state: &AppState, companion: &Companion, folder: &Path) -> CodeFolder {
+    CodeFolder {
+        name: folder
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| crate::paths::display_path(folder)),
+        display_path: crate::paths::display_path(folder),
+        allowed: code_grant(state, companion, folder),
+    }
+}
+
+/// The project folder Nodi would read for this diagram, and whether it may.
+#[tauri::command]
+pub async fn companion_code(app: AppHandle, diagram_id: String) -> Result<CodeFolder, AppError> {
+    run_blocking(&app, move |app, state| {
+        let agent = app.state::<Arc<Agent>>();
+        let diagram = open_diagram(state, &agent, &diagram_id)?;
+        let companion = app.state::<Arc<Companion>>();
+        let folder = code_folder_of(state, &diagram_id, &diagram.absolute);
+        Ok(code_info(state, &companion, &folder))
+    })
+    .await
+}
+
+/// The person's answer to Nodi asking to read the project: until the app quits, or always.
+#[tauri::command]
+pub async fn companion_allow_code(
+    app: AppHandle,
+    diagram_id: String,
+    grant: CodeGrant,
+) -> Result<CodeFolder, AppError> {
+    run_blocking(&app, move |app, state| {
+        let agent = app.state::<Arc<Agent>>();
+        let diagram = open_diagram(state, &agent, &diagram_id)?;
+        let companion = app.state::<Arc<Companion>>();
+        let folder = code_folder_of(state, &diagram_id, &diagram.absolute);
+        match grant {
+            CodeGrant::Now => companion.allow_code_now(folder.clone()),
+            CodeGrant::Always => {
+                let path = folder.to_string_lossy().into_owned();
+                state.settings.update(|s| {
+                    if !s.code_folders.contains(&path) {
+                        s.code_folders.insert(0, path);
+                        s.code_folders.truncate(crate::settings::CODE_FOLDERS_CAP);
+                    }
+                })?;
+            }
+        }
+        state.events.emit(crate::state::HostEvent::AgentChanged);
+        Ok(code_info(state, &companion, &folder))
+    })
+    .await
+}
+
+/// Another folder for this diagram's code, picked in the system's own dialog: remembered as this
+/// diagram's, and not yet allowed (the person still says how long). `None` when they cancel.
+#[tauri::command]
+pub async fn companion_choose_code(
+    app: AppHandle,
+    diagram_id: String,
+) -> Result<Option<CodeFolder>, AppError> {
+    run_blocking(&app, move |app, state| {
+        let agent = app.state::<Arc<Agent>>();
+        let diagram = open_diagram(state, &agent, &diagram_id)?;
+        let companion = app.state::<Arc<Companion>>();
+        let start = code_folder_of(state, &diagram_id, &diagram.absolute);
+        let Some(picked) = crate::dialogs::pick_folder(app, Some(start)) else {
+            return Ok(None);
+        };
+        let folder = dunce::canonicalize(&picked).unwrap_or(picked);
+        let path = folder.to_string_lossy().into_owned();
+        state.settings.update(|s| {
+            s.code_folder_of.insert(diagram_id.clone(), path);
+            while s.code_folder_of.len() > crate::settings::CODE_FOLDERS_CAP {
+                let Some(first) = s.code_folder_of.keys().next().cloned() else {
+                    break;
+                };
+                s.code_folder_of.remove(&first);
+            }
+        })?;
+        Ok(Some(code_info(state, &companion, &folder)))
+    })
+    .await
+}
+
 /// Starts the agent on one turn. Its events arrive as `HostEvent::Companion` under `request.runId`,
 /// the last always `stopped`.
 #[tauri::command]
@@ -116,13 +231,21 @@ pub async fn companion_send(app: AppHandle, request: PromptRequest) -> Result<()
             }
         };
         let sidecar = connectable_sidecar()?;
+        // The project folder, only when the person said this run may read it.
+        let code = {
+            let folder = code_folder_of(state, &request.diagram_id, &diagram.absolute);
+            code_grant(state, &companion, &folder).map(|_| folder)
+        };
+        let code_name = code
+            .as_ref()
+            .map(|folder| code_info(state, &companion, folder).name);
 
         let work_dir = companion.work_dir()?;
         let run_dir = companion.run_dir(&request.run_id)?;
         let config = run_dir.join("mcp.json");
         let written = write_private(
             &config,
-            &companion::mcp_config(&sidecar, &request.run_id, agent.dir()),
+            &companion::mcp_config(&sidecar, &request.run_id, agent.dir(), code.is_some()),
             Subject::Preferences,
         );
         // The brief as a file too, for an agent that reads its instructions from one (Codex).
@@ -136,7 +259,7 @@ pub async fn companion_send(app: AppHandle, request: PromptRequest) -> Result<()
 
         let resume = companion.session_for(&request.diagram_id, request.agent);
         let fresh = uuid::Uuid::new_v4().to_string();
-        let server_env = companion::server_env(&request.run_id, agent.dir());
+        let server_env = companion::server_env(&request.run_id, agent.dir(), code.is_some());
         let command = backend.command(&RunSpec {
             program: &program,
             work_dir: &work_dir,
@@ -157,6 +280,7 @@ pub async fn companion_send(app: AppHandle, request: PromptRequest) -> Result<()
             RunPolicy {
                 diagram_id: request.diagram_id.clone(),
                 direct: request.mode == ApplyMode::Direct,
+                code,
             },
         );
         // The newest proposal this diagram's conversations submitted that still waits on the person.
@@ -180,6 +304,7 @@ pub async fn companion_send(app: AppHandle, request: PromptRequest) -> Result<()
                         version: *version,
                         summary,
                     }),
+                code_name.as_deref(),
             ),
             run_id: request.run_id.clone(),
             diagram_id: request.diagram_id.clone(),

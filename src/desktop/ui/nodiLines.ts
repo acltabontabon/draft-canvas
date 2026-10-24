@@ -227,6 +227,31 @@ const SELECTED_BY_KIND: Partial<Record<NodeCategory, readonly string[]>> = {
     '{it} will click that button twice, boss. Plan for it.',
     '{it} doesn’t read error messages. Nobody does. Design for it.',
     '{it} is the reason any of this exists, boss. Be nice to {it}.',
+    '{it} will submit a name made of spaces, boss. Trim before validation.',
+    '{it} will order minus three socks, boss. Check quantity bounds.',
+    '{it} will paste a novel into “notes”, boss. Set a length limit.',
+    '{it} will SHOUT at search, boss. Match text regardless of case.',
+    '{it} will fight over edits in two tabs, boss. Detect conflicts.',
+    '{it} will age a form like cheese, boss. Save drafts before sessions expire.',
+    '{it} will reuse a leaked password, boss. Offer passkeys.',
+    '{it} will edit IDs in the URL, boss. Check access on every request.',
+    '{it} will hit Back like it owes money, boss. Preserve form state.',
+    '{it} will let autofill pick a country, boss. Confirm the address.',
+    '{it} will upload a whole hard drive, boss. Enforce file size limits.',
+    '{it} will rename an exe to jpg, boss. Check file contents.',
+    '{it} will ghost every email, boss. Show order status in the app.',
+    '{it} will book “tomorrow” from another continent, boss. Show the time zone.',
+    '{it} will spill tea on the mouse, boss. Keep keyboard access working.',
+    '{it} will zoom until buttons flee, boss. Test the layout at 200%.',
+    '{it} will hammer password reset, boss. Rate-limit the email cannon.',
+    '{it} will enter a tunnel mid-save, boss. Keep unsent changes locally.',
+    '{it} will arrive on a fossil browser, boss. Check feature support.',
+    '{it} won’t log out of the shared PC, boss. Expire idle sessions.',
+    '{it} will end a trip before it starts, boss. Validate date ranges.',
+    '{it} will abandon an upload at 99%, boss. Clean up partial files.',
+    '{it} will close without saving, boss. Warn about unsaved changes.',
+    '{it} will mistake a trash icon for storage, boss. Offer undo.',
+    '{it} will share a login with the office, boss. Offer separate accounts.',
   ],
   agent: ['{it} is an AI agent, boss. Smallest permissions that work. Ask me how I know.'],
   objectStorage: ['{it} is where files go to live forever, boss. Who pays for forever?', 'Please tell me {it} isn’t a public bucket, boss.'],
@@ -910,6 +935,26 @@ export function diagramLines(nodes: readonly DraftNode[], edges: readonly DraftE
     say(`${named(actor)} will paste an emoji into a name field, boss. Validate it.`);
     say(`${named(actor)} will hit refresh mid-checkout, boss. That’s what idempotency keys are for.`);
     say(`${named(actor)} has 40 tabs open on hotel Wi-Fi, boss. Timeouts, please.`);
+    say(`${named(actor)} will race for the last ticket, boss. Reserve stock atomically.`);
+    say(`${named(actor)} will visit a dead bookmark, boss. Give that 404 a way home.`);
+    say(`${named(actor)} will trust a clock set to 2099, boss. Use server time for expiry.`);
+    say(`${named(actor)} will export a name starting with =, boss. Guard CSV formulas.`);
+    say(`${named(actor)} will put HTML in a bio, boss. Escape it before rendering.`);
+    say(`${named(actor)} will insist 007 is a number, boss. Keep account codes as text.`);
+    say(`${named(actor)} will type faster than search replies, boss. Drop stale responses.`);
+    say(`${named(actor)} will upload a folder as a photo, boss. Explain accepted file types.`);
+    say(`${named(actor)} will lose a download at 98%, boss. Support resume. Spare the desk.`);
+    say(`${named(actor)} will mute the victory beep, boss. Show success in text too.`);
+    say(`${named(actor)} will tap the wrong tiny button, boss. Give touch targets room.`);
+    say(`${named(actor)} will ignore a red warning, boss. Use words, not colour alone.`);
+    say(`${named(actor)} will pick “password1”, boss. Let password managers help.`);
+    say(`${named(actor)} will use an old reset link, boss. Explain expiry and offer a new one.`);
+    say(`${named(actor)} will lose the receipt tab, boss. Keep order history somewhere sane.`);
+    say(`${named(actor)} will call every spinner “broken”, boss. Show progress for long jobs.`);
+    say(`${named(actor)} will trust “Save” on a failed request, boss. Confirm persisted writes.`);
+    say(`${named(actor)} will retry an outage like a woodpecker, boss. Back off with jitter.`);
+    say(`${named(actor)} will pick “Other” then write a saga, boss. Don’t log free text blindly.`);
+    say(`${named(actor)} will keep scrolling forever, boss. Paginate before the browser melts.`);
   }
   const agent = first(['agent']);
   if (agent) say(`${named(agent)} is an AI agent, boss. Give it the smallest permissions that work. Ask me how I know.`);

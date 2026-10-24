@@ -84,6 +84,12 @@ unchanged?: boolean,
  * first call needn't be a read. JSON text; left out when it was too big or couldn't be read.
  */
 snapshot?: string, };
+export type CodeGrant = "now" | "always";
+export type CodeFolder = { name: string, displayPath: string,
+/**
+ * Whether runs may read it already, and for how long; absent until the person says.
+ */
+allowed?: CodeGrant, };
 export type ToolStatus = "in-progress" | "completed" | "failed";
 export type StopReason = { "kind": "end-turn" } | { "kind": "cancelled" } | { "kind": "max-turns" } | { "kind": "refusal" } | { "kind": "failed", message: string, };
 export type Usage = { input: number, cached: number, output: number, };

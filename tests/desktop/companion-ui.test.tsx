@@ -1,7 +1,7 @@
 import { ReactFlowProvider } from '@xyflow/react';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AgentInfo, AgentSettings, PromptRequest } from '../../src/desktop/api';
+import type { AgentInfo, AgentSettings, CodeFolder, CodeGrant, PromptRequest } from '../../src/desktop/api';
 
 // The apply mode is a preference; a real `localStorage` would leak it from one test into the next.
 const prefs = new Map<string, string>();
@@ -37,6 +37,9 @@ function fakeController() {
     companionCancel: vi.fn(async () => {}),
     companionSnapshot: vi.fn(async (): Promise<string | null> => null),
     companionForget: vi.fn(async (diagramId: string) => companion.clear(diagramId)),
+    companionCode: vi.fn(async (): Promise<CodeFolder | null> => ({ name: 'library', displayPath: '~/Work/library' })),
+    companionAllowCode: vi.fn(async (_diagramId: string, grant: CodeGrant): Promise<CodeFolder | null> => ({ name: 'library', displayPath: '~/Work/library', allowed: grant })),
+    companionChooseCode: vi.fn(async (): Promise<CodeFolder | null> => null),
     refreshCompanionProposals: vi.fn(async () => {}),
     refreshAgent: vi.fn(async () => {}),
     openAgentSettings: vi.fn(),
@@ -136,6 +139,76 @@ describe('the companion', () => {
     expect(controller.companionSnapshot).toHaveBeenCalledWith(doc.metadata.id, []);
     expect(controller.companionSend).toHaveBeenCalledTimes(1);
     expect(controller.companionSend.mock.calls[0]![0]).toMatchObject({ text: 'What breaks first?', snapshot: '{"revision":"o:1.1","elements":[]}' });
+  });
+
+  it('offers its suggestions the first time, about a selection, and otherwise only when asked', async () => {
+    useEditorStore.setState({ document: { ...doc, metadata: { ...doc.metadata, id: 'd_ideas00001' } }, selection: { nodes: [], edges: [] } });
+    useUiStore.setState({ companionOpen: true });
+    const first = mount();
+    await settle();
+    expect(screen.getByRole('list', { name: 'Ask Nodi' })).toBeTruthy();
+    // Opened again, nothing selected: the line and the composer, and the suggestions one link away.
+    act(() => useUiStore.setState({ companionOpen: false }));
+    await settle();
+    act(() => useUiStore.setState({ companionOpen: true }));
+    await settle();
+    expect(screen.queryByRole('list', { name: 'Ask Nodi' })).toBeNull();
+    // Nor on the diagram's next opening, which mounts the box anew: counted per mount, they came
+    // back every time.
+    first.unmount();
+    mount();
+    await settle();
+    expect(screen.queryByRole('list', { name: 'Ask Nodi' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Ideas' }));
+    expect(screen.getByRole('list', { name: 'Ask Nodi' })).toBeTruthy();
+    // With something selected they are about it, so they show.
+    act(() => useUiStore.setState({ companionOpen: false }));
+    await settle();
+    act(() => {
+      useEditorStore.setState({ selection: { nodes: ['db'], edges: [] } });
+      useUiStore.setState({ companionOpen: true });
+    });
+    await settle();
+    expect(screen.getByRole('list', { name: 'Ask Nodi' }).textContent).toContain('Orders database');
+  });
+
+  it('asks to read the code when the agent needs it, and asks again with it once allowed', async () => {
+    useUiStore.setState({ companionOpen: true });
+    mount();
+    await settle();
+    act(() => {
+      companion.begin(doc.metadata.id, 'r1', 'How are retries implemented?', null);
+      companion.apply('r1', { type: 'tool-call', id: 't1', tool: 'ask_to_read_code', status: 'in-progress' });
+      companion.apply('r1', { type: 'tool-call-update', id: 't1', status: 'completed', error: null });
+      companion.apply('r1', { type: 'stopped', reason: { kind: 'end-turn' }, summary: 'I’d need the retry code to answer that.', costMicroUsd: null, usage: null });
+    });
+    await settle();
+    const ask = screen.getByRole('group', { name: 'Let Nodi read the code' });
+    expect(ask.textContent).toContain('library');
+    expect(ask.textContent).toMatch(/Only reading/);
+    fireEvent.click(screen.getByRole('button', { name: 'Just for now' }));
+    await settle();
+    expect(controller.companionAllowCode).toHaveBeenCalledWith(doc.metadata.id, 'now');
+    // The same question again, this time with the code: no retyping.
+    expect(controller.companionSend.mock.calls.at(-1)![0]).toMatchObject({ text: 'How are retries implemented?' });
+    expect(screen.queryByRole('group', { name: 'Let Nodi read the code' })).toBeNull();
+  });
+
+  it('takes no for an answer about the code', async () => {
+    useUiStore.setState({ companionOpen: true });
+    mount();
+    await settle();
+    act(() => {
+      companion.begin(doc.metadata.id, 'r2', 'Does the diagram match the code?', null);
+      companion.apply('r2', { type: 'tool-call', id: 't1', tool: 'ask_to_read_code', status: 'in-progress' });
+      companion.apply('r2', { type: 'tool-call-update', id: 't1', status: 'completed', error: null });
+      companion.apply('r2', { type: 'stopped', reason: { kind: 'end-turn' }, summary: 'I’d need to read the code.', costMicroUsd: null, usage: null });
+    });
+    await settle();
+    fireEvent.click(screen.getByRole('button', { name: 'No' }));
+    await settle();
+    expect(controller.companionAllowCode).not.toHaveBeenCalled();
+    expect(screen.getByText(/stick to the diagram/)).toBeTruthy();
   });
 
   it('answers small talk itself, without running the agent', async () => {
@@ -398,7 +471,8 @@ describe('the companion', () => {
     // Inside another view: its name, not something to light or bring into view from here.
     expect(screen.getByText('Orders endpoint').getAttribute('data-elsewhere')).toBe('true');
     expect(screen.queryByRole('button', { name: 'Orders endpoint' })).toBeNull();
-    expect(screen.getByText('something not in this diagram')).toBeTruthy();
+    // An id it doesn't know is said as its own words, muted, never as the id or a shrug.
+    expect(screen.getByText('gone').getAttribute('data-missing')).toBe('true');
   });
 
   it('offers the way inside a shape its answer names, and takes the person there', async () => {

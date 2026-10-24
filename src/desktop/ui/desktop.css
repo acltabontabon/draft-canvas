@@ -2110,6 +2110,13 @@
   transform: translateX(3px);
 }
 
+/* The suggestions, folded away: one quiet link under Nodi's line. */
+.dc-companion-ideas {
+  align-self: flex-start;
+  margin-top: 6px;
+  font-size: 12px;
+}
+
 /* Buttons under Nodi's own answer: a wrapping row of pills, so they read as things to press, not
    more lines to read. A question for the agent is outlined; something the app does now is filled. */
 .dc-companion-actions {
@@ -2139,6 +2146,27 @@
 .dc-companion-actions button:focus-visible {
   border-color: var(--dc-selection);
   background: color-mix(in srgb, var(--dc-selection) 24%, transparent);
+}
+
+/* Nodi asking to read the project: set apart from the reply by a rule in its own colour, since it is
+   the person's decision, not more of the answer. */
+.dc-companion-ask {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  margin-top: 10px;
+  padding: 10px 0 0 12px;
+  border-left: 2px solid var(--dc-selection);
+}
+
+.dc-companion-ask p {
+  margin: 0;
+}
+
+.dc-companion-ask .dc-companion-link {
+  margin-top: 6px;
+  font-size: 12px;
 }
 
 /* What would make the agent better outside the box: below the questions, after a hairline, so it

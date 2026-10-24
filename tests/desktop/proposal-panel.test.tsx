@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { prepareProposal } from '../../src/agent/proposal';
@@ -139,5 +139,64 @@ describe('ProposalPanel accept', () => {
     await act(async () => fireEvent.click(screen.getByText('Second')));
     await acceptButton();
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+});
+
+describe('ProposalPanel review presentation', () => {
+  it('leads with one summary, colour-count labels and named changes grouped before rationale', async () => {
+    const doc = useEditorStore.getState().document;
+    const withLegacy = { ...doc, nodes: [...doc.nodes, createNode({ id: 'old', type: 'service', x: 300, y: 0, text: 'Legacy worker' })] };
+    useEditorStore.setState({ document: withLegacy });
+    const proposal = proposalFor(withLegacy, 'p1', [
+      { op: 'add', nodes: [{ id: 'worker', type: 'service', label: 'Payment worker' }], relationships: [{ id: 'jobs', from: 'api', to: 'worker', label: 'Dispatches jobs' }] },
+      { op: 'update', id: 'api', set: { label: 'Checkout API' } },
+      { op: 'remove', ids: ['old'] },
+    ], 'Replace the legacy worker and rename the API');
+    proposal.counts = { added: 2, updated: 1, removed: 1 };
+    proposal.rationale = 'Keep payment processing separate.';
+    const { container } = mount(fakeController([proposal]), 'p1');
+    await acceptButton();
+
+    expect(screen.getAllByText(proposal.summary)).toHaveLength(1);
+    const counts = screen.getByRole('list', { name: 'Proposed changes' });
+    expect(within(counts).getAllByRole('listitem').map((row) => row.textContent)).toEqual(['+ 2 added', '~ 1 changed', '− 1 removed']);
+    const added = screen.getByRole('region', { name: 'Added' });
+    expect(within(added).getByText('Payment worker')).toBeTruthy();
+    expect(within(added).getByText('Dispatches jobs')).toBeTruthy();
+    expect(within(added).getByText('Connector')).toBeTruthy();
+    const changed = screen.getByRole('region', { name: 'Changed' });
+    expect(within(changed).getByText('Checkout API', { selector: '.dc-proposal-diff-label' })).toBeTruthy();
+    expect(within(changed).getByText('Orders API')).toBeTruthy();
+    expect(within(screen.getByRole('region', { name: 'Removed' })).getByText('Legacy worker')).toBeTruthy();
+    const rationale = screen.getByText('Rationale').closest('details')!;
+    expect(rationale.open).toBe(false);
+    expect([...container.querySelectorAll('.dc-proposal-diff-group, .dc-proposal-collapsible')].at(-1)).toBe(rationale);
+  });
+
+  it('keeps decided proposals in quiet history and clears the preview when switching or closing', async () => {
+    const doc = useEditorStore.getState().document;
+    const pending = proposalFor(doc, 'p1', [{ op: 'update', id: 'api', set: { label: 'Checkout API' } }]);
+    const old = { ...proposalFor(doc, 'old', [{ op: 'update', id: 'api', set: { label: 'Orders API' } }], 'An earlier change with a long summary'), status: 'accepted' as const };
+    mount(fakeController([old, pending]), 'p1');
+    await acceptButton();
+    await waitFor(() => expect(useUiStore.getState().proposalPreview?.proposalId).toBe('p1'));
+    const history = screen.getByText('History · 1').closest('details')!;
+    expect(history.open).toBe(false);
+    expect(within(history).getByRole('img', { name: 'Accepted' })).toHaveTextContent('✓');
+    fireEvent.click(screen.getByText('History · 1'));
+    fireEvent.click(within(history).getByRole('listitem'));
+    expect(await screen.findByText('Accepted: it is in the diagram.')).toBeTruthy();
+    expect(screen.getAllByText(old.summary)).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: 'Accept' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Reject' })).toBeNull();
+    expect(screen.queryByRole('checkbox', { name: 'Show on canvas' })).toBeNull();
+    expect(useUiStore.getState().proposalPreview).toBeNull();
+
+    fireEvent.click(screen.getByRole('listitem', { name: /Rename the API/ }));
+    await acceptButton();
+    await waitFor(() => expect(useUiStore.getState().proposalPreview?.proposalId).toBe('p1'));
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(useUiStore.getState().proposalPreview).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Proposal review' })).toBeNull();
   });
 });

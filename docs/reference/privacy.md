@@ -101,7 +101,9 @@ and what the agent reads go to that agent's provider, as with any prompt. Draft 
 itself. The conversation shown is kept in memory only; the agent keeps its own session files
 (`~/.claude/projects`, `~/.codex/sessions`), and Draft Canvas keeps which session belongs to which
 diagram in `companion/sessions.json` in the app's data folder. A run's working folder holds only its
-connector configuration and is removed when the run ends.
+connector configuration and is removed when the run ends. Nodi reads no code unless you allow it in
+the chat, and then only the one project folder, read-only and without secret files; what it reads
+goes to the agent's provider like the rest of the turn.
 
 ## Storage limits and backups
 

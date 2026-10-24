@@ -12,6 +12,7 @@ use super::broker::{CallRegistry, ToolError};
 use crate::util::lock;
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex, Weak};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -19,6 +20,9 @@ pub struct RunPolicy {
     pub diagram_id: String,
     /// `update_diagram` is allowed; otherwise changes go through `submit_proposal`.
     pub direct: bool,
+    /// The project folder the person let this run read (`code.rs`), read-only; without one the run
+    /// may only ask to (`ask_to_read_code`).
+    pub code: Option<PathBuf>,
 }
 
 struct Open {
@@ -82,7 +86,15 @@ const RUN_TOOLS: &[&str] = &[
     "submit_proposal",
     "get_proposal",
     "list_proposals",
+    "ask_to_read_code",
+    "list_code",
+    "search_code",
+    "read_code",
 ];
+
+/// Tools no agent but a companion run is ever offered: an agent the person connected has files of
+/// its own.
+pub const RUN_ONLY: &[&str] = &["ask_to_read_code", "list_code", "search_code", "read_code"];
 
 pub fn ended() -> ToolError {
     ToolError::new(
@@ -118,7 +130,16 @@ pub fn constrain(
     }
     let named = args.get("diagramId").and_then(Value::as_str);
     match tool {
-        "get_capabilities" => {}
+        "get_capabilities" | "ask_to_read_code" => {}
+        reader if super::code::CODE_TOOLS.contains(&reader) => {
+            if policy.code.is_none() {
+                return Err(ToolError::new(
+                    "NOT_ALLOWED",
+                    "The person hasn't let you read the project's code.",
+                )
+                .hint("Call ask_to_read_code with why you need it, then end your turn."));
+            }
+        }
         "list_proposals" => {
             if named.is_some_and(|id| id != policy.diagram_id) {
                 return Err(outside(format!(
@@ -160,6 +181,7 @@ mod tests {
         RunPolicy {
             diagram_id: "d_1".into(),
             direct,
+            code: None,
         }
     }
 
@@ -168,6 +190,29 @@ mod tests {
             .as_str()
             .unwrap()
             .to_string()
+    }
+
+    #[test]
+    fn a_run_reads_code_only_when_the_person_allowed_it() {
+        let none = |_: &str| None;
+        let p = policy(false);
+        assert!(constrain(&p, "ask_to_read_code", json!({"reason": "retries"}), none).is_ok());
+        assert_eq!(
+            code(constrain(
+                &p,
+                "read_code",
+                json!({"path": "src/a.ts"}),
+                none
+            )),
+            "NOT_ALLOWED"
+        );
+        let allowed = RunPolicy {
+            code: Some(PathBuf::from("/work/library")),
+            ..policy(false)
+        };
+        for tool in ["list_code", "search_code", "read_code"] {
+            assert!(constrain(&allowed, tool, json!({}), none).is_ok(), "{tool}");
+        }
     }
 
     #[test]

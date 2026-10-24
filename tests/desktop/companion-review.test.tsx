@@ -129,8 +129,9 @@ describe('reviewing in the companion card', () => {
     mount(controller);
     expect(await screen.findByRole('region', { name: 'Proposed change' })).toHaveTextContent('Rename the database');
     const accept = await acceptButton();
-    // Checked against the diagram, the change is dashed on the canvas: the card's own preview.
-    expect(useUiStore.getState().proposalPreview).toMatchObject({ proposalId: 'p1', owner: 'companion' });
+    // Checked against the diagram, the change is dashed on the canvas: the card's own preview (set by
+    // an effect after the check, which a loaded runner can leave a beat behind Accept enabling).
+    await waitFor(() => expect(useUiStore.getState().proposalPreview).toMatchObject({ proposalId: 'p1', owner: 'companion' }), { timeout: 5000 });
     await act(async () => fireEvent.click(accept));
     await waitFor(() => expect(controller.resolveProposal).toHaveBeenCalledWith('p1', 'accepted'));
     expect(useEditorStore.getState().history.past).toHaveLength(1);

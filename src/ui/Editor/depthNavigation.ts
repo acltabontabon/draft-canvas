@@ -4,7 +4,7 @@ import { isEditableTarget } from '../../lib/isEditableTarget';
 import { prefersReducedMotion } from '../../lib/motion';
 import { useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
-import { rectOfEntrance, rectOfRoom, type ScreenRect } from './depthRects';
+import { pictureRoom, takePicture, rectOfEntrance, rectOfRoom, type ScreenRect } from './depthRects';
 
 /**
  * Stepping into or out of a shape, from wherever it is asked for — a shortcut, a command, the
@@ -37,8 +37,13 @@ function play(direction: 'in' | 'out', nodeId: string, from: ScreenRect | null):
 export async function lookInside(nodeId: string): Promise<void> {
   await commitEditing();
   const entrance = rectOfEntrance(nodeId);
-  if (!useEditorStore.getState().enterInside(nodeId)) return;
+  if (!prefersReducedMotion()) pictureRoom({ grid: true });
+  if (!useEditorStore.getState().enterInside(nodeId)) {
+    takePicture(); // dropped: a move that didn't happen keeps no picture of the room
+    return;
+  }
   if (entrance) play('in', nodeId, entrance);
+  else takePicture();
 }
 
 /** Climb back out — one room by default, or all the way out to `depth`. */
@@ -50,10 +55,14 @@ export async function backOut(depth?: number): Promise<void> {
   const owner = state.path[target];
   // Measured while it is still on screen: the climb closes from this frame onto the shape.
   const room = rectOfRoom();
+  if (!prefersReducedMotion()) pictureRoom({ grid: false });
   state.exitTo(target);
   // Refused (a drag or a resize is still under way): nothing moved, so nothing is selected or played.
   const after = useEditorStore.getState();
-  if (!owner || after.path.length !== target) return;
+  if (!owner || after.path.length !== target) {
+    takePicture(); // dropped, as above
+    return;
+  }
   // The shape this room belongs to is back on screen, and the room closes onto it — followed frame
   // by frame, since the camera is still on its way there. It is left selected so ⌘↓ goes straight
   // back in — except while presenting, where a selection ring is not part of the picture.

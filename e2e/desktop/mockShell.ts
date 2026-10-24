@@ -87,6 +87,7 @@ export async function installMockShell(page: Page): Promise<void> {
     const sidecars = new Map<string, { mime: string; base64: string }>();
     const calls: { command: string; args: unknown }[] = [];
     const companionSent: { runId: string; diagramId: string; text: string; selection: unknown; mode: string }[] = [];
+    let codeAllowed: 'now' | 'always' | null = null;
     const companionCancelled: string[] = [];
     const exported: { name: string; text: string }[] = [];
     const asked: { title: string; message: string; buttons: string[] }[] = [];
@@ -468,6 +469,12 @@ export async function installMockShell(page: Page): Promise<void> {
       },
       companion_runs: () => [],
       companion_forget: () => null,
+      companion_code: () => ({ name: 'library', displayPath: '~/Work/library', ...(codeAllowed ? { allowed: codeAllowed } : {}) }),
+      companion_allow_code: (args: { grant: 'now' | 'always' }) => {
+        codeAllowed = args.grant;
+        return { name: 'library', displayPath: '~/Work/library', allowed: args.grant };
+      },
+      companion_choose_code: () => null,
       companion_continue: () => "cd '/Users/me/Library/Application Support/Draft Canvas/companion/work' && '/usr/local/bin/claude' '--resume' 's-1'",
       agent_configure: (args: { patch: { enabled?: boolean; project?: { handle: string; agent: boolean }; rotate?: boolean } }) => {
         if (args.patch.enabled !== undefined) agentSettings = { ...agentSettings, enabled: args.patch.enabled, listening: args.patch.enabled };

@@ -30,6 +30,8 @@ fn desktop_wire_types_match_rust() {
         crate::companion::protocol::Selection::decl(&config),
         crate::companion::protocol::ApplyMode::decl(&config),
         crate::companion::protocol::PromptRequest::decl(&config),
+        crate::companion::protocol::CodeGrant::decl(&config),
+        crate::companion::protocol::CodeFolder::decl(&config),
         crate::companion::protocol::ToolStatus::decl(&config),
         crate::companion::protocol::StopReason::decl(&config),
         crate::companion::protocol::Usage::decl(&config),

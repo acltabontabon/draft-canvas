@@ -24,6 +24,8 @@ import {
   type Proposal,
   type ProposalAction,
   type AgentKind,
+  type CodeFolder,
+  type CodeGrant,
   type DesktopApi,
   type DocState,
   type Handle,
@@ -1829,6 +1831,39 @@ export class DesktopController {
       await this.api.companionForget(diagramId);
     } catch (error) {
       logDiagnostic(error, { operation: 'desktop-companion-forget' });
+    }
+  }
+
+  /** The project folder Nodi would read for this diagram, and whether it may; null when the shell
+   *  can't say (the diagram's folder isn't one agents may use). */
+  async companionCode(diagramId: string): Promise<CodeFolder | null> {
+    try {
+      return await this.api.companionCode(diagramId);
+    } catch (error) {
+      logDiagnostic(error, { operation: 'desktop-companion-code' });
+      return null;
+    }
+  }
+
+  /** The person's answer to Nodi asking to read the project. Null when it didn't take. */
+  async companionAllowCode(diagramId: string, grant: CodeGrant): Promise<CodeFolder | null> {
+    try {
+      const folder = await this.api.companionAllowCode(diagramId, grant);
+      void this.refreshAgent();
+      return folder;
+    } catch (error) {
+      logDiagnostic(error, { operation: 'desktop-companion-allow-code' });
+      return null;
+    }
+  }
+
+  /** Another folder for the diagram's code, from the system's own dialog; null when cancelled. */
+  async companionChooseCode(diagramId: string): Promise<CodeFolder | null> {
+    try {
+      return await this.api.companionChooseCode(diagramId);
+    } catch (error) {
+      logDiagnostic(error, { operation: 'desktop-companion-choose-code' });
+      return null;
     }
   }
 

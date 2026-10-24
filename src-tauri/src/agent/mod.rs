@@ -13,6 +13,7 @@
 pub mod bridge;
 pub mod broker;
 pub mod clients;
+pub mod code;
 pub mod endpoint;
 pub mod ledger;
 pub mod page;

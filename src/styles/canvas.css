@@ -1811,6 +1811,23 @@
   max-width: 480px;
 }
 
+.dc-element-inspector .dc-element-technology {
+  min-width: 0;
+  max-width: 136px;
+  gap: 5px;
+  color: var(--dc-text-muted);
+}
+
+.dc-element-technology svg {
+  flex: none;
+}
+
+.dc-element-technology span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* The 24-unit dots are dust at 16px: drawn heavier, like the toolbar's own More, so ⋯ reads as a
    control rather than a smudge at the end of the row. */
 .dc-popover-more svg[data-icon='more'] {

@@ -1,126 +1,192 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
+import { useReactFlow, type Viewport } from '@xyflow/react';
+import { cameraEntering, cameraLeaving, DEPTH_MOVE_MS, depthEase, fitCamera, type PaneRect } from '../../canvas/depthCamera';
+import { boundsOf, type Bounds } from '../../document/geometry';
 import { motionMs } from '../../lib/motion';
+import { useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
-import { rectOfEntrance, rectOfRoom, type ScreenRect } from './depthRects';
+import { takePicture, type RoomPicture } from './depthRects';
 
-const CORNERS = ['nw', 'ne', 'se', 'sw'] as const;
-/** The corner marks' arm on the shape, as a share of its shorter side (never longer than the room
- *  frame's); and the room frame's arm — see `.dc-room-mark`. */
-const SHAPE_ARM_SHARE = 0.22;
-const ROOM_ARM = 28;
-
-const easeOut = (t: number) => 1 - (1 - t) ** 3;
-const easeInOut = (t: number) => (t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2);
-const mix = (a: number, b: number, t: number) => a + (b - a) * t;
 const clamp01 = (t: number) => Math.min(1, Math.max(0, t));
+/** 0 before `from`, 1 after `to`, smoothly between: when each room is seen, over the move. */
+const between = (t: number, from: number, to: number) => {
+  const x = clamp01((t - from) / (to - from));
+  return x * x * (3 - 2 * x);
+};
+/** Frames worked out for the compositor to run between: enough that the zoom's curve reads as one. */
+const FRAMES = 32;
 
 /**
- * A shape becoming the room you are standing in — and, on the way out, the room closing back down
- * onto the shape.
+ * Stepping into a shape, and back out of it, as one continuous zoom through the shape.
  *
- * The room you arrive in is framed by corner marks (`RoomFrame`). So the dive is those four marks:
- * they start on the shape's own corners, open out, and land exactly on the room's frame (or the
- * canvas edges, for a room with nothing in it yet). Coming out, they close back onto the shape.
+ * The editor draws one room at a time, so the room being left is carried off as a picture of
+ * itself (`pictureRoom`), held in step with the camera. Going in, the room you leave keeps growing
+ * past you, the shape's outline opening around the room inside it, which grows up out of the shape
+ * to where Fit to view (Shift 1) frames it, while the one you left dissolves. Coming out, the room
+ * shrinks back into its shape, and the room around it settles in as it does, from just closer than
+ * where it lands.
  *
- * Driven frame by frame rather than as a keyframe animation, because both ends move: the camera
- * glides into the room (or back out to the shape) over the same few hundred milliseconds, so each
- * frame re-measures its destination and lands exactly on it. Positioned by box rather than scaled,
- * so a 1px mark stays a 1px mark while it travels.
+ * Both rooms move by the same zoom about the same point, every frame, so the shape and what is
+ * inside it never part: that is what makes it read as going through the shape rather than as a cut
+ * and a pan. The far room fades in and the near one out, so a shape is never seen filling the
+ * screen at full strength. The camera itself lands at once, and both rooms are moved as layers by
+ * the compositor, so nothing on the page's own thread can make the move stutter.
  *
- * It is a picture of a move that has already happened: the editor is showing the new room before
- * this mounts, nothing waits on it, and a second navigation simply replaces the token mid-flight.
- * Under reduced motion no token is ever set, so this renders nothing at all.
+ * It is the picture of a move that has already happened: the editor is in the new room before this
+ * runs, nothing waits on it, a second move replaces it mid-flight, and reaching for the canvas
+ * mid-move ends it at once. It always ends where Fit to view would. Under reduced
+ * motion no move is ever played, and the canvas lands at once (`Canvas`'s room camera).
  */
 export function DepthTransition() {
   const transition = useUiStore((state) => state.depthTransition);
-  const frameRef = useRef<HTMLDivElement>(null);
+  const anchorRef = useRef<HTMLDivElement>(null);
+  const { setViewport } = useReactFlow();
 
-  // Before paint, so the frame is never seen at its resting size for the one frame before it moves.
+  // Before paint, so neither room is ever seen at rest for the frame before it moves.
   useLayoutEffect(() => {
-    const frame = frameRef.current;
-    if (!transition || !frame) return;
-    const canvasOf = () => frame.parentElement?.getBoundingClientRect() ?? null;
-    const duration = motionMs(360);
-    const initialCanvas = canvasOf();
-    if (!initialCanvas || initialCanvas.width === 0 || duration === 0) {
-      useUiStore.getState().setDepthTransition(null);
+    if (!transition) return;
+    const picture = takePicture();
+    const done = () => useUiStore.getState().setDepthTransition(null);
+    const root = anchorRef.current?.parentElement?.querySelector<HTMLElement>('.react-flow') ?? null;
+    const live = root?.querySelector<HTMLElement>('.react-flow__viewport') ?? null;
+    // The dot grid zooms with the camera: arriving from eleven times closer, it was giant dots.
+    const grid = root?.querySelector<HTMLElement>('.react-flow__background') ?? null;
+    const box = root?.getBoundingClientRect();
+    const room = useEditorStore.getState().document;
+    const landing = box ? fitCamera(room.nodes, box) : null;
+    const duration = motionMs(DEPTH_MOVE_MS);
+    if (!root || !live || !box || box.width === 0 || duration === 0) {
+      if (landing) void setViewport(landing);
+      done();
       return;
     }
+    const onPane = (rect: PaneRect): PaneRect => ({ ...rect, x: rect.x - box.x, y: rect.y - box.y });
+    const plan = flightOf(transition, picture, room.nodes, onPane, box, landing ?? room.viewport);
 
-    const inward = transition.direction === 'in';
-    const corners = [...frame.querySelectorAll<HTMLElement>('[data-at]')];
-    const veil = frame.querySelector<HTMLElement>('.dc-depth-sheet-veil');
-    // The room end of the move is the room's frame, clipped to the canvas — a room larger than the
-    // screen would otherwise put its marks off it — or the canvas itself when there is no frame.
-    const roomEnd = (canvas: DOMRect, room: ScreenRect | null): ScreenRect => {
-      if (!room) return canvas;
-      const x = Math.max(room.x, canvas.x);
-      const y = Math.max(room.y, canvas.y);
-      const width = Math.min(room.x + room.width, canvas.right) - x;
-      const height = Math.min(room.y + room.height, canvas.bottom) - y;
-      return width > 0 && height > 0 ? { x, y, width, height } : canvas;
+    // The picture rides above the live room, inside the canvas, so every control stays above both.
+    const ghost = document.createElement('div');
+    ghost.className = 'dc-depth-ghost';
+    if (picture) ghost.append(picture.layer);
+    root.append(ghost);
+
+    // The camera goes straight to where it lands, once; what is seen moving is the two rooms as
+    // layers, animated by the compositor from frames worked out here. Driving the camera itself
+    // every frame re-laid and repainted the whole room each time, at up to eleven times its size
+    // coming out, and the move stuttered.
+    const to = plan.to;
+    void setViewport(to);
+    const layer = live.parentElement ?? live;
+    const frames = { room: [] as Keyframe[], picture: [] as Keyframe[], grid: [] as Keyframe[] };
+    for (let i = 0; i <= FRAMES; i += 1) {
+      const t = i / FRAMES;
+      const e = depthEase(t);
+      const zoom = plan.from.zoom * (plan.to.zoom / plan.from.zoom) ** e;
+      const cx = plan.anchorFrom.x + (plan.anchorTo.x - plan.anchorFrom.x) * e;
+      const cy = plan.anchorFrom.y + (plan.anchorTo.y - plan.anchorFrom.y) * e;
+      const camera = { x: cx - plan.anchor.x * zoom, y: cy - plan.anchor.y * zoom, zoom };
+      // The room as the camera would show it now, from the camera it has: a zoom about the origin.
+      const s = camera.zoom / to.zoom;
+      const arriving = between(t, ...plan.arriving);
+      frames.room.push({ offset: t, transform: `translate(${camera.x - s * to.x}px, ${camera.y - s * to.y}px) scale(${s})`, opacity: arriving });
+      // The picture: zoomed by just as much as the camera has since it set off, about the same point.
+      const scale = plan.picture ? plan.picture ** e : zoom / plan.from.zoom;
+      frames.picture.push({ offset: t, transform: `translate(${cx - scale * plan.anchorFrom.x}px, ${cy - scale * plan.anchorFrom.y}px) scale(${scale})`, opacity: 1 - between(t, ...plan.leaving) });
+      // The dot grid only fades: zoomed with the camera, arriving from eleven times closer, it was
+      // giant dots.
+      frames.grid.push({ offset: t, opacity: arriving });
+    }
+    const timing: KeyframeAnimationOptions = { duration, easing: 'linear' };
+    layer.style.transformOrigin = '0 0';
+    layer.style.willChange = 'transform, opacity';
+    const animations = [layer.animate(frames.room, timing), ghost.animate(frames.picture, timing), ...(grid ? [grid.animate(frames.grid, timing)] : [])];
+
+    let over = false;
+    const settle = () => {
+      if (over) return;
+      over = true;
+      for (const animation of animations) animation.cancel();
+      ghost.remove();
+      layer.style.transformOrigin = '';
+      layer.style.willChange = '';
+      root.removeEventListener('wheel', interrupted, true);
+      root.removeEventListener('pointerdown', interrupted, true);
     };
-    const roomStart = inward ? null : roomEnd(initialCanvas, transition.from);
-    let shape: ScreenRect | null = inward ? transition.from : null;
-    let started: number | null = null;
-    let raf = 0;
-    // Coming out, the shape is only drawn a frame or two after the room is left; the move waits
-    // for it (unseen, and without starting its clock) rather than guessing, and gives up rather
-    // than stalling.
-    let waitsLeft = 8;
-
-    const draw = (now: number) => {
-      const canvas = canvasOf();
-      if (!inward) shape = rectOfEntrance(transition.nodeId) ?? shape;
-      if (!shape && started === null && waitsLeft-- > 0) {
-        raf = requestAnimationFrame(draw);
-        return;
-      }
-      const room = inward && canvas ? roomEnd(canvas, rectOfRoom()) : roomStart;
-      if (!canvas || !shape || !room) {
-        useUiStore.getState().setDepthTransition(null);
-        return;
-      }
-      started ??= now;
-      const t = clamp01((now - started) / duration);
-
-      // Going in, the marks hold on the shape for a beat before opening out; coming out, they close
-      // straight down onto it.
-      const p = inward ? easeInOut(clamp01((t - 0.1) / 0.9)) : easeOut(t);
-      const from = inward ? shape : room;
-      const to = inward ? room : shape;
-      frame.style.left = `${mix(from.x, to.x, p) - canvas.x}px`;
-      frame.style.top = `${mix(from.y, to.y, p) - canvas.y}px`;
-      frame.style.width = `${mix(from.width, to.width, p)}px`;
-      frame.style.height = `${mix(from.height, to.height, p)}px`;
-      // Handing over to what is really there at the far end: the room's own frame, or the shape.
-      frame.style.opacity = String(inward ? 1 - clamp01((t - 0.75) / 0.25) : 1 - clamp01((t - 0.85) / 0.15));
-
-      const shapeArm = Math.min(ROOM_ARM, Math.min(shape.width, shape.height) * SHAPE_ARM_SHARE);
-      const armT = inward ? p : 1 - p;
-      const arm = `${mix(shapeArm, ROOM_ARM, armT)}px`;
-      for (const corner of corners) {
-        corner.style.width = arm;
-        corner.style.height = arm;
-      }
-      if (veil) veil.style.opacity = String(0.25 * Math.sin(Math.PI * p));
-
-      if (t < 1) raf = requestAnimationFrame(draw);
-      else useUiStore.getState().setDepthTransition(null);
+    const finish = () => {
+      settle();
+      done();
     };
-    draw(performance.now());
-    return () => cancelAnimationFrame(raf);
-  }, [transition]);
+    // The person reaching for the canvas mid-move gets it as it will be, at once.
+    const interrupted = () => finish();
+    root.addEventListener('wheel', interrupted, { capture: true, passive: true });
+    root.addEventListener('pointerdown', interrupted, true);
+    void animations[0]!.finished.then(finish, () => {});
+    return settle;
+  }, [transition, setViewport]);
 
   useEffect(() => () => useUiStore.getState().setDepthTransition(null), []);
 
-  if (!transition) return null;
-  return (
-    <div className="dc-depth-sheet" ref={frameRef} aria-hidden="true">
-      <span className="dc-depth-sheet-veil" />
-      {CORNERS.map((corner) => (
-        <span key={corner} data-at={corner} />
-      ))}
-    </div>
-  );
+  // Only something to find the canvas from; everything seen is drawn inside the canvas itself.
+  return transition ? <div className="dc-depth-sheet" ref={anchorRef} hidden /> : null;
+}
+
+type Flight = {
+  from: Viewport;
+  to: Viewport;
+  /** The point the zoom is about, on the canvas of the room arriving… */
+  anchor: { x: number; y: number };
+  /** …and where it is on screen as the move sets off, and as it lands. */
+  anchorFrom: { x: number; y: number };
+  anchorTo: { x: number; y: number };
+  /** When the room arriving is seen, and the one being left stops being seen, as parts of the move. */
+  arriving: [number, number];
+  leaving: [number, number];
+  /** How far the picture zooms by itself, when the camera doesn't move. */
+  picture?: number;
+};
+
+/** How far the picture zooms when there is no shape to zoom through. */
+const EMPTY_ZOOM = 3;
+
+/** For when there is no shape to zoom through (an empty room, or a shape no longer there): only the
+ *  picture moves, by `factor` about one point on screen. The camera stays put: someone arriving in
+ *  an empty room draws in it at once, and a camera still moving put the first shape elsewhere. */
+function about(to: Viewport, point: { x: number; y: number }, factor: number, arriving: [number, number], leaving: [number, number]): Flight {
+  const anchor = { x: (point.x - to.x) / to.zoom, y: (point.y - to.y) / to.zoom };
+  return { from: to, to, anchor, anchorFrom: point, anchorTo: point, arriving, leaving, picture: factor };
+}
+
+const centreOf = (b: Bounds) => ({ x: b.x + b.width / 2, y: b.y + b.height / 2 });
+const onScreen = (point: { x: number; y: number }, camera: Viewport) => ({
+  x: point.x * camera.zoom + camera.x,
+  y: point.y * camera.zoom + camera.y,
+});
+
+/** Where the move sets off from and lands, and about which point it zooms. */
+function flightOf(
+  transition: NonNullable<ReturnType<typeof useUiStore.getState>['depthTransition']>,
+  picture: RoomPicture | null,
+  nodes: readonly Bounds[],
+  onPane: (rect: PaneRect) => PaneRect,
+  box: DOMRect,
+  to: Viewport,
+): Flight {
+  const pane = { x: 0, y: 0, width: box.width, height: box.height };
+  const content = boundsOf(nodes);
+  if (transition.direction === 'in') {
+    // The room's shapes start small inside the shape stepped into, and grow out of it.
+    const entrance = transition.from ? onPane(transition.from) : pane;
+    const from = content ? cameraEntering(nodes, entrance) : null;
+    const anchor = content ? centreOf(content) : { x: 0, y: 0 };
+    // An empty room: nothing to grow, so the one left behind opens up around the shape and goes.
+    if (!from || !content) return about(to, centreOf(entrance), EMPTY_ZOOM, [0, 0.4], [0, 0.45]);
+    return { from, to, anchor, anchorFrom: onScreen(anchor, from), anchorTo: onScreen(anchor, to), arriving: [0.06, 0.5], leaving: [0.04, 0.5] };
+  }
+  // Coming out, the shape starts around where the room's shapes were, so the room shrinks back
+  // into it; the room around it only shows once the shape is near its own size again.
+  const owner = useEditorStore.getState().document.nodes.find((node) => node.id === transition.nodeId);
+  const left = picture?.content ? onPane(picture.content) : transition.from ? onPane(transition.from) : pane;
+  if (!owner) return about(to, centreOf(left), 1 / EMPTY_ZOOM, [0, 0.4], [0, 0.4]);
+  const from = cameraLeaving(owner, left);
+  const anchor = centreOf(owner);
+  return { from, to, anchor, anchorFrom: onScreen(anchor, from), anchorTo: onScreen(anchor, to), arriving: [0.24, 0.7], leaving: [0.3, 0.8] };
 }

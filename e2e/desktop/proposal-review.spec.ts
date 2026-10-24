@@ -262,6 +262,7 @@ test('Accept and Reject stay reachable under a long history of proposals in a sh
   await page.screenshot({ path: test.info().outputPath('proposal-history-short.png') });
 
   // One already decided reads as a record of it, with nothing left to accept or reject.
+  await panel.getByText('History · 4', { exact: true }).click();
   await panel.locator('.dc-proposal-row').filter({ hasText: 'Add a dead-letter queue' }).first().click();
   await expect(panel.getByText('Accepted: it is in the diagram.')).toBeVisible();
   await expect(panel.getByRole('button', { name: 'Accept' })).toHaveCount(0);
@@ -416,9 +417,10 @@ test('a duplicate-id conflict from a sibling proposal disables Accept — never 
 
   await page.getByRole('button', { name: '2 proposals to review' }).click();
   const panel = page.getByRole('region', { name: 'Proposal review' });
-  // Each row is a `role="listitem"` button (its explicit role wins over "button" for accessible-name
-  // lookups), so it's found by list-item role, not button role.
-  await panel.getByRole('listitem').filter({ hasText: 'Add a dead-letter queue after the payments queue' }).click();
+  const first = panel.locator('.dc-proposal-row').filter({ hasText: 'Add a dead-letter queue after the payments queue' });
+  if (await first.count()) await first.click();
+  // The selected proposal's summary appears once, as the review heading.
+  await expect(panel.getByText('Add a dead-letter queue after the payments queue', { exact: true })).toHaveCount(1);
   await panel.getByRole('button', { name: 'Accept' }).click();
   await expect(page.locator('.react-flow__node').filter({ hasText: 'payments-dlq' }).first()).toBeVisible();
 

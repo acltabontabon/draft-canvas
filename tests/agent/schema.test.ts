@@ -6,7 +6,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { FULL_TOOLS, TOOLS } from '../../src/agent/schema';
+import { FULL_TOOLS, RUN_TOOLS, TOOLS } from '../../src/agent/schema';
 
 const toolsJson = () => readFileSync(join(process.cwd(), 'src-tauri/mcp/tools.json'), 'utf8');
 
@@ -68,6 +68,17 @@ function refsIn(schema: unknown, out: string[] = []): string[] {
 describe('MCP tool definitions', () => {
   it('are the ones the sidecar compiles in', () => {
     expect(toolsJson()).toBe(`${JSON.stringify(TOOLS, null, 2)}\n`);
+    const runTools = readFileSync(join(process.cwd(), 'src-tauri/mcp/run-tools.json'), 'utf8');
+    expect(runTools).toBe(`${JSON.stringify(RUN_TOOLS, null, 2)}\n`);
+  });
+
+  it('keep the companion’s own tools apart from the published ones', () => {
+    const published = new Set<string>(TOOLS.map((t) => t.name));
+    expect(RUN_TOOLS.map((t) => t.name)).toEqual(['ask_to_read_code', 'list_code', 'search_code', 'read_code']);
+    for (const run of RUN_TOOLS) {
+      expect(published.has(run.name), run.name).toBe(false);
+      expect(run.annotations.readOnlyHint, run.name).toBe(true);
+    }
   });
 
   it('name the documented tools, each with an object input schema and annotations', () => {

@@ -34,6 +34,12 @@ const facts: LocalFacts = {
     { id: 'tidy-connectors', title: 'Tidy connectors', keywords: ['route', 'arrows'] },
     { id: 'present-flow', title: 'Present a flow…', keywords: ['presentation', 'slideshow'] },
     { id: 'settings', title: 'Canvas settings…' },
+    { id: 'collaborate', title: 'Collaborate…', keywords: ['collaborate', 'live', 'invite', 'share', 'together', 'real time', 'multiplayer', 'session', 'people'] },
+    { id: 'outline', title: 'Outline' },
+    { id: 'fit', title: 'Fit to view' },
+    { id: 'select-all', title: 'Select all' },
+    { id: 'flow-new', title: 'New flow' },
+    { id: 'back-out', title: 'Back out' },
     { id: 'companion', title: 'Nodi' },
   ],
 };
@@ -84,12 +90,49 @@ describe('what Nodi answers itself', () => {
     expect(limits.text).toMatch(/make you rich/);
   });
 
-  it('offers the app’s own commands as buttons, never Nodi itself', () => {
-    expect(localAnswer('export', facts)?.actions).toEqual([{ kind: 'command', id: 'export', label: 'Export…' }]);
-    expect(localAnswer('export as png please', facts)?.actions?.[0]).toMatchObject({ id: 'export' });
-    expect(localAnswer('zoom in', facts)?.actions?.[0]).toMatchObject({ id: 'zoom-in' });
-    expect(localAnswer('can you tidy the connectors', facts)?.actions?.[0]).toMatchObject({ id: 'tidy-connectors' });
+  it('runs the app’s own command it was plainly asked for, never Nodi itself', () => {
+    /** The command Nodi runs at once, or the first it offers. */
+    const did = (asked: string) => {
+      const answer = localAnswer(asked, facts);
+      const offered = answer?.actions?.[0];
+      return answer?.run ?? (offered?.kind === 'command' ? offered.id : undefined);
+    };
+    expect(localAnswer('export', facts)).toMatchObject({ run: 'export' });
+    expect(localAnswer('export', facts)?.actions).toBeUndefined();
+    for (const [asked, id] of [
+      ['export as png please', 'export'],
+      ['zoom in', 'zoom-in'],
+      ['can you tidy the connectors', 'tidy-connectors'],
+      // Said the way people say it: another form of the word, and a verb that only says "do it".
+      ['can you start a collaboration session', 'collaborate'],
+      ['start a live session', 'collaborate'],
+      ['invite people', 'collaborate'],
+      ['open the outline', 'outline'],
+      ['exporting to png', 'export'],
+      // Everyday words for what a command calls something.
+      ['download as png', 'export'],
+      ['save as png', 'export'],
+      ['fit to screen', 'fit'],
+      ['select everything', 'select-all'],
+      ['make a new flow', 'flow-new'],
+      ['clean up the arrows', 'tidy-connectors'],
+    ] as const) {
+      expect(did(asked), asked).toBe(id);
+    }
     expect(localAnswer('dark mode', facts)?.actions?.[0]).toMatchObject({ id: 'settings' });
+    // Not sure which: offered, not run. "Zoom" alone is in or out.
+    expect(localAnswer('zoom', facts)).toMatchObject({ actions: [{ id: 'zoom-in' }, { id: 'zoom-out' }] });
+    expect(localAnswer('zoom', facts)?.run).toBeUndefined();
+    // "Outline" is not "Back out", and a bare "save" is the file's own.
+    expect(localAnswer('open the outline', facts)?.run).toBe('outline');
+    expect(localAnswer('save', facts)).toBeNull();
+  });
+
+  it('never ends a live session straight from a sentence', () => {
+    const live = { ...facts, commands: [...facts.commands, { id: 'end-session', title: 'End live session', keywords: ['stop', 'collaborate', 'live', 'disconnect'] }] };
+    const answer = localAnswer('end the live session', live);
+    expect(answer?.run).toBeUndefined();
+    expect(answer?.actions?.[0]).toMatchObject({ id: 'end-session' });
   });
 
   it('leaves to the agent anything that is about the architecture', () => {

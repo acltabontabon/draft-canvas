@@ -215,6 +215,16 @@ agent folder). The bridge holds a run's calls to its policy (`agent/runs.rs`):
 - `update_diagram` only in **Apply changes directly** mode; otherwise `PROPOSAL_ONLY`, and the agent
   submits a proposal, tagged with its `run`.
 - Stopping the run, or turning agent access off, ends it: calls not yet committed fail with `CANCELLED`.
+- The project's code only when the person allowed it. A run without that is offered `ask_to_read_code`,
+  which the app answers itself ("end your turn"); Nodi sees the call in the run and asks the person in
+  the chat. With it, the connector carries `DRAFT_CANVAS_CODE=1` and offers `list_code`, `search_code`
+  and `read_code` instead, and the turn's context names the folder. The app answers them from that one
+  folder (`agent/code.rs`): canonical paths inside it only, no symlinks out, no `.git`, dependency or
+  build folders, no secrets (`.env`, keys, credentials), no binaries, and bounded results. The folder
+  is the one the person chose for the diagram, else the repository the diagram is saved in, else its
+  own folder; "Always" is kept in settings (`codeFolders`), "Just for now" until the app quits. These
+  tools are in `RUN_TOOLS` (`src/agent/schema.ts`, generated into `src-tauri/mcp/run-tools.json`), and no
+  connected agent is ever offered them (`UNKNOWN_TOOL`).
 
 **Tokens.** Every model call of a turn resends the agent's instructions and tools, so each is kept small
 and calls are kept few:
@@ -344,7 +354,8 @@ budget; a worker still busy at 20 s is ended. Either way nothing changes.
 
 **Advisories** (`src/agent/advice.ts`) name what to change, with ops where possible: ungroup unrelated
 external systems, move detail inside past 8 elements per boundary or 15 per view, give a note an
-`about`, or set a `primaryFlow` when there are many crossings or detours. An `arrange` that names a
+`about`, set a `primaryFlow` when there are many crossings or detours, or name a technology as its product
+("Spring Boot 3", not "Spring Boot modular monolith") so its logo shows. An `arrange` that names a
 direction keeps it, and says so when the other direction reads clearly better.
 
 Large one-shot requests (about 50+ elements) are often degraded or refused. Build in steps or use inside views.

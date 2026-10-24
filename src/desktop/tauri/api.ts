@@ -2,6 +2,7 @@ import { Channel, invoke } from '@tauri-apps/api/core';
 import {
   DesktopError,
   type AgentInfo,
+  type CodeFolder,
   type AgentClientSetup,
   type AgentSkillSetup,
   type AgentSettings,
@@ -142,6 +143,9 @@ export function createTauriApi(): DesktopApi {
     companionCancel: (runId) => call<boolean>('companion_cancel', { runId }),
     companionRuns: () => call<RunSnapshot[]>('companion_runs'),
     companionForget: (diagramId) => call<void>('companion_forget', { diagramId }),
+    companionCode: (diagramId) => call<CodeFolder>('companion_code', { diagramId }),
+    companionAllowCode: (diagramId, grant) => call<CodeFolder>('companion_allow_code', { diagramId, grant }),
+    companionChooseCode: (diagramId) => call<CodeFolder | null>('companion_choose_code', { diagramId }),
     companionContinue: (diagramId, agent) => call<string | null>('companion_continue', { diagramId, agent }),
 
     collabLanStart: ({ token }) => call<CollabLanStarted>('collab_lan_start', { token }),

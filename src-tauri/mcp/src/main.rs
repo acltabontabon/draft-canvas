@@ -25,6 +25,11 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 const TOOLS_JSON: &str = include_str!("../tools.json");
+/// The tools only a companion run is offered (`src/agent/schema.ts`'s `RUN_TOOLS`), answered by the app.
+const RUN_TOOLS_JSON: &str = include_str!("../run-tools.json");
+/// Set for a run the person let read the project folder: its readers are offered then, and only the
+/// way to ask for them otherwise. Which folder, and whether anything is read, are the app's.
+const CODE_VAR: &str = "DRAFT_CANVAS_CODE";
 const PACKAGE_JSON: &str = include_str!("../../../package.json");
 
 const INSTRUCTIONS: &str = "Draft Canvas turns a semantic description of a system (components, relationships, groups, notes, flows, C4 levels) into an editable diagram in the person's running Draft Canvas app. Layout, sizing and connector routing are the app's by default; send positions only to put something exactly where the person wants it (see below).\n\
@@ -110,16 +115,26 @@ fn lean(tool: Tool) -> Tool {
     serde_json::from_value(value).expect("a lean tool is still a tool")
 }
 
+fn run_tools() -> Vec<Tool> {
+    serde_json::from_str(RUN_TOOLS_JSON)
+        .expect("run-tools.json is generated from src/agent/schema.ts")
+}
+
 /// The tools this session serves: everything for an agent the person connected, the lean run set
-/// for a companion run.
-fn served(run: bool) -> Vec<Tool> {
+/// for a companion run, with the project's readers when it may read the project (`code`) or the
+/// one way to ask for them.
+fn served(run: bool, code: bool) -> Vec<Tool> {
     let all = tools();
     if !run {
         return all;
     }
+    let readers = run_tools()
+        .into_iter()
+        .filter(|t| (t.name == "ask_to_read_code") != code);
     all.into_iter()
         .filter(|t| RUN_OFFERED.contains(&t.name.as_ref()))
         .map(lean)
+        .chain(readers.map(lean))
         .collect()
 }
 
@@ -307,9 +322,10 @@ async fn main() {
     }
     // A companion run gets the lean set and short instructions (`lean`); its brief says the rest.
     let run = std::env::var(RUN_VAR).is_ok_and(|v| !v.trim().is_empty());
+    let code = std::env::var(CODE_VAR).is_ok_and(|v| v == "1");
     let server = Server {
         bridge: Arc::new(Bridge::new(version())),
-        tools: Arc::new(served(run)),
+        tools: Arc::new(served(run, code)),
         instructions: if run { RUN_INSTRUCTIONS } else { INSTRUCTIONS },
         calls: Arc::default(),
     };
@@ -331,14 +347,26 @@ mod tests {
 
     #[test]
     fn a_companion_run_is_offered_a_lean_set_its_policy_allows() {
-        let lean = served(true);
+        let lean = served(true, false);
         let names: Vec<&str> = lean.iter().map(|t| t.name.as_ref()).collect();
-        assert_eq!(names, RUN_OFFERED);
+        assert_eq!(names[..RUN_OFFERED.len()], *RUN_OFFERED);
+        // The way to ask to read the project, and none of its readers until the person says.
+        assert_eq!(names[RUN_OFFERED.len()..], ["ask_to_read_code"]);
+        let reading = served(true, true);
+        let readers: Vec<&str> = reading[RUN_OFFERED.len()..]
+            .iter()
+            .map(|t| t.name.as_ref())
+            .collect();
+        assert_eq!(readers, ["list_code", "search_code", "read_code"]);
         // Every one of them a tool the run policy lets a run call.
         let policy = include_str!("../../src/agent/runs.rs");
         let allowed = &policy[policy.find("const RUN_TOOLS").unwrap()..];
         let allowed = &allowed[..allowed.find("];").unwrap()];
-        for name in RUN_OFFERED {
+        for name in
+            RUN_OFFERED
+                .iter()
+                .chain(&["ask_to_read_code", "list_code", "search_code", "read_code"])
+        {
             assert!(
                 allowed.contains(&format!("\"{name}\"")),
                 "{name} isn't in RUN_TOOLS"
@@ -355,9 +383,12 @@ mod tests {
             assert!(!text.contains(gone), "{gone} is still offered");
         }
         // Less than half of what a connected agent is offered.
-        assert!(text.len() * 2 < serde_json::to_string(&served(false)).unwrap().len());
-        // And the full set for anyone else, unchanged.
-        assert_eq!(served(false).len(), tools().len());
+        assert!(text.len() * 2 < serde_json::to_string(&served(false, false)).unwrap().len());
+        // And the full set for anyone else, unchanged, with none of the run's own.
+        assert_eq!(served(false, true).len(), tools().len());
+        assert!(!served(false, true)
+            .iter()
+            .any(|t| t.name.ends_with("_code")));
     }
 
     #[test]

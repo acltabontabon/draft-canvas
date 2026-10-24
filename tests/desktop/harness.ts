@@ -6,6 +6,7 @@ import {
   DesktopError,
   type AgentClient,
   type AgentInfo,
+  type CodeFolder,
   type AgentClientSetup,
   type AgentSkillSetup,
   type AgentSkillTarget,
@@ -73,6 +74,8 @@ export function createHarness() {
       agents: [{ agent: 'claude-code', name: 'Claude Code', availability: 'installed', version: '2.1.295', signIn: { loggedIn: true, method: 'claude.ai', transcripts: '~/.claude/projects' } }] as AgentInfo[],
       /** The next send fails with this message, as the shell would refuse it. */
       refuse: null as string | null,
+      /** The project folder Nodi would read for the diagram. */
+      code: { name: 'library', displayPath: '~/Work/library' } as CodeFolder,
     },
     settings: {
       enabled: false,
@@ -375,6 +378,12 @@ export function createHarness() {
     companionRuns: vi.fn(async () => agent.companion.runs),
     companionForget: vi.fn(async (diagramId: string) => void agent.companion.forgotten.push(diagramId)),
     companionContinue: vi.fn(async () => null),
+    companionCode: vi.fn(async () => agent.companion.code),
+    companionAllowCode: vi.fn(async (_diagramId: string, grant: 'now' | 'always') => {
+      agent.companion.code = { ...agent.companion.code, allowed: grant };
+      return agent.companion.code;
+    }),
+    companionChooseCode: vi.fn(async () => null),
     collabLanStart: vi.fn(async (_options: { token: string }) => ({ port: 49152, addresses: ['192.168.1.20'] })),
     collabLanStop: vi.fn(async () => {}),
     collabLanSend: vi.fn(async (_connId: string, _text: string) => {}),

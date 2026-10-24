@@ -9,8 +9,8 @@
  */
 import type { Snapshot as UpdateSnapshot, HostEvent as WireHostEvent } from './wire';
 export type { UpdateInfo, Phase as UpdatePhase, Snapshot as UpdateSnapshot } from './wire';
-import type { AgentInfo, AgentKind, PromptRequest, RunSnapshot } from './wire';
-export type { AgentInfo, AgentKind, ApplyMode, PromptRequest, RunEvent, RunSnapshot, StopReason, ToolStatus, Usage } from './wire';
+import type { AgentInfo, AgentKind, CodeFolder, CodeGrant, PromptRequest, RunSnapshot } from './wire';
+export type { AgentInfo, AgentKind, ApplyMode, CodeFolder, CodeGrant, PromptRequest, RunEvent, RunSnapshot, StopReason, ToolStatus, Usage } from './wire';
 /** The agent context is refined by the bridge protocol beyond Rust's JSON value envelope. */
 export type HostEvent = Exclude<WireHostEvent, { type: 'agent-request' }> | (Omit<Extract<WireHostEvent, { type: 'agent-request' }>, 'args' | 'context'> & { args: Record<string, unknown>; context: AgentContext });
 import type { CollabLanStarted, ExplorerStart, ExplorerDirectory, ExplorerLocation, ExplorerSaveResult, OpenedDoc, SavedAs, SaveResult, ProjectInfo, Scan as ProjectScan } from './wire';
@@ -132,6 +132,17 @@ export interface AgentSettings {
    *  `unverified`: this system offers no supported way to keep a hidden window running. */
   background: 'ready' | 'restart-needed' | 'unverified';
   projects: AgentProject[];
+  /** Project folders Nodi may always read, as the person allowed them in its chat. Absent from a
+   *  shell older than the field. */
+  codeFolders?: AgentCodeFolder[];
+}
+
+/** A project folder Nodi may always read (read-only), as Settings → AI agents lists it. */
+export interface AgentCodeFolder {
+  /** What `forgetCode` names to stop letting it. */
+  path: string;
+  name: string;
+  displayPath: string;
 }
 
 /** A listed folder, as Settings → AI agents shows it. */
@@ -184,6 +195,8 @@ export interface AgentPatch {
   enabled?: boolean;
   project?: { handle: Handle; agent: boolean };
   rotate?: boolean;
+  /** A folder Nodi may read, by its `AgentCodeFolder.path`, to stop letting it. */
+  forgetCode?: string;
 }
 
 /** A batch of changes a coding agent submitted for a person to explicitly accept or reject — never
@@ -362,6 +375,12 @@ export interface DesktopApi {
   companionForget(diagramId: string): Promise<void>;
   /** The shell line that carries the diagram's conversation on in the agent's own terminal UI. */
   companionContinue(diagramId: string, agent: AgentKind): Promise<string | null>;
+  /** The project folder Nodi would read for this diagram, and whether it may. */
+  companionCode(diagramId: string): Promise<CodeFolder>;
+  /** The person's answer to Nodi asking to read the project: until the app quits, or always. */
+  companionAllowCode(diagramId: string, grant: CodeGrant): Promise<CodeFolder>;
+  /** Another folder for this diagram's code, picked in the system's dialog; null when cancelled. */
+  companionChooseCode(diagramId: string): Promise<CodeFolder | null>;
 
   // Collaboration on the local network (`src-tauri/src/collab/`). The shell serves this app at
   // http://<address>:<port>/ and relays text on `/collab` between guests and the page; guests are

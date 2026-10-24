@@ -74,6 +74,10 @@ const STEP_TEXT: Record<string, string> = {
   submit_proposal: 'Preparing a proposal',
   get_proposal: 'Checking the proposal',
   list_proposals: 'Checking proposals',
+  ask_to_read_code: 'Asking to read the code',
+  list_code: 'Looking through the code',
+  search_code: 'Searching the code',
+  read_code: 'Reading the code',
 };
 
 export function stepText(tool: string): string {
@@ -94,6 +98,11 @@ const DONE_TEXT: Record<string, string | null> = {
   submit_proposal: 'Proposed a change',
   get_proposal: 'Checked the proposal',
   list_proposals: 'Checked the proposal',
+  // Asking is said by the card that asks, not as something done.
+  ask_to_read_code: null,
+  list_code: 'Looked through the code',
+  search_code: 'Searched the code',
+  read_code: 'Read the code',
 };
 
 /** A turn's steps as one line: while it runs, the step under way; once over, each kind of thing it

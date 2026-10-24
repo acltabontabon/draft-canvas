@@ -77,6 +77,7 @@ import { arrangeFreshRoom } from './compile';
 import { checkQuality, isBetterReport, isClean, type QualityReport } from './quality';
 import { moveInside, moveOutside } from './restructure';
 import { newFindings, REVIEW_LIMIT, reviewView } from './review';
+import { technologyAdvice } from './advice';
 import { OP_FIELDS, SET_FIELDS } from './fields';
 import { GROUP_KINDS, LINE_STYLE_NAMES, LINE_STYLES, NOTE_FORM_NAMES, NOTE_KIND_NAMES, resolveType, suggestTypes } from './vocabulary';
 import { applyRoutes, readPlace, readRoute, type PlaceSpec, type RouteSpec } from './placement';
@@ -493,6 +494,9 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
     const before = reviewView(original.nodes, original.edges, { level: effectiveLevel(file, path), nested, limit: Infinity });
     const after = reviewView(view.nodes, view.edges, { level: effectiveLevel(nextFile, path), nested, limit: Infinity });
     advisories.push(...newFindings(before, after).slice(0, REVIEW_LIMIT).map((finding) => `Review (${finding.code}): ${finding.message}`));
+    // Technology this change set that will show a plain mark, though it names a known product.
+    const was = new Map(original.nodes.map((n) => [n.id, n.technology]));
+    advisories.push(...technologyAdvice(view.nodes.filter((n) => touched.has(n.id) && n.technology && n.technology !== was.get(n.id))));
   }
   return { file: nextFile, touched, counts, advisories, quality };
 }

@@ -14,7 +14,7 @@ import { useDesktopController } from '../useDesktop';
 import { revealViewport } from './chipPlace';
 import { ProposalHistory } from './ProposalHistory';
 import { reviewRows } from './reviewRows';
-import { countsLabel, useProposalReview, type ProposalChanged } from './useProposalReview';
+import { useProposalReview, type ProposalChanged } from './useProposalReview';
 
 /** The floating panel's own width (`app.css`'s `.dc-proposal-panel`) plus its margin from the edge
  *  — subtracted from the pane width "Focus changes" fits into, so a focused change doesn't land
@@ -149,6 +149,29 @@ export function ProposalPanel() {
   }
 
   const selected = proposals.find((p) => p.proposalId === selectedId) ?? pending[0] ?? null;
+  // The open proposal has its own full summary; repeating it in navigation competes with the review.
+  const others = proposals.filter((p) => p.proposalId !== selected?.proposalId);
+  const toReview = others.filter((p) => p.status === 'pending' || p.status === 'accepting');
+  const history = others.filter((p) => p.status !== 'pending' && p.status !== 'accepting');
+  const proposalRows = (items: Proposal[]) => (
+    <div className="dc-proposal-list" role="list">
+      {items.map((p) => (
+        <button
+          key={p.proposalId}
+          type="button"
+          role="listitem"
+          className="dc-proposal-row"
+          title={`${statusLabel(p.status)}: ${p.summary}`}
+          onClick={() => setOpen(true, p.proposalId)}
+        >
+          <span className="dc-proposal-status" data-status={p.status} role="img" aria-label={statusLabel(p.status)}>
+            {p.status === 'accepted' ? '✓' : p.status === 'rejected' ? '×' : p.status === 'pending' || p.status === 'accepting' ? '○' : '−'}
+          </span>
+          <span className="dc-proposal-row-summary">{p.summary}</span>
+        </button>
+      ))}
+    </div>
+  );
 
   return (
     <div className="dc-proposal-panel" role="region" aria-label="Proposal review">
@@ -172,21 +195,10 @@ export function ProposalPanel() {
         <p className="dc-muted dc-proposal-empty">No proposals for this diagram.</p>
       ) : (
         <>
-          {proposals.length > 1 && (
-            <div className="dc-proposal-list" role="list">
-              {proposals.map((p) => (
-                <button
-                  key={p.proposalId}
-                  type="button"
-                  role="listitem"
-                  className="dc-proposal-row"
-                  data-selected={p.proposalId === selected?.proposalId}
-                  onClick={() => setOpen(true, p.proposalId)}
-                >
-                  <span>{p.summary}</span>
-                  <span className="dc-muted dc-proposal-status">{p.status}</span>
-                </button>
-              ))}
+          {toReview.length > 0 && (
+            <div className="dc-proposal-queue">
+              <p className="dc-proposal-section-title">Also to review · {toReview.length}</p>
+              {proposalRows(toReview)}
             </div>
           )}
           {selected && (
@@ -211,6 +223,12 @@ export function ProposalPanel() {
                 } else void refresh();
               }}
             />
+          )}
+          {history.length > 0 && (
+            <details className="dc-proposal-past">
+              <summary>History · {history.length}</summary>
+              {proposalRows(history)}
+            </details>
           )}
         </>
       )}
@@ -265,124 +283,154 @@ function ProposalDetail({ proposal, onChanged }: { proposal: Proposal; onChanged
 
   return (
     <div className="dc-proposal-detail">
-      <div className="dc-proposal-detail-head">
-        <p className="dc-proposal-summary">{proposal.summary}</p>
-        <ProposalHistory proposal={proposal} />
-        <div className="dc-proposal-meta">
+      <div className="dc-proposal-detail-content">
+        <div className="dc-proposal-detail-head">
           <span className="dc-proposal-status-pill" data-status={proposal.status}>
             {statusLabel(proposal.status)}
           </span>
-          {!informational && <span className="dc-muted">{countsLabel(proposal.counts)}</span>}
-        </div>
-        {path.length > 0 && (
-          <p className="dc-muted dc-proposal-path">
-            Targets <strong>{breadcrumb}</strong>
-            {!targetsCurrentView && ' — open that view to see it on the canvas'}
-          </p>
-        )}
-      </div>
-
-      {!informational && !decided && !busy && !checking && !dryRunProblem && (
-        <div className="dc-proposal-toolbar">
-          <label className="dc-proposal-toggle">
-            <input type="checkbox" checked={previewVisible} onChange={(e) => setProposalPreviewVisible(e.target.checked)} />
-            Show on canvas
-          </label>
-          <Button variant="quiet" onClick={focusChanges} disabled={!diffBounds}>
-            Focus changes
-          </Button>
-        </div>
-      )}
-      {!informational && !decided && !busy && !checking && !dryRunProblem && diff.length > 0 && (
-        <ul className="dc-proposal-legend" aria-hidden="true">
-          <li className="dc-proposal-legend-item dc-proposal-legend-changed">Added / modified</li>
-          <li className="dc-proposal-legend-item dc-proposal-legend-removed">Removed</li>
-        </ul>
-      )}
-
-      <div className="dc-proposal-detail-scroll">
-        {proposal.rationale && (
-          <details className="dc-proposal-collapsible">
-            <summary>Rationale</summary>
-            <p className="dc-muted">{proposal.rationale}</p>
-          </details>
-        )}
-        {proposal.assumptions.length > 0 && (
-          <details className="dc-proposal-collapsible">
-            <summary>Assumptions</summary>
-            <ul>
-              {proposal.assumptions.map((a, i) => (
-                <li key={i}>{a}</li>
-              ))}
+          <p className="dc-proposal-summary">{proposal.summary}</p>
+          {!informational && !decided && proposal.counts.added + proposal.counts.updated + proposal.counts.removed > 0 && (
+            <ul className="dc-proposal-counts" aria-label="Proposed changes">
+              {/* Only what changes: "0 removed" is one more thing to read for nothing. */}
+              {proposal.counts.added > 0 && (
+                <li className="dc-proposal-count dc-proposal-count-added">
+                  <span aria-hidden="true">+</span> <strong>{proposal.counts.added}</strong> added
+                </li>
+              )}
+              {proposal.counts.updated > 0 && (
+                <li className="dc-proposal-count dc-proposal-count-modified">
+                  <span aria-hidden="true">~</span> <strong>{proposal.counts.updated}</strong> changed
+                </li>
+              )}
+              {proposal.counts.removed > 0 && (
+                <li className="dc-proposal-count dc-proposal-count-removed">
+                  <span aria-hidden="true">−</span> <strong>{proposal.counts.removed}</strong> removed
+                </li>
+              )}
             </ul>
-          </details>
+          )}
+          {path.length > 0 && (
+            <p className="dc-muted dc-proposal-path">
+              Targets <strong>{breadcrumb}</strong>
+              {!targetsCurrentView && ' — open that view to see it on the canvas'}
+            </p>
+          )}
+        </div>
+
+        {!informational && !decided && !busy && !checking && !dryRunProblem && (
+          <div className="dc-proposal-toolbar">
+            <label className="dc-proposal-toggle">
+              <input type="checkbox" checked={previewVisible} onChange={(e) => setProposalPreviewVisible(e.target.checked)} />
+              Show on canvas
+            </label>
+            <Button variant="quiet" onClick={focusChanges} disabled={!diffBounds}>
+              Focus changes
+            </Button>
+          </div>
         )}
-        {proposal.openQuestions.length > 0 && (
-          <details className="dc-proposal-collapsible">
-            <summary>Open questions</summary>
-            <ul>
-              {proposal.openQuestions.map((q, i) => (
-                <li key={i}>{q}</li>
-              ))}
-            </ul>
-          </details>
-        )}
-        {informational ? (
-          <p className="dc-muted">No architectural impact — nothing to accept or reject.</p>
-        ) : busy ? (
-          <p className="dc-muted">Working…</p>
-        ) : checking ? (
-          <p className="dc-muted">Checking it against the diagram…</p>
-        ) : (
-          <>
-            {proposal.stale && !decided && !dryRunProblem && conflicts.length === 0 && <p className="dc-proposal-banner dc-proposal-banner-stale">The diagram changed elsewhere since this was submitted (unrelated to this proposal).</p>}
-            {conflicts.length > 0 && (
-              <p className="dc-proposal-banner dc-proposal-banner-conflict">
-                {conflicts.length === 1 ? 'One thing this proposal is about has' : `${conflicts.length} things this proposal is about have`} changed since it was written — ask the agent to revise it.
-              </p>
-            )}
-            {alreadyApplied ? (
-              <p className="dc-proposal-banner dc-proposal-banner-stale">This looks like it already applied — the app likely stopped right after committing it, before recording that. The diagram itself needs nothing further; mark it applied to clear this from your review list.</p>
-            ) : (
-              <>
-                {dryRunProblem && <p className="dc-proposal-banner dc-proposal-banner-conflict">{dryRunProblem}</p>}
-                {proposal.status === 'accepting' && <p className="dc-proposal-banner dc-proposal-banner-stale">Recovering from an interrupted accept — click Accept to finish, or Dismiss if you'd rather inspect the diagram yourself.</p>}
-              </>
-            )}
-            {decided && <p className="dc-muted">{decidedNote(proposal.status)}</p>}
-            {!decided && !dryRunProblem && (
-              <ul className="dc-proposal-diff" role="list">
-                {readable.layout && (
-                  <li className="dc-proposal-diff-row dc-proposal-diff-modified">
-                    <span className="dc-proposal-diff-change">layout</span>
-                    <span className="dc-proposal-diff-label">{readable.layout}</span>
-                  </li>
-                )}
-                {readable.rows.map((row) => (
-                  <li key={`${row.kind}-${row.id}-${row.path?.join('/') ?? ''}`} className={`dc-proposal-diff-row dc-proposal-diff-${row.change}`}>
-                    <span className="dc-proposal-diff-change">{row.change}</span>
-                    <span className="dc-proposal-diff-label">{row.label || row.id}</span>
-                    {row.fields && (
-                      <ul className="dc-proposal-diff-fields">
-                        {row.fields.map((f) => (
-                          <li key={f.field}>
-                            {f.field}: <span className="dc-proposal-diff-before">{f.before ?? '—'}</span> → <span className="dc-proposal-diff-after">{f.after ?? '—'}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </li>
+        <div className="dc-proposal-detail-scroll">
+          {informational ? (
+            <p className="dc-muted">No architectural impact — nothing to accept or reject.</p>
+          ) : busy ? (
+            <p className="dc-muted">Working…</p>
+          ) : checking ? (
+            <p className="dc-muted">Checking it against the diagram…</p>
+          ) : (
+            <>
+              {proposal.stale && !decided && !dryRunProblem && conflicts.length === 0 && <p className="dc-proposal-banner dc-proposal-banner-stale">The diagram changed elsewhere since this was submitted (unrelated to this proposal).</p>}
+              {conflicts.length > 0 && (
+                <p className="dc-proposal-banner dc-proposal-banner-conflict">
+                  {conflicts.length === 1 ? 'One thing this proposal is about has' : `${conflicts.length} things this proposal is about have`} changed since it was written — ask the agent to revise it.
+                </p>
+              )}
+              {alreadyApplied ? (
+                <p className="dc-proposal-banner dc-proposal-banner-stale">This looks like it already applied — the app likely stopped right after committing it, before recording that. The diagram itself needs nothing further; mark it applied to clear this from your review list.</p>
+              ) : (
+                <>
+                  {dryRunProblem && <p className="dc-proposal-banner dc-proposal-banner-conflict">{dryRunProblem}</p>}
+                  {proposal.status === 'accepting' && <p className="dc-proposal-banner dc-proposal-banner-stale">Recovering from an interrupted accept — click Accept to finish, or Dismiss if you'd rather inspect the diagram yourself.</p>}
+                </>
+              )}
+              {decided && <p className="dc-muted">{decidedNote(proposal.status)}</p>}
+              {!decided && !dryRunProblem && (
+                <div className="dc-proposal-changes">
+                  {(['added', 'modified', 'removed'] as const).map((change) => {
+                    const rows = readable.rows.filter((row) => row.change === change);
+                    if (rows.length === 0) return null;
+                    const label = change === 'modified' ? 'Changed' : change === 'added' ? 'Added' : 'Removed';
+                    return (
+                      <section key={change} className="dc-proposal-diff-group" aria-label={label}>
+                        <h3 className="dc-proposal-section-title">{label} · {rows.length}</h3>
+                        <ul className="dc-proposal-diff" role="list">
+                          {rows.map((row) => {
+                            const kind = row.kind === 'element' ? 'Shape' : row.kind === 'group' ? 'Boundary' : row.kind === 'relationship' ? 'Connector' : row.kind;
+                            return (
+                              <li key={`${row.kind}-${row.id}-${row.path?.join('/') ?? ''}`} className={`dc-proposal-diff-row dc-proposal-diff-${row.change}`}>
+                                <span className="dc-proposal-diff-change">{kind}</span>
+                                <span className="dc-proposal-diff-label">{row.label || `Unnamed ${kind.toLowerCase()}`}</span>
+                                {row.fields && (
+                                  <ul className="dc-proposal-diff-fields">
+                                    {row.fields.map((f) => (
+                                      <li key={f.field}>
+                                        {f.field}: <span className="dc-proposal-diff-before">{f.before ?? '—'}</span> → <span className="dc-proposal-diff-after">{f.after ?? '—'}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </section>
+                    );
+                  })}
+                  {/* Under its own heading: below the last group, it read as one of its changes. */}
+                  {readable.layout && (
+                    <section className="dc-proposal-diff-group" aria-label="Layout">
+                      <h3 className="dc-proposal-section-title">Layout</h3>
+                      <div className="dc-proposal-diff-row dc-proposal-diff-modified">
+                        <span className="dc-proposal-diff-label">{readable.layout}</span>
+                      </div>
+                    </section>
+                  )}
+                  {diff.length === 0 && <p className="dc-muted">No changes touch {targetsCurrentView ? 'the current view' : breadcrumb}.</p>}
+                </div>
+              )}
+            </>
+          )}
+          {proposal.rationale && (
+            <details className="dc-proposal-collapsible">
+              <summary>Rationale</summary>
+              <p className="dc-muted">{proposal.rationale}</p>
+            </details>
+          )}
+          {proposal.assumptions.length > 0 && (
+            <details className="dc-proposal-collapsible">
+              <summary>Assumptions</summary>
+              <ul>
+                {proposal.assumptions.map((a, i) => (
+                  <li key={i}>{a}</li>
                 ))}
-                {diff.length === 0 && <li className="dc-muted">No changes touch {targetsCurrentView ? 'the current view' : breadcrumb}.</li>}
               </ul>
-            )}
-          </>
-        )}
-        {error && (
-          <p className="dc-proposal-banner dc-proposal-banner-conflict" role="alert">
-            {error}
-          </p>
-        )}
+            </details>
+          )}
+          {proposal.openQuestions.length > 0 && (
+            <details className="dc-proposal-collapsible">
+              <summary>Open questions</summary>
+              <ul>
+                {proposal.openQuestions.map((q, i) => (
+                  <li key={i}>{q}</li>
+                ))}
+              </ul>
+            </details>
+          )}
+          <ProposalHistory proposal={proposal} />
+          {error && (
+            <p className="dc-proposal-banner dc-proposal-banner-conflict" role="alert">
+              {error}
+            </p>
+          )}
+        </div>
       </div>
 
       {!decided && (

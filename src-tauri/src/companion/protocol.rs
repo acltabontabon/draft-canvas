@@ -237,3 +237,24 @@ mod tests {
         assert!(extra.is_err());
     }
 }
+
+/// How long the person let a diagram's runs read its project folder: until the app quits, or always.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "kebab-case")]
+pub enum CodeGrant {
+    Now,
+    Always,
+}
+
+/// The project folder a diagram's code is in, as Nodi asks to read it: never its full path, only
+/// what the person would recognise it by.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+pub struct CodeFolder {
+    pub name: String,
+    pub display_path: String,
+    /// Whether runs may read it already, and for how long; absent until the person says.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub allowed: Option<CodeGrant>,
+}

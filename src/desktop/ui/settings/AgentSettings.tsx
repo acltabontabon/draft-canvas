@@ -64,6 +64,7 @@ export function AgentSettings() {
       {agent && (
         <>
           <Folders agent={agent} />
+          <CodeFolders agent={agent} />
           <Connect agent={agent} platform={platform} />
           <Manage agent={agent} />
         </>
@@ -130,6 +131,31 @@ function Folders({ agent }: { agent: AgentState }) {
           />
         ))
       )}
+    </SettingsSection>
+  );
+}
+
+/** The project folders Nodi may always read, as the person allowed them when it asked in its chat:
+ *  only shown once there are some, each one taken back with one click. "Just for now" ends when the
+ *  app quits, and isn't listed. */
+function CodeFolders({ agent }: { agent: AgentState }) {
+  const controller = useDesktopController();
+  const folders = agent.codeFolders ?? [];
+  if (folders.length === 0) return null;
+  return (
+    <SettingsSection title="Code Nodi may read" group list description="Read-only. Nodi asks before reading any other folder, and secrets are never read.">
+      {folders.map((folder) => (
+        <SettingRow
+          key={folder.path}
+          label={folder.name}
+          description={folder.displayPath}
+          control={
+            <Button variant="quiet" onClick={() => void controller.configureAgent({ forgetCode: folder.path })}>
+              Stop
+            </Button>
+          }
+        />
+      ))}
     </SettingsSection>
   );
 }

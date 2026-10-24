@@ -28,6 +28,8 @@ export interface LocalAnswer {
   actions?: LocalAction[];
   /** A part to bring into view at once. */
   reveal?: string;
+  /** A command to run at once (one the person plainly asked for), by id. */
+  run?: string;
 }
 
 export interface LocalFacts {
@@ -68,10 +70,38 @@ export function agentlessAnswer(seed: number): LocalAnswer {
 }
 
 /** Words that carry nothing about what is asked. */
-const FILLER = new Set(['a', 'an', 'the', 'please', 'pls', 'can', 'could', 'would', 'will', 'you', 'nodi', 'boss', 'me', 'my', 'for', 'to', 'this', 'that', 'it', 'now', 'just', 'quickly', 'kindly', 'hey', 'hi', 'ok', 'okay', 'go', 'ahead', 'and', 'of', 'i', 'want', 'wanna', 'need', 'let', 'lets', 'us', 'as', 'in', 'into', 'with', 'some', 'bit', 'little']);
+const FILLER = new Set(['a', 'an', 'the', 'please', 'pls', 'can', 'could', 'would', 'will', 'you', 'nodi', 'boss', 'me', 'my', 'for', 'to', 'this', 'that', 'it', 'now', 'just', 'quickly', 'kindly', 'hey', 'hi', 'ok', 'okay', 'go', 'ahead', 'and', 'of', 'i', 'want', 'wanna', 'need', 'let', 'lets', 'us', 'as', 'into', 'with', 'some', 'bit', 'little', 'up']);
+
+/** Commands that end something for other people too: offered, never run straight from a sentence. */
+const ASK_FIRST = new Set(['end-session', 'leave-session', 'stop-hosting']);
+
+/** Everyday words for what a command calls something else. */
+const SAME: Record<string, string> = {
+  download: 'export',
+  picture: 'image',
+  screenshot: 'image',
+  screen: 'view',
+  everything: 'all',
+  someone: 'people',
+  somebody: 'people',
+  colleague: 'people',
+  colleagues: 'people',
+  sharing: 'share',
+  clean: 'tidy',
+  arrows: 'connectors',
+  arrow: 'connectors',
+  lines: 'connectors',
+  wires: 'connectors',
+  slideshow: 'presentation',
+  slides: 'presentation',
+};
+
+/** Verbs that only say "do it": they ask for a command, but needn't be in its name ("start a live
+ *  session" is Collaborate…, "open the outline" is Outline). */
+const ACTING = new Set(['start', 'begin', 'open', 'launch', 'run', 'do', 'turn', 'enable', 'activate', 'show', 'bring', 'get', 'take', 'make']);
 
 /** First words that ask the app to do something rather than the agent to think about something. */
-const DOING = new Set(['export', 'copy', 'open', 'show', 'zoom', 'fit', 'present', 'start', 'undo', 'redo', 'arrange', 'tidy', 'find', 'share', 'trace', 'select', 'next', 'previous', 'exit', 'back', 'look', 'switch', 'outline', 'spotlight', 'reset', 'distribute', 'group', 'ungroup', 'duplicate', 'paste', 'cut']);
+const DOING = new Set(['begin', 'launch', 'run', 'turn', 'enable', 'activate', 'bring', 'invite', 'collaborate', 'end', 'stop', 'leave', 'copy', 'download', 'save', 'export', 'copy', 'open', 'show', 'zoom', 'fit', 'present', 'start', 'undo', 'redo', 'arrange', 'tidy', 'find', 'share', 'trace', 'select', 'next', 'previous', 'exit', 'back', 'look', 'switch', 'outline', 'spotlight', 'reset', 'distribute', 'group', 'ungroup', 'duplicate', 'paste', 'cut']);
 
 /** What "the queues" or "the databases" means, by the shape categories it covers. */
 const KINDS: { words: RegExp; label: [string, string]; categories: readonly NodeCategory[] | 'all' }[] = [
@@ -94,6 +124,15 @@ const plain = (text: string) =>
     .replace(/[^a-z0-9\s]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+
+/** A word without the endings that change its form but not its meaning: "collaboration" and
+ *  "collaborate" are one command; "exporting" is "export". */
+function stem(word: string): string {
+  for (const ending of ['ations', 'ation', 'ions', 'ion', 'ing', 'ers', 'er', 'ed', 'es', 'e', 's']) {
+    if (word.length - ending.length >= 4 && word.endsWith(ending)) return word.slice(0, -ending.length);
+  }
+  return word;
+}
 
 /** Nodi's own answer to `text`, or null when it is for the agent. */
 export function localAnswer(text: string, facts: LocalFacts): LocalAnswer | null {
@@ -285,29 +324,48 @@ function helpOf(said: string, facts: LocalFacts): LocalAnswer | null {
 
 /** "Export", "export as png", "tidy connectors", "zoom in", "present": the app's own commands. */
 function commandOf(said: string, facts: LocalFacts): LocalAnswer | null {
-  const words = said.split(' ').filter((w) => !FILLER.has(w));
+  const raw = said.split(' ').filter((w) => !FILLER.has(w));
+  // "Save as PNG" is an export; "save" alone is the file's own Save, not a command here.
+  const exporting = raw.some((w) => ['png', 'svg', 'pdf', 'image', 'picture'].includes(w));
+  const words = raw.map((w) => (w === 'save' && exporting ? 'export' : (SAME[w] ?? w)));
   if (words.length === 0 || words.length > 5) return null;
   const exactTitle = facts.commands.find((c) => plain(c.title) === words.join(' '));
-  if (!exactTitle && !DOING.has(words[0]!)) return null;
-  const vocabulary = (c: (typeof facts.commands)[number]) => [...plain(c.title).split(' '), ...(c.keywords ?? []).flatMap((k) => plain(k).split(' '))].filter(Boolean);
-  const matches = (word: string, vocab: string[]) => vocab.some((v) => v === word || (word.length >= 3 && (v.startsWith(word) || word.startsWith(v) && v.length >= 3)));
+  const first = words[0]!;
+  if (!exactTitle && !DOING.has(first) && !DOING.has(stem(first)) && !ACTING.has(first)) return null;
+  // What has to be about the command: everything but a leading "start"/"open"/… that only says do it.
+  const needed = words.length > 1 && ACTING.has(words[0]!) ? words.slice(1) : words;
+  const vocabulary = (c: (typeof facts.commands)[number]) => [...plain(c.title).split(' '), ...(c.keywords ?? []).flatMap((k) => plain(k).split(' '))].filter(Boolean).map(stem);
+  const matches = (word: string, vocab: string[]) => {
+    const w = stem(word);
+    // The same word, or one typed short ("pres" for presentation); a longer word only matches a
+    // shorter one that is most of it ("connectors" and "connector"), so "outline" isn't "out".
+    return vocab.some((v) => v === w || (w.length >= 3 && v.startsWith(w)) || (v.length >= 4 && w.startsWith(v) && w.length - v.length <= 2));
+  };
   const scored = facts.commands
     .filter((c) => c.id !== 'companion')
     .map((c) => {
       const vocab = vocabulary(c);
-      const hit = words.filter((w) => matches(w, vocab)).length;
+      const hit = needed.filter((w) => matches(w, vocab)).length + (needed === words ? 0 : matches(words[0]!, vocab) ? 1 : 0);
       const titleWords = plain(c.title).split(' ').filter((w) => !FILLER.has(w));
-      const covered = titleWords.filter((t) => words.some((w) => t === w || t.startsWith(w) || w.startsWith(t))).length;
-      return { c, hit, score: hit * 10 + covered * 3 - titleWords.length };
+      const covered = titleWords.filter((t) => words.some((w) => matches(w, [stem(t)]))).length;
+      return { c, hit, full: covered === titleWords.length, score: hit * 10 + covered * 3 - titleWords.length };
     })
     // Every word said must be about the command: "export the cache design doc" is not Export.
-    .filter((s) => s.hit === words.length)
+    .filter((s) => needed.every((w) => matches(w, vocabulary(s.c))))
     .sort((a, b) => b.score - a.score)
     .slice(0, 3);
   if (scored.length === 0) return null;
-  // Offered, not run: the person clicks the one they meant, and a slip of the tongue does nothing.
+  // Plainly asked for — one command, and every word of its name said — it just runs: "start
+  // presentation" starts the presentation. Anything less sure is offered to pick from, as is a
+  // command that ends something for everyone in a live session.
+  const whole = scored.filter((s) => s.full);
+  const sure = whole.length === 1 ? whole[0]! : scored.length === 1 ? scored[0]! : null;
+  if (sure && !ASK_FIRST.has(sure.c.id)) {
+    const done = ['Done, boss', 'On it, boss', 'Consider it done, boss', 'Already on it, boss'];
+    return { text: `${done[(sure.c.id.length + words.length) % done.length]}: **${sure.c.title.replace(/…$/, '')}**.`, run: sure.c.id };
+  }
   return {
-    text: scored.length === 1 ? 'On it, boss. One click:' : 'Here’s what I can do, boss. Pick one:',
+    text: scored.length === 1 ? 'Say the word, boss. One click:' : 'Here’s what I can do, boss. Pick one:',
     actions: scored.map(({ c }) => ({ kind: 'command' as const, id: c.id, label: c.title })),
   };
 }

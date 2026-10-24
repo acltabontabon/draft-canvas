@@ -31,7 +31,16 @@ describe('bundled technology recognition', () => {
     expect(technologyIcon(value)?.slug).toBe(slug);
   });
 
-  it.each(['InternalDB', 'PostgreSQL-compatible', 'PostgreSQL and Redis', 'Node.js / React', 'Spring Boot 3 on Kubernetes', 'Go service'])('uses a neutral mark for ambiguous or custom technology %s', (value) => {
+  it.each([
+    ['Spring Boot 3 modular monolith (Java 21)', 'springboot'],
+    ['PostgreSQL 16 (primary)', 'postgresql'],
+    ['Redis 7 cluster, three shards', 'redis'],
+    ['Node.js 22 LTS', 'nodedotjs'],
+  ])('recognizes one product with a version and words about it: %s', (value, slug) => {
+    expect(technologyIcon(value)?.slug).toBe(slug);
+  });
+
+  it.each(['InternalDB', 'PostgreSQL-compatible', 'PostgreSQL and Redis', 'Node.js / React', 'Spring Boot 3 on Kubernetes', 'Go service', 'Spring Boot 3 with PostgreSQL 16', 'PostgreSQL 16 and Redis 7'])('uses a neutral mark for ambiguous or custom technology %s', (value) => {
     expect(technologyIcon(value)).toBe(GENERIC_TECHNOLOGY_ICON);
   });
 

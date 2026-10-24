@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { newCanvas, create, reopenAfterReload } from './canvas';
+import { newCanvas, create, reopenAfterReload, cameraAtRest } from './canvas';
 
 /**
  * Looking inside a shape, drawing there, and coming back out — through the real UI.
@@ -48,6 +48,70 @@ async function cameraMovesWithin(page: Page, ms: number): Promise<string[]> {
     }
     return moves;
   }, ms);
+}
+
+/** The camera is already where Fit to view (Shift 1) would put it. */
+async function fitHasNothingToDo(page: Page): Promise<void> {
+  const landed = await page.locator('.react-flow__viewport').getAttribute('style');
+  await page.keyboard.press('Shift+Digit1');
+  await cameraAtRest(page);
+  expect(await page.locator('.react-flow__viewport').getAttribute('style')).toBe(landed);
+}
+
+for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+  test(`stepping in and back out fits and centres the content over its saved camera (${reducedMotion})`, async ({ page }) => {
+    await page.emulateMedia({ reducedMotion });
+    await newCanvas(page, 'Framed inside');
+    await create(page, 'Service', { x: 260, y: 260 });
+    await lookInside(page);
+    await expect(page.locator('.dc-node')).toHaveCount(0);
+    await cameraAtRest(page);
+    await create(page, 'Component', { x: 250, y: 220 });
+    await create(page, 'Data Store', { x: 650, y: 420 });
+
+    // Leave a deliberately bad saved camera: revisiting must frame the architecture even after
+    // somebody has panned it out of view, rather than treating that camera as an arrival target.
+    const pane = (await page.locator(CANVAS).boundingBox())!;
+    await page.mouse.move(pane.x + 150, pane.y + 500);
+    await page.mouse.down({ button: 'middle' });
+    await page.mouse.move(pane.x + pane.width - 80, pane.y + 500, { steps: 10 });
+    await page.mouse.up({ button: 'middle' });
+    await cameraAtRest(page);
+    await backOut(page);
+    await expect(page.locator('.dc-room')).toHaveCount(0);
+    await cameraAtRest(page);
+
+    await lookInside(page);
+    await expect(page.locator('.dc-room')).toHaveCount(1);
+    await expect(page.locator('.dc-depth-sheet')).toHaveCount(0);
+    if (reducedMotion === 'reduce') await cameraAtRest(page);
+    const bounds = await page.locator('.react-flow__node').evaluateAll((nodes) => {
+      const boxes = nodes.map((node) => node.getBoundingClientRect());
+      const x = Math.min(...boxes.map((box) => box.x));
+      const y = Math.min(...boxes.map((box) => box.y));
+      return {
+        x, y,
+        width: Math.max(...boxes.map((box) => box.right)) - x,
+        height: Math.max(...boxes.map((box) => box.bottom)) - y,
+      };
+    });
+    expect(bounds.x).toBeGreaterThan(pane.x);
+    expect(bounds.y).toBeGreaterThan(pane.y);
+    expect(bounds.x + bounds.width).toBeLessThan(pane.x + pane.width);
+    expect(bounds.y + bounds.height).toBeLessThan(pane.y + pane.height);
+    expect(Math.abs(bounds.x + bounds.width / 2 - pane.x - pane.width / 2)).toBeLessThan(5);
+    expect(Math.abs(bounds.y + bounds.height / 2 - pane.y - pane.height / 2)).toBeLessThan(5);
+    // The transition has already landed on the fitted camera; Shift+1 has nothing left to fix.
+    expect(await cameraMovesWithin(page, 400)).toEqual([]);
+    await fitHasNothingToDo(page);
+
+    // And back out: the room it came from is framed the same way, not left where it was panned.
+    await backOut(page);
+    await expect(page.locator('.dc-room')).toHaveCount(0);
+    await expect(page.locator('.dc-depth-sheet')).toHaveCount(0);
+    await cameraAtRest(page);
+    await fitHasNothingToDo(page);
+  });
 }
 
 test('draw inside a shape, come back out, and find it still there', async ({ page }) => {

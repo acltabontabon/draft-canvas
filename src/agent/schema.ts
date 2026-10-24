@@ -88,7 +88,7 @@ const element = (depth: number): Schema => ({
     type: { anyOf: [{ enum: ELEMENT_TYPE_NAMES }, { type: 'string', maxLength: 64 }], description: 'Unknown names require create_diagram.fallbackType. What it is. Common: service, api, worker, gateway, external-system, database, cache, queue, topic, stream, person, component.' },
     label: text(AGENT_LIMITS.labelLength, 'Its name.'),
     description: text(AGENT_LIMITS.descriptionLength, 'C4 description: its responsibility, in a sentence.'),
-    technology: text(AGENT_LIMITS.technologyLength, 'C4 technology, e.g. "Spring Boot", "PostgreSQL 16".'),
+    technology: text(AGENT_LIMITS.technologyLength, 'One product, as named, e.g. "Spring Boot 3": shows its logo.'),
     group: { type: 'string', description: 'Id of the group/boundary it sits in.' },
     color: { enum: ACCENTS },
     evidence: ref('evidence'),
@@ -728,3 +728,71 @@ export const TOOLS = FULL_TOOLS.map((tool) => {
   const { $defs: _defs, properties, ...rest } = tool.inputSchema as unknown as { $defs: unknown; properties: Record<string, Schema> } & Schema;
   return { ...tool, inputSchema: { ...rest, properties: { ...properties, ops: slimOps } } } as unknown as typeof tool;
 });
+
+/**
+ * Tools only a companion run (Nodi) is offered, served by the app itself rather than the page: an
+ * agent the person connected has files of its own, and never sees these. A run that may not read
+ * the project gets `ask_to_read_code`, which asks the person in the app; one that may gets the
+ * three readers, confined by the app to the one folder the person allowed (`src-tauri/src/agent/
+ * code.rs`). Generated into `src-tauri/mcp/run-tools.json` by `npm run agent:schemas`.
+ */
+export const RUN_TOOLS = [
+  {
+    name: 'ask_to_read_code',
+    title: 'Ask to read the project',
+    description: 'You cannot read the project’s code. When an answer needs it (how something is implemented, whether the diagram matches the code), call this once with why, then end your turn in one short sentence: the person is asked in Draft Canvas, and their answer comes with their next message.',
+    inputSchema: {
+      type: 'object',
+      properties: { reason: { type: 'string', maxLength: 200, description: 'What you would look for, in a few words.' } },
+      required: ['reason'],
+      additionalProperties: false,
+    },
+    annotations: { title: 'Ask to read the project', readOnlyHint: true, openWorldHint: false },
+  },
+  {
+    name: 'list_code',
+    title: 'List project files',
+    description: 'Files and folders in the project folder the person allowed, read-only, relative to it. Generated and dependency folders and secrets are left out.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'A folder inside the project, relative, with forward slashes. Default: the project itself.' },
+        depth: { type: 'integer', minimum: 1, maximum: 4 },
+      },
+      additionalProperties: false,
+    },
+    annotations: { title: 'List project files', readOnlyHint: true, openWorldHint: false },
+  },
+  {
+    name: 'search_code',
+    title: 'Search project files',
+    description: 'Lines in the project that contain query (literal, ignoring case), at most 60.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', minLength: 1, maxLength: 200 },
+        path: { type: 'string', description: 'Only under this folder or file.' },
+        glob: { type: 'string', description: 'Only files matching it, e.g. "*.ts" or "src/**/*.rs".' },
+      },
+      required: ['query'],
+      additionalProperties: false,
+    },
+    annotations: { title: 'Search project files', readOnlyHint: true, openWorldHint: false },
+  },
+  {
+    name: 'read_code',
+    title: 'Read a project file',
+    description: 'A text file in the project, numbered, up to 400 lines a call; ask for the next range with startLine when it is cut short.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        path: { type: 'string' },
+        startLine: { type: 'integer', minimum: 1 },
+        endLine: { type: 'integer', minimum: 1 },
+      },
+      required: ['path'],
+      additionalProperties: false,
+    },
+    annotations: { title: 'Read a project file', readOnlyHint: true, openWorldHint: false },
+  },
+] as const;

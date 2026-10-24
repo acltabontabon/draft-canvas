@@ -8,6 +8,7 @@
  * touches the page, so it runs on the agent worker with the rest of `compose`.
  */
 
+import { productNamedIn } from '../nodes/technology';
 import type { Legibility } from './legibility';
 import type { RoomSpec } from './input';
 
@@ -20,8 +21,25 @@ const MANY_CROSSINGS = 6;
 
 const quote = (ids: readonly string[], max = 4) => ids.slice(0, max).map((id) => `"${id}"`).join(', ') + (ids.length > max ? `, …` : '');
 
+/**
+ * Technologies that will show the neutral mark but name a known product first: the logo shows for one
+ * product, as it is called, with an optional version ("Spring Boot 3"); the rest belongs in the
+ * description. Each with the update that fixes it. At most three, the rest counted.
+ */
+export function technologyAdvice(elements: readonly { id: string; technology?: string }[]): string[] {
+  const fixes = elements.flatMap((e) => {
+    const product = productNamedIn(e.technology);
+    return product ? [{ id: e.id, technology: e.technology!, product }] : [];
+  });
+  if (fixes.length === 0) return [];
+  const shown = fixes.slice(0, 3).map((f) => `"${f.id}" ("${f.technology}" → ${JSON.stringify({ op: 'update', id: f.id, set: { technology: f.product } })})`);
+  return [
+    `Technology shows its logo only as one product's own name, optionally with a version ("Spring Boot 3", "PostgreSQL 16"); qualifiers go in description. These show a plain mark: ${shown.join(', ')}${fixes.length > 3 ? `, and ${fixes.length - 3} more` : ''}.`,
+  ];
+}
+
 export function adviceFor(room: RoomSpec, legibility: Legibility, primaryFlow?: string): string[] {
-  const out: string[] = [];
+  const out: string[] = [...technologyAdvice(room.nodes)];
   const byId = new Map(room.nodes.map((n) => [n.id, n]));
 
   // A boundary of external systems (or people) each called from a different shape: laid out as one

@@ -43,7 +43,7 @@ test.describe('element inspector popover', () => {
     await page.getByRole('option', { name: 'External' }).click();
     await expect(page.locator('.dc-node').first()).toContainText('EXTERNAL');
 
-    // One row: colour, kind and the shape's own actions; everything else is behind ⋯.
+    // One row: colour, kind, technology and the shape's own actions; more options are behind ⋯.
     const inspector = page.locator('.dc-element-inspector');
     const more = inspector.getByRole('button', { name: 'More options' });
     const moreMenu = page.getByRole('menu');
@@ -78,12 +78,17 @@ test.describe('element inspector popover', () => {
     await newCanvas(page, 'Details undo');
     await create(page, 'Service', { x: 400, y: 300 });
     await page.locator('.dc-node').first().click();
-    await page.locator('.dc-element-inspector').getByRole('button', { name: 'More options' }).click();
-    await page.getByRole('menuitem', { name: 'Edit details…' }).click();
-    const technology = page.getByLabel('Technology');
+    await page.getByRole('button', { name: 'Add technology' }).click();
+    // By role: the chip that opened it is named for technology too.
+    const technology = page.getByRole('combobox', { name: 'Technology' });
+    await expect(technology).toBeFocused();
     await technology.fill('Go');
     await technology.press('Enter');
     await expect(page.locator('.dc-node').first()).toContainText('Go');
+    // The first Enter accepts a suggestion; the next commits and advances to the description.
+    await expect(technology).toBeFocused();
+    await technology.press('Enter');
+    await expect(page.getByLabel('Description')).toBeFocused();
 
     await page.locator('.dc-canvas').focus();
     await page.keyboard.press('ControlOrMeta+z');
@@ -91,6 +96,40 @@ test.describe('element inspector popover', () => {
     await technology.focus();
     await technology.blur();
     await expect(page.locator('.dc-node').first()).not.toContainText('Go');
+  });
+
+  test('technology stays compact and opens details directly by keyboard in either theme', async ({ page }) => {
+    await newCanvas(page, 'Technology shortcut');
+    await create(page, 'Service', { x: 400, y: 300 });
+    await page.locator('.dc-node').first().click();
+    await page.getByRole('button', { name: 'Add technology' }).click();
+    const technology = page.getByRole('combobox', { name: 'Technology' });
+    // Long enough to overflow the chip, inside the field's own limit (longer is cut on commit).
+    const value = 'Internal application runtime, long-named on purpose';
+    await technology.fill(value);
+    await technology.press('Enter');
+    await expect(page.getByLabel('Description')).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(technology).toHaveCount(0);
+
+    const chip = page.getByRole('button', { name: `Technology: ${value}, edit` });
+    for (const colorScheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme });
+      await expect(chip).toBeVisible();
+      expect(await chip.locator('span').evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+      expect((await page.locator('.dc-element-inspector').boundingBox())!.width).toBeLessThanOrEqual(480);
+      await chip.focus();
+      await chip.press('Enter');
+      await expect(technology).toBeFocused();
+      await expect(technology).toHaveValue(value);
+      await technology.press('Escape');
+      await expect(technology).toHaveCount(0);
+    }
+
+    // The existing menu entry remains another way to open the same details panel.
+    await page.getByRole('button', { name: 'More options' }).click();
+    await page.getByRole('menuitem', { name: 'Edit details…' }).click();
+    await expect(technology).toBeFocused();
   });
 
   test('hides while the element is being dragged, and reappears once the drag ends', async ({ page }) => {

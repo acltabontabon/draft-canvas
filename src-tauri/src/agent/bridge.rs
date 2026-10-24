@@ -566,6 +566,7 @@ mod tests {
             super::super::runs::RunPolicy {
                 diagram_id: "d_1".into(),
                 direct: false,
+                code: None,
             },
         );
         assert!(check_run(&agent, Some(run)).is_ok());
