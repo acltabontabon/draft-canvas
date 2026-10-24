@@ -55,6 +55,12 @@ pub struct PromptRequest {
     pub room: Vec<String>,
     pub agent: AgentKind,
     pub mode: ApplyMode,
+    /// The page's word that the diagram is as it was when this conversation's last turn was sent,
+    /// so the agent can skip reading it again (a read is a round trip, and its whole answer). False
+    /// whenever the page can't be sure.
+    #[serde(default)]
+    #[ts(optional)]
+    pub unchanged: Option<bool>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ts_rs::TS)]

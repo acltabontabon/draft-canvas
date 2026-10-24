@@ -72,7 +72,13 @@ text: string, selection: Selection | null,
 /**
  * The room the person is in, outermost first; empty at the root.
  */
-room: Array<string>, agent: AgentKind, mode: ApplyMode, };
+room: Array<string>, agent: AgentKind, mode: ApplyMode,
+/**
+ * The page's word that the diagram is as it was when this conversation's last turn was sent,
+ * so the agent can skip reading it again (a read is a round trip, and its whole answer). False
+ * whenever the page can't be sure.
+ */
+unchanged?: boolean, };
 export type ToolStatus = "in-progress" | "completed" | "failed";
 export type StopReason = { "kind": "end-turn" } | { "kind": "cancelled" } | { "kind": "max-turns" } | { "kind": "refusal" } | { "kind": "failed", message: string, };
 export type Usage = { input: number, cached: number, output: number, };

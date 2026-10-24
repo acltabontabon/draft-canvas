@@ -15,6 +15,7 @@ import type { AgentClientSetup, AgentInfo, AgentSkillSetup, ApplyMode, PromptReq
 import { activityOf, companion, newTokens, numberedBlocks, partsIn, replyBlocks, replyOf, replyPoints, spentOn, stepText, stopMessage, tokenCount, type ReplyEntry, type Spent, type Turn } from '../companion';
 import { useDesktopController, useDesktopState } from '../useDesktop';
 import { useNodiShown } from '../nodiShown';
+import { forgetTurnSnapshot, unchangedSinceLastTurn } from '../turnSnapshot';
 import { Mascot } from './mascot/Mascot';
 import { CHANNEL_MS, CHANNELS, channelClock, type Channel, type Mood } from './mascot/pixels';
 import { CHIP_HEIGHT, chipPlace, revealViewport, type Box } from './chipPlace';
@@ -314,6 +315,8 @@ export function Companion() {
   // What would make the agent better outside this box too, each one click (`setupStepsOf`).
   const [setup, setSetup] = useState<{ clients: AgentClientSetup[]; skills: AgentSkillSetup[] } | null>(null);
   const accessOn = access?.enabled === true;
+  const [setupBusy, setSetupBusy] = useState<string | null>(null);
+  const [setupSaid, setSetupSaid] = useState<string | null>(null);
   // Asked each time Nodi opens, as Settings asks each time it shows them: one may have been set up
   // (or undone) elsewhere since.
   useEffect(() => {
@@ -326,8 +329,6 @@ export function Companion() {
     };
   }, [expanded, accessOn, controller]);
   const setupSteps = useMemo(() => (agent && setup && accessOn ? setupStepsOf(agent, setup.clients, setup.skills) : []), [agent, setup, accessOn]);
-  const [setupBusy, setSetupBusy] = useState<string | null>(null);
-  const [setupSaid, setSetupSaid] = useState<string | null>(null);
   const runSetup = async (step: SetupStep) => {
     if (setupBusy || !setup) return;
     setSetupBusy(step.label);
@@ -359,14 +360,17 @@ export function Companion() {
     const prompt = text.trim();
     if (!prompt || running || blocker) return;
     const scoped = includeSelection && hasSelection;
+    const kind = agent?.agent ?? 'claude-code';
     const request: PromptRequest = {
       runId: crypto.randomUUID(),
       diagramId,
       text: prompt,
       selection: scoped ? { nodes: selection.nodes, edges: selection.edges } : null,
       room: [...room],
-      agent: agent?.agent ?? 'claude-code',
+      agent: kind,
       mode,
+      // A follow-up on a diagram nobody has touched since: the agent needn't read it again.
+      unchanged: unchangedSinceLastTurn(diagramId, useEditorStore.getState().document, room, kind, turns.length > 0),
     };
     setDraft('');
     void controller.companionSend(request, scoped ? about : null);
@@ -660,7 +664,15 @@ export function Companion() {
               start over or carry on, and two disabled icons only drew the eye. */}
           {talking && !running && (
             <span className="dc-companion-speech-tools">
-              <button type="button" aria-label="New conversation" title="New conversation" onClick={() => void controller.companionForget(diagramId)}>
+              <button
+                type="button"
+                aria-label="New conversation"
+                title="New conversation"
+                onClick={() => {
+                  forgetTurnSnapshot(diagramId);
+                  void controller.companionForget(diagramId);
+                }}
+              >
                 <Icon name="pencil" />
               </button>
               <button

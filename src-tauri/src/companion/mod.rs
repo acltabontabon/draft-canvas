@@ -90,7 +90,14 @@ pub fn backend(kind: AgentKind) -> &'static dyn Backend {
 /// conversation and reuses it when resumed, so anything that changes per turn goes in the prompt.
 pub const BRIEF: &str = "You are the Draft Canvas companion: a design partner for the one diagram the person is \
 looking at in Draft Canvas, working through the draft-canvas tools. They typed the message that follows the \
-<draft-canvas-context> block. Always read the diagram first, with read_diagram in the view the context names.\n\
+<draft-canvas-context> block. Read the diagram once, first, with read_diagram in the view the context names \
+\u{2014} unless the context says it is unchanged since your last turn, when what you read then still holds.\n\
+\n\
+Every tool call is another round trip with everything so far, so make few. Don't call get_capabilities \
+unless a change is refused for a type or field you don't know. submit_proposal checks a change as \
+preview_diagram does, so preview only to compare options the person asked for. Don't read the diagram again \
+after a change: its receipt has the new revision and anything wrong with it. To work inside an element, \
+name it in view.inside (an add there creates its inside view).\n\
 \n\
 Then decide what they are asking for:\n\
 - A question, a concern or a request for advice (\"I'm worried about database load, what would you \
@@ -174,8 +181,14 @@ pub fn turn_prompt(request: &PromptRequest, title: &str, waiting: Option<Waiting
             quote(w.summary)
         )
     });
+    // Only on a follow-up, and only when the page is sure: otherwise the brief's "read it first" stands.
+    let unchanged = if request.unchanged == Some(true) {
+        "Unchanged since your last turn: don't read it again.\n"
+    } else {
+        ""
+    };
     format!(
-        "<draft-canvas-context>\nDiagram: {} (diagramId {})\nView: {view}\nSelected: {selection}\nMake changes with: {change}\n{waiting}</draft-canvas-context>\n\n{}",
+        "<draft-canvas-context>\nDiagram: {} (diagramId {})\nView: {view}\nSelected: {selection}\nMake changes with: {change}\n{unchanged}{waiting}</draft-canvas-context>\n\n{}",
         quote(title),
         quote(&request.diagram_id),
         request.text.trim()
@@ -601,6 +614,7 @@ mod tests {
             room: Vec::new(),
             agent: AgentKind::ClaudeCode,
             mode: ApplyMode::Proposal,
+            unchanged: None,
         }
     }
 
@@ -828,6 +842,11 @@ mod tests {
         let prompt = turn_prompt(&r, "Orders", None);
         assert!(prompt.contains("update_diagram") && prompt.contains("Selected: nothing"));
         assert!(!prompt.contains("Waiting for review"));
+        // A follow-up on a diagram the page knows is unchanged says so; otherwise nothing is said.
+        assert!(!prompt.contains("Unchanged since your last turn"));
+        r.unchanged = Some(true);
+        assert!(turn_prompt(&r, "Orders", None).contains("Unchanged since your last turn: don't read it again.\n"));
+        r.unchanged = None;
         let prompt = turn_prompt(
             &r,
             "Orders",

@@ -97,7 +97,10 @@ fn args(spec: &RunSpec) -> Vec<String> {
     args.push(spec.mcp_config.to_string_lossy().into_owned());
     args.push("--allowedTools".into());
     args.push(format!("{}*", tool_prefix()));
-    args.push("--append-system-prompt".into());
+    // The brief is the whole system prompt, not an addition to Claude Code's own: that one is about
+    // coding in a repository, which a canvas run can't do (no built-in tools), and it cost every model
+    // call of a turn 2,300 tokens more (measured, 2.1.310).
+    args.push("--system-prompt".into());
     args.push(spec.brief.to_string());
     match spec.session {
         SessionArg::New(id) => args.extend(["--session-id".into(), id.to_string()]),
@@ -596,7 +599,7 @@ pub(crate) mod tests {
         assert_eq!(after("--permission-prompts"), Some("none"));
         assert_eq!(after("--mcp-config"), Some("/tmp/runs/r/mcp.json"));
         assert_eq!(after("--session-id"), Some("s-new"));
-        assert_eq!(after("--append-system-prompt"), Some("BRIEF"));
+        assert_eq!(after("--system-prompt"), Some("BRIEF"));
         assert!(args.contains(&"--strict-mcp-config".to_string()));
         assert!(after("--resume").is_none());
         let resumed = super::args(&RunSpec {
