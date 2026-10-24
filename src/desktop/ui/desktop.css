@@ -1604,41 +1604,42 @@
   font-size: 11px;
 }
 
-.dc-companion-steps {
+/* What the agent is doing, or did: one quiet line above its reply. */
+.dc-companion-activity {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  align-items: baseline;
+  gap: 7px;
   margin: 0;
-  padding: 0;
-  list-style: none;
-  font-size: 12.5px;
+  color: var(--dc-text-muted);
+  font-size: 12px;
 }
 
-.dc-companion-steps li {
-  display: grid;
-  grid-template-columns: 14px 1fr;
-  column-gap: 9px;
-  align-items: center;
+.dc-companion-activity > svg,
+.dc-companion-activity > .dc-companion-spinner {
+  flex: none;
+  align-self: center;
 }
 
-.dc-companion-step-mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+.dc-companion-activity > svg {
+  width: 12px;
+  height: 12px;
   color: var(--dc-selection);
 }
 
-.dc-companion-step-mark svg {
-  width: 13px;
-  height: 13px;
+.dc-companion-activity[data-running='true'] {
+  color: var(--dc-text);
 }
 
-.dc-companion-steps li[data-status='failed'] .dc-companion-step-mark {
+/* The step under way trails off as it goes. */
+.dc-companion-activity[data-running='true'] > span:last-child::after {
+  content: '…';
+}
+
+.dc-companion-activity[data-status='failed'] > svg {
   color: var(--dc-danger);
 }
 
 .dc-companion-step-error {
-  grid-column: 2;
   color: var(--dc-text-muted);
   font-size: 11.5px;
   overflow-wrap: anywhere;
@@ -2249,7 +2250,6 @@
   margin: 0;
 }
 
-.dc-companion-now,
 .dc-companion-hint {
   color: var(--dc-text-muted);
   font-size: 12px;

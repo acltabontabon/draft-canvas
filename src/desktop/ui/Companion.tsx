@@ -11,7 +11,7 @@ import type { DraftDocument, DraftEdge, DraftNode } from '../../document/types';
 import { useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
 import type { AgentClientSetup, AgentInfo, AgentSkillSetup, ApplyMode, PromptRequest, Proposal } from '../api';
-import { companion, newTokens, numberedBlocks, partsIn, replyBlocks, replyOf, replyPoints, spentOn, stepText, stopMessage, tokenCount, type ReplyEntry, type Spent, type Turn } from '../companion';
+import { activityOf, companion, newTokens, numberedBlocks, partsIn, replyBlocks, replyOf, replyPoints, spentOn, stepText, stopMessage, tokenCount, type ReplyEntry, type Spent, type Turn } from '../companion';
 import { useDesktopController, useDesktopState } from '../useDesktop';
 import { useNodiShown } from '../nodiShown';
 import { Mascot } from './mascot/Mascot';
@@ -819,6 +819,7 @@ export function Companion() {
 /** What the mascot says about the latest turn: the step it is on, then its reply as it streams in. */
 function TurnView({ turn, pinned }: { turn: Turn; pinned: boolean }) {
   const reply = replyOf(turn);
+  const activity = activityOf(turn.steps, turn.stop === null);
   const stopped = stopMessage(turn.stop);
   return (
     <article className="dc-companion-turn">
@@ -826,20 +827,34 @@ function TurnView({ turn, pinned }: { turn: Turn; pinned: boolean }) {
         {turn.about && <span className="dc-companion-about">About {turn.about}</span>}
         <p>{turn.prompt}</p>
       </div>
-      {turn.steps.length > 0 && (
-        <ol className="dc-companion-steps">
-          {turn.steps.map((step) => (
-            <li key={step.id} data-status={step.status}>
-              <span className="dc-companion-step-mark" aria-hidden="true">
-                {step.status === 'completed' ? <Icon name="check" /> : step.status === 'failed' ? <Icon name="close" /> : <span className="dc-companion-spinner" />}
-              </span>
-              <span>{stepText(step.tool)}</span>
-              {step.error && <span className="dc-companion-step-error">{step.error}</span>}
-            </li>
-          ))}
-        </ol>
+      {/* One line, not a list: the step under way while it runs, then what it did, each kind once. */}
+      {activity.now ? (
+        <p className="dc-companion-activity" data-running="true">
+          <span className="dc-companion-spinner" aria-hidden="true" />
+          <span>{activity.now}</span>
+        </p>
+      ) : turn.stop === null ? (
+        // Between steps: thinking, until the reply itself is coming in, which says so on its own.
+        !reply && <p className="dc-companion-activity" data-running="true">
+          <span className="dc-companion-spinner" aria-hidden="true" />
+          <span>Thinking</span>
+        </p>
+      ) : (
+        activity.done.length > 0 && (
+          <p className="dc-companion-activity">
+            <Icon name="check" />
+            <span>{activity.done.join(' · ')}</span>
+          </p>
+        )
       )}
-      {turn.stop === null && turn.steps.length === 0 && <p className="dc-companion-now">Thinking…</p>}
+      {activity.snag && (
+        <p className="dc-companion-activity" data-status="failed">
+          <Icon name="close" />
+          <span>
+            Couldn’t finish {lowerFirst(activity.snag.what)}: <span className="dc-companion-step-error">{activity.snag.error}</span>
+          </span>
+        </p>
+      )}
       {reply && <ReplyText text={reply} pinned={pinned} />}
       {pinned && turn.stop !== null && reply && <Doors reply={reply} />}
       {(turn.stop?.kind === 'failed' || turn.stop?.kind === 'refusal') && <p className="dc-companion-quip">{failLine(seedOf(turn.runId))}</p>}
@@ -904,6 +919,10 @@ function SpentLine({ spent, showsCost }: { spent: Spent; showsCost: boolean }) {
       </span>
     </span>
   );
+}
+
+function lowerFirst(text: string): string {
+  return text ? text[0]!.toLowerCase() + text.slice(1) : text;
 }
 
 function prefersReducedMotion(): boolean {

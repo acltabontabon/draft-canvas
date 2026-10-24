@@ -75,6 +75,48 @@ export function stepText(tool: string): string {
   return STEP_TEXT[tool] ?? tool;
 }
 
+/** What a step did, said once the turn is over. Getting ready is left out: it is the agent's own
+ *  housekeeping, not something done to the diagram. */
+const DONE_TEXT: Record<string, string | null> = {
+  get_capabilities: null,
+  read_diagram: 'Read the diagram',
+  read_selection: 'Looked at the selection',
+  read_attachment: 'Read a note',
+  get_implementation_context: 'Read the details',
+  render_diagram: 'Checked how it looks',
+  preview_diagram: 'Drafted the change',
+  update_diagram: 'Changed the diagram',
+  submit_proposal: 'Proposed a change',
+  get_proposal: 'Checked the proposal',
+  list_proposals: 'Checked the proposal',
+};
+
+/** A turn's steps as one line: while it runs, the step under way; once over, each kind of thing it
+ *  did once, in the order it first did it. An agent reads the diagram again and again on one turn,
+ *  and four ticks of "Reading the diagram" said nothing the first didn't. */
+export interface Activity {
+  /** The step under way, while the turn runs; null between steps. */
+  now: string | null;
+  /** What it did, deduplicated. */
+  done: string[];
+  /** A step that failed and was never put right by the same tool working later: the only error worth
+   *  showing. One the agent recovered from (a wrong argument, retried) was its own business. */
+  snag: { what: string; error: string } | null;
+}
+
+export function activityOf(steps: readonly Step[], running: boolean): Activity {
+  const last = steps.at(-1);
+  const now = running && last?.status === 'in-progress' ? stepText(last.tool) : null;
+  const done: string[] = [];
+  for (const step of steps) {
+    if (step.status !== 'completed') continue;
+    const text = step.tool in DONE_TEXT ? DONE_TEXT[step.tool] : step.tool;
+    if (text && !done.includes(text)) done.push(text);
+  }
+  const failed = [...steps].reverse().find((step, i, later) => step.status === 'failed' && !later.slice(0, i).some((after) => after.tool === step.tool && after.status === 'completed'));
+  return { now, done, snag: failed && !running ? { what: stepText(failed.tool), error: failed.error ?? 'It failed.' } : null };
+}
+
 export function newTurn(runId: string, prompt: string, about: string | null): Turn {
   return { runId, prompt, about, steps: [], reply: '', stop: null, summary: null, costMicroUsd: null, usage: null, proposalId: null, outcome: null };
 }

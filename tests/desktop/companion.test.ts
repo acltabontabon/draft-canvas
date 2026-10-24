@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { RunEvent } from '../../src/desktop/api';
-import { applyRunEvent, companion, newTokens, newTurn, numberedBlocks, partsIn, replyBlocks, replyOf, replyPoints, spentOn, stepText, stopMessage, tokenCount } from '../../src/desktop/companion';
+import { activityOf, applyRunEvent, companion, newTokens, newTurn, numberedBlocks, partsIn, replyBlocks, replyOf, replyPoints, spentOn, stepText, stopMessage, tokenCount } from '../../src/desktop/companion';
 import { frame, HEIGHT, ROWS, WIDTH } from '../../src/desktop/ui/mascot/pixels';
 import { createHarness } from './harness';
 
@@ -248,6 +248,26 @@ describe('the controller', () => {
     await h.controller.companionForget('d_1');
     expect(companion.snapshot().has('d_1')).toBe(false);
     expect(h.agent.companion.forgotten).toEqual(['d_1']);
+  });
+});
+
+describe('what a turn did, in one line', () => {
+  const step = (id: string, tool: string, status: 'in-progress' | 'completed' | 'failed', error: string | null = null) => ({ id, tool, status, error });
+
+  it('says the step under way while it runs, and each kind of thing it did once when over', () => {
+    const steps = [step('1', 'get_capabilities', 'completed'), step('2', 'read_diagram', 'completed'), step('3', 'read_diagram', 'completed'), step('4', 'read_diagram', 'in-progress')];
+    expect(activityOf(steps, true)).toEqual({ now: 'Reading the diagram', done: ['Read the diagram'], snag: null });
+    const over = [...steps.slice(0, 3), step('4', 'read_diagram', 'completed'), step('5', 'submit_proposal', 'completed')];
+    expect(activityOf(over, false)).toEqual({ now: null, done: ['Read the diagram', 'Proposed a change'], snag: null });
+  });
+
+  it('keeps quiet about a failed step the agent put right, and says one it never did', () => {
+    const retried = [step('1', 'read_diagram', 'failed', '/scope: unknown field'), step('2', 'read_diagram', 'completed')];
+    expect(activityOf(retried, false).snag).toBeNull();
+    const stuck = [step('1', 'read_diagram', 'completed'), step('2', 'update_diagram', 'failed', 'LAYOUT_CONSTRAINED')];
+    expect(activityOf(stuck, false).snag).toEqual({ what: 'Changing the diagram', error: 'LAYOUT_CONSTRAINED' });
+    // Not while it is still going: it may yet put it right.
+    expect(activityOf(stuck, true).snag).toBeNull();
   });
 });
 
