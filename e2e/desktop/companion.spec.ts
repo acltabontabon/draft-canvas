@@ -402,24 +402,25 @@ async function expectChatting(page: Page) {
   await expect(page.locator('.dc-companion-footer')).toContainText('Review changes first');
 }
 
-test('without agent access it says so and links to the setting', async ({ page }) => {
+test('without agent access it asks to be let in, right there', async ({ page }) => {
   // Typed out at once, so the shot has the whole line.
   await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
   await openOrders(page);
   await page.evaluate(() => window.__shell.setAgent({ enabled: false, listening: false }));
   await page.getByRole('button', { name: 'Open Nodi' }).click();
   const box = await expectBlocked(page, 'Agent access is off, boss', 'nodi-blocked-access-off');
-  // The step opens the setting, and only that: letting agents in is the person's own switch.
-  const step = box.getByRole('button', { name: 'Turn on agent access in Settings' });
+  // The first step lets Nodi in: the person's click is the decision, with no trip to Settings.
+  const step = box.getByRole('button', { name: 'Let Nodi in' });
   await expect(step).toBeFocused();
-  await step.click();
+  // Settings is still one click away.
+  await box.getByRole('button', { name: 'Open agent settings' }).click();
   const settings = page.getByRole('dialog', { name: 'Settings' });
   await expect(settings).toBeVisible();
   await expect(settings.getByRole('tab', { name: 'AI agents' })).toHaveAttribute('aria-selected', 'true');
   await page.keyboard.press('Escape');
   await expect(settings).toBeHidden();
+  await box.getByRole('button', { name: 'Let Nodi in' }).click();
   // Switched on: the composer and footer are back.
-  await page.evaluate(() => window.__shell.setAgent({ enabled: true, listening: true }));
   await expectChatting(page);
 });
 

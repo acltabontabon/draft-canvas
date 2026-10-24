@@ -114,7 +114,14 @@ fn args(spec: &RunSpec) -> Vec<String> {
     args
 }
 
-/// `{"draft-canvas"={command="…",args=[],env={DRAFT_CANVAS_RUN="…",…}}}` as an inline TOML table.
+/// `{"draft-canvas"={command="…",args=[],env={DRAFT_CANVAS_RUN="…",…},default_tools_approval_mode="approve"}}`
+/// as an inline TOML table.
+///
+/// The tools are pre-approved for Codex because Draft Canvas is where the approval happens: the run
+/// policy lets a run change one diagram, by proposal unless the person chose direct, and a proposal
+/// lands only when the person accepts it. Codex asks for its own approval before a tool that writes,
+/// and with `approval_policy="never"` that ask is a refusal ("MCP tool call requires approval, but
+/// approval policy is never") — every change Nodi tried failed with nothing to click.
 fn server_table(command: &Path, env: &[(&'static str, String)]) -> String {
     let env = env
         .iter()
@@ -122,7 +129,7 @@ fn server_table(command: &Path, env: &[(&'static str, String)]) -> String {
         .collect::<Vec<_>>()
         .join(",");
     format!(
-        "{{{}={{command={},args=[],env={{{env}}}}}}}",
+        "{{{}={{command={},args=[],env={{{env}}},default_tools_approval_mode=\"approve\"}}}}",
         toml_string(SERVER_NAME),
         toml_string(&command.to_string_lossy())
     )
@@ -415,7 +422,7 @@ mod tests {
         let servers = args.iter().find(|a| a.starts_with("mcp_servers=")).unwrap();
         assert_eq!(
             servers,
-            r#"mcp_servers={"draft-canvas"={command="/App/draft-canvas-mcp",args=[],env={DRAFT_CANVAS_RUN="run-1"}}}"#
+            r#"mcp_servers={"draft-canvas"={command="/App/draft-canvas-mcp",args=[],env={DRAFT_CANVAS_RUN="run-1"},default_tools_approval_mode="approve"}}"#
         );
         assert!(servers.parse::<toml_edit::DocumentMut>().is_ok());
         let brief = args

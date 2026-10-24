@@ -36,7 +36,8 @@ updates with Draft Canvas. An edited copy is kept until you click **Replace skil
 Nodi is the desktop app's companion: ask your own Claude Code or Codex about the diagram you are
 looking at, without leaving it for a terminal. It appears in the canvas corner once Draft Canvas finds
 one of them installed, and needs agent access on and the diagram saved in an allowed folder. Until
-then it says what is missing and offers the fix.
+then it says what is missing and offers the fix: **Let Nodi in** turns agent access on, and
+**Allow** *folder* opens the folder the diagram is in, both from Nodi's box without opening Settings.
 
 ![Nodi offering replies about the diagram.](../media/guides/nodi-open.png)
 

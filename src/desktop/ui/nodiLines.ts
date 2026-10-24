@@ -126,6 +126,10 @@ export type SnagStep =
   | { kind: 'save'; label: string }
   | { kind: 'save-copy'; label: string }
   | { kind: 'settings'; label: string }
+  /** Agent access switched on, here: the person's click is the decision Settings would ask for. */
+  | { kind: 'allow'; label: string }
+  /** One listed folder opened to agents, the one this diagram is in. */
+  | { kind: 'allow-folder'; label: string; handle: string }
   | { kind: 'copy'; label: string; command: string };
 
 /** Why Nodi can't take a message yet, in its voice, and what gets it going. */
@@ -142,6 +146,8 @@ export interface SnagFacts {
   readOnly: boolean;
   /** Whether agent access is on; null until the shell has said. */
   access: boolean | null;
+  /** The listed folder holding this diagram, when agents can't use it yet (see `blockedFolderOf`). */
+  folder?: { handle: string; name: string } | null;
   /** The shell has said which agents are installed. */
   agentsKnown: boolean;
   /** The agent Nodi would run, if any. */
@@ -175,12 +181,27 @@ export function snagOf(facts: SnagFacts): Snag | null {
     };
   }
   // Unknown until the shell answers: only a shell that says it is off gets the snag.
+  // Turning access on lets agents into the person's folders, so it is theirs to do — and a click
+  // here, on a button that says what it does, is them doing it. Sending them to Settings for the
+  // same switch only made them hunt for it. Settings stays the second step, for the finer controls.
   if (facts.access === false) {
     return {
-      // Turning access on lets agents into the person's folders: theirs to do, in Settings.
-      line: 'Agent access is off, boss, so I’m locked out. Only you can let me in: it’s in Settings, under AI agents.',
+      line: 'Agent access is off, boss, so I’m locked out. Let me in? Agents on this computer, me included, can then work on diagrams in the folders you allow. Switch it off any time in Settings.',
       rest: 'Agent access is off, boss. I’m locked out.',
-      steps: [{ kind: 'settings', label: 'Turn on agent access in Settings' }],
+      steps: [
+        { kind: 'allow', label: 'Let Nodi in' },
+        { kind: 'settings', label: 'Open agent settings' },
+      ],
+    };
+  }
+  if (facts.folder) {
+    return {
+      line: `Agents can’t use ${facts.folder.name} yet, boss, and this diagram lives there. Open that folder to agents? Only that folder, and you can close it again in Settings.`,
+      rest: `I’m not allowed in ${facts.folder.name}, boss.`,
+      steps: [
+        { kind: 'allow-folder', label: `Allow ${facts.folder.name}`, handle: facts.folder.handle },
+        { kind: 'settings', label: 'Open agent settings' },
+      ],
     };
   }
   const { agent } = facts;
@@ -208,6 +229,23 @@ export function snagOf(facts: SnagFacts): Snag | null {
     };
   }
   return null;
+}
+
+/**
+ * The listed folder this file is in, when no listed folder agents may use holds it: the nearest one,
+ * so allowing it opens no more than the diagram needs. Null when one already lets agents in, or when
+ * no listed folder holds the file (only Settings can list a folder). Matched by the shell's own
+ * display paths, which both come in the same form.
+ */
+export function blockedFolderOf(
+  file: string,
+  projects: readonly { handle: string; name: string; displayPath: string; agent: boolean }[],
+): { handle: string; name: string } | null {
+  const holds = (folder: string) => file.startsWith(`${folder.replace(/[\\/]+$/, '')}/`) || file.startsWith(`${folder.replace(/[\\/]+$/, '')}\\`);
+  const holding = projects.filter((p) => holds(p.displayPath));
+  if (holding.length === 0 || holding.some((p) => p.agent)) return null;
+  const nearest = holding.reduce((a, b) => (b.displayPath.length > a.displayPath.length ? b : a));
+  return { handle: nearest.handle, name: nearest.name };
 }
 
 /** A stable small number from a string (a diagram or run id), for the seeds. */

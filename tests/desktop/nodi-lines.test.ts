@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createEdge, createNode } from '../../src/document/factory';
-import { diagramLines, doorOf, openers, restingLine, seedOf, snagOf } from '../../src/desktop/ui/nodiLines';
+import { blockedFolderOf, diagramLines, doorOf, openers, restingLine, seedOf, snagOf } from '../../src/desktop/ui/nodiLines';
 
 /** What Nodi says from rest: the one thing worth knowing, most pressing first. */
 
@@ -52,8 +52,12 @@ describe('what stops Nodi, and the next step it offers', () => {
   it('names the first thing in the way, with a step that does it', () => {
     expect(snagOf({ ...ready, doc: 'quick', readOnly: true, access: false })).toMatchObject({ steps: [{ kind: 'save', label: 'Save it to a folder' }] });
     expect(snagOf({ ...ready, readOnly: true, access: false })).toMatchObject({ steps: [{ kind: 'save-copy', label: 'Save a copy' }] });
-    // Only Settings: switching access on is the person's call.
-    expect(snagOf({ ...ready, access: false })).toMatchObject({ steps: [{ kind: 'settings' }] });
+    // Switching access on is the person's call: a button that does it, here, with Settings beside it.
+    expect(snagOf({ ...ready, access: false })).toMatchObject({ steps: [{ kind: 'allow', label: 'Let Nodi in' }, { kind: 'settings' }] });
+    expect(snagOf({ ...ready, folder: { handle: 'p1', name: 'Library' } })).toMatchObject({
+      rest: 'I’m not allowed in Library, boss.',
+      steps: [{ kind: 'allow-folder', label: 'Allow Library', handle: 'p1' }, { kind: 'settings' }],
+    });
     expect(snagOf({ ...ready, agent: { ...claude, availability: 'too-old', version: '1.0.3' } })).toMatchObject({
       line: expect.stringContaining('Your Claude Code 1.0.3 is too old for me, boss.'),
       rest: 'Claude Code needs an update, boss.',
@@ -65,6 +69,16 @@ describe('what stops Nodi, and the next step it offers', () => {
     });
     expect(snagOf({ ...ready, agent: { ...claude, availability: 'missing' } })).toMatchObject({ steps: [] });
     expect(snagOf({ ...ready, agent: null })).toMatchObject({ steps: [] });
+  });
+
+  it('finds the folder to allow: the nearest listed one holding the file, and none when one already lets agents in', () => {
+    const outer = { handle: 'a', name: 'Work', displayPath: '~/Work', agent: false };
+    const inner = { handle: 'b', name: 'Library', displayPath: '~/Work/Library', agent: false };
+    expect(blockedFolderOf('~/Work/Library/plan.dcanvas', [outer, inner])).toEqual({ handle: 'b', name: 'Library' });
+    expect(blockedFolderOf('~/Work/Library/plan.dcanvas', [{ ...outer, agent: true }, inner])).toBeNull();
+    // Not a folder just because the name starts the same.
+    expect(blockedFolderOf('~/Work/Library2/plan.dcanvas', [inner])).toBeNull();
+    expect(blockedFolderOf('C:\\Work\\plan.dcanvas', [{ ...outer, displayPath: 'C:\\Work' }])).toEqual({ handle: 'a', name: 'Work' });
   });
 
   it('says it in Nodi’s voice, with a short line for rest', () => {

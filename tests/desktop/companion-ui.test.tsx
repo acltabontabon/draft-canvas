@@ -38,6 +38,18 @@ function fakeController() {
     refreshCompanionProposals: vi.fn(async () => {}),
     refreshAgent: vi.fn(async () => {}),
     openAgentSettings: vi.fn(),
+    // As the shell answers: where access now stands.
+    configureAgent: vi.fn(async (patch: { enabled?: boolean; project?: { handle: string; agent: boolean } }) => {
+      const now = desktopStore.getSnapshot().agent!;
+      desktopStore.update({
+        agent: {
+          ...now,
+          ...(patch.enabled !== undefined ? { enabled: patch.enabled } : {}),
+          projects: now.projects.map((p) => (patch.project && p.handle === patch.project.handle ? { ...p, agent: patch.project.agent } : p)),
+        },
+      });
+      return true;
+    }),
     save: vi.fn(async () => {}),
     saveAs: vi.fn(async () => {}),
     // The proposal itself is reviewed in the card (`companion-review.test.tsx`).
@@ -334,20 +346,36 @@ describe('the companion', () => {
     expect(screen.queryByLabelText('Message Claude Code')).toBeNull();
     expect(document.querySelector('.dc-companion-chip')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Review changes first' })).toBeNull();
-    // The next step is a reply in the box, focused for the keyboard, and it opens the setting: turning
-    // access on is the person's to do there, never Nodi's.
-    const step = screen.getByRole('button', { name: 'Turn on agent access in Settings' });
+    // The next step is a reply in the box, focused for the keyboard, that lets Nodi in right there:
+    // the person's click is the decision, so they aren't sent off to hunt for the switch.
+    const step = screen.getByRole('button', { name: 'Let Nodi in' });
     expect(step.closest('.dc-companion-options')).not.toBeNull();
     expect(document.activeElement).toBe(step);
-    fireEvent.click(step);
+    // Settings is still one click away, for the finer controls.
+    fireEvent.click(screen.getByRole('button', { name: 'Open agent settings' }));
     expect(controller.openAgentSettings).toHaveBeenCalled();
     expect(desktopStore.getSnapshot().agent?.enabled).toBe(false);
+    await act(async () => fireEvent.click(step));
+    expect(controller.configureAgent).toHaveBeenCalledWith({ enabled: true });
 
     // Switched on: the composer and footer are back.
-    act(() => desktopStore.update({ agent: ACCESS }));
     expect(screen.getByLabelText('Message Claude Code')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Review changes first' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Turn on agent access in Settings' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Let Nodi in' })).toBeNull();
+  });
+
+  it('asks to open the diagram’s folder to agents, and opens only that one', async () => {
+    const doc = desktopStore.getSnapshot().doc;
+    if (doc.kind !== 'file') throw new Error('expected a file');
+    desktopStore.update({ agent: { ...ACCESS, projects: [{ handle: 'p1', name: 'Plans', displayPath: '~/Plans', agent: false }] } });
+    desktopStore.update({ doc: { ...doc, displayPath: '~/Plans/orders.dcanvas' } });
+    useUiStore.setState({ companionOpen: true });
+    mount();
+    await settle();
+    expect(screen.getByRole('status').textContent).toMatch(/Agents can’t use Plans yet/);
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Allow Plans' })));
+    expect(controller.configureAgent).toHaveBeenCalledWith({ project: { handle: 'p1', agent: true } });
+    expect(screen.getByLabelText('Message Claude Code')).toBeTruthy();
   });
 
   it('offers a copy of a read-only file through Save As', async () => {

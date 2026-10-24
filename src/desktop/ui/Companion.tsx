@@ -18,7 +18,7 @@ import type { Mood } from './mascot/pixels';
 import { chipPlace, revealViewport } from './chipPlace';
 import { canCreateInside, hasInside } from '../../depth/tree';
 import { lookInside } from '../../ui/Editor/depthNavigation';
-import { diagramLines, doorOf, openers, restingLine, seedOf, snagOf, type Look, type SnagStep } from './nodiLines';
+import { blockedFolderOf, diagramLines, doorOf, openers, restingLine, seedOf, snagOf, type Look, type SnagStep } from './nodiLines';
 import { PointPins } from './PointPins';
 import { ProposalHistory } from './ProposalHistory';
 import { countsLabel, useProposalReview } from './useProposalReview';
@@ -209,7 +209,15 @@ export function Companion() {
   const agentName = agent?.name ?? 'your agent';
   // Why Nodi can't take a message yet, with the next steps it offers in place of the composer.
   const blocker = useMemo(
-    () => snagOf({ doc: doc.kind, readOnly: doc.kind === 'file' && doc.readOnly, access: access ? access.enabled : null, agentsKnown: agents !== null, agent }),
+    () =>
+      snagOf({
+        doc: doc.kind,
+        readOnly: doc.kind === 'file' && doc.readOnly,
+        access: access ? access.enabled : null,
+        folder: doc.kind === 'file' && access ? blockedFolderOf(doc.displayPath, access.projects) : null,
+        agentsKnown: agents !== null,
+        agent,
+      }),
     [doc, access, agents, agent],
   );
   // A conversation to show (rather than a greeting or what is in the way), and how much of its
@@ -224,6 +232,8 @@ export function Companion() {
     if (step.kind === 'save') void controller.save();
     else if (step.kind === 'save-copy') void controller.saveAs();
     else if (step.kind === 'settings') controller.openAgentSettings();
+    else if (step.kind === 'allow') void controller.configureAgent({ enabled: true });
+    else if (step.kind === 'allow-folder') void controller.configureAgent({ project: { handle: step.handle, agent: true } });
     else void useEditorStore.getState().copyText(step.command).then((ok) => setCopied({ command: step.command, ok }));
   };
 
