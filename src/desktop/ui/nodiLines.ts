@@ -46,71 +46,67 @@ export interface RestingState {
  *  mutters to itself. Kept to a line or two: the bubble is small, and the canvas is the point. */
 const GREETINGS = [
   'Boss, need a hand?',
-  'Need a hand with this one, boss?',
-  'Want a second opinion, boss? I have several.',
-  'Say the word, boss, and I’ll find the weak spots.',
-  'Psst. Boss. I read diagrams for fun.',
-  'Ready when you are, boss. Probably readier.',
-  'I have opinions about this diagram, boss.',
-  'It’s always DNS. Unless it’s the cache. It’s the cache, boss.',
-  'Somewhere, a cron job is running at 3am. I think it’s yours, boss.',
-  'Someone deployed on a Friday. Not saying it was you, boss. The logs are.',
-  'That TODO from 2019? git blame says hi, boss.',
-  'The pager went off at 2am. Not your fault, boss. Probably.',
-  'Someone hardcoded a 30-second timeout. Classic you, boss.',
-  'I found a feature flag nobody remembers adding. Ring a bell, boss?',
-  'Rule one of prod: never deploy on a Friday. Rule two: see rule one.',
-  'That queue looks calm, boss. Too calm.',
-  'I once watched a retry loop retry itself into the sun.',
-  'Every arrow is a promise, boss. Some arrows lie.',
-  'Ask me about the time a “quick fix” paged six people.',
-  'Have you tried turning the architecture off and on again, boss?',
-  'If a service falls over and there’s no alert, did it page?',
-  'Retries without backoff? In this economy, boss?',
-  'I don’t sleep, boss. I wait for 2am incidents.',
-  'Nothing scales like a diagram. Production has notes.',
-  'Is it me, boss, or is that arrow judging us?',
-  'Timeouts set to “forever”: a love story.',
-  'I promise not to rename anything, boss. Unless you ask.',
+  'I read your diagram twice, boss. Once for the architecture, once for the crimes.',
+  'Boss. Boss. I found a single point of failure. It’s the database. It’s always the database.',
+  'I used to live inside a load balancer, boss. Round and round. I don’t talk about it.',
+  'It’s not DNS. There’s no way it’s DNS. …It was DNS, boss.',
+  'A cron job fires at 3am and nobody knows why. The commit says “temp”. The author says boss.',
+  'git blame is pointing at you, boss. I didn’t make it do that. I just held the flashlight.',
+  'The postmortem said “human error”, boss. I’m not a human. Just saying.',
+  'I named the next outage after you, boss. It felt right.',
+  'There’s a feature flag at 50% since 2021. Half your users live in another timeline, boss.',
+  'The queue is quiet, boss. I don’t like it when the queue is quiet.',
+  'I asked the logs what happened. The logs said “success”. The logs lie, boss.',
+  'Every arrow here is a network call that can fail. I counted. I wish I hadn’t.',
+  'Your p50 is gorgeous, boss. Your p99 is a crime scene.',
+  'Deploying on a Friday? Bold, boss. I’ll be in the bunker.',
+  'I don’t sleep, boss. I wait for the 2am page like it owes me money.',
+  'Someone set prod logging to DEBUG. The disk is filling like a bathtub, boss.',
+  'Your circuit breaker is open, boss. Mine too. Emotionally.',
+  'The README says “self-explanatory”. It is not, boss. I have questions. Many.',
+  'If you can’t draw it, you can’t fix it at 3am. I can draw it. The 3am part is yours, boss.',
   // True, if said with a straight face: the laws and lessons this trade keeps relearning.
-  'Conway’s law, boss: this diagram is your org chart wearing a disguise.',
-  'Gall’s law: every complex system that works grew from a simple one that worked.',
-  'Hyrum’s law, boss: somebody depends on that bug. Fix it anyway.',
-  'Little’s law: what’s in the queue = arrival rate × time spent in it. The queue did the math.',
-  'Brooks’s law: adding people to a late project makes it later. Boxes too, boss.',
-  'Fallacy #1 of distributed computing: the network is reliable. It is not, boss.',
-  'Fallacy #2: latency is zero. Ask anyone who called another region.',
-  'When the network splits you get consistency or availability, boss. Not both. Thanks, CAP.',
-  'Exactly-once delivery is a myth, boss. At-least-once plus idempotency is the cure.',
-  'At-least-once means “twice, on a Friday”. Make the consumer idempotent, boss.',
-  'The average is lying to you, boss. Look at the p99.',
-  'A retry without a timeout is just hope with a for-loop.',
-  'Cache stampede: one empty cache, a thousand requests, zero survivors.',
+  'Conway’s law, boss: this diagram is your org chart in a fake mustache.',
+  'Gall’s law: every complex system that works grew from a simple one that worked. Start small, boss.',
+  'Hyrum’s law, boss: somebody depends on that bug. They will email you. In caps.',
+  'Little’s law: queue length = arrival rate × wait. The queue did the math and it’s upset, boss.',
+  'Brooks’s law: nine people can’t ship a feature in one month, boss. I asked.',
+  '“The network is reliable,” said nobody who has met a network, boss.',
+  'Latency is zero, boss, as long as you never leave localhost. Please leave localhost.',
+  'CAP, boss: when the network splits, you pick consistency or availability. The network doesn’t ask first.',
+  'Exactly-once delivery is a bedtime story, boss. Idempotency is the grown-up version.',
+  'At-least-once means “twice, on a Friday, during the demo”, boss.',
+  'A retry without backoff is a denial-of-service attack you wrote on yourself, boss.',
+  'A thousand clients retrying on the same second is a stampede, boss. Add jitter.',
+  'A retry without a timeout is hope with a for-loop.',
+  'Cache stampede: one cold cache, ten thousand requests, one database crying in the corner.',
   'Two services sharing one database is a monolith in a trench coat, boss.',
-  'A distributed monolith: all the pain of both, none of the joy.',
-  'Clocks drift, boss. Never trust two servers to agree on “now”.',
-  'Backpressure is just a service learning to say “no”. Healthy, honestly.',
-  'Every microservice starts as “just a small one”, boss.',
+  'A distributed monolith: every network call of microservices, every deploy of a monolith. Collect them all, boss.',
+  'Clocks drift, boss. Two servers will never agree on “now”. Neither will two of your teams.',
+  'Backpressure is a service saying “no” before it falls over. Healthier than most of us, boss.',
+  '“It’s just one small microservice,” said every boss, forty microservices ago.',
+  'I counted your services three times and got three answers. Eventual consistency, boss.',
+  'Distributed tracing: watch one request visit eleven services and achieve nothing, boss.',
   'There are two hard things: cache invalidation, naming things and off-by-one errors.',
 ];
 
 const SELECTED = [
   'Want me to look at {it}, boss?',
-  'Ooh, {it}. Want my take, boss?',
+  'Ooh, {it}. Want my take, boss? It’s spicy.',
   '{it}? I have thoughts.',
-  'Shall I poke at {it}, boss?',
-  '{it} looks suspicious, boss. Want me to check?',
+  'I’ve been watching {it}, boss. It’s been watching back.',
+  '{it} looks fine. That’s what worries me, boss.',
   'Ah, {it}. What has it done this time?',
-  'Bold of you to select {it}, boss.',
+  'Of all the boxes, boss, you picked {it}. Interesting.',
 ];
 
-const WORKING = ['On it, boss… {step}.', 'Hold my coffee, boss… {step}.', 'Busy busy… {step}.', 'Crunching, boss… {step}.', 'Don’t mind me… {step}.'];
+const WORKING = ['On it, boss… {step}.', 'Rummaging through your choices, boss… {step}.', 'Don’t unplug me, boss… {step}.', 'Pretending this is fine… {step}.', 'Whistling innocently… {step}.'];
 
-const WAITING = ['Got a change for you to look at, boss!', 'I made a thing, boss. Take a look?', 'Fresh proposal on the canvas, boss.', 'Your review is requested, boss. Very official.'];
+const WAITING = ['Got a change for you to look at, boss!', 'I made a thing, boss. It’s on the canvas. Be gentle.', 'Nothing lands until you say so, boss. Those are the rules. I hate the rules.', 'Your judgement is requested, boss. Very official.'];
 
-const DONE = ['Done, boss! Come see what I found.', 'Boss, I found stuff. Come look.', 'All done. You’ll want to read this, boss.', 'Finished. I was very thorough. Mostly.'];
+const DONE = ['Done, boss! Come see what I found.', 'Boss. Boss. I found stuff.', 'Finished. I was very thorough. Mostly.', 'Done. Some of it is your fault, boss. Come read.'];
 
-const BLOCKED = ['Psst, boss… I need a hand first.', 'I’m stuck, boss. Click and I’ll explain.', 'Can’t start yet. Small snag, boss.'];
+const BLOCKED = ['Psst, boss… I need a hand first.', 'I’m stuck, boss. Click and I’ll explain.', 'All revved up and nowhere to run, boss.'];
 
 export function restingLine(state: RestingState): RestingLine {
   const { seed, runSeed } = state;
@@ -317,7 +313,7 @@ const QUIP: Record<ReviewCode, string> = {
   'call-cycle': 'That’s not architecture, boss, that’s a relationship.',
   'no-consumer': 'They’ll pile up forever, boss. Who was meant to read them?',
   'no-producer': 'Who’s supposed to feed it, boss?',
-  'cache-not-written': 'Stale data has entered the chat, boss.',
+  'cache-not-written': 'It will serve yesterday’s answer with total confidence, boss.',
   unconnected: 'Feature or cry for help, boss?',
 };
 
