@@ -88,6 +88,10 @@ const seenRun = new Map<string, string>();
 const PEEK_MS = 5000;
 /** Nodi's walk on (`desktop.css`'s `dc-nodi-arrive`). */
 const ARRIVAL_MS = 1400;
+/** Quiet long enough to take a break, with a word before walking off. */
+export const IDLE_MS = 90_000;
+const GOODBYE_MS = 2500;
+const FADE_MS = 200;
 /** How long the bubble lingers once nothing keeps it up, plus its exit (`desktop.css`'s `.dc-companion-say`). */
 const SAY_GONE_MS = 2500 + 200;
 
@@ -477,6 +481,7 @@ export function Companion() {
 
   // At rest, Nodi speaks up: once on arrival, on hover, and for as long as there is news.
   const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
   // Each time Nodi pipes up on a hover, a new line from its repertoire: only once the last one has
   // gone, so coming back while it lingers never swaps the line being read.
   const [visits, setVisits] = useState(0);
@@ -487,6 +492,67 @@ export function Companion() {
   // Read under the pointer when its five seconds are up, the hello stays until the bubble goes,
   // rather than being typed over with another line mid-read.
   const [helloHeld, setHelloHeld] = useState(false);
+  const [wandering, setWandering] = useState<'here' | 'goodbye' | 'leaving' | 'away'>('here');
+  const [returned, setReturned] = useState(false);
+  const [trips, setTrips] = useState(0);
+  const lastActivity = useRef<number | null>(null);
+  const needed = open || running || Boolean(last?.proposalId) || unseen || blocker !== null || hovered || focused || poked;
+  const canWander = !needed && !arriving && !peeking && !helloHeld && shown && !yielded && Boolean(agents?.some((a) => a.availability !== 'missing'));
+
+  useEffect(() => {
+    lastActivity.current ??= Date.now();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let changed = false;
+    const comeBack = () => {
+      if (changed) return;
+      changed = true;
+      setWandering('here');
+      setReturned(true);
+      setArriving(!open && wandering !== 'goodbye');
+      setPeeking(!open && wandering !== 'goodbye');
+    };
+    const activity = () => {
+      lastActivity.current = Date.now();
+      if (wandering !== 'here') comeBack();
+    };
+    // Input only updates a timestamp while Nodi is here. One timeout checks the remaining quiet
+    // time, so moving the pointer neither renders the companion nor churns a timer per event.
+    const checkIdle = () => {
+      const remaining = IDLE_MS - (Date.now() - lastActivity.current!);
+      if (remaining > 0) timer = setTimeout(checkIdle, remaining);
+      else {
+        setReturned(false);
+        setTrips((n) => n + 1);
+        setWandering('goodbye');
+      }
+    };
+    if (wandering !== 'here' && needed) comeBack();
+    else if (wandering === 'here' && canWander) timer = setTimeout(checkIdle, Math.max(0, IDLE_MS - (Date.now() - lastActivity.current!)));
+    else if (wandering === 'goodbye') timer = setTimeout(() => setWandering('leaving'), GOODBYE_MS);
+    else if (wandering === 'leaving') timer = setTimeout(() => setWandering('away'), prefersReducedMotion() ? FADE_MS : ARRIVAL_MS);
+
+    const events = ['pointermove', 'pointerdown', 'click', 'keydown', 'wheel', 'scroll'] as const;
+    for (const event of events) window.addEventListener(event, activity, { capture: true, passive: true });
+    const unsubscribe = useEditorStore.subscribe((state, previous) => {
+      if (state.document !== previous.document || state.outer !== previous.outer || state.selection !== previous.selection) activity();
+    });
+    // The same key can wake Nodi and open it: opening takes precedence over the walk it just began.
+    const unsubscribeOpen = useUiStore.subscribe((state, previous) => {
+      if (!state.companionOpen || previous.companionOpen) return;
+      changed = true;
+      lastActivity.current = Date.now();
+      setWandering('here');
+      setArriving(false);
+      setPeeking(false);
+      setFocused(false);
+    });
+    return () => {
+      clearTimeout(timer);
+      unsubscribe();
+      unsubscribeOpen();
+      for (const event of events) window.removeEventListener(event, activity, true);
+    };
+  }, [wandering, needed, canWander, open, diagramId]);
   useEffect(() => {
     if (hovered || !helloHeld) return;
     const timer = setTimeout(() => setHelloHeld(false), SAY_GONE_MS);
@@ -521,7 +587,7 @@ export function Companion() {
   useEffect(() => {
     if (!arriving) return;
     // Ends with the walk's animation; this is only for a walk that never gets to play (a hidden window).
-    const timer = setTimeout(() => setArriving(false), ARRIVAL_MS + 800);
+    const timer = setTimeout(() => setArriving(false), (prefersReducedMotion() ? FADE_MS : ARRIVAL_MS) + 800);
     return () => clearTimeout(timer);
   }, [arriving]);
   useEffect(() => {
@@ -542,17 +608,20 @@ export function Companion() {
     // What the message would be about: the selection, unless the person left it out.
     selected: about,
     selectedKind: about ? onlyKind : null,
-    seed: seedOf(diagramId) + visits,
+    seed: seedOf(diagramId) + (wandering === 'goodbye' || (returned && (peeking || helloHeld)) ? trips : visits),
     diagram: setupSteps.length ? [`Psst, boss. ${agentName} can’t find me outside this box yet. Open me: it’s one click.`, ...aboutDiagram] : aboutDiagram,
     runSeed: seedOf(last?.runId ?? diagramId),
     clock,
     poked,
+    departure: wandering === 'goodbye',
+    returning: returned && (peeking || helloHeld),
     arrival: peeking || helloHeld ? hello : undefined,
   });
   // Opened from rest: the pointer was over the bubble, which goes from under it without a leave, so
   // the hover is put down here or Nodi would keep talking after the conversation closes.
   const openFromRest = () => {
     setHovered(false);
+    setFocused(false);
     setOpen(true);
   };
 
@@ -560,6 +629,7 @@ export function Companion() {
   // with no agent on this computer (or until that is known) there is no Nodi: nothing it could run.
   // Nor once the person has switched it off in Settings.
   if (!shown || yielded || !agents?.some((a) => a.availability !== 'missing')) return null;
+  if (wandering === 'away' && !open) return null;
 
   if (!expanded) {
     return (
@@ -571,8 +641,14 @@ export function Companion() {
           // Its own keys: Backspace on a focused button must not delete the selection behind it.
           data-dc-keyboard-region=""
           data-arriving={arriving ? 'true' : undefined}
+          data-leaving={wandering === 'leaving' ? 'true' : undefined}
           onAnimationEnd={(event) => {
-            if (event.animationName === 'dc-nodi-arrive') setArriving(false);
+            if (event.animationName === 'dc-nodi-arrive' || event.animationName === 'dc-nodi-fade-in') setArriving(false);
+            if (event.animationName === 'dc-nodi-leave' || event.animationName === 'dc-nodi-fade-out') setWandering('away');
+          }}
+          onFocusCapture={() => setFocused(true)}
+          onBlurCapture={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false);
           }}
           // The pointer only: focus is handed back here when the conversation closes, and a bubble
           // kept up by it stayed under a pointer long gone. News is said without either.
@@ -592,7 +668,7 @@ export function Companion() {
           {/* Nodi says the one thing worth knowing, and the bubble is the way in. Kept mounted: it
               lingers a moment after the pointer leaves, then goes (`desktop.css`), so a line isn't
               snatched away mid-read. */}
-          {!arriving && (
+          {!arriving && wandering !== 'leaving' && (
             <button
               type="button"
               className="dc-companion-say"
@@ -620,7 +696,7 @@ export function Companion() {
               openFromRest();
             }}
           >
-            <Mascot mood={arriving ? 'walking' : mood} />
+            <Mascot mood={arriving || wandering === 'leaving' ? (prefersReducedMotion() ? 'idle' : 'walking') : mood} facing={wandering === 'leaving' ? 'right' : 'left'} />
           </button>
         </div>
       </>

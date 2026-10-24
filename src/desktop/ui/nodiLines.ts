@@ -49,6 +49,37 @@ export interface RestingState {
   poked?: boolean;
   /** Nodi's hello, while it is saying hello on the diagram's opening (`arrivalLine`). */
   arrival?: string;
+  /** Saying goodbye before wandering off, or hello after coming back. */
+  departure?: boolean;
+  returning?: boolean;
+}
+
+const GOODBYES = [
+  'I’ll see you later, boss.',
+  'Going for coffee, boss. Shout if prod catches fire.',
+  'Off to read some RFCs, boss. Call me if anything pages.',
+  'Taking five, boss. The diagram can’t break itself. Probably.',
+  'Stretching my pixels, boss. All of them. Occupational hazard.',
+  'Going to stare at a different rectangle, boss. Personal growth.',
+  'Off to interview a rubber duck, boss. It knows too much.',
+];
+
+const RETURNS = [
+  'I’m here if you need me, boss.',
+  'Back, boss! Did anything break? Don’t answer that.',
+  'Missed me, boss? I missed the pager. A little.',
+  'Back from coffee, boss. My pixels are vibrating at unsafe frequencies.',
+  'Reporting for duty, boss. The rubber duck has requested a lawyer.',
+  'You moved, boss. I assumed an incident. Force of habit.',
+  'Back, boss. The RFC had an appendix. I barely escaped.',
+];
+
+export function goodbyeLine(seed: number): string {
+  return pick(GOODBYES, seed);
+}
+
+export function returnLine(seed: number): string {
+  return pick(RETURNS, seed);
 }
 
 /** An invitation now and then, and in between, what a companion who has seen too many incidents
@@ -323,6 +354,8 @@ export function restingLine(state: RestingState): RestingLine {
   if (state.waiting) return { tone: 'waiting', text: pick(WAITING, runSeed), hint: 'Show me', stays: true };
   if (state.unseen) return { tone: 'done', text: pick(DONE, runSeed), hint: 'Open', stays: true };
   if (state.poked) return { tone: 'poked', text: pick(POKED, seed), hint: 'Click to chat', stays: true };
+  if (state.departure) return { tone: 'greet', text: goodbyeLine(seed), hint: 'Click to chat', stays: true };
+  if (state.returning) return { tone: 'greet', text: returnLine(seed), hint: 'Click to chat', stays: false };
   if (state.arrival) return { tone: 'greet', text: state.arrival, hint: 'Click to chat', stays: false };
   if (state.selected) return { tone: 'selected', text: selectedLine(state.selected, state.selectedKind, seed), hint: 'Ask me', stays: false };
   // Every other greeting is about this diagram, when Nodi has something to say about it; of the

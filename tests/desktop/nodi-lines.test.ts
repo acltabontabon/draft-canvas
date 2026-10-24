@@ -1,12 +1,29 @@
 import { describe, expect, it } from 'vitest';
 import { createEdge, createNode } from '../../src/document/factory';
-import { arrivalLine, blockedFolderOf, clockLines, diagramLines, doorOf, openers, restingLine, seedOf, setupStepsOf, smallHours, snagOf } from '../../src/desktop/ui/nodiLines';
+import { arrivalLine, blockedFolderOf, clockLines, diagramLines, doorOf, goodbyeLine, openers, restingLine, returnLine, seedOf, setupStepsOf, smallHours, snagOf } from '../../src/desktop/ui/nodiLines';
 
 /** What Nodi says from rest: the one thing worth knowing, most pressing first. */
 
 const quiet = { blocked: false, working: null, waiting: false, unseen: false, selected: null, seed: 0, runSeed: 0 };
 
 describe('Nodi at rest', () => {
+  it('has seeded goodbyes and returns, with news and snags still coming first', () => {
+    for (const line of [goodbyeLine, returnLine]) {
+      const variants = Array.from({ length: 14 }, (_, seed) => line(seed));
+      expect(new Set(variants).size).toBeGreaterThanOrEqual(6);
+      for (const text of variants) expect(text).toMatch(/boss/i);
+      expect(line(-123)).toBe(line(-123));
+    }
+    const departure = { ...quiet, departure: true, arrival: 'HELLO', selected: 'Orders' };
+    expect(restingLine(departure)).toMatchObject({ text: goodbyeLine(0), stays: true });
+    expect(restingLine({ ...quiet, returning: true, arrival: 'HELLO' })).toMatchObject({ text: returnLine(0), stays: false });
+    expect(restingLine({ ...departure, blocked: true }).tone).toBe('blocked');
+    expect(restingLine({ ...departure, working: 'Reading' }).tone).toBe('working');
+    expect(restingLine({ ...departure, waiting: true }).tone).toBe('waiting');
+    expect(restingLine({ ...departure, unseen: true }).tone).toBe('done');
+    expect(restingLine({ ...departure, poked: true }).tone).toBe('poked');
+  });
+
   it('greets, and offers to look at what is selected', () => {
     expect(restingLine(quiet)).toMatchObject({ tone: 'greet', text: 'Boss, need a hand?', stays: false });
     expect(restingLine({ ...quiet, selected: 'Orders database' })).toMatchObject({ tone: 'selected', text: expect.stringContaining('Orders database'), stays: false });

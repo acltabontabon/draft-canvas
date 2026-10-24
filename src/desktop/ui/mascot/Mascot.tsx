@@ -24,7 +24,7 @@ function prefersStill(): boolean {
  * while idle, types while working, looks over at the canvas while a proposal waits, and hops when
  * done; with reduced motion it holds still.
  */
-export function Mascot({ mood, scale = 3 }: { mood: Mood; scale?: number }) {
+export function Mascot({ mood, scale = 3, facing = 'left' }: { mood: Mood; scale?: number; facing?: 'left' | 'right' }) {
   // Working, it follows the channel clock its caption reads too; otherwise it just counts frames.
   const clocked = mood === 'working';
   const [tick, setTick] = useState(() => (clocked && !prefersStill() ? channelClock().tick : 0));
@@ -45,6 +45,7 @@ export function Mascot({ mood, scale = 3 }: { mood: Mood; scale?: number }) {
       viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
       shapeRendering="crispEdges"
       data-mood={mood}
+      style={facing === 'right' ? { transform: 'scaleX(-1)' } : undefined}
     >
       {runs.map((run, i) => (
         <rect key={i} x={run.x} y={run.y} width={run.width} height={1} fill={run.fill} />

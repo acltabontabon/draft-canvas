@@ -1355,16 +1355,48 @@
 }
 
 /* Arriving: Nodi walks on from beyond the canvas's right edge to its place, stepping as it goes
-   (`walking` frames), and greets once it stops. Without motion it is simply there. */
+   (`walking` frames), and greets once it stops. The same walk takes it off for a break. */
 @media (prefers-reduced-motion: no-preference) {
   .dc-companion[data-arriving='true'] {
-  animation: dc-nodi-arrive 1400ms linear backwards;
+    animation: dc-nodi-arrive 1400ms linear backwards;
+  }
+
+  .dc-companion[data-leaving='true'] {
+    animation: dc-nodi-leave 1400ms linear forwards;
   }
 }
 
 @keyframes dc-nodi-arrive {
   from {
-  transform: translateX(140px);
+    transform: translateX(140px);
+  }
+}
+
+@keyframes dc-nodi-leave {
+  to {
+    transform: translateX(140px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-companion[data-arriving='true'] {
+    animation: dc-nodi-fade-in 200ms linear both;
+  }
+
+  .dc-companion[data-leaving='true'] {
+    animation: dc-nodi-fade-out 200ms linear both;
+  }
+}
+
+@keyframes dc-nodi-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes dc-nodi-fade-out {
+  to {
+    opacity: 0;
   }
 }
 

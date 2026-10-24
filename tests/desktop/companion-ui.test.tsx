@@ -1,5 +1,5 @@
 import { ReactFlowProvider } from '@xyflow/react';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentInfo, AgentSettings, PromptRequest } from '../../src/desktop/api';
 
@@ -11,7 +11,8 @@ vi.mock('../../src/lib/preferences', () => ({
   removePreference: (key: string) => void prefs.delete(key),
 }));
 
-const { Companion } = await import('../../src/desktop/ui/Companion');
+const { Companion, IDLE_MS } = await import('../../src/desktop/ui/Companion');
+const { goodbyeLine, returnLine, seedOf } = await import('../../src/desktop/ui/nodiLines');
 const { companion } = await import('../../src/desktop/companion');
 const { desktopStore } = await import('../../src/desktop/store');
 const { setDesktopController } = await import('../../src/desktop/useDesktop');
@@ -94,6 +95,10 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   setDesktopController(null as never);
 });
 
@@ -114,6 +119,150 @@ describe('the companion', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Walk me through it' }));
     await settle();
     expect(controller.companionSend.mock.calls[0]![0]).toMatchObject({ text: 'Explain this diagram' });
+  });
+
+  describe('taking a break', () => {
+    async function start() {
+      vi.useFakeTimers();
+      await act(async () => { mount(); });
+      await advance(2200);
+      await advance(5000);
+      fireEvent.keyDown(window, { key: 'Shift' });
+    }
+
+    async function advance(ms: number) {
+      await act(async () => { vi.advanceTimersByTime(ms); });
+    }
+
+    const tripSeed = () => seedOf(doc.metadata.id) + 1;
+    const say = () => document.querySelector('.dc-companion-say');
+
+    it('says goodbye after idle, walks right, and walks back on a key with a return greeting', async () => {
+      await start();
+      await advance(IDLE_MS - 1);
+      expect(say()?.getAttribute('aria-label')).not.toContain(goodbyeLine(tripSeed()));
+      await advance(1);
+      expect(say()?.getAttribute('aria-label')).toContain(goodbyeLine(tripSeed()));
+      expect(say()?.getAttribute('data-shown')).toBe('true');
+      await advance(2500);
+      const walking = screen.getByRole('img', { name: 'Nodi, on the way' });
+      expect(walking.style.transform).toBe('scaleX(-1)');
+      expect(walking.closest('.dc-companion')?.getAttribute('data-leaving')).toBe('true');
+      await advance(1400);
+      expect(screen.queryByRole('button', { name: 'Open Nodi' })).toBeNull();
+      expect(say()).toBeNull();
+
+      fireEvent.keyDown(window, { key: 'a' });
+      expect(screen.getByRole('img', { name: 'Nodi, on the way' }).style.transform).toBe('');
+      expect(document.querySelector('.dc-companion')?.getAttribute('data-arriving')).toBe('true');
+      await advance(2200);
+      expect(say()?.getAttribute('aria-label')).toContain(returnLine(tripSeed()));
+      expect(say()?.getAttribute('data-shown')).toBe('true');
+      await advance(5000);
+      expect(say()?.getAttribute('data-shown')).toBeNull();
+    });
+
+    it('keeps the idle clock in refs for input, document and selection activity', async () => {
+      const snapshots = vi.spyOn(companion, 'snapshot');
+      await start();
+      for (const event of ['pointermove', 'pointerdown', 'click', 'keydown', 'wheel', 'scroll']) {
+        await advance(IDLE_MS - 2);
+        snapshots.mockClear();
+        fireEvent(window, new Event(event));
+        // A parent render reads its conversation snapshot; the mascot's own frame ticks don't.
+        expect(snapshots).not.toHaveBeenCalled();
+        await advance(1);
+        expect(say()?.getAttribute('aria-label')).not.toContain(goodbyeLine(tripSeed()));
+      }
+      await advance(IDLE_MS - 2);
+      act(() => useEditorStore.setState({ document: { ...doc, metadata: { ...doc.metadata, title: 'Updated' } } }));
+      await advance(IDLE_MS - 1);
+      act(() => useEditorStore.setState({ selection: { nodes: ['db'], edges: [] } }));
+      await advance(IDLE_MS - 1);
+      expect(say()?.getAttribute('aria-label')).not.toContain(goodbyeLine(tripSeed()));
+      await advance(1);
+      expect(say()?.getAttribute('aria-label')).toContain(goodbyeLine(tripSeed()));
+    });
+
+    it('stays while a run is going, and while its answer or proposal needs attention', async () => {
+      act(() => companion.begin(doc.metadata.id, 'idle-run', 'Check this', null));
+      await start();
+      await advance(IDLE_MS + 10_000);
+      expect(screen.getByRole('img', { name: 'Nodi, working' })).toBeTruthy();
+      expect(document.querySelector('[data-leaving="true"]')).toBeNull();
+      act(() => companion.apply('idle-run', { type: 'stopped', reason: { kind: 'end-turn' }, summary: 'Done.', costMicroUsd: null, usage: null }));
+      await advance(IDLE_MS + 10_000);
+      expect(say()?.getAttribute('data-tone')).toBe('done');
+      act(() => companion.setProposal('idle-run', 'idle-proposal'));
+      await advance(IDLE_MS + 10_000);
+      expect(say()?.getAttribute('data-tone')).toBe('waiting');
+      expect(screen.getByRole('button', { name: 'Open Nodi' })).toBeTruthy();
+    });
+
+    it('stays for a snag, hover or focus, and cancels a goodbye when activity resumes', async () => {
+      desktopStore.update({ agent: { ...ACCESS, enabled: false } });
+      await start();
+      await advance(IDLE_MS + 10_000);
+      expect(say()?.getAttribute('data-tone')).toBe('blocked');
+      fireEvent.mouseEnter(screen.getByRole('button', { name: 'Open Nodi' }).closest('.dc-companion')!);
+      act(() => desktopStore.update({ agent: ACCESS }));
+      await advance(IDLE_MS);
+      expect(say()?.getAttribute('aria-label')).not.toContain(goodbyeLine(tripSeed()));
+      act(() => screen.getByRole('button', { name: 'Open Nodi' }).focus());
+      fireEvent.mouseLeave(document.querySelector('.dc-companion')!);
+      await advance(IDLE_MS);
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Open Nodi' }));
+      act(() => (document.activeElement as HTMLElement).blur());
+      await advance(0);
+      expect(say()?.getAttribute('aria-label')).toContain(goodbyeLine(tripSeed()));
+      fireEvent.pointerMove(window);
+      await advance(4000);
+      expect(screen.getByRole('button', { name: 'Open Nodi' })).toBeTruthy();
+      expect(document.querySelector('[data-leaving="true"]')).toBeNull();
+    });
+
+    it('opens immediately through companionOpen while away', async () => {
+      await start();
+      await advance(IDLE_MS);
+      await advance(2500);
+      await advance(1400);
+      expect(screen.queryByRole('button', { name: 'Open Nodi' })).toBeNull();
+      act(() => useUiStore.getState().setCompanionOpen(true));
+      expect(screen.getByLabelText('Message Claude Code')).toBeTruthy();
+      expect(document.querySelector('[data-arriving="true"]')).toBeNull();
+      act(() => useUiStore.getState().setCompanionOpen(false));
+      await advance(IDLE_MS);
+      await advance(2500);
+      await advance(1400);
+      expect(screen.queryByRole('button', { name: 'Open Nodi' })).toBeNull();
+      // EditorScreen handles the shortcut after the window's activity capture listener.
+      const shortcut = () => useUiStore.getState().setCompanionOpen(true);
+      window.addEventListener('keydown', shortcut);
+      try {
+        fireEvent.keyDown(window, { key: 'j', metaKey: true });
+      } finally {
+        window.removeEventListener('keydown', shortcut);
+      }
+      expect(screen.getByLabelText('Message Claude Code')).toBeTruthy();
+      act(() => useUiStore.getState().setCompanionOpen(false));
+      expect(document.querySelector('[data-arriving="true"]')).toBeNull();
+    });
+
+    it('fades without walking under reduced motion, keeping both lines', async () => {
+      vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })));
+      await start();
+      await advance(IDLE_MS);
+      expect(say()?.getAttribute('aria-label')).toContain(goodbyeLine(tripSeed()));
+      await advance(2500);
+      expect(screen.queryByRole('img', { name: 'Nodi, on the way' })).toBeNull();
+      await advance(200);
+      expect(screen.queryByRole('button', { name: 'Open Nodi' })).toBeNull();
+      fireEvent.keyDown(window, { key: 'a' });
+      expect(screen.queryByRole('img', { name: 'Nodi, on the way' })).toBeNull();
+      await advance(1000);
+      expect(say()?.getAttribute('aria-label')).toContain(returnLine(tripSeed()));
+      expect(say()?.getAttribute('data-shown')).toBe('true');
+    });
   });
 
   it('sends what was typed, about the selection, as a proposal by default', async () => {
