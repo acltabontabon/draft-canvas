@@ -67,8 +67,9 @@ switches to **Apply changes directly**, where changes land at once and Undo take
   this one diagram and nothing else: no shell, no file access, no other MCP servers, no hooks.
 - **Two agents:** with both installed, the name under the message box switches between them. Each
   diagram keeps one conversation per agent; the pencil starts over.
-- **What it uses:** the line under the message box shows the conversation's new tokens; each turn
-  shows its own, and how much the agent re-read from its cache (cheaper). With an API key, the cost too.
+- **What it uses:** the line under the message box shows the conversation's new tokens, and with an
+  API key its cost. Hover it to see what the agent also re-sent from its provider's cache each step:
+  billed at a discount (about a tenth of the usual price with Claude), not free.
 - **Where conversations are kept:** the agent's own sessions (`~/.claude/projects`,
   `~/.codex/sessions`). Draft Canvas keeps the conversation shown only while the app runs.
 

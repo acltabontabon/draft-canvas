@@ -176,7 +176,7 @@ test('asks about the selection, follows the run in the bubble, and accepts its p
   await expect(speech).toContainText('Added to the diagram');
   // The whole exchange is there, with no toggle to find it.
   await expect(page.getByRole('region', { name: 'Conversation with Claude Code' })).toContainText('Put a cache in front of this');
-  await expect(page.getByRole('region', { name: 'Conversation with Claude Code' })).toContainText('31k new tokens · 30k reused');
+  await expect(page.locator('.dc-companion-spent')).toContainText('31k new tokens so far');
   await page.screenshot({ path: test.info().outputPath('companion-thread.png') });
   await expect(review).toHaveCount(0);
   await page.screenshot({ path: test.info().outputPath('companion-accepted.png') });

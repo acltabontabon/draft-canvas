@@ -10,7 +10,7 @@ import type { DraftEdge, DraftNode } from '../../document/types';
 import { useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
 import type { AgentInfo, ApplyMode, PromptRequest, Proposal } from '../api';
-import { companion, newTokens, numberedBlocks, replyBlocks, replyOf, replyPoints, spentOn, stepText, stopMessage, tokenCount, usageText, type ReplyEntry, type Spent, type Turn } from '../companion';
+import { companion, newTokens, numberedBlocks, replyBlocks, replyOf, replyPoints, spentOn, stepText, stopMessage, tokenCount, type ReplyEntry, type Spent, type Turn } from '../companion';
 import { useDesktopController, useDesktopState } from '../useDesktop';
 import { Mascot } from './mascot/Mascot';
 import type { Mood } from './mascot/pixels';
@@ -441,16 +441,17 @@ export function Companion() {
           <span className="dc-companion-say-name" aria-hidden="true">
             Nodi
           </span>
-          {talking && (
+          {/* Once the agent has answered and while it isn't working: before that there is nothing to
+              start over or carry on, and two disabled icons only drew the eye. */}
+          {talking && !running && (
             <span className="dc-companion-speech-tools">
-              <button type="button" aria-label="New conversation" title="New conversation" disabled={running} onClick={() => void controller.companionForget(diagramId)}>
+              <button type="button" aria-label="New conversation" title="New conversation" onClick={() => void controller.companionForget(diagramId)}>
                 <Icon name="pencil" />
               </button>
               <button
                 type="button"
                 aria-label="Continue in Terminal"
                 title={`Continue in Terminal: copies a command that reopens this conversation in ${agentName}`}
-                disabled={running}
                 onClick={() => void continueInTerminal()}
               >
                 <span className="dc-companion-prompt" aria-hidden="true">
@@ -497,7 +498,7 @@ export function Companion() {
                   </button>
                 )}
                 {turns.slice(folded).map((turn) => (
-                  <TurnView key={turn.runId} turn={turn} showsCost={showsCost} pinned={turn === last} />
+                  <TurnView key={turn.runId} turn={turn} pinned={turn === last} />
                 ))}
               </section>
               {continued && (
@@ -609,7 +610,7 @@ export function Companion() {
 }
 
 /** What the mascot says about the latest turn: the step it is on, then its reply as it streams in. */
-function TurnView({ turn, showsCost, pinned }: { turn: Turn; showsCost: boolean; pinned: boolean }) {
+function TurnView({ turn, pinned }: { turn: Turn; pinned: boolean }) {
   const reply = replyOf(turn);
   const stopped = stopMessage(turn.stop);
   return (
@@ -641,9 +642,6 @@ function TurnView({ turn, showsCost, pinned }: { turn: Turn; showsCost: boolean;
         </p>
       )}
       {turn.outcome === 'rejected' && <p className="dc-companion-stopped">Rejected. The diagram is unchanged.</p>}
-      {(turn.usage || (showsCost && turn.costMicroUsd !== null)) && (
-        <p className="dc-companion-cost">{[turn.usage && usageText(turn.usage), showsCost && turn.costMicroUsd !== null && dollars(turn.costMicroUsd)].filter(Boolean).join(' · ')}</p>
-      )}
     </article>
   );
 }
@@ -655,7 +653,13 @@ function SpentLine({ spent, showsCost }: { spent: Spent; showsCost: boolean }) {
   const fresh = tokenCount(newTokens(spent.usage));
   const cost = showsCost && spent.costMicroUsd !== null ? dollars(spent.costMicroUsd) : null;
   const turns = spent.turns === 1 ? '1 turn' : `${spent.turns} turns`;
-  const detail = `This conversation so far: ${fresh} new tokens over ${turns}${cached > 0 ? `, plus ${tokenCount(cached)} the agent read again from the cache (its instructions, the tools, the diagram, resent with every step), which costs about a tenth as much` : ''}.`;
+  // One line for the conversation, under the message box; a per-turn line in the bubble only said it
+  // again. What it leaves out, the cached re-reads, is told here as what it is: discounted, not free.
+  const detail =
+    `This conversation so far: ${fresh} new tokens over ${turns}.` +
+    (cached > 0
+      ? ` The agent also re-sent ${tokenCount(cached)} tokens it had already read (its instructions, the tools, the diagram), served from its provider's cache. Those are billed at a discount (about a tenth of the usual price with Claude), not free, and still count toward a plan's usage.`
+      : ''); 
   return (
     <span className="dc-companion-spent" title={detail}>
       <span className="dc-sr-only">{detail}</span>

@@ -1689,8 +1689,7 @@
   font-size: 12px;
 }
 
-.dc-companion-stopped,
-.dc-companion-cost {
+.dc-companion-stopped {
   margin: 0;
   font-size: 13px;
   line-height: 1.55;
@@ -1698,8 +1697,7 @@
   overflow-wrap: anywhere;
 }
 
-.dc-companion-stopped,
-.dc-companion-cost {
+.dc-companion-stopped {
   color: var(--dc-text-muted);
   font-size: 12px;
 }
@@ -2262,16 +2260,11 @@
     2px 0 0 0 var(--dc-say-line);
 }
 
-.dc-companion-speech-tools button:hover:not(:disabled),
+.dc-companion-speech-tools button:hover,
 .dc-companion-speech-tools button:focus-visible {
   background: var(--dc-say-line);
   color: var(--dc-canvas);
   outline: none;
-}
-
-.dc-companion-speech-tools button:disabled {
-  opacity: 0.45;
-  cursor: default;
 }
 
 .dc-companion-speech-tools svg {

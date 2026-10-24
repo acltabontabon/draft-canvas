@@ -149,18 +149,14 @@ export function tokenCount(count: number): string {
 /**
  * What a turn really added: everything it read and wrote, less what it read again from the cache. A
  * turn is many model calls, one per step, and each resends the whole context (the brief, the tools,
- * the diagram, the conversation); the cache serves that repeat at about a tenth of the price, so a
+ * the diagram, the conversation); the cache serves that repeat at a discount (about a tenth of the price
+ * with Claude), so a
  * total that counts it reads as many times what the turn cost.
  */
 export function newTokens(usage: Usage): number {
   return Math.max(0, usage.input + usage.output - usage.cached);
 }
 
-/** "14k new tokens · 494k reused": what the turn added first, the cached repeat after it. */
-export function usageText(usage: Usage): string {
-  const fresh = `${tokenCount(newTokens(usage))} new tokens`;
-  return usage.cached > 0 ? `${fresh} · ${tokenCount(usage.cached)} reused` : fresh;
-}
 
 /** One event folded into its turn. Pure: the same turn and event always give the same result. */
 export function applyRunEvent(turn: Turn, event: RunEvent): Turn {

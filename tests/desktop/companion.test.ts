@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { RunEvent } from '../../src/desktop/api';
-import { applyRunEvent, companion, newTokens, newTurn, numberedBlocks, partsIn, replyBlocks, replyOf, replyPoints, spentOn, stepText, stopMessage, tokenCount, usageText } from '../../src/desktop/companion';
+import { applyRunEvent, companion, newTokens, newTurn, numberedBlocks, partsIn, replyBlocks, replyOf, replyPoints, spentOn, stepText, stopMessage, tokenCount } from '../../src/desktop/companion';
 import { frame, HEIGHT, ROWS, WIDTH } from '../../src/desktop/ui/mascot/pixels';
 import { createHarness } from './harness';
 
@@ -177,8 +177,6 @@ describe('what a conversation uses', () => {
   it('reads at a glance', () => {
     expect([640, 4_800, 4_000, 48_169, 999_999, 1_200_000, 3_000_000].map(tokenCount)).toEqual(['640', '4.8k', '4k', '48k', '1M', '1.2M', '3M']);
     // What the turn added leads; the cached repeat of its context follows.
-    expect(usageText({ input: 60_953, cached: 30_392, output: 114 })).toBe('31k new tokens · 30k reused');
-    expect(usageText({ input: 900, cached: 0, output: 40 })).toBe('940 new tokens');
     expect(newTokens({ input: 507_000, cached: 494_000, output: 1_000 })).toBe(14_000);
   });
 });

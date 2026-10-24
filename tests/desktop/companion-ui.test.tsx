@@ -196,8 +196,10 @@ describe('the companion', () => {
       companion.apply('r1', { type: 'tool-call', id: 't1', tool: 'read_diagram', status: 'in-progress' });
     });
     expect(screen.getByRole('img', { name: 'Nodi, working' })).toBeTruthy();
-    // The bubble shows the turn as it goes: each step the agent takes.
+    // The bubble shows the turn as it goes: each step the agent takes, and no conversation actions yet.
     expect(screen.getByText('Reading the diagram')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'New conversation' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Continue in Terminal' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
     expect(controller.companionCancel).toHaveBeenCalledWith('r1');
 
@@ -210,6 +212,8 @@ describe('the companion', () => {
     // Advice reads as a list, with emphasis, never as raw markup.
     expect(screen.getAllByRole('listitem').map((li) => li.textContent)).toEqual(expect.arrayContaining(['Cache-aside: reads first', 'Invalidate on write']));
     expect(screen.getByText('Cache-aside').tagName).toBe('STRONG');
+    // Answered: now there is a conversation to start over or carry on.
+    expect(screen.getByRole('button', { name: 'New conversation' })).toBeTruthy();
     expect(screen.getByRole('img', { name: 'Nodi, waiting for you' })).toBeTruthy();
     expect(screen.getByRole('region', { name: 'Conversation with Claude Code' }).textContent).toMatch(/shown on the canvas/);
     await settle();
@@ -229,11 +233,12 @@ describe('the companion', () => {
     const total = document.querySelector('.dc-companion-spent')!;
     // What the conversation added: everything less what the agent read again from the cache.
     expect(total.textContent).toContain('33k new tokens so far');
-    expect(total.getAttribute('title')).toMatch(/33k new tokens over 2 turns, plus 76k the agent read again from the cache/);
+    expect(total.getAttribute('title')).toMatch(/33k new tokens over 2 turns\. The agent also re-sent 76k tokens it had already read/);
     // Signed in with a subscription: tokens, never a dollar figure that isn't what they pay.
     expect(total.textContent).not.toContain('$');
-    const lines = [...document.querySelectorAll('.dc-companion-turn .dc-companion-cost')].map((p) => p.textContent);
-    expect(lines).toEqual(['31k new tokens · 30k reused', '2.5k new tokens · 46k reused']);
+    // One line for it, not one per turn as well; the cache's share is explained, not hidden or made free.
+    expect(screen.getByRole('region', { name: 'Conversation with Claude Code' }).textContent).not.toMatch(/tokens/);
+    expect(total.getAttribute('title')).toMatch(/billed at a discount .*not free/);
   });
 
   it('shows the conversation whole in the bubble, folding all but the last two turns once it is long', async () => {
