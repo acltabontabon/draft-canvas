@@ -61,6 +61,13 @@ It does not encrypt the Library copy, desktop file or recovery copies.
   skill copies files into the agent's skill folder.
 - Your agent may send diagram content to its AI provider. See
   [Agent security](docs/reference/agent-integration.md#security).
+- **Companion runs** are scoped to one diagram and use proposals unless direct changes were chosen.
+  Cancellation closes tool authority before waiting for the process to exit, including when Stop
+  races startup; an agent's terminal event closes it too. Raw process output and retained event text
+  have separate size limits. These boundaries depend on running the supported, trusted agent CLI;
+  they do not sandbox a malicious replacement executable.
+  Codex turns ignore user configuration: command-line MCP table overrides merge with it and cannot
+  by themselves exclude other servers. Authentication and sessions keep their original home.
 
 ## Live collaboration
 
@@ -90,17 +97,27 @@ size-capped before parsing, prototype keys refused, and validated like an import
 - **Limits.** 10 collaborators; 4 MB per collaborator message, 16 MB from the owner; per-connection
   rate and byte budgets, and at most 1,000 moves a patch. Collaborators can't grow the file past
   about 15 MB as it is saved (indented), so it always reopens and a fresh copy still fits one
-  message. Code highlighting, Markdown parsing, nested groups, selection rings and the owner's record
-  of who changed what have bounded cost, so one collaborator can't stall the owner's tab. Relay
+  message. Limits also apply before admission and to ICE restart control messages. Room paths from
+  patches are resolved without unbounded recursion, and held edits replay in short batches. Code
+  highlighting, Markdown parsing, nested groups and selection rings have bounded cost. The owner's
+  take-back ledger has session-wide limits as well as per-person limits: 128 authors, 128 file
+  versions, 50,000 touches and an estimated 64 MiB of retained document objects. Old history is
+  discarded when any limit is reached; it is not a permanent audit log. Relay
   limits, including 4 guest sockets per client in a room, are in
   [Website](docs/reference/website.md#the-collaboration-relay).
 - **Framing.** The hosted editor and the local network page refuse to be framed by other sites.
 - **Connection candidates** naming loopback, unspecified, multicast or 169.254.0.0/16 addresses, or
-  any DNS name, are dropped from invites and from ICE restarts.
+  any DNS name, are dropped from invites, reply codes and ICE restarts, including hand-crafted
+  compact codes.
 - **Not protected.** An unused invite works for whoever holds it until it expires, so send invites
   like passwords. The local network link is plain HTTP: someone who can change traffic on the network
   can change the page a guest loads. Editors can change anything they can see; the owner can take one
   person's edits back with **Undo changes**.
-- **Agents.** While you host, the agent tools that read a diagram mark what collaborators wrote
-  (`fromCollaborators`), so your agent treats it as untrusted data rather than instructions. A guest's
-  copy is never visible to agents.
+- **Agents.** While you host, the agent tools mark remembered collaborator edits
+  (`fromCollaborators`) as untrusted data rather than instructions. This uses the bounded take-back
+  ledger above: an absent marker does not establish trust. Diagram content should always be treated
+  as data. A guest's copy is never visible to agents.
+- **Reconnects.** A returning guest sends no edits or presence until that connection's welcome is
+  accepted. Over encrypted peer connections it must prove the owner's identity; the plain LAN
+  option relies on a trusted network and renewed owner approval. A reconnect attempt belongs to one
+  session and cannot take over a later session's retries.

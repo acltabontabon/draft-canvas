@@ -265,8 +265,8 @@
    "dependsOn"
   ],
   "component>deadLetter": [
-   "deadLetters",
-   "publishes"
+   "publishes",
+   "deadLetters"
   ],
   "component>device": [
    "notifies",
@@ -543,8 +543,8 @@
    "dependsOn"
   ],
   "external>deadLetter": [
-   "deadLetters",
-   "publishes"
+   "publishes",
+   "deadLetters"
   ],
   "external>device": [
    "notifies",
@@ -685,8 +685,8 @@
    "query"
   ],
   "gateway>deadLetter": [
-   "deadLetters",
-   "publishes"
+   "publishes",
+   "deadLetters"
   ],
   "gateway>device": [
    "notifies",
@@ -895,8 +895,8 @@
    "dependsOn"
   ],
   "scheduler>deadLetter": [
-   "deadLetters",
-   "publishes"
+   "publishes",
+   "deadLetters"
   ],
   "scheduler>device": [
    "notifies",
@@ -1006,8 +1006,8 @@
    "dependsOn"
   ],
   "service>deadLetter": [
-   "deadLetters",
-   "publishes"
+   "publishes",
+   "deadLetters"
   ],
   "service>device": [
    "notifies",
@@ -1207,8 +1207,8 @@
    "dependsOn"
   ],
   "worker>deadLetter": [
-   "deadLetters",
-   "publishes"
+   "publishes",
+   "deadLetters"
   ],
   "worker>device": [
    "notifies",

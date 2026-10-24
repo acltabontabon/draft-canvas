@@ -141,11 +141,12 @@ pub fn run() {
     let (events, bridge) = (app.handle().clone(), app.handle().clone());
     app.manage(std::sync::Arc::new(companion::Companion::new(
         &data_dir,
-        std::sync::Arc::new(move |run, event| {
+        std::sync::Arc::new(move |run, event, sequence| {
             if let Some(state) = events.try_state::<AppState>() {
                 state.events.emit(state::HostEvent::Companion {
                     run: run.to_string(),
                     event: event.clone(),
+                    sequence: Some(sequence),
                 });
             }
         }),

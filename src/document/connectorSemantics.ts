@@ -392,20 +392,32 @@ export const MATRIX: Record<string, ConnectionCapability> = {
   'queue>deadLetter': capability(['deadLetters'], 'deadLetters', [], 'failure', {
     defaultAsync: true,
   }),
+  // A consumer writing a message to a dead-letter queue itself. Dead-lettering proper is the
+  // queue's job — the broker moves a message off the queue its consumer keeps rejecting (an SQS
+  // redrive policy, a RabbitMQ dead-letter exchange, a Service Bus subqueue), which is
+  // `queue>deadLetter` — so a fresh Worker → DLQ connector reads as what it shows, the consumer
+  // publishing the message, rather than claiming to be that redrive. Only a stream's consumer
+  // parks a record itself by design (a stream keeps every record and has no redrive of its own);
+  // `deadLetters` stays one pick away for it, and `stream-consumer-dead-letter` picks it. The
+  // matrix can't see what the consumer reads, so the semantic review (`agent/review.ts`,
+  // `dead-letter-source`) is what says when the queue in front should own the path. Same
+  // failure/dashed treatment either way.
+  'service>deadLetter': capability(['publishes', 'deadLetters'], 'publishes', [], 'failure', {
+    defaultAsync: true,
+  }),
   // A Topic never dead-letters: it fans a message out and is done. Retries, and where a poison
   // message ends up after they run out, belong to each consumer's own delivery path — the same
   // rule `addDeadLetterQueue` enforces by refusing a Topic, restated here as guidance for a
   // connector someone draws by hand rather than a dead end.
-  // A consumer that gives up on a message and parks it itself — the application-level dead-letter
-  // path, as opposed to the broker's own redrive (`queue>deadLetter`). Same failure/dashed
-  // treatment so both read as the same kind of path; `publishes` stays one pick away for a
-  // service that simply writes to a queue someone happened to name a DLQ.
-  'service>deadLetter': capability(['deadLetters', 'publishes'], 'deadLetters', [], 'failure', {
-    defaultAsync: true,
-  }),
   'topic>deadLetter': capability(['dependsOn'], undefined, [], undefined, {
     status: 'unusual',
     guidance: "A topic doesn't dead-letter — retries and a DLQ belong to each consumer's own queue.",
+  }),
+  // Its own row only for its own words: it would fold to `topic>deadLetter` otherwise, and a stream
+  // has no subscriber queue to point at — its consumer parks what it can't process.
+  'stream>deadLetter': capability(['dependsOn'], undefined, [], undefined, {
+    status: 'unusual',
+    guidance: "A stream doesn't dead-letter — it keeps every record; the consumer that can't process one parks it.",
   }),
   // Deliberately not JDBC/synchronous-request-shaped — see `defaultsToResponse`, which this
   // pairing is intentionally absent from. "Ingests" is the default because it's the most

@@ -15,7 +15,7 @@
 // it leads with the desktop reel, lists only what reaches the desktop app, and has no "Get it"
 // (there's nothing yet to open on the web).
 
-import { readFileSync } from 'node:fs';
+import { lstatSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ChangelogError, REPO, parseChangelog, parseVersion, releaseNotes, unwrap, versionFromTag, whatsNew, withDraft } from './changelog.mjs';
@@ -23,6 +23,7 @@ import { ChangelogError, REPO, parseChangelog, parseVersion, releaseNotes, unwra
 export { unwrap };
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+const releaseMedia = join(root, 'docs/media/releases');
 
 /** A version's section of the changelog, whole and without its heading; null when there is none. */
 export function changelogSection(changelog, version) {
@@ -42,7 +43,7 @@ export function getIt(version) {
   return [
     '### Get it',
     '',
-    '- **On the web:** [draftcanvas.dev](https://draftcanvas.dev/). Nothing you draw leaves your browser.',
+    '- **On the web:** [draftcanvas.dev](https://draftcanvas.dev/). Open the editor without an account.',
     `- **Desktop (macOS and Windows):** the installers under **Assets** below. Installed copies update themselves.`,
     ...(/^\d+\.\d+\.\d+$/.test(version) ? [HOMEBREW] : []),
   ].join('\n');
@@ -53,7 +54,7 @@ export function getItOnTheWeb() {
   return [
     '### Get it',
     '',
-    '- **On the web:** [draftcanvas.dev](https://draftcanvas.dev/). Nothing you draw leaves your browser.',
+    '- **On the web:** [draftcanvas.dev](https://draftcanvas.dev/). Open the editor without an account.',
   ].join('\n');
 }
 
@@ -70,8 +71,62 @@ const demo = (tag, file, alt) => `![${alt}](https://raw.githubusercontent.com/${
 
 const tableText = (text) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\|/g, '&#124;');
 
+/** Optional, versioned screenshots. Missing manifests leave older releases as they were. */
+export function releaseScreenshots(tag, audience = 'all', mediaDirectory = releaseMedia) {
+  const { version } = versionFromTag(tag);
+  const directory = join(mediaDirectory, `v${version}`);
+  const invalid = (message) => new ChangelogError(`Release screenshots for ${tag}: ${message}`);
+  let source;
+  try {
+    const manifest = join(directory, 'screenshots.json');
+    if (!lstatSync(manifest).isFile()) throw invalid('screenshots.json must be a regular file.');
+    source = readFileSync(manifest, 'utf8');
+  } catch (error) {
+    if (error instanceof ChangelogError) throw error;
+    if (error.code === 'ENOENT') return '';
+    throw invalid('could not read screenshots.json.');
+  }
+  let screenshots;
+  try {
+    screenshots = JSON.parse(source);
+  } catch {
+    throw invalid('screenshots.json must contain valid JSON.');
+  }
+  if (!Array.isArray(screenshots)) throw invalid('screenshots.json must contain an array.');
+  if (!['all', 'desktop', 'web'].includes(audience)) throw invalid(`unknown audience "${audience}".`);
+  const seen = new Set();
+  const images = [];
+  for (const screenshot of screenshots) {
+    if (!screenshot || typeof screenshot !== 'object' || Array.isArray(screenshot)
+      || Object.keys(screenshot).some((key) => !['file', 'alt', 'platform'].includes(key))) {
+      throw invalid('each entry must contain only file, alt and platform.');
+    }
+    const { file, alt, platform } = screenshot;
+    // A single lowercase filename, never a directory, URL, traversal or symlink outside the tag.
+    if (typeof file !== 'string' || !/^[a-z0-9][a-z0-9-]*\.png$/.test(file)) throw invalid('file must be a lowercase PNG filename, such as nodi.png.');
+    if (seen.has(file)) throw invalid(`duplicate image "${file}".`);
+    seen.add(file);
+    if (typeof alt !== 'string' || !alt.trim() || /[\r\n]/.test(alt)) throw invalid(`"${file}" needs a single-line alt description.`);
+    if (!['shared', 'desktop', 'web'].includes(platform)) throw invalid(`"${file}" needs platform shared, desktop or web.`);
+    try {
+      if (!lstatSync(join(directory, file)).isFile()) throw invalid(`"${file}" must be a regular PNG file.`);
+      if (!readFileSync(join(directory, file)).subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) {
+        throw invalid(`"${file}" must be a PNG image.`);
+      }
+    } catch (error) {
+      if (error instanceof ChangelogError) throw error;
+      throw invalid(`could not read image "${file}".`);
+    }
+    // Validate every entry, including another platform's: a release must never publish broken media.
+    if (audience !== 'all' && platform !== 'shared' && platform !== audience) continue;
+    const label = alt.trim().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/([\\[\]])/g, '\\$1');
+    images.push(demo(tag, `releases/v${version}/${file}`, label));
+  }
+  return images.length ? `### In the app\n\n${images.join('\n\n')}` : '';
+}
+
 /** The marked changelog bullets are both the app's news and the release page's feature cards. */
-function releaseLandingPage(tag, version, changelog, audience, notes) {
+function releaseLandingPage(tag, version, changelog, audience, notes, mediaDirectory) {
   const releases = whatsNew(changelog, audience);
   const news = releases.find((entry) => entry.version === version);
   if (!news) return null;
@@ -102,7 +157,7 @@ function releaseLandingPage(tag, version, changelog, audience, notes) {
     `## ${headline || `Draft Canvas ${version}`}`,
     ...description,
     `### Get it\n\n${downloads.join(' · ')}`,
-    'No account. No backend. Diagrams stay on your device.',
+    'No Draft Canvas account or diagram server. Your coding agent uses its own AI provider.',
     ...(overview !== news ? [`### In this update\n\n${news.highlights.map(({ title, description }) => `**${tableText(title)}** — ${tableText(description ?? '')}`).join('\n\n')}`] : []),
     demo(tag, 'demo.gif', 'Draft Canvas: draw, explain, and share software architecture'),
     `### Key highlights${overview !== news ? ` from ${parsed.major}.${parsed.minor}` : ''}\n\n| | |\n| --- | --- |\n${rows.join('\n')}`,
@@ -111,6 +166,8 @@ function releaseLandingPage(tag, version, changelog, audience, notes) {
   if (audience !== 'desktop') {
     parts.push('[Self-host the static editor](https://draftcanvas.dev/docs/self-hosting/).');
   }
+  const screenshots = releaseScreenshots(tag, audience, mediaDirectory);
+  if (screenshots) parts.push(screenshots);
   parts.push(`<details>\n<summary>Everything added, changed and fixed</summary>\n\n${details}\n\n</details>`);
   if (audience !== 'web') {
     parts.push(
@@ -118,7 +175,7 @@ function releaseLandingPage(tag, version, changelog, audience, notes) {
       `<details>\n<summary>First-time desktop installation</summary>\n\n${FIRST_LAUNCH}\n\n</details>`,
     );
   }
-  parts.push('**[Getting started](https://draftcanvas.dev/docs/getting-started/)** · **[All guides](https://draftcanvas.dev/docs/)**');
+  parts.push(`**[Getting started](https://draftcanvas.dev/docs/getting-started/)** · **[All guides](https://draftcanvas.dev/docs/)** · **[README](https://github.com/${REPO}/blob/${tag}/README.md)**`);
   return `${parts.join('\n\n')}\n`;
 }
 
@@ -126,14 +183,14 @@ function releaseLandingPage(tag, version, changelog, audience, notes) {
  * The whole body for a tag, or throws when the changelog has nothing for it. `platform` defaults to
  * what the tag publishes: a desktop preview's notes are the desktop app's; a release's are everyone's.
  */
-export function releaseBody(tag, changelog, { platform } = {}) {
+export function releaseBody(tag, changelog, { platform, mediaDirectory } = {}) {
   const { version, desktopPreview } = versionFromTag(tag);
   const audience = platform ?? (desktopPreview ? 'desktop' : 'all');
   const notes = unwrap(releaseNotes(changelog, { version, platform: audience, tag }));
   const parsed = parseVersion(version);
   const launch = changelogSection(changelog, version)?.includes('<!-- launch -->');
   if (!desktopPreview && (parsed.patch === 0 || launch) && parsed.pre.length === 0) {
-    const landing = releaseLandingPage(tag, version, changelog, audience, notes);
+    const landing = releaseLandingPage(tag, version, changelog, audience, notes, mediaDirectory);
     if (landing) return landing;
   }
   // A patch should explain its fixes first; the product demo belongs to larger releases.

@@ -523,7 +523,9 @@ function readSdp(reader: Reader): CompactSdp {
       if (addressKind(address) !== 'hostname') throw new Truncated();
       continue;
     }
-    candidates.push({ type, protocol: tcp ? 'tcp' : 'udp', ...(tcp ? { tcpType } : {}), priority, address, port });
+    // Codes are written by the peer too: checking only the browser SDP before packing left a
+    // hand-crafted binary code free to restore loopback and cloud metadata candidates.
+    if (reachable(address)) candidates.push({ type, protocol: tcp ? 'tcp' : 'udp', ...(tcp ? { tcpType } : {}), priority, address, port });
   }
   return { ufrag, pwd, fingerprint, setup, mid, sctpPort, maxMessageSize, candidates };
 }

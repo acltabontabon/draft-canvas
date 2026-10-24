@@ -82,6 +82,11 @@ Closing the canvas or the tab, reloading or opening another canvas also ends the
 saving as usual. A collaborator whose connection drops rejoins on their own, in the same role —
 except over the desktop local network link, where they ask to join again and you let them back in.
 
+**Undo changes** keeps a bounded history for the session. In a long or busy session, older changes
+may no longer be available to take back; Draft Canvas says when some were forgotten. The oldest
+recovery entries eventually leave that list too. Keep a saved copy before a session if you need a
+complete record to return to.
+
 ## Desktop: share on your local network
 
 For a room on the same Wi-Fi, the desktop app can serve the editor itself:

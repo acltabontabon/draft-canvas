@@ -76,7 +76,8 @@ that point.
 
 ![A risk review pinned onto the diagram.](../media/guides/nodi-points.png)
 
-A change comes back as a proposal on the canvas, drawn solid with what changes in teal; a change that
+A question gets an answer and changes nothing; Nodi offers to make the change, or to record the risks
+it found as open points. A change comes back as a proposal on the canvas, drawn solid with what changes in teal; a change that
 moves shapes is shown on a tracing sheet over the diagram. **Now / Proposed** compares, and **Accept**
 applies it as one undo step. Ask Nodi to adjust it ("keep the cache, but use Redis") and it revises
 the same proposal; the chip lists earlier versions. **Review changes first** under the message box
@@ -88,6 +89,8 @@ switches to **Apply changes directly**, where changes land at once and Undo take
 
 - **What runs:** your own CLI, signed in as you, in the background. It gets the Draft Canvas tools for
   this one diagram and nothing else: no shell, no file access, no other MCP servers, no hooks.
+  For Codex, Nodi ignores `config.toml` to keep other configured tools out. It keeps your sign-in and
+  sessions, but uses Codex's default model, provider and credential-store settings.
 - **Reading your code:** when a question needs the code ("how are retries done?"), Nodi asks in the
   chat before anything is read: **Just for now** (until you quit), **Always for this folder**, or
   **No**. **Another folder…** picks the project when it isn't the repository the diagram is saved in.
@@ -96,6 +99,8 @@ switches to **Apply changes directly**, where changes land at once and Undo take
   **Settings → AI agents → Code Nodi may read**, where **Stop** takes one back.
 - **Two agents:** with both installed, the name under the message box switches between them. Each
   diagram keeps one conversation per agent; the pencil starts over.
+- **Stopping:** **Stop** closes the run's access to diagram tools immediately, even while the agent
+  is starting. Oversized agent output ends the run with an error; ask for a smaller answer and retry.
 - **What it uses:** the line under the message box shows the conversation's new tokens, and with an
   API key its cost. Hover it to see what the agent also re-sent from its provider's cache each step:
   billed at a discount (about a tenth of the usual price with Claude), not free.

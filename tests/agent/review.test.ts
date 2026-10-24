@@ -60,9 +60,10 @@ describe('no-dead-letter', () => {
   it("is silent once the queue, or one of its consumers, has a dead-letter path", () => {
     const { nodes, edges } = ordersQueue();
     expect(codes([...nodes, dlq('d')], [...edges, said('x', 'q', 'd', 'deadLetters')])).toEqual([]);
-    expect(codes([...nodes, dlq('d')], [...edges, said('x', 'w', 'd', 'deadLetters')])).toEqual([]);
+    // A consumer's path is a path — misplaced, which `dead-letter-source` says instead.
+    expect(codes([...nodes, dlq('d')], [...edges, said('x', 'w', 'd', 'deadLetters')])).toEqual(['dead-letter-source']);
     // A plain queue named as one, fed by a failure route.
-    expect(codes([...nodes, queue('d', 'orders-dlq')], [...edges, said('x', 'w', 'd', 'publishes', { kind: 'failure' })])).toEqual([]);
+    expect(codes([...nodes, queue('d', 'orders-dlq')], [...edges, said('x', 'w', 'd', 'publishes', { kind: 'failure' })])).toEqual(['dead-letter-source']);
   });
 
   it('is silent for a topic, a dead-letter or retry queue, and a context view', () => {
@@ -89,6 +90,70 @@ describe('no-dead-letter', () => {
     expect(review(nodes, edges)).toEqual([
       { code: 'no-dead-letter', ids: ['s', 'w1'], message: '"Indexer" reads stream "Events" but has no dead-letter path for a record it can\'t process.' },
     ]);
+  });
+});
+
+describe('dead-letter-source', () => {
+  const topic = (id: string, text: string) => queue(id, text, { queueKind: 'topic' });
+  const stream = (id: string, text: string) => queue(id, text, { queueKind: 'stream' });
+
+  it('names a consumer feeding a dead-letter queue itself, and the queue that should', () => {
+    const { nodes, edges } = ordersQueue();
+    expect(review([...nodes, dlq('d', 'billing-dlq')], [...edges, inferred('x', 'w', 'd', 'publishes', { label: 'Rejects after retries exhausted' })])).toEqual([
+      {
+        code: 'dead-letter-source',
+        ids: ['d', 'w', 'q'],
+        message:
+          '"Billing Worker" feeds dead-letter queue "billing-dlq" itself, but dead-lettering is the queue\'s job: connect "billing-dlq" from queue "Orders", whose messages "Billing Worker" rejects — the broker moves a message there once its delivery attempts run out.',
+      },
+    ]);
+  });
+
+  it('asks for the consumer queue a topic subscriber is missing', () => {
+    const nodes = [api('a', 'Checkout API'), topic('t', 'order-events'), worker('w', 'Payments'), dlq('d', 'payments-dlq')];
+    const edges = [said('p', 'a', 't', 'publishes'), said('s', 't', 'w', 'deliversTo'), said('x', 'w', 'd', 'deadLetters')];
+    expect(review(nodes, edges)).toEqual([
+      {
+        code: 'dead-letter-source',
+        ids: ['d', 'w', 't'],
+        message:
+          '"Payments" feeds dead-letter queue "payments-dlq" itself, but a dead-letter queue takes messages from the queue that rejects them: model "Payments"\'s own queue between topic "order-events" and "Payments", and dead-letter from that queue.',
+      },
+    ]);
+  });
+
+  it('names a topic or a stream feeding a dead-letter queue', () => {
+    const fromTopic = review([topic('t', 'order-events'), dlq('d', 'DLQ')], [createEdge({ id: 'x', source: 't', target: 'd' })]);
+    expect(fromTopic.map((f) => [f.code, f.ids])).toEqual([['dead-letter-source', ['d', 't']]]);
+    expect(fromTopic[0]!.message).toMatch(/^Topic "order-events" feeds dead-letter queue "DLQ", but a topic doesn't dead-letter/);
+    const fromStream = review([stream('s', 'clicks'), dlq('d', 'DLQ')], [createEdge({ id: 'x', source: 's', target: 'd' })]);
+    expect(fromStream.map((f) => f.code)).toEqual(['dead-letter-source']);
+    expect(fromStream[0]!.message).toMatch(/a stream doesn't dead-letter: it keeps every record/);
+  });
+
+  it("asks for the queue in front of a consumer whose input isn't drawn — outside inside views and junctions", () => {
+    const nodes = [worker('w', 'Payments'), dlq('d', 'payments-dlq')];
+    const edges = [said('x', 'w', 'd', 'deadLetters')];
+    expect(review(nodes, edges)[0]!.message).toBe(
+      '"Payments" feeds dead-letter queue "payments-dlq" itself, but a dead-letter queue takes messages from the queue that rejects them: model the queue "Payments" consumes from, and dead-letter from that queue.',
+    );
+    expect(codes(nodes, edges, { nested: true })).toEqual([]);
+    const behindJunction = [...nodes, createNode({ id: 'j', type: 'ellipse', ...at })];
+    expect(codes(behindJunction, [...edges, createEdge({ id: 'in', source: 'j', target: 'w' })])).toEqual([]);
+  });
+
+  it("is silent for a queue's own path, a stream consumer's, a re-drive, a reader and a context view", () => {
+    const { nodes, edges } = ordersQueue();
+    expect(codes([...nodes, dlq('d')], [...edges, said('x', 'q', 'd', 'deadLetters')])).toEqual([]);
+    const streamed = [stream('s', 'clicks'), worker('w', 'Sessionizer'), dlq('d')];
+    expect(codes(streamed, [said('c', 's', 'w', 'consumes'), said('x', 'w', 'd', 'deadLetters')])).toEqual([]);
+    // A re-drive worker reads the dead-letter queue and sends back into the work queue.
+    const redrive = [queue('q', 'Orders'), dlq('d'), worker('r', 'Redriver')];
+    expect(codes(redrive, [said('x', 'q', 'd', 'deadLetters'), said('c', 'd', 'r', 'consumes'), said('b', 'r', 'q', 'publishes')])).not.toContain('dead-letter-source');
+    expect(codes([worker('r', 'Redriver'), dlq('d')], [said('c', 'r', 'd', 'consumes')])).toEqual([]);
+    // A queue only named like one, written to plainly: not evidence enough.
+    expect(codes([api('a', 'Checkout API'), queue('d', 'Orders DLQ')], [said('p', 'a', 'd', 'publishes')])).not.toContain('dead-letter-source');
+    expect(codes([...nodes, dlq('d')], [...edges, said('x', 'w', 'd', 'deadLetters')], { level: 'context' })).toEqual([]);
   });
 });
 

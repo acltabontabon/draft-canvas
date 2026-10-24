@@ -282,7 +282,7 @@ export function Companion({ buildCommandContext }: { buildCommandContext?: () =>
         agentsKnown: agents !== null,
         agent,
       }),
-    [doc, access, agents, agent],
+    [doc, access, agents, agent, agentless],
   );
   // A conversation to show (rather than a greeting or what is in the way), and how much of its
   // beginning is folded: past two turns, the earlier ones wait behind one line.
@@ -385,6 +385,72 @@ export function Companion({ buildCommandContext }: { buildCommandContext?: () =>
   const about = includeSelection ? selected : null;
   const showsCost = /api/i.test(agent?.signIn.method ?? '');
   const spent = spentOn(conversations.get(diagramId));
+
+  // The parts the latest reply points at: named in its text, pinned by number on the canvas, and lit
+  // on both together.
+  const docNodes = useEditorStore((s) => s.document.nodes);
+  const docEdges = useEditorStore((s) => s.document.edges);
+  const view = useEditorStore((s) => s.document);
+  const outerFile = useEditorStore((s) => s.outer);
+  const partNames = useMemo(() => partNamesOf(outerFile ?? view, view), [outerFile, view]);
+  const partsHere = useMemo(() => new Set([...docNodes.map((n) => n.id), ...docEdges.map((e) => e.id)]), [docNodes, docEdges]);
+  const doors = useMemo(() => new Map(docNodes.filter(hasInside).map((n) => [n.id, partNames.get(n.id) ?? 'it'])), [docNodes, partNames]);
+  // What Nodi can offer to look inside: the selected shape's inside, or draw one it could have; else
+  // the first shape on screen that holds a diagram.
+  const look = useMemo<Look>(() => {
+    const only = selection.nodes.length === 1 && selection.edges.length === 0 ? docNodes.find((n) => n.id === selection.nodes[0]) : undefined;
+    if (only && hasInside(only)) return { into: { id: only.id, name: partNames.get(only.id) ?? 'it' } };
+    if (only) return { drawable: canCreateInside(only) };
+    return { into: doorOf(docNodes, [], (n) => partNames.get(n.id) ?? 'it') ?? undefined };
+  }, [selection.nodes, selection.edges, docNodes, partNames]);
+  // What Nodi can say about this very diagram: its queues, stores, crons and loose ends, by name.
+  const flowCount = useEditorStore((s) => s.document.flows.length);
+  const openPointCount = useEditorStore((s) => s.document.openPoints?.filter((p) => !p.resolved).length ?? 0);
+  const aboutDiagram = useMemo(() => diagramLines(docNodes, docEdges, flowCount, openPointCount), [docNodes, docEdges, flowCount, openPointCount]);
+  const points = useMemo(() => pointsOf(turns.at(-1) ?? null, partsHere), [turns, partsHere]);
+  const [hot, setHot] = useState<number | null>(null);
+  const setPointedIds = useUiStore((s) => s.setPointedIds);
+  const { setViewport } = useReactFlow();
+  const flowStore = useStoreApi();
+  const pointAt = useCallback(
+    (point: number | null, parts: readonly string[]) => {
+      setHot(point);
+      setPointedIds(parts.length ? new Set(parts) : null);
+    },
+    [setPointedIds],
+  );
+  useEffect(() => () => setPointedIds(null), [setPointedIds]);
+  // Closed, or making way for a panel: nothing it pointed at stays lit on the canvas.
+  useEffect(() => {
+    if (expanded) return;
+    setHot(null);
+    setPointedIds(null);
+  }, [expanded, setPointedIds]);
+  const pointing = useMemo<Pointing>(
+    () => ({
+      names: partNames,
+      here: partsHere,
+      doors,
+      hot,
+      pointAt,
+      reveal: (id) => {
+        const { nodes, edges } = useEditorStore.getState().document;
+        const edge = edges.find((e) => e.id === id);
+        const bounds = boundsOf(nodes.filter((n) => (edge ? n.id === edge.source || n.id === edge.target : n.id === id)));
+        const { transform, width, height } = flowStore.getState();
+        const viewport = revealViewport(bounds, transform, { width: width - RESERVED_WIDTH, height });
+        if (viewport) void setViewport(viewport, { duration: 320 });
+        const ui = useUiStore.getState();
+        if (partFlash) clearTimeout(partFlash);
+        ui.setJumpFlashId(id);
+        partFlash = setTimeout(() => {
+          partFlash = null;
+          if (useUiStore.getState().jumpFlashId === id) useUiStore.getState().setJumpFlashId(null);
+        }, PART_FLASH_MS);
+      },
+    }),
+    [partNames, partsHere, doors, hot, pointAt, flowStore, setViewport],
+  );
 
   // What Nodi knows without asking an agent, read when a message is sent (`nodiLocal.ts`).
   const localFacts = (): LocalFacts => {
@@ -497,71 +563,6 @@ export function Companion({ buildCommandContext }: { buildCommandContext?: () =>
     setMode(next);
   };
 
-  // The parts the latest reply points at: named in its text, pinned by number on the canvas, and lit
-  // on both together.
-  const docNodes = useEditorStore((s) => s.document.nodes);
-  const docEdges = useEditorStore((s) => s.document.edges);
-  const view = useEditorStore((s) => s.document);
-  const outerFile = useEditorStore((s) => s.outer);
-  const partNames = useMemo(() => partNamesOf(outerFile ?? view, view), [outerFile, view]);
-  const partsHere = useMemo(() => new Set([...docNodes.map((n) => n.id), ...docEdges.map((e) => e.id)]), [docNodes, docEdges]);
-  const doors = useMemo(() => new Map(docNodes.filter(hasInside).map((n) => [n.id, partNames.get(n.id) ?? 'it'])), [docNodes, partNames]);
-  // What Nodi can offer to look inside: the selected shape's inside, or draw one it could have; else
-  // the first shape on screen that holds a diagram.
-  const look = useMemo<Look>(() => {
-    const only = selection.nodes.length === 1 && selection.edges.length === 0 ? docNodes.find((n) => n.id === selection.nodes[0]) : undefined;
-    if (only && hasInside(only)) return { into: { id: only.id, name: partNames.get(only.id) ?? 'it' } };
-    if (only) return { drawable: canCreateInside(only) };
-    return { into: doorOf(docNodes, [], (n) => partNames.get(n.id) ?? 'it') ?? undefined };
-  }, [selection.nodes, selection.edges, docNodes, partNames]);
-  // What Nodi can say about this very diagram: its queues, stores, crons and loose ends, by name.
-  const flowCount = useEditorStore((s) => s.document.flows.length);
-  const openPointCount = useEditorStore((s) => s.document.openPoints?.filter((p) => !p.resolved).length ?? 0);
-  const aboutDiagram = useMemo(() => diagramLines(docNodes, docEdges, flowCount, openPointCount), [docNodes, docEdges, flowCount, openPointCount]);
-  const points = useMemo(() => pointsOf(turns.at(-1) ?? null, partsHere), [turns, partsHere]);
-  const [hot, setHot] = useState<number | null>(null);
-  const setPointedIds = useUiStore((s) => s.setPointedIds);
-  const { setViewport } = useReactFlow();
-  const flowStore = useStoreApi();
-  const pointAt = useCallback(
-    (point: number | null, parts: readonly string[]) => {
-      setHot(point);
-      setPointedIds(parts.length ? new Set(parts) : null);
-    },
-    [setPointedIds],
-  );
-  useEffect(() => () => setPointedIds(null), [setPointedIds]);
-  // Closed, or making way for a panel: nothing it pointed at stays lit on the canvas.
-  useEffect(() => {
-    if (expanded) return;
-    setHot(null);
-    setPointedIds(null);
-  }, [expanded, setPointedIds]);
-  const pointing = useMemo<Pointing>(
-    () => ({
-      names: partNames,
-      here: partsHere,
-      doors,
-      hot,
-      pointAt,
-      reveal: (id) => {
-        const { nodes, edges } = useEditorStore.getState().document;
-        const edge = edges.find((e) => e.id === id);
-        const bounds = boundsOf(nodes.filter((n) => (edge ? n.id === edge.source || n.id === edge.target : n.id === id)));
-        const { transform, width, height } = flowStore.getState();
-        const viewport = revealViewport(bounds, transform, { width: width - RESERVED_WIDTH, height });
-        if (viewport) void setViewport(viewport, { duration: 320 });
-        const ui = useUiStore.getState();
-        if (partFlash) clearTimeout(partFlash);
-        ui.setJumpFlashId(id);
-        partFlash = setTimeout(() => {
-          partFlash = null;
-          if (useUiStore.getState().jumpFlashId === id) useUiStore.getState().setJumpFlashId(null);
-        }, PART_FLASH_MS);
-      },
-    }),
-    [partNames, partsHere, doors, hot, pointAt, flowStore, setViewport],
-  );
   const pins =
     expanded && !blocker && points.length > 0 ? (
       <PointPins
@@ -755,7 +756,9 @@ export function Companion({ buildCommandContext }: { buildCommandContext?: () =>
   const bubbleUp = resting.stays || peeking || hovered;
   const [said, setSaid] = useState(resting);
   const latest = useRef(resting);
-  latest.current = resting;
+  useLayoutEffect(() => {
+    latest.current = resting;
+  });
   useEffect(() => {
     if (bubbleUp) {
       setSaid(latest.current);
@@ -1159,7 +1162,9 @@ function TurnView({ turn, pinned, onAction }: { turn: Turn; pinned: boolean; onA
           </span>
         </p>
       )}
-      {reply && <ReplyText text={reply} pinned={pinned} />}
+      {/* Numbered only while its pins can be on the canvas: a waiting proposal holds the canvas
+          (`pointsOf`), and numbers in the bubble with no pins to match point at nothing. */}
+      {reply && <ReplyText text={reply} pinned={pinned && !turn.proposalId} />}
       {/* Still at it: below whatever it has said so far, so words that arrive first ("I'll review the
           modules, then…") never look like the end of the turn. */}
       {turn.stop === null && <Working now={activity.now} />}

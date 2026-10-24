@@ -55,13 +55,13 @@ impl Backend for ClaudeCode {
             .unwrap_or_default()
     }
 
-    fn command(&self, spec: &RunSpec) -> Command {
+    fn command(&self, spec: &RunSpec) -> Result<Command, crate::errors::AppError> {
         let mut command = Command::new(spec.program);
         command.args(args(spec)).current_dir(spec.work_dir);
         if let Some(path) = clients::path_with(spec.program.parent()) {
             command.env("PATH", path);
         }
-        command
+        Ok(command)
     }
 
     fn parser(&self) -> Box<dyn Parser> {

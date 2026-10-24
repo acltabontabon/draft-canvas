@@ -5,7 +5,7 @@ import { HostSession } from '../../src/collab/hostSession';
 import { createDocument, createNode } from '../../src/document/factory';
 import { addNodes } from '../../src/document/operations';
 import type { DraftDocument } from '../../src/document/types';
-import { PROTOCOL_VERSION } from '../../src/collab/protocol';
+import { encode, PROTOCOL_VERSION } from '../../src/collab/protocol';
 import { CURRENT_VERSION } from '../../src/document/types';
 import { PRODUCT } from '../../src/product';
 import { loopbackPair } from './support';
@@ -45,6 +45,30 @@ function guest(transport: ReturnType<typeof loopbackPair>['b']) {
 }
 
 describe('the local network door', () => {
+  it('rejects large frames before admission and bounds heartbeat replies while waiting', async () => {
+    const oversized = loopbackPair();
+    const rejected = holdAtDoor(oversized.a);
+    oversized.b.send(' '.repeat(4097), 'commit');
+    oversized.pump();
+    expect(await rejected).toBeNull();
+    expect(oversized.b.state).toBe('closed');
+
+    const waiting = loopbackPair();
+    const pending = holdAtDoor(waiting.a);
+    waiting.b.send(encode({ t: 'hello', v: PROTOCOL_VERSION, app: PRODUCT.version, doc: CURRENT_VERSION, name: 'Visitor' }), 'commit');
+    waiting.pump();
+    const door = (await pending)!;
+    for (let n = 0; n < 50; n += 1) waiting.b.send(encode({ t: 'ping', n }), 'commit');
+    waiting.pump();
+    expect(waiting.sent.a.filter((text) => JSON.parse(text).t === 'pong')).toHaveLength(5);
+    // The disconnect happened before the UI could install its listener: still remove the knock.
+    waiting.b.send(' '.repeat(4097), 'commit');
+    waiting.pump();
+    const gone = vi.fn();
+    door.onGone(gone);
+    expect(gone).toHaveBeenCalledOnce();
+  });
+
   it('holds someone until the owner lets them in, then joins them as if nothing waited', async () => {
     let owner = addNodes(createDocument('LAN'), [createNode({ type: 'service', x: 0, y: 0, text: 'A' })]);
     const host = new HostSession(

@@ -8,7 +8,7 @@ const request = (ops: unknown) => ({ requestId: 'r', diagramId: 'd', expectedRev
 describe('schema problems name what to fix', () => {
   it('points at the field of the op that was meant, not at "no shape matched"', () => {
     const problems = schemaProblems(update, request([{ op: 'update', id: 'a', set: { lable: 'x' } }]));
-    expect(problems).toEqual(['/ops/0/set/lable: unknown field']);
+    expect(problems).toEqual(['/ops/0/set/lable: unknown field; use label']);
   });
 
   it('lists the allowed values of a short enum, and counts a long one', () => {

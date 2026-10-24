@@ -5,7 +5,7 @@ import { GuestSession } from '../../src/collab/guestSession';
 import { HostCore } from '../../src/collab/hostCore';
 import { HostSession } from '../../src/collab/hostSession';
 import { fileBytes, MAX_SHARED_FILE_BYTES } from '../../src/collab/limits';
-import { encode, PROTOCOL_VERSION } from '../../src/collab/protocol';
+import { encode, exceedsMessageLimit, MAX_GUEST_MESSAGE_BYTES, MAX_MESSAGE_BYTES, PROTOCOL_VERSION } from '../../src/collab/protocol';
 import { repairReferences } from '../../src/collab/repair';
 import { Replica } from '../../src/collab/replica';
 import { createDocument, createNode } from '../../src/document/factory';
@@ -53,6 +53,70 @@ describe('a collaborator can’t poison the owner’s file', () => {
 });
 
 describe('a collaborator can’t stall the owner’s tab', () => {
+  it('yields between batches of patches after the owner releases a held gesture', () => {
+    let busy = true;
+    let file = createDocument('Held');
+    const host = new HostSession(
+      { readFile: () => file, applyRemote: (next) => ((file = next), true), isBusy: () => busy, appVersion: PRODUCT.version },
+      { peers: () => {}, presence: () => {} },
+      { name: 'Owner' },
+      { now: () => 0, setTimeout: () => 0, clearTimeout: () => {} },
+    );
+    const pair = loopbackPair();
+    host.attach(pair.a, { role: 'editor' });
+    pair.b.send(encode({ t: 'hello', v: PROTOCOL_VERSION, app: PRODUCT.version, doc: file.version, name: 'Visitor' }), 'commit');
+    pair.pump();
+    for (let i = 1; i <= 100; i += 1) pair.b.send(encode({ t: 'patch', clientSeq: i, changes: [{ kind: 'title', value: `title${i}` }] }), 'commit');
+    pair.pump();
+    busy = false;
+    host.drainHeld();
+    expect(file.metadata.title).toBe('title32');
+    for (let i = 0; i < 3; i += 1) host.drainHeld();
+    expect(file.metadata.title).toBe('title100');
+    host.end();
+  });
+
+  it('bounds bytes held for a collaborator’s gesture, even when the owner sends large snapshots', () => {
+    let busy = false;
+    let file = createDocument('Held');
+    const pair = loopbackPair();
+    const guest = new GuestSession(
+      { readFile: () => file, applyRemote: (next) => ((file = next), true), isBusy: () => busy, open: (next) => (file = next), setAccess: () => {}, appVersion: PRODUCT.version, name: 'Visitor' },
+      { status: () => {}, joined: () => {}, peers: () => {}, presence: () => {}, presenter: () => {}, rejected: () => {}, unconfirmed: () => {}, tooLarge: () => {} },
+      { now: () => 0, setTimeout: () => 0, clearTimeout: () => {} },
+    );
+    guest.connect(pair.b);
+    pair.a.send(encode({ t: 'welcome', v: PROTOCOL_VERSION, session: 's', peer: 'p', key: 'k', role: 'editor', seq: 0, snapshot: file, peers: [] }), 'commit');
+    pair.pump();
+    busy = true;
+    const large = JSON.stringify({ t: 'snapshot', seq: 0, snapshot: { ...file, ignored: 'x'.repeat(MAX_MESSAGE_BYTES / 8) } });
+    for (let i = 0; i < 17; i += 1) {
+      pair.a.send(large, 'commit');
+      pair.pump();
+    }
+    const held = guest as unknown as { held: unknown[]; heldOut: boolean };
+    expect(held.heldOut).toBe(true);
+    expect(held.held).toHaveLength(0);
+    busy = false;
+    guest.drainHeld();
+    expect(pair.sent.b.some((text) => JSON.parse(text).t === 'resync')).toBe(true);
+    guest.leave();
+  });
+
+  it('bounds room resolution before following an attacker’s chain of new owners', () => {
+    const host = new HostCore(createDocument('Chain'));
+    const changes = Array.from({ length: 15_000 }, (_, i) => ({
+      kind: 'node',
+      id: `new${i}`,
+      room: i === 14_999 ? '' : `new${i + 1}`,
+      value: { id: `new${i}`, type: 'service', x: 0, y: 0, width: 100, height: 60, z: 0 },
+    }));
+    expect(exceedsMessageLimit(JSON.stringify(changes), MAX_GUEST_MESSAGE_BYTES)).toBe(false);
+    // Before the depth filter, recursive resolution used to throw RangeError on this legal frame.
+    expect(() => host.receivePatch('attacker', { role: 'editor', lastClientSeq: 0 }, 1, changes)).not.toThrow();
+    expect(parseDocument(host.file).ok).toBe(true);
+  });
+
   it('bounds the grouping walk: a chain of thousands is cut at the limit, the same in validation and repair', () => {
     const nodes: DraftNode[] = Array.from({ length: 3000 }, (_, i) =>
       createNode({ id: `g${i}`, type: 'group', x: 0, y: 0, ...(i > 0 ? { parentId: `g${i - 1}` } : {}) }),

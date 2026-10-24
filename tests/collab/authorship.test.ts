@@ -26,6 +26,47 @@ function session(start: DraftDocument) {
 }
 
 describe('taking back one person’s changes', () => {
+  it('keeps the unchanged starting tree retained while replacing one person’s touch', () => {
+    const start = addNodes(createDocument('Shared'), [node('a'), node('b')]);
+    const s = session(start);
+    s.edit('gus', (file) => updateNode(file, 'a', { x: 10 }));
+    const retained = (s.ledger as unknown as { retained: Map<object, unknown> }).retained;
+    const beginning = retained.get(start);
+    s.edit('gus', (file) => updateNode(file, 'a', { x: 20 }));
+    expect(retained.get(start)).toBe(beginning);
+    s.edit('gus', (file) => updateNode(file, 'a', { x: 0 }));
+    expect(s.ledger.has('gus')).toBe(false);
+    expect(retained.size).toBe(0);
+  });
+
+  it('bounds identities and file versions across people joining under fresh names', () => {
+    const s = session(addNodes(createDocument('Churn'), [node('a')]));
+    for (let i = 0; i < 200; i += 1) s.edit(`visitor${i}`, (file) => updateNode(file, 'a', { text: `Edit ${i}` }));
+    const retained = s.ledger as unknown as { files: Map<DraftDocument, number> };
+    expect(s.ledger.authors().length).toBeLessThanOrEqual(128);
+    expect(retained.files.size).toBeLessThanOrEqual(128);
+    expect(s.ledger.has('visitor0')).toBe(false);
+    expect(s.ledger.has('visitor199')).toBe(true);
+    expect(s.ledger.revert('visitor199', s.file).file.nodes[0]!.text).toBe('Edit 198');
+    for (const person of s.ledger.authors()) s.ledger.forget(person);
+    expect(retained.files.size).toBe(0);
+    expect((s.ledger as unknown as { retainedBytes: number }).retainedBytes).toBe(0);
+  });
+
+  it('bounds retained contents as well as the number of versions', () => {
+    const ledger = new Authorship();
+    for (let i = 0; i < 50; i += 1) {
+      const before = createDocument('Before');
+      const after = addNodes(before, Array.from({ length: 4 }, (_, j) => createNode({ id: `code${i}_${j}`, type: 'code', code: `${i}_${j}`.padEnd(190_000, 'x'), x: 0, y: 0 })));
+      ledger.record(`visitor${i}`, before, after);
+    }
+    expect((ledger as unknown as { retainedBytes: number }).retainedBytes).toBeLessThanOrEqual(64 * 1024 * 1024);
+    expect(ledger.forgotten('visitor0')).toBe(true);
+    expect(ledger.has('visitor49')).toBe(true);
+    for (const person of ledger.authors()) ledger.forget(person);
+    expect((ledger as unknown as { retained: Map<object, unknown> }).retained.size).toBe(0);
+  });
+
   it('reverts what they did and keeps what everyone else did', () => {
     const s = session(addNodes(createDocument('Shared'), [node('a'), node('b')]));
     s.edit('gus', (file) => removeElements(file, ['a']));

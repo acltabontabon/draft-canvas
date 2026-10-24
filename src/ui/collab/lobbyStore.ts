@@ -41,7 +41,9 @@ export function openLobby(owner: string): void {
     (identity) => {
       if (generation === opening && useCollabStore.getState().role === 'host') start(owner, url, identity);
     },
-    () => useCollabStore.setState({ rendezvous: 'unavailable' }),
+    () => {
+      if (generation === opening && useCollabStore.getState().role === 'host') useCollabStore.setState({ rendezvous: 'unavailable' });
+    },
   );
 }
 
@@ -66,6 +68,10 @@ function start(owner: string, url: string, identity: Awaited<ReturnType<typeof n
     knocks: (knocks) => {
       if (lobby !== current) return;
       useCollabStore.setState({ knocks });
+      // Only current requests need deduplication; remembering every knock let a link holder grow
+      // this set for the entire session, even though the waiting room itself is bounded.
+      const present = new Set(knocks.map((knock) => knock.id));
+      for (const id of seen) if (!present.has(id)) seen.delete(id);
       // The door card on the canvas asks the question; only while presenting (when the canvas's
       // chrome is hidden) does a knock need a notice of its own.
       for (const knock of knocks) {

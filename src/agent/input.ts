@@ -34,7 +34,7 @@ import { Problems } from './errors';
 import { starterFor, starterIds } from './starter';
 import { isEvidence, EVIDENCE_LIMIT } from '../document/evidence';
 import type { SourceEvidence } from '../document/types';
-import { CREATE_FIELDS, ROOM_FIELDS } from './fields';
+import { CREATE_FIELDS, ROOM_FIELDS, unknownFieldHint } from './fields';
 import { readPlace, readRoute, type PlaceSpec, type RouteSpec } from './placement';
 import { GROUP_KINDS, LINE_STYLE_NAMES, NOTE_FORM_NAMES, NOTE_KIND_NAMES, resolveType, suggestTypes, type LineStyleName, type NativeShape } from './vocabulary';
 
@@ -270,7 +270,7 @@ export class Reader {
   }
 
   fields(value: Json, path: string, allowed: readonly string[]): void {
-    for (const key of Object.keys(value)) if (!allowed.includes(key)) this.problems.add('INVALID_INPUT', `${path}/${key}`, 'unknown or unsupported field');
+    for (const key of Object.keys(value)) if (!allowed.includes(key)) this.problems.add('INVALID_INPUT', `${path}/${key}`, `unknown or unsupported field${unknownFieldHint(key, allowed)}`);
   }
 
   object(value: unknown, path: string, allowed?: readonly string[]): Json | undefined {
@@ -721,7 +721,8 @@ export function readFlow(r: Reader, item: Json, at: string, taken: Set<string> |
     const step = typeof s === 'string' ? { relationship: s } : r.object(s, stepAt);
     if (!step) return;
     if (step.frame !== undefined) {
-      r.problems.add('INVALID_INPUT', `${stepAt}/frame`, 'a new flow has no frame steps to keep; light elements without a relationship with {spotlight: [ids]}');
+      // Agents read frame as "name this step" and invent an id for it; say what to send instead.
+      r.problems.add('INVALID_INPUT', `${stepAt}/frame`, 'frame keeps a step a flow already has, and a new flow has none: drop frame and send {spotlight: [ids], caption?}');
       return;
     }
     if (step.spotlight !== undefined || step.relationship === undefined) {

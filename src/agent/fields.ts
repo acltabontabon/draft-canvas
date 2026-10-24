@@ -1,3 +1,38 @@
+import { distance } from './vocabulary';
+
+/**
+ * Names agents reach for that this API spells differently, by the field they mean. Recorded from
+ * real runs: open points and notes sent with `target`/`elementId` and `text`, which a bare "unknown
+ * field" left the agent to guess at for several retries. Only suggested where the field exists.
+ */
+const MEANT: Record<string, readonly string[]> = {
+  about: ['target', 'targets', 'element', 'elements', 'elementid', 'elementids', 'node', 'nodeid', 'nodes', 'ids', 'on', 'for', 'attachto', 'subject', 'ref', 'refs'],
+  context: ['text', 'note', 'body', 'description', 'detail', 'details', 'message', 'question', 'content'],
+  text: ['content', 'body', 'message', 'note', 'description'],
+  label: ['name', 'title', 'caption'],
+  title: ['name', 'label'],
+  caption: ['text', 'description', 'note', 'label'],
+  spotlight: ['highlight', 'lights', 'elements'],
+  highlight: ['spotlight', 'lights'],
+  relationship: ['edge', 'connector', 'relation', 'rel'],
+  from: ['source'],
+  to: ['target'],
+};
+
+/**
+ * What to say about a field `allowed` doesn't have: the field it most likely means (a near spelling,
+ * or a name from `MEANT`), and the fields this object takes when there are few enough to list.
+ */
+export function unknownFieldHint(key: string, allowed: readonly string[]): string {
+  const lower = key.toLowerCase();
+  // Edit distance cannot be less than the length difference. Skip impossible matches before
+  // traversing a hostile field name: validation runs on the page, before the worker's time limit.
+  const near = lower.length >= 4 ? allowed.find((field) => field !== key && Math.abs(lower.length - field.length) <= 2 && distance(lower, field.toLowerCase()) <= 2) : undefined;
+  const meant = near ?? allowed.find((field) => MEANT[field]?.includes(lower));
+  const listed = allowed.length <= 12 ? ` (takes ${allowed.join(', ')})` : '';
+  return meant ? `; use ${meant}${listed}` : listed;
+}
+
 /** Runtime field sets are also the keys of the published patch schema. */
 export const ROOM_FIELDS = ['level', 'nodes', 'relationships', 'groups', 'flows', 'notes'] as const;
 export const SET_FIELDS = {

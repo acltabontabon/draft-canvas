@@ -11,7 +11,7 @@ import { compose, type Composed } from './compile';
 import { applyUpdate, type PatchResult } from './patch';
 import { prepareProposal, type PreparedProposal } from './proposal';
 import { silent, type Report } from './progress';
-import { type QualityIssue, type QualityReport } from './quality';
+import { smallestArrange, type QualityReport } from './quality';
 import { withDeadline } from './route';
 import { legibilityOf, type Legibility } from './legibility';
 
@@ -72,26 +72,4 @@ export function runJob(job: Job, deadline: number, report: Report = silent): Job
       ...(view && result.file !== job.file ? { legibility: legibilityOf(view.nodes, view.edges) } : {}),
     };
   });
-}
-
-/**
- * The narrowest `arrange` that could make room for what didn't fit: the innermost boundary holding
- * every shape a problem names, or the whole view when they don't share one.
- */
-function smallestArrange(view: DraftDocument, issues: readonly QualityIssue[]): Record<string, unknown> {
-  const byId = new Map(view.nodes.map((n) => [n.id, n]));
-  const chains = issues
-    .flatMap((issue) => issue.ids)
-    .filter((id) => byId.has(id))
-    .map((id) => {
-      const chain: string[] = [];
-      let at = byId.get(id)?.parentId;
-      while (at && !chain.includes(at)) {
-        chain.push(at);
-        at = byId.get(at)?.parentId;
-      }
-      return chain;
-    });
-  const shared = chains[0]?.find((group) => chains.every((chain) => chain.includes(group)));
-  return shared ? { op: 'arrange', scope: { group: shared } } : { op: 'arrange' };
 }

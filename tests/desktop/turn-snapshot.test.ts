@@ -26,4 +26,15 @@ describe('unchanged since the last turn', () => {
     forgetTurnSnapshot('d_b');
     expect(unchangedSinceLastTurn('d_b', view, ['n_api'], 'claude-code', true)).toBe(false);
   });
+  it('does not confuse room ids containing a path separator', () => {
+    unchangedSinceLastTurn('d_rooms', view, ['a/b'], 'codex', false);
+    expect(unchangedSinceLastTurn('d_rooms', view, ['a', 'b'], 'codex', true)).toBe(false);
+  });
+
+  it('forgets the oldest diagram when the cache reaches its limit', () => {
+    unchangedSinceLastTurn('oldest', view, [], 'codex', false);
+    for (let i = 0; i < 100; i += 1) unchangedSinceLastTurn(`cache-${i}`, view, [], 'codex', false);
+    expect(unchangedSinceLastTurn('oldest', view, [], 'codex', true)).toBe(false);
+  });
+
 });

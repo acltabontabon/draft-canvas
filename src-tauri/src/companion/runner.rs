@@ -21,6 +21,8 @@ pub struct RunLimits {
     /// One stdout line at most. A tool result can carry an image (`render_diagram` allows 8 MiB before
     /// base64), so this is generous; past it the output is not something the companion understands.
     pub max_line: usize,
+    /// Bytes read from both output streams over the whole turn, including unrecognised output.
+    pub max_output: u64,
     /// No output on either stream for this long, and the agent is taken to have hung.
     pub idle: Duration,
     /// How long the agent gets to stop after being asked, before it is killed.
@@ -31,6 +33,7 @@ impl Default for RunLimits {
     fn default() -> Self {
         Self {
             max_line: 32 * 1024 * 1024,
+            max_output: 128 * 1024 * 1024,
             idle: Duration::from_secs(5 * 60),
             grace: Duration::from_secs(3),
         }
@@ -44,6 +47,7 @@ pub enum Cause {
     Cancelled,
     Idle,
     LineTooLong,
+    TooMuchOutput,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -68,6 +72,8 @@ struct Shared {
     done: Mutex<bool>,
     finished: Condvar,
     last_output: AtomicU64,
+    output_bytes: AtomicU64,
+    max_output: u64,
     grace: Duration,
 }
 
@@ -84,6 +90,17 @@ impl RunControl {
         self.end(Cause::Cancelled);
     }
 
+    /// Let a CLI flush its transcript after its terminal result, then stop a process that lingers.
+    /// Waiting here runs on its own thread: stdout delivery must continue so a natural exit completes.
+    pub fn stop_after(&self, grace: Duration) {
+        let control = self.clone();
+        std::thread::spawn(move || {
+            if !control.wait(grace) {
+                control.stop();
+            }
+        });
+    }
+
     /// Whether the process is gone and its last output delivered, waiting up to `timeout`.
     pub fn wait(&self, timeout: Duration) -> bool {
         let done = lock(&self.shared.done);
@@ -93,6 +110,18 @@ impl RunControl {
             .wait_timeout_while(done, timeout, |done| !*done)
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         *done
+    }
+
+    fn output(&self, bytes: usize) -> bool {
+        let before = self
+            .shared
+            .output_bytes
+            .fetch_add(bytes as u64, Ordering::Relaxed);
+        if before.saturating_add(bytes as u64) > self.shared.max_output {
+            self.end(Cause::TooMuchOutput);
+            return false;
+        }
+        true
     }
 
     fn end(&self, cause: Cause) {
@@ -144,6 +173,8 @@ pub fn spawn(
         done: Mutex::new(false),
         finished: Condvar::new(),
         last_output: AtomicU64::new(now_ms()),
+        output_bytes: AtomicU64::new(0),
+        max_output: limits.max_output,
         grace: limits.grace,
     });
     let control = RunControl {
@@ -168,6 +199,14 @@ pub fn spawn(
                     break;
                 }
                 shared.last_output.store(now_ms(), Ordering::Relaxed);
+                let control = RunControl {
+                    shared: shared.clone(),
+                };
+                if !control.output(n) {
+                    // Drain until termination, retaining no more of the runaway stream.
+                    let _ = std::io::copy(&mut pipe, &mut std::io::sink());
+                    break;
+                }
                 let mut tail = lock(&tail);
                 tail.extend(&chunk[..n]);
                 let excess = tail.len().saturating_sub(STDERR_KEEP);
@@ -236,7 +275,11 @@ fn read_lines(pipe: impl Read, max_line: usize, control: &RunControl, sink: &Sin
             Some(at) => (at + 1, true),
             None => (buffer.len(), false),
         };
-        if line.len() + take > max_line + 1 {
+        if !control.output(take) {
+            let _ = std::io::copy(&mut reader, &mut std::io::sink());
+            return;
+        }
+        if line.len() + take - usize::from(complete) > max_line {
             control.end(Cause::LineTooLong);
             // Keep draining so the agent isn't blocked on a full pipe while it is stopped.
             let _ = std::io::copy(&mut reader, &mut std::io::sink());
@@ -434,6 +477,32 @@ pub(crate) mod tests {
         let (lines, exit) = collect(&rx);
         assert_eq!(lines, vec!["short"]);
         assert_eq!(exit.cause, Cause::LineTooLong);
+    }
+
+    #[test]
+    fn an_unterminated_line_has_the_same_limit_as_a_complete_line() {
+        let (_, rx) = start(
+            shell("printf '123456789'", "<nul set /p =123456789"),
+            "",
+            RunLimits {
+                max_line: 8,
+                ..RunLimits::default()
+            },
+        );
+        let (lines, exit) = collect(&rx);
+        assert!(lines.is_empty());
+        assert_eq!(exit.cause, Cause::LineTooLong);
+    }
+
+    #[test]
+    fn the_total_output_budget_includes_stderr_and_small_lines() {
+        let (_, rx) = start(
+            shell("echo 1234567890; echo 123456789012345678901234567890 >&2; sleep 30", "echo 1234567890& echo 123456789012345678901234567890 1>&2& ping -n 30 127.0.0.1 >nul"),
+            "",
+            RunLimits { max_output: 25, ..RunLimits::default() },
+        );
+        let (_, exit) = collect(&rx);
+        assert_eq!(exit.cause, Cause::TooMuchOutput);
     }
 
     #[cfg(unix)]

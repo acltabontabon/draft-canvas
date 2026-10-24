@@ -17,21 +17,24 @@ A local-first canvas for turning software architecture into a clear visual story
 
 </div>
 
-<img width="100%" alt="Draft Canvas in action: sketching an architecture, presenting a flow, exploring inside a service, and sharing the diagram." src="docs/media/demo.gif">
+| Ask Nodi on the canvas · Desktop | Draw together · Web and desktop |
+| --- | --- |
+| ![Nodi previews a proposed change for review.](docs/media/releases/v1.16.0/nodi.png) | ![An owner and collaborator edit one canvas directly.](docs/media/releases/v1.16.0/collaboration.png) |
 
-## Features
+- **Draw architecture with meaning:** services, stores, queues and relationships, from the overview
+  down to detail inside a shape.
+- **Explain it:** present flows step by step, write rich-text notes and mark open questions.
+- **Work together:** share a live session, approve who joins and control who can edit. Your copy
+  hosts and saves the diagram; no account or diagram server.
+- **Think with your agent:** ask Nodi to run your own Claude Code or Codex, or connect any MCP client.
+  Review proposed changes before accepting them.
+- **Keep your work:** import Mermaid; export images, editable files and architecture source;
+  share passphrase-protected read-only links.
 
-- **Draw with meaning.** Services, data stores and queues, with connectors that say how they relate.
-- **Keep the overview clear.** Put detail inside a shape, from system overview down to components.
-- **Tell the story.** Present flows step by step. Attach notes and mark open questions.
-- **Draw together, live.** Share a link and edit with others in real time. Your copy hosts the
-  session: no account, and the diagram never passes through a server.
-- **Move fast.** Draw from the keyboard, accept suggestions, or start from an architecture starter.
-- **Take it with you.** Import Mermaid flowcharts. Export images, editable files, and Mermaid,
-  PlantUML, Structurizr or draw.io source. Share read-only links.
-- **Draw with your coding agent.** Connect an MCP agent to the desktop app to draw or revise a diagram.
+[What's new in 1.16](https://github.com/acltabontabon/draft-canvas/releases/tag/v1.16.0) ·
+[All guides](docs/index.md) · [Privacy and security](SECURITY.md)
 
-## Install
+## Get started
 
 - **Web:** open [app.draftcanvas.dev](https://app.draftcanvas.dev/). Nothing to install.
 - **macOS and Windows:** download from the [latest release](https://github.com/acltabontabon/draft-canvas/releases/latest),
@@ -43,7 +46,7 @@ A local-first canvas for turning software architecture into a clear visual story
 
 First launch: [desktop guide](docs/guides/desktop.md#installing). Build from source: [Contributing](CONTRIBUTING.md).
 
-## Draw your own repo
+## Draw a repository with your agent
 
 Works with Claude Code, Codex, Cursor, Gemini CLI, Junie or any MCP client.
 
@@ -52,20 +55,16 @@ Works with Claude Code, Codex, Cursor, Gemini CLI, Junie or any MCP client.
 3. Click **Add to…** for your agent, then **Install skill**. Start a new agent session.
 4. Ask:
 
-   > Use the Draft Canvas skill to diagram this repository's architecture as C4 views, down to
-   > components where the code has real logic. Read the code before you draw, cite source files
-   > and mark anything inferred. Make the main request path a presentation flow, with variants for
-   > the failure paths the code handles, and leave open questions as notes. Render every view and
-   > fix what reads badly before you finish.
+   > Use the Draft Canvas skill to diagram this repository as C4 views. Read the code, cite sources,
+   > show the main request path as a flow and mark open questions. Render each view and fix readability.
 
 Ask again to refresh the same diagram when the code changes.
 [Setup and troubleshooting](docs/guides/connect-an-ai-agent.md)
 
-## Built with
+## Contribute
 
-[React](https://github.com/react/react), [React Flow](https://github.com/xyflow/xyflow),
-[Tauri](https://github.com/tauri-apps/tauri), [Simple Icons](https://github.com/simple-icons/simple-icons)
-and more: [credits](docs/reference/third-party.md) and [licences](THIRD_PARTY_LICENSES.txt).
+[Build and contribute](CONTRIBUTING.md) · [Architecture](docs/reference/architecture.md) ·
+[Credits](docs/reference/third-party.md) · [Licences](THIRD_PARTY_LICENSES.txt)
 
 ---
 

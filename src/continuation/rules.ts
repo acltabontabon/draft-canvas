@@ -138,7 +138,9 @@ const QUEUE_DEAD_LETTER: ContinuationRule = {
  * has to decide what to do with it — so the dead-letter path belongs to *each consumer*, the same
  * rule a topic's subscribers follow. Anchored on the consumer, then: a Worker reading a stream with
  * nowhere to park a poison record gets its own queue for them (the `service>deadLetter` row — the
- * consumer parks the record itself, dashed like the broker's own redrive).
+ * consumer parks the record itself, dashed like the broker's own redrive). The one consumer whose
+ * parking *is* its dead-letter path, so it names `deadLetters` rather than the row's `publishes`
+ * default, which only says a worker wrote to the queue.
  */
 const STREAM_CONSUMER_DEAD_LETTER: ContinuationRule = {
   id: 'stream-consumer-dead-letter',
@@ -149,10 +151,11 @@ const STREAM_CONSUMER_DEAD_LETTER: ContinuationRule = {
   when: (nb) =>
     nb.node.type === 'service' &&
     nb.in.some(({ edge, category }) => edge.semantic === 'consumes' && category === 'stream') &&
-    !hasOutboundSemantic(nb, 'deadLetters'),
+    // A hand-drawn Worker → DLQ infers `publishes`: the queue it points at is the path all the same.
+    !nb.out.some(({ edge, category }) => category === 'deadLetter' || edge.semantic === 'deadLetters'),
   fragment: () => ({
     nodes: [{ key: 'dlq', type: 'queue', queueKind: 'queue', deliveryRole: 'dead-letter' }],
-    edges: [{ from: 'anchor', to: 'dlq', deliveryAttempts: 3 }],
+    edges: [{ from: 'anchor', to: 'dlq', semantic: 'deadLetters', deliveryAttempts: 3 }],
   }),
 };
 

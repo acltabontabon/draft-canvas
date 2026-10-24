@@ -498,6 +498,38 @@ describe('connection state', () => {
 });
 
 describe('sending', () => {
+  it('drops every queued frame when a multi-frame send overflows the queue', async () => {
+    const { host, hostPc } = await connect();
+    hostPc.channel!.paused = true;
+    const message = 'x'.repeat(16 * 1024 * 1024);
+    for (let i = 0; i < 6 && host.state !== 'closed'; i++) host.send(message, 'commit');
+    expect(host.state).toBe('closed');
+    // The send loop must not recreate a queue after enqueue tears down midway through its frames.
+    expect(host).toMatchObject({ queuedBytes: 0, queue: [] });
+  });
+
+  it('bounds control traffic that bypasses the host session message budget', async () => {
+    const { host, hostPc } = await connect();
+    for (let id = 0; id < 9; id++) {
+      const text = JSON.stringify({ t: 'restart-answer', gen: 1, sdp: '' });
+      for (const frame of encodeFrames(text, id, 'control')) hostPc.channel!.dispatchEvent(new MessageEvent('message', { data: frame.buffer }));
+    }
+    expect(host.state).toBe('closed');
+    expect(drops.at(-1)).toContain('too much ICE restart control traffic');
+  });
+
+  it('applies at most one copy of a restart offer while the browser is handling it', async () => {
+    const { guest, hostPc, guestPc } = await connect();
+    const remoteBefore = guestPc.remoteHistory.length;
+    const text = JSON.stringify({ t: 'restart-offer', gen: 1, sdp: hostPc.localDescription!.sdp! });
+    for (let id = 0; id < 8; id++) {
+      for (const frame of encodeFrames(text, id, 'control')) guestPc.channel!.dispatchEvent(new MessageEvent('message', { data: frame.buffer }));
+    }
+    await settle();
+    expect(guest.state).toBe('open');
+    expect(guestPc.remoteHistory).toHaveLength(remoteBefore + 1);
+  });
+
   it('drops presence under backpressure, queues commits, and degrades when congestion lasts', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const { host, guest, hostPc } = await connect();

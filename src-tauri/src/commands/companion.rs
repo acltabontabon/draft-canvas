@@ -199,12 +199,12 @@ pub async fn companion_choose_code(
 /// the last always `stopped`.
 #[tauri::command]
 pub async fn companion_send(app: AppHandle, request: PromptRequest) -> Result<(), AppError> {
+    companion::validate(&request)?;
+    let companion = app.state::<Arc<Companion>>().inner().clone();
+    let preparation = companion.prepare(&request)?;
     run_blocking(&app, move |app, state| {
-        companion::validate(&request)?;
         let agent = app.state::<Arc<Agent>>();
         let diagram = open_diagram(state, &agent, &request.diagram_id)?;
-        let companion = app.state::<Arc<Companion>>();
-        companion.check_room(&request.diagram_id)?;
 
         let backend = companion::backend(request.agent);
         let located = backend.locate();
@@ -260,7 +260,7 @@ pub async fn companion_send(app: AppHandle, request: PromptRequest) -> Result<()
         let resume = companion.session_for(&request.diagram_id, request.agent);
         let fresh = uuid::Uuid::new_v4().to_string();
         let server_env = companion::server_env(&request.run_id, agent.dir(), code.is_some());
-        let command = backend.command(&RunSpec {
+        let command = match backend.command(&RunSpec {
             program: &program,
             work_dir: &work_dir,
             mcp_config: &config,
@@ -272,17 +272,13 @@ pub async fn companion_send(app: AppHandle, request: PromptRequest) -> Result<()
                 Some(session) => SessionArg::Resume(session),
                 None => SessionArg::New(&fresh),
             },
-        });
-        // What the agent's connection may reach, open before the agent can connect; the run ending
-        // in any way closes it again (`Agent::end_run`).
-        agent.runs.open(
-            &request.run_id,
-            RunPolicy {
-                diagram_id: request.diagram_id.clone(),
-                direct: request.mode == ApplyMode::Direct,
-                code,
-            },
-        );
+        }) {
+            Ok(command) => command,
+            Err(error) => {
+                let _ = std::fs::remove_dir_all(&run_dir);
+                return Err(error);
+            }
+        };
         // The newest proposal this diagram's conversations submitted that still waits on the person.
         let waiting = agent
             .with_proposals(|store| {
@@ -293,28 +289,42 @@ pub async fn companion_send(app: AppHandle, request: PromptRequest) -> Result<()
                     .map(|p| (p.id.clone(), p.version, p.summary.clone()))
             })
             .flatten();
-        let started = companion.start(Launch {
-            stdin: companion::turn_prompt(
-                &request,
-                &diagram.title,
-                waiting
-                    .as_ref()
-                    .map(|(proposal_id, version, summary)| companion::Waiting {
-                        proposal_id,
-                        version: *version,
-                        summary,
-                    }),
-                code_name.as_deref(),
-            ),
-            run_id: request.run_id.clone(),
-            diagram_id: request.diagram_id.clone(),
-            agent: request.agent,
-            text: request.text.clone(),
-            command,
-            dir: run_dir,
-        });
+        let started = companion.start_prepared(
+            Launch {
+                stdin: companion::turn_prompt(
+                    &request,
+                    &diagram.title,
+                    waiting
+                        .as_ref()
+                        .map(|(proposal_id, version, summary)| companion::Waiting {
+                            proposal_id,
+                            version: *version,
+                            summary,
+                        }),
+                    code_name.as_deref(),
+                ),
+                run_id: request.run_id.clone(),
+                diagram_id: request.diagram_id.clone(),
+                agent: request.agent,
+                text: request.text.clone(),
+                command,
+                dir: run_dir.clone(),
+            },
+            preparation,
+            || {
+                agent.runs.open(
+                    &request.run_id,
+                    RunPolicy {
+                        diagram_id: request.diagram_id.clone(),
+                        direct: request.mode == ApplyMode::Direct,
+                        code,
+                    },
+                );
+            },
+        );
         if started.is_err() {
             agent.end_run(&request.run_id);
+            let _ = std::fs::remove_dir_all(&run_dir);
         }
         started
     })

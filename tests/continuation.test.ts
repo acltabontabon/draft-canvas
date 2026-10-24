@@ -826,6 +826,15 @@ describe('materialize', () => {
     expect(edge.targetAnchor?.side).toBe('top');
   });
 
+  it("names a stream consumer's dead-letter route: the one consumer whose parking is the path", () => {
+    // Worker → DLQ infers `publishes` (dead-lettering is a queue's redrive); a stream has none, so
+    // the rule says `deadLetters` and keeps the attempt count.
+    const doc = graph([service('s'), stream('st'), worker('w')], [['s', 'st'], ['st', 'w']]);
+    const offer = continuationsFor(doc, 'w', 'drop').find((c) => c.ruleId === 'stream-consumer-dead-letter')!;
+    const edge = materialize(doc, offer)!.edges[0]!;
+    expect(edge).toMatchObject({ source: 'w', semantic: 'deadLetters', semanticsOrigin: 'explicit', deliveryAttempts: 3, kind: 'failure', async: true });
+  });
+
   /*
    * Connectors are a *preference*, never an obstacle. Placement failing is how a suggestion
    * silently disappears, so every case below that has somewhere better to go takes it, and every

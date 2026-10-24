@@ -13,6 +13,7 @@ import { AgentError } from './errors';
 import type { Attachment, DraftDocument, DraftEdge, DraftFlow, DraftNode, OpenPoint } from '../document/types';
 import { OPEN_POINT_LABELS } from '../document/openPoints';
 import { applyUpdate, type PatchResult } from './patch';
+import { smallestArrange, unreadableFix, type QualityIssue } from './quality';
 
 export interface EntitySnapshot {
   kind: 'node' | 'edge' | 'flow' | 'open point' | 'view';
@@ -53,9 +54,24 @@ export interface PreparedProposal {
   preconditions: PreconditionSnapshot;
 }
 
+/**
+ * The refusal for a proposal that would leave something unreadable — naming the first problem and
+ * the op that fixes it in the message itself, as `update_diagram`'s refusal does: agents act on the
+ * message, and the problems only in details cost them retries.
+ */
+export function unreadableProposal(issues: readonly QualityIssue[], view: DraftDocument | undefined): AgentError {
+  const suggestedOp = view ? smallestArrange(view, issues) : { op: 'arrange' };
+  const first = issues[0]!.message.replace(/\.$/, '');
+  const more = issues.length > 1 ? ` (and ${issues.length - 1} more)` : '';
+  return new AgentError('LAYOUT_CONSTRAINED', `The proposal would leave unreadable content: ${first}${more}. ${unreadableFix(issues, suggestedOp)}`, {
+    hint: 'Nothing was submitted. Existing shapes only move by an arrange op in the same ops list; a top-level layout does not move them.',
+    details: { problems: issues, suggestedOp },
+  });
+}
+
 export function prepareProposal(file: DraftDocument, path: DepthPath, rawOps: unknown, rawLayout: unknown, rawScope: unknown): PreparedProposal {
   const result = applyUpdate(file, path, rawOps, rawLayout, rawScope);
-  if (result.quality.errors.length) throw new AgentError('LAYOUT_CONSTRAINED', 'The proposal would leave unreadable content.', { details: { problems: result.quality.errors } });
+  if (result.quality.errors.length) throw unreadableProposal(result.quality.errors, viewOf(result.file, path));
   const original = snapshotsOf(file);
   const proposed = snapshotsOf(result.file);
   const entities = Object.create(null) as Record<string, EntitySnapshot>;

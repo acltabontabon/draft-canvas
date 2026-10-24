@@ -107,6 +107,10 @@ pub enum HostEvent {
     Companion {
         run: String,
         event: crate::companion::protocol::RunEvent,
+        /// Monotonic within this run, for replaying live events after a recovery snapshot.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        #[ts(optional, type = "number")]
+        sequence: Option<u64>,
     },
     /// A guest on the local network joined the shared canvas (`collab/`). Always before any of its
     /// messages.

@@ -72,6 +72,41 @@ async function settle(pump: () => number) {
 const base = () => addNodes(createDocument('Proof'), [createNode({ id: 'n_a', type: 'service', text: 'A', x: 0, y: 0 })]);
 
 describe('coming back over a connection with a binding', () => {
+  it('keeps offline edits private until the new connection proves its welcome', async () => {
+    const { host } = owner(base());
+    const first = loopbackPair('webrtc', 'sha-256 aa');
+    host.attach(first.a, { role: 'editor' });
+    const vic = collaborator();
+    vic.session.connect(first.b);
+    await settle(first.pump);
+    first.drop();
+
+    const mallory = loopbackPair('webrtc', 'sha-256 ee');
+    vic.session.connect(mallory.b);
+    await settle(mallory.pump);
+    // Proof generation and hello have finished, but this invite's owner has not proved who it is.
+    vic.state.file = updateNode(vic.state.file!, 'n_a', { text: 'Private offline work' });
+    vic.session.localChanged();
+    mallory.a.send(encode({ t: 'commit', seq: 1, origin: 'host', changes: [{ kind: 'title', value: 'Fake' }] }), 'commit');
+    mallory.a.send(encode({ t: 'role', role: 'viewer' }), 'commit');
+    mallory.pump();
+    expect(mallory.sent.b.some((text) => text.includes('"t":"patch"'))).toBe(false);
+    expect(vic.session.role).toBe('editor');
+    expect(vic.state.file!.nodes[0]!.text).toBe('Private offline work');
+
+    // A forged refusal cannot destroy the retained session and its pending edits either.
+    mallory.a.send(encode({ t: 'end', reason: 'removed' }), 'commit');
+    mallory.pump();
+    expect(vic.session.isEnded).toBe(false);
+    expect(mallory.b.state).toBe('closed');
+
+    const back = loopbackPair('webrtc', 'sha-256 bb');
+    host.attach(back.a, { role: 'editor' });
+    vic.session.connect(back.b);
+    await settle(back.pump);
+    expect(host.core.file.nodes[0]!.text).toBe('Private offline work');
+  });
+
   it('proves the place without sending its key, and keeps the edit made while away', async () => {
     const { host, state } = owner(base());
     const first = loopbackPair('webrtc', 'sha-256 aa');

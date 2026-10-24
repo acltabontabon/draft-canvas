@@ -7,6 +7,7 @@
 use super::protocol::{Availability, RunEvent, SignIn, StopReason, ToolStatus, Usage};
 use super::{Backend, Located, Parser, RunSpec, SessionArg};
 use crate::agent::clients::{self, SERVER_NAME};
+use crate::errors::{AppError, ErrorKind};
 use serde_json::Value;
 use std::collections::HashSet;
 use std::path::Path;
@@ -52,15 +53,16 @@ impl Backend for Codex {
         sign_in
     }
 
-    fn command(&self, spec: &RunSpec) -> Command {
+    fn command(&self, spec: &RunSpec) -> Result<Command, AppError> {
         let mut command = Command::new(spec.program);
+        let probe_home = spec.mcp_config.parent().ok_or_else(AppError::internal)?;
         command
-            .args(args(spec, &features(spec.program)))
+            .args(args(spec, &features(spec.program, probe_home)?))
             .current_dir(spec.work_dir);
         if let Some(path) = clients::path_with(spec.program.parent()) {
             command.env("PATH", path);
         }
-        command
+        Ok(command)
     }
 
     fn parser(&self) -> Box<dyn Parser> {
@@ -72,58 +74,91 @@ impl Backend for Codex {
     }
 }
 
-/// Codex features that put tools of their own into every model call (a browser, computer use, image
-/// generation, sub-agents, plugins and apps, skill search, a second shell…), none of which a canvas run
-/// can use. Off, a call went from 17.3k tokens to 6.3k before the agent did anything (measured with
+/// Codex features that add tools, filesystem context or side effects outside the canvas (a browser,
+/// computer use, image generation, sub-agents, plugins and apps, skills, a second shell…), none of
+/// which a canvas run can use. Off, a call went from 17.3k tokens to 6.3k before the agent did anything (measured with
 /// codex-cli 0.163.0, with web search off too). Only the ones this Codex has are named: it refuses
 /// to start on a feature it doesn't know, and the list changes from version to version.
 const NOT_FOR_A_CANVAS: &[&str] = &[
     "apps",
+    "artifact",
     "browser_use",
     "browser_use_external",
     "computer_use",
+    "code_mode",
+    "code_mode_host",
     "goals",
+    "hooks",
     "image_generation",
     "in_app_browser",
+    "in_app_chat",
+    "in_app_voice",
+    "in_app_local_automation",
+    "memories",
     "multi_agent",
+    "multi_agent_v2",
     "plugins",
     "realtime_conversation",
     "remote_plugin",
+    "request_permissions_tool",
+    "shell_snapshot",
+    "shell_snapshot_v2",
     "skill_search",
+    "skill_mcp_dependency_install",
     "sleep_tool",
+    "stable_environment_tools",
+    "standalone_web_search",
     "tool_suggest",
     "unified_exec",
     "view_image",
     "worktrees",
+    "workspace_dependencies",
 ];
 
 /// The features this Codex has (`codex features list`), asked once per program per app run.
-fn features(program: &Path) -> HashSet<String> {
+fn features(program: &Path, probe_home: &Path) -> Result<HashSet<String>, AppError> {
     static KNOWN: std::sync::OnceLock<
         std::sync::Mutex<std::collections::HashMap<std::path::PathBuf, HashSet<String>>>,
     > = std::sync::OnceLock::new();
     let known = KNOWN.get_or_init(Default::default);
     if let Some(found) = known.lock().ok().and_then(|k| k.get(program).cloned()) {
-        return found;
+        return Ok(found);
     }
-    let found = quick(program, &["features", "list"])
-        .map(|out| features_of(&out))
-        .unwrap_or_default();
+    // An unavailable probe must not silently leave the person's plugins, apps or browser enabled.
+    // Failed probes are not cached: retrying after a transient failure can work.
+    // `features list` has no --ignore-user-config flag. Its names need no authentication:
+    // inspect defaults in the private run folder, never the person's settings or project.
+    let output = quick_in_home(program, &["features", "list"], Some(probe_home));
+    let found = checked_features(output.as_deref())?;
     if let Ok(mut k) = known.lock() {
         k.insert(program.to_path_buf(), found.clone());
     }
-    found
+    Ok(found)
+}
+
+fn checked_features(output: Option<&str>) -> Result<HashSet<String>, AppError> {
+    let found = output.map(features_of).unwrap_or_default();
+    if !found.contains("shell_tool") {
+        return Err(AppError::new(ErrorKind::PermissionDenied,
+            "Draft Canvas couldn’t verify Codex’s tool restrictions. Check that codex features list works in Terminal, then try again."));
+    }
+    Ok(found)
 }
 
 /// `browser_use   stable   true` → `browser_use`, one per line.
 fn features_of(text: &str) -> HashSet<String> {
     text.lines()
-        .filter_map(|line| line.split_whitespace().next())
-        .filter(|name| {
-            name.chars()
-                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+        .filter_map(|line| {
+            let mut words = line.split_whitespace();
+            let name = words.next()?;
+            let rest: Vec<_> = words.collect();
+            (rest.len() >= 2
+                && matches!(rest.last(), Some(&"true" | &"false"))
+                && name
+                    .chars()
+                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_'))
+            .then(|| name.to_string())
         })
-        .map(str::to_string)
         .collect()
 }
 
@@ -144,6 +179,9 @@ fn args(spec: &RunSpec, available: &HashSet<String>) -> Vec<String> {
             // The person's command rules and the shell are for coding, not for a canvas: with the shell
             // off and a read-only sandbox, the Draft Canvas tools are all Codex can act through.
             "--ignore-rules",
+            // Config tables merge: setting mcp_servers never removes the person's other servers.
+            // Keep auth and sessions in CODEX_HOME while omitting all user configuration instead.
+            "--ignore-user-config",
             "--disable",
             "shell_tool",
             "-c",
@@ -157,10 +195,17 @@ fn args(spec: &RunSpec, available: &HashSet<String>) -> Vec<String> {
         args.push("--disable".into());
         args.push((*feature).to_string());
     }
+    if available.contains("skip_host_skill_discovery") {
+        args.extend([
+            "--enable".to_string(),
+            "skip_host_skill_discovery".to_string(),
+        ]);
+    }
     // No web search: its tool goes with every call, and a canvas run answers from the diagram.
     args.push("-c".into());
     args.push(r#"web_search="disabled""#.into());
-    // Replacing the whole table keeps the person's other servers out of the run.
+    // With user config omitted above, this configures only this run's connector. A table override
+    // alone would merge with the user's servers and expose their tools to the companion.
     args.push("-c".into());
     args.push(format!(
         "mcp_servers={}",
@@ -213,12 +258,22 @@ fn sessions_dir() -> Option<String> {
 
 /// A short question to the CLI itself (`--version`, `login status`), never a model turn.
 fn quick(program: &Path, args: &[&str]) -> Option<String> {
+    quick_in_home(program, args, None)
+}
+
+fn quick_in_home(program: &Path, args: &[&str], home: Option<&Path>) -> Option<String> {
     let mut command = Command::new(program);
+    if let Some(home) = home {
+        command.env("CODEX_HOME", home).current_dir(home);
+    }
     command.args(args);
     if let Some(path) = clients::path_with(program.parent()) {
         command.env("PATH", path);
     }
     let output = clients::run(command, Duration::from_secs(10)).ok()?;
+    if args == ["features", "list"] && !output.success {
+        return None;
+    }
     // `codex login status` answers on stderr (codex-cli 0.163.0).
     let mut text = String::from_utf8_lossy(&output.stdout).into_owned();
     text.push_str(&String::from_utf8_lossy(&output.stderr));
@@ -467,7 +522,7 @@ mod tests {
 
     fn spec_args(session: SessionArg) -> Vec<String> {
         let env = vec![("DRAFT_CANVAS_RUN", "run-1".to_string())];
-        let available = features_of("browser_use   stable   true\nunified_exec   stable   true\nshell_tool   stable   true\n");
+        let available = features_of("browser_use stable true\nunified_exec stable true\nshell_tool stable true\nhooks stable true\nskill_mcp_dependency_install stable true\nworkspace_dependencies stable true\nin_app_local_automation stable true\nmemories stable false\nshell_snapshot stable true\ncode_mode_host stable true\nskip_host_skill_discovery under development false\n");
         args(
             &RunSpec {
                 program: Path::new("/bin/codex"),
@@ -483,11 +538,54 @@ mod tests {
         )
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn feature_probes_use_a_private_home_and_do_not_cache_failed_output() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path().join("run");
+        std::fs::create_dir(&home).unwrap();
+        std::fs::write(home.join("mcp.json"), "private run marker").unwrap();
+        let program = dir.path().join("codex-probe");
+        // Even a plausible feature table from an unsuccessful CLI must not count as verification.
+        std::fs::write(
+            &program,
+            "#!/bin/sh\nprintf 'shell_tool stable true\\n'\nexit 1\n",
+        )
+        .unwrap();
+        std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o700)).unwrap();
+        assert!(features(&program, &home).is_err());
+        std::fs::write(&program, "#!/bin/sh\ntest -f \"$CODEX_HOME/mcp.json\" || exit 1\ntest -f ./mcp.json || exit 1\nprintf 'shell_tool stable true\\napps experimental true\\n'\n").unwrap();
+        let found = features(&program, &home).unwrap();
+        assert!(found.contains("apps"));
+        assert!(found.contains("shell_tool"));
+    }
+
+    #[test]
+    fn feature_discovery_fails_closed_instead_of_leaving_extra_tools_enabled() {
+        for output in [
+            None,
+            Some(""),
+            Some("error unavailable"),
+            Some("browser_use stable true"),
+        ] {
+            assert!(checked_features(output).is_err());
+        }
+        let found = checked_features(Some(
+            "shell_tool stable true\napps experimental true\nbrowser_use under development false\n",
+        ))
+        .unwrap();
+        assert!(found.contains("apps"));
+        assert!(found.contains("browser_use"));
+        assert!(!features_of("error: cannot read configuration").contains("error"));
+    }
+
     #[test]
     fn a_turn_runs_with_only_draft_canvas_and_no_shell() {
         let args = spec_args(SessionArg::New("ignored"));
         assert_eq!(args[..2], ["exec", "--json"]);
         assert!(args.windows(2).any(|w| w == ["--disable", "shell_tool"]));
+        assert!(args.contains(&"--ignore-user-config".to_string()));
         assert!(args.contains(&r#"sandbox_mode="read-only""#.to_string()));
         assert!(args.contains(&r#"approval_policy="never""#.to_string()));
         let servers = args.iter().find(|a| a.starts_with("mcp_servers=")).unwrap();
@@ -509,9 +607,49 @@ mod tests {
         assert!(args.windows(2).any(|w| w == ["--disable", "browser_use"]));
         assert!(args.windows(2).any(|w| w == ["--disable", "unified_exec"]));
         assert!(!args.windows(2).any(|w| w == ["--disable", "computer_use"]));
+        for feature in [
+            "hooks",
+            "skill_mcp_dependency_install",
+            "workspace_dependencies",
+            "in_app_local_automation",
+            "memories",
+            "shell_snapshot",
+            "code_mode_host",
+        ] {
+            assert!(args.windows(2).any(|w| w == ["--disable", feature]));
+        }
+        assert!(args
+            .windows(2)
+            .any(|w| w == ["--enable", "skip_host_skill_discovery"]));
         assert!(args.contains(&r#"web_search="disabled""#.to_string()));
         assert_eq!(args.last().map(String::as_str), Some("-"));
         assert!(!args.contains(&"--ephemeral".to_string()));
+    }
+
+    #[test]
+    fn new_and_resumed_turns_keep_user_config_skills_and_side_effects_out() {
+        for session in [SessionArg::New("fresh"), SessionArg::Resume("existing")] {
+            let args = spec_args(session);
+            assert!(args.contains(&"--ignore-user-config".to_string()));
+            for feature in [
+                "shell_tool",
+                "hooks",
+                "skill_mcp_dependency_install",
+                "workspace_dependencies",
+                "in_app_local_automation",
+                "memories",
+                "shell_snapshot",
+                "code_mode_host",
+            ] {
+                assert!(
+                    args.windows(2).any(|pair| pair == ["--disable", feature]),
+                    "{feature}"
+                );
+            }
+            assert!(args
+                .windows(2)
+                .any(|pair| pair == ["--enable", "skip_host_skill_discovery"]));
+        }
     }
 
     #[test]
@@ -520,6 +658,7 @@ mod tests {
         assert_eq!(args[..3], ["exec", "resume", "--json"]);
         assert_eq!(args[args.len() - 2..], ["01a16b26-519e", "-"]);
         assert!(args.windows(2).any(|w| w == ["--disable", "shell_tool"]));
+        assert!(args.contains(&"--ignore-user-config".to_string()));
     }
 
     #[test]

@@ -7,7 +7,8 @@
  * connection is handed to the session with the hello delivered again first, exactly as it arrived;
  * turned away, they are told so and the connection closes.
  */
-import { encode, parseWire, readGuestMessage, type HelloMessage, type Role } from './protocol';
+import { ByteBudget, RateLimit, REAL_CLOCK } from './clock';
+import { encode, exceedsMessageLimit, parseWire, readGuestMessage, type HelloMessage, type Role } from './protocol';
 import { sameSecret } from './rendezvous';
 import type { CollabTransport, TransportState } from './transport/types';
 
@@ -48,6 +49,9 @@ export function holdAtDoor(transport: CollabTransport, timeoutMs = DOOR_HELLO_MS
     let hello: { text: string; message: HelloMessage } | null = null;
     let decided = false;
     let gone: (() => void) | null = null;
+    let closed = false;
+    const budget = new ByteBudget(REAL_CLOCK, 4096, 8192);
+    const pings = new RateLimit(REAL_CLOCK, 1, 5);
     const timer = setTimeout(() => {
       if (hello) return;
       release();
@@ -55,6 +59,18 @@ export function holdAtDoor(transport: CollabTransport, timeoutMs = DOOR_HELLO_MS
       resolve(null);
     }, timeoutMs);
     const offMessage = transport.onMessage((text) => {
+      // Nothing at the door needs a diagram-sized message. Bound the parsing work before admission,
+      // too: the session's limits only start after the owner has let this connection in.
+      if (exceedsMessageLimit(text, 4096) || !budget.spend(text.length)) {
+        release();
+        transport.close('protocol');
+        if (!hello) resolve(null);
+        else if (!decided) {
+          closed = true;
+          gone?.();
+        }
+        return;
+      }
       const message = readGuestMessage(parseWire(text));
       if (!hello) {
         if (message?.t !== 'hello') {
@@ -67,12 +83,13 @@ export function holdAtDoor(transport: CollabTransport, timeoutMs = DOOR_HELLO_MS
         return resolve(door());
       }
       // Waiting: keep the connection looking alive, and nothing else.
-      if (message?.t === 'ping') transport.send(encode({ t: 'pong', n: message.n }), 'presence');
+      if (message?.t === 'ping' && pings.take()) transport.send(encode({ t: 'pong', n: message.n }), 'presence');
     });
     const offState = transport.onState((state: TransportState) => {
       if (state !== 'closed') return;
       release();
       if (!hello) return resolve(null);
+      closed = true;
       if (!decided) gone?.();
     });
     function release() {
@@ -98,6 +115,7 @@ export function holdAtDoor(transport: CollabTransport, timeoutMs = DOOR_HELLO_MS
         },
         onGone(listener) {
           gone = listener;
+          if (closed && !decided) listener();
         },
       };
     }

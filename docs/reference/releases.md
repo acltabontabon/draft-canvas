@@ -12,6 +12,13 @@ are generated from it (`scripts/changelog.mjs`).
 - Highlight a bullet with a **bold title** and `<!-- highlight -->`.
 - Minor and major releases get a launch-style page; a patch opts in with `<!-- launch -->` on its own
   line in a platform section.
+- A launch page can include screenshots from `docs/media/releases/vX.Y.Z/screenshots.json`.
+  Add an array of `{ "file": "nodi.png", "alt": "What the screenshot shows", "platform": "desktop" }`
+  entries, where platform is `shared`, `desktop` or `web`. Images must be regular PNG files in the
+  same directory, with lowercase kebab-case filenames. The generator checks every image and filters
+  the gallery for platform previews. No manifest means no gallery; historical releases need no changes.
+  Screenshots appear between the highlights and full notes, and their URLs and the README link point
+  to the release tag so later edits cannot change a published release's examples.
 
 ```markdown
 ### Shared

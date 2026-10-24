@@ -160,6 +160,17 @@ describe('invites and replies', () => {
   const answer = compactSdp(FIREFOX_ANSWER);
   const nonce = Uint8Array.from({ length: 16 }, (_, i) => i * 7);
 
+  it('filters unsafe addresses from hand-crafted binary invites and reply codes', () => {
+    for (const address of ['127.0.0.1', '0.0.0.0', '169.254.169.254', '224.0.0.251', '::1', '::', 'ff02::1', '::ffff:127.0.0.1']) {
+      // Skip compactSdp's safety checks, as an attacker writing the binary code would.
+      const candidates: CompactSdp['candidates'] = [{ type: 'host', protocol: 'udp', priority: 1, address, port: 80 }];
+      const invite = encodeInvite({ nonce, issuedAt: NOW, offer: { ...offer, candidates } });
+      expect(decodeInvite(invite.payload, NOW).offer.candidates, address).toEqual([]);
+      const reply = encodeReply({ nonce, answer: { ...answer, candidates } });
+      expect(decodeReply(reply, { nonce, expiresAt: invite.expiresAt }, NOW).candidates, address).toEqual([]);
+    }
+  });
+
   it('round-trips an invite with its nonce and a 30-minute expiry', () => {
     const { payload, expiresAt } = encodeInvite({ nonce, issuedAt: NOW + 999, offer });
     expect(payload.startsWith('1.')).toBe(true);

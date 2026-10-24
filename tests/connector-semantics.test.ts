@@ -144,9 +144,12 @@ describe('capabilityFor — the capability matrix', () => {
     expect(capabilityFor('stream', 'searchIndex')).toEqual(capabilityFor('topic', 'searchIndex'));
     expect(capabilityFor('stream', 'database')).toEqual(capabilityFor('topic', 'database'));
     expect(capabilityFor('stream', 'queue')).toEqual(capabilityFor('topic', 'queue'));
-    // A stream never dead-letters itself — it gets the topic's guidance, not `queue>deadLetter`.
-    expect(capabilityFor('stream', 'deadLetter')).toEqual(capabilityFor('topic', 'deadLetter'));
-    expect(capabilityFor('stream', 'deadLetter')?.defaultRelation).toBeUndefined();
+    // A stream never dead-letters itself — unusual like a topic, never `queue>deadLetter`, in its own
+    // words: it has no subscriber queues, its consumer parks what it can't process.
+    const fromStream = capabilityFor('stream', 'deadLetter')!;
+    expect(fromStream).toMatchObject({ relations: capabilityFor('topic', 'deadLetter')!.relations, status: 'unusual' });
+    expect(fromStream.defaultRelation).toBeUndefined();
+    expect(fromStream.guidance).toMatch(/consumer/);
   });
 
   it('queue → queue is ambiguous — no capability at all', () => {
@@ -194,8 +197,10 @@ describe('capabilityFor — the capability matrix', () => {
   it('a dead-letter queue is otherwise a plain queue for every pairing without its own row', () => {
     expect(capabilityFor('deadLetter', 'service')).toEqual(capabilityFor('queue', 'service'));
     expect(capabilityFor('deadLetter', 'worker')).toEqual(capabilityFor('queue', 'service'));
-    // Feeding one is the exception: a consumer parking a message it gave up on has its own row.
-    expect(capabilityFor('service', 'deadLetter')!.defaultRelation).toBe('deadLetters');
+    // Feeding one is the exception: a consumer writing to one has its own row, which doesn't claim
+    // the queue's own redrive — `deadLetters` is one pick away (a stream consumer's path).
+    expect(capabilityFor('service', 'deadLetter')!.defaultRelation).toBe('publishes');
+    expect(capabilityFor('service', 'deadLetter')!.relations).toContain('deadLetters');
     expect(capabilityFor('worker', 'deadLetter')).toEqual(capabilityFor('service', 'deadLetter'));
     expect(capabilityFor('deadLetter', 'deadLetter')).toBeUndefined();
   });

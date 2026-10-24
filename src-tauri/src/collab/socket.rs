@@ -25,6 +25,10 @@ const CLOSE_REPLY_WAIT: Duration = Duration::from_secs(1);
 const MAX_CLOSE_REASON: usize = 123;
 /// How long a guest has to answer the challenge: its page does so at once.
 const PROOF_TIMEOUT: Duration = Duration::from_secs(5);
+/// The expected proof is under 100 bytes. Unauthenticated input never needs an edit-sized JSON
+/// parse, and control frames must not keep an unauthenticated socket busy for the whole timeout.
+const MAX_PROOF_TEXT: usize = 256;
+const MAX_PROOF_FRAMES: usize = 16;
 
 const NORMAL: u16 = 1000;
 const GOING_AWAY: u16 = 1001;
@@ -77,20 +81,26 @@ pub(super) async fn run(
     address: IpAddr,
 ) {
     let nonce = uuid::Uuid::new_v4().simple().to_string();
-    let answer = timeout(PROOF_TIMEOUT, async {
+    let mut shutdown = shared.shutdown.subscribe();
+    let answer_for_challenge = async {
         let challenge = format!(r#"{{"t":"challenge","nonce":"{nonce}"}}"#);
         socket.send(Message::Text(challenge.into())).await.ok()?;
-        loop {
+        for _ in 0..MAX_PROOF_FRAMES {
             match socket.recv().await? {
-                Ok(Message::Text(text)) => return Some(text.to_string()),
+                Ok(Message::Text(text)) if text.len() <= MAX_PROOF_TEXT => {
+                    return Some(text.to_string())
+                }
                 Ok(Message::Ping(_) | Message::Pong(_)) => continue,
                 _ => return None,
             }
         }
-    })
-    .await
-    .ok()
-    .flatten();
+        None
+    };
+    let answer = tokio::select! {
+        biased;
+        () = stopped(&mut shutdown) => None,
+        answer = timeout(PROOF_TIMEOUT, answer_for_challenge) => answer.ok().flatten(),
+    };
     let proved = answer
         .as_deref()
         .and_then(read_proof)

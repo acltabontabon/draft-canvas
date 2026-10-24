@@ -512,6 +512,10 @@ mod tests {
             "10",
             "825a1201bfb2f108f12fde862a8c4bec802dcb7a9387c1aeb48e920fd758ec4a",
         ),
+        (
+            "11",
+            "1e132506dc0a993d3140c4c06798df2b7b0140a18d422699103f49d13641d39c",
+        ),
     ];
 
     #[test]

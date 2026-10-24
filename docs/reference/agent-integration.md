@@ -94,6 +94,7 @@ pattern in the view is missing, read from the diagram's own semantics (`src/agen
 | `shared-database` | Two or more services, workers or schedulers write (`writes`, `readsWrites`) the same database. |
 | `no-consumer` | A queue, topic or stream receives messages and nothing consumes them. |
 | `no-dead-letter` | A queue with consumers has no dead-letter path, its own or a consumer's; or a stream consumer has nowhere to park a record. Topics never get this. |
+| `dead-letter-source` | A dead-letter queue is fed by something other than the queue whose messages it parks: a topic, a stream, or a consumer that writes to it itself. Names the queue to dead-letter from, or the consumer queue to add between a topic and its subscriber. A stream's consumer parking a record is not flagged. |
 | `no-producer` | A queue, topic or stream is consumed and nothing in the view sends to it. Not in inside views. |
 | `cache-not-written` | A cache is read and nothing writes, refreshes or invalidates it. |
 | `unconnected` | Shapes with no connections, in a view that has connections. Not in inside views. |
@@ -198,7 +199,18 @@ tool call, tool update and stopped). Each agent is a `Backend` (locate, sign-in,
 | Agent | Command (prompt on stdin) | Kept to Draft Canvas by |
 | --- | --- | --- |
 | Claude Code 2.1.295+ | `claude -p --output-format stream-json`, `--resume` for later turns | `--tools ""`, `--strict-mcp-config` with only Draft Canvas, `--allowedTools mcp__draft-canvas__*`, hooks off |
-| Codex 0.163.0+ | `codex exec --json`, `codex exec resume <thread>` for later turns | `--disable shell_tool` (and `unified_exec`), `sandbox_mode="read-only"`, `approval_policy="never"`, `mcp_servers` replaced by Draft Canvas only, its tools pre-approved |
+| Codex 0.163.0+ | `codex exec --json`, `codex exec resume <thread>` for later turns | `--ignore-user-config`, shell and tool-providing features off, read-only sandbox, approvals off, only the run's Draft Canvas server configured |
+
+Codex starts only after its feature listing can be verified; an unsuccessful or unreadable probe
+refuses the run instead of omitting tool restrictions. CLI discovery, version and sign-in probes
+have deadlines through process exit and pipe closure, with a combined 1 MiB output limit.
+
+Codex merges MCP tables from configuration overrides, so replacing `mcp_servers` alone does not
+remove other servers. Companion runs use `--ignore-user-config` for both new and resumed turns;
+feature discovery uses a private temporary configuration home. Actual turns keep the person's
+`CODEX_HOME` for authentication and sessions, without copying credentials. User configuration
+overrides, including custom models, providers and credential-store settings, do not carry into Nodi:
+it uses Codex's defaults. External agents connected normally keep their own configuration.
 
 The brief (`BRIEF`) goes in as the agent's whole system prompt, replacing its coding one: Claude Code's
 `--system-prompt`, Codex's `model_instructions_file` (the run folder's `brief.md`). Each turn's prompt
@@ -215,6 +227,8 @@ agent folder). The bridge holds a run's calls to its policy (`agent/runs.rs`):
 - `update_diagram` only in **Apply changes directly** mode; otherwise `PROPOSAL_ONLY`, and the agent
   submits a proposal, tagged with its `run`.
 - Stopping the run, or turning agent access off, ends it: calls not yet committed fail with `CANCELLED`.
+  A terminal event from the agent closes the same authority immediately, even if its process has not
+  exited. Stop requested during process startup is remembered and applied when the process appears.
 - The project's code only when the person allowed it. A run without that is offered `ask_to_read_code`,
   which the app answers itself ("end your turn"); Nodi sees the call in the run and asks the person in
   the chat. With it, the connector carries `DRAFT_CANVAS_CODE=1` and offers `list_code`, `search_code`
@@ -245,6 +259,19 @@ and calls are kept few:
 The agent's session id is kept per diagram and agent in `companion/sessions.json`; the conversation
 shown is the page's, in memory only. Replies may name parts as `[[id]]`; the companion shows their names
 and pins numbered points onto them.
+
+Run output is bounded independently of the agent's model budget: at most 128 MiB of raw stdout and
+stderr combined, 32 MiB per stdout line, and 1 MiB of parsed event text. Passing a limit fails the
+run and closes its tool access. At most 20,000 live events are emitted per run, independently of
+chunk merging. Recovery keeps at most 2,000 events per run, merging adjacent reply
+chunks so a streamed answer does not lose its beginning just because it arrived in small pieces.
+Snapshots and live events carry per-run sequence numbers. Reload recovery buffers live updates,
+then applies only those newer than the snapshot; it does not duplicate text already recovered.
+The two most recent completed turns remain available in native memory, so a process finishing
+before the reload snapshot is captured does not lose its answer. **New conversation** clears them
+for that diagram.
+The page caps conversations, reply text and tool steps; diagram snapshots used to skip redundant
+reads are weak references in a bounded cache, so visiting many diagrams does not keep their files alive.
 
 ## One diagram across a conversation
 

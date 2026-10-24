@@ -1,6 +1,6 @@
 # Agent companion: implementation plan
 
-Status: Phases 1–4 built, not released; [open questions settled](#settled-decisions). Desktop only. The
+Status: Released in 1.16.0 with Claude Code and Codex; [open questions settled](#settled-decisions). Desktop only. The
 companion's mascot is **Nodi** (NOH-dee), after the nodes diagrams are made of; the agent keeps its own
 name (Claude Code, Codex) wherever the person talks to it. Mockup: the "Canvas Agent Companion" design (pixel mascot,
 floating composer, conversation card, inline proposal review). Reviewed against the code by a second
@@ -43,7 +43,7 @@ with a narrower policy than an external agent gets.
    `AgentContext` for every request, including the direct update path that builds its own
    `AgentRequest`.
 6. Each stdout line goes through the backend's parser into `RunEvent`s, pushed as
-   `HostEvent::Companion { run, event }` on the existing `Channel<HostEvent>`, and kept in a bounded
+   `HostEvent::Companion { run, event, sequence }` on the existing `Channel<HostEvent>`, and kept in a bounded
    per-run buffer for reload recovery.
 7. The page's companion store folds events into the conversation. A proposal tagged with this run is
    reviewed in the card.
@@ -157,6 +157,14 @@ There is no long-running child process in the app yet; this is the first.
   so stopping the agent also stops the sidecar it started.
 - **Limits**: one run per diagram, two at once; a run with no output for 5 minutes stops.
 
+The hardening review also bounds total output (128 MiB across stdout and stderr), parsed event text
+(1 MiB), live events (20,000) and recovery events (2,000). Adjacent reply chunks merge in recovery, so a streamed reply
+keeps its beginning. CLI setup probes have their own 1 MiB output cap and deadline through pipe
+closure; Codex refuses startup when its feature restrictions cannot be verified. A terminal event
+closes the run's policy and stops a lingering process, and Stop applies during setup as well as
+after process launch. See the current [agent reference](agent-integration.md#nodi-the-desktop-companion)
+for the runtime contract.
+
 ### Stopping a run
 
 Killing the CLI is not enough: broker tasks outlive the connection, and page work is cancelled per
@@ -192,10 +200,10 @@ is regenerated with `npm run desktop:bindings`.
 | `companion_agents()` | Installed backends, version and sign-in. Lazy: finding `claude` may start a login shell, like `agent_clients`. |
 | `companion_send(request)` | Validates access and scope, registers the policy, spawns. Errors are `AppError`. |
 | `companion_cancel(runId)` | [Stopping a run](#stopping-a-run). |
-| `companion_runs()` | Live runs with their buffered events, so a reloaded page rebuilds running conversations. |
+| `companion_runs()` | Live runs and the last two completed turns, with buffered events and sequence highwaters for reload recovery. |
 | `companion_forget(diagramId)` | Drops the stored session. |
 
-New `HostEvent::Companion { run, event: RunEvent }`; `agent-request` context gains `run?: string`.
+New `HostEvent::Companion { run, event: RunEvent, sequence }`; `agent-request` context gains `run?: string`.
 
 ## Sidecar and broker
 
@@ -374,7 +382,8 @@ undo of an accepted proposal keeps remote changes; access turned off mid-run sto
   bullet that names a part of the view gets a number, and the same number is pinned on that part
   (`PointPins.tsx`: a shape's top-left shoulder, beside a connector's label). Hovering a pin lights its
   point and parts, and the point lights its pin; clicking a pin opens the conversation at that point.
-  Only the latest finished turn is pinned, never one with a proposal up, and only while Nodi is open.
+  Only the latest finished turn is pinned, never one with a proposal up (the change holds the canvas,
+  so its points aren't numbered in the bubble either), and only while Nodi is open.
   The light is `uiStore.pointedIds`, transient like the jump flash; an id the view doesn't have points
   at nothing (`numberedBlocks`, `replyPoints` in `companion.ts`).
 - **Nodi talks from rest, and only exists with an agent.** No pill of unlabelled buttons: a pixel
@@ -395,10 +404,14 @@ undo of an accepted proposal keeps remote changes; access turned off mid-run sto
 - **Accept** is the panel's own commit (`useProposalReview`), one undo step; each surface clears only
   its own canvas preview. The proposal badge leaves a proposal the companion is showing to the companion.
 - **Activity line** skips work tagged with a companion run. Turning agent access off stops every run.
-- **The agent's brief** asks for advice before edits, whole patterns (read, miss, fill and the write
-  policy for cache-aside, with a flow and a policy note), facts kept apart from assumptions, risks
-  raised as open points, and a waiting proposal revised in place (`revises`) rather than replaced. It
-  changes only what was asked: a tidy-up is the `arrange` op alone, and regrouping, recolouring or
+- **The agent's brief** asks for advice before edits: a question gets an answer pinned to the parts
+  it names and changes nothing (no note, no open point), with the change or open points offered. A
+  change is sized to the request: a whole pattern when one is asked for (read, miss, fill and the
+  write policy for cache-aside, with a flow and a policy note), one element and the relationships it
+  needs when that is asked for, the rest of its pattern suggested in the reply; descriptions stay
+  short. Facts are kept apart from assumptions, a change records the risks it notices as open points,
+  and a waiting proposal is revised in place (`revises`) rather than replaced. It changes only what
+  was asked: a tidy-up is the `arrange` op alone, and regrouping, recolouring or
   renaming is suggested in the reply, not done.
 - Collaboration: a guest never gets the companion (`ui/Editor/companionGate.ts`); an edit that lands
   before Accept, local or remote, turns the proposal into a conflict. Selective undo of an accepted

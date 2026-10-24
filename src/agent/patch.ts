@@ -158,6 +158,28 @@ function overFileLimits(file: DraftDocument): { what: string; count: number; lim
   return undefined;
 }
 
+/**
+ * Ops run in order, so an id only a later `add` creates is not there yet for an earlier op. Agents
+ * read "no element X in this view" as a typo and retried with the same order; this names the op
+ * that adds it. Only the ids an add lists at its own level — what a reference here could mean.
+ */
+function laterAdd(ops: readonly unknown[]): (problem: { path: string; message: string }) => string | undefined {
+  const addedBy = new Map<string, number>();
+  ops.forEach((op, i) => {
+    if (!op || typeof op !== 'object' || (op as Json).op !== 'add') return;
+    for (const field of ['nodes', 'relationships', 'groups', 'flows', 'notes', 'openPoints']) {
+      const items = (op as Json)[field];
+      if (Array.isArray(items)) for (const item of items) if (item && typeof (item as Json).id === 'string' && !addedBy.has((item as Json).id as string)) addedBy.set((item as Json).id as string, i);
+    }
+  });
+  return ({ path, message }) => {
+    const id = /"([^"]+)" in this view$/.exec(message)?.[1];
+    const at = Number(/^\/ops\/(\d+)\//.exec(path)?.[1] ?? Number.NaN);
+    const by = id === undefined ? undefined : addedBy.get(id);
+    return by !== undefined && by > at ? `; /ops/${by} adds it and ops run in order, so put that add before /ops/${at}` : undefined;
+  };
+}
+
 export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknown, rawLayout: unknown, rawScope: unknown = undefined): PatchResult {
   const problems = new Problems();
   const r = new Reader(problems);
@@ -468,6 +490,7 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
     }
     if (view !== before) counts.updated += 1;
   });
+  problems.explain(laterAdd(ops));
   problems.throwIfAny();
   if (!view) throw new AgentError('NOT_FOUND', 'That view no longer exists.');
 
@@ -1334,7 +1357,11 @@ function flowStepsFor(r: Reader, raw: unknown, at: string, flow: DraftFlow, know
       if (step.frame !== undefined) {
         const frame = typeof step.frame === 'string' ? unused.find((s) => s.id === step.frame && !s.edgeId) : undefined;
         if (!frame) {
-          r.problems.add('INVALID_REFERENCE', `${stepAt}/frame`, `no frame step "${String(step.frame)}" in this flow`);
+          // Agents read frame as "name this step" and invent an id; say which there are, and what a
+          // new step without a relationship is sent as.
+          const frames = flow.steps.filter((s) => !s.edgeId).map((s) => `"${s.id}"`);
+          const has = frames.length ? `its frame steps are ${frames.slice(0, 6).join(', ')}${frames.length > 6 ? ', …' : ''}` : 'it has no frame steps';
+          r.problems.add('INVALID_REFERENCE', `${stepAt}/frame`, `no frame step "${String(step.frame)}" in this flow (${has}); frame keeps an existing step, so for a new one drop frame and send {spotlight: [ids], caption?}`);
           return;
         }
         unused.splice(unused.indexOf(frame), 1);

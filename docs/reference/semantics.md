@@ -89,8 +89,9 @@ Database, anything touching `generic`) is an unrestricted connector with no defa
 | Topic → Database | ingests | ingests |  |
 | Queue → Topic | dependsOn, event | *(none)* | unusual; offers **Insert Worker** |
 | Queue → Dead-letter queue | deadLetters | deadLetters | `failure`, dashed |
-| Service → Dead-letter queue | deadLetters, publishes | deadLetters | `failure`, dashed |
+| Service → Dead-letter queue | publishes, deadLetters | publishes | `failure`, dashed; dead-lettering is the queue's redrive, so only a stream consumer's route takes `deadLetters` |
 | Topic → Dead-letter queue | dependsOn | *(none)* | unusual |
+| Stream → Dead-letter queue | dependsOn | *(none)* | unusual |
 | Database → Database | ingests, replicates, cdc, syncs, transforms | ingests |  |
 | Object Storage → Database | transforms, ingests | transforms |  |
 | Worker → Search Index | searches, indexes, dependsOn | indexes |  |

@@ -14,7 +14,7 @@
  * so a person's own arrangement elsewhere can never fail an agent's request.
  */
 
-import type { DraftEdge, DraftNode } from '../document/types';
+import type { DraftDocument, DraftEdge, DraftNode } from '../document/types';
 import { naturalArchitectureSize, type DescribeContext } from '../nodes/describe';
 import { nodeTechnologyIcon, technologyMarkBounds } from '../nodes/technology';
 import { isC4Element } from '../depth/c4';
@@ -297,4 +297,44 @@ export function checkQuality(
   if (!explicit?.size) return { errors, warnings };
   const asked = (issue: QualityIssue) => ROUTE_KINDS.has(issue.kind) && issue.ids.some((id) => explicit.has(id));
   return { errors: errors.filter((issue) => !asked(issue)), warnings: [...warnings, ...errors.filter(asked)] };
+}
+
+/**
+ * The narrowest `arrange` that could make room for what didn't fit: the innermost boundary holding
+ * every shape a problem names, or the whole view when they don't share one.
+ */
+export function smallestArrange(view: DraftDocument, issues: readonly QualityIssue[]): Record<string, unknown> {
+  const byId = new Map(view.nodes.map((n) => [n.id, n]));
+  const chains = issues
+    .flatMap((issue) => issue.ids)
+    .filter((id) => byId.has(id))
+    .map((id) => {
+      const chain: string[] = [];
+      let at = byId.get(id)?.parentId;
+      while (at && !chain.includes(at)) {
+        chain.push(at);
+        at = byId.get(at)?.parentId;
+      }
+      return chain;
+    });
+  const shared = chains[0]?.find((group) => chains.every((chain) => chain.includes(group)));
+  return shared ? { op: 'arrange', scope: { group: shared } } : { op: 'arrange' };
+}
+
+/**
+ * What a refusal for `issues` tells the agent to do, by the first one: the op that re-lays out the
+ * part they're in, or the label or text to shorten. Without it a proposal's refusal said only "would
+ * leave unreadable content", and agents resubmitted the same ops with a different top-level layout.
+ */
+export function unreadableFix(issues: readonly QualityIssue[], arrange: Record<string, unknown>): string {
+  const op = JSON.stringify(arrange);
+  switch (issues[0]?.kind) {
+    case 'clipped-text': return 'Shorten that text.';
+    case 'label-over-node':
+    case 'label-collision':
+    case 'label-crossed': return `Shorten those connector labels, or add ${op} as the last op to re-lay them out.`;
+    case 'shared-run':
+    case 'through-node': return `Add ${op} as the last op to re-lay them out, or give one connector a route with {op:"update", id, set:{route:{from, to}}}.`;
+    default: return `Add ${op} as the last op to make room.`;
+  }
 }

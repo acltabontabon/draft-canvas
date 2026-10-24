@@ -145,16 +145,33 @@ function applyRooms(file: DraftDocument, changes: readonly Change[]): DraftDocum
   if (plans.size === 0) return file;
 
   const paths = new Map<RoomId, DepthPath | undefined>();
-  const resolve = (room: RoomId, seen: Set<RoomId> = new Set()): DepthPath | undefined => {
-    if (paths.has(room)) return paths.get(room);
-    let path = pathOf(index, room);
-    if (!path && addedNodeRooms.has(room) && !seen.has(room)) {
-      seen.add(room);
-      const parent = resolve(addedNodeRooms.get(room)!, seen);
-      path = parent && [...parent, room];
+  const resolve = (room: RoomId): DepthPath | undefined => {
+    // These owners came off the wire, not from the bounded document tree. Resolve iteratively:
+    // thousands in a chain used to overflow the stack before the depth check below could run.
+    const trail: RoomId[] = [];
+    const seen = new Set<RoomId>();
+    let current = room;
+    while (!paths.has(current)) {
+      const existing = pathOf(index, current);
+      if (existing) {
+        paths.set(current, existing);
+        break;
+      }
+      const parent = addedNodeRooms.get(current);
+      if (parent === undefined || seen.has(current)) {
+        paths.set(current, undefined);
+        break;
+      }
+      seen.add(current);
+      trail.push(current);
+      current = parent;
     }
-    paths.set(room, path);
-    return path;
+    let path = paths.get(current);
+    for (let i = trail.length - 1; i >= 0; i -= 1) {
+      path = path && path.length < LIMITS.maxInsideDepth ? [...path, trail[i]!] : undefined;
+      paths.set(trail[i]!, path);
+    }
+    return paths.get(room);
   };
 
   const ordered = [...plans.keys()]

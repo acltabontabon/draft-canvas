@@ -129,15 +129,16 @@ export class Reassembler {
     const payload = bytes.subarray(FRAME_HEADER_BYTES);
 
     if (count === 1) {
-      if (this.partials.has(id)) this.discard(id, 'malformed', `message ${id} restarted before it finished`);
+      if (this.partials.has(id)) return this.discard(id, 'malformed', `message ${id} restarted before it finished`);
       if (payload.length > this.maxMessageBytes) return this.drop('oversize', `message ${id}`);
       return this.deliver(payload, kind, id);
     }
 
     let partial = this.partials.get(id);
     if (partial && (partial.count !== count || partial.kind !== kind)) {
-      this.discard(id, 'malformed', `message ${id} changed shape mid-way`);
-      partial = undefined;
+      // A drop may dispose this reassembler (the transport closes on malformed input). Never
+      // recreate state after that callback, or keep part of the rejected replacement message.
+      return this.discard(id, 'malformed', `message ${id} changed shape mid-way`);
     }
     if (!partial) {
       if (this.partials.size >= this.maxPartials) {
@@ -230,6 +231,8 @@ export class Reassembler {
       this.partials.delete(id);
       this.buffered -= partial.bytes;
       this.drop('timeout', `message ${id} stalled for ${this.timeoutMs} ms (${partial.received}/${partial.count} chunks)`);
+      // The transport's drop callback may dispose all remaining partials and reset the byte count.
+      if (this.disposed) return;
     }
     this.schedule();
   }

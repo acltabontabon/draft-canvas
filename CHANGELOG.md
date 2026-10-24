@@ -1,203 +1,130 @@
 # Changelog
 
-Every notable change to Draft Canvas, written once. The web app and the desktop app
-share one version and ship together; an `-alpha.N` or `-beta.N` section is a desktop preview ahead of
-the release it leads to. Draft Canvas for VS Code, retired at 0.2.0, kept
-[its own changelog](https://github.com/acltabontabon/draft-canvas/blob/extension-v0.2.0/vscode-extension/CHANGELOG.md).
+Notable changes to Draft Canvas. Web and desktop share one version; **Shared**, **Desktop** and
+**Web** identify who each change is for. Release notes and in-app What's New are generated from
+this file. See [Release notes](docs/reference/releases.md#release-notes).
 
-From 1.10.0, each change says who it's for — **Shared** (web and desktop), **Desktop** or **Web** — and
-the release notes and the in-app What's New are generated from here. See
-[Release notes](docs/reference/releases.md#release-notes) for how to write an entry.
+The retired VS Code extension has [its own changelog](https://github.com/acltabontabon/draft-canvas/blob/extension-v0.2.0/vscode-extension/CHANGELOG.md).
 
 ## [Unreleased]
+
+## [1.16.0] - 2026-10-24
+
+Draw together. Think with your own agent.
+
+Nodi brings Claude Code and Codex onto the canvas, live collaboration connects your team directly,
+and a calmer editor makes room for the architecture.
 
 ### Shared
 
 #### Added
 
-- **Live collaboration** — edit one canvas together in real time. Start a session, share one link,
-  and let people in as they ask to join. Everyone's browser connects straight to yours: your diagram
-  never passes through a server, and your copy stays the one that's saved. See who's here and where,
-  each other's cursors and selections, follow the presenter, decide who can edit, take back any one
-  person's changes, and undo only your
-  own changes. <!-- highlight -->
-- **Rich text** — Text shapes are written in Markdown: headings, bold and italic, highlights,
-  inline code, syntax-highlighted code blocks and diffs, lists and checklists, tables, quotes,
-  GitHub-style callouts and coloured words, drawn the same on the canvas and in every export. A
-  format bar and shortcuts help while you type, and Aa adds Serif, Mono and Hand fonts and Card,
-  Marker and Banner backgrounds. AI agents can write and style them too. <!-- highlight -->
-- **AI Agent actors** — an Actor can now be an AI Agent, drawn as a robot, for assistants, chatbots
-  and autonomous agents that act on your system. Agents can draw them too. <!-- highlight -->
-- **Actors that talk to each other** — connectors between people, AI agents and devices label
-  themselves: a user *asks* an agent, an agent *delegates to* another or *escalates to* a person, and
-  a service *notifies* the people and devices it reaches. Change an actor's kind and its connectors
-  follow.
+- **Live collaboration** — share a session link and approve each person who asks to join. Edit
+  together, see pointers and selections, follow the presenter, control editing access and take back
+  one person's changes. Your copy hosts and saves the diagram; no account or diagram server.
+  <!-- highlight -->
+- **Rich text** — write Markdown in Text shapes, including headings, code, tables, checklists and
+  callouts. A format bar, fonts and backgrounds help explain the diagram, with the same rendering
+  on the canvas and in exports. <!-- highlight -->
+- Actors can represent AI agents as robots. Connectors between people, agents, devices and services
+  suggest the appropriate relationship, and an untouched actor name follows its kind.
 
 #### Changed
 
-- Leaving a flow is easy to find: while a chosen flow dims the canvas, a pill names it with **Whole
-  diagram** to go back, and Escape does the same. The Flows panel is tidier: **Whole diagram** first,
-  every flow the same two lines, and **Trace a flow** and **Trace more steps** once, at the bottom.
-- Canvas settings is now **Settings → Canvas**, the same Settings dialog on the web and the desktop:
-  each drawing style shows a preview of itself, Intent Continuation is one switch, and the
-  background's fit, dim and blur sit together under the image.
-- The blank canvas has a centered heading with an inked underline and a tidy row of architecture
-  sketches. **View all starters** opens the full collection, with a subtle keyboard search hint.
-- Long diagram titles use more space on wide screens, and the header grows to hold wrapped lines
-  clear of the drawing and other controls.
-- **A calmer editor** — the header floats on the canvas, so the drawing runs to the top of the
-  window. A back arrow takes you to your diagrams, beside the diagram's name. The tools
-  are small drawings of their shapes, and the one in hand shows its name. **Present** and **Flows**
-  are one control, and **Share** holds drawing together live, exporting and a read-only link. Undo,
-  redo, canvas settings and **?** for help sit with zoom at the bottom right; tidy up and find and
-  replace are a right-click on the canvas away. <!-- highlight -->
-- **Guided sharing** — share from desktop or web into a dedicated reader with the actual diagram,
-  fixed shapes, level navigation and Flow playback. Export & share has its own Share tab and real
-  diagram preview; passphrase protection is on by default, with encryption and unlocking kept local.
-  Desktop links open at `app.draftcanvas.dev`. Generated links remain available to copy or open
-  directly in Guided reader when a browser's clipboard is unavailable or isolated.
-  Diagrams and levels without a playable Flow open in Focus view, with more canvas space and
-  navigation and inspection controls under Contents instead of an empty walkthrough or permanent
-  sidebar. Guided reader uses the same open canvas, with a compact manual control bar and an
-  optional step selector. Refined attachment markers open one readable card beside its shape or
-  connector in both readers, with previous/next browsing across levels. Cards sit below the diagram
-  on small screens. Notes, decisions, code, pending items and resolutions remain easy to inspect.
-  Flow steps advance only on reader input and reveal the relevant detail for that step.
-  Self-contained links compact snapshot identities before compression, keeping all diagram content
-  local. Link preparation runs in a background worker, with stage feedback and cancellation.
-
-- An Actor's name follows its kind: switch a new User to Device and it becomes "Device". A name
-  you typed stays.
-
-- **Smoother large diagrams** — panning, dragging, selecting and drawing connectors on a diagram with
-  hundreds of shapes do less work per frame, large diagrams open faster, and the command palette and
-  Outline stay quick on them. <!-- highlight -->
-- The first screen loads about a third less code and styling; export tools and the editor's styles
-  load when first needed.
-- Arrange on a large diagram finishes in a second or two instead of freezing the page.
+- **A calmer editor** — floating controls leave more room for the drawing. Present and Flows sit
+  together; Share brings live collaboration, exports and read-only links into one place. Canvas
+  preferences live in Settings, with clearer drawing-style previews. <!-- highlight -->
+- **Guided sharing** — share a read-only diagram with level navigation, flow playback and notes.
+  Passphrase protection is on by default, links are prepared locally in a cancellable background
+  worker, and diagrams without a playable flow open in Focus view. <!-- highlight -->
+- **Smoother large diagrams** — panning, dragging, selecting, search and Arrange do less work, and
+  the first screen loads less code. Export tools load when needed. <!-- highlight -->
+- Flows offer **Whole diagram** and Escape to leave the chosen flow; the blank canvas has a
+  searchable starter collection, and long titles wrap clear of the controls.
 
 #### Fixed
 
-- Presenting, a step's card shows its chips in full instead of cutting them off, and a note on a
-  short connector opens beside it instead of at the bottom of the screen.
-- The canvas no longer gains a border glow when it receives keyboard focus or shapes are deleted.
-- Home and About share the same Draft Canvas logo, including its dark tile and teal connector.
-- Toolbar separators use quiet vertical lines so they no longer resemble connector tools.
-- Panning and zooming the canvas no longer create horizontal or vertical page scrollbars.
-- The Add to canvas picker has clearer spacing and complete shape previews, including Data Store,
-  Queue and Actor icons that used to be clipped.
-- Shared diagrams offer only what they can do: no Arrange, Find & Replace, Tidy connectors,
-  background image or other edits in the command palette and right-click menus.
-- While presenting, clicking or panning no longer saves the camera into the diagram, a camera you
-  moved yourself stays put unless the next step is off screen, and clicking a note's chip or the
-  flow's title no longer gets in the way.
-- Leaving Present after looking inside a shape no longer moves the camera to the top level's view.
-- Selecting a boundary no longer covers the boundaries and connectors inside it, so they stay
-  clickable while it's selected.
-- Cut and paste, Insert worker and Convert to junction keep the open points and source evidence on
-  what they move, and a copied shape's inside view keeps its flow variants linked.
-- Undo or redo that leaves a shape's inside keeps where you'd panned to there.
-- A rename made elsewhere while the diagram's title field is focused is no longer undone when you
-  click away.
-- An empty Text removed with Escape no longer comes back after a reload.
-- Two code snippets of the same length no longer show each other's highlighting.
-- Exporting every level gives each image its own file name, C4-PlantUML export no longer turns `//`
-  or `***` into italics or bold, and code notes in a sequence diagram keep their indentation.
-- Escape closes an open dialog rather than the depth map behind it, and finishing an IME
-  composition with Escape no longer clears the Library search.
-- In the Library, typing in search with a Move menu open no longer moves a diagram, and a file
-  dropped on a dialog is no longer imported behind it.
-- Opening a share link asks first when the current diagram couldn't be saved.
-- Arrange and imports say when they couldn't load, instead of doing nothing.
-- Find & Replace no longer opens over the clipboard permission prompt.
-- Tooltips no longer stay closed when you hover back onto a button quickly.
-- An agent's or proposal's preview draws connectors with their bends, side by side when parallel,
-  and with their reply line.
-- An agent's diagram where two services call the same set of others (a frontend and a checkout
-  service, both calling cart, catalog, currency and shipping) is no longer refused or drawn as a
-  tangle: each caller's calls share one trunk, running straight past the other caller.
-- The status bar says "Saved" only once every edit is saved.
+- Presentation keeps manual camera framing, avoids saving camera moves, and shows step cards and
+  note chips without clipping or covering their controls.
+- Nested boundaries remain clickable; leaving a nested presentation and undoing across levels keep
+  the correct camera. Copy, cut and connector conversions preserve open points and source evidence.
+- Text edits no longer revert external renames, resurrect empty Text shapes or share code highlights
+  between snippets of the same length.
+- Exports keep distinct level filenames, code indentation and literal punctuation in C4-PlantUML.
+- Dialogs, IME composition, Library search and file drops respect the active control. Read-only
+  diagrams hide editing commands, failed imports and Arrange report errors, and Saved reflects
+  completed writes.
+- Agent previews preserve connector bends and reply lines, and diagrams with parallel calls to the
+  same services route without being refused as unreadable.
+
+#### Security
+
+- Collaboration validates crafted connection addresses and deeply nested patches, bounds traffic
+  before admission and during reconnects, and replays held edits in short batches. Offline edits
+  wait for proof of the owner's identity on encrypted peer connections; stale retries cannot
+  reconnect a different session.
+- Take-back history and validation work stay bounded through repeated joins, large inputs and long
+  sessions. The owner is told when older changes are no longer available to undo.
 
 ### Desktop
 
 #### Added
 
-- **Nodi** — a companion in the canvas corner that asks your own Claude Code or Codex about the diagram
-  you're looking at, without a terminal. Ask about what you've selected, or pick one of its
-  suggestions; answers name the parts they're about and pin numbered points onto them. Changes come
-  back as a proposal drawn on the canvas, with **Now / Proposed** to compare, revised in place when you
-  ask, and applied as one undo step. Your agent gets the Draft Canvas tools for that diagram only, and
-  the conversation shows the tokens it uses. <!-- highlight -->
-- **Share on your local network** — during a live session, the desktop app can share with everyone
-  on the same network through one link they open in a browser, with no reply code. Meant for a
-  trusted network: that link's traffic isn't encrypted.
+- **Nodi** — ask your own Claude Code or Codex about the diagram or selected parts, directly on the
+  canvas. Answers point at the architecture; changes arrive as a proposal with **Now / Proposed**
+  comparison and one-step acceptance. Token usage stays visible. <!-- highlight -->
+- During a live session, **Share on your local network** serves the editor to nearby browsers.
+  Each person still needs your approval; use a trusted network or VPN because LAN traffic is
+  unencrypted.
 
 #### Changed
 
-- Reviewing a proposal: the change is drawn solid and the rest of the diagram steps back; a change that
-  moves shapes is shown on a tracing sheet with trails from where shapes stand. The review panel frames
-  the change beside itself, lists changes in plain words, keeps **Accept** and **Reject** in reach in a
-  short window, and shows a decided proposal as a record.
-- The menu bar has **Find and Replace…**, **Commands…**, **Arrange Diagram** and **Canvas Settings…**
-  (in View on macOS, at the end of Edit on Windows and Linux).
-- **Canvas Settings…** in the menu bar opens **Settings → Canvas**, beside General, AI agents,
-  Updates and Support.
-- AI agents no longer take focus from the field you're typing in, wait while you trace a flow, and
-  no longer hold up saving on large projects.
-- The agent skill draws a repository at every C4 level it needs: a component view for the service
-  that does the main path's work, each view's main flow first, failure variants only for paths the
-  code handles, and evidence lines that point at the code they cite. It no longer draws a store
-  from a library's dependencies, or one database shared by services that each have their own.
-- The proposals panel checks proposals in the background, and only when something needs it.
-- Editing a large diagram does less work per keystroke, and exporting a large image writes faster.
-- Home rescans less: not for a rebuilt `dist`, `build` or `node_modules` folder, and recent files no
-  longer push project folders out of what it watches.
+- Proposal review groups changes in plain language, shows moved shapes on a tracing sheet and keeps
+  Accept and Reject in reach. Checks run in the background only when needed.
+- The agent skill draws the C4 levels and real request paths supported by the code, cites source
+  evidence and keeps failure variants specific to implemented behavior.
+- Agent validation explains unknown fields, operation order and layout problems with actionable
+  fixes. Semantic review distinguishes a queue's dead-letter path from a stream consumer parking
+  failed records.
+- Native menus expose commands, Arrange, Find and Replace and Canvas Settings. Agents wait while
+  you type or trace, and project rescans ignore generated folders.
 
 #### Fixed
 
-- A file touched by a sync client or git without changing its contents is no longer reloaded with
-  a notice, and no longer blocks AI agents while you have unsaved edits.
-- Two saves to the same file at the same moment can no longer lose one, an agent's save no longer
-  lands in the file you picked in an open Save As, and ⌘S during an agent's save no longer reports
-  the file as changed by something else.
-- Save As over an existing file no longer keeps that file's old background image, and renaming a
-  file can no longer replace one that appeared under the new name meanwhile.
-- The recovery copy always holds your latest edits, follows a renamed file, and is removed when you
-  undo back to the saved state.
-- Home notices changes that land while a project is being listed, and folders with a dot in their
-  name being removed or renamed; the open file keeps hearing about outside changes however many
-  project folders are listed.
-- A proposal for one diagram can no longer show, or be accepted, on another, accepting one no
-  longer gets stuck when it changes nothing or you're mid-drag, and one proposal's error no longer
-  shows on the next.
-- An agent working while you edit can no longer delete what you just added, leave a flow's variants
-  pointing at a removed flow, or go past a diagram's flow limit, and its preview no longer shows
-  your new shapes as removed.
-- An agent's change refused because you were dragging or in a read-only diagram is reported to the
-  agent as refused, and one oversized request is refused on its own instead of dropping the
-  connection.
-- On Windows, two AI agents connecting at the same moment no longer get told the app isn't running.
-- The update window shows links as links, a stalled update download gives up after a minute so you
-  can try again, and the daily update check counts time the Mac was asleep.
+- Nodi stops throughout startup, releases finished processes and restores replies in the correct
+  order after reload. Conversations and diagram snapshots no longer retain old files indefinitely.
+- Concurrent saves, agent writes, Save As and renames no longer overwrite a newer file or the wrong
+  destination. Recovery follows the latest edits and renamed file, and clears when no longer needed.
+- Proposals stay with their diagram, handle no-op acceptance and interrupted review, and clear stale
+  previews. Agent edits preserve new content and flow references and report refused changes honestly.
+- Unchanged sync-client writes no longer trigger reloads or block agents. Folder watching, concurrent
+  Windows agent connections, update links and stalled-download recovery are more reliable.
+
+#### Security
+
+- Companion turns are limited to their diagram, with tool authority closed on Stop or completion.
+  CLI probes and process output are bounded, and oversized requests fail independently.
+- Codex companion turns ignore user configuration to prevent other configured MCP servers, hooks
+  or skill helpers becoming available. Sign-in and sessions are retained, but Codex's default model,
+  provider and credential-store settings are used.
 
 ### Web
 
 #### Changed
 
-- **A new home** — Draft Canvas lives at [draftcanvas.dev](https://draftcanvas.dev/), and the editor
-  at [app.draftcanvas.dev](https://app.draftcanvas.dev/). Old links forward to the same page there.
-  <!-- highlight -->
+- The website is now [draftcanvas.dev](https://draftcanvas.dev/) and the editor is
+  [app.draftcanvas.dev](https://app.draftcanvas.dev/). Existing links forward to the same content.
 
 #### Fixed
 
-- The hosted editor blocks embedding in other pages to prevent clickjacking.
-- Backups and restores keep background images.
-- A refresh with unsaved edits keeps them even if saving them fails at first, or the diagram was
-  renamed in another tab.
-- Closing a diagram no longer removes background images its undo history needs in another tab.
-- Duplicating, importing or deleting a diagram is no longer reported as failed when only the list
-  couldn't be refreshed afterwards.
-- About → Licences opens offline.
+- Backups, restores and background-image cleanup preserve the images each diagram and undo history
+  need. Unsaved edits survive a refresh even after a failed save or a rename in another tab.
+- Successful diagram operations remain successful when only a Library refresh fails. About's
+  licence list opens offline.
+
+#### Security
+
+- The hosted editor refuses embedding in other pages to prevent clickjacking.
 
 ## [1.15.2] - 2026-10-21
 
@@ -2384,7 +2311,8 @@ pre-release milestone; this is the one meant for real use.
 - Fully local and private by design — no accounts, no cloud sync, nothing you draw ever leaves
   your device. Documents are encrypted at rest in your browser.
 
-[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.15.2...main
+[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.16.0...main
+[1.16.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.15.2...v1.16.0
 [1.15.2]: https://github.com/acltabontabon/draft-canvas/compare/v1.15.1...v1.15.2
 [1.15.1]: https://github.com/acltabontabon/draft-canvas/compare/v1.15.0...v1.15.1
 [1.15.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.14.0...v1.15.0

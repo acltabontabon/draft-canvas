@@ -1,6 +1,7 @@
 /**
  * Semantic review: what a pattern in one view is missing, read from the diagram's own semantics — a
- * queue with consumers and no dead-letter path, a cache nothing fills, a database two services write.
+ * queue with consumers and no dead-letter path, a dead-letter queue fed by something other than the
+ * queue whose messages it parks, a cache nothing fills, a database two services write.
  * The same findings serve the agent (`read_diagram`'s `review`, the receipts' advisories) and the
  * person (the desktop companion can say them in its own voice), so they are plain data: a code, the
  * ids involved, and a factual sentence naming the parts by label.
@@ -21,7 +22,15 @@ import type { DraftDocument, DraftEdge, DraftNode, EdgeSemantic, ViewLevel } fro
 import { effectiveLevel } from '../depth/level';
 import { roomsOf } from '../depth/tree';
 
-export type ReviewCode = 'call-cycle' | 'shared-database' | 'no-consumer' | 'no-dead-letter' | 'no-producer' | 'cache-not-written' | 'unconnected';
+export type ReviewCode =
+  | 'call-cycle'
+  | 'shared-database'
+  | 'no-consumer'
+  | 'no-dead-letter'
+  | 'dead-letter-source'
+  | 'no-producer'
+  | 'cache-not-written'
+  | 'unconnected';
 
 export interface ReviewFinding {
   code: ReviewCode;
@@ -44,7 +53,7 @@ export interface ReviewOptions {
 export const REVIEW_LIMIT = 8;
 
 /** Most important first: the order findings are listed in, and cut in. */
-const ORDER: readonly ReviewCode[] = ['call-cycle', 'shared-database', 'no-consumer', 'no-dead-letter', 'no-producer', 'cache-not-written', 'unconnected'];
+const ORDER: readonly ReviewCode[] = ['call-cycle', 'shared-database', 'no-consumer', 'no-dead-letter', 'dead-letter-source', 'no-producer', 'cache-not-written', 'unconnected'];
 
 /** Shapes that do something — call, publish, consume, read, write. */
 const ACTING: ReadonlySet<NodeCategory> = new Set(['actor', 'agent', 'device', 'service', 'external', 'worker', 'scheduler', 'gateway', 'component', 'port']);
@@ -59,6 +68,8 @@ const SENDS: ReadonlySet<EdgeSemantic> = new Set(['publishes', 'command', 'event
 const WRITES: ReadonlySet<EdgeSemantic> = new Set(['writes', 'readsWrites']);
 const FILLS_CACHE: ReadonlySet<EdgeSemantic> = new Set(['writes', 'readsWrites', 'invalidates']);
 const READS_CACHE: ReadonlySet<EdgeSemantic> = new Set(['reads', 'query', 'searches']);
+/** What a connector toward a dead-letter queue says when it reads from it rather than feeding it. */
+const NOT_FEEDING: ReadonlySet<EdgeSemantic> = new Set(['consumes', 'reads', 'query', 'searches', 'dependsOn']);
 const ARCHITECTURE = new Set<DraftNode['type']>(['service', 'database', 'queue', 'actor', 'component']);
 /** A queue named as a dead-letter or retry queue is one, whatever kind it was given. */
 const DEAD_LETTER_NAME = /\b(dlq|dead[\s-]?letters?|poison|parking[\s-]?lot)\b/i;
@@ -225,6 +236,81 @@ export function reviewView(nodes: readonly DraftNode[], edges: readonly DraftEdg
     }
   }
 
+  // A dead-letter queue fed by something other than a queue. Dead-lettering is the queue's job: the
+  // broker moves a message off the queue its consumer keeps rejecting (an SQS redrive policy, a
+  // RabbitMQ dead-letter exchange, a Service Bus subqueue). A topic fans out and keeps nothing to
+  // redrive, and a consumer writing to the DLQ itself hides the queue that should own the path —
+  // except a stream's consumer, which parks what it can't process by design (a stream keeps every
+  // record). Only what the view shows: a consumer whose input isn't drawn here (an inside view, a
+  // junction in the way) could be reading a stream. A queue that is a dead-letter queue only by its
+  // name counts only when the connector says it dead-letters (or fails) into it.
+  if (detail) {
+    for (const edge of live) {
+      if (edge.directed === false || !isDeadLetter(edge.target) || isDeadLetter(edge.source)) continue;
+      if (cat(edge.target) !== 'deadLetter' && edge.semantic !== 'deadLetters' && edge.kind !== 'failure') continue;
+      const stated = statedSemantic(edge);
+      if (stated && NOT_FEEDING.has(stated)) continue;
+      const source = edge.source;
+      const dlq = edge.target;
+      const sc = cat(source);
+      const into = `${name(source)} feeds dead-letter queue ${name(dlq)}`;
+      if (sc === 'topic') {
+        found.push({
+          code: 'dead-letter-source',
+          ids: [dlq, source],
+          message: `${titled('topic', source)} feeds dead-letter queue ${name(dlq)}, but a topic doesn't dead-letter: it fans each message out and keeps none. Give each subscriber its own queue between the topic and its consumer, and dead-letter from that queue.`,
+        });
+        continue;
+      }
+      if (sc === 'stream') {
+        found.push({
+          code: 'dead-letter-source',
+          ids: [dlq, source],
+          message: `${titled('stream', source)} feeds dead-letter queue ${name(dlq)}, but a stream doesn't dead-letter: it keeps every record. Draw the path from the consumer that can't process a record.`,
+        });
+        continue;
+      }
+      if (!ACTING.has(sc)) continue;
+      // What the consumer reads: a channel pointing at it, or one it is drawn consuming from.
+      const queues: string[] = [];
+      const topics: string[] = [];
+      let stream = false;
+      let hidden = false;
+      for (const other of at(source)) {
+        if (other === edge) continue;
+        const end = other.source === source ? other.target : other.source;
+        const ec = cat(end);
+        if (ec === 'junction' || ec === 'generic') hidden = true;
+        if (isDeadLetter(end) || !MESSAGING_CATEGORIES.has(ec) || other.directed === false) continue;
+        const reads = other.target === source || statedSemantic(other) === 'consumes';
+        if (!reads) continue;
+        if (ec === 'stream') stream = true;
+        else if (ec === 'topic') topics.push(end);
+        else if (ec === 'queue') queues.push(end);
+      }
+      if (stream) continue;
+      if (queues.length) {
+        found.push({
+          code: 'dead-letter-source',
+          ids: [dlq, source, ...queues],
+          message: `${into} itself, but dead-lettering is the queue's job: connect ${name(dlq)} from ${queues.length === 1 ? 'queue' : 'queues'} ${list(queues.map(name), 3, 'or')}, whose messages ${name(source)} rejects — the broker moves a message there once its delivery attempts run out.`,
+        });
+      } else if (topics.length) {
+        found.push({
+          code: 'dead-letter-source',
+          ids: [dlq, source, ...topics],
+          message: `${into} itself, but a dead-letter queue takes messages from the queue that rejects them: model ${name(source)}'s own queue between ${topics.length === 1 ? 'topic' : 'topics'} ${list(topics.map(name))} and ${name(source)}, and dead-letter from that queue.`,
+        });
+      } else if (!hidden && !options.nested) {
+        found.push({
+          code: 'dead-letter-source',
+          ids: [dlq, source],
+          message: `${into} itself, but a dead-letter queue takes messages from the queue that rejects them: model the queue ${name(source)} consumes from, and dead-letter from that queue.`,
+        });
+      }
+    }
+  }
+
   // Two services calling each other, each by a plain call (a callback or an event back is not one).
   const isCall = (e: DraftEdge) => {
     const stated = statedSemantic(e);
@@ -317,9 +403,9 @@ function nameOf(node: DraftNode, category: NodeCategory): string {
 
 const upper = (word: string) => word.charAt(0).toUpperCase() + word.slice(1);
 
-/** "a", "a and b", "a, b and c", "a, b, c and 2 more". */
-function list(names: readonly string[], max = 3): string {
+/** "a", "a and b", "a, b and c", "a, b, c and 2 more" — or "a or b" when only one of them is meant. */
+function list(names: readonly string[], max = 3, joiner: 'and' | 'or' = 'and'): string {
   if (names.length <= 1) return names[0] ?? '';
-  if (names.length > max) return `${names.slice(0, max).join(', ')} and ${names.length - max} more`;
-  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+  if (names.length > max) return `${names.slice(0, max).join(', ')} ${joiner} ${names.length - max} more`;
+  return `${names.slice(0, -1).join(', ')} ${joiner} ${names[names.length - 1]}`;
 }

@@ -7,6 +7,7 @@
  */
 import type { AgentKind, RunEvent, RunSnapshot, StopReason, ToolStatus, Usage } from './api';
 import type { LocalAction } from './ui/nodiLocal';
+import { forgetTurnSnapshot } from './turnSnapshot';
 
 export interface Step {
   id: string;
@@ -60,6 +61,8 @@ export interface Spent {
 
 /** Turns kept per diagram; the card shows the latest, and older ones only scroll. */
 const KEEP_TURNS = 20;
+/** Finished conversations kept in this window; active runs are never evicted. */
+const KEEP_CONVERSATIONS = 100;
 
 /** Friendly words for each step, as the card lists them. */
 const STEP_TEXT: Record<string, string> = {
@@ -122,12 +125,27 @@ export function activityOf(steps: readonly Step[], running: boolean): Activity {
   const last = steps.at(-1);
   const now = running && last?.status === 'in-progress' ? stepText(last.tool) : null;
   const done: string[] = [];
+  const said = new Set<string>();
   for (const step of steps) {
     if (step.status !== 'completed') continue;
     const text = step.tool in DONE_TEXT ? DONE_TEXT[step.tool] : step.tool;
-    if (text && !done.includes(text)) done.push(text);
+    if (text && !said.has(text)) {
+      said.add(text);
+      done.push(text);
+    }
   }
-  const failed = [...steps].reverse().find((step, i, later) => step.status === 'failed' && !later.slice(0, i).some((after) => after.tool === step.tool && after.status === 'completed'));
+  const completed = new Set<string>();
+  let failed: Step | undefined;
+  if (!running) {
+    for (let i = steps.length - 1; i >= 0; i -= 1) {
+      const step = steps[i]!;
+      if (step.status === 'completed') completed.add(step.tool);
+      else if (step.status === 'failed' && !completed.has(step.tool)) {
+        failed = step;
+        break;
+      }
+    }
+  }
   return { now, done, snag: failed && !running ? { what: stepText(failed.tool), error: failed.error ?? 'It failed.' } : null };
 }
 
@@ -311,6 +329,13 @@ let runs = new Map<string, string>();
 const listeners = new Set<Listener>();
 
 function changed(): void {
+  for (const [diagramId, conversation] of conversations) {
+    if (conversations.size <= KEEP_CONVERSATIONS) break;
+    if (conversation.turns.some((turn) => turn.stop === null)) continue;
+    for (const turn of conversation.turns) runs.delete(turn.runId);
+    conversations.delete(diagramId);
+    forgetTurnSnapshot(diagramId);
+  }
   conversations = new Map(conversations);
   for (const listener of listeners) listener();
 }
@@ -338,7 +363,10 @@ export const companion = {
 
   /** The person sent a prompt: a new turn, working until it stops. */
   begin(diagramId: string, runId: string, prompt: string, about: string | null, agent?: AgentKind): void {
+    if (runs.has(runId)) return;
     const conversation = conversations.get(diagramId) ?? { diagramId, turns: [] };
+    // Move the used conversation to the end, so pruning keeps the most recently used.
+    conversations.delete(diagramId);
     const turns = [...conversation.turns, newTurn(runId, prompt, about)];
     // What a dropped turn used still counts: the total is the conversation's, not the kept turns'.
     const dropped = turns.slice(0, Math.max(0, turns.length - KEEP_TURNS));
@@ -387,12 +415,22 @@ export const companion = {
   /** Runs a reloaded page found still going: their turns, rebuilt from what they have said. */
   restore(snapshots: RunSnapshot[]): void {
     if (snapshots.length === 0) return;
+    const recovered = new Map<string, { turns: Turn[]; agent: AgentKind }>();
     for (const snapshot of snapshots) {
       if (runs.has(snapshot.runId)) continue;
       const turn = snapshot.events.reduce(applyRunEvent, newTurn(snapshot.runId, snapshot.prompt, null));
-      const conversation = conversations.get(snapshot.diagramId) ?? { diagramId: snapshot.diagramId, turns: [] };
-      conversations.set(snapshot.diagramId, { ...conversation, turns: [...conversation.turns, turn] });
+      const previous = recovered.get(snapshot.diagramId);
+      recovered.set(snapshot.diagramId, { turns: [...(previous?.turns ?? []), turn], agent: snapshot.agent });
       runs.set(snapshot.runId, snapshot.diagramId);
+    }
+    for (const [diagramId, history] of recovered) {
+      const conversation = conversations.get(diagramId) ?? { diagramId, turns: [] };
+      // A turn begun by this page while recovery was in flight is newer than its recovered history.
+      const turns = [...history.turns, ...conversation.turns];
+      const dropped = turns.slice(0, Math.max(0, turns.length - KEEP_TURNS));
+      const earlier = dropped.reduce<Spent | null>(add, conversation.earlier ?? null);
+      for (const previous of dropped) runs.delete(previous.runId);
+      conversations.set(diagramId, { ...conversation, agent: conversation.agent ?? history.agent, turns: turns.slice(-KEEP_TURNS), ...(earlier ? { earlier } : {}) });
     }
     changed();
   },
@@ -401,9 +439,10 @@ export const companion = {
   clear(diagramId: string): void {
     const conversation = conversations.get(diagramId);
     if (!conversation) return;
+    forgetTurnSnapshot(diagramId);
     const working = conversation.turns.filter((turn) => turn.stop === null);
     for (const turn of conversation.turns) if (turn.stop !== null) runs.delete(turn.runId);
-    if (working.length) conversations.set(diagramId, { ...conversation, turns: working });
+    if (working.length) conversations.set(diagramId, { diagramId, agent: conversation.agent, turns: working });
     else conversations.delete(diagramId);
     changed();
   },

@@ -6,6 +6,7 @@ import type { CommandMessage, LoadMessage, ToHostMessage } from '../host/embedde
 import type { AgentHost } from './agent';
 import { agentActivity } from './agentActivity';
 import { companion } from './companion';
+import { forgetTurnSnapshot } from './turnSnapshot';
 import { dispatchCollabLanEvent, lanRelayOf } from './collabLan';
 import type { LanRelay } from '../collab/lan';
 import { confirmWrite, takeWrite, type AgentWrite } from './agentWrites';
@@ -65,6 +66,18 @@ interface Clock {
   setTimeout(run: () => void, ms: number): unknown;
   clearTimeout(handle: unknown): void;
   now(): number;
+}
+
+type CompanionEvent = Extract<HostEvent, { type: 'companion' }>;
+const MAX_COMPANION_RECOVERY_EVENTS = 4096;
+const MAX_COMPANION_RECOVERY_BYTES = 4 * 1024 * 1024;
+const MAX_COMPANION_RECOVERY_RUNS = 128;
+
+interface CompanionRecovery {
+  events: CompanionEvent[];
+  bytes: number;
+  runs: Set<string>;
+  overflow: boolean;
 }
 
 export interface ControllerDeps {
@@ -271,6 +284,9 @@ export class DesktopController {
   private rescanWhenShown = false;
   /** Anything that swaps the open document runs in turn: two requests at once (a menu pick and a tray click) mustn't interleave. */
   private turn: Promise<unknown> = Promise.resolve();
+  /** Live updates can arrive before the shell's recovery snapshot returns. */
+  private companionRecovery: CompanionRecovery | null = { events: [], bytes: 0, runs: new Set(), overflow: false };
+  private readonly companionSequences = new Map<string, number>();
 
   constructor(deps: ControllerDeps) {
     this.api = deps.api;
@@ -334,8 +350,19 @@ export class DesktopController {
         void this.refreshCompanionProposals();
         return void this.refreshAgent();
       case 'companion':
-        companion.apply(event.run, event.event);
-        if (event.event.type === 'stopped') void this.refreshCompanionProposals();
+        if (this.companionRecovery) {
+          const pending = this.companionRecovery;
+          if (pending.runs.size < MAX_COMPANION_RECOVERY_RUNS) pending.runs.add(event.run);
+          if (pending.overflow) return;
+          pending.bytes += JSON.stringify(event).length * 2;
+          if (pending.events.length >= MAX_COMPANION_RECOVERY_EVENTS || pending.bytes > MAX_COMPANION_RECOVERY_BYTES) {
+            pending.overflow = true;
+            pending.events = [];
+            pending.bytes = 0;
+          } else pending.events.push(event);
+          return;
+        }
+        this.applyCompanionEvent(event);
         return;
       case 'collab-lan-open':
       case 'collab-lan-message':
@@ -1805,6 +1832,9 @@ export class DesktopController {
       await this.api.companionSend(request);
     } catch (error) {
       logDiagnostic(error, { operation: 'desktop-companion-send' });
+      // The view was cached before native startup. A failed send may never have reached the
+      // agent's old session, so its retry must carry the view again.
+      forgetTurnSnapshot(request.diagramId);
       companion.fail(request.runId, describe(error));
     }
   }
@@ -1817,6 +1847,13 @@ export class DesktopController {
   }
 
   async companionCancel(runId: string): Promise<void> {
+    // Stop can land before the agent reads its prompt, including during CLI discovery.
+    for (const [diagramId, conversation] of companion.snapshot()) {
+      if (conversation.turns.some((turn) => turn.runId === runId)) {
+        forgetTurnSnapshot(diagramId);
+        break;
+      }
+    }
     try {
       await this.api.companionCancel(runId);
     } catch (error) {
@@ -1877,12 +1914,66 @@ export class DesktopController {
     }
   }
 
-  /** Runs a reloaded page finds still going. */
+  /** Active and recently finished runs a reloaded page recovers. */
   private async restoreCompanion(): Promise<void> {
+    const pending = this.companionRecovery;
     try {
-      companion.restore(await this.api.companionRuns());
+      const snapshots = await this.api.companionRuns();
+      // Existing turns were begun by this page while recovery was pending. Their buffered events
+      // have not been applied yet, so only newly restored turns may skip the snapshot's prefix.
+      for (const snapshot of snapshots) {
+        if (companion.diagramOf(snapshot.runId) === undefined && snapshot.sequence !== undefined) this.rememberCompanionSequence(snapshot.runId, snapshot.sequence);
+      }
+      companion.restore(snapshots);
+      if (pending?.overflow) {
+        for (const snapshot of snapshots) pending.runs.add(snapshot.runId);
+      }
     } catch (error) {
       logDiagnostic(error, { operation: 'desktop-companion-runs' });
+    } finally {
+      this.companionRecovery = null;
+      if (pending?.overflow) {
+        const message = 'Nodi sent too much while this window was recovering. Start a new turn.';
+        for (const run of pending.runs) {
+          const diagramId = companion.diagramOf(run);
+          if (diagramId) forgetTurnSnapshot(diagramId);
+          companion.fail(run, message);
+          void this.companionCancel(run);
+        }
+        this.ui.notify(message);
+      } else {
+        const byRun = new Map<string, CompanionEvent[]>();
+        for (const event of pending?.events ?? []) {
+          const events = byRun.get(event.run);
+          if (events) events.push(event);
+          else byRun.set(event.run, [event]);
+        }
+        for (const events of byRun.values()) {
+          // Cancellation can emit from a different native thread after the next sequence was
+          // recorded. Recovery has the whole batch, so put it back in the recorded order.
+          if (events.every((event) => event.sequence !== undefined)) events.sort((a, b) => a.sequence! - b.sequence!);
+          for (const event of events) this.applyCompanionEvent(event);
+        }
+      }
+    }
+  }
+
+  private rememberCompanionSequence(run: string, sequence: number): void {
+    this.companionSequences.delete(run);
+    this.companionSequences.set(run, sequence);
+    if (this.companionSequences.size > 4096) this.companionSequences.delete(this.companionSequences.keys().next().value!);
+  }
+
+  private applyCompanionEvent(event: CompanionEvent): void {
+    if (event.sequence !== undefined) {
+      if (event.sequence <= (this.companionSequences.get(event.run) ?? 0)) return;
+      this.rememberCompanionSequence(event.run, event.sequence);
+    }
+    const diagramId = companion.diagramOf(event.run);
+    companion.apply(event.run, event.event);
+    if (event.event.type === 'stopped') {
+      if (event.event.reason.kind !== 'end-turn' && diagramId) forgetTurnSnapshot(diagramId);
+      void this.refreshCompanionProposals();
     }
   }
 

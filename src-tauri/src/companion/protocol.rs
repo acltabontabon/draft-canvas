@@ -174,7 +174,7 @@ pub struct AgentInfo {
     pub sign_in: SignIn,
 }
 
-/// A run still going, with what it has said so far: a reloaded page rebuilds its conversation from it.
+/// An active or recently finished run: a reloaded page rebuilds its conversation from it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct RunSnapshot {
@@ -184,6 +184,10 @@ pub struct RunSnapshot {
     /// What the person typed.
     pub prompt: String,
     pub events: Vec<RunEvent>,
+    /// Last live event included, even when adjacent message chunks were coalesced for recovery.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub sequence: Option<u64>,
 }
 
 #[cfg(test)]

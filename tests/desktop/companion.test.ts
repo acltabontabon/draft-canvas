@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { RunEvent } from '../../src/desktop/api';
+import type { RunEvent, RunSnapshot } from '../../src/desktop/api';
 import { activityOf, applyRunEvent, companion, newTokens, newTurn, numberedBlocks, partsIn, replyBlocks, replyOf, replyPoints, spentOn, stepText, stopMessage, tokenCount } from '../../src/desktop/companion';
 import { CHANNEL_MS, CHANNEL_TICKS, CHANNELS, channelAt, channelClock, channelFrame, frame, HEIGHT, ROWS, WIDTH } from '../../src/desktop/ui/mascot/pixels';
+import { unchangedSinceLastTurn } from '../../src/desktop/turnSnapshot';
 import { createHarness } from './harness';
 
 /**
@@ -129,6 +130,36 @@ describe('the store', () => {
     expect(turns).toHaveLength(1);
     expect(turns[0]).toMatchObject({ prompt: 'Add a cache', stop: null });
     expect(turns[0]!.steps).toHaveLength(1);
+    expect(companion.snapshot().get('d_1')!.agent).toBe('claude-code');
+  });
+
+  it('bounds older recovered turns without changing the latest page turn’s agent', () => {
+    for (let i = 0; i < 20; i += 1) {
+      companion.begin('d_1', `old-${i}`, 'Earlier', null, 'claude-code');
+      companion.apply(`old-${i}`, TURN.at(-1)!);
+    }
+    companion.restore([
+      { runId: 'finished', diagramId: 'd_1', agent: 'codex', prompt: 'Finished', sequence: 1, events: [TURN.at(-1)!] },
+      { runId: 'finished-2', diagramId: 'd_1', agent: 'codex', prompt: 'Also finished', sequence: 1, events: [TURN.at(-1)!] },
+    ]);
+    const restored = companion.snapshot().get('d_1')!;
+    expect(restored.turns).toHaveLength(20);
+    expect(restored.earlier?.turns).toBe(2);
+    expect(restored.agent).toBe('claude-code');
+    expect(restored.turns.at(-1)!.runId).toBe('old-19');
+    expect(companion.running('d_1')).toBeNull();
+  });
+
+  it('evicts finished conversations while keeping an active run', () => {
+    companion.begin('working', 'working', 'Still going', null);
+    const view = { nodes: [], edges: [], flows: [] };
+    unchangedSinceLastTurn('old', view, [], 'codex', false);
+    companion.answer('old', 'Hello', 'Hello');
+    for (let i = 0; i < 105; i += 1) companion.answer(`diagram-${i}`, 'Hi', 'Hi');
+    expect(companion.snapshot().size).toBe(100);
+    expect(companion.running('working')?.runId).toBe('working');
+    expect(companion.snapshot().has('old')).toBe(false);
+    expect(unchangedSinceLastTurn('old', view, [], 'codex', true)).toBe(false);
   });
 
   it('a new conversation drops finished turns but keeps one still working', () => {
@@ -165,6 +196,17 @@ describe('what a conversation uses', () => {
     expect(conversation.turns).toHaveLength(20);
     expect(spentOn(conversation)).toMatchObject({ usage: { input: 25_000, cached: 12_500, output: 250 }, turns: 25 });
     companion.clear('d_1');
+    expect(spentOn(companion.snapshot().get('d_1'))).toBeNull();
+  });
+
+  it('clears earlier usage even when a running turn must be kept', () => {
+    for (let i = 0; i < 21; i += 1) {
+      companion.begin('d_1', `r${i}`, 'Hello', null);
+      companion.apply(`r${i}`, stop({ input: 100, cached: 0, output: 1 }));
+    }
+    companion.begin('d_1', 'active', 'Keep this turn', null);
+    companion.clear('d_1');
+    expect(companion.running('d_1')?.runId).toBe('active');
     expect(spentOn(companion.snapshot().get('d_1'))).toBeNull();
   });
 
@@ -207,12 +249,29 @@ describe('the controller', () => {
     const h = createHarness();
     await h.controller.start();
     h.agent.companion.refuse = 'Turn on agent access in Settings → AI agents first.';
+    const view = { nodes: [], edges: [], flows: [] };
+    unchangedSinceLastTurn('d_1', view, [], 'claude-code', false);
     await h.controller.companionSend(
       { runId: RUN, diagramId: 'd_1', text: 'Add a cache', selection: null, room: [], agent: 'claude-code', mode: 'proposal' },
       null,
     );
     const turn = companion.snapshot().get('d_1')!.turns[0]!;
     expect(stopMessage(turn.stop)).toBe('Turn on agent access in Settings → AI agents first.');
+    expect(unchangedSinceLastTurn('d_1', view, [], 'claude-code', true)).toBe(false);
+  });
+
+  it('sends the view again after a Stop that may have arrived before the agent read it', async () => {
+    const h = createHarness();
+    await h.controller.start();
+    const view = { nodes: [], edges: [], flows: [] };
+    unchangedSinceLastTurn('d_cancelled', view, [], 'claude-code', false);
+    await h.controller.companionSend(
+      { runId: RUN, diagramId: 'd_cancelled', text: 'Explain', selection: null, room: [], agent: 'claude-code', mode: 'proposal' },
+      null,
+    );
+    await h.controller.companionCancel(RUN);
+    expect(h.agent.companion.cancelled).toEqual([RUN]);
+    expect(unchangedSinceLastTurn('d_cancelled', view, [], 'claude-code', true)).toBe(false);
   });
 
   it('tells every proposal list when one is resolved, so a badge never keeps an accepted proposal', async () => {
@@ -238,6 +297,99 @@ describe('the controller', () => {
     h.agent.companion.runs = [{ runId: RUN, diagramId: 'd_1', agent: 'claude-code', prompt: 'Add a cache', events: TURN.slice(0, 2) }];
     await h.controller.start();
     expect(companion.running('d_1')?.prompt).toBe('Add a cache');
+  });
+
+  it('replays events after a recovery snapshot exactly once, including a terminal event', async () => {
+    const h = createHarness();
+    let recovered!: (runs: RunSnapshot[]) => void;
+    h.api.companionRuns.mockImplementation(() => new Promise((resolve) => (recovered = resolve)));
+    const starting = h.controller.start();
+    await h.settle();
+    h.hostEvent({ type: 'companion', run: RUN, sequence: 2, event: { type: 'message-chunk', text: 'Already in the snapshot. ' } });
+    h.hostEvent({ type: 'companion', run: RUN, sequence: 4, event: TURN.at(-1)! });
+    h.hostEvent({ type: 'companion', run: RUN, sequence: 3, event: { type: 'message-chunk', text: 'Arrived later.' } });
+    recovered([{ runId: RUN, diagramId: 'd_1', agent: 'codex', prompt: 'Explain it', sequence: 2, events: [TURN[0]!, { type: 'message-chunk', text: 'Already in the snapshot. ' }] }]);
+    await starting;
+    const turn = companion.snapshot().get('d_1')!.turns[0]!;
+    expect(turn.reply).toBe('Already in the snapshot. Arrived later.');
+    expect(turn.stop).toEqual({ kind: 'end-turn' });
+    expect(companion.snapshot().get('d_1')!.agent).toBe('codex');
+    expect(companion.running('d_1')).toBeNull();
+    h.hostEvent({ type: 'companion', run: RUN, sequence: 3, event: { type: 'message-chunk', text: 'Duplicate' } });
+    expect(companion.snapshot().get('d_1')!.turns[0]!.reply).toBe(turn.reply);
+  });
+
+  it('keeps buffered events for a turn begun by this page while recovery was pending', async () => {
+    const h = createHarness();
+    let recovered!: (runs: RunSnapshot[]) => void;
+    h.api.companionRuns.mockImplementation(() => new Promise((resolve) => (recovered = resolve)));
+    const starting = h.controller.start();
+    await h.settle();
+    companion.begin('d_1', RUN, 'New turn', null);
+    h.hostEvent({ type: 'companion', run: RUN, sequence: 1, event: { type: 'message-chunk', text: 'Keep me' } });
+    recovered([{ runId: RUN, diagramId: 'd_1', agent: 'codex', prompt: 'New turn', sequence: 1, events: [{ type: 'message-chunk', text: 'Keep me' }] }]);
+    await starting;
+    expect(companion.snapshot().get('d_1')!.turns[0]!.reply).toBe('Keep me');
+  });
+
+  it('places older recovered turns before a newer turn begun by this page', async () => {
+    const h = createHarness();
+    let recovered!: (runs: RunSnapshot[]) => void;
+    h.api.companionRuns.mockImplementation(() => new Promise((resolve) => (recovered = resolve)));
+    const starting = h.controller.start();
+    await h.settle();
+    companion.begin('d_1', 'new-page-run', 'Newest question', null, 'claude-code');
+    h.hostEvent({ type: 'companion', run: 'new-page-run', sequence: 1, event: { type: 'message-chunk', text: 'Newest reply' } });
+    recovered([
+      { runId: 'older-a', diagramId: 'd_1', agent: 'codex', prompt: 'Older A', sequence: 1, events: [TURN.at(-1)!] },
+      { runId: 'older-b', diagramId: 'd_1', agent: 'codex', prompt: 'Older B', sequence: 1, events: [TURN.at(-1)!] },
+    ]);
+    await starting;
+    const conversation = companion.snapshot().get('d_1')!;
+    expect(conversation.turns.map((turn) => turn.runId)).toEqual(['older-a', 'older-b', 'new-page-run']);
+    expect(conversation.agent).toBe('claude-code');
+    expect(conversation.turns.at(-1)!.reply).toBe('Newest reply');
+    expect(companion.running('d_1')?.runId).toBe('new-page-run');
+  });
+
+  it('restores a run that finished before the native recovery snapshot was captured', async () => {
+    const h = createHarness();
+    let recovered!: (runs: RunSnapshot[]) => void;
+    h.api.companionRuns.mockImplementation(() => new Promise((resolve) => (recovered = resolve)));
+    const starting = h.controller.start();
+    await h.settle();
+    const final = TURN.at(-1)!;
+    h.hostEvent({ type: 'companion', run: RUN, sequence: 3, event: final });
+    recovered([{ runId: RUN, diagramId: 'd_1', agent: 'codex', prompt: 'Explain it', sequence: 3, events: [TURN[0]!, { type: 'message-chunk', text: 'Finished before capture.' }, final] }]);
+    await starting;
+    const restored = companion.snapshot().get('d_1')!.turns[0]!;
+    expect(restored.reply).toBe('Finished before capture.');
+    expect(restored.stop).toEqual({ kind: 'end-turn' });
+    expect(companion.running('d_1')).toBeNull();
+  });
+
+  it('bounds recovery events and cancels the affected turn if the window cannot catch up', async () => {
+    const h = createHarness();
+    let recovered!: (runs: RunSnapshot[]) => void;
+    h.api.companionRuns.mockImplementation(() => new Promise((resolve) => (recovered = resolve)));
+    const starting = h.controller.start();
+    await h.settle();
+    for (let sequence = 1; sequence <= 4100; sequence += 1) h.hostEvent({ type: 'companion', run: RUN, sequence, event: { type: 'message-chunk', text: 'x' } });
+    recovered([{ runId: RUN, diagramId: 'd_1', agent: 'codex', prompt: 'Too much', sequence: 0, events: [] }]);
+    await starting;
+    expect(companion.running('d_1')).toBeNull();
+    expect(companion.snapshot().get('d_1')!.turns[0]!.stop).toMatchObject({ kind: 'failed', message: expect.stringContaining('recovering') });
+    expect(h.agent.companion.cancelled).toContain(RUN);
+  });
+
+  it('reads the view afresh after an agent fails before consuming the prompt', async () => {
+    const h = createHarness();
+    await h.controller.start();
+    const view = { nodes: [], edges: [], flows: [] };
+    unchangedSinceLastTurn('d_1', view, [], 'codex', false);
+    companion.begin('d_1', RUN, 'Explain it', null, 'codex');
+    h.hostEvent({ type: 'companion', run: RUN, sequence: 1, event: { type: 'stopped', reason: { kind: 'failed', message: 'Sign in first' }, summary: null, costMicroUsd: null, usage: null } });
+    expect(unchangedSinceLastTurn('d_1', view, [], 'codex', true)).toBe(false);
   });
 
   it('forgets a conversation in the store and the shell', async () => {

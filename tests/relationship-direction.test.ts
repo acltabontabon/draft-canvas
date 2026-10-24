@@ -93,7 +93,8 @@ describe('drawing a connector: the inferred relationship reads in the arrow\'s d
     ['service', 'topic', 'publishes', 'publishes to'],
     ['topic', 'queue', 'fansOut', 'fans out to'],
     ['topic', 'worker', 'deliversTo', 'delivers to'],
-    ['worker', 'dlq', 'deadLetters', 'dead-letters to'],
+    // Dead-lettering is the queue's own redrive (queue → dlq); a worker writing to one only publishes.
+    ['worker', 'dlq', 'publishes', 'publishes to'],
     ['scheduler', 'worker', 'triggers', 'triggers'],
     ['gateway', 'api', 'routes', 'routes to'],
     // The store beside a service is nearly always its own: read and written over one connector.

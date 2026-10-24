@@ -15,7 +15,7 @@ const RETRY_MS = [1_000, 2_000, 4_000, 8_000, 15_000];
  * room, and one outlived by a recovered link would stay at the owner's door. A connection that still
  * arrives after that is closed.
  */
-function untilBackOrGivenUp(pending: Awaited<ReturnType<typeof knock>>, deadline: number): Promise<CollabTransport | null> {
+function untilBackOrGivenUp(pending: Awaited<ReturnType<typeof knock>>, deadline: number, wanted: () => boolean): Promise<CollabTransport | null> {
   return new Promise((resolve) => {
     let done = false;
     const settle = (transport: CollabTransport | null) => {
@@ -31,12 +31,12 @@ function untilBackOrGivenUp(pending: Awaited<ReturnType<typeof knock>>, deadline
       settle(null);
     };
     const timer = setTimeout(stop, Math.max(0, deadline - Date.now()));
-    const unsubscribe = useCollabStore.subscribe((state) => {
-      if (state.status !== 'reconnecting') stop();
+    const unsubscribe = useCollabStore.subscribe(() => {
+      if (!wanted()) stop();
     });
     // Back already, while the knock was being made: nothing to wait for (left, it sat at the owner's
     // door for two minutes and was let in to a place already filled).
-    if (useCollabStore.getState().status !== 'reconnecting') stop();
+    if (!wanted()) stop();
     pending.transport.then(settle, () => settle(null));
   });
 }
@@ -51,27 +51,39 @@ export function rejoinByRelay(link: SessionLink, relayUrl: string, name: string,
   let running = false;
   return () => {
     if (running) return;
+    const session = guestSession();
+    if (!session) return;
+    // A retry belongs to the session that dropped. A later session can also be reconnecting when
+    // this one's timer or knock finishes; it must never send that session to the old owner.
+    const wanted = () => guestSession() === session && !session.isEnded && useCollabStore.getState().status === 'reconnecting';
     running = true;
     const started = Date.now();
     let attempt = 0;
     const tryOnce = async (): Promise<void> => {
-      const session = guestSession();
-      if (!session || session.isEnded || useCollabStore.getState().status !== 'reconnecting') {
+      if (!wanted()) {
         running = false;
         return;
       }
       try {
         const returning = session.id && session.resumeKey ? { returning: { peer: session.id, key: session.resumeKey } } : {};
         const pending = await knock(link, relayUrl, { name, ...returning }, stunServer, () => {});
-        const transport = await untilBackOrGivenUp(pending, started + GIVE_UP_MS);
+        if (!wanted()) {
+          pending.cancel();
+          // Cancellation can race a successful connection; close anything already resolved too.
+          void pending.transport.then((transport) => transport?.close('cancelled'), () => {});
+          running = false;
+          return;
+        }
+        const transport = await untilBackOrGivenUp(pending, started + GIVE_UP_MS, wanted);
         if (transport) {
           running = false;
+          if (!wanted()) return transport.close('cancelled');
           return reconnectSession(transport);
         }
       } catch {
         // Treated like an unreachable relay: wait and knock again.
       }
-      if (useCollabStore.getState().status !== 'reconnecting') {
+      if (!wanted()) {
         running = false;
         return;
       }

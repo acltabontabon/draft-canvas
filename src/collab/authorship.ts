@@ -30,6 +30,16 @@ export interface PersonRevert extends SelectiveStep {
  * oldest touches go: taking their changes back then says some had to stay.
  */
 const MAX_VERSIONS_PER_PERSON = 64;
+const MAX_VERSIONS = 128;
+const MAX_PEOPLE = 128;
+const MAX_RETAINED_BYTES = 64 * 1024 * 1024;
+const MAX_TOUCHES = 50_000;
+
+interface RetainedObject {
+  references: number;
+  bytes: number;
+  children: object[];
+}
 
 export class Authorship {
   private readonly people = new Map<string, Map<string, Touch>>();
@@ -38,6 +48,15 @@ export class Authorship {
   /** People some of whose touches were let go: their changes can no longer all be taken back. */
   private readonly trimmed = new Set<string>();
   private order = 0;
+  /** Count shared immutable objects once, rather than serializing a whole file on every edit. */
+  private readonly retained = new Map<object, RetainedObject>();
+  private readonly files = new Map<DraftDocument, number>();
+  private retainedBytes = 0;
+
+  /** Identities still represented by the bounded take-back ledger, including trimmed histories. */
+  authors(): string[] {
+    return [...new Set([...this.people.keys(), ...this.trimmed])];
+  }
 
   /** `person` took the file from `before` to `after`. */
   record(person: string, before: DraftDocument, after: DraftDocument): void {
@@ -49,19 +68,23 @@ export class Authorship {
     for (const key of keys) {
       const touch = touches.get(key);
       if (touch) {
-        this.release(person, touch);
+        const previous = { ...touch };
         // Someone else changed it since this person last did: what this person made before is
         // already gone, and taking their changes back must land on that other person's version
         // (or keep the owner's deletion), not reach past it to the very first.
         if (!sameAt(before, touch.left, key)) touch.found = before;
         touch.left = after;
         touch.order = this.order;
+        // Keep shared objects retained across replacement: dropping the last root first made a
+        // repeated move rewalk the unchanged starting file on every pointer update.
+        this.retain(person, touch);
+        this.release(person, previous);
         // Back where they found it (made, then deleted): nothing of theirs to take back, or to keep.
         if (sameAt(touch.found, touch.left, key)) {
           touches.delete(key);
+          this.release(person, touch);
           continue;
         }
-        this.retain(person, touch);
       } else {
         const fresh = { key, found: before, left: after, order: this.order };
         touches.set(key, fresh);
@@ -69,12 +92,17 @@ export class Authorship {
       }
     }
     this.trim(person, touches);
+    this.trimAll();
   }
 
   private retain(person: string, touch: Touch): void {
     let held = this.versions.get(person);
     if (!held) this.versions.set(person, (held = new Map()));
-    for (const file of new Set([touch.found, touch.left])) held.set(file, (held.get(file) ?? 0) + 1);
+    for (const file of new Set([touch.found, touch.left])) {
+      held.set(file, (held.get(file) ?? 0) + 1);
+      this.files.set(file, (this.files.get(file) ?? 0) + 1);
+      this.retainObject(file);
+    }
   }
 
   private release(person: string, touch: Touch): void {
@@ -84,7 +112,52 @@ export class Authorship {
       const count = (held.get(file) ?? 0) - 1;
       if (count <= 0) held.delete(file);
       else held.set(file, count);
+      const all = (this.files.get(file) ?? 0) - 1;
+      if (all <= 0) this.files.delete(file);
+      else this.files.set(file, all);
+      this.releaseObject(file);
     }
+  }
+
+  private retainObject(value: object): void {
+    const existing = this.retained.get(value);
+    if (existing) {
+      existing.references += 1;
+      return;
+    }
+    const values: unknown[] = Object.values(value);
+    const children = values.filter((item): item is object => typeof item === 'object' && item !== null);
+    // Conservative JS storage estimate, including field/array slots. Shared strings may count
+    // twice; shared objects do not, so moving one shape in a large file keeps useful history.
+    const bytes = 64 + values.length * 32 + values.reduce<number>((sum, item) => sum + (typeof item === 'string' ? item.length * 2 : 0), 0);
+    this.retained.set(value, { references: 1, bytes, children });
+    this.retainedBytes += bytes;
+    for (const child of children) this.retainObject(child);
+  }
+
+  private releaseObject(value: object): void {
+    const held = this.retained.get(value);
+    if (!held || --held.references > 0) return;
+    this.retained.delete(value);
+    this.retainedBytes -= held.bytes;
+    for (const child of held.children) this.releaseObject(child);
+  }
+
+  /** Bound the whole session as well: reconnecting under new ids must not multiply the allowance. */
+  private trimAll(): void {
+    let touches = [...this.people.values()].reduce((count, person) => count + person.size, 0);
+    if (this.files.size > MAX_VERSIONS || this.retainedBytes > MAX_RETAINED_BYTES || touches > MAX_TOUCHES) {
+      const oldest = [...this.people].flatMap(([person, values]) => [...values.values()].map((touch) => ({ person, touch }))).sort((a, b) => a.touch.order - b.touch.order);
+      for (const { person, touch } of oldest) {
+        if (this.files.size <= MAX_VERSIONS && this.retainedBytes <= MAX_RETAINED_BYTES && touches <= MAX_TOUCHES) break;
+        this.people.get(person)!.delete(touch.key);
+        this.release(person, touch);
+        this.trimmed.add(person);
+        touches -= 1;
+      }
+    }
+    const authors = this.authors();
+    for (const person of authors.slice(0, Math.max(0, authors.length - MAX_PEOPLE))) this.forget(person);
   }
 
   /** Lets go of `person`'s oldest touches until the versions they hold are well inside the bound. */
@@ -147,6 +220,7 @@ export class Authorship {
   }
 
   forget(person: string): void {
+    for (const touch of this.people.get(person)?.values() ?? []) this.release(person, touch);
     this.people.delete(person);
     this.versions.delete(person);
     this.trimmed.delete(person);

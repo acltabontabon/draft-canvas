@@ -63,7 +63,7 @@ export function materialize(
     // `addConsumer`/`addDeadLetterQueue` follow, so "after 3 attempts" never overlaps either box.
     const inbound = continuation.fragment.edges.find((e) => e.to === spec.key);
     const hostForGap = inbound ? resolve(inbound.from) : undefined;
-    const semantic = hostForGap ? capabilityFor(categoryOf(hostForGap), categoryOf(spec))?.defaultRelation : undefined;
+    const semantic = hostForGap ? (inbound?.semantic ?? capabilityFor(categoryOf(hostForGap), categoryOf(spec))?.defaultRelation) : undefined;
     const caption =
       semantic && hostForGap
         ? relationshipCaptionLabel(semantic, {

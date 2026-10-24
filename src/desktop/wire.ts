@@ -55,7 +55,11 @@ export type HostEvent = { "type": "open", handle: string, name: string, displayP
 /**
  * A new diagram (nothing to undo); otherwise a change to an existing one.
  */
-created: boolean, } | { "type": "agent-changed" } | { "type": "companion", run: string, event: RunEvent, } | { "type": "collab-lan-open", connId: string, } | { "type": "collab-lan-message", connId: string, text: string, } | { "type": "collab-lan-close", connId: string, reason: string, } | { "type": "collab-lan-stopped", reason: string, token: string, };
+created: boolean, } | { "type": "agent-changed" } | { "type": "companion", run: string, event: RunEvent,
+/**
+ * Monotonic within this run, for replaying live events after a recovery snapshot.
+ */
+sequence?: number, } | { "type": "collab-lan-open", connId: string, } | { "type": "collab-lan-message", connId: string, text: string, } | { "type": "collab-lan-close", connId: string, reason: string, } | { "type": "collab-lan-stopped", reason: string, token: string, };
 export type CollabLanStarted = { port: number, addresses: Array<string>, };
 export type AgentKind = "claude-code" | "codex";
 export type Selection = { nodes: Array<string>, edges: Array<string>, };
@@ -121,4 +125,8 @@ export type RunSnapshot = { runId: string, diagramId: string, agent: AgentKind,
 /**
  * What the person typed.
  */
-prompt: string, events: Array<RunEvent>, };
+prompt: string, events: Array<RunEvent>,
+/**
+ * Last live event included, even when adjacent message chunks were coalesced for recovery.
+ */
+sequence?: number, };

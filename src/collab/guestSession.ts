@@ -20,6 +20,7 @@ import {
   encode,
   exceedsMessageLimit,
   MAX_GUEST_MESSAGE_BYTES,
+  MAX_MESSAGE_BYTES,
   MAX_MOVES_PER_PATCH,
   MOVE_BURST,
   MOVE_RATE,
@@ -91,6 +92,7 @@ const RESEND_RATE_BYTES = 768 * 1024;
  * once the gesture ends, which is the same file for far less memory.
  */
 const MAX_HELD = 4096;
+const MAX_HELD_BYTES = 2 * MAX_MESSAGE_BYTES;
 
 /**
  * A fresh copy of the owner's file, held to what a change may carry: a file's checks, and no embedded
@@ -118,6 +120,7 @@ export class GuestSession {
   private sessionId: string | null = null;
   private access: Role = 'viewer';
   private readonly held: Inbound[] = [];
+  private heldBytes = 0;
   private holdTimer: unknown = null;
   private heartbeatTimer: unknown = null;
   private resyncTimer: unknown = null;
@@ -132,6 +135,8 @@ export class GuestSession {
   private outboxTimer: unknown = null;
   /** Whether this connection's hello has gone: until then nothing else is sent on it (`send`). */
   private greeted = false;
+  /** This connection has proved its welcome; an old replica alone does not authenticate it. */
+  private welcomed = false;
   /** Whether this connection's welcome must carry the owner's proof (`connect`), and what it must be. */
   private expectProof = false;
   private ownerProof: string | null = null;
@@ -179,11 +184,13 @@ export class GuestSession {
     // would hold a place in the session.
     if (this.transport && this.transport !== transport) this.transport.close('replaced');
     this.transport = transport;
+    this.welcomed = false;
     this.lastHeard = this.clock.now();
     const offMessage = transport.onMessage((text) => {
+      if (exceedsMessageLimit(text)) return this.finish('too-large');
       this.lastHeard = this.clock.now();
       const message = readHostMessage(parseWire(text));
-      if (message) this.receive(message);
+      if (message) this.receive(message, text.length);
     });
     const offState = transport.onState((state) => {
       if (this.transport !== transport || this.ended) return;
@@ -222,7 +229,9 @@ export class GuestSession {
           this.ownerProof = theirs;
           this.send({ ...hello, resume: { peer, seq, proof: mine } });
         },
-        () => this.finish('protocol'),
+        () => {
+          if (this.transport === transport && !this.ended) this.finish('protocol');
+        },
       );
     } else {
       this.send({ ...hello, ...(peer && key && this.replica ? { resume: { peer, key, seq: this.replica.seq } } : {}) });
@@ -319,21 +328,26 @@ export class GuestSession {
     this.finish('ended');
   }
 
-  private receive(message: HostMessage): void {
+  private receive(message: HostMessage, bytes: number): void {
+    // A reconnecting copy still has its replica and private offline edits. Until this connection
+    // answers the resume proof, neither its messages nor our edits may cross that trust boundary.
+    if (!this.welcomed && message.t !== 'welcome' && message.t !== 'ping' && message.t !== 'pong' && message.t !== 'end') return;
     switch (message.t) {
       case 'welcome':
-        return this.welcome(message);
+        return this.welcome(message, bytes);
       case 'commit':
       case 'ack':
       case 'snapshot':
         if (!this.replica && message.t !== 'snapshot') return;
         if (this.held.length > 0 || this.heldOut || this.env.isBusy()) {
           if (this.heldOut) return this.scheduleHold();
-          if (this.held.length >= MAX_HELD) {
+          if (this.held.length >= MAX_HELD || this.heldBytes + bytes > MAX_HELD_BYTES) {
             this.held.length = 0;
+            this.heldBytes = 0;
             this.heldOut = true;
           } else {
             this.held.push(message);
+            this.heldBytes += bytes;
           }
           this.scheduleHold();
           return;
@@ -359,19 +373,22 @@ export class GuestSession {
       case 'pong':
         return;
       case 'end':
+        if (!this.welcomed && this.expectProof) return this.refuseLink();
         return this.finish(message.reason);
     }
   }
 
-  private welcome(message: Extract<HostMessage, { t: 'welcome' }>): void {
-    if (message.v !== PROTOCOL_VERSION) return this.finish('version');
-    const parsed = readSnapshot(message.snapshot);
-    if (!parsed.ok) return this.finish('protocol');
+  private welcome(message: Extract<HostMessage, { t: 'welcome' }>, bytes: number): void {
+    if (this.welcomed) return;
     // A welcome from a different session (an invite to someone else's, opened while this one was
     // reconnecting) is not this session: unsent edits must not go to it.
     if (this.sessionId !== null && message.session !== this.sessionId) return this.refuseLink();
     // Anyone who was in the session knows its id: only the owner can answer a proof with one of its own.
     if (this.expectProof && !(message.proof !== undefined && this.ownerProof !== null && sameSecret(message.proof, this.ownerProof))) return this.refuseLink();
+    if (message.v !== PROTOCOL_VERSION) return this.finish('version');
+    const parsed = readSnapshot(message.snapshot);
+    if (!parsed.ok) return this.finish('protocol');
+    this.welcomed = true;
     this.sessionId = message.session;
     const resuming = this.replica !== null && this.selfId === message.peer;
     // Back, but as someone new: the owner forgot this place (more people dropped meanwhile than it
@@ -388,6 +405,7 @@ export class GuestSession {
     this.access = message.role;
     this.awaitingSnapshot = false;
     this.held.length = 0;
+    this.heldBytes = 0;
     this.heldOut = false;
     if (resuming) {
       this.env.setAccess(message.role);
@@ -395,6 +413,7 @@ export class GuestSession {
       // since the drop are in the replica. Reset while a drag still held the old file, the editor kept
       // it, and the next local diff sent the owner's offline work back out as this person's deletions.
       this.held.push({ t: 'snapshot', seq: message.seq, snapshot: message.snapshot, ...resendOf(message) });
+      this.heldBytes = bytes;
       this.drainHeld();
     } else {
       this.replica = new Replica(parsed.document, message.seq);
@@ -494,7 +513,13 @@ export class GuestSession {
 
   /** Applies what waited for a gesture to end, in the order it arrived. */
   drainHeld(): void {
-    while (this.held.length > 0 && !this.env.isBusy()) this.apply(this.held.shift()!);
+    const started = this.clock.now();
+    let processed = 0;
+    while (this.held.length > 0 && !this.env.isBusy() && processed < 32 && this.clock.now() - started < 8) {
+      processed += 1;
+      this.apply(this.held.shift()!);
+    }
+    if (this.held.length === 0) this.heldBytes = 0;
     if (this.heldOut && !this.env.isBusy()) {
       this.heldOut = false;
       // Anything the gesture made goes into the replica first, as `apply` does, then a fresh copy.
@@ -535,6 +560,7 @@ export class GuestSession {
     if (this.resyncTimer !== null) this.clock.clearTimeout(this.resyncTimer);
     this.holdTimer = this.heartbeatTimer = this.resyncTimer = null;
     this.held.length = 0;
+    this.heldBytes = 0;
     this.heldOut = false;
     this.clearOutbox();
     this.events.status('ended', reason);
@@ -544,6 +570,7 @@ export class GuestSession {
     // Nothing goes ahead of the hello on a new connection: the owner reads the first message as it,
     // and a patch there (one made while a resume proof was being worked out) closed the connection.
     if (!this.greeted && message.t !== 'hello') return;
+    if (!this.welcomed && (message.t === 'patch' || message.t === 'presence' || message.t === 'resync')) return;
     if (message.t === 'hello') this.greeted = true;
     this.transport?.send(encode(message), priority);
   }

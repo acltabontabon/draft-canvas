@@ -848,6 +848,7 @@ export function doorOf(nodes: readonly DraftNode[], selected: readonly string[],
 /** Nodi's word after a review finding: the finding is the fact, this is the boss being told. */
 const QUIP: Record<ReviewCode, string> = {
   'no-dead-letter': 'Bold choice, boss. Want me to add one?',
+  'dead-letter-source': 'Want me to move it onto the queue, boss?',
   'shared-database': 'That’s one service with extra steps, boss.',
   'call-cycle': 'That’s not architecture, boss, that’s a relationship.',
   'no-consumer': 'They’ll pile up forever, boss. Who was meant to read them?',

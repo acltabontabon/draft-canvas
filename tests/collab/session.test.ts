@@ -248,6 +248,31 @@ describe('hosting from the editor', () => {
     expect(store.getState().document.nodes.map((node) => node.id).sort()).toEqual(['n_a', 'n_b']);
   });
 
+  it('prunes departed authors from the interface when the recovery ledger forgets their identities', () => {
+    const host = startHosting({ name: 'Owner' });
+    let first = '';
+    let last = '';
+    for (let i = 0; i < 140; i += 1) {
+      const pair = loopbackPair();
+      attachCollaborator(pair.a, 'editor');
+      const visitor = collaborator(pair.b);
+      settle(pair.pump);
+      first ||= visitor.session.id!;
+      last = visitor.session.id!;
+      visitor.edit((file) => updateNode(file, 'n_a', { text: `Visitor ${i}` }));
+      settle(pair.pump);
+      visitor.session.leave();
+      settle(pair.pump);
+    }
+    const authors = useCollabStore.getState().authors;
+    expect(Object.keys(authors).sort()).toEqual(host.authorship.authors().sort());
+    expect(Object.keys(authors).length).toBeLessThanOrEqual(128);
+    expect(authors[first]).toBeUndefined();
+    expect(authors[last]).toBe('Ada');
+    expect(undoChangesOf(last, 'Ada')).toBe('done');
+    expect(store.getState().document.nodes.find((node) => node.id === 'n_a')!.text).toBe('Visitor 138');
+  });
+
   it('leaves a collaborator’s shape that the owner has built on', () => {
     const gus = guest.session.id!;
     guest.edit((file) => addNodes(file, [createNode({ id: 'n_g', type: 'service', text: 'Gus', x: 0, y: 300 })]));
@@ -444,6 +469,47 @@ describe('a session that ends while the collaborator’s copy is still opening',
     expect(useUiStore.getState().readOnly).toMatchObject({ collaborative: true });
     __resetCollabBridge();
     vi.useRealTimers();
+  });
+});
+
+describe('a shared canvas that fails to open', () => {
+  afterEach(() => {
+    __resetCollabBridge();
+    vi.useRealTimers();
+  });
+
+  it.each(['throw', 'reject'] as const)('leaves cleanly when opening fails by %s, preserving the local canvas', async (failure) => {
+    vi.useFakeTimers();
+    __resetCollabBridge();
+    const mine = createDocument('Mine');
+    resetEditor(mine);
+    const file = createDocument('Owner’s');
+    const owner = new HostSession(
+      { readFile: () => file, applyRemote: () => true, isBusy: () => false, appVersion: PRODUCT.version },
+      { peers: () => {}, presence: () => {} },
+      { name: 'Owner' },
+    );
+    const pair = loopbackPair();
+    const keeper = { lost: vi.fn(), stop: vi.fn() };
+    owner.attach(pair.a, { role: 'editor' });
+    const guest = joinSession(pair.b, {
+      name: 'Guest',
+      keeper,
+      open: () => {
+        if (failure === 'throw') throw new Error('Opening failed');
+        return Promise.reject(new Error('Opening failed'));
+      },
+    });
+    settle(pair.pump);
+    await Promise.resolve();
+    settle(pair.pump);
+    expect(guest.isEnded).toBe(true);
+    expect(useCollabStore.getState().role).toBe('off');
+    expect(keeper.stop).toHaveBeenCalledTimes(1);
+    expect(store.getState().document).toBe(mine);
+    expect(useUiStore.getState().readOnly).toBeNull();
+    expect(useUiStore.getState().toasts.some((toast) => toast.message.includes('Couldn’t open the shared canvas'))).toBe(true);
+    owner.end();
   });
 });
 

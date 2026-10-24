@@ -471,14 +471,22 @@ fn login_shell_find(_program: &str) -> Option<PathBuf> {
 }
 
 pub(crate) struct Output {
-    success: bool,
+    pub(crate) success: bool,
     pub(crate) stdout: Vec<u8>,
     /// Some CLIs answer a status question here (`codex login status`).
     pub(crate) stderr: Vec<u8>,
 }
 
-/// Runs `command` without a console window, giving up (and stopping it) after `limit`.
+/// Runs `command` without a console window. The deadline covers both exit and pipe EOF: an
+/// exited CLI may have left a child holding its pipes. Output and the reader queue are bounded too.
 pub(crate) fn run(mut command: Command, limit: Duration) -> std::io::Result<Output> {
+    use std::sync::mpsc::{self, RecvTimeoutError};
+    const MAX_OUTPUT: usize = 1024 * 1024;
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        command.process_group(0);
+    }
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
@@ -490,36 +498,110 @@ pub(crate) fn run(mut command: Command, limit: Duration) -> std::io::Result<Outp
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()?;
-    // Drained on their own threads so a chatty command can't block on a full pipe while it's waited for.
-    let drain = |mut pipe: Box<dyn Read + Send>| {
+    let (tx, rx) = mpsc::sync_channel(8);
+    let drain = |mut pipe: Box<dyn Read + Send>, stdout: bool| {
+        let tx = tx.clone();
         std::thread::spawn(move || {
-            let mut bytes = Vec::new();
-            let _ = pipe.read_to_end(&mut bytes);
-            bytes
-        })
+            let mut buffer = [0; 8192];
+            while let Ok(count) = pipe.read(&mut buffer) {
+                if count == 0 {
+                    break;
+                }
+                if tx.send((stdout, Some(buffer[..count].to_vec()))).is_err() {
+                    return;
+                }
+            }
+            let _ = tx.send((stdout, None));
+        });
     };
-    let stdout = drain(Box::new(child.stdout.take().expect("piped")));
-    let stderr = drain(Box::new(child.stderr.take().expect("piped")));
+    drain(Box::new(child.stdout.take().expect("piped")), true);
+    drain(Box::new(child.stderr.take().expect("piped")), false);
+    drop(tx);
     let deadline = Instant::now() + limit;
-    let status = loop {
-        if let Some(status) = child.try_wait()? {
-            break status;
+    let mut stdout = Vec::new();
+    let mut stderr = Vec::new();
+    let mut status = None;
+    let mut closed = 0;
+    let result = loop {
+        if status.is_none() {
+            match child.try_wait() {
+                Ok(next) => status = next,
+                Err(error) => break Err(error),
+            }
         }
-        if Instant::now() >= deadline {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err(std::io::Error::new(
+        if closed == 2 {
+            if let Some(status) = status {
+                break Ok(status);
+            }
+        }
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            break Err(std::io::Error::new(
                 std::io::ErrorKind::TimedOut,
                 "timed out",
             ));
         }
-        std::thread::sleep(Duration::from_millis(40));
+        match rx.recv_timeout(remaining.min(Duration::from_millis(40))) {
+            Ok((is_stdout, Some(bytes))) => {
+                if stdout.len() + stderr.len() + bytes.len() > MAX_OUTPUT {
+                    break Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        "CLI output exceeded its limit",
+                    ));
+                }
+                if is_stdout {
+                    stdout.extend(bytes);
+                } else {
+                    stderr.extend(bytes);
+                }
+            }
+            Ok((_, None)) => closed += 1,
+            Err(RecvTimeoutError::Timeout) => {}
+            Err(RecvTimeoutError::Disconnected) => {
+                // Both readers finished; wait for process exit without spinning on the closed queue.
+                closed = 2;
+                std::thread::sleep(remaining.min(Duration::from_millis(40)));
+            }
+        }
     };
+    if result.is_err() {
+        stop_probe_tree(&mut child);
+        let _ = child.wait();
+    }
+    let status = result?;
     Ok(Output {
         success: status.success(),
-        stdout: stdout.join().unwrap_or_default(),
-        stderr: stderr.join().unwrap_or_default(),
+        stdout,
+        stderr,
     })
+}
+
+/// Stop the whole probe, including children that keep stdout/stderr open after the CLI exited.
+fn stop_probe_tree(child: &mut std::process::Child) {
+    #[cfg(unix)]
+    {
+        extern "C" {
+            fn kill(pid: i32, sig: i32) -> i32;
+        }
+        if let Ok(pid) = i32::try_from(child.id()) {
+            // SAFETY: kill takes integers; process_group(0) gave this probe its own group.
+            unsafe {
+                kill(-pid, 9);
+            }
+        }
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        let _ = Command::new("taskkill")
+            .args(["/PID", &child.id().to_string(), "/T", "/F"])
+            .creation_flags(0x0800_0000)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+    }
+    let _ = child.kill();
 }
 
 fn claude_status(sidecar: &Path) -> ClientSetup {
@@ -825,6 +907,41 @@ mod tests {
 
     fn entry_of(text: &str) -> Option<Entry> {
         codex_entry(&text.parse().unwrap())
+    }
+
+    #[test]
+    fn cli_probes_bound_output_and_keep_nonzero_exit_status() {
+        let mut command = crate::companion::runner::tests::shell(
+            "echo hello; echo denied >&2; exit 3",
+            "(echo hello& echo denied 1>&2& exit /b 3)",
+        );
+        let output = run(command, Duration::from_secs(5)).unwrap();
+        assert!(!output.success);
+        assert!(String::from_utf8_lossy(&output.stdout).contains("hello"));
+        assert!(String::from_utf8_lossy(&output.stderr).contains("denied"));
+        command = crate::companion::runner::tests::shell(
+            "while :; do echo 0123456789012345678901234567890123456789; done",
+            "for /L %i in (1,1,100000) do @echo 0123456789012345678901234567890123456789",
+        );
+        assert_eq!(
+            run(command, Duration::from_secs(5)).err().unwrap().kind(),
+            std::io::ErrorKind::InvalidData
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn cli_probe_timeout_includes_pipes_inherited_by_children() {
+        let command = crate::companion::runner::tests::shell("sleep 30 & exit 0", "");
+        let started = Instant::now();
+        assert_eq!(
+            run(command, Duration::from_millis(200))
+                .err()
+                .unwrap()
+                .kind(),
+            std::io::ErrorKind::TimedOut
+        );
+        assert!(started.elapsed() < Duration::from_secs(3));
     }
 
     #[test]

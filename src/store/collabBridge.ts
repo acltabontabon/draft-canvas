@@ -193,7 +193,12 @@ export function startHosting(options: HostOptions): HostSession {
         useCollabStore.setState({ peers: others });
       },
       presence: setPresenceOf,
-      authored: (peerId: string, name: string) => useCollabStore.setState((state) => ({ authors: { ...state.authors, [peerId]: name } })),
+      authored: (peerId: string, name: string) => useCollabStore.setState((state) => {
+        // The recovery ledger evicts old authors in long sessions; their names and UI rows must
+        // leave too, rather than growing for every newly admitted identity.
+        const remembered = new Set(host?.authorship.authors() ?? [peerId]);
+        return { authors: Object.fromEntries(Object.entries({ ...state.authors, [peerId]: name }).filter(([id]) => remembered.has(id))) };
+      }),
     },
     { name: options.name },
   );
@@ -377,11 +382,23 @@ export function joinSession(transport: CollabTransport, options: JoinOptions): G
         sharedLoad = null;
         stopWatching?.();
         stopWatching = null;
-        void options.open(file).then((opened) => {
+        void (async () => {
+          let opened: boolean;
+          try {
+            opened = await options.open(file);
+          } catch (error) {
+            // Opening can fail after the welcome, while the session is already live. Never leave
+            // it holding remote commits forever, or let an older opening close a newer session.
+            if (guest !== session) return;
+            logDiagnostic(error, { operation: 'collab-open' });
+            useUiStore.getState().notify('Couldn’t open the shared canvas. Open the invite again to retry.', 'error');
+            leaveSession();
+            return;
+          }
           if (guest !== session) {
             // The session ended (or another replaced it) while the copy was opening. It is on screen
             // now, and nobody's file: read-only with the way to keep a copy, never left to look editable.
-            if (opened && useEditorStore.getState().document.metadata.id === file.metadata.id) {
+            if (opened && !onSharedCanvas() && useEditorStore.getState().document.metadata.id === file.metadata.id) {
               useUiStore.getState().setReadOnly({ sharedTitle: title, collaborative: true });
             }
             return;
@@ -402,7 +419,7 @@ export function joinSession(transport: CollabTransport, options: JoinOptions): G
           setAccess(session.role);
           // Commits that arrived while the canvas was opening waited for it.
           session.drainHeld();
-        });
+        })();
       },
       setAccess,
     },

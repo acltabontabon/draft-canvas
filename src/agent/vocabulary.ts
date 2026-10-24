@@ -49,7 +49,7 @@ export const ELEMENT_TYPES: Record<string, NativeShape & { summary: string }> = 
   queue: { type: 'queue', queueKind: 'queue', summary: 'A point-to-point message queue.' },
   topic: { type: 'queue', queueKind: 'topic', summary: 'A publish/subscribe topic (SNS, Kafka topic…).' },
   stream: { type: 'queue', queueKind: 'stream', summary: 'An ordered event stream or log.' },
-  'dead-letter-queue': { type: 'queue', queueKind: 'queue', deliveryRole: 'dead-letter', summary: 'Where undeliverable messages go.' },
+  'dead-letter-queue': { type: 'queue', queueKind: 'queue', deliveryRole: 'dead-letter', summary: 'Where a queue parks the messages it could not deliver: connect it from that queue (a stream consumer parks its own).' },
   person: { type: 'actor', actorKind: 'human', summary: 'A user or role (C4: a person).' },
   'user-group': { type: 'actor', actorKind: 'group', summary: 'A group of people, a team or department.' },
   'external-actor': { type: 'actor', actorKind: 'thirdParty', summary: 'A third party acting on the system (a partner, a payment provider).' },
@@ -142,7 +142,8 @@ export function suggestTypes(word: string): string[] {
   return out;
 }
 
-function distance(a: string, b: string): number {
+/** Edit distance between two words: how many letters to add, drop or change. */
+export function distance(a: string, b: string): number {
   const row = Array.from({ length: b.length + 1 }, (_, i) => i);
   for (let i = 1; i <= a.length; i += 1) {
     let previous = row[0];

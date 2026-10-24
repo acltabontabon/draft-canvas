@@ -50,6 +50,10 @@ export const BUFFER_HIGH_WATERMARK = 1024 * 1024;
 export const MAX_QUEUED_BYTES = 64 * 1024 * 1024;
 /** How long a closed transport keeps sending what it had queued before it lets the connection go. */
 export const CLOSE_DRAIN_MS = 2_000;
+/** Restarts are rare. Control frames bypass the session's application-message rate limits. */
+const CONTROL_WINDOW_MS = 10_000;
+const MAX_CONTROLS_PER_WINDOW = 8;
+const MAX_CONTROL_CHARS = 70 * 1024;
 
 type PeerConnectionCtor = new (configuration: RTCConfiguration) => RTCPeerConnection;
 
@@ -252,6 +256,10 @@ class WebRtcTransport implements CollabTransport {
   private closing: { reason: string; timer: ReturnType<typeof setTimeout> } | null = null;
   private released = false;
   private restartGeneration = 0;
+  private controlWindow = Date.now();
+  private controls = 0;
+  private handlingControl = false;
+  private answeredGeneration = 0;
   private waiters: { resolve(transport: CollabTransport): void; reject(error: Error): void; timer: ReturnType<typeof setTimeout> }[] = [];
 
   constructor(pc: RTCPeerConnection, role: Role, opts: Pick<WebRtcOptions, 'onDrop' | 'maxMessageBytes'> = {}) {
@@ -391,6 +399,9 @@ class WebRtcTransport implements CollabTransport {
   }
 
   private enqueue(frame: Uint8Array<ArrayBuffer>, first = false): void {
+    // Overflow tears down in the middle of enqueueing a multi-frame message. Its remaining frames
+    // must not repopulate the released transport's queue after teardown cleared it.
+    if (this.released) return;
     if (first) {
       if (this.head > 0) this.queue[--this.head] = frame;
       else this.queue.unshift(frame);
@@ -542,11 +553,28 @@ class WebRtcTransport implements CollabTransport {
   private receive(text: string, kind: FrameKind): void {
     if (this.current === 'closed') return;
     if (kind === 'control') {
+      // Before JSON parsing or calling the browser: a hostile guest can send these without ever
+      // reaching HostSession's byte and message budgets.
+      const now = Date.now();
+      if (now - this.controlWindow >= CONTROL_WINDOW_MS) {
+        this.controlWindow = now;
+        this.controls = 0;
+      }
+      if (text.length > MAX_CONTROL_CHARS || ++this.controls > MAX_CONTROLS_PER_WINDOW) {
+        return this.lostFrame('overflow', 'too much ICE restart control traffic');
+      }
       const control = parseControl(text);
       if (!control) return this.reportDrop('malformed', 'unreadable control frame');
-      if (control.t === 'restart-offer' && this.role === 'guest') void this.answerRestart(control);
-      else if (control.t === 'restart-answer' && this.role === 'host') void this.applyRestartAnswer(control);
-      else this.reportDrop('malformed', `unexpected ${control.t}`);
+      if (this.handlingControl) return;
+      if (control.t === 'restart-offer' && this.role === 'guest') {
+        if (control.gen <= this.answeredGeneration) return;
+        this.answeredGeneration = control.gen;
+        this.handlingControl = true;
+        void this.answerRestart(control).finally(() => { this.handlingControl = false; });
+      } else if (control.t === 'restart-answer' && this.role === 'host') {
+        this.handlingControl = true;
+        void this.applyRestartAnswer(control).finally(() => { this.handlingControl = false; });
+      } else this.reportDrop('malformed', `unexpected ${control.t}`);
       return;
     }
     for (const listener of [...this.messageListeners]) {
@@ -608,6 +636,6 @@ function parseControl(text: string): Control | null {
   if (!value || typeof value !== 'object') return null;
   const { t, gen, sdp } = value as Partial<Control>;
   if (t !== 'restart-offer' && t !== 'restart-answer') return null;
-  if (typeof gen !== 'number' || !Number.isSafeInteger(gen) || typeof sdp !== 'string' || sdp.length > 64 * 1024) return null;
+  if (typeof gen !== 'number' || !Number.isSafeInteger(gen) || gen < 1 || typeof sdp !== 'string' || sdp.length > 64 * 1024) return null;
   return { t, gen, sdp };
 }

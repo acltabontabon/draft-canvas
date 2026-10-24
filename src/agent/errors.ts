@@ -84,6 +84,11 @@ export class Problems {
     else this.truncated = true;
   }
 
+  /** Adds what `more` has to say to each problem's message — context only the whole request has. */
+  explain(more: (problem: { path: string; message: string }) => string | undefined): void {
+    for (const problem of this.list) problem.message += more(problem) ?? '';
+  }
+
   get empty(): boolean {
     return this.list.length === 0;
   }

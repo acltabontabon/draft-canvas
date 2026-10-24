@@ -549,7 +549,11 @@ export class HostSession {
 
   /** Applies what waited for a gesture to end, in the order it arrived. */
   drainHeld(): void {
-    while (this.held.length > 0 && !this.env.isBusy()) {
+    const started = this.clock.now();
+    let processed = 0;
+    // Give input and paint a turn between batches, even after a long-held gesture.
+    while (this.held.length > 0 && !this.env.isBusy() && processed < 32 && this.clock.now() - started < 8) {
+      processed += 1;
       const next = this.held.shift()!;
       this.heldBytes -= next.bytes;
       // A fresh copy sent meanwhile (they asked for one) already has this patch coming again with it.

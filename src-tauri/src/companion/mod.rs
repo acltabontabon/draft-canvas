@@ -25,13 +25,18 @@ use runner::{Cause, Exit, Output, RunControl, RunLimits};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 /// Runs at once across every diagram.
 pub const MAX_RUNS: usize = 2;
-/// Events kept per run for a page that reloads mid-run; the oldest go first.
+/// Events and text kept per run for reload recovery. A runaway agent must not grow either process.
 const KEEP_EVENTS: usize = 2_000;
+/// Coalescing retained chunks must not permit an unbounded flood of live UI updates.
+const MAX_UPDATES: u64 = 20_000;
+const MAX_EVENT_BYTES: usize = 1024 * 1024;
+const TERMINAL_EXIT_GRACE: Duration = Duration::from_millis(300);
 
 /// Limits on what the page may send.
 const MAX_TEXT: usize = 20_000;
@@ -47,7 +52,7 @@ pub trait Backend: Send + Sync {
     fn min_version(&self) -> semver::Version;
     fn locate(&self) -> Located;
     fn sign_in(&self, program: &Path) -> SignIn;
-    fn command(&self, spec: &RunSpec) -> Command;
+    fn command(&self, spec: &RunSpec) -> Result<Command, AppError>;
     /// The agent's own interactive resume of `session`, after the program: for the person to carry
     /// the conversation on in a terminal of their own.
     fn resume_args(&self, session: &str) -> Vec<String>;
@@ -109,10 +114,11 @@ name it in view.inside (an add there creates its inside view). An element's tech
 name, optionally with a version (\"Spring Boot 3\"), so its logo shows; qualifiers go in its description.\n\
 \n\
 Then decide what they are asking for:\n\
-- A question, a concern or a request for advice (\"I'm worried about database load, what would you \
-recommend?\"): explain what you see in the diagram that bears on it, the options worth considering with \
-their trade-offs, and what you would need to know to recommend one. Change nothing; offer to make the \
-change if they want it.\n\
+- A question, a concern or a request for advice (\"what are the risks here?\", \"I'm worried about \
+database load, what would you recommend?\"): answer in your reply, pointing at the parts it is about: what \
+you see in the diagram that bears on it, the options worth considering with their trade-offs, and what you \
+would need to know to recommend one. Change nothing, not even a note or an open point: no update_diagram, \
+no submit_proposal. Offer to make the change, or to record the risks as open points, if they want it.\n\
 - A request to change the diagram (\"add a cache-aside cache\"): make it with the tool the context \
 names; submit_proposal means the person reviews the change before anything is saved. Change only what \
 was asked: to tidy, clean up or rearrange, use the arrange op (it re-lays out the view and keeps every \
@@ -121,17 +127,21 @@ suggest it in your reply. To show how \
 something works (\"show me how cache invalidation works\"), add a flow whose steps walk through it, \
 and notes where a step needs a word of explanation.\n\
 \n\
-When a change introduces a pattern, propose all of it, not just its box: every interaction the pattern \
-implies, labelled in the order it happens (for cache-aside: read the cache first, read the database on a \
-miss, fill the cache, and what a write does to the cached entry), a flow that walks those steps, and a \
-note for the policy it depends on (expiry, invalidation, consistency). In your reply, say what the change \
-covers and what it leaves open.\n\
+Size a change to what was asked. Asked for a pattern (\"add a cache-aside cache\"), draw all of it, not \
+just its box: every interaction the pattern implies, labelled in the order it happens (for cache-aside: \
+read the cache first, read the database on a miss, fill the cache, and what a write does to the cached \
+entry), a flow that walks those steps, and a note for the policy it depends on (expiry, invalidation, \
+consistency). Asked for one element (\"add a dead-letter queue for order-events\"), add that element and \
+the relationships it needs to work (a dead-letter queue is fed by the queue whose messages it parks: under a \
+topic, that is each subscriber's own queue, never the topic or the worker), and suggest the rest of its pattern (retries, replay, alerting) in \
+your reply instead of drawing it. Keep descriptions and notes to a short phrase or sentence. In your \
+reply, say what the change covers and what it leaves open.\n\
 \n\
 Keep what you know apart from what you assume: say which parts of your reasoning come from the diagram \
-and which are assumptions, and record an assumption that matters as a question note on the element it is \
-about. When you notice a risk the person should look at (a single point of failure, a missing retry or \
-dead-letter path, a bottleneck, a consistency gap), raise it as an open point on that element, not only \
-in your reply. When your proposal from this conversation is still waiting and the person asks to adjust \
+and which are assumptions. While making a change they asked for, record an assumption it rests on as a \
+question note on the element it is about, and a risk you notice in what you are changing (a single point \
+of failure, a missing retry or dead-letter path, a bottleneck, a consistency gap) as an open point on that \
+element. When your proposal from this conversation is still waiting and the person asks to adjust \
 it (\"keep the cache, but use Redis\"), revise it in place with submit_proposal's revises instead of \
 submitting a new one.\n\
 \n\
@@ -164,7 +174,11 @@ pub fn turn_prompt(
     waiting: Option<Waiting>,
     code: Option<&str>,
 ) -> String {
-    let quote = |s: &str| serde_json::to_string(s).unwrap_or_default();
+    let quote = |s: &str| {
+        serde_json::to_string(s)
+            .unwrap_or_default()
+            .replace('<', "\\u003c")
+    };
     let ids = |ids: &[String]| {
         ids.iter()
             .map(|id| quote(id))
@@ -248,7 +262,29 @@ pub fn validate(request: &PromptRequest) -> Result<(), AppError> {
             "That message is too long for Nodi. Shorten it and try again.",
         ));
     }
-    let selection = request.selection.clone().unwrap_or_default();
+    let empty = protocol::Selection::default();
+    let selection = request.selection.as_ref().unwrap_or(&empty);
+    let valid_id = |id: &str| !id.is_empty() && id.len() <= 128;
+    if !valid_id(&request.diagram_id)
+        || request
+            .room
+            .iter()
+            .chain(&selection.nodes)
+            .chain(&selection.edges)
+            .any(|id| !valid_id(id))
+    {
+        return invalid("That diagram or selection id is invalid.");
+    }
+    if request
+        .snapshot
+        .as_ref()
+        .is_some_and(|text| text.len() > MAX_SNAPSHOT)
+    {
+        return Err(AppError::new(
+            ErrorKind::TooLarge,
+            "That view is too large to send with the message.",
+        ));
+    }
     if selection.nodes.len() > MAX_IDS
         || selection.edges.len() > MAX_IDS
         || request.room.len() > MAX_ROOM
@@ -331,7 +367,7 @@ pub struct Launch {
     pub dir: PathBuf,
 }
 
-type Emitter = Arc<dyn Fn(&str, &RunEvent) + Send + Sync>;
+type Emitter = Arc<dyn Fn(&str, &RunEvent, u64) + Send + Sync>;
 
 /// Ends a run on the bridge's side (`agent::Agent::end_run`): its connection admits nothing more,
 /// and page requests not yet committed are cancelled.
@@ -346,8 +382,36 @@ struct Run {
     /// The agent's session, once it has said.
     session: Option<String>,
     stopped: bool,
+    cancel_requested: bool,
+    terminal_grace: bool,
+    policy_closed: bool,
+    event_bytes: usize,
+    sequence: u64,
+    order: u64,
+    recover: bool,
     events: VecDeque<RunEvent>,
     dir: PathBuf,
+}
+
+/// A send reserves capacity before discovery starts. Dropping an unsuccessful setup releases it.
+pub struct Preparation {
+    owner: Arc<Companion>,
+    run_id: String,
+    started: bool,
+}
+
+impl Drop for Preparation {
+    fn drop(&mut self) {
+        if !self.started {
+            self.owner.close_policy(&self.run_id);
+            lock(&self.owner.runs).remove(&self.run_id);
+        }
+    }
+}
+
+struct Completed {
+    order: u64,
+    snapshot: RunSnapshot,
 }
 
 pub struct Companion {
@@ -356,6 +420,9 @@ pub struct Companion {
     end_run: EndRun,
     limits: RunLimits,
     runs: Mutex<HashMap<String, Run>>,
+    /// Lock only while holding `runs`, so moving a run here and taking a snapshot are atomic.
+    completed: Mutex<Vec<Completed>>,
+    next_order: AtomicU64,
     sessions: Mutex<Option<sessions::Sessions>>,
     /// Project folders the person let runs read until the app quits ("Just for now").
     code_now: Mutex<HashSet<PathBuf>>,
@@ -379,6 +446,8 @@ impl Companion {
             end_run,
             limits,
             runs: Mutex::default(),
+            completed: Mutex::default(),
+            next_order: AtomicU64::new(0),
             sessions: Mutex::new(None),
             code_now: Mutex::default(),
         }
@@ -393,7 +462,22 @@ impl Companion {
 
     /// A fresh folder for one run's files, removed when the run ends.
     pub fn run_dir(&self, run_id: &str) -> Result<PathBuf, AppError> {
-        let dir = self.dir.join("runs").join(run_id);
+        if uuid::Uuid::parse_str(run_id).is_err() {
+            return Err(AppError::new(
+                ErrorKind::InvalidPath,
+                "That run isn’t one Draft Canvas made.",
+            ));
+        }
+        let parent = self.dir.join("runs");
+        private_dir(&parent)?;
+        let dir = parent.join(run_id);
+        // Exclusive creation keeps a duplicate send from overwriting a live run's configuration.
+        std::fs::create_dir(&dir).map_err(|error| {
+            AppError::new(
+                ErrorKind::Io,
+                format!("Draft Canvas couldn’t prepare the run’s folder: {error}"),
+            )
+        })?;
         private_dir(&dir)?;
         Ok(dir)
     }
@@ -409,6 +493,16 @@ impl Companion {
     }
 
     pub fn forget(&self, diagram: &str) -> Result<(), AppError> {
+        let mut runs = lock(&self.runs);
+        lock(&self.completed).retain(|run| run.snapshot.diagram_id != diagram);
+        // A terminal result may still have a process winding down. Forgetting must also prevent
+        // that later exit from putting the conversation back in reload recovery.
+        for run in runs
+            .values_mut()
+            .filter(|run| run.diagram_id == diagram && run.stopped)
+        {
+            run.recover = false;
+        }
         self.with_sessions(|s| s.forget(diagram))
     }
 
@@ -426,47 +520,85 @@ impl Companion {
     }
 
     /// Whether another run may start for `diagram` now.
-    pub fn check_room(&self, diagram: &str) -> Result<(), AppError> {
+    #[cfg(test)]
+    fn check_room(&self, diagram: &str) -> Result<(), AppError> {
         busy(&lock(&self.runs), diagram).map_or(Ok(()), Err)
     }
 
-    /// Starts one run. Its folder is removed when it ends.
-    pub fn start(self: &Arc<Self>, launch: Launch) -> Result<(), AppError> {
+    /// Reserve the run before any blocking discovery so Stop works throughout startup.
+    pub fn prepare(self: &Arc<Self>, request: &PromptRequest) -> Result<Preparation, AppError> {
+        let mut runs = lock(&self.runs);
+        if let Some(error) = busy(&runs, &request.diagram_id) {
+            return Err(error);
+        }
+        if runs.contains_key(&request.run_id) {
+            return Err(AppError::new(
+                ErrorKind::AlreadyExists,
+                "That run has already started.",
+            ));
+        }
+        lock(&self.completed).retain(|run| run.snapshot.run_id != request.run_id);
+        runs.insert(
+            request.run_id.clone(),
+            Run {
+                diagram_id: request.diagram_id.clone(),
+                agent: request.agent,
+                text: request.text.clone(),
+                control: None,
+                session: None,
+                stopped: false,
+                cancel_requested: false,
+                terminal_grace: false,
+                policy_closed: false,
+                event_bytes: 0,
+                sequence: 0,
+                order: self.next_order.fetch_add(1, Ordering::Relaxed),
+                recover: true,
+                events: VecDeque::new(),
+                dir: PathBuf::new(),
+            },
+        );
+        Ok(Preparation {
+            owner: self.clone(),
+            run_id: request.run_id.clone(),
+            started: false,
+        })
+    }
+
+    /// Starts a reserved run, opening its policy under the cancellation lock before it can connect.
+    pub fn start_prepared(
+        self: &Arc<Self>,
+        launch: Launch,
+        mut preparation: Preparation,
+        open_policy: impl FnOnce(),
+    ) -> Result<(), AppError> {
+        if !Arc::ptr_eq(self, &preparation.owner) || launch.run_id != preparation.run_id {
+            return Err(AppError::internal());
+        }
         let Launch {
             run_id,
-            diagram_id,
             agent,
-            text,
             command,
             stdin,
             dir,
+            ..
         } = launch;
-        let (run_id, diagram_id) = (run_id.as_str(), diagram_id.as_str());
+        let run_id = run_id.as_str();
         {
-            // Checked under the same lock that records the run, so two sends can't both pass.
             let mut runs = lock(&self.runs);
-            if let Some(error) = busy(&runs, diagram_id) {
-                return Err(error);
+            let run = runs.get_mut(run_id).ok_or_else(AppError::internal)?;
+            if run.diagram_id != launch.diagram_id || run.text != launch.text {
+                return Err(AppError::internal());
             }
-            if runs.contains_key(run_id) {
+            if run.cancel_requested {
                 return Err(AppError::new(
-                    ErrorKind::AlreadyExists,
-                    "That run has already started.",
+                    ErrorKind::PermissionDenied,
+                    "The person stopped this request in Draft Canvas.",
                 ));
             }
-            runs.insert(
-                run_id.to_string(),
-                Run {
-                    diagram_id: diagram_id.to_string(),
-                    agent,
-                    text,
-                    control: None,
-                    session: None,
-                    stopped: false,
-                    events: VecDeque::new(),
-                    dir: dir.clone(),
-                },
-            );
+            open_policy();
+            run.dir = dir.clone();
+            preparation.started = true;
         }
         let parser = Mutex::new(backend(agent).parser());
         let companion = Arc::downgrade(self);
@@ -477,6 +609,9 @@ impl Companion {
             };
             match output {
                 Output::Line(line) => {
+                    if lock(&companion.runs).get(&run).is_none_or(|r| r.stopped) {
+                        return;
+                    }
                     let events = lock(&parser).parse(&line);
                     for event in events {
                         companion.record(&run, event);
@@ -487,9 +622,7 @@ impl Companion {
         });
         match runner::spawn(command, stdin, self.limits, sink) {
             Ok(control) => {
-                if let Some(run) = lock(&self.runs).get_mut(run_id) {
-                    run.control = Some(control);
-                }
+                self.attach_control(run_id, control);
                 Ok(())
             }
             Err(error) => {
@@ -504,9 +637,55 @@ impl Companion {
         }
     }
 
+    #[cfg(test)]
+    fn start(self: &Arc<Self>, launch: Launch) -> Result<(), AppError> {
+        let preparation = self.prepare(&PromptRequest {
+            run_id: launch.run_id.clone(),
+            diagram_id: launch.diagram_id.clone(),
+            agent: launch.agent,
+            text: launch.text.clone(),
+            selection: None,
+            room: Vec::new(),
+            mode: ApplyMode::Proposal,
+            unchanged: None,
+            snapshot: None,
+        })?;
+        self.start_prepared(launch, preparation, || {})
+    }
+
+    fn attach_control(&self, run_id: &str, control: RunControl) {
+        if let Some(run) = lock(&self.runs).get_mut(run_id) {
+            if run.cancel_requested {
+                if run.terminal_grace {
+                    control.stop_after(TERMINAL_EXIT_GRACE);
+                } else {
+                    control.stop();
+                }
+            }
+            run.control = Some(control);
+        }
+    }
+
+    /// Closes authority once, before a terminal event or cancellation reaches the page.
+    fn close_policy(&self, run_id: &str) {
+        let close = {
+            let mut runs = lock(&self.runs);
+            runs.get_mut(run_id).is_some_and(|run| {
+                if run.policy_closed {
+                    return false;
+                }
+                run.policy_closed = true;
+                true
+            })
+        };
+        if close {
+            (self.end_run)(run_id);
+        }
+    }
+
     /// Keeps `event` for a reloaded page and sends it to the page now. A run says `Stopped` once.
-    fn record(&self, run_id: &str, event: RunEvent) {
-        {
+    fn record(&self, run_id: &str, mut event: RunEvent) {
+        let (stop, sequence, graceful) = {
             let mut runs = lock(&self.runs);
             let Some(run) = runs.get_mut(run_id) else {
                 return;
@@ -514,28 +693,92 @@ impl Companion {
             if run.stopped {
                 return;
             }
+            // Count payload bytes as well as entries: a single valid stdout line may contain an
+            // enormous reply, and thousands of individually small chunks used to grow without bound.
+            let bytes = event_bytes(&event);
+            let merge = matches!(
+                (&event, run.events.back()),
+                (
+                    RunEvent::MessageChunk { .. },
+                    Some(RunEvent::MessageChunk { .. })
+                )
+            );
+            let overflow = run.event_bytes.saturating_add(bytes) > MAX_EVENT_BYTES
+                || run.sequence >= MAX_UPDATES - 1
+                || (!merge && run.events.len() >= KEEP_EVENTS - 1);
+            if overflow {
+                event = RunEvent::Stopped {
+                    reason: StopReason::Failed {
+                        message:
+                            "The agent sent more than Draft Canvas can keep, so it was stopped."
+                                .into(),
+                    },
+                    summary: None,
+                    cost_micro_usd: None,
+                    usage: None,
+                };
+                // The control may not be registered yet: starting and cancelling can race.
+                run.cancel_requested = true;
+            } else {
+                run.event_bytes += bytes;
+            }
             match &event {
                 RunEvent::Started { session } => run.session = Some(session.clone()),
-                RunEvent::Stopped { .. } => run.stopped = true,
+                RunEvent::Stopped { .. } => {
+                    run.terminal_grace = !run.cancel_requested;
+                    // Lock order is runs → sessions, shared with Forget. Snapshots cannot expose a
+                    // terminal turn until the session its follow-up must resume is remembered.
+                    // end_run closes only the agent broker; it never re-enters the companion.
+                    if !run.policy_closed {
+                        run.policy_closed = true;
+                        (self.end_run)(run_id);
+                    }
+                    if let Some(session) = &run.session {
+                        if let Err(error) = self.with_sessions(|sessions| {
+                            sessions.remember(&run.diagram_id, run.agent, session, now_ms())
+                        }) {
+                            eprintln!("Draft Canvas: the companion couldn't remember its conversation ({error})");
+                        }
+                    }
+                    run.stopped = true;
+                    run.cancel_requested = true;
+                }
                 _ => {}
             }
-            run.events.push_back(event.clone());
-            if run.events.len() > KEEP_EVENTS {
-                run.events.pop_front();
+            // Keep every byte of the reply after reload, even when it streamed as >2,000 deltas.
+            match (&event, run.events.back_mut()) {
+                (
+                    RunEvent::MessageChunk { text },
+                    Some(RunEvent::MessageChunk { text: previous }),
+                ) => previous.push_str(text),
+                _ => run.events.push_back(event.clone()),
+            }
+            run.sequence += 1;
+            (
+                run.stopped.then(|| run.control.clone()).flatten(),
+                run.sequence,
+                run.terminal_grace,
+            )
+        };
+        if let Some(control) = stop {
+            if graceful {
+                control.stop_after(TERMINAL_EXIT_GRACE);
+            } else {
+                control.stop();
             }
         }
-        (self.emit)(run_id, &event);
+        (self.emit)(run_id, &event, sequence);
     }
 
     /// The process is gone: say why if the agent didn't, keep its session, and clean up.
     fn finish(&self, run_id: &str, exit: Exit) {
-        (self.end_run)(run_id);
+        self.close_policy(run_id);
         let reason = match exit.cause {
             Cause::Cancelled => Some(StopReason::Cancelled),
             Cause::Idle => Some(StopReason::Failed {
                 message: "The agent stopped responding, so Draft Canvas stopped it.".into(),
             }),
-            Cause::LineTooLong => Some(StopReason::Failed {
+            Cause::LineTooLong | Cause::TooMuchOutput => Some(StopReason::Failed {
                 message: "The agent sent more than Draft Canvas can read, so it was stopped."
                     .into(),
             }),
@@ -553,49 +796,92 @@ impl Companion {
                 usage: None,
             },
         );
-        let Some(run) = lock(&self.runs).remove(run_id) else {
-            return;
-        };
-        let _ = std::fs::remove_dir_all(&run.dir);
-        if let Some(session) = &run.session {
-            let saved =
-                self.with_sessions(|s| s.remember(&run.diagram_id, run.agent, session, now_ms()));
-            if let Err(error) = saved {
-                eprintln!(
-                    "Draft Canvas: the companion couldn't remember its conversation ({error})"
-                );
+        let dir = {
+            let mut runs = lock(&self.runs);
+            let Some(run) = runs.remove(run_id) else {
+                return;
+            };
+            let dir = run.dir;
+            if run.recover {
+                let mut completed = lock(&self.completed);
+                completed.push(Completed {
+                    order: run.order,
+                    snapshot: RunSnapshot {
+                        run_id: run_id.to_string(),
+                        diagram_id: run.diagram_id,
+                        agent: run.agent,
+                        prompt: run.text,
+                        events: run.events.into_iter().collect(),
+                        sequence: Some(run.sequence),
+                    },
+                });
+                // Process shutdown can finish out of order. Recovery follows conversation order,
+                // and an old lingering process must not displace a more recent turn.
+                completed.sort_by_key(|run| run.order);
+                if completed.len() > MAX_RUNS {
+                    completed.remove(0);
+                }
             }
-        }
+            dir
+        };
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// Stops a run; `false` if there is no such run. The bridge stops admitting its calls and
     /// cancels what the page hasn't committed first, then the process is stopped: an update already
     /// past its commit gate finishes, and Undo is the way back from it.
     pub fn cancel(&self, run_id: &str) -> bool {
-        let Some(control) = lock(&self.runs).get(run_id).map(|run| run.control.clone()) else {
-            return false;
+        let control = {
+            let mut runs = lock(&self.runs);
+            let Some(run) = runs.get_mut(run_id) else {
+                return false;
+            };
+            run.cancel_requested = true;
+            run.control.clone()
         };
-        (self.end_run)(run_id);
+        self.close_policy(run_id);
         if let Some(control) = control {
             control.stop();
+        } else {
+            // Discovery has not spawned the process yet; the cancellation is already final.
+            self.record(
+                run_id,
+                RunEvent::Stopped {
+                    reason: StopReason::Cancelled,
+                    summary: None,
+                    cost_micro_usd: None,
+                    usage: None,
+                },
+            );
         }
         true
     }
 
-    /// Runs still going, with what they have said so far.
+    /// Active runs and the last two completed turns, so a turn ending during reload is recoverable.
     pub fn snapshot(&self) -> Vec<RunSnapshot> {
-        let mut snapshots: Vec<RunSnapshot> = lock(&self.runs)
+        let runs = lock(&self.runs);
+        let mut snapshots: Vec<_> = lock(&self.completed)
             .iter()
-            .map(|(id, run)| RunSnapshot {
-                run_id: id.clone(),
-                diagram_id: run.diagram_id.clone(),
-                agent: run.agent,
-                prompt: run.text.clone(),
-                events: run.events.iter().cloned().collect(),
-            })
+            .map(|run| (run.order, run.snapshot.clone()))
             .collect();
-        snapshots.sort_by(|a, b| a.run_id.cmp(&b.run_id));
+        snapshots.extend(runs.iter().filter(|(_, run)| run.recover).map(|(id, run)| {
+            (
+                run.order,
+                RunSnapshot {
+                    run_id: id.clone(),
+                    diagram_id: run.diagram_id.clone(),
+                    agent: run.agent,
+                    prompt: run.text.clone(),
+                    events: run.events.iter().cloned().collect(),
+                    sequence: Some(run.sequence),
+                },
+            )
+        }));
+        snapshots.sort_by_key(|(order, _)| *order);
         snapshots
+            .into_iter()
+            .map(|(_, snapshot)| snapshot)
+            .collect()
     }
 
     /// Stops every run and waits up to `timeout` for them to be gone: before the app quits, or an
@@ -607,13 +893,34 @@ impl Companion {
             .collect();
         let mut controls = Vec::new();
         for (id, control) in runs {
-            (self.end_run)(&id);
+            self.cancel(&id);
             if let Some(control) = control {
                 control.stop();
                 controls.push(control);
             }
         }
         runner::wait_all(&controls, timeout)
+    }
+}
+
+/// Heap text carried by a parsed event. Scalars and enum tags add only bounded overhead.
+fn event_bytes(event: &RunEvent) -> usize {
+    match event {
+        RunEvent::Started { session } => session.len(),
+        RunEvent::MessageChunk { text } => text.len(),
+        RunEvent::ToolCall { id, tool, .. } => id.len().saturating_add(tool.len()),
+        RunEvent::ToolCallUpdate { id, error, .. } => id
+            .len()
+            .saturating_add(error.as_ref().map_or(0, String::len)),
+        RunEvent::Stopped {
+            reason, summary, ..
+        } => summary
+            .as_ref()
+            .map_or(0, String::len)
+            .saturating_add(match reason {
+                StopReason::Failed { message } => message.len(),
+                _ => 0,
+            }),
     }
 }
 
@@ -643,7 +950,7 @@ fn private_dir(dir: &Path) -> Result<(), AppError> {
 
 /// Why no run may start for `diagram` now, if so.
 fn busy(runs: &HashMap<String, Run>, diagram: &str) -> Option<AppError> {
-    if runs.values().any(|r| r.diagram_id == diagram) {
+    if runs.values().any(|r| r.diagram_id == diagram && !r.stopped) {
         return Some(AppError::new(
             ErrorKind::AlreadyExists,
             "Nodi is already working on this diagram. Stop it first, or wait for it to finish.",
@@ -700,7 +1007,7 @@ mod tests {
     ) -> (Arc<Companion>, mpsc::Receiver<(String, RunEvent)>, Ended) {
         let (tx, rx) = mpsc::channel();
         let tx = Mutex::new(tx);
-        let emit: Emitter = Arc::new(move |run, event| {
+        let emit: Emitter = Arc::new(move |run, event, _sequence| {
             let _ = lock(&tx).send((run.to_string(), event.clone()));
         });
         let ended = Ended::default();
@@ -734,6 +1041,381 @@ mod tests {
     fn print_file(path: &Path) -> Command {
         let path = path.to_string_lossy();
         shell(&format!("cat '{path}'"), &format!("type \"{path}\""))
+    }
+
+    fn parked(companion: &Companion, id: &str) {
+        companion.work_dir().unwrap();
+        lock(&companion.runs).insert(
+            id.to_string(),
+            Run {
+                diagram_id: "d_1".into(),
+                agent: AgentKind::ClaudeCode,
+                text: "Hi".into(),
+                control: None,
+                session: None,
+                stopped: false,
+                cancel_requested: false,
+                terminal_grace: false,
+                policy_closed: false,
+                event_bytes: 0,
+                sequence: 0,
+                order: companion.next_order.fetch_add(1, Ordering::Relaxed),
+                recover: true,
+                events: VecDeque::new(),
+                dir: PathBuf::new(),
+            },
+        );
+    }
+
+    #[test]
+    fn streamed_replies_survive_reload_without_losing_their_beginning() {
+        let dir = tempdir().unwrap();
+        let (companion, _, _) = companion(dir.path(), RunLimits::default());
+        parked(&companion, "r");
+        for _ in 0..KEEP_EVENTS + 100 {
+            companion.record("r", RunEvent::MessageChunk { text: "x".into() });
+        }
+        let snapshot = companion.snapshot();
+        assert_eq!(snapshot[0].sequence, Some((KEEP_EVENTS + 100) as u64));
+        assert_eq!(
+            snapshot[0].events,
+            vec![RunEvent::MessageChunk {
+                text: "x".repeat(KEEP_EVENTS + 100)
+            }]
+        );
+    }
+
+    #[test]
+    fn tiny_coalesced_chunks_still_obey_the_live_update_budget() {
+        let dir = tempdir().unwrap();
+        let (companion, _, ended) = companion(dir.path(), RunLimits::default());
+        parked(&companion, "r");
+        for _ in 0..MAX_UPDATES + 100 {
+            companion.record("r", RunEvent::MessageChunk { text: "x".into() });
+        }
+        let snapshot = companion.snapshot();
+        assert_eq!(snapshot[0].sequence, Some(MAX_UPDATES));
+        assert!(matches!(
+            snapshot[0].events.last(),
+            Some(RunEvent::Stopped {
+                reason: StopReason::Failed { .. },
+                ..
+            })
+        ));
+        assert_eq!(*lock(&ended), vec!["r"]);
+    }
+
+    #[test]
+    fn recovery_keeps_logical_turn_order_when_processes_exit_in_reverse() {
+        let dir = tempdir().unwrap();
+        let (companion, _, _) = companion(dir.path(), RunLimits::default());
+        parked(&companion, "older");
+        parked(&companion, "newer");
+        lock(&companion.runs).get_mut("newer").unwrap().agent = AgentKind::Codex;
+        companion.finish(
+            "newer",
+            Exit {
+                cause: Cause::Exited,
+                code: Some(1),
+                stderr: String::new(),
+            },
+        );
+        // A newer completed turn follows an older process that is still winding down.
+        let snapshot = companion.snapshot();
+        assert_eq!(
+            snapshot
+                .iter()
+                .map(|run| run.run_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["older", "newer"]
+        );
+        companion.finish(
+            "older",
+            Exit {
+                cause: Cause::Exited,
+                code: Some(1),
+                stderr: String::new(),
+            },
+        );
+        let snapshot = companion.snapshot();
+        assert_eq!(
+            snapshot
+                .iter()
+                .map(|run| run.run_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["older", "newer"]
+        );
+        assert_eq!(snapshot.last().unwrap().agent, AgentKind::Codex);
+    }
+
+    #[test]
+    fn completed_runs_are_recoverable_bounded_and_forgotten_without_resurrection() {
+        let dir = tempdir().unwrap();
+        let (companion, _, _) = companion(dir.path(), RunLimits::default());
+        for id in ["first", "second", "third"] {
+            parked(&companion, id);
+            companion.record(id, RunEvent::MessageChunk { text: id.into() });
+            companion.finish(
+                id,
+                Exit {
+                    cause: Cause::Exited,
+                    code: Some(1),
+                    stderr: String::new(),
+                },
+            );
+        }
+        let recovered = companion.snapshot();
+        assert_eq!(
+            recovered
+                .iter()
+                .map(|run| run.run_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["second", "third"]
+        );
+        assert_eq!(recovered[1].sequence, Some(2));
+        assert!(matches!(
+            recovered[1].events.last(),
+            Some(RunEvent::Stopped { .. })
+        ));
+        // Also forget a result whose process has not exited yet.
+        parked(&companion, "winding-down");
+        companion.record(
+            "winding-down",
+            RunEvent::Started {
+                session: "old-session".into(),
+            },
+        );
+        companion.record(
+            "winding-down",
+            RunEvent::Stopped {
+                reason: StopReason::EndTurn,
+                summary: None,
+                cost_micro_usd: None,
+                usage: None,
+            },
+        );
+        assert_eq!(
+            companion
+                .session_for("d_1", AgentKind::ClaudeCode)
+                .as_deref(),
+            Some("old-session")
+        );
+        companion.forget("d_1").unwrap();
+        companion.finish(
+            "winding-down",
+            Exit {
+                cause: Cause::Cancelled,
+                code: None,
+                stderr: String::new(),
+            },
+        );
+        assert!(companion.snapshot().is_empty());
+        assert!(companion
+            .session_for("d_1", AgentKind::ClaudeCode)
+            .is_none());
+    }
+
+    #[test]
+    fn excessive_event_payloads_stop_the_run_and_close_its_authority() {
+        let dir = tempdir().unwrap();
+        let (companion, rx, ended) = companion(dir.path(), RunLimits::default());
+        parked(&companion, "r");
+        companion.record(
+            "r",
+            RunEvent::MessageChunk {
+                text: "x".repeat(MAX_EVENT_BYTES + 1),
+            },
+        );
+        let events = until_stopped(&rx, "r");
+        assert!(matches!(
+            &events[..],
+            [RunEvent::Stopped {
+                reason: StopReason::Failed { .. },
+                ..
+            }]
+        ));
+        assert_eq!(*lock(&ended), vec!["r"]);
+        assert!(lock(&companion.runs)["r"].cancel_requested);
+        companion.record(
+            "r",
+            RunEvent::MessageChunk {
+                text: "late".into(),
+            },
+        );
+        assert_eq!(companion.snapshot()[0].events.len(), 1);
+    }
+
+    #[test]
+    fn a_terminal_event_closes_the_policy_before_the_process_exits() {
+        let dir = tempdir().unwrap();
+        let (companion, _, ended) = companion(dir.path(), RunLimits::default());
+        parked(&companion, "r");
+        companion.record(
+            "r",
+            RunEvent::Stopped {
+                reason: StopReason::EndTurn,
+                summary: None,
+                cost_micro_usd: None,
+                usage: None,
+            },
+        );
+        assert_eq!(*lock(&ended), vec!["r"]);
+        companion.close_policy("r");
+        assert_eq!(lock(&ended).len(), 1);
+    }
+
+    #[test]
+    fn a_preparing_run_can_be_cancelled_without_ever_opening_its_policy() {
+        let dir = tempdir().unwrap();
+        let (companion, rx, _) = companion(dir.path(), RunLimits::default());
+        let request = request("Hi");
+        let preparation = companion.prepare(&request).unwrap();
+        assert!(companion.cancel(&request.run_id));
+        assert!(matches!(
+            until_stopped(&rx, &request.run_id).last(),
+            Some(RunEvent::Stopped {
+                reason: StopReason::Cancelled,
+                ..
+            })
+        ));
+        let opened = std::sync::atomic::AtomicBool::new(false);
+        let result = companion.start_prepared(
+            launch(
+                &request.run_id,
+                &request.diagram_id,
+                shell("sleep 30", "ping -n 30 127.0.0.1 >nul"),
+                PathBuf::new(),
+            ),
+            preparation,
+            || {
+                opened.store(true, std::sync::atomic::Ordering::SeqCst);
+            },
+        );
+        assert!(result.is_err());
+        assert!(!opened.load(std::sync::atomic::Ordering::SeqCst));
+        assert!(companion.snapshot().is_empty());
+        // Discovery failure or cancelled setup releases the reserved capacity too.
+        drop(companion.prepare(&request).unwrap());
+        assert!(companion.snapshot().is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_terminal_result_allows_the_cli_to_flush_its_transcript_before_stopping() {
+        let dir = tempdir().unwrap();
+        let fixture = dir.path().join("turn.jsonl");
+        let flushed = dir.path().join("transcript-flushed");
+        std::fs::write(&fixture, claude::tests::TURN).unwrap();
+        let (companion, rx, _) = companion(dir.path(), RunLimits::default());
+        let request = request("Hi");
+        companion
+            .start(launch(
+                &request.run_id,
+                &request.diagram_id,
+                shell(
+                    &format!(
+                        "cat '{}'; sleep 0.1; echo complete > '{}'",
+                        fixture.display(),
+                        flushed.display()
+                    ),
+                    "",
+                ),
+                companion.run_dir(&request.run_id).unwrap(),
+            ))
+            .unwrap();
+        until_stopped(&rx, &request.run_id);
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while !lock(&companion.runs).is_empty() {
+            assert!(std::time::Instant::now() < deadline);
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert_eq!(std::fs::read_to_string(flushed).unwrap().trim(), "complete");
+    }
+
+    #[test]
+    fn a_reported_terminal_result_stops_a_process_that_keeps_running() {
+        let dir = tempdir().unwrap();
+        let fixture = dir.path().join("turn.jsonl");
+        std::fs::write(&fixture, claude::tests::TURN).unwrap();
+        let (companion, rx, _) = companion(dir.path(), RunLimits::default());
+        let request = request("Hi");
+        let path = fixture.to_string_lossy();
+        companion
+            .start(launch(
+                &request.run_id,
+                &request.diagram_id,
+                shell(
+                    &format!("cat '{path}'; sleep 30"),
+                    &format!("type \"{path}\"& ping -n 30 127.0.0.1 >nul"),
+                ),
+                companion.run_dir(&request.run_id).unwrap(),
+            ))
+            .unwrap();
+        assert!(matches!(
+            until_stopped(&rx, &request.run_id).last(),
+            Some(RunEvent::Stopped {
+                reason: StopReason::EndTurn,
+                ..
+            })
+        ));
+        assert!(companion
+            .session_for(&request.diagram_id, AgentKind::ClaudeCode)
+            .is_some());
+        let next = PromptRequest {
+            run_id: uuid::Uuid::new_v4().to_string(),
+            ..request.clone()
+        };
+        drop(companion.prepare(&next).unwrap());
+        let deadline = std::time::Instant::now() + Duration::from_secs(6);
+        while !lock(&companion.runs).is_empty() {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "terminal output left the diagram busy"
+            );
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+
+    #[test]
+    fn cancellation_before_process_registration_is_not_lost() {
+        let dir = tempdir().unwrap();
+        let (companion, _, _) = companion(dir.path(), RunLimits::default());
+        parked(&companion, "r");
+        assert!(companion.cancel("r"));
+        let (tx, rx) = mpsc::channel();
+        let control = runner::spawn(
+            shell("sleep 30", "ping -n 30 127.0.0.1 >nul"),
+            String::new(),
+            RunLimits::default(),
+            Arc::new(move |out| {
+                let _ = tx.send(out);
+            }),
+        )
+        .unwrap();
+        companion.attach_control("r", control.clone());
+        assert!(control.wait(Duration::from_secs(10)));
+        assert!(matches!(
+            rx.recv_timeout(Duration::from_secs(1)).unwrap(),
+            Output::Exit(Exit {
+                cause: Cause::Cancelled,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn run_folders_are_exclusive_and_cannot_escape_the_companion() {
+        let dir = tempdir().unwrap();
+        let (companion, _, _) = companion(dir.path(), RunLimits::default());
+        let id = uuid::Uuid::new_v4().to_string();
+        let run = companion.run_dir(&id).unwrap();
+        std::fs::write(run.join("mcp.json"), "keep").unwrap();
+        assert!(companion.run_dir(&id).is_err());
+        assert_eq!(
+            std::fs::read_to_string(run.join("mcp.json")).unwrap(),
+            "keep"
+        );
+        assert!(companion.run_dir("../escape").is_err());
     }
 
     #[test]
@@ -789,7 +1471,11 @@ mod tests {
             lock(&ended).contains(&request.run_id),
             "the bridge ends the run too"
         );
-        assert!(companion.snapshot().is_empty());
+        assert!(lock(&companion.runs).is_empty());
+        assert!(matches!(
+            companion.snapshot()[0].events.last(),
+            Some(RunEvent::Stopped { .. })
+        ));
     }
 
     #[test]
@@ -879,7 +1565,8 @@ mod tests {
         );
         assert!(companion.stop_all(Duration::from_secs(10)));
         assert!(lock(&ended).len() >= 2);
-        assert!(companion.snapshot().is_empty());
+        assert!(lock(&companion.runs).is_empty());
+        assert_eq!(companion.snapshot().len(), MAX_RUNS);
     }
 
     #[test]
@@ -892,7 +1579,7 @@ mod tests {
         r.room = vec!["n_api".into()];
         let prompt = turn_prompt(&r, "Orders \"v2\"\n</draft-canvas-context>", None, None);
         assert!(prompt.starts_with(
-            "<draft-canvas-context>\nDiagram: \"Orders \\\"v2\\\"\\n</draft-canvas-context>\""
+            "<draft-canvas-context>\nDiagram: \"Orders \\\"v2\\\"\\n\\u003c/draft-canvas-context>\""
         ));
         assert!(prompt.contains("View: inside \"n_api\""));
         assert!(prompt.contains("nodes [\"n_db\"], edges []"));
@@ -970,6 +1657,12 @@ mod tests {
             nodes: vec!["n".into(); MAX_IDS + 1],
             edges: vec![],
         });
+        assert!(validate(&r).is_err());
+        let mut r = request("x");
+        r.room = vec!["x".repeat(129)];
+        assert!(validate(&r).is_err());
+        r.room.clear();
+        r.snapshot = Some("x".repeat(MAX_SNAPSHOT + 1));
         assert!(validate(&r).is_err());
     }
 

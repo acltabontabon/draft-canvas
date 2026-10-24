@@ -61,7 +61,8 @@ right most of the time. Set it when the code says something more specific:
 | Evicts cache entries | service → cache | `invalidates` | |
 | Searches / indexes | service → search-index | `searches` · `indexes` | |
 | Moves data between stores (ETL, replication, CDC) | store → store | `ingests` · `replicates` · `cdc` · `transforms` | |
-| Parks failed messages | queue/worker → dead-letter-queue | `deadLetters` (+ `deliveryAttempts`) | |
+| Dead-letters messages its consumer keeps rejecting (SQS redrive, RabbitMQ DLX, Service Bus) | queue → dead-letter-queue | `deadLetters` (+ `deliveryAttempts`) | |
+| Parks a record it can't process (stream consumers only) | worker → dead-letter-queue | `deadLetters` (+ `deliveryAttempts`) | |
 | A scheduler starts a job | scheduler → worker/service | `triggers` | |
 | A gateway routes a path | gateway → service | `routes` | |
 | An in-process call between modules | component → component | `uses` | |
@@ -75,6 +76,10 @@ right most of the time. Set it when the code says something more specific:
 | An email, push or alert reaches someone | service → person/device | `notifies` | |
 | A webhook or schedule starts an agent | service/scheduler → ai-agent | `triggers` | |
 | A retry or fallback path | any | as the call | `retry` · `fallback` |
+
+A dead-letter queue hangs off the queue whose messages it parks — never a topic, and not the worker
+that consumes the queue. Under a topic, draw each subscriber's own queue (topic → queue `fansOut` →
+worker `consumes`) and dead-letter from that queue; only a stream's consumer parks its own records.
 
 `response` on a synchronous call draws its reply line: `true`, or a label such as `"201 Order"`. Use
 it on the main path's key calls, not everywhere. `condition` adds a short guard under the label

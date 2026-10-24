@@ -1486,6 +1486,47 @@ fn the_proof_is_hmac_sha256_of_the_context_and_nonce() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn unauthenticated_control_floods_and_oversized_proofs_are_refused_promptly() {
+    let (events, relay, port) = started(Limits::default()).await;
+    for flood in [false, true] {
+        let mut request = format!("ws://127.0.0.1:{port}/collab")
+            .into_client_request()
+            .unwrap();
+        request.headers_mut().insert(
+            "Origin",
+            HeaderValue::from_str(&format!("http://127.0.0.1:{port}")).unwrap(),
+        );
+        request
+            .headers_mut()
+            .insert("Sec-WebSocket-Protocol", HeaderValue::from_static(PROTOCOL));
+        let (mut socket, _) = tokio_tungstenite::connect_async(request).await.unwrap();
+        assert!(matches!(next(&mut socket).await, Some(Message::Text(_))));
+        if flood {
+            for _ in 0..16 {
+                socket.send(Message::Pong(Vec::new().into())).await.unwrap();
+            }
+        } else {
+            socket
+                .send(Message::text(format!(
+                    r#"{{"t":"proof","mac":"{}","padding":"{}"}}"#,
+                    "0".repeat(64),
+                    "x".repeat(1024)
+                )))
+                .await
+                .unwrap();
+        }
+        assert_eq!(
+            timeout(Duration::from_secs(2), close_of(&mut socket))
+                .await
+                .expect("refused without waiting for the proof timeout"),
+            (1008, "unauthorized".to_string())
+        );
+    }
+    assert!(events.all().is_empty());
+    relay.stop("stopped").await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn a_full_page_pool_makes_room_from_whoever_holds_the_most() {
     let shared = shared_for_counting(Limits::default());
     let heavy: std::net::IpAddr = "192.168.1.66".parse().unwrap();

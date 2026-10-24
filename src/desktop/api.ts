@@ -369,7 +369,7 @@ export interface DesktopApi {
   companionSend(request: PromptRequest): Promise<void>;
   /** Stops a run. False when it had already ended. */
   companionCancel(runId: string): Promise<boolean>;
-  /** Runs still going, with what they have said so far, for a page that has just loaded. */
+  /** Active and recently finished runs, with their events, for a page that has just loaded. */
   companionRuns(): Promise<RunSnapshot[]>;
   /** The next prompt on this diagram starts a new conversation. */
   companionForget(diagramId: string): Promise<void>;

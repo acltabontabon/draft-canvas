@@ -138,8 +138,23 @@ describe('untrusted frames', () => {
     reassembler.push(frame(5, 0, 3));
     reassembler.push(frame(5, 1, 2));
     expect(drops.map(([reason]) => reason)).toEqual(['malformed']);
+    expect(reassembler.pendingMessages).toBe(0);
     reassembler.push(frame(5, 0, 2, [0x63]));
+    expect(messages).toEqual([]);
+    reassembler.push(frame(5, 1, 2));
     expect(messages).toEqual([['ca', 'message']]);
+  });
+
+  it('does not recreate partials or deliver a replacement after a drop disposes it', () => {
+    for (const count of [1, 2]) {
+      const onMessage = vi.fn();
+      const reassembler = new Reassembler({ onMessage, onDrop: () => reassembler.dispose() });
+      reassembler.push(frame(5, 0, 3));
+      reassembler.push(frame(5, 0, count));
+      expect(reassembler.pendingMessages).toBe(0);
+      expect(reassembler.pendingBytes).toBe(0);
+      expect(onMessage).not.toHaveBeenCalled();
+    }
   });
 
   it('caps a message at its byte limit', () => {
@@ -202,6 +217,19 @@ describe('untrusted frames', () => {
     }
     expect(drops).toEqual([]);
     expect(messages).toEqual([['abcdef', 'message']]);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('stops expiring partials after the first timeout disposes the transport', () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    const onDrop = vi.fn(() => reassembler.dispose());
+    const reassembler = new Reassembler({ onMessage: vi.fn(), onDrop });
+    reassembler.push(frame(1, 0, 2));
+    reassembler.push(frame(2, 0, 2));
+    vi.advanceTimersByTime(REASSEMBLY_TIMEOUT_MS);
+    expect(onDrop).toHaveBeenCalledOnce();
+    expect(reassembler.pendingBytes).toBe(0);
+    expect(reassembler.pendingMessages).toBe(0);
     expect(vi.getTimerCount()).toBe(0);
   });
 

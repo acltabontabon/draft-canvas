@@ -1,0 +1,22 @@
+[
+  {
+    "file": "nodi.png",
+    "alt": "Nodi previews a proposed architecture change beside the canvas, ready to compare and accept.",
+    "platform": "desktop"
+  },
+  {
+    "file": "collaboration.png",
+    "alt": "A live collaboration session shows the people drawing together, their pointers and selections.",
+    "platform": "shared"
+  },
+  {
+    "file": "rich-text.png",
+    "alt": "Rich text notes explain the architecture with headings, lists, code and formatted details.",
+    "platform": "shared"
+  },
+  {
+    "file": "editor.png",
+    "alt": "The editor keeps the architecture in view with compact drawing tools and canvas controls.",
+    "platform": "shared"
+  }
+]
