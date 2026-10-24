@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createEdge, createNode } from '../../src/document/factory';
-import { arrivalLine, blockedFolderOf, smallTalkOf, clockLines, diagramLines, doorOf, goodbyeLine, openers, restingLine, returnLine, seedOf, setupStepsOf, smallHours, snagOf } from '../../src/desktop/ui/nodiLines';
+import { arrivalLine, updateLine, blockedFolderOf, smallTalkOf, clockLines, diagramLines, doorOf, goodbyeLine, openers, restingLine, returnLine, seedOf, setupStepsOf, smallHours, snagOf } from '../../src/desktop/ui/nodiLines';
 
 /** What Nodi says from rest: the one thing worth knowing, most pressing first. */
 
@@ -310,7 +310,7 @@ describe('what Nodi says about the time', () => {
 
 describe('small talk Nodi answers itself', () => {
   it('answers a greeting, a thanks, an okay, a goodbye or a how-are-you, however it is typed', () => {
-    for (const said of ['hello', 'Hello!', 'hey boss', 'Hi there 👋', 'good morning', 'thanks', 'Thank you!!', 'ok', 'lol', 'bye', 'How are you?', 'what’s up', 'whats your name', 'Who are you?', 'how old are you?', 'how hold are you?', 'are you an AI?', 'what can you do', 'tell me a joke', 'good job', 'you there?']) {
+    for (const said of ['hello', 'Hello!', 'hey boss', 'Hi there 👋', 'good morning', 'thanks', 'Thank you!!', 'ok', 'lol', 'bye', 'How are you?', 'what’s up', 'whats your name', 'Who are you?', 'how old are you?', 'how hold are you?', 'are you an AI?', 'tell me a joke', 'good job', 'you there?']) {
       expect(smallTalkOf(said, 0), said).toMatch(/\w/);
     }
   });
@@ -323,5 +323,15 @@ describe('small talk Nodi answers itself', () => {
     for (const said of ['hello, what breaks first?', 'hi can you add a cache', 'thanks, now add a queue', 'ok do it', 'why', 'explain this', 'hey what is this service for', 'how old is the database', 'what can you do with the queue', 'help me add a cache', '']) {
       expect(smallTalkOf(said, 0), said).toBeNull();
     }
+  });
+});
+
+describe('a new version, mentioned', () => {
+  it('names it, says whether it is waiting, and opens the update panel rather than the chat', () => {
+    expect(updateLine('1.16.0', false)).toMatch(/1\.16\.0/);
+    expect(updateLine('1.16.0', true)).toMatch(/1\.16\.0.*(waiting|ready)/);
+    expect(restingLine({ ...quiet, update: 'NEWS' })).toMatchObject({ tone: 'update', text: 'NEWS', hint: 'What’s new' });
+    // Work under way and news of a turn come first.
+    expect(restingLine({ ...quiet, update: 'NEWS', working: 'Reading the diagram' }).tone).toBe('working');
   });
 });

@@ -190,7 +190,8 @@ test('a tidy-up is shown on tracing paper: the proposed diagram on one sheet, tr
   await openOrders(page);
   await page.getByRole('button', { name: 'Open Nodi' }).click();
   const input = page.getByLabel('Message Claude Code');
-  await input.fill('Tidy this up');
+  // (A bare "tidy this up" is the app's own Arrange command now, offered by Nodi without the agent.)
+  await input.fill('Move the database under the API so the worker’s connector is short');
   await input.press('Enter');
   await expect.poll(() => page.evaluate(() => window.__shell.companionSent().length)).toBe(1);
   const runId = await page.evaluate(() => window.__shell.companionSent()[0]!.runId);
@@ -361,13 +362,23 @@ test('at rest Nodi speaks up: a greeting on arrival, what it is doing, and news 
   await expect(say).toBeHidden({ timeout: 5000 });
 });
 
-test('with no agent on the computer there is no Nodi', async ({ page }) => {
+test('with no agent on the computer Nodi still helps, and says what it can’t do', async ({ page }) => {
   await openOrders(page, () =>
     page.evaluate(() => window.__shell.setCompanionAgents([{ agent: 'claude-code', name: 'Claude Code', availability: 'missing', version: null, signIn: { loggedIn: false, method: null, transcripts: null } }])),
   );
-  await page.waitForTimeout(800);
-  await expect(page.getByRole('button', { name: 'Open Nodi' })).toHaveCount(0);
-  await expect(page.locator('.dc-companion')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Open Nodi' }).click();
+  await expect(page.locator('.dc-companion-speech')).toContainText('No coding agent on this computer');
+  await expect(page.locator('.dc-companion-footer')).toContainText('no coding agent');
+  // What it can answer itself, it does.
+  await page.getByRole('list', { name: 'Ask Nodi' }).getByRole('button', { name: 'What’s in this diagram?' }).click();
+  const conversation = page.getByRole('region', { name: /Conversation with/ });
+  await expect(conversation).toContainText('Order processing');
+  // What needs an agent, it says so, without trying to run one.
+  const input = page.getByLabel('Message Claude Code');
+  await input.fill('Add a cache in front of the database');
+  await input.press('Enter');
+  await expect(conversation).toContainText('Claude Code or Codex');
+  expect(await page.evaluate(() => window.__shell.companionSent().length)).toBe(0);
 });
 
 test('stop asks the shell to end the run', async ({ page }) => {

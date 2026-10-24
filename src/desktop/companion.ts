@@ -6,6 +6,7 @@
  * No React here: `ui/Companion.tsx` reads it through `subscribe`/`snapshot`.
  */
 import type { AgentKind, RunEvent, RunSnapshot, StopReason, ToolStatus, Usage } from './api';
+import type { LocalAction } from './ui/nodiLocal';
 
 export interface Step {
   id: string;
@@ -34,8 +35,10 @@ export interface Turn {
   proposalId: string | null;
   /** What the person decided about the turn's proposal, once they have. */
   outcome: 'accepted' | 'rejected' | null;
-  /** Answered by Nodi itself, with no agent run (`smallTalkOf`): nothing was spent on it. */
+  /** Answered by Nodi itself, with no agent run (`smallTalkOf`, `localAnswer`): nothing was spent on it. */
   local?: true;
+  /** Buttons under Nodi's own answer: commands to run, questions to ask the agent. */
+  actions?: LocalAction[];
 }
 
 export interface Conversation {
@@ -338,10 +341,10 @@ export const companion = {
   },
 
   /** A turn Nodi answers itself, with no agent run: small talk, whole at once, costing nothing. */
-  answer(diagramId: string, prompt: string, reply: string): void {
+  answer(diagramId: string, prompt: string, reply: string, actions?: LocalAction[]): void {
     const runId = `local-${crypto.randomUUID()}`;
     companion.begin(diagramId, runId, prompt, null);
-    update(runId, (turn) => ({ ...turn, reply, stop: { kind: 'end-turn' }, local: true }));
+    update(runId, (turn) => ({ ...turn, reply, stop: { kind: 'end-turn' }, local: true, ...(actions?.length ? { actions } : {}) }));
   },
 
   apply(runId: string, event: RunEvent): void {

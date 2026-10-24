@@ -1514,6 +1514,11 @@
   --dc-say-line: var(--dc-border-strong);
 }
 
+/* News of a new version: the same accent as the app's own update chip. */
+.dc-companion-say[data-tone='update'] {
+  --dc-say-line: var(--dc-caution);
+}
+
 /* Poked once too often: the box goes the colour of its screen. */
 .dc-companion-say[data-tone='poked'] {
   --dc-say-line: var(--dc-danger);
@@ -2103,6 +2108,37 @@
 .dc-companion-options button:hover::before,
 .dc-companion-options button:focus-visible::before {
   transform: translateX(3px);
+}
+
+/* Buttons under Nodi's own answer: a wrapping row of pills, so they read as things to press, not
+   more lines to read. A question for the agent is outlined; something the app does now is filled. */
+.dc-companion-actions {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 0;
+}
+
+.dc-companion-actions button {
+  padding: 3px 10px;
+  border: 1px solid color-mix(in srgb, var(--dc-selection) 55%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--dc-selection) 14%, transparent);
+  font-size: 12px;
+}
+
+.dc-companion-actions button::before {
+  content: none;
+}
+
+.dc-companion-actions button[data-kind='ask'] {
+  background: none;
+}
+
+.dc-companion-actions button:hover,
+.dc-companion-actions button:focus-visible {
+  border-color: var(--dc-selection);
+  background: color-mix(in srgb, var(--dc-selection) 24%, transparent);
 }
 
 /* What would make the agent better outside the box: below the questions, after a hairline, so it

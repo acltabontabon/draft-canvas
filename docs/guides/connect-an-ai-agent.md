@@ -43,8 +43,11 @@ then it says what is missing and offers the fix: **Let Nodi in** turns agent acc
 
 1. Click Nodi, its speech bubble, or press ⌘J (Ctrl+J). Select shapes first to ask about them; the
    selection shows in the message box, and × asks about the whole view instead.
-2. Pick one of Nodi's suggestions (**Walk me through it**, **What breaks first?**, …) or type. A plain
-   "hello", "thanks" or "ok" Nodi answers itself, without running your agent, so it costs no tokens.
+2. Pick one of Nodi's suggestions (**Walk me through it**, **What breaks first?**, …) or type. What
+   needs no agent, Nodi answers itself, at no token cost: small talk, the time, what is in the view
+   ("how many queues?", "where is billing?"), where the file is saved, which folders agents can use, and
+   the app's own commands ("export", "present", "tidy connectors"), offered as buttons. Ask "what can
+   you do?" for the list.
 3. Read the answer in the bubble, which holds the whole conversation; past two turns, the earlier
    ones fold behind one line. On its top edge, the pencil starts a new conversation and `>_` copies a
    command that continues it in your agent's own terminal UI.

@@ -665,7 +665,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
           {!presenting && !tracing && <OpenPointsPanel buildCommandContext={buildCommandContext} />}
           {CompanionChunk && !tracing && !readOnly && !collabGuest && companionAllowed(presenting) && (
             <Suspense fallback={null}>
-              <CompanionChunk.Component />
+              <CompanionChunk.Component buildCommandContext={buildCommandContext} />
             </Suspense>
           )}
           <FlowBar playback={playback} />

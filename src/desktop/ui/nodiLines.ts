@@ -10,7 +10,7 @@ import type { AgentClient, AgentClientSetup, AgentSkillSetup, AgentSkillTarget }
  * test, and the lines are data: more personality is more lines, not more code.
  */
 
-export type RestingTone = 'greet' | 'selected' | 'working' | 'waiting' | 'done' | 'blocked' | 'poked';
+export type RestingTone = 'greet' | 'selected' | 'working' | 'waiting' | 'done' | 'blocked' | 'poked' | 'update';
 
 export interface RestingLine {
   tone: RestingTone;
@@ -49,6 +49,8 @@ export interface RestingState {
   poked?: boolean;
   /** Nodi's hello, while it is saying hello on the diagram's opening (`arrivalLine`). */
   arrival?: string;
+  /** A new version of the app to mention, now and then (`updateLine`). */
+  update?: string;
   /** Saying goodbye before wandering off, or hello after coming back. */
   departure?: boolean;
   returning?: boolean;
@@ -392,6 +394,21 @@ export function arrivalLine(at: Arrival, seed: number): string {
   return upperFirst(pick(lines, seed));
 }
 
+/** Nodi mentioning a new version of the app: once it is out, and once it is downloaded and waiting. */
+export function updateLine(version: string, ready: boolean): string {
+  const lines = ready
+    ? [
+        `${version} is downloaded and waiting, boss. Restart when you’re ready. I’ll hold your diagrams.`,
+        `Boss, ${version} is ready to go. One restart. Your unsaved work is kept, I promise.`,
+      ]
+    : [
+        `Psst, boss. Draft Canvas ${version} is out. New toys, fewer bugs. Probably.`,
+        `Boss! ${version} just landed. I read the release notes so you don’t have to.`,
+        `There’s a ${version}, boss. Updating is one click and zero incidents. I checked.`,
+      ];
+  return pick(lines, seedOf(version));
+}
+
 /** Whether it is the small hours, when Nodi dozes between messages. */
 export function smallHours(now: Date): boolean {
   return now.getHours() < 5;
@@ -406,6 +423,7 @@ export function restingLine(state: RestingState): RestingLine {
   if (state.waiting) return { tone: 'waiting', text: pick(WAITING, runSeed), hint: 'Show me', stays: true };
   if (state.unseen) return { tone: 'done', text: pick(DONE, runSeed), hint: 'Open', stays: true };
   if (state.poked) return { tone: 'poked', text: pick(POKED, seed), hint: 'Click to chat', stays: true };
+  if (state.update) return { tone: 'update', text: state.update, hint: 'What’s new', stays: false };
   if (state.departure) return { tone: 'greet', text: goodbyeLine(seed), hint: 'Click to chat', stays: true };
   if (state.returning) return { tone: 'greet', text: returnLine(seed), hint: 'Click to chat', stays: false };
   if (state.arrival) return { tone: 'greet', text: state.arrival, hint: 'Click to chat', stays: false };
@@ -644,13 +662,6 @@ const SMALL_TALK: { words: RegExp; replies: readonly string[] }[] = [
     replies: [
       'I’m Nodi, boss: pixels on top, your own coding agent underneath. Very real. Somewhat sentient about queues.',
       'A robot made of a sheet of paper and opinions, boss. The thinking is your agent’s; the attitude is mine.',
-    ],
-  },
-  {
-    words: /^(what can you do|what do you do|help|help me|how do you work|how does this work)$/,
-    replies: [
-      'I read this diagram with your agent and talk about it, boss: walk you through it, find what breaks first, draw a change for you to accept or reject. Ask away.',
-      'Ask me anything about the diagram, boss: risks, what’s missing, how a request travels. Ask for a change and I’ll put it on the canvas for you to accept.',
     ],
   },
   {

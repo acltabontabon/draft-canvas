@@ -15,13 +15,18 @@ import type { AgentClientSetup, AgentInfo, AgentSkillSetup, ApplyMode, PromptReq
 import { activityOf, companion, newTokens, numberedBlocks, partsIn, replyBlocks, replyOf, replyPoints, spentOn, stepText, stopMessage, tokenCount, type ReplyEntry, type Spent, type Turn } from '../companion';
 import { useDesktopController, useDesktopState } from '../useDesktop';
 import { useNodiShown } from '../nodiShown';
+import { describeUpdate } from '../updates';
+import { desktopStore } from '../store';
 import { forgetTurnSnapshot, unchangedSinceLastTurn } from '../turnSnapshot';
 import { Mascot } from './mascot/Mascot';
 import { CHANNEL_MS, CHANNELS, channelClock, type Channel, type Mood } from './mascot/pixels';
 import { CHIP_HEIGHT, chipPlace, revealViewport, type Box } from './chipPlace';
 import { canCreateInside, hasInside } from '../../depth/tree';
 import { lookInside } from '../../ui/Editor/depthNavigation';
-import { arrivalLine, blockedFolderOf, clockLines, RUN_SALT, smallTalkOf, diagramLines, failLine, doorOf, openers, restingLine, seedOf, setupStepsOf, smallHours, snagOf, type Look, type SetupStep, type SnagStep } from './nodiLines';
+import { agentlessAnswer, localAnswer, type LocalAction, type LocalFacts } from './nodiLocal';
+import { commandsFor } from '../../commands/registry';
+import { isStage, type CommandContext } from '../../commands/types';
+import { arrivalLine, updateLine, blockedFolderOf, clockLines, RUN_SALT, smallTalkOf, diagramLines, failLine, doorOf, openers, restingLine, seedOf, setupStepsOf, smallHours, snagOf, type Look, type SetupStep, type SnagStep } from './nodiLines';
 import { PointPins } from './PointPins';
 import { ProposalHistory } from './ProposalHistory';
 import { countsLabel, useProposalReview } from './useProposalReview';
@@ -127,7 +132,7 @@ function aboutOf(nodes: string[], edges: string[], names: Map<string, string>): 
 /** One empty list, so a diagram with no conversation keeps the same `turns` across renders. */
 const NO_TURNS: readonly Turn[] = [];
 
-export function Companion() {
+export function Companion({ buildCommandContext }: { buildCommandContext?: () => CommandContext } = {}) {
   const controller = useDesktopController();
   const shown = useNodiShown();
   const diagramId = useEditorStore((s) => s.document.metadata.id);
@@ -158,7 +163,10 @@ export function Companion() {
   const openProposal = useUiStore((s) => s.setProposalPanelOpen);
   const review = (id: string) => openProposal(true, id);
   const proposalPanelOpen = useUiStore((s) => s.proposalPanelOpen);
-  const { doc, agent: access } = useDesktopState();
+  const { doc, agent: access, update: updateState } = useDesktopState();
+  // A new version to mention: only while the app's own update chip would (not once dismissed).
+  const updateView = describeUpdate(updateState);
+  const newVersion = updateView.chip && updateView.version && (updateState?.state.phase === 'available' || updateState?.state.phase === 'ready') ? updateLine(updateView.version, updateState.state.phase === 'ready') : null;
   const conversations = useSyncExternalStore(companion.subscribe, companion.snapshot);
   const turns = conversations.get(diagramId)?.turns ?? NO_TURNS;
   const last = turns.at(-1) ?? null;
@@ -247,10 +255,13 @@ export function Companion() {
     window.setTimeout(() => setContinued(null), 4000);
   };
   const agentName = agent?.name ?? 'your agent';
+  // No coding agent on this computer: Nodi still answers what it can itself, and says plainly that
+  // the thinking needs one (`nodiLocal.ts`).
+  const agentless = agents !== null && !agents.some((a) => a.availability !== 'missing');
   // Why Nodi can't take a message yet, with the next steps it offers in place of the composer.
   const blocker = useMemo(
     () =>
-      snagOf({
+      agentless ? null : snagOf({
         doc: doc.kind,
         readOnly: doc.kind === 'file' && doc.readOnly,
         access: access ? access.enabled : null,
@@ -362,16 +373,69 @@ export function Companion() {
   const showsCost = /api/i.test(agent?.signIn.method ?? '');
   const spent = spentOn(conversations.get(diagramId));
 
+  // What Nodi knows without asking an agent, read when a message is sent (`nodiLocal.ts`).
+  const localFacts = (): LocalFacts => {
+    const { document: view, outer } = useEditorStore.getState();
+    const file = outer ?? view;
+    const shapes = view.nodes.filter((n) => !['note', 'text', 'code', 'group'].includes(n.type));
+    let commands: LocalFacts['commands'] = [];
+    try {
+      commands = buildCommandContext ? commandsFor(buildCommandContext()) : [];
+    } catch {
+      commands = [];
+    }
+    return {
+      now: new Date(),
+      title: file.metadata.title,
+      shapes: shapes.map((n) => ({ id: n.id, name: partNames.get(n.id) ?? 'Shape', category: categoryOf(n) })),
+      connectors: view.edges.map((e) => ({ id: e.id, name: partNames.get(e.id) ?? '' })),
+      flows: view.flows.map((f) => ({ id: f.id, title: f.title })),
+      boundaries: view.nodes.filter((n) => n.type === 'group').map((n) => ({ id: n.id, name: partNames.get(n.id) ?? 'Boundary' })),
+      notes: view.nodes.filter((n) => n.type === 'note').length,
+      openPoints: file.openPoints?.filter((p) => !p.resolved).length ?? 0,
+      file: doc.kind === 'file' ? doc.displayPath : null,
+      folders: access ? access.projects.map((p) => ({ name: p.name, displayPath: p.displayPath, agent: p.agent })) : null,
+      agentName: agentless ? null : agentName,
+      commands,
+    };
+  };
+  // A button under Nodi's own answer: a command runs as ⌘K runs it (a command that needs a second
+  // step opens ⌘K at it), a question goes to the agent.
+  const runAction = (action: LocalAction) => {
+    if (action.kind === 'ask') send(action.prompt);
+    else if (action.kind === 'settings') controller.openAgentSettings();
+    else if (action.kind === 'palette') useUiStore.getState().openCommandPaletteAt(action.query);
+    else if (action.kind === 'say') send(action.text);
+    else {
+      const ctx = buildCommandContext?.();
+      const command = ctx ? commandsFor(ctx).find((c) => c.id === action.id) : undefined;
+      if (!ctx || !command) {
+        useUiStore.getState().openCommandPaletteAt(action.label.replace(/…$/, ''));
+        return;
+      }
+      const next = command.run(ctx);
+      if (isStage(next)) useUiStore.getState().openCommandPaletteAt(command.title.replace(/…$/, ''));
+    }
+  };
   // Between Send and the turn starting (its view is read first): a second Enter is not a second turn.
   const sending = useRef(false);
   const send = (text = draft) => {
     const prompt = text.trim();
     if (!prompt || running || blocker || sending.current) return;
-    // Small talk is Nodi's own to answer: no agent run, no tokens.
+    // Small talk, and what Nodi can answer or do itself, are its own: no agent run, no tokens.
     const own = smallTalkOf(prompt, seedOf(diagramId) + turns.length);
-    if (own) {
+    const local = own ? null : localAnswer(prompt, localFacts());
+    if (own || local) {
       setDraft('');
-      companion.answer(diagramId, prompt, own);
+      companion.answer(diagramId, prompt, own ?? local!.text, local?.actions);
+      if (local?.reveal) pointing.reveal(local.reveal);
+      return;
+    }
+    // Only an agent could answer this, and there is none: Nodi says so, and what it can still do.
+    if (agentless) {
+      setDraft('');
+      const reply = agentlessAnswer(seedOf(diagramId) + turns.length);
+      companion.answer(diagramId, prompt, reply.text, reply.actions);
       return;
     }
     const scoped = includeSelection && hasSelection;
@@ -524,7 +588,7 @@ export function Companion() {
   const [trips, setTrips] = useState(0);
   const lastActivity = useRef<number | null>(null);
   const needed = open || running || Boolean(last?.proposalId) || unseen || blocker !== null || hovered || focused || poked;
-  const canWander = !needed && !arriving && !peeking && !helloHeld && shown && !yielded && Boolean(agents?.some((a) => a.availability !== 'missing'));
+  const canWander = !needed && !arriving && !peeking && !helloHeld && shown && !yielded && agents !== null;
 
   useEffect(() => {
     lastActivity.current ??= Date.now();
@@ -646,6 +710,8 @@ export function Companion() {
     departure: wandering === 'goodbye',
     returning: returned && (peeking || helloHeld),
     arrival: peeking || helloHeld ? hello : undefined,
+    // Said with the hello, and then every fourth time Nodi pipes up: news, not nagging.
+    update: newVersion && (peeking || visits % 4 === 0) ? newVersion : undefined,
   });
   // The line the bubble says. While it is up, whatever Nodi has to say now; once it starts to go (the
   // hello's five seconds are up, the pointer has left), the line it was saying stays until it has
@@ -675,7 +741,8 @@ export function Companion() {
   // The review and open-points panels sit in the same corner: the companion makes way for them. And
   // with no agent on this computer (or until that is known) there is no Nodi: nothing it could run.
   // Nor once the person has switched it off in Settings.
-  if (!shown || yielded || !agents?.some((a) => a.availability !== 'missing')) return null;
+  // Until the shell says which agents there are, nothing: then Nodi, agent or not.
+  if (!shown || yielded || agents === null) return null;
   if (wandering === 'away' && !open) return null;
 
   if (!expanded) {
@@ -722,7 +789,8 @@ export function Companion() {
               data-tone={line.tone}
               data-shown={bubbleUp ? 'true' : undefined}
               aria-label={`Nodi: ${line.text} ${line.hint}`}
-              onClick={openFromRest}
+              // News of a new version opens the update panel; anything else, the conversation.
+              onClick={line.tone === 'update' ? () => desktopStore.update({ updateOpen: true }) : openFromRest}
             >
               {/* Who is talking, as a game's dialogue box says it: a nameplate on the box's edge. */}
               <span className="dc-companion-say-name" aria-hidden="true">
@@ -859,7 +927,7 @@ export function Companion() {
                   </button>
                 )}
                 {turns.slice(folded).map((turn) => (
-                  <TurnView key={turn.runId} turn={turn} pinned={turn === last} />
+                  <TurnView key={turn.runId} turn={turn} pinned={turn === last} onAction={runAction} />
                 ))}
               </section>
               {/* Said once a turn ends, for someone who stayed in the composer and can't see the reply arrive. */}
@@ -876,16 +944,34 @@ export function Companion() {
             // Nodi carries on the line it said at rest, and offers the person's replies the way a
             // game's dialogue does: in their words, with a plain question behind each for the agent.
             <>
-              <Typed key={resting.text} text={resting.text} />
-              <ul className="dc-companion-options" aria-label="Ask Nodi">
-                {openers(about, seedOf(diagramId) + visits, look).map((option) => (
-                  <li key={option.label}>
-                    <button type="button" onClick={() => (option.enter ? void lookInside(option.enter) : send(option.prompt))}>
-                      {option.label}
-                    </button>
-                  </li>
-                ))}
-              </ul>
+              {agentless ? (
+                // Without an agent: said once, plainly, and what Nodi can still do as the replies.
+                <>
+                  <Typed key="agentless" text="No coding agent on this computer, boss, so I can’t think about the architecture yet. I can still count, find, tell the time and run the app for you." />
+                  <ul className="dc-companion-options" aria-label="Ask Nodi">
+                    {['What can you do?', 'What’s in this diagram?', 'What time is it?'].map((said) => (
+                      <li key={said}>
+                        <button type="button" onClick={() => send(said)}>
+                          {said}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : (
+                <>
+                  <Typed key={resting.text} text={resting.text} />
+                  <ul className="dc-companion-options" aria-label="Ask Nodi">
+                    {openers(about, seedOf(diagramId) + visits, look).map((option) => (
+                      <li key={option.label}>
+                        <button type="button" onClick={() => (option.enter ? void lookInside(option.enter) : send(option.prompt))}>
+                          {option.label}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
               {/* Set apart from the questions: what would make the agent better outside this box,
                   each one Settings' own one-click button, done from here. */}
               {(setupSteps.length > 0 || setupSaid) && (
@@ -946,7 +1032,7 @@ export function Companion() {
           spellCheck
           value={draft}
           // Short beside a chip, so it reads whole.
-          placeholder={about ? 'Ask about this…' : selected ? 'Ask about the whole view…' : `Ask ${agentName} about this diagram…`}
+          placeholder={about ? 'Ask about this…' : selected ? 'Ask about the whole view…' : agentless ? 'Ask Nodi…' : `Ask ${agentName} about this diagram…`}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={onKey}
         />
@@ -967,6 +1053,11 @@ export function Companion() {
           </button>
         )}
       </div>
+      {agentless ? (
+        <div className="dc-companion-footer">
+          <span>Nodi on its own · no coding agent</span>
+        </div>
+      ) : (
       <div className="dc-companion-footer">
         <span title="It works through Draft Canvas’s diagram tools, and nothing else on this computer.">
           via{' '}
@@ -989,6 +1080,7 @@ export function Companion() {
           </>
         )}
       </div>
+      )}
       </>
       )}
     </div>
@@ -997,7 +1089,7 @@ export function Companion() {
 }
 
 /** What the mascot says about the latest turn: the step it is on, then its reply as it streams in. */
-function TurnView({ turn, pinned }: { turn: Turn; pinned: boolean }) {
+function TurnView({ turn, pinned, onAction }: { turn: Turn; pinned: boolean; onAction: (action: LocalAction) => void }) {
   const reply = replyOf(turn);
   const activity = activityOf(turn.steps, turn.stop === null);
   const stopped = stopMessage(turn.stop);
@@ -1041,6 +1133,17 @@ function TurnView({ turn, pinned }: { turn: Turn; pinned: boolean }) {
         </p>
       )}
       {turn.outcome === 'rejected' && <p className="dc-companion-stopped">Rejected. The diagram is unchanged.</p>}
+      {turn.actions && (
+        <ul className="dc-companion-options dc-companion-actions" aria-label="Nodi can">
+          {turn.actions.map((action) => (
+            <li key={`${action.kind}:${action.label}`}>
+              <button type="button" data-kind={action.kind} onClick={() => onAction(action)}>
+                {action.label}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </article>
   );
 }
