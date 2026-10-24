@@ -282,6 +282,9 @@ function layout({ page, title, description, body, stylesheet, navigation, conten
     <meta property="og:title" content="${escape(fullTitle)}" />
     <meta property="og:description" content="${escape(description)}" />
     <meta property="og:image" content="${SITE}og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Draft Canvas — Nodi and a team shaping a shared architecture diagram, sketched in fine lines on charcoal." />
     <link rel="icon" href="${root}favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="${root}icon-180.png" />
     <meta name="color-scheme" content="light dark" />

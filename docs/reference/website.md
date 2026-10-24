@@ -59,10 +59,12 @@ With `npm run site:dev`, refresh `http://localhost:5280/docs/` to see an edit.
 | --- | --- |
 | `npm --prefix www run art` | Hero drawing in `www/index.html` (seeded, so repeatable) |
 | `npm --prefix www run clips` | The five demo clips in `www/public/clips/`, cut from `docs/media/demo.mp4` with ffmpeg |
-| `npx tsx e2e/og-diagram.ts --base <dev server>` | `www/scripts/og-diagram.png`, rendered in the editor from `og-diagram.json` |
 | `npm --prefix www run social` | `og-image.png` and the Apple touch icon |
 
-Outputs are committed, so deploys need neither ffmpeg nor a browser. Run `social` after `art`.
+Outputs are committed, so deploys need neither ffmpeg nor a browser. The 1200 × 630 social card
+combines `www/scripts/og-illustration.png` with editable lettering and the root package's release
+version. Keep text out of the source illustration, run `social` after changing it or the version,
+and check that the full headline remains visible at small preview sizes.
 
 ## Deploying
 
