@@ -305,17 +305,23 @@ pub(crate) mod tests {
     use super::*;
     use std::sync::mpsc;
 
+    /// A shell command: `sh -c` on Unix, `cmd /C` on Windows. Windows gets its line as it is: the
+    /// standard library's quoting escapes inner quotes with backslashes, which cmd doesn't read, so
+    /// `type "C:\…\turn.jsonl"` failed to start and the run stopped before saying anything.
+    #[cfg(windows)]
+    pub(crate) fn shell(_unix: &str, windows: &str) -> Command {
+        use std::os::windows::process::CommandExt;
+        let mut command = Command::new("cmd");
+        command.arg("/C").raw_arg(windows);
+        command
+    }
+
     /// A shell command: `sh -c` on Unix, `cmd /C` on Windows.
-    pub(crate) fn shell(unix: &str, windows: &str) -> Command {
-        if cfg!(windows) {
-            let mut command = Command::new("cmd");
-            command.args(["/C", windows]);
-            command
-        } else {
-            let mut command = Command::new("sh");
-            command.args(["-c", unix]);
-            command
-        }
+    #[cfg(not(windows))]
+    pub(crate) fn shell(unix: &str, _windows: &str) -> Command {
+        let mut command = Command::new("sh");
+        command.args(["-c", unix]);
+        command
     }
 
     fn start(

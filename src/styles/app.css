@@ -2991,11 +2991,12 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   width: max-content;
   max-width: min(360px, calc(100% - 48px));
   /* Sized to its content, up to the corner footprint the camera keeps clear for it (CAPTION_SIZE in
-     useFlowPlayback, 172px) or the room between the exit control and the strip, if less. The old
+     useFlowPlayback, 224px) or the room between the exit control and the strip, if less. The old
      132px cap was shorter than an ordinary step — a two-line headline, a caption and its chips — so
-     the chips row was cut in half by the card's own edge; with no cap at all, a long caption grew
-     over the step it explains. Longer details scroll, and the read-more control says so. */
-  max-height: min(172px, calc(100% - 192px));
+     the chips row was cut in half by the card's own edge; 172px still was, with Linux's wider fonts
+     wrapping the chips to a second row. With no cap at all, a long caption grew over the step it
+     explains. Longer details scroll, and the read-more control says so. */
+  max-height: min(224px, calc(100% - 192px));
   overflow: auto;
   overflow-anchor: none;
   pointer-events: none;
