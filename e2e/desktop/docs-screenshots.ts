@@ -8,7 +8,6 @@ import { copyFileSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, expect, type Browser, type Page } from '@playwright/test';
-import { NAME_SHIM } from '../../demo/overlay';
 import type { RunEvent } from '../../src/desktop/api';
 import { chooseWorkFile } from './explorer';
 import { installMockShell } from './mockShell';
@@ -20,6 +19,9 @@ const BASE_URL = `http://localhost:${PORT}`;
 const DIAGRAM = 'd_open00000001';
 const releaseAt = process.argv.indexOf('--release');
 const RELEASE = releaseAt < 0 ? null : process.argv[releaseAt + 1];
+// tsx's function-name helper can occur in serialized browser callbacks. Keep this capture tool
+// independent of local-only demo files so it also typechecks in a clean checkout.
+const NAME_SHIM = 'globalThis.__name ||= (fn) => fn;';
 
 const ORDERS = {
   requestId: 'nodi-guide',

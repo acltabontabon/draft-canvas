@@ -98,8 +98,9 @@ export interface ExportResult {
 
 /** Export through the real dialog, timing from the click to the browser receiving the file. */
 export async function measureExport(page: Page, kind: 'svg' | 'png'): Promise<ExportResult> {
-  await page.getByRole('button', { name: 'Export', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'Export' });
+  await page.getByRole('button', { name: 'Share', exact: true }).click();
+  await page.getByRole('menuitem', { name: /^Export/ }).click();
+  const dialog = page.getByRole('dialog', { name: 'Export & share' });
   await dialog.locator('[data-mode="image"]').click();
   // The dialog remembers the last format, so name the one wanted rather than trusting the default.
   await dialog.locator(`[data-value="${kind}"]`).click();
