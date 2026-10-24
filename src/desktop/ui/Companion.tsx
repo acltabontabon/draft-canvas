@@ -5,8 +5,9 @@ import { Icon } from '../../ui/common/Icon';
 import { SegmentedControl } from '../../ui/common/SegmentedControl';
 import { MOD_SYMBOL } from '../../lib/platform';
 import { readPreference, writePreference } from '../../lib/preferences';
+import { walkGraphs } from '../../depth/tree';
 import { boundsOf } from '../../document/geometry';
-import type { DraftEdge, DraftNode } from '../../document/types';
+import type { DraftDocument, DraftEdge, DraftNode } from '../../document/types';
 import { useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
 import type { AgentInfo, ApplyMode, PromptRequest, Proposal } from '../api';
@@ -33,7 +34,10 @@ let partFlash: ReturnType<typeof setTimeout> | null = null;
 
 /** What the reply's points and part chips need to light the canvas, shared down the reply's text. */
 interface Pointing {
+  /** Every part's name, in every view of the diagram: a reply may name parts of another view. */
   names: ReadonlyMap<string, string>;
+  /** The parts of the view on screen: only these are pinned, lit and brought into view. */
+  here: ReadonlySet<string>;
   /** The point lit now, in the bubble and on its pin. */
   hot: number | null;
   /** Light a point and the parts given (or one part), or put them out with null and none. */
@@ -44,21 +48,29 @@ interface Pointing {
 
 const PointingContext = createContext<Pointing | null>(null);
 
-/** Every part's name as the reply's chips and pins say it: a shape's first line, a connector's
- *  label, else where it runs. */
-function partNamesOf(nodes: readonly DraftNode[], edges: readonly DraftEdge[]): Map<string, string> {
+/**
+ * Every part's name as the reply's chips and pins say it: a shape's first line, a connector's label,
+ * else where it runs. From every view of the file, so a reply about the parts inside a shape (or about
+ * the shape itself, read from inside it) names them rather than showing their ids; the view on screen
+ * last, as it is now (the file it came from may not have its latest edits yet).
+ */
+function partNamesOf(file: DraftDocument, view: DraftDocument): Map<string, string> {
   const names = new Map<string, string>();
   const line = (text: string | undefined) => text?.split('\n')[0]?.trim().slice(0, 48) || undefined;
-  for (const node of nodes) names.set(node.id, line(node.text) ?? (node.type === 'group' ? 'Boundary' : 'Shape'));
-  for (const edge of edges) names.set(edge.id, line(edge.label) ?? `${names.get(edge.source) ?? '?'} → ${names.get(edge.target) ?? '?'}`);
+  const add = (nodes: readonly DraftNode[], edges: readonly DraftEdge[]) => {
+    for (const node of nodes) names.set(node.id, line(node.text) ?? (node.type === 'group' ? 'Boundary' : 'Shape'));
+    for (const edge of edges) names.set(edge.id, line(edge.label) ?? `${names.get(edge.source) ?? '?'} → ${names.get(edge.target) ?? '?'}`);
+  };
+  walkGraphs(file, (graph) => add(graph.nodes, graph.edges));
+  add(view.nodes, view.edges);
   return names;
 }
 
 /** The latest turn's points, once it has finished: not for a turn whose proposal is up, where the
  *  change on the canvas is the answer. */
-function pointsOf(turn: Turn | null, names: ReadonlyMap<string, string>) {
+function pointsOf(turn: Turn | null, here: ReadonlySet<string>) {
   const reply = turn && turn.stop !== null && !turn.proposalId ? replyOf(turn) : '';
-  return reply ? replyPoints(numberedBlocks(replyBlocks(reply), (id) => names.has(id))) : [];
+  return reply ? replyPoints(numberedBlocks(replyBlocks(reply), (id) => here.has(id))) : [];
 }
 
 /** Diagrams Nodi has greeted this app run: the greeting pops up once on arrival, then on hover. */
@@ -266,12 +278,15 @@ export function Companion() {
   // on both together.
   const docNodes = useEditorStore((s) => s.document.nodes);
   const docEdges = useEditorStore((s) => s.document.edges);
-  const partNames = useMemo(() => partNamesOf(docNodes, docEdges), [docNodes, docEdges]);
+  const view = useEditorStore((s) => s.document);
+  const outerFile = useEditorStore((s) => s.outer);
+  const partNames = useMemo(() => partNamesOf(outerFile ?? view, view), [outerFile, view]);
+  const partsHere = useMemo(() => new Set([...docNodes.map((n) => n.id), ...docEdges.map((e) => e.id)]), [docNodes, docEdges]);
   // What Nodi can say about this very diagram: its queues, stores, crons and loose ends, by name.
   const flowCount = useEditorStore((s) => s.document.flows.length);
   const openPointCount = useEditorStore((s) => s.document.openPoints?.filter((p) => !p.resolved).length ?? 0);
   const aboutDiagram = useMemo(() => diagramLines(docNodes, docEdges, flowCount, openPointCount), [docNodes, docEdges, flowCount, openPointCount]);
-  const points = useMemo(() => pointsOf(turns.at(-1) ?? null, partNames), [turns, partNames]);
+  const points = useMemo(() => pointsOf(turns.at(-1) ?? null, partsHere), [turns, partsHere]);
   const [hot, setHot] = useState<number | null>(null);
   const setPointedIds = useUiStore((s) => s.setPointedIds);
   const { setViewport } = useReactFlow();
@@ -287,6 +302,7 @@ export function Companion() {
   const pointing = useMemo<Pointing>(
     () => ({
       names: partNames,
+      here: partsHere,
       hot,
       pointAt,
       reveal: (id) => {
@@ -305,7 +321,7 @@ export function Companion() {
         }, PART_FLASH_MS);
       },
     }),
-    [partNames, hot, pointAt, flowStore, setViewport],
+    [partNames, partsHere, hot, pointAt, flowStore, setViewport],
   );
   const pins =
     expanded && !blocker && points.length > 0 ? (
@@ -832,13 +848,27 @@ function inline(text: string, entry: ReplyEntry | null): ReactNode[] {
 
 /**
  * A part the reply names, by the name the diagram gives it: hovering lights it on the canvas, clicking
- * brings it into view. One the view doesn't have (another view's, or a slip of the agent's) is shown
- * as its id and points at nothing.
+ * brings it into view. A part of another view is named but points at nothing here; an id the diagram
+ * doesn't have at all (removed since, or a slip of the agent's) is never shown as the id, which means
+ * nothing to the person.
  */
 function PartChip({ id, entry }: { id: string; entry: ReplyEntry | null }) {
   const pointing = useContext(PointingContext);
   const name = pointing?.names.get(id);
-  if (!pointing || !name) return <code className="dc-companion-part" data-missing="true">{id}</code>;
+  if (!pointing || !name) {
+    return (
+      <span className="dc-companion-part" data-missing="true">
+        something not in this diagram
+      </span>
+    );
+  }
+  if (!pointing.here.has(id)) {
+    return (
+      <span className="dc-companion-part" data-elsewhere="true" title="In another view of this diagram">
+        {name}
+      </span>
+    );
+  }
   // Back to the whole point when the pointer leaves the chip but not the point.
   const back = () => pointing.pointAt(entry?.point ?? null, entry?.point ? entry.parts : []);
   return (
@@ -863,7 +893,7 @@ function PartChip({ id, entry }: { id: string; entry: ReplyEntry | null }) {
  */
 function ReplyText({ text, pinned = false }: { text: string; pinned?: boolean }) {
   const pointing = useContext(PointingContext);
-  const blocks = numberedBlocks(replyBlocks(text), (id) => pointing?.names.has(id) ?? false);
+  const blocks = numberedBlocks(replyBlocks(text), (id) => pointing?.here.has(id) ?? false);
   const point = (entry: ReplyEntry) =>
     pinned && entry.point !== null
       ? {

@@ -1728,9 +1728,19 @@
   outline: none;
 }
 
+/* A part of another view of the diagram: named, but nothing here to light or bring into view. */
+.dc-companion-part[data-elsewhere='true'] {
+  background: none;
+  font-weight: 500;
+  text-decoration: underline dotted;
+  text-decoration-color: var(--dc-text-faint);
+  cursor: default;
+}
+
 .dc-companion-part[data-missing='true'] {
   background: none;
   color: var(--dc-text-muted);
+  font-style: italic;
   font-weight: 400;
   text-decoration: none;
   cursor: default;

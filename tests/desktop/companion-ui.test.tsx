@@ -68,7 +68,7 @@ beforeEach(() => {
   prefs.clear();
   companion.__reset();
   controller = fakeController();
-  useEditorStore.setState({ document: doc, selection: { nodes: [], edges: [] } });
+  useEditorStore.setState({ document: doc, path: [], outer: null, selection: { nodes: [], edges: [] } });
   useUiStore.setState({ companionOpen: false, proposalPanelOpen: false, openPointsPanelOpen: false, readOnly: null });
   desktopStore.update({ doc: { kind: 'file', name: 'orders.draftcanvas', displayPath: '~/orders.draftcanvas', dirty: false, readOnly: false }, agent: ACCESS });
 });
@@ -155,6 +155,43 @@ describe('the companion', () => {
     act(() => companion.apply(sent.runId, { type: 'stopped', reason: { kind: 'end-turn' }, summary: 'Done.', costMicroUsd: null, usage: null }));
     fireEvent.click(screen.getByRole('button', { name: 'Codex' }));
     expect(prefs.get('companion.agent')).toBe('claude-code');
+  });
+
+  it('names parts of another view by name, and never shows an id the diagram doesn’t have', async () => {
+    // The reply was about the parts inside Orders database; the person is at the top level.
+    const inner = createNode({ id: 'c_api', type: 'component', x: 0, y: 0, text: 'Orders endpoint' });
+    const db = { ...doc.nodes[0]!, inside: { nodes: [inner], edges: [], flows: [], viewport: { x: 0, y: 0, zoom: 1 } } };
+    useEditorStore.setState({ document: { ...doc, nodes: [db] }, path: [], outer: null });
+    useUiStore.setState({ companionOpen: true });
+    mount();
+    await settle();
+    act(() => {
+      companion.begin(doc.metadata.id, 'r1', 'Add a component view inside the database', null);
+      companion.apply('r1', { type: 'stopped', reason: { kind: 'end-turn' }, summary: 'Inside [[db]], [[c_api]] routes requests. [[c_gone]] is gone.', costMicroUsd: null, usage: null });
+    });
+    const thread = screen.getByRole('region', { name: 'Conversation with Claude Code' });
+    expect(thread.textContent).not.toMatch(/c_api|c_gone|\[\[/);
+    expect(screen.getByRole('button', { name: 'Orders database' })).toBeTruthy();
+    // Inside another view: its name, not something to light or bring into view from here.
+    expect(screen.getByText('Orders endpoint').getAttribute('data-elsewhere')).toBe('true');
+    expect(screen.queryByRole('button', { name: 'Orders endpoint' })).toBeNull();
+    expect(screen.getByText('something not in this diagram')).toBeTruthy();
+  });
+
+  it('names the shape a view is inside, read from inside it', async () => {
+    const inner = createNode({ id: 'c_api', type: 'component', x: 0, y: 0, text: 'Orders endpoint' });
+    const room = { nodes: [inner], edges: [], flows: [], viewport: { x: 0, y: 0, zoom: 1 } };
+    const file = { ...doc, nodes: [{ ...doc.nodes[0]!, inside: room }] };
+    useEditorStore.setState({ document: { ...doc, ...room }, path: ['db'], outer: file });
+    useUiStore.setState({ companionOpen: true });
+    mount();
+    await settle();
+    act(() => {
+      companion.begin(doc.metadata.id, 'r1', 'What is in here?', null);
+      companion.apply('r1', { type: 'stopped', reason: { kind: 'end-turn' }, summary: 'I added a view inside [[db]]: [[c_api]] routes requests.', costMicroUsd: null, usage: null });
+    });
+    expect(screen.getByText('Orders database').getAttribute('data-elsewhere')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Orders endpoint' })).toBeTruthy();
   });
 
   it('copies the command that carries the conversation on in Terminal', async () => {
