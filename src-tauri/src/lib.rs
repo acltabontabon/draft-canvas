@@ -12,6 +12,8 @@ mod grants;
 mod lifecycle;
 mod menu;
 mod paths;
+#[cfg(windows)]
+mod process_tree;
 mod project;
 mod quit;
 mod recents;

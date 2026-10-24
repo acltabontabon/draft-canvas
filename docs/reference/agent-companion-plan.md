@@ -290,8 +290,9 @@ the plan above:
 - **Stopping is the process half only.** Stop terminates the agent's process group; closing the run
   policy and cancelling page requests (steps 1 and 2 of [Stopping a run](#stopping-a-run)) need the
   run tag, so they land in Phase 2.
-- **Windows** ends the tree with `taskkill /T /F` rather than a job object, and has no gentle stop.
-  The Windows runner tests run only in CI.
+- **Windows** originally used `taskkill /T /F`. Release hardening replaced it with a kill-on-close
+  Job Object assigned while the process is suspended, before its first thread runs. Cancellation
+  and parent exit end that job before pipe readers join. The Windows runner tests run only in CI.
 - **Minimum version** is 2.1.295, the version the flags were checked against, until an older one is checked.
 - **Verified since** with real runs (see [Real runs](#real-runs-2026-10-24)): the hooks switch, and the
   parser against recorded real turns. `companion/fixtures/claude-turn.jsonl` stays as the hand-written

@@ -67,7 +67,10 @@ pub enum Output {
 pub type Sink = Arc<dyn Fn(Output) + Send + Sync>;
 
 struct Shared {
+    #[cfg(unix)]
     pid: u32,
+    #[cfg(windows)]
+    tree: crate::process_tree::ProcessTree,
     cause: Mutex<Option<Cause>>,
     done: Mutex<bool>,
     finished: Condvar,
@@ -134,10 +137,10 @@ impl RunControl {
         }
         let shared = self.shared.clone();
         std::thread::spawn(move || {
-            terminate(shared.pid, false);
+            terminate(&shared, false);
             let control = RunControl { shared };
             if !control.wait(control.shared.grace) {
-                terminate(control.shared.pid, true);
+                terminate(&control.shared, true);
             }
         });
     }
@@ -161,14 +164,14 @@ pub fn spawn(
         command.process_group(0);
     }
     #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        command.creation_flags(CREATE_NO_WINDOW);
-    }
+    let (mut child, tree) = crate::process_tree::spawn(&mut command)?;
+    #[cfg(not(windows))]
     let mut child = command.spawn()?;
     let shared = Arc::new(Shared {
+        #[cfg(unix)]
         pid: child.id(),
+        #[cfg(windows)]
+        tree,
         cause: Mutex::new(None),
         done: Mutex::new(false),
         finished: Condvar::new(),
@@ -237,11 +240,9 @@ pub fn spawn(
             }
             std::thread::sleep(Duration::from_millis(40));
         };
-        // Whatever the agent left running in its group (a sidecar mid-shutdown) goes with it. Not on
-        // Windows: there the id may already name another process, and a sidecar exits when its
-        // stdin, held by the agent, closes.
-        #[cfg(unix)]
-        terminate(shared.pid, true);
+        // A descendant may still hold the pipes after its parent exited. End the owned group/job
+        // before joining the readers, rather than waiting forever for that descendant's pipe EOF.
+        terminate(&shared, true);
         let _ = stdout.join();
         let _ = stderr.join();
         let stderr = String::from_utf8_lossy(lock(&stderr_tail).make_contiguous()).into_owned();
@@ -305,13 +306,13 @@ fn text_of(line: &[u8]) -> String {
 
 /// Asks the process group to stop, or (`force`) kills it. Harmless once it is gone.
 #[cfg(unix)]
-fn terminate(pid: u32, force: bool) {
+fn terminate(shared: &Shared, force: bool) {
     extern "C" {
         fn kill(pid: i32, sig: i32) -> i32;
     }
     const SIGTERM: i32 = 15;
     const SIGKILL: i32 = 9;
-    let Ok(group) = i32::try_from(pid) else {
+    let Ok(group) = i32::try_from(shared.pid) else {
         return;
     };
     // SAFETY: kill(2) takes plain integers and has no memory effects; a negative pid names the
@@ -321,18 +322,12 @@ fn terminate(pid: u32, force: bool) {
     }
 }
 
-/// Windows has no gentle stop for a console process without a console; the tree is ended at once.
+/// Windows ends the owned job at once; its membership survives the root process exiting.
 #[cfg(windows)]
-fn terminate(pid: u32, _force: bool) {
-    use std::os::windows::process::CommandExt;
-    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-    let _ = Command::new("taskkill")
-        .args(["/PID", &pid.to_string(), "/T", "/F"])
-        .creation_flags(CREATE_NO_WINDOW)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status();
+fn terminate(shared: &Shared, _force: bool) {
+    if let Err(error) = shared.tree.terminate() {
+        eprintln!("Draft Canvas: the companion process tree could not be stopped ({error})");
+    }
 }
 
 /// Waits for every run to finish, `timeout` for all of them together.
@@ -503,6 +498,46 @@ pub(crate) mod tests {
         );
         let (_, exit) = collect(&rx);
         assert_eq!(exit.cause, Cause::TooMuchOutput);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn repeated_early_output_cancellation_cannot_let_a_new_child_escape() {
+        // Stop as soon as cmd says anything, while it is about to create PING. A taskkill tree walk
+        // could miss that new child, kill cmd, then leave its pipe held open for the full 30 seconds.
+        for _ in 0..16 {
+            let (control, rx) = start(
+                shell("", "echo ready& ping -n 30 127.0.0.1 >nul"),
+                "",
+                RunLimits::default(),
+            );
+            assert_eq!(
+                rx.recv_timeout(Duration::from_secs(10)).unwrap(),
+                Output::Line("ready".into())
+            );
+            let started = Instant::now();
+            control.stop();
+            let (_, exit) = collect(&rx);
+            assert_eq!(exit.cause, Cause::Cancelled);
+            assert!(control.wait(Duration::from_secs(5)));
+            assert!(started.elapsed() < Duration::from_secs(10));
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn an_exited_parent_cannot_leave_a_child_holding_the_output_pipes() {
+        let started = Instant::now();
+        let (control, rx) = start(
+            shell("", r#"start "" /b ping -n 30 127.0.0.1 & exit /b 0"#),
+            "",
+            RunLimits::default(),
+        );
+        let (_, exit) = collect(&rx);
+        assert_eq!(exit.cause, Cause::Exited);
+        assert_eq!(exit.code, Some(0));
+        assert!(control.wait(Duration::from_secs(5)));
+        assert!(started.elapsed() < Duration::from_secs(10));
     }
 
     #[cfg(unix)]

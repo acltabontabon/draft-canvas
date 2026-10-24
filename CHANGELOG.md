@@ -8,7 +8,7 @@ The retired VS Code extension has [its own changelog](https://github.com/acltabo
 
 ## [Unreleased]
 
-## [1.16.0] - 2026-10-24
+## [1.16.0] - 2026-10-25
 
 Draw together. Think with your own agent.
 
@@ -103,7 +103,8 @@ and a calmer editor makes room for the architecture.
 #### Security
 
 - Companion turns are limited to their diagram, with tool authority closed on Stop or completion.
-  CLI probes and process output are bounded, and oversized requests fail independently.
+  CLI probes and process output are bounded, and oversized requests fail independently. Windows
+  owns each process tree from startup, so stopping a turn or probe leaves no child holding its pipes.
 - Codex companion turns ignore user configuration to prevent other configured MCP servers, hooks
   or skill helpers becoming available. Sign-in and sessions are retained, but Codex's default model,
   provider and credential-store settings are used.

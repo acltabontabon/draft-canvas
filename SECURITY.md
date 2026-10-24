@@ -64,7 +64,9 @@ It does not encrypt the Library copy, desktop file or recovery copies.
 - **Companion runs** are scoped to one diagram and use proposals unless direct changes were chosen.
   Cancellation closes tool authority before waiting for the process to exit, including when Stop
   races startup; an agent's terminal event closes it too. Raw process output and retained event text
-  have separate size limits. These boundaries depend on running the supported, trusted agent CLI;
+  have separate size limits. Windows runs and CLI probes join a kill-on-close Job Object before
+  their first thread runs; cancellation and parent exit end the whole job before draining pipes.
+  These boundaries depend on running the supported, trusted agent CLI;
   they do not sandbox a malicious replacement executable.
   Codex turns ignore user configuration: command-line MCP table overrides merge with it and cannot
   by themselves exclude other servers. Authentication and sessions keep their original home.

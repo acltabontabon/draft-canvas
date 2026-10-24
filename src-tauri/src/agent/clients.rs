@@ -487,17 +487,14 @@ pub(crate) fn run(mut command: Command, limit: Duration) -> std::io::Result<Outp
         use std::os::unix::process::CommandExt;
         command.process_group(0);
     }
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        command.creation_flags(CREATE_NO_WINDOW);
-    }
-    let mut child = command
+    command
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?;
+        .stderr(Stdio::piped());
+    #[cfg(windows)]
+    let (mut child, tree) = crate::process_tree::spawn(&mut command)?;
+    #[cfg(not(windows))]
+    let mut child = command.spawn()?;
     let (tx, rx) = mpsc::sync_channel(8);
     let drain = |mut pipe: Box<dyn Read + Send>, stdout: bool| {
         let tx = tx.clone();
@@ -525,7 +522,15 @@ pub(crate) fn run(mut command: Command, limit: Duration) -> std::io::Result<Outp
     let result = loop {
         if status.is_none() {
             match child.try_wait() {
-                Ok(next) => status = next,
+                Ok(next) => {
+                    status = next;
+                    #[cfg(windows)]
+                    if status.is_some() {
+                        if let Err(error) = tree.terminate() {
+                            break Err(error);
+                        }
+                    }
+                }
                 Err(error) => break Err(error),
             }
         }
@@ -565,6 +570,9 @@ pub(crate) fn run(mut command: Command, limit: Duration) -> std::io::Result<Outp
         }
     };
     if result.is_err() {
+        #[cfg(windows)]
+        let _ = tree.terminate();
+        #[cfg(unix)]
         stop_probe_tree(&mut child);
         let _ = child.wait();
     }
@@ -577,6 +585,7 @@ pub(crate) fn run(mut command: Command, limit: Duration) -> std::io::Result<Outp
 }
 
 /// Stop the whole probe, including children that keep stdout/stderr open after the CLI exited.
+#[cfg(unix)]
 fn stop_probe_tree(child: &mut std::process::Child) {
     #[cfg(unix)]
     {
@@ -589,17 +598,6 @@ fn stop_probe_tree(child: &mut std::process::Child) {
                 kill(-pid, 9);
             }
         }
-    }
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        let _ = Command::new("taskkill")
-            .args(["/PID", &child.id().to_string(), "/T", "/F"])
-            .creation_flags(0x0800_0000)
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status();
     }
     let _ = child.kill();
 }
@@ -927,6 +925,29 @@ mod tests {
             run(command, Duration::from_secs(5)).err().unwrap().kind(),
             std::io::ErrorKind::InvalidData
         );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn cli_probe_jobs_end_on_timeout_and_on_parent_exit_with_inherited_pipes() {
+        let command = crate::companion::runner::tests::shell("", "ping -n 30 127.0.0.1 >nul");
+        let started = Instant::now();
+        assert_eq!(
+            run(command, Duration::from_millis(200))
+                .err()
+                .unwrap()
+                .kind(),
+            std::io::ErrorKind::TimedOut
+        );
+        assert!(started.elapsed() < Duration::from_secs(3));
+        let command = crate::companion::runner::tests::shell(
+            "",
+            r#"start "" /b ping -n 30 127.0.0.1 & exit /b 0"#,
+        );
+        let started = Instant::now();
+        let output = run(command, Duration::from_secs(2)).unwrap();
+        assert!(output.success);
+        assert!(started.elapsed() < Duration::from_secs(2));
     }
 
     #[cfg(unix)]

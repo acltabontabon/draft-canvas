@@ -205,6 +205,11 @@ Codex starts only after its feature listing can be verified; an unsuccessful or 
 refuses the run instead of omitting tool restrictions. CLI discovery, version and sign-in probes
 have deadlines through process exit and pipe closure, with a combined 1 MiB output limit.
 
+On Unix, each run and probe has its own process group. On Windows, the app creates the process
+suspended, assigns a kill-on-close Job Object, then resumes its initial thread. Setup failure
+terminates and reaps the suspended process. Stop, an output limit and parent exit terminate the
+whole job before readers wait for pipe closure, including children created as the turn ends.
+
 Codex merges MCP tables from configuration overrides, so replacing `mcp_servers` alone does not
 remove other servers. Companion runs use `--ignore-user-config` for both new and resumed turns;
 feature discovery uses a private temporary configuration home. Actual turns keep the person's
