@@ -178,6 +178,22 @@ describe('the companion', () => {
     expect(screen.getByText('something not in this diagram')).toBeTruthy();
   });
 
+  it('offers the way inside a shape its answer names, and takes the person there', async () => {
+    const inner = createNode({ id: 'c_api', type: 'component', x: 0, y: 0, text: 'Orders endpoint' });
+    const db = { ...doc.nodes[0]!, inside: { nodes: [inner], edges: [], flows: [], viewport: { x: 0, y: 0, zoom: 1 } } };
+    useEditorStore.setState({ document: { ...doc, nodes: [db] }, path: [], outer: null });
+    useUiStore.setState({ companionOpen: true });
+    mount();
+    await settle();
+    act(() => {
+      companion.begin(doc.metadata.id, 'r1', 'Add a component view inside the database', null);
+      companion.apply('r1', { type: 'stopped', reason: { kind: 'end-turn' }, summary: 'I added a component view inside [[db]].', costMicroUsd: null, usage: null });
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Take me inside Orders database' }));
+    await settle();
+    expect(useEditorStore.getState().path).toEqual(['db']);
+  });
+
   it('names the shape a view is inside, read from inside it', async () => {
     const inner = createNode({ id: 'c_api', type: 'component', x: 0, y: 0, text: 'Orders endpoint' });
     const room = { nodes: [inner], edges: [], flows: [], viewport: { x: 0, y: 0, zoom: 1 } };

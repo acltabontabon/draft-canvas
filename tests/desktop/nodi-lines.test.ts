@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createEdge, createNode } from '../../src/document/factory';
-import { diagramLines, openers, restingLine, seedOf, snagOf } from '../../src/desktop/ui/nodiLines';
+import { diagramLines, doorOf, openers, restingLine, seedOf, snagOf } from '../../src/desktop/ui/nodiLines';
 
 /** What Nodi says from rest: the one thing worth knowing, most pressing first. */
 
@@ -158,5 +158,34 @@ describe('what Nodi says about the diagram', () => {
     expect(diagram).toContain(said[1]);
     expect(diagram).toContain(said[3]);
     expect(diagram).not.toContain(said[0]);
+  });
+});
+
+describe('pointing the way inside', () => {
+  const room = { nodes: [createNode({ id: 'c1', type: 'component', x: 0, y: 0, text: 'Catalog' })], edges: [], flows: [], viewport: { x: 0, y: 0, zoom: 1 } };
+  const roomy = { ...createNode({ id: 'lib', type: 'service', x: 0, y: 0, text: 'Library System' }), inside: room };
+  const plain = createNode({ id: 'mail', type: 'service', x: 0, y: 0, text: 'Email Service' });
+
+  it('offers to step inside the selected shape that holds a diagram, or to draw one it could hold', () => {
+    const into = openers('Library System', 0, { into: { id: 'lib', name: 'Library System' } });
+    expect(into[2]).toEqual({ label: 'Take me inside Library System', prompt: '', enter: 'lib' });
+    const draw = openers('Email Service', 0, { drawable: true });
+    expect(draw[2]!.label).toBe('Draw what’s inside Email Service');
+    expect(draw[2]!.prompt).toMatch(/component view inside this element/);
+    expect(draw[2]!.enter).toBeUndefined();
+  });
+
+  it('with nothing selected, the way in every other time, a wildcard otherwise', () => {
+    const look = { into: { id: 'lib', name: 'Library System' } };
+    expect(openers(null, 0, look)[2]!.enter).toBe('lib');
+    expect(openers(null, 1, look)[2]!.enter).toBeUndefined();
+  });
+
+  it('finds the door, the selected shape first, and says it is bigger on the inside', () => {
+    const other = { ...roomy, id: 'lib2', text: 'Archive' };
+    expect(doorOf([plain, roomy, other], [], (n) => n.text!)).toEqual({ id: 'lib', name: 'Library System' });
+    expect(doorOf([plain, roomy, other], ['lib2'], (n) => n.text!)).toEqual({ id: 'lib2', name: 'Archive' });
+    expect(doorOf([plain], [], (n) => n.text!)).toBeNull();
+    expect(diagramLines([roomy, plain], [], 0, 0)).toContain('Psst, boss. Library System is bigger on the inside. Want a tour?');
   });
 });

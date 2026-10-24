@@ -1,4 +1,5 @@
 import { reviewView, type ReviewCode } from '../../agent/review';
+import { canCreateInside, hasInside } from '../../depth/tree';
 import { categoryOf } from '../../document/connectorSemantics';
 import type { DraftEdge, DraftNode } from '../../document/types';
 
@@ -237,6 +238,15 @@ function upperFirst(text: string): string {
 export interface Opener {
   label: string;
   prompt: string;
+  /** A shape to step inside instead of asking the agent anything: the way in for someone who
+   *  doesn't know a shape can hold a diagram of its own. */
+  enter?: string;
+}
+
+/** A shape on screen that holds a diagram of its own, by id and name. */
+export interface Door {
+  id: string;
+  name: string;
 }
 
 /** The wildcard third reply, a new one each time: the same honest review, asked with some nerve. */
@@ -257,16 +267,42 @@ const WILDCARDS_FOR: Opener[] = [
  * The replies Nodi offers before anything is asked: walk me through it, what breaks first, and a
  * wildcard. About the selection when there is one, by its name.
  */
-export function openers(selected: string | null, seed: number): Opener[] {
+export function openers(selected: string | null, seed: number, look: Look = {}): Opener[] {
   if (selected) {
     const wild = pick(WILDCARDS_FOR, seed);
+    // The selected shape's own inside comes first when it has one; when it could have one and
+    // doesn't, drawing it is the third offer.
+    const third: Opener = look.into
+      ? { label: `Take me inside ${look.into.name}`, prompt: '', enter: look.into.id }
+      : look.drawable
+        ? { label: `Draw what’s inside ${selected}`, prompt: DRAW_INSIDE }
+        : { label: wild.label.replace('{it}', selected), prompt: wild.prompt };
     return [
       { label: `What’s ${selected} doing here?`, prompt: 'Explain what this does in the diagram and why it is there.' },
       { label: `What could go wrong with ${selected}?`, prompt: 'What are the risks here?' },
-      { label: wild.label.replace('{it}', selected), prompt: wild.prompt },
+      third,
     ];
   }
-  return [{ label: 'Walk me through it', prompt: 'Explain this diagram' }, { label: 'What breaks first?', prompt: 'What are the risks here?' }, pick(WILDCARDS, seed)];
+  // A shape with a diagram inside is easy to miss: every other time, the third offer is the way in.
+  const third = look.into && seed % 2 === 0 ? { label: `Take me inside ${look.into.name}`, prompt: '', enter: look.into.id } : pick(WILDCARDS, seed);
+  return [{ label: 'Walk me through it', prompt: 'Explain this diagram' }, { label: 'What breaks first?', prompt: 'What are the risks here?' }, third];
+}
+
+/** What the person could look inside: a shape on screen that holds a diagram (`into`), and whether
+ *  the selected shape could hold one it doesn't have yet (`drawable`). */
+export interface Look {
+  into?: Door;
+  drawable?: boolean;
+}
+
+const DRAW_INSIDE =
+  'Add a component view inside this element: the parts it is made of and how they work together, drawn from what the diagram and its notes say about it. Where the diagram doesn’t say, ask me rather than guess.';
+
+/** The first shape on screen with a diagram inside, the selected one first: the door Nodi points at. */
+export function doorOf(nodes: readonly DraftNode[], selected: readonly string[], name: (node: DraftNode) => string): Door | null {
+  const inside = nodes.filter(hasInside);
+  const door = inside.find((n) => selected.includes(n.id)) ?? inside[0];
+  return door ? { id: door.id, name: name(door) } : null;
 }
 
 /**
@@ -349,6 +385,15 @@ export function diagramLines(nodes: readonly DraftNode[], edges: readonly DraftE
   if (openPoints > 0) say(`${openPoints === 1 ? 'One open point' : `${openPoints} open points`}, boss. They’re not closing themselves. I checked.`);
   if (groups === 0 && shapes.length >= 8) say(`${shapes.length} shapes and no boundaries, boss. Who owns what? Asking for the pager.`);
   if (shapes.length >= 25) say('This diagram is getting big, boss. Want me to tidy it? I won’t rename anything.');
+
+  // A shape can hold a diagram of its own, which is easy never to find out.
+  const roomy = shapes.find((n) => hasInside(n) && named(n));
+  if (roomy) {
+    say(`Psst, boss. ${named(roomy)} is bigger on the inside. Want a tour?`);
+    say(`There’s a whole diagram inside ${named(roomy)}, boss. Select it and Look inside, or ask me.`);
+  }
+  const busyOne = shapes.find((n) => canCreateInside(n) && !hasInside(n) && named(n) && (into.get(n.id) ?? 0) + edges.filter((e) => e.source === n.id).length >= 3);
+  if (busyOne) say(`${named(busyOne)} does a lot, boss. Want me to draw what’s inside it?`);
 
   // More of what every system like this learns the hard way, said about the parts that will learn it.
   if (actor) {

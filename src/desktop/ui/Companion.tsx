@@ -11,12 +11,14 @@ import type { DraftDocument, DraftEdge, DraftNode } from '../../document/types';
 import { useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
 import type { AgentInfo, ApplyMode, PromptRequest, Proposal } from '../api';
-import { companion, newTokens, numberedBlocks, replyBlocks, replyOf, replyPoints, spentOn, stepText, stopMessage, tokenCount, type ReplyEntry, type Spent, type Turn } from '../companion';
+import { companion, newTokens, numberedBlocks, partsIn, replyBlocks, replyOf, replyPoints, spentOn, stepText, stopMessage, tokenCount, type ReplyEntry, type Spent, type Turn } from '../companion';
 import { useDesktopController, useDesktopState } from '../useDesktop';
 import { Mascot } from './mascot/Mascot';
 import type { Mood } from './mascot/pixels';
 import { chipPlace, revealViewport } from './chipPlace';
-import { diagramLines, openers, restingLine, seedOf, snagOf, type SnagStep } from './nodiLines';
+import { canCreateInside, hasInside } from '../../depth/tree';
+import { lookInside } from '../../ui/Editor/depthNavigation';
+import { diagramLines, doorOf, openers, restingLine, seedOf, snagOf, type Look, type SnagStep } from './nodiLines';
 import { PointPins } from './PointPins';
 import { ProposalHistory } from './ProposalHistory';
 import { countsLabel, useProposalReview } from './useProposalReview';
@@ -38,6 +40,8 @@ interface Pointing {
   names: ReadonlyMap<string, string>;
   /** The parts of the view on screen: only these are pinned, lit and brought into view. */
   here: ReadonlySet<string>;
+  /** The shapes on screen that hold a diagram of their own, by name: a reply naming one offers the way in. */
+  doors: ReadonlyMap<string, string>;
   /** The point lit now, in the bubble and on its pin. */
   hot: number | null;
   /** Light a point and the parts given (or one part), or put them out with null and none. */
@@ -282,6 +286,15 @@ export function Companion() {
   const outerFile = useEditorStore((s) => s.outer);
   const partNames = useMemo(() => partNamesOf(outerFile ?? view, view), [outerFile, view]);
   const partsHere = useMemo(() => new Set([...docNodes.map((n) => n.id), ...docEdges.map((e) => e.id)]), [docNodes, docEdges]);
+  const doors = useMemo(() => new Map(docNodes.filter(hasInside).map((n) => [n.id, partNames.get(n.id) ?? 'it'])), [docNodes, partNames]);
+  // What Nodi can offer to look inside: the selected shape's inside, or draw one it could have; else
+  // the first shape on screen that holds a diagram.
+  const look = useMemo<Look>(() => {
+    const only = selection.nodes.length === 1 && selection.edges.length === 0 ? docNodes.find((n) => n.id === selection.nodes[0]) : undefined;
+    if (only && hasInside(only)) return { into: { id: only.id, name: partNames.get(only.id) ?? 'it' } };
+    if (only) return { drawable: canCreateInside(only) };
+    return { into: doorOf(docNodes, [], (n) => partNames.get(n.id) ?? 'it') ?? undefined };
+  }, [selection.nodes, selection.edges, docNodes, partNames]);
   // What Nodi can say about this very diagram: its queues, stores, crons and loose ends, by name.
   const flowCount = useEditorStore((s) => s.document.flows.length);
   const openPointCount = useEditorStore((s) => s.document.openPoints?.filter((p) => !p.resolved).length ?? 0);
@@ -303,6 +316,7 @@ export function Companion() {
     () => ({
       names: partNames,
       here: partsHere,
+      doors,
       hot,
       pointAt,
       reveal: (id) => {
@@ -321,7 +335,7 @@ export function Companion() {
         }, PART_FLASH_MS);
       },
     }),
-    [partNames, partsHere, hot, pointAt, flowStore, setViewport],
+    [partNames, partsHere, doors, hot, pointAt, flowStore, setViewport],
   );
   const pins =
     expanded && !blocker && points.length > 0 ? (
@@ -529,9 +543,9 @@ export function Companion() {
             <>
               <Typed key={resting.text} text={resting.text} />
               <ul className="dc-companion-options" aria-label="Ask Nodi">
-                {openers(about, seedOf(diagramId) + visits).map((option) => (
+                {openers(about, seedOf(diagramId) + visits, look).map((option) => (
                   <li key={option.label}>
-                    <button type="button" onClick={() => send(option.prompt)}>
+                    <button type="button" onClick={() => (option.enter ? void lookInside(option.enter) : send(option.prompt))}>
                       {option.label}
                     </button>
                   </li>
@@ -650,6 +664,7 @@ function TurnView({ turn, pinned }: { turn: Turn; pinned: boolean }) {
       )}
       {turn.stop === null && turn.steps.length === 0 && <p className="dc-companion-now">Thinking…</p>}
       {reply && <ReplyText text={reply} pinned={pinned} />}
+      {pinned && turn.stop !== null && reply && <Doors reply={reply} />}
       {stopped && <p className="dc-companion-stopped">{stopped}</p>}
       {turn.proposalId && <p className="dc-companion-hint">The change is shown on the canvas: accept or reject it there.</p>}
       {turn.outcome === 'accepted' && (
@@ -659,6 +674,28 @@ function TurnView({ turn, pinned }: { turn: Turn; pinned: boolean }) {
       )}
       {turn.outcome === 'rejected' && <p className="dc-companion-stopped">Rejected. The diagram is unchanged.</p>}
     </article>
+  );
+}
+
+/**
+ * The way into the shapes a reply names that hold a diagram of their own: after an agent has drawn
+ * the inside of a shape, or talked about one, the next step is often to go and look, and nothing on
+ * the canvas says you can.
+ */
+function Doors({ reply }: { reply: string }) {
+  const pointing = useContext(PointingContext);
+  const named = partsIn(reply).filter((id) => pointing?.doors.has(id)).slice(0, 2);
+  if (!pointing || named.length === 0) return null;
+  return (
+    <ul className="dc-companion-options" aria-label="Look inside">
+      {named.map((id) => (
+        <li key={id}>
+          <button type="button" onClick={() => void lookInside(id)}>
+            Take me inside {pointing.doors.get(id)}
+          </button>
+        </li>
+      ))}
+    </ul>
   );
 }
 

@@ -47,6 +47,10 @@ then it says what is missing and offers the fix.
    ones fold behind one line. On its top edge, the pencil starts a new conversation and `>_` copies a
    command that continues it in your agent's own terminal UI.
 
+Nodi also points the way inside: it mentions a shape that holds a diagram of its own, offers
+**Take me inside…** when an answer names one, and offers to draw the inside of a selected service
+that has none yet.
+
 Answers point at the diagram: a shape or connector Nodi talks about shows as its name, which lights
 it on the canvas, and each point gets a numbered pin on the part it is about. Click a pin to read
 that point.
