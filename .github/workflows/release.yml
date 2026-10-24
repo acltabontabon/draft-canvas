@@ -33,7 +33,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: 22.14.0
+          node-version: 22.22.2
 
       # The body is this tag's section of CHANGELOG.md — the one source of truth for what changed — led
       # by its headline, demo, downloads and marked highlights, followed by the complete changes and

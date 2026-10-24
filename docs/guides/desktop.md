@@ -105,7 +105,7 @@ On Windows, use `Ctrl`. Editor keys: [keyboard shortcuts](keyboard-and-commands.
 
 ## Building it yourself
 
-Install Node 22.14+, [Rust](https://www.rust-lang.org/tools/install) and
+Install Node 22.22+, [Rust](https://www.rust-lang.org/tools/install) and
 [Tauri's prerequisites](https://v2.tauri.app/start/prerequisites/), then:
 
 ```bash
