@@ -69,6 +69,17 @@ impl<T> Drop for Registration<T> {
     }
 }
 
+/// Set by Draft Canvas when its companion starts an agent, in the MCP configuration it writes for
+/// that run. Optional in the hello, so the bridge version is unchanged and an older app ignores it.
+pub const RUN_VAR: &str = "DRAFT_CANVAS_RUN";
+
+/// A run id as the app makes them (a UUID); anything else is not sent.
+fn run_from(value: Option<String>) -> Option<String> {
+    value.filter(|v| {
+        !v.is_empty() && v.len() <= 64 && v.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+    })
+}
+
 #[derive(Default)]
 pub struct Bridge {
     conn: tokio::sync::Mutex<Option<Conn>>,
@@ -76,6 +87,9 @@ pub struct Bridge {
     version: String,
     /// This process's agent session, sent in every hello so a reconnect is still the same session.
     session: String,
+    /// The companion run that started this agent (`RUN_VAR`), sent in every hello: the app holds such
+    /// a connection to that run's limits. Absent for an agent the person connected themselves.
+    run: Option<String>,
     /// Kept across reconnects: a call's sink outlives the connection it was sent on.
     progress: ProgressSinks,
 }
@@ -89,6 +103,7 @@ impl Bridge {
         Self {
             version,
             session: format!("s{:x}-{nanos:x}", std::process::id()),
+            run: run_from(std::env::var(RUN_VAR).ok()),
             ..Self::default()
         }
     }
@@ -193,7 +208,10 @@ impl Bridge {
         };
         let mut reader = BufReader::new(read);
         let mut write = write;
-        let hello = json!({"type": "hello", "bridge": BRIDGE_VERSION, "sidecar": self.version, "token": info.token, "session": self.session});
+        let mut hello = json!({"type": "hello", "bridge": BRIDGE_VERSION, "sidecar": self.version, "token": info.token, "session": self.session});
+        if let Some(run) = &self.run {
+            hello["run"] = json!(run);
+        }
         send(&mut write, &hello)
             .await
             .map_err(|_| unavailable(None))?;
@@ -390,6 +408,16 @@ mod tests {
         let data = format!("\"{}\"\n", "x".repeat(MAX_FRAME - 2));
         let mut reader = BufReader::with_capacity(data.len(), data.as_bytes());
         assert!(read_frame(&mut reader).await.unwrap().is_some());
+    }
+
+    #[test]
+    fn only_a_plausible_run_id_is_sent() {
+        let id = "3f1c2a4e-0000-4000-8000-000000000001";
+        assert_eq!(run_from(Some(id.into())).as_deref(), Some(id));
+        assert_eq!(run_from(None), None);
+        assert_eq!(run_from(Some(String::new())), None);
+        assert_eq!(run_from(Some("a b".into())), None);
+        assert_eq!(run_from(Some("x".repeat(65))), None);
     }
 
     #[tokio::test]

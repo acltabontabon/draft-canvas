@@ -20,15 +20,15 @@ import {
 import { defaultTextFor, maxSizeFor } from '../document/factory';
 import { openFitViewport } from '../document/geometry';
 import { boundsOf, descendantsOf, hasAttachmentRoom } from '../document/operations';
-import type { DraftDocument, DraftEdge, DraftNode, DraftViewport, Side } from '../document/types';
+import type { DraftDocument, DraftEdge, DraftNode, Side } from '../document/types';
 import { parseAnchorId, rectOf, snappedAnchorForDrop, type Rect } from '../edges/routing';
 import { isEditableTarget } from '../lib/isEditableTarget';
 import { motionMs } from '../lib/motion';
-import { centerOf, clamp, pointInBox } from '../lib/math';
+import { centerOf, pointInBox } from '../lib/math';
 import { pathKey } from '../depth/tree';
 import { findFlow } from '../document/flow';
 import { accentOf } from '../render/theme/tokens';
-import { hasSomethingToFit, lensFlow, useEditorStore } from '../store/editorStore';
+import { lensFlow, useEditorStore } from '../store/editorStore';
 import { PresentationPointer } from './presentation/PresentationPointer';
 import { edgeIndex, nodeIndex } from '../store/selectors';
 import { pointer, useUiStore } from '../store/uiStore';
@@ -51,6 +51,7 @@ import { endsBendDrag } from './bendDrag';
 import { DraftEdgeView } from './DraftEdgeView';
 import { EdgeLabelRoot } from './EdgeLabels';
 import { ViewportLayer } from './ViewportLayer';
+import { DEPTH_MOVE_MS, depthEase, fitCamera } from './depthCamera';
 import { DraftNodeView } from './DraftNodeView';
 import { Markers } from './Markers';
 import {
@@ -430,52 +431,6 @@ function useZoomVariable() {
   }, [storeApi]);
 }
 
-/**
- * Whether a room's camera is one somebody actually chose.
- *
- * A room is made by the first shape drawn in it, or arrives whole from a starter or a paste, and
- * none of those is anyone framing a view — so a room can perfectly well carry a camera pointing
- * somewhere else entirely. Restoring that faithfully is worse than useless: you asked to look
- * inside a shape and got an empty corner of it. A camera still exactly where every room's starts
- * has never been moved, so there is nothing to restore and the room is framed instead.
- */
-function hasACameraOfItsOwn(room: DraftDocument): boolean {
-  const { x, y, zoom } = room.viewport;
-  return x !== 0 || y !== 0 || zoom !== 1;
-}
-
-/** Breathing room around a room that is being framed on arrival, in screen pixels. */
-const FRAME_PAD = 72;
-
-/**
- * The camera that puts a whole room on screen.
- *
- * Worked out from the document rather than asked of React Flow, because `fitView` measures what
- * is currently rendered and arriving somewhere means the shapes it would measure are the ones
- * being replaced. This also makes the landing exactly the same with the animation and without it,
- * which is what reduced motion has to be able to promise.
- */
-function frameFor(room: DraftDocument, width: number, height: number): DraftViewport | null {
-  const bounds = boundsOf(room.nodes);
-  if (!bounds || width <= 0 || height <= 0) return null;
-  const zoom = clamp(
-    Math.min(
-      (width - FRAME_PAD * 2) / Math.max(bounds.width, 1),
-      (height - FRAME_PAD * 2) / Math.max(bounds.height, 1),
-    ),
-    MIN_FRAME_ZOOM,
-    1,
-  );
-  return {
-    x: (width - bounds.width * zoom) / 2 - bounds.x * zoom,
-    y: (height - bounds.height * zoom) / 2 - bounds.y * zoom,
-    zoom,
-  };
-}
-
-/** Far enough out for a big room, never so far that its labels stop being readable. */
-const MIN_FRAME_ZOOM = 0.25;
-
 /** A host's name in the one-line "Attach to …" pill — a note can hold pages of text, and the pill
  *  never wraps, so anything past a short name would run off across the canvas. */
 function truncateForAffordance(text: string): string {
@@ -544,12 +499,13 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   // A fresh object here would defeat React Flow's own memoized renderer on every drag frame.
   const connectionLineStyle = useMemo(() => ({ stroke: theme.selection, strokeWidth: 1.8 }), [theme.selection]);
 
-  const { screenToFlowPosition, flowToScreenPosition, getNodes, getInternalNode, getZoom, setViewport, fitView } =
+  const { screenToFlowPosition, flowToScreenPosition, getNodes, getInternalNode, getZoom, setViewport } =
     useReactFlow<DraftRfNode>();
 
   // `defaultViewport` is read once, at mount — so stepping into or out of a shape has to move the
-  // camera itself. Each room remembers where it was left; one that has never been drawn in has no
-  // camera of its own, and is framed rather than left wherever the last room happened to be.
+  // camera itself. Wherever a room was left, arriving in it frames all of it as Fit to view would:
+  // it used to restore the room's own camera, and a room panned off to one side opened on an empty
+  // corner of it.
   //
   // Which room this *was* is remembered by value, not by a "first run" flag: React runs effects
   // twice on mount in development, and a flag would spend itself on the first run and then move
@@ -564,23 +520,22 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
     shownPath.current = key;
     if (first) return;
     const state = useEditorStore.getState();
-    const duration = motionMs(320);
-    // Arriving somewhere should show what is there. A room nobody has panned about in carries
-    // whatever camera it was made with — a starter's rooms all start at the origin — and
-    // restoring that put the user off the side of the architecture they had just asked to see.
-    if (hasACameraOfItsOwn(state.document)) {
+    const duration = motionMs(DEPTH_MOVE_MS);
+    const pane = paneRef.current?.getBoundingClientRect();
+    const landing = pane ? fitCamera(state.document.nodes, pane) : null;
+    // An empty room starts where a new canvas does. Never a `fitView`: React Flow holds one with
+    // nothing to measure and springs it on the first shape drawn in here (or, backing out first,
+    // on the room left behind — overriding the camera it had just restored).
+    if (!pane || !landing) {
       void setViewport(state.document.viewport, { duration });
       return;
     }
-    const pane = paneRef.current?.getBoundingClientRect();
-    const framed = pane ? frameFor(state.document, pane.width, pane.height) : null;
-    if (framed) void setViewport(framed, { duration });
-    else if (hasSomethingToFit(state)) void fitView({ padding: 0.4, duration, maxZoom: 1 });
-    // An empty room starts where a new canvas does. Never a fit: React Flow holds one with nothing
-    // to measure and springs it on the first shape drawn in here (or, backing out first, on the
-    // room left behind — overriding the camera it had just restored).
-    else void setViewport(state.document.viewport, { duration });
-  }, [path, fitView, setViewport]);
+    // A move being played is flown frame by frame by `DepthTransition`, which lands it here too.
+    // Only with motion (the move is never played without it), and only the move that just happened.
+    const move = useUiStore.getState().depthTransition;
+    if (duration > 0 && move && (move.direction === 'out' || move.nodeId === path[path.length - 1])) return;
+    void setViewport(landing, { duration, ease: depthEase });
+  }, [path, setViewport]);
 
   // A live session's presence and presenter-following. After the effect above on purpose: a
   // follower's camera for a room they were just taken to has to land after that room's own.

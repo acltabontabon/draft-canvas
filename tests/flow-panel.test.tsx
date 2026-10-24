@@ -128,7 +128,7 @@ describe('FlowPanel', () => {
     expect(useUiStore.getState().flowRenameRequestId).toBeNull();
   });
 
-  it('clicking a row makes it the active flow, and Diagram clears it', () => {
+  it('clicking a row makes it the active flow, and Whole diagram clears it', () => {
     const checkout = useEditorStore.getState().createFlow('Checkout')!;
     useEditorStore.getState().createFlow('Refund');
     mount();
@@ -137,8 +137,33 @@ describe('FlowPanel', () => {
     expect(useEditorStore.getState().selectedFlowId).toBe(checkout);
     expect(rowFor('Checkout').dataset.selected).toBe('true');
 
-    fireEvent.click(screen.getByText('Diagram'));
+    fireEvent.click(screen.getByText('Whole diagram'));
     expect(useEditorStore.getState().selectedFlowId).toBeNull();
+    expect(screen.getByText('Whole diagram').closest('.dc-flow-row')?.getAttribute('data-selected')).toBe('true');
+  });
+
+  it('offers tracing once, in the footer: a new flow always, more steps only for the chosen flow', () => {
+    useUiStore.setState({ flowTrace: null });
+    const checkout = useEditorStore.getState().createFlow('Checkout')!;
+    useEditorStore.getState().createFlow('Refund');
+    mount();
+
+    // Nothing chosen: one way to trace, and no per-row links however many flows there are.
+    expect(screen.getAllByRole('button', { name: 'Trace a flow' })).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: /^Trace more steps/ })).toBeNull();
+
+    fireEvent.click(screen.getByText('Checkout'));
+    expect(screen.getAllByRole('button', { name: /^Trace more steps/ })).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Trace more steps: Checkout' }));
+    expect(useUiStore.getState().flowTrace?.flowId).toBe(checkout);
+    useUiStore.setState({ flowTrace: null });
+  });
+
+  it('a shared diagram shows no tracing footer', () => {
+    useEditorStore.getState().createFlow('Checkout');
+    useUiStore.setState({ readOnly: { sharedTitle: 'Shared diagram' } });
+    mount();
+    expect(screen.queryByRole('button', { name: 'Trace a flow' })).toBeNull();
   });
 
   it('is fully keyboard-driven: Enter selects, F2 renames, Delete deletes, Escape closes', () => {
@@ -225,8 +250,8 @@ describe('FlowPanel', () => {
     for (const key of ['Delete', 'Backspace', 'F2', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']) {
       fireEvent.keyDown(removeStep, { key });
     }
-    // The Diagram row has no flow to delete — its Delete must not fall through to the canvas either.
-    fireEvent.keyDown(screen.getByText('Diagram').closest('.dc-flow-row')!, { key: 'Delete' });
+    // The Whole diagram row has no flow to delete — its Delete must not fall through to the canvas either.
+    fireEvent.keyDown(screen.getByText('Whole diagram').closest('.dc-flow-row')!, { key: 'Delete' });
     window.removeEventListener('keydown', listener);
 
     expect(useEditorStore.getState().document.flows.map((flow) => flow.steps.length)).toEqual([1]);

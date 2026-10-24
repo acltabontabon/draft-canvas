@@ -3,6 +3,7 @@ mod agent;
 mod bindings;
 mod collab;
 mod commands;
+mod companion;
 mod dialogs;
 mod docio;
 mod errors;
@@ -109,6 +110,15 @@ pub fn run() {
             commands::agent::agent_proposal_get,
             commands::agent::agent_proposal_begin_accept,
             commands::agent::agent_proposal_resolve,
+            commands::companion::companion_agents,
+            commands::companion::companion_send,
+            commands::companion::companion_cancel,
+            commands::companion::companion_runs,
+            commands::companion::companion_forget,
+            commands::companion::companion_code,
+            commands::companion::companion_allow_code,
+            commands::companion::companion_choose_code,
+            commands::companion::companion_continue,
             commands::collab::collab_lan_start,
             commands::collab::collab_lan_stop,
             commands::collab::collab_lan_send,
@@ -128,6 +138,23 @@ pub fn run() {
     };
     app.manage(AppState::new(&config_dir, &data_dir));
     app.manage(std::sync::Arc::new(agent::Agent::new(&data_dir)));
+    let (events, bridge) = (app.handle().clone(), app.handle().clone());
+    app.manage(std::sync::Arc::new(companion::Companion::new(
+        &data_dir,
+        std::sync::Arc::new(move |run, event| {
+            if let Some(state) = events.try_state::<AppState>() {
+                state.events.emit(state::HostEvent::Companion {
+                    run: run.to_string(),
+                    event: event.clone(),
+                });
+            }
+        }),
+        std::sync::Arc::new(move |run| {
+            if let Some(agent) = bridge.try_state::<std::sync::Arc<agent::Agent>>() {
+                agent.end_run(run);
+            }
+        }),
+    )));
     app.manage(collab::Relay::for_app(app.handle()));
 
     app.run(lifecycle::on_run_event);

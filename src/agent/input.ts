@@ -240,6 +240,8 @@ export interface LayoutSpec {
    *  `unshared` keeps them off trunks on a side other connectors use too — arrangements compared
    *  against one with them (see `AnchorOptions.fans`). */
   fans?: 'all' | 'unshared' | 'unlabelled';
+  /** Internal (never read from a request): see `LayoutInput.peers`. */
+  peers?: 'rank' | 'layer';
 }
 
 export interface StarterSpec {

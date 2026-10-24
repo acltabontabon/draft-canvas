@@ -6,9 +6,11 @@
 //! answer instead of a revision conflict; and every step that changes something is written to the
 //! ledger before it happens.
 
+use super::code;
 use super::ledger::{Begin, Entry, Stage};
 use super::page::{Budgets, Failure};
 use super::proposals::{Proposal, ProposalStatus};
+use super::runs;
 use super::scope::{self, enabled_projects, in_scope, Diagram, Lookup, Project};
 use super::{Agent, InflightGuard};
 use crate::docio::{
@@ -86,6 +88,10 @@ const TOOLS: &[&str] = &[
     "submit_proposal",
     "get_proposal",
     "list_proposals",
+    "ask_to_read_code",
+    "list_code",
+    "search_code",
+    "read_code",
 ];
 
 /// The whole request, as stored for comparison: keys sorted at every level, `requestId` left out
@@ -155,6 +161,28 @@ pub async fn call(agent: &Agent, tool: &str, args: Value, calls: &CallRegistry) 
             ))
         }
     };
+    // A companion run reaches only its own diagram; one that has ended reaches nothing.
+    let policy = match &calls.run {
+        Some(run) => Some(agent.runs.policy(run).ok_or_else(runs::ended)?),
+        None if runs::RUN_ONLY.contains(&tool) => {
+            return Err(ToolError::new(
+                "UNKNOWN_TOOL",
+                format!("There is no tool named {tool}."),
+            ))
+        }
+        None => None,
+    };
+    let args = match &policy {
+        Some(policy) => runs::constrain(policy, tool, args, |proposal| {
+            agent
+                .with_proposals(|s| s.get(proposal).map(|p| p.diagram_id.clone()))
+                .flatten()
+        })?,
+        None => args,
+    };
+    if runs::RUN_ONLY.contains(&tool) {
+        return read_code(tool, policy.and_then(|p| p.code), args).await;
+    }
     let projects = enabled_projects(&app.state::<AppState>());
     match tool {
         "get_capabilities" => to_page(agent, &app, tool, &args, json!({}), calls).await,
@@ -174,6 +202,32 @@ pub async fn call(agent: &Agent, tool: &str, args: Value, calls: &CallRegistry) 
         "list_proposals" => list_proposals(agent, &projects, &args),
         _ => unreachable!(),
     }
+}
+
+/// The companion's own tools, answered here: the page has nothing to do with them. Asking is said back
+/// to the agent as what to do next; the person is asked by the companion itself, which sees the
+/// call in the run. Reading happens off the async runtime, inside the folder the person allowed.
+async fn read_code(tool: &str, root: Option<std::path::PathBuf>, args: Value) -> ToolResult {
+    if tool == "ask_to_read_code" {
+        return Ok(json!({
+            "asked": true,
+            "next": "The person is being asked in Draft Canvas. End your turn now, in one short sentence saying what you would look for in the code.",
+        }));
+    }
+    let root = root.ok_or_else(|| {
+        ToolError::new(
+            "NOT_ALLOWED",
+            "The person hasn't let you read the project's code.",
+        )
+    })?;
+    let tool = tool.to_string();
+    tauri::async_runtime::spawn_blocking(move || match tool.as_str() {
+        "list_code" => code::list_code(&root, &args),
+        "search_code" => code::search_code(&root, &args),
+        _ => code::read_code(&root, &args),
+    })
+    .await
+    .unwrap_or_else(|_| Err(ToolError::new("INTERNAL", "Reading the project failed.")))
 }
 
 fn unavailable() -> ToolError {
@@ -417,6 +471,8 @@ pub struct CallRegistry {
     current: std::sync::Mutex<Option<u64>>,
     /// The agent session the call came from (see `session.rs`).
     pub session: String,
+    /// The companion run the call's agent belongs to, if the companion started it (see `runs.rs`).
+    pub run: Option<String>,
     /// Where this call's progress frames go: its connection's writer, and the call's own id there.
     progress: Option<ProgressSink>,
 }
@@ -428,7 +484,21 @@ impl CallRegistry {
         Self {
             current: std::sync::Mutex::default(),
             session,
+            run: None,
             progress: None,
+        }
+    }
+
+    pub fn with_run(mut self, run: Option<String>) -> Self {
+        self.run = run;
+        self
+    }
+
+    /// What every request to the page carries about where the call came from.
+    fn stamp(&self, context: &mut Value) {
+        context["session"] = json!(self.session);
+        if let Some(run) = &self.run {
+            context["run"] = json!(run);
         }
     }
 
@@ -473,7 +543,7 @@ async fn to_page(
     mut context: Value,
     calls: &CallRegistry,
 ) -> Result<Value, ToolError> {
-    context["session"] = json!(calls.session);
+    calls.stamp(&mut context);
     let state = app.state::<AppState>();
     let (id, rx) = agent.page.register();
     let sent = state.events.emit(HostEvent::AgentRequest {
@@ -1098,7 +1168,7 @@ async fn update(
     // A diagram that isn't open is changed on disk (the page works the change out from this text, and
     // this module writes it under the stamp read here); an open one through the editor.
     let mut context = diagram_context(agent, &diagram, true)?;
-    context["session"] = json!(calls.session);
+    calls.stamp(&mut context);
     let stamp_read = context
         .get("stamp")
         .and_then(Value::as_str)
@@ -1420,9 +1490,14 @@ async fn submit_proposal(
         assumptions: strings("assumptions"),
         open_questions: strings("openQuestions"),
         source_ref: composed.get("sourceRef").cloned().filter(|v| !v.is_null()),
+        run: calls.run.clone(),
         created_at,
         updated_at: now,
         resolved_at: if no_impact { Some(now) } else { None },
+        history: existing
+            .as_ref()
+            .map(Proposal::history_with_self)
+            .unwrap_or_default(),
     };
 
     // A revise re-checks what it revises under the store's lock, right before writing: the person may
@@ -1640,6 +1715,42 @@ mod tests {
     use super::*;
 
     #[test]
+    fn ending_a_run_cancels_what_the_page_has_not_committed() {
+        let dir = tempfile::tempdir().unwrap();
+        let agent = Agent::new(dir.path());
+        agent.runs.open(
+            "r1",
+            runs::RunPolicy {
+                diagram_id: "d_1".into(),
+                direct: false,
+                code: None,
+            },
+        );
+        let call = std::sync::Arc::new(CallRegistry::new("s".into()).with_run(Some("r1".into())));
+        assert!(agent.runs.track("r1", &call));
+        let (id, _reply) = agent.page.register();
+        call.track(&agent, id);
+
+        let mut context = json!({});
+        call.stamp(&mut context);
+        assert_eq!(context, json!({"session": "s", "run": "r1"}));
+
+        agent.end_run("r1");
+        assert!(!agent.page.gate(id), "the commit gate refuses it");
+        assert!(
+            !agent.runs.track("r1", &call),
+            "and the run admits nothing more"
+        );
+    }
+
+    #[test]
+    fn a_call_from_an_agent_the_person_connected_carries_no_run() {
+        let mut context = json!({});
+        CallRegistry::new("s".into()).stamp(&mut context);
+        assert_eq!(context, json!({"session": "s"}));
+    }
+
+    #[test]
     fn titles_match_ignoring_case_and_spacing_but_not_words() {
         assert_eq!(title_key("  Order   Processing "), "order processing");
         assert_eq!(title_key("ORDER processing"), title_key("Order Processing"));
@@ -1676,11 +1787,19 @@ mod tests {
     fn every_tool_the_sidecar_offers_is_dispatched_here() {
         let tools: Vec<Value> = serde_json::from_str(include_str!("../../mcp/tools.json"))
             .expect("tools.json is generated from src/agent/schema.ts");
+        let run_tools: Vec<Value> = serde_json::from_str(include_str!("../../mcp/run-tools.json"))
+            .expect("run-tools.json is generated from src/agent/schema.ts");
         let offered: Vec<&str> = tools
             .iter()
+            .chain(&run_tools)
             .filter_map(|t| t.get("name").and_then(Value::as_str))
             .collect();
         assert_eq!(offered, TOOLS);
+        // The run's own, answered here and never to an agent the person connected.
+        for tool in &run_tools {
+            let name = tool["name"].as_str().unwrap();
+            assert!(runs::RUN_ONLY.contains(&name), "{name}");
+        }
     }
 
     #[test]
@@ -1815,9 +1934,11 @@ mod tests {
             assumptions: vec![],
             open_questions: vec![],
             source_ref: None,
+            run: None,
             created_at: updated_at,
             updated_at,
             resolved_at: None,
+            history: vec![],
         }
     }
 

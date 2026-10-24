@@ -103,10 +103,45 @@ pub struct Proposal {
     pub open_questions: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_ref: Option<Value>,
+    /// The companion run that submitted it, so the companion can show its own proposal.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub run: Option<String>,
     pub created_at: u64,
     pub updated_at: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub resolved_at: Option<u64>,
+    /// What it said before each revise-in-place, oldest first, so a refined design reads as one that
+    /// evolved ("v1: a cache · v2: Redis, explicit invalidation") rather than as the last word only.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub history: Vec<Revision>,
+}
+
+/// One earlier version of a revised proposal.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Revision {
+    pub version: u32,
+    pub summary: String,
+    pub updated_at: u64,
+}
+
+/// Earlier versions kept per proposal: enough to read how it got here.
+pub const KEEP_REVISIONS: usize = 10;
+
+impl Proposal {
+    /// The history a revision of this proposal carries: this version added, the oldest beyond
+    /// `KEEP_REVISIONS` let go.
+    pub fn history_with_self(&self) -> Vec<Revision> {
+        let mut history = self.history.clone();
+        history.push(Revision {
+            version: self.version,
+            summary: self.summary.clone(),
+            updated_at: self.updated_at,
+        });
+        let excess = history.len().saturating_sub(KEEP_REVISIONS);
+        history.drain(..excess);
+        history
+    }
 }
 
 pub struct Proposals {
@@ -305,6 +340,7 @@ mod tests {
             assumptions: vec![],
             open_questions: vec![],
             source_ref: None,
+            run: None,
             created_at: updated_at,
             updated_at,
             resolved_at: if status.is_terminal() {
@@ -312,7 +348,33 @@ mod tests {
             } else {
                 None
             },
+            history: vec![],
         }
+    }
+
+    #[test]
+    fn a_revision_keeps_what_each_earlier_version_said() {
+        let mut first = proposal("p1", ProposalStatus::Pending, 10);
+        first.summary = "A cache".into();
+        let mut second = first.clone();
+        second.version = 2;
+        second.summary = "Redis, explicit invalidation".into();
+        second.history = first.history_with_self();
+        assert_eq!(
+            second.history,
+            [Revision {
+                version: 1,
+                summary: "A cache".into(),
+                updated_at: 10
+            }]
+        );
+        let mut many = second.clone();
+        for _ in 0..20 {
+            many.history = many.history_with_self();
+            many.version += 1;
+        }
+        assert_eq!(many.history.len(), KEEP_REVISIONS);
+        assert_eq!(many.history.last().unwrap().version, many.version - 1);
     }
 
     #[test]

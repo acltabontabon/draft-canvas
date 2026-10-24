@@ -25,6 +25,7 @@
 import { updateNode } from '../document/operations';
 import type { DraftDocument, DraftEdge, DraftNode } from '../document/types';
 import { assignAnchors, type Anchors } from '../layout/anchors';
+import { hasPeerCalls } from '../layout/layered';
 import type { DescribeContext } from '../nodes/describe';
 import type { Problems } from './errors';
 import type { LayoutSpec, Reader } from './input';
@@ -128,6 +129,8 @@ export interface Arranged {
   view: DraftDocument;
   /** What moved or was re-anchored — what the quality check then judges. */
   touched: Set<string>;
+  /** What the arrangement found that the request could change (see `arrangeView`). */
+  advisories?: string[];
 }
 
 /** One candidate arrangement with what was found wrong with it, and the layout that made it. */
@@ -143,6 +146,7 @@ const errorsOnly = (c: Judged) => ({ report: { errors: c.report.errors, warnings
 const betterByErrors = (a: Judged, b: Judged) => isBetterCandidate(errorsOnly(a), errorsOnly(b));
 const tied = (a: Judged, b: Judged) => !betterByErrors(a, b) && !betterByErrors(b, a);
 /** Between equally readable candidates: legibility, with skewed connectors counted in. */
+const crossingsOf = (c: Judged) => legibilityOf(c.arranged.view.nodes, c.arranged.view.edges).crossings;
 const cost = (c: Judged) => legibilityCost(legibilityOf(c.arranged.view.nodes, c.arranged.view.edges)) + c.report.warnings.length * JOG_COST;
 
 /**
@@ -193,19 +197,48 @@ export function arrangeView(view: DraftDocument, request: ArrangeRequest, ctx: D
     const unshared = shared && !pastDeadline() ? judge({ ...best.layout, fans: 'unshared' }) : undefined;
     if (unshared && (betterByErrors(unshared, best) || (tied(unshared, best) && cost(unshared) < cost(best)))) best = unshared;
   }
+  // Peers that call each other: one row or a staircase, whichever reads better (see `chooseArrangement`).
+  const peers = hasPeerCalls(view.edges.filter((e) => inScope.has(e.source) && inScope.has(e.target)));
+  if (best && request.move !== false && !pastDeadline() && peers) {
+    // Only where it adds no crossing (see `chooseArrangement`).
+    const row = judge({ ...best.layout, peers: 'layer' });
+    if (row && crossingsOf(row) <= crossingsOf(best) && (betterByErrors(row, best) || (tied(row, best) && cost(row) < cost(best)))) best = row;
+  }
   // The other reading direction, for a whole-view cleanup that left the direction to us: kept only
   // when it reads clearly better, never over a few pixels — the diagram a person is looking at
   // doesn't turn on its side for nothing. A scoped arrange keeps the view's direction: the part it
   // moves has to read the way the rest still does.
   if (best && !request.scope && request.move !== false && !request.layout.directionChosen && !pastDeadline()) {
-    const other = judge({ ...best.layout, direction: best.layout.direction === 'right' ? 'down' : 'right' });
-    if (other && (betterByErrors(other, best) || (tied(other, best) && clearlyBetterDirection(cost(other), cost(best))))) best = other;
+    const other = otherDirection(best, judge, peers);
+    if (other && (betterByErrors(other, best) || (tied(other, best) && clearlyBetterDirection(cost(other), cost(best), crossingsOf(other) < crossingsOf(best))))) best = other;
+  }
+  // A direction the request chose is kept, but measured against the other: an agent that asked for
+  // "down" and got five crossings otherwise tries spacings, captions and hand placement in turn
+  // without ever learning that "right" has two.
+  if (best && !request.scope && request.move !== false && request.layout.directionChosen && !pastDeadline()) {
+    const direction = best.layout.direction === 'right' ? 'down' : 'right';
+    const other = otherDirection(best, judge, peers);
+    if (other && (betterByErrors(other, best) || (tied(other, best) && clearlyBetterDirection(cost(other), cost(best), crossingsOf(other) < crossingsOf(best))))) {
+      const op = { op: 'arrange', direction, ...(request.layout.primaryFlow ? { primaryFlow: request.layout.primaryFlow } : {}) };
+      best = { ...best, arranged: { ...best.arranged, advisories: [`Arranged reading "${best.layout.direction}" as asked, with ${crossingsOf(best)} crossing(s); reading "${direction}" it has ${crossingsOf(other)} and reads clearly better: ${JSON.stringify(op)}, or leave direction out and the layout picks.`] } };
+    }
   }
   if (!best && lastRefusal) {
     problems.add('LAYOUT_CONSTRAINED', at, 'the arranged part would run into shapes outside the scope, and there is no free space beside it; arrange the whole view instead ({op:"arrange"})');
     return undefined;
   }
   return best?.arranged;
+}
+
+/** The other reading direction at its best: both layerings when peers call each other (see `peers`). */
+function otherDirection(best: Judged, judge: (layout: LayoutSpec) => Judged | undefined, peers: boolean): Judged | undefined {
+  const { peers: _peers, ...layout } = best.layout;
+  const direction = layout.direction === 'right' ? 'down' : 'right';
+  const staircase = judge({ ...layout, direction });
+  const row = peers && !pastDeadline() ? judge({ ...layout, direction, peers: 'layer' }) : undefined;
+  if (!row) return staircase;
+  if (!staircase) return row;
+  return crossingsOf(row) <= crossingsOf(staircase) && (betterByErrors(row, staircase) || (tied(row, staircase) && cost(row) < cost(staircase))) ? row : staircase;
 }
 
 function arrangeOnce(view: DraftDocument, inScope: ReadonlySet<string>, request: ArrangeRequest, layout: LayoutSpec, ctx: DescribeContext): Arranged | undefined {

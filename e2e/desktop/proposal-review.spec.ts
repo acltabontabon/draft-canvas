@@ -232,6 +232,48 @@ test('the panel and its ghost stay legible in dark theme and at a small window',
   await page.screenshot({ path: test.info().outputPath('proposal-dark-narrow.png') });
 });
 
+test('Accept and Reject stay reachable under a long history of proposals in a short window', async ({ page }) => {
+  // Every accepted proposal stays listed. Five of them, with summaries that run to several lines, once
+  // filled the panel and pushed the open one's actions out of reach below its edge.
+  await page.setViewportSize({ width: 1000, height: 630 });
+  await page.goto('/');
+  const long = 'Add a dead-letter queue for events the Ledger Service cannot process, with a failure flow and a note on the policy.';
+  for (let i = 0; i < 4; i += 1) {
+    await page.evaluate((proposal) => window.__shell.addProposal(proposal), proposalFixture({ proposalId: `old-${i}`, status: 'accepted', summary: long, resolvedAt: Date.now() }));
+  }
+  await page.evaluate(
+    (proposal) => window.__shell.addProposal(proposal),
+    proposalFixture({ summary: 'Group the diagram into Loan Domain, Messaging and Ledger Domain, colour each group, and re-lay it out left to right along the main flow.' }),
+  );
+  await openPlatform(page);
+  await page.getByRole('button', { name: '1 proposal to review' }).click();
+
+  const panel = page.getByRole('region', { name: 'Proposal review' });
+  const accept = panel.getByRole('button', { name: 'Accept' });
+  // Once it is checked against the diagram: the canvas toggles and legend that appear then are what
+  // tipped the panel over its height.
+  await expect(panel.getByText('Show on canvas')).toBeVisible();
+  await expect(accept).toBeInViewport();
+  await expect(panel.getByRole('button', { name: 'Reject' })).toBeInViewport();
+  // Inside the panel's own box, not clipped by it.
+  const box = (await panel.boundingBox())!;
+  const button = (await accept.boundingBox())!;
+  expect(button.y + button.height).toBeLessThanOrEqual(box.y + box.height);
+  await page.screenshot({ path: test.info().outputPath('proposal-history-short.png') });
+
+  // One already decided reads as a record of it, with nothing left to accept or reject.
+  await panel.getByText('History · 4', { exact: true }).click();
+  await panel.locator('.dc-proposal-row').filter({ hasText: 'Add a dead-letter queue' }).first().click();
+  await expect(panel.getByText('Accepted: it is in the diagram.')).toBeVisible();
+  await expect(panel.getByRole('button', { name: 'Accept' })).toHaveCount(0);
+  await expect(panel.getByRole('button', { name: 'Reject' })).toHaveCount(0);
+  await expect(panel.getByText('Show on canvas')).toHaveCount(0);
+
+  await panel.locator('.dc-proposal-row').filter({ hasText: 'Group the diagram' }).click();
+  await accept.click();
+  await expect.poll(() => page.evaluate(() => window.__shell.proposal('p1')?.status)).toBe('accepted');
+});
+
 test('a proposal stuck "accepting" whose own ids already exist offers "Mark as applied", not a plain conflict', async ({ page }) => {
   await page.goto('/');
   await page.evaluate(
@@ -375,9 +417,10 @@ test('a duplicate-id conflict from a sibling proposal disables Accept — never 
 
   await page.getByRole('button', { name: '2 proposals to review' }).click();
   const panel = page.getByRole('region', { name: 'Proposal review' });
-  // Each row is a `role="listitem"` button (its explicit role wins over "button" for accessible-name
-  // lookups), so it's found by list-item role, not button role.
-  await panel.getByRole('listitem').filter({ hasText: 'Add a dead-letter queue after the payments queue' }).click();
+  const first = panel.locator('.dc-proposal-row').filter({ hasText: 'Add a dead-letter queue after the payments queue' });
+  if (await first.count()) await first.click();
+  // The selected proposal's summary appears once, as the review heading.
+  await expect(panel.getByText('Add a dead-letter queue after the payments queue', { exact: true })).toHaveCount(1);
   await panel.getByRole('button', { name: 'Accept' }).click();
   await expect(page.locator('.react-flow__node').filter({ hasText: 'payments-dlq' }).first()).toBeVisible();
 

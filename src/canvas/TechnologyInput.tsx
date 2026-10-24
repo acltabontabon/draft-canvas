@@ -11,10 +11,23 @@ function Icon({ icon: candidate }: { icon: TechnologyIcon }) {
 
 /** Suggestions only advertise bundled brand icons. Typing a custom value is always allowed;
  * draft text stays local until selection, Enter or blur, so browsing never creates undo steps. */
-export function TechnologyInput({ value, onCommit }: { value: string; onCommit: (value: string) => void }) {
+export function TechnologyInput({ value, onCommit, onConfirm, autoFocus }: {
+  value: string;
+  onCommit: (value: string) => void;
+  onConfirm?: () => void;
+  autoFocus?: boolean;
+}) {
   const [draft, setDraft] = useState(value);
+  const [previousValue, setPreviousValue] = useState(value);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
+  // Undo must replace the draft without remounting a focused field after a suggestion is picked.
+  if (previousValue !== value) {
+    setPreviousValue(value);
+    setDraft(value);
+    setOpen(false);
+    setActive(0);
+  }
   const [placement, setPlacement] = useState({ above: false, height: 188 });
   const rootRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
@@ -74,7 +87,10 @@ export function TechnologyInput({ value, onCommit }: { value: string; onCommit: 
           placeholder="Spring Boot, PostgreSQL…"
           spellCheck={false}
           autoComplete="off"
-          onFocus={() => { setOpen(true); setActive(0); }}
+          autoFocus={autoFocus}
+          // Opened by a click, by typing or by an arrow key, never by focus alone: arriving here from
+          // Edit details or Tab opened the list over the rest of the panel, its source evidence too.
+          onPointerDown={() => { setOpen(true); setActive(0); }}
           onChange={(event) => { setDraft(event.currentTarget.value); setOpen(true); setActive(0); }}
           onBlur={() => {
             setOpen(false);
@@ -91,7 +107,10 @@ export function TechnologyInput({ value, onCommit }: { value: string; onCommit: 
             } else if (event.key === 'Enter') {
               event.preventDefault();
               if (expanded) choose(suggestions[active]!.value);
-              else event.currentTarget.blur();
+              else {
+                event.currentTarget.blur();
+                onConfirm?.();
+              }
             } else if (event.key === 'Escape') {
               event.preventDefault();
               setOpen(false);

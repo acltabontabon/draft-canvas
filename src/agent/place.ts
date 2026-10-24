@@ -540,6 +540,7 @@ export function arrangeParts(parts: RoomParts, layout: LayoutSpec, ctx: Describe
       direction: layout.direction as Direction,
       spacing: spacingOf(layout),
       ...(layout.ties ? { ties: layout.ties } : {}),
+      ...(layout.peers ? { peers: layout.peers } : {}),
     });
   } catch (error) {
     if (error instanceof LayoutError) throw new AgentError('LAYOUT_FAILED', error.message);

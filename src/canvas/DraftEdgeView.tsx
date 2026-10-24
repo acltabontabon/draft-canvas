@@ -307,6 +307,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const stopEditingCondition = useCallback(() => setEditingCondition(false), []);
   const editRequested = useUiStore((state) => state.editRequestId === id);
   const jumpFlash = useUiStore((state) => state.jumpFlashId === id);
+  const pointed = useUiStore((state) => state.pointedIds?.has(id) ?? false);
 
   // Tracked in JS, not left to a pure `.dc-edge:hover` CSS rule: the response label and the
   // attachment chip row both live in React Flow's `EdgeLabels` portal, a sibling overlay div
@@ -659,6 +660,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       data-attach-target={attachTarget ? 'true' : undefined}
       data-lens-member={lensMember ? 'true' : undefined}
       data-jump-flash={jumpFlash ? 'true' : undefined}
+      data-pointed={pointed ? 'true' : undefined}
       data-lens-dimmed={lensDimmed ? 'true' : undefined}
       data-lens-pulse={lensPulsing ? 'true' : undefined}
       data-hovered={hoverShown ? 'true' : undefined}

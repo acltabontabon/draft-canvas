@@ -9,6 +9,8 @@
  */
 import type { Snapshot as UpdateSnapshot, HostEvent as WireHostEvent } from './wire';
 export type { UpdateInfo, Phase as UpdatePhase, Snapshot as UpdateSnapshot } from './wire';
+import type { AgentInfo, AgentKind, CodeFolder, CodeGrant, PromptRequest, RunSnapshot } from './wire';
+export type { AgentInfo, AgentKind, ApplyMode, CodeFolder, CodeGrant, PromptRequest, RunEvent, RunSnapshot, StopReason, ToolStatus, Usage } from './wire';
 /** The agent context is refined by the bridge protocol beyond Rust's JSON value envelope. */
 export type HostEvent = Exclude<WireHostEvent, { type: 'agent-request' }> | (Omit<Extract<WireHostEvent, { type: 'agent-request' }>, 'args' | 'context'> & { args: Record<string, unknown>; context: AgentContext });
 import type { CollabLanStarted, ExplorerStart, ExplorerDirectory, ExplorerLocation, ExplorerSaveResult, OpenedDoc, SavedAs, SaveResult, ProjectInfo, Scan as ProjectScan } from './wire';
@@ -103,6 +105,8 @@ export type DocState =
 /** What the shell tells the page about the diagram an agent's request names. */
 export interface AgentContext {
   session?: string;
+  /** The companion run whose agent sent the request; absent for an agent the person connected. */
+  run?: string;
   diagramId?: string;
   project?: string;
   path?: string;
@@ -128,6 +132,17 @@ export interface AgentSettings {
    *  `unverified`: this system offers no supported way to keep a hidden window running. */
   background: 'ready' | 'restart-needed' | 'unverified';
   projects: AgentProject[];
+  /** Project folders Nodi may always read, as the person allowed them in its chat. Absent from a
+   *  shell older than the field. */
+  codeFolders?: AgentCodeFolder[];
+}
+
+/** A project folder Nodi may always read (read-only), as Settings → AI agents lists it. */
+export interface AgentCodeFolder {
+  /** What `forgetCode` names to stop letting it. */
+  path: string;
+  name: string;
+  displayPath: string;
 }
 
 /** A listed folder, as Settings → AI agents shows it. */
@@ -180,6 +195,8 @@ export interface AgentPatch {
   enabled?: boolean;
   project?: { handle: Handle; agent: boolean };
   rotate?: boolean;
+  /** A folder Nodi may read, by its `AgentCodeFolder.path`, to stop letting it. */
+  forgetCode?: string;
 }
 
 /** A batch of changes a coding agent submitted for a person to explicitly accept or reject — never
@@ -203,6 +220,10 @@ export interface Proposal {
   assumptions: string[];
   openQuestions: string[];
   sourceRef: { url?: string; title?: string; baseCommit?: string; headCommit?: string } | null;
+  /** The companion run that submitted it, if the companion started the agent. */
+  run?: string | null;
+  /** What it said before each revise-in-place, oldest first. */
+  history?: { version: number; summary: string; updatedAt: number }[];
   createdAt: number;
   updatedAt: number;
   resolvedAt: number | null;
@@ -339,6 +360,27 @@ export interface DesktopApi {
   /** Durably records `pending → accepting` before the document commit is attempted. */
   agentProposalBeginAccept(id: string, version: number, diagramId: string, path: string[]): Promise<ProposalAction>;
   agentProposalResolve(id: string, status: 'accepted' | 'rejected' | 'dismissed'): Promise<ProposalAction>;
+
+  // The agent companion (`src-tauri/src/companion/`): the person's own coding agent, run in the
+  // background for one prompt typed on the canvas. A run's progress arrives as `companion` events.
+  /** Which agents it can run, their versions and what they say about sign-in. May start a login shell. */
+  companionAgents(): Promise<AgentInfo[]>;
+  /** Starts one turn; its events arrive under `request.runId`, the last always `stopped`. */
+  companionSend(request: PromptRequest): Promise<void>;
+  /** Stops a run. False when it had already ended. */
+  companionCancel(runId: string): Promise<boolean>;
+  /** Runs still going, with what they have said so far, for a page that has just loaded. */
+  companionRuns(): Promise<RunSnapshot[]>;
+  /** The next prompt on this diagram starts a new conversation. */
+  companionForget(diagramId: string): Promise<void>;
+  /** The shell line that carries the diagram's conversation on in the agent's own terminal UI. */
+  companionContinue(diagramId: string, agent: AgentKind): Promise<string | null>;
+  /** The project folder Nodi would read for this diagram, and whether it may. */
+  companionCode(diagramId: string): Promise<CodeFolder>;
+  /** The person's answer to Nodi asking to read the project: until the app quits, or always. */
+  companionAllowCode(diagramId: string, grant: CodeGrant): Promise<CodeFolder>;
+  /** Another folder for this diagram's code, picked in the system's dialog; null when cancelled. */
+  companionChooseCode(diagramId: string): Promise<CodeFolder | null>;
 
   // Collaboration on the local network (`src-tauri/src/collab/`). The shell serves this app at
   // http://<address>:<port>/ and relays text on `/collab` between guests and the page; guests are

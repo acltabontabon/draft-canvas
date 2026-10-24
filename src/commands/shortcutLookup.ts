@@ -1,5 +1,5 @@
 import type { DraftEdge, DraftNode } from '../document/types';
-import { commandsFor, edgeCommands, multiCommands, nodeCommands, openPointCommands } from './registry';
+import { commandsFor, companionCommand, edgeCommands, multiCommands, nodeCommands, openPointCommands } from './registry';
 import type { Command, CommandContext } from './types';
 
 /**
@@ -142,6 +142,9 @@ function buildCatalog(): ReadonlyMap<string, ShortcutEntry> {
   // No selection: presets, starters, flow/view/canvas commands (undo/redo/paste all made visible
   // by the fixture's primed history + clipboard above).
   record(map, commandsFor(buildFixtureContext({ nodes: [], edges: [] })));
+  // Desktop-only, so absent from the fixture's command list; its key is still the command's own.
+  // The help screen shows its row on the desktop only (`desktopOnly` in `shortcutSections.ts`).
+  record(map, [companionCommand(buildFixtureContext({ nodes: [], edges: [] }))]);
 
   const nodeCtx = buildFixtureContext({ nodes: [NODE_A.id], edges: [] });
   record(map, nodeCommands(nodeCtx, NODE_A));

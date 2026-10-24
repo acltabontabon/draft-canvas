@@ -249,6 +249,36 @@ test.describe('Flows', () => {
     await expect(page.locator('.dc-edge-step')).toHaveCount(2);
   });
 
+  test('a chosen flow names itself on the canvas, and Escape or Whole diagram leaves it', async ({ page }) => {
+    await newCanvas(page, 'Leaving a flow');
+    await buildArchitecture(page);
+    await addToFlow(page, 0, undefined, 'Checkout');
+    await addToFlow(page, 1, 'Checkout');
+    const pill = page.getByRole('status', { name: 'Showing the Checkout flow' });
+    await expect(pill).toBeVisible();
+    await expect(page.locator('.dc-edge-step')).toHaveCount(2);
+
+    // A selected connector is what Escape means first — the flow stays chosen.
+    await clickEdgeBetween(page, 2);
+    await page.keyboard.press('Escape');
+    await expect(pill).toBeVisible();
+
+    // With nothing selected, Escape on the canvas steps back out to the whole diagram.
+    await page.locator('.react-flow__pane').click({ position: { x: 40, y: 400 } });
+    await expect.poll(() => page.locator('.react-flow__node.selected, .react-flow__edge.selected').count()).toBe(0);
+    await page.keyboard.press('Escape');
+    await expect(pill).toBeHidden();
+    await expect(page.locator('.dc-edge-step')).toHaveCount(0);
+
+    // Choosing it again, the pill's own button does the same.
+    await openFlowPanel(page);
+    await page.locator('.dc-flow-item .dc-flow-item-head').click();
+    await expect(pill).toBeVisible();
+    await pill.getByRole('button', { name: 'Whole diagram' }).click();
+    await expect(pill).toBeHidden();
+    await expect(page.locator('.dc-flow-diagram')).toHaveAttribute('data-selected', 'true');
+  });
+
   test('reorders and removes steps from the Flow panel', async ({ page }) => {
     await newCanvas(page, 'Reordering');
     await buildArchitecture(page);

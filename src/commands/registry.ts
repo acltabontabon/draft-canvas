@@ -29,6 +29,7 @@ import { backOut, lookInside } from '../ui/Editor/depthNavigation';
 import { inheritedLevel, LEVEL_HINTS, LEVEL_LABELS } from '../depth/level';
 import { fileOf, fileWithLiveViewport, ownsData, viewLevel } from '../store/editorStore';
 import { pointer, type UiStore } from '../store/uiStore';
+import { hostKind } from '../host/hostInfo';
 import { useCollabStore } from '../store/collabStore';
 import { leaveSessionKeepingView, stopHosting } from '../store/collabBridge';
 import { SOURCE_FORMAT_INFO, SOURCE_FORMATS } from '../export/source/formats';
@@ -446,13 +447,13 @@ function flowCommands(ctx: CommandContext): Command[] {
       id: 'switch-flow',
       title: 'Switch to flow…',
       group: 'flow',
-      keywords: ['lens', 'view', 'select flow'],
+      keywords: ['lens', 'view', 'select flow', 'whole diagram', 'leave flow'],
       run: (inner) => ({
         prompt: 'Switch to',
         options: [
           {
             id: 'switch-flow:diagram',
-            title: 'Diagram',
+            title: 'Whole diagram',
             hint: inner.editor.selectedFlowId === null ? 'Current' : 'No flow lens',
             run: (deep) => deep.editor.setSelectedFlowId(null),
           },
@@ -2040,5 +2041,20 @@ function editCommands(ctx: CommandContext): Command[] {
     { id: 'share-from-here', title: 'Share from here…', group: 'canvas' as const, run: (inner: CommandContext) => inner.ui.requestShareFromHere() },
     ...arrangeSelectionCommands(ctx),
     ...canvasCommands(ctx),
+    // The companion runs the person's own coding agent, which only the desktop app can start.
+    ...(__DESKTOP__ && hostKind() === 'desktop' ? [companionCommand(ctx)] : []),
   ];
+}
+
+/** Opens Nodi, the agent companion, or puts it back to rest. Desktop only (see `editCommands`). */
+export function companionCommand(ctx: CommandContext): Command {
+  return {
+    id: 'companion',
+    title: 'Nodi',
+    group: 'canvas',
+    keywords: ['ai', 'agent', 'companion', 'claude', 'codex', 'assistant', 'chat', 'prompt', 'ask'],
+    hint: ctx.ui.companionOpen ? 'Showing' : 'Ask your coding agent',
+    shortcut: `${MOD_SYMBOL} J`,
+    run: (inner) => inner.ui.setCompanionOpen(!inner.ui.companionOpen),
+  };
 }

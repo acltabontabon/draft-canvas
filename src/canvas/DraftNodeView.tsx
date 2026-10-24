@@ -98,6 +98,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   // Same boolean-not-id discipline as `isAttachTarget` — see its comment.
   const isReconnectTarget = useUiStore((state) => state.reconnectHoverTarget === id);
   const jumpFlash = useUiStore((state) => state.jumpFlashId === id);
+  const pointed = useUiStore((state) => state.pointedIds?.has(id) ?? false);
   const settling = useSettle(id);
   // Which specific anchor (side + offset) a reconnect drag is currently
   // hovering, if any is on this node — null on every other node, so only the
@@ -455,6 +456,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
       data-drag-capsule={capsule ? 'true' : undefined}
       data-reconnect-target={isReconnectTarget ? 'true' : undefined}
       data-jump-flash={jumpFlash ? 'true' : undefined}
+      data-pointed={pointed ? 'true' : undefined}
       data-settle={settling ? 'true' : undefined}
       data-plate-focus={plateFocused ? 'true' : undefined}
       style={

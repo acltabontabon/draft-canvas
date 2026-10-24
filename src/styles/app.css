@@ -2090,6 +2090,60 @@ kbd {
   border-radius: 50%;
 }
 
+/* The same pill while a chosen flow dims the canvas: the flow it is showing, and the way back to
+   the whole diagram, worded — a bare × beside a flow's name read as "delete this flow". */
+.dc-flow-lens-indicator {
+  gap: 6px;
+  max-width: min(420px, calc(100% - 32px));
+  padding-left: 12px;
+}
+
+/* A shared or example diagram's banner holds the top-centre already (an example opens on its
+   flow): the pill sits just under it rather than on top of its buttons. */
+.dc-editor-canvas:has(.dc-read-only-banner) .dc-flow-lens-indicator {
+  top: 48px;
+}
+
+.dc-flow-lens-indicator > svg {
+  flex-shrink: 0;
+  color: var(--dc-selection);
+}
+
+.dc-flow-lens-title {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.dc-focus-indicator .dc-flow-lens-exit {
+  flex-shrink: 0;
+  width: auto;
+  gap: 6px;
+  margin-left: 4px;
+  padding: 0 4px 0 10px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-pill);
+  background: var(--dc-surface-raised);
+  color: var(--dc-text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.dc-focus-indicator .dc-flow-lens-exit:hover {
+  color: var(--dc-text);
+}
+
+.dc-flow-lens-exit kbd {
+  padding: 0 5px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-xs);
+  color: var(--dc-text-faint);
+  font: inherit;
+  font-size: 10.5px;
+  line-height: 16px;
+}
+
 /* ---------------------------------------------------------------- depth -- */
 
 /* What the view is showing, where a level is known. Quiet as the counts beside it — this is a
@@ -2111,60 +2165,16 @@ button.dc-status-level:focus-visible {
   color: var(--dc-text);
 }
 
-/* The sheet that grows out of a shape into the room inside it (and shrinks back on the way out).
-   Inert, above the canvas but below every control, and only ever on screen for a quarter second. */
-.dc-depth-sheet {
-  position: absolute;
-  top: 0;
-  left: 0;
-  z-index: var(--dc-z-chrome);
-  pointer-events: none;
-  /* Only ever seen while animated — see `DepthTransition`. */
-  opacity: 0;
-  will-change: left, top, width, height, opacity;
-}
-
-.dc-depth-sheet-veil {
+/* The room being left, carried off as a picture while the camera zooms through the shape (see
+   `DepthTransition`). Inside the canvas, above the room arriving and below every control; inert,
+   and only ever on screen for a fraction of a second. */
+.dc-depth-ghost {
   position: absolute;
   inset: 0;
-  background: var(--dc-canvas);
-  opacity: 0;
-}
-
-/* The depth glyph's room, travelling: the same corner marks the room frame is drawn with. */
-.dc-depth-sheet [data-at] {
-  position: absolute;
-  width: 28px;
-  height: 28px;
-  border: 0 solid var(--dc-selection);
-}
-
-.dc-depth-sheet [data-at='nw'] {
-  top: 0;
-  left: 0;
-  border-top-width: 1.5px;
-  border-left-width: 1.5px;
-}
-
-.dc-depth-sheet [data-at='ne'] {
-  top: 0;
-  right: 0;
-  border-top-width: 1.5px;
-  border-right-width: 1.5px;
-}
-
-.dc-depth-sheet [data-at='se'] {
-  right: 0;
-  bottom: 0;
-  border-right-width: 1.5px;
-  border-bottom-width: 1.5px;
-}
-
-.dc-depth-sheet [data-at='sw'] {
-  bottom: 0;
-  left: 0;
-  border-bottom-width: 1.5px;
-  border-left-width: 1.5px;
+  z-index: 4;
+  pointer-events: none;
+  transform-origin: 0 0;
+  will-change: transform, opacity;
 }
 
 /* Where you are, when you are inside something — the layers you came down through (see
@@ -2936,9 +2946,13 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 .dc-present-caption {
   width: max-content;
   max-width: min(360px, calc(100% - 48px));
-  /* Match CAPTION_SIZE in useFlowPlayback: long text remains readable by scrolling without
-     taking over the clear corner the presentation camera reserved. */
-  max-height: min(132px, calc(100% - 192px));
+  /* Sized to its content, up to the corner footprint the camera keeps clear for it (CAPTION_SIZE in
+     useFlowPlayback, 224px) or the room between the exit control and the strip, if less. The old
+     132px cap was shorter than an ordinary step — a two-line headline, a caption and its chips — so
+     the chips row was cut in half by the card's own edge; 172px still was, with Linux's wider fonts
+     wrapping the chips to a second row. With no cap at all, a long caption grew over the step it
+     explains. Longer details scroll, and the read-more control says so. */
+  max-height: min(224px, calc(100% - 192px));
   overflow: auto;
   overflow-anchor: none;
   pointer-events: none;
@@ -3370,7 +3384,30 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 }
 
 .dc-flow-panel-header strong {
+  flex: 1;
   font-size: 13px;
+}
+
+/* Tracing, once for the whole panel — a new flow, or more of the chosen one. */
+.dc-flow-panel-footer {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  padding: 5px 6px;
+  border-top: 1px solid var(--dc-border);
+}
+
+.dc-flow-panel-footer .dc-button {
+  height: 26px;
+  padding: 0 8px;
+  color: var(--dc-text-muted);
+  font-size: 12px;
+}
+
+.dc-flow-panel-footer .dc-button:hover {
+  color: var(--dc-text);
 }
 
 /* ---------------------------------------------------------------- outline -- */
@@ -3524,7 +3561,8 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   flex-direction: column;
   width: min(360px, calc(100% - 24px));
   max-height: min(560px, calc(100% - 24px));
-  /* Only `.dc-proposal-detail-scroll` scrolls — the head and the actions row must stay put. */
+  /* The panel's head stays put, the list and the open proposal scroll on their own, and the actions
+     row is pinned inside the proposal: Accept and Reject are always on screen. */
   overflow: hidden;
   border: 1px solid var(--dc-border);
   border-radius: var(--dc-radius-lg);
@@ -3546,76 +3584,125 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   padding: 12px 14px;
 }
 
+.dc-proposal-queue,
+.dc-proposal-past {
+  flex-shrink: 0;
+  min-height: 0;
+  padding: 8px 0;
+  font-size: 12px;
+}
+
+.dc-proposal-queue {
+  border-bottom: 1px solid var(--dc-border);
+}
+
+.dc-proposal-past {
+  border-top: 1px solid var(--dc-border);
+  color: var(--dc-text-muted);
+}
+
+.dc-proposal-past > summary {
+  margin: 0 14px;
+  cursor: pointer;
+}
+
 .dc-proposal-list {
   display: flex;
   flex-direction: column;
-  flex-shrink: 0;
-  border-bottom: 1px solid var(--dc-border);
+  /* History and other pending proposals never get to crowd the active review's actions. */
+  max-height: min(96px, 16vh);
+  overflow-y: auto;
 }
 
 .dc-proposal-row {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
-  padding: 8px 14px;
+  width: 100%;
+  padding: 6px 14px;
   border: 0;
   background: transparent;
-  color: var(--dc-text);
-  font-size: 13px;
+  color: var(--dc-text-muted);
+  font: inherit;
   text-align: left;
   cursor: pointer;
 }
 
-.dc-proposal-row:hover,
-.dc-proposal-row[data-selected='true'] {
+.dc-proposal-row:hover {
   background: var(--dc-surface-hover);
+  color: var(--dc-text);
+}
+
+.dc-proposal-row:focus-visible,
+.dc-proposal-past > summary:focus-visible,
+.dc-proposal-collapsible > summary:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: -2px;
+}
+
+.dc-proposal-row-summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dc-proposal-status {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
+  flex: 0 0 14px;
+  text-align: center;
+}
+
+.dc-proposal-status[data-status='accepted'],
+.dc-proposal-status[data-status='pending'],
+.dc-proposal-status[data-status='accepting'] {
+  color: var(--dc-selection);
+}
+
+.dc-proposal-status[data-status='rejected'] {
+  color: var(--dc-danger);
 }
 
 .dc-proposal-detail {
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
-  min-height: 0;
+  min-height: 120px;
+  overflow: hidden;
   font-size: 13px;
+}
+
+.dc-proposal-detail-content {
+  /* Long summaries and rationale scroll together; the decision footer stays outside this area so
+     it remains reachable even in a short window with history expanded. */
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .dc-proposal-detail-head {
   display: flex;
   flex-direction: column;
-  flex-shrink: 0;
-  gap: 4px;
-  padding: 12px 14px 0;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 16px 14px 8px;
 }
 
 .dc-proposal-summary {
   margin: 0;
-  font-weight: 500;
-}
-
-.dc-proposal-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .dc-proposal-status-pill {
-  padding: 1px 8px;
-  border-radius: var(--dc-radius-pill);
-  background: var(--dc-surface-raised);
   color: var(--dc-text-muted);
   font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
+  font-weight: 600;
 }
 
+.dc-proposal-status-pill[data-status='pending'],
 .dc-proposal-status-pill[data-status='accepted'] {
   color: var(--dc-selection);
 }
@@ -3625,19 +3712,42 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   color: var(--dc-danger);
 }
 
+.dc-proposal-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dc-proposal-count {
+  padding: 4px 7px;
+  border: 1px solid color-mix(in srgb, var(--dc-selection) 24%, var(--dc-border));
+  border-radius: var(--dc-radius);
+  background: color-mix(in srgb, var(--dc-selection) 8%, var(--dc-surface));
+  color: var(--dc-selection);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.dc-proposal-count-removed {
+  border-color: color-mix(in srgb, var(--dc-danger) 24%, var(--dc-border));
+  background: color-mix(in srgb, var(--dc-danger) 8%, var(--dc-surface));
+  color: var(--dc-danger);
+}
+
 .dc-proposal-path {
   margin: 0;
   font-size: 12px;
 }
 
-/* The toolbar (preview toggle, Focus changes) and the legend sit between the head and the
-   scrollable body, so they never scroll out of reach the way a paragraph of rationale can. */
 .dc-proposal-toolbar {
   display: flex;
-  flex-shrink: 0;
   align-items: center;
+  justify-content: space-between;
   gap: 10px;
-  padding: 8px 14px;
+  padding: 0 14px 10px;
 }
 
 .dc-proposal-toggle {
@@ -3649,69 +3759,42 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   cursor: pointer;
 }
 
-.dc-proposal-legend {
-  display: flex;
-  flex-shrink: 0;
-  gap: 14px;
-  margin: 0 0 4px;
-  padding: 0 14px;
-  list-style: none;
-  font-size: 11px;
-  color: var(--dc-text-muted);
-}
-
-.dc-proposal-legend-item {
-  position: relative;
-  padding-left: 14px;
-}
-
-.dc-proposal-legend-item::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 50%;
-  width: 9px;
-  height: 9px;
-  transform: translateY(-50%);
-  border-radius: 2px;
-  border: 1px dashed var(--dc-border-strong);
-}
-
-.dc-proposal-legend-changed::before {
-  border-color: var(--dc-selection);
-}
-
-.dc-proposal-legend-removed::before {
-  border-color: var(--dc-danger);
-  background: color-mix(in srgb, var(--dc-danger) 18%, transparent);
-}
-
 .dc-proposal-detail-scroll {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: auto;
-  padding: 4px 14px 12px;
+  gap: 14px;
+  padding: 4px 14px 16px;
 }
 
-.dc-proposal-collapsible {
-  font-size: 13px;
+.dc-proposal-section-title {
+  margin: 0 0 6px;
+  color: var(--dc-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.dc-proposal-queue > .dc-proposal-section-title {
+  margin: 0 14px 4px;
+}
+
+.dc-proposal-collapsible,
+.dc-proposal-history {
+  font-size: 12px;
+  color: var(--dc-text-muted);
 }
 
 .dc-proposal-collapsible summary {
-  font-weight: 600;
   cursor: pointer;
 }
 
 .dc-proposal-collapsible ul {
-  margin: 4px 0 0;
+  margin: 6px 0 0;
   padding-left: 18px;
 }
 
 .dc-proposal-collapsible p {
-  margin: 4px 0 0;
+  margin: 6px 0 0;
+  line-height: 1.5;
 }
 
 .dc-proposal-banner {
@@ -3731,6 +3814,12 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   color: var(--dc-danger);
 }
 
+.dc-proposal-changes {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .dc-proposal-diff {
   display: flex;
   flex-direction: column;
@@ -3740,12 +3829,15 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   list-style: none;
 }
 
+/* One line a change: its name, then what kind of thing it is, small, at the end. Two lines each
+   left room for two changes before the list scrolled. */
 .dc-proposal-diff-row {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 6px 8px;
-  border-left: 3px solid var(--dc-border-strong);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  column-gap: 10px;
+  padding: 6px 10px;
+  border-left: 2px solid var(--dc-border-strong);
   border-radius: var(--dc-radius-sm);
   background: var(--dc-surface-raised);
 }
@@ -3762,21 +3854,33 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 }
 
 .dc-proposal-diff-change {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
+  grid-column: 2;
+  grid-row: 1;
+  font-size: 11px;
   color: var(--dc-text-muted);
 }
 
 .dc-proposal-diff-label {
-  font-weight: 500;
+  grid-column: 1;
+  grid-row: 1;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.dc-proposal-diff-removed .dc-proposal-diff-label {
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--dc-danger) 60%, transparent);
 }
 
 .dc-proposal-diff-fields {
+  grid-column: 1 / -1;
   margin: 2px 0 0;
-  padding-left: 14px;
+  padding: 0;
+  list-style: none;
   color: var(--dc-text-muted);
   font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
 }
 
 .dc-proposal-diff-before {
@@ -3793,8 +3897,9 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   flex-shrink: 0;
   justify-content: flex-end;
   gap: 8px;
-  padding: 8px 14px 12px;
+  padding: 12px 14px;
   border-top: 1px solid var(--dc-border);
+  background: var(--dc-surface-raised);
 }
 
 /* The empty state teaches the concept and offers the one thing to do next. */
@@ -3842,13 +3947,54 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   background: var(--dc-selection-soft);
 }
 
+/* "Whole diagram" is the way out of every flow, so a hairline sets it apart from the flows below. */
+.dc-flow-diagram + .dc-flow-row {
+  position: relative;
+  margin-top: 13px;
+}
+
+.dc-flow-diagram + .dc-flow-row::before {
+  content: '';
+  position: absolute;
+  top: -7px;
+  right: 8px;
+  left: 8px;
+  border-top: 1px solid var(--dc-border);
+}
+
+.dc-flow-item + .dc-flow-item {
+  margin-top: 1px;
+}
+
+/* Every row is the same two lines — a name over a quiet line of detail — so the list keeps one
+   rhythm however long a name is. */
 .dc-flow-item-head {
   display: flex;
   align-items: center;
   gap: 2px;
-  min-height: 30px;
-  padding: 2px 4px 2px 2px;
+  min-height: 40px;
+  padding: 3px 4px 3px 2px;
   cursor: pointer;
+}
+
+.dc-flow-item-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dc-flow-item-text .dc-flow-title-input {
+  flex: none;
+}
+
+.dc-flow-item-meta {
+  padding: 0 7px;
+  font-size: 10.5px;
+  line-height: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .dc-flow-item-head:hover {
@@ -3877,16 +4023,22 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   color: var(--dc-text);
 }
 
-/* Keeps "Diagram" aligned with the flow rows, which have a real expand chevron. */
+/* Keeps "Whole diagram" aligned with the flow rows, which have a real expand chevron; it carries a
+   check while no flow is chosen. */
 .dc-flow-expand-spacer {
+  display: inline-flex;
   flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
   width: 18px;
+  color: var(--dc-selection);
 }
 
 .dc-flow-title {
-  flex: 1;
+  display: block;
+  width: 100%;
   min-width: 0;
-  padding: 3px 6px;
+  padding: 1px 6px;
   border: 1px solid transparent;
   border-radius: var(--dc-radius-xs);
   background: none;
@@ -3896,8 +4048,9 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   font-weight: 600;
   text-align: left;
   cursor: pointer;
-  white-space: normal;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .dc-flow-row[data-selected='true'] .dc-flow-title {
@@ -3905,7 +4058,7 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 }
 
 .dc-flow-diagram .dc-flow-title {
-  color: var(--dc-text-muted);
+  color: var(--dc-text);
   font-weight: 500;
 }
 
@@ -3928,13 +4081,6 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   font-weight: 600;
   outline: none;
   box-shadow: 0 0 0 2px var(--dc-selection-soft);
-}
-
-.dc-flow-step-count {
-  flex-shrink: 0;
-  margin: 0 2px 0 4px;
-  font-size: 10.5px;
-  white-space: nowrap;
 }
 
 /* Per-row actions stay out of the way until the row is hovered or holds focus — except the

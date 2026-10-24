@@ -1811,6 +1811,23 @@
   max-width: 480px;
 }
 
+.dc-element-inspector .dc-element-technology {
+  min-width: 0;
+  max-width: 136px;
+  gap: 5px;
+  color: var(--dc-text-muted);
+}
+
+.dc-element-technology svg {
+  flex: none;
+}
+
+.dc-element-technology span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* The 24-unit dots are dust at 16px: drawn heavier, like the toolbar's own More, so ⋯ reads as a
    control rather than a smudge at the end of the row. */
 .dc-popover-more svg[data-icon='more'] {
@@ -4023,6 +4040,27 @@
   filter: drop-shadow(0 0 6px color-mix(in srgb, var(--dc-selection) 90%, transparent));
 }
 
+/* What the point of Nodi's reply under the pointer is about: the jump's ring, held steady for as long
+   as the person looks at the point, so reading the reply and finding its parts are one gesture. */
+.dc-node[data-pointed='true']::after {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border: 2px solid var(--dc-selection);
+  border-radius: calc(var(--dc-radius) + 4px);
+  box-shadow: 0 0 0 7px color-mix(in srgb, var(--dc-selection) 22%, transparent);
+  pointer-events: none;
+}
+
+.dc-node[data-type='ellipse'][data-pointed='true']::after {
+  border-radius: 50%;
+}
+
+.dc-edge[data-pointed='true'] .dc-edge-line {
+  stroke: var(--dc-selection);
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--dc-selection) 90%, transparent));
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .dc-node[data-jump-flash='true']::after {
   animation: dc-jump-flash 900ms ease-out 1;
@@ -4083,6 +4121,17 @@
   border-radius: var(--dc-radius-lg);
 }
 
+/* A boundary's name is most of what adding one changes, so the ghost carries it, where the canvas puts
+   a boundary's header. */
+.dc-agent-preview-group-label {
+  position: absolute;
+  left: 12px;
+  top: 8px;
+  color: var(--dc-text-muted);
+  font: 600 12px/16px var(--dc-font);
+  white-space: nowrap;
+}
+
 .dc-agent-preview-removed {
   position: absolute;
   left: 0;
@@ -4090,6 +4139,168 @@
   border: 1px dashed var(--dc-danger);
   border-radius: calc(var(--dc-radius) + 3px);
   background: repeating-linear-gradient(135deg, transparent 0 6px, color-mix(in srgb, var(--dc-danger) 18%, transparent) 6px 7px);
+}
+
+/* A proposal waiting for review is the subject while it is shown: drawn solid and outlined in teal,
+   with the diagram around it stepped back, rather than a faint ghost over a diagram at full strength
+   (which read as hardly anything proposed at all). The live preview of an agent still working keeps
+   the quieter ghost: the person is still editing underneath it. */
+.react-flow:has(.dc-agent-preview[data-source='proposal']:not([data-mode='sheet'])) .react-flow__nodes,
+.react-flow:has(.dc-agent-preview[data-source='proposal']:not([data-mode='sheet'])) .react-flow__edges,
+.react-flow:has(.dc-agent-preview[data-source='proposal']:not([data-mode='sheet'])) .react-flow__edgelabel-renderer {
+  opacity: 0.4;
+  transition: opacity 220ms var(--dc-ease-out);
+}
+
+.dc-agent-preview[data-source='proposal']:not([data-mode='sheet']) .dc-ghost-node-body {
+  opacity: 1;
+}
+
+.dc-agent-preview[data-source='proposal']:not([data-mode='sheet']) .dc-ghost-node-body::after {
+  border: 2px solid var(--dc-selection);
+  box-shadow: 0 0 0 6px var(--dc-selection-soft);
+}
+
+.dc-agent-preview[data-source='proposal']:not([data-mode='sheet']) .dc-ghost-edges {
+  opacity: 1;
+}
+
+.dc-agent-preview[data-source='proposal']:not([data-mode='sheet']) .dc-ghost-edges g[data-ink] {
+  filter: drop-shadow(0 0 2px var(--dc-selection));
+}
+
+.dc-agent-preview[data-source='proposal']:not([data-mode='sheet']) .dc-agent-preview-group {
+  border: 2px dashed var(--dc-selection);
+  background: color-mix(in srgb, var(--dc-selection) 6%, transparent);
+}
+
+.dc-agent-preview[data-source='proposal'] .dc-agent-preview-tag {
+  border: 0;
+  background: var(--dc-selection);
+  color: var(--dc-canvas);
+  font-weight: 600;
+}
+
+/* A change that moves shapes, on tracing paper (`AgentPreviewLayer`'s `TracingSheet`): the current
+   drawing sinks behind a translucent sheet, and the whole proposed diagram is drawn on the sheet, what
+   is new or changed in teal ink. Moved shapes trail back to a faint outline of where they stand now.
+   The real layers fade with `:has`, so nothing about the canvas itself changes while it is up. */
+/* The diagram goes fully under the sheet. Every shape is drawn on it, the ones that stay included, so
+   a faded copy beneath adds nothing but each moved shape and label a second time: with a whole
+   re-layout that read as two diagrams on top of each other. Where moved shapes stood is the sheet's
+   own faint outline, without text. */
+.react-flow:has(.dc-agent-preview[data-mode='sheet']) .react-flow__nodes,
+.react-flow:has(.dc-agent-preview[data-mode='sheet']) .react-flow__edges,
+.react-flow:has(.dc-agent-preview[data-mode='sheet']) .react-flow__edgelabel-renderer {
+  opacity: 0;
+  transition: opacity 220ms var(--dc-ease-out);
+}
+
+.dc-preview-sheet {
+  position: absolute;
+  left: -50000px;
+  top: -50000px;
+  width: 100000px;
+  height: 100000px;
+  /* Vellum: the canvas colour, a little lighter, with the faintest grain. */
+  background-color: color-mix(in srgb, var(--dc-canvas) 70%, var(--dc-surface) 30%);
+  background-image: repeating-linear-gradient(115deg, color-mix(in srgb, var(--dc-text) 2.5%, transparent) 0 1px, transparent 1px 9px);
+  opacity: 0.72;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dc-preview-sheet {
+  animation: dc-sheet-in 260ms var(--dc-ease-out) both;
+  }
+}
+
+@keyframes dc-sheet-in {
+  from {
+  opacity: 0;
+  transform: translateY(-14px);
+  }
+}
+
+.dc-preview-ink {
+  display: contents;
+}
+
+.dc-agent-preview[data-mode='sheet'] .dc-ghost-node-body {
+  opacity: 1;
+}
+
+.dc-agent-preview[data-mode='sheet'] .dc-preview-ink[data-ink='plain'] .dc-ghost-node-body::after {
+  border-color: transparent;
+}
+
+.dc-agent-preview[data-mode='sheet'] .dc-preview-ink[data-ink='new'] .dc-ghost-node-body::after,
+.dc-agent-preview[data-mode='sheet'] .dc-preview-ink[data-ink='changed'] .dc-ghost-node-body::after {
+  border: 2px solid var(--dc-selection);
+  box-shadow: 0 0 0 6px var(--dc-selection-soft);
+}
+
+.dc-agent-preview[data-mode='sheet'] .dc-preview-ink[data-ink='changed'] .dc-ghost-node-body::after {
+  border-style: dashed;
+}
+
+.dc-agent-preview[data-mode='sheet'] .dc-ghost-edges {
+  opacity: 1;
+}
+
+.dc-agent-preview[data-mode='sheet'] .dc-ghost-edges g[data-ink='new'],
+.dc-agent-preview[data-mode='sheet'] .dc-ghost-edges g[data-ink='changed'] {
+  filter: drop-shadow(0 0 2px var(--dc-selection));
+}
+
+.dc-agent-preview[data-mode='sheet'] .dc-agent-preview-group[data-ink='new'],
+.dc-agent-preview[data-mode='sheet'] .dc-agent-preview-group[data-ink='changed'] {
+  border: 2px dashed var(--dc-selection);
+  background: color-mix(in srgb, var(--dc-selection) 6%, transparent);
+}
+
+.dc-agent-preview[data-mode='sheet'] .dc-agent-preview-group[data-ink='new'] .dc-agent-preview-group-label,
+.dc-agent-preview[data-mode='sheet'] .dc-agent-preview-group[data-ink='changed'] .dc-agent-preview-group-label,
+.dc-agent-preview[data-source='proposal']:not([data-mode='sheet']) .dc-agent-preview-group-label {
+  color: var(--dc-selection);
+}
+
+.dc-preview-was {
+  position: absolute;
+  left: 0;
+  top: 0;
+  border: 1px dashed color-mix(in srgb, var(--dc-text-faint) 70%, transparent);
+  border-radius: calc(var(--dc-radius) + 3px);
+  opacity: 0.55;
+}
+
+.dc-preview-trails {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+}
+
+.dc-preview-trails line {
+  stroke: var(--dc-selection);
+  stroke-width: 2;
+  stroke-dasharray: 0.5 6;
+  stroke-linecap: round;
+  opacity: 0.75;
+}
+
+.dc-preview-trails circle {
+  fill: var(--dc-selection);
+  opacity: 0.6;
+}
+
+/* A whole re-layout: a trail for every shape would cross the new drawing everywhere, so they recede to
+   a hint of where things came from; the drawing itself is what is being proposed. */
+.dc-agent-preview[data-many='true'] .dc-preview-trails line {
+  opacity: 0.3;
+}
+
+.dc-agent-preview[data-many='true'] .dc-preview-trails circle {
+  opacity: 0.3;
 }
 
 /* The ghost: an offer drawn in flow space (inside the viewport portal, so it pans and zooms
@@ -4903,7 +5114,6 @@
 /* Tracing keeps connector hit bands active while editing gestures are suspended. */
 .dc-editor[data-tracing] .dc-edge-hit { pointer-events: stroke; cursor: pointer; }
 
-.dc-flow-trace-more { margin: 0 8px 6px; font-size: 11px; }
 
 .dc-source-evidence { max-width: 320px; font-size: 11px; line-height: 1.5; }
 .dc-source-evidence summary { cursor: pointer; }

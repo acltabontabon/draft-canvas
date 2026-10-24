@@ -130,7 +130,7 @@ fn display_path_in(path: &Path, home: Option<&Path>) -> String {
     path.display().to_string()
 }
 
-fn home_dir() -> Option<PathBuf> {
+pub(crate) fn home_dir() -> Option<PathBuf> {
     if cfg!(windows) {
         return None;
     }

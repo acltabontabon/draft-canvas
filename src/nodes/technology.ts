@@ -82,8 +82,49 @@ const listeners = new Map<string, Set<() => void>>();
 
 export function technologyIcon(technology: string | undefined, snapshot: TechnologyIconSnapshot = bySlug): TechnologyIcon | undefined {
   if (!technology?.trim()) return undefined;
-  const slug = NAMES.get(normalizedName(technology));
+  const slug = NAMES.get(normalizedName(technology)) ?? leadingProduct(technology);
   return (slug ? snapshot.get(slug) : undefined) ?? GENERIC_TECHNOLOGY_ICON;
+}
+
+const VERSION_WORD = /^v?\d+(?:\.\d+)*(?:\.x)?$/i;
+const word = (token: string) => token.replace(/^[(\[,;:]+|[)\],;:.]+$/g, '');
+
+/**
+ * One known product, named first and given a version, with words about it after: "Spring Boot 3
+ * modular monolith (Java 21)", "PostgreSQL 16 (primary)". The slug of that product, or undefined.
+ * A version is required, so a name that merely starts with a brand ("Go service") stays custom; and
+ * anything after it that is itself a known product ("Spring Boot 3 on Kubernetes") makes it a mixed
+ * stack, which never borrows a single logo.
+ */
+export function leadingProduct(technology: string): string | undefined {
+  const tokens = cleanName(technology).split(' ');
+  for (let length = Math.min(4, tokens.length - 1); length >= 1; length -= 1) {
+    const slug = NAMES.get(tokens.slice(0, length).join(' '));
+    if (!slug) continue;
+    const rest = tokens.slice(length).map(word).filter(Boolean);
+    if (!rest[0] || !VERSION_WORD.test(rest[0])) return undefined;
+    const others = rest.slice(1).filter((t) => t.length >= 3 && !VERSION_WORD.test(t));
+    const mixed = others.some((t, i) => NAMES.has(t) || (i + 1 < others.length && NAMES.has(`${t} ${others[i + 1]}`)));
+    return mixed ? undefined : slug;
+  }
+  return undefined;
+}
+
+/**
+ * The catalog name of the product a technology starts with, when it would otherwise show the neutral
+ * mark: what an agent should have written ("Spring Boot" for "Spring Boot modular monolith").
+ * Undefined when the technology already has its logo or names no known product first.
+ */
+export function productNamedIn(technology: string | undefined): string | undefined {
+  if (!technology?.trim() || technologyIcon(technology) !== GENERIC_TECHNOLOGY_ICON) return undefined;
+  const tokens = cleanName(technology).split(' ').map(word);
+  for (let length = Math.min(4, tokens.length); length >= 1; length -= 1) {
+    const slug = NAMES.get(tokens.slice(0, length).join(' '));
+    const icon = slug ? CATALOG.find((entry) => entry.slug === slug) : undefined;
+    // A one-letter or two-letter brand ("Go", "R") at the start of a phrase is too often a word.
+    if (icon && tokens.slice(0, length).join(' ').length >= 3) return displayName(icon);
+  }
+  return undefined;
 }
 
 /** Unknown/custom technologies need no asset. Imports are deduplicated and failures can be retried. */

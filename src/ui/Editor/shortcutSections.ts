@@ -17,6 +17,8 @@ export interface CommandRow {
   commandId: string;
   /** Overrides the command's own `title` when the help-screen phrasing should read better. */
   label?: string;
+  /** Shown only in the desktop app, where the command exists. */
+  desktopOnly?: true;
 }
 
 /** A row for a real keyboard interaction that isn't a `Command` at all — Escape's own layered
@@ -79,7 +81,8 @@ export const SECTIONS: Section[] = [
       { commandId: 'back-out', label: 'Back out to what contains it' },
       { keys: ['Shift', 'F10'], label: 'Context menu for the selection (or the Menu key)' },
       { commandId: 'outline', label: 'Outline — this view as a list of shapes and their connectors, for the keyboard and screen readers' },
-      { keys: ['Esc'], label: 'Step back — out of editing, then a popover, then presenting, then the selection, then out of a shape' },
+      { commandId: 'companion', label: 'Nodi — ask your coding agent about this diagram', desktopOnly: true },
+      { keys: ['Esc'], label: 'Step back — out of editing, then a popover, then presenting, then the selection, then a chosen flow, then out of a shape' },
     ],
   },
   {

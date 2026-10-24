@@ -18,7 +18,8 @@ export interface ShellHandle {
   agentProgress(): { id: number; message: string }[];
   /** Adds a file to the fake disk. */
   addFile(name: string, text: string): string;
-  file(handle: string): { name: string; text: string; version: number } | undefined;
+  /** The file itself: a test may change it as something else would, or mark it read-only before it opens. */
+  file(handle: string): { name: string; text: string; version: number; readOnly?: boolean } | undefined;
   /** Where the next Save dialog saves (`null` cancels it). */
   nextSaveAs(target: { name: string } | null): void;
   /** Answers for the native message boxes, in order: the index of the button pressed. */
@@ -53,9 +54,14 @@ export interface ShellHandle {
   /** Changes what the agent connector reports (connections, background support, a sidecar warning…);
    *  the page hears of it the way it would from the shell. */
   setAgent(patch: Record<string, unknown>): void;
+  /** What the companion finds installed; Claude Code by default. Set before the editor asks. */
+  setCompanionAgents(agents: Record<string, unknown>[]): void;
   /** Seeds a proposal directly into the mock store, as if `submit_proposal` had already run. */
   addProposal(proposal: Record<string, unknown>): void;
   proposal(id: string): Record<string, unknown> | undefined;
+  /** Prompts the companion sent, in order, and the runs it asked to stop. */
+  companionSent(): { runId: string; diagramId: string; text: string; selection: unknown; mode: string }[];
+  companionCancelled(): string[];
 }
 
 declare global {
@@ -71,6 +77,7 @@ export async function installMockShell(page: Page): Promise<void> {
       displayPath: string;
       text: string;
       version: number;
+      readOnly?: boolean;
     }
     interface ChannelLike {
       id: number;
@@ -79,6 +86,9 @@ export async function installMockShell(page: Page): Promise<void> {
     const recovery = new Map<string, { entry: Record<string, unknown>; text: string }>();
     const sidecars = new Map<string, { mime: string; base64: string }>();
     const calls: { command: string; args: unknown }[] = [];
+    const companionSent: { runId: string; diagramId: string; text: string; selection: unknown; mode: string }[] = [];
+    let codeAllowed: 'now' | 'always' | null = null;
+    const companionCancelled: string[] = [];
     const exported: { name: string; text: string }[] = [];
     const asked: { title: string; message: string; buttons: string[] }[] = [];
     const answers: number[] = [];
@@ -106,6 +116,7 @@ export async function installMockShell(page: Page): Promise<void> {
         return { ...folder(handle).info, agent: agentFolders.get(handle) ?? false, within: within ?? null };
       }),
     });
+    let companionAgents: Record<string, unknown>[] = [{ agent: 'claude-code', name: 'Claude Code', availability: 'installed', version: '2.1.295', signIn: { loggedIn: true, method: 'claude.ai', transcripts: '~/.claude/projects' } }];
     let agentSettings: Record<string, unknown> = { enabled: false, listening: false, connections: 0, sidecarPath: '/Applications/Draft Canvas.app/Contents/MacOS/draft-canvas-mcp', sidecarWarning: null, background: 'restart-needed', projects: [] };
     // Claude Code without its CLI where the shell looks (so its manual command shows); Codex, Gemini CLI
     // and Junie not yet set up.
@@ -134,7 +145,7 @@ export async function installMockShell(page: Page): Promise<void> {
       displayPath: file.displayPath,
       text: file.text,
       stamp: stamp(file),
-      readOnly: false,
+      readOnly: file.readOnly ?? false,
     });
     const touch = (handle: string, file: Held) => {
       const at = recents.findIndex((item) => item.handle === handle);
@@ -448,6 +459,23 @@ export async function installMockShell(page: Page): Promise<void> {
       agent_progress: (args: { id: number; message: string }) => void progressLog.push(args),
       agent_respond: (args: { id: number; outcome: unknown }) => void agentResponses.set(args.id, args.outcome),
       agent_status: () => agentView(),
+      // The agent companion: what the page sent is recorded; a test plays the run's events back
+      // with `emit({ type: 'companion', run, event })`, as the shell would.
+      companion_agents: () => companionAgents,
+      companion_send: (args: { request: { runId: string; diagramId: string; text: string; selection: unknown; mode: string } }) => void companionSent.push(args.request),
+      companion_cancel: (args: { runId: string }) => {
+        companionCancelled.push(args.runId);
+        return true;
+      },
+      companion_runs: () => [],
+      companion_forget: () => null,
+      companion_code: () => ({ name: 'library', displayPath: '~/Work/library', ...(codeAllowed ? { allowed: codeAllowed } : {}) }),
+      companion_allow_code: (args: { grant: 'now' | 'always' }) => {
+        codeAllowed = args.grant;
+        return { name: 'library', displayPath: '~/Work/library', allowed: args.grant };
+      },
+      companion_choose_code: () => null,
+      companion_continue: () => "cd '/Users/me/Library/Application Support/Draft Canvas/companion/work' && '/usr/local/bin/claude' '--resume' 's-1'",
       agent_configure: (args: { patch: { enabled?: boolean; project?: { handle: string; agent: boolean }; rotate?: boolean } }) => {
         if (args.patch.enabled !== undefined) agentSettings = { ...agentSettings, enabled: args.patch.enabled, listening: args.patch.enabled };
         if (args.patch.project) agentFolders.set(args.patch.project.handle, args.patch.project.agent);
@@ -533,6 +561,11 @@ export async function installMockShell(page: Page): Promise<void> {
       nextSaveAs: (target) => void (saveTarget = target),
       answer: (...choices) => void answers.push(...choices),
       cancelNextExport: () => void (cancelExport = true),
+      companionSent: () => companionSent,
+      companionCancelled: () => companionCancelled,
+      setCompanionAgents: (agents) => {
+        companionAgents = agents;
+      },
       setAgent: (patch) => {
         agentSettings = { ...agentSettings, ...patch };
         emit({ type: 'agent-changed' });

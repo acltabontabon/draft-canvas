@@ -5,6 +5,8 @@ import type { CommandMessage, ToHostMessage } from '../../src/host/embeddedHost'
 import {
   DesktopError,
   type AgentClient,
+  type AgentInfo,
+  type CodeFolder,
   type AgentClientSetup,
   type AgentSkillSetup,
   type AgentSkillTarget,
@@ -15,10 +17,12 @@ import {
   type HostEvent,
   type OpenedDoc,
   type Proposal,
+  type PromptRequest,
   type ProjectInfo,
   type QuitDecision,
   type RecentItem,
   type RecoveryEntry,
+  type RunSnapshot,
   type SavedAs,
   type StartLocation,
   type UpdateSnapshot,
@@ -61,6 +65,18 @@ export function createHarness() {
     /** In-memory stand-in for `proposals.rs`: enough of its rules (idempotent resolve, wrong-stage,
      *  version/identity check at accept) to drive `ProposalPanel` through a real round trip in tests. */
     proposals: new Map<string, Proposal>(),
+    /** The companion: what the page asked to run and stop, and the runs a reloaded page finds. */
+    companion: {
+      sent: [] as PromptRequest[],
+      cancelled: [] as string[],
+      forgotten: [] as string[],
+      runs: [] as RunSnapshot[],
+      agents: [{ agent: 'claude-code', name: 'Claude Code', availability: 'installed', version: '2.1.295', signIn: { loggedIn: true, method: 'claude.ai', transcripts: '~/.claude/projects' } }] as AgentInfo[],
+      /** The next send fails with this message, as the shell would refuse it. */
+      refuse: null as string | null,
+      /** The project folder Nodi would read for the diagram. */
+      code: { name: 'library', displayPath: '~/Work/library' } as CodeFolder,
+    },
     settings: {
       enabled: false,
       listening: false,
@@ -348,6 +364,26 @@ export function createHarness() {
       agent.proposals.set(id, next);
       return { ok: true, proposal: next } as const;
     }),
+    companionAgents: vi.fn(async () => agent.companion.agents),
+    companionSend: vi.fn(async (request: PromptRequest) => {
+      const refusal = agent.companion.refuse;
+      agent.companion.refuse = null;
+      if (refusal) throw new DesktopError('PermissionDenied', refusal);
+      agent.companion.sent.push(request);
+    }),
+    companionCancel: vi.fn(async (runId: string) => {
+      agent.companion.cancelled.push(runId);
+      return true;
+    }),
+    companionRuns: vi.fn(async () => agent.companion.runs),
+    companionForget: vi.fn(async (diagramId: string) => void agent.companion.forgotten.push(diagramId)),
+    companionContinue: vi.fn(async () => null),
+    companionCode: vi.fn(async () => agent.companion.code),
+    companionAllowCode: vi.fn(async (_diagramId: string, grant: 'now' | 'always') => {
+      agent.companion.code = { ...agent.companion.code, allowed: grant };
+      return agent.companion.code;
+    }),
+    companionChooseCode: vi.fn(async () => null),
     collabLanStart: vi.fn(async (_options: { token: string }) => ({ port: 49152, addresses: ['192.168.1.20'] })),
     collabLanStop: vi.fn(async () => {}),
     collabLanSend: vi.fn(async (_connId: string, _text: string) => {}),

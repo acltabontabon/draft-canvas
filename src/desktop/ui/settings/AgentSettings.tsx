@@ -4,6 +4,7 @@ import { Icon } from '../../../ui/common/Icon';
 import { SegmentedControl } from '../../../ui/common/SegmentedControl';
 import type { AgentClient, AgentClientSetup, AgentSettings as AgentState, AgentSkillSetup, AgentSkillTarget } from '../../api';
 import { useDesktopController, useDesktopState } from '../../useDesktop';
+import { setNodiShown, useNodiShown } from '../../nodiShown';
 import {
   claudeCodeCommand,
   clientLine,
@@ -34,9 +35,20 @@ export function AgentSettings() {
   useEffect(() => {
     void controller.refreshAgent();
   }, [controller]);
+  const nodi = useNodiShown();
 
   return (
     <SettingsPage title="AI agents">
+      <SettingsSection title="Nodi">
+        <ChoiceRow
+          type="checkbox"
+          toggle
+          label="Show Nodi on the canvas"
+          description="Your own Claude Code or Codex, in the canvas corner: ask about the diagram without leaving it. Off hides it everywhere."
+          checked={nodi}
+          onChange={(event) => setNodiShown(event.target.checked)}
+        />
+      </SettingsSection>
       <SettingsSection title="Access" busy={!agent}>
         <ChoiceRow
           type="checkbox"
@@ -52,6 +64,7 @@ export function AgentSettings() {
       {agent && (
         <>
           <Folders agent={agent} />
+          <CodeFolders agent={agent} />
           <Connect agent={agent} platform={platform} />
           <Manage agent={agent} />
         </>
@@ -118,6 +131,31 @@ function Folders({ agent }: { agent: AgentState }) {
           />
         ))
       )}
+    </SettingsSection>
+  );
+}
+
+/** The project folders Nodi may always read, as the person allowed them when it asked in its chat:
+ *  only shown once there are some, each one taken back with one click. "Just for now" ends when the
+ *  app quits, and isn't listed. */
+function CodeFolders({ agent }: { agent: AgentState }) {
+  const controller = useDesktopController();
+  const folders = agent.codeFolders ?? [];
+  if (folders.length === 0) return null;
+  return (
+    <SettingsSection title="Code Nodi may read" group list description="Read-only. Nodi asks before reading any other folder, and secrets are never read.">
+      {folders.map((folder) => (
+        <SettingRow
+          key={folder.path}
+          label={folder.name}
+          description={folder.displayPath}
+          control={
+            <Button variant="quiet" onClick={() => void controller.configureAgent({ forgetCode: folder.path })}>
+              Stop
+            </Button>
+          }
+        />
+      ))}
     </SettingsSection>
   );
 }

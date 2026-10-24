@@ -1,6 +1,8 @@
 import { Channel, invoke } from '@tauri-apps/api/core';
 import {
   DesktopError,
+  type AgentInfo,
+  type CodeFolder,
   type AgentClientSetup,
   type AgentSkillSetup,
   type AgentSettings,
@@ -11,6 +13,7 @@ import {
   type HostBoot,
   type Proposal,
   type ProposalAction,
+  type RunSnapshot,
   type UpdateSnapshot,
   type HostEvent,
 } from '../api';
@@ -135,6 +138,15 @@ export function createTauriApi(): DesktopApi {
     agentProposalGet: (id) => call<Proposal | null>('agent_proposal_get', { id }),
     agentProposalBeginAccept: (id, version, diagramId, path) => call<ProposalAction>('agent_proposal_begin_accept', { id, version, diagramId, path }),
     agentProposalResolve: (id, status) => call<ProposalAction>('agent_proposal_resolve', { id, status }),
+    companionAgents: () => call<AgentInfo[]>('companion_agents'),
+    companionSend: (request) => call<void>('companion_send', { request }),
+    companionCancel: (runId) => call<boolean>('companion_cancel', { runId }),
+    companionRuns: () => call<RunSnapshot[]>('companion_runs'),
+    companionForget: (diagramId) => call<void>('companion_forget', { diagramId }),
+    companionCode: (diagramId) => call<CodeFolder>('companion_code', { diagramId }),
+    companionAllowCode: (diagramId, grant) => call<CodeFolder>('companion_allow_code', { diagramId, grant }),
+    companionChooseCode: (diagramId) => call<CodeFolder | null>('companion_choose_code', { diagramId }),
+    companionContinue: (diagramId, agent) => call<string | null>('companion_continue', { diagramId, agent }),
 
     collabLanStart: ({ token }) => call<CollabLanStarted>('collab_lan_start', { token }),
     collabLanStop: (options) => call<void>('collab_lan_stop', options ? { token: options.token } : {}),

@@ -245,7 +245,8 @@ test('long presentation details remain scrollable within the camera footprint', 
   await page.getByRole('button', { name: 'Exit', exact: true }).focus();
   await expect(page.getByRole('button', { name: 'Exit', exact: true })).toBeInViewport();
   await expect(details.locator('.dc-present-text')).toHaveText(caption.trim());
-  await expect.poll(() => details.evaluate((element) => element.getBoundingClientRect().height)).toBeLessThanOrEqual(132);
+  // Within the corner the camera keeps clear for it (CAPTION_SIZE, 224px): an ordinary step fits whole.
+  await expect.poll(() => details.evaluate((element) => element.getBoundingClientRect().height)).toBeLessThanOrEqual(224);
   await details.getByRole('button', { name: 'Read full step details' }).click();
   await expect(details).toBeFocused();
   await page.keyboard.press('End');

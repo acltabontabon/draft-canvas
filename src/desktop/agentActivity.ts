@@ -33,6 +33,8 @@ export interface AgentOp {
   target: AgentTarget;
   /** The view being changed, for a preview on the open diagram. */
   path: readonly string[];
+  /** The companion run whose agent sent it (`companion.ts`): its card shows the work instead. */
+  run?: string;
   stage: Stage;
   seq: number;
   startedAt: number;
@@ -99,7 +101,7 @@ export const agentActivity = {
   },
 
   /** A request the page has taken. `reveal`: the generation view may open by itself (see `agent.ts`). */
-  begin(op: Pick<AgentOp, 'id' | 'tool' | 'title' | 'target' | 'path' | 'base'>, reveal = false): void {
+  begin(op: Pick<AgentOp, 'id' | 'tool' | 'title' | 'target' | 'path' | 'base' | 'run'>, reveal = false): void {
     const entry: AgentOp = { ...op, stage: 'preparing', seq: 0, startedAt: Date.now(), shown: false, watching: false, follow: false, applying: false, cancelling: false };
     const kept = [...ops.filter((o) => o.id !== op.id), entry];
     for (const dropped of kept.slice(0, Math.max(0, kept.length - MAX_ENTRIES))) {

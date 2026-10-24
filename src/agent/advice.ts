@@ -8,6 +8,7 @@
  * touches the page, so it runs on the agent worker with the rest of `compose`.
  */
 
+import { productNamedIn } from '../nodes/technology';
 import type { Legibility } from './legibility';
 import type { RoomSpec } from './input';
 
@@ -20,8 +21,25 @@ const MANY_CROSSINGS = 6;
 
 const quote = (ids: readonly string[], max = 4) => ids.slice(0, max).map((id) => `"${id}"`).join(', ') + (ids.length > max ? `, …` : '');
 
+/**
+ * Technologies that will show the neutral mark but name a known product first: the logo shows for one
+ * product, as it is called, with an optional version ("Spring Boot 3"); the rest belongs in the
+ * description. Each with the update that fixes it. At most three, the rest counted.
+ */
+export function technologyAdvice(elements: readonly { id: string; technology?: string }[]): string[] {
+  const fixes = elements.flatMap((e) => {
+    const product = productNamedIn(e.technology);
+    return product ? [{ id: e.id, technology: e.technology!, product }] : [];
+  });
+  if (fixes.length === 0) return [];
+  const shown = fixes.slice(0, 3).map((f) => `"${f.id}" ("${f.technology}" → ${JSON.stringify({ op: 'update', id: f.id, set: { technology: f.product } })})`);
+  return [
+    `Technology shows its logo only as one product's own name, optionally with a version ("Spring Boot 3", "PostgreSQL 16"); qualifiers go in description. These show a plain mark: ${shown.join(', ')}${fixes.length > 3 ? `, and ${fixes.length - 3} more` : ''}.`,
+  ];
+}
+
 export function adviceFor(room: RoomSpec, legibility: Legibility, primaryFlow?: string): string[] {
-  const out: string[] = [];
+  const out: string[] = [...technologyAdvice(room.nodes)];
   const byId = new Map(room.nodes.map((n) => [n.id, n]));
 
   // A boundary of external systems (or people) each called from a different shape: laid out as one
@@ -35,9 +53,11 @@ export function adviceFor(room: RoomSpec, legibility: Legibility, primaryFlow?: 
     const crossing = room.relationships.filter((r) => inside(r.from) !== inside(r.to));
     const callers = new Set(crossing.map((r) => (inside(r.from) ? r.to : r.from)));
     // Only when it shows: the layout lines such a column up with its callers where it can. It shows
-    // as one of the boundary's own connectors going the long way round, or as any connector cutting
-    // through the boundary (the column sits in the way of what runs between its callers).
+    // as one of the boundary's own connectors going the long way round or crossing another, or as any
+    // connector cutting through the boundary (the column sits in the way of what runs between its callers).
     const troubled = new Set([...legibility.detours, ...legibility.throughBoundaries]);
+    // Or as one of them crossing another connector on its way to a caller across the view.
+    for (const [a, b] of legibility.crossed) troubled.add(a).add(b);
     if (callers.size < 2 || !(crossing.some((r) => troubled.has(r.id)) || legibility.crossedBoundaries.includes(group.id))) continue;
     const ops = members.map((m) => ({ op: 'update', id: m.id, set: { group: null } }));
     out.push(
@@ -76,13 +96,18 @@ export function adviceFor(room: RoomSpec, legibility: Legibility, primaryFlow?: 
     out.push(`Note(s) ${quote(loose)} have no "about", so they were placed after the diagram. Give each the element, boundary or relationship it describes, e.g. {op:"update", id:"${loose[0]}", set:{about:"<element id>"}}.`);
   }
 
-  // Lines everywhere: the request's order and main path are what the layout reads first.
+  // Lines everywhere: the request's order and main path are what the layout reads first. Not "try
+  // another direction": the layout compares both itself, and an agent told to try one went on to
+  // try every direction, spacing and hand placement in turn without the count moving.
   if (legibility.crossings >= MANY_CROSSINGS || legibility.detours.length >= 2 || legibility.throughBoundaries.length >= 3) {
     const hint = primaryFlow
-      ? 'try {op:"arrange", direction:"down"}'
+      ? 'the main path is already drawn straight, so look at the connectors named: one that only restates another (a caller reaching past an orchestrator to what the orchestrator already calls) can go, and a cluster of them is often one element\'s internals that belong in its "inside" view'
       : 'name the main path as a flow and pass it as layout.primaryFlow (or {op:"arrange", primaryFlow:"<flow id>"}) so it is drawn straight, and list elements in reading order, entry point first';
     const where = [...legibility.detours, ...legibility.throughBoundaries];
-    out.push(`The arrangement has ${legibility.crossings} crossing(s)${where.length ? `, and connector(s) ${quote([...new Set(where)])} run around or through other parts` : ''}. To help: ${hint}.`);
+    const pairs = legibility.crossed.slice(0, 3).map(([a, b]) => `"${a}" × "${b}"`);
+    out.push(
+      `The arrangement has ${legibility.crossings} crossing(s)${pairs.length ? ` (${pairs.join(', ')}${legibility.crossed.length > 3 ? ', …' : ''})` : ''}${where.length ? `, and connector(s) ${quote([...new Set(where)])} run around or through other parts` : ''}. Crossings come from what connects to what, not from spacing, and a direction left out is chosen by comparing both. To help: ${hint}.`,
+    );
   }
   return out;
 }

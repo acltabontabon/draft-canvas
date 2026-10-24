@@ -35,6 +35,9 @@ the release notes and the in-app What's New are generated from here. See
 
 #### Changed
 
+- Leaving a flow is easy to find: while a chosen flow dims the canvas, a pill names it with **Whole
+  diagram** to go back, and Escape does the same. The Flows panel is tidier: **Whole diagram** first,
+  every flow the same two lines, and **Trace a flow** and **Trace more steps** once, at the bottom.
 - Canvas settings is now **Settings → Canvas**, the same Settings dialog on the web and the desktop:
   each drawing style shows a preview of itself, Intent Continuation is one switch, and the
   background's fit, dim and blur sit together under the image.
@@ -75,6 +78,8 @@ the release notes and the in-app What's New are generated from here. See
 
 #### Fixed
 
+- Presenting, a step's card shows its chips in full instead of cutting them off, and a note on a
+  short connector opens beside it instead of at the bottom of the screen.
 - The canvas no longer gains a border glow when it receives keyboard focus or shapes are deleted.
 - Home and About share the same Draft Canvas logo, including its dark tile and teal connector.
 - Toolbar separators use quiet vertical lines so they no longer resemble connector tools.
@@ -117,12 +122,22 @@ the release notes and the in-app What's New are generated from here. See
 
 #### Added
 
+- **Nodi** — a companion in the canvas corner that asks your own Claude Code or Codex about the diagram
+  you're looking at, without a terminal. Ask about what you've selected, or pick one of its
+  suggestions; answers name the parts they're about and pin numbered points onto them. Changes come
+  back as a proposal drawn on the canvas, with **Now / Proposed** to compare, revised in place when you
+  ask, and applied as one undo step. Your agent gets the Draft Canvas tools for that diagram only, and
+  the conversation shows the tokens it uses. <!-- highlight -->
 - **Share on your local network** — during a live session, the desktop app can share with everyone
   on the same network through one link they open in a browser, with no reply code. Meant for a
   trusted network: that link's traffic isn't encrypted.
 
 #### Changed
 
+- Reviewing a proposal: the change is drawn solid and the rest of the diagram steps back; a change that
+  moves shapes is shown on a tracing sheet with trails from where shapes stand. The review panel frames
+  the change beside itself, lists changes in plain words, keeps **Accept** and **Reject** in reach in a
+  short window, and shows a decided proposal as a record.
 - The menu bar has **Find and Replace…**, **Commands…**, **Arrange Diagram** and **Canvas Settings…**
   (in View on macOS, at the end of Edit on Windows and Linux).
 - **Canvas Settings…** in the menu bar opens **Settings → Canvas**, beside General, AI agents,

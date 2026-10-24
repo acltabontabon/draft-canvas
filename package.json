@@ -19,7 +19,7 @@
     "url": "https://github.com/acltabontabon/draft-canvas/issues"
   },
   "engines": {
-    "node": ">=22.14.0"
+    "node": ">=22.22.2"
   },
   "scripts": {
     "dev": "vite",

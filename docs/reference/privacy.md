@@ -96,6 +96,15 @@ Off by default and limited to folders you allow.
 `agent/ledger.jsonl` keeps request ids, fingerprints, receipts and paths, not content: resolved
 entries up to 7 days (at most 2,000), unresolved 30 days. See [Agent security](agent-integration.md#security).
 
+**Nodi** (desktop) runs your own Claude Code or Codex on your machine, signed in as you; what you type
+and what the agent reads go to that agent's provider, as with any prompt. Draft Canvas sends nothing
+itself. The conversation shown is kept in memory only; the agent keeps its own session files
+(`~/.claude/projects`, `~/.codex/sessions`), and Draft Canvas keeps which session belongs to which
+diagram in `companion/sessions.json` in the app's data folder. A run's working folder holds only its
+connector configuration and is removed when the run ends. Nodi reads no code unless you allow it in
+the chat, and then only the one project folder, read-only and without secret files; what it reads
+goes to the agent's provider like the rest of the turn.
+
 ## Storage limits and backups
 
 - Clearing site data, or closing a private window, can delete browser diagrams.

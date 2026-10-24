@@ -1,5 +1,7 @@
 import { SourceEvidenceDetails } from './SourceEvidenceDetails';
 import { TechnologyInput } from './TechnologyInput';
+import { useTechnologyIcon } from './useTechnologyIcon';
+import { GENERIC_TECHNOLOGY_ICON } from '../nodes/technology';
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { LIMITS } from '../document/limits';
 import { createPortal } from 'react-dom';
@@ -389,19 +391,26 @@ const C4_TYPES: ReadonlySet<string> = new Set(C4_TEXT_TYPES);
  * An architecture shape's C4 detail: what it is built with, and what it is responsible for. Each field
  * commits when it lets go (blur, or Enter in the one-line technology field) as one coalesced edit, and
  * the shape grows to show what was typed. Keyed by node id by the caller, so switching elements
- * starts from that element's own values — and each field by its own value, so an undo (or anything
- * else that changes it underneath) shows through. Without that the field kept the undone text, and
- * the next blur committed it again, silently reversing the undo.
+ * starts from that element's own values — the description is also keyed by its own value, and the
+ * technology input synchronizes its draft, so an undo shows through. Without that the field kept
+ * the undone text, and the next blur committed it again, silently reversing the undo.
  */
 function C4DetailsPanel({ node }: { node: DraftNode }) {
+  const descriptionRef = useRef<HTMLTextAreaElement>(null);
   const commit = (patch: { technology?: string; description?: string }) => useEditorStore.getState().setNodeC4Text(node.id, patch);
   const stop = (event: ReactKeyboardEvent<HTMLElement>) => event.stopPropagation();
   return (
     <div className="dc-popover-panel dc-c4-panel">
-      <TechnologyInput key={node.technology ?? ''} value={node.technology ?? ''} onCommit={(technology) => commit({ technology })} />
+      <TechnologyInput
+        value={node.technology ?? ''}
+        onCommit={(technology) => commit({ technology })}
+        onConfirm={() => descriptionRef.current?.focus()}
+        autoFocus
+      />
       <label className="dc-c4-field">
         <span>Description</span>
         <textarea
+          ref={descriptionRef}
           dir="auto"
           key={node.description ?? ''}
           className="dc-inspector-control"
@@ -443,6 +452,7 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
 }) {
   const currentAccentChip = node.accent !== undefined ? theme.accents[node.accent].chip : undefined;
   const { preset: personality } = usePersonality();
+  const technologyIcon = useTechnologyIcon(node.technology) ?? GENERIC_TECHNOLOGY_ICON;
 
   // The 0-3 shape-native quick actions for this node — memoized on the specific fields that can
   // change the result, never on `node` itself or `document` wholesale. `node` gets a new identity
@@ -643,6 +653,23 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
             preferredDirection={menuDirection}
             getAvoidRect={getMenuAvoidRect}
           />
+        )}
+        {C4_TYPES.has(node.type) && (
+          <Button
+            variant="quiet"
+            className="dc-element-technology"
+            aria-label={node.technology ? `Technology: ${node.technology}, edit` : 'Add technology'}
+            aria-expanded={openPanel === 'details'}
+            title={node.technology ? `Technology: ${node.technology}, edit` : 'Add technology'}
+            onClick={() => setOpenPanel(openPanel === 'details' ? null : 'details')}
+          >
+            {node.technology && (
+              <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
+                <path d={technologyIcon.path} fill="currentColor" />
+              </svg>
+            )}
+            <span>{node.technology || '+ Technology'}</span>
+          </Button>
         )}
         {primaryCommands.length > 0 && <span className="dc-popover-divider" aria-hidden="true" />}
         {primaryCommands.map((command) => (

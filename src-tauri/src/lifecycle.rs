@@ -148,6 +148,12 @@ pub fn on_run_event(app: &AppHandle, event: RunEvent) {
         // Connected agents hear the app is going, so a sidecar exits (and, on Windows, releases its
         // executable before an update replaces it) instead of waiting on a socket that's gone.
         RunEvent::Exit => {
+            // A companion run is the app's own child: it goes, with the sidecar it started, before
+            // the app does, not left talking to a socket that's gone.
+            if let Some(companion) = app.try_state::<std::sync::Arc<crate::companion::Companion>>()
+            {
+                companion.stop_all(std::time::Duration::from_secs(3));
+            }
             if let Some(agent) = app.try_state::<std::sync::Arc<crate::agent::Agent>>() {
                 agent.shutdown("quit");
             }

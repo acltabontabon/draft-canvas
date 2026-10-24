@@ -130,3 +130,35 @@ export function agentGhostDiff(before: AgentGhostView, after: AgentGhostView): A
 
   return { addedNodes, modifiedNodes, removedNodes, addedGroups, modifiedGroups, removedGroups, addedEdges, modifiedEdges, removedEdges };
 }
+
+/** A shape a change moves or resizes: where it ends up, and where it stands now. */
+export interface MovedShape {
+  node: DraftNode;
+  from: DraftNode;
+}
+
+/**
+ * The shapes a change moves or resizes (a tidy-up, a regrouping). With any of these, the change is
+ * shown as the whole diagram it leads to, laid over the current one, rather than as pieces drawn on
+ * top of it: a moved shape drawn over its old self is in two places at once.
+ */
+export function movedShapes(before: AgentGhostView, after: AgentGhostView): MovedShape[] {
+  const was = new Map(before.nodes.map((n) => [n.id, n]));
+  const moved: MovedShape[] = [];
+  for (const node of after.nodes) {
+    const from = was.get(node.id);
+    // Only a shape that changes place: a boundary growing to fit a new member, or a box growing with
+    // its label, is still where it was, and treating it as a move put a plain addition on the sheet.
+    if (from && node.type !== 'group' && (from.x !== node.x || from.y !== node.y)) moved.push({ node, from });
+  }
+  return moved;
+}
+
+const PLACE_KEYS = ['x', 'y', 'width', 'height', 'z', 'sourceAnchor', 'targetAnchor', 'routeMode', 'waypoints'];
+
+/** Whether a shape or connector changed in more than where it sits or how it is routed: what a
+ *  re-layout does to everything, and no reason on its own to ink it as changed. */
+export function changedBeyondPlace<T extends object>(before: T, after: T): boolean {
+  const strip = (item: T) => JSON.stringify(Object.fromEntries(Object.entries(item).filter(([key]) => !PLACE_KEYS.includes(key))));
+  return strip(before) !== strip(after);
+}

@@ -4,7 +4,7 @@ The web editor is a static site with no backend.
 
 ## Build
 
-With Node.js 22.14 or later, check out a stable `vX.Y.Z` tag of the
+With Node.js 22.22 or later, check out a stable `vX.Y.Z` tag of the
 [repository](https://github.com/acltabontabon/draft-canvas) and run:
 
 ```bash

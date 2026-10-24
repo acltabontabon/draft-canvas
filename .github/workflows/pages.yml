@@ -116,7 +116,7 @@ jobs:
           echo "::notice::Editor from $tag, landing page from ${site:0:7}."
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: 22.14.0
+          node-version: 22.22.2
           cache: npm
       # A published editor's lockfile can predate a security fix in a build or test tool. Refresh
       # these compatible development dependencies (source-map-js for the build, DOMPurify for
@@ -183,7 +183,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: 22.14.0
+          node-version: 22.22.2
           cache: npm
       # Test the selected editor's journeys, with the current no-rebuild server configuration.
       - name: Use the artifact-only server configuration
@@ -229,7 +229,7 @@ jobs:
         run: node -e 'const source=require("./verified-source.json"); if(source.commit !== process.env.EXPECTED_COMMIT) throw new Error("Artifact source does not match verification")'
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: 22.14.0
+          node-version: 22.22.2
       # The relay first, so a new editor never points at a relay that is not there yet; then the
       # editor, so the site never links to an editor that is not there yet; the www. redirect last.
       # Each config names its custom domain, and Wrangler creates its DNS record. The relay's config

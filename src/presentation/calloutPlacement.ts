@@ -159,10 +159,51 @@ function crosses(leader: CalloutLeader, box: Box): boolean {
   return false;
 }
 
+/** Which way each candidate steps when it lands on a shape it must keep off. */
+const AWAY: Record<CalloutPlacementName, 'up' | 'down' | 'left' | 'right'> = {
+  above: 'up',
+  'above-right': 'up',
+  'above-left': 'up',
+  below: 'down',
+  right: 'right',
+  left: 'left',
+  docked: 'up',
+};
+
+/**
+ * `origin` stepped clear of every `avoid` box it would land on, in the candidate's own direction.
+ *
+ * A candidate is first set against the marker alone. On a short connector the marker sits in the
+ * narrow gap between its two endpoints, so every one of those spots overlapped the source or the
+ * target by a corner — and with no candidate left, the callout docked at the bottom of the canvas,
+ * nowhere near its connector, threadless. Stepping past the endpoint instead keeps it beside the
+ * marker, threaded across the gap; the thread's own length and crossing checks still judge it.
+ */
+function clearOfAvoided(
+  name: CalloutPlacementName,
+  origin: { x: number; y: number },
+  input: Omit<CalloutPlacementInput, 'soft'>,
+): { x: number; y: number } {
+  const { avoid, size } = input;
+  const away = AWAY[name];
+  let { x, y } = origin;
+  // Each step clears one box for good (it only moves further the same way), so this ends.
+  for (let pass = 0; pass <= avoid.length; pass++) {
+    const rect = { x, y, width: size.width, height: size.height };
+    const hit = avoid.find((box) => overlapArea(rect, box) > 0);
+    if (!hit) break;
+    if (away === 'up') y = hit.y - CALLOUT_GAP - size.height;
+    else if (away === 'down') y = hit.y + hit.height + CALLOUT_GAP;
+    else if (away === 'left') x = hit.x - CALLOUT_GAP - size.width;
+    else x = hit.x + hit.width + CALLOUT_GAP;
+  }
+  return { x, y };
+}
+
 /** Where candidate `name` puts the callout, kept inside the canvas. */
 function candidateRect(name: CalloutPlacementName, input: Omit<CalloutPlacementInput, 'soft'>): Box {
   const { bounds, size } = input;
-  const origin = candidateOrigin(name, input);
+  const origin = clearOfAvoided(name, candidateOrigin(name, input), input);
   return {
     x: clamp(origin.x, bounds.x, bounds.x + bounds.width - size.width),
     y: clamp(origin.y, bounds.y, bounds.y + bounds.height - size.height),

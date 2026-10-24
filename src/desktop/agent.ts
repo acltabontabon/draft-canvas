@@ -273,6 +273,26 @@ async function read(host: AgentHost, args: Record<string, unknown>, context: Age
   }, snapshot);
 }
 
+/** Past this, a turn's snapshot is left out and the agent reads (and pages) the view itself. */
+export const SNAPSHOT_MAX = 40_000;
+
+/**
+ * What read_diagram would answer for the open diagram's view `room`, as the text a companion turn
+ * carries: given up front, the agent's first call is its answer, not a read, and every call of a
+ * turn resends everything so far. Read through the same path a tool call takes, so the revision in
+ * it is one this host handed out and a change built on it is checked as one built on a read. Null
+ * when it is too big to send whole, or can't be read.
+ */
+export async function turnSnapshot(host: AgentHost, diagramId: string, room: readonly string[]): Promise<string | null> {
+  try {
+    const result = await read(host, room.length ? { view: { inside: [...room] } } : {}, { diagramId, open: true });
+    const text = JSON.stringify(result);
+    return text.length <= SNAPSHOT_MAX ? text : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Mark only content actually handed out, including attachment ids whose edits belong to their host. */
 function withCollaborators(result: Record<string, unknown>, snapshot: ReadSnapshot): Record<string, unknown> {
   if (!snapshot.collaboratorTouches?.length) return result;
@@ -655,6 +675,7 @@ async function update(api: DesktopApi, host: AgentHost, event: Request) {
     title: snapshot.file.metadata.title,
     target: 'open',
     path,
+    ...(event.context.run ? { run: event.context.run } : {}),
     ...(startView ? { base: { nodes: startView.nodes, edges: startView.edges } } : {}),
   });
   let result = await candidateOrUpdate(event, snapshot.file, path, handOut(host, snapshot), api);
@@ -744,7 +765,7 @@ async function updateFile(api: DesktopApi, host: AgentHost, event: Request, expe
   const path = args.previewId !== undefined && args.view === undefined
     ? readPreview(args.previewId, context.diagramId ?? '', context.session ?? '', current).path
     : viewPathOf(parsed.document, args.view);
-  agentActivity.begin({ id: event.id, tool: 'update_diagram', title: parsed.document.metadata.title, target: 'file', path });
+  agentActivity.begin({ id: event.id, tool: 'update_diagram', title: parsed.document.metadata.title, target: 'file', path, ...(context.run ? { run: context.run } : {}) });
   const result = await candidateOrUpdate(event, parsed.document, path, current, api);
   if (result.kind !== 'update') throw new AgentError('INTERNAL', 'The edit could not be worked out.');
   if (result.problems.length) throw layoutConstrained(result);

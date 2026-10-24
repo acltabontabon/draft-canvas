@@ -4,7 +4,7 @@ Keep changes focused and the editor local-first.
 
 ## Setup
 
-Needs **Node 22.14+** and **npm**. No backend or environment variables.
+Needs **Node 22.22+** and **npm**. No backend or environment variables.
 
 ```bash
 git clone https://github.com/acltabontabon/draft-canvas.git

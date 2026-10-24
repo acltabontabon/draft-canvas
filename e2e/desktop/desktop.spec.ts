@@ -230,8 +230,9 @@ test('Open file shares the explorer with file selection, previews, and native me
   await expect(page.locator('.dc-title-input')).toHaveValue('Selected from explorer');
 
   // Cancelling a file switch leaves both unsaved work and the file explorer intact.
+  // A corner clear of the node and of the agent companion, which rests in the bottom-right.
   const pane = await page.locator(CANVAS).boundingBox();
-  await drawService(page, { x: pane!.width - 60, y: pane!.height - 60 });
+  await drawService(page, { x: pane!.width - 60, y: 80 });
   await page.evaluate(() => { window.__shell.answer(2); window.__shell.emit({ type: 'menu', command: 'open' }); });
   await dialog.getByRole('complementary', { name: 'Places' }).getByRole('button', { name: 'Documents', exact: true }).click();
   await dialog.getByRole('option', { name: 'Diagrams', exact: true }).dblclick();
@@ -310,8 +311,9 @@ test('explorer opens a selected diagram without adding a project', async ({ page
   await expect(dialog).toBeHidden();
   await expect(page.locator('.dc-title-input')).toHaveValue('Opened in explorer');
   expect(await page.evaluate(() => window.__shell.calls().filter(call => call.command === 'explorer_add_project').length)).toBe(0);
+  // A corner clear of the node and of the agent companion, which rests in the bottom-right.
   const pane = await page.locator(CANVAS).boundingBox();
-  await drawService(page, { x: pane!.width - 60, y: pane!.height - 60 });
+  await drawService(page, { x: pane!.width - 60, y: 80 });
   await expect(status(page)).toContainText('Unsaved changes');
   await page.evaluate(() => {
     window.__shell.answer(2);
@@ -861,9 +863,10 @@ test('opens a file, says when it has unsaved changes, and asks before leaving it
 
   // Opening an existing diagram now frames its content, so the one node here sits centred in the
   // pane rather than near its old default position — draw well into a corner instead of a fixed
-  // centre-ish point, so this doesn't land back on top of it.
+  // centre-ish point, so this doesn't land back on top of it. The top-right one: the agent companion
+  // rests in the bottom-right.
   const pane = await page.locator(CANVAS).boundingBox();
-  await drawService(page, { x: pane!.width - 60, y: pane!.height - 60 });
+  await drawService(page, { x: pane!.width - 60, y: 80 });
   await expect(status(page)).toContainText('Unsaved changes');
 
   // Cancel: stay, with the changes still there.

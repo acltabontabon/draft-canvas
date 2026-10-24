@@ -5,6 +5,7 @@ import type { AgentEditorReply, AgentEditorRequest } from '../host/agentBridge';
 import type { CommandMessage, LoadMessage, ToHostMessage } from '../host/embeddedHost';
 import type { AgentHost } from './agent';
 import { agentActivity } from './agentActivity';
+import { companion } from './companion';
 import { dispatchCollabLanEvent, lanRelayOf } from './collabLan';
 import type { LanRelay } from '../collab/lan';
 import { confirmWrite, takeWrite, type AgentWrite } from './agentWrites';
@@ -16,11 +17,15 @@ import {
   DesktopError,
   type AgentClient,
   type AgentClientSetup,
+  type AgentInfo,
   type AgentSkillSetup,
   type AgentSkillTarget,
   type AgentPatch,
   type Proposal,
   type ProposalAction,
+  type AgentKind,
+  type CodeFolder,
+  type CodeGrant,
   type DesktopApi,
   type DocState,
   type Handle,
@@ -29,6 +34,7 @@ import {
   type ProjectFile,
   type ProjectInfo,
   type ProjectScan,
+  type PromptRequest,
   type RecoveryEntry,
   type RenamedFile,
   type SavedAs,
@@ -289,10 +295,13 @@ export class DesktopController {
       projects: boot.projects.map((info) => ({ info, status: 'unscanned', files: [], truncatedDirs: [] })),
     });
     const update = this.refreshUpdate();
+    // Where agent access stands, from the start: Nodi reads it, and asked only by Settings it stayed
+    // unknown after a restart, so Nodi said to turn on access that was already on.
+    const agent = this.refreshAgent();
     // Each refresh reports its own failure, so Home still learns that listing is over.
-    await Promise.all([this.refreshRecents(), this.refreshRecovery()]);
+    await Promise.all([this.refreshRecents(), this.refreshRecovery(), this.restoreCompanion()]);
     this.store.update({ listed: true });
-    await update;
+    await Promise.all([update, agent]);
   }
 
   private async onHostEvent(event: HostEvent): Promise<void> {
@@ -322,7 +331,12 @@ export class DesktopController {
         return this.onAgentFileWritten(event);
       case 'agent-changed':
         for (const listener of this.proposalListeners) listener();
+        void this.refreshCompanionProposals();
         return void this.refreshAgent();
+      case 'companion':
+        companion.apply(event.run, event.event);
+        if (event.event.type === 'stopped') void this.refreshCompanionProposals();
+        return;
       case 'collab-lan-open':
       case 'collab-lan-message':
       case 'collab-lan-close':
@@ -1649,7 +1663,8 @@ export class DesktopController {
     this.store.update({ settings });
   }
 
-  /** Settings → AI agents asks where access stands; so does the shell's `agent-changed`. */
+  /** Where agent access stands: asked at start, by Settings → AI agents and by Nodi when it opens,
+   *  and on the shell's `agent-changed`. */
   async refreshAgent(): Promise<void> {
     try {
       this.store.update({ agent: await this.api.agentStatus() });
@@ -1759,8 +1774,145 @@ export class DesktopController {
     return this.api.agentProposalBeginAccept(id, version, diagramId, path);
   }
 
-  resolveProposal(id: string, status: 'accepted' | 'rejected' | 'dismissed'): Promise<ProposalAction> {
-    return this.api.agentProposalResolve(id, status);
+  /** Every surface that lists proposals hears of a resolution, wherever it was made: the shell doesn't
+   *  announce one, and a list resolved elsewhere (Nodi's chip, say) would otherwise keep showing it
+   *  as waiting. */
+  async resolveProposal(id: string, status: 'accepted' | 'rejected' | 'dismissed'): Promise<ProposalAction> {
+    const action = await this.api.agentProposalResolve(id, status);
+    for (const listener of this.proposalListeners) listener();
+    return action;
+  }
+
+  // ─── The agent companion (`ui/Companion.tsx`) ────────────────────────────────────────────────
+  // A turn's progress arrives as `companion` events and is folded into `companion.ts`; these only
+  // ask the shell to start, stop or forget.
+
+  /** Which agents the companion can run. Asked when it opens: finding one can start a login shell. */
+  async companionAgents(): Promise<AgentInfo[]> {
+    try {
+      return await this.api.companionAgents();
+    } catch (error) {
+      logDiagnostic(error, { operation: 'desktop-companion-agents' });
+      return [];
+    }
+  }
+
+  /** Sends one prompt. `about` is how the card names what it was about. A refusal (access off, a
+   *  folder agents can't use) ends the turn with the shell's own words. */
+  async companionSend(request: PromptRequest, about: string | null): Promise<void> {
+    companion.begin(request.diagramId, request.runId, request.text, about, request.agent);
+    try {
+      await this.api.companionSend(request);
+    } catch (error) {
+      logDiagnostic(error, { operation: 'desktop-companion-send' });
+      companion.fail(request.runId, describe(error));
+    }
+  }
+
+  /** The open diagram's view as a companion turn carries it (`agent.ts`'s `turnSnapshot`). */
+  async companionSnapshot(diagramId: string, room: readonly string[]): Promise<string | null> {
+    this.agentModule ??= import('./agent');
+    const { turnSnapshot } = await this.agentModule;
+    return turnSnapshot(this.agentHost, diagramId, room);
+  }
+
+  async companionCancel(runId: string): Promise<void> {
+    try {
+      await this.api.companionCancel(runId);
+    } catch (error) {
+      logDiagnostic(error, { operation: 'desktop-companion-cancel' });
+    }
+  }
+
+  /** A new conversation on `diagramId`: the card empties and the agent starts afresh next time. */
+  async companionForget(diagramId: string): Promise<void> {
+    companion.clear(diagramId);
+    try {
+      await this.api.companionForget(diagramId);
+    } catch (error) {
+      logDiagnostic(error, { operation: 'desktop-companion-forget' });
+    }
+  }
+
+  /** The project folder Nodi would read for this diagram, and whether it may; null when the shell
+   *  can't say (the diagram's folder isn't one agents may use). */
+  async companionCode(diagramId: string): Promise<CodeFolder | null> {
+    try {
+      return await this.api.companionCode(diagramId);
+    } catch (error) {
+      logDiagnostic(error, { operation: 'desktop-companion-code' });
+      return null;
+    }
+  }
+
+  /** The person's answer to Nodi asking to read the project. Null when it didn't take. */
+  async companionAllowCode(diagramId: string, grant: CodeGrant): Promise<CodeFolder | null> {
+    try {
+      const folder = await this.api.companionAllowCode(diagramId, grant);
+      void this.refreshAgent();
+      return folder;
+    } catch (error) {
+      logDiagnostic(error, { operation: 'desktop-companion-allow-code' });
+      return null;
+    }
+  }
+
+  /** Another folder for the diagram's code, from the system's own dialog; null when cancelled. */
+  async companionChooseCode(diagramId: string): Promise<CodeFolder | null> {
+    try {
+      return await this.api.companionChooseCode(diagramId);
+    } catch (error) {
+      logDiagnostic(error, { operation: 'desktop-companion-choose-code' });
+      return null;
+    }
+  }
+
+  /** The shell line that carries the diagram's conversation on in the agent's own terminal UI. */
+  async companionContinue(diagramId: string, agent: AgentKind): Promise<string | null> {
+    try {
+      return await this.api.companionContinue(diagramId, agent);
+    } catch (error) {
+      logDiagnostic(error, { operation: 'desktop-companion-continue' });
+      return null;
+    }
+  }
+
+  /** Runs a reloaded page finds still going. */
+  private async restoreCompanion(): Promise<void> {
+    try {
+      companion.restore(await this.api.companionRuns());
+    } catch (error) {
+      logDiagnostic(error, { operation: 'desktop-companion-runs' });
+    }
+  }
+
+  /** Which of the companion's turns have a proposal waiting for review: looked up when a run stops,
+   *  when the shell says agent state changed (a proposal submitted or resolved), and when the review
+   *  panel closes. */
+  async refreshCompanionProposals(): Promise<void> {
+    const watched = new Map<string, string[]>();
+    for (const conversation of companion.snapshot().values()) {
+      const last = conversation.turns.at(-1);
+      if (last && last.outcome === null && (last.stop === null || last.proposalId !== null || last.steps.some((s) => s.tool === 'submit_proposal'))) {
+        watched.set(conversation.diagramId, [last.runId]);
+      }
+    }
+    for (const [diagramId, runIds] of watched) {
+      const proposals = await this.listProposals(diagramId);
+      for (const runId of runIds) {
+        const own = proposals.filter((p) => p.run === runId);
+        const waiting = own.find((p) => p.status === 'pending' || p.status === 'accepting');
+        const decided = own.find((p) => p.status === 'accepted' || p.status === 'rejected' || p.status === 'dismissed');
+        if (waiting) companion.setProposal(runId, waiting.proposalId);
+        else if (decided) companion.resolve(runId, decided.status === 'accepted' ? 'accepted' : 'rejected');
+        else companion.setProposal(runId, null);
+      }
+    }
+  }
+
+  /** Settings, at its AI agents page. */
+  openAgentSettings(): void {
+    this.store.update({ settingsOpen: true, settingsCategory: 'agents' });
   }
 
   // ─── Updates ────────────────────────────────────────────────────────────────────────

@@ -1,0 +1,7 @@
+{"type":"thread.started","thread_id":"01a16b26-519e-7da1-845b-2a484e9f17a1"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"I’ll find and call the Draft Canvas `get_capabilities` tool once."}}
+{"type":"item.started","item":{"id":"item_1","type":"mcp_tool_call","server":"draft-canvas","tool":"get_capabilities","arguments":{},"result":null,"error":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_1","type":"mcp_tool_call","server":"draft-canvas","tool":"get_capabilities","arguments":{},"result":{"content":[{"type":"text","text":"{\"error\":{\"code\":\"APP_UNAVAILABLE\",\"hint\":\"Ask the person to open Draft Canvas and turn on Settings → AI agents, then try again.\",\"message\":\"Draft Canvas isn't running, or agent access is turned off.\",\"retryable\":true}}"}],"structured_content":{"error":{"code":"APP_UNAVAILABLE","hint":"Ask the person to open Draft Canvas and turn on Settings → AI agents, then try again.","message":"Draft Canvas isn't running, or agent access is turned off.","retryable":true}}},"error":null,"status":"failed"}}
+{"type":"item.completed","item":{"id":"item_2","type":"agent_message","text":"Called `get_capabilities` once; it reported that Draft Canvas isn’t running or AI agent access is turned off."}}
+{"type":"turn.completed","usage":{"input_tokens":51672,"cached_input_tokens":46208,"cache_write_input_tokens":0,"output_tokens":145,"reasoning_output_tokens":0}}

@@ -55,5 +55,70 @@ export type HostEvent = { "type": "open", handle: string, name: string, displayP
 /**
  * A new diagram (nothing to undo); otherwise a change to an existing one.
  */
-created: boolean, } | { "type": "agent-changed" } | { "type": "collab-lan-open", connId: string, } | { "type": "collab-lan-message", connId: string, text: string, } | { "type": "collab-lan-close", connId: string, reason: string, } | { "type": "collab-lan-stopped", reason: string, token: string, };
+created: boolean, } | { "type": "agent-changed" } | { "type": "companion", run: string, event: RunEvent, } | { "type": "collab-lan-open", connId: string, } | { "type": "collab-lan-message", connId: string, text: string, } | { "type": "collab-lan-close", connId: string, reason: string, } | { "type": "collab-lan-stopped", reason: string, token: string, };
 export type CollabLanStarted = { port: number, addresses: Array<string>, };
+export type AgentKind = "claude-code" | "codex";
+export type Selection = { nodes: Array<string>, edges: Array<string>, };
+export type ApplyMode = "proposal" | "direct";
+export type PromptRequest = {
+/**
+ * Made by the page, so events that arrive before `companion_send` returns are already its.
+ */
+runId: string, diagramId: string,
+/**
+ * The person's words, passed on unchanged.
+ */
+text: string, selection: Selection | null,
+/**
+ * The room the person is in, outermost first; empty at the root.
+ */
+room: Array<string>, agent: AgentKind, mode: ApplyMode,
+/**
+ * The page's word that the diagram is as it was when this conversation's last turn was sent,
+ * so the agent can skip reading it again (a read is a round trip, and its whole answer). False
+ * whenever the page can't be sure.
+ */
+unchanged?: boolean,
+/**
+ * The view as read_diagram would answer it, read by the page as the turn was sent, so the agent's
+ * first call needn't be a read. JSON text; left out when it was too big or couldn't be read.
+ */
+snapshot?: string, };
+export type CodeGrant = "now" | "always";
+export type CodeFolder = { name: string, displayPath: string,
+/**
+ * Whether runs may read it already, and for how long; absent until the person says.
+ */
+allowed?: CodeGrant, };
+export type ToolStatus = "in-progress" | "completed" | "failed";
+export type StopReason = { "kind": "end-turn" } | { "kind": "cancelled" } | { "kind": "max-turns" } | { "kind": "refusal" } | { "kind": "failed", message: string, };
+export type Usage = { input: number, cached: number, output: number, };
+export type RunEvent = { "type": "started", session: string, } | { "type": "message-chunk", text: string, } | { "type": "tool-call", id: string, tool: string, status: ToolStatus, } | { "type": "tool-call-update", id: string, status: ToolStatus, error: string | null, } | { "type": "stopped", reason: StopReason, summary: string | null,
+/**
+ * What the turn cost in millionths of a dollar, as the agent reported it.
+ */
+costMicroUsd: number | null,
+/**
+ * The tokens the turn used, as the agent reported them.
+ */
+usage: Usage | null, };
+export type Availability = "installed" | "missing" | "too-old";
+export type SignIn = { loggedIn: boolean | null,
+/**
+ * The agent's own word for how it signs in (`claude.ai`, `api_key`, …).
+ */
+method: string | null,
+/**
+ * Where the agent keeps its transcripts, for the person to see.
+ */
+transcripts: string | null, };
+export type AgentInfo = { agent: AgentKind,
+/**
+ * How the companion names it: the page has no list of agents of its own.
+ */
+name: string, availability: Availability, version: string | null, signIn: SignIn, };
+export type RunSnapshot = { runId: string, diagramId: string, agent: AgentKind,
+/**
+ * What the person typed.
+ */
+prompt: string, events: Array<RunEvent>, };
