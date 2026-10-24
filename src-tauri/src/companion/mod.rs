@@ -845,7 +845,8 @@ mod tests {
         // A follow-up on a diagram the page knows is unchanged says so; otherwise nothing is said.
         assert!(!prompt.contains("Unchanged since your last turn"));
         r.unchanged = Some(true);
-        assert!(turn_prompt(&r, "Orders", None).contains("Unchanged since your last turn: don't read it again.\n"));
+        assert!(turn_prompt(&r, "Orders", None)
+            .contains("Unchanged since your last turn: don't read it again.\n"));
         r.unchanged = None;
         let prompt = turn_prompt(
             &r,

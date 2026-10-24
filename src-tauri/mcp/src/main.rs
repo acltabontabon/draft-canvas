@@ -95,7 +95,11 @@ fn lean(tool: Tool) -> Tool {
     if let Some(schema) = value.get_mut("inputSchema") {
         strip(schema);
         if let Some(defs) = schema.get_mut("$defs").and_then(Value::as_object_mut) {
-            if let Some(props) = defs.get_mut("element0").and_then(|e| e.get_mut("properties")).and_then(Value::as_object_mut) {
+            if let Some(props) = defs
+                .get_mut("element0")
+                .and_then(|e| e.get_mut("properties"))
+                .and_then(Value::as_object_mut)
+            {
                 props.remove("inside");
             }
             for nested in ["element1", "element2", "element3"] {
@@ -113,7 +117,10 @@ fn served(run: bool) -> Vec<Tool> {
     if !run {
         return all;
     }
-    all.into_iter().filter(|t| RUN_OFFERED.contains(&t.name.as_ref())).map(lean).collect()
+    all.into_iter()
+        .filter(|t| RUN_OFFERED.contains(&t.name.as_ref()))
+        .map(lean)
+        .collect()
 }
 
 #[derive(Clone)]
@@ -332,10 +339,19 @@ mod tests {
         let allowed = &policy[policy.find("const RUN_TOOLS").unwrap()..];
         let allowed = &allowed[..allowed.find("];").unwrap()];
         for name in RUN_OFFERED {
-            assert!(allowed.contains(&format!("\"{name}\"")), "{name} isn't in RUN_TOOLS");
+            assert!(
+                allowed.contains(&format!("\"{name}\"")),
+                "{name} isn't in RUN_TOOLS"
+            );
         }
         let text = serde_json::to_string(&lean).unwrap();
-        for gone in ["\"maxLength\"", "\"maxItems\"", "\"outputSchema\"", "element1", "element3"] {
+        for gone in [
+            "\"maxLength\"",
+            "\"maxItems\"",
+            "\"outputSchema\"",
+            "element1",
+            "element3",
+        ] {
             assert!(!text.contains(gone), "{gone} is still offered");
         }
         // Less than half of what a connected agent is offered.
