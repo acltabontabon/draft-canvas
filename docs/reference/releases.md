@@ -65,6 +65,12 @@ Commit new media separately and pin its public URLs to that media commit. Keep t
 tag and installer assets in place. Preview the Markdown with GitHub's renderer before editing the
 published notes with `gh release edit`, then inspect the live page, animations, links and narrow layouts.
 
+For wide screenshot galleries, use a `<picture>` with a phone layout selected by
+`<source media="(max-width: 600px)">`. Stack close-ups from the same captures so controls and text
+remain readable; link the picture to the full desktop image. Use an appropriately sized animation
+for phones too. Verify the rendered page at 320, 390 and 430 pixels, check intermediate widths for
+button wrapping, and restore the browser viewport after reviewing.
+
 ## Desktop previews
 
 Tag `desktop-vX.Y.Z-alpha.N` or `-beta.N`, with a dated changelog section. `X.Y.Z` may equal or lead
