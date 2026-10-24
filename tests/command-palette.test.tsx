@@ -140,7 +140,7 @@ describe('CommandPalette', () => {
 
     expect(useUiStore.getState().commandPaletteOpen).toBe(true);
     expect(screen.getByText('Switch to')).toHaveClass('dc-palette-stage');
-    expect(options().map((o) => o.textContent)).toEqual([expect.stringContaining('Diagram'), expect.stringContaining('Checkout')]);
+    expect(options().map((o) => o.textContent)).toEqual([expect.stringContaining('Whole diagram'), expect.stringContaining('Checkout')]);
 
     key('Backspace');
     expect(screen.queryByText('Switch to')).toBeNull();

@@ -128,8 +128,10 @@ export interface FlowPlaybackController {
  */
 export const PRESENTATION_INSETS: Insets = { top: 64, right: 40, bottom: 128, left: 40 };
 const READER_INSETS: Insets = { top: 32, right: 32, bottom: 32, left: 32 };
-/** The step caption's footprint the corner choice keeps clear (`.dc-present-caption`). */
-export const CAPTION_SIZE = { width: 360, height: 132 };
+/** The step caption's footprint the corner choice keeps clear (`.dc-present-caption`). The card is
+ *  sized to its content, so this is an ordinary step's: a headline over two lines, a caption of a
+ *  line or two and a row of chips. At 132 it was the card's height cap too, and cut its chips off. */
+export const CAPTION_SIZE = { width: 360, height: 172 };
 /** The opening and closing card's footprint (`.dc-present-card`): its column, or its row. */
 const CARD_COLUMN = 500;
 const CARD_ROW = 200;

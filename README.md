@@ -8,6 +8,8 @@
 
 A local-first canvas for turning software architecture into a clear visual story.
 
+**Your architecture, your agents, your decisions.** ([Principles](docs/reference/principles.md))
+
 **[draftcanvas.dev](https://draftcanvas.dev/)** ·
 **[Try it in your browser](https://app.draftcanvas.dev/)** ·
 **[Download for macOS & Windows](https://github.com/acltabontabon/draft-canvas/releases/latest)** ·

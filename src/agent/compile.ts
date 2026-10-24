@@ -18,6 +18,7 @@ import { checkFit, isBetterCandidate, isCleanCandidate, checkQuality, renderedBo
 import { pastDeadline, withDeadline } from './route';
 import { buildFromStarter } from './starter';
 import { legibilityCost, legibilityOf, type Legibility } from './legibility';
+import { reviewFile } from './review';
 import { adviceFor } from './advice';
 import { routingPlan } from '../edges/bundles';
 
@@ -88,6 +89,8 @@ function composeWithin(raw: unknown, diagramId: string, report: Report): Compose
   ];
   const text = gate(document);
   const counts = countAll(document);
+  // What a pattern drawn here is missing, from the diagram's own semantics (`review.ts`).
+  const review = reviewFile(document);
   return {
     text,
     title: spec.title,
@@ -102,6 +105,7 @@ function composeWithin(raw: unknown, diagramId: string, report: Report): Compose
       },
       ...(fit ? { fit } : {}),
       ...advisoriesReceipt(advice, 10),
+      ...(review.length ? { review } : {}),
     },
   };
 }

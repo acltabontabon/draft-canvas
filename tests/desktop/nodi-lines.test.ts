@@ -1,0 +1,162 @@
+import { describe, expect, it } from 'vitest';
+import { createEdge, createNode } from '../../src/document/factory';
+import { diagramLines, openers, restingLine, seedOf, snagOf } from '../../src/desktop/ui/nodiLines';
+
+/** What Nodi says from rest: the one thing worth knowing, most pressing first. */
+
+const quiet = { blocked: false, working: null, waiting: false, unseen: false, selected: null, seed: 0, runSeed: 0 };
+
+describe('Nodi at rest', () => {
+  it('greets, and offers to look at what is selected', () => {
+    expect(restingLine(quiet)).toMatchObject({ tone: 'greet', text: 'Boss, need a hand?', stays: false });
+    expect(restingLine({ ...quiet, selected: 'Orders database' })).toMatchObject({ text: 'Want me to look at Orders database, boss?', stays: false });
+    // A line that starts with the name still starts with a capital.
+    expect(restingLine({ ...quiet, selected: 'orders', seed: 2 }).text).toBe('Orders? I have thoughts.');
+  });
+
+  it('keeps saying what is under way, waiting or unread until it no longer is', () => {
+    expect(restingLine({ ...quiet, working: 'Reading the diagram', waiting: true })).toMatchObject({ tone: 'working', text: 'On it, boss… reading the diagram.', stays: true });
+    expect(restingLine({ ...quiet, waiting: true, unseen: true })).toMatchObject({ tone: 'waiting', stays: true });
+    expect(restingLine({ ...quiet, unseen: true, selected: 'Orders database' })).toMatchObject({ tone: 'done', text: 'Done, boss! Come see what I found.', stays: true });
+  });
+
+  it('says first when it can’t run at all, and what is in the way when it knows', () => {
+    expect(restingLine({ ...quiet, blocked: true, working: 'Reading the diagram' })).toMatchObject({ tone: 'blocked', stays: false });
+    expect(restingLine({ ...quiet, blocked: true, snag: 'Agent access is off, boss. I’m locked out.' })).toMatchObject({
+      tone: 'blocked',
+      text: 'Agent access is off, boss. I’m locked out.',
+      hint: 'Show me how',
+    });
+  });
+
+  it('has a new line each time it pipes up, but one line for the whole of a run', () => {
+    const greetings = new Set([0, 1, 2, 3, 4, 5].map((seed) => restingLine({ ...quiet, seed }).text));
+    expect(greetings.size).toBe(6);
+    const working = (seed: number) => restingLine({ ...quiet, working: 'Reading the diagram', seed, runSeed: seedOf('run-1') }).text;
+    expect(working(0)).toBe(working(7));
+    expect(seedOf('d_terpy4jwc2so')).toBe(seedOf('d_terpy4jwc2so'));
+  });
+});
+
+describe('what stops Nodi, and the next step it offers', () => {
+  const claude = { agent: 'claude-code', name: 'Claude Code', availability: 'installed' as const, version: '2.1.0', signIn: { loggedIn: true } };
+  const ready = { doc: 'file' as const, readOnly: false, access: true, agentsKnown: true, agent: claude };
+
+  it('is nothing when it can run, and nothing about access before the shell has said', () => {
+    expect(snagOf(ready)).toBeNull();
+    expect(snagOf({ ...ready, access: null })).toBeNull();
+    // Unknown sign-in is not signed out.
+    expect(snagOf({ ...ready, agent: { ...claude, signIn: { loggedIn: null } } })).toBeNull();
+  });
+
+  it('names the first thing in the way, with a step that does it', () => {
+    expect(snagOf({ ...ready, doc: 'quick', readOnly: true, access: false })).toMatchObject({ steps: [{ kind: 'save', label: 'Save it to a folder' }] });
+    expect(snagOf({ ...ready, readOnly: true, access: false })).toMatchObject({ steps: [{ kind: 'save-copy', label: 'Save a copy' }] });
+    // Only Settings: switching access on is the person's call.
+    expect(snagOf({ ...ready, access: false })).toMatchObject({ steps: [{ kind: 'settings' }] });
+    expect(snagOf({ ...ready, agent: { ...claude, availability: 'too-old', version: '1.0.3' } })).toMatchObject({
+      line: expect.stringContaining('Your Claude Code 1.0.3 is too old for me, boss.'),
+      rest: 'Claude Code needs an update, boss.',
+      steps: [{ kind: 'copy', label: 'Copy the update command', command: 'claude update' }],
+    });
+    expect(snagOf({ ...ready, agent: { ...claude, signIn: { loggedIn: false } } })).toMatchObject({
+      line: expect.stringContaining('Run claude once in Terminal to sign in'),
+      steps: [{ kind: 'copy', label: 'Copy the sign-in command', command: 'claude' }],
+    });
+    expect(snagOf({ ...ready, agent: { ...claude, availability: 'missing' } })).toMatchObject({ steps: [] });
+    expect(snagOf({ ...ready, agent: null })).toMatchObject({ steps: [] });
+  });
+
+  it('says it in Nodi’s voice, with a short line for rest', () => {
+    for (const facts of [{ ...ready, doc: 'quick' as const }, { ...ready, readOnly: true }, { ...ready, access: false }]) {
+      const snag = snagOf(facts)!;
+      expect(snag.line).toMatch(/boss/);
+      expect(snag.rest.length).toBeLessThan(snag.line.length);
+    }
+  });
+
+  it('gives an agent with no known commands the words without a command', () => {
+    expect(snagOf({ ...ready, agent: { ...claude, agent: 'other', name: 'Other', availability: 'too-old' } })).toMatchObject({ steps: [] });
+  });
+});
+
+describe('the replies Nodi offers', () => {
+  it('words them as the person would, and asks the agent plainly', () => {
+    const [walk, risks, wild] = openers(null, 0);
+    expect(walk).toEqual({ label: 'Walk me through it', prompt: 'Explain this diagram' });
+    expect(risks!.prompt).toBe('What are the risks here?');
+    // The wildcard's nerve stays in the label; the agent gets an honest review request.
+    expect(wild!.label).toBe('Roast my diagram');
+    expect(wild!.prompt).not.toMatch(/roast/i);
+  });
+
+  it('are about the selection by name when there is one, with a new wildcard each time', () => {
+    const options = openers('Orders database', 1);
+    expect(options.map((o) => o.label)).toEqual(['What’s Orders database doing here?', 'What could go wrong with Orders database?', 'What would Orders database break at 3am?']);
+    expect(new Set([0, 1, 2, 3].map((seed) => openers(null, seed)[2]!.label)).size).toBe(4);
+  });
+});
+
+describe('what Nodi says about the diagram', () => {
+  const api = createNode({ id: 'api', type: 'service', x: 0, y: 0, text: 'Orders API' });
+  const worker = createNode({ id: 'w', type: 'service', serviceKind: 'worker', x: 0, y: 0, text: 'Fulfilment worker' });
+  const db = createNode({ id: 'db', type: 'database', x: 0, y: 0, text: 'Orders database' });
+  const queue = createNode({ id: 'q', type: 'queue', x: 0, y: 0, text: 'orders' });
+  const lonely = createNode({ id: 'x', type: 'service', x: 0, y: 0, text: 'Legacy billing' });
+  const nodes = [api, worker, db, queue, lonely];
+  const edges = [
+    createEdge({ id: 'e1', source: 'api', target: 'q' }),
+    createEdge({ id: 'e2', source: 'q', target: 'w' }),
+    createEdge({ id: 'e3', source: 'w', target: 'db' }),
+    createEdge({ id: 'e4', source: 'api', target: 'db' }),
+    createEdge({ id: 'e5', source: 'q', target: 'db' }),
+  ];
+
+  it('notices what is there by name, and who is to blame', () => {
+    const lines = diagramLines(nodes, edges, 0, 2);
+    expect(lines).toEqual(
+      expect.arrayContaining([
+        'Queue "orders" has consumers ("Fulfilment worker" and "Orders database") but no dead-letter path: a message that keeps failing has nowhere to go. Bold choice, boss. Want me to add one?',
+        'Orders database has 3 things writing to it. Who approved that? Oh. You did, boss.',
+        'Fulfilment worker runs at 3am, I assume. Somebody’s cron job. I think it’s yours, boss.',
+        // From the semantic review, which reads the connectors: the fact first, then Nodi's word.
+        '"Legacy billing" has no connections in this view. Feature or cry for help, boss?',
+        'No flows yet, boss. Want me to show how a request actually travels?',
+        '2 open points, boss. They’re not closing themselves. I checked.',
+      ]),
+    );
+  });
+
+  it('knows the hard lessons of the parts it sees', () => {
+    const lines = diagramLines(nodes, edges, 1, 0);
+    expect(lines).toEqual(
+      expect.arrayContaining([
+        'Orders delivers at least once, boss. So, twice. Make the consumer idempotent.',
+        'Fulfilment worker and Orders API both write to Orders database, boss. That’s one service with extra steps.',
+        'If Fulfilment worker crashes halfway, does it start over or pick up where it left off, boss?',
+      ]),
+    );
+    // Two services calling each other.
+    const looped = diagramLines(nodes, [...edges, createEdge({ id: 'e6', source: 'db', target: 'api' }), createEdge({ id: 'e7', source: 'api', target: 'w' }), createEdge({ id: 'e8', source: 'w', target: 'api' })], 1, 0);
+    expect(looped).toContain('Orders API and Fulfilment worker call each other, boss. That’s not architecture, that’s a relationship.');
+  });
+
+  it('says only what holds', () => {
+    const dlq = createNode({ id: 'dlq', type: 'queue', deliveryRole: 'dead-letter', x: 0, y: 0, text: 'orders-dlq' });
+    const lines = diagramLines([...nodes, dlq], edges, 1, 0);
+    expect(lines.some((l) => l.includes('no dead-letter queue'))).toBe(false);
+    expect(lines.some((l) => l.includes('No flows yet'))).toBe(false);
+    expect(lines.some((l) => l.includes('open point'))).toBe(false);
+    expect(lines.some((l) => l.includes('call each other'))).toBe(false);
+    expect(lines.some((l) => l.includes('API without telling you'))).toBe(false);
+    expect(diagramLines([], [], 0, 0)).toEqual(['Blank canvas, boss. The most reliable architecture there is.']);
+  });
+
+  it('mixes them in with the greetings, every other time', () => {
+    const diagram = diagramLines(nodes, edges, 0, 0);
+    const said = [0, 1, 2, 3].map((seed) => restingLine({ ...quiet, seed, diagram }).text);
+    expect(diagram).toContain(said[1]);
+    expect(diagram).toContain(said[3]);
+    expect(diagram).not.toContain(said[0]);
+  });
+});

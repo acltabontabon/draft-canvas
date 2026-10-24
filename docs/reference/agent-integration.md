@@ -75,6 +75,40 @@ attachments and flows with their ids.
 Pages hold at most 200 elements, 400 relationships, 20 flows, 50 open points and 96 KB. A `cursor` is
 bound to the revision and read options; a change answers `CURSOR_STALE`.
 
+#### Semantic review
+
+The first page of a read also carries `review`: up to 8 findings, most important first, about what a
+pattern in the view is missing, read from the diagram's own semantics (`src/agent/review.ts`). Each is
+`{code, ids, message}`; a focused read keeps the findings about what it is focused on.
+
+```json
+"review": [
+  { "code": "no-dead-letter", "ids": ["q1", "w1"],
+    "message": "Queue \"Orders\" has a consumer (\"Billing Worker\") but no dead-letter path: a message that keeps failing has nowhere to go." }
+]
+```
+
+| `code` | When |
+| --- | --- |
+| `call-cycle` | Two services (or components) call each other with plain calls. A callback, event or async reply is not a call. |
+| `shared-database` | Two or more services, workers or schedulers write (`writes`, `readsWrites`) the same database. |
+| `no-consumer` | A queue, topic or stream receives messages and nothing consumes them. |
+| `no-dead-letter` | A queue with consumers has no dead-letter path, its own or a consumer's; or a stream consumer has nowhere to park a record. Topics never get this. |
+| `no-producer` | A queue, topic or stream is consumed and nothing in the view sends to it. Not in inside views. |
+| `cache-not-written` | A cache is read and nothing writes, refreshes or invalidates it. |
+| `unconnected` | Shapes with no connections, in a view that has connections. Not in inside views. |
+
+A finding needs the model to say it. A connector's semantic counts when it was chosen, or when it was
+inferred and the connector carries no label (the canvas then shows that word). A connector that
+can't be read this way, or a junction or boundary at a part, silences findings about something absent
+there. A context-level view gets no messaging or cache findings. Findings are facts to raise with
+the person, not changes to make: a missing dead-letter path belongs in the diagram only if the system
+has one.
+
+`create_diagram`'s receipt carries the same `review` for every view (an inside view's findings name
+it in `view`). An update or preview adds the findings the change brought in to its advisories, as
+`Review (<code>): <message>`.
+
 ## Changing a diagram
 
 `update_diagram` runs its ops in order as one change and one undo step, whether or not the diagram is open.
@@ -131,10 +165,14 @@ Submission captures preconditions: the before-state of everything the ops change
 - **Conflict**: something the proposal is about changed, found by comparing the preconditions with
   the live document. A successful dry run is not proof. **Accept** stays disabled until the agent revises.
 
-**Review panel** (`src/desktop/ui/ProposalPanel.tsx`): summary, status, counts and before → after
-values. A canvas ghost shows additions dashed and removals struck through; **Show on canvas** toggles
-it and **Focus changes** frames it. The ghost clears on Accept, Reject, Dismiss, close, or a proposal or
-document switch.
+**Review panel** (`src/desktop/ui/ProposalPanel.tsx`): summary, status, counts and the changes in the
+diagram's words (`reviewRows.ts`: what only moved is one layout line, boundaries by name, colours as
+colours). On the canvas the proposal is drawn solid with its new and changed parts in teal and the
+diagram stepped back; a change that moves shapes is drawn on a tracing sheet, each moved shape trailing
+back to where it stands now; removals are struck through. **Show on canvas** toggles it and **Focus
+changes** frames it; the panel frames it beside itself once when it opens. A revised proposal lists its
+earlier versions (`history`). The preview clears on Accept, Reject, Dismiss, close, or a proposal or
+document switch. A decided proposal reads as a record, without actions.
 
 **Accept** re-checks the proposal version and diagram revision inside the commit, then applies the
 whole batch as one undo step through `applyToFile`. **Reject** and **Dismiss** never touch the document.
@@ -148,7 +186,35 @@ dry run decides:
 | B | Fails only because this proposal's own new ids exist with matching content (`looksAlreadyApplied` in `src/agent/proposal.ts`) | **Mark as applied** (no document write) or **Dismiss** |
 | C | Anything else | **Dismiss**; never resolved automatically |
 
-Proposals are stored in `agent/proposals.jsonl`; resolved ones are kept 30 days.
+Proposals are stored in `agent/proposals.jsonl`; resolved ones are kept 30 days. Each keeps up to ten
+earlier versions' summaries in `history` when revised.
+
+## Nodi, the desktop companion
+
+Nodi (`src/desktop/ui/Companion.tsx`) runs the person's own agent CLI in the background for one turn at
+a time, behind an ACP-shaped interface (`src-tauri/src/companion/`: `RunEvent`s for started, message,
+tool call, tool update and stopped). Each agent is a `Backend` (locate, sign-in, command, parser):
+
+| Agent | Command (prompt on stdin) | Kept to Draft Canvas by |
+| --- | --- | --- |
+| Claude Code 2.1.295+ | `claude -p --output-format stream-json`, `--resume` for later turns | `--tools ""`, `--strict-mcp-config` with only Draft Canvas, `--allowedTools mcp__draft-canvas__*`, hooks off |
+| Codex 0.163.0+ | `codex exec --json`, `codex exec resume <thread>` for later turns | `--disable shell_tool`, `sandbox_mode="read-only"`, `approval_policy="never"`, `mcp_servers` replaced by Draft Canvas only |
+
+The brief (`BRIEF`) goes in as Claude Code's appended system prompt or Codex's `developer_instructions`;
+each turn's prompt starts with a `<draft-canvas-context>` block: the diagram, the view, the selection,
+which tool makes changes, and a proposal of this conversation still waiting for review. Each run's
+connector carries `DRAFT_CANVAS_RUN` (the run id) and `DRAFT_CANVAS_AGENT_DIR` (the starting app's own
+agent folder). The bridge holds a run's calls to its policy (`agent/runs.rs`):
+
+- Only the diagram the person asked about. `list_diagrams` and `create_diagram` are refused
+  (`RUN_LIMIT`), as is any other diagram id.
+- `update_diagram` only in **Apply changes directly** mode; otherwise `PROPOSAL_ONLY`, and the agent
+  submits a proposal, tagged with its `run`.
+- Stopping the run, or turning agent access off, ends it: calls not yet committed fail with `CANCELLED`.
+
+The agent's session id is kept per diagram and agent in `companion/sessions.json`; the conversation
+shown is the page's, in memory only. Replies may name parts as `[[id]]`; the companion shows their names
+and pins numbered points onto them.
 
 ## One diagram across a conversation
 

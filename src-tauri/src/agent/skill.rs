@@ -500,6 +500,10 @@ mod tests {
             "7",
             "a582a5524f3ebd64b9f7aaba753dc75210069bc23d867b29d881eb60dfdbcdb2",
         ),
+        (
+            "8",
+            "110cda59f2104e3ef5f7be68f19ca5aee1a53c1f2a99ca6bfb69e8f58a46b32f",
+        ),
     ];
 
     #[test]

@@ -26,6 +26,18 @@ fn desktop_wire_types_match_rust() {
         crate::state::MenuCommand::decl(&config),
         crate::state::HostEvent::decl(&config),
         crate::collab::Started::decl(&config),
+        crate::companion::protocol::AgentKind::decl(&config),
+        crate::companion::protocol::Selection::decl(&config),
+        crate::companion::protocol::ApplyMode::decl(&config),
+        crate::companion::protocol::PromptRequest::decl(&config),
+        crate::companion::protocol::ToolStatus::decl(&config),
+        crate::companion::protocol::StopReason::decl(&config),
+        crate::companion::protocol::Usage::decl(&config),
+        crate::companion::protocol::RunEvent::decl(&config),
+        crate::companion::protocol::Availability::decl(&config),
+        crate::companion::protocol::SignIn::decl(&config),
+        crate::companion::protocol::AgentInfo::decl(&config),
+        crate::companion::protocol::RunSnapshot::decl(&config),
     ];
     let generated = format!(
         "// Generated from Rust by npm run desktop:bindings. Do not edit.\n{}\n",

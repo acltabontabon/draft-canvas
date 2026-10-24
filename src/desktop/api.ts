@@ -9,6 +9,8 @@
  */
 import type { Snapshot as UpdateSnapshot, HostEvent as WireHostEvent } from './wire';
 export type { UpdateInfo, Phase as UpdatePhase, Snapshot as UpdateSnapshot } from './wire';
+import type { AgentInfo, AgentKind, PromptRequest, RunSnapshot } from './wire';
+export type { AgentInfo, AgentKind, ApplyMode, PromptRequest, RunEvent, RunSnapshot, StopReason, ToolStatus, Usage } from './wire';
 /** The agent context is refined by the bridge protocol beyond Rust's JSON value envelope. */
 export type HostEvent = Exclude<WireHostEvent, { type: 'agent-request' }> | (Omit<Extract<WireHostEvent, { type: 'agent-request' }>, 'args' | 'context'> & { args: Record<string, unknown>; context: AgentContext });
 import type { CollabLanStarted, ExplorerStart, ExplorerDirectory, ExplorerLocation, ExplorerSaveResult, OpenedDoc, SavedAs, SaveResult, ProjectInfo, Scan as ProjectScan } from './wire';
@@ -103,6 +105,8 @@ export type DocState =
 /** What the shell tells the page about the diagram an agent's request names. */
 export interface AgentContext {
   session?: string;
+  /** The companion run whose agent sent the request; absent for an agent the person connected. */
+  run?: string;
   diagramId?: string;
   project?: string;
   path?: string;
@@ -203,6 +207,10 @@ export interface Proposal {
   assumptions: string[];
   openQuestions: string[];
   sourceRef: { url?: string; title?: string; baseCommit?: string; headCommit?: string } | null;
+  /** The companion run that submitted it, if the companion started the agent. */
+  run?: string | null;
+  /** What it said before each revise-in-place, oldest first. */
+  history?: { version: number; summary: string; updatedAt: number }[];
   createdAt: number;
   updatedAt: number;
   resolvedAt: number | null;
@@ -339,6 +347,21 @@ export interface DesktopApi {
   /** Durably records `pending → accepting` before the document commit is attempted. */
   agentProposalBeginAccept(id: string, version: number, diagramId: string, path: string[]): Promise<ProposalAction>;
   agentProposalResolve(id: string, status: 'accepted' | 'rejected' | 'dismissed'): Promise<ProposalAction>;
+
+  // The agent companion (`src-tauri/src/companion/`): the person's own coding agent, run in the
+  // background for one prompt typed on the canvas. A run's progress arrives as `companion` events.
+  /** Which agents it can run, their versions and what they say about sign-in. May start a login shell. */
+  companionAgents(): Promise<AgentInfo[]>;
+  /** Starts one turn; its events arrive under `request.runId`, the last always `stopped`. */
+  companionSend(request: PromptRequest): Promise<void>;
+  /** Stops a run. False when it had already ended. */
+  companionCancel(runId: string): Promise<boolean>;
+  /** Runs still going, with what they have said so far, for a page that has just loaded. */
+  companionRuns(): Promise<RunSnapshot[]>;
+  /** The next prompt on this diagram starts a new conversation. */
+  companionForget(diagramId: string): Promise<void>;
+  /** The shell line that carries the diagram's conversation on in the agent's own terminal UI. */
+  companionContinue(diagramId: string, agent: AgentKind): Promise<string | null>;
 
   // Collaboration on the local network (`src-tauri/src/collab/`). The shell serves this app at
   // http://<address>:<port>/ and relays text on `/collab` between guests and the page; guests are

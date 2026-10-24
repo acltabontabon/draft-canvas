@@ -140,6 +140,9 @@ export interface ProposalPreview {
   edges: readonly DraftEdge[];
   /** The review panel's "Show on canvas" toggle — ghost data stays cached while this is off. */
   visible: boolean;
+  /** Which surface is reviewing it (`useProposalReview`): only that one clears it. The review panel
+   *  when unset. */
+  owner?: 'panel' | 'companion';
 }
 
 export interface ContinuationOffer extends MaterializedContinuation {
@@ -357,6 +360,8 @@ export interface UiStore {
    *  which proposal it's showing — `null` shows the list for the current diagram. */
   proposalPanelOpen: boolean;
   proposalPanelId: string | null;
+  /** Whether the agent companion (`desktop/ui/Companion.tsx`, desktop only) is open, or resting. */
+  companionOpen: boolean;
   /**
    * A flow id the panel should open in rename mode, with its title selected — set by every
    * "new flow" entry point so naming is part of creating, not a separate errand. One-shot, like
@@ -420,6 +425,12 @@ export interface UiStore {
    * one-shot request into memoized views that have no imperative API.
    */
   jumpFlashId: string | null;
+  /**
+   * The parts Nodi's reply points at while the person hovers that point, ringed on the canvas like a
+   * jump until they look away. Transient: never saved, undone or exported. A set, so each node's and
+   * edge's selector is one lookup.
+   */
+  pointedIds: ReadonlySet<string> | null;
   /**
    * The id of a document that has just arrived and still needs its opening viewport computed —
    * set once as it arrives (see `arriveWith` in `useDocumentSession.ts`) for a genuine new open,
@@ -558,6 +569,7 @@ export interface UiStore {
   requestFlowRename: (flowId: string | null) => void;
   /** Opens the proposal panel (optionally straight to one proposal), or closes it. */
   setProposalPanelOpen: (open: boolean, proposalId?: string | null) => void;
+  setCompanionOpen: (open: boolean) => void;
   setInteractionActive: (active: boolean, movingNodeIds?: Iterable<string>) => void;
   requestEdit: (id: string | null) => void;
   setEditingText: (id: string | null) => void;
@@ -584,6 +596,7 @@ export interface UiStore {
   openCommandPaletteAt: (query: string) => void;
   requestExportSelection: (requested: boolean) => void;
   setJumpFlashId: (id: string | null) => void;
+  setPointedIds: (ids: ReadonlySet<string> | null) => void;
   /** Marks `documentId` as just arrived and awaiting its opening viewport fit. */
   requestOpenFit: (documentId: string) => void;
   /** Consumes the pending fit for `documentId` — a no-op if a newer request has already replaced
@@ -682,6 +695,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   outlinePanelOpen: false,
   proposalPanelOpen: false,
   proposalPanelId: null,
+  companionOpen: false,
   flowRenameRequestId: null,
   interactionActive: false,
   movingNodeIds: NO_MOVING_NODES,
@@ -694,6 +708,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   commandPaletteQuery: '',
   exportSelectionRequested: false,
   jumpFlashId: null,
+  pointedIds: null,
   openFitDocumentId: null,
   continuation: null,
   agentPreview: null,
@@ -788,6 +803,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   setFlowPanelOpen: (flowPanelOpen) => set({ flowPanelOpen }),
   setOutlinePanelOpen: (outlinePanelOpen) => set({ outlinePanelOpen }),
   setProposalPanelOpen: (proposalPanelOpen, proposalId = null) => set({ proposalPanelOpen, proposalPanelId: proposalPanelOpen ? proposalId : null }),
+  setCompanionOpen: (companionOpen) => set({ companionOpen }),
   requestFlowRename: (flowRenameRequestId) => set({ flowRenameRequestId }),
   setInteractionActive: (interactionActive, movingNodeIds) =>
     set((state) => {
@@ -865,6 +881,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   requestExportSelection: (exportSelectionRequested) => set({ exportSelectionRequested }),
   setJumpFlashId: (jumpFlashId) =>
     set((state) => (state.jumpFlashId === jumpFlashId ? state : { jumpFlashId })),
+  setPointedIds: (pointedIds) => set((state) => (state.pointedIds === pointedIds ? state : { pointedIds })),
   requestOpenFit: (documentId) => set({ openFitDocumentId: documentId }),
   clearOpenFit: (documentId) =>
     set((state) => (state.openFitDocumentId === documentId ? { openFitDocumentId: null } : state)),

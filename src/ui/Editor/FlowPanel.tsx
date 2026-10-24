@@ -15,8 +15,9 @@ import { Icon } from '../common/Icon';
 /**
  * The one surface for flows — a small story navigator, not a management dialog. Every row is a
  * flow; clicking one makes it the *active* flow (`selectedFlowId`: lens, step badges, and what a
- * connector's "Add to …" chip appends to). "Diagram" is a real first row, not an absence:
- * choosing it is how you leave a flow's lens. Names are edited in place (double-click, the
+ * connector's "Add to …" chip appends to). "Whole diagram" is a real first row, not an absence:
+ * choosing it is how you leave a flow's lens (so are Escape on the canvas and the canvas's own
+ * `FlowLensIndicator`). Tracing lives once, in the footer. Names are edited in place (double-click, the
  * pencil, or F2), and a brand-new flow opens straight into its name field — naming is part of
  * creating, never a separate errand. Present, rename and delete stay out of the way until a row
  * is hovered or focused; the active row keeps its Present button showing, so the primary action
@@ -173,11 +174,12 @@ export function FlowPanel({ onPresent }: { onPresent: (flowId?: string) => void 
     }
   };
 
+  const selectedFlow = selectedFlowId ? document.flows.find((flow) => flow.id === selectedFlowId) : undefined;
+
   return (
     <div className="dc-flow-panel" role="region" aria-label="Flows" tabIndex={-1} ref={rootRef} onKeyDown={onKeyDown}>
       <header className="dc-flow-panel-header">
         <strong>Flows</strong>
-        {!readOnly && <Button variant="quiet" onClick={() => useEditorStore.getState().beginFlowTrace()}>Trace a flow</Button>}
         {!readOnly && document.flows.length > 0 && (
           <Button variant="quiet" icon="plus" aria-label="New flow" title="New flow" onClick={createNewFlow} />
         )}
@@ -209,11 +211,15 @@ export function FlowPanel({ onPresent }: { onPresent: (flowId?: string) => void 
             tabIndex={0}
           >
             <div className="dc-flow-item-head" onClick={() => setSelectedFlowId(null)}>
-              <span className="dc-flow-expand-spacer" aria-hidden="true" />
-              <button type="button" className="dc-flow-title" tabIndex={-1}>
-                Diagram
-              </button>
-              <span className="dc-muted dc-flow-step-count">everything</span>
+              <span className="dc-flow-expand-spacer" aria-hidden="true">
+                {selectedFlowId === null && <Icon name="check" size={12} />}
+              </span>
+              <span className="dc-flow-item-text">
+                <button type="button" className="dc-flow-title" tabIndex={-1}>
+                  Whole diagram
+                </button>
+                <span className="dc-muted dc-flow-item-meta">Everything, nothing dimmed</span>
+              </span>
             </div>
           </li>
           {document.flows.map((flow) => {
@@ -247,34 +253,38 @@ export function FlowPanel({ onPresent }: { onPresent: (flowId?: string) => void 
                   >
                     <Icon name={expanded ? 'down' : 'forward'} size={12} />
                   </button>
-                  {renaming === flow.id ? (
-                    <FlowTitleInput
-                      flow={flow}
-                      onDone={(title) => {
-                        if (title !== null) useEditorStore.getState().renameFlow(flow.id, title);
-                        setRenamingId(null);
-                      }}
-                    />
-                  ) : (
-                    <button
-                      type="button"
-                      className="dc-flow-title"
-                      tabIndex={-1}
-                      title={readOnly ? flow.title : `${flow.title} — double-click to rename`}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setSelectedFlowId(flow.id);
-                      }}
-                      onDoubleClick={(event) => {
-                        event.stopPropagation();
-                        beginRename(flow.id);
-                      }}
-                    >
-                      {flow.title}
-                    </button>
-                  )}
-                  <span className="dc-muted dc-flow-step-count">
-                    {steps === 0 ? 'no steps' : count(steps, 'step')}
+                  {/* Name over step count: every row is the same two lines, a long name ends in an
+                      ellipsis (the whole of it is the tooltip) rather than making its row taller. */}
+                  <span className="dc-flow-item-text">
+                    {renaming === flow.id ? (
+                      <FlowTitleInput
+                        flow={flow}
+                        onDone={(title) => {
+                          if (title !== null) useEditorStore.getState().renameFlow(flow.id, title);
+                          setRenamingId(null);
+                        }}
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        className="dc-flow-title"
+                        tabIndex={-1}
+                        title={readOnly ? flow.title : `${flow.title} — double-click to rename`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setSelectedFlowId(flow.id);
+                        }}
+                        onDoubleClick={(event) => {
+                          event.stopPropagation();
+                          beginRename(flow.id);
+                        }}
+                      >
+                        {flow.title}
+                      </button>
+                    )}
+                    <span className="dc-muted dc-flow-item-meta dc-flow-step-count">
+                      {steps === 0 ? 'no steps' : count(steps, 'step')}
+                    </span>
                   </span>
                   <span className="dc-flow-item-actions">
                     <Button
@@ -313,7 +323,6 @@ export function FlowPanel({ onPresent }: { onPresent: (flowId?: string) => void 
                     />
                   </span>
                 </div>
-                {!readOnly && <Button className="dc-flow-trace-more" variant="quiet" aria-label={`Trace more steps: ${flow.title}`} onClick={() => useEditorStore.getState().beginFlowTrace(flow.id)}>Trace more steps</Button>}
 
                 {expanded && (
                   <ol className="dc-flow-steps">
@@ -354,6 +363,28 @@ export function FlowPanel({ onPresent }: { onPresent: (flowId?: string) => void 
             );
           })}
         </ul>
+      )}
+
+      {/* Tracing, in one place: clicking connectors in order, either into a new flow or onto the
+          end of the chosen one. It used to sit under every row and beside the title, so the list
+          read as a column of the same link. */}
+      {!readOnly && (
+        <footer className="dc-flow-panel-footer">
+          <Button variant="quiet" icon="flow" onClick={() => useEditorStore.getState().beginFlowTrace()}>
+            Trace a flow
+          </Button>
+          {selectedFlow && (
+            <Button
+              variant="quiet"
+              icon="plus"
+              aria-label={`Trace more steps: ${selectedFlow.title}`}
+              title={`Click more connectors to add to ${selectedFlow.title}`}
+              onClick={() => useEditorStore.getState().beginFlowTrace(selectedFlow.id)}
+            >
+              Trace more steps
+            </Button>
+          )}
+        </footer>
       )}
     </div>
   );

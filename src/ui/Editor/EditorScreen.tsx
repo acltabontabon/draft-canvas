@@ -33,7 +33,7 @@ import { naturalCodeSize, describeContext } from '../../nodes/describe';
 import { isActivatableTarget, isEditableTarget, isInOwnKeyboardRegion, isTextChord } from '../../lib/isEditableTarget';
 import { centerOf } from '../../lib/math';
 import { logDiagnostic } from '../../lib/diagnostics';
-import { flowFitViewNodes, hasSomethingToFit, roomFor, useEditorStore, viewLevel } from '../../store/editorStore';
+import { flowFitViewNodes, hasSomethingToFit, lensFlow, roomFor, useEditorStore, viewLevel } from '../../store/editorStore';
 import { pointer, useUiStore, type ContextMenuTarget } from '../../store/uiStore';
 import { useCollabStore } from '../../store/collabStore';
 import { END_MESSAGES } from '../collab/collabCopy';
@@ -54,6 +54,7 @@ import { FlowBar } from './FlowBar';
 import { FlowPanel } from './FlowPanel';
 import { SharedReader } from './SharedReader';
 import { FocusIndicator } from './FocusIndicator';
+import { FlowLensIndicator } from './FlowLensIndicator';
 import { dragCarriesImport, importDroppedFile, insertMermaidText, looksLikeMermaid } from './importIntoEditor';
 import { CanvasSettingsDialog } from './CanvasSettingsDialog';
 import { CommandPalette } from './CommandPalette';
@@ -68,6 +69,7 @@ import { PanelBoundary } from '../common/PanelBoundary';
 import { retryableLazy } from '../common/retryableLazy';
 import { motionMs } from '../../lib/motion';
 import { returnHome } from '../../host/hostInfo';
+import { companionAllowed } from './companionGate';
 import { PRODUCT } from '../../product';
 
 // Export (its panels, previews, and exporters) is a sizeable slice of the editor that most sessions
@@ -77,6 +79,8 @@ const ExportDialogChunk = retryableLazy(() => import('./ExportDialog').then((mod
 // Proposal review is desktop-only (an AI agent's own feature); `__DESKTOP__` drops it from the web
 // build entirely, the same way `App.tsx` gates every other desktop-only chunk.
 const ProposalPanelChunk = __DESKTOP__ ? retryableLazy(() => import('../../desktop/ui/ProposalPanel').then((module) => ({ default: module.ProposalPanel }))) : null;
+// The agent companion, likewise desktop-only: it runs the person's own coding agent.
+const CompanionChunk = __DESKTOP__ ? retryableLazy(() => import('../../desktop/ui/Companion').then((module) => ({ default: module.Companion }))) : null;
 
 /**
  * What a ⌘C/⌘X keydown just copied, for the browser's copy event that follows it to write — see
@@ -156,6 +160,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
   const setShortcutsOpen = useUiStore((state) => state.setShortcutsOpen);
   const collabOpen = useUiStore((state) => state.collabOpen);
   const collabStatus = useCollabStore((state) => state.status);
+  const collabGuest = useCollabStore((state) => state.role === 'guest');
   const collabEnd = useCollabStore((state) => state.endReason);
   const onCollabFailed = useCallback((error: Error, componentStack: string) => {
     logDiagnostic(error, { operation: 'collab-panel' }, componentStack);
@@ -658,8 +663,14 @@ function EditorScreen({ session }: { session: DocumentSession }) {
             </Suspense>
           )}
           {!presenting && !tracing && <OpenPointsPanel buildCommandContext={buildCommandContext} />}
+          {CompanionChunk && !tracing && !readOnly && !collabGuest && companionAllowed(presenting) && (
+            <Suspense fallback={null}>
+              <CompanionChunk.Component />
+            </Suspense>
+          )}
           <FlowBar playback={playback} />
           <FocusIndicator />
+          {!presenting && !tracing && <FlowLensIndicator />}
           <DepthStack />
           <DepthAnnouncer />
           <DepthTransition />
@@ -1056,6 +1067,11 @@ export function useKeyboard({
             event.preventDefault();
             setExportOpen(true);
             return;
+          case 'j':
+            if (!CompanionChunk || !companionAllowed(presenting)) return;
+            event.preventDefault();
+            useUiStore.getState().setCompanionOpen(!useUiStore.getState().companionOpen);
+            return;
           case 'k':
             // The command palette. Only opens from here — while it's open its own
             // capture-phase listener owns every key, including the ⌘K that closes it again.
@@ -1223,6 +1239,20 @@ export function useKeyboard({
             playback.stop();
             if (state.mode === 'present') state.setMode('edit');
           } else if (state.mode === 'present') state.setMode('edit');
+          // A chosen flow dimming the canvas is a view you stepped into, so with nothing selected
+          // Escape steps back out to the whole diagram — before leaving the shape it lives in. Only
+          // while the lens is actually on: an empty flow just created dims nothing, and clearing it
+          // would quietly turn off its connector chip's "Add to …". Not from a focused shape or
+          // connector either: React Flow's own handler there has already deselected it by now, so
+          // the selection reads empty — but deselecting was all that press was for.
+          else if (
+            state.selection.nodes.length === 0 &&
+            state.selection.edges.length === 0 &&
+            !(event.target instanceof Element && event.target.closest('.react-flow__node, .react-flow__edge')) &&
+            lensFlow(state)
+          ) {
+            state.setSelectedFlowId(null);
+          }
           // Last of all, and only with nothing selected: Escape steps back out of a shape, the way
           // it steps back out of everything else. Anything still selected is what Escape means
           // first — backing out of a room is never what someone wanted from their first press.

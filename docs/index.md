@@ -24,6 +24,7 @@ New here? Start with [Getting started](guides/getting-started.md).
 
 | Document | Covers |
 | --- | --- |
+| [Principles](reference/principles.md) | Your architecture, your agents, your decisions |
 | [Privacy](reference/privacy.md) | What is stored and what leaves the device |
 | [Agent integration](reference/agent-integration.md) | MCP tools and guarantees |
 | [Architecture](reference/architecture.md) | Design and module boundaries |

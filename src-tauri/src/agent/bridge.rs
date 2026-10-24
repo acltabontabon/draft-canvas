@@ -20,6 +20,9 @@
 //!
 //! `session` is optional (an older sidecar has none): a nonce the sidecar makes up once per process,
 //! so its reconnects stay one agent session (`session.rs`). Without it the connection is its own.
+//!
+//! `run` is optional too: present only when Draft Canvas's companion started the agent. Such a
+//! connection is held to its run's limits (`runs.rs`), and refused once the run has ended.
 
 use super::broker::{self, CallRegistry};
 use super::endpoint::{self, Info};
@@ -326,6 +329,31 @@ pub fn session_of(hello: &Value) -> String {
         .unwrap_or_else(|| uuid::Uuid::new_v4().to_string())
 }
 
+/// The companion run a hello names, if it names a plausible one.
+pub fn run_of(hello: &Value) -> Option<String> {
+    hello
+        .get("run")
+        .and_then(Value::as_str)
+        .filter(|s| {
+            !s.is_empty()
+                && s.len() <= 64
+                && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+        })
+        .map(str::to_string)
+}
+
+/// A run named in a hello that isn't open: refused, so a stale or made-up name reaches nothing.
+fn check_run(agent: &Agent, run: Option<&str>) -> Result<(), Value> {
+    match run {
+        Some(run) if agent.runs.policy(run).is_none() => Err(json!({
+            "type": "refused",
+            "code": "RUN_ENDED",
+            "message": "This request from the Draft Canvas companion has already ended.",
+        })),
+        _ => Ok(()),
+    }
+}
+
 /// Checks a hello frame. `Err` carries the refusal to send before closing.
 pub fn check_hello(frame: &Value, token: &str, app_version: &str) -> Result<Value, Option<Value>> {
     if frame.get("type").and_then(Value::as_str) != Some("hello") {
@@ -375,7 +403,14 @@ async fn serve<R, W>(
         Ok(Ok(Some(frame))) => frame,
         _ => return,
     };
-    match check_hello(&hello, &token, &version) {
+    let run = run_of(&hello);
+    let checked = check_hello(&hello, &token, &version).and_then(|welcome| {
+        match check_run(&agent, run.as_deref()) {
+            Ok(()) => Ok(welcome),
+            Err(refusal) => Err(Some(refusal)),
+        }
+    });
+    match checked {
         Ok(welcome) => {
             if send(&mut write, &welcome).await.is_err() {
                 return;
@@ -419,7 +454,15 @@ async fn serve<R, W>(
                                 continue;
                             }
                         };
-                        let registry = Arc::new(CallRegistry::new(session.clone()).with_progress(out_tx.clone(), id));
+                        let registry = Arc::new(CallRegistry::new(session.clone()).with_run(run.clone()).with_progress(out_tx.clone(), id));
+                        // A run's calls are tracked so ending the run can cancel them; a run that
+                        // has ended admits nothing more.
+                        if let Some(run) = &run {
+                            if !agent.runs.track(run, &registry) {
+                                let _ = out_tx.send(json!({"type": "result", "id": id, "ok": false, "error": super::runs::ended().to_value()})).await;
+                                continue;
+                            }
+                        }
                         crate::util::lock(&calls).insert(id, registry.clone());
                         let (agent, out_tx, calls) = (agent.clone(), out_tx.clone(), calls.clone());
                         tauri::async_runtime::spawn(async move {
@@ -501,6 +544,34 @@ async fn send<W: AsyncWrite + Unpin>(write: &mut W, frame: &Value) -> std::io::R
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_hello_naming_a_run_is_refused_unless_that_run_is_open() {
+        let dir = tempfile::tempdir().unwrap();
+        let agent = Agent::new(dir.path());
+        let run = "3f1c2a4e-0000-4000-8000-000000000001";
+        assert_eq!(
+            run_of(&json!({"type": "hello", "run": run})).as_deref(),
+            Some(run)
+        );
+        assert_eq!(run_of(&json!({"type": "hello"})), None);
+        assert_eq!(run_of(&json!({"type": "hello", "run": "a b"})), None);
+        assert!(check_run(&agent, None).is_ok(), "an ordinary agent");
+        assert_eq!(
+            check_run(&agent, Some(run)).unwrap_err()["code"],
+            "RUN_ENDED"
+        );
+        agent.runs.open(
+            run,
+            super::super::runs::RunPolicy {
+                diagram_id: "d_1".into(),
+                direct: false,
+            },
+        );
+        assert!(check_run(&agent, Some(run)).is_ok());
+        agent.end_run(run);
+        assert!(check_run(&agent, Some(run)).is_err());
+    }
 
     #[test]
     fn a_hello_keeps_its_session_nonce_and_a_missing_or_odd_one_gets_a_fresh_session() {

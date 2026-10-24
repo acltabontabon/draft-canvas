@@ -2,6 +2,7 @@ import { PRODUCT } from '../../product';
 import { useMemo, useState } from 'react';
 import { ALL_PRESETS } from '../../canvas/presets';
 import { shortcutFor, titleFor } from '../../commands/shortcutLookup';
+import { hostKind } from '../../host/hostInfo';
 import { useUiStore } from '../../store/uiStore';
 import { Modal } from '../common/Modal';
 import { isGestureRow, isMouseRow, SECTIONS, type Row } from './shortcutSections';
@@ -40,11 +41,12 @@ function ShortcutSheetBody() {
   );
 
   const rowMatches = (row: Row) =>
-    isGestureRow(row)
+    !('desktopOnly' in row && row.desktopOnly && hostKind() !== 'desktop') &&
+    (isGestureRow(row)
       ? matches(query, ...row.keys, row.label)
       : isMouseRow(row)
         ? matches(query, row.gesture, row.label)
-        : matches(query, shortcutFor(row.commandId), row.label ?? titleFor(row.commandId));
+        : matches(query, shortcutFor(row.commandId), row.label ?? titleFor(row.commandId)));
 
   const sectionsToShow = SECTIONS.map((section) => ({ ...section, rows: section.rows.filter(rowMatches) })).filter(
     (section) => section.rows.length > 0,

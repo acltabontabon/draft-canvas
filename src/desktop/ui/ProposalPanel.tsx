@@ -1,29 +1,30 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useReactFlow, useStore as useReactFlowStore } from '@xyflow/react';
-import { diffForReview, looksAlreadyApplied, preconditionConflicts, type ElementDiffRow } from '../../agent/proposal';
-import { applyUpdate } from '../../agent/patch';
-import { changedIds } from '../../agent/rebase';
-import { AgentError } from '../../agent/errors';
-import { runOffThread } from '../../agent/offThread';
-import { agentGhostDiff } from '../../canvas/agentGhostDiff';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useReactFlow, useStoreApi, useStore as useReactFlowStore } from '@xyflow/react';
 import { focusBoundsInView } from '../../commands/search';
-import { ownerAt, pathKey, viewOf, type DepthPath } from '../../depth/tree';
+import { ownerAt, pathKey, type DepthPath } from '../../depth/tree';
 import { displayNameFor } from '../../document/factory';
-import { boundsOf } from '../../document/geometry';
 import type { DraftDocument } from '../../document/types';
-import { fileOf, isInteracting, useEditorStore } from '../../store/editorStore';
+import { useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
 import { Button } from '../../ui/common/Button';
 import type { Proposal } from '../api';
+import { companion } from '../companion';
 import { useDesktopController } from '../useDesktop';
+import { revealViewport } from './chipPlace';
+import { ProposalHistory } from './ProposalHistory';
+import { reviewRows } from './reviewRows';
+import { countsLabel, useProposalReview, type ProposalChanged } from './useProposalReview';
 
 /** The floating panel's own width (`app.css`'s `.dc-proposal-panel`) plus its margin from the edge
  *  — subtracted from the pane width "Focus changes" fits into, so a focused change doesn't land
  *  underneath the panel that just asked to see it. */
 const PANEL_RESERVED_WIDTH = 360 + 24;
 
-/** How long the diagram must stay still before a proposal is checked against it again. */
-const DRY_RUN_SETTLE_MS = 300;
+function decidedNote(status: Proposal['status']): string {
+  if (status === 'accepted') return 'Accepted: it is in the diagram.';
+  if (status === 'rejected') return 'Rejected: the diagram was left as it was.';
+  return 'Dismissed without a decision: the diagram was left as it was.';
+}
 
 function statusLabel(status: Proposal['status']): string {
   switch (status) {
@@ -42,14 +43,6 @@ function statusLabel(status: Proposal['status']): string {
     case 'informational':
       return 'Informational';
   }
-}
-
-function countsLabel(counts: Proposal['counts']): string {
-  const parts: string[] = [];
-  if (counts.added) parts.push(`${counts.added} added`);
-  if (counts.updated) parts.push(`${counts.updated} modified`);
-  if (counts.removed) parts.push(`${counts.removed} removed`);
-  return parts.length ? parts.join(' · ') : 'No changes';
 }
 
 /** "root → OrderService → checkout flow" — the room a proposal targets, by the label each room's
@@ -135,13 +128,18 @@ export function ProposalPanel() {
   }, [diagramId, open]);
 
   const pending = proposals.filter((p) => p.status === 'pending' || p.status === 'accepting');
+  // Proposals the companion's card is showing are reviewed there; the badge counts the rest. One whose
+  // conversation is gone (a reload, a new conversation) is the badge's again.
+  const conversations = useSyncExternalStore(companion.subscribe, companion.snapshot);
+  const inCompanion = useMemo(() => new Set([...conversations.values()].flatMap((c) => c.turns.map((t) => t.proposalId))), [conversations]);
+  const unreviewed = pending.filter((p) => !inCompanion.has(p.proposalId));
   if (!diagramId) return null;
 
   if (!open) {
-    if (pending.length === 0) return null;
+    if (unreviewed.length === 0) return null;
     return (
-      <button type="button" className="dc-proposal-badge" onClick={() => setOpen(true, pending[0]?.proposalId ?? null)}>
-        {pending.length === 1 ? '1 proposal to review' : `${pending.length} proposals to review`}
+      <button type="button" className="dc-proposal-badge" onClick={() => setOpen(true, unreviewed[0]?.proposalId ?? null)}>
+        {unreviewed.length === 1 ? '1 proposal to review' : `${unreviewed.length} proposals to review`}
       </button>
     );
   }
@@ -216,289 +214,56 @@ export function ProposalPanel() {
   );
 }
 
-/** Called with the authoritative updated record the instant an action's own result is known (an
- *  optimistic, synchronous local update — see `ProposalPanel`'s caller), or with nothing to fall
- *  back to a full background refresh when no such record is available (an error path, or a refusal
- *  whose real cause needs a fresh read to explain). */
-type ProposalChanged = (patch?: Proposal) => void;
-
-/** A proposal checked against the diagram: what applying it would change, and whether it can be. */
-interface DryRun {
-  /** The proposal and path it was worked out for (see `ProposalDetail`'s `dryRunKey`). */
-  key: string;
-  /** The file it was worked out against. */
-  base: DraftDocument | null;
-  diff: ElementDiffRow[];
-  conflicts: ReturnType<typeof preconditionConflicts>;
-  dryRunProblem: string | null;
-  resultFile: DraftDocument | null;
-  conflictingIds: readonly string[] | undefined;
-}
-
-const NO_DRY_RUN: DryRun = { key: '', base: null, diff: [], conflicts: [], dryRunProblem: null, resultFile: null, conflictingIds: undefined };
-
-/** The same simulated patch Accept makes (`applyUpdate`, through the worker's `update` job), never committed. */
-async function dryRunOf(base: DraftDocument, proposal: Proposal): Promise<Omit<DryRun, 'key'>> {
-  const path = proposal.path;
-  try {
-    const result = await runOffThread({ kind: 'update', file: base, path, ops: proposal.ops, layout: proposal.layout ?? undefined, scope: proposal.scope ?? undefined });
-    if (result.kind !== 'update') throw new AgentError('INTERNAL', 'The proposal could not be checked.');
-    return {
-      base,
-      diff: diffForReview(base, result.file, path),
-      conflicts: preconditionConflicts(base, path, proposal.preconditions),
-      dryRunProblem: result.quality.errors.length ? 'This proposal would leave unreadable content.' : null,
-      resultFile: result.file,
-      conflictingIds: undefined,
-    };
-  } catch (error_) {
-    return {
-      ...NO_DRY_RUN,
-      base,
-      dryRunProblem: error_ instanceof AgentError ? error_.message : 'This proposal no longer applies to the current diagram.',
-      conflictingIds: error_ instanceof AgentError ? (error_.details?.conflictingIds as readonly string[] | undefined) : undefined,
-    };
-  }
-}
-
 function ProposalDetail({ proposal, onChanged }: { proposal: Proposal; onChanged: ProposalChanged }) {
-  const controller = useDesktopController();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const { setViewport } = useReactFlow();
+  const useReactFlowStoreApi = useStoreApi();
   const viewWidth = useReactFlowStore((state) => state.width);
   const viewHeight = useReactFlowStore((state) => state.height);
-  const currentPath = useEditorStore((state) => state.path);
   const previewVisible = useUiStore((state) => (state.proposalPreview?.proposalId === proposal.proposalId ? state.proposalPreview.visible : true));
   const setProposalPreviewVisible = useUiStore((state) => state.setProposalPreviewVisible);
-
-  // Recomputed against the live document — never the submit-time snapshot, and never proof by itself
-  // that nothing conflicts (see `preconditionConflicts`). Against the whole file and the view the
-  // proposal was written for — never the room on screen, which is only the whole file at the top
-  // level. Subscribed to the room so an edit re-renders; `fileOf` is cached per room, so reading it
-  // here costs nothing.
-  useEditorStore((state) => state.document);
-  const live = fileOf(useEditorStore.getState());
-  const path = proposal.path;
+  const { live, path, targetsCurrentView, bounds: diffBounds, busy, error, checking, diff, conflicts, dryRunProblem, informational, alreadyApplied, recoveringAccept, accept, reject, dismiss, markApplied } =
+    useProposalReview(proposal, onChanged, 'panel');
+  // Accepted, rejected or dismissed: there is nothing left to review, so it reads as a record of what
+  // was decided, with no canvas toggles and no actions (they stayed after an accept, still offering
+  // Accept and Reject on a proposal already in the diagram).
+  const decided = proposal.status === 'accepted' || proposal.status === 'rejected' || proposal.status === 'dismissed';
   const pathKeyStr = pathKey(path);
-  // Keyed on content, not object identity: `proposal` is refetched by the panel's poll (and every
-  // other action's refresh), a fresh object every time even when nothing about it changed, so keying
-  // on `proposal.ops`/`.layout`/`.preconditions`/`.path` directly would redo this dry run — a full
-  // simulated patch, then two more full diff passes over it — on every such poll. `proposal.version`
-  // only bumps on an actual revise-in-place, and `pathKeyStr` is the path's *content*.
-  const dryRunKey = `${proposal.proposalId}:${proposal.version}:${pathKeyStr}`;
-  // Skipped while `busy`: an Accept in flight has already committed by the time its own
-  // `applyToFile` call returns, but `proposal.status` here is still whatever it was when `act()`
-  // was called until the optimistic update lands — recomputing in that window would dry-run this
-  // proposal's ops against a document that already contains them, throwing a DUPLICATE_ID that has
-  // nothing to do with a real conflict, while the buttons are (separately) still disabled by `busy`.
-  const reviewable = !busy && (proposal.status === 'pending' || proposal.status === 'accepting');
-  const [checked, setChecked] = useState<DryRun | null>(null);
-  // The simulated patch runs on the agent worker, not the page, and only once the diagram has been
-  // still for a moment: run synchronously on every document change it froze the canvas through a
-  // drag or a burst of typing while the panel was open. A result for an older document or proposal is
-  // dropped when it lands.
-  useEffect(() => {
-    if (!reviewable) return;
-    let current = true;
-    const base = live;
-    const timer = window.setTimeout(
-      () => void dryRunOf(base, proposal).then((result) => current && setChecked({ ...result, key: dryRunKey })),
-      checked?.key === dryRunKey ? DRY_RUN_SETTLE_MS : 0,
-    );
-    return () => {
-      current = false;
-      window.clearTimeout(timer);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `proposal`'s content is `dryRunKey` (see above); `checked` only picks the delay
-  }, [live, dryRunKey, reviewable]);
-  // Until the first check for this proposal lands, nothing about it is known: Accept waits for it.
-  const checking = reviewable && checked?.key !== dryRunKey;
-  const dryRun = reviewable && checked && !checking ? checked : NO_DRY_RUN;
-  const { diff, conflicts, dryRunProblem, conflictingIds } = dryRun;
-  // Worked out against a diagram that has since changed: its text stands until the next check lands
-  // (Accept checks again anyway), but its ghost would be drawn over shapes that have moved on.
-  const resultFile = dryRun.base === live ? dryRun.resultFile : null;
-  const informational = proposal.status === 'informational';
-  // Case B of crash recovery (`docs/reference/agent-integration.md`): stuck `accepting`, and the only
-  // reason the dry run now fails is that this exact proposal's own ids already exist, matching what
-  // it would have set (`looksAlreadyApplied` also checks the live content, not just the id) — the
-  // fingerprint of a crash between the document commit and recording it, not a real conflict. Never
-  // true for `pending`: only an interrupted Accept can leave a proposal in this position.
-  const alreadyApplied = proposal.status === 'accepting' && looksAlreadyApplied(proposal.ops, conflictingIds, viewOf(live, path));
-  // The backend's own state machine (`resolve_outcome` in `src-tauri/src/commands/agent.rs`) only
-  // allows `Accepting → Accepted` or `Accepting → Dismissed`; `Accepting → Rejected` is refused as
-  // `WRONG_STAGE`. Offering Reject here would be a dead-end action dressed up as a real recovery
-  // choice, right next to the banner that already tells the person the only two ways out.
-  const recoveringAccept = proposal.status === 'accepting' && !alreadyApplied;
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- `path`'s content is `pathKeyStr`; see the `dryRun` memo above for why this is keyed on content, not the array's own (churning) reference
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `path`'s content is `pathKeyStr`; keyed on content, not the array's own (churning) reference
   const breadcrumb = useMemo(() => pathBreadcrumb(live, path), [live, pathKeyStr]);
-  const targetsCurrentView = pathKey(path) === pathKey(currentPath);
 
-  // The same union of touched shapes the canvas ghost draws — "Focus changes" pans/zooms to
-  // exactly what the ghost is showing, never a separate notion of "what changed." `null` while the
-  // proposal targets a different room than the one on screen: each room has its own coordinate
-  // space, and `ProposalPreviewLayer` already refuses to draw there for the same reason — panning
-  // to this room's local coordinates while looking at a different room would land somewhere
-  // arbitrary in it, not "off" in a way that reads as a mistake.
-  const diffBounds = useMemo(() => {
-    if (!resultFile || !targetsCurrentView) return null;
-    const before = viewOf(dryRun.base ?? live, path);
-    const after = viewOf(resultFile, path);
-    const ghost = agentGhostDiff({ nodes: before?.nodes ?? [], edges: before?.edges ?? [] }, { nodes: after?.nodes ?? [], edges: after?.edges ?? [] });
-    return boundsOf([...ghost.addedNodes, ...ghost.modifiedNodes, ...ghost.removedNodes, ...ghost.addedGroups, ...ghost.modifiedGroups, ...ghost.removedGroups]);
-  }, [resultFile, dryRun.base, live, path, targetsCurrentView]);
+  // Read as a person reads the diagram: geometry counted into one layout line, boundaries by name.
+  const readable = useMemo(() => {
+    const names = new Map<string, string>();
+    for (const node of live?.nodes ?? []) if (node.text) names.set(node.id, node.text);
+    for (const row of diff) if (row.label) names.set(row.id, row.label);
+    return reviewRows(diff, (id) => names.get(id));
+  }, [diff, live]);
 
   const focusChanges = () => {
     if (!diffBounds) return;
     focusBoundsInView({ viewWidth: Math.max(200, viewWidth - PANEL_RESERVED_WIDTH), viewHeight, setViewport }, diffBounds);
   };
 
-  // The canvas ghost mirrors exactly what the text diff above just showed: the same `resultFile`,
-  // never a second dry run. Cleared (not merely hidden) the moment this proposal stops being
-  // reviewable here — resolved, gone stale past recovery, or deselected/closed (the cleanup runs
-  // on every dependency change, including unmount) — so a stale ghost can never outlive its
-  // proposal. Only ever touches this proposal's own preview: a sibling `ProposalDetail` render for
-  // a different proposal (after switching) sets its own before this one's cleanup can run.
+  // Once, when the change is first worked out: the panel covers the right of the canvas, and a change
+  // that re-lays the diagram out runs underneath it. The camera moves only as far as it takes to show
+  // it beside the panel (out only if it won't fit); after that it is the person's, and Focus changes
+  // brings the change back.
+  const framed = useRef(false);
+  const setViewportRef = useRef(setViewport);
+  setViewportRef.current = setViewport;
   useEffect(() => {
-    const ownsCurrent = () => useUiStore.getState().proposalPreview?.proposalId === proposal.proposalId;
-    if (resultFile && !dryRunProblem) {
-      const view = viewOf(resultFile, path);
-      const previous = useUiStore.getState().proposalPreview;
-      const visible = previous && previous.proposalId === proposal.proposalId ? previous.visible : true;
-      useUiStore.getState().setProposalPreview({
-        proposalId: proposal.proposalId,
-        path,
-        nodes: view?.nodes ?? [],
-        edges: view?.edges ?? [],
-        visible,
-      });
-    } else if (ownsCurrent()) {
-      useUiStore.getState().setProposalPreview(null);
-    }
-    return () => {
-      if (ownsCurrent()) useUiStore.getState().setProposalPreview(null);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `path`'s content is `pathKeyStr`, and `resultFile` is now the memoized `dryRun.resultFile` (stable across renders that don't change its answer) — keying on the array/object references themselves would re-fire (and re-render every ghost consumer) on every unrelated re-render this component gets
-  }, [proposal.proposalId, dryRunProblem, resultFile, pathKeyStr]);
-
-  const act = async (run: () => Promise<Proposal | undefined>) => {
-    setBusy(true);
-    setError(null);
-    try {
-      onChanged(await run());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong.');
-      onChanged();
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  /**
-   * The proposal worked out against the diagram as it is right now, or why it can't be accepted now.
-   * `unchanged` means the diagram already holds what it would make: nothing to commit, only to record.
-   */
-  const prepareAccept = (): { error: string } | { revision: number; file: DraftDocument; unchanged: boolean } => {
-    // A drag or a text edit in flight would absorb the commit into its own gesture, so `applyToFile`
-    // refuses it — after `begin_accept` had already moved the proposal on. Asked before, it is a retry.
-    if (isInteracting()) return { error: 'Finish the drag or edit in progress, then accept it again. Nothing was committed.' };
-    if (useUiStore.getState().readOnly) return { error: 'This diagram is read-only. Nothing was committed.' };
-    const state = useEditorStore.getState();
-    const file = fileOf(state);
-    // The panel follows the open diagram, but a switch can land while this panel still shows the one
-    // left: a proposal is only ever accepted into the diagram it was written for.
-    if (file.metadata.id !== proposal.diagramId) return { error: 'This proposal is for a different diagram than the one open now. Nothing was committed.' };
-    const result = applyUpdate(file, proposal.path, proposal.ops, proposal.layout ?? undefined, proposal.scope ?? undefined);
-    if (result.quality.errors.length) return { error: 'This proposal would leave unreadable content. Ask the agent to revise it.' };
-    if (preconditionConflicts(file, proposal.path, proposal.preconditions).length > 0) {
-      return { error: 'The diagram changed in a way this proposal conflicts with. Ask the agent to revise it.' };
-    }
-    // `applyToFile` refuses a change that changes nothing; accepting one is still a decision to record.
-    const unchanged = result.file === file || changedIds(file, result.file).size === 0;
-    return { revision: state.revision, file: result.file, unchanged };
-  };
-
-  const accept = () =>
-    act(async () => {
-      // Re-check everything immediately before committing — the diagram may have moved since this
-      // render; a stale re-render here would otherwise commit against a document already gone stale.
-      let ready = prepareAccept();
-      if ('error' in ready) {
-        setError(ready.error);
-        return undefined;
-      }
-      const begun = await controller.beginAcceptProposal(proposal.proposalId, proposal.version, proposal.diagramId, proposal.path);
-      if (!begun.ok) {
-        setError(begun.code === 'PROPOSAL_CHANGED' ? 'This proposal changed since it was opened. Review it again.' : `Couldn’t start accepting it (${begun.code}).`);
-        // `PROPOSAL_CHANGED` carries the record as it actually stands now — applying it locally means
-        // the next render (and the "review it again" it's being told to do) works from the real
-        // current state, not the one this attempt started from.
-        return begun.code === 'PROPOSAL_CHANGED' ? begun.proposal : undefined;
-      }
-      // The person may have edited, or begun a drag, while `begin_accept` was in flight: worked out
-      // again against what is there now rather than refused, which would leave it mid-accept.
-      if (ready.revision !== useEditorStore.getState().revision || isInteracting()) {
-        ready = prepareAccept();
-        if ('error' in ready) {
-          setError(ready.error);
-          return begun.proposal;
-        }
-      }
-      if (!ready.unchanged) {
-        // The one gap left: an edit landing between the check above and this commit. Passing the
-        // revision `ready` was worked out at lets `applyToFile` refuse atomically, inside the same
-        // synchronous pass that would otherwise commit.
-        const file = ready.file;
-        const applied = useEditorStore.getState().applyToFile(`Applied proposal: ${proposal.summary}`, () => file, ready.revision);
-        if (!applied) {
-          setError('The diagram changed while this was being accepted. Nothing was committed; accept it again.');
-          return begun.proposal;
-        }
-      }
-      const resolved = await controller.resolveProposal(proposal.proposalId, 'accepted');
-      if (!resolved.ok && resolved.code !== 'ALREADY_RESOLVED') {
-        setError(ready.unchanged ? 'The diagram already had this change, but the proposal record could not be updated.' : 'Applied, but the proposal record could not be updated.');
-        return undefined;
-      }
-      // The document already has the change either way (`resolved.ok`, or `ALREADY_RESOLVED` because
-      // a retry landed after an earlier attempt's response was lost) — but only `resolved.ok` carries
-      // the fresh record `ALREADY_RESOLVED` doesn't; local status stays stale until the next poll then,
-      // which is exactly the window `busy` alone doesn't close.
-      return resolved.ok ? resolved.proposal : undefined;
-    });
-
-  const close = (status: 'rejected' | 'dismissed') =>
-    act(async () => {
-      const resolved = await controller.resolveProposal(proposal.proposalId, status);
-      // Already closed is the outcome asked for; anything else (one mid-accept, say) would otherwise
-      // leave the button doing nothing, with no word why.
-      if (!resolved.ok && resolved.code !== 'ALREADY_RESOLVED') {
-        setError(resolved.code === 'WRONG_STAGE' ? `It can’t be ${status} while it is ${resolved.status}.` : `Couldn’t update it (${resolved.code}).`);
-        return undefined;
-      }
-      return resolved.ok ? resolved.proposal : undefined;
-    });
-  const reject = () => close('rejected');
-
-  // Case B: nothing to commit — it's already there. `Accepting → Accepted` is already a valid
-  // transition on its own (the ordinary path once `begin_accept` has run); this just takes it
-  // directly, skipping the dry run and `applyToFile` that would otherwise try to reapply it.
-  const markApplied = () =>
-    act(async () => {
-      const resolved = await controller.resolveProposal(proposal.proposalId, 'accepted');
-      if (!resolved.ok && resolved.code !== 'ALREADY_RESOLVED') {
-        setError(`Couldn’t record it as applied (${resolved.code}). The diagram itself is unaffected either way.`);
-        return undefined;
-      }
-      return resolved.ok ? resolved.proposal : undefined;
-    });
-  const dismiss = () => close('dismissed');
+    if (!diffBounds || framed.current || !previewVisible) return;
+    framed.current = true;
+    const { transform } = useReactFlowStoreApi.getState();
+    const viewport = revealViewport(diffBounds, transform, { width: Math.max(200, viewWidth - PANEL_RESERVED_WIDTH), height: viewHeight });
+    if (viewport) void setViewportRef.current(viewport, { duration: 320 });
+  }, [diffBounds, previewVisible, viewWidth, viewHeight, useReactFlowStoreApi]);
 
   return (
     <div className="dc-proposal-detail">
       <div className="dc-proposal-detail-head">
         <p className="dc-proposal-summary">{proposal.summary}</p>
+        <ProposalHistory proposal={proposal} />
         <div className="dc-proposal-meta">
           <span className="dc-proposal-status-pill" data-status={proposal.status}>
             {statusLabel(proposal.status)}
@@ -513,7 +278,7 @@ function ProposalDetail({ proposal, onChanged }: { proposal: Proposal; onChanged
         )}
       </div>
 
-      {!informational && !busy && !checking && !dryRunProblem && (
+      {!informational && !decided && !busy && !checking && !dryRunProblem && (
         <div className="dc-proposal-toolbar">
           <label className="dc-proposal-toggle">
             <input type="checkbox" checked={previewVisible} onChange={(e) => setProposalPreviewVisible(e.target.checked)} />
@@ -524,7 +289,7 @@ function ProposalDetail({ proposal, onChanged }: { proposal: Proposal; onChanged
           </Button>
         </div>
       )}
-      {!informational && !busy && !checking && !dryRunProblem && diff.length > 0 && (
+      {!informational && !decided && !busy && !checking && !dryRunProblem && diff.length > 0 && (
         <ul className="dc-proposal-legend" aria-hidden="true">
           <li className="dc-proposal-legend-item dc-proposal-legend-changed">Added / modified</li>
           <li className="dc-proposal-legend-item dc-proposal-legend-removed">Removed</li>
@@ -566,7 +331,7 @@ function ProposalDetail({ proposal, onChanged }: { proposal: Proposal; onChanged
           <p className="dc-muted">Checking it against the diagram…</p>
         ) : (
           <>
-            {proposal.stale && !dryRunProblem && conflicts.length === 0 && <p className="dc-proposal-banner dc-proposal-banner-stale">The diagram changed elsewhere since this was submitted (unrelated to this proposal).</p>}
+            {proposal.stale && !decided && !dryRunProblem && conflicts.length === 0 && <p className="dc-proposal-banner dc-proposal-banner-stale">The diagram changed elsewhere since this was submitted (unrelated to this proposal).</p>}
             {conflicts.length > 0 && (
               <p className="dc-proposal-banner dc-proposal-banner-conflict">
                 {conflicts.length === 1 ? 'One thing this proposal is about has' : `${conflicts.length} things this proposal is about have`} changed since it was written — ask the agent to revise it.
@@ -580,9 +345,16 @@ function ProposalDetail({ proposal, onChanged }: { proposal: Proposal; onChanged
                 {proposal.status === 'accepting' && <p className="dc-proposal-banner dc-proposal-banner-stale">Recovering from an interrupted accept — click Accept to finish, or Dismiss if you'd rather inspect the diagram yourself.</p>}
               </>
             )}
-            {!dryRunProblem && (
+            {decided && <p className="dc-muted">{decidedNote(proposal.status)}</p>}
+            {!decided && !dryRunProblem && (
               <ul className="dc-proposal-diff" role="list">
-                {diff.map((row) => (
+                {readable.layout && (
+                  <li className="dc-proposal-diff-row dc-proposal-diff-modified">
+                    <span className="dc-proposal-diff-change">layout</span>
+                    <span className="dc-proposal-diff-label">{readable.layout}</span>
+                  </li>
+                )}
+                {readable.rows.map((row) => (
                   <li key={`${row.kind}-${row.id}-${row.path?.join('/') ?? ''}`} className={`dc-proposal-diff-row dc-proposal-diff-${row.change}`}>
                     <span className="dc-proposal-diff-change">{row.change}</span>
                     <span className="dc-proposal-diff-label">{row.label || row.id}</span>
@@ -609,38 +381,40 @@ function ProposalDetail({ proposal, onChanged }: { proposal: Proposal; onChanged
         )}
       </div>
 
-      <div className="dc-proposal-actions">
-        {informational ? (
-          <Button variant="quiet" disabled={busy} onClick={dismiss}>
-            Dismiss
-          </Button>
-        ) : alreadyApplied ? (
-          // Reject makes no sense once the change is already real; Accept would just retry a dry run
-          // that's guaranteed to fail the same way. Dismiss stays as a plain escape hatch.
-          <>
+      {!decided && (
+        <div className="dc-proposal-actions">
+          {informational ? (
             <Button variant="quiet" disabled={busy} onClick={dismiss}>
               Dismiss
             </Button>
-            <Button variant="solid" disabled={busy} onClick={markApplied}>
-              Mark as applied
-            </Button>
-          </>
-        ) : (
-          <>
-            {!recoveringAccept && (
-              <Button variant="danger" disabled={busy} onClick={reject}>
-                Reject
+          ) : alreadyApplied ? (
+            // Reject makes no sense once the change is already real; Accept would just retry a dry run
+            // that's guaranteed to fail the same way. Dismiss stays as a plain escape hatch.
+            <>
+              <Button variant="quiet" disabled={busy} onClick={dismiss}>
+                Dismiss
               </Button>
-            )}
-            <Button variant="quiet" disabled={busy} onClick={dismiss}>
-              Dismiss
-            </Button>
-            <Button variant="solid" disabled={busy || checking || !!dryRunProblem || conflicts.length > 0} onClick={accept}>
-              Accept
-            </Button>
-          </>
-        )}
-      </div>
+              <Button variant="solid" disabled={busy} onClick={markApplied}>
+                Mark as applied
+              </Button>
+            </>
+          ) : (
+            <>
+              {!recoveringAccept && (
+                <Button variant="danger" disabled={busy} onClick={reject}>
+                  Reject
+                </Button>
+              )}
+              <Button variant="quiet" disabled={busy} onClick={dismiss}>
+                Dismiss
+              </Button>
+              <Button variant="solid" disabled={busy || checking || !!dryRunProblem || conflicts.length > 0} onClick={accept}>
+                Accept
+              </Button>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

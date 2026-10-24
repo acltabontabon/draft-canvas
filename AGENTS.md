@@ -7,6 +7,10 @@ collaboration in `src/collab/transport/`.
 Make focused changes. Keep updates and final responses brief: what changed, what was checked, and
 any blocker. Complete authorized work without unnecessary confirmation.
 
+The product principle is **your architecture, your agents, your decisions**
+([Principles](docs/reference/principles.md)): no account or server that sees diagrams, the person's own
+agent, and every agent change reviewed before it lands. Design new features to keep it.
+
 See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, commands and the repository map;
 [docs/index.md](docs/index.md) for guides and reference material.
 

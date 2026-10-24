@@ -82,12 +82,12 @@ describe('commandsFor — edit mode', () => {
     expect(ids(stubContext())).toContain('focus-exit');
   });
 
-  it('"Switch to flow…" is a two-step command listing Diagram and each flow', () => {
+  it('"Switch to flow…" is a two-step command listing Whole diagram and each flow', () => {
     const state = useEditorStore.getState();
     const checkout = state.createFlow('Checkout')!;
     const ctx = stubContext();
     const stage = commandsFor(ctx).find((command) => command.id === 'switch-flow')!.run(ctx);
-    expect(stage && 'options' in stage ? stage.options.map((o) => o.title) : []).toEqual(['Diagram', 'Checkout']);
+    expect(stage && 'options' in stage ? stage.options.map((o) => o.title) : []).toEqual(['Whole diagram', 'Checkout']);
     if (stage && 'options' in stage) stage.options[1]!.run(ctx);
     expect(useEditorStore.getState().selectedFlowId).toBe(checkout);
   });

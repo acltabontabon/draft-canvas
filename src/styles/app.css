@@ -2090,6 +2090,60 @@ kbd {
   border-radius: 50%;
 }
 
+/* The same pill while a chosen flow dims the canvas: the flow it is showing, and the way back to
+   the whole diagram, worded — a bare × beside a flow's name read as "delete this flow". */
+.dc-flow-lens-indicator {
+  gap: 6px;
+  max-width: min(420px, calc(100% - 32px));
+  padding-left: 12px;
+}
+
+/* A shared or example diagram's banner holds the top-centre already (an example opens on its
+   flow): the pill sits just under it rather than on top of its buttons. */
+.dc-editor-canvas:has(.dc-read-only-banner) .dc-flow-lens-indicator {
+  top: 48px;
+}
+
+.dc-flow-lens-indicator > svg {
+  flex-shrink: 0;
+  color: var(--dc-selection);
+}
+
+.dc-flow-lens-title {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.dc-focus-indicator .dc-flow-lens-exit {
+  flex-shrink: 0;
+  width: auto;
+  gap: 6px;
+  margin-left: 4px;
+  padding: 0 4px 0 10px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-pill);
+  background: var(--dc-surface-raised);
+  color: var(--dc-text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.dc-focus-indicator .dc-flow-lens-exit:hover {
+  color: var(--dc-text);
+}
+
+.dc-flow-lens-exit kbd {
+  padding: 0 5px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-xs);
+  color: var(--dc-text-faint);
+  font: inherit;
+  font-size: 10.5px;
+  line-height: 16px;
+}
+
 /* ---------------------------------------------------------------- depth -- */
 
 /* What the view is showing, where a level is known. Quiet as the counts beside it — this is a
@@ -2936,9 +2990,12 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 .dc-present-caption {
   width: max-content;
   max-width: min(360px, calc(100% - 48px));
-  /* Match CAPTION_SIZE in useFlowPlayback: long text remains readable by scrolling without
-     taking over the clear corner the presentation camera reserved. */
-  max-height: min(132px, calc(100% - 192px));
+  /* Sized to its content, up to the corner footprint the camera keeps clear for it (CAPTION_SIZE in
+     useFlowPlayback, 172px) or the room between the exit control and the strip, if less. The old
+     132px cap was shorter than an ordinary step — a two-line headline, a caption and its chips — so
+     the chips row was cut in half by the card's own edge; with no cap at all, a long caption grew
+     over the step it explains. Longer details scroll, and the read-more control says so. */
+  max-height: min(172px, calc(100% - 192px));
   overflow: auto;
   overflow-anchor: none;
   pointer-events: none;
@@ -3370,7 +3427,30 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 }
 
 .dc-flow-panel-header strong {
+  flex: 1;
   font-size: 13px;
+}
+
+/* Tracing, once for the whole panel — a new flow, or more of the chosen one. */
+.dc-flow-panel-footer {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  padding: 5px 6px;
+  border-top: 1px solid var(--dc-border);
+}
+
+.dc-flow-panel-footer .dc-button {
+  height: 26px;
+  padding: 0 8px;
+  color: var(--dc-text-muted);
+  font-size: 12px;
+}
+
+.dc-flow-panel-footer .dc-button:hover {
+  color: var(--dc-text);
 }
 
 /* ---------------------------------------------------------------- outline -- */
@@ -3524,7 +3604,8 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   flex-direction: column;
   width: min(360px, calc(100% - 24px));
   max-height: min(560px, calc(100% - 24px));
-  /* Only `.dc-proposal-detail-scroll` scrolls — the head and the actions row must stay put. */
+  /* The panel's head stays put, the list and the open proposal scroll on their own, and the actions
+     row is pinned inside the proposal: Accept and Reject are always on screen. */
   overflow: hidden;
   border: 1px solid var(--dc-border);
   border-radius: var(--dc-radius-lg);
@@ -3550,6 +3631,10 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
+  /* Past proposals pile up (every accepted one stays listed). Unbounded, five of them filled the
+     panel and pushed the open proposal's Accept and Reject out of reach below its edge. */
+  max-height: min(168px, 24vh);
+  overflow-y: auto;
   border-bottom: 1px solid var(--dc-border);
 }
 
@@ -3582,7 +3667,11 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
-  min-height: 0;
+  /* Room for at least the summary's first line and the actions, however short the window. */
+  min-height: 120px;
+  /* The whole proposal scrolls as one, summary and toggles included: they are tall too when the
+     summary runs to several lines, and only the change list scrolling left them no room. */
+  overflow-y: auto;
   font-size: 13px;
 }
 
@@ -3690,9 +3779,7 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   display: flex;
   flex-direction: column;
   gap: 10px;
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: auto;
+  flex: 1 0 auto;
   padding: 4px 14px 12px;
 }
 
@@ -3789,12 +3876,15 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 }
 
 .dc-proposal-actions {
+  position: sticky;
+  bottom: 0;
   display: flex;
   flex-shrink: 0;
   justify-content: flex-end;
   gap: 8px;
   padding: 8px 14px 12px;
   border-top: 1px solid var(--dc-border);
+  background: var(--dc-surface);
 }
 
 /* The empty state teaches the concept and offers the one thing to do next. */
@@ -3842,13 +3932,54 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   background: var(--dc-selection-soft);
 }
 
+/* "Whole diagram" is the way out of every flow, so a hairline sets it apart from the flows below. */
+.dc-flow-diagram + .dc-flow-row {
+  position: relative;
+  margin-top: 13px;
+}
+
+.dc-flow-diagram + .dc-flow-row::before {
+  content: '';
+  position: absolute;
+  top: -7px;
+  right: 8px;
+  left: 8px;
+  border-top: 1px solid var(--dc-border);
+}
+
+.dc-flow-item + .dc-flow-item {
+  margin-top: 1px;
+}
+
+/* Every row is the same two lines — a name over a quiet line of detail — so the list keeps one
+   rhythm however long a name is. */
 .dc-flow-item-head {
   display: flex;
   align-items: center;
   gap: 2px;
-  min-height: 30px;
-  padding: 2px 4px 2px 2px;
+  min-height: 40px;
+  padding: 3px 4px 3px 2px;
   cursor: pointer;
+}
+
+.dc-flow-item-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dc-flow-item-text .dc-flow-title-input {
+  flex: none;
+}
+
+.dc-flow-item-meta {
+  padding: 0 7px;
+  font-size: 10.5px;
+  line-height: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .dc-flow-item-head:hover {
@@ -3877,16 +4008,22 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   color: var(--dc-text);
 }
 
-/* Keeps "Diagram" aligned with the flow rows, which have a real expand chevron. */
+/* Keeps "Whole diagram" aligned with the flow rows, which have a real expand chevron; it carries a
+   check while no flow is chosen. */
 .dc-flow-expand-spacer {
+  display: inline-flex;
   flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
   width: 18px;
+  color: var(--dc-selection);
 }
 
 .dc-flow-title {
-  flex: 1;
+  display: block;
+  width: 100%;
   min-width: 0;
-  padding: 3px 6px;
+  padding: 1px 6px;
   border: 1px solid transparent;
   border-radius: var(--dc-radius-xs);
   background: none;
@@ -3896,8 +4033,9 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   font-weight: 600;
   text-align: left;
   cursor: pointer;
-  white-space: normal;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .dc-flow-row[data-selected='true'] .dc-flow-title {
@@ -3905,7 +4043,7 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 }
 
 .dc-flow-diagram .dc-flow-title {
-  color: var(--dc-text-muted);
+  color: var(--dc-text);
   font-weight: 500;
 }
 
@@ -3928,13 +4066,6 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   font-weight: 600;
   outline: none;
   box-shadow: 0 0 0 2px var(--dc-selection-soft);
-}
-
-.dc-flow-step-count {
-  flex-shrink: 0;
-  margin: 0 2px 0 4px;
-  font-size: 10.5px;
-  white-space: nowrap;
 }
 
 /* Per-row actions stay out of the way until the row is hovered or holds focus — except the

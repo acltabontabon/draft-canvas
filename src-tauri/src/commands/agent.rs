@@ -226,7 +226,14 @@ pub(crate) fn configure(
 pub async fn agent_configure(app: AppHandle, patch: AgentPatch) -> Result<AgentSettings, AppError> {
     run_blocking(&app, move |app, state| {
         let agent = app.state::<Arc<Agent>>();
+        let turning_off = patch.enabled == Some(false);
         configure(state, &agent, patch)?;
+        // A companion run can't reach the diagram any more; it is stopped rather than left to fail.
+        if turning_off {
+            if let Some(companion) = app.try_state::<Arc<crate::companion::Companion>>() {
+                companion.stop_all(std::time::Duration::ZERO);
+            }
+        }
         state.events.emit(HostEvent::AgentChanged);
         Ok(settings_of(state, &agent))
     })
@@ -234,7 +241,7 @@ pub async fn agent_configure(app: AppHandle, patch: AgentPatch) -> Result<AgentS
 }
 
 /// The connector this app ships, if a client's configuration may be pointed at it now.
-fn connectable_sidecar() -> Result<PathBuf, AppError> {
+pub(crate) fn connectable_sidecar() -> Result<PathBuf, AppError> {
     let path = sidecar_path().ok_or_else(|| {
         AppError::new(
             ErrorKind::NotFound,
@@ -376,6 +383,7 @@ fn proposal_json(proposal: &Proposal, diagram: Option<&scope::Diagram>) -> Value
         "assumptions": proposal.assumptions,
         "openQuestions": proposal.open_questions,
         "sourceRef": proposal.source_ref,
+        "run": proposal.run,
         "createdAt": proposal.created_at,
         "updatedAt": proposal.updated_at,
         "resolvedAt": proposal.resolved_at,

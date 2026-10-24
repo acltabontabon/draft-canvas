@@ -50,6 +50,7 @@ import { DEFAULTS, LIMITS } from '../document/limits';
 import type { Accent, AttachableType, Attachment, DraftDocument, DraftEdge, DraftFlow, DraftFlowStep, DraftNode } from '../document/types';
 import { ACCENTS, CODE_LANGUAGES, CONNECTOR_KINDS, EDGE_SEMANTICS } from '../document/types';
 import { embed, totals, viewOf, walkGraphs, type DepthPath } from '../depth/tree';
+import { effectiveLevel } from '../depth/level';
 import { assignAnchors } from '../layout/anchors';
 import { naturalCodeSize, naturalTextSize } from '../nodes/describe';
 import { AgentError, Problems } from './errors';
@@ -74,6 +75,7 @@ import { pastDeadline, repairAnchors } from './route';
 import { arrangeView, fitGroups, placeBeside, placeInGroup, readArrange, scopeOf } from './arrange';
 import { checkQuality, isBetterReport, isClean, type QualityReport } from './quality';
 import { moveInside, moveOutside } from './restructure';
+import { newFindings, REVIEW_LIMIT, reviewView } from './review';
 import { OP_FIELDS, SET_FIELDS } from './fields';
 import { GROUP_KINDS, LINE_STYLE_NAMES, LINE_STYLES, NOTE_FORM_NAMES, NOTE_KIND_NAMES, resolveType, suggestTypes } from './vocabulary';
 import { applyRoutes, readPlace, readRoute, type PlaceSpec, type RouteSpec } from './placement';
@@ -481,6 +483,15 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
     quality.errors.push(...report.errors);
     quality.warnings.push(...report.warnings);
   });
+  // What this change left a pattern missing (`review.ts`): only the findings it brought in, never the
+  // view's standing ones — read_diagram's `review` lists those.
+  const original = viewOf(file, path);
+  if (original && (original.nodes !== view.nodes || original.edges !== view.edges)) {
+    const nested = path.length > 0;
+    const before = reviewView(original.nodes, original.edges, { level: effectiveLevel(file, path), nested, limit: Infinity });
+    const after = reviewView(view.nodes, view.edges, { level: effectiveLevel(nextFile, path), nested, limit: Infinity });
+    advisories.push(...newFindings(before, after).slice(0, REVIEW_LIMIT).map((finding) => `Review (${finding.code}): ${finding.message}`));
+  }
   return { file: nextFile, touched, counts, advisories, quality };
 }
 

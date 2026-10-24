@@ -103,6 +103,11 @@ pub enum HostEvent {
     /// Agent access was switched on or off, or its connections changed: Settings looks again. Also
     /// sent when an agent submits a proposal: the review panel lists them again.
     AgentChanged,
+    /// What a companion run (`companion/`) did, as it happens; the run's last event is `stopped`.
+    Companion {
+        run: String,
+        event: crate::companion::protocol::RunEvent,
+    },
     /// A guest on the local network joined the shared canvas (`collab/`). Always before any of its
     /// messages.
     CollabLanOpen {

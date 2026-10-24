@@ -175,6 +175,37 @@ async fn a_real_client_lists_the_tools_and_round_trips_a_call() {
     client.cancel().await.unwrap();
     let seen = app.await.unwrap();
     assert_eq!(seen[0]["type"], "hello");
+    assert!(
+        seen[0].get("run").is_none(),
+        "an agent the person connected is no run"
+    );
+}
+
+#[tokio::test]
+async fn an_agent_the_companion_started_names_its_run_in_the_hello() {
+    let dir = tempfile::tempdir().unwrap();
+    let app = fake_app(dir.path(), |_, _| json!({"diagrams": []}));
+    let agent_dir = dir.path().to_path_buf();
+    let client = ()
+        .serve(
+            TokioChildProcess::new(Command::new(sidecar()).configure(|c| {
+                c.env("DRAFT_CANVAS_AGENT_DIR", &agent_dir)
+                    .env("DRAFT_CANVAS_RUN", "3f1c2a4e-0000-4000-8000-000000000001");
+            }))
+            .unwrap(),
+        )
+        .await
+        .unwrap();
+    client
+        .call_tool(
+            CallToolRequestParams::new("get_capabilities").with_arguments(serde_json::Map::new()),
+        )
+        .await
+        .unwrap();
+    client.cancel().await.unwrap();
+    let seen = app.await.unwrap();
+    assert_eq!(seen[0]["type"], "hello");
+    assert_eq!(seen[0]["run"], "3f1c2a4e-0000-4000-8000-000000000001");
 }
 
 #[tokio::test]

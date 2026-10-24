@@ -31,6 +31,47 @@ configure by hand, open **Set it up by hand instead** (Cursor: **Copy the config
 The skill installs in `~/.claude/skills` (Claude Code) or `~/.agents/skills` (other agents) and
 updates with Draft Canvas. An edited copy is kept until you click **Replace skill**.
 
+## Ask Nodi, on the canvas
+
+Nodi is the desktop app's companion: ask your own Claude Code or Codex about the diagram you are
+looking at, without leaving it for a terminal. It appears in the canvas corner once Draft Canvas finds
+one of them installed, and needs agent access on and the diagram saved in an allowed folder. Until
+then it says what is missing and offers the fix.
+
+![Nodi offering replies about the diagram.](../media/guides/nodi-open.png)
+
+1. Click Nodi, its speech bubble, or press ⌘J (Ctrl+J). Select shapes first to ask about them; the
+   selection shows in the message box, and × asks about the whole view instead.
+2. Pick one of Nodi's suggestions (**Walk me through it**, **What breaks first?**, …) or type.
+3. Read the answer in the bubble, which holds the whole conversation; past two turns, the earlier
+   ones fold behind one line. On its top edge, the pencil starts a new conversation and `>_` copies a
+   command that continues it in your agent's own terminal UI.
+
+Answers point at the diagram: a shape or connector Nodi talks about shows as its name, which lights
+it on the canvas, and each point gets a numbered pin on the part it is about. Click a pin to read
+that point.
+
+![A risk review pinned onto the diagram.](../media/guides/nodi-points.png)
+
+A change comes back as a proposal on the canvas, drawn solid with what changes in teal; a change that
+moves shapes is shown on a tracing sheet over the diagram. **Now / Proposed** compares, and **Accept**
+applies it as one undo step. Ask Nodi to adjust it ("keep the cache, but use Redis") and it revises
+the same proposal; the chip lists earlier versions. **Review changes first** under the message box
+switches to **Apply changes directly**, where changes land at once and Undo takes them back.
+
+![A proposal on the canvas, beside the change.](../media/guides/nodi-proposal.png)
+
+![A tidy-up on the tracing sheet: each moved shape trails back to where it stands.](../media/guides/nodi-tracing.png)
+
+- **What runs:** your own CLI, signed in as you, in the background. It gets the Draft Canvas tools for
+  this one diagram and nothing else: no shell, no file access, no other MCP servers, no hooks.
+- **Two agents:** with both installed, the name under the message box switches between them. Each
+  diagram keeps one conversation per agent; the pencil starts over.
+- **What it uses:** the line under the message box shows the conversation's new tokens; each turn
+  shows its own, and how much the agent re-read from its cache (cheaper). With an API key, the cost too.
+- **Where conversations are kept:** the agent's own sessions (`~/.claude/projects`,
+  `~/.codex/sessions`). Draft Canvas keeps the conversation shown only while the app runs.
+
 ## Draw a repository
 
 Open your agent in the repository and ask:
@@ -94,5 +135,7 @@ In **Settings → AI agents**:
 | Layout refused | Ask for a smaller diagram, or put detail inside services. |
 | Version mismatch, or Settings shows **Update** *agent* | Click it to point the agent at this copy of Draft Canvas. |
 | Claude Code finds Draft Canvas in one folder only | Use **Add to Claude Code**, which sets it up for every project. |
+| No Nodi in the canvas corner | Install Claude Code (2.1.295 or later) or Codex (0.163.0 or later), then reopen the diagram. |
+| Nodi says the agent isn't signed in | Run `claude` or `codex` once in Terminal to sign in, then try again. |
 
 Tools, limits and error codes: [Agent integration](../reference/agent-integration.md).

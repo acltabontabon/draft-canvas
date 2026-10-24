@@ -326,3 +326,61 @@ describe('update_diagram file-wide limits', () => {
     expect(applyUpdate(roomy, [], [{ op: 'add', flows: [{ id: 'g', title: 'Refund', steps: ['u'] }] }], undefined).file.flows.map((f) => f.id)).toContain('g');
   });
 });
+
+describe('semantic review for agents', () => {
+  const queued = (raw: Record<string, unknown> = {}) =>
+    build({
+      nodes: [
+        { id: 'api', type: 'api', label: 'Checkout API' },
+        { id: 'q', type: 'queue', label: 'Orders' },
+        { id: 'w', type: 'worker', label: 'Billing Worker' },
+      ],
+      relationships: [
+        { id: 'p', from: 'api', to: 'q', semantic: 'publishes' },
+        { id: 'c', from: 'q', to: 'w', semantic: 'consumes' },
+      ],
+      ...raw,
+    });
+  const missing = {
+    code: 'no-dead-letter',
+    ids: ['q', 'w'],
+    message: 'Queue "Orders" has a consumer ("Billing Worker") but no dead-letter path: a message that keeps failing has nowhere to go.',
+  };
+
+  it('read_diagram lists what a pattern in the view is missing, and nothing for a view with no such gap', () => {
+    expect(readDiagram(queued(), {}, 'o:x.1', 'd').review).toEqual([missing]);
+    expect(readDiagram(base(), {}, 'o:x.1', 'd').review).toBeUndefined();
+  });
+
+  it('a focused read keeps only the findings about what it is focused on', () => {
+    expect(readDiagram(queued(), { focus: { nodes: ['w'] } }, 'o:x.1', 'd').review).toEqual([missing]);
+    expect(readDiagram(queued(), { focus: { nodes: ['api'] } }, 'o:x.1', 'd').review).toBeUndefined();
+  });
+
+  it("create_diagram's receipt carries the review of what it drew", () => {
+    const out = compose({
+      title: 'T',
+      nodes: [
+        { id: 'api', type: 'api', label: 'Checkout API' },
+        { id: 'q', type: 'queue', label: 'Orders' },
+        { id: 'w', type: 'worker', label: 'Billing Worker' },
+      ],
+      relationships: [
+        { id: 'p', from: 'api', to: 'q', semantic: 'publishes' },
+        { id: 'c', from: 'q', to: 'w', semantic: 'consumes' },
+      ],
+    }, 'd_reviewtest01');
+    expect(out.receipt.review).toEqual([missing]);
+  });
+
+  it('an update says what it left missing in its advisories, once', () => {
+    const added = applyUpdate(base(), [], [{ op: 'add', nodes: [{ id: 'jobs', type: 'queue', label: 'Jobs' }], relationships: [{ id: 'pj', from: 'api', to: 'jobs', semantic: 'publishes' }] }], undefined);
+    expect(added.advisories).toContain('Review (no-consumer): Queue "Jobs" receives messages from "Orders API", but nothing consumes them.');
+    // A standing finding is read_diagram's to list, not every later receipt's.
+    const renamed = applyUpdate(added.file, [], [{ op: 'update', id: 'db', set: { label: 'Orders Store' } }], undefined);
+    expect(renamed.advisories.filter((a) => a.startsWith('Review'))).toEqual([]);
+    // Closing the gap brings nothing new either.
+    const consumed = applyUpdate(added.file, [], [{ op: 'add', nodes: [{ id: 'jw', type: 'worker', label: 'Job Runner' }, { id: 'jd', type: 'dead-letter-queue', label: 'Jobs DLQ' }], relationships: [{ id: 'cj', from: 'jobs', to: 'jw', semantic: 'consumes' }, { id: 'dj', from: 'jobs', to: 'jd' }] }], undefined);
+    expect(consumed.advisories.filter((a) => a.startsWith('Review'))).toEqual([]);
+  });
+});

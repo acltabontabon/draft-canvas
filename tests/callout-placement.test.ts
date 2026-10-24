@@ -94,6 +94,26 @@ describe('placeCallout for a connector', () => {
     for (const blocker of blockers) expect(overlapArea(rectOf(result), blocker)).toBe(0);
   });
 
+  it('stays threaded to a short connector whose endpoints crowd the marker, never docking', () => {
+    // A vertical connector with its chip row in the narrow gap between the two shapes: every spot
+    // set against the marker alone touched the source or the target by a corner, so the callout
+    // docked at the bottom of the canvas, nowhere near its connector.
+    const source: Box = { x: 600, y: 300, width: 180, height: 84 };
+    const target: Box = { x: 604, y: 434, width: 172, height: 56 };
+    const marker: Box = { x: 647, y: 398, width: 86, height: 23 };
+    const card = { width: 320, height: 125 };
+    const result = placeCallout(edgeInput({ marker, host: marker, avoid: [source, target], soft: [], size: card }));
+    expect(result.placement).not.toBe('docked');
+    const rect = { ...result, width: card.width, height: card.height };
+    expect(overlapArea(rect, source)).toBe(0);
+    expect(overlapArea(rect, target)).toBe(0);
+    expect(overlapArea(rect, flowBar)).toBe(0);
+    expect(inside(rect, bounds)).toBe(true);
+    expect(result.leader).not.toBeNull();
+    const { x1, y1, x2, y2 } = result.leader!;
+    expect(Math.hypot(x2 - x1, y2 - y1)).toBeLessThan(160);
+  });
+
   it('never lands on the flow bar', () => {
     const marker: Box = { x: 680, y: 760, width: 40, height: 18 };
     const result = placeCallout(edgeInput({ marker, host: marker, avoid: [], soft: [] }));

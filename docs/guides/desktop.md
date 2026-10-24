@@ -62,6 +62,14 @@ tray (Windows) and asks whether to keep doing that. Change it in **Settings → 
 
 For coding agents, see [Connect an AI agent](connect-an-ai-agent.md).
 
+## Nodi
+
+Nodi, in the canvas corner, asks your own Claude Code or Codex about the open diagram: explain it, find
+its risks, or propose a change you review on the canvas. It shows up once one of them is installed;
+⌘J opens it. See [Ask Nodi, on the canvas](connect-an-ai-agent.md#ask-nodi-on-the-canvas).
+
+![Nodi in the canvas corner, saying hello.](../media/guides/nodi-rest.png)
+
 ## Settings
 
 **Settings…** (`⌘,`) has five pages: **General** (closing the window), **Canvas** (drawing style,

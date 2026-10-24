@@ -245,9 +245,20 @@ impl Backend for PluginBackend {
                 ));
             };
             can_replace_bundle()?;
+            let app = self.app.clone();
             // On Windows the plugin starts the installer and ends this process, so a successful call
-            // never returns there. The page has already kept everything by now.
-            match tauri::async_runtime::spawn_blocking(move || update.install(&package)).await {
+            // never returns there. The page has already kept everything by now. Companion runs are
+            // stopped first: that exit skips `RunEvent::Exit`, and a running agent would hold the
+            // sidecar the installer replaces.
+            let install = move || {
+                if let Some(companion) =
+                    app.try_state::<std::sync::Arc<crate::companion::Companion>>()
+                {
+                    companion.stop_all(std::time::Duration::from_secs(3));
+                }
+                update.install(&package)
+            };
+            match tauri::async_runtime::spawn_blocking(install).await {
                 Ok(Ok(())) => {}
                 Ok(Err(error)) => return Err(UpdateError::InstallFailed(error.to_string())),
                 Err(error) => return Err(UpdateError::InstallFailed(error.to_string())),

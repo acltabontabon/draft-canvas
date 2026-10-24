@@ -151,10 +151,13 @@ fn unavailable(message: impl Into<String>) -> AppError {
 
 // --- Codex -------------------------------------------------------------------------------------
 
+/// Codex's own folder: `CODEX_HOME`, else `~/.codex`.
+pub(crate) fn codex_home() -> Option<PathBuf> {
+    env_dir("CODEX_HOME").or_else(|| home().map(|h| h.join(".codex")))
+}
+
 fn codex_config() -> Option<PathBuf> {
-    env_dir("CODEX_HOME")
-        .or_else(|| home().map(|h| h.join(".codex")))
-        .map(|dir| dir.join("config.toml"))
+    codex_home().map(|dir| dir.join("config.toml"))
 }
 
 fn codex_entry(doc: &toml_edit::DocumentMut) -> Option<Entry> {
@@ -400,7 +403,7 @@ fn find_cli(program: &str, names: &[&str], known: Vec<PathBuf>) -> Option<PathBu
         .or_else(|| login_shell_find(program))
 }
 
-fn find_claude() -> Option<PathBuf> {
+pub(crate) fn find_claude() -> Option<PathBuf> {
     let exe = if cfg!(windows) {
         "claude.exe"
     } else {
@@ -417,8 +420,27 @@ fn find_claude() -> Option<PathBuf> {
     find_cli("claude", &[exe], known)
 }
 
+/// The Codex CLI: its standalone installer's folder, Homebrew, or an npm global (`codex.cmd` on
+/// Windows), wherever the person's shell finds it.
+pub(crate) fn find_codex() -> Option<PathBuf> {
+    let names: &[&str] = if cfg!(windows) {
+        &["codex.exe", "codex.cmd"]
+    } else {
+        &["codex"]
+    };
+    let known = home()
+        .map(|home| {
+            vec![
+                home.join(".local/bin").join(names[0]),
+                home.join(".codex/bin").join(names[0]),
+            ]
+        })
+        .unwrap_or_default();
+    find_cli("codex", names, known)
+}
+
 /// This process's PATH with `dir` first, or `None` when there is no folder to add.
-fn path_with(dir: Option<&Path>) -> Option<std::ffi::OsString> {
+pub(crate) fn path_with(dir: Option<&Path>) -> Option<std::ffi::OsString> {
     let dir = dir.filter(|d| !d.as_os_str().is_empty())?;
     let inherited = std::env::var_os("PATH").unwrap_or_default();
     std::env::join_paths(
@@ -448,14 +470,15 @@ fn login_shell_find(_program: &str) -> Option<PathBuf> {
     None
 }
 
-struct Output {
+pub(crate) struct Output {
     success: bool,
-    stdout: Vec<u8>,
-    stderr: Vec<u8>,
+    pub(crate) stdout: Vec<u8>,
+    /// Some CLIs answer a status question here (`codex login status`).
+    pub(crate) stderr: Vec<u8>,
 }
 
 /// Runs `command` without a console window, giving up (and stopping it) after `limit`.
-fn run(mut command: Command, limit: Duration) -> std::io::Result<Output> {
+pub(crate) fn run(mut command: Command, limit: Duration) -> std::io::Result<Output> {
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;

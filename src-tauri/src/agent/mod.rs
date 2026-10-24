@@ -17,6 +17,7 @@ pub mod endpoint;
 pub mod ledger;
 pub mod page;
 pub mod proposals;
+pub mod runs;
 pub mod scope;
 pub mod session;
 pub mod skill;
@@ -62,6 +63,8 @@ pub struct Agent {
     pub(crate) gates: Mutex<HashMap<u64, String>>,
     /// The diagrams each agent session created or changed (see `session`).
     pub(crate) sessions: session::Sessions,
+    /// Agents the companion started, and what each may reach (see `runs`).
+    pub(crate) runs: runs::Runs,
     /// Page request id → where its progress goes (the calling connection), while it is worked on.
     pub(crate) progress: Mutex<HashMap<u64, broker::ProgressSink>>,
     connections: AtomicUsize,
@@ -84,6 +87,7 @@ impl Agent {
             active: Mutex::new(None),
             gates: Mutex::default(),
             sessions: session::Sessions::default(),
+            runs: runs::Runs::default(),
             progress: Mutex::default(),
             connections: AtomicUsize::new(0),
             background_ready: AtomicBool::new(false),
@@ -202,6 +206,17 @@ impl Agent {
             return None;
         }
         lock(&self.proposals).as_mut().map(work)
+    }
+
+    /// Ends a companion run on the bridge's side: its connection admits nothing more, and each page
+    /// request it hasn't committed is cancelled. One already past its commit gate finishes; a commit
+    /// is never cut in half, and Undo is the way back from it.
+    pub fn end_run(&self, run: &str) {
+        for call in self.runs.close(run) {
+            if let Some(page_id) = call.current() {
+                self.page.cancel(page_id);
+            }
+        }
     }
 
     pub fn set_active(&self, active: Option<ActiveDoc>) {

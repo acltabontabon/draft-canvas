@@ -655,6 +655,7 @@ async function update(api: DesktopApi, host: AgentHost, event: Request) {
     title: snapshot.file.metadata.title,
     target: 'open',
     path,
+    ...(event.context.run ? { run: event.context.run } : {}),
     ...(startView ? { base: { nodes: startView.nodes, edges: startView.edges } } : {}),
   });
   let result = await candidateOrUpdate(event, snapshot.file, path, handOut(host, snapshot), api);
@@ -744,7 +745,7 @@ async function updateFile(api: DesktopApi, host: AgentHost, event: Request, expe
   const path = args.previewId !== undefined && args.view === undefined
     ? readPreview(args.previewId, context.diagramId ?? '', context.session ?? '', current).path
     : viewPathOf(parsed.document, args.view);
-  agentActivity.begin({ id: event.id, tool: 'update_diagram', title: parsed.document.metadata.title, target: 'file', path });
+  agentActivity.begin({ id: event.id, tool: 'update_diagram', title: parsed.document.metadata.title, target: 'file', path, ...(context.run ? { run: context.run } : {}) });
   const result = await candidateOrUpdate(event, parsed.document, path, current, api);
   if (result.kind !== 'update') throw new AgentError('INTERNAL', 'The edit could not be worked out.');
   if (result.problems.length) throw layoutConstrained(result);

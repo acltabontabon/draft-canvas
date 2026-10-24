@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { agentGhostDiff } from '../src/canvas/agentGhostDiff';
+import { agentGhostDiff, movedShapes } from '../src/canvas/agentGhostDiff';
 import { createEdge, createNode } from '../src/document/factory';
 
 describe('agentGhostDiff', () => {
@@ -97,5 +97,30 @@ describe('agentGhostDiff', () => {
     expect(diff.addedEdges).toEqual([]);
     expect(diff.modifiedEdges).toEqual([]);
     expect(diff.removedEdges).toEqual([]);
+  });
+});
+
+describe('movedShapes', () => {
+  it('names the shapes a change moves or resizes, with where they stand now', () => {
+    const a = createNode({ id: 'a', type: 'service', x: 0, y: 0 });
+    const b = createNode({ id: 'b', type: 'service', x: 200, y: 0 });
+    const added = createNode({ id: 'c', type: 'service', x: 400, y: 0 });
+    const moved = movedShapes(
+      { nodes: [a, b], edges: [] },
+      { nodes: [{ ...a, text: 'Renamed' }, { ...b, x: 260 }, added], edges: [] },
+    );
+    expect(moved.map((m) => [m.node.id, m.from.x, m.node.x])).toEqual([['b', 200, 260]]);
+  });
+
+  it('leaves out a boundary growing to fit, and a box growing with its label', () => {
+    const group = createNode({ id: 'g', type: 'group', x: 0, y: 0, width: 300, height: 200 });
+    const a = createNode({ id: 'a', type: 'service', x: 20, y: 40 });
+    const after = [{ ...group, width: 420, height: 260 }, { ...a, width: a.width + 40 }];
+    expect(movedShapes({ nodes: [group, a], edges: [] }, { nodes: after, edges: [] })).toEqual([]);
+  });
+
+  it('is empty for a change that only adds or relabels', () => {
+    const a = createNode({ id: 'a', type: 'service', x: 0, y: 0 });
+    expect(movedShapes({ nodes: [a], edges: [] }, { nodes: [{ ...a, text: 'New name' }], edges: [] })).toEqual([]);
   });
 });

@@ -54,7 +54,7 @@ fn in_capability(capability: &str) -> BTreeSet<String> {
 #[test]
 fn the_handler_the_manifest_and_the_capability_list_the_same_commands() {
     let handler = in_handler();
-    assert_eq!(handler.len(), 66, "{handler:?}");
+    assert_eq!(handler.len(), 72, "{handler:?}");
     assert_eq!(
         handler,
         in_manifest(),
