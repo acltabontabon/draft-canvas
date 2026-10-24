@@ -73,6 +73,7 @@ import {
 import { anchorRectOf, attachNote, captionSizer, connectorFor, edgeLabelSize, flowFromSpec, lineOf, measureContext, noteNode, placeBlock, placeRoom, sizeToFit } from './place';
 import { pastDeadline, repairAnchors } from './route';
 import { arrangeView, fitGroups, placeBeside, placeInGroup, readArrange, scopeOf } from './arrange';
+import { arrangeFreshRoom } from './compile';
 import { checkQuality, isBetterReport, isClean, type QualityReport } from './quality';
 import { moveInside, moveOutside } from './restructure';
 import { newFindings, REVIEW_LIMIT, reviewView } from './review';
@@ -228,6 +229,7 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
       const arranged = arrangeView(view, request, ctx, problems, at);
       if (!arranged) return;
       view = arranged.view;
+      advisories.push(...(arranged.advisories ?? []));
       for (const id of arranged.touched) touched.add(id);
       counts.arranged = (counts.arranged ?? 0) + arranged.touched.size;
       return;
@@ -982,7 +984,9 @@ function addToView(
     flows: [],
     notes: [],
   };
-  const block = spec.nodes.length || spec.groups.length ? placeRoom(spec, layout, ctx) : undefined;
+  // Into an empty view, the flows that come with it say what the main path is (see `arrangeFreshRoom`).
+  const fresh = view.nodes.length === 0 && bridging.length === 0;
+  const block = spec.nodes.length || spec.groups.length ? (fresh ? arrangeFreshRoom({ ...spec, flows: room.flows }, layout, ctx) : placeRoom(spec, layout, ctx)) : undefined;
   if (block) advisories.push(...block.advisories);
   // The existing elements the new part connects to, most connections first: where it may go.
   const weight = new Map<string, number>();

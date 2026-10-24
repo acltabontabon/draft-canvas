@@ -12,6 +12,7 @@ import { walkGraphs } from '../depth/tree';
 import { deserializeDocument, serializeDocument } from '../export/project';
 import { AgentError } from './errors';
 import { readCreate, type CreateSpec, type LayoutSpec, type RoomSpec } from './input';
+import { hasPeerCalls } from '../layout/layered';
 import { measureContext, placeRoom, type PlacedRoom } from './place';
 import { silent, type Report } from './progress';
 import { checkFit, isBetterCandidate, isCleanCandidate, checkQuality, renderedBoundsOf, smallestFontPresent, type FitReport, type QualityIssue, type QualityReport } from './quality';
@@ -110,6 +111,18 @@ function composeWithin(raw: unknown, diagramId: string, report: Report): Compose
       ...(review.length ? { review } : {}),
     },
   };
+}
+
+/**
+ * A block added into a view with nothing in it yet (an element's new inside view, most often) is
+ * laid out as a new diagram's room is — around its main path, with the whole repair ladder — not
+ * placed once as a part beside what's there: there is nothing there, and the one try was the
+ * difference between an agent's add and the same diagram created whole.
+ */
+export function arrangeFreshRoom(room: RoomSpec, layout: LayoutSpec, ctx: ReturnType<typeof measureContext>): PlacedRoom {
+  const primary = mainFlowOf(room);
+  const local: LayoutSpec = { ...layout, ...(primary ? { primaryFlow: primary.id } : {}) };
+  return chooseArrangement(room, local, ctx, (choice) => placeRoom(room, choice, ctx), silent, false).candidate.placed;
 }
 
 /** An inside view's main path: its first flow that is not a variant and walks a relationship. */
@@ -212,6 +225,23 @@ function chooseArrangement(
     keep(judge({ ...found.layout, fans: 'unlabelled' }));
     if (hasSharedSideTrunk(found.placed) && !pastDeadline()) keep(judge({ ...found.layout, fans: 'unshared' }));
   }
+  // Peers that call each other (an API's components, one of which asks another) read as one row
+  // with a short hop between them, or as a staircase whose every step drags the caller's other
+  // connectors across the diagram — which one depends on the rest, so both are judged.
+  // Judged afresh, trunks and all: the trunks that lost in the other arrangement may win in this one.
+  // A row is kept only where it adds no crossing: it is there to stop the staircase's long lines, and
+  // a cheaper-looking one that crosses more trades the reader's main question for a shorter total.
+  if (best && hasPeerCalls(best.placed.edges) && !pastDeadline()) {
+    const staircase = best as Candidate;
+    const { fans: _fans, ...found } = staircase.layout;
+    const keepRow = (row: Candidate) => {
+      if (row.legibility.crossings <= staircase.legibility.crossings) keep(row);
+    };
+    const row = judge({ ...found, peers: 'layer' });
+    keepRow(row);
+    if (hasLabelledTrunk(row.placed) && !pastDeadline()) keepRow(judge({ ...found, peers: 'layer', fans: 'unlabelled' }));
+    if (hasSharedSideTrunk(row.placed) && !pastDeadline()) keepRow(judge({ ...found, peers: 'layer', fans: 'unshared' }));
+  }
   const repaired = tried - 1;
   if (!best) throw new AgentError('INTERNAL', 'Nothing was laid out.');
   return { candidate: best as Candidate, repaired, outOfTime };
@@ -264,9 +294,11 @@ export const JOG_COST = 10;
 
 /** Whether an arrangement in the other reading direction, costing `other` (`legibilityCost` plus
  *  jogs), reads clearly enough better than the preferred direction's `same` to be worth the flip —
- *  a diagram never turns over a few pixels of connector. Shared with `arrange`. */
-export function clearlyBetterDirection(other: number, same: number): boolean {
-  return other < same * CLEARLY_BETTER && same - other > MIN_GAIN;
+ *  a diagram never turns over a few pixels of connector. One that also `uncrosses` (has fewer
+ *  crossings) needs only the ratio: a crossing gone is what a reader sees, however short the gain.
+ *  Shared with `arrange`. */
+export function clearlyBetterDirection(other: number, same: number, uncrosses = false): boolean {
+  return other < same * CLEARLY_BETTER && (uncrosses || same - other > MIN_GAIN);
 }
 
 /**
@@ -282,7 +314,9 @@ function isBetterArrangement(a: Candidate, b: Candidate, preferred?: LayoutSpec[
   const cost = (c: Candidate) => legibilityCost(c.legibility) + c.found.warnings.length * JOG_COST;
   const [ca, cb] = [cost(a), cost(b)];
   if (preferred === undefined || a.layout.direction === b.layout.direction) return ca < cb;
-  return a.layout.direction === preferred ? !clearlyBetterDirection(cb, ca) : clearlyBetterDirection(ca, cb);
+  return a.layout.direction === preferred
+    ? !clearlyBetterDirection(cb, ca, b.legibility.crossings < a.legibility.crossings)
+    : clearlyBetterDirection(ca, cb, a.legibility.crossings < b.legibility.crossings);
 }
 
 /** Whether any labelled connector shares a Smart Routing trunk here (see `assignAnchors`'s labelled fan). */
@@ -307,6 +341,8 @@ export function hasSharedSideTrunk(room: { nodes: readonly DraftNode[]; edges: r
 export function legibilityReceipt(l: Legibility) {
   return {
     crossings: l.crossings,
+    // Which ones, so an agent can see what crosses instead of re-arranging until the count moves.
+    ...(l.crossed.length ? { crossed: l.crossed.slice(0, 8) } : {}),
     ...(l.detours.length ? { detours: l.detours.slice(0, 10) } : {}),
     ...(l.throughBoundaries.length ? { throughBoundaries: l.throughBoundaries.slice(0, 10) } : {}),
     ...(l.farNotes.length ? { farNotes: l.farNotes.slice(0, 10) } : {}),

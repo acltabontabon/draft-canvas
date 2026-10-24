@@ -35,9 +35,11 @@ export function adviceFor(room: RoomSpec, legibility: Legibility, primaryFlow?: 
     const crossing = room.relationships.filter((r) => inside(r.from) !== inside(r.to));
     const callers = new Set(crossing.map((r) => (inside(r.from) ? r.to : r.from)));
     // Only when it shows: the layout lines such a column up with its callers where it can. It shows
-    // as one of the boundary's own connectors going the long way round, or as any connector cutting
-    // through the boundary (the column sits in the way of what runs between its callers).
+    // as one of the boundary's own connectors going the long way round or crossing another, or as any
+    // connector cutting through the boundary (the column sits in the way of what runs between its callers).
     const troubled = new Set([...legibility.detours, ...legibility.throughBoundaries]);
+    // Or as one of them crossing another connector on its way to a caller across the view.
+    for (const [a, b] of legibility.crossed) troubled.add(a).add(b);
     if (callers.size < 2 || !(crossing.some((r) => troubled.has(r.id)) || legibility.crossedBoundaries.includes(group.id))) continue;
     const ops = members.map((m) => ({ op: 'update', id: m.id, set: { group: null } }));
     out.push(
@@ -76,13 +78,18 @@ export function adviceFor(room: RoomSpec, legibility: Legibility, primaryFlow?: 
     out.push(`Note(s) ${quote(loose)} have no "about", so they were placed after the diagram. Give each the element, boundary or relationship it describes, e.g. {op:"update", id:"${loose[0]}", set:{about:"<element id>"}}.`);
   }
 
-  // Lines everywhere: the request's order and main path are what the layout reads first.
+  // Lines everywhere: the request's order and main path are what the layout reads first. Not "try
+  // another direction": the layout compares both itself, and an agent told to try one went on to
+  // try every direction, spacing and hand placement in turn without the count moving.
   if (legibility.crossings >= MANY_CROSSINGS || legibility.detours.length >= 2 || legibility.throughBoundaries.length >= 3) {
     const hint = primaryFlow
-      ? 'try {op:"arrange", direction:"down"}'
+      ? 'the main path is already drawn straight, so look at the connectors named: one that only restates another (a caller reaching past an orchestrator to what the orchestrator already calls) can go, and a cluster of them is often one element\'s internals that belong in its "inside" view'
       : 'name the main path as a flow and pass it as layout.primaryFlow (or {op:"arrange", primaryFlow:"<flow id>"}) so it is drawn straight, and list elements in reading order, entry point first';
     const where = [...legibility.detours, ...legibility.throughBoundaries];
-    out.push(`The arrangement has ${legibility.crossings} crossing(s)${where.length ? `, and connector(s) ${quote([...new Set(where)])} run around or through other parts` : ''}. To help: ${hint}.`);
+    const pairs = legibility.crossed.slice(0, 3).map(([a, b]) => `"${a}" × "${b}"`);
+    out.push(
+      `The arrangement has ${legibility.crossings} crossing(s)${pairs.length ? ` (${pairs.join(', ')}${legibility.crossed.length > 3 ? ', …' : ''})` : ''}${where.length ? `, and connector(s) ${quote([...new Set(where)])} run around or through other parts` : ''}. Crossings come from what connects to what, not from spacing, and a direction left out is chosen by comparing both. To help: ${hint}.`,
+    );
   }
   return out;
 }

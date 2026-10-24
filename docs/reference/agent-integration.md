@@ -305,14 +305,17 @@ readable at that size; refuse if none is).
 | Error | Overlapping shapes; a member outside its boundary; clipped text; a connector through a shape; a caption over a shape or another caption; a line through a caption; connectors overlapping for over 30 px; invalid geometry | Repaired, else `LAYOUT_FAILED`. `allowDegraded: true` keeps it with `degraded: true`. | Only touched content is judged. An error is `LAYOUT_CONSTRAINED`. |
 | Warning | A lone connector between facing sides that still steps sideways | Reported | Reported |
 
-Repair tries re-anchoring, roomier spacing, then the other direction. It stops at a 6 s soft budget;
-a worker still busy at 20 s is ended. Either way nothing changes.
+Repair tries re-anchoring, roomier spacing, then the other direction. Where shapes one caller calls
+also call each other, a second layering keeps them in one row instead of a staircase; it is kept only
+when it reads better and adds no crossing. An add into an empty view (a new inside view) is laid out
+like a new diagram's room: around its first flow, with the whole ladder. Repair stops at a 6 s soft
+budget; a worker still busy at 20 s is ended. Either way nothing changes.
 
 **Legibility** (`src/agent/legibility.ts`) ranks equal candidates and is reported per view:
 
 | Measure | Counts |
 | --- | --- |
-| `crossings` | Connector crossings |
+| `crossings` | Connector crossings; `crossed` names the pairs (up to 8) |
 | `bundled` | Connectors folded into a shared trunk (a credit) |
 | `detours` | Connectors over 1.5× the distance between their shapes plus 200 px |
 | `throughBoundaries` | Connectors through a boundary neither end is in |
@@ -321,7 +324,8 @@ a worker still busy at 20 s is ended. Either way nothing changes.
 
 **Advisories** (`src/agent/advice.ts`) name what to change, with ops where possible: ungroup unrelated
 external systems, move detail inside past 8 elements per boundary or 15 per view, give a note an
-`about`, or set a `primaryFlow` when there are many crossings or detours.
+`about`, or set a `primaryFlow` when there are many crossings or detours. An `arrange` that names a
+direction keeps it, and says so when the other direction reads clearly better.
 
 Large one-shot requests (about 50+ elements) are often degraded or refused. Build in steps or use inside views.
 

@@ -17,6 +17,8 @@ type Point = { x: number; y: number };
 export interface Legibility {
   /** Places where two connectors cross (a shared trunk's members never count against each other). */
   crossings: number;
+  /** Which connectors cross, a pair each (a trunk by one of its members), so a receipt can say which. */
+  crossed: [string, string][];
   /** Connectors drawn far longer than the distance between their ends — around the outside of things. */
   detours: string[];
   /** Connectors that pass through a boundary neither of their ends is in… */
@@ -135,6 +137,7 @@ export function legibilityOf(nodes: readonly DraftNode[], edges: readonly DraftE
   // place, not once per member. Each place is counted once per pair of lines as drawn — a connector
   // or a whole trunk.
   const places = new Set<string>();
+  const pairs = new Map<string, [string, string]>();
   for (let i = 0; i < runs.length; i += 1) {
     const a = runs[i]!;
     for (let j = i + 1; j < runs.length; j += 1) {
@@ -142,7 +145,10 @@ export function legibilityOf(nodes: readonly DraftNode[], edges: readonly DraftE
       if (a.spine && a.spine === b.spine) continue;
       if (a.right < b.left || b.right < a.left || a.bottom < b.top || b.bottom < a.top) continue;
       const lines = [a.spine ?? `#${i}`, b.spine ?? `#${j}`].sort().join('\u0000');
-      for (const p of crossingsBetween(a.points, b.points)) places.add(`${lines}\u0000${Math.round(p.x)}\u0000${Math.round(p.y)}`);
+      for (const p of crossingsBetween(a.points, b.points)) {
+        places.add(`${lines}\u0000${Math.round(p.x)}\u0000${Math.round(p.y)}`);
+        if (!pairs.has(lines)) pairs.set(lines, [drawn[i]!.edge.id, drawn[j]!.edge.id]);
+      }
     }
   }
   const crossings = places.size;
@@ -186,7 +192,7 @@ export function legibilityOf(nodes: readonly DraftNode[], edges: readonly DraftE
   }
   for (const n of solid) area += n.width * n.height;
   const bounds = Number.isFinite(minX) ? (maxX - minX) * (maxY - minY) : 0;
-  return { crossings, detours, throughBoundaries, crossedBoundaries: [...crossedBoundaries], farNotes, bundled, length: Math.round(length), fill: bounds > 0 ? Math.round((area / bounds) * 1000) / 1000 : 1 };
+  return { crossings, crossed: [...pairs.values()], detours, throughBoundaries, crossedBoundaries: [...crossedBoundaries], farNotes, bundled, length: Math.round(length), fill: bounds > 0 ? Math.round((area / bounds) * 1000) / 1000 : 1 };
 }
 
 /**

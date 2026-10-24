@@ -105,6 +105,19 @@ export interface LayoutInput {
    * crowded diagram sometimes has room for its captions only that way (a repair falls back to it).
    */
   ties?: 'align' | 'balance';
+  /**
+   * `rank` (the default): every connector moves its target a layer on. `layer`: a call between two
+   * shapes the same caller also calls leaves them in one layer (see `layerComponent`); a repair
+   * compares the two and keeps the one that reads better.
+   */
+  peers?: 'rank' | 'layer';
+}
+
+/** Whether some connector joins two shapes one caller also calls: worth laying out with `peers: 'layer'` too. */
+export function hasPeerCalls(edges: readonly { source: string; target: string }[]): boolean {
+  const callers = new Map<string, Set<string>>();
+  for (const e of edges) if (e.source !== e.target) callers.set(e.target, (callers.get(e.target) ?? new Set()).add(e.source));
+  return edges.some((e) => e.source !== e.target && [...(callers.get(e.source) ?? [])].some((w) => w !== e.target && callers.get(e.target)?.has(w)));
 }
 
 export interface Rect {
@@ -135,6 +148,8 @@ const ORDER_SWEEPS = 24;
 const POSITION_PASSES = 8;
 /** Passes of the neighbour-swapping refinement after the sweeps. */
 const TRANSPOSE_PASSES = 6;
+/** A layer this small with calls between its peers tries every order of them (6! = 720). */
+const PEER_PERMUTE = 6;
 /** How wide the corridor a long edge's placeholder keeps open is, across the layer. */
 const DUMMY_THICKNESS = 18;
 /** Gap next to a placeholder: corridors can run closer together than boxes. */
@@ -348,7 +363,7 @@ export function layoutGraph(input: LayoutInput): LayoutOutput {
     return across(rect) + (bands.get(end) ?? (input.direction === 'right' ? rect.height : rect.width) / 2);
   };
   const first = new Set(input.boxes.filter((b) => b.first).map((b) => b.id));
-  const env: Env = { sizes, order, direction: input.direction, spacing: input.spacing, local, bands, ties: input.ties ?? 'align', exits, enters, endLine, first, hangs, hangsMembers: (g) => get(members, g) };
+  const env: Env = { sizes, order, direction: input.direction, spacing: input.spacing, local, bands, ties: input.ties ?? 'align', peers: input.peers ?? 'rank', exits, enters, endLine, first, hangs, hangsMembers: (g) => get(members, g) };
   // A cluster's items and connectors, its satellites (and their connectors) taken out: they are laid
   // out with the boundary they hang off, as part of its block.
   const itemsOf = (cluster: string | undefined) => (children.get(cluster) ?? []).filter((id) => !satelliteIds.has(id));
@@ -520,6 +535,7 @@ interface Env {
   /** Each box's connection line, down from its top (see `LayoutBox.band`); absent means its middle. */
   bands: Map<string, number>;
   ties: 'align' | 'balance';
+  peers: 'rank' | 'layer';
   /** Items with an edge leaving the cluster they sit in (to somewhere outside it)… */
   exits: ReadonlySet<string>;
   /** …or arriving into it from outside. */
@@ -722,9 +738,20 @@ function layerComponent(ids: string[], edges: LiftedEdge[], env: Env): Block {
   const dag = edges.map((e) => (reversed.has(e.id) ? { ...e, source: e.target, target: e.source, sourceEnd: e.targetEnd, targetEnd: e.sourceEnd } : e));
 
   // 3. Layers: longest path, then sources pulled up to just before what they feed.
+  //
+  // A call between peers doesn't push its target a layer on: when one shape calls both B and C and
+  // B also calls C, B and C are siblings of that caller (an API's components, a service's handlers),
+  // and an architect draws them as one column with the call between them, not as a staircase whose
+  // every step pulls the caller's other connectors across the diagram. Such an edge is left out of
+  // the ranking, and drawn within the layer (`flat` below) when its ends land in the same one.
+  const callers = new Map<string, Set<string>>(ids.map((id) => [id, new Set()]));
+  for (const e of dag) get(callers, e.target).add(e.source);
+  const peer = new Set(dag.filter((e) => env.peers === 'layer' && e.source !== e.target && [...get(callers, e.source)].some((w) => w !== e.target && get(callers, e.target).has(w))).map((e) => e.id));
+  const ranked = new Set(dag.filter((e) => !peer.has(e.id)).map((e) => e.id));
   const preds = new Map<string, string[]>(ids.map((id) => [id, []]));
   const succs = new Map<string, string[]>(ids.map((id) => [id, []]));
   for (const e of dag) {
+    if (!ranked.has(e.id)) continue;
     get(preds, e.target).push(e.source);
     get(succs, e.source).push(e.target);
   }
@@ -745,7 +772,22 @@ function layerComponent(ids: string[], edges: LiftedEdge[], env: Env): Block {
     }
   }
   const rank = new Map<string, number>();
-  for (const id of topo) rank.set(id, Math.max(0, ...get(preds, id).map((p) => get(rank, p) + 1)));
+  const rankAll = () => {
+    for (const id of topo) rank.set(id, Math.max(0, ...get(preds, id).map((p) => get(rank, p) + 1)));
+  };
+  rankAll();
+  // A peer call whose target came out ahead of its caller would read backwards: it ranks after all.
+  // Bounded: each pass puts back at least one, and the topological order still holds for them all.
+  for (let pass = 0; pass < peer.size; pass += 1) {
+    const back = dag.filter((e) => peer.has(e.id) && !ranked.has(e.id) && get(rank, e.target) < get(rank, e.source));
+    if (back.length === 0) break;
+    for (const e of back) {
+      ranked.add(e.id);
+      get(preds, e.target).push(e.source);
+      get(succs, e.source).push(e.target);
+    }
+    rankAll();
+  }
   for (const id of [...topo].reverse()) {
     if (get(preds, id).length === 0 && get(succs, id).length > 0) {
       rank.set(id, Math.min(...get(succs, id).map((s) => get(rank, s))) - 1);
@@ -755,9 +797,12 @@ function layerComponent(ids: string[], edges: LiftedEdge[], env: Env): Block {
   // instead of the middle, where they would cross everything after it to get out; an item entered
   // from outside and fed by nothing here is the boundary's way in, so it goes first.
   const lastRank = Math.max(...ids.map((id) => get(rank, id)));
+  // Counting peer calls too: a shape only a peer calls is not a way in.
+  const feeds = (id: string) => dag.some((e) => e.source === id && e.target !== id);
+  const fed = (id: string) => get(callers, id).size > (get(callers, id).has(id) ? 1 : 0);
   for (const id of ids) {
-    if (env.exits.has(id) && get(succs, id).length === 0 && get(preds, id).length > 0) rank.set(id, lastRank);
-    else if (env.enters.has(id) && get(preds, id).length === 0 && !env.exits.has(id)) rank.set(id, Math.min(...ids.map((other) => get(rank, other))));
+    if (env.exits.has(id) && !feeds(id) && fed(id)) rank.set(id, lastRank);
+    else if (env.enters.has(id) && !fed(id) && !env.exits.has(id)) rank.set(id, Math.min(...ids.map((other) => get(rank, other))));
   }
   const minRank = Math.min(...ids.map((id) => get(rank, id)));
   for (const id of ids) rank.set(id, get(rank, id) - minRank);
@@ -786,9 +831,16 @@ function layerComponent(ids: string[], edges: LiftedEdge[], env: Env): Block {
   const corridors: { target: string; dummies: string[] }[] = [];
   // Shapes a trunk's branch reaches, by the layer the trunk leaves from.
   const trunkInto = new Set(dag.filter((e) => e.bundled && !reversed.has(e.id)).map((e) => `${get(rank, e.source)}\u0000${e.target}`));
+  // Calls between peers that landed in one layer: drawn across it, between neighbours, so they are
+  // no link for ordering or alignment to pull on (see `adjacent` and `separation` below).
+  const flat: LiftedEdge[] = [];
   for (const e of dag) {
     const from = get(rank, e.source);
     const to = get(rank, e.target);
+    if (from === to && e.source !== e.target) {
+      flat.push(e);
+      continue;
+    }
     // A caption sits in the first gap the edge crosses; the widest one there sets that gap.
     const label = direction === 'right' ? e.labelWidth : e.labelHeight;
     const trunk = label > 0 && ((fanOut.get(e.source) ?? 0) > 1 || (fanIn.get(e.target) ?? 0) > 1) ? FAN_TRUNK : 0;
@@ -931,6 +983,44 @@ function layerComponent(ids: string[], edges: LiftedEdge[], env: Env): Block {
     }
     if (!improved) break;
   }
+  // Peers that call each other stand side by side, so the call is a short hop between neighbours
+  // rather than a line around the rest of the layer. A small layer tries every order, a larger one
+  // moves each hop's ends together; neither keeps an order that adds a crossing.
+  for (let r = 0; r < layerCount && flat.length; r += 1) {
+    const layer = at(layers, r);
+    const hops = flat.filter((e) => get(rank, e.source) === r);
+    const span = (at: Map<string, number>) => hops.reduce((sum, e) => sum + Math.abs(get(at, e.source) - get(at, e.target)) - 1, 0);
+    const pick = { order: null as string[] | null, crossings: crossings(layers, down, position), span: span(position) };
+    if (pick.span === 0) continue;
+    const judgeOrder = (order: string[]) => {
+      const trial = new Map(position);
+      order.forEach((id, i) => trial.set(id, i));
+      const shorter = span(trial);
+      if (shorter >= pick.span) return;
+      const count = crossings(layers, down, trial);
+      if (count > pick.crossings) return;
+      Object.assign(pick, { order: [...order], crossings: count, span: shorter });
+    };
+    if (layer.length <= PEER_PERMUTE) permute([...layer], 0, judgeOrder);
+    else {
+      for (const e of hops) {
+        for (const [moved, stay] of [
+          [e.target, e.source],
+          [e.source, e.target],
+        ] as const) {
+          for (const side of [0, 1]) {
+            const order = (pick.order ?? layer).filter((id) => id !== moved);
+            order.splice(order.indexOf(stay) + side, 0, moved);
+            judgeOrder(order);
+          }
+        }
+      }
+    }
+    if (pick.order) {
+      layer.splice(0, layer.length, ...pick.order);
+      layer.forEach((id, i) => position.set(id, i));
+    }
+  }
   // A shape with satellites goes to the far edge of its layer, whatever the sweeps made of it: its
   // connectors across the flow then leave the boundary without passing a sibling.
   for (const layer of layers) {
@@ -943,10 +1033,17 @@ function layerComponent(ids: string[], edges: LiftedEdge[], env: Env): Block {
 
   // 6. Positions across the layers.
   const centre = new Map<string, number>();
+  // Neighbours joined by a peer call keep the room its caption needs between them.
+  const hop = new Map<string, number>();
+  for (const e of flat) {
+    const label = direction === 'right' ? e.labelHeight : e.labelWidth;
+    for (const key of [`${e.source}\u0000${e.target}`, `${e.target}\u0000${e.source}`]) hop.set(key, Math.max(hop.get(key) ?? 0, label > 0 ? label + CAPTION_AIR : 0));
+  }
   const separation = (a: string, b: string) => {
     const sa = get(slots, a);
     const sb = get(slots, b);
-    return sa.across - sa.lead + sb.lead + (sa.dummy || sb.dummy ? DUMMY_GAP : spacing.sibling);
+    const gap = sa.dummy || sb.dummy ? DUMMY_GAP : Math.max(spacing.sibling, hop.get(`${a}\u0000${b}`) ?? 0);
+    return sa.across - sa.lead + sb.lead + gap;
   };
   for (const layer of layers) {
     let cursor = 0;
@@ -1050,6 +1147,19 @@ function layerComponent(ids: string[], edges: LiftedEdge[], env: Env): Block {
       }
     },
   };
+}
+
+/** Every order of `items` from `from` on, each passed to `visit` (the array is reused: copy to keep). */
+function permute(items: string[], from: number, visit: (order: string[]) => void): void {
+  if (from >= items.length - 1) {
+    visit(items);
+    return;
+  }
+  for (let i = from; i < items.length; i += 1) {
+    [items[from], items[i]] = [at(items, i), at(items, from)];
+    permute(items, from + 1, visit);
+    [items[from], items[i]] = [at(items, i), at(items, from)];
+  }
 }
 
 /**
