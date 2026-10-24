@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { frame, FRAME_MS, HEIGHT, WIDTH, type Mood } from './pixels';
+import { channelClock, frame, FRAME_MS, HEIGHT, WIDTH, type Mood } from './pixels';
 
 const LABEL: Record<Mood, string> = {
   idle: 'Nodi, ready',
@@ -25,12 +25,15 @@ function prefersStill(): boolean {
  * done; with reduced motion it holds still.
  */
 export function Mascot({ mood, scale = 3 }: { mood: Mood; scale?: number }) {
-  const [tick, setTick] = useState(0);
+  // Working, it follows the channel clock its caption reads too; otherwise it just counts frames.
+  const clocked = mood === 'working';
+  const [tick, setTick] = useState(() => (clocked && !prefersStill() ? channelClock().tick : 0));
   useEffect(() => {
     if (prefersStill() || mood === 'asleep') return;
-    const timer = window.setInterval(() => setTick((t) => t + 1), FRAME_MS);
+    if (clocked) setTick(channelClock().tick);
+    const timer = window.setInterval(() => setTick((t) => (clocked ? channelClock().tick : t + 1)), FRAME_MS);
     return () => window.clearInterval(timer);
-  }, [mood]);
+  }, [mood, clocked]);
   const runs = useMemo(() => frame(mood, tick), [mood, tick]);
   return (
     <svg

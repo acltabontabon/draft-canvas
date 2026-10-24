@@ -232,10 +232,24 @@ export function channelFrame(channel: Channel, t: number): Lit[] {
   return lit.filter(([x, y]) => x >= SCREEN.left && x <= SCREEN.right && y >= SCREEN.top && y <= SCREEN.bottom);
 }
 
-/** Which channel is on, `tick` frames into the work. */
+/** Which channel is on at frame `tick` of the channel clock. */
 export function channelAt(tick: number): Channel {
   return CHANNELS[Math.floor(tick / CHANNEL_TICKS) % CHANNELS.length]!;
 }
+
+/**
+ * The one clock the channels run on, read off the wall clock: the mascot's screen (`Mascot.tsx`) and
+ * the caption that jokes about it (`Companion.tsx`'s `Working`) each read it, so they change channel
+ * together. Each kept its own count before, started at different moments, and drifted apart:
+ * "scrolling Reddit" under an episode playing.
+ */
+export function channelClock(ms: number = Date.now()): { tick: number; index: number } {
+  const tick = Math.floor(ms / FRAME_MS);
+  return { tick, index: Math.floor(tick / CHANNEL_TICKS) };
+}
+
+/** How long one channel is on, in milliseconds. */
+export const CHANNEL_MS = CHANNEL_TICKS * FRAME_MS;
 
 /** A Z floating up beside the head, two pixels a step: [x, y] from the frame's top-left. */
 const ZED: [number, number][] = [[0, 0], [1, 0], [2, 0], [1, 1], [0, 2], [1, 2], [2, 2]];

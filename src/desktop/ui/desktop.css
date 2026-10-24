@@ -1630,13 +1630,16 @@
   color: var(--dc-text);
 }
 
-/* The step under way trails off as it goes (after the spinner, the label). */
-.dc-companion-activity[data-running='true'] > span:nth-child(2)::after {
+/* The step under way trails off as it goes, and never breaks from its ellipsis. */
+.dc-companion-activity-label {
+  white-space: nowrap;
+}
+
+.dc-companion-activity[data-running='true'] .dc-companion-activity-label::after {
   content: '…';
 }
 
 .dc-companion-aside {
-  margin-left: -3px;
   color: var(--dc-text-muted);
 }
 

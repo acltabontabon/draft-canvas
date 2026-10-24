@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { RunEvent } from '../../src/desktop/api';
 import { activityOf, applyRunEvent, companion, newTokens, newTurn, numberedBlocks, partsIn, replyBlocks, replyOf, replyPoints, spentOn, stepText, stopMessage, tokenCount } from '../../src/desktop/companion';
-import { CHANNEL_TICKS, CHANNELS, channelAt, channelFrame, frame, HEIGHT, ROWS, WIDTH } from '../../src/desktop/ui/mascot/pixels';
+import { CHANNEL_MS, CHANNEL_TICKS, CHANNELS, channelAt, channelClock, channelFrame, frame, HEIGHT, ROWS, WIDTH } from '../../src/desktop/ui/mascot/pixels';
 import { createHarness } from './harness';
 
 /**
@@ -292,6 +292,11 @@ describe('the mascot', () => {
       }
     }
     expect(CHANNELS.map((_, i) => channelAt(i * CHANNEL_TICKS))).toEqual([...CHANNELS]);
+    // The screen and its caption read one clock: whatever the moment, they name the same channel.
+    for (const ms of [0, 1, CHANNEL_MS - 1, CHANNEL_MS, 1_761_300_000_000, 1_761_300_004_499, 1_761_300_004_500]) {
+      const { tick, index } = channelClock(ms);
+      expect(channelAt(tick)).toBe(CHANNELS[index % CHANNELS.length]);
+    }
     // The frame held still under reduced motion has something on it too.
     expect(channelFrame(channelAt(0), 0).length).toBeGreaterThan(0);
   });

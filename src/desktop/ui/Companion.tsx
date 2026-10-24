@@ -16,7 +16,7 @@ import { activityOf, companion, newTokens, numberedBlocks, partsIn, replyBlocks,
 import { useDesktopController, useDesktopState } from '../useDesktop';
 import { useNodiShown } from '../nodiShown';
 import { Mascot } from './mascot/Mascot';
-import { CHANNEL_TICKS, CHANNELS, FRAME_MS as MASCOT_FRAME_MS, type Channel, type Mood } from './mascot/pixels';
+import { CHANNEL_MS, CHANNELS, channelClock, type Channel, type Mood } from './mascot/pixels';
 import { CHIP_HEIGHT, chipPlace, revealViewport, type Box } from './chipPlace';
 import { canCreateInside, hasInside } from '../../depth/tree';
 import { lookInside } from '../../ui/Editor/depthNavigation';
@@ -926,11 +926,19 @@ const THINKING_ASIDES: Record<Channel, string | readonly string[]> = {
  * that changes as Nodi's screen does (`pixels.ts`'s channels, the same order and pace).
  */
 function Working({ now }: { now: string | null }) {
-  const [channel, setChannel] = useState(0);
+  // The channel clock the mascot's screen runs on, so the joke is about what is on it.
+  const [channel, setChannel] = useState(() => (prefersReducedMotion() ? 0 : channelClock().index));
   useEffect(() => {
     if (now || prefersReducedMotion()) return;
-    const timer = window.setInterval(() => setChannel((c) => c + 1), CHANNEL_TICKS * MASCOT_FRAME_MS);
-    return () => window.clearInterval(timer);
+    let timer = 0;
+    const next = () => {
+      const ms = Date.now();
+      setChannel(channelClock(ms).index);
+      // Woken just after the next change of channel, wherever in this one it is now.
+      timer = window.setTimeout(next, CHANNEL_MS - (ms % CHANNEL_MS) + 5);
+    };
+    next();
+    return () => window.clearTimeout(timer);
   }, [now]);
   // A channel with more than one aside says the next one each time round.
   const said = THINKING_ASIDES[CHANNELS[channel % CHANNELS.length]!];
@@ -938,8 +946,11 @@ function Working({ now }: { now: string | null }) {
   return (
     <p className="dc-companion-activity" data-running="true">
       <span className="dc-companion-spinner" aria-hidden="true" />
-      <span>{now ?? 'Thinking'}</span>
-      {aside && <span className="dc-companion-aside">({aside})</span>}
+      {/* One run of text, so a long aside wraps under it rather than squeezing the label into a column. */}
+      <span>
+        <span className="dc-companion-activity-label">{now ?? 'Thinking'}</span>
+        {aside && <span className="dc-companion-aside"> ({aside})</span>}
+      </span>
     </p>
   );
 }
