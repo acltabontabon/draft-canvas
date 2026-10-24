@@ -254,12 +254,23 @@ describe('the controller', () => {
 describe('the mascot', () => {
   it('draws every frame inside its box, with a shadow on the ground', () => {
     expect(ROWS.every((row) => row.length === WIDTH)).toBe(true);
-    for (const mood of ['idle', 'working', 'waiting', 'happy', 'asleep', 'walking'] as const) {
+    for (const mood of ['idle', 'working', 'waiting', 'happy', 'asleep', 'walking', 'angry', 'dizzy', 'love', 'surprised', 'sleepy'] as const) {
       for (let tick = 0; tick < 32; tick += 1) {
         const runs = frame(mood, tick);
         expect(runs.every((r) => r.x >= 0 && r.x + r.width <= WIDTH && r.y >= 0 && r.y < HEIGHT)).toBe(true);
         expect(runs.at(-1)!.y).toBe(HEIGHT - 1);
       }
     }
+  });
+
+  it('shows how it feels in its face: red when cross, pink when pleased, a Z when it dozes', () => {
+    const fills = (mood: Parameters<typeof frame>[0]) => new Set(frame(mood, 0).map((r) => r.fill));
+    expect(fills('angry').has('#ff7a66')).toBe(true);
+    expect(fills('love').has('#ff9ec7')).toBe(true);
+    expect(fills('idle').has('#ff7a66')).toBe(false);
+    // Shaking: the same frame drawn a pixel apart from one tick to the next.
+    expect(frame('angry', 0)[0]!.x - frame('angry', 1)[0]!.x).toBe(2);
+    // The Z beside the head, above where the head starts.
+    expect(frame('sleepy', 0).some((r) => r.x >= 19 && r.y < 2)).toBe(true);
   });
 });

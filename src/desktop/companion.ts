@@ -5,7 +5,7 @@
  *
  * No React here: `ui/Companion.tsx` reads it through `subscribe`/`snapshot`.
  */
-import type { RunEvent, RunSnapshot, StopReason, ToolStatus, Usage } from './api';
+import type { AgentKind, RunEvent, RunSnapshot, StopReason, ToolStatus, Usage } from './api';
 
 export interface Step {
   id: string;
@@ -41,6 +41,8 @@ export interface Conversation {
   turns: Turn[];
   /** What turns no longer kept (past `KEEP_TURNS`) used, so the conversation's total stays whole. */
   earlier?: Spent;
+  /** The agent the latest turn ran on: its session is the one Continue in Terminal carries on. */
+  agent?: AgentKind;
 }
 
 /** What a conversation has used so far. */
@@ -279,14 +281,14 @@ export const companion = {
   },
 
   /** The person sent a prompt: a new turn, working until it stops. */
-  begin(diagramId: string, runId: string, prompt: string, about: string | null): void {
+  begin(diagramId: string, runId: string, prompt: string, about: string | null, agent?: AgentKind): void {
     const conversation = conversations.get(diagramId) ?? { diagramId, turns: [] };
     const turns = [...conversation.turns, newTurn(runId, prompt, about)];
     // What a dropped turn used still counts: the total is the conversation's, not the kept turns'.
     const dropped = turns.slice(0, Math.max(0, turns.length - KEEP_TURNS));
     const earlier = dropped.reduce<Spent | null>(add, conversation.earlier ?? null);
     for (const turn of dropped) runs.delete(turn.runId);
-    conversations.set(diagramId, { ...conversation, turns: turns.slice(-KEEP_TURNS), ...(earlier ? { earlier } : {}) });
+    conversations.set(diagramId, { ...conversation, turns: turns.slice(-KEEP_TURNS), ...(earlier ? { earlier } : {}), ...(agent ? { agent } : {}) });
     runs.set(runId, diagramId);
     changed();
   },

@@ -4,6 +4,7 @@ import { Icon } from '../../../ui/common/Icon';
 import { SegmentedControl } from '../../../ui/common/SegmentedControl';
 import type { AgentClient, AgentClientSetup, AgentSettings as AgentState, AgentSkillSetup, AgentSkillTarget } from '../../api';
 import { useDesktopController, useDesktopState } from '../../useDesktop';
+import { setNodiShown, useNodiShown } from '../../nodiShown';
 import {
   claudeCodeCommand,
   clientLine,
@@ -34,9 +35,20 @@ export function AgentSettings() {
   useEffect(() => {
     void controller.refreshAgent();
   }, [controller]);
+  const nodi = useNodiShown();
 
   return (
     <SettingsPage title="AI agents">
+      <SettingsSection title="Nodi">
+        <ChoiceRow
+          type="checkbox"
+          toggle
+          label="Show Nodi on the canvas"
+          description="Your own Claude Code or Codex, in the canvas corner: ask about the diagram without leaving it. Off hides it everywhere."
+          checked={nodi}
+          onChange={(event) => setNodiShown(event.target.checked)}
+        />
+      </SettingsSection>
       <SettingsSection title="Access" busy={!agent}>
         <ChoiceRow
           type="checkbox"

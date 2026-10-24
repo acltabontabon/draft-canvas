@@ -4,7 +4,7 @@
  * `Mascot.tsx`.
  */
 
-export type Mood = 'idle' | 'working' | 'waiting' | 'happy' | 'asleep' | 'walking';
+export type Mood = 'idle' | 'working' | 'waiting' | 'happy' | 'asleep' | 'walking' | 'angry' | 'dizzy' | 'love' | 'surprised' | 'sleepy';
 
 export const WIDTH = 24;
 /** The figure's 25 rows, two rows above it to hop into, and one for its shadow. */
@@ -48,14 +48,28 @@ export const PALETTE: Record<string, string> = {
   d: '#0f1d1c',
   g: '#b9fff5',
   k: '#2c6f67',
+  /** A screen gone red with rage, and one gone soft. */
+  r: '#ff7a66',
+  p: '#ff9ec7',
 };
 
 export const SHADOW = 'rgba(0, 0, 0, 0.32)';
 
-type Face = 'idle' | 'blink' | 'look' | 'happy' | 'asleep' | 'dots1' | 'dots2' | 'dots3';
+type Face = 'idle' | 'blink' | 'look' | 'happy' | 'asleep' | 'dots1' | 'dots2' | 'dots3' | 'angry' | 'dizzy' | 'love' | 'surprised';
+
+/** The screen's colour for a face, when it isn't the usual glow. */
+const FACE_COLOUR: Partial<Record<Face, string>> = { angry: 'r', love: 'p' };
 
 /** Lit screen pixels for each face, as [x, y]. */
 const FACES: Record<Face, [number, number][]> = {
+  // Brows down to the middle, eyes narrowed, mouth turned down.
+  angry: [[6, 8], [7, 8], [8, 9], [7, 10], [8, 10], [17, 8], [16, 8], [15, 9], [15, 10], [16, 10], [10, 12], [11, 11], [12, 11], [13, 12]],
+  // X for eyes, a wobbly mouth.
+  dizzy: [[6, 8], [8, 8], [7, 9], [6, 10], [8, 10], [15, 8], [17, 8], [16, 9], [15, 10], [17, 10], [10, 12], [11, 11], [12, 12], [13, 11]],
+  // A heart for each eye.
+  love: [[6, 8], [8, 8], [6, 9], [7, 9], [8, 9], [7, 10], [15, 8], [17, 8], [15, 9], [16, 9], [17, 9], [16, 10], [10, 11], [11, 12], [12, 12], [13, 11]],
+  // Eyes up and wide, mouth an O.
+  surprised: [[7, 7], [8, 7], [7, 8], [8, 8], [15, 7], [16, 7], [15, 8], [16, 8], [11, 10], [12, 10], [10, 11], [13, 11], [11, 12], [12, 12]],
   idle: [[7, 8], [8, 8], [7, 9], [8, 9], [7, 10], [8, 10], [15, 8], [16, 8], [15, 9], [16, 9], [15, 10], [16, 10], [11, 11], [12, 11]],
   blink: [[7, 10], [8, 10], [15, 10], [16, 10], [11, 11], [12, 11]],
   look: [[6, 8], [7, 8], [6, 9], [7, 9], [6, 10], [7, 10], [14, 8], [15, 8], [14, 9], [15, 9], [14, 10], [15, 10], [10, 11], [11, 11]],
@@ -81,9 +95,27 @@ export interface Run {
   fill: string;
 }
 
-/** What one frame shows: the face and how high the mascot is, from its mood and the frame count. */
-export function pose(mood: Mood, tick: number): { face: Face; lift: number; stride?: number } {
+/** A Z floating up beside the head, two pixels a step: [x, y] from the frame's top-left. */
+const ZED: [number, number][] = [[0, 0], [1, 0], [2, 0], [1, 1], [0, 2], [1, 2], [2, 2]];
+
+/** What one frame shows: the face, how high the mascot is and how far it shakes sideways, and a Z
+ *  above it when it dozes, from its mood and the frame count. */
+export function pose(mood: Mood, tick: number): { face: Face; lift: number; stride?: number; shake?: number; zed?: { x: number; y: number } } {
   switch (mood) {
+    case 'angry':
+      // Shaking with it, a pixel each way.
+      return { face: 'angry', lift: 0, shake: tick % 2 === 0 ? 1 : -1 };
+    case 'dizzy':
+      return { face: 'dizzy', lift: 0, shake: [0, 1, 0, -1][Math.floor(tick / 2) % 4]! };
+    case 'love':
+      return { face: 'love', lift: Math.floor(tick / 3) % 2 };
+    case 'surprised':
+      return { face: tick % 24 === 23 ? 'blink' : 'surprised', lift: tick % 24 < 2 ? 1 : 0 };
+    case 'sleepy': {
+      // Eyes shut, a slow breath, and a Z that drifts up and starts again.
+      const step = Math.floor(tick / 3) % 4;
+      return { face: 'asleep', lift: Math.floor(tick / 8) % 2, zed: { x: 19 + (step % 2), y: 3 - step } };
+    }
     case 'walking':
       // A step every other frame, bobbing up on each one, eyes on where it is going.
       return { face: 'look', lift: tick % 2, stride: tick % 2 };
@@ -102,9 +134,10 @@ export function pose(mood: Mood, tick: number): { face: Face; lift: number; stri
 
 /** The frame as runs, ready to draw. */
 export function frame(mood: Mood, tick: number): Run[] {
-  const { face, lift, stride } = pose(mood, tick);
+  const { face, lift, stride, shake = 0, zed } = pose(mood, tick);
   const grid = ROWS.map((row) => row.split(''));
-  for (const [x, y] of FACES[face]) grid[y]![x] = 'g';
+  const lit = FACE_COLOUR[face] ?? 'g';
+  for (const [x, y] of FACES[face]) grid[y]![x] = lit;
   if (stride !== undefined) {
     const [upper, lower] = STRIDES[stride]!;
     grid[ROWS.length - 2] = upper.split('');
@@ -122,10 +155,12 @@ export function frame(mood: Mood, tick: number): Run[] {
       }
       let n = 1;
       while (x + n < row.length && row[x + n] === c) n += 1;
-      runs.push({ x, y: y + top, width: n, fill: PALETTE[c]! });
+      runs.push({ x: x + shake, y: y + top, width: n, fill: PALETTE[c]! });
       x += n;
     }
   });
+  // Drifting up out of the frame: the rows above the top are simply not drawn.
+  if (zed) for (const [dx, dy] of ZED) if (zed.y + dy - 3 >= 0) runs.push({ x: zed.x + dx, y: zed.y + dy - 3, width: 1, fill: PALETTE.g! });
   // The shadow stays on the ground, smaller while the mascot is up.
   runs.push(lift ? { x: 8, y: HEIGHT - 1, width: 8, fill: SHADOW } : { x: 6, y: HEIGHT - 1, width: 12, fill: SHADOW });
   return runs;

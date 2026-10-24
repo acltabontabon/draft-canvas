@@ -68,6 +68,11 @@ function fakeController(proposal: Proposal) {
     companionCancel: vi.fn(async () => {}),
     companionForget: vi.fn(async () => {}),
     openAgentSettings: vi.fn(),
+    // Settings' one-click setups, all done already unless a test says otherwise.
+    agentClients: vi.fn(async (): Promise<unknown[]> => []),
+    agentSkills: vi.fn(async (): Promise<unknown[]> => []),
+    connectAgentClient: vi.fn(async (_client: string): Promise<unknown> => null),
+    installAgentSkill: vi.fn(async (_target: string): Promise<unknown> => null),
     getProposal: vi.fn(async () => record()),
     listProposals: vi.fn(async () => [record()]),
     onProposalsChanged: vi.fn(() => () => {}),
@@ -98,8 +103,9 @@ function mount(controller: ReturnType<typeof fakeController>) {
 }
 
 async function acceptButton() {
-  const button = await screen.findByRole('button', { name: 'Accept' });
-  await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false));
+  // The dry run that enables Accept is real work; a loaded runner can take past the 1 s default.
+  const button = await screen.findByRole('button', { name: 'Accept' }, { timeout: 5000 });
+  await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false), { timeout: 5000 });
   return button;
 }
 

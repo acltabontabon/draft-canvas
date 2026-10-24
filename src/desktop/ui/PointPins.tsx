@@ -52,15 +52,18 @@ function spotsOf(points: readonly ReplyPoint[], nodes: readonly DraftNode[], edg
   const spots = new Map<number, Spot & { slot: number }>();
   const taken = new Map<string, number>();
   for (const { point, parts } of points) {
-    for (const part of parts) {
+    // On the first of its parts no earlier point is pinned to, where it names one: four points that
+    // each start at the entry point otherwise stack four pins on it and none on what they are about.
+    const placeable = parts.flatMap((part) => {
       const node = nodeById.get(part);
       const spot = node ? nodeSpot(node) : edgeIds.has(part) ? edgeSpot(part, transform) : null;
-      if (!spot) continue;
-      const slot = taken.get(part) ?? 0;
-      taken.set(part, slot + 1);
-      spots.set(point, { ...spot, slot });
-      break;
-    }
+      return spot ? [{ part, spot }] : [];
+    });
+    const chosen = placeable.find(({ part }) => !taken.has(part)) ?? placeable[0];
+    if (!chosen) continue;
+    const slot = taken.get(chosen.part) ?? 0;
+    taken.set(chosen.part, slot + 1);
+    spots.set(point, { ...chosen.spot, slot });
   }
   return spots;
 }

@@ -38,6 +38,11 @@ function fakeController() {
     refreshCompanionProposals: vi.fn(async () => {}),
     refreshAgent: vi.fn(async () => {}),
     openAgentSettings: vi.fn(),
+    // Settings' one-click setups, all done already unless a test says otherwise.
+    agentClients: vi.fn(async (): Promise<unknown[]> => []),
+    agentSkills: vi.fn(async (): Promise<unknown[]> => []),
+    connectAgentClient: vi.fn(async (_client: string): Promise<unknown> => null),
+    installAgentSkill: vi.fn(async (_target: string): Promise<unknown> => null),
     // As the shell answers: where access now stands.
     configureAgent: vi.fn(async (patch: { enabled?: boolean; project?: { handle: string; agent: boolean } }) => {
       const now = desktopStore.getSnapshot().agent!;
@@ -72,6 +77,9 @@ function mount() {
 
 async function settle() {
   await act(async () => {
+    for (let i = 0; i < 5; i += 1) await Promise.resolve();
+    // And one timer tick: stepping inside first commits the focused composer, a tick later.
+    await new Promise((resolve) => setTimeout(resolve, 0));
     for (let i = 0; i < 5; i += 1) await Promise.resolve();
   });
 }
@@ -357,11 +365,53 @@ describe('the companion', () => {
     expect(desktopStore.getSnapshot().agent?.enabled).toBe(false);
     await act(async () => fireEvent.click(step));
     expect(controller.configureAgent).toHaveBeenCalledWith({ enabled: true });
+    // The step that had the focus is gone: the composer that replaces it takes it.
+    expect(document.activeElement).toBe(screen.getByLabelText('Message Claude Code'));
 
     // Switched on: the composer and footer are back.
     expect(screen.getByLabelText('Message Claude Code')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Review changes first' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Let Nodi in' })).toBeNull();
+  });
+
+  it('offers to set the agent up properly, one click each, and says when it is done', async () => {
+    controller.agentClients.mockResolvedValue([{ client: 'claude-code', state: 'not-set-up', automatic: true, location: null, configuredCommand: null }]);
+    controller.agentSkills.mockResolvedValue([{ target: 'claude-code', state: 'not-installed', location: null, installedVersion: null, bundledVersion: '10', backup: null }]);
+    controller.connectAgentClient.mockResolvedValue({ client: 'claude-code', state: 'ready', automatic: true, location: null, configuredCommand: null });
+    useUiStore.setState({ companionOpen: true });
+    mount();
+    await settle();
+    const setup = screen.getByRole('list', { name: 'Set up' });
+    expect(setup.textContent).toContain('Connect Claude Code everywhere');
+    expect(setup.textContent).toContain('Teach Claude Code to draw');
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Connect Claude Code everywhere' })));
+    await settle();
+    expect(controller.connectAgentClient).toHaveBeenCalledWith('claude-code');
+    expect(screen.getByText(/finds Draft Canvas from anywhere now/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Connect Claude Code everywhere' })).toBeNull();
+    // The skill is still one click away.
+    expect(screen.getByRole('button', { name: 'Teach Claude Code to draw' })).toBeTruthy();
+  });
+
+  it('gets cross when poked over and over', async () => {
+    mount();
+    await settle();
+    for (let i = 0; i < 4; i += 1) {
+      fireEvent.click(screen.getByRole('button', { name: /^(Open|Hide) Nodi$/ }));
+      await settle();
+    }
+    expect(screen.getByRole('img', { name: 'Nodi, fuming' })).toBeTruthy();
+  });
+
+  it('is not there at all once switched off in Settings', async () => {
+    const { setNodiShown } = await import('../../src/desktop/nodiShown');
+    mount();
+    await settle();
+    expect(screen.getByRole('button', { name: 'Open Nodi' })).toBeTruthy();
+    act(() => setNodiShown(false));
+    expect(screen.queryByRole('button', { name: 'Open Nodi' })).toBeNull();
+    act(() => setNodiShown(true));
+    expect(screen.getByRole('button', { name: 'Open Nodi' })).toBeTruthy();
   });
 
   it('asks to open the diagram’s folder to agents, and opens only that one', async () => {

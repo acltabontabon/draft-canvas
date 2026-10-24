@@ -1482,6 +1482,11 @@
   --dc-say-line: var(--dc-border-strong);
 }
 
+/* Poked once too often: the box goes the colour of its screen. */
+.dc-companion-say[data-tone='poked'] {
+  --dc-say-line: var(--dc-danger);
+}
+
 .dc-companion-say:hover,
 .dc-companion-say:focus-visible {
   background: color-mix(in srgb, var(--dc-surface-raised) 88%, var(--dc-selection) 12%);
@@ -1854,6 +1859,9 @@
   flex-direction: column;
   gap: 6px;
   width: 300px;
+  /* A chip grown by its history or a problem scrolls inside the canvas rather than leaving it. */
+  max-height: calc(100% - 24px);
+  overflow-y: auto;
   padding: 10px 12px;
   border: 1px solid var(--dc-border-strong);
   border-radius: var(--dc-radius);
@@ -2056,6 +2064,34 @@
   transform: translateX(3px);
 }
 
+/* What would make the agent better outside the box: below the questions, after a hairline, so it
+   reads as Nodi's aside rather than one more thing to ask. */
+/* Nodi's own word over a turn that went wrong, ahead of the agent's reason. */
+.dc-companion-quip {
+  margin: 0;
+  color: var(--dc-text);
+}
+
+.dc-companion-setup {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed color-mix(in srgb, var(--dc-selection) 40%, transparent);
+}
+
+.dc-companion-setup p {
+  margin: 0 0 2px;
+  color: var(--dc-text-muted);
+}
+
+.dc-companion-options button[data-setup]::before {
+  content: '+';
+}
+
+.dc-companion-options button:disabled {
+  color: var(--dc-text-muted);
+  cursor: default;
+}
+
 .dc-companion-link {
   padding: 0;
   border: 0;
@@ -2223,6 +2259,21 @@
 .dc-companion-speech[data-expanded='true'] {
   width: 340px;
   max-width: 340px;
+}
+
+/* What Nodi and the agent say can be selected and copied, whatever the canvas around it does; and a
+   long unbroken name (a path, an id-like label) wraps rather than pushing past the box. */
+.dc-companion-say,
+.dc-companion-speech,
+.dc-companion-review {
+  overflow-wrap: anywhere;
+}
+
+.dc-companion-thread,
+.dc-companion-speech > p,
+.dc-companion-review-summary {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .dc-companion-thread {

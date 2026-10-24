@@ -23,6 +23,22 @@ describe('chipPlace', () => {
     expect(off.top).toBeLessThanOrEqual(view.height - CHIP_HEIGHT - 12);
   });
 
+  it('keeps a tall chip on the canvas, by its height as drawn', () => {
+    const tall = chipPlace({ x: 5000, y: 5000, width: 100, height: 100 }, identity, view, 400);
+    expect(tall.top).toBe(view.height - 400 - 12);
+  });
+
+  it('never sits under Nodi: beside it, else above it', () => {
+    const nodi = { x: 840, y: 240, width: 424, height: 384 };
+    // Pushed into the bottom-right corner, where Nodi is: it goes to Nodi's left.
+    const cornered = chipPlace({ x: 5000, y: 5000, width: 100, height: 100 }, identity, view, CHIP_HEIGHT, nodi);
+    expect(cornered.left + CHIP_WIDTH).toBeLessThanOrEqual(nodi.x);
+    // A change right beside Nodi skips the place that would cover it.
+    const beside = chipPlace({ x: 700, y: 400, width: 100, height: 100 }, identity, view, CHIP_HEIGHT, nodi);
+    const overlaps = beside.left < nodi.x + nodi.width && beside.left + CHIP_WIDTH > nodi.x && beside.top < nodi.y + nodi.height && beside.top + CHIP_HEIGHT > nodi.y;
+    expect(overlaps).toBe(false);
+  });
+
   it('waits at the top-left while the change is in another view', () => {
     expect(chipPlace(null, identity, view)).toEqual({ left: 12, top: 12 });
   });

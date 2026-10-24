@@ -9,6 +9,7 @@ import { useUiStore } from '../../store/uiStore';
 import { Button } from '../../ui/common/Button';
 import type { Proposal } from '../api';
 import { companion } from '../companion';
+import { useNodiShown } from '../nodiShown';
 import { useDesktopController } from '../useDesktop';
 import { revealViewport } from './chipPlace';
 import { ProposalHistory } from './ProposalHistory';
@@ -128,10 +129,13 @@ export function ProposalPanel() {
   }, [diagramId, open]);
 
   const pending = proposals.filter((p) => p.status === 'pending' || p.status === 'accepting');
-  // Proposals the companion's card is showing are reviewed there; the badge counts the rest. One whose
-  // conversation is gone (a reload, a new conversation) is the badge's again.
+  // The proposal the companion's chip is showing is reviewed there; the badge counts the rest. Only
+  // a conversation's latest turn has a chip: an earlier turn's proposal, left unanswered when the
+  // person asked again, would otherwise have had no way in at all. Nor has any, with Nodi switched
+  // off. One whose conversation is gone (a reload, a new conversation) is the badge's again.
   const conversations = useSyncExternalStore(companion.subscribe, companion.snapshot);
-  const inCompanion = useMemo(() => new Set([...conversations.values()].flatMap((c) => c.turns.map((t) => t.proposalId))), [conversations]);
+  const nodi = useNodiShown();
+  const inCompanion = useMemo(() => new Set(nodi ? [...conversations.values()].map((c) => c.turns.at(-1)?.proposalId) : []), [conversations, nodi]);
   const unreviewed = pending.filter((p) => !inCompanion.has(p.proposalId));
   if (!diagramId) return null;
 

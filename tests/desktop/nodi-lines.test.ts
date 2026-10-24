@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createEdge, createNode } from '../../src/document/factory';
-import { blockedFolderOf, diagramLines, doorOf, openers, restingLine, seedOf, snagOf } from '../../src/desktop/ui/nodiLines';
+import { blockedFolderOf, clockLines, diagramLines, doorOf, openers, restingLine, seedOf, setupStepsOf, smallHours, snagOf } from '../../src/desktop/ui/nodiLines';
 
 /** What Nodi says from rest: the one thing worth knowing, most pressing first. */
 
@@ -201,5 +201,55 @@ describe('pointing the way inside', () => {
     expect(doorOf([plain, roomy, other], ['lib2'], (n) => n.text!)).toEqual({ id: 'lib2', name: 'Archive' });
     expect(doorOf([plain], [], (n) => n.text!)).toBeNull();
     expect(diagramLines([roomy, plain], [], 0, 0)).toContain('Psst, boss. Library System is bigger on the inside. Want a tour?');
+  });
+});
+
+describe('setting the agent up from Nodi', () => {
+  const codex = { agent: 'codex', name: 'Codex' };
+  const client = (state: 'not-set-up' | 'ready' | 'outdated', automatic = true) => ({ client: 'codex' as const, state, automatic, location: null, configuredCommand: null });
+  const skill = (state: 'not-installed' | 'ready' | 'outdated' | 'modified' | 'newer') => ({ target: 'agents' as const, state, location: null, installedVersion: null, bundledVersion: '10', backup: null });
+
+  it('offers what Settings would, for the agent Nodi runs, one click each', () => {
+    const steps = setupStepsOf(codex, [client('not-set-up')], [skill('not-installed')]);
+    expect(steps.map((s) => s.kind)).toEqual(['connect', 'skill']);
+    expect(steps[0]).toMatchObject({ client: 'codex', label: 'Connect Codex everywhere' });
+    expect(steps[1]).toMatchObject({ target: 'agents', label: 'Teach Codex to draw' });
+    expect(setupStepsOf(codex, [client('outdated')], [skill('outdated')]).map((s) => s.label)).toEqual(['Rewire Codex', 'Update the drawing skill']);
+  });
+
+  it('leaves alone what is done, what only a terminal can do, and a skill the person edited', () => {
+    expect(setupStepsOf(codex, [client('ready')], [skill('ready')])).toEqual([]);
+    expect(setupStepsOf(codex, [client('not-set-up', false)], [skill('modified')])).toEqual([]);
+    expect(setupStepsOf({ agent: 'claude-code', name: 'Claude Code' }, [client('not-set-up')], [skill('not-installed')])).toEqual([]);
+    expect(setupStepsOf(codex, null, null)).toEqual([]);
+  });
+});
+
+describe('what Nodi says about the time', () => {
+  it('reads the hour and day off the clock, and nothing else', () => {
+    const late = clockLines(new Date(2026, 9, 21, 2, 14));
+    expect(late.some((l) => l.includes('Nothing good has ever been deployed at'))).toBe(true);
+    expect(smallHours(new Date(2026, 9, 21, 2, 14))).toBe(true);
+    expect(smallHours(new Date(2026, 9, 21, 10, 0))).toBe(false);
+    // Friday afternoon (23 October 2026 is a Friday).
+    expect(clockLines(new Date(2026, 9, 23, 16, 0)).some((l) => l.includes('Step away from the deploy button'))).toBe(true);
+    // And always the weather it can't see, and the time in UTC.
+    const noon = clockLines(new Date(2026, 9, 21, 10, 30));
+    expect(noon.some((l) => l.includes('In UTC it’s'))).toBe(true);
+    expect(noon.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('mixes the time in every third greeting, keeping every greeting new', () => {
+    const clock = ['CLOCK'];
+    const said = [0, 1, 2, 3, 4, 5].map((seed) => restingLine({ ...quiet, seed, clock }).text);
+    expect(said[2]).toBe('CLOCK');
+    expect(said[5]).toBe('CLOCK');
+    expect(new Set(said.filter((l) => l !== 'CLOCK')).size).toBe(4);
+  });
+
+  it('has a word to say when poked too often, and it stays up', () => {
+    expect(restingLine({ ...quiet, poked: true })).toMatchObject({ tone: 'poked', stays: true });
+    // News still wins.
+    expect(restingLine({ ...quiet, poked: true, unseen: true }).tone).toBe('done');
   });
 });

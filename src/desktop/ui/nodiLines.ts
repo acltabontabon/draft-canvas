@@ -2,6 +2,7 @@ import { reviewView, type ReviewCode } from '../../agent/review';
 import { canCreateInside, hasInside } from '../../depth/tree';
 import { categoryOf } from '../../document/connectorSemantics';
 import type { DraftEdge, DraftNode } from '../../document/types';
+import type { AgentClient, AgentClientSetup, AgentSkillSetup, AgentSkillTarget } from '../api';
 
 /**
  * What Nodi says from rest, in its speech bubble: the one thing worth knowing now, said the way an
@@ -9,7 +10,7 @@ import type { DraftEdge, DraftNode } from '../../document/types';
  * test, and the lines are data: more personality is more lines, not more code.
  */
 
-export type RestingTone = 'greet' | 'selected' | 'working' | 'waiting' | 'done' | 'blocked';
+export type RestingTone = 'greet' | 'selected' | 'working' | 'waiting' | 'done' | 'blocked' | 'poked';
 
 export interface RestingLine {
   tone: RestingTone;
@@ -40,6 +41,10 @@ export interface RestingState {
   diagram?: readonly string[];
   /** Picks the line for news about a run: the same for the whole run, so it never changes mid-word. */
   runSeed: number;
+  /** What Nodi can say about the time and day (`clockLines`), mixed in with the greetings. */
+  clock?: readonly string[];
+  /** Poked too many times in a row: Nodi says so, over anything but news. */
+  poked?: boolean;
 }
 
 /** An invitation now and then, and in between, what a companion who has seen too many incidents
@@ -106,6 +111,74 @@ const WAITING = ['Got a change for you to look at, boss!', 'I made a thing, boss
 
 const DONE = ['Done, boss! Come see what I found.', 'Boss. Boss. I found stuff.', 'Finished. I was very thorough. Mostly.', 'Done. Some of it is your fault, boss. Come read.'];
 
+/** Clicked over and over: a companion has its dignity. */
+const POKED = [
+  'Boss. I’m a companion, not a fidget spinner.',
+  'Poke me again and I’m filing an incident. Severity: personal.',
+  'That’s a lot of clicks, boss. Is the diagram that bad? …It’s that bad, isn’t it.',
+  'Stop that, boss. I bruise in pixels.',
+  'Rate limit exceeded, boss. Try again in a few seconds. Or never.',
+];
+
+/** Said over a turn that fell over, before the agent's own words for why: the error is the fact. */
+const FAILED = [
+  'Well. That went sideways, boss.',
+  'That broke, boss. Not my fault. Probably not yours either. Probably.',
+  'It fell over, boss. I’d blame the network. It’s usually the network.',
+  'Ow. That one hurt, boss. Ask me again and I’ll try again.',
+];
+
+export function failLine(seed: number): string {
+  return pick(FAILED, seed);
+}
+
+/** The weather, as far as a companion without a window can tell: indoors, in the system. No
+ *  location, no network: it can't see outside, and doesn't ask to. */
+const WEATHER = [
+  'Today’s forecast, boss: cloudy, with a 40% chance of 503s.',
+  'Weather in us-east-1: partly degraded. As is tradition.',
+  'I can’t see outside, boss. In here it’s humid, with scattered retries.',
+  'A cold start is moving in from the west, boss. Bring a warm cache.',
+  'Forecast: timeouts in the afternoon, clearing by the next deploy.',
+  'Current conditions: 100% chance of someone saying “works on my machine”.',
+];
+
+/**
+ * What Nodi says about the time, from the computer's own clock and nothing else: the hour and the
+ * day are the only facts it uses, and the jokes are about what they mean for production.
+ */
+export function clockLines(now: Date): string[] {
+  const time = now.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  const weekday = now.toLocaleDateString(undefined, { weekday: 'long' });
+  const hour = now.getHours();
+  const day = now.getDay();
+  const lines: string[] = [];
+  if (hour < 5) {
+    lines.push(`It’s ${time}, boss. Nothing good has ever been deployed at ${time}.`);
+    lines.push(`${time}. Go to bed, boss. The diagram will still be wrong in the morning.`);
+  } else if (hour < 9) {
+    lines.push(`${time} and already on architecture? Respect, boss. Coffee first, decisions second.`);
+  } else if (hour >= 12 && hour < 14) {
+    lines.push(`It’s ${time}, boss. Lunch is eventually consistent: it gets to you, just not now.`);
+  } else if (hour >= 21) {
+    lines.push(`${time}, boss. Big decisions read better after sleep. So do diagrams.`);
+  } else if (hour >= 17) {
+    lines.push(`${time}. Perfect time for “one small change”, said every incident report ever, boss.`);
+  }
+  if (day === 5 && hour >= 14) lines.push(`It’s ${weekday}, ${time}. Step away from the deploy button, boss.`);
+  if (day === 1 && hour < 12) lines.push(`${weekday} morning, boss. Somebody’s weekend deploy is about to become your problem.`);
+  if (day === 0 || day === 6) lines.push(`It’s ${weekday}, boss. Working on the weekend? I won’t tell the pager.`);
+  if (now.getMonth() === 11 && now.getDate() >= 15) lines.push('Change-freeze season, boss. The diagram can change. Production can’t.');
+  lines.push(`It’s ${time} here, boss. In UTC it’s ${now.toISOString().slice(11, 16)}. Your logs only know the second one.`);
+  lines.push(WEATHER[(now.getDate() + hour) % WEATHER.length]!);
+  return lines;
+}
+
+/** Whether it is the small hours, when Nodi dozes between messages. */
+export function smallHours(now: Date): boolean {
+  return now.getHours() < 5;
+}
+
 const BLOCKED = ['Psst, boss… I need a hand first.', 'I’m stuck, boss. Click and I’ll explain.', 'All revved up and nowhere to run, boss.'];
 
 export function restingLine(state: RestingState): RestingLine {
@@ -114,10 +187,19 @@ export function restingLine(state: RestingState): RestingLine {
   if (state.working) return { tone: 'working', text: pick(WORKING, runSeed).replace('{step}', lowerFirst(state.working)), hint: 'Watch', stays: true };
   if (state.waiting) return { tone: 'waiting', text: pick(WAITING, runSeed), hint: 'Show me', stays: true };
   if (state.unseen) return { tone: 'done', text: pick(DONE, runSeed), hint: 'Open', stays: true };
+  if (state.poked) return { tone: 'poked', text: pick(POKED, seed), hint: 'Click to chat', stays: true };
   if (state.selected) return { tone: 'selected', text: upperFirst(pick(SELECTED, seed).replace('{it}', state.selected)), hint: 'Ask me', stays: false };
-  // Every other greeting is about this diagram, when Nodi has something to say about it.
+  // Every other greeting is about this diagram, when Nodi has something to say about it; of the
+  // rest, every third is about the time of day, when Nodi was told it.
   const about = state.diagram ?? [];
-  const text = about.length && seed % 2 !== 0 ? pick(about, (seed - 1) / 2) : pick(GREETINGS, Math.floor(seed / (about.length ? 2 : 1)));
+  const clock = state.clock ?? [];
+  const rest = Math.floor(seed / (about.length ? 2 : 1));
+  const text =
+    about.length && seed % 2 !== 0
+      ? pick(about, (seed - 1) / 2)
+      : clock.length && rest % 3 === 2
+        ? pick(clock, Math.floor(rest / 3))
+        : pick(GREETINGS, rest - (clock.length ? Math.floor((rest + 1) / 3) : 0));
   return { tone: 'greet', text, hint: 'Click to chat', stays: false };
 }
 
@@ -246,6 +328,51 @@ export function blockedFolderOf(
   if (holding.length === 0 || holding.some((p) => p.agent)) return null;
   const nearest = holding.reduce((a, b) => (b.displayPath.length > a.displayPath.length ? b : a));
   return { handle: nearest.handle, name: nearest.name };
+}
+
+/** One thing Nodi can set up for the agent it runs, in one click, with why it matters. */
+export type SetupStep =
+  | { kind: 'connect'; client: AgentClient; label: string; why: string }
+  | { kind: 'skill'; target: AgentSkillTarget; label: string; why: string };
+
+/**
+ * What would make the agent Nodi runs better outside Nodi's box too, from Settings → AI agents' own
+ * facts: Draft Canvas in that agent's MCP servers (so a conversation carried on in its terminal, or
+ * any session of its own, still reaches the diagram) and the drawing skill in the folder it reads.
+ * Only what Settings could do with its one-click buttons; an edited skill is the person's, and left be.
+ */
+export function setupStepsOf(
+  agent: { agent: string; name: string },
+  clients: readonly AgentClientSetup[] | null,
+  skills: readonly AgentSkillSetup[] | null,
+): SetupStep[] {
+  if (agent.agent !== 'codex' && agent.agent !== 'claude-code') return [];
+  const client = agent.agent as AgentClient;
+  const target: AgentSkillTarget = client === 'claude-code' ? 'claude-code' : 'agents';
+  const steps: SetupStep[] = [];
+  const connection = clients?.find((c) => c.client === client);
+  if (connection?.automatic && connection.state === 'not-set-up') {
+    steps.push({
+      kind: 'connect',
+      client,
+      label: `Connect ${agent.name} everywhere`,
+      why: `${agent.name} only finds me inside this box, boss. One click and it finds Draft Canvas in your terminal and editor too, including when you continue there.`,
+    });
+  } else if (connection?.automatic && connection.state === 'outdated') {
+    steps.push({ kind: 'connect', client, label: `Rewire ${agent.name}`, why: `${agent.name} is wired to another copy of Draft Canvas, boss. Or to nothing. One click and it’s this one.` });
+  }
+  const skill = skills?.find((s) => s.target === target);
+  if (skill?.state === 'not-installed') {
+    steps.push({
+      kind: 'skill',
+      target,
+      label: `Teach ${agent.name} to draw`,
+      why: `There’s a drawing skill for ${agent.name}, boss: C4 levels, real flows, notes with evidence. Installed once, every project gets it.`,
+    });
+  } else if (skill?.state === 'outdated') {
+    steps.push({ kind: 'skill', target, label: 'Update the drawing skill', why: `${agent.name}’s drawing skill is from an older Draft Canvas, boss. Mine’s newer. Obviously.` });
+  }
+  return steps;
 }
 
 /** A stable small number from a string (a diagram or run id), for the seeds. */

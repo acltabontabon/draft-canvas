@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { diffForReview, looksAlreadyApplied, preconditionConflicts, type ElementDiffRow } from '../../agent/proposal';
 import { applyUpdate } from '../../agent/patch';
 import { changedIds } from '../../agent/rebase';
@@ -173,12 +173,16 @@ export function useProposalReview(proposal: Proposal, onChanged: ProposalChanged
   // change, including unmount) — so a stale ghost can never outlive its proposal. Only ever touches
   // this surface's own preview of this proposal: the other surface, or a sibling review of another
   // proposal (after switching), sets its own and this cleanup leaves it alone.
+  // Whether the person was looking at the change or at the diagram as it is: kept across the clear
+  // and rebuild a re-check does (after an edit lands), or "Now" quietly turned back into "Proposed".
+  const shownAs = useRef<{ proposalId: string; visible: boolean } | null>(null);
   useEffect(() => {
     const ownsCurrent = () => owns(useUiStore.getState().proposalPreview, proposal.proposalId, owner);
     if (resultFile && !dryRunProblem) {
       const view = viewOf(resultFile, path);
       const previous = useUiStore.getState().proposalPreview;
-      const visible = previous && previous.proposalId === proposal.proposalId ? previous.visible : true;
+      const kept = shownAs.current?.proposalId === proposal.proposalId ? shownAs.current.visible : true;
+      const visible = previous && previous.proposalId === proposal.proposalId ? previous.visible : kept;
       useUiStore.getState().setProposalPreview({
         proposalId: proposal.proposalId,
         path,
@@ -191,7 +195,9 @@ export function useProposalReview(proposal: Proposal, onChanged: ProposalChanged
       useUiStore.getState().setProposalPreview(null);
     }
     return () => {
-      if (ownsCurrent()) useUiStore.getState().setProposalPreview(null);
+      if (!ownsCurrent()) return;
+      shownAs.current = { proposalId: proposal.proposalId, visible: useUiStore.getState().proposalPreview?.visible ?? true };
+      useUiStore.getState().setProposalPreview(null);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `path`'s content is `pathKeyStr`, and `resultFile` is now the memoized `dryRun.resultFile` (stable across renders that don't change its answer) — keying on the array/object references themselves would re-fire (and re-render every ghost consumer) on every unrelated re-render this component gets
   }, [proposal.proposalId, dryRunProblem, resultFile, pathKeyStr, owner]);

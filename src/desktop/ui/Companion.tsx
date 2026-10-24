@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from 'react';
 import { useReactFlow, useStoreApi, useStore as useReactFlowStore } from '@xyflow/react';
 import { useShallow } from 'zustand/react/shallow';
 import { Icon } from '../../ui/common/Icon';
@@ -10,15 +10,16 @@ import { boundsOf } from '../../document/geometry';
 import type { DraftDocument, DraftEdge, DraftNode } from '../../document/types';
 import { useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
-import type { AgentInfo, ApplyMode, PromptRequest, Proposal } from '../api';
+import type { AgentClientSetup, AgentInfo, AgentSkillSetup, ApplyMode, PromptRequest, Proposal } from '../api';
 import { companion, newTokens, numberedBlocks, partsIn, replyBlocks, replyOf, replyPoints, spentOn, stepText, stopMessage, tokenCount, type ReplyEntry, type Spent, type Turn } from '../companion';
 import { useDesktopController, useDesktopState } from '../useDesktop';
+import { useNodiShown } from '../nodiShown';
 import { Mascot } from './mascot/Mascot';
 import type { Mood } from './mascot/pixels';
-import { chipPlace, revealViewport } from './chipPlace';
+import { CHIP_HEIGHT, chipPlace, revealViewport, type Box } from './chipPlace';
 import { canCreateInside, hasInside } from '../../depth/tree';
 import { lookInside } from '../../ui/Editor/depthNavigation';
-import { blockedFolderOf, diagramLines, doorOf, openers, restingLine, seedOf, snagOf, type Look, type SnagStep } from './nodiLines';
+import { blockedFolderOf, clockLines, diagramLines, failLine, doorOf, openers, restingLine, seedOf, setupStepsOf, smallHours, snagOf, type Look, type SetupStep, type SnagStep } from './nodiLines';
 import { PointPins } from './PointPins';
 import { ProposalHistory } from './ProposalHistory';
 import { countsLabel, useProposalReview } from './useProposalReview';
@@ -90,6 +91,10 @@ const SAY_GONE_MS = 2500 + 200;
 
 /** Asked once per app run: finding the agent can start a login shell. */
 let agentsOnce: Promise<AgentInfo[]> | null = null;
+/** Clicks on Nodi this close together, this many times, and it has had enough. */
+const POKE_WINDOW_MS = 2500;
+const POKES = 4;
+const POKED_MS = 3500;
 
 function applyMode(): ApplyMode {
   return readPreference(APPLY_KEY) === 'direct' ? 'direct' : 'proposal';
@@ -116,18 +121,22 @@ const NO_TURNS: readonly Turn[] = [];
 
 export function Companion() {
   const controller = useDesktopController();
+  const shown = useNodiShown();
   const diagramId = useEditorStore((s) => s.document.metadata.id);
   const room = useEditorStore((s) => s.path);
   const selection = useEditorStore(useShallow((s) => ({ nodes: s.selection.nodes, edges: s.selection.edges })));
-  // Names are read when the selection changes, not on every store update.
+  // The one selected shape's name, as it is now: renamed while selected, the chip and lines follow.
+  // A string, so the selector is stable between unrelated store updates.
+  const onlyName = useEditorStore((s) => {
+    if (s.selection.nodes.length !== 1) return '';
+    const node = s.document.nodes.find((n) => n.id === s.selection.nodes[0]);
+    return node?.text?.split('\n')[0]?.trim().slice(0, 40) ?? '';
+  });
   const names = useMemo(() => {
     const out = new Map<string, string>();
-    if (selection.nodes.length !== 1) return out;
-    const node = useEditorStore.getState().document.nodes.find((n) => n.id === selection.nodes[0]);
-    const name = node?.text?.split('\n')[0]?.trim().slice(0, 40);
-    if (name) out.set(node!.id, name);
+    if (selection.nodes.length === 1 && onlyName) out.set(selection.nodes[0]!, onlyName);
     return out;
-  }, [selection.nodes]);
+  }, [selection.nodes, onlyName]);
   const open = useUiStore((s) => s.companionOpen);
   const setOpen = useUiStore((s) => s.setCompanionOpen);
   const yielded = useUiStore((s) => s.proposalPanelOpen || s.openPointsPanelOpen);
@@ -163,9 +172,12 @@ export function Companion() {
     };
   }, [agents, controller]);
 
-  useEffect(() => {
-    if (expanded) input.current?.focus();
-  }, [expanded]);
+  // The composer has the focus whenever it appears: on opening, and once what was in the way (access,
+  // a folder) is cleared from inside the box, where the step that cleared it has just gone.
+  const focusInput = useCallback((element: HTMLInputElement | null) => {
+    input.current = element;
+    element?.focus();
+  }, []);
   // While Nodi can't take a message, the first thing that fixes that has the focus the composer
   // would: whenever it appears, which may be after opening (once the shell says access is off).
   const focusStep = useCallback((step: HTMLButtonElement | null) => step?.focus(), []);
@@ -175,10 +187,21 @@ export function Companion() {
     if (expanded) void controller.refreshAgent();
   }, [expanded, controller]);
 
-  // The thread reads downward to the newest, so it opens (and stays) at the bottom.
+  // The thread reads downward to the newest, so it opens at the bottom, and follows a reply as it
+  // streams in only while the reader is there: scrolled up to read an earlier turn, they stay put.
+  const following = useRef(true);
+  const placeThread = useCallback((element: HTMLElement | null) => {
+    thread.current = element;
+    following.current = true;
+    if (element) element.scrollTop = element.scrollHeight;
+  }, []);
+  const turnCount = turns.length;
+  useEffect(() => {
+    following.current = true;
+  }, [turnCount]);
   useEffect(() => {
     const box = thread.current;
-    if (box) box.scrollTop = box.scrollHeight;
+    if (box && following.current) box.scrollTop = box.scrollHeight;
   }, [turns]);
 
   // The review panel may have accepted or rejected the companion's proposal.
@@ -201,7 +224,9 @@ export function Companion() {
   // Continue in Terminal: the line is copied, and the box says so for a moment.
   const [continued, setContinued] = useState<'copied' | 'failed' | null>(null);
   const continueInTerminal = async () => {
-    const line = agent ? await controller.companionContinue(diagramId, agent.agent) : null;
+    // The session to carry on is the one the conversation ran on, whichever agent is picked now.
+    const ran = conversations.get(diagramId)?.agent ?? agent?.agent;
+    const line = ran ? await controller.companionContinue(diagramId, ran) : null;
     const ok = line !== null && (await useEditorStore.getState().copyText(line));
     setContinued(ok ? 'copied' : 'failed');
     window.setTimeout(() => setContinued(null), 4000);
@@ -237,15 +262,83 @@ export function Companion() {
     else void useEditorStore.getState().copyText(step.command).then((ok) => setCopied({ command: step.command, ok }));
   };
 
-  const mood: Mood = blocker
-    ? 'asleep'
-    : running
-      ? 'working'
-      : last?.proposalId
-        ? 'waiting'
-        : last?.outcome === 'accepted' || (last?.stop?.kind === 'end-turn' && last.outcome === null)
-          ? 'happy'
-          : 'idle';
+  // Poked over and over, Nodi has a word to say about it, and a face to go with it.
+  const pokes = useRef<number[]>([]);
+  const [poked, setPoked] = useState(false);
+  const poke = () => {
+    const now = performance.now();
+    pokes.current = [...pokes.current.filter((at) => now - at < POKE_WINDOW_MS), now];
+    if (pokes.current.length < POKES) return;
+    pokes.current = [];
+    setPoked(true);
+  };
+  useEffect(() => {
+    if (!poked) return;
+    const timer = setTimeout(() => setPoked(false), POKED_MS);
+    return () => clearTimeout(timer);
+  }, [poked]);
+  // News not yet read: a finished turn the person hasn't had open since.
+  const unseen = Boolean(last && last.stop !== null && !expanded && seenRun.get(diagramId) !== last.runId);
+  // Read off the clock when Nodi next has something to say, not on every render.
+  const [clockAt, setClockAt] = useState(() => new Date());
+  const clock = useMemo(() => clockLines(clockAt), [clockAt]);
+  const failed = last?.stop?.kind === 'failed' || last?.stop?.kind === 'refusal';
+  const mood: Mood = poked
+    ? 'angry'
+    : blocker
+      ? 'asleep'
+      : running
+        ? 'working'
+        : last?.proposalId
+          ? 'waiting'
+          : failed
+            ? 'dizzy'
+            : last?.outcome === 'accepted'
+              ? 'love'
+              : unseen
+                ? 'surprised'
+                : last?.stop?.kind === 'end-turn' && last.outcome === null
+                  ? 'happy'
+                  : smallHours(clockAt)
+                    ? 'sleepy'
+                    : 'idle';
+
+  // What would make the agent better outside this box too, each one click (`setupStepsOf`).
+  const [setup, setSetup] = useState<{ clients: AgentClientSetup[]; skills: AgentSkillSetup[] } | null>(null);
+  const accessOn = access?.enabled === true;
+  // Asked each time Nodi opens, as Settings asks each time it shows them: one may have been set up
+  // (or undone) elsewhere since.
+  useEffect(() => {
+    if (!expanded || !accessOn) return;
+    let live = true;
+    void Promise.all([controller.agentClients(), controller.agentSkills()]).then(([clients, skills]) => live && setSetup({ clients, skills }));
+    return () => {
+      live = false;
+      setSetupSaid(null);
+    };
+  }, [expanded, accessOn, controller]);
+  const setupSteps = useMemo(() => (agent && setup && accessOn ? setupStepsOf(agent, setup.clients, setup.skills) : []), [agent, setup, accessOn]);
+  const [setupBusy, setSetupBusy] = useState<string | null>(null);
+  const [setupSaid, setSetupSaid] = useState<string | null>(null);
+  const runSetup = async (step: SetupStep) => {
+    if (setupBusy || !setup) return;
+    setSetupBusy(step.label);
+    const name = agent?.name ?? 'your agent';
+    if (step.kind === 'connect') {
+      const done = await controller.connectAgentClient(step.client);
+      if (done) {
+        setSetup((now) => now && { ...now, clients: now.clients.map((c) => (c.client === done.client ? done : c)) });
+        setSetupSaid(`Done, boss. A new ${name} session finds Draft Canvas from anywhere now.`);
+      }
+    } else {
+      const done = await controller.installAgentSkill(step.target);
+      if (done) {
+        setSetup((now) => now && { ...now, skills: now.skills.map((s) => (s.target === done.target ? done : s)) });
+        setSetupSaid(`Installed. ${name} draws like it means it now, boss.`);
+      }
+    }
+    setSetupBusy(null);
+  };
   const hasSelection = selection.nodes.length + selection.edges.length > 0;
   const selectionKey = `${selection.nodes.join(',')}|${selection.edges.join(',')}`;
   const includeSelection = leftOut !== selectionKey;
@@ -322,6 +415,12 @@ export function Companion() {
     [setPointedIds],
   );
   useEffect(() => () => setPointedIds(null), [setPointedIds]);
+  // Closed, or making way for a panel: nothing it pointed at stays lit on the canvas.
+  useEffect(() => {
+    if (expanded) return;
+    setHot(null);
+    setPointedIds(null);
+  }, [expanded, setPointedIds]);
   const pointing = useMemo<Pointing>(
     () => ({
       names: partNames,
@@ -396,12 +495,14 @@ export function Companion() {
     snag: blocker?.rest,
     working: running ? (last.steps.length ? stepText(last.steps.at(-1)!.tool) : 'Thinking') : null,
     waiting: Boolean(last?.proposalId),
-    unseen: Boolean(last && last.stop !== null && !expanded && seenRun.get(diagramId) !== last.runId),
+    unseen,
     // What the message would be about: the selection, unless the person left it out.
     selected: about,
     seed: seedOf(diagramId) + visits,
-    diagram: aboutDiagram,
+    diagram: setupSteps.length ? [`Psst, boss. ${agentName} can’t find me outside this box yet. Open me: it’s one click.`, ...aboutDiagram] : aboutDiagram,
     runSeed: seedOf(last?.runId ?? diagramId),
+    clock,
+    poked,
   });
   // Opened from rest: the pointer was over the bubble, which goes from under it without a leave, so
   // the hover is put down here or Nodi would keep talking after the conversation closes.
@@ -412,7 +513,8 @@ export function Companion() {
 
   // The review and open-points panels sit in the same corner: the companion makes way for them. And
   // with no agent on this computer (or until that is known) there is no Nodi: nothing it could run.
-  if (yielded || !agents?.some((a) => a.availability !== 'missing')) return null;
+  // Nor once the person has switched it off in Settings.
+  if (!shown || yielded || !agents?.some((a) => a.availability !== 'missing')) return null;
 
   if (!expanded) {
     return (
@@ -421,6 +523,8 @@ export function Companion() {
         <div
           className="dc-companion"
           data-open="false"
+          // Its own keys: Backspace on a focused button must not delete the selection behind it.
+          data-dc-keyboard-region=""
           data-arriving={arriving ? 'true' : undefined}
           onAnimationEnd={(event) => {
             if (event.animationName === 'dc-nodi-arrive') setArriving(false);
@@ -429,7 +533,10 @@ export function Companion() {
           // kept up by it stayed under a pointer long gone. News is said without either.
           onMouseEnter={() => {
             setHovered(true);
-            if (!resting.stays && !peeking && performance.now() - leftAt.current > SAY_GONE_MS) setVisits((n) => n + 1);
+            if (!resting.stays && !peeking && performance.now() - leftAt.current > SAY_GONE_MS) {
+              setVisits((n) => n + 1);
+              setClockAt(new Date());
+            }
           }}
           onMouseLeave={() => {
             setHovered(false);
@@ -458,7 +565,15 @@ export function Companion() {
               </span>
             </button>
           )}
-          <button type="button" className="dc-companion-mascot" aria-label="Open Nodi" onClick={openFromRest}>
+          <button
+            type="button"
+            className="dc-companion-mascot"
+            aria-label="Open Nodi"
+            onClick={() => {
+              poke();
+              openFromRest();
+            }}
+          >
             <Mascot mood={arriving ? 'walking' : mood} />
           </button>
         </div>
@@ -470,9 +585,27 @@ export function Companion() {
     <PointingContext.Provider value={pointing}>
       {chip}
       {pins}
-    <div className="dc-companion" data-open="true">
+    <div
+      className="dc-companion"
+      data-open="true"
+      // Its own keys (see the resting one), and Escape closes it from anywhere inside, not only the composer.
+      data-dc-keyboard-region=""
+      onKeyDown={(event) => {
+        if (event.key !== 'Escape' || event.defaultPrevented || event.nativeEvent.isComposing) return;
+        event.preventDefault();
+        setOpen(false);
+      }}
+    >
       <div className="dc-companion-presence">
-        <button type="button" className="dc-companion-mascot" aria-label="Hide Nodi" onClick={() => setOpen(false)}>
+        <button
+          type="button"
+          className="dc-companion-mascot"
+          aria-label="Hide Nodi"
+          onClick={() => {
+            poke();
+            setOpen(false);
+          }}
+        >
           <Mascot mood={mood} />
         </button>
         {/* One surface: the bubble is the conversation, whole while it is short, its earlier turns
@@ -531,7 +664,15 @@ export function Companion() {
             </>
           ) : talking ? (
             <>
-              <section className="dc-companion-thread" aria-label={`Conversation with ${agentName}`} ref={thread}>
+              <section
+                className="dc-companion-thread"
+                aria-label={`Conversation with ${agentName}`}
+                ref={placeThread}
+                onScroll={(event) => {
+                  const box = event.currentTarget;
+                  following.current = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+                }}
+              >
                 {folded > 0 && (
                   <button type="button" className="dc-companion-earlier" onClick={() => setShowEarlier(true)}>
                     {folded === 1 ? '1 earlier turn' : `${folded} earlier turns`}
@@ -541,6 +682,10 @@ export function Companion() {
                   <TurnView key={turn.runId} turn={turn} pinned={turn === last} />
                 ))}
               </section>
+              {/* Said once a turn ends, for someone who stayed in the composer and can't see the reply arrive. */}
+              <p className="dc-sr-only" role="status">
+                {last && last.stop !== null ? (stopMessage(last.stop) ?? (last.proposalId ? `${agentName} proposed a change.` : `${agentName} has answered.`)) : ''}
+              </p>
               {continued && (
                 <p className="dc-companion-hint" role="status">
                   {continued === 'copied' ? 'Copied. Paste it into Terminal, boss.' : 'Couldn’t copy it, boss.'}
@@ -561,6 +706,28 @@ export function Companion() {
                   </li>
                 ))}
               </ul>
+              {/* Set apart from the questions: what would make the agent better outside this box,
+                  each one Settings' own one-click button, done from here. */}
+              {(setupSteps.length > 0 || setupSaid) && (
+                <div className="dc-companion-setup">
+                  {setupSaid ? (
+                    <p role="status">{setupSaid}</p>
+                  ) : (
+                    <p>{setupSteps.length === 1 ? setupSteps[0]!.why : `Two things and I’m at full power, boss. ${setupSteps[0]!.why}`}</p>
+                  )}
+                  {setupSteps.length > 0 && (
+                    <ul className="dc-companion-options" aria-label="Set up">
+                      {setupSteps.map((step) => (
+                        <li key={step.label}>
+                          <button type="button" data-setup="true" disabled={setupBusy !== null} aria-busy={setupBusy === step.label || undefined} onClick={() => void runSetup(step)}>
+                            {setupBusy === step.label ? 'On it…' : step.label}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
             </>
           )}
         </div>
@@ -593,7 +760,7 @@ export function Companion() {
         </label>
         <input
           id="dc-companion-input"
-          ref={input}
+          ref={focusInput}
           type="text"
           autoComplete="off"
           spellCheck
@@ -675,8 +842,14 @@ function TurnView({ turn, pinned }: { turn: Turn; pinned: boolean }) {
       {turn.stop === null && turn.steps.length === 0 && <p className="dc-companion-now">Thinking…</p>}
       {reply && <ReplyText text={reply} pinned={pinned} />}
       {pinned && turn.stop !== null && reply && <Doors reply={reply} />}
+      {(turn.stop?.kind === 'failed' || turn.stop?.kind === 'refusal') && <p className="dc-companion-quip">{failLine(seedOf(turn.runId))}</p>}
       {stopped && <p className="dc-companion-stopped">{stopped}</p>}
-      {turn.proposalId && <p className="dc-companion-hint">The change is shown on the canvas: accept or reject it there.</p>}
+      {turn.proposalId &&
+        (pinned ? (
+          <p className="dc-companion-hint">The change is shown on the canvas: accept or reject it there.</p>
+        ) : (
+          <p className="dc-companion-hint">Still waiting for you, boss: it’s under “proposals to review”.</p>
+        ))}
       {turn.outcome === 'accepted' && (
         <p className="dc-companion-outcome">
           <Icon name="check" /> Added to the diagram. {UNDO} undoes it.
@@ -823,9 +996,8 @@ function ProposalChip({ proposal, onChanged, onDetails }: { proposal: Proposal; 
   // An interrupted accept has the panel's fuller explanation and choices.
   const unusual = alreadyApplied || recoveringAccept;
   const problem = dryRunProblem ?? (conflicts.length > 0 ? 'Something this change is about has moved on since. Ask the agent to revise it.' : null);
-  const place = chipPlace(bounds, [tx, ty, zoom], { width: viewWidth, height: viewHeight });
   return (
-    <section className="dc-companion-review" aria-label="Proposed change" style={{ left: place.left, top: place.top }} data-anchored={bounds ? 'true' : undefined}>
+    <ChipBox bounds={bounds} transform={[tx, ty, zoom]} view={{ width: viewWidth, height: viewHeight }}>
       <div className="dc-companion-review-head">
         <span className="dc-companion-review-mascot" aria-hidden="true">
           <Mascot mood="waiting" scale={1} />
@@ -879,6 +1051,44 @@ function ProposalChip({ proposal, onChanged, onDetails }: { proposal: Proposal; 
           </>
         )}
       </div>
+    </ChipBox>
+  );
+}
+
+/**
+ * The chip's place, from how tall it is as drawn and where Nodi is: measured after each draw, so a
+ * chip grown by its history or a problem never runs off the canvas, and never sits under Nodi.
+ */
+function ChipBox({ bounds, transform, view, children }: { bounds: ReturnType<typeof useProposalReview>['bounds']; transform: [number, number, number]; view: { width: number; height: number }; children: ReactNode }) {
+  const box = useRef<HTMLElement>(null);
+  const [room, setRoom] = useState<{ height: number; keepOut: Box | null }>({ height: CHIP_HEIGHT, keepOut: null });
+  const measure = useCallback(() => {
+    const chip = box.current;
+    const parent = chip?.offsetParent;
+    if (!chip || !parent) return;
+    const base = parent.getBoundingClientRect();
+    const nodi = parent.querySelector('.dc-companion')?.getBoundingClientRect();
+    const keepOut = nodi && nodi.width > 0 ? { x: nodi.left - base.left, y: nodi.top - base.top, width: nodi.width, height: nodi.height } : null;
+    const height = chip.offsetHeight || CHIP_HEIGHT;
+    setRoom((now) =>
+      now.height === height && JSON.stringify(now.keepOut) === JSON.stringify(keepOut) ? now : { height, keepOut },
+    );
+  }, []);
+  // After every draw (cheap, and set only on a change), and whenever the chip or Nodi resizes.
+  useLayoutEffect(measure);
+  useEffect(() => {
+    const chip = box.current;
+    if (!chip || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(chip);
+    const nodi = chip.offsetParent?.querySelector('.dc-companion');
+    if (nodi) observer.observe(nodi);
+    return () => observer.disconnect();
+  }, [measure]);
+  const place = chipPlace(bounds, transform, view, room.height, room.keepOut);
+  return (
+    <section ref={box} className="dc-companion-review" aria-label="Proposed change" style={{ left: place.left, top: place.top }} data-anchored={bounds ? 'true' : undefined} data-dc-keyboard-region="">
+      {children}
     </section>
   );
 }

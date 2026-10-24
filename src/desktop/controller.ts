@@ -1798,7 +1798,7 @@ export class DesktopController {
   /** Sends one prompt. `about` is how the card names what it was about. A refusal (access off, a
    *  folder agents can't use) ends the turn with the shell's own words. */
   async companionSend(request: PromptRequest, about: string | null): Promise<void> {
-    companion.begin(request.diagramId, request.runId, request.text, about);
+    companion.begin(request.diagramId, request.runId, request.text, about, request.agent);
     try {
       await this.api.companionSend(request);
     } catch (error) {

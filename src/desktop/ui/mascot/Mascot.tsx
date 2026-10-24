@@ -11,6 +11,11 @@ const LABEL: Record<Mood, string> = {
   happy: 'Nodi, done',
   asleep: 'Nodi, not set up',
   walking: 'Nodi, on the way',
+  angry: 'Nodi, fuming',
+  dizzy: 'Nodi, dizzy after an error',
+  love: 'Nodi, delighted',
+  surprised: 'Nodi, with news',
+  sleepy: 'Nodi, dozing',
 };
 
 function prefersStill(): boolean {

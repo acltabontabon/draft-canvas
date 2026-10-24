@@ -48,6 +48,12 @@ then it says what is missing and offers the fix: **Let Nodi in** turns agent acc
    ones fold behind one line. On its top edge, the pencil starts a new conversation and `>_` copies a
    command that continues it in your agent's own terminal UI.
 
+When your agent could do more outside Nodi's box, Nodi offers it under its suggestions, one click
+each: **Connect** *agent* **everywhere** adds Draft Canvas to that agent's own MCP servers (so a
+conversation you continue in its terminal still reaches the diagram), and **Teach** *agent* **to
+draw** installs the drawing skill. They are the same as the buttons in **Settings → AI agents**.
+To hide Nodi, turn off **Show Nodi on the canvas** there.
+
 Nodi also points the way inside: it mentions a shape that holds a diagram of its own, offers
 **Take me inside…** when an answer names one, and offers to draw the inside of a selected service
 that has none yet.
