@@ -6052,6 +6052,45 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   font-size: 10.5px;
 }
 
+/* --------------------------------------------------------------- traffic -- */
+
+/* The status bar's way into traffic — the open-points chip's treatment, with a glyph of three lines
+   meeting at a point: where paths converge. Pressed while traffic shows. */
+button.dc-status-traffic {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--dc-text-muted);
+  font: inherit;
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+button.dc-status-traffic:hover,
+button.dc-status-traffic:focus-visible,
+button.dc-status-traffic[aria-pressed='true'] {
+  color: var(--dc-text);
+}
+
+.dc-status-traffic-glyph {
+  position: relative;
+  display: inline-block;
+  width: 10px;
+  height: 9px;
+  background:
+    linear-gradient(to bottom right, transparent calc(50% - 0.7px), currentColor calc(50% - 0.7px), currentColor calc(50% + 0.7px), transparent calc(50% + 0.7px)) left top / 50% 50% no-repeat,
+    linear-gradient(to top right, transparent calc(50% - 0.7px), currentColor calc(50% - 0.7px), currentColor calc(50% + 0.7px), transparent calc(50% + 0.7px)) left bottom / 50% 50% no-repeat,
+    linear-gradient(currentColor, currentColor) left center / 100% 1.4px no-repeat;
+}
+
+button.dc-status-traffic[aria-pressed='true'] .dc-status-traffic-glyph {
+  color: var(--dc-selection);
+}
+
 /* ------------------------------------------------------------ open points -- */
 
 /* The status bar's count of what is still open — the same all-small-caps, click-to-open treatment as

@@ -141,7 +141,7 @@ function paneMenu(ctx: CommandContext, flowPosition: { x: number; y: number }): 
   return grouped(null, [
     [pasteAtCommand(flowPosition), ...pick(canvas, ['undo'])],
     { type: 'grid', label: 'Add here', items: shapes },
-    [...pick(canvas, ['select-all']), ...pick(viewCommands(ctx), ['fit']), ...pick(canvas, ['arrange'])],
+    [...pick(canvas, ['select-all']), ...pick(viewCommands(ctx), ['fit', 'traffic-show', 'traffic-hide']), ...pick(canvas, ['arrange'])],
     // What acts on the whole diagram lives with the diagram, now that the header has no ⋯ for it.
     pick(canvas, ['find-replace', 'settings']),
   ]);

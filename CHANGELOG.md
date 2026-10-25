@@ -8,6 +8,13 @@ The retired VS Code extension has [its own changelog](https://github.com/acltabo
 
 ## [Unreleased]
 
+### Shared
+
+#### Added
+
+- **Traffic** — Show traffic on the canvas to see drawn paths, flowing light, handwritten findings
+  and open questions. Nothing is saved or shared.
+
 ## [1.16.1] - 2026-10-25
 
 Fixes for diagram editing, saving, collaboration and Nodi.

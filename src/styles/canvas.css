@@ -3967,6 +3967,512 @@
   transition: opacity 180ms ease;
 }
 
+/* ------------------------------------------------------------- traffic --- */
+
+/*
+ * Showing traffic reads like a lens: what carries modeled paths stays at full strength, what takes
+ * no part is nudged aside to the lens's own floor, and nothing is greyed out or hidden. Where paths
+ * concentrate is lit along its own contour (`.dc-emphasis[data-role^='traffic-']`, set by
+ * `DraftNodeView`) and says how many in a small badge — the halo is never the only signal, and no
+ * colour here means "overloaded": the analysis knows nothing about load.
+ */
+.dc-canvas[data-traffic='on'] .react-flow__node:has(.dc-node[data-traffic='dim']) {
+  opacity: 0.4;
+  transition: opacity 180ms ease;
+}
+
+.dc-canvas[data-traffic='on'] .react-flow__node:has(.dc-node[data-editing='true']) {
+  opacity: 1;
+}
+
+.dc-canvas[data-traffic='on'] .dc-edge[data-lens-dimmed='true'],
+.dc-canvas[data-traffic='on'] .dc-attachment-chip-row[data-lens-dimmed='true'] {
+  opacity: 0.35;
+  transition: opacity 180ms ease;
+}
+
+/* Only some of the traffic may take this branch — a split nobody drew the share of, a condition,
+   one of several competing consumers. Present, but quieter than what certainly carries paths. */
+.dc-canvas[data-traffic='on'] .dc-edge[data-traffic='uncertain'] .dc-edge-line {
+  opacity: 0.62;
+}
+
+/*
+ * The flow itself: light travelling along each connector that carries traffic (`DraftEdgeView`).
+ * Three layers on the very path drawn — a faint channel showing where traffic runs, and sparks
+ * with a short comet tail riding it in the direction the work travels. The sparks are round dots on
+ * a dash pattern and the tail a dash one tail-length behind them, both moved one gap per beat, so
+ * the rhythm is in screen-true pixels whatever the line's length and the stream never seams. Its
+ * density is the reading: paths sharing a line pack the sparks close and widen the channel; a branch
+ * only some traffic may take thins them and dims them. Each stream fades in one beat later per hop
+ * from its entry point (`--dc-traffic-hop`), so turning traffic on shows it spreading through the
+ * system from where it enters, then flowing on. Every speed is the same: calm, never urgent.
+ */
+.dc-traffic-flow {
+  --dc-traffic-gap: 34px;
+  --dc-traffic-tail: 12px;
+  --dc-traffic-beat: 620ms;
+  --dc-traffic-spark: 4px;
+  --dc-traffic-glow: 0.13;
+  --dc-traffic-light: 1;
+  color: var(--dc-selection);
+  opacity: var(--dc-traffic-light);
+}
+
+.dc-edge[data-traffic='shared'] .dc-traffic-flow {
+  --dc-traffic-gap: 22px;
+  --dc-traffic-beat: 400ms;
+  --dc-traffic-spark: 4.6px;
+  --dc-traffic-glow: 0.2;
+}
+
+.dc-edge[data-traffic='uncertain'] .dc-traffic-flow {
+  --dc-traffic-gap: 54px;
+  --dc-traffic-tail: 8px;
+  --dc-traffic-beat: 985ms;
+  --dc-traffic-spark: 3.4px;
+  --dc-traffic-glow: 0.08;
+  --dc-traffic-light: 0.65;
+}
+
+.dc-traffic-channel {
+  stroke: currentColor;
+  stroke-width: 7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: var(--dc-traffic-glow);
+}
+
+.dc-traffic-spark {
+  stroke: currentColor;
+  stroke-width: var(--dc-traffic-spark);
+  stroke-linecap: round;
+  stroke-dasharray: 0 var(--dc-traffic-gap);
+}
+
+/* One tail-length behind the spark: before it along the line when it flows with the arrow, after
+   it when the work runs against the arrow. */
+.dc-traffic-tail {
+  --dc-traffic-from: var(--dc-traffic-tail);
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: var(--dc-traffic-tail) calc(var(--dc-traffic-gap) - var(--dc-traffic-tail));
+  stroke-dashoffset: var(--dc-traffic-from);
+  opacity: 0.4;
+}
+
+.dc-traffic-flow[data-dir='reverse'] .dc-traffic-tail {
+  --dc-traffic-from: 0px;
+}
+
+/* Light themes have no dark sky for the light to glow against: a deeper line reads better. */
+:root:not([data-theme='dark']) .dc-traffic-flow {
+  color: color-mix(in srgb, var(--dc-selection) 88%, var(--dc-text));
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dc-traffic-flow {
+    animation: dc-traffic-arrive 700ms var(--dc-ease-out) calc(var(--dc-traffic-hop, 0) * 180ms) both;
+  }
+
+  .dc-traffic-spark,
+  .dc-traffic-tail {
+    animation: dc-traffic-flow var(--dc-traffic-beat) linear calc(var(--dc-traffic-hop, 0) * 180ms) infinite;
+  }
+
+  .dc-traffic-flow[data-dir='reverse'] .dc-traffic-spark,
+  .dc-traffic-flow[data-dir='reverse'] .dc-traffic-tail {
+    animation-name: dc-traffic-flow-reverse;
+  }
+
+  /* Past the motion budget on a very large diagram: drawn, not moving. */
+  .dc-traffic-flow[data-still='true'] .dc-traffic-spark,
+  .dc-traffic-flow[data-still='true'] .dc-traffic-tail {
+    animation: none;
+  }
+
+  @keyframes dc-traffic-flow {
+    from {
+      stroke-dashoffset: var(--dc-traffic-from, 0px);
+    }
+    to {
+      stroke-dashoffset: calc(var(--dc-traffic-from, 0px) - var(--dc-traffic-gap));
+    }
+  }
+
+  @keyframes dc-traffic-flow-reverse {
+    from {
+      stroke-dashoffset: var(--dc-traffic-from, 0px);
+    }
+    to {
+      stroke-dashoffset: calc(var(--dc-traffic-from, 0px) + var(--dc-traffic-gap));
+    }
+  }
+
+  @keyframes dc-traffic-arrive {
+    from {
+      opacity: 0;
+    }
+  }
+
+  /* Where the most paths meet breathes, slowly — arrivals pooling, never an alarm. */
+  .dc-emphasis[data-role='traffic-top'] {
+    animation:
+      dc-emphasis-in 220ms var(--dc-ease-out) both,
+      dc-traffic-breathe 3.4s ease-in-out 1.2s infinite;
+  }
+
+  @keyframes dc-traffic-breathe {
+    0%,
+    100% {
+      filter: drop-shadow(0 0 3px color-mix(in srgb, var(--dc-emphasis-color, var(--dc-selection)) 60%, transparent));
+    }
+    50% {
+      filter: drop-shadow(0 0 8px color-mix(in srgb, var(--dc-emphasis-color, var(--dc-selection)) 80%, transparent));
+    }
+  }
+}
+
+/*
+ * Traffic's whiteboard markup (`TrafficSketches`): marker loops, flicked arrows and handwritten
+ * notes over the diagram. One ink — the theme's own "check this" amber — and a highlighter swipe of
+ * the same hue behind the words, so it reads as somebody's review on top of the drawing rather than
+ * part of it. Findings the diagram leaves open (`unknown`) are written in a lighter, dashed hand.
+ * Each stroke draws itself on in turn (`--dc-sketch-delay`), as if being written.
+ */
+.dc-traffic-sketches {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: visible;
+  pointer-events: none;
+  --dc-sketch-ink: var(--dc-caution);
+}
+
+.dc-sketch-stroke {
+  fill: none;
+  stroke: var(--dc-sketch-ink);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.92;
+}
+
+.dc-sketch-arrow,
+.dc-sketch-head {
+  stroke-width: 1.8;
+}
+
+.dc-traffic-sketch[data-tone='unknown'] .dc-sketch-loop {
+  stroke-dasharray: 0.035 0.025;
+  opacity: 0.75;
+}
+
+.dc-sketch-text {
+  fill: var(--dc-sketch-ink);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  paint-order: stroke;
+  stroke: var(--dc-canvas);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+
+.dc-sketch-hop {
+  font-size: 13px;
+}
+
+/* While a shape is carried the notes hold still where they were; fade them rather than leave them
+   pointing at where it used to be. They are placed again on release. */
+.dc-traffic-sketches[data-moving],
+.dc-traffic-notes[data-moving] {
+  opacity: 0.15;
+  transition: opacity 120ms ease;
+}
+
+/* The handwriting: real text, in the hand Text elements use, written in the review's amber ink with
+   a highlighter pass behind the words — no box, no card, nothing that reads as UI. */
+.dc-traffic-notes {
+  position: absolute;
+  top: 0;
+  left: 0;
+  --dc-sketch-ink: var(--dc-caution);
+  --dc-sketch-highlight: color-mix(in srgb, var(--dc-caution) 22%, transparent);
+}
+
+.dc-hand {
+  color: var(--dc-sketch-ink);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  /* Legible over a connector or a dotted grid without a box behind it. */
+  text-shadow:
+    0 0 3px var(--dc-canvas),
+    0 0 2px var(--dc-canvas),
+    0 0 1px var(--dc-canvas);
+}
+
+.dc-traffic-note,
+.dc-traffic-headline-note,
+.dc-traffic-callout {
+  position: absolute;
+  top: 0;
+  left: 0;
+  /* The layer they sit in has no width of its own: size to the words, not to it. */
+  width: max-content;
+  transform-origin: 0 0;
+  pointer-events: all;
+}
+
+.dc-traffic-headline-note {
+  max-width: 560px;
+}
+
+.dc-traffic-note {
+  display: block;
+  max-width: 260px;
+  margin: 0;
+  padding: 1px 4px;
+  border: 0;
+  border-radius: 3px;
+  background: none;
+  font: inherit;
+  font-size: 17px;
+  line-height: 21px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dc-traffic-note[data-up] {
+  display: flex;
+  flex-direction: column-reverse;
+  /* Grows upward from where the words sit: the button is anchored by its bottom edge. */
+  translate: 0 calc(-100% + 23px);
+}
+
+.dc-traffic-note[data-up] .dc-traffic-note-more {
+  margin-top: 0;
+  margin-bottom: 6px;
+}
+
+.dc-traffic-note[data-up] .dc-traffic-note-mark {
+  align-self: flex-start;
+}
+
+.dc-traffic-note-mark {
+  background: linear-gradient(transparent 42%, var(--dc-sketch-highlight) 42%, var(--dc-sketch-highlight) 92%, transparent 92%);
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.dc-traffic-note:hover .dc-traffic-note-mark,
+.dc-traffic-note[aria-expanded='true'] .dc-traffic-note-mark {
+  --dc-sketch-highlight: color-mix(in srgb, var(--dc-caution) 36%, transparent);
+}
+
+.dc-traffic-note:focus-visible,
+.dc-hand-link:focus-visible {
+  outline: 2px dashed var(--dc-sketch-ink);
+  outline-offset: 3px;
+}
+
+.dc-traffic-note[data-tone='unknown'] {
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+/* Unfolded: the rest of the thought, written smaller underneath, as if added after a pause. A wash
+   of the canvas behind it only — it is still handwriting on the board, not a dialog. */
+.dc-traffic-note-more,
+.dc-hand-list {
+  display: block;
+  width: 280px;
+  margin-top: 6px;
+  padding: 6px 8px 7px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--dc-canvas) 90%, transparent);
+  color: var(--dc-text);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.45;
+  text-shadow: none;
+}
+
+.dc-traffic-note[aria-expanded='true'],
+.dc-traffic-headline-note:has([aria-expanded='true']) {
+  z-index: 2;
+}
+
+.dc-hand-title {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+.dc-hand-link {
+  margin-top: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 15px;
+  text-decoration: underline wavy color-mix(in srgb, var(--dc-caution) 55%, transparent);
+  text-underline-offset: 4px;
+  cursor: pointer;
+}
+
+.dc-hand-list {
+  margin-bottom: 0;
+  padding-left: 22px;
+  list-style: '– ';
+}
+
+.dc-hand-list li + li {
+  margin-top: 4px;
+}
+
+/* A selected shape's blast radius, written beside it. */
+.dc-traffic-callout {
+  max-width: 300px;
+  padding: 6px 10px 7px;
+  border-radius: 10px;
+  /* A wash of the board behind the words, so they read over connectors — still not a card. */
+  background: color-mix(in srgb, var(--dc-canvas) 88%, transparent);
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.dc-traffic-callout p {
+  margin: 0 0 3px;
+}
+
+.dc-traffic-callout-lead {
+  font-size: 17px;
+}
+
+.dc-traffic-callout-lead::before {
+  content: '→ ';
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Opacity only: these carry their position in an inline transform an animated one would replace. */
+  .dc-traffic-note,
+  .dc-traffic-headline-note {
+    animation: dc-sketch-appear 420ms var(--dc-ease-out) var(--dc-sketch-delay, 700ms) both;
+  }
+
+  .dc-traffic-callout {
+    animation: dc-sketch-appear 240ms var(--dc-ease-out) both;
+  }
+
+  .dc-traffic-note-more,
+  .dc-hand-list {
+    animation: dc-sketch-write 260ms var(--dc-ease-out) both;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dc-traffic-sketch .dc-sketch-stroke {
+    stroke-dasharray: 1;
+    animation: dc-sketch-draw 520ms var(--dc-ease-out) var(--dc-sketch-delay, 0ms) both;
+  }
+
+  .dc-traffic-sketch .dc-sketch-arrow {
+    animation-delay: calc(var(--dc-sketch-delay, 0ms) + 260ms);
+    animation-duration: 300ms;
+  }
+
+  .dc-traffic-sketch .dc-sketch-head {
+    animation-delay: calc(var(--dc-sketch-delay, 0ms) + 520ms);
+    animation-duration: 160ms;
+  }
+
+  .dc-traffic-sketch[data-tone='unknown'] .dc-sketch-loop {
+    animation-name: dc-sketch-appear;
+  }
+
+  .dc-traffic-hop .dc-sketch-text {
+    animation: dc-sketch-write 420ms var(--dc-ease-out) calc(var(--dc-sketch-delay, 0ms) + 380ms) both;
+  }
+
+  @keyframes dc-sketch-draw {
+    from {
+      stroke-dashoffset: 1;
+    }
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  @keyframes dc-sketch-appear {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes dc-sketch-write {
+    from {
+      opacity: 0;
+      transform: translateY(3px);
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-canvas[data-traffic='on'] .react-flow__node,
+  .dc-canvas[data-traffic='on'] .dc-edge,
+  .dc-canvas[data-traffic='on'] .dc-attachment-chip-row {
+    transition: none;
+  }
+}
+
+.dc-emphasis[data-role='traffic-raised'] {
+  opacity: 0.55;
+  filter: drop-shadow(0 0 2px color-mix(in srgb, var(--dc-emphasis-color, var(--dc-selection)) 45%, transparent));
+}
+
+/* Above the shape's top-left edge: the top-right is the attachment badge's and the resize handle's,
+   and the open-point marker sits past the right edge. */
+.dc-traffic-badge {
+  position: absolute;
+  top: -22px;
+  left: 6px;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border: 1px solid var(--dc-border-strong);
+  border-radius: var(--dc-radius-pill);
+  background: var(--dc-surface);
+  color: var(--dc-text);
+  font-size: 10.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: var(--dc-shadow-panel);
+}
+
+.dc-traffic-badge[data-tier='raised'] {
+  border-color: var(--dc-border);
+  color: var(--dc-text-muted);
+  font-weight: 500;
+  box-shadow: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dc-traffic-badge {
+    animation: dc-traffic-badge-in 200ms var(--dc-ease-out) both;
+  }
+
+  @keyframes dc-traffic-badge-in {
+    from {
+      opacity: 0;
+      transform: translateY(3px);
+    }
+  }
+}
+
 .dc-editor[data-armed='true'] .react-flow__pane {
   cursor: crosshair;
 }

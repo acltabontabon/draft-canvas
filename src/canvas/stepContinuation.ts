@@ -27,7 +27,7 @@ export interface AskInstead {
  * everything about continuation itself.
  */
 export function stepContinuation(
-  editor: Pick<EditorStore, 'document' | 'selection' | 'selectedFlowId' | 'flowPlayback' | 'focus' | 'path' | 'outer'>,
+  editor: Pick<EditorStore, 'document' | 'selection' | 'selectedFlowId' | 'flowPlayback' | 'focus' | 'traffic' | 'path' | 'outer'>,
   delta: 1 | -1,
 ): boolean | AskInstead {
   const ui = useUiStore.getState();

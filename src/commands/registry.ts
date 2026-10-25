@@ -27,7 +27,7 @@ import { ALT_SYMBOL, MOD_SYMBOL } from '../lib/platform';
 import { canCreateInside, hasInside, ownerAt, totals } from '../depth/tree';
 import { backOut, lookInside } from '../ui/Editor/depthNavigation';
 import { inheritedLevel, LEVEL_HINTS, LEVEL_LABELS } from '../depth/level';
-import { fileOf, fileWithLiveViewport, ownsData, viewLevel } from '../store/editorStore';
+import { fileOf, fileWithLiveViewport, lensFlow, ownsData, viewLevel } from '../store/editorStore';
 import { pointer, type UiStore } from '../store/uiStore';
 import { hostKind } from '../host/hostInfo';
 import { useCollabStore } from '../store/collabStore';
@@ -556,6 +556,27 @@ export function viewCommands(ctx: CommandContext): Command[] {
       keywords: ['focus', 'clear', 'unhighlight'],
       shortcut: 'Esc',
       run: (inner) => inner.editor.exitFocus(),
+    });
+  }
+  // Offered once the room has a connector, the way the status bar chip is; the analysis itself
+  // says so when there turns out to be nothing it can read.
+  if (ctx.editor.traffic?.active) {
+    commands.push({
+      id: 'traffic-hide',
+      title: 'Hide traffic',
+      group: 'view',
+      keywords: ['traffic', 'load', 'hotspots', 'clear'],
+      shortcut: 'Esc',
+      run: (inner) => inner.editor.hideTraffic(),
+    });
+  } else if (ctx.editor.mode === 'edit' && ctx.editor.document.edges.length > 0) {
+    commands.push({
+      id: 'traffic-show',
+      title: 'Show traffic',
+      group: 'view',
+      hint: 'Where modeled traffic concentrates',
+      keywords: ['traffic', 'hotspots', 'load', 'convergence', 'shared', 'analyze', 'requests', 'paths'],
+      run: (inner) => inner.editor.showTraffic(lensFlow(inner.editor)?.id ?? null),
     });
   }
   commands.push({
