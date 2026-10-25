@@ -1,11 +1,12 @@
 /**
- * The one way to read a connector's routes: the request line and its reply as the canvas, the export
- * and the agent's checks all draw them.
+ * The document-level way to read a connector's routes for export and agent checks. The canvas
+ * supplies live geometry through its per-connector subscriptions to the same `edgeRoutes` function.
  *
  * Built in two layers so the plans that look at every connector at once can read the layer below the
  * one they shape: `edgeRoutes.ts` holds the routes before separation (`rawRouteInputs` — rects, lane,
  * trunk, nearby shapes, spread ends, search budget), `separation.ts` plans parallel tracks from those,
- * and this adds the tracks. Everything that draws, measures or judges a connector reads it here.
+ * and this adds the tracks. Document-level readers use this accessor; the canvas shares the route
+ * engine while keeping its live-geometry hot path.
  */
 import type { DraftEdge, DraftNode } from '../document/types';
 import { edgeRoutes, rawRouteInputs, type EdgeRouteInputs, type EdgeRoutes, type RouteOverrides } from './edgeRoutes';

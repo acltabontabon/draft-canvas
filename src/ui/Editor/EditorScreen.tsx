@@ -522,8 +522,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
     [armed, createAt],
   );
   const onQuickConnectMenu = useCallback<NonNullable<CanvasProps['onQuickConnectMenu']>>(
-    (source, sourceSide, sourceOffset, flowPosition, screenPosition, center) =>
-      setQuickConnect({ source, sourceSide, sourceOffset, flowPosition, screenPosition, center }),
+    (source, flowPosition, screenPosition, center) => setQuickConnect({ source, flowPosition, screenPosition, center }),
     [setQuickConnect],
   );
   const onEmptyCanvasMenu = useCallback<NonNullable<CanvasProps['onEmptyCanvasMenu']>>(

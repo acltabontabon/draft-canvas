@@ -44,6 +44,18 @@ async function start(page: Page, id: string) {
 
 const boxOf = async (page: Page, id: string) => (await page.locator(`.react-flow__node[data-id="${id}"]`).boundingBox())!;
 
+/** The canvas hit path is the exact line export and agent checks read. */
+async function expectRouteParity(page: Page, id: string) {
+  const expected = await page.evaluate(async (edgeId) => {
+    const { useEditorStore } = await import('/src/store/editorStore.ts');
+    const { connectorRoutes } = await import('/src/edges/connectorRoutes.ts');
+    const doc = useEditorStore.getState().document;
+    const edge = doc.edges.find((item: { id: string }) => item.id === edgeId);
+    return edge ? connectorRoutes(edge, doc, 'transient')?.request.d : null;
+  }, id);
+  expect(await page.locator(`.react-flow__edge[data-id="${id}"] .dc-edge-hit`).first().getAttribute('d')).toBe(expected);
+}
+
 test('dragging a shape across turns an automatic end to face it and leaves a pinned end where it was pinned', async ({ page }) => {
   await open(page);
   const a = await boxOf(page, 'a');
@@ -71,6 +83,53 @@ test('dragging a shape across turns an automatic end to face it and leaves a pin
   const pinnedAfter = await start(page, 'pinned');
   expect(pinnedAfter.x).toBeCloseTo(after.x + after.width, 0);
   expect(pinnedAfter.y).toBeCloseTo(after.y + after.height * 0.75, 0);
+});
+
+test('a new connector follows its shapes even when drawn between off-centre dots', async ({ page }) => {
+  await open(page);
+  const source = page.locator('.react-flow__node[data-id="b"]');
+  await source.hover();
+  const handle = (await source.locator('.dc-handle[data-handleid="top@0"]').boundingBox())!;
+  const target = await boxOf(page, 'c');
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(target.x + target.width * 0.75, target.y + target.height, { steps: 12 });
+  await nextFrames(page);
+  await page.mouse.up();
+  await expect(page.locator('.react-flow__edge')).toHaveCount(3);
+
+  const edgeId = (await page.locator('.react-flow__edge').last().getAttribute('data-id'))!;
+  const b = await boxOf(page, 'b');
+  // The starting dot was at B's top left, but the new line takes the best side automatically.
+  expect((await start(page, edgeId)).y).toBeCloseTo(b.y + b.height, 0);
+  await expectRouteParity(page, edgeId);
+
+  const c = await boxOf(page, 'c');
+  await page.mouse.move(c.x + c.width / 2, c.y + c.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(c.x + c.width / 2 - 700, c.y + c.height / 2, { steps: 12 });
+  await page.mouse.up();
+  await cameraAtRest(page);
+  expect((await start(page, edgeId)).x).toBeCloseTo((await boxOf(page, 'b')).x, 0);
+  await expectRouteParity(page, edgeId);
+});
+
+test('reconnecting a pinned end to a dot makes that end automatic', async ({ page }) => {
+  await open(page);
+  await clickEdge(page, page.locator('.react-flow__edge[data-id="pinned"] .dc-edge-hit').first());
+  const endpoint = (await page.locator('.dc-edge-endpoint').first().boundingBox())!;
+  const b = await boxOf(page, 'b');
+  await page.mouse.move(endpoint.x + endpoint.width / 2, endpoint.y + endpoint.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(b.x + b.width * 0.25, b.y, { steps: 12 });
+  await page.mouse.up();
+
+  const changed = await page.evaluate(async () => {
+    const edge = (await import('/src/store/editorStore.ts')).useEditorStore.getState().document.edges.find((item: { id: string }) => item.id === 'pinned');
+    return { source: edge.source, pinned: edge.sourceAnchor !== undefined };
+  });
+  expect(changed).toEqual({ source: 'b', pinned: false });
+  await expectRouteParity(page, 'pinned');
 });
 
 test('Auto attach start lets a pinned end face the shape again, in one undo step', async ({ page }) => {

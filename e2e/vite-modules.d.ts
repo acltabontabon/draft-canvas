@@ -26,6 +26,8 @@ declare module '/src/*' {
   // oxlint-disable-next-line typescript/no-explicit-any
   export const renderDocumentSvg: (doc: any, options?: Record<string, unknown>) => { svg: string };
   // oxlint-disable-next-line typescript/no-explicit-any
+  export const connectorRoutes: (edge: any, doc: any, scope: string) => { request: { d: string } } | null;
+  // oxlint-disable-next-line typescript/no-explicit-any
   export const deserializeDocument: (text: string) => { document: any };
   // oxlint-disable-next-line typescript/no-explicit-any
   export const serializeDocument: (doc: any) => string;

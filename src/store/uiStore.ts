@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { Preset } from '../canvas/presets';
 import { ANY_CANDIDATE, dismissalKey } from '../continuation/dismissal';
 import type { DismissalKey, MaterializedContinuation } from '../continuation';
-import type { DraftEdge, DraftNode, OpenPointTarget, Side } from '../document/types';
+import type { DraftEdge, DraftNode, OpenPointTarget } from '../document/types';
 import type { CaptionCorner } from '../presentation/framing';
 import type { PresentationReveal } from '../presentation/presentationAttachments';
 import { readPreference, writePreference } from '../lib/preferences';
@@ -38,10 +38,6 @@ export type Toast = { id: number; message: string; tone: 'info' | 'error'; actio
 export interface QuickConnectState {
   /** Absent for a plain double-click-to-create; present for a connector dropped on empty canvas. */
   source?: string;
-  /** The side of the source node the user actually dragged from, if known. */
-  sourceSide?: Side;
-  /** How far along that side, if known — one of `ANCHOR_OFFSETS` (`edges/routing.ts`). */
-  sourceOffset?: number;
   flowPosition: { x: number; y: number };
   screenPosition: { x: number; y: number };
   /** The raw drop point in flow coordinates (`flowPosition` is that point already offset for a
@@ -55,14 +51,6 @@ export interface QuickConnectState {
   asked?: boolean;
   /** One line above the rows saying why there is no suggestion (`continuation/ambiguity.ts`). */
   note?: string;
-}
-
-/** The specific anchor (side + offset, one of `ANCHOR_OFFSETS`) a reconnect
- *  drag is currently hovering, and which node it's on — see `armedAnchor`. */
-export interface ArmedAnchor {
-  nodeId: string;
-  side: Side;
-  offset: number;
 }
 
 /** A Note/Code card standing in as its own capsule mid-drag — see `dragCapsule` below and
@@ -321,13 +309,6 @@ export interface UiStore {
   hoveredEdgeId: string | null;
   hoveredRecoveryParentId: string | null;
   /**
-   * The specific anchor (not just the node) a reconnect drag is currently
-   * hovering, so the one matching handle can highlight as "release here" —
-   * the hand-rolled counterpart to React Flow's own `.connectingto.valid`,
-   * which only exists for its native connection-creation drag.
-   */
-  armedAnchor: ArmedAnchor | null;
-  /**
    * The attachment UI currently open, shared by both node and edge hosts — see `AttachmentChip`/
    * `AttachmentChipRow` in `AttachmentPresentation.tsx`. For an edge, `attachmentId` is always
    * non-null when this is set (one click pins one specific chip's card open for editing). For a
@@ -558,9 +539,7 @@ export interface UiStore {
   setReconnectHoverTarget: (nodeId: string | null) => void;
   setReconnectDragActive: (active: boolean) => void;
   setHoveredEdge: (id: string | null) => void;
-  setHoveredRecoveryParent: (id: string | null) => void;
-  setArmedAnchor: (anchor: ArmedAnchor | null) => void;
-  setOpenAttachmentDetail: (
+  setHoveredRecoveryParent: (id: string | null) => void;  setOpenAttachmentDetail: (
     target: { hostKind: 'node' | 'edge'; hostId: string; attachmentId: string | null } | null,
   ) => void;
   setPresentationReveal: (target: PresentationReveal | null) => void;
@@ -693,9 +672,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   reconnectHoverTarget: null,
   reconnectDragActive: false,
   hoveredEdgeId: null,
-  hoveredRecoveryParentId: null,
-  armedAnchor: null,
-  openAttachmentDetail: null,
+  hoveredRecoveryParentId: null,  openAttachmentDetail: null,
   presentationReveal: null,
   presentation: PRESENTATION_AT_REST,
   openPointPopover: null,
@@ -784,20 +761,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   setReconnectDragActive: (reconnectDragActive) =>
     set((state) => (state.reconnectDragActive === reconnectDragActive ? state : { reconnectDragActive })),
   setHoveredEdge: (hoveredEdgeId) => set((state) => (state.hoveredEdgeId === hoveredEdgeId ? state : { hoveredEdgeId })),
-  setHoveredRecoveryParent: (hoveredRecoveryParentId) => set((state) => (state.hoveredRecoveryParentId === hoveredRecoveryParentId ? state : { hoveredRecoveryParentId })),
-  setArmedAnchor: (next) =>
-    set((state) => {
-      const current = state.armedAnchor;
-      const same =
-        current === next ||
-        (current !== null &&
-          next !== null &&
-          current.nodeId === next.nodeId &&
-          current.side === next.side &&
-          current.offset === next.offset);
-      return same ? state : { armedAnchor: next };
-    }),
-  setOpenAttachmentDetail: (openAttachmentDetail) => set({ openAttachmentDetail }),
+  setHoveredRecoveryParent: (hoveredRecoveryParentId) => set((state) => (state.hoveredRecoveryParentId === hoveredRecoveryParentId ? state : { hoveredRecoveryParentId })),  setOpenAttachmentDetail: (openAttachmentDetail) => set({ openAttachmentDetail }),
   setPresentationReveal: (presentationReveal) => set({ presentationReveal }),
   setPresentation: (patch) =>
     set((state) => {

@@ -212,41 +212,6 @@ export function snappedAnchorForDrop(rect: Rect, point: { x: number; y: number }
   return anchor ? { side: anchor.side, offset: snapOffset(anchor.offset) } : undefined;
 }
 
-/**
- * What a connector drawn out of `handle` stores for its start. Starting from the middle handle of the
- * side the router would pick anyway carries no intent, so the start stays automatic and follows the
- * shapes as they move; any other handle is a pin. `targetAnchor` is the drop end's pin, if it has one.
- */
-export function startAnchor(sourceRect: Rect, targetRect: Rect, handle: EdgeAnchor | undefined, targetAnchor?: EdgeAnchor): EdgeAnchor | undefined {
-  if (!handle) return undefined;
-  const automatic = sidesFor(sourceRect, targetRect, { target: targetAnchor }).source;
-  return handle.offset === 0.5 && handle.side === automatic ? undefined : handle;
-}
-
-/** How near a handle, in screen pixels, a drop counts as landing on it — a little over the dot's own
- *  radius, as forgiving as React Flow's connection radius is for the handle a drag starts from. */
-export const HANDLE_DROP_RADIUS = 12;
-
-/**
- * The handle a drop at `point` landed on, within `radius` of it — a pin there. A drop anywhere else on
- * a shape's body attaches automatically (`undefined`): it says "this shape", not "this point".
- */
-export function handleNear(rect: Rect, point: { x: number; y: number }, radius: number): EdgeAnchor | undefined {
-  let best: EdgeAnchor | undefined;
-  let bestDistance = radius;
-  for (const side of SIDES) {
-    for (const offset of ANCHOR_OFFSETS) {
-      const at = anchorPoint(rect, side, offset);
-      const distance = Math.hypot(at.x - point.x, at.y - point.y);
-      if (distance <= bestDistance) {
-        bestDistance = distance;
-        best = { side, offset };
-      }
-    }
-  }
-  return best;
-}
-
 /** The anchor that puts an end exactly at `point` on `side` — `anchorPoint`'s inverse, for pinning an
  *  end where it is drawn. */
 export function anchorOnSide(rect: Rect, side: Side, point: { x: number; y: number }): EdgeAnchor {

@@ -77,9 +77,11 @@ pairing stays free; an unusual one gets guidance, not rejection. Rules: [Semanti
   without one is automatic: it faces the other shape and moves with it. Nothing guesses a pin from
   geometry; **Auto attach** and **Pin ends here** are the only ways one becomes the other.
   **Tidy connectors** clears only route modes and bends.
-- Every connector reads its routes through one accessor (`connectorRouteInputs` / `connectorRoutes`
-  in `edges/connectorRoutes.ts`), so the canvas, export and agent's checks see the same lines. The
-  passes run in one order with no cycles: sides and trunk membership, then where automatic ends sit
+- Export and agent checks read `connectorRouteInputs` / `connectorRoutes` in
+  `edges/connectorRoutes.ts`. The canvas gathers live geometry through per-connector subscriptions
+  and passes equivalent inputs to the same `edgeRoutes` function, so a drag remains responsive. A
+  browser check compares the settled canvas path with the accessor's path. The passes run in one
+  order with no cycles: sides and trunk membership, then where automatic ends sit
   on a side (`edges/endpoints.ts` spreads ends sharing a side, and pins sharing one point within
   their band), then the raw routes (`edges/edgeRoutes.ts`), then parallel tracks for runs sharing a
   corridor (`edges/separation.ts`, each shift checked and kept only if it clears shapes and adds no

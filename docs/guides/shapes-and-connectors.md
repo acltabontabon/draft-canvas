@@ -47,10 +47,10 @@ side and point.
 
 | Draw it | The end is |
 | --- | --- |
-| Out of a shape's middle dot, on the side facing the other shape | Automatic |
-| Out of any other dot | Pinned there |
-| Dropped on a shape | Automatic |
-| Dropped on a dot | Pinned there |
+| Drawn from any dot | Automatic |
+| Dropped on a shape or a dot | Automatic |
+| Reconnected to a shape or a dot | Automatic at the reconnected end |
+| Set with **Pin ends here** | Pinned at its drawn position |
 
 A selected connector shows a pinned end filled and an automatic end as a ring. Right-click a connector
 → **Auto attach start**, **Auto attach end**, **Auto attach both ends** or **Pin ends here**.

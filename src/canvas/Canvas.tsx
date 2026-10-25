@@ -22,8 +22,8 @@ import { defaultTextFor, maxSizeFor } from '../document/factory';
 import { linkedCompensations, visibleEdges } from '../document/compensation';
 import { openFitViewport } from '../document/geometry';
 import { boundsOf, descendantsOf, hasAttachmentRoom } from '../document/operations';
-import type { DraftDocument, DraftEdge, DraftNode, Side } from '../document/types';
-import { HANDLE_DROP_RADIUS, handleNear, parseAnchorId, rectOf, startAnchor, type Rect } from '../edges/routing';
+import type { DraftDocument, DraftEdge, DraftNode } from '../document/types';
+import type { Rect } from '../edges/routing';
 import { isEditableTarget } from '../lib/isEditableTarget';
 import { motionMs } from '../lib/motion';
 import { centerOf, pointInBox } from '../lib/math';
@@ -459,8 +459,6 @@ export interface CanvasProps {
    */
   onQuickConnectMenu?: (
     sourceId: string,
-    sourceSide: Side | undefined,
-    sourceOffset: number | undefined,
     flowPosition: { x: number; y: number },
     screenPosition: { x: number; y: number },
     center: { x: number; y: number },
@@ -1444,26 +1442,9 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
     (connection: Connection) => {
       if (connectCancelled.current) return;
       if (!connection.source || !connection.target) return;
-      // A handle id encodes exactly which of the 12 anchors it is (see
-      // `HANDLE_ANCHORS`/`parseAnchorId` in `edges/routing.ts`), so this is
-      // the drag's actual start/end point, not a guess — see `EdgeAnchor` in
-      // `document/types.ts`. Dropped on a handle, the end is pinned there; the
-      // start is pinned too unless it left from the middle handle of the side
-      // the router would pick anyway (`startAnchor`).
-      const state = useEditorStore.getState();
-      const targetAnchor = parseAnchorId(connection.targetHandle);
-      const sourceNode = state.document.nodes.find((node) => node.id === connection.source);
-      const targetNode = state.document.nodes.find((node) => node.id === connection.target);
-      const handle = parseAnchorId(connection.sourceHandle);
-      const sourceAnchor = sourceNode && targetNode ? startAnchor(rectOf(sourceNode), rectOf(targetNode), handle, targetAnchor) : handle;
-      state.connect(
-          connection.source,
-          connection.target,
-          sourceAnchor?.side,
-          targetAnchor?.side,
-          sourceAnchor?.offset,
-          targetAnchor?.offset,
-        );
+      // Handles start the gesture, but a new connector follows its shapes by default. Pinning is
+      // explicit through "Pin ends here" after the line is drawn.
+      useEditorStore.getState().connect(connection.source, connection.target);
     },
     [],
   );
@@ -1489,8 +1470,6 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       if (connectionState.isValid) return;
       const source = connectionState.fromNode?.id;
       if (!source) return;
-      const handle = parseAnchorId(connectionState.fromHandle?.id);
-
       const point = 'changedTouches' in event ? event.changedTouches[0] : event;
       if (!point) return;
       const position = screenToFlowPosition({ x: point.clientX, y: point.clientY });
@@ -1507,21 +1486,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
 
       if (droppedOn) {
         if (droppedOn.id !== source) {
-          // A body-hit says "this shape", not "this point": the end attaches
-          // automatically and follows the shape — unless the drop landed on a
-          // handle React Flow's own radius missed, which pins it there.
-          const targetRect = rectOf(droppedOn);
-          const targetAnchor = handleNear(targetRect, position, HANDLE_DROP_RADIUS / getZoom());
-          const sourceNode = state.document.nodes.find((node) => node.id === source);
-          const sourceAnchor = sourceNode ? startAnchor(rectOf(sourceNode), targetRect, handle, targetAnchor) : handle;
-          state.connect(
-            source,
-            droppedOn.id,
-            sourceAnchor?.side,
-            targetAnchor?.side,
-            sourceAnchor?.offset,
-            targetAnchor?.offset,
-          );
+          state.connect(source, droppedOn.id);
         }
         return;
       }
@@ -1531,14 +1496,12 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       // decides what appears.
       onQuickConnectMenu?.(
         source,
-        handle?.side,
-        handle?.offset,
         { x: Math.round(position.x - 88), y: Math.round(position.y - 34) },
         { x: point.clientX, y: point.clientY },
         position,
       );
     },
-    [getZoom, onQuickConnectMenu, screenToFlowPosition],
+    [onQuickConnectMenu, screenToFlowPosition],
   );
 
   // Reconnecting an existing connector's endpoint is driven entirely by hand

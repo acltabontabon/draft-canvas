@@ -112,16 +112,6 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   const jumpFlash = useUiStore((state) => state.jumpFlashId === id);
   const pointed = useUiStore((state) => state.pointedIds?.has(id) ?? false);
   const settling = useSettle(id);
-  // Which specific anchor (side + offset) a reconnect drag is currently
-  // hovering, if any is on this node — null on every other node, so only the
-  // one matching handle (see the render below) ever re-renders when this
-  // changes. A plain string, not the `armedAnchor` object itself, so zustand's
-  // default equality still skips a re-render when it hasn't actually changed.
-  const armedAnchorKey = useUiStore((state) =>
-    state.armedAnchor && state.armedAnchor.nodeId === id
-      ? `${state.armedAnchor.side}:${state.armedAnchor.offset}`
-      : null,
-  );
   // One subscription for all of this shape's handles (see `DraftHandle.tsx`).
   const connecting = useConnectingHandles(id);
   const popoverOpen = useUiStore(
@@ -741,9 +731,9 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
         handles don't visually overwhelm a shape this small.
 
         A left/right handle sits on the node's anchor band (`anchorBandOf`: a
-        queue-family node's tube glyph, the whole side for everything else) in
-        pixels, so the dot the user sees is exactly where `edges/routing.ts`
-        will land the connector drawn from it.
+        queue-family node's tube glyph, the whole side for everything else).
+        The dot starts the drawing gesture; after the drop an automatic end
+        may move to another point or side as the shapes move.
       */}
       {(node.type === 'ellipse' ? HANDLE_ANCHORS.filter((anchor) => anchor.offset === 0.5) : HANDLE_ANCHORS).map(
         (anchor) => (
@@ -753,7 +743,6 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
             id={anchor.id}
             position={anchor.position}
             className="dc-handle"
-            armed={armedAnchorKey === `${anchor.side}:${anchor.offset}`}
             style={handleStyles.get(anchor.id)}
             connectable={!readOnly}
             from={connecting.from === anchor.id}

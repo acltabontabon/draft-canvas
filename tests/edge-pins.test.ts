@@ -3,57 +3,14 @@ import { createDocument, createEdge, createNode } from '../src/document/factory'
 import { autoAttachEnds, pinEnds } from '../src/document/operations';
 import type { DraftDocument, DraftEdge, EdgeAnchor } from '../src/document/types';
 import { connectorRoutes } from '../src/edges/connectorRoutes';
-import { anchorPoint, handleNear, routeBetween, startAnchor, type Rect } from '../src/edges/routing';
+import { anchorPoint, routeBetween, type Rect } from '../src/edges/routing';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
 
-/**
- * Pinned and automatic connector ends. A stored anchor is a pin: its side and point never change,
- * whatever the shapes do. An end without one attaches automatically and follows the shapes. How an
- * end becomes one or the other is a rule about the gesture that drew it, never a guess from geometry.
- */
+/** Pinned and automatic connector ends: existing pins are kept; new ends follow their shapes. */
 
 const a: Rect = { x: 0, y: 0, width: 160, height: 80 };
 const b: Rect = { x: 480, y: 0, width: 160, height: 80 };
 const pin = (side: EdgeAnchor['side'], offset = 0.5): EdgeAnchor => ({ side, offset });
-
-describe('where a drawn connector starts', () => {
-  it('stays automatic from the middle handle of the side the router would pick', () => {
-    expect(startAnchor(a, b, pin('right'))).toBeUndefined();
-  });
-
-  it('is pinned from any other handle', () => {
-    expect(startAnchor(a, b, pin('right', 0.25))).toEqual(pin('right', 0.25));
-    expect(startAnchor(a, b, pin('bottom'))).toEqual(pin('bottom'));
-  });
-
-  it('is automatic without a handle', () => {
-    expect(startAnchor(a, b, undefined)).toBeUndefined();
-  });
-});
-
-describe('where a drawn connector lands', () => {
-  it('is pinned on a handle, middle one included', () => {
-    expect(handleNear(b, anchorPoint(b, 'left', 0.5), 12)).toEqual(pin('left', 0.5));
-    expect(handleNear(b, { ...anchorPoint(b, 'top', 0.75), y: 6 }, 12)).toEqual(pin('top', 0.75));
-  });
-
-  it('is automatic anywhere else on the shape', () => {
-    expect(handleNear(b, { x: 560, y: 40 }, 12)).toBeUndefined();
-    expect(handleNear(b, { x: 490, y: 60 }, 6)).toBeUndefined();
-  });
-
-  it('makes all four combinations of an automatic or pinned start and drop', () => {
-    const cases = [
-      { start: pin('right'), drop: undefined, expected: [undefined, undefined] },
-      { start: pin('right'), drop: pin('left', 0.25), expected: [undefined, pin('left', 0.25)] },
-      { start: pin('top'), drop: undefined, expected: [pin('top'), undefined] },
-      { start: pin('top'), drop: pin('left'), expected: [pin('top'), pin('left')] },
-    ];
-    for (const { start, drop, expected } of cases) {
-      expect([startAnchor(a, b, start, drop), drop]).toEqual(expected);
-    }
-  });
-});
 
 describe('the pin contract', () => {
   it('draws a pinned end exactly at its anchor, however the shapes move', () => {

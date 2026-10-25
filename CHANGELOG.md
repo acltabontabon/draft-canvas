@@ -13,7 +13,8 @@ The retired VS Code extension has [its own changelog](https://github.com/acltabo
 #### Added
 
 - Connectors route around shapes, spread automatic ends and separate overlapping runs. Auto attach
-  lets ends follow shapes; pinned ends keep their exact attachment. Existing diagrams retain pins.
+  lets ends follow shapes, including after reconnecting; Pin ends here keeps their exact attachment.
+  Existing diagrams retain pins.
 - Agents can set automatic or pinned ends and receive unresolved-route and crowded-side advice.
 
 #### Fixed

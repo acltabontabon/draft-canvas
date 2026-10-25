@@ -18,10 +18,7 @@ import {
   labelChipSide,
   labelLaneOffset,
   laneIndex,
-  rectOf,
   responseAwayFor,
-  HANDLE_DROP_RADIUS,
-  handleNear,
   strokeSeed,
   type Rect,
   type Side,
@@ -1310,15 +1307,6 @@ function EdgeEndpointHandle({
   // reconnect drag — same result, no allocation, no O(n log n) sort.
   // A shape under the pointer wins; with none, the innermost boundary around it takes the end — a
   // connector can be drawn to a boundary, and re-pointing one there used to snap back silently.
-  /** `HANDLE_DROP_RADIUS` screen pixels around a pointer, in flow units at the current zoom. */
-  const dropRadius = useCallback(
-    (clientX: number, clientY: number) => {
-      const at = screenToFlowPosition({ x: clientX, y: clientY });
-      const off = screenToFlowPosition({ x: clientX + HANDLE_DROP_RADIUS, y: clientY });
-      return Math.abs(off.x - at.x);
-    },
-    [screenToFlowPosition],
-  );
   const findDropNode = useCallback(
     (point: { x: number; y: number }) => {
       let best: DraftNode | undefined;
@@ -1343,7 +1331,6 @@ function EdgeEndpointHandle({
     if (onKeyDownRef.current) window.removeEventListener('keydown', onKeyDownRef.current);
     useUiStore.getState().setReconnectHoverTarget(null);
     useUiStore.getState().setReconnectDragActive(false);
-    useUiStore.getState().setArmedAnchor(null);
     useUiStore.getState().setInteractionActive(false);
     lastHover.current = null;
     dragStarted.current = false;
@@ -1415,15 +1402,8 @@ function EdgeEndpointHandle({
         lastHover.current = hoverId;
         useUiStore.getState().setReconnectHoverTarget(hoverId);
       }
-      // Live "release here" preview — the hand-rolled counterpart to React
-      // Flow's own `.connectingto.valid`, which only tracks its native
-      // connection-creation drag, not this one. Only over a handle, exactly
-      // where the drop would pin the end (`handleNear`); anywhere else on the
-      // shape the end attaches automatically, and no handle is promised.
-      const anchor = node ? handleNear(rectOf(node), point, dropRadius(event.clientX, event.clientY)) : undefined;
-      useUiStore.getState().setArmedAnchor(anchor && node ? { nodeId: node.id, ...anchor } : null);
     },
-    [dropRadius, edgeId, endpoint, findDropNode, onDrag, screenToFlowPosition],
+    [edgeId, endpoint, findDropNode, onDrag, screenToFlowPosition],
   );
 
   const onPointerUp = useCallback(
@@ -1438,11 +1418,9 @@ function EdgeEndpointHandle({
       const point = screenToFlowPosition({ x: event.clientX, y: event.clientY });
       const node = findDropNode(point);
       if (!node) return; // Empty canvas: leave the connection exactly as it was.
-      // On a handle: pinned there. Anywhere else on the shape: automatic.
-      const anchor = handleNear(rectOf(node), point, dropRadius(event.clientX, event.clientY));
-      useEditorStore.getState().reconnectEdge(edgeId, endpoint, node.id, anchor?.side, anchor?.offset);
+      useEditorStore.getState().reconnectEdge(edgeId, endpoint, node.id, undefined);
     },
-    [dropRadius, edgeId, endDrag, endpoint, findDropNode, screenToFlowPosition],
+    [edgeId, endDrag, endpoint, findDropNode, screenToFlowPosition],
   );
 
   // An interrupted gesture (e.g. a touch/stylus drag cancelled by the OS) fires `pointercancel`
@@ -1462,7 +1440,7 @@ function EdgeEndpointHandle({
     <div
       className="dc-edge-endpoint"
       data-pinned={pinned ? 'true' : undefined}
-      title={pinned ? 'Pinned here. Drag to move it; right-click to auto attach.' : 'Attaches automatically. Drop on a handle to pin it.'}
+      title={pinned ? 'Pinned here. Drag to reconnect; right-click to auto attach.' : 'Attaches automatically. Drag to reconnect.'}
       style={{ transform: `translate(-50%, -50%) translate(${x}px, ${y}px)` }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
