@@ -87,6 +87,10 @@ Closing the canvas or the tab, reloading or opening another canvas also ends the
 saving as usual. A collaborator whose connection drops rejoins on their own, in the same role —
 except over the desktop local network link, where they ask to join again and you let them back in.
 
+Edits awaiting confirmation stay in memory (up to 8,192 edits or 32 MiB of change payloads), including
+during reconnection or while the owner holds a drag. If that backlog fills, Draft Canvas takes back the latest edit and tells you to
+wait for the connection to catch up. Earlier pending edits stay queued and are sent on reconnection.
+
 **Undo changes** keeps a bounded history for the session. In a long or busy session, older changes
 may no longer be available to take back; Draft Canvas says when some were forgotten. The oldest
 recovery entries eventually leave that list too. Keep a saved copy before a session if you need a
@@ -112,6 +116,7 @@ The link stops when you turn it off or end the session.
 | **The owner isn't in the session right now** | Keep the page open; it asks again when they return. |
 | **This invite has expired** | Ask for a new link. |
 | **Reconnecting…** | Your edits are sent when the connection recovers. If it does not, ask the owner to **Re-invite** you. |
+| **Too many edits are waiting to be shared** | The latest edit was taken back; earlier pending work is kept. Wait for the connection to catch up before editing more. |
 | **Your copy of Draft Canvas and the owner's don't match** | Whoever is behind updates the app. |
 | **This diagram is too large to share live** | The limit is 16 MB. Share an export instead. |
 

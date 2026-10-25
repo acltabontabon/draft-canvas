@@ -7,6 +7,7 @@ import {
   SOCKET_DEGRADE_MS,
   SOCKET_HIGH_WATERMARK,
   SOCKET_LOW_WATERMARK,
+  SOCKET_MAX_QUEUED_BYTES,
   closeReason,
   lanSocketUrl,
   openSocketTransport,
@@ -212,6 +213,20 @@ describe('LAN socket transport', () => {
     // Under the cap in UTF-16 units but over it in UTF-8 bytes.
     expect(() => transport.send('é'.repeat(MAX_MESSAGE_BYTES / 2 + 1), 'commit')).toThrow(RangeError);
     expect(socket.sent).toEqual([]);
+  });
+
+  it('counts Unicode backlog in wire bytes before a stalled connection can retain three times its budget', () => {
+    const { transport, socket } = open();
+    socket.accept();
+    socket.bufferedAmount = SOCKET_HIGH_WATERMARK + 1;
+    const message = '界'.repeat(1024 * 1024);
+    const bytes = new TextEncoder().encode(message).byteLength;
+    const fitting = Math.floor(SOCKET_MAX_QUEUED_BYTES / bytes);
+    for (let i = 0; i < fitting; i += 1) expect(transport.send(message, 'commit')).toBe(true);
+    expect(transport.send(message, 'commit')).toBe(false);
+    expect(transport.state).toBe('closed');
+    expect(socket.closedWith?.reason).toBe('queue-overflow');
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it('closes cleanly: one closed state, then silence', () => {

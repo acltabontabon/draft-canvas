@@ -18,6 +18,7 @@ import argparse
 import json
 import os
 import re
+import stat
 import subprocess
 import sys
 from collections import Counter, defaultdict
@@ -646,7 +647,10 @@ def list_files(root: str, max_files: int) -> tuple[list[str], bool]:
 def read_text(root: str, rel: str) -> str | None:
     path = os.path.join(root, rel)
     try:
-        if os.path.islink(path) or os.path.getsize(path) > MAX_READ:
+        metadata = os.stat(path, follow_symlinks=False)
+        # A repository can contain a FIFO or socket. Opening one can wait forever even though its
+        # reported size is zero; only ordinary source files belong in the survey.
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > MAX_READ:
             return None
         with open(path, 'rb') as fh:
             data = fh.read(MAX_READ + 1)

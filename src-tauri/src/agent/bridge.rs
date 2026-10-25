@@ -37,6 +37,8 @@ use tokio::sync::{broadcast, mpsc};
 /// A whole diagram fits many times over; a runaway client can't make the app buffer without bound.
 pub const MAX_FRAME: u64 = 4 * 1024 * 1024;
 const HELLO_TIMEOUT: Duration = Duration::from_secs(5);
+/// A client that stops reading must not pin a writer, queued replies or access shutdown forever.
+const WRITE_TIMEOUT: Duration = Duration::from_secs(5);
 /// How long the listener waits after a failed accept before trying again.
 const ACCEPT_BACKOFF: Duration = Duration::from_millis(100);
 /// Calls one connection may have running at once. A well-behaved agent sends one at a time.
@@ -428,7 +430,7 @@ async fn serve<R, W>(
 
     // Writes funnel through one task so concurrent results never interleave within a line.
     let (out_tx, mut out_rx) = mpsc::channel::<Value>(32);
-    let writer = tauri::async_runtime::spawn(async move {
+    let mut writer = tauri::async_runtime::spawn(async move {
         while let Some(frame) = out_rx.recv().await {
             if send(&mut write, &frame).await.is_err() {
                 break;
@@ -437,8 +439,13 @@ async fn serve<R, W>(
     });
 
     let calls: Arc<Mutex<HashMap<u64, Arc<CallRegistry>>>> = Arc::default();
+    let mut writer_done = false;
     loop {
         tokio::select! {
+            _ = &mut writer => {
+                writer_done = true;
+                break;
+            }
             frame = read_frame(&mut reader) => {
                 let Ok(Some(frame)) = frame else { break };
                 match frame.get("type").and_then(Value::as_str) {
@@ -463,6 +470,7 @@ async fn serve<R, W>(
                                 continue;
                             }
                         }
+                        agent.track_call(&registry);
                         crate::util::lock(&calls).insert(id, registry.clone());
                         let (agent, out_tx, calls) = (agent.clone(), out_tx.clone(), calls.clone());
                         tauri::async_runtime::spawn(async move {
@@ -490,8 +498,8 @@ async fn serve<R, W>(
                     Some("cancel") => {
                         let id = frame.get("id").and_then(Value::as_u64).unwrap_or(0);
                         let registry = crate::util::lock(&calls).get(&id).cloned();
-                        if let Some(page_id) = registry.and_then(|r| r.current()) {
-                            agent.page.cancel(page_id);
+                        if let Some(registry) = registry {
+                            registry.cancel(&agent);
                         }
                     }
                     _ => {}
@@ -499,14 +507,31 @@ async fn serve<R, W>(
             }
             reason = stop.recv() => {
                 let reason = reason.unwrap_or_else(|_| "disabled".into());
+                if reason == "disabled" {
+                    cancel_calls(&agent, &calls);
+                }
                 let _ = out_tx.send(json!({"type": "shutdown", "reason": reason})).await;
                 if reason == "disabled" { break; }
             }
         }
     }
     drop(out_tx);
-    let _ = writer.await;
+    if !writer_done {
+        // In-flight calls may retain senders while they finish at the commit gate. Their ledger
+        // outcomes survive the connection, so waiting for every sender here serves no purpose.
+        let _ = tokio::time::timeout(WRITE_TIMEOUT, &mut writer).await;
+        writer.abort();
+    }
     agent.connection_closed();
+}
+
+/// Turning access off is an explicit cancellation; a dropped socket alone is not. Copy the
+/// registries before taking their locks, so a finishing broker can still remove itself.
+fn cancel_calls(agent: &Agent, calls: &Mutex<HashMap<u64, Arc<CallRegistry>>>) {
+    let calls: Vec<_> = crate::util::lock(calls).values().cloned().collect();
+    for call in calls {
+        call.cancel(agent);
+    }
 }
 
 /// Why a call can't start on this connection, if it can't. An id already in flight would replace that
@@ -537,8 +562,12 @@ fn admit<T>(calls: &HashMap<u64, T>, id: Option<u64>) -> Result<u64, broker::Too
 async fn send<W: AsyncWrite + Unpin>(write: &mut W, frame: &Value) -> std::io::Result<()> {
     let mut line = serde_json::to_vec(frame)?;
     line.push(b'\n');
-    write.write_all(&line).await?;
-    write.flush().await
+    tokio::time::timeout(WRITE_TIMEOUT, async {
+        write.write_all(&line).await?;
+        write.flush().await
+    })
+    .await
+    .map_err(|_| std::io::Error::new(std::io::ErrorKind::TimedOut, "bridge write stalled"))?
 }
 
 #[cfg(test)]
@@ -632,6 +661,50 @@ mod tests {
             calls.insert(id, ());
         }
         assert_eq!(admit(&calls, Some(99)).unwrap_err().code, "BUSY");
+    }
+
+    #[test]
+    fn disabling_access_cancels_calls_even_before_they_reach_the_page() {
+        let dir = tempfile::tempdir().unwrap();
+        let agent = Agent::new(dir.path());
+        let call = Arc::new(CallRegistry::new("external".into()));
+        let calls = Mutex::new(HashMap::from([(1, call.clone())]));
+        cancel_calls(&agent, &calls);
+        // Register through the update path after shutdown, as a folder lookup could do.
+        assert!(call.is_cancelled());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_nonreading_client_cannot_hold_a_bridge_write_forever() {
+        let (mut writer, _nonreading_client) = tokio::io::duplex(64);
+        let started = tokio::time::Instant::now();
+        let error = send(&mut writer, &json!({"value": "x".repeat(4096)}))
+            .await
+            .unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::TimedOut);
+        assert_eq!(started.elapsed(), WRITE_TIMEOUT);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_stalled_welcome_does_not_retain_an_authenticated_connection() {
+        let dir = tempfile::tempdir().unwrap();
+        let agent = Arc::new(Agent::new(dir.path()));
+        let (socket, client) = tokio::io::duplex(1);
+        let (read, write) = tokio::io::split(socket);
+        let (_stop, stopped) = broadcast::channel(1);
+        let (_nonreading_client, mut client_writer) = tokio::io::split(client);
+        let hello = async {
+            send(
+                &mut client_writer,
+                &json!({"type": "hello", "bridge": BRIDGE_VERSION, "token": "secret"}),
+            )
+            .await
+            .unwrap();
+        };
+        let serve = serve(agent, "secret".into(), read, write, stopped);
+        let started = tokio::time::Instant::now();
+        tokio::join!(serve, hello);
+        assert_eq!(started.elapsed(), WRITE_TIMEOUT);
     }
 
     #[tokio::test]

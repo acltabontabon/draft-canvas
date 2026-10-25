@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import time
 import unittest
 from unittest.mock import patch
@@ -155,6 +156,13 @@ class FindsTheSystem(unittest.TestCase):
 
 
 class StaysUpright(unittest.TestCase):
+    @unittest.skipUnless(hasattr(os, 'mkfifo'), 'named pipes need Unix')
+    def test_a_named_pipe_is_skipped_before_it_can_block_the_survey(self) -> None:
+        with TempRepo({}) as root:
+            os.mkfifo(root / 'server.py')
+            with patch('builtins.open', side_effect=AssertionError('a pipe must never be opened')):
+                self.assertIsNone(scan.read_text(str(root), 'server.py'))
+
     def test_fallback_stops_walking_as_soon_as_the_file_limit_is_reached(self) -> None:
         def walk(root):
             yield root, [], ['a.py', 'b.py', 'c.py']

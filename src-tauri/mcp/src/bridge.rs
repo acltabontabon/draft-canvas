@@ -49,6 +49,22 @@ struct Conn {
     out: mpsc::Sender<Value>,
     pending: Arc<Mutex<HashMap<u64, oneshot::Sender<Value>>>>,
     alive: Arc<AtomicBool>,
+    tasks: Vec<tokio::task::JoinHandle<()>>,
+}
+
+impl Drop for Conn {
+    fn drop(&mut self) {
+        // Dropping can race the reader's normal cleanup after a failed enqueue. Registrations keep
+        // this map alive, so aborting tasks alone would strand other callers until their deadline.
+        self.alive.store(false, Ordering::SeqCst);
+        self.pending
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clear();
+        for task in &self.tasks {
+            task.abort();
+        }
+    }
 }
 
 /// Where a call's progress messages go while it runs (see `Bridge::call`).
@@ -128,7 +144,11 @@ impl Bridge {
             id,
             entries: self.progress.clone(),
         };
-        self.call_as(id, tool, args, on_id).await
+        // Include connection and queue waits: a full outgoing queue used to hold the connection
+        // mutex forever, before the reply-only timeout even started.
+        tokio::time::timeout(CALL_TIMEOUT, self.call_as(id, tool, args, on_id))
+            .await
+            .unwrap_or_else(|_| Err(lost()))
     }
 
     async fn call_as(
@@ -169,8 +189,8 @@ impl Bridge {
             (rx, pending)
         };
         on_id(id);
-        match tokio::time::timeout(CALL_TIMEOUT, rx).await {
-            Ok(Ok(frame)) => {
+        match rx.await {
+            Ok(frame) => {
                 if frame.get("ok").and_then(Value::as_bool) == Some(true) {
                     Ok(frame.get("value").cloned().unwrap_or(Value::Null))
                 } else {
@@ -186,9 +206,12 @@ impl Bridge {
     /// Asks the app to stop working on a call whose client gave up. Best effort: work past its commit
     /// gate finishes regardless.
     pub async fn cancel(&self, id: u64) {
-        if let Some(conn) = self.conn.lock().await.as_ref() {
-            let _ = conn.out.send(json!({"type": "cancel", "id": id})).await;
-        }
+        let _ = tokio::time::timeout(CONNECT_TIMEOUT, async {
+            if let Some(conn) = self.conn.lock().await.as_ref() {
+                let _ = conn.out.send(json!({"type": "cancel", "id": id})).await;
+            }
+        })
+        .await;
     }
 
     async fn connect(&self) -> Result<Conn, Value> {
@@ -237,67 +260,87 @@ impl Bridge {
             _ => return Err(unavailable(None)),
         }
 
-        let pending: Arc<Mutex<HashMap<u64, oneshot::Sender<Value>>>> = Arc::default();
-        let alive = Arc::new(AtomicBool::new(true));
-        let (out, mut out_rx) = mpsc::channel::<Value>(16);
-        tokio::spawn(async move {
-            while let Some(frame) = out_rx.recv().await {
-                if send(&mut write, &frame).await.is_err() {
+        Ok(start_connection(reader, write, self.progress.clone()))
+    }
+}
+
+fn start_connection<R, W>(mut reader: BufReader<R>, mut write: W, progress: ProgressSinks) -> Conn
+where
+    R: AsyncRead + Unpin + Send + 'static,
+    W: AsyncWrite + Unpin + Send + 'static,
+{
+    let pending: Arc<Mutex<HashMap<u64, oneshot::Sender<Value>>>> = Arc::default();
+    let alive = Arc::new(AtomicBool::new(true));
+    let (out, mut out_rx) = mpsc::channel::<Value>(16);
+    let (writer_done, mut writer_finished) = oneshot::channel();
+    let writer = tokio::spawn(async move {
+        while let Some(frame) = out_rx.recv().await {
+            if send(&mut write, &frame).await.is_err() {
+                break;
+            }
+        }
+        let _ = writer_done.send(());
+    });
+    let writer_abort = writer.abort_handle();
+    let (reader_pending, reader_alive) = (pending.clone(), alive.clone());
+    let reader_progress = progress;
+    let reader = tokio::spawn(async move {
+        loop {
+            let frame = tokio::select! {
+                _ = &mut writer_finished => break,
+                frame = read_frame(&mut reader) => match frame {
+                    Ok(Some(frame)) => frame,
+                    _ => break,
+                },
+            };
+            match frame.get("type").and_then(Value::as_str) {
+                Some("progress") => {
+                    let id = frame.get("id").and_then(Value::as_u64).unwrap_or(0);
+                    let message = frame
+                        .get("message")
+                        .and_then(Value::as_str)
+                        .unwrap_or("")
+                        .chars()
+                        .take(120)
+                        .collect::<String>();
+                    if let Some(sink) = reader_progress
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .get(&id)
+                    {
+                        let _ = sink.send(message);
+                    }
+                }
+                Some("result") => {
+                    let id = frame.get("id").and_then(Value::as_u64).unwrap_or(0);
+                    let waiter = reader_pending
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .remove(&id);
+                    if let Some(waiter) = waiter {
+                        let _ = waiter.send(frame);
+                    }
+                }
+                Some("shutdown") => {
+                    // The app is quitting or access was turned off: the next call reconnects.
                     break;
                 }
+                _ => {}
             }
-        });
-        let (reader_pending, reader_alive) = (pending.clone(), alive.clone());
-        let reader_progress = self.progress.clone();
-        tokio::spawn(async move {
-            while let Ok(Some(frame)) = read_frame(&mut reader).await {
-                match frame.get("type").and_then(Value::as_str) {
-                    Some("progress") => {
-                        let id = frame.get("id").and_then(Value::as_u64).unwrap_or(0);
-                        let message = frame
-                            .get("message")
-                            .and_then(Value::as_str)
-                            .unwrap_or("")
-                            .chars()
-                            .take(120)
-                            .collect::<String>();
-                        if let Some(sink) = reader_progress
-                            .lock()
-                            .unwrap_or_else(|e| e.into_inner())
-                            .get(&id)
-                        {
-                            let _ = sink.send(message);
-                        }
-                    }
-                    Some("result") => {
-                        let id = frame.get("id").and_then(Value::as_u64).unwrap_or(0);
-                        let waiter = reader_pending
-                            .lock()
-                            .unwrap_or_else(|e| e.into_inner())
-                            .remove(&id);
-                        if let Some(waiter) = waiter {
-                            let _ = waiter.send(frame);
-                        }
-                    }
-                    Some("shutdown") => {
-                        // The app is quitting or access was turned off: the next call reconnects.
-                        reader_alive.store(false, Ordering::SeqCst);
-                    }
-                    _ => {}
-                }
-            }
-            reader_alive.store(false, Ordering::SeqCst);
-            // Every call still waiting learns its connection went away (its sender is dropped here).
-            reader_pending
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .clear();
-        });
-        Ok(Conn {
-            out,
-            pending,
-            alive,
-        })
+        }
+        writer_abort.abort();
+        reader_alive.store(false, Ordering::SeqCst);
+        // Every call still waiting learns its connection went away (its sender is dropped here).
+        reader_pending
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clear();
+    });
+    Conn {
+        out,
+        pending,
+        alive,
+        tasks: vec![writer, reader],
     }
 }
 
@@ -353,8 +396,12 @@ async fn open(endpoint: &str) -> std::io::Result<Halves> {
 async fn send<W: AsyncWrite + Unpin>(write: &mut W, frame: &Value) -> std::io::Result<()> {
     let mut line = serde_json::to_vec(frame)?;
     line.push(b'\n');
-    write.write_all(&line).await?;
-    write.flush().await
+    tokio::time::timeout(CONNECT_TIMEOUT, async {
+        write.write_all(&line).await?;
+        write.flush().await
+    })
+    .await
+    .map_err(|_| std::io::Error::new(std::io::ErrorKind::TimedOut, "bridge write stalled"))?
 }
 
 /// The app's own cap on a frame it reads (`MAX_FRAME` in the app's `agent/bridge.rs`), newline included.
@@ -420,6 +467,112 @@ mod tests {
         assert_eq!(run_from(Some("x".repeat(65))), None);
     }
 
+    #[tokio::test(start_paused = true)]
+    async fn a_stalled_writer_closes_the_connection_and_releases_waiters() {
+        let (socket, _nonreading_app) = tokio::io::duplex(64);
+        let (read, write) = tokio::io::split(socket);
+        let mut bridge = Bridge::new("test".into());
+        let conn = start_connection(BufReader::new(read), write, bridge.progress.clone());
+        let alive = conn.alive.clone();
+        let pending = conn.pending.clone();
+        *bridge.conn.get_mut() = Some(conn);
+        let (progress, _rx) = mpsc::unbounded_channel();
+        let started = tokio::time::Instant::now();
+        let result = bridge
+            .call(
+                "read_diagram",
+                json!({"text": "x".repeat(4096)}),
+                |_| {},
+                Some(progress),
+            )
+            .await;
+        assert_eq!(result.unwrap_err()["code"], "CONNECTION_LOST");
+        assert_eq!(started.elapsed(), CONNECT_TIMEOUT);
+        assert!(!alive.load(Ordering::SeqCst));
+        assert!(pending.lock().unwrap().is_empty());
+        assert!(bridge.progress.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn the_call_deadline_includes_waiting_for_queue_room() {
+        let (out, _nonreading_writer) = mpsc::channel(1);
+        out.send(json!({"type": "busy"})).await.unwrap();
+        let pending = Arc::new(Mutex::new(HashMap::new()));
+        let bridge = Bridge {
+            conn: tokio::sync::Mutex::new(Some(Conn {
+                out,
+                pending: pending.clone(),
+                alive: Arc::new(AtomicBool::new(true)),
+                tasks: Vec::new(),
+            })),
+            ..Bridge::new("test".into())
+        };
+        let started = tokio::time::Instant::now();
+        let error = bridge
+            .call("read_diagram", json!({}), |_| {}, None)
+            .await
+            .unwrap_err();
+        assert_eq!(error["code"], "CONNECTION_LOST");
+        assert_eq!(started.elapsed(), CALL_TIMEOUT);
+        assert!(pending.lock().unwrap().is_empty());
+        // The timed-out call also released the mutex: cancellation cannot wait forever behind it.
+        bridge.cancel(1).await;
+        assert_eq!(started.elapsed(), CALL_TIMEOUT + CONNECT_TIMEOUT);
+    }
+
+    #[tokio::test]
+    async fn dropping_a_connection_releases_both_socket_halves() {
+        use tokio::io::AsyncReadExt;
+        let (socket, mut app) = tokio::io::duplex(64);
+        let (read, write) = tokio::io::split(socket);
+        let conn = start_connection(BufReader::new(read), write, Arc::default());
+        let pending = conn.pending.clone();
+        let alive = conn.alive.clone();
+        let (tx, mut rx) = oneshot::channel();
+        pending.lock().unwrap().insert(1, tx);
+        drop(conn);
+        assert!(!alive.load(Ordering::SeqCst));
+        assert!(pending.lock().unwrap().is_empty());
+        assert!(matches!(
+            rx.try_recv(),
+            Err(oneshot::error::TryRecvError::Closed)
+        ));
+        let mut byte = [0];
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(1), app.read(&mut byte))
+                .await
+                .unwrap()
+                .unwrap(),
+            0,
+        );
+    }
+
+    #[tokio::test]
+    async fn shutdown_releases_calls_without_waiting_for_socket_eof() {
+        let (socket, mut app) = tokio::io::duplex(1024);
+        let (read, write) = tokio::io::split(socket);
+        let mut bridge = Bridge::new("test".into());
+        *bridge.conn.get_mut() = Some(start_connection(
+            BufReader::new(read),
+            write,
+            bridge.progress.clone(),
+        ));
+        let call = bridge.call("read_diagram", json!({}), |_| {}, None);
+        let shutdown = async {
+            send(&mut app, &json!({"type": "shutdown"})).await.unwrap();
+        };
+        let (result, ()) = tokio::join!(call, shutdown);
+        assert_eq!(result.unwrap_err()["code"], "CONNECTION_LOST");
+        assert!(!bridge
+            .conn
+            .lock()
+            .await
+            .as_ref()
+            .unwrap()
+            .alive
+            .load(Ordering::SeqCst));
+    }
+
     #[tokio::test]
     async fn dropping_a_call_cleans_up_its_waiter_and_progress_sink() {
         let (out, mut received) = mpsc::channel(4);
@@ -429,6 +582,7 @@ mod tests {
                 out,
                 pending: pending.clone(),
                 alive: Arc::new(AtomicBool::new(true)),
+                tasks: Vec::new(),
             })),
             ..Bridge::new("test".into())
         };

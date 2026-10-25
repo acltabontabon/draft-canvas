@@ -44,6 +44,7 @@ import {
   type Role,
 } from './protocol';
 import type { CollabTransport } from './transport/types';
+import { utf8Bytes } from './bytes';
 
 export interface HostEnvironment {
   /** The owner's whole file as the editor holds it now. */
@@ -438,14 +439,15 @@ export class HostSession {
       }
       // Size and budget before parsing: parsing is what a hostile peer would make the owner pay for.
       if (exceedsMessageLimit(text, MAX_GUEST_MESSAGE_BYTES)) return this.disconnect(slot, 'too-large');
-      if (!slot.budget.spend(text.length)) return this.disconnect(slot, 'protocol');
+      const bytes = utf8Bytes(text);
+      if (!slot.budget.spend(bytes)) return this.disconnect(slot, 'protocol');
       const message = readGuestMessage(parseWire(text));
       if (!message) {
         bad += 1;
         if (bad > MAX_BAD_MESSAGES) this.disconnect(slot, 'protocol');
         return;
       }
-      this.receive(slot, message, text.length);
+      this.receive(slot, message, bytes);
     });
     const offState = transport.onState((state) => {
       if (state === 'closed' && slot.transport === transport) this.lose(slot);

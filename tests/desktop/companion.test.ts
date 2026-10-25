@@ -183,6 +183,39 @@ describe('the store', () => {
     expect(unchangedSinceLastTurn('old', view, [], 'codex', true)).toBe(false);
   });
 
+  it('bounds long histories by content while keeping the latest answer and all usage', () => {
+    const reply = 'x'.repeat(1024 * 1024);
+    for (let i = 0; i < 20; i += 1) {
+      const run = `long-${i}`;
+      companion.begin('long', run, 'Explain it', null);
+      companion.apply(run, { type: 'message-chunk', text: reply });
+      companion.apply(run, { type: 'stopped', reason: { kind: 'end-turn' }, summary: null, costMicroUsd: 1, usage: { input: 100, cached: 50, output: 10 } });
+    }
+    const history = companion.snapshot().get(conversationKey('long'))!;
+    expect(history.turns.length).toBeLessThan(20);
+    expect(history.turns.at(-1)).toMatchObject({ runId: 'long-19', reply });
+    expect(companion.diagramOf('long-0')).toBeUndefined();
+    expect(spentOn(history)).toEqual({ usage: { input: 2000, cached: 1000, output: 200 }, costMicroUsd: 20, turns: 20 });
+  });
+
+  it('bounds content across diagrams without evicting a live turn', () => {
+    companion.begin('working', 'working', 'Keep working', null);
+    const reply = 'x'.repeat(1024 * 1024);
+    for (let i = 0; i < 20; i += 1) companion.answer(`long-${i}`, 'Explain it', reply);
+    expect(companion.snapshot().size).toBeLessThan(20);
+    expect(companion.snapshot().has(conversationKey('long-0'))).toBe(false);
+    expect(companion.snapshot().get(conversationKey('long-19'))?.turns.at(-1)?.reply).toBe(reply);
+    expect(companion.running('working')?.runId).toBe('working');
+  });
+
+  it('keeps live turns when local answers push older turns past the history limit', () => {
+    companion.begin('d_1', RUN, 'Still working', null);
+    for (let i = 0; i < 25; i += 1) companion.answer('d_1', 'Hello', 'Hello');
+    expect(companion.running('d_1')?.runId).toBe(RUN);
+    companion.apply(RUN, { type: 'message-chunk', text: 'Still here' });
+    expect(companion.running('d_1')?.reply).toBe('Still here');
+  });
+
   it('a new conversation drops finished turns but keeps one still working', () => {
     companion.begin('d_1', 'done', 'First', null);
     companion.apply('done', { type: 'stopped', reason: { kind: 'end-turn' }, summary: null, costMicroUsd: null, usage: null });

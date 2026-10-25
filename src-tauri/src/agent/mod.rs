@@ -30,7 +30,7 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock, Weak};
 use tauri::AppHandle;
 use tokio::sync::watch;
 
@@ -51,6 +51,9 @@ pub struct Agent {
     dir: PathBuf,
     app: OnceLock<AppHandle>,
     running: Mutex<Option<bridge::Running>>,
+    /// Calls may outlive a disconnected sidecar to finish their ledger outcome. Weak references let
+    /// disabling access still cancel them without keeping completed requests alive.
+    calls: Mutex<Vec<Weak<broker::CallRegistry>>>,
     pub(crate) page: page::PageLink,
     ledger: Mutex<Option<Ledger>>,
     /// Proposals a coding agent submitted for human review — a distinct, longer-lived store from the
@@ -80,6 +83,7 @@ impl Agent {
             dir: endpoint::agent_dir(local_data_dir),
             app: OnceLock::new(),
             running: Mutex::new(None),
+            calls: Mutex::default(),
             page: page::PageLink::default(),
             ledger: Mutex::new(None),
             proposals: Mutex::new(None),
@@ -136,8 +140,19 @@ impl Agent {
         if let Some(running) = lock(&self.running).take() {
             running.stop();
         }
+        let calls: Vec<_> = lock(&self.calls).iter().filter_map(Weak::upgrade).collect();
+        for call in calls {
+            call.cancel(self);
+        }
         endpoint::remove_info(&self.dir);
         self.tray_changed();
+    }
+
+    /// Tracks before broker execution, independently of the connection that admitted the call.
+    pub(crate) fn track_call(&self, call: &Arc<broker::CallRegistry>) {
+        let mut calls = lock(&self.calls);
+        calls.retain(|call| call.strong_count() > 0);
+        calls.push(Arc::downgrade(call));
     }
 
     /// Everything a connected sidecar should be told before the app goes away — and the connection
@@ -214,9 +229,7 @@ impl Agent {
     /// is never cut in half, and Undo is the way back from it.
     pub fn end_run(&self, run: &str) {
         for call in self.runs.close(run) {
-            if let Some(page_id) = call.current() {
-                self.page.cancel(page_id);
-            }
+            call.cancel(self);
         }
     }
 

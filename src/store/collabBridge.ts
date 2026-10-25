@@ -460,6 +460,7 @@ export function joinSession(transport: CollabTransport, options: JoinOptions): G
       rejected: (reason: RejectReason) => ui.notify(REJECTIONS[reason], 'error'),
       unconfirmed: (count: number) => useCollabStore.setState({ unconfirmed: count }),
       tooLarge: () => ui.notify('That change is too large to share live, so it was undone. Smaller edits still go through.', 'error'),
+      backlogFull: () => ui.notify('Too many edits are waiting to be shared, so that change was undone. Wait for the connection to catch up before editing more.', 'error'),
       refusedLink: () => {
         // The link opened was for some other session; this one carries on reconnecting.
         useUiStore.getState().setJoinInvite(null);

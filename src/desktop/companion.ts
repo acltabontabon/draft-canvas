@@ -63,6 +63,9 @@ export interface Spent {
 const KEEP_TURNS = 20;
 /** Finished conversations kept in this window; active runs are never evicted. */
 const KEEP_CONVERSATIONS = 100;
+/** Count limits alone allowed gigabytes of long replies to accumulate in one window. */
+const KEEP_CONVERSATION_BYTES = 4 * 1024 * 1024;
+const KEEP_HISTORY_BYTES = 16 * 1024 * 1024;
 
 /** Friendly words for each step, as the card lists them. */
 const STEP_TEXT: Record<string, string> = {
@@ -333,11 +336,57 @@ let selectedAgents = new Map<string, AgentKind>();
 /** Which conversation each run belongs to. */
 let runs = new Map<string, string>();
 const listeners = new Set<Listener>();
+const turnBytes = new WeakMap<Turn, number>();
+const conversationBytes = new WeakMap<Conversation, number>();
+
+/** Conservatively account for UTF-16 strings and step records; cached for unchanged turns. */
+function bytesOf(turn: Turn): number {
+  const known = turnBytes.get(turn);
+  if (known !== undefined) return known;
+  let chars = turn.runId.length + turn.prompt.length + (turn.about?.length ?? 0) + turn.reply.length + (turn.summary?.length ?? 0) + (turn.proposalId?.length ?? 0);
+  if (turn.stop?.kind === 'failed') chars += turn.stop.message.length;
+  for (const step of turn.steps) chars += step.id.length + step.tool.length + (step.error?.length ?? 0);
+  const bytes = chars * 2 + turn.steps.length * 128 + 256;
+  turnBytes.set(turn, bytes);
+  return bytes;
+}
+
+function historyBytes(conversation: Conversation): number {
+  const known = conversationBytes.get(conversation);
+  if (known !== undefined) return known;
+  const bytes = conversation.turns.reduce((sum, turn) => sum + bytesOf(turn), 0);
+  conversationBytes.set(conversation, bytes);
+  return bytes;
+}
+
+/** Keep the latest answer and every live turn; older finished turns retain their usage totals. */
+function trimHistory(conversation: Conversation): Conversation {
+  let bytes = historyBytes(conversation);
+  if (conversation.turns.length <= KEEP_TURNS && bytes <= KEEP_CONVERSATION_BYTES) return conversation;
+  const turns = [...conversation.turns];
+  let earlier = conversation.earlier ?? null;
+  while (turns.length > KEEP_TURNS || bytes > KEEP_CONVERSATION_BYTES) {
+    const index = turns.findIndex((turn, i) => i < turns.length - 1 && turn.stop !== null);
+    if (index < 0) break;
+    const [dropped] = turns.splice(index, 1);
+    bytes -= bytesOf(dropped!);
+    earlier = add(earlier, dropped!);
+    runs.delete(dropped!.runId);
+  }
+  return { ...conversation, turns, ...(earlier ? { earlier } : {}) };
+}
 
 function changed(): void {
+  let bytes = 0;
   for (const [key, conversation] of conversations) {
-    if (conversations.size <= KEEP_CONVERSATIONS) break;
+    const trimmed = trimHistory(conversation);
+    if (trimmed !== conversation) conversations.set(key, trimmed);
+    bytes += historyBytes(trimmed);
+  }
+  for (const [key, conversation] of conversations) {
+    if (conversations.size <= KEEP_CONVERSATIONS && bytes <= KEEP_HISTORY_BYTES) break;
     if (conversation.turns.some((turn) => turn.stop === null)) continue;
+    bytes -= historyBytes(conversation);
     for (const turn of conversation.turns) runs.delete(turn.runId);
     conversations.delete(key);
     forgetTurnSnapshot(conversation.diagramId);
@@ -388,11 +437,7 @@ export const companion = {
     // Move the used conversation to the end, so pruning keeps the most recently used.
     conversations.delete(key);
     const turns = [...conversation.turns, newTurn(runId, prompt, about)];
-    // What a dropped turn used still counts: the total is the conversation's, not the kept turns'.
-    const dropped = turns.slice(0, Math.max(0, turns.length - KEEP_TURNS));
-    const earlier = dropped.reduce<Spent | null>(add, conversation.earlier ?? null);
-    for (const turn of dropped) runs.delete(turn.runId);
-    conversations.set(key, { ...conversation, turns: turns.slice(-KEEP_TURNS), ...(earlier ? { earlier } : {}), ...(agent ? { agent } : {}) });
+    conversations.set(key, { ...conversation, turns, ...(agent ? { agent } : {}) });
     runs.set(runId, key);
     changed();
   },
@@ -460,10 +505,7 @@ export const companion = {
       const conversation = conversations.get(key) ?? { diagramId: history.diagramId, turns: [] };
       // A turn begun by this page while recovery was in flight is newer than its recovered history.
       const turns = [...history.turns, ...conversation.turns];
-      const dropped = turns.slice(0, Math.max(0, turns.length - KEEP_TURNS));
-      const earlier = dropped.reduce<Spent | null>(add, conversation.earlier ?? null);
-      for (const previous of dropped) runs.delete(previous.runId);
-      conversations.set(key, { ...conversation, agent: conversation.agent ?? history.agent, turns: turns.slice(-KEEP_TURNS), ...(earlier ? { earlier } : {}) });
+      conversations.set(key, { ...conversation, agent: conversation.agent ?? history.agent, turns });
     }
     changed();
   },

@@ -1,4 +1,5 @@
 import { MAX_MESSAGE_BYTES } from './chunk';
+import { utf8Bytes } from '../bytes';
 import { hmacSha256Hex } from './sha256';
 import type { CollabTransport, SendPriority, TransportState } from './types';
 
@@ -74,16 +75,6 @@ const browserSocket: SocketFactory = (url, protocols) => new WebSocket(url, prot
 
 const encoder = new TextEncoder();
 
-/**
- * What `text` counts as against the limits: exact UTF-8 bytes near the cap, where it decides; its
- * length below, where it only feeds the backlog's accounting and encoding every pointer move would
- * be waste. Past the cap in UTF-16 units it is past it in bytes too.
- */
-function messageBytes(text: string): number {
-  if (text.length * 3 <= MAX_MESSAGE_BYTES || text.length > MAX_MESSAGE_BYTES) return text.length;
-  return encoder.encode(text).byteLength;
-}
-
 /** `reason` cut to what a close frame carries, never splitting a character. */
 export function closeReason(reason: string): string {
   if (encoder.encode(reason).byteLength <= MAX_CLOSE_REASON_BYTES) return reason;
@@ -143,7 +134,7 @@ class SocketTransport implements CollabTransport {
 
   send(message: string, priority: SendPriority): boolean {
     if (this.current === 'closed') return false;
-    const bytes = messageBytes(message);
+    const bytes = message.length > MAX_MESSAGE_BYTES ? message.length : utf8Bytes(message);
     if (bytes > MAX_MESSAGE_BYTES) {
       throw new RangeError(`A collaboration message may be at most ${MAX_MESSAGE_BYTES} bytes.`);
     }

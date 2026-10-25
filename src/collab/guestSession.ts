@@ -43,6 +43,7 @@ import { Replica, type PendingPatch } from './replica';
 import { resumeProof, sameSecret } from './rendezvous';
 import { sanitizeChanges } from './sanitize';
 import type { CollabTransport } from './transport/types';
+import { utf8Bytes } from './bytes';
 
 export interface GuestEnvironment {
   readFile(): DraftDocument;
@@ -69,6 +70,8 @@ export interface GuestEvents {
   unconfirmed(count: number): void;
   /** An edit made here was too big to share live, and was taken back. */
   tooLarge(): void;
+  /** Pending work has filled its budget: the latest edit was taken back, earlier work is kept. */
+  backlogFull?(): void;
   /**
    * A link opened to pick this session back up reached some other session (or one that couldn't
    * prove it is this one): that connection is closed and this session carries on reconnecting.
@@ -79,7 +82,7 @@ export interface GuestEvents {
 type Inbound = Extract<HostMessage, { t: 'commit' | 'ack' | 'snapshot' }>;
 
 function patchBytes(patch: PendingPatch): number {
-  return encode({ t: 'patch', clientSeq: patch.clientSeq, changes: patch.changes }).length;
+  return utf8Bytes(encode({ t: 'patch', clientSeq: patch.clientSeq, changes: patch.changes }));
 }
 
 /** Unconfirmed work resent at once after a fresh copy, then this many bytes a second: under the owner's budget for a collaborator. */
@@ -192,7 +195,7 @@ export class GuestSession {
       if (exceedsMessageLimit(text)) return this.finish('too-large');
       this.lastHeard = this.clock.now();
       const message = readHostMessage(parseWire(text));
-      if (message) this.receive(message, text.length);
+      if (message) this.receive(message, utf8Bytes(text));
     });
     const offState = transport.onState((state) => {
       if (this.transport !== transport || this.ended) return;
@@ -259,7 +262,14 @@ export class GuestSession {
       return;
     }
     this.restorePending = false;
-    const patch = this.replica.propose(changes)!;
+    const patch = this.replica.propose(changes);
+    if (!patch) {
+      this.restorePending = !this.env.applyRemote(this.replica.local);
+      if (this.restorePending) this.scheduleHold();
+      if (this.events.backlogFull) this.events.backlogFull();
+      else this.events.tooLarge();
+      return;
+    }
     // Behind anything older still waiting its turn: a newer patch arriving first made the owner take
     // the older ones for repeats.
     if (this.outbox.length > 0) this.outbox.push(patch);
@@ -437,7 +447,9 @@ export class GuestSession {
       this.clearOutbox();
       if (unconfirmed.length > 0) {
         if (message.role === 'editor') {
-          for (const changes of unconfirmed) this.replica.propose(changes);
+          for (const changes of unconfirmed) {
+            if (!this.replica.propose(changes)) this.events.tooLarge();
+          }
           this.sendOrDrop(this.replica.rebase(message.handled ?? 0, this.fits));
         } else this.events.rejected('view-only');
       }

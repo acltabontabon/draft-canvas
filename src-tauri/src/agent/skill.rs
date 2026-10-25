@@ -19,6 +19,7 @@
 use crate::errors::{AppError, ErrorKind};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use std::io::{Error, ErrorKind as IoErrorKind, Read};
 use std::path::{Path, PathBuf};
 
 /// The skill's folder name, and the `name` in its SKILL.md.
@@ -26,6 +27,11 @@ pub const SKILL_NAME: &str = "draft-canvas";
 
 /// Written beside the skill's files on install; never part of the skill itself.
 pub const MANIFEST: &str = ".draft-canvas-skill.json";
+
+/// A bundled skill is small. An edited folder must not make startup read arbitrary amounts of data.
+const MAX_TREE_BYTES: usize = 8 * 1024 * 1024;
+const MAX_TREE_ENTRIES: usize = 1024;
+const MAX_MANIFEST_BYTES: usize = 4096;
 
 /// The skill's files, relative to its folder. `every_file_in_the_skill_folder_is_bundled` keeps this
 /// list and the folder in step.
@@ -183,16 +189,60 @@ pub fn skills_root(target: SkillTarget) -> Option<PathBuf> {
     }
 }
 
-/// Every file under `dir` but the manifest, as (relative path with `/`, bytes).
+fn read_file(path: &Path, limit: usize) -> std::io::Result<Vec<u8>> {
+    let kind = std::fs::symlink_metadata(path)?;
+    if !kind.is_file() || kind.len() > limit as u64 {
+        return Err(Error::new(
+            IoErrorKind::InvalidData,
+            "not a bounded regular file",
+        ));
+    }
+    // Bound the read too: a file may grow after its metadata was checked.
+    let mut bytes = Vec::new();
+    std::fs::File::open(path)?
+        .take(limit as u64 + 1)
+        .read_to_end(&mut bytes)?;
+    if bytes.len() > limit {
+        return Err(Error::new(IoErrorKind::InvalidData, "skill is too large"));
+    }
+    Ok(bytes)
+}
+
+/// Every file under `dir` but the manifest, as (relative path with `/`, bytes). Unknown entries fail
+/// closed: ignoring a person's symlink made an edited old skill look safe to replace without backup.
 fn read_tree(dir: &Path) -> std::io::Result<Vec<(String, Vec<u8>)>> {
+    if !std::fs::symlink_metadata(dir)?.is_dir() {
+        return Err(Error::new(
+            IoErrorKind::InvalidData,
+            "not a skill directory",
+        ));
+    }
     let mut out = Vec::new();
     let mut stack = vec![dir.to_path_buf()];
+    let mut entries = 0;
+    let mut remaining = MAX_TREE_BYTES;
     while let Some(current) = stack.pop() {
         for entry in std::fs::read_dir(&current)? {
             let entry = entry?;
+            entries += 1;
+            if entries > MAX_TREE_ENTRIES {
+                return Err(Error::new(
+                    IoErrorKind::InvalidData,
+                    "too many skill entries",
+                ));
+            }
             let path = entry.path();
             let kind = entry.file_type()?;
+            if !kind.is_dir() && !kind.is_file() {
+                return Err(Error::new(
+                    IoErrorKind::InvalidData,
+                    "unsupported skill entry",
+                ));
+            }
             if kind.is_dir() {
+                if entry.file_name() == "__pycache__" {
+                    continue;
+                }
                 stack.push(path);
             } else if kind.is_file() {
                 let rel = path
@@ -207,7 +257,9 @@ fn read_tree(dir: &Path) -> std::io::Result<Vec<(String, Vec<u8>)>> {
                     && !rel.ends_with("/.DS_Store")
                     && !rel.contains("__pycache__/")
                 {
-                    out.push((rel, std::fs::read(&path)?));
+                    let bytes = read_file(&path, remaining)?;
+                    remaining -= bytes.len();
+                    out.push((rel, bytes));
                 }
             }
         }
@@ -217,10 +269,14 @@ fn read_tree(dir: &Path) -> std::io::Result<Vec<(String, Vec<u8>)>> {
 
 /// What is in `dir` (a skill folder), against what this app carries.
 pub fn state_of(dir: &Path) -> (SkillState, Option<String>) {
-    if !dir.exists() {
-        return (SkillState::NotInstalled, None);
+    match std::fs::symlink_metadata(dir) {
+        Ok(metadata) if metadata.is_dir() => {}
+        Err(error) if error.kind() == IoErrorKind::NotFound => {
+            return (SkillState::NotInstalled, None);
+        }
+        _ => return (SkillState::Modified, None),
     }
-    let manifest: Option<Manifest> = std::fs::read(dir.join(MANIFEST))
+    let manifest: Option<Manifest> = read_file(&dir.join(MANIFEST), MAX_MANIFEST_BYTES)
         .ok()
         .and_then(|bytes| serde_json::from_slice(&bytes).ok());
     let on_disk = read_tree(dir)
@@ -235,7 +291,8 @@ pub fn state_of(dir: &Path) -> (SkillState, Option<String>) {
             (SkillState::Modified, None)
         };
     };
-    let untouched = on_disk.as_deref() == Some(manifest.hash.as_str());
+    let untouched =
+        manifest.skill == SKILL_NAME && on_disk.as_deref() == Some(manifest.hash.as_str());
     let state = if !untouched {
         SkillState::Modified
     } else if manifest.hash == bundled {
@@ -299,25 +356,47 @@ fn write_skill(dir: &Path) -> std::io::Result<()> {
 
 /// Moves a folder, copying when a rename can't cross volumes.
 fn move_dir(from: &Path, to: &Path) -> std::io::Result<()> {
-    if std::fs::rename(from, to).is_ok() {
-        return Ok(());
+    match std::fs::rename(from, to) {
+        Ok(()) => return Ok(()),
+        Err(error) if error.kind() == IoErrorKind::CrossesDevices => {}
+        Err(error) => return Err(error),
     }
     copy_dir(from, to)?;
     std::fs::remove_dir_all(from)
 }
 
 fn copy_dir(from: &Path, to: &Path) -> std::io::Result<()> {
-    std::fs::create_dir_all(to)?;
-    for entry in std::fs::read_dir(from)? {
-        let entry = entry?;
-        let target = to.join(entry.file_name());
-        if entry.file_type()?.is_dir() {
-            copy_dir(&entry.path(), &target)?;
-        } else {
-            std::fs::copy(entry.path(), &target)?;
-        }
+    if !std::fs::symlink_metadata(from)?.is_dir() {
+        return Err(Error::new(
+            IoErrorKind::InvalidData,
+            "not a skill directory",
+        ));
     }
-    Ok(())
+    // Never merge a backup with a previous one or follow a link outside the skill. If copying cannot
+    // preserve it, fail while the original is still in place and remove only our incomplete copy.
+    std::fs::create_dir(to)?;
+    let result = (|| {
+        for entry in std::fs::read_dir(from)? {
+            let entry = entry?;
+            let target = to.join(entry.file_name());
+            let kind = entry.file_type()?;
+            if kind.is_dir() {
+                copy_dir(&entry.path(), &target)?;
+            } else if kind.is_file() {
+                std::fs::copy(entry.path(), &target)?;
+            } else {
+                return Err(Error::new(
+                    IoErrorKind::InvalidData,
+                    "unsupported skill entry",
+                ));
+            }
+        }
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_dir_all(to);
+    }
+    result
 }
 
 /// Puts this app's skill in `root/draft-canvas`, replacing what is there. A copy that isn't one
@@ -343,12 +422,15 @@ pub fn install_into(root: &Path, backups: &Path) -> Result<Option<PathBuf>, AppE
     let (state, _) = state_of(&dir);
     let mut backup = None;
     let mut retired = None;
-    if dir.exists() {
+    if std::fs::symlink_metadata(&dir).is_ok() {
         let keep = matches!(state, SkillState::Modified | SkillState::Newer);
         let aside = if keep {
             let stamp = crate::util::now_ms();
-            std::fs::create_dir_all(backups).map_err(|e| fail("back up", e))?;
-            backups.join(format!("{SKILL_NAME}-{stamp}"))
+            if let Err(error) = std::fs::create_dir_all(backups) {
+                let _ = std::fs::remove_dir_all(&staging);
+                return Err(fail("back up", error));
+            }
+            backups.join(format!("{SKILL_NAME}-{stamp}-{}", unique_suffix()))
         } else {
             parent.join(format!(".{SKILL_NAME}-skill-old-{}", unique_suffix()))
         };
@@ -389,7 +471,7 @@ pub fn install(target: SkillTarget, backups: &Path) -> Result<SkillSetup, AppErr
 /// Takes the skill out of `root`. An edited copy is kept in `backups`, as on a replace.
 pub fn remove_from(root: &Path, backups: &Path) -> Result<Option<PathBuf>, AppError> {
     let dir = root.join(SKILL_NAME);
-    if !dir.exists() {
+    if std::fs::symlink_metadata(&dir).is_err_and(|error| error.kind() == IoErrorKind::NotFound) {
         return Ok(None);
     }
     let fail = |e: std::io::Error| {
@@ -401,7 +483,11 @@ pub fn remove_from(root: &Path, backups: &Path) -> Result<Option<PathBuf>, AppEr
     match state_of(&dir).0 {
         SkillState::Modified | SkillState::Newer => {
             std::fs::create_dir_all(backups).map_err(fail)?;
-            let aside = backups.join(format!("{SKILL_NAME}-{}", crate::util::now_ms()));
+            let aside = backups.join(format!(
+                "{SKILL_NAME}-{}-{}",
+                crate::util::now_ms(),
+                unique_suffix()
+            ));
             move_dir(&dir, &aside).map_err(fail)?;
             Ok(Some(aside))
         }
@@ -527,6 +613,10 @@ mod tests {
         (
             "14",
             "d6ed80d825e5e5d27d553eec3f9973e08583dc595e5aeee79cb58c1c1d1c7e7f",
+        ),
+        (
+            "15",
+            "74c59c9d2b2251fe0250280203c9b8efab7d3accde4942e7505a16ed8a2c1253",
         ),
     ];
 
@@ -655,6 +745,126 @@ mod tests {
             1,
             "the backup is not in the skills folder"
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_extra_link_in_an_old_skill_is_modified_and_preserved_on_replace() {
+        use std::os::unix::fs::symlink;
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("skills");
+        let backups = tmp.path().join("backups");
+        install_into(&root, &backups).unwrap();
+        pretend_older(&installed(&root), "0.5");
+        let personal = tmp.path().join("personal.md");
+        std::fs::write(&personal, "my instructions").unwrap();
+        symlink(&personal, installed(&root).join("personal.md")).unwrap();
+        assert_eq!(state_of(&installed(&root)).0, SkillState::Modified);
+
+        let backup = install_into(&root, &backups).unwrap().expect("kept");
+        assert_eq!(
+            std::fs::read_link(backup.join("personal.md")).unwrap(),
+            personal
+        );
+        assert_eq!(state_of(&installed(&root)).0, SkillState::Ready);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_linked_skill_even_when_dangling_is_modified_and_its_target_is_left_alone() {
+        use std::os::unix::fs::symlink;
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("skills");
+        let backups = tmp.path().join("backups");
+        std::fs::create_dir(&root).unwrap();
+        let target = tmp.path().join("personal");
+        symlink(&target, installed(&root)).unwrap();
+        assert_eq!(state_of(&installed(&root)).0, SkillState::Modified);
+        let backup = remove_from(&root, &backups).unwrap().expect("kept");
+        assert_eq!(std::fs::read_link(backup).unwrap(), target);
+        assert!(std::fs::symlink_metadata(installed(&root)).is_err());
+    }
+
+    #[test]
+    fn oversized_files_and_manifests_are_modified_without_reading_them_whole() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("skills");
+        let backups = tmp.path().join("backups");
+        install_into(&root, &backups).unwrap();
+        let extra = installed(&root).join("huge.dat");
+        std::fs::File::create(&extra)
+            .unwrap()
+            .set_len(MAX_TREE_BYTES as u64 + 1)
+            .unwrap();
+        assert!(read_tree(&installed(&root)).is_err());
+        assert_eq!(state_of(&installed(&root)).0, SkillState::Modified);
+        std::fs::remove_file(extra).unwrap();
+        let manifest = installed(&root).join(MANIFEST);
+        std::fs::File::create(&manifest)
+            .unwrap()
+            .set_len(MAX_MANIFEST_BYTES as u64 + 1)
+            .unwrap();
+        assert!(read_file(&manifest, MAX_MANIFEST_BYTES).is_err());
+    }
+
+    #[test]
+    fn many_empty_directories_cannot_make_status_walk_without_a_bound() {
+        let tmp = tempfile::tempdir().unwrap();
+        for i in 0..=MAX_TREE_ENTRIES {
+            std::fs::create_dir(tmp.path().join(format!("d{i}"))).unwrap();
+        }
+        assert!(read_tree(tmp.path()).is_err());
+        assert_eq!(state_of(tmp.path()).0, SkillState::Modified);
+    }
+
+    #[test]
+    fn copying_a_backup_never_merges_with_an_existing_destination() {
+        let tmp = tempfile::tempdir().unwrap();
+        let source = tmp.path().join("source");
+        let previous = tmp.path().join("previous");
+        std::fs::create_dir(&source).unwrap();
+        std::fs::create_dir(&previous).unwrap();
+        std::fs::write(source.join("notes.md"), "new").unwrap();
+        std::fs::write(previous.join("notes.md"), "old").unwrap();
+        assert!(copy_dir(&source, &previous).is_err());
+        assert_eq!(
+            std::fs::read_to_string(previous.join("notes.md")).unwrap(),
+            "old"
+        );
+        assert_eq!(
+            std::fs::read_to_string(source.join("notes.md")).unwrap(),
+            "new"
+        );
+    }
+
+    #[test]
+    fn a_backup_failure_leaves_the_edited_skill_without_an_abandoned_staging_copy() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("skills");
+        let backups = tmp.path().join("backups");
+        install_into(&root, &backups).unwrap();
+        std::fs::write(installed(&root).join("notes.md"), "mine").unwrap();
+        std::fs::write(&backups, "not a directory").unwrap();
+        assert!(install_into(&root, &backups).is_err());
+        assert_eq!(
+            std::fs::read_to_string(installed(&root).join("notes.md")).unwrap(),
+            "mine"
+        );
+        assert_eq!(std::fs::read_dir(tmp.path()).unwrap().count(), 2);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn copying_a_backup_refuses_links_without_touching_the_original() {
+        use std::os::unix::fs::symlink;
+        let tmp = tempfile::tempdir().unwrap();
+        let source = tmp.path().join("source");
+        let backup = tmp.path().join("backup");
+        std::fs::create_dir(&source).unwrap();
+        symlink(tmp.path().join("missing"), source.join("notes.md")).unwrap();
+        assert!(copy_dir(&source, &backup).is_err());
+        assert!(std::fs::read_link(source.join("notes.md")).is_ok());
+        assert!(!backup.exists());
     }
 
     #[test]

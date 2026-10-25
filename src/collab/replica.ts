@@ -19,6 +19,11 @@ import type { Change } from './changes';
 import { diffFile } from './diff';
 import { repairReferences } from './repair';
 import { withinLimits } from './limits';
+import { utf8Bytes } from './bytes';
+
+/** A long outage must not retain every text replacement forever. Earlier unconfirmed work stays. */
+export const MAX_PENDING_PATCHES = 8192;
+export const MAX_PENDING_BYTES = 32 * 1024 * 1024;
 
 export interface PendingPatch {
   clientSeq: number;
@@ -36,6 +41,8 @@ export class Replica {
   private confirmedFile: DraftDocument;
   private confirmedSeq: number;
   private queue: PendingPatch[] = [];
+  private readonly sizes = new WeakMap<PendingPatch, number>();
+  private queuedBytes = 0;
   private lastClientSeq = 0;
   private localFile: DraftDocument | undefined;
 
@@ -64,13 +71,17 @@ export class Replica {
     return this.localFile;
   }
 
-  /** Records this person's edit; the returned patch is what to send. */
+  /** Records this person's edit; null if empty or no more unconfirmed work can be held. */
   propose(changes: Change[]): PendingPatch | null {
     if (changes.length === 0) return null;
+    const bytes = utf8Bytes(JSON.stringify(changes));
+    if (this.queue.length >= MAX_PENDING_PATCHES || this.queuedBytes + bytes > MAX_PENDING_BYTES) return null;
     const local = this.local;
     this.lastClientSeq += 1;
     const patch = { clientSeq: this.lastClientSeq, changes };
     this.queue.push(patch);
+    this.sizes.set(patch, bytes);
+    this.queuedBytes += bytes;
     this.localFile = applyPatch(local, changes);
     return patch;
   }
@@ -95,6 +106,7 @@ export class Replica {
   /** The owner's answer to a patch that changed nothing, or that it refused. */
   acknowledge(clientSeq: number): void {
     const before = this.queue.length;
+    for (const patch of this.queue) if (patch.clientSeq <= clientSeq) this.queuedBytes -= this.sizes.get(patch) ?? 0;
     this.queue = this.queue.filter((patch) => patch.clientSeq > clientSeq);
     if (this.queue.length !== before) this.localFile = undefined;
   }
@@ -124,11 +136,13 @@ export class Replica {
     const whole = diffFile(this.confirmedFile, local);
     if (whole.length === 0) {
       this.queue = [];
+      this.queuedBytes = 0;
       this.localFile = this.confirmedFile;
       return [];
     }
     if (fits(whole)) {
       this.queue = [{ clientSeq: this.lastClientSeq, changes: whole }];
+      this.measureQueue();
       this.localFile = local;
       return this.queue;
     }
@@ -151,6 +165,7 @@ export class Replica {
     const rest = diffFile(base, file);
     if (rest.length > 0) runs.push({ clientSeq: newest, changes: rest });
     this.queue = runs;
+    this.measureQueue();
     this.localFile = file;
     return runs;
   }
@@ -158,6 +173,16 @@ export class Replica {
   /** Unconfirmed edits given up (too large to send): `local` is the confirmed file again. */
   discardPending(): void {
     this.queue = [];
+    this.queuedBytes = 0;
     this.localFile = undefined;
+  }
+
+  private measureQueue(): void {
+    this.queuedBytes = 0;
+    for (const patch of this.queue) {
+      const bytes = utf8Bytes(JSON.stringify(patch.changes));
+      this.sizes.set(patch, bytes);
+      this.queuedBytes += bytes;
+    }
   }
 }

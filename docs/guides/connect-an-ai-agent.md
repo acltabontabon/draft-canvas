@@ -29,7 +29,10 @@ If Draft Canvas cannot find `claude` or `gemini`, Settings shows a terminal comm
 configure by hand, open **Set it up by hand instead** (Cursor: **Copy the config instead**).
 
 The skill installs in `~/.claude/skills` (Claude Code) or `~/.agents/skills` (other agents) and
-updates with Draft Canvas. An edited copy is kept until you click **Replace skill**.
+updates with Draft Canvas. An edited copy is kept until you click **Replace skill**. Linked files
+and unusually large copies also count as modified, so automatic updates leave them alone. Replacing
+or removing a customized copy keeps a uniquely named backup; if it cannot be backed up safely, the
+original stays in place. Repository surveys skip named pipes, sockets and other nonregular files.
 
 ## Ask Nodi, on the canvas
 

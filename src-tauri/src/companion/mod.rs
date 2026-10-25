@@ -424,6 +424,8 @@ pub struct Companion {
     emit: Emitter,
     end_run: EndRun,
     limits: RunLimits,
+    /// Recording and delivery share an order, including cancellation from another native thread.
+    delivery: Mutex<()>,
     runs: Mutex<HashMap<String, Run>>,
     /// Lock only while holding `runs`, so moving a run here and taking a snapshot are atomic.
     completed: Mutex<Vec<Completed>>,
@@ -450,6 +452,7 @@ impl Companion {
             emit,
             end_run,
             limits,
+            delivery: Mutex::default(),
             runs: Mutex::default(),
             completed: Mutex::default(),
             next_order: AtomicU64::new(0),
@@ -693,6 +696,10 @@ impl Companion {
 
     /// Keeps `event` for a reloaded page and sends it to the page now. A run says `Stopped` once.
     fn record(&self, run_id: &str, mut event: RunEvent) {
+        // Assigning a sequence under `runs` alone let a later cancellation emit first. The page
+        // then correctly discarded the delayed reply as old. Keep delivery ordered without holding
+        // `runs` while calling the event sink.
+        let _delivery = lock(&self.delivery);
         let (stop, sequence, graceful) = {
             let mut runs = lock(&self.runs);
             let Some(run) = runs.get_mut(run_id) else {
@@ -1078,6 +1085,58 @@ mod tests {
                 dir: PathBuf::new(),
             },
         );
+    }
+
+    #[test]
+    fn cancellation_cannot_overtake_an_event_waiting_to_reach_the_page() {
+        let dir = tempdir().unwrap();
+        let (entered_tx, entered_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let release_rx = Mutex::new(release_rx);
+        let (events_tx, events_rx) = mpsc::channel();
+        let companion = Arc::new(Companion::new(
+            dir.path(),
+            Arc::new(move |_, _, sequence| {
+                if sequence == 1 {
+                    entered_tx.send(()).unwrap();
+                    lock(&release_rx).recv().unwrap();
+                }
+                events_tx.send(sequence).unwrap();
+            }),
+            Arc::new(|_| {}),
+        ));
+        parked(&companion, "r");
+        let first = {
+            let companion = companion.clone();
+            std::thread::spawn(move || {
+                companion.record(
+                    "r",
+                    RunEvent::MessageChunk {
+                        text: "Keep me".into(),
+                    },
+                );
+            })
+        };
+        entered_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        let (cancelling_tx, cancelling_rx) = mpsc::channel();
+        let second = {
+            let companion = companion.clone();
+            std::thread::spawn(move || {
+                cancelling_tx.send(()).unwrap();
+                companion.cancel("r");
+            })
+        };
+        cancelling_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        let overtaken = events_rx.recv_timeout(Duration::from_millis(100)).ok();
+        // Release even on a failed assertion, so a regression cannot strand the worker threads.
+        release_tx.send(()).unwrap();
+        first.join().unwrap();
+        second.join().unwrap();
+        assert_eq!(
+            overtaken, None,
+            "the terminal event must wait for the reply"
+        );
+        assert_eq!(events_rx.try_iter().collect::<Vec<_>>(), vec![1, 2]);
     }
 
     #[test]

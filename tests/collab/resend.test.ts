@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Clock } from '../../src/collab/clock';
 import { GuestSession, type GuestEvents } from '../../src/collab/guestSession';
 import { HostSession } from '../../src/collab/hostSession';
+import { MAX_PENDING_PATCHES } from '../../src/collab/replica';
 import type { PeerView } from '../../src/collab/protocol';
 import { createDocument, createNode } from '../../src/document/factory';
 import { addNodes, updateNode } from '../../src/document/operations';
@@ -175,6 +176,63 @@ describe('edits across a fresh copy', () => {
     expect(guest.state.ended).toBeNull();
     expect(owner.file.nodes.find((node) => node.id === 'n_a')?.x).toBe(300);
     expect(second.sent.b.filter((text) => text.includes('"t":"patch"'))).toHaveLength(1);
+  });
+
+  it('bounds unconfirmed edits during a long outage, keeps earlier work, and accepts edits again after reconnecting', () => {
+    const clock = manualClock();
+    const { host, state: owner } = ownerOf(base(), clock);
+    const first = loopbackPair();
+    host.attach(first.a, { role: 'editor' });
+    const guest = guestOf(clock);
+    guest.session.connect(first.b);
+    settle(first.pump);
+    first.drop();
+
+    for (let i = 1; i <= MAX_PENDING_PATCHES + 1; i += 1) {
+      guest.state.file = updateNode(guest.state.file!, 'n_a', { x: i });
+      guest.session.localChanged();
+    }
+    expect(guest.state.tooLarge).toBe(1);
+    expect(guest.state.file!.nodes[0]!.x).toBe(MAX_PENDING_PATCHES);
+
+    const second = loopbackPair();
+    host.attach(second.a, { role: 'editor' });
+    guest.session.connect(second.b);
+    settle(second.pump);
+    expect(guest.state.file).toEqual(owner.file);
+    expect(owner.file.nodes[0]!.x).toBe(MAX_PENDING_PATCHES);
+    guest.state.file = updateNode(guest.state.file!, 'n_a', { x: MAX_PENDING_PATCHES + 2 });
+    guest.session.localChanged();
+    settle(second.pump);
+    expect(owner.file.nodes[0]!.x).toBe(MAX_PENDING_PATCHES + 2);
+    expect(guest.state.tooLarge).toBe(1);
+  });
+
+  it('paces Unicode offline work by UTF-8 bytes so the relay and owner do not reject the resend as a flood', () => {
+    const clock = manualClock();
+    const { host, state: owner } = ownerOf(base(), clock);
+    const first = loopbackPair();
+    host.attach(first.a, { role: 'editor' });
+    const guest = guestOf(clock);
+    guest.session.connect(first.b);
+    settle(first.pump);
+    first.drop();
+    for (let i = 0; i < 20; i += 1) {
+      guest.state.file = addNodes(guest.state.file!, [createNode({ id: `n_unicode${i}`, type: 'code', x: i * 300, y: 600, code: `${i}${'界'.repeat(190_000)}` })]);
+      guest.session.localChanged();
+    }
+    const second = loopbackPair();
+    host.attach(second.a, { role: 'editor' });
+    guest.session.connect(second.b);
+    for (let i = 0; i < 30; i += 1) {
+      settle(second.pump);
+      clock.advance(1000);
+    }
+    settle(second.pump);
+    expect(guest.state.ended).toBeNull();
+    expect(guest.state.tooLarge).toBe(0);
+    expect(owner.file.nodes.filter((node) => node.id.startsWith('n_unicode'))).toHaveLength(20);
+    expect(guest.state.file).toEqual(owner.file);
   });
 
   it('numbers a re-invited fresh page on from where its place left off', () => {

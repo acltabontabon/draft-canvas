@@ -10,7 +10,7 @@ import { applyChanges } from '../../src/collab/apply';
 import { diffFile } from '../../src/collab/diff';
 import { HostCore, HOST_ORIGIN } from '../../src/collab/hostCore';
 import { repairReferences } from '../../src/collab/repair';
-import { Replica, applyPatch } from '../../src/collab/replica';
+import { MAX_PENDING_BYTES, Replica, applyPatch } from '../../src/collab/replica';
 import { sanitizeChanges } from '../../src/collab/sanitize';
 import { randomEdit, rngFrom, seededFile, sharedContent } from './support';
 
@@ -138,6 +138,29 @@ describe('repairReferences', () => {
  * owner's, and the owner's file must open without a single repair.
  */
 describe('a session', () => {
+  it('bounds retained replacement text and releases the byte budget when work is acknowledged or discarded', () => {
+    const file = addNodes(createDocument('Pending'), [createNode({ id: 'n_code', type: 'code', x: 0, y: 0, code: 'before' })]);
+    const replica = new Replica(file, 0);
+    const code = '界'.repeat(190_000);
+    let newest = 0;
+    while (newest < 100) {
+      const patch = replica.propose([{ kind: 'node', id: 'n_code', room: '', value: { ...file.nodes[0]!, code: `${newest}${code}` } }]);
+      if (!patch) break;
+      newest = patch.clientSeq;
+    }
+    expect(newest).toBeGreaterThan(0);
+    expect(newest).toBeLessThan(100);
+    const bytes = replica.pending.reduce((sum, patch) => sum + new TextEncoder().encode(JSON.stringify(patch.changes)).byteLength, 0);
+    expect(bytes).toBeLessThanOrEqual(MAX_PENDING_BYTES);
+    const kept = replica.local;
+    expect(replica.propose([{ kind: 'node', id: 'n_code', room: '', value: { ...file.nodes[0]!, code: `overflow${code}` } }])).toBeNull();
+    expect(replica.local).toBe(kept);
+    replica.acknowledge(newest);
+    expect(replica.propose([{ kind: 'title', value: 'Space is free again' }])).not.toBeNull();
+    replica.discardPending();
+    expect(replica.propose([{ kind: 'node', id: 'n_code', room: '', value: { ...file.nodes[0]!, code } }])).not.toBeNull();
+  });
+
   it('converges, whatever the interleaving', () => {
     fc.assert(
       fc.property(fc.integer(), fc.integer({ min: 20, max: 120 }), (seed, ticks) => {

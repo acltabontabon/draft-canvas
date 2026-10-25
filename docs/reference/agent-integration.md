@@ -277,13 +277,18 @@ stderr combined, 32 MiB per stdout line, and 1 MiB of parsed event text. Passing
 run and closes its tool access. At most 20,000 live events are emitted per run, independently of
 chunk merging. Recovery keeps at most 2,000 events per run, merging adjacent reply
 chunks so a streamed answer does not lose its beginning just because it arrived in small pieces.
-Snapshots and live events carry per-run sequence numbers. Reload recovery buffers live updates,
+Snapshots and live events carry per-run sequence numbers, and native recording and delivery stay
+ordered even when cancellation arrives on another thread. Reload recovery buffers live updates,
 then applies only those newer than the snapshot; it does not duplicate text already recovered.
 The two most recent completed turns remain available in native memory, so a process finishing
 before the reload snapshot is captured does not lose its answer. **New conversation** clears them
 for the chosen agent on that diagram.
-The page caps conversations, reply text and tool steps; diagram snapshots used to skip redundant
-reads are weak references in a bounded cache, so visiting many diagrams does not keep their files alive.
+The page keeps at most 20 turns per conversation and 100 finished conversations, with estimated
+content budgets of 4 MiB per conversation and 16 MiB across the window. Older finished turns can be
+trimmed sooner for long replies; each conversation keeps its latest answer and live turns, and usage
+from trimmed turns still counts. Active conversations are never evicted. Diagram snapshots used to
+skip redundant reads are weak references in a bounded cache, so visiting many diagrams does not keep
+their files alive.
 
 ## One diagram across a conversation
 
@@ -347,11 +352,17 @@ append-only, fsynced, mode 0600, compacted at start-up and every 500 records.
 
 | Deadline | Limit | Past it |
 | --- | --- | --- |
+| Local bridge write | 5 s | Connection closes and waiters are released |
+| Sidecar call, including connection and queue waits | 120 s | `CONNECTION_LOST`; retry a write with the same `requestId` |
 | Page acknowledges | 5 s | `APP_UNRESPONSIVE`, nothing applied |
 | Page reaches the commit gate | 30 s | Refused, nothing applied |
 | Receipt after the gate | 60 s | `OUTCOME_UNKNOWN` |
 
-- Cancellation counts only before the gate. A client disconnect is not a cancel.
+- Cancellation counts only before the gate. It is remembered during connection setup, folder
+  lookup and between page requests, including before a prepared proposal is saved. A client
+  disconnect is not a cancel; turning access off still cancels its work that has not passed the gate.
+  Work already past its commit gate finishes and keeps its receipt. Proposal storage releases the
+  cancellation lock before disk I/O, so a slow save cannot hold Stop or process termination.
 - Resolved entries are kept 7 days (at most 2,000); unresolved ones 30 days.
 - Guarantee: at most one application per `requestId` while its entry is kept.
 

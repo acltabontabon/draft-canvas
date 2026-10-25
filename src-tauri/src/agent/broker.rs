@@ -139,6 +139,9 @@ pub fn fingerprint(tool: &str, args: &Value) -> String {
 
 /// Runs one tool call. `calls` is how the connection finds this call's page request to cancel it.
 pub async fn call(agent: &Agent, tool: &str, args: Value, calls: &CallRegistry) -> ToolResult {
+    if calls.is_cancelled() {
+        return Err(failure_error(Failure::Cancelled));
+    }
     let Some(app) = agent.app().cloned() else {
         return Err(unavailable());
     };
@@ -464,11 +467,17 @@ async fn active_context(
 
 // ─── the page ───────────────────────────────────────────────────────────────────────────────────
 
-/// The page request one tool call is waiting on right now, so the connection can cancel it when its
-/// client gives up on the call.
+#[derive(Default)]
+struct CallState {
+    current: Option<u64>,
+    cancelled: bool,
+}
+
+/// The page request one tool call is waiting on right now. Cancellation is sticky through folder
+/// lookup and the gaps between page requests, so stopping before registration cannot be lost.
 #[derive(Default)]
 pub struct CallRegistry {
-    current: std::sync::Mutex<Option<u64>>,
+    state: std::sync::Mutex<CallState>,
     /// The agent session the call came from (see `session.rs`).
     pub session: String,
     /// The companion run the call's agent belongs to, if the companion started it (see `runs.rs`).
@@ -482,7 +491,7 @@ pub type ProgressSink = (tokio::sync::mpsc::Sender<Value>, u64);
 impl CallRegistry {
     pub fn new(session: String) -> Self {
         Self {
-            current: std::sync::Mutex::default(),
+            state: std::sync::Mutex::default(),
             session,
             run: None,
             progress: None,
@@ -508,28 +517,55 @@ impl CallRegistry {
     }
 
     /// The page is working on `page_id` for this call: cancellable, and its progress routed here.
-    fn track(&self, agent: &Agent, page_id: u64) {
-        self.set(page_id);
+    fn track(&self, agent: &Agent, page_id: u64) -> bool {
+        let mut state = crate::util::lock(&self.state);
+        if state.cancelled {
+            agent.page.cancel(page_id);
+            return false;
+        }
+        state.current = Some(page_id);
         if let Some(sink) = &self.progress {
             crate::util::lock(&agent.progress).insert(page_id, sink.clone());
         }
+        true
     }
 
     fn untrack(&self, agent: &Agent, page_id: u64) {
-        self.clear();
+        let mut state = crate::util::lock(&self.state);
+        if state.current == Some(page_id) {
+            state.current = None;
+        }
         crate::util::lock(&agent.progress).remove(&page_id);
     }
 
-    fn set(&self, page_id: u64) {
-        *crate::util::lock(&self.current) = Some(page_id);
+    /// Synchronize cancellation with registration: either the live page is cancelled, or a later
+    /// registration is refused. The page owns its gate and preserves work already committing.
+    pub fn cancel(&self, agent: &Agent) {
+        let mut state = crate::util::lock(&self.state);
+        state.cancelled = true;
+        if let Some(page_id) = state.current {
+            agent.page.cancel(page_id);
+        }
     }
 
-    fn clear(&self) {
-        *crate::util::lock(&self.current) = None;
+    /// A proposal's disk write has no page commit gate. This synchronized check is its gate:
+    /// cancellation either wins first or lets the atomic save finish. Release the lock before I/O,
+    /// so a slow disk cannot block Stop, process termination or companion recovery.
+    fn persist<T>(&self, save: impl FnOnce() -> Result<T, ToolError>) -> Result<T, ToolError> {
+        let state = crate::util::lock(&self.state);
+        if state.cancelled {
+            return Err(failure_error(Failure::Cancelled));
+        }
+        drop(state);
+        save()
+    }
+
+    pub fn is_cancelled(&self) -> bool {
+        crate::util::lock(&self.state).cancelled
     }
 
     pub fn current(&self) -> Option<u64> {
-        *crate::util::lock(&self.current)
+        crate::util::lock(&self.state).current
     }
 }
 
@@ -546,6 +582,10 @@ async fn to_page(
     calls.stamp(&mut context);
     let state = app.state::<AppState>();
     let (id, rx) = agent.page.register();
+    if !calls.track(agent, id) {
+        agent.page.forget(id);
+        return Err(failure_error(Failure::Cancelled));
+    }
     let sent = state.events.emit(HostEvent::AgentRequest {
         id,
         tool: tool.to_string(),
@@ -554,6 +594,7 @@ async fn to_page(
     });
     if !sent {
         agent.page.forget(id);
+        calls.untrack(agent, id);
         return Err(ToolError::new(
             "APP_STARTING",
             "Draft Canvas is running but its window hasn't finished loading.",
@@ -561,7 +602,6 @@ async fn to_page(
         .hint("Wait a moment and try again.")
         .retryable());
     }
-    calls.track(agent, id);
     let answer = agent.page.wait(id, rx, Budgets::default()).await;
     calls.untrack(agent, id);
     let value = answer.map_err(failure_error)?;
@@ -1131,11 +1171,14 @@ fn register_update(
     agent: &Agent,
     key: &str,
     calls: &CallRegistry,
-) -> (u64, tokio::sync::oneshot::Receiver<super::page::Reply>) {
+) -> Result<(u64, tokio::sync::oneshot::Receiver<super::page::Reply>), ToolError> {
     let (id, rx) = agent.page.register();
-    calls.track(agent, id);
+    if !calls.track(agent, id) {
+        agent.page.forget(id);
+        return Err(failure_error(Failure::Cancelled));
+    }
     crate::util::lock(&agent.gates).insert(id, key.to_string());
-    (id, rx)
+    Ok((id, rx))
 }
 
 async fn update(
@@ -1173,7 +1216,9 @@ async fn update(
         .get("stamp")
         .and_then(Value::as_str)
         .map(str::to_string);
-    let (page_id, rx) = register_update(agent, &key, calls);
+    let (page_id, rx) = register_update(agent, &key, calls).inspect_err(|error| {
+        fail(agent, &key, error);
+    })?;
     let sent = app
         .state::<AppState>()
         .events
@@ -1500,57 +1545,14 @@ async fn submit_proposal(
             .unwrap_or_default(),
     };
 
-    // A revise re-checks what it revises under the store's lock, right before writing: the person may
-    // have accepted or rejected it, or another revise landed, while the page was composing this one —
-    // and writing over that would reopen a proposal they had already decided.
-    let saved = agent.with_proposals(|s| {
-        if let Some(before) = &existing {
-            match s.get(&proposal_id) {
-                Some(now) if now.status == ProposalStatus::Pending && now.version == before.version => {}
-                Some(now) if now.status != ProposalStatus::Pending => {
-                    return Err(ToolError::new(
-                        "PROPOSAL_CLOSED",
-                        format!("That proposal became {:?} while this revision was being prepared; submit a new one instead.", now.status),
-                    ));
-                }
-                _ => {
-                    return Err(ToolError::new(
-                        "PROPOSAL_CHANGED",
-                        "That proposal changed while this revision was being prepared. Read it again before revising it.",
-                    ));
-                }
-            }
-        } else if !proposal.status.is_terminal() {
-            if let Some(why) = s.pending_limit(&proposal.diagram_id) {
-                return Err(ToolError::new("LIMIT_EXCEEDED", why)
-                    .hint("Ask the person to review the waiting proposals, or revise one of them instead."));
-            }
-        }
-        s.put(proposal.clone()).map_err(|_| {
-            ToolError::new(
-                "INTERNAL",
-                "The proposal couldn't be saved. Nothing was recorded.",
-            )
-            .hint("Retry with the same requestId.")
-        })
-    });
-    match saved {
+    match persist_proposal(agent, calls, &proposal, existing.as_ref()) {
         // The review panel lists proposals when told to rather than polling for them all the time.
-        Some(Ok(())) => {
+        Ok(()) => {
             app.state::<AppState>().events.emit(HostEvent::AgentChanged);
         }
-        Some(Err(e)) => {
-            fail(agent, &key, &e);
-            return Err(e);
-        }
-        None => {
-            let e = ToolError::new(
-                "INTERNAL",
-                "The proposal couldn't be saved. Nothing was recorded.",
-            )
-            .hint("Retry with the same requestId.");
-            fail(agent, &key, &e);
-            return Err(e);
+        Err(error) => {
+            fail(agent, &key, &error);
+            return Err(error);
         }
     }
 
@@ -1567,6 +1569,48 @@ async fn submit_proposal(
     let _ =
         agent.with_ledger(|l| l.advance(&key, Stage::Committed, now, |e| e.receipt = Some(stored)));
     Ok(receipt)
+}
+
+/// The proposal's commit gate stays in Rust, where its atomic store write actually happens.
+fn persist_proposal(
+    agent: &Agent,
+    calls: &CallRegistry,
+    proposal: &Proposal,
+    existing: Option<&Proposal>,
+) -> Result<(), ToolError> {
+    calls.persist(|| {
+        let unavailable = || {
+            ToolError::new("INTERNAL", "The proposal couldn't be saved. Nothing was recorded.")
+                .hint("Retry with the same requestId.")
+        };
+        // Re-check a revision under the store lock: it may have been accepted or revised while
+        // the page was composing it. Never reopen work the person already decided about.
+        agent.with_proposals(|store| {
+            if let Some(before) = existing {
+                match store.get(&proposal.id) {
+                    Some(now) if now.status == ProposalStatus::Pending && now.version == before.version => {}
+                    Some(now) if now.status != ProposalStatus::Pending => {
+                        return Err(ToolError::new(
+                            "PROPOSAL_CLOSED",
+                            format!("That proposal became {:?} while this revision was being prepared; submit a new one instead.", now.status),
+                        ));
+                    }
+                    _ => {
+                        return Err(ToolError::new(
+                            "PROPOSAL_CHANGED",
+                            "That proposal changed while this revision was being prepared. Read it again before revising it.",
+                        ));
+                    }
+                }
+            } else if !proposal.status.is_terminal() {
+                if let Some(why) = store.pending_limit(&proposal.diagram_id) {
+                    return Err(ToolError::new("LIMIT_EXCEEDED", why)
+                        .hint("Ask the person to review the waiting proposals, or revise one of them instead."));
+                }
+            }
+            store.put(proposal.clone()).map_err(|_| unavailable())
+        }).unwrap_or_else(|| Err(unavailable()))
+    })
 }
 
 /// What an unfinished `submit_proposal` left behind, after a crash. Mirrors `recover_create`: the
@@ -1744,6 +1788,141 @@ mod tests {
     }
 
     #[test]
+    fn ending_a_run_before_page_registration_still_prevents_its_update() {
+        let dir = tempfile::tempdir().unwrap();
+        let agent = Agent::new(dir.path());
+        agent.runs.open(
+            "r1",
+            runs::RunPolicy {
+                diagram_id: "d_1".into(),
+                direct: true,
+                code: None,
+            },
+        );
+        let call = std::sync::Arc::new(CallRegistry::new("s".into()).with_run(Some("r1".into())));
+        assert!(agent.runs.track("r1", &call));
+        // The broker is still looking through folders, before there is any page id to cancel.
+        agent.end_run("r1");
+        let error = register_update(&agent, "update_diagram:stopped", &call).unwrap_err();
+        assert_eq!(error.code, "CANCELLED");
+        assert_eq!(call.current(), None);
+        assert!(crate::util::lock(&agent.gates).is_empty());
+    }
+
+    #[test]
+    fn cancelling_between_page_requests_prevents_the_next_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let agent = Agent::new(dir.path());
+        let call = CallRegistry::new("external".into());
+        let (first, _rx) = agent.page.register();
+        assert!(call.track(&agent, first));
+        agent.page.forget(first);
+        call.untrack(&agent, first);
+        // External MCP cancellation uses the same sticky state even with no companion run.
+        call.cancel(&agent);
+        let (second, _rx) = agent.page.register();
+        assert!(!call.track(&agent, second));
+        assert!(!agent.page.gate(second));
+        assert_eq!(call.current(), None);
+    }
+
+    #[test]
+    fn cancellation_and_registration_cannot_miss_each_other() {
+        use std::sync::{Arc, Barrier};
+        let dir = tempfile::tempdir().unwrap();
+        let agent = Arc::new(Agent::new(dir.path()));
+        for _ in 0..32 {
+            let call = Arc::new(CallRegistry::new("external".into()));
+            let start = Arc::new(Barrier::new(2));
+            let (id, _rx) = agent.page.register();
+            std::thread::scope(|scope| {
+                scope.spawn(|| {
+                    start.wait();
+                    call.track(&agent, id);
+                });
+                start.wait();
+                call.cancel(&agent);
+            });
+            assert!(
+                !agent.page.gate(id),
+                "both orderings must cancel the live page"
+            );
+            call.untrack(&agent, id);
+            agent.page.forget(id);
+        }
+    }
+
+    #[tokio::test]
+    async fn cancellation_preserves_a_page_already_past_its_commit_gate() {
+        let dir = tempfile::tempdir().unwrap();
+        let agent = Agent::new(dir.path());
+        let call = CallRegistry::new("external".into());
+        let (id, rx) = agent.page.register();
+        assert!(call.track(&agent, id));
+        assert!(agent.page.gate(id));
+        call.cancel(&agent);
+        assert!(
+            agent.page.gate(id),
+            "a commit already in flight must finish"
+        );
+        agent.page.respond(id, json!({"persisted": true}));
+        assert_eq!(
+            agent.page.wait(id, rx, Budgets::default()).await.unwrap(),
+            json!({"persisted": true})
+        );
+        call.untrack(&agent, id);
+        assert_eq!(
+            register_update(&agent, "later", &call).unwrap_err().code,
+            "CANCELLED"
+        );
+    }
+
+    #[test]
+    fn disabling_access_cancels_a_broker_call_after_its_client_disconnected() {
+        let dir = tempfile::tempdir().unwrap();
+        let agent = Agent::new(dir.path());
+        let connection = std::sync::Arc::new(CallRegistry::new("external".into()));
+        agent.track_call(&connection);
+        let executing = connection.clone();
+        drop(connection);
+        let committing = std::sync::Arc::new(CallRegistry::new("committing".into()));
+        agent.track_call(&committing);
+        let (committed_page, _reply) = agent.page.register();
+        assert!(committing.track(&agent, committed_page));
+        assert!(agent.page.gate(committed_page));
+        // A broker intentionally survives disconnect to settle its ledger. Access turned off
+        // afterwards must still reach it while folder lookup has not yet registered a page id.
+        agent.disable();
+        assert!(
+            agent.page.gate(committed_page),
+            "a commit already in flight must finish"
+        );
+        assert_eq!(
+            register_update(&agent, "update_diagram:disconnected", &executing)
+                .unwrap_err()
+                .code,
+            "CANCELLED"
+        );
+        let (id, _reply) = agent.page.register();
+        assert!(!executing.track(&agent, id));
+        assert!(!agent.page.gate(id));
+    }
+
+    #[test]
+    fn global_call_tracking_does_not_keep_finished_requests_alive() {
+        let dir = tempfile::tempdir().unwrap();
+        let agent = Agent::new(dir.path());
+        let completed = std::sync::Arc::new(CallRegistry::new("external".into()));
+        let weak = std::sync::Arc::downgrade(&completed);
+        agent.track_call(&completed);
+        drop(completed);
+        assert!(weak.upgrade().is_none());
+        let next = std::sync::Arc::new(CallRegistry::new("next".into()));
+        agent.track_call(&next);
+        assert_eq!(crate::util::lock(&agent.calls).len(), 1);
+    }
+
+    #[test]
     fn a_call_from_an_agent_the_person_connected_carries_no_run() {
         let mut context = json!({});
         CallRegistry::new("s".into()).stamp(&mut context);
@@ -1833,7 +2012,7 @@ mod tests {
         )
         .unwrap();
         let calls = CallRegistry::new("session".into());
-        let (id, _rx) = register_update(&agent, key, &calls);
+        let (id, _rx) = register_update(&agent, key, &calls).unwrap();
         // Simulate the page's first action before the event sender gets another turn.
         assert!(gate_passed(&agent, id));
         assert_eq!(calls.current(), Some(id));
@@ -1957,6 +2136,92 @@ mod tests {
             root: dunce::canonicalize(dir).unwrap(),
             name: name.into(),
         }
+    }
+
+    #[test]
+    fn cancelling_after_preparation_keeps_a_proposal_out_of_the_store() {
+        let dir = tempfile::tempdir().unwrap();
+        let agent = Agent::new(dir.path());
+        agent.ensure_ledger().unwrap();
+        let call = CallRegistry::new("external".into());
+        let proposal = stored_proposal("p_stopped", "d_1", ProposalStatus::Pending, 1);
+        let entry = Entry {
+            key: "submit_proposal:stopped".into(),
+            tool: "submit_proposal".into(),
+            fingerprint: "f".into(),
+            stage: Stage::Pending,
+            at: 1,
+            diagram_id: Some(proposal.id.clone()),
+            path: None,
+            receipt: None,
+        };
+        record(&agent, entry.clone()).unwrap();
+        // The page has finished its dry run, but the proposal has not been saved yet.
+        call.cancel(&agent);
+        let error = persist_proposal(&agent, &call, &proposal, None).unwrap_err();
+        assert_eq!(error.code, "CANCELLED");
+        fail(&agent, &entry.key, &error);
+        assert!(agent
+            .with_proposals(|store| store.get(&proposal.id).is_none())
+            .unwrap());
+        assert_eq!(recover_submit_proposal(&agent, &entry), None);
+        assert_eq!(
+            agent.with_ledger(|ledger| ledger.get(&entry.key).unwrap().stage),
+            Some(Stage::Failed)
+        );
+    }
+
+    #[test]
+    fn a_proposal_past_its_gate_finishes_without_blocking_stop() {
+        use std::sync::{mpsc, Arc};
+        let dir = tempfile::tempdir().unwrap();
+        let agent = Arc::new(Agent::new(dir.path()));
+        let call = Arc::new(CallRegistry::new("external".into()));
+        let proposal = stored_proposal("p_saving", "d_1", ProposalStatus::Pending, 1);
+        let (started, entered) = mpsc::channel();
+        let (release, proceed) = mpsc::channel();
+        let saving = {
+            let (agent, call) = (agent.clone(), call.clone());
+            std::thread::spawn(move || {
+                call.persist(|| {
+                    started.send(()).unwrap();
+                    proceed.recv().unwrap();
+                    agent
+                        .with_proposals(|store| store.put(proposal))
+                        .unwrap()
+                        .map_err(|_| ToolError::new("INTERNAL", "save failed"))
+                })
+            })
+        };
+        entered
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .unwrap();
+        let (cancelling, requested) = mpsc::channel();
+        let (cancelled, finished) = mpsc::channel();
+        let stopping = {
+            let (agent, call) = (agent.clone(), call.clone());
+            std::thread::spawn(move || {
+                cancelling.send(()).unwrap();
+                call.cancel(&agent);
+                cancelled.send(()).unwrap();
+            })
+        };
+        requested
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .unwrap();
+        let stopped_promptly = finished
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .is_ok();
+        release.send(()).unwrap();
+        assert!(saving.join().unwrap().is_ok());
+        stopping.join().unwrap();
+        assert!(
+            stopped_promptly,
+            "Stop must not wait for disk I/O after the proposal's commit gate"
+        );
+        assert!(agent
+            .with_proposals(|store| store.get("p_saving").is_some())
+            .unwrap());
     }
 
     #[test]

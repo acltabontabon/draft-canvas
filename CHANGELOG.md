@@ -34,6 +34,23 @@ The retired VS Code extension has [its own changelog](https://github.com/acltabo
 - When a live session ends on a collaborator, their canvas closes behind a card that says why, with
   the choice to keep a copy or go home. Someone the owner removes can only go home.
 
+#### Fixed
+
+- Collaboration bounds edits waiting for confirmation during long outages and correctly paces
+  non-ASCII text, preserving earlier pending work when the backlog fills.
+
+### Desktop
+
+#### Fixed
+
+- Stalled MCP connections release queued calls and close cleanly; retries keep their existing
+  request-id protection. Stopping an agent or turning access off also cancels work still connecting
+  or preparing, including after its client disconnects.
+- Nodi keeps streamed replies in order during cancellation and bounds conversation memory while
+  preserving active turns and accumulated usage totals.
+- Agent skill updates preserve customized links and backups, bound inspection of modified copies,
+  and skip named pipes and other nonregular files when surveying a repository.
+
 ## [1.16.1] - 2026-10-25
 
 Fixes for diagram editing, saving, collaboration and Nodi.

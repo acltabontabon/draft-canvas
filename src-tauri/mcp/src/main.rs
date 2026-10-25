@@ -263,9 +263,8 @@ impl ServerHandler for Server {
             });
             tx
         });
-        let outcome = self
-            .bridge
-            .call(
+        let outcome = tokio::select! {
+            outcome = self.bridge.call(
                 &request.name,
                 args,
                 |id| {
@@ -275,8 +274,17 @@ impl ServerHandler for Server {
                         .insert(key.clone(), id);
                 },
                 sink,
-            )
-            .await;
+            ) => outcome,
+            _ = context.ct.cancelled() => {
+                // Cancellation can arrive while connecting or waiting for queue room, before
+                // on_cancelled has a bridge id to forward. Dropping this future stops that work.
+                let id = self.calls.lock().unwrap_or_else(|e| e.into_inner()).get(&key).copied();
+                if let Some(id) = id {
+                    self.bridge.cancel(id).await;
+                }
+                Err(bridge::error("CANCELLED", "The request was cancelled.", "", false))
+            }
+        };
         self.calls
             .lock()
             .unwrap_or_else(|e| e.into_inner())

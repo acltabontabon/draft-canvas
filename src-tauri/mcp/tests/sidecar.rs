@@ -278,3 +278,61 @@ async fn stdout_carries_only_protocol_messages_and_stderr_never_the_token() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(!stderr.contains(TOKEN));
 }
+
+#[tokio::test]
+async fn cancelling_during_the_bridge_handshake_never_sends_the_tool_call() {
+    let dir = tempfile::tempdir().unwrap();
+    let socket = dir.path().join("bridge.sock");
+    let listener = UnixListener::bind(&socket).unwrap();
+    std::fs::write(
+        dir.path().join("agent.json"),
+        json!({"v": 1, "endpoint": socket, "token": TOKEN, "pid": 1}).to_string(),
+    )
+    .unwrap();
+    let (greeted, hello_received) = tokio::sync::oneshot::channel();
+    let app = tokio::spawn(async move {
+        let (stream, _) = listener.accept().await.unwrap();
+        let mut lines = BufReader::new(stream).lines();
+        let hello: Value =
+            serde_json::from_str(&lines.next_line().await.unwrap().unwrap()).unwrap();
+        assert_eq!(hello["type"], "hello");
+        greeted.send(()).unwrap();
+        // The app has not welcomed it yet: there is no registered bridge-call id to cancel.
+        // Cancellation must release the connection now, rather than finishing the handshake later.
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_secs(1), lines.next_line())
+                .await
+                .unwrap()
+                .unwrap()
+                .is_none()
+        );
+    });
+    let mut child = Command::new(sidecar())
+        .env("DRAFT_CANVAS_AGENT_DIR", dir.path())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .kill_on_drop(true)
+        .spawn()
+        .unwrap();
+    let mut stdin = child.stdin.take().unwrap();
+    for message in [
+        json!({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "raw", "version": "0"}}}),
+        json!({"jsonrpc": "2.0", "method": "notifications/initialized"}),
+        json!({"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "list_diagrams", "arguments": {}}}),
+    ] {
+        let line = format!("{message}\n");
+        stdin.write_all(line.as_bytes()).await.unwrap();
+    }
+    tokio::time::timeout(std::time::Duration::from_secs(5), hello_received)
+        .await
+        .unwrap()
+        .unwrap();
+    stdin.write_all(format!("{}\n", json!({"jsonrpc": "2.0", "method": "notifications/cancelled", "params": {"requestId": 2}})).as_bytes()).await.unwrap();
+    app.await.unwrap();
+    drop(stdin);
+    tokio::time::timeout(std::time::Duration::from_secs(5), child.wait())
+        .await
+        .unwrap()
+        .unwrap();
+}
