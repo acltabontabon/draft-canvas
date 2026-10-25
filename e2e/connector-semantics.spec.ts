@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { clickEdge, connect, connectAndOpen, create, newCanvas, nextFrames } from './canvas';
 
 /**
@@ -38,6 +38,15 @@ function inspectorSelect(page: Page, ariaLabel: string) {
 async function chooseInspectorOption(page: Page, ariaLabel: string, optionLabel: string) {
   await inspectorSelect(page, ariaLabel).click();
   await page.getByRole('option', { name: optionLabel, exact: true }).click();
+}
+
+/** WebKit's protocol box for SVG text loses its position; use the browser's actual client rect. */
+async function captionPoint(caption: Locator) {
+  await expect(caption).toBeVisible();
+  return caption.evaluate((element) => {
+    const box = element.getBoundingClientRect();
+    return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  });
 }
 
 test.describe('contextual connector toolbar', () => {
@@ -213,11 +222,12 @@ test.describe('contextual connector toolbar', () => {
     await expect(page.locator('.dc-edge-inspector')).toHaveCount(0);
     await expect(page.locator('.dc-edge-compensation-marker')).toHaveCount(0);
     const recoveryCaption = page.locator('.dc-edge-caption').filter({ hasText: 'compensates' });
-    await recoveryCaption.hover();
+    const recoveryPoint = await captionPoint(recoveryCaption);
+    await page.mouse.move(recoveryPoint.x, recoveryPoint.y);
     await expect(page.getByRole('tooltip')).toContainText('Order Service');
     await expect(page.getByRole('tooltip')).toContainText('Inventory Service');
     await expect(page.locator('.dc-edge[data-recovery-associated="true"]')).toHaveCount(2);
-    await recoveryCaption.click();
+    await page.mouse.click(recoveryPoint.x, recoveryPoint.y);
     await expect(page.getByRole('button', { name: 'Hide compensation on canvas' })).toHaveCount(0);
     const protocols = page.getByRole('group', { name: 'Compensation protocol' });
     await expect(protocols.getByRole('button')).toHaveCount(3);
@@ -279,7 +289,8 @@ test.describe('contextual connector toolbar', () => {
     await connectAndOpen(page, 0, 1);
     await page.getByRole('button', { name: '+ Add compensating action' }).click();
     await page.locator('.dc-node').nth(1).click();
-    await page.locator('.dc-edge-caption').filter({ hasText: 'compensates' }).click();
+    const recoveryPoint = await captionPoint(page.locator('.dc-edge-caption').filter({ hasText: 'compensates' }));
+    await page.mouse.click(recoveryPoint.x, recoveryPoint.y);
     await expect(page.locator('.dc-recovery-section[data-single-action="true"]')).toHaveCSS('border-top-width', '0px');
 
     const bend = page.locator('.dc-edge-bend[data-kind="run"][data-level="true"]').last();
@@ -308,7 +319,8 @@ test.describe('contextual connector toolbar', () => {
     await chooseInspectorOption(page, 'Protocol', 'HTTP');
     await page.getByRole('button', { name: '+ Add compensating action' }).click();
     await page.locator('.dc-node').nth(1).click();
-    await page.locator('.dc-edge-caption').first().click();
+    const primaryPoint = await captionPoint(page.locator('.dc-edge-caption').first());
+    await page.mouse.click(primaryPoint.x, primaryPoint.y);
     await expect(page.locator('.dc-edge-inspector')).toBeVisible();
     await page.getByRole('button', { name: '+ Add compensating action' }).click();
     await page.locator('.dc-node').nth(2).click();
