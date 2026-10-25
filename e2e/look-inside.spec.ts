@@ -124,7 +124,7 @@ test('draw inside a shape, come back out, and find it still there', async ({ pag
   await lookInside(page);
   // A shape nobody has drawn in yet opens empty — and the canvas says so.
   await expect(page.locator('.dc-node')).toHaveCount(0);
-  await expect(page.getByText(/What runs inside/)).toBeVisible();
+  await expect(page.getByText('What runs inside Service?', { exact: true })).toBeVisible();
 
   await create(page, 'Service', { x: 300, y: 240 });
   // The first shape stays where it was put. Arriving in the empty room used to ask React Flow for a
@@ -164,7 +164,7 @@ test('undo reaches into the room the change was made in', async ({ page }) => {
   // Undoing from outside goes back to where the change happened and takes it back.
   await page.keyboard.press(`${MOD}+z`);
   await expect(page.locator('.dc-node')).toHaveCount(0);
-  await expect(page.getByText(/What runs inside/)).toBeVisible();
+  await expect(page.getByText('What runs inside Service?', { exact: true })).toBeVisible();
 
   await page.keyboard.press(`${MOD}+Shift+z`);
   await expect(page.locator('.dc-node')).toHaveCount(1);
@@ -185,7 +185,7 @@ test('the canvas says where you are, and how to get back', async ({ page }) => {
   // Inside, the corner names where you are, and holds every layer back out to the whole canvas.
   await expect(page.locator('.dc-depth-here')).toHaveText('Service');
   await expect(page.locator('.dc-depth')).toContainText('Orientation');
-  await expect(page.getByText(/What runs inside/)).toBeVisible();
+  await expect(page.getByText('What runs inside Service?', { exact: true })).toBeVisible();
 
   await create(page, 'Component', { x: 320, y: 240 });
   // Once the room holds something it is a sheet with a name on it.

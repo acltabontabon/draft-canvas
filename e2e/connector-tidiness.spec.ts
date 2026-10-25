@@ -34,7 +34,7 @@ test('context Async and inspector Sync agree, including response visibility and 
   await page.keyboard.press('Shift+F10');
   await page.getByRole('menuitem', { name: 'Make asynchronous', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Interaction mode' })).toHaveText('Async');
-  await expect(page.getByRole('button', { name: 'Response line' })).toHaveCount(0);
+  await expect(page.getByRole('textbox', { name: 'Response', exact: true })).toHaveCount(0);
   await expect(page.locator('.react-flow__edge[data-id="edge"] .dc-edge-response-line')).toHaveCount(0);
   await expect(page.locator('.react-flow__edge[data-id="edge"] .dc-edge-async-marker')).toBeVisible();
   await page.keyboard.press('Shift+F10');
@@ -51,7 +51,9 @@ test('context Async and inspector Sync agree, including response visibility and 
   });
   await page.mouse.click(point.x, point.y);
   await expect(page.getByRole('button', { name: 'Interaction mode' })).toHaveText('Sync');
-  await expect(page.getByRole('button', { name: 'Response line' })).toHaveText('On');
+  await expect(page.getByRole('textbox', { name: 'Response', exact: true })).toHaveValue('Accepted');
+  await expect(page.getByRole('button', { name: 'Hide reply', exact: true })).toBeVisible();
+  await expect(page.locator('.react-flow__edge[data-id="edge"] .dc-edge-response-line')).toHaveCount(1);
   await page.getByRole('button', { name: 'Interaction mode' }).click();
   await page.getByRole('option', { name: 'Async', exact: true }).click();
   await page.keyboard.press('Shift+F10');

@@ -225,6 +225,8 @@ test.describe('element inspector popover', () => {
     await page.getByRole('button', { name: 'Add technology' }).click();
     const popup = page.locator('.dc-element-inspector');
     const description = page.getByLabel('Description');
+    // Opening the details repositions the popup; wait for a stable field before locating its grip.
+    await description.hover();
     const before = (await description.boundingBox())!;
     const popupBefore = (await popup.boundingBox())!;
     await page.mouse.move(before.x + before.width - 5, before.y + before.height - 5);
@@ -232,7 +234,7 @@ test.describe('element inspector popover', () => {
     await page.mouse.move(before.x + before.width - 5, before.y + before.height + 55, { steps: 8 });
     expect((await popup.boundingBox())!.x).toBeCloseTo(popupBefore.x, 0);
     await page.mouse.up();
-    expect((await description.boundingBox())!.height).toBeGreaterThan(before.height + 30);
+    await expect.poll(async () => (await description.boundingBox())!.height).toBeGreaterThan(before.height + 30);
   });
 
   test('selecting two elements still shows the shared bottom bar, not the popover', async ({ page }) => {

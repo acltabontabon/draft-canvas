@@ -95,7 +95,7 @@ async function connect(page: Page, fromIndex: number, toIndex: number) {
  */
 async function addToFlow(page: Page, edgeIndex: number, existingFlowTitle?: string, newTitle?: string) {
   await clickEdgeBetween(page, edgeIndex);
-  const chip = page.locator('[title="Flow membership"]');
+  const chip = page.locator('.dc-edge-inspector [data-flow-state]');
   await expect(chip).toBeVisible();
   const state = await chip.getAttribute('data-flow-state');
 
@@ -115,7 +115,8 @@ async function addToFlow(page: Page, edgeIndex: number, existingFlowTitle?: stri
     return;
   }
 
-  if (state === 'add' && (await chip.textContent()) === `Add to ${existingFlowTitle}`) {
+  if (state === 'add') {
+    await expect(chip).toHaveAccessibleName(`Add to ${existingFlowTitle}`);
     await chip.click();
   } else {
     await chip.click();

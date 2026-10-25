@@ -72,7 +72,7 @@ async function clickEdgeBetween(page: Page, edgeIndex: number) {
  */
 async function addToFlow(page: Page, edgeIndex: number, existingFlowTitle?: string, newTitle?: string) {
   await clickEdgeBetween(page, edgeIndex);
-  const chip = page.locator('[title="Flow membership"]');
+  const chip = page.locator('.dc-edge-inspector [data-flow-state]');
   await expect(chip).toBeVisible();
   const state = await chip.getAttribute('data-flow-state');
 
@@ -92,7 +92,8 @@ async function addToFlow(page: Page, edgeIndex: number, existingFlowTitle?: stri
     return;
   }
 
-  if (state === 'add' && (await chip.textContent()) === `Add to ${existingFlowTitle}`) {
+  if (state === 'add') {
+    await expect(chip).toHaveAccessibleName(`Add to ${existingFlowTitle}`);
     await chip.click();
   } else {
     await chip.click();
@@ -417,9 +418,10 @@ test.describe('Flows', () => {
     await page.getByRole('option', { name: 'Async', exact: true }).click();
     await expect(page.locator('.dc-edge-line')).toHaveCSS('stroke-dasharray', /6.*4/);
 
-    const condition = page.getByLabel('Condition');
+    await page.getByRole('button', { name: 'Condition', exact: true }).click();
+    const condition = page.getByRole('textbox', { name: 'Condition text' });
     await condition.fill('approved');
-    await condition.blur();
+    await condition.press('Enter');
     await expect(page.locator('.dc-edge-condition')).toContainText('[approved]');
   });
 

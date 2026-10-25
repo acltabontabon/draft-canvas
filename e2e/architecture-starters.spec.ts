@@ -79,9 +79,10 @@ test.describe('architecture starters', () => {
     // The one service-to-service call (the last connector the starter creates) carries the full
     // Service → Service editor, condition field included.
     await clickEdgeBetween(page, 7);
-    const condition = page.getByLabel('Condition');
+    await page.getByRole('button', { name: 'Condition', exact: true }).click();
+    const condition = page.getByRole('textbox', { name: 'Condition text' });
     await condition.fill('when B needs C');
-    await condition.blur();
+    await condition.press('Enter');
     const chip = page.locator('.dc-edge-condition', { hasText: 'when B needs C' });
     await expect(chip).toHaveCount(1);
 

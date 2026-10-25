@@ -546,7 +546,10 @@ def check_view(view: View, r: Report, repo: str | None, request: dict, is_top: b
         if rel.get('semantic') != 'compensates':
             key = (src, dst)
             if key in pairs:
-                r.error(f'{p} relationship {rid}', f'a second relationship {src} → {dst} (first: {pairs[key]}) — one ordinary relationship per direction; merge them')
+                r.error(
+                    f'{p} relationship {rid}',
+                    f'a second relationship {src} → {dst} (first: {pairs[key]}) — one ordinary relationship per direction; merge them',
+                )
             pairs[key] = rid
         connected.update(x for x in (src, dst) if isinstance(x, str))
         label = rel.get('label')
@@ -584,7 +587,9 @@ def check_view(view: View, r: Report, repo: str | None, request: dict, is_top: b
                 r.error(f'{p} relationship {rid}', 'a linked action needs semantic "compensates"')
         elif 'compensationVisible' in rel:
             r.error(f'{p} relationship {rid}', 'compensationVisible requires compensationFor')
-        if rel.get('semantic') != 'compensates' and any(rel.get(field) is not None for field in ('compensationName', 'compensationProtocol', 'compensationDescription')):
+        if rel.get('semantic') != 'compensates' and any(
+            rel.get(field) is not None for field in ('compensationName', 'compensationProtocol', 'compensationDescription')
+        ):
             r.error(f'{p} relationship {rid}', 'counteraction details require semantic "compensates"')
         if rel.get('compensationProtocol') not in (None, 'http', 'calls', 'grpc'):
             r.error(f'{p} relationship {rid}', 'compensationProtocol must be http, calls or grpc')
