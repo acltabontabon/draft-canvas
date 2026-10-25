@@ -545,12 +545,12 @@ export interface DraftEdge {
   /** `true` renders a dashed line for an asynchronous interaction. Absent/`false` is synchronous (solid). */
   async?: boolean;
   /**
-   * Where this connector actually starts/ends, captured from the side the
-   * user dragged from/dropped onto. Absent means "never explicitly chosen" —
-   * routing falls back to picking the nearest sides itself (`chooseSides` in
-   * `edges/routing.ts`), exactly as every edge behaved before this field
-   * existed. Once set, routing must not silently move it; only an explicit
-   * reconnect changes it.
+   * A pin: where this connector starts/ends, chosen by the person (a handle they drew from or dropped
+   * on) or by an agent. Absent means the end is automatic — it faces the other shape and follows it as
+   * shapes move (`chooseSides` in `edges/routing.ts`). Once set, routing never changes its side or
+   * point (the pin contract, `resolveEnds`); only a reconnect, **Auto attach** or **Pin ends here**
+   * changes it. Never inferred from geometry: a pin that happens to sit where an automatic end would
+   * is still a pin.
    */
   sourceAnchor?: EdgeAnchor;
   targetAnchor?: EdgeAnchor;

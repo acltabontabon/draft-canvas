@@ -3,7 +3,7 @@ import { compose } from '../../src/agent/compile';
 import { applyUpdate } from '../../src/agent/patch';
 import { measureContext } from '../../src/agent/place';
 import { checkQuality } from '../../src/agent/quality';
-import { bendsOf, drawnRoute } from '../../src/agent/route';
+import { bendsOf, drawnRoute, routeGeometry } from '../../src/agent/route';
 import { walkGraphs } from '../../src/depth/tree';
 import { viewOf } from '../../src/depth/tree';
 import { deserializeDocument } from '../../src/export/project';
@@ -53,8 +53,15 @@ describe('layout gallery', { timeout: 30_000 }, () => {
         expect(checkQuality(view.nodes, view.edges, ctx, focus).errors, `view ${path.join('/') || 'top'}`).toEqual([]);
         // Every anchor the layout chose is one the router draws as given — never one it overrides
         // because the line would cut back through a shape (see `anchorsHold`).
+        // Pins this edit didn't choose — ones a person moved shapes away from — are kept as given and
+        // drawn the long way round; only the layout's own choices are held to this.
         const byId = new Map(view.nodes.map((n) => [n.id, n]));
-        for (const edge of view.edges) expect(anchorsHold(edge, byId), `anchors of ${edge.id}`).toBe(true);
+        const earlier = new Map((before?.edges ?? []).map((e) => [e.id, e]));
+        for (const edge of view.edges) {
+          const was = earlier.get(edge.id);
+          if (path.length === 0 && was && JSON.stringify([was.sourceAnchor, was.targetAnchor]) === JSON.stringify([edge.sourceAnchor, edge.targetAnchor])) continue;
+          expect(anchorsHold(edge, byId), `anchors of ${edge.id}`).toBe(true);
+        }
         void graph;
       });
       // The same request lays out the same way, to the pixel.
@@ -172,9 +179,11 @@ describe('layout gallery', { timeout: 30_000 }, () => {
     for (const id of ['bureau', 'fraud', 'core']) {
       expect(at(id).x, id).toBeGreaterThanOrEqual(batch.x + batch.width);
       expect(at(id).parentId, id).toBeUndefined();
+      // As drawn: its ends may be automatic now, attaching where the layout put them.
       const edge = doc.edges.find((e) => e.target === id)!;
-      expect(edge.sourceAnchor?.side, id).toBe('right');
-      expect(edge.targetAnchor?.side, id).toBe('left');
+      const sides = routeGeometry(edge, doc.nodes, doc.edges)!;
+      expect(sides.from, id).toBe('right');
+      expect(sides.to, id).toBe('left');
     }
     expect(at('fraud').y + at('fraud').height / 2).toBeCloseTo(worker.y + worker.height / 2, -1);
     expect(at('mail').y).toBeGreaterThanOrEqual(at('notify').y + at('notify').height);

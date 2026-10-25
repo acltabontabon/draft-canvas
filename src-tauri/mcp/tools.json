@@ -1120,23 +1120,13 @@
         },
         "route": {
           "type": "object",
-          "description": "from/to: sides. via: [x,y] bends in order; stepped adds right angles; [] drops them. null on update: automatic.",
+          "description": "Ends follow their shapes unless pinned: a side pins its middle, {side, offset 0-1} pins exactly, \"auto\" unpins; pins are kept. via: [x,y] bends in order; [] drops them. null on update: automatic, no bends.",
           "properties": {
             "from": {
-              "enum": [
-                "top",
-                "right",
-                "bottom",
-                "left"
-              ]
+              "$ref": "#/$defs/routeEnd"
             },
             "to": {
-              "enum": [
-                "top",
-                "right",
-                "bottom",
-                "left"
-              ]
+              "$ref": "#/$defs/routeEnd"
             },
             "via": {
               "type": "array",
@@ -1152,6 +1142,39 @@
             }
           },
           "additionalProperties": false
+        },
+        "routeEnd": {
+          "oneOf": [
+            {
+              "enum": [
+                "top",
+                "right",
+                "bottom",
+                "left",
+                "auto"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "side": {
+                  "enum": [
+                    "top",
+                    "right",
+                    "bottom",
+                    "left"
+                  ]
+                },
+                "offset": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "side"
+              ],
+              "additionalProperties": false
+            }
+          ]
         },
         "steps": {
           "type": "array",
@@ -3235,23 +3258,13 @@
         },
         "route": {
           "type": "object",
-          "description": "from/to: sides. via: [x,y] bends in order; stepped adds right angles; [] drops them. null on update: automatic.",
+          "description": "Ends follow their shapes unless pinned: a side pins its middle, {side, offset 0-1} pins exactly, \"auto\" unpins; pins are kept. via: [x,y] bends in order; [] drops them. null on update: automatic, no bends.",
           "properties": {
             "from": {
-              "enum": [
-                "top",
-                "right",
-                "bottom",
-                "left"
-              ]
+              "$ref": "#/$defs/routeEnd"
             },
             "to": {
-              "enum": [
-                "top",
-                "right",
-                "bottom",
-                "left"
-              ]
+              "$ref": "#/$defs/routeEnd"
             },
             "via": {
               "type": "array",
@@ -3267,6 +3280,39 @@
             }
           },
           "additionalProperties": false
+        },
+        "routeEnd": {
+          "oneOf": [
+            {
+              "enum": [
+                "top",
+                "right",
+                "bottom",
+                "left",
+                "auto"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "side": {
+                  "enum": [
+                    "top",
+                    "right",
+                    "bottom",
+                    "left"
+                  ]
+                },
+                "offset": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "side"
+              ],
+              "additionalProperties": false
+            }
+          ]
         },
         "steps": {
           "type": "array",

@@ -8,10 +8,9 @@ import type { useInternalNode } from '@xyflow/react';
 import { anchorBandOf } from '../document/queueGeometry';
 import type { DraftEdge, DraftNode, DraftNodeType, Side } from '../document/types';
 import { visibleEdges } from '../document/compensation';
-import { routingPlan } from '../edges/bundles';
+import { connectorRouteInputs } from '../edges/connectorRoutes';
+import { edgeRoutes } from '../edges/edgeRoutes';
 import { labelGroupPlan } from '../edges/labelGroups';
-import { obstaclesForEdge } from '../edges/obstacles';
-import { edgeLabelSize } from '../edges/labelLayout';
 import { labelChipSide, labelLaneOffset, laneIndex, responseAwayFor, routeBetween, type Rect } from '../edges/routing';
 import { clamp } from '../lib/math';
 
@@ -55,14 +54,16 @@ export function edgeLabelPoint(
 ): { x: number; y: number; side: Side } {
   const edges = visibleEdges(document.edges);
   const lane = laneIndex(edges).get(edge.id)?.offset ?? 0;
-  const route = routeBetween(sourceRect, targetRect, edge.routing, {
-    anchors: { source: edge.sourceAnchor, target: edge.targetAnchor },
-    waypoints: edge.waypoints,
-    lane,
-    label: edge.label ? { ...edgeLabelSize(edge.label), away: responseAwayFor(edge.hasResponse, lane) } : undefined,
-    obstacles: interactionActive ? undefined : obstaclesForEdge(document.nodes, edge.source, edge.target),
-    spine: routingPlan(document.nodes, edges).spineFor(edge.id),
+  // The live rects the overlay measures against; the rest from the document, as every renderer reads it.
+  const inputs = connectorRouteInputs(edge, { nodes: document.nodes, edges }, 'canvas', undefined, {
+    source: sourceRect,
+    target: targetRect,
+    ...(interactionActive ? { obstacles: [] } : {}),
   });
+  if (inputs && interactionActive) inputs.mode = 'gesture';
+  const route = inputs
+    ? edgeRoutes(inputs, 'transient').request
+    : routeBetween(sourceRect, targetRect, edge.routing, { anchors: { source: edge.sourceAnchor, target: edge.targetAnchor }, waypoints: edge.waypoints, lane });
   // A connector sharing one label with others (`edges/labelGroups.ts`) is pointed at where that one
   // label is drawn, not at the spot its own would have taken.
   const shared = interactionActive ? undefined : labelGroupPlan(document.nodes, edges).groupFor(edge.id);

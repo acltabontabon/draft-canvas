@@ -73,6 +73,9 @@ import {
   setEdgeWaypoints as setEdgeWaypointsOp,
   updateEdge,
   updateEdges,
+  autoAttachEnds as autoAttachEndsOp,
+  pinEnds as pinEndsOp,
+  type EdgeEnd,
   updateEdgeAttachment as updateEdgeAttachmentOp,
   updateNode,
   type AlignEdge,
@@ -139,6 +142,7 @@ import type {
   DraftMetadata,
   DraftNode,
   DraftPoint,
+  EdgeAnchor,
   ConnectorKind,
   DatabaseKind,
   DraftSettings,
@@ -154,7 +158,8 @@ import type {
 } from '../document/types';
 import { ACTOR_KINDS, C4_TEXT_TYPES } from '../document/types';
 import { routingPlan } from '../edges/bundles';
-import { anchorPoint, rectOf, trunkCoordinate } from '../edges/routing';
+import { anchorOnSide, anchorPoint, rectOf, trunkCoordinate } from '../edges/routing';
+import { connectorRoutes } from '../edges/connectorRoutes';
 import { recoveryBranchAnchor } from '../edges/compensationMarker';
 import { centerOf, clamp } from '../lib/math';
 import {
@@ -506,6 +511,11 @@ export interface EditorStore {
   /** Hands every manually-routed connector back to Smart Routing, in one undo
    *  step. Never moves a node, and never touches an anchor. */
   tidyConnections: () => void;
+  /** Lets connectors' pinned ends attach automatically again — the start, the end or both — in one
+   *  undo step (see the pin contract in `edges/routing.ts`). */
+  autoAttachEnds: (ids: readonly string[], end: EdgeEnd) => void;
+  /** Pins connectors' automatic ends exactly where they are drawn now, in one undo step. */
+  pinEnds: (ids: readonly string[], end: EdgeEnd) => void;
   /**
    * Lays the room on screen out again with the layout engine the AI agent's `{op:"arrange"}` uses
    * — same request, same reading direction — as one undo step labelled "Arrange". Every id, note,
@@ -2156,6 +2166,32 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const ids = new Set(manual.map((edge) => edge.id));
     // One pass over the edges, not one `updateEdge` (and one new edges array) per manual connector.
     state.apply('Tidy connectors', (doc) => updateEdges(doc, ids, { routeMode: undefined, waypoints: undefined }));
+  },
+
+  autoAttachEnds(ids, end) {
+    get().apply(end === 'both' ? 'Auto attach' : end === 'source' ? 'Auto attach start' : 'Auto attach end', (doc) =>
+      autoAttachEndsOp(doc, new Set(ids), end),
+    );
+  },
+
+  pinEnds(ids, end) {
+    get().apply('Pin ends', (doc) => {
+      const byId = new Map(doc.nodes.map((node) => [node.id, node]));
+      const pins = new Map<string, { source?: EdgeAnchor; target?: EdgeAnchor }>();
+      for (const edge of doc.edges) {
+        if (!ids.includes(edge.id)) continue;
+        const source = byId.get(edge.source);
+        const target = byId.get(edge.target);
+        // Where the line is drawn now is where it stays: the end's side and its exact point on it.
+        const drawn = source && target ? connectorRoutes(edge, doc, 'transient', byId)?.request : undefined;
+        if (!source || !target || !drawn) continue;
+        const pin: { source?: EdgeAnchor; target?: EdgeAnchor } = {};
+        if (end !== 'target' && !edge.sourceAnchor) pin.source = anchorOnSide(rectOf(source), drawn.source.side, drawn.source);
+        if (end !== 'source' && !edge.targetAnchor) pin.target = anchorOnSide(rectOf(target), drawn.target.side, drawn.target);
+        if (pin.source || pin.target) pins.set(edge.id, pin);
+      }
+      return pinEndsOp(doc, pins);
+    });
   },
 
   async arrangeSelection() {

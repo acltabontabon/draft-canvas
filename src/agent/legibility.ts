@@ -9,6 +9,7 @@
  * Pure geometry over the connectors exactly as the canvas draws them (`drawnRoute`).
  */
 
+import { endpointPlan } from '../edges/endpoints';
 import type { DraftEdge, DraftNode } from '../document/types';
 import { drawnRoute, type Box, type Drawn } from './route';
 
@@ -33,6 +34,10 @@ export interface Legibility {
   length: number;
   /** Shapes' area over the diagram's bounding area (0–1): low means mostly empty space. */
   fill: number;
+  /** Connectors no clear line could be drawn for — through a shape, pinned the wrong way, or walled in. */
+  unresolved: string[];
+  /** Sides of shapes too short to give every automatic end its own point (`shape:side`). */
+  crowded: string[];
 }
 
 /** Past this, a note no longer reads as belonging to its subject — and `read.ts`'s `nearestElement`
@@ -192,7 +197,9 @@ export function legibilityOf(nodes: readonly DraftNode[], edges: readonly DraftE
   }
   for (const n of solid) area += n.width * n.height;
   const bounds = Number.isFinite(minX) ? (maxX - minX) * (maxY - minY) : 0;
-  return { crossings, crossed: [...pairs.values()], detours, throughBoundaries, crossedBoundaries: [...crossedBoundaries], farNotes, bundled, length: Math.round(length), fill: bounds > 0 ? Math.round((area / bounds) * 1000) / 1000 : 1 };
+  const unresolved = drawn.filter((d) => d.route.status).map((d) => d.edge.id);
+  const crowded = [...endpointPlan(nodes, edges, 'transient').crowded];
+  return { crossings, crossed: [...pairs.values()], detours, throughBoundaries, crossedBoundaries: [...crossedBoundaries], farNotes, bundled, length: Math.round(length), fill: bounds > 0 ? Math.round((area / bounds) * 1000) / 1000 : 1, unresolved, crowded };
 }
 
 /**

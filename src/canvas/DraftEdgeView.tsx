@@ -20,7 +20,8 @@ import {
   laneIndex,
   rectOf,
   responseAwayFor,
-  snappedAnchorForDrop,
+  HANDLE_DROP_RADIUS,
+  handleNear,
   strokeSeed,
   type Rect,
   type Side,
@@ -61,7 +62,9 @@ import { pointInBox } from '../lib/math';
 import { isImeKeyEvent } from '../lib/isEditableTarget';
 import { EdgeBendHandles, type BendPreview } from './EdgeBendHandles';
 import { translateWaypoints } from '../edges/waypoints';
-import { computeEdgeRoutes, edgeRoutes, type EdgeRouteInputs, type EdgeRoutes } from '../edges/edgeRoutes';
+import { computeEdgeRoutes, edgeRoutes, searchAllowed, type EdgeRouteInputs, type EdgeRoutes } from '../edges/edgeRoutes';
+import { endpointPlan } from '../edges/endpoints';
+import { separationPlan } from '../edges/separation';
 
 const NO_OBSTACLES: readonly Rect[] = [];
 
@@ -250,6 +253,14 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // the plan, but every bundled connector's geometry has genuinely changed by
   // then anyway.
   const spine = useEditorStore((state) => routingPlan(state.document.nodes, visibleEdgesForPlayback(state.document, state.flowPlayback)).spineFor(id));
+  // Whether this connector may still search for a clear line: a boolean, from a plan memoized on the
+  // document's arrays (`searchAllowed`).
+  const searchable = useEditorStore((state) => searchAllowed(id, { nodes: state.document.nodes, edges: visibleEdgesForPlayback(state.document, state.flowPlayback) }, 'canvas'));
+  // Where this connector's automatic ends sit among others on the same sides: an interned object
+  // that keeps its identity while it doesn't change (`endpointPlan`).
+  const spread = useEditorStore((state) => endpointPlan(state.document.nodes, visibleEdgesForPlayback(state.document, state.flowPlayback)).spreadFor(id));
+  // This connector's runs moved onto their own tracks, clear of others' (`separationPlan`); interned.
+  const tracks = useEditorStore((state) => separationPlan(state.document.nodes, visibleEdgesForPlayback(state.document, state.flowPlayback)).tracksFor(id));
   // The live pointer position while this edge's own endpoint is being dragged — local state, not the
   // shared store, so only this one edge re-renders per pointer-move frame. Exactly the same "stream to
   // the rendered element for smoothness, commit to the document only at the end" pattern node dragging
@@ -497,6 +508,9 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
     laneOffset,
     spine,
     routeObstacles,
+    searchable,
+    spread,
+    tracks,
   ] as const;
   const known = LAST_ROUTES.get(id) ?? null;
   const unmoved = known !== null && known.inputs.every((input, index) => input === routeInputs[index]);
@@ -521,6 +535,13 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
     spine: dragOverride ? undefined : spine,
     obstacles: routeObstacles,
     waypoints,
+    // A gesture's frames are drawn the quick way; the drop checks and, if need be, searches.
+    ...(transient ? { mode: 'gesture' as const } : {}),
+    ...(searchable ? {} : { fallback: false }),
+    // A dragged end is on its way to another shape: its planned point means nothing there.
+    ...(spread ? { spread: dragOverride ? { [dragOverride.endpoint === 'source' ? 'target' : 'source']: spread[dragOverride.endpoint === 'source' ? 'target' : 'source'] } : spread } : {}),
+    // Tracks were planned for the shapes at rest; a gesture's frames go without them.
+    ...(tracks && !transient ? { tracks } : {}),
   };
   const routes = unmoved ? known.routes : transient ? computeEdgeRoutes(routeRequest) : edgeRoutes(routeRequest);
   if (!unmoved) LAST_ROUTES.set(id, { inputs: routeInputs, routes });
@@ -1006,6 +1027,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
               endpoint="source"
               x={route.source.x}
               y={route.source.y}
+              pinned={edge.sourceAnchor !== undefined}
               oppositeNodeId={edge.target}
               onDrag={setDragOverride}
             />
@@ -1014,6 +1036,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
               endpoint="target"
               x={route.target.x}
               y={route.target.y}
+              pinned={edge.targetAnchor !== undefined}
               oppositeNodeId={edge.source}
               onDrag={setDragOverride}
             />
@@ -1250,6 +1273,7 @@ function EdgeEndpointHandle({
   endpoint,
   x,
   y,
+  pinned,
   oppositeNodeId,
   onDrag,
 }: {
@@ -1257,6 +1281,8 @@ function EdgeEndpointHandle({
   endpoint: 'source' | 'target';
   x: number;
   y: number;
+  /** Pinned ends show filled, automatic ones as a ring — see the pin contract in `edges/routing.ts`. */
+  pinned: boolean;
   /** The other end's node — never a drop target, since `reconnectEdge` refuses a self-loop. */
   oppositeNodeId: string;
   onDrag: (override: DragOverride | null) => void;
@@ -1284,6 +1310,15 @@ function EdgeEndpointHandle({
   // reconnect drag — same result, no allocation, no O(n log n) sort.
   // A shape under the pointer wins; with none, the innermost boundary around it takes the end — a
   // connector can be drawn to a boundary, and re-pointing one there used to snap back silently.
+  /** `HANDLE_DROP_RADIUS` screen pixels around a pointer, in flow units at the current zoom. */
+  const dropRadius = useCallback(
+    (clientX: number, clientY: number) => {
+      const at = screenToFlowPosition({ x: clientX, y: clientY });
+      const off = screenToFlowPosition({ x: clientX + HANDLE_DROP_RADIUS, y: clientY });
+      return Math.abs(off.x - at.x);
+    },
+    [screenToFlowPosition],
+  );
   const findDropNode = useCallback(
     (point: { x: number; y: number }) => {
       let best: DraftNode | undefined;
@@ -1382,14 +1417,13 @@ function EdgeEndpointHandle({
       }
       // Live "release here" preview — the hand-rolled counterpart to React
       // Flow's own `.connectingto.valid`, which only tracks its native
-      // connection-creation drag, not this one. Snapped, and `undefined`
-      // exactly when the eventual drop would leave the anchor dynamic (see
-      // `snappedAnchorForDrop`), so the highlight never promises a specific
-      // point the commit wouldn't actually capture.
-      const anchor = node ? snappedAnchorForDrop(rectOf(node), point) : undefined;
+      // connection-creation drag, not this one. Only over a handle, exactly
+      // where the drop would pin the end (`handleNear`); anywhere else on the
+      // shape the end attaches automatically, and no handle is promised.
+      const anchor = node ? handleNear(rectOf(node), point, dropRadius(event.clientX, event.clientY)) : undefined;
       useUiStore.getState().setArmedAnchor(anchor && node ? { nodeId: node.id, ...anchor } : null);
     },
-    [edgeId, endpoint, findDropNode, onDrag, screenToFlowPosition],
+    [dropRadius, edgeId, endpoint, findDropNode, onDrag, screenToFlowPosition],
   );
 
   const onPointerUp = useCallback(
@@ -1404,10 +1438,11 @@ function EdgeEndpointHandle({
       const point = screenToFlowPosition({ x: event.clientX, y: event.clientY });
       const node = findDropNode(point);
       if (!node) return; // Empty canvas: leave the connection exactly as it was.
-      const anchor = snappedAnchorForDrop(rectOf(node), point);
+      // On a handle: pinned there. Anywhere else on the shape: automatic.
+      const anchor = handleNear(rectOf(node), point, dropRadius(event.clientX, event.clientY));
       useEditorStore.getState().reconnectEdge(edgeId, endpoint, node.id, anchor?.side, anchor?.offset);
     },
-    [edgeId, endDrag, endpoint, findDropNode, screenToFlowPosition],
+    [dropRadius, edgeId, endDrag, endpoint, findDropNode, screenToFlowPosition],
   );
 
   // An interrupted gesture (e.g. a touch/stylus drag cancelled by the OS) fires `pointercancel`
@@ -1426,6 +1461,8 @@ function EdgeEndpointHandle({
   return (
     <div
       className="dc-edge-endpoint"
+      data-pinned={pinned ? 'true' : undefined}
+      title={pinned ? 'Pinned here. Drag to move it; right-click to auto attach.' : 'Attaches automatically. Drop on a handle to pin it.'}
       style={{ transform: `translate(-50%, -50%) translate(${x}px, ${y}px)` }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}

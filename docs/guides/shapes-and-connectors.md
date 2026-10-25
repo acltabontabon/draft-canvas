@@ -40,6 +40,26 @@ Queue and Data Store artwork also grows when you drag a corner resize handle.
 - Click a connector to change its relationship
   ([rules](../reference/semantics.md#the-capability-matrix)). Drag its end to reconnect it.
 
+## Pinned and automatic ends
+
+An automatic end faces the shape it joins and turns to follow it as shapes move. A pinned end keeps its
+side and point.
+
+| Draw it | The end is |
+| --- | --- |
+| Out of a shape's middle dot, on the side facing the other shape | Automatic |
+| Out of any other dot | Pinned there |
+| Dropped on a shape | Automatic |
+| Dropped on a dot | Pinned there |
+
+A selected connector shows a pinned end filled and an automatic end as a ring. Right-click a connector
+→ **Auto attach start**, **Auto attach end**, **Auto attach both ends** or **Pin ends here**.
+**Auto attach all connectors** (`⌘K`) frees every end in the view, including the pins of diagrams
+drawn before automatic ends existed.
+
+Connectors route around shapes. When no clear line exists, such as from pins facing away from each other, the line is
+drawn anyway and its toolbar says so, with **Auto attach** to fix it.
+
 ## Bend a connector by hand
 
 Select a connector, then:

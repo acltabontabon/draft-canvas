@@ -22,12 +22,7 @@ import {
   labelSideAwayFromResponse,
   rectOf,
   responseAwayFor,
-  responseLaneFor,
   responseLabelAnchor,
-  responseWaypointsFor,
-  responseSpineFor,
-  routeBetween,
-  routeEdge,
   strokeSeed,
   type EdgeSpine,
   type Rect,
@@ -38,6 +33,9 @@ import { RESPONSE_DASH, dashForEdge, markerVariantForEdge, resolveEdgeColor } fr
 import { badgeCrowds, badgePoint } from './badgePoint';
 import { attachmentRowBelowsSourceOrTarget, captionSideOf, describeAttachmentChips } from './attachmentChips';
 import { bridgePath } from './bridge';
+import { computeEdgeRoutes, type EdgeRoutes } from './edgeRoutes';
+import type { EdgeSpread } from './endpoints';
+import type { EdgeTracks } from './separation';
 import type { Crossing } from './crossings';
 import { relationshipCaptionLabel } from '../document/edgeSemantics';
 import { capabilityFor, categoryOf } from '../document/connectorSemantics';
@@ -82,6 +80,16 @@ export interface EdgeDescribeContext {
    * openPoints`). Absent draws no marker — every caller that builds a bare context is unchanged.
    */
   openPoints?: readonly OpenPoint[];
+  /**
+   * The connector's routes, when the caller already has them — the exporter reads them from the
+   * same accessor the canvas does (`connectorRoutes`). Omitted: routed here from the fields above,
+   * with the same inputs and so the same answer.
+   */
+  routes?: EdgeRoutes;
+  /** Where `endpoints.ts` spread this connector's automatic ends, for routing it here. */
+  spread?: EdgeSpread;
+  /** Its runs moved onto their own tracks by `separation.ts`, for routing it here. */
+  tracks?: EdgeTracks;
 }
 
 const BADGE_RADIUS = 8;
@@ -166,6 +174,28 @@ export interface DescribedEdge {
   color: string;
 }
 
+/** A connector's routes from a describe context: the inputs `connectorRouteInputs` builds, given here. */
+function routesOf(edge: DraftEdge, nodes: Map<string, DraftNode>, ctx: EdgeDescribeContext, obstacles: readonly Rect[]): EdgeRoutes | null {
+  const source = nodes.get(edge.source);
+  const target = nodes.get(edge.target);
+  if (!source || !target) return null;
+  return computeEdgeRoutes({
+    source: rectOf(source),
+    target: rectOf(target),
+    routing: edge.routing,
+    label: edge.label,
+    sourceAnchor: edge.sourceAnchor,
+    targetAnchor: edge.targetAnchor,
+    hasResponse: edge.hasResponse,
+    lane: ctx.lane ?? 0,
+    spine: ctx.spine,
+    obstacles,
+    waypoints: edge.waypoints,
+    ...(ctx.spread ? { spread: ctx.spread } : {}),
+    ...(ctx.tracks ? { tracks: ctx.tracks } : {}),
+  });
+}
+
 export function describeEdge(
   edge: DraftEdge,
   nodes: Map<string, DraftNode>,
@@ -181,8 +211,9 @@ export function describeEdge(
     [...nodes.values()]
       .filter((node) => node.id !== edge.source && node.id !== edge.target && node.type !== 'group')
       .map(rectOf);
-  const route = routeEdge(edge, nodes, { lane: ctx.lane, obstacles, spine: ctx.spine });
-  if (!route) return null;
+  const routes = ctx.routes ?? routesOf(edge, nodes, ctx, obstacles);
+  if (!routes) return null;
+  const route = routes.request;
 
   // A label chip is far taller than the line's own lane nudge — extra
   // separation on top of it is what keeps parallel labels from stacking.
@@ -262,25 +293,17 @@ export function describeEdge(
   // What already sits at the label point, for the open-point marker to take its place beside.
   let markerOccupied: OccupiedRect | undefined;
 
-  // The reply half of a request/response connector — reuses `routeBetween` a second time with
+  // The reply half of a request/response connector — routed by `computeEdgeRoutes` with
   // source/target (and their anchors) swapped, so the path naturally runs target → source, plus a
-  // small addition to this edge's own lane slot, exactly mirroring `DraftEdgeView.tsx`'s live
-  // rendering. `responseRoute.target` lands on the *original source* node — see
-  // `responseLaneFor`'s own doc comment in `edges/routing.ts` — which is what makes its
-  // `markerEnd` correctly point back at A.
+  // small addition to this edge's own lane slot: the same route `DraftEdgeView.tsx` draws.
+  // `responseRoute.target` lands on the *original source* node — see `responseLaneFor`'s own doc
+  // comment in `edges/routing.ts` — which is what makes its `markerEnd` correctly point back at A.
   let responseLine: Shape[] | undefined;
   if (edge.hasResponse) {
     const sourceNode = nodes.get(edge.source);
     const targetNode = nodes.get(edge.target);
-    if (sourceNode && targetNode) {
-      const responseLane = responseLaneFor(ctx.lane ?? 0);
-      const responseRoute = routeBetween(rectOf(targetNode), rectOf(sourceNode), edge.routing, {
-        anchors: { source: edge.targetAnchor, target: edge.sourceAnchor },
-        waypoints: responseWaypointsFor(edge.waypoints, ctx.lane ?? 0),
-        lane: responseLane,
-        obstacles,
-        spine: responseSpineFor(ctx.spine),
-      });
+    const responseRoute = routes.response;
+    if (sourceNode && targetNode && responseRoute) {
       // Roughened exactly like the primary line — this used to draw `responseRoute.d` straight,
       // which meant the reply line stayed perfectly crisp in every export while the live canvas
       // (`DraftEdgeView.tsx`) already wobbled it; fixed to match, using the same shared seed

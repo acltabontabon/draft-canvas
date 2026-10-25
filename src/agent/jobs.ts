@@ -14,6 +14,7 @@ import { silent, type Report } from './progress';
 import { smallestArrange, type QualityReport } from './quality';
 import { withDeadline } from './route';
 import { legibilityOf, type Legibility } from './legibility';
+import { routingAdvice } from './advice';
 
 export type Job =
   | { kind: 'compose'; raw: unknown; diagramId: string }
@@ -60,16 +61,18 @@ export function runJob(job: Job, deadline: number, report: Report = silent): Job
     if (view && result.file !== job.file) report('routing', { nodes: view.nodes, edges: view.edges, flows: view.flows });
     const issues = result.quality.errors;
     const suggestedOp = view && issues.length ? smallestArrange(view, issues) : undefined;
+    const legibility = view && result.file !== job.file ? legibilityOf(view.nodes, view.edges) : undefined;
     return {
       kind: 'update',
       file: result.file,
       unchanged: result.file === job.file,
       counts: result.counts,
-      advisories: result.advisories,
+      // How the edit's own connectors could read better comes first: it is the advice to act on now.
+      advisories: [...(view && legibility ? routingAdvice(view, legibility, result.touched) : []), ...result.advisories],
       problems: issues.map((issue) => issue.message),
       ...(suggestedOp ? { suggestedOp } : {}),
       quality: result.quality,
-      ...(view && result.file !== job.file ? { legibility: legibilityOf(view.nodes, view.edges) } : {}),
+      ...(legibility ? { legibility } : {}),
     };
   });
 }

@@ -92,11 +92,15 @@ describe('a persisted anchor never draws a connector through the shapes it joins
     expect(through).toEqual([]);
   });
 
-  it('keeps the anchors as drawn when the shapes go back where they were', () => {
-    // Drawn right-to-left, the target dragged to the other side on the same row and then back.
+  it('keeps a pinned side whichever way the shapes move, and goes round them', () => {
+    // Drawn left-to-right, then the target dragged to the other side on the same row and back. A pin
+    // is the person's choice: the line goes the long way round rather than swapping sides.
     const anchors = { source: { side: 'right' as const, offset: 0.5 }, target: { side: 'left' as const, offset: 0.5 } };
-    const swapped = routeBetween({ ...a }, { x: 0, y: 0, width: 176, height: 68 }, 'smoothstep', { anchors });
-    expect(swapped.source.side).toBe('left');
+    const b = { x: 0, y: 0, width: 176, height: 68 };
+    const swapped = routeBetween({ ...a }, b, 'smoothstep', { anchors });
+    expect([swapped.source.side, swapped.target.side]).toEqual(['right', 'left']);
+    expect(swapped.status).toBe('clear');
+    expect(runsThroughEnds(swapped.d, a, b)).toBe(false);
     const restored = routeBetween({ ...a }, { x: 800, y: 0, width: 176, height: 68 }, 'smoothstep', { anchors });
     expect([restored.source.side, restored.target.side]).toEqual(['right', 'left']);
   });
@@ -962,25 +966,32 @@ describe('shapes only roughly in line get one straight connector, not a kink', (
     expect(turns(routeBetween(source, target, 'smoothstep').d)).toBeGreaterThan(0);
   });
 
-  it('straightens a connector drawn from the shapes\' own middle handles', () => {
-    // Dragging a connector out records an anchor even when it came from the middle handle, at the
-    // very point the router would have picked itself. That is not a placement to defend.
+  it('straightens by moving the automatic end onto a pinned one', () => {
+    // Drawn out of the source's own middle handle (which stays automatic) onto the target's middle
+    // handle (a pin): the start slides along its side to meet the pin, and the pin stays put.
     const { source, target } = stacked(17);
-    const d = routeBetween(source, target, 'smoothstep', {
-      anchors: { source: { side: 'bottom', offset: 0.5 }, target: { side: 'top', offset: 0.5 } },
-    }).d;
-    expect(turns(d)).toBe(0);
+    const route = routeBetween(source, target, 'smoothstep', { anchors: { target: { side: 'top', offset: 0.5 } } });
+    expect(turns(route.d)).toBe(0);
+    expect(route.target).toEqual({ ...anchorPoint(target, 'top', 0.5), side: 'top' });
+  });
+
+  it('never moves a pinned end to straighten a line, middle handle or not', () => {
+    const { source, target } = stacked(17);
+    const anchors = { source: { side: 'bottom' as const, offset: 0.5 }, target: { side: 'top' as const, offset: 0.5 } };
+    const route = routeBetween(source, target, 'smoothstep', { anchors });
+    expect(route.source).toEqual({ ...anchorPoint(source, 'bottom', 0.5), side: 'bottom' });
+    expect(route.target).toEqual({ ...anchorPoint(target, 'top', 0.5), side: 'top' });
+    expect(turns(route.d)).toBeGreaterThan(0);
   });
 
   it('never overrules an off-centre anchor someone placed by hand', () => {
     const source = { x: 400, y: 0, width: 170, height: 76 };
-    // Narrow enough that a quarter-way anchor still lands within a few units of the source's
-    // centre — so the only reason not to straighten is that someone chose that anchor.
     const target = { x: 470, y: 400, width: 40, height: 76 };
-    const d = routeBetween(source, target, 'smoothstep', {
+    const route = routeBetween(source, target, 'smoothstep', {
       anchors: { target: { side: 'top', offset: 0.25 } },
-    }).d;
-    expect(turns(d)).toBeGreaterThan(0);
+    });
+    // The pin is drawn exactly where it was placed; only the automatic start may move to meet it.
+    expect(route.target).toEqual({ ...anchorPoint(target, 'top', 0.25), side: 'top' });
   });
 
   it('leaves the endpoint on the shape rather than dragging it out to a corner', () => {

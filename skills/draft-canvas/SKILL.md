@@ -2,7 +2,7 @@
 name: draft-canvas
 description: Draws a codebase's architecture as a detailed, editable Draft Canvas diagram — C4 views with look-inside drill-downs, presentation flows of the real request path, notes, code snippets and source evidence — through the Draft Canvas desktop app's MCP tools. Use when someone asks to diagram, draw, map, visualize or explain the architecture of a repository, service or system in Draft Canvas, to turn a codebase into a diagram, or to refresh such a diagram after the code changed.
 metadata:
-  version: "15"
+  version: "16"
   contract: "3"
   requires: Draft Canvas Desktop with agent access on (MCP server draft-canvas)
 ---
@@ -112,8 +112,9 @@ symbols that don't exist.
 ## 5. Look and polish (at most two rounds)
 
 - **`advisories`** say what to change, often with the exact `update_diagram` ops.
-- **`legibility`**: crossings (`crossed` names which relationships cross) and connectors that detour
-  or cut through a boundary, for the top view and each inside view (`legibility.views`). A crossing
+- **`legibility`**: crossings (`crossed` names which relationships cross), connectors that detour
+  or cut through a boundary, and any no clear line could be drawn for (`unresolved`), for the top view
+  and each inside view (`legibility.views`). A crossing
   usually means a store every service writes to (split it per owner), an external grouped away from its
   caller, or a boundary that isn't one unit. A report-back loop (workers → status queue → dispatcher)
   is a real cycle: keep it, in its own flow. Another spacing or direction, shorter captions or shapes
@@ -124,6 +125,9 @@ symbols that don't exist.
   you found; don't invent a dead-letter queue the code doesn't have.
 - **`render_diagram`** each view (`view: {inside: [ids…]}`) and judge it as a reader would: main path
   in one direction, labels on one or two lines, nothing floating.
+- Connector ends are automatic unless pinned: they face their shapes and follow them when the person
+  moves shapes, spread apart where they share a side. Don't pin a side to tidy a line; an `update`
+  receipt's advisories name a crossing, a detour or a pin that can't be drawn clear, with the op.
 - An inside view is laid out around its first flow when it is created. If one still comes out bent, or
   after you changed it, `preview_diagram` it with `{op: "arrange", primaryFlow}`, render the preview,
   and apply it only if it reads better.

@@ -25,11 +25,10 @@
  * way `crossingPlan` is, so a connector asks `groupFor(id)` on every render for nothing.
  */
 import type { DraftEdge, DraftNode } from '../document/types';
-import { routingPlan } from './bundles';
 import { LABEL_PADDING_X, LABEL_PADDING_Y, layoutEdgeLabel } from './labelLayout';
 import { distanceToPolyline, type Point } from './nearest';
 import { sameNodeGeometry, type PlanScope } from './sameGeometry';
-import { obstaclesForEdge } from './obstacles';
+import { connectorRouteInputs } from './connectorRoutes';
 import { edgeRoutes } from './edgeRoutes';
 import {
   LABEL_BEND_CLEARANCE,
@@ -37,7 +36,6 @@ import {
   flattenPath,
   labelChipSide,
   labelLaneOffset,
-  laneIndex,
   rectOf,
   responseAwayFor,
   type Rect,
@@ -209,37 +207,19 @@ function compute(nodes: readonly DraftNode[], edges: readonly DraftEdge[], scope
   if (candidates.length === 0) return found;
 
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
-  const lanes = laneIndex(edges);
-  const plan = routingPlan(nodes, edges, scope);
   const routed = new Map<string, Routed | null>();
   // Routed exactly as both renderers route it, and only when something asks.
   const route = (edge: DraftEdge): Routed | null => {
     if (routed.has(edge.id)) return routed.get(edge.id)!;
-    const source = nodeById.get(edge.source);
-    const target = nodeById.get(edge.target);
+    // From the cache the canvas and the crossing plan share (`edgeRoutes.ts`).
+    const inputs = connectorRouteInputs(edge, { nodes, edges }, scope, nodeById);
     let result: Routed | null = null;
-    if (source && target) {
-      const lane = lanes.get(edge.id)?.offset ?? 0;
+    if (inputs) {
+      const { lane } = inputs;
       // A connector with a reply keeps its label on the side away from the reply line, on both
       // renderers; routed without that, its chip was checked for room where it is never drawn.
       const away = responseAwayFor(edge.hasResponse, lane);
-      // From the cache the canvas and the crossing plan share (`edgeRoutes.ts`).
-      const drawn = edgeRoutes(
-        {
-          source: rectOf(source),
-          target: rectOf(target),
-          routing: edge.routing,
-          label: edge.label,
-          sourceAnchor: edge.sourceAnchor,
-          targetAnchor: edge.targetAnchor,
-          hasResponse: edge.hasResponse,
-          lane,
-          spine: plan.spineFor(edge.id),
-          obstacles: obstaclesForEdge(nodes, edge.source, edge.target, scope),
-          waypoints: edge.waypoints,
-        },
-        scope,
-      ).request;
+      const drawn = edgeRoutes(inputs, scope).request;
       const poly = polyOf(drawn.d);
       if (poly) {
         let chip: Rect | undefined;

@@ -10,8 +10,9 @@ import {
 } from '../document/types';
 import { anchorBandOf, type AnchorBand } from '../document/queueGeometry';
 import { centerOf, clamp } from '../lib/math';
-import { longestRunMidpoint, orthogonalThrough, polylineMidpoint, polylinePath, responseWaypoints, smoothPath } from './waypoints';
+import { longestRunMidpoint, orthogonalThrough, polylineMidpoint, polylinePath, responseWaypoints, smoothPath, stepPolyline } from './waypoints';
 import { edgeLabelSize, LABEL_PADDING_X, LABEL_PADDING_Y } from './labelLayout';
+import { MAX_POPS, orthogonalRoute, polylineClear, type RouteStatus } from './pathfinder';
 
 /**
  * Edge geometry.
@@ -69,6 +70,12 @@ function verticalSpan(rect: Rect): { start: number; length: number } {
   return rect.anchorBand
     ? { start: rect.anchorBand.top, length: rect.anchorBand.bottom - rect.anchorBand.top }
     : { start: rect.y, length: rect.height };
+}
+
+/** The stretch of a side its anchors are spread along: where it starts and how long it is, on the
+ *  axis the side runs along (a tube's or a Data Store's band for its left and right). */
+export function sideSpan(rect: Rect, side: Side): { start: number; length: number } {
+  return side === 'left' || side === 'right' ? verticalSpan(rect) : { start: rect.x, length: rect.width };
 }
 
 /**
@@ -205,6 +212,51 @@ export function snappedAnchorForDrop(rect: Rect, point: { x: number; y: number }
   return anchor ? { side: anchor.side, offset: snapOffset(anchor.offset) } : undefined;
 }
 
+/**
+ * What a connector drawn out of `handle` stores for its start. Starting from the middle handle of the
+ * side the router would pick anyway carries no intent, so the start stays automatic and follows the
+ * shapes as they move; any other handle is a pin. `targetAnchor` is the drop end's pin, if it has one.
+ */
+export function startAnchor(sourceRect: Rect, targetRect: Rect, handle: EdgeAnchor | undefined, targetAnchor?: EdgeAnchor): EdgeAnchor | undefined {
+  if (!handle) return undefined;
+  const automatic = sidesFor(sourceRect, targetRect, { target: targetAnchor }).source;
+  return handle.offset === 0.5 && handle.side === automatic ? undefined : handle;
+}
+
+/** How near a handle, in screen pixels, a drop counts as landing on it — a little over the dot's own
+ *  radius, as forgiving as React Flow's connection radius is for the handle a drag starts from. */
+export const HANDLE_DROP_RADIUS = 12;
+
+/**
+ * The handle a drop at `point` landed on, within `radius` of it — a pin there. A drop anywhere else on
+ * a shape's body attaches automatically (`undefined`): it says "this shape", not "this point".
+ */
+export function handleNear(rect: Rect, point: { x: number; y: number }, radius: number): EdgeAnchor | undefined {
+  let best: EdgeAnchor | undefined;
+  let bestDistance = radius;
+  for (const side of SIDES) {
+    for (const offset of ANCHOR_OFFSETS) {
+      const at = anchorPoint(rect, side, offset);
+      const distance = Math.hypot(at.x - point.x, at.y - point.y);
+      if (distance <= bestDistance) {
+        bestDistance = distance;
+        best = { side, offset };
+      }
+    }
+  }
+  return best;
+}
+
+/** The anchor that puts an end exactly at `point` on `side` — `anchorPoint`'s inverse, for pinning an
+ *  end where it is drawn. */
+export function anchorOnSide(rect: Rect, side: Side, point: { x: number; y: number }): EdgeAnchor {
+  if (isHorizontalSide(side)) {
+    const span = verticalSpan(rect);
+    return { side, offset: clamp(span.length ? (point.y - span.start) / span.length : 0.5, 0, 1) };
+  }
+  return { side, offset: clamp(rect.width ? (point.x - rect.x) / rect.width : 0.5, 0, 1) };
+}
+
 export interface RoutedEdge {
   d: string;
   labelX: number;
@@ -248,6 +300,14 @@ export interface RoutedEdge {
    * bend handles are drawn on, and how a straight connector's arrowhead finds its last leg.
    */
   points?: DraftPoint[];
+  /**
+   * Whether the line is clear of every shape it was routed around: `clear`, `blocked` (no clear line
+   * exists from these ends, so the quick one is drawn), `budget` (the search ran out of work first)
+   * or `unchecked` (a straight, curved or hand-bent line, or a gesture's frame).
+   */
+  status: RouteStatus;
+  /** Search work spent on this line (`pathfinder.ts`), for a budget shared across a diagram. */
+  work: number;
 }
 
 /** The direction of travel arriving at a side's own anchor — the inward-pointing counterpart to
@@ -500,7 +560,7 @@ export function resolveSides(
   targetRect: Rect,
   anchors?: RouteAnchors,
 ): { source: Side; target: Side } {
-  return sidesFor(sourceRect, targetRect, workableAnchors(sourceRect, targetRect, anchors));
+  return sidesFor(sourceRect, targetRect, anchors);
 }
 
 function sidesFor(sourceRect: Rect, targetRect: Rect, anchors?: RouteAnchors): { source: Side; target: Side } {
@@ -580,7 +640,70 @@ export interface RouteOptions {
    * the nearest bend rather than the far shape.
    */
   waypoints?: readonly DraftPoint[];
+  /**
+   * `gesture`: a frame of a drag, resize or reconnect. Its line is drawn the quick way and never
+   * checked or searched — the next frame replaces it, and the drop routes it properly.
+   */
+  mode?: 'gesture';
+  /** Whether this line may search for a clear route when the quick one is blocked — `false` once a
+   *  diagram's shared search budget is spent (see `edgeRoutes.ts`). Default `true`. */
+  fallback?: boolean;
+  /** A line to keep apart from: the request line, when routing its reply. */
+  avoid?: readonly { x: number; y: number }[];
+  /**
+   * A reply line's step out from its request, in lane slots (`responseLaneFor(lane) - lane`). Kept
+   * apart from `lane` because a pinned end takes the whole step but only a bounded share of a lane.
+   */
+  replyStep?: number;
+  /**
+   * Where `endpoints.ts` spread this connector's automatic ends among others on the same sides: a
+   * position for each end it placed, not a pin. A spread end is drawn there (plus its reply step) and
+   * never straightened here — the plan already straightened it with its neighbours in view. In a
+   * gesture, an end keeps its planned side while the shapes still face that way (`SIDE_HYSTERESIS`).
+   */
+  spread?: RouteAnchors;
+  /** Inner runs moved onto their own tracks, clear of other connectors' (`separation.ts`). */
+  tracks?: readonly Track[];
 }
+
+/**
+ * One inner run of a stepped line moved sideways onto its own track: the run from corner `run` to
+ * corner `run + 1` of the line's corners (`stepPolyline`), shifted by `delta` across its direction.
+ * The runs either side of it stretch or shrink to meet it; the ends never move.
+ */
+export interface Track {
+  run: number;
+  delta: number;
+}
+
+/** `corners` with each track's run shifted across its direction, or `null` when a track no longer
+ *  fits the line (an end run, a slanted one, or one past the end). */
+export function shiftRuns(corners: readonly { x: number; y: number }[], tracks: readonly Track[]): { x: number; y: number }[] | null {
+  const out = corners.map((p) => ({ ...p }));
+  for (const { run, delta } of tracks) {
+    // An inner run: never the first or the last, which meet the shapes.
+    if (run < 1 || run > out.length - 3) return null;
+    const a = out[run]!;
+    const b = out[run + 1]!;
+    if (Math.abs(a.y - b.y) < 0.5) {
+      a.y += delta;
+      b.y += delta;
+    } else if (Math.abs(a.x - b.x) < 0.5) {
+      a.x += delta;
+      b.x += delta;
+    } else {
+      return null;
+    }
+  }
+  return out;
+}
+
+/**
+ * How far around a connector's two shapes the shapes it is routed around are collected
+ * (`obstaclesForEdge`). A search for a clear line stays within it, so it can never pass a shape it
+ * was never told about. Wide enough for a wrapped label's full reach too, not just the stroke's corridor.
+ */
+export const OBSTACLE_REACH = 256;
 
 /**
  * The reply line's bends for a bent request/response connector: reversed, and moved over by the
@@ -840,7 +963,7 @@ export function detourAround(
  * before each turn) matches `getSmoothStepPath`'s own, so a detoured
  * connector reads as the same routing style, not a different one.
  */
-function roundedStepPath(points: readonly { x: number; y: number }[], radius: number): string {
+export function roundedStepPath(points: readonly { x: number; y: number }[], radius: number): string {
   let d = `M${points[0]!.x} ${points[0]!.y}`;
   for (let i = 1; i < points.length - 1; i += 1) {
     d += stepCorner(points[i - 1]!, points[i]!, points[i + 1]!, radius);
@@ -1355,10 +1478,7 @@ export function routeBetween(
   routing: EdgeRouting,
   options?: RouteOptions,
 ): RoutedEdge {
-  // A bent connector's ends face its bends, not each other, so "does this anchor point away from
-  // the other shape" is the wrong question to ask of it.
-  const anchors = options?.waypoints?.length ? options.anchors : workableAnchors(sourceRect, targetRect, options?.anchors, routing);
-  const route = routeWith(sourceRect, targetRect, routing, anchors === options?.anchors ? options : { ...options, anchors });
+  const route = withTracks(drawBetween(sourceRect, targetRect, routing, resolveEnds(sourceRect, targetRect, routing, options), options), routing, options);
   if (!options?.label) return route;
   const label = clearLabel(route.d, { x: route.labelX, y: route.labelY, side: route.labelSide }, options.label,
     sourceRect, targetRect, options.obstacles ?? [], options.lane ?? 0, route.source.side, route.target.side);
@@ -1366,45 +1486,35 @@ export function routeBetween(
 }
 
 /**
- * The persisted anchors a route can actually use. An anchor is the user's choice and is kept —
- * unless the shapes have since moved so that it faces away from the other end and the line it
- * produces runs straight through one of the two shapes it joins (drawn right-to-left, then the
- * target dragged to the other side on the same row: the path went out of A's right side, back
- * through A and on through B). Then the end that faces away falls back to the nearest side, as an
- * end with no anchor would; the document still holds the anchor, so moving the shapes back
- * restores it.
+ * Whether a connector's pins point the right way: neither faces away from the other shape so that
+ * its quick line runs straight back through one of the two shapes it joins (drawn right-to-left,
+ * then the target dragged to the other side on the same row: out of A's right side, back through A
+ * and on through B).
+ *
+ * The router keeps a pin regardless — it searches round the shapes instead, or says the line is
+ * blocked (see `resolveEnds`). Until pins became strict this decided which ends the router quietly
+ * swapped to the nearest side; now it only judges.
  */
-function workableAnchors(sourceRect: Rect, targetRect: Rect, anchors: RouteAnchors | undefined, routing: EdgeRouting = 'smoothstep'): RouteAnchors | undefined {
-  if (!anchors?.source && !anchors?.target) return anchors;
+function pinsFace(sourceRect: Rect, targetRect: Rect, anchors: RouteAnchors, routing: EdgeRouting): boolean {
   const sourceFaces = faces(sourceRect, anchors.source?.side, centreOf(targetRect));
   const targetFaces = faces(targetRect, anchors.target?.side, centreOf(sourceRect));
   // Both ends point at each other (or have no anchor): the common case, and never a through-route.
-  if (sourceFaces && targetFaces) return anchors;
-  const clean = (candidate: RouteAnchors | undefined) =>
-    !runsThroughEnds(routeWith(sourceRect, targetRect, routing, { anchors: candidate }).d, sourceRect, targetRect);
-  if (clean(anchors)) return anchors;
-  const candidates: (RouteAnchors | undefined)[] = [];
-  if (!sourceFaces) candidates.push(anchors.target ? { target: anchors.target } : undefined);
-  if (!targetFaces) candidates.push(anchors.source ? { source: anchors.source } : undefined);
-  candidates.push(undefined);
-  // `findIndex`, not `find`: "no anchors at all" is itself a candidate, and `find` can't tell it
-  // from finding nothing.
-  const index = candidates.findIndex(clean);
-  return index === -1 ? anchors : candidates[index];
+  if (sourceFaces && targetFaces) return true;
+  // Judged on the quick line only: whether a pin faces the wrong way is a question about the pin, not
+  // one the pathfinder should answer by going the long way round.
+  return !runsThroughEnds(routeWith(sourceRect, targetRect, routing, { anchors, mode: 'gesture' }).d, sourceRect, targetRect);
 }
 
 /**
- * Whether a connector's persisted anchors are drawn as they say (see `workableAnchors`). Anything
- * that *chooses* anchors — the agent's layout — must only choose ones this holds for: an overridden
- * anchor still sits in the document, and what reads it (lanes, caption groups, quality checks)
- * would disagree with the line that is actually drawn.
+ * Whether a connector's pins can be drawn the quick way without cutting back through its own shapes
+ * (see `pinsFace`). Anything that *chooses* anchors — the agent's layout — should only choose ones
+ * this holds for: a pin that faces away is kept as given and drawn the long way round.
  */
 export function anchorsHold(edge: DraftEdge, nodes: Map<string, DraftNode>): boolean {
   const source = nodes.get(edge.source);
   const target = nodes.get(edge.target);
-  if (!source || !target) return true;
-  const anchors = { source: edge.sourceAnchor, target: edge.targetAnchor };
-  return workableAnchors(rectOf(source), rectOf(target), anchors, edge.routing) === anchors;
+  if (!source || !target || (!edge.sourceAnchor && !edge.targetAnchor)) return true;
+  return pinsFace(rectOf(source), rectOf(target), { source: edge.sourceAnchor, target: edge.targetAnchor }, edge.routing);
 }
 
 const centreOf = (rect: Rect) => ({ x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 });
@@ -1462,22 +1572,102 @@ function segmentEntersRect(from: { x: number; y: number }, to: { x: number; y: n
   return clip(-dx, from.x - left) && clip(dx, right - from.x) && clip(-dy, from.y - top) && clip(dy, bottom - from.y) && t1 - t0 > 1e-6;
 }
 
-function routeWith(
+/**
+ * Where a connector's two ends are drawn: the side each leaves or lands on and the exact point on it,
+ * lane slot and straightening included. Everything after this — the line between them — only draws.
+ */
+export interface ConnectorEnds {
+  from: { x: number; y: number };
+  to: { x: number; y: number };
+  sourceSide: Side;
+  targetSide: Side;
+}
+
+/**
+ * The ends a connector is drawn between.
+ *
+ * **The pin contract.** A stored anchor is a pin: the person (or the agent) chose that side and that
+ * point. A pinned end keeps its side whatever happens to the shapes, and is drawn at its anchor
+ * point — moved only by its own reply line's fixed step, or spread a little (never past ⅜ of the gap
+ * to the next handle) when several connectors pin the very same point. Nothing else moves it: not
+ * straightening, not lanes, not repair. An end with no anchor is automatic: it faces the other
+ * shape, takes its lane and straightens onto the line it obviously meant.
+ */
+export function resolveEnds(
   sourceRect: Rect,
   targetRect: Rect,
-  routing: EdgeRouting,
-  options?: RouteOptions,
-): RoutedEdge {
+  _routing: EdgeRouting,
+  options?: Pick<RouteOptions, 'anchors' | 'waypoints' | 'lane' | 'replyStep' | 'spread' | 'mode'>,
+): ConnectorEnds {
+  return endsFor(sourceRect, targetRect, options);
+}
+
+/** How much clearer, in pixels of gap, another side must be before a gesture's automatic end leaves
+ *  the side it was planned on — so an end dragged near the diagonal doesn't flicker between two. */
+const SIDE_HYSTERESIS = 12;
+
+/** The spread positions a frame may still use: in a gesture, a planned side is kept only while it
+ *  faces the other shape and the side the shapes now favour isn't clearer by `SIDE_HYSTERESIS`. */
+function usableSpread(sourceRect: Rect, targetRect: Rect, options: Pick<RouteOptions, 'spread' | 'mode' | 'anchors'> | undefined): RouteAnchors | undefined {
+  const spread = options?.spread;
+  if (!spread?.source && !spread?.target) return undefined;
+  const live = chooseSides(sourceRect, targetRect);
+  const a = centerOf(sourceRect);
+  const b = centerOf(targetRect);
+  const gapX = Math.abs(b.x - a.x) - (sourceRect.width + targetRect.width) / 2;
+  const gapY = Math.abs(b.y - a.y) - (sourceRect.height + targetRect.height) / 2;
+  const keeps = (planned: EdgeAnchor | undefined, side: Side, rect: Rect, other: Rect) => {
+    if (!planned) return undefined;
+    if (planned.side === side) return planned;
+    if (options?.mode !== 'gesture') return planned;
+    return faces(rect, planned.side, centreOf(other)) && Math.abs(gapX - gapY) <= SIDE_HYSTERESIS ? planned : undefined;
+  };
+  // A pinned end takes a spread position only on its own side, within its share of a shared point.
+  const sharing = (pin: EdgeAnchor, planned: EdgeAnchor | undefined) =>
+    planned && planned.side === pin.side && Math.abs(planned.offset - pin.offset) <= PIN_SPREAD + 1e-9 ? planned : undefined;
+  const source = options?.anchors?.source ? sharing(options.anchors.source, spread.source) : keeps(spread.source, live.source, sourceRect, targetRect);
+  const target = options?.anchors?.target ? sharing(options.anchors.target, spread.target) : keeps(spread.target, live.target, targetRect, sourceRect);
+  return source || target ? { source, target } : undefined;
+}
+
+/** How far, in lane slots, connectors pinned to one point may spread: ⅜ of the gap between two
+ *  handles (a quarter of the side), so a pinned end never drifts towards a neighbouring handle. */
+const PIN_SPREAD = 0.375 * 0.25;
+
+/** A pinned end's nudge: its share of a shared point, kept within `PIN_SPREAD`, plus its reply step. */
+function pinNudge(rect: Rect, side: Side, lane: number, replyStep: number): { x: number; y: number } {
+  const sideLength = isHorizontalSide(side) ? verticalSpan(rect).length : rect.width;
+  const limit = sideLength * PIN_SPREAD;
+  const spread = laneNudge(rect, side, lane);
+  const reply = laneNudge(rect, side, replyStep);
+  const clampAlong = (v: number) => clamp(v, -limit, limit);
+  return { x: clampAlong(spread.x) + reply.x, y: clampAlong(spread.y) + reply.y };
+}
+
+function endsFor(
+  sourceRect: Rect,
+  targetRect: Rect,
+  options: Pick<RouteOptions, 'anchors' | 'waypoints' | 'lane' | 'replyStep' | 'spread' | 'mode'> | undefined,
+): ConnectorEnds {
   const anchors = options?.anchors;
   const waypoints = options?.waypoints?.length ? options.waypoints : undefined;
+  const lane = options?.lane ?? 0;
+  const replyStep = options?.replyStep ?? 0;
+  const spread = waypoints ? undefined : usableSpread(sourceRect, targetRect, options);
   const { source: sourceSide, target: targetSide } = waypoints
     ? bentSides(sourceRect, targetRect, waypoints, anchors)
-    : sidesFor(sourceRect, targetRect, anchors);
+    : sidesFor(sourceRect, targetRect, { source: anchors?.source ?? spread?.source, target: anchors?.target ?? spread?.target });
+  const sourcePinned = anchors?.source !== undefined;
+  const targetPinned = anchors?.target !== undefined;
+  // A spread end is placed by the plan — an automatic one anywhere on its side, a pin within its
+  // share of a shared point: no lane of its own, and never straightened here.
+  const sourcePlaced = spread?.source !== undefined;
+  const targetPlaced = spread?.target !== undefined;
 
-  const sourcePoint = anchorPoint(sourceRect, sourceSide, anchors?.source?.offset);
-  const targetPoint = anchorPoint(targetRect, targetSide, anchors?.target?.offset);
-  const sourceNudge = laneNudge(sourceRect, sourceSide, options?.lane ?? 0);
-  const targetNudge = laneNudge(targetRect, targetSide, options?.lane ?? 0);
+  const sourcePoint = anchorPoint(sourceRect, sourceSide, (spread?.source ?? anchors?.source)?.offset);
+  const targetPoint = anchorPoint(targetRect, targetSide, (spread?.target ?? anchors?.target)?.offset);
+  const sourceNudge = sourcePinned && !sourcePlaced ? pinNudge(sourceRect, sourceSide, lane, replyStep) : laneNudge(sourceRect, sourceSide, (sourcePlaced ? 0 : lane) + replyStep);
+  const targetNudge = targetPinned && !targetPlaced ? pinNudge(targetRect, targetSide, lane, replyStep) : laneNudge(targetRect, targetSide, (targetPlaced ? 0 : lane) + replyStep);
   const from = clampToBoundary(
     { x: sourcePoint.x + sourceNudge.x, y: sourcePoint.y + sourceNudge.y },
     sourceRect,
@@ -1492,22 +1682,43 @@ function routeWith(
   // `.75` against a box centre on the integer grid — would otherwise get a stepped path with an
   // invisible 0.25px jog and two hairline bends near the target. Snapping the target along its own
   // side keeps it on the boundary and draws the one straight line the composition intended.
-  // Shapes only roughly in line get the same treatment, within `NEAR_LEVEL`.
-  //
-  // "Chosen by hand" means an *off-centre* anchor. Drawing a connector from a shape's middle handle
-  // records an anchor too, but at the very point the router would have picked anyway — treating
-  // that as a deliberate placement would leave every connector anyone actually dragged out with the
-  // kink this exists to remove, while connectors the router placed came out straight.
-  const deliberate = (anchor: EdgeAnchor | undefined) => anchor !== undefined && anchor.offset !== 0.5;
-  const automatic = !deliberate(anchors?.source) && !deliberate(anchors?.target);
-  if (waypoints) return bentRoute(sourceRect, targetRect, routing, from, sourceSide, waypoints, to, targetSide);
-  if (isHorizontalSide(sourceSide) && isHorizontalSide(targetSide) && sourceSide !== targetSide) {
-    if (Math.abs(from.y - to.y) < LEVEL_SNAP) to.y = from.y;
-    else if (automatic) to.y = levelOnto(targetRect, targetSide, from.y, to.y);
-  } else if (isVerticalSide(sourceSide) && isVerticalSide(targetSide) && sourceSide !== targetSide) {
-    if (Math.abs(from.x - to.x) < LEVEL_SNAP) to.x = from.x;
-    else if (automatic) to.x = levelOnto(targetRect, targetSide, from.x, to.x);
+  // Shapes only roughly in line get the same treatment, within `NEAR_LEVEL` — but only an automatic
+  // end is ever moved to do it: the target when it is automatic, else the source. Two pinned ends
+  // are drawn exactly where they were pinned, jog and all.
+  if (!waypoints) {
+    if (isHorizontalSide(sourceSide) && isHorizontalSide(targetSide) && sourceSide !== targetSide) {
+      if (Math.abs(from.y - to.y) < LEVEL_SNAP) to.y = from.y;
+      else if (!targetPinned && !targetPlaced) to.y = levelOnto(targetRect, targetSide, from.y, to.y);
+      else if (!sourcePinned && !sourcePlaced) from.y = levelOnto(sourceRect, sourceSide, to.y, from.y);
+    } else if (isVerticalSide(sourceSide) && isVerticalSide(targetSide) && sourceSide !== targetSide) {
+      if (Math.abs(from.x - to.x) < LEVEL_SNAP) to.x = from.x;
+      else if (!targetPinned && !targetPlaced) to.x = levelOnto(targetRect, targetSide, from.x, to.x);
+      else if (!sourcePinned && !sourcePlaced) from.x = levelOnto(sourceRect, sourceSide, to.x, from.x);
+    }
   }
+  return { from, to, sourceSide, targetSide };
+}
+
+function routeWith(
+  sourceRect: Rect,
+  targetRect: Rect,
+  routing: EdgeRouting,
+  options?: RouteOptions,
+): RoutedEdge {
+  return drawBetween(sourceRect, targetRect, routing, endsFor(sourceRect, targetRect, options), options);
+}
+
+/** The line between two resolved ends, in its routing style, with its label point. */
+function drawBetween(
+  sourceRect: Rect,
+  targetRect: Rect,
+  routing: EdgeRouting,
+  ends: ConnectorEnds,
+  options?: RouteOptions,
+): RoutedEdge {
+  const { from, to, sourceSide, targetSide } = ends;
+  const waypoints = options?.waypoints?.length ? options.waypoints : undefined;
+  if (waypoints) return bentRoute(sourceRect, targetRect, routing, from, sourceSide, waypoints, to, targetSide);
 
   const params = {
     sourceX: from.x,
@@ -1524,6 +1735,8 @@ function routeWith(
   let branchStart: { x: number; y: number } | undefined;
   let trunkLabel: { x: number; y: number } | undefined;
   let trunkLabelSide: Side | undefined;
+  let status: RouteStatus = 'unchecked';
+  let work = 0;
 
   switch (routing) {
     case 'straight': {
@@ -1561,11 +1774,16 @@ function routeWith(
         branchStart = built.branchStart;
         trunkLabel = built.trunkLabel;
         trunkLabelSide = built.trunkLabelSide;
+        // The planner chose the trunk clear of shapes; a member is checked, never rerouted off it.
+        if (options?.mode !== 'gesture') {
+          status = polylineClear(flattenPath(path), [...(options?.obstacles ?? []), glyphOf(sourceRect), glyphOf(targetRect)]) ? 'clear' : 'blocked';
+        }
         break;
       }
       // Obstacle avoidance only applies to the orthogonal style — a forced
       // straight or bezier line has no "bend" to route around anything with.
-      const detour = detourAround(from, to, sourceSide, targetSide, options?.obstacles ?? []);
+      const obstacles = options?.obstacles ?? [];
+      const detour = detourAround(from, to, sourceSide, targetSide, obstacles);
       if (detour) {
         const built = buildDetourPath(from, to, sourceSide, targetSide, detour);
         path = built.d;
@@ -1576,6 +1794,33 @@ function routeWith(
         path = d;
         labelX = lx;
         labelY = ly;
+      }
+      if (options?.mode === 'gesture') break;
+      // The quick line, checked against every shape it passes — the detour above only ever looked
+      // straight between two level ends, and an elbow was never checked at all. Only when it is
+      // blocked does the pathfinder search for one that isn't.
+      const blockers = [...obstacles, glyphOf(sourceRect), glyphOf(targetRect)];
+      if (polylineClear(flattenPath(path), blockers)) {
+        status = 'clear';
+        break;
+      }
+      const found = orthogonalRoute(
+        { from, fromSide: sourceSide, to, toSide: targetSide, obstacles, ends: [glyphOf(sourceRect), glyphOf(targetRect)], bounds: searchBounds(sourceRect, targetRect), avoid: options?.avoid },
+        options?.fallback === false ? 0 : MAX_POPS,
+      );
+      work = found.work;
+      status = found.status;
+      if (found.points) {
+        const d = roundedStepPath(found.points, 10);
+        // The rounded corners cut inside the square ones: checked again as drawn.
+        if (polylineClear(flattenPath(d), blockers)) {
+          const mid = longestRunMidpoint(found.points);
+          path = d;
+          labelX = mid.x;
+          labelY = mid.y;
+        } else {
+          status = 'blocked';
+        }
       }
       break;
     }
@@ -1599,6 +1844,55 @@ function routeWith(
     branchStart,
     trunkLabel,
     trunkLabelSide,
+    status,
+    work,
+  };
+}
+
+/** The part of a shape a connector lands on: a Data Store's or a tube's glyph, else the box. A line
+ *  may cross the margin round a glyph to reach it, but not the glyph. */
+function glyphOf(rect: Rect): Rect {
+  const band = rect.anchorBand;
+  if (!band) return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+  const left = band.left ?? rect.x;
+  const right = band.right ?? rect.x + rect.width;
+  const top = band.glyphTop ?? rect.y;
+  return { x: left, y: top, width: right - left, height: rect.y + rect.height - top };
+}
+
+/** A routed stepped line with its runs moved onto `options.tracks`, the label riding along with the
+ *  run it sits on. Unchanged when there are none, or they no longer fit this line. */
+function withTracks(route: RoutedEdge, routing: EdgeRouting, options: RouteOptions | undefined): RoutedEdge {
+  const tracks = options?.tracks;
+  if (!tracks?.length || routing !== 'smoothstep' || options?.waypoints?.length || options?.spine || options?.mode === 'gesture') return route;
+  const corners = stepPolyline(route.d);
+  const shifted = shiftRuns(corners, tracks);
+  if (!shifted) return route;
+  let labelX = route.labelX;
+  let labelY = route.labelY;
+  for (const { run, delta } of tracks) {
+    const a = corners[run]!;
+    const b = corners[run + 1]!;
+    const onRun = Math.abs(a.y - b.y) < 0.5
+      ? Math.abs(labelY - a.y) < 1 && labelX >= Math.min(a.x, b.x) - 1 && labelX <= Math.max(a.x, b.x) + 1
+      : Math.abs(labelX - a.x) < 1 && labelY >= Math.min(a.y, b.y) - 1 && labelY <= Math.max(a.y, b.y) + 1;
+    if (!onRun) continue;
+    if (Math.abs(a.y - b.y) < 0.5) labelY += delta;
+    else labelX += delta;
+  }
+  return { ...route, d: roundedStepPath(shifted, 10), labelX, labelY };
+}
+
+/** Where a connector between two shapes may search for a clear line: as far as its shapes were
+ *  collected from (`OBSTACLE_REACH`). */
+function searchBounds(source: Rect, target: Rect): Rect {
+  const x = Math.min(source.x, target.x) - OBSTACLE_REACH;
+  const y = Math.min(source.y, target.y) - OBSTACLE_REACH;
+  return {
+    x,
+    y,
+    width: Math.max(source.x + source.width, target.x + target.width) + OBSTACLE_REACH - x,
+    height: Math.max(source.y + source.height, target.y + target.height) + OBSTACLE_REACH - y,
   };
 }
 
@@ -1650,6 +1944,8 @@ function bentRoute(
     source: { ...from, side: sourceSide },
     target: { ...to, side: targetSide },
     points,
+    status: 'unchecked',
+    work: 0,
   };
 }
 

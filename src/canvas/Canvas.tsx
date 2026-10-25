@@ -23,7 +23,7 @@ import { linkedCompensations, visibleEdges } from '../document/compensation';
 import { openFitViewport } from '../document/geometry';
 import { boundsOf, descendantsOf, hasAttachmentRoom } from '../document/operations';
 import type { DraftDocument, DraftEdge, DraftNode, Side } from '../document/types';
-import { parseAnchorId, rectOf, snappedAnchorForDrop, type Rect } from '../edges/routing';
+import { HANDLE_DROP_RADIUS, handleNear, parseAnchorId, rectOf, startAnchor, type Rect } from '../edges/routing';
 import { isEditableTarget } from '../lib/isEditableTarget';
 import { motionMs } from '../lib/motion';
 import { centerOf, pointInBox } from '../lib/math';
@@ -1447,12 +1447,16 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       // A handle id encodes exactly which of the 12 anchors it is (see
       // `HANDLE_ANCHORS`/`parseAnchorId` in `edges/routing.ts`), so this is
       // the drag's actual start/end point, not a guess — see `EdgeAnchor` in
-      // `document/types.ts`.
-      const sourceAnchor = parseAnchorId(connection.sourceHandle);
+      // `document/types.ts`. Dropped on a handle, the end is pinned there; the
+      // start is pinned too unless it left from the middle handle of the side
+      // the router would pick anyway (`startAnchor`).
+      const state = useEditorStore.getState();
       const targetAnchor = parseAnchorId(connection.targetHandle);
-      useEditorStore
-        .getState()
-        .connect(
+      const sourceNode = state.document.nodes.find((node) => node.id === connection.source);
+      const targetNode = state.document.nodes.find((node) => node.id === connection.target);
+      const handle = parseAnchorId(connection.sourceHandle);
+      const sourceAnchor = sourceNode && targetNode ? startAnchor(rectOf(sourceNode), rectOf(targetNode), handle, targetAnchor) : handle;
+      state.connect(
           connection.source,
           connection.target,
           sourceAnchor?.side,
@@ -1485,7 +1489,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       if (connectionState.isValid) return;
       const source = connectionState.fromNode?.id;
       if (!source) return;
-      const sourceAnchor = parseAnchorId(connectionState.fromHandle?.id);
+      const handle = parseAnchorId(connectionState.fromHandle?.id);
 
       const point = 'changedTouches' in event ? event.changedTouches[0] : event;
       if (!point) return;
@@ -1503,12 +1507,13 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
 
       if (droppedOn) {
         if (droppedOn.id !== source) {
-          // A body-hit, not a handle — a drop that clearly favours one side
-          // attaches close to where the user actually dropped it (snapped to
-          // the same 3-point grid a real handle sits on); a drop near dead
-          // centre keeps the dynamic side choice `chooseSides` would pick
-          // anyway. See `snappedAnchorForDrop` in `edges/routing.ts`.
-          const targetAnchor = snappedAnchorForDrop(rectOf(droppedOn), position);
+          // A body-hit says "this shape", not "this point": the end attaches
+          // automatically and follows the shape — unless the drop landed on a
+          // handle React Flow's own radius missed, which pins it there.
+          const targetRect = rectOf(droppedOn);
+          const targetAnchor = handleNear(targetRect, position, HANDLE_DROP_RADIUS / getZoom());
+          const sourceNode = state.document.nodes.find((node) => node.id === source);
+          const sourceAnchor = sourceNode ? startAnchor(rectOf(sourceNode), targetRect, handle, targetAnchor) : handle;
           state.connect(
             source,
             droppedOn.id,
@@ -1526,14 +1531,14 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       // decides what appears.
       onQuickConnectMenu?.(
         source,
-        sourceAnchor?.side,
-        sourceAnchor?.offset,
+        handle?.side,
+        handle?.offset,
         { x: Math.round(position.x - 88), y: Math.round(position.y - 34) },
         { x: point.clientX, y: point.clientY },
         position,
       );
     },
-    [onQuickConnectMenu, screenToFlowPosition],
+    [getZoom, onQuickConnectMenu, screenToFlowPosition],
   );
 
   // Reconnecting an existing connector's endpoint is driven entirely by hand

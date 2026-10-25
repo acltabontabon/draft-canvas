@@ -72,7 +72,21 @@ pairing stays free; an unusual one gets guidance, not rejection. Rules: [Semanti
 
 - **Semantic graph vs. routing graph.** Spines, bundles and line jumps are presentation: never nodes,
   never saved, no effect on semantics.
-- Routing never moves an anchor the user chose. **Tidy connectors** clears only route modes and bends.
+- A stored anchor is a pin: routing never changes its side or point (only its own reply line steps
+  beside it, and connectors pinned to one point spread within a quarter of a handle gap). An end
+  without one is automatic: it faces the other shape and moves with it. Nothing guesses a pin from
+  geometry; **Auto attach** and **Pin ends here** are the only ways one becomes the other.
+  **Tidy connectors** clears only route modes and bends.
+- Every connector reads its routes through one accessor (`connectorRouteInputs` / `connectorRoutes`
+  in `edges/connectorRoutes.ts`), so the canvas, export and agent's checks see the same lines. The
+  passes run in one order with no cycles: sides and trunk membership, then where automatic ends sit
+  on a side (`edges/endpoints.ts` spreads ends sharing a side, and pins sharing one point within
+  their band), then the raw routes (`edges/edgeRoutes.ts`), then parallel tracks for runs sharing a
+  corridor (`edges/separation.ts`, each shift checked and kept only if it clears shapes and adds no
+  crossing), then labels, label groups and line jumps on the final lines. A stepped
+  line is checked against the shapes; when it is blocked, `edges/pathfinder.ts` searches for a clear
+  one within the area its shapes were collected from, and a line it cannot clear says `blocked` or
+  `budget` rather than passing as clear. Gesture frames are never searched.
 - Spine geometry is relative to the hub, so it follows a drag without writing the document.
 - The connection target shows where a release will land before the pointer is released.
 

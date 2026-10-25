@@ -19,7 +19,7 @@
  */
 
 import { LIMITS } from '../document/limits';
-import { SIDES, type DraftDocument, type DraftEdge, type DraftPoint, type Side } from '../document/types';
+import { SIDES, type DraftDocument, type DraftEdge, type DraftPoint, type EdgeAnchor, type Side } from '../document/types';
 import { AgentError } from './errors';
 import type { Reader } from './input';
 
@@ -36,9 +36,15 @@ export interface PlaceSpec {
   height?: number;
 }
 
+/**
+ * One end of a hand route: a side (pinned at its middle), an exact pin, or `'auto'` — no pin, so the
+ * end faces the other shape and follows it as shapes move (the pin contract in `edges/routing.ts`).
+ */
+export type RouteEnd = Side | EdgeAnchor | 'auto';
+
 export interface RouteSpec {
-  from?: Side;
-  to?: Side;
+  from?: RouteEnd;
+  to?: RouteEnd;
   via?: DraftPoint[];
 }
 
@@ -91,8 +97,8 @@ export function readRoute(r: Reader, value: unknown, path: string): RouteSpec | 
   const raw = r.object(value, path, ROUTE_FIELDS);
   if (!raw) return undefined;
   const spec: RouteSpec = {};
-  const from = r.oneOf(raw.from, `${path}/from`, SIDES);
-  const to = r.oneOf(raw.to, `${path}/to`, SIDES);
+  const from = readEnd(r, raw.from, `${path}/from`);
+  const to = readEnd(r, raw.to, `${path}/to`);
   if (from) spec.from = from;
   if (to) spec.to = to;
   if (raw.via !== undefined) {
@@ -114,11 +120,42 @@ export function readRoute(r: Reader, value: unknown, path: string): RouteSpec | 
   return spec;
 }
 
-/** One connector routed by hand: the sides given, and the bends given (`via: []` drops them). */
+/** A route end: a side, `{side, offset}` with the offset from 0 to 1, or `"auto"`. */
+function readEnd(r: Reader, value: unknown, path: string): RouteEnd | undefined {
+  if (value === undefined) return undefined;
+  if (value === 'auto') return 'auto';
+  if (typeof value === 'string') return r.oneOf(value, path, SIDES);
+  const raw = r.object(value, path, ['side', 'offset']);
+  if (!raw) return undefined;
+  const side = r.oneOf(raw.side, `${path}/side`, SIDES);
+  if (!side) {
+    if (raw.side === undefined) r.problems.add('INVALID_INPUT', `${path}/side`, `give one of ${SIDES.join(', ')}`);
+    return undefined;
+  }
+  if (raw.offset === undefined) return { side, offset: 0.5 };
+  if (typeof raw.offset !== 'number' || !Number.isFinite(raw.offset) || raw.offset < 0 || raw.offset > 1) {
+    r.problems.add('INVALID_INPUT', `${path}/offset`, 'must be a number from 0 to 1 (0 is the top or left corner of the side)');
+    return undefined;
+  }
+  return { side, offset: Math.round(raw.offset * 1000) / 1000 };
+}
+
+/** The anchor a route end stores: a pin, or none for `"auto"`. */
+function anchorOf(end: RouteEnd): EdgeAnchor | undefined {
+  if (end === 'auto') return undefined;
+  return typeof end === 'string' ? { side: end, offset: 0.5 } : { ...end };
+}
+
+/** One connector routed by hand: the ends given — pinned, or automatic for `"auto"` — and the bends
+ *  given (`via: []` drops them). */
 export function routed(edge: DraftEdge, route: RouteSpec): DraftEdge {
   const next: DraftEdge = { ...edge };
-  if (route.from) next.sourceAnchor = { side: route.from, offset: 0.5 };
-  if (route.to) next.targetAnchor = { side: route.to, offset: 0.5 };
+  for (const [end, key] of [[route.from, 'sourceAnchor'], [route.to, 'targetAnchor']] as const) {
+    if (end === undefined) continue;
+    const anchor = anchorOf(end);
+    if (anchor) next[key] = anchor;
+    else delete next[key];
+  }
   if (route.via !== undefined) {
     if (route.via.length) next.waypoints = route.via.map((p) => ({ ...p }));
     else delete next.waypoints;

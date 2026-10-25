@@ -1,0 +1,1136 @@
+{
+  "case/anchor-bands": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 1701,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "case/blocked-elbow": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 812,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "case/blocked-straight": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 809,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "case/corridor-70": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 5633,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "case/crowded-queue": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 4160,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "case/facing-away-pin": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 929,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "case/hub-12": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 11,
+    "cost": 10183,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "case/impossible": {
+    "obstruction": 1,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 440,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 1,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "case/mixed-pins": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 1285,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "case/narrow-corridor": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 944,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "case/near-level": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 585,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "case/reciprocal": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 1697,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "case/request-reply": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 2137,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "case/shared-corridor": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 4,
+    "cost": 5323,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "case/side-share": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 2209,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "case/side-share-reply": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 2087,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 1
+    }
+  },
+  "gallery/01-request-path": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 359,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "gallery/02-branch-merge": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 1215,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "gallery/03-topic-fanout": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 2041,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "gallery/04-cycle-retry": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 1372,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "gallery/05-groups": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 1976,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "gallery/06-parallel-bidirectional": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 1666,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "gallery/07-long-labels-unicode": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 1390,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "gallery/08-disconnected": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 757,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "gallery/09-incremental-pinned": {
+    "obstruction": 0,
+    "overlap": 90,
+    "crossings": 1,
+    "cost": 2669,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 1
+    }
+  },
+  "gallery/10-dense": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 2,
+    "cost": 10629,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "gallery/11-c4-context": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 1805,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "gallery/11-c4-context/ibs": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 123,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "gallery/12-c4-container": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 1377,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "gallery/13-c4-component/api": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 428,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "gallery/14-starter-flow": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 1362,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "gallery/15-feature-rich-edit": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 471,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "gallery/16-notes-busy": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 3221,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "gallery/17-retry-main-path": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 1017,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "gallery/18-cleanup": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 1177,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "gallery/19-loan-application-context": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 3568,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "gallery/20-route-only-cleanup": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 1,
+    "cost": 1490,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "gallery/21-card-provisioning": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 2,
+    "cost": 17232,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "gallery/22-credit-card-batch": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 1,
+    "cost": 15536,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "gallery/23-credit-card-batch-ungrouped": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 6839,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "gallery/24-skill-example": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 676,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "gallery/24-skill-example/storefront": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 4006,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "gallery/24-skill-example/storefront/orders": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 1103,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "gallery/25-readme-architecture": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 3785,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "gallery/25-readme-architecture/app": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 4392,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "gallery/25-readme-architecture/web": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 2671,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "gallery/26-shared-fan-out": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 259,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "gallery/26-shared-fan-out/system": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 15,
+    "cost": 16942,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "starter/bff": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 1741,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "starter/cdc": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 1423,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "starter/cqrs": {
+    "obstruction": 1,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 2419,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "starter/event-driven": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 1211,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "starter/hexagonal": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 1652,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "starter/kappa": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 2021,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "starter/medallion": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 2369,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "starter/microservices": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 2500,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "starter/modular-monolith": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 1992,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "starter/monolith": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 490,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "starter/saga-choreography": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 3420,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "starter/saga-orchestration": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 7,
+    "cost": 3777,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "starter/transactional-outbox": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 1047,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "workload/stress": {
+    "obstruction": 8,
+    "overlap": 0,
+    "crossings": 71,
+    "cost": 208744,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "workload/typical": {
+    "obstruction": 1,
+    "overlap": 0,
+    "crossings": 9,
+    "cost": 36345,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  }
+}

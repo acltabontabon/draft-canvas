@@ -573,6 +573,12 @@
   pointer-events: all;
 }
 
+/* A pinned end keeps its side and point however the shapes move: filled. An automatic one faces the
+   other shape: the plain ring above. */
+.dc-edge-endpoint[data-pinned='true'] {
+  background: var(--dc-selection);
+}
+
 /* Not `transform: scale` — the endpoint's position is itself an inline
    `transform`, which a stylesheet rule would silently replace rather than
    compose with. */
@@ -2227,6 +2233,15 @@
 }
 
 .dc-edge-inspector-caption,
+/* Said under a connector's controls when no clear line could be drawn; the quiet buttons after it
+   let its pinned ends attach automatically. */
+.dc-edge-inspector-blocked-text {
+  padding: 0 6px;
+  color: var(--dc-text-muted);
+  font-size: var(--dc-popover-font);
+  white-space: nowrap;
+}
+
 .dc-edge-inspector-flows {
   max-width: 180px;
   min-height: var(--dc-popover-control);

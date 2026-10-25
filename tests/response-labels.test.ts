@@ -18,7 +18,7 @@ const horizontal = (side: Side) => side === 'top' || side === 'bottom';
 
 function pair(a = source, b = target, from = sourceAnchor, to = targetAnchor) {
   const request = routeBetween(a, b, 'smoothstep', { anchors: { source: from, target: to } });
-  const response = routeBetween(b, a, 'smoothstep', { anchors: { source: to, target: from }, lane: responseLaneFor(0) });
+  const response = routeBetween(b, a, 'smoothstep', { anchors: { source: to, target: from }, replyStep: responseLaneFor(0) });
   return { request, response, label: responseLabelAnchor(request, response, a, b) };
 }
 
@@ -77,7 +77,7 @@ describe('enabled response label placement', () => {
     const b = { ...target, y: 0 };
     for (const lane of [-1.5, -0.5, 0, 0.5, 1.5]) {
       const request = routeBetween(source, b, routing, { lane });
-      const response = routeBetween(b, source, routing, { lane: responseLaneFor(lane) });
+      const response = routeBetween(b, source, routing, { lane, replyStep: responseLaneFor(lane) - lane });
       const label = responseLabelAnchor(request, response, source, b, lane);
       expect(distanceToPath(label, response.d)).toBeCloseTo(0);
       expect(label.x).toBeCloseTo(request.labelX);
@@ -90,7 +90,7 @@ describe('enabled response label placement', () => {
     const b = { ...target, x: 260, y: 0 };
     const spine = { id: 'fan', hub: 'source', hubSide: 'right', trunkGap: 60, corridor: 100, count: 3 } as const;
     const request = routeBetween(a, b, 'smoothstep', { spine });
-    const response = routeBetween(b, a, 'smoothstep', { spine: responseSpineFor(spine), lane: responseLaneFor(0) });
+    const response = routeBetween(b, a, 'smoothstep', { spine: responseSpineFor(spine), replyStep: responseLaneFor(0) });
     const label = responseLabelAnchor(request, response, a, b);
     expect(label.x).toBe(response.labelX);
     expect(label.y).toBe(response.labelY);
@@ -101,7 +101,7 @@ describe('enabled response label placement', () => {
     const b = { ...target, x: 500, y: 0 };
     const obstacles = [{ x: 230, y: -300, width: 120, height: 700 }];
     const request = routeBetween(source, b, 'smoothstep', { obstacles });
-    const response = routeBetween(b, source, 'smoothstep', { obstacles, lane: responseLaneFor(0) });
+    const response = routeBetween(b, source, 'smoothstep', { obstacles, replyStep: responseLaneFor(0) });
     const label = responseLabelAnchor(request, response, source, b);
     expect(request.labelY).toBeLessThan(-300);
     // Projecting onto the nearest run alone would move the words onto an endpoint leg.

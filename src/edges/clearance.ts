@@ -3,9 +3,9 @@ import { categoryOf } from '../document/connectorSemantics';
 import { effectiveConnectorText } from '../document/edgeSemantics';
 import type { DraftDocument, DraftEdge, DraftNode } from '../document/types';
 import { LABEL_PADDING_X, LABEL_PADDING_Y, layoutEdgeLabel } from './labelLayout';
-import { routingPlan } from './bundles';
-import { obstaclesForEdge } from './obstacles';
-import { LABEL_LINE_GAP, flattenPath, labelLaneOffset, laneIndex, routeEdge } from './routing';
+import { connectorRouteInputs } from './connectorRoutes';
+import { edgeRoutes } from './edgeRoutes';
+import { LABEL_LINE_GAP, flattenPath, labelLaneOffset } from './routing';
 
 /**
  * Where the connectors already drawn in a region are, as plain boxes.
@@ -119,16 +119,12 @@ function spansOf(nodes: readonly DraftNode[], edges: readonly DraftEdge[]): Span
  * cached result holds the boxes and nothing of the router's working state (see AGENTS.md).
  */
 function routeBoxes(doc: Pick<DraftDocument, 'nodes' | 'edges'>, { edge, source, target }: EdgeSpan): RoutedBoxes | null {
-  // `routeEdge` looks its endpoints up by id; the span already holds them.
+  // Looks its endpoints up by id; the span already holds them. Not the canvas's own plan slot: the
+  // document asked about may be one that never reaches the screen.
   const byId = new Map<string, DraftNode>([[source.id, source], [target.id, target]]);
-  // Both memoized on the document's arrays. Not the canvas's own plan slot: the document asked
-  // about may be one that never reaches the screen.
-  const lane = laneIndex(doc.edges).get(edge.id)?.offset ?? 0;
-  const route = routeEdge(edge, byId, {
-    obstacles: obstaclesForEdge(doc.nodes, edge.source, edge.target, 'transient'),
-    lane,
-    spine: routingPlan(doc.nodes, doc.edges, 'transient').spineFor(edge.id),
-  });
+  const inputs = connectorRouteInputs(edge, doc, 'transient', byId);
+  const route = inputs ? edgeRoutes(inputs, 'transient').request : null;
+  const lane = inputs?.lane ?? 0;
   if (!route) return null;
   const points = flattenPath(route.d);
   const segments: Bounds[] = [];

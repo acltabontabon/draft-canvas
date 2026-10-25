@@ -1,0 +1,194 @@
+{
+ "agent/01-request-path": {
+  "obstruction": 0,
+  "overlap": 0,
+  "crossings": 0,
+  "cost": 359
+ },
+ "agent/02-branch-merge": {
+  "obstruction": 0,
+  "overlap": 0,
+  "crossings": 0,
+  "cost": 1215
+ },
+ "agent/03-topic-fanout": {
+  "obstruction": 0,
+  "overlap": 0,
+  "crossings": 0,
+  "cost": 2041
+ },
+ "agent/04-cycle-retry": {
+  "obstruction": 0,
+  "overlap": 0,
+  "crossings": 0,
+  "cost": 1372
+ },
+ "agent/05-groups": {
+  "obstruction": 0,
+  "overlap": 0,
+  "crossings": 0,
+  "cost": 1976
+ },
+ "agent/06-parallel-bidirectional": {
+  "obstruction": 0,
+  "overlap": 0,
+  "crossings": 0,
+  "cost": 1666
+ },
+ "agent/07-long-labels-unicode": {
+  "obstruction": 0,
+  "overlap": 0,
+  "crossings": 0,
+  "cost": 1390
+ },
+ "agent/08-disconnected": {
+  "obstruction": 0,
+  "overlap": 0,
+  "crossings": 0,
+  "cost": 757
+ },
+ "agent/09-incremental-pinned": {
+  "obstruction": 0,
+  "overlap": 285,
+  "crossings": 1,
+  "cost": 2669
+ },
+ "agent/10-dense": {
+  "obstruction": 2,
+  "overlap": 0,
+  "crossings": 2,
+  "cost": 10438
+ },
+ "agent/11-c4-context": {
+  "obstruction": 0,
+  "overlap": 0,
+  "crossings": 0,
+  "cost": 1805
+ },
+ "agent/11-c4-context/ibs": {
+  "obstruction": 0,
+  "overlap": 0,
+  "crossings": 0,
+  "cost": 123
+ },
+ "agent/12-c4-container": {
+  "obstruction": 0,
+  "overlap": 0,
+  "crossings": 0,
+  "cost": 1377
+ },
+ "agent/13-c4-component/api": {
+  "obstruction": 0,
+  "overlap": 0,
+  "crossings": 0,
+  "cost": 428
+ },
+ "agent/14-starter-flow": {
+  "obstruction": 0,
+  "overlap": 0,
+  "crossings": 0,
+  "cost": 1362
+ },
+ "agent/15-feature-rich-edit": {
+  "obstruction": 0,
+  "overlap": 0,
+  "crossings": 0,
+  "cost": 471
+ },
+ "agent/16-notes-busy": {
+  "obstruction": 0,
+  "overlap": 0,
+  "crossings": 0,
+  "cost": 3221
+ },
+ "agent/17-retry-main-path": {
+  "obstruction": 0,
+  "overlap": 0,
+  "crossings": 0,
+  "cost": 1017
+ },
+ "agent/18-cleanup": {
+  "obstruction": 0,
+  "overlap": 0,
+  "crossings": 0,
+  "cost": 1177
+ },
+ "agent/19-loan-application-context": {
+  "obstruction": 0,
+  "overlap": 0,
+  "crossings": 0,
+  "cost": 3568
+ },
+ "agent/20-route-only-cleanup": {
+  "obstruction": 0,
+  "overlap": 0,
+  "crossings": 1,
+  "cost": 1490
+ },
+ "agent/21-card-provisioning": {
+  "obstruction": 0,
+  "overlap": 0,
+  "crossings": 2,
+  "cost": 17232
+ },
+ "agent/22-credit-card-batch": {
+  "obstruction": 0,
+  "overlap": 0,
+  "crossings": 1,
+  "cost": 15536
+ },
+ "agent/23-credit-card-batch-ungrouped": {
+  "obstruction": 0,
+  "overlap": 0,
+  "crossings": 0,
+  "cost": 6839
+ },
+ "agent/24-skill-example": {
+  "obstruction": 0,
+  "overlap": 0,
+  "crossings": 0,
+  "cost": 676
+ },
+ "agent/24-skill-example/storefront": {
+  "obstruction": 0,
+  "overlap": 0,
+  "crossings": 0,
+  "cost": 4006
+ },
+ "agent/24-skill-example/storefront/orders": {
+  "obstruction": 0,
+  "overlap": 0,
+  "crossings": 0,
+  "cost": 1103
+ },
+ "agent/25-readme-architecture": {
+  "obstruction": 0,
+  "overlap": 0,
+  "crossings": 0,
+  "cost": 3785
+ },
+ "agent/25-readme-architecture/web": {
+  "obstruction": 0,
+  "overlap": 0,
+  "crossings": 0,
+  "cost": 2671
+ },
+ "agent/25-readme-architecture/app": {
+  "obstruction": 0,
+  "overlap": 0,
+  "crossings": 0,
+  "cost": 4392
+ },
+ "agent/26-shared-fan-out": {
+  "obstruction": 0,
+  "overlap": 0,
+  "crossings": 0,
+  "cost": 259
+ },
+ "agent/26-shared-fan-out/system": {
+  "obstruction": 0,
+  "overlap": 0,
+  "crossings": 15,
+  "cost": 16942
+ }
+}

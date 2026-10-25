@@ -1,5 +1,7 @@
 import { describeEdge } from '../../edges/describe';
 import { obstaclesForEdge } from '../../edges/obstacles';
+import { connectorRouteInputs } from '../../edges/connectorRoutes';
+import { edgeRoutes } from '../../edges/edgeRoutes';
 import { describeNode, describeContext, type DescribeContext } from '../../nodes/describe';
 import { technologyMarkBounds } from '../../nodes/technology';
 import { findFlow, stepIndexOf } from '../../document/flow';
@@ -304,6 +306,9 @@ export function buildScene(
     const stepIndex = stepIndexOf(options.selectedFlow, edge.id);
     const lane = lanes.get(edge.id)?.offset ?? 0;
     const edgePoints = points.length ? unresolvedOpenPointsFor(points, { kind: 'edge', id: edge.id }) : [];
+    // The inputs every renderer routes from (`connectorRouteInputs`), and the canvas's routes when it
+    // already has them.
+    const inputs = connectorRouteInputs(edge, { nodes, edges }, 'transient', nodeMap);
     const described = describeEdge(edge, nodeMap, {
       ...edgeCtx,
       stepIndex,
@@ -311,8 +316,9 @@ export function buildScene(
       ...(edgePoints.length ? { openPoints: edgePoints } : {}),
       spine: plan.spineFor(edge.id),
       sharedLabel: sharedLabelOf(edge.id),
-      obstacles: obstaclesForEdge(nodes, edge.source, edge.target, 'transient'),
+      obstacles: inputs?.obstacles ?? obstaclesForEdge(nodes, edge.source, edge.target, 'transient'),
       crossings: crossings.crossingsFor(edge.id),
+      ...(inputs ? { routes: edgeRoutes(inputs, 'transient') } : {}),
     });
     if (!described) continue;
     if (edge.directed) arrowColors.add(described.color);
