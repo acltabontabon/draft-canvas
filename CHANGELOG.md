@@ -12,7 +12,40 @@ The retired VS Code extension has [its own changelog](https://github.com/acltabo
 
 #### Fixed
 
-- The share dialog's Start at dropdown uses a consistently styled field with clearer spacing and a single chevron.
+- Find and Replace preserves custom names, respects text limits and avoids empty undo steps.
+- Text formatting works on blank first lines and preserves literal Markdown fences while typing.
+- Finding a flow frames every participating shape, including extra connectors.
+- Collaboration takes back edits that cannot be shared after a gesture ends or editing access
+  changes, and large shared flows keep all their valid shape references.
+
+### Desktop
+
+#### Fixed
+
+- Proposal previews show text styling changes and keep their review card clear of Depth and Nodi.
+- The update dialog's full changelog link opens once in the system browser.
+- Proposal acceptance protects newer work attached to shapes it would remove.
+- Agent edits clear selection for elements they replace, even when the element count stays the same.
+
+## [1.16.1] - 2026-10-25
+
+Fixes for diagram editing, saving and token reporting.
+
+### Shared
+
+#### Fixed
+
+- Closing or reloading waits for the latest edits to finish saving.
+
+### Desktop
+
+#### Fixed
+
+- **Nodi fixes** — Project setup includes folder access and Codex can use diagram tools. Switching
+  agents keeps each conversation, while questions and follow-ups avoid unintended edits. <!-- highlight -->
+- Layout requests honor rows, columns and spacing; short confirmations and layout feedback continue
+  the task instead of stopping at an answer or an unchanged proposal.
+- **Clearer token usage** — Totals count each turn once, with a breakdown on hover or focus. <!-- highlight -->
 
 ## [1.16.0] - 2026-10-25
 
@@ -2318,7 +2351,8 @@ pre-release milestone; this is the one meant for real use.
 - Fully local and private by design — no accounts, no cloud sync, nothing you draw ever leaves
   your device. Documents are encrypted at rest in your browser.
 
-[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.16.0...main
+[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.16.1...main
+[1.16.1]: https://github.com/acltabontabon/draft-canvas/compare/v1.16.0...v1.16.1
 [1.16.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.15.2...v1.16.0
 [1.15.2]: https://github.com/acltabontabon/draft-canvas/compare/v1.15.1...v1.15.2
 [1.15.1]: https://github.com/acltabontabon/draft-canvas/compare/v1.15.0...v1.15.1
