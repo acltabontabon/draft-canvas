@@ -53,7 +53,7 @@ async function openOrders(page: Page, setup?: () => Promise<unknown>, { readOnly
   await expect(page.locator('.dc-editor')).toBeVisible();
 }
 
-test('token breakdown stays visible after click and keyboard focus, within the viewport', async ({ page, browserName }) => {
+test('token breakdown stays visible after click and keyboard focus, within the viewport', async ({ page }) => {
   await openOrders(page);
   await page.getByRole('button', { name: 'Open Nodi' }).click();
   const input = page.getByLabel('Message Claude Code');
@@ -88,20 +88,20 @@ test('token breakdown stays visible after click and keyboard focus, within the v
   await page.screenshot({ path: test.info().outputPath('token-breakdown-click.png') });
   await page.keyboard.press('Escape');
   await expect(tooltip).toBeHidden();
+  // WebKit ports differ in which controls participate in Tab traversal. Establish keyboard
+  // modality, then focus the trigger directly: this verifies the app's focus/blur behavior rather
+  // than assuming a browser/OS Tab sequence returns to the same button (Linux CI did not).
+  await expect(input).toBeVisible();
+  await input.focus();
+  await expect(input).toBeFocused();
+  await page.keyboard.press('Shift');
   await count.focus();
-  // Focus is still on the count after Escape, so move off it and back with the keyboard.
-  // macOS Safari omits buttons from default Tab traversal. Linux WebKit uses ordinary Tab;
-  // applying macOS's Option-Tab there leaves focus elsewhere and broke the release's CI check.
-  const optionTab = browserName === 'webkit' && process.platform === 'darwin';
-  const backward = optionTab ? 'Alt+Shift+Tab' : 'Shift+Tab';
-  const forward = optionTab ? 'Alt+Tab' : 'Tab';
-  await page.keyboard.press(backward);
-  await page.keyboard.press(forward);
   await expect(count).toBeFocused();
   await expect(tooltip).toBeVisible();
   await expect(tooltip).toHaveCSS('opacity', '1');
   await page.screenshot({ path: test.info().outputPath('token-breakdown-focus.png') });
-  await page.keyboard.press(backward);
+  await input.focus();
+  await expect(input).toBeFocused();
   await expect(tooltip).toBeHidden();
 });
 
