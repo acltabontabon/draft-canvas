@@ -15,7 +15,8 @@ import { languageForFence, tokenizeCode } from '../render/code/highlight';
 import { CODE_THEMES, colorForScope } from '../render/code/theme';
 import { LANGUAGE_LABELS } from '../render/code/highlight';
 import { PERSONALITY_PROFILES } from '../render/roughness/presets';
-import { DS_GLYPH_HEIGHT, DS_GLYPH_TOP, dataStoreScale } from '../document/dataStoreGeometry';
+import { DS_GLYPH_HEIGHT, DS_GLYPH_TOP, dataStoreGlyphTop, dataStoreScale } from '../document/dataStoreGeometry';
+import { queueTubeSpan } from '../document/queueGeometry';
 import { roughenPath } from '../render/roughness/roughPath';
 import { bowControlPoint, roughEllipsePath, roughRectOvershootPath, roughRectPath } from '../render/roughness/roughRect';
 import { jitter } from '../render/roughness/seed';
@@ -1160,7 +1161,11 @@ function cylinderPaths(
 function database(node: DraftNode, ctx: DescribeContext): Shape[] {
   const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
   const scale = dataStoreScale(node);
-  return [...scaledGlyph(dataStoreGlyph(node, ctx), scale, node.width / 2), ...dataStoreCaption(node, ctx, palette, scale)];
+  const top = dataStoreGlyphTop(node);
+  return [
+    ...scaledGlyph(dataStoreGlyph(node, ctx), scale, node.width / 2, top - DS_GLYPH_TOP * scale),
+    ...dataStoreCaption(node, ctx, palette, scale, top),
+  ];
 }
 
 /**
@@ -1169,8 +1174,8 @@ function database(node: DraftNode, ctx: DescribeContext): Shape[] {
  * one. Strokes keep their weight: the group scales them, so they are divided back here. At the
  * normal size (`scale` 1, every box up to the default) the shapes are returned untouched.
  */
-function scaledGlyph(shapes: Shape[], scale: number, centreX: number): Shape[] {
-  if (scale === 1) return shapes;
+function scaledGlyph(shapes: Shape[], scale: number, centreX: number, offsetY = 0): Shape[] {
+  if (scale === 1 && offsetY === 0) return shapes;
   const unscaled = (stroke: Stroke | undefined): Stroke | undefined =>
     stroke && { ...stroke, width: stroke.width / scale, dash: stroke.dash?.map((length) => length / scale) };
   const restore = (shape: Shape): Shape => {
@@ -1185,7 +1190,7 @@ function scaledGlyph(shapes: Shape[], scale: number, centreX: number): Shape[] {
         return shape;
     }
   };
-  return [{ t: 'group', children: shapes.map(restore), scale, translate: { x: centreX * (1 - scale), y: 0 } }];
+  return [{ t: 'group', children: shapes.map(restore), scale, translate: { x: centreX * (1 - scale), y: offsetY } }];
 }
 
 /** A Data Store's glyph alone, at its normal size — see `database` for what goes around it. */
@@ -1218,14 +1223,13 @@ function dataStoreGlyph(node: DraftNode, ctx: DescribeContext): Shape[] {
  * a name laid over it collides with the very thing that identifies the kind. Anchoring every kind
  * the same way is also what lets eight quite different silhouettes still read as one family.
  */
-const DS_GLYPH_BOTTOM = DS_GLYPH_TOP + DS_GLYPH_HEIGHT;
 const DS_CAPTION_GAP = 5;
 
 /** The caption under a Data Store's glyph. `generic` has no kind label of its own — it's the
  *  family's baseline, so it carries just the name. */
-function dataStoreCaption(node: DraftNode, ctx: DescribeContext, palette: AccentPalette, scale = 1): Shape[] {
+function dataStoreCaption(node: DraftNode, ctx: DescribeContext, palette: AccentPalette, scale = 1, glyphTop = DS_GLYPH_TOP * scale): Shape[] {
   const kindLabel = DATABASE_KIND_LABELS[node.databaseKind ?? 'generic'];
-  const top = DS_GLYPH_BOTTOM * scale + DS_CAPTION_GAP;
+  const top = glyphTop + DS_GLYPH_HEIGHT * scale + DS_CAPTION_GAP;
   if (kindLabel) {
     return pinnedCaption(node, ctx, { top, kindLabel, nameColor: palette.text });
   }
@@ -1655,22 +1659,15 @@ function queue(node: DraftNode, ctx: DescribeContext): Shape[] {
   const isDlq = node.deliveryRole === 'dead-letter';
   const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
   const w = node.width - 1.5;
-  const h = node.height - 1.5;
   const x = 0.75;
-  const y = 0.75;
-  // The tube is a compact glyph, not the whole node — like an actor's head
-  // and shoulders, it doesn't grow to fill the box. The name and its kind
-  // subtext live below it, stacked, in the full-width space that leaves —
-  // kept small enough that even a pre-existing (shorter) queue node has room
-  // for both lines without them running into the tube.
-  // `document/queueGeometry.ts`'s `queueTubeSpan` mirrors this `y`/`tubeH` arithmetic
-  // for anything placing a connector on the tube ahead of rendering — keep the two in step.
-  const tubeH = Math.min(32, h * 0.5);
+  const span = queueTubeSpan(node.height, node.width);
+  const y = span.top;
+  const tubeH = span.bottom - span.top;
   // Capped at half the tube's own height, not just a width fraction — a cap
   // wider than the tube is tall reads as a flattened oval bulging past the
   // pill's own ends rather than a rounded one, which is what a short queue
   // node (tubeH below the historical 32px cap) would otherwise get.
-  const rx = Math.min(14, w * 0.12, tubeH / 2);
+  const rx = Math.min(tubeH <= 32 ? 14 : tubeH * (14 / 32), w * 0.12, tubeH / 2);
   const profile = PERSONALITY_PROFILES[ctx.preset];
 
   // A horizontal cylinder — a pipe messages travel through — built the same
@@ -1775,10 +1772,12 @@ function queue(node: DraftNode, ctx: DescribeContext): Shape[] {
         : queueIcons();
 
   const dlqOpacity = isDlq ? DLQ_OPACITY : undefined;
+  const iconShapes: Shape[] = [
+    { t: 'path', d: icons, fill: 'none', stroke: { color: palette.line, width: 1.2 }, opacity: dlqOpacity },
+  ];
   const shapes: Shape[] = [
     { t: 'path', d: body, fill: palette.fill, stroke: { color: palette.line, width: 1.5 }, opacity: dlqOpacity },
     { t: 'path', d: lid, fill: 'none', stroke: { color: palette.line, width: 1.5 }, opacity: dlqOpacity },
-    { t: 'path', d: icons, fill: 'none', stroke: { color: palette.line, width: 1.2 }, opacity: dlqOpacity },
   ];
   // A DLQ's dash belongs on the undelivered message, not on the pipe: the queue itself is a real,
   // working queue, and what's exceptional about it is the message sitting in it. So the tube stays
@@ -1786,7 +1785,7 @@ function queue(node: DraftNode, ctx: DescribeContext): Shape[] {
   // made it, one that didn't." The whole-tube dash this used to carry said the infrastructure was
   // hypothetical, which was never the intent.
   if (isDlq) {
-    shapes.push({
+    iconShapes.push({
       t: 'path',
       d: envelope(dlqStartX + DLQ_ICON_W + DLQ_ICON_GAP, y + tubeH / 2 - DLQ_ICON_H / 2, DLQ_ICON_W, DLQ_ICON_H),
       fill: 'none',
@@ -1794,6 +1793,8 @@ function queue(node: DraftNode, ctx: DescribeContext): Shape[] {
       opacity: dlqOpacity,
     });
   }
+  const iconScale = Math.max(1, tubeH / 32);
+  shapes.push(...scaledGlyph(iconShapes, iconScale, node.width / 2, (y + tubeH / 2) * (1 - iconScale)));
 
   // Same "special opportunity" retrace pass as `database()` — Sketch only, independently
   // seeded. The icon glyphs above never retrace; they're small, identifying, and text-adjacent.
@@ -1815,13 +1816,8 @@ function queue(node: DraftNode, ctx: DescribeContext): Shape[] {
   // as "DLQ" rather than reverting to a generic kind caption.
   const kindLabel = isDlq ? 'DLQ' : QUEUE_KIND_LABELS[node.queueKind ?? 'queue'];
 
-  // Anchored right under the tube (not centred in whatever height the node
-  // happens to be) — the tube is a small fixed-size glyph, not something that
-  // grows to fill a resized node, so the caption stays close to the shape it
-  // labels instead of drifting toward the middle of a tall box. Deliberately
-  // tight (not a generic paragraph gap) so the icon and its caption read as
-  // one element, not an icon plus a detached line of text underneath it.
-  const top = tubeH + 2;
+  // Keep the caption close to the tube as both move inside a taller box.
+  const top = span.bottom + 1.25;
   shapes.push(...pinnedCaption(node, ctx, { top, kindLabel, nameColor: palette.text }));
 
   return shapes;
@@ -1839,6 +1835,10 @@ const GLYPH_BOTTOM = GLYPH_TOP + GLYPH_SLOT;
 /** Tight on purpose — the glyph and the participant's name need to read as one unit, not two
  *  separate things with a gap between them. */
 const GLYPH_LABEL_GAP = 6;
+// Group is the widest actor glyph: 34px either side of centre. Keep a small side margin while
+// letting a resized actor's drawing fill most of its box; the label keeps its readable font size.
+const ACTOR_GLYPH_WIDTH = 68;
+const ACTOR_CAPTION_MARGIN = 26;
 
 /**
  * Human: a simplified bust silhouette — a large head sitting just above a broad, closed
@@ -2240,15 +2240,20 @@ function actor(node: DraftNode, ctx: DescribeContext): Shape[] {
               ? agentGlyph(node, cx, stroke, ctx)
               : humanGlyph(node, cx, stroke, ctx);
 
-  const shapes: Shape[] = node.actorFrame === 'borderless' ? glyphShapes : [container, topBar, ...glyphShapes];
-
   // No on-shape kind caption ("HUMAN"/"SYSTEM"/"DEVICE") — unlike Service/Data Store/Queue, whose
   // silhouette is shared across every sub-kind, Actor's three kinds are already visually distinct
   // by shape; the only text this glyph needs is the participant's own name.
   const text = node.text ?? '';
-  if (text.trim()) {
-    const top = glyphBottom + GLYPH_LABEL_GAP;
-    const maxWidth = Math.max(16, node.width - PADDING);
+  const maxWidth = Math.max(16, node.width - PADDING);
+  const captionAt = (scale: number) => {
+    const top = GLYPH_TOP + (glyphBottom - GLYPH_TOP) * scale + GLYPH_LABEL_GAP;
+    if (!text.trim()) {
+      return {
+        label: null,
+        detailShapes: [] as Shape[],
+        contentBottom: top + FONTS.nodeLabel.size * LINE_HEIGHTS.label,
+      };
+    }
     const { layout, font } = fitLabel(text, {
       font: FONTS.nodeLabel,
       minFontSize: TEXT_SIZES.nodeLabelMin,
@@ -2257,7 +2262,7 @@ function actor(node: DraftNode, ctx: DescribeContext): Shape[] {
       lineHeightRatio: LINE_HEIGHTS.label,
       measurer: ctx.measurer,
     });
-    shapes.push({
+    const label: Extract<Shape, { t: 'text' }> = {
       t: 'text',
       x: cx,
       y: top,
@@ -2267,11 +2272,28 @@ function actor(node: DraftNode, ctx: DescribeContext): Shape[] {
       align: 'middle',
       role: 'label',
       labelWidth: maxWidth,
-    });
+    };
     const detailTop = top + layout.height + C4_NAME_GAP;
     const detail = c4Detail(node, ctx, maxWidth, node.height - 6 - detailTop);
-    if (detail) shapes.push(...detail.place(cx, detailTop, 'middle'));
-  }
+    return {
+      label,
+      detailShapes: detail ? detail.place(cx, detailTop, 'middle') : [],
+      contentBottom: detail ? detailTop + detail.height : top + layout.height,
+    };
+  };
+  const baseline = captionAt(1);
+  // Use only height left after the name and any C4 detail. Otherwise an arranger that grows an
+  // actor to fit its description would grow the glyph too, take that room back, and grow it again.
+  const extraHeight = Math.max(0, node.height - baseline.contentBottom - ACTOR_CAPTION_MARGIN);
+  const scale = Math.max(1, Math.min((node.width - PADDING * 2) / ACTOR_GLYPH_WIDTH, 1 + extraHeight / GLYPH_SLOT));
+  const { label, detailShapes, contentBottom } = scale === 1 ? baseline : captionAt(scale);
+  // Keep the glyph's original top inset instead of scaling the empty space above it, then centre
+  // the visible glyph-and-label block in whatever height remains.
+  const offsetY = Math.max(0, Math.floor((node.height - contentBottom - GLYPH_TOP) / 2));
+  const grownGlyph = scaledGlyph(glyphShapes, scale, cx, GLYPH_TOP * (1 - scale) + offsetY);
+  const shapes: Shape[] = node.actorFrame === 'borderless' ? grownGlyph : [container, topBar, ...grownGlyph];
+  if (label) shapes.push({ ...label, y: label.y + offsetY });
+  shapes.push(...detailShapes.map((shape) => (shape.t === 'text' ? { ...shape, y: shape.y + offsetY } : shape)));
   return shapes;
 }
 

@@ -2,12 +2,41 @@ import { describe, expect, it } from 'vitest';
 import { createNode } from '../src/document/factory';
 import { anchorBandOf, queueTubeSpan } from '../src/document/queueGeometry';
 import { anchorPoint, rectOf } from '../src/edges/routing';
+import { describeContext, describeNode } from '../src/nodes/describe';
+import { LIGHT } from '../src/render/theme/tokens';
 
 describe('queue tube geometry', () => {
-  it('mirrors the renderer: a 0.75 inset and a tube of at most 32px, at most half the box', () => {
+  it('keeps compact queues at their original tube size', () => {
     expect(queueTubeSpan(48)).toEqual({ top: 0.75, bottom: 0.75 + 23.25 });
     expect(queueTubeSpan(68)).toEqual({ top: 0.75, bottom: 32.75 });
     expect(queueTubeSpan(72)).toEqual({ top: 0.75, bottom: 32.75 });
+  });
+
+  it('grows and centres a resized tube while keeping anchors on its visible outline', () => {
+    const span = queueTubeSpan(150, 280);
+    expect(span.top).toBeGreaterThan(0.75);
+    expect(span.bottom - span.top).toBeGreaterThan(80);
+    const band = anchorBandOf({ type: 'queue', x: 10, y: 20, width: 280, height: 150 })!;
+    expect(band).toEqual({ top: 20 + span.top, bottom: 20 + span.bottom, glyphTop: 20 + span.top });
+    const node = createNode({ type: 'queue', x: 10, y: 20, width: 280, height: 150 });
+    const rect = rectOf(node);
+    expect(anchorPoint(rect, 'top').y).toBe(20 + span.top);
+    expect(anchorPoint(rect, 'left').y).toBe(20 + (span.top + span.bottom) / 2);
+  });
+
+  it('grows the message symbols with Queue, Topic, Stream and DLQ tubes', () => {
+    for (const queueKind of ['queue', 'topic', 'stream'] as const) {
+      const node = createNode({ type: 'queue', queueKind, x: 0, y: 0, width: 280, height: 150 });
+      const shapes = describeNode(node, describeContext(LIGHT)).shapes;
+      const symbols = shapes.find((shape) => shape.t === 'group');
+      const caption = shapes.find((shape) => shape.t === 'text');
+      expect(symbols?.t === 'group' && symbols.scale).toBeGreaterThan(2.5);
+      expect(caption?.t === 'text' && caption.y).toBeGreaterThan(queueTubeSpan(150, 280).bottom);
+      expect(caption?.t === 'text' && caption.y + caption.layout.height).toBeLessThan(node.height);
+    }
+    const dlq = createNode({ type: 'queue', deliveryRole: 'dead-letter', x: 0, y: 0, width: 280, height: 150 });
+    const symbols = describeNode(dlq, describeContext(LIGHT)).shapes.find((shape) => shape.t === 'group');
+    expect(symbols?.t === 'group' && symbols.children).toHaveLength(2);
   });
 
   it('gives a queue-family node an absolute band and every other node none', () => {

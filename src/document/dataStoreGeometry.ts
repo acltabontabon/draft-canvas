@@ -17,9 +17,8 @@
  * that went with it. Tying the scale to the default instead would silently redraw every store in
  * every diagram the moment the default moved.
  *
- * The width is what sets how much of its box the glyph fills (54 of 90, not 54 of 148): with the
- * wider figure a glyph grown to fit its box still left a wide empty frame around it. Height is the
- * side that limits a wide box, so a store at any aspect wider than ~1 keeps the scale it had.
+ * The older scale remains the floor for saved diagrams. A box with room beyond that grows the
+ * glyph further while reserving space for its name and optional C4 detail.
  */
 const DS_UNIT_WIDTH = 90;
 const DS_UNIT_HEIGHT = 88;
@@ -33,15 +32,31 @@ export const DS_GLYPH_MARGIN = 12;
  *  56 rounds to it: the others are narrower, and a connector a pixel or two off a narrower glyph
  *  reads as touching). */
 const DS_GLYPH_WIDTH = 54;
+const DS_MAX_GLYPH_WIDTH = 56;
+const DS_CAPTION_RESERVE = 64;
+const DS_MARK_RESERVE = 25;
 
 /**
- * How much bigger than normal a Data Store's glyph is drawn: 1 at the unit box above and at every
- * smaller one, then growing with the box — uniformly, by whichever side has grown the least, so a
- * box stretched only one way keeps its glyph and one dragged out from a corner scales it. A store
- * at today's default box is a little over 1; one at the old default is exactly 1.
+ * Keep the established scale for ordinary diagram sizes, then use spare width and height in boxes
+ * enlarged past both thresholds. The limits reserve space for the caption, C4 detail and a possible
+ * technology mark beside the glyph.
  */
 export function dataStoreScale(node: { width: number; height: number }): number {
-  return Math.max(1, Math.min(node.width / DS_UNIT_WIDTH, node.height / DS_UNIT_HEIGHT));
+  const original = Math.max(1, Math.min(node.width / DS_UNIT_WIDTH, node.height / DS_UNIT_HEIGHT));
+  const growth = Math.min(Math.max(0, node.width - 250), Math.max(0, node.height - 200)) / 45;
+  if (growth === 0) return original;
+  return Math.max(original, Math.min(
+    original + growth,
+    (node.width - DS_GLYPH_MARGIN * 2 - DS_MARK_RESERVE) / DS_MAX_GLYPH_WIDTH,
+    (node.height - 22 - DS_CAPTION_RESERVE) / DS_GLYPH_HEIGHT,
+  ));
+}
+
+/** The original top inset eases toward a smaller one as an enlarged glyph consumes the box. */
+export function dataStoreGlyphTop(node: { width: number; height: number }): number {
+  const original = Math.max(1, Math.min(node.width / DS_UNIT_WIDTH, node.height / DS_UNIT_HEIGHT));
+  const growth = dataStoreScale(node) - original;
+  return Math.max(DS_GLYPH_TOP, DS_GLYPH_TOP * original - growth * 5);
 }
 
 export interface DataStoreGlyphBounds {
@@ -59,7 +74,7 @@ export function dataStoreGlyphBounds(node: { x: number; y: number; width: number
   const scale = dataStoreScale(node);
   const width = Math.min(DS_GLYPH_WIDTH * scale, Math.max(0, node.width - DS_GLYPH_MARGIN * 2));
   const centre = node.x + node.width / 2;
-  const top = node.y + Math.min(DS_GLYPH_TOP * scale, node.height);
+  const top = node.y + Math.min(dataStoreGlyphTop(node), node.height);
   return {
     top,
     bottom: Math.min(node.y + node.height, top + DS_GLYPH_HEIGHT * scale),

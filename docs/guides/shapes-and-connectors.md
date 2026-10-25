@@ -17,7 +17,9 @@ Press a key to add a shape. Select it to choose a kind in its toolbar.
 | Boundary | `B` | See [Boundaries](#boundaries) |
 | Text / Note / Code | `T` / `N` / `C` | |
 
-Use **External** for a service you do not own. **Actor frame → Framed** outlines an actor.
+Use **External** for a service you do not own. **Actor frame → Framed** outlines an actor. Drag an
+actor's corner resize handle to grow its glyph and box together.
+Queue and Data Store artwork also grows when you drag a corner resize handle.
 
 ## Names and technology
 

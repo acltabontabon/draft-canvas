@@ -34,6 +34,25 @@ describe('actor frames', () => {
     }
   });
 
+  it.each(ACTOR_KINDS)('grows the %s glyph and keeps its name below it when resized', (actorKind) => {
+    const node = createNode({ type: 'actor', id: 'actor', x: 0, y: 0, text: 'Customer', actorKind });
+    const ctx = describeContext(LIGHT);
+    const original = describeNode(node, ctx);
+    const enlarged = { ...node, width: node.width * 2, height: node.height * 2 };
+    const resized = describeNode(enlarged, ctx);
+    const glyph = resized.shapes.find((shape) => shape.t === 'group');
+    const label = resized.shapes.find((shape) => shape.t === 'text' && shape.role === 'label');
+    const originalLabel = original.shapes.find((shape) => shape.t === 'text' && shape.role === 'label');
+
+    if (glyph?.t !== 'group' || label?.t !== 'text' || originalLabel?.t !== 'text') throw new Error('Actor drawing is incomplete');
+    expect(glyph.scale).toBeGreaterThan(2.5);
+    expect(glyph.translate!.x).toBeCloseTo(enlarged.width * (1 - glyph.scale!) / 2);
+    expect(glyph.translate!.y + 13 * glyph.scale!).toBeLessThan(enlarged.height / 4);
+    expect(label.y).toBeGreaterThan(originalLabel.y);
+    expect(label.y + label.layout.height).toBeLessThan(enlarged.height);
+    expect(renderDocumentSvg({ ...createDocument('Resized actor'), nodes: [enlarged] }).svg).toContain(`scale(${glyph.scale})`);
+  });
+
   it.each(ACTOR_FRAMES)('preserves %s through saving, including look-inside rooms and image exports', (actorFrame) => {
     const actor = createNode({ type: 'actor', id: 'actor', x: 0, y: 0, actorFrame, text: 'Customer' });
     const host = createNode({ type: 'service', x: 300, y: 0 });

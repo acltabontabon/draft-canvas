@@ -3,19 +3,21 @@ import type { DraftNode } from './types';
 
 /**
  * Where a Queue/Topic/Stream node's tube glyph sits, vertically, relative to the node's own top
- * edge — mirrors `nodes/describe.ts`'s `queue()` geometry exactly (`y`/`tubeH`; that function
- * computes the same numbers for drawing). The tube is a compact glyph anchored near the top of the
- * box (the name/kind captions sit in the remaining space below it), so its own visual centre sits
- * well above the box's vertical midpoint.
+ * edge — shared with `nodes/describe.ts` so drawing, handles and routing use the same tube.
+ * A box enlarged beyond the usual diagram sizes gives the tube more height and centres the
+ * tube-and-caption block vertically. Smaller boxes retain their established layout.
  *
  * Lives in `document/` rather than beside the renderer because it's *placement* knowledge, not
  * drawing: `edges/routing.ts` reads it (via `anchorBandOf`) so a left/right connector lands on the
  * glyph instead of on the gap between the tube and its caption.
  */
-export function queueTubeSpan(height: number): { top: number; bottom: number } {
+export function queueTubeSpan(height: number, width = Infinity): { top: number; bottom: number } {
   const h = height - 1.5;
-  const tubeH = Math.min(32, h * 0.5);
-  const top = 0.75;
+  const compact = Math.min(32, h * 0.5);
+  const growth = Math.min(Math.max(0, height - 110) * 1.25, Math.max(0, width - 200) * 0.65);
+  const tubeH = growth === 0 ? compact : Math.min(32 + growth, (width - 1.5) * 0.38, height - 39);
+  const centredTop = (height - tubeH - 22) / 2;
+  const top = 0.75 + Math.max(0, centredTop - 0.75) * Math.min(1, growth / 20);
   return { top, bottom: top + tubeH };
 }
 
@@ -48,8 +50,12 @@ export function anchorBandOf(
   node: Pick<DraftNode, 'type' | 'x' | 'y' | 'width' | 'height'>,
 ): AnchorBand | undefined {
   if (node.type === 'queue') {
-    const span = queueTubeSpan(node.height);
-    return { top: node.y + span.top, bottom: node.y + span.bottom };
+    const span = queueTubeSpan(node.height, node.width);
+    return {
+      top: node.y + span.top,
+      bottom: node.y + span.bottom,
+      ...(span.top > 0.75 ? { glyphTop: node.y + span.top } : {}),
+    };
   }
   if (node.type === 'database') {
     const glyph = dataStoreGlyphBounds(node);
