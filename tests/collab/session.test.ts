@@ -401,7 +401,8 @@ describe('joining from the editor', () => {
 
     owner.end('owner-left');
     settle(pump);
-    expect(useCollabStore.getState()).toMatchObject({ status: 'ended', endReason: 'owner-left' });
+    // Who owned it outlives the cleared people list, for the card the canvas closes behind.
+    expect(useCollabStore.getState()).toMatchObject({ status: 'ended', endReason: 'owner-left', peers: [], endedOwner: { name: 'Owner', color: 0 } });
     expect(useUiStore.getState().readOnly).toMatchObject({ collaborative: true });
   });
 

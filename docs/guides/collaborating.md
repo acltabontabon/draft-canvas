@@ -47,10 +47,14 @@ them a one-time link; they send back a reply code for you to paste.
 With a direct invite, you get a reply code instead (copied for you where the browser allows). Send
 it back to the owner.
 
-Your copy is never saved. To keep the diagram afterwards, choose **Make an editable copy** when the
-session ends, or ask the owner for an export. Joined over a desktop's local network link, you get
-**Export a copy** instead: a copy kept in the browser at that plain `http://` address could be read
-by whatever answers there later.
+Your copy is never saved. When the session ends on you — the owner ends it, closes the canvas,
+removes you, or the connection is lost — your canvas closes behind a card that says why. Choose
+**Keep a copy** to carry on with an editable copy in this browser, or **Back to home**. Joined over a
+desktop's local network link, you get **Export a copy** instead: a copy kept in the browser at that
+plain `http://` address could be read by whatever answers there later. You can also ask the owner
+for an export.
+
+![A collaborator's canvas greyed out behind a card: Ada's line to the canvas snipped, her seat empty, the sheet stamped Session ended, with Keep a copy and Back to home.](../media/guides/collab-ended.png)
 
 ## Working together
 
@@ -76,7 +80,7 @@ Hover a face in the people column, or open the faces beside **Share** in the too
 | **Undo changes** | Takes back everything that person changed this session, even after they leave; one undo reverses it |
 | **Remove** | Takes them out of the session; offers **Undo their changes** if they edited |
 | **Re-invite** | Makes a new direct invite for someone who joined by one |
-| **End session** | Disconnects everyone |
+| **End session** | Disconnects everyone; their canvases close |
 
 Closing the canvas or the tab, reloading or opening another canvas also ends the session. Your canvas keeps
 saving as usual. A collaborator whose connection drops rejoins on their own, in the same role —

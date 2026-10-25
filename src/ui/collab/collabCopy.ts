@@ -74,6 +74,25 @@ export const END_MESSAGES: Record<EndReason, string> = {
   denied: 'The owner didn’t let you in.',
 };
 
+/** What the card says first: who ended it and how, in one line. */
+export function endHeadline(reason: EndReason, owner: string | null): string {
+  const who = owner?.trim() || 'The owner';
+  switch (reason) {
+    case 'ended':
+      return `${who} ended the session`;
+    case 'owner-left':
+      return `${who} closed the canvas`;
+    case 'document-changed':
+      return `${who} moved to another canvas`;
+    case 'removed':
+      return `${who} removed you from the session`;
+    case 'timeout':
+      return `Lost the line to ${who === 'The owner' ? 'the owner' : who}`;
+    default:
+      return 'The session ended';
+  }
+}
+
 export const ROLE_LABELS: Record<Role, string> = {
   editor: 'Can edit',
   viewer: 'Can view',

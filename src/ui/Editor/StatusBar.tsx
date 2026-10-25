@@ -88,7 +88,7 @@ function LiveStatus({ role }: { role: 'host' | 'guest' }) {
         </span>
         <span className="dc-muted dc-status-hint">
           {status === 'ended'
-            ? 'This copy isn’t saved anywhere — keep a copy from the banner above the canvas.'
+            ? 'This copy isn’t saved anywhere.'
             : `${owner ? `${owner}’s` : 'The owner’s'} copy is the one that’s saved. Nothing goes through a server.`}
         </span>
       </div>

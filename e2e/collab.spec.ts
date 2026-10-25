@@ -235,7 +235,42 @@ test('two browsers edit one canvas live, and the owner stays in charge', async (
 
   // Removing them ends their session, and their screen says why.
   await dialog.getByRole('button', { name: 'Remove Gus from the session' }).click();
-  await expect(guest.page.getByRole('status').filter({ hasText: 'removed you' })).toBeVisible();
+  await expect(guest.page.getByRole('dialog', { name: 'Olive removed you from the session' })).toBeVisible();
+  await expect(guest.page.locator('.dc-editor')).toHaveAttribute('data-session-ended', 'true');
+  await expect(guest.page.locator('.dc-editor-body')).toHaveAttribute('inert', '');
+  await expect(guest.page.locator('.dc-read-only-banner')).toHaveCount(0);
+  await guest.page.context().close();
+});
+
+test('when the owner ends the session, the collaborator’s canvas closes behind a card, and a copy can be kept', async ({ page: owner, browser, browserName }) => {
+  await newCanvas(owner, 'Payments');
+  test.skip(!(await peersConnect(browser, browserName)), 'This engine can’t connect two browser contexts on this machine');
+  await create(owner, 'Service', { x: 260, y: 220 });
+
+  const link = await startSession(owner);
+  await owner.keyboard.press('Escape');
+  const guest = { page: await knock(browser, link, 'Gus') };
+  await letIn(owner, 'Gus');
+  await expect(guest.page.locator('.dc-editor')).toBeVisible({ timeout: 30_000 });
+
+  await expect.poll(async () => (await labels(guest.page)).length).toBe(1);
+  await owner.getByRole('button', { name: /^Live session/ }).click();
+  const dialog = owner.getByRole('dialog', { name: 'Collaborate' });
+  await dialog.getByRole('button', { name: 'End session' }).click();
+
+  const sessionEnd = guest.page.getByRole('dialog', { name: 'Olive ended the session' });
+  await expect(sessionEnd).toBeVisible({ timeout: 15_000 });
+  await expect(guest.page.locator('.dc-editor-body')).toHaveAttribute('inert', '');
+  // Nothing behind the card takes a key: select-all and Delete leave the canvas as it was.
+  await guest.page.keyboard.press(process.platform === 'darwin' ? 'Meta+a' : 'Control+a');
+  await guest.page.keyboard.press('Delete');
+  await expect.poll(async () => (await labels(guest.page)).length).toBe(1);
+  await expect(guest.page.locator('.react-flow__node.selected')).toHaveCount(0);
+
+  await sessionEnd.getByRole('button', { name: 'Keep a copy' }).click();
+  await expect(guest.page.locator('.dc-session-end')).toHaveCount(0);
+  await expect(guest.page.locator('.dc-editor')).not.toHaveAttribute('data-session-ended');
+  await expect(guest.page.getByLabel('Diagram title')).toHaveValue('Payments');
   await guest.page.context().close();
 });
 

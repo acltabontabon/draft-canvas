@@ -278,12 +278,18 @@ async function collabScreenshots(browser: Browser, page: Page) {
     await expect(page.locator('.dc-presence-cursor').filter({ hasText: 'Grace' })).toBeVisible({ timeout: 10_000 });
     await rest();
     await shot(page, 'collab-live');
+
+    // The owner ends it: Grace's canvas closes behind the card that says so.
+    await page.getByRole('button', { name: /^Live session/ }).click();
+    await dialog.getByRole('button', { name: 'End session' }).click();
+    await page.keyboard.press('Escape');
+    await expect(guest.getByRole('dialog', { name: 'Ada ended the session' })).toBeVisible({ timeout: 15_000 });
+    await guest.mouse.move(8, 8);
+    await guest.waitForTimeout(1400); // with `shot`'s own wait: the line snips, the seat empties, the postmark lands
+    await shot(guest, 'collab-ended');
   } finally {
     await guestContext.close();
   }
-  await page.getByRole('button', { name: /^Live session/ }).click();
-  await dialog.getByRole('button', { name: 'End session' }).click();
-  await page.keyboard.press('Escape');
 }
 
 async function technologyScreenshots(page: Page) {

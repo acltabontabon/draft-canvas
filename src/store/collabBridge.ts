@@ -425,9 +425,16 @@ export function joinSession(transport: CollabTransport, options: JoinOptions): G
     },
     {
       status(status: GuestStatus, reason?: EndReason) {
-        const was = useCollabStore.getState().status;
+        const before = useCollabStore.getState();
+        const was = before.status;
         const mapped: SessionStatus = status;
-        useCollabStore.setState({ status: mapped, endReason: reason ?? null, ...(status === 'ended' ? { peers: [], presence: {}, presenter: null, following: false } : {}) });
+        // Read before `peers` is cleared below; a second "ended" keeps the name the first one read.
+        const owner = before.peers.find((peer) => peer.role === 'owner');
+        useCollabStore.setState({
+          status: mapped,
+          endReason: reason ?? null,
+          ...(status === 'ended' ? { peers: [], presence: {}, presenter: null, following: false, endedOwner: owner ? { name: owner.name, color: owner.color } : before.endedOwner } : {}),
+        });
         if (status === 'ended') {
           if (reason) announce(`The live session ended.`, { assertive: true });
           if (reason && FAULTS.has(reason)) logDiagnostic(new Error('collab ended'), { operation: 'collab-session' });
