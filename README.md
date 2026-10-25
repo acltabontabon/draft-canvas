@@ -17,12 +17,19 @@ is yours to review.
 
 ## What it can do
 
-- Map services, stores, queues, and components while keeping the big picture readable.
-- Trace request flows step by step, including happy and failure paths.
-- Add notes, source references, and open questions where they belong.
-- Start from an architecture pattern, draw from the keyboard, and follow connection suggestions.
-- Collaborate live, share protected links, and import or export Mermaid, PlantUML, Structurizr, and
-  draw.io diagrams.
+- **C4-aware.** Move from System Context to Containers to Components, and look inside services
+  without losing context.
+- **Tech-aware shapes.** Model services, APIs, workers, stores, queues, actors, and boundaries;
+  add technologies like Postgres or Rust.
+- **Presentation flows.** Trace requests through connectors and present happy or failure paths step
+  by step.
+- **Bring your own agent.** Connect Claude Code, Codex, Cursor, Gemini CLI, Junie, or any MCP client;
+  review proposed changes on the canvas.
+- **Live collaboration.** Share a canvas, control view/edit access, see pointers, and follow
+  presentations.
+- **Context for decisions.** Attach rich-text notes, code, source references, and open questions.
+- **Import and export.** Start with Mermaid; export images, editable files, Mermaid, PlantUML,
+  Structurizr, or draw.io.
 
 ## Get started
 
