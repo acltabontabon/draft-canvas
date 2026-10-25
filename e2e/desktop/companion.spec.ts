@@ -90,9 +90,11 @@ test('token breakdown stays visible after click and keyboard focus, within the v
   await expect(tooltip).toBeHidden();
   await count.focus();
   // Focus is still on the count after Escape, so move off it and back with the keyboard.
-  // Safari's default Tab traversal omits buttons; Option-Tab includes every focusable control.
-  const backward = browserName === 'webkit' ? 'Alt+Shift+Tab' : 'Shift+Tab';
-  const forward = browserName === 'webkit' ? 'Alt+Tab' : 'Tab';
+  // macOS Safari omits buttons from default Tab traversal. Linux WebKit uses ordinary Tab;
+  // applying macOS's Option-Tab there leaves focus elsewhere and broke the release's CI check.
+  const optionTab = browserName === 'webkit' && process.platform === 'darwin';
+  const backward = optionTab ? 'Alt+Shift+Tab' : 'Shift+Tab';
+  const forward = optionTab ? 'Alt+Tab' : 'Tab';
   await page.keyboard.press(backward);
   await page.keyboard.press(forward);
   await expect(count).toBeFocused();
