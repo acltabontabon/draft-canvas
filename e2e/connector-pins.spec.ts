@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { afterDropGuard, cameraAtRest, nextFrames } from './canvas';
+import { afterDropGuard, cameraAtRest, clickEdge, nextFrames } from './canvas';
 
 /**
  * Pinned and automatic connector ends, end to end: drag a shape across to the other side of the
@@ -17,7 +17,7 @@ async function open(page: Page) {
       format: 'draft-canvas',
       version: 21,
       metadata: { id: 'connector-pins', title: 'Connector pins', createdAt: 1, updatedAt: 2 },
-      nodes: [node('a', 400, 0), node('b', 900, 0), node('c', 900, 300)],
+      nodes: [node('a', 600, 0), node('b', 1000, 0), node('c', 1000, 300)],
       edges: [
         // No anchors: both ends automatic.
         { id: 'auto', source: 'a', target: 'b', routing: 'smoothstep', directed: true },
@@ -53,13 +53,13 @@ test('dragging a shape across turns an automatic end to face it and leaves a pin
   expect(pinnedBefore.x).toBeCloseTo(a.x + a.width, 0);
   expect(pinnedBefore.y).toBeCloseTo(a.y + a.height * 0.75, 0);
 
-  // Drag B and C over to A's left.
+  // Drag B and C over to A's left. Stay clear of the canvas edge: Firefox auto-pans a drag held near it.
   for (const id of ['b', 'c']) {
     const box = await boxOf(page, id);
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
     await page.mouse.down();
-    await page.mouse.move(box.x + box.width / 2 - 450, box.y + box.height / 2, { steps: 8 });
-    await page.mouse.move(box.x + box.width / 2 - 900, box.y + box.height / 2, { steps: 8 });
+    await page.mouse.move(box.x + box.width / 2 - 350, box.y + box.height / 2, { steps: 8 });
+    await page.mouse.move(box.x + box.width / 2 - 700, box.y + box.height / 2, { steps: 8 });
     await page.mouse.up();
     await nextFrames(page);
   }
@@ -78,22 +78,16 @@ test('Auto attach start lets a pinned end face the shape again, in one undo step
   const c = await boxOf(page, 'c');
   await page.mouse.move(c.x + c.width / 2, c.y + c.height / 2);
   await page.mouse.down();
-  await page.mouse.move(c.x + c.width / 2 - 900, c.y + c.height / 2, { steps: 10 });
+  await page.mouse.move(c.x + c.width / 2 - 700, c.y + c.height / 2, { steps: 10 });
   await page.mouse.up();
   await cameraAtRest(page);
   const a = await boxOf(page, 'a');
   expect((await start(page, 'pinned')).x).toBeCloseTo(a.x + a.width, 0);
 
-  const line = page.locator('.react-flow__edge[data-id="pinned"] .dc-edge-hit').first();
-  const mid = await line.evaluate((el) => {
-    const path = el as SVGPathElement;
-    const point = path.getPointAtLength(path.getTotalLength() * 0.3).matrixTransform(path.getScreenCTM()!);
-    return { x: point.x, y: point.y };
-  });
   await page.keyboard.press('Escape');
   // A click straight after a drop is eaten by the drag's own guard.
   await afterDropGuard(page);
-  await page.mouse.click(mid.x, mid.y);
+  await clickEdge(page, page.locator('.react-flow__edge[data-id="pinned"] .dc-edge-hit').first());
   await expect(page.getByRole('toolbar', { name: 'Connector options' })).toBeVisible();
   await page.keyboard.press('Shift+F10');
   await page.getByRole('menuitem', { name: 'Auto attach start', exact: true }).click();
