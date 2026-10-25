@@ -8,6 +8,12 @@ The retired VS Code extension has [its own changelog](https://github.com/acltabo
 
 ## [Unreleased]
 
+### Shared
+
+#### Fixed
+
+- The share dialog's Start at dropdown uses a consistently styled field with clearer spacing and a single chevron.
+
 ## [1.16.0] - 2026-10-25
 
 Draw together. Think with your own agent.

@@ -1,6 +1,7 @@
 import { useId, useState } from 'react';
 import type { ShareStart } from '../../share/link';
 import { Button } from '../common/Button';
+import { Icon } from '../common/Icon';
 
 export interface ShareChoice { key: string; label: string; start?: ShareStart }
 
@@ -20,7 +21,13 @@ export function ExportSharePanel({
     <div className="dc-export-panel dc-share-panel">
       <h3>A link made for reading</h3>
       <p className="dc-export-panel-description">Send a snapshot that opens in any browser.</p>
-      <label className="dc-field"><span>Start at</span><select value={choice} onChange={(event) => onChoice(event.target.value)} disabled={busy}>{choices.map((entry) => <option key={entry.key} value={entry.key}>{entry.label}</option>)}</select></label>
+      <label className="dc-field">
+        <span>Start at</span>
+        <span className="dc-share-start-select">
+          <select value={choice} onChange={(event) => onChoice(event.target.value)} disabled={busy}>{choices.map((entry) => <option key={entry.key} value={entry.key}>{entry.label}</option>)}</select>
+          <Icon name="down" size={14} />
+        </span>
+      </label>
       <label className="dc-share-protection"><span><strong>Require a passphrase</strong><small>Protect the diagram before sharing it.</small></span><input type="checkbox" checked={protectedLink} disabled={busy} onChange={(event) => onProtectedLink(event.target.checked)} /></label>
       {protectedLink && <>
         <label className="dc-field" htmlFor={`${id}-passphrase`}>Passphrase</label>

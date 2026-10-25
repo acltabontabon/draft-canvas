@@ -152,6 +152,21 @@
 .dc-share-panel .dc-export-panel-description { font-size: 13px; margin: 0 0 21px; }
 .dc-share-panel .dc-field { margin-bottom: 14px; }
 .dc-share-panel select, .dc-reader-step-menu select { width: 100%; min-width: 0; min-height: 34px; padding: 7px 9px; border: 1px solid var(--dc-border); border-radius: var(--dc-radius-sm); background: var(--dc-canvas); color: var(--dc-text); font: inherit; font-size: 12px; }
+.dc-share-start-select { position: relative; display: flex; min-width: 0; }
+.dc-share-start-select select {
+  appearance: none;
+  height: 38px;
+  padding: 0 36px 0 12px;
+  border-radius: var(--dc-radius);
+  background: var(--dc-surface-raised);
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.dc-share-start-select > svg { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--dc-text-muted); pointer-events: none; }
+.dc-share-start-select select:hover:not(:disabled) { border-color: var(--dc-border-strong); background: var(--dc-surface-hover); }
+.dc-share-start-select select:focus-visible { outline: 2px solid var(--dc-selection); outline-offset: 2px; }
+.dc-share-start-select:has(select:disabled) { opacity: 0.45; }
+.dc-share-start-select select:disabled { cursor: default; }
 .dc-share-protection { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 0 14px; margin: 9px 0 16px; border-bottom: 1px solid var(--dc-border); }
 .dc-share-protection strong { display: block; font-size: 12px; font-weight: 600; margin-bottom: 5px; }
 .dc-share-protection small { font-size: 12px; color: var(--dc-text-muted); }
