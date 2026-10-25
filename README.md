@@ -4,6 +4,8 @@
 
 # Draft Canvas
 
+[![draft-canvas on DevHunt](https://devhunt.org/badge/draft-canvas.svg)](https://devhunt.org/tool/draft-canvas)
+
 Draft Canvas is a local-first architecture canvas for developers. Spend more time explaining how
 software works and less time making diagrams accurate and tidy. Map systems, trace request flows,
 and decide what to build next—with your team.
