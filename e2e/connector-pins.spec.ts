@@ -121,7 +121,9 @@ test('reconnecting a pinned end to a dot makes that end automatic', async ({ pag
   const b = await boxOf(page, 'b');
   await page.mouse.move(endpoint.x + endpoint.width / 2, endpoint.y + endpoint.height / 2);
   await page.mouse.down();
-  await page.mouse.move(b.x + b.width * 0.25, b.y, { steps: 12 });
+  // A few pixels inside B's top edge: a drop is judged against the shape's box, and WebKit rounds
+  // a point on the border itself to the outside.
+  await page.mouse.move(b.x + b.width * 0.25, b.y + 6, { steps: 12 });
   await page.mouse.up();
 
   const changed = await page.evaluate(async () => {
