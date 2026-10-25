@@ -1,4 +1,5 @@
 import { FlowTraceBadges } from './FlowTraceBadges';
+import { TrafficSketches } from './TrafficSketches';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
   Background,
@@ -495,6 +496,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   // `docs/reference/architecture.md`'s "Flows and presentation". `lensFlow` owns the rule for when that
   // lens is on (never during Presentation/Focus, never for an empty flow).
   const lensActive = useEditorStore((state) => lensFlow(state) !== undefined);
+  const trafficActive = useEditorStore((state) => state.traffic.active);
   const theme = useThemeValue();
   // A fresh object here would defeat React Flow's own memoized renderer on every drag frame.
   const connectionLineStyle = useMemo(() => ({ stroke: theme.selection, strokeWidth: 1.8 }), [theme.selection]);
@@ -1979,6 +1981,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       data-explain-stage={explainOverview ? 'overview' : undefined}
       data-focus={focusActive ? 'on' : undefined}
       data-lens={lensActive ? 'on' : undefined}
+      data-traffic={trafficActive ? 'on' : undefined}
       data-connect-cancelled={connectionCancelled ? 'true' : undefined}
       style={
         explainActive
@@ -2151,6 +2154,9 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
 
           {/* Other people in a live session: their pointers and what they hold. Never exported. */}
           <PresenceLayer />
+
+          {/* Traffic's findings, written over the diagram like a whiteboard review. Never exported. */}
+          {trafficActive && <TrafficSketches />}
 
           {interactive && attachTarget && (
             <div

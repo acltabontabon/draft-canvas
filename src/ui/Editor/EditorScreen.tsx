@@ -1239,6 +1239,17 @@ export function useKeyboard({
             playback.stop();
             if (state.mode === 'present') state.setMode('edit');
           } else if (state.mode === 'present') state.setMode('edit');
+          // Traffic is a view you asked for, like a flow's lens: with nothing selected, Escape puts
+          // it away — and while something is, it deselects first, so the panel can go back to the
+          // summary before the view itself goes.
+          else if (
+            state.traffic.active &&
+            state.selection.nodes.length === 0 &&
+            state.selection.edges.length === 0 &&
+            !(event.target instanceof Element && event.target.closest('.react-flow__node, .react-flow__edge'))
+          ) {
+            state.hideTraffic();
+          }
           // A chosen flow dimming the canvas is a view you stepped into, so with nothing selected
           // Escape steps back out to the whole diagram — before leaving the shape it lives in. Only
           // while the lens is actually on: an empty flow just created dims nothing, and clearing it

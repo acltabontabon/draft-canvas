@@ -71,6 +71,7 @@ function buildFixtureContext(selection: { nodes: string[]; edges: string[] }): C
     mode: 'edit',
     clipboard: { nodes: [NODE_A], edges: [] },
     focus: { active: false, nodeIds: [], edgeIds: [] },
+    traffic: { active: false, flowId: null },
     canUndo: () => true,
     canRedo: () => true,
   };

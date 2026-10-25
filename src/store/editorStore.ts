@@ -223,6 +223,20 @@ export interface FocusState {
 }
 
 /**
+ * Whether the canvas is showing traffic (`src/traffic/`), and over which connectors: every one in
+ * the room, or only a flow's (`flowId`). The analysis itself is never stored — `store/traffic.ts`
+ * derives it from the room on demand — so it can't describe a graph that has since changed. Like
+ * Focus: transient, never saved, never in history, never shared with collaborators, and dropped by
+ * `resetViewSession` along with everything else about the room being left.
+ */
+export interface TrafficView {
+  active: boolean;
+  flowId: string | null;
+}
+
+export const TRAFFIC_OFF: TrafficView = { active: false, flowId: null };
+
+/**
  * An edge counts as focused if it was explicitly added, or if both of its
  * endpoints are focused nodes — inferred automatically so a user tracing a
  * path through Focus Mode does not have to click every connecting arrow one
@@ -316,6 +330,7 @@ export interface EditorStore {
    */
   editReturn: { selection: Selection; viewport: DraftViewport | null } | null;
   focus: FocusState;
+  traffic: TrafficView;
   /** The active flow: which flow's step badges show on the canvas, which the Flows panel
    *  highlights, and which a connector's "Add to …" chip appends to. Independent of playback;
    *  never mutates anything by itself. See `lensFlow` for when it also dims the canvas. */
@@ -653,6 +668,12 @@ export interface EditorStore {
   enterFocus: (nodeIds: string[], edgeIds: string[]) => void;
   exitFocus: () => void;
 
+  /* Traffic */
+  /** Shows traffic over the whole room, or over one flow's connectors. Ends Focus: one dimming
+   *  system at a time. Refused while presenting. */
+  showTraffic: (flowId?: string | null) => void;
+  hideTraffic: () => void;
+
   /* Depth */
   /** Step into a shape's inside. Pure navigation: nothing is written, and an inside that does not
    *  exist yet stays unwritten until the first shape is drawn there. `false` when it can't. */
@@ -972,7 +993,7 @@ export function viewLevel(state: FileState): ViewLevel | undefined {
  * and node ids survive both a reload of the same file and a step into another room. Deliberately
  * leaves `mode` alone — presenting is a way of looking at any room, not a property of one.
  */
-function resetViewSession(): Pick<EditorStore, 'selection' | 'flowPlayback' | 'editReturn' | 'focus' | 'selectedFlowId'> {
+function resetViewSession(): Pick<EditorStore, 'selection' | 'flowPlayback' | 'editReturn' | 'focus' | 'traffic' | 'selectedFlowId'> {
   const ui = useUiStore.getState();
   if (ui.flowTrace) { ui.setFlowTrace(null); ui.notify('Tracing cancelled because the diagram or level changed.'); }
   ui.resetContinuation();
@@ -998,6 +1019,8 @@ function resetViewSession(): Pick<EditorStore, 'selection' | 'flowPlayback' | 'e
     // Whatever was selected belonged to the canvas being left, not the one arriving.
     editReturn: null,
     focus: { active: false, nodeIds: [], edgeIds: [] },
+    // An analysis of the room being left says nothing about the one arriving.
+    traffic: TRAFFIC_OFF,
     selectedFlowId: null,
   };
 }
@@ -1013,9 +1036,11 @@ function resetViewSession(): Pick<EditorStore, 'selection' | 'flowPlayback' | 'e
  * are moot for an empty flow anyway.
  */
 export function lensFlow(
-  state: Pick<EditorStore, 'document' | 'selectedFlowId' | 'flowPlayback' | 'focus'>,
+  state: Pick<EditorStore, 'document' | 'selectedFlowId' | 'flowPlayback' | 'focus' | 'traffic'>,
 ): DraftFlow | undefined {
-  if (!state.selectedFlowId || state.flowPlayback.active || state.focus.active) return undefined;
+  // Traffic owns the dimming while it shows, the way Focus and playback do — a flow it is scoped
+  // to is named in the traffic panel rather than lit a second way.
+  if (!state.selectedFlowId || state.flowPlayback.active || state.focus.active || state.traffic.active) return undefined;
   const flow = findFlow(state.document, state.selectedFlowId);
   return flow && flowHasMembers(state.document, flow) ? flow : undefined;
 }
@@ -1290,6 +1315,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   flowPlayback: { active: false, flowId: null, step: 0 },
   editReturn: null,
   focus: { active: false, nodeIds: [], edgeIds: [] },
+  traffic: TRAFFIC_OFF,
   selectedFlowId: null,
   revision: 0,
   liveViewport: null,
@@ -3056,6 +3082,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       const leaving = mode === 'edit' && s.mode === 'present';
       return {
         mode,
+        // Presenting tells the story; it doesn't carry an analysis along with it.
+        traffic: entering ? TRAFFIC_OFF : s.traffic,
         flowPlayback: mode === 'edit' ? { active: false, flowId: null, step: 0 } : s.flowPlayback,
         // A selection ring left over from editing has no meaning in a
         // read-only presentation — nothing there can show why it is
@@ -3079,12 +3107,14 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       // Mutually exclusive with Focus — starting playback exits it, rather
       // than the two dimming systems ever needing to combine.
       const exitsFocus = playback.active === true && s.focus.active;
+      const exitsTraffic = playback.active === true && s.traffic.active;
       // Playback re-asserts its phase on every step (and on mount, while editing): a write that changes
       // nothing would still hand every subscriber new objects and re-render them all.
-      if (unchanged && !exitsFocus) return s;
+      if (unchanged && !exitsFocus && !exitsTraffic) return s;
       return {
         flowPlayback: unchanged ? s.flowPlayback : { ...s.flowPlayback, ...playback },
         focus: exitsFocus ? { active: false, nodeIds: [], edgeIds: [] } : s.focus,
+        traffic: exitsTraffic ? TRAFFIC_OFF : s.traffic,
       };
     });
   },
@@ -3093,11 +3123,28 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     set((s) => ({
       focus: { active: true, nodeIds, edgeIds },
       flowPlayback: s.flowPlayback.active ? { active: false, flowId: null, step: 0 } : s.flowPlayback,
+      traffic: s.traffic.active ? TRAFFIC_OFF : s.traffic,
     }));
   },
 
   exitFocus() {
     set({ focus: { active: false, nodeIds: [], edgeIds: [] } });
+  },
+
+  showTraffic(flowId = null) {
+    set((s) => {
+      if (s.mode === 'present') return s;
+      const scoped = flowId && findFlow(s.document, flowId) ? flowId : null;
+      if (s.traffic.active && s.traffic.flowId === scoped) return s;
+      return {
+        traffic: { active: true, flowId: scoped },
+        focus: s.focus.active ? { active: false, nodeIds: [], edgeIds: [] } : s.focus,
+      };
+    });
+  },
+
+  hideTraffic() {
+    set((s) => (s.traffic.active ? { traffic: TRAFFIC_OFF } : s));
   },
 
   enterInside(nodeId) {

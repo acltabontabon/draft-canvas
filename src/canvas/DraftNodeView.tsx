@@ -41,6 +41,8 @@ import { useThemeValue } from '../ui/theme/useTheme';
 import { SvgSurface } from './SvgSurface';
 import { layerBehind } from './insideMark';
 import { emphasisColorOf, emphasisOf } from './emphasis';
+import { pathsLabel } from './trafficLabels';
+import { trafficNodeOf, trafficNodeReading } from '../store/traffic';
 import { OpenPointMarker } from './OpenPointMarker';
 import { unresolvedOpenPointsFor } from '../document/openPoints';
 import { nodeMarkerOrigin } from '../openPoints/marker';
@@ -80,8 +82,18 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   const emphasisKey = useEditorStore((state) => {
     const role = explainRoleFor(state, id);
     if (role === 'target' || role === 'both') return stepContextOf(state)?.transitionKey ?? null;
-    return role === 'source' ? 'source' : null;
+    if (role === 'source') return 'source';
+    // Where traffic concentrates is lit along the same contour a presented step's shapes are —
+    // never a box around it. Presentation and traffic never show together (`setMode`).
+    const traffic = trafficNodeReading(state, id);
+    return traffic === 'top' || traffic === 'raised' ? `traffic-${traffic}` : null;
   });
+  const trafficReading = useEditorStore((state) => trafficNodeReading(state, id));
+  // The analysis's own object for this node, identity-stable until the room changes — read only
+  // where a badge is drawn.
+  const trafficNode = useEditorStore((state) =>
+    trafficReading === 'top' || trafficReading === 'raised' ? trafficNodeOf(state, id) : undefined,
+  );
   const focused = useEditorStore((state) => isNodeFocused(state.focus, id));
   const lensMember = useEditorStore((state) => lensMemberFor(state, id));
   const theme = useThemeValue();
@@ -451,6 +463,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
       data-explain-crossed={explainRole === 'crossed' ? 'true' : undefined}
       data-focused={focused ? 'true' : undefined}
       data-lens-member={lensMember ? 'true' : undefined}
+      data-traffic={trafficReading ?? undefined}
       data-editing={editing ? 'true' : undefined}
       data-attach-target={isAttachTarget ? 'true' : undefined}
       data-drag-capsule={capsule ? 'true' : undefined}
@@ -608,7 +621,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
         <SvgSurface
           key={emphasisKey ?? undefined}
           className="dc-emphasis"
-          data-role={explainRole ?? undefined}
+          data-role={explainRole ?? (emphasisKey?.startsWith('traffic-') ? emphasisKey : undefined)}
           width={effectiveWidth}
           height={effectiveHeight}
           bleed={EMPHASIS_BLEED}
@@ -621,6 +634,15 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
       <SvgSurface className="dc-node-surface" width={effectiveWidth} height={effectiveHeight}>
         {shapes}
       </SvgSurface>
+
+      {/* How many modeled paths meet here, in words as well as the halo — never a colour alone.
+          Chrome, like the halo: it never reaches an export. */}
+      {trafficNode && !capsule && (
+        <span className="dc-traffic-badge" data-tier={trafficNode.tier}>
+          <span className="dc-sr-only">Traffic: </span>
+          {pathsLabel(trafficNode.paths)}
+        </span>
+      )}
 
       {!editing && !capsule && liveNode && nodeTechnologyIcon(liveNode) && (
         <TechnologyDetails key={`${node.id}:${node.technology}`} node={liveNode} />

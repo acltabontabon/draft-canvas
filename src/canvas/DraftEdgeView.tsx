@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { LIMITS } from '../document/limits';
 import { reconnectProblem } from '../document/reconnect';
 import { useInternalNode, useReactFlow, type EdgeProps } from '@xyflow/react';
@@ -47,6 +47,7 @@ import { roughenPath } from '../render/roughness/roughPath';
 import { sketchArrowPath } from '../render/roughness/roughArrow';
 import { accentOf } from '../render/theme/tokens';
 import { isEdgeFocused, lensFlow, useEditorStore, type EditorStore } from '../store/editorStore';
+import { trafficEdgeMotionOf, trafficEdgeOf } from '../store/traffic';
 import { selectEdge, selectNode } from '../store/selectors';
 import { useUiStore } from '../store/uiStore';
 import { usePersonality } from '../ui/personality/usePersonality';
@@ -188,6 +189,9 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // The flow object comes straight out of `document.flows`, so its identity only changes when the
   // flow itself does — this subscription doesn't re-render every edge on unrelated store writes.
   const lensFlowValue = useEditorStore(lensFlow);
+  // While traffic shows: a string out of the room's one memoized analysis — see `store/traffic.ts`.
+  const trafficReading = useEditorStore((state) => trafficEdgeOf(state, id));
+  const trafficMotion = useEditorStore((state) => trafficEdgeMotionOf(state, id));
   const mode = useEditorStore((state) => state.mode);
   // Identity-stable out of a per-document index — see `DraftNodeView`'s matching subscription.
   const openPoints = useEditorStore((state) => unresolvedOpenPointsFor(state.document.openPoints, { kind: 'edge', id }));
@@ -372,7 +376,9 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const lensActive = lensFlowValue !== undefined;
   const lensTier = lensActive && edge ? lensEdgeTier(lensFlowValue, edge.id) : 'dimmed';
   const lensMember = lensActive && lensTier === 'member';
-  const lensDimmed = lensActive && lensTier === 'dimmed';
+  // Traffic dims what carries none the way a lens dims what isn't in the flow, through the same
+  // attribute, so labels, chips and open-point markers fade with their connector without a second path.
+  const lensDimmed = (lensActive && lensTier === 'dimmed') || trafficReading === 'none';
   // The flow's own identity colour, temporarily worn by its member
   // connectors while it's the active lens — never a permanent per-edge
   // colour, since a connector can belong to several flows. See
@@ -662,6 +668,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       data-jump-flash={jumpFlash ? 'true' : undefined}
       data-pointed={pointed ? 'true' : undefined}
       data-lens-dimmed={lensDimmed ? 'true' : undefined}
+      data-traffic={trafficReading ?? undefined}
       data-lens-pulse={lensPulsing ? 'true' : undefined}
       data-hovered={hoverShown ? 'true' : undefined}
     >
@@ -712,11 +719,38 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
         style={{
           stroke: strokeColor,
           strokeWidth:
-            isActiveStep ? 2.6 : selected || attachTarget ? 2.4 : lensMember || (overview && isShownStep) ? 2.0 : hoverShown ? 2.0 : 1.6,
+            isActiveStep
+              ? 2.6
+              : selected || attachTarget
+                ? 2.4
+                : trafficReading === 'shared'
+                  ? 2.3
+                  : lensMember || (overview && isShownStep) || hoverShown || trafficReading === 'flow'
+                    ? 2.0
+                    : 1.6,
           strokeLinecap: 'round',
           strokeDasharray: dashForEdge(edge)?.join(' '),
         }}
       />
+      {/* Traffic, flowing: a stream of light along the very path drawn, in the direction the work
+          travels (not always the arrow's — "read by" flows back up it), denser where more paths
+          share the line, sparse where only some may take it. Started a beat later per hop from an
+          entry, so turning traffic on shows it spreading out from where it enters. Pure CSS — see
+          `.dc-traffic-flow` — and still under reduced motion. Chrome: never exported. */}
+      {trafficMotion && trafficReading !== 'none' && trafficReading !== null && (
+        <g
+          className="dc-traffic-flow"
+          fill="none"
+          pointerEvents="none"
+          data-dir={trafficMotion[0] === 'r' ? 'reverse' : undefined}
+          data-still={trafficMotion === 's' ? 'true' : undefined}
+          style={{ '--dc-traffic-hop': trafficMotion === 's' ? 0 : Number(trafficMotion.slice(1)) } as CSSProperties}
+        >
+          <path className="dc-traffic-channel" d={drawnPath} />
+          <path className="dc-traffic-tail" d={drawnPath} />
+          <path className="dc-traffic-spark" d={drawnPath} />
+        </g>
+      )}
       {secondStrokePath && (
         <path
           d={secondStrokePath}

@@ -13,6 +13,8 @@ import { DesktopStatus } from '../../desktop/ui/DesktopStatus';
 import { hostKind } from '../../host/hostInfo';
 import { useUiStore } from '../../store/uiStore';
 import { pointsOf } from '../../document/openPoints';
+import { roomMayHaveTraffic } from '../../store/traffic';
+import { toggleTraffic } from './trafficToggle';
 
 /**
  * The save indicator is the only place the local-first promise is visible while
@@ -161,6 +163,7 @@ export function StatusBar({ durable, presenting = false, onResolveConflict }: St
       )}
 
       <div className="dc-status-right">
+        <TrafficChip />
         <OpenPointsChip />
         <LevelChip />
         <span className="dc-muted">
@@ -174,6 +177,34 @@ export function StatusBar({ durable, presenting = false, onResolveConflict }: St
         <HelpMenu />
       </div>
     </footer>
+  );
+}
+
+/**
+ * Where the traffic this diagram describes concentrates — one click, nothing to configure.
+ *
+ * Same bargain as the chips beside it: absent until the room has something traffic can be read
+ * from (a runtime connector between services, queues or data stores), so a plain drawing never
+ * grows a control it can't use. Pressed while traffic shows; pressing again hides it.
+ */
+function TrafficChip() {
+  const available = useEditorStore(roomMayHaveTraffic);
+  const active = useEditorStore((state) => state.traffic.active);
+  if (!available && !active) return null;
+  return (
+    <>
+      <button
+        type="button"
+        className="dc-status-traffic"
+        title={active ? 'Hide traffic (Esc)' : 'Show where modeled traffic concentrates'}
+        aria-pressed={active}
+        onClick={toggleTraffic}
+      >
+        <span className="dc-status-traffic-glyph" aria-hidden="true" />
+        Traffic
+      </button>
+      <span className="dc-inspector-divider" />
+    </>
   );
 }
 

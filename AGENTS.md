@@ -135,7 +135,7 @@ The reasoning behind these rules is in [Architecture](docs/reference/architectur
 Dependencies flow `ui/` → `canvas/` → `document/`; storage and export consume the document model.
 Library and editor are states of `src/App.tsx`, with no router. Keep the editor's Vite `base: './'`.
 
-`depth/` and `starters/` import only `document/`; `layout/` also imports `edges/bundles`. `collab/`
+`depth/`, `starters/` and `traffic/` import only `document/`; `layout/` also imports `edges/bundles`. `collab/`
 imports `document/` and `depth/`. `continuation/` also imports `render/text` and `edges/` routing
 helpers; `openPoints/` also imports `depth/` and `render/` types. None of these import UI, canvas or
 store modules. `agent/` may consume these and rendering/export helpers, never UI or store modules. `depth/c4.ts` shares C4 role and scope derivation with the editor and agent.

@@ -12,6 +12,7 @@ New here? Start with [Getting started](guides/getting-started.md).
 | [Architecture examples](guides/examples.md) | Ready-made starters |
 | [System levels](guides/depth.md) | Look inside a shape for more detail |
 | [Open points](guides/open-points.md) | Track open questions |
+| [Traffic](guides/traffic.md) | See where modeled traffic concentrates |
 | [Keyboard shortcuts](guides/keyboard-and-commands.md) | Shortcuts and the command palette |
 | [Accessibility](guides/accessibility.md) | Keyboard, screen reader, touch |
 | [Saving and sharing](guides/saving-and-sharing.md) | Save, back up, export, import, share links |
