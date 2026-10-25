@@ -294,7 +294,7 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
       const places = new Map(room.nodes.flatMap((n) => (n.place ? [[n.id, n.place] as const] : [])));
       const routes = new Map(room.relationships.flatMap((e) => (e.route ? [[e.id, e.route] as const] : [])));
       if (places.size || routes.size) {
-        view = touchedBy(view, applyRoutes(applyPlaces(view, places, ctx, at), routes, at), touched);
+        view = touchedBy(view, applyRoutes(applyPlaces(view, places, ctx, at, layout), routes, at), touched);
         for (const id of [...places.keys(), ...routes.keys()]) explicit.add(id);
       }
       // An add may say what level the view is at — the first add into a new inside view usually does.
@@ -480,7 +480,7 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
       view = result.view;
     }
     if (place) {
-      view = touchedBy(view, applyPlaces(view, new Map<string, PlaceSpec>([[id, place]]), ctx, `${at}/set/place`), touched);
+      view = touchedBy(view, applyPlaces(view, new Map<string, PlaceSpec>([[id, place]]), ctx, `${at}/set/place`, layout), touched);
       explicit.add(id);
     }
     if (route !== undefined) {

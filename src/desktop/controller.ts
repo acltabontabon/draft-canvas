@@ -553,8 +553,7 @@ export class DesktopController {
       case 'open':
         return this.openFile();
       case 'open-project':
-        this.store.getSnapshot().explorerSave?.cancel();
-        return this.store.update({ explorerMode: 'project' });
+        return this.addProject();
       case 'new-canvas':
         return this.newCanvas();
       case 'reveal':
@@ -1556,9 +1555,15 @@ export class DesktopController {
   explorerCreateFolder(session: string, handle: Handle, name: string) { return this.api.explorerCreateFolder(session, handle, name); }
   explorerPeek(session: string, handle: Handle) { return this.api.explorerPeek(session, handle); }
   explorerClose(session: string) { return this.api.explorerClose(session); }
+  /** The same project picker from Home, the menu and Nodi's setup steps. */
+  addProject(): void {
+    this.store.getSnapshot().explorerSave?.cancel();
+    this.store.update({ explorerMode: 'project' });
+  }
   async explorerAddProject(session: string, handle: Handle) {
     const info = await this.api.explorerAddProject(session, handle);
     await this.bringForward(info);
+    await this.refreshAgent();
     return info;
   }
   explorerOpenFile(session: string, handle: Handle): Promise<boolean> {
@@ -1848,9 +1853,9 @@ export class DesktopController {
 
   async companionCancel(runId: string): Promise<void> {
     // Stop can land before the agent reads its prompt, including during CLI discovery.
-    for (const [diagramId, conversation] of companion.snapshot()) {
+    for (const conversation of companion.snapshot().values()) {
       if (conversation.turns.some((turn) => turn.runId === runId)) {
-        forgetTurnSnapshot(diagramId);
+        forgetTurnSnapshot(conversation.diagramId);
         break;
       }
     }
@@ -1862,10 +1867,10 @@ export class DesktopController {
   }
 
   /** A new conversation on `diagramId`: the card empties and the agent starts afresh next time. */
-  async companionForget(diagramId: string): Promise<void> {
-    companion.clear(diagramId);
+  async companionForget(diagramId: string, agent?: AgentKind): Promise<void> {
+    companion.clear(diagramId, agent);
     try {
-      await this.api.companionForget(diagramId);
+      await this.api.companionForget(diagramId, agent);
     } catch (error) {
       logDiagnostic(error, { operation: 'desktop-companion-forget' });
     }
@@ -1985,7 +1990,7 @@ export class DesktopController {
     for (const conversation of companion.snapshot().values()) {
       const last = conversation.turns.at(-1);
       if (last && last.outcome === null && (last.stop === null || last.proposalId !== null || last.steps.some((s) => s.tool === 'submit_proposal'))) {
-        watched.set(conversation.diagramId, [last.runId]);
+        watched.set(conversation.diagramId, [...(watched.get(conversation.diagramId) ?? []), last.runId]);
       }
     }
     for (const [diagramId, runIds] of watched) {

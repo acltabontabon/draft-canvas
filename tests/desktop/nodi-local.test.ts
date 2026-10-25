@@ -140,4 +140,24 @@ describe('what Nodi answers itself', () => {
       expect(localAnswer(asked, facts), asked).toBeNull();
     }
   });
+
+  it('never mistakes a generic follow-up for an architecture starter', () => {
+    const starters = { ...facts, commands: [...facts.commands, { id: 'starter-change-data-capture', title: 'Change Data Capture', keywords: ['cdc', 'debezium'] }] };
+    for (const asked of ['do it change it', 'do the change', 'make the change', 'show change', 'do data']) {
+      expect(localAnswer(asked, starters), asked).toBeNull();
+    }
+    expect(localAnswer('start change data capture', starters)?.run).toBe('starter-change-data-capture');
+    expect(localAnswer('start cdc', starters)?.run).toBe('starter-change-data-capture');
+  });
+
+  it('offers editing commands for capability questions without executing them', () => {
+    const editing = { ...facts, commands: [...facts.commands, { id: 'undo', title: 'Undo' }, { id: 'delete', title: 'Delete' }, { id: 'cut', title: 'Cut' }] };
+    for (const [asked, id] of [['can I undo?', 'undo'], ['could I delete that?', 'delete'], ['please could I cut?', 'cut'], ['hey Nodi, can I undo that?', 'undo']] as const) {
+      const answer = localAnswer(asked, editing);
+      expect(answer?.run, asked).toBeUndefined();
+      expect(answer?.actions, asked).toContainEqual({ kind: 'command', id, label: editing.commands.find((c) => c.id === id)!.title });
+    }
+    expect(localAnswer('can you undo?', editing)?.run).toBe('undo');
+    expect(localAnswer('could you delete that?', editing)?.run).toBe('delete');
+  });
 });

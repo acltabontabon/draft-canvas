@@ -57,6 +57,10 @@ pub trait Backend: Send + Sync {
     /// the conversation on in a terminal of their own.
     fn resume_args(&self, session: &str) -> Vec<String>;
     fn parser(&self) -> Box<dyn Parser>;
+    /// A resumed agent may report session-wide totals; capture its baseline before it starts.
+    fn parser_for(&self, _session: Option<&str>) -> Box<dyn Parser> {
+        self.parser()
+    }
 }
 
 /// Reads an agent's output, one line at a time, into events. Lines it doesn't recognise are ignored.
@@ -121,8 +125,9 @@ would need to know to recommend one. Change nothing, not even a note or an open 
 no submit_proposal. Offer to make the change, or to record the risks as open points, if they want it.\n\
 - A request to change the diagram (\"add a cache-aside cache\"): make it with the tool the context \
 names; submit_proposal means the person reviews the change before anything is saved. Change only what \
-was asked: to tidy, clean up or rearrange, use the arrange op (it re-lays out the view and keeps every \
-id, label, colour, note and flow) and nothing else; regroup, recolour or rename only when asked to, or \
+was asked: for layout-only changes, keep every id, label, colour, note, flow and inside diagram. Use \
+arrange for automatic cleanup; follow the exact layout controls in the turn context when the person \
+specifies an arrangement. Regroup, recolour or rename only when asked to, or \
 suggest it in your reply. To show how \
 something works (\"show me how cache invalidation works\"), add a flow whose steps walk through it, \
 and notes where a step needs a word of explanation.\n\
@@ -240,7 +245,7 @@ pub fn turn_prompt(
         )
     });
     format!(
-        "<draft-canvas-context>\nDiagram: {} (diagramId {})\nView: {view}\nSelected: {selection}\nMake changes with: {change}\n{code}{unchanged}{snapshot}{waiting}</draft-canvas-context>\n\n{}",
+        "<draft-canvas-context>\nDiagram: {} (diagramId {})\nView: {view}\nSelected: {selection}\nMake changes with: {change}\nFollow-through: layout feedback asks you to adjust the ongoing edit; confirmations accept your offered change. Use the change tool above without asking permission again.\nLayout: box=[x,y,width,height] in pixels. Preserve content; spacing-only feedback keeps alignment/order and changes existing gaps in the requested direction, without arrange. Use set.place with rightOf/below and align: \"center\" for a single row/column; choose a generous gap when asked for space. When moving/reordering nodes, reset affected connectors with set.route: null or choose suitable sides, unless their routes were requested. Read geometry only if needed; otherwise use the supplied view and receipts.\n{code}{unchanged}{snapshot}{waiting}</draft-canvas-context>\n\n{}",
         quote(title),
         quote(&request.diagram_id),
         request.text.trim()
@@ -492,18 +497,20 @@ impl Companion {
         self.with_sessions(|s| s.get(diagram, agent, now_ms()))
     }
 
-    pub fn forget(&self, diagram: &str) -> Result<(), AppError> {
+    pub fn forget(&self, diagram: &str, agent: Option<AgentKind>) -> Result<(), AppError> {
         let mut runs = lock(&self.runs);
-        lock(&self.completed).retain(|run| run.snapshot.diagram_id != diagram);
+        lock(&self.completed).retain(|run| {
+            run.snapshot.diagram_id != diagram
+                || agent.is_some_and(|agent| run.snapshot.agent != agent)
+        });
         // A terminal result may still have a process winding down. Forgetting must also prevent
         // that later exit from putting the conversation back in reload recovery.
-        for run in runs
-            .values_mut()
-            .filter(|run| run.diagram_id == diagram && run.stopped)
-        {
+        for run in runs.values_mut().filter(|run| {
+            run.diagram_id == diagram && run.stopped && agent.is_none_or(|agent| run.agent == agent)
+        }) {
             run.recover = false;
         }
-        self.with_sessions(|s| s.forget(diagram))
+        self.with_sessions(|s| s.forget(diagram, agent))
     }
 
     /// Lets runs read `folder` until the app quits.
@@ -600,7 +607,8 @@ impl Companion {
             run.dir = dir.clone();
             preparation.started = true;
         }
-        let parser = Mutex::new(backend(agent).parser());
+        let session = self.session_for(&launch.diagram_id, agent);
+        let parser = Mutex::new(backend(agent).parser_for(session.as_deref()));
         let companion = Arc::downgrade(self);
         let run = run_id.to_string();
         let sink: runner::Sink = Arc::new(move |output| {
@@ -1200,7 +1208,7 @@ mod tests {
                 .as_deref(),
             Some("old-session")
         );
-        companion.forget("d_1").unwrap();
+        companion.forget("d_1", None).unwrap();
         companion.finish(
             "winding-down",
             Exit {
@@ -1623,6 +1631,34 @@ mod tests {
             None,
         );
         assert!(prompt.contains("Waiting for review: proposal \"p_1\" (version 2): \"Redis \\\"cache\\\"\". To adjust it, revise it with submit_proposal's revises.\n</draft-canvas-context>"));
+    }
+
+    #[test]
+    fn resumed_turns_follow_through_on_layout_feedback_with_spacing_and_routes() {
+        // A resumed CLI can retain its old standing brief. Keep these operational rules in each
+        // turn, including short feedback and confirmations, rather than recognizing specific text.
+        for text in [
+            "its too dense!",
+            "yes",
+            "Give the boxes more breathing room",
+        ] {
+            let mut r = request(text);
+            r.unchanged = Some(true);
+            let prompt = turn_prompt(&r, "Orders", None, None);
+            assert!(prompt.contains("layout feedback asks you to adjust the ongoing edit"));
+            assert!(prompt.contains("confirmations accept your offered change"));
+            assert!(prompt.contains("without asking permission again"));
+            assert!(prompt.contains("rightOf/below and align: \"center\" for a single row/column"));
+            assert!(prompt.contains("choose a generous gap"));
+            assert!(prompt.contains("box=[x,y,width,height] in pixels"));
+            assert!(prompt.contains("spacing-only feedback keeps alignment/order"));
+            assert!(prompt
+                .contains("changes existing gaps in the requested direction, without arrange"));
+            assert!(prompt.contains("reset affected connectors with set.route: null"));
+            assert!(prompt.contains("Read geometry only if needed"));
+            assert!(prompt.contains("Unchanged since your last turn: don't read it again"));
+            assert!(prompt.ends_with(text));
+        }
     }
 
     #[test]

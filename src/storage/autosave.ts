@@ -195,23 +195,28 @@ export class Autosave {
    * queued behind it. Resolves `false` when that version could not be written.
    */
   async flush(): Promise<boolean> {
-    if (this.timer) {
-      clearTimeout(this.timer);
-      this.timer = null;
+    for (;;) {
+      if (this.timer) {
+        clearTimeout(this.timer);
+        this.timer = null;
+      }
+      // Never run two writes at once: wait for the current one, then write whatever
+      // arrived meanwhile.
+      while (this.current) await this.current;
+      if (this.disposed) return this.pending === null;
+      if (this.conflict) return false;
+      if (!this.pending) return !this.lastFailed;
+      this.current = this.write();
+      try {
+        await this.current;
+      } finally {
+        this.current = null;
+      }
+      // A close or reload trusts this promise to cover everything queued during the write too.
+      // Leaving that version to write()'s timer lets the caller dispose us before it reaches disk.
+      // A failure keeps its version pending for an explicit retry, never a tight loop here.
+      if (this.lastFailed) return false;
     }
-    // Never run two writes at once: wait for the current one, then write whatever
-    // arrived meanwhile.
-    while (this.current) await this.current;
-    if (this.disposed) return this.pending === null;
-    if (this.conflict) return false;
-    if (!this.pending) return !this.lastFailed;
-    this.current = this.write();
-    try {
-      await this.current;
-    } finally {
-      this.current = null;
-    }
-    return !this.lastFailed;
   }
 
   private async write(): Promise<void> {

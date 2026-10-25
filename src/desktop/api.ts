@@ -372,7 +372,7 @@ export interface DesktopApi {
   /** Active and recently finished runs, with their events, for a page that has just loaded. */
   companionRuns(): Promise<RunSnapshot[]>;
   /** The next prompt on this diagram starts a new conversation. */
-  companionForget(diagramId: string): Promise<void>;
+  companionForget(diagramId: string, agent?: AgentKind): Promise<void>;
   /** The shell line that carries the diagram's conversation on in the agent's own terminal UI. */
   companionContinue(diagramId: string, agent: AgentKind): Promise<string | null>;
   /** The project folder Nodi would read for this diagram, and whether it may. */

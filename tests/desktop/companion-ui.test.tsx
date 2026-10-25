@@ -27,22 +27,23 @@ const { useUiStore } = await import('../../src/store/uiStore');
 
 const CLAUDE: AgentInfo = { agent: 'claude-code', name: 'Claude Code', availability: 'installed', version: '2.1.295', signIn: { loggedIn: true, method: 'claude.ai', transcripts: null } };
 const CODEX: AgentInfo = { agent: 'codex', name: 'Codex', availability: 'installed', version: '0.163.0', signIn: { loggedIn: true, method: 'chatgpt', transcripts: null } };
-const ACCESS = { enabled: true, listening: true, connections: 0, sidecarPath: null, sidecarWarning: null, background: 'ready', projects: [] } as unknown as AgentSettings;
+const ACCESS: AgentSettings = { enabled: true, listening: true, connections: 0, sidecarPath: null, sidecarWarning: null, background: 'ready', projects: [{ handle: 'ready', name: 'Work', displayPath: '~/work', agent: true }] };
 
 function fakeController() {
   return {
     companionAgents: vi.fn(async () => [CLAUDE, CODEX]),
     companionContinue: vi.fn(async () => "cd '/work' && 'claude' '--resume' 's-1'"),
-    companionSend: vi.fn(async (request: PromptRequest, about: string | null) => companion.begin(request.diagramId, request.runId, request.text, about)),
+    companionSend: vi.fn(async (request: PromptRequest, about: string | null) => companion.begin(request.diagramId, request.runId, request.text, about, request.agent)),
     companionCancel: vi.fn(async () => {}),
     companionSnapshot: vi.fn(async (): Promise<string | null> => null),
-    companionForget: vi.fn(async (diagramId: string) => companion.clear(diagramId)),
+    companionForget: vi.fn(async (diagramId: string, agent?: 'claude-code' | 'codex') => companion.clear(diagramId, agent)),
     companionCode: vi.fn(async (): Promise<CodeFolder | null> => ({ name: 'library', displayPath: '~/Work/library' })),
     companionAllowCode: vi.fn(async (_diagramId: string, grant: CodeGrant): Promise<CodeFolder | null> => ({ name: 'library', displayPath: '~/Work/library', allowed: grant })),
     companionChooseCode: vi.fn(async (): Promise<CodeFolder | null> => null),
     refreshCompanionProposals: vi.fn(async () => {}),
     refreshAgent: vi.fn(async () => {}),
     openAgentSettings: vi.fn(),
+    addProject: vi.fn(() => desktopStore.update({ explorerMode: 'project' })),
     // Settings' one-click setups, all done already unless a test says otherwise.
     agentClients: vi.fn(async (): Promise<unknown[]> => []),
     agentSkills: vi.fn(async (): Promise<unknown[]> => []),
@@ -95,7 +96,7 @@ beforeEach(() => {
   controller = fakeController();
   useEditorStore.setState({ document: doc, path: [], outer: null, selection: { nodes: [], edges: [] } });
   useUiStore.setState({ companionOpen: false, proposalPanelOpen: false, openPointsPanelOpen: false, readOnly: null });
-  desktopStore.update({ doc: { kind: 'file', name: 'orders.draftcanvas', displayPath: '~/orders.draftcanvas', dirty: false, readOnly: false }, agent: ACCESS });
+  desktopStore.update({ doc: { kind: 'file', name: 'orders.draftcanvas', displayPath: '~/work/orders.draftcanvas', dirty: false, readOnly: false }, agent: ACCESS, explorerMode: null });
 });
 
 afterEach(() => {
@@ -230,6 +231,33 @@ describe('the companion', () => {
     fireEvent.keyDown(input, { key: 'Enter' });
     await settle();
     expect(controller.companionSend).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['yes', 'okay', 'sure', 'sounds good'])('sends "%s" back to the agent after its offer, even after local small talk', async (confirmation) => {
+    useUiStore.setState({ companionOpen: true });
+    companion.begin(doc.metadata.id, 'offer', 'Change the layout', null);
+    companion.apply('offer', { type: 'message-chunk', text: 'Would you like a completely new visual layout?' });
+    companion.apply('offer', { type: 'stopped', reason: { kind: 'end-turn' }, summary: null, costMicroUsd: null, usage: null });
+    companion.answer(doc.metadata.id, 'thanks', 'Anytime, boss.');
+    mount();
+    await settle();
+    const input = screen.getByLabelText('Message Claude Code');
+    fireEvent.change(input, { target: { value: confirmation } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await settle();
+    expect(controller.companionSend).toHaveBeenCalledTimes(1);
+    expect(controller.companionSend.mock.calls[0]![0]).toMatchObject({ text: confirmation });
+  });
+
+  it('passes a confirmation to a resumed session even when no earlier turns are on screen', async () => {
+    useUiStore.setState({ companionOpen: true });
+    mount();
+    await settle();
+    const input = screen.getByLabelText('Message Claude Code');
+    fireEvent.change(input, { target: { value: 'yes' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await settle();
+    expect(controller.companionSend.mock.calls[0]![0]).toMatchObject({ text: 'yes' });
   });
 
   describe('taking a break', () => {
@@ -453,6 +481,53 @@ describe('the companion', () => {
     expect(prefs.get('companion.agent')).toBe('claude-code');
   });
 
+  it('shows the chosen agent history and sends yes, Continue and New conversation to that agent', async () => {
+    useUiStore.setState({ companionOpen: true });
+    mount();
+    await settle();
+    act(() => {
+      companion.begin(doc.metadata.id, 'claude-question', 'Rearrange it', null, 'claude-code');
+      companion.apply('claude-question', { type: 'stopped', reason: { kind: 'end-turn' }, summary: 'Claude asks: use a row?', costMicroUsd: null, usage: null });
+      companion.begin(doc.metadata.id, 'codex-question', 'Explain it', null, 'codex');
+      companion.apply('codex-question', { type: 'stopped', reason: { kind: 'end-turn' }, summary: 'Codex explanation', costMicroUsd: null, usage: null });
+    });
+    expect(screen.getByRole('region', { name: 'Conversation with Claude Code' }).textContent).toContain('Claude asks');
+    fireEvent.click(screen.getByRole('button', { name: 'Claude Code' }));
+    const codexThread = screen.getByRole('region', { name: 'Conversation with Codex' });
+    expect(codexThread.textContent).toContain('Codex explanation');
+    expect(codexThread.textContent).not.toContain('Claude asks');
+    fireEvent.click(screen.getByRole('button', { name: 'Continue in Terminal' }));
+    await settle();
+    expect(controller.companionContinue).toHaveBeenLastCalledWith(doc.metadata.id, 'codex');
+    fireEvent.click(screen.getByRole('button', { name: 'New conversation' }));
+    await settle();
+    expect(controller.companionForget).toHaveBeenLastCalledWith(doc.metadata.id, 'codex');
+    fireEvent.click(screen.getByRole('button', { name: 'Codex' }));
+    expect(screen.getByRole('region', { name: 'Conversation with Claude Code' }).textContent).toContain('Claude asks');
+    fireEvent.change(screen.getByLabelText('Message Claude Code'), { target: { value: 'yes' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await settle();
+    expect(controller.companionSend).toHaveBeenLastCalledWith(expect.objectContaining({ text: 'yes', agent: 'claude-code' }), null);
+  });
+
+  it('shows a recovered active run even when another agent was preferred, and prevents a second send', async () => {
+    prefs.set('companion.agent', 'claude-code');
+    companion.restore([{ runId: 'recovered-codex', diagramId: doc.metadata.id, agent: 'codex', prompt: 'Rearrange it', events: [{ type: 'message-chunk', text: 'Still arranging' }] }]);
+    useUiStore.setState({ companionOpen: true });
+    mount();
+    await settle();
+    expect(screen.getByLabelText('Message Codex')).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Conversation with Codex' }).textContent).toContain('Still arranging');
+    expect((screen.getByRole('button', { name: 'Codex' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText('Message Codex'), { target: { value: 'yes' } });
+    fireEvent.keyDown(screen.getByLabelText('Message Codex'), { key: 'Enter' });
+    expect(controller.companionSend).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
+    expect(controller.companionCancel).toHaveBeenCalledWith('recovered-codex');
+    act(() => companion.apply('recovered-codex', { type: 'stopped', reason: { kind: 'end-turn' }, summary: null, costMicroUsd: null, usage: null }));
+    expect(screen.getByLabelText('Message Codex')).toBeTruthy();
+  });
+
   it('names parts of another view by name, and never shows an id the diagram doesn’t have', async () => {
     // The reply was about the parts inside Orders database; the person is at the top level.
     const inner = createNode({ id: 'c_api', type: 'component', x: 0, y: 0, text: 'Orders endpoint' });
@@ -576,7 +651,7 @@ describe('the companion', () => {
     expect(controller.getProposal).toHaveBeenCalledWith('p1');
   });
 
-  it('adds up what the conversation uses in the bubble, and each turn’s share in the thread', async () => {
+  it('explains conversation usage on keyboard focus, with cache separated from new tokens', async () => {
     useUiStore.setState({ companionOpen: true });
     mount();
     await settle();
@@ -589,12 +664,64 @@ describe('the companion', () => {
     const total = document.querySelector('.dc-companion-spent')!;
     // What the conversation added: everything less what the agent read again from the cache.
     expect(total.textContent).toContain('33k new tokens so far');
-    expect(total.getAttribute('title')).toMatch(/33k new tokens over 2 turns\. The agent also re-sent 76k tokens it had already read/);
+    expect(total.getAttribute('title')).toBeNull();
     // Signed in with a subscription: tokens, never a dollar figure that isn't what they pay.
     expect(total.textContent).not.toContain('$');
-    // One line for it, not one per turn as well; the cache's share is explained, not hidden or made free.
+    // One quiet line, with readable exact figures on demand rather than a native title paragraph.
     expect(screen.getByRole('region', { name: 'Conversation with Claude Code' }).textContent).not.toMatch(/tokens/);
-    expect(total.getAttribute('title')).toMatch(/billed at a discount .*not free/);
+    expect(screen.queryByRole('tooltip')).toBeNull();
+    const description = document.getElementById(total.getAttribute('aria-describedby')!)!;
+    expect(description.textContent).toContain('New input: 32,730');
+    fireEvent.keyDown(window, { key: 'Tab' });
+    fireEvent.focus(total);
+    const tooltip = screen.getByRole('tooltip');
+    expect(tooltip.textContent).toContain('Token usage · 2 turns');
+    expect([...tooltip.querySelectorAll('dt')].map((row) => row.textContent)).toEqual(['New input', 'Cached input', 'Output', 'New tokens', 'All tokens']);
+    expect([...tooltip.querySelectorAll('dd')].map((row) => row.textContent)).toEqual(['32,730', '76,392', '414', '33,144', '109,536']);
+    expect(tooltip.textContent).toContain('New tokens are new input + output');
+    expect(tooltip.textContent).toContain('provider pricing and plan limits still apply');
+    expect(tooltip.textContent).not.toMatch(/tenth|free|\$/);
+    fireEvent.mouseLeave(total);
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 180)));
+    expect(screen.getByRole('tooltip')).toBe(tooltip);
+    fireEvent.keyDown(total, { key: 'Escape' });
+    expect(screen.queryByRole('tooltip')).toBeNull();
+  });
+
+  it('shows the same token breakdown on hover and includes reported API cost for API-key sessions', async () => {
+    // Discovery is cached across mounts, so adjust the cached fixture and restore it afterwards.
+    const method = CODEX.signIn.method;
+    CODEX.signIn.method = 'api-key';
+    try {
+      prefs.set('companion.agent', 'codex');
+      useUiStore.setState({ companionOpen: true });
+      mount();
+      await settle();
+      act(() => {
+        companion.begin(doc.metadata.id, 'api-usage', 'Explain this diagram', null, 'codex');
+        companion.apply('api-usage', { type: 'stopped', reason: { kind: 'end-turn' }, summary: 'Done.', costMicroUsd: 167_615, usage: { input: 1000, cached: 600, output: 100 } });
+      });
+      const total = screen.getByRole('button', { name: 'Token usage: 500 new tokens so far' });
+      expect(total.textContent).toContain('$0.17');
+      fireEvent.mouseEnter(total);
+      const tooltip = await screen.findByRole('tooltip');
+      expect([...tooltip.querySelectorAll('dd')].map((row) => row.textContent)).toEqual(['400', '600', '100', '500', '1,100', '$0.17']);
+      expect(tooltip.textContent).toContain('API cost');
+      expect(tooltip.textContent).not.toMatch(/Claude|tenth/);
+      fireEvent.mouseLeave(total);
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 180)));
+      expect(screen.queryByRole('tooltip')).toBeNull();
+      fireEvent.pointerDown(total);
+      fireEvent.click(total);
+      expect(document.activeElement).toBe(total);
+      fireEvent.mouseLeave(total);
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 180)));
+      expect(screen.getByRole('tooltip').textContent).toContain('API cost');
+      fireEvent.blur(total);
+      expect(screen.queryByRole('tooltip')).toBeNull();
+    } finally {
+      CODEX.signIn.method = method;
+    }
   });
 
   it('shows the conversation whole in the bubble, folding all but the last two turns once it is long', async () => {
@@ -622,7 +749,7 @@ describe('the companion', () => {
     fireEvent.click(screen.getByRole('button', { name: '2 earlier turns' }));
     expect(thread.querySelectorAll('.dc-companion-turn')).toHaveLength(4);
     fireEvent.click(screen.getByRole('button', { name: 'New conversation' }));
-    expect(controller.companionForget).toHaveBeenCalledWith(doc.metadata.id);
+    expect(controller.companionForget).toHaveBeenCalledWith(doc.metadata.id, 'claude-code');
   });
 
   it('says why it can’t run and offers the fix, instead of a composer that would fail', async () => {
@@ -708,6 +835,28 @@ describe('the companion', () => {
     expect(screen.getByRole('status').textContent).toMatch(/Agents can’t use Plans yet/);
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Allow Plans' })));
     expect(controller.configureAgent).toHaveBeenCalledWith({ project: { handle: 'p1', agent: true } });
+    expect(screen.getByLabelText('Message Claude Code')).toBeTruthy();
+  });
+
+  it('offers to add an unregistered project before allowing its folder', async () => {
+    desktopStore.update({ agent: { ...ACCESS, projects: [] } });
+    useUiStore.setState({ companionOpen: true });
+    mount();
+    await settle();
+    expect(screen.queryByLabelText('Message Claude Code')).toBeNull();
+    const add = screen.getByRole('button', { name: 'Add project…' });
+    expect(document.activeElement).toBe(add);
+    fireEvent.click(add);
+    expect(controller.addProject).toHaveBeenCalledTimes(1);
+    expect(controller.configureAgent).not.toHaveBeenCalled();
+    expect(controller.companionSend).not.toHaveBeenCalled();
+    act(() => desktopStore.update({ agent: { ...ACCESS, projects: ACCESS.projects.map((p) => ({ ...p, agent: false })) } }));
+    expect(screen.queryByRole('button', { name: 'Allow Work' })).toBeNull();
+    act(() => desktopStore.update({ explorerMode: null }));
+    const allow = screen.getByRole('button', { name: 'Allow Work' });
+    expect(document.activeElement).toBe(allow);
+    await act(async () => fireEvent.click(allow));
+    expect(controller.configureAgent).toHaveBeenCalledWith({ project: { handle: 'ready', agent: true } });
     expect(screen.getByLabelText('Message Claude Code')).toBeTruthy();
   });
 

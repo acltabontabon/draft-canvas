@@ -223,8 +223,12 @@ function sanitizeFlow(raw: unknown, id: string): DraftFlow | null {
     for (const ref of strings(step.extraEdgeIds).slice(0, LIMITS.maxExtraMembersPerStep)) if (safeId(ref)) edgeIds.add(ref);
     for (const ref of strings(step.extraNodeIds).slice(0, LIMITS.maxExtraMembersPerStep)) if (safeId(ref, true)) nodeIds.add(ref);
   }
-  const [from, to] = freshIds(nodeIds, 2) as [string, string];
-  const nodes = [stubNode(from), stubNode(to), ...[...nodeIds].map(stubNode)];
+  // Reuse spotlighted shapes for the stand-in connectors. Two extra stubs would push a valid flow
+  // covering every allowed shape past maxNodes, silently trimming its last two references.
+  const ids = [...nodeIds];
+  ids.push(...freshIds(nodeIds, Math.max(0, 2 - ids.length)));
+  const [from, to] = ids as [string, string, ...string[]];
+  const nodes = ids.map(stubNode);
   const edges = [...edgeIds].map((edgeId) => ({ id: edgeId, source: from, target: to }));
   const { variantOf, ...rest } = raw;
   const result = documentOf({ nodes, edges, flows: [{ ...rest, steps }] });

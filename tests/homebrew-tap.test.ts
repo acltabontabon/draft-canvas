@@ -22,6 +22,8 @@ function tap() {
   git(seed, 'init', '-b', 'main');
   git(seed, 'config', 'user.name', 'test');
   git(seed, 'config', 'user.email', 'test@example.invalid');
+  // Fixture commits must not depend on the developer's signing key or running GPG agent.
+  git(seed, 'config', 'commit.gpgSign', 'false');
   mkdirSync(join(seed, 'Casks'));
   writeFileSync(join(seed, 'Casks', 'habi.rb'), 'habi release one\n');
   writeFileSync(join(seed, 'Casks', 'draft-canvas.rb'), cask('1.13.0'));
@@ -32,6 +34,7 @@ function tap() {
   git(dir, 'clone', remote, local);
   git(local, 'config', 'user.name', 'test');
   git(local, 'config', 'user.email', 'test@example.invalid');
+  git(local, 'config', 'commit.gpgSign', 'false');
   const candidate = join(dir, 'candidate.rb');
   writeFileSync(candidate, cask('1.13.1'));
   return { dir, remote, seed, local, candidate };

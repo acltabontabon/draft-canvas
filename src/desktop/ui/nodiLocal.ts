@@ -324,6 +324,9 @@ function helpOf(said: string, facts: LocalFacts): LocalAnswer | null {
 
 /** "Export", "export as png", "tidy connectors", "zoom in", "present": the app's own commands. */
 function commandOf(said: string, facts: LocalFacts): LocalAnswer | null {
+  // A capability question is not an instruction to edit. Keep this before filler removal, which
+  // erases "could I" and used to turn "could I delete that?" into an immediate Delete command.
+  const capabilityQuestion = /\b(?:can|could|may|might|should|would) (?:i|we)\b/.test(said);
   const raw = said.split(' ').filter((w) => !FILLER.has(w));
   // "Save as PNG" is an export; "save" alone is the file's own Save, not a command here.
   const exporting = raw.some((w) => ['png', 'svg', 'pdf', 'image', 'picture'].includes(w));
@@ -352,6 +355,9 @@ function commandOf(said: string, facts: LocalFacts): LocalAnswer | null {
     })
     // Every word said must be about the command: "export the cache design doc" is not Export.
     .filter((s) => needed.every((w) => matches(w, vocabulary(s.c))))
+    // A starter inserts an entire architecture. A fragment such as "change" in "do it, change it"
+    // must not select Change Data Capture: require its full name or a complete explicit alias.
+    .filter((s) => !s.c.id.startsWith('starter-') || s.full || (s.c.keywords ?? []).some((alias) => plain(alias) === needed.join(' ')))
     .sort((a, b) => b.score - a.score)
     .slice(0, 3);
   if (scored.length === 0) return null;
@@ -360,7 +366,7 @@ function commandOf(said: string, facts: LocalFacts): LocalAnswer | null {
   // command that ends something for everyone in a live session.
   const whole = scored.filter((s) => s.full);
   const sure = whole.length === 1 ? whole[0]! : scored.length === 1 ? scored[0]! : null;
-  if (sure && !ASK_FIRST.has(sure.c.id)) {
+  if (sure && !ASK_FIRST.has(sure.c.id) && !capabilityQuestion) {
     const done = ['Done, boss', 'On it, boss', 'Consider it done, boss', 'Already on it, boss'];
     return { text: `${done[(sure.c.id.length + words.length) % done.length]}: **${sure.c.title.replace(/…$/, '')}**.`, run: sure.c.id };
   }

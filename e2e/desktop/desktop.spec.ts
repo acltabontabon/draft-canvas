@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import { readFileSync } from 'node:fs';
+import { desktopNotes } from '../../scripts/update-manifest.mjs';
 import { installMockShell } from './mockShell';
 import { chooseWorkFile } from './explorer';
 
@@ -1010,6 +1012,46 @@ test('an update is offered quietly, and nothing happens to it until it is asked 
   await expect(page.getByRole('button', { name: 'Restart to update' })).toBeVisible();
   await dialog.getByRole('button', { name: 'Update and restart' }).click();
   await expect.poll(called).toContain('update_install');
+});
+
+test('the full changelog renders as a link and opens in the system browser', async ({ page }) => {
+  // Exercise the published notes pipeline: 1.15.2 displayed this closing link as raw Markdown.
+  const info = {
+    version: '1.16.0',
+    notes: desktopNotes(readFileSync(new URL('../../CHANGELOG.md', import.meta.url), 'utf8'), '1.16.0', 'v1.16.0'),
+  };
+  const url = 'https://github.com/acltabontabon/draft-canvas/blob/v1.16.0/CHANGELOG.md#1160---2026-10-25';
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'New Quick Draft' })).toBeVisible();
+  await page.evaluate(
+    (info) => window.__shell.setUpdate({ currentVersion: '1.15.2', state: { phase: 'available', info }, dismissed: false, held: null, error: null }),
+    info,
+  );
+  await page.getByRole('button', { name: 'Update available · 1.16.0' }).click();
+  const dialog = page.getByRole('dialog', { name: 'A new version of Draft Canvas' });
+  const notes = dialog.getByRole('region', { name: 'What’s new' });
+  const link = notes.getByRole('link', { name: '1.16.0', exact: true });
+  await expect(notes.getByText('Full changelog:', { exact: false })).toHaveText('Full changelog: 1.16.0');
+  await expect(link).toHaveAttribute('href', url);
+
+  for (const theme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+    await expect(page.locator(':root')).toHaveAttribute('data-theme', theme);
+    await link.scrollIntoViewIfNeeded();
+    await expect(link).toBeVisible();
+    expect(await notes.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    if (theme === 'light') await link.click();
+    else {
+      await link.focus();
+      await expect(link).toBeFocused();
+      await link.press('Enter');
+    }
+    await expect.poll(() => page.evaluate(() => window.__shell.calls().filter((call) => call.command === 'open_external'))).toEqual(
+      Array.from({ length: theme === 'light' ? 1 : 2 }, () => ({ command: 'open_external', args: { url } })),
+    );
+    await expect(dialog).toBeVisible();
+    await expect(page).toHaveURL('http://localhost:5199/');
+  }
 });
 
 /** Opens Settings the way the menu does, on the page named. */

@@ -472,6 +472,7 @@ export type SnagStep =
   | { kind: 'save'; label: string }
   | { kind: 'save-copy'; label: string }
   | { kind: 'settings'; label: string }
+  | { kind: 'add-project'; label: string }
   /** Agent access switched on, here: the person's click is the decision Settings would ask for. */
   | { kind: 'allow'; label: string }
   /** One listed folder opened to agents, the one this diagram is in. */
@@ -492,8 +493,8 @@ export interface SnagFacts {
   readOnly: boolean;
   /** Whether agent access is on; null until the shell has said. */
   access: boolean | null;
-  /** The listed folder holding this diagram, when agents can't use it yet (see `blockedFolderOf`). */
-  folder?: { handle: string; name: string } | null;
+  /** The folder holding this diagram when agents can't use it; no handle until it is a project. */
+  folder?: { handle: string | null; name: string } | null;
   /** The shell has said which agents are installed. */
   agentsKnown: boolean;
   /** The agent Nodi would run, if any. */
@@ -541,6 +542,13 @@ export function snagOf(facts: SnagFacts): Snag | null {
     };
   }
   if (facts.folder) {
+    if (facts.folder.handle === null) {
+      return {
+        line: `This diagram’s folder isn’t a project yet, boss. Add the folder containing this diagram (${facts.folder.name}), or a parent folder, as a project. Then I’ll ask you to allow agents in, right here.`,
+        rest: 'Add this diagram’s folder as a project, boss.',
+        steps: [{ kind: 'add-project', label: 'Add project…' }],
+      };
+    }
     return {
       line: `Agents can’t use ${facts.folder.name} yet, boss, and this diagram lives there. Open that folder to agents? Only that folder, and you can close it again in Settings.`,
       rest: `I’m not allowed in ${facts.folder.name}, boss.`,
@@ -578,18 +586,20 @@ export function snagOf(facts: SnagFacts): Snag | null {
 }
 
 /**
- * The listed folder this file is in, when no listed folder agents may use holds it: the nearest one,
- * so allowing it opens no more than the diagram needs. Null when one already lets agents in, or when
- * no listed folder holds the file (only Settings can list a folder). Matched by the shell's own
- * display paths, which both come in the same form.
+ * The folder this file is in, when no listed folder agents may use holds it: the nearest listed one,
+ * or its own folder without a handle when it still needs adding as a project. Null only when agents
+ * already have access. Matched by the shell's own display paths, which come in the same form.
  */
 export function blockedFolderOf(
   file: string,
   projects: readonly { handle: string; name: string; displayPath: string; agent: boolean }[],
-): { handle: string; name: string } | null {
+): { handle: string | null; name: string } | null {
   const holds = (folder: string) => file.startsWith(`${folder.replace(/[\\/]+$/, '')}/`) || file.startsWith(`${folder.replace(/[\\/]+$/, '')}\\`);
   const holding = projects.filter((p) => holds(p.displayPath));
-  if (holding.length === 0 || holding.some((p) => p.agent)) return null;
+  if (holding.some((p) => p.agent)) return null;
+  if (holding.length === 0) {
+    return { handle: null, name: file.slice(0, Math.max(file.lastIndexOf('/'), file.lastIndexOf('\\'))) || file };
+  }
   const nearest = holding.reduce((a, b) => (b.displayPath.length > a.displayPath.length ? b : a));
   return { handle: nearest.handle, name: nearest.name };
 }
@@ -645,7 +655,7 @@ export function setupStepsOf(
  * tokens (its instructions and tools go with every call), which is a lot for "hello". Anything more
  * — a question, a name, a second clause — goes to the agent as before.
  */
-const SMALL_TALK: { words: RegExp; replies: readonly string[] }[] = [
+const SMALL_TALK: { words: RegExp; replies: readonly string[]; continuation?: boolean }[] = [
   {
     words: /^(hi|hello|hey|heya|hiya|yo|sup|howdy|hola|good (morning|afternoon|evening)|morning|hi there|hello there|hey there|hey nodi|hi nodi|hello nodi)$/,
     replies: [
@@ -660,6 +670,7 @@ const SMALL_TALK: { words: RegExp; replies: readonly string[] }[] = [
   },
   {
     words: /^(ok|okay|k|kk|cool|nice|great|awesome|got it|sounds good|perfect|lol|haha|lmao|yep|yes|yup|sure|alright|all right)$/,
+    continuation: true,
     replies: ['Noted, boss.', 'Cool cool cool. I’ll be here.', 'Great. Say the word when you want more.'],
   },
   {
@@ -715,8 +726,10 @@ const SMALL_TALK: { words: RegExp; replies: readonly string[] }[] = [
   },
 ];
 
-/** Nodi's own answer to `text` when it is only small talk, else null (send it to the agent). */
-export function smallTalkOf(text: string, seed: number): string | null {
+/** Nodi's own answer to `text` when it is only small talk, else null (send it to the agent).
+ *  A short acknowledgment may accept an agent's offer or answer its question, including in a resumed
+ *  session whose earlier turns are no longer on screen. */
+export function smallTalkOf(text: string, seed: number, passConfirmations = false): string | null {
   const said = text
     .toLowerCase()
     .replace(/[’']/g, '')
@@ -726,7 +739,7 @@ export function smallTalkOf(text: string, seed: number): string | null {
     .replace(/ boss$/, '');
   if (!said || said.split(' ').length > 6) return null;
   const talk = SMALL_TALK.find((t) => t.words.test(said)) ?? SMALL_TALK.find((t) => typoOf(said, t.words));
-  return talk ? pick(talk.replies, seed) : null;
+  return talk && !(passConfirmations && talk.continuation) ? pick(talk.replies, seed) : null;
 }
 
 /** A small talk phrase with one typo in it ("how hold are you"): only for phrases long enough that one

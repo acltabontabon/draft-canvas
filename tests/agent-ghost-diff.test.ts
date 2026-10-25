@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { agentGhostDiff, movedShapes } from '../src/canvas/agentGhostDiff';
 import { createEdge, createNode } from '../src/document/factory';
+import type { DraftNode } from '../src/document/types';
 
 describe('agentGhostDiff', () => {
   it('buckets an added node separately from an added group', () => {
@@ -41,6 +42,21 @@ describe('agentGhostDiff', () => {
     expect(agentGhostDiff({ nodes: [node], edges: [] }, { nodes: [described], edges: [] }).modifiedNodes).toEqual([described]);
     const withTech = { ...node, technology: 'Spring Boot' };
     expect(agentGhostDiff({ nodes: [node], edges: [] }, { nodes: [withTech], edges: [] }).modifiedNodes).toEqual([withTech]);
+  });
+
+  it.each<Partial<DraftNode>>([
+    { annotation: true },
+    { textRole: 'heading' },
+    { textFont: 'serif' },
+    { textBackground: 'marker' },
+    { textAlign: 'right' },
+    { textBold: true },
+    { textItalic: true },
+  ])('previews label styling even when its geometry stays unchanged: %j', (style) => {
+    const node = createNode({ id: 'label', type: 'text', x: 0, y: 0, text: 'A long heading\nshort' });
+    const styled = { ...node, ...style };
+    expect(agentGhostDiff({ nodes: [node], edges: [] }, { nodes: [styled], edges: [] }).modifiedNodes).toEqual([styled]);
+    expect(agentGhostDiff({ nodes: [styled], edges: [] }, { nodes: [node], edges: [] }).modifiedNodes).toEqual([node]);
   });
 
   it('leaves an untouched node out of every bucket', () => {

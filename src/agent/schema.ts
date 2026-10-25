@@ -280,7 +280,7 @@ const openPoint: Schema = {
 const num = { type: 'number' } as const;
 const place: Schema = {
   type: 'object',
-  description: 'View px, as read_diagram geometry. x,y: top-left; or rightOf/leftOf/above/below an id, gap (48), align start|center|end; x/y also given wins. width/height: not below its text. Overlaps refused.',
+  description: 'View px: x/y or rightOf/leftOf/above/below an id; align start|center|end. gap is exact; omitted uses layout.spacing + caption room, or 48px if unset. x/y wins. Sizes fit text; overlaps refused.',
   properties: { x: num, y: num, rightOf: { type: 'string' }, leftOf: { type: 'string' }, above: { type: 'string' }, below: { type: 'string' }, gap: num, align: { enum: ['start', 'center', 'end'] }, width: num, height: num },
   additionalProperties: false,
 };

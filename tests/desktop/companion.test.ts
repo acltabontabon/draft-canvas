@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { RunEvent, RunSnapshot } from '../../src/desktop/api';
-import { activityOf, applyRunEvent, companion, newTokens, newTurn, numberedBlocks, partsIn, replyBlocks, replyOf, replyPoints, spentOn, stepText, stopMessage, tokenCount } from '../../src/desktop/companion';
+import { activityOf, applyRunEvent, companion, conversationKey, newTokens, newTurn, numberedBlocks, partsIn, replyBlocks, replyOf, replyPoints, spentOn, stepText, stopMessage, tokenCount } from '../../src/desktop/companion';
 import { CHANNEL_MS, CHANNEL_TICKS, CHANNELS, channelAt, channelClock, channelFrame, frame, HEIGHT, ROWS, WIDTH } from '../../src/desktop/ui/mascot/pixels';
 import { unchangedSinceLastTurn } from '../../src/desktop/turnSnapshot';
 import { createHarness } from './harness';
@@ -117,20 +117,20 @@ describe('the store', () => {
     expect(companion.running('d_1')?.runId).toBe(RUN);
     for (const event of TURN) companion.apply(RUN, event);
     expect(companion.running('d_1')).toBeNull();
-    expect(companion.snapshot().get('d_1')?.turns).toHaveLength(1);
+    expect(companion.snapshot().get(conversationKey('d_1'))?.turns).toHaveLength(1);
     companion.apply('unknown-run', { type: 'message-chunk', text: 'x' });
-    expect(companion.snapshot().get('d_1')?.turns[0]?.reply).toBe('I proposed a cache.');
+    expect(companion.snapshot().get(conversationKey('d_1'))?.turns[0]?.reply).toBe('I proposed a cache.');
   });
 
   it('rebuilds a run a reloaded page finds, once', () => {
     const snapshot = { runId: RUN, diagramId: 'd_1', agent: 'claude-code' as const, prompt: 'Add a cache', events: TURN.slice(0, 3) };
     companion.restore([snapshot]);
     companion.restore([snapshot]);
-    const turns = companion.snapshot().get('d_1')!.turns;
+    const turns = companion.snapshot().get(conversationKey('d_1'))!.turns;
     expect(turns).toHaveLength(1);
     expect(turns[0]).toMatchObject({ prompt: 'Add a cache', stop: null });
     expect(turns[0]!.steps).toHaveLength(1);
-    expect(companion.snapshot().get('d_1')!.agent).toBe('claude-code');
+    expect(companion.snapshot().get(conversationKey('d_1'))!.agent).toBe('claude-code');
   });
 
   it('bounds older recovered turns without changing the latest page turn’s agent', () => {
@@ -142,12 +142,33 @@ describe('the store', () => {
       { runId: 'finished', diagramId: 'd_1', agent: 'codex', prompt: 'Finished', sequence: 1, events: [TURN.at(-1)!] },
       { runId: 'finished-2', diagramId: 'd_1', agent: 'codex', prompt: 'Also finished', sequence: 1, events: [TURN.at(-1)!] },
     ]);
-    const restored = companion.snapshot().get('d_1')!;
+    const restored = companion.snapshot().get(conversationKey('d_1'))!;
     expect(restored.turns).toHaveLength(20);
-    expect(restored.earlier?.turns).toBe(2);
+    expect(restored.earlier).toBeUndefined();
+    expect(companion.snapshot().get(conversationKey('d_1', 'codex'))?.turns.map((turn) => turn.runId)).toEqual(['finished', 'finished-2']);
     expect(restored.agent).toBe('claude-code');
     expect(restored.turns.at(-1)!.runId).toBe('old-19');
     expect(companion.running('d_1')).toBeNull();
+  });
+
+  it('isolates each agent history, local replies, proposals and clearing while events keep their owner', () => {
+    companion.begin('d_1', 'claude', 'Could you rearrange it?', null, 'claude-code');
+    companion.apply('claude', { type: 'stopped', reason: { kind: 'end-turn' }, summary: 'Do you want a row?', costMicroUsd: null, usage: null });
+    companion.setProposal('claude', 'claude-proposal');
+    companion.begin('d_1', 'codex', 'Explain this', null, 'codex');
+    companion.apply('codex', { type: 'stopped', reason: { kind: 'end-turn' }, summary: 'Codex reply', costMicroUsd: null, usage: null });
+    companion.selectAgent('d_1', 'codex');
+    expect(companion.selected('d_1')?.turns.map((turn) => turn.runId)).toEqual(['codex']);
+    companion.answer('d_1', 'Thanks', 'Welcome', undefined, 'codex');
+    companion.selectAgent('d_1', 'claude-code');
+    expect(companion.selected('d_1')?.turns[0]?.summary).toBe('Do you want a row?');
+    expect(companion.selected('d_1')?.turns[0]?.proposalId).toBe('claude-proposal');
+    expect(companion.diagramOf('codex')).toBe('d_1');
+    companion.clear('d_1', 'codex');
+    expect(companion.snapshot().has(conversationKey('d_1', 'codex'))).toBe(false);
+    expect(companion.selected('d_1')?.turns).toHaveLength(1);
+    companion.resolve('claude', 'accepted');
+    expect(companion.selected('d_1')?.turns[0]?.outcome).toBe('accepted');
   });
 
   it('evicts finished conversations while keeping an active run', () => {
@@ -158,7 +179,7 @@ describe('the store', () => {
     for (let i = 0; i < 105; i += 1) companion.answer(`diagram-${i}`, 'Hi', 'Hi');
     expect(companion.snapshot().size).toBe(100);
     expect(companion.running('working')?.runId).toBe('working');
-    expect(companion.snapshot().has('old')).toBe(false);
+    expect(companion.snapshot().has(conversationKey('old'))).toBe(false);
     expect(unchangedSinceLastTurn('old', view, [], 'codex', true)).toBe(false);
   });
 
@@ -167,10 +188,10 @@ describe('the store', () => {
     companion.apply('done', { type: 'stopped', reason: { kind: 'end-turn' }, summary: null, costMicroUsd: null, usage: null });
     companion.begin('d_1', RUN, 'Second', null);
     companion.clear('d_1');
-    expect(companion.snapshot().get('d_1')!.turns.map((t) => t.prompt)).toEqual(['Second']);
+    expect(companion.snapshot().get(conversationKey('d_1'))!.turns.map((t) => t.prompt)).toEqual(['Second']);
     companion.apply(RUN, { type: 'stopped', reason: { kind: 'end-turn' }, summary: null, costMicroUsd: null, usage: null });
     companion.clear('d_1');
-    expect(companion.snapshot().has('d_1')).toBe(false);
+    expect(companion.snapshot().has(conversationKey('d_1'))).toBe(false);
   });
 });
 
@@ -184,7 +205,7 @@ describe('what a conversation uses', () => {
     companion.apply('b', stop(null));
     companion.begin('d_1', 'c', 'Third', null);
     companion.apply('c', stop({ input: 50_000, cached: 46_000, output: 300 }, 30_000));
-    expect(spentOn(companion.snapshot().get('d_1'))).toEqual({ usage: { input: 98_000, cached: 46_000, output: 500 }, costMicroUsd: 220_000, turns: 2 });
+    expect(spentOn(companion.snapshot().get(conversationKey('d_1')))).toEqual({ usage: { input: 98_000, cached: 46_000, output: 500 }, costMicroUsd: 220_000, turns: 2 });
   });
 
   it('keeps counting turns the conversation no longer keeps, and starts over with a new one', () => {
@@ -192,11 +213,11 @@ describe('what a conversation uses', () => {
       companion.begin('d_1', `r${i}`, `Turn ${i}`, null);
       companion.apply(`r${i}`, stop({ input: 1000, cached: 500, output: 10 }));
     }
-    const conversation = companion.snapshot().get('d_1')!;
+    const conversation = companion.snapshot().get(conversationKey('d_1'))!;
     expect(conversation.turns).toHaveLength(20);
     expect(spentOn(conversation)).toMatchObject({ usage: { input: 25_000, cached: 12_500, output: 250 }, turns: 25 });
     companion.clear('d_1');
-    expect(spentOn(companion.snapshot().get('d_1'))).toBeNull();
+    expect(spentOn(companion.snapshot().get(conversationKey('d_1')))).toBeNull();
   });
 
   it('clears earlier usage even when a running turn must be kept', () => {
@@ -207,12 +228,12 @@ describe('what a conversation uses', () => {
     companion.begin('d_1', 'active', 'Keep this turn', null);
     companion.clear('d_1');
     expect(companion.running('d_1')?.runId).toBe('active');
-    expect(spentOn(companion.snapshot().get('d_1'))).toBeNull();
+    expect(spentOn(companion.snapshot().get(conversationKey('d_1')))).toBeNull();
   });
 
   it('is nothing until a turn reports it', () => {
     companion.begin('d_1', RUN, 'Add a cache', null);
-    expect(spentOn(companion.snapshot().get('d_1'))).toBeNull();
+    expect(spentOn(companion.snapshot().get(conversationKey('d_1')))).toBeNull();
     expect(spentOn(undefined)).toBeNull();
   });
 
@@ -235,14 +256,32 @@ describe('the controller', () => {
     expect(h.agent.companion.sent).toHaveLength(1);
     for (const event of TURN) h.hostEvent({ type: 'companion', run: RUN, event });
     await h.settle();
-    const turn = companion.snapshot().get('d_1')!.turns[0]!;
+    const turn = companion.snapshot().get(conversationKey('d_1'))!.turns[0]!;
     expect(turn.stop).toEqual({ kind: 'end-turn' });
     expect(turn.proposalId).toBe('p1');
 
     h.agent.proposals.set('p1', { proposalId: 'p1', diagramId: 'd_1', status: 'accepted', run: RUN } as never);
     h.hostEvent({ type: 'agent-changed' });
     await h.settle();
-    expect(companion.snapshot().get('d_1')!.turns[0]!.proposalId).toBeNull();
+    expect(companion.snapshot().get(conversationKey('d_1'))!.turns[0]!.proposalId).toBeNull();
+  });
+
+  it('tracks pending proposals from both agent histories on the same diagram', async () => {
+    const h = createHarness();
+    await h.controller.start();
+    for (const [runId, agent] of [['claude', 'claude-code'], ['codex', 'codex']] as const) {
+      companion.begin('d_1', runId, 'Rearrange it', null, agent);
+      companion.apply(runId, { type: 'tool-call', id: `tool-${runId}`, tool: 'submit_proposal', status: 'completed' });
+      companion.apply(runId, TURN.at(-1)!);
+      h.agent.proposals.set(`p-${runId}`, { proposalId: `p-${runId}`, diagramId: 'd_1', status: 'pending', run: runId } as never);
+    }
+    await h.controller.refreshCompanionProposals();
+    expect(companion.snapshot().get(conversationKey('d_1', 'claude-code'))?.turns[0]?.proposalId).toBe('p-claude');
+    expect(companion.snapshot().get(conversationKey('d_1', 'codex'))?.turns[0]?.proposalId).toBe('p-codex');
+    await h.controller.companionForget('d_1', 'codex');
+    expect(h.api.companionForget).toHaveBeenLastCalledWith('d_1', 'codex');
+    expect(companion.snapshot().has(conversationKey('d_1', 'claude-code'))).toBe(true);
+    expect(companion.snapshot().has(conversationKey('d_1', 'codex'))).toBe(false);
   });
 
   it('ends the turn with the shell’s own words when it refuses to start', async () => {
@@ -255,7 +294,7 @@ describe('the controller', () => {
       { runId: RUN, diagramId: 'd_1', text: 'Add a cache', selection: null, room: [], agent: 'claude-code', mode: 'proposal' },
       null,
     );
-    const turn = companion.snapshot().get('d_1')!.turns[0]!;
+    const turn = companion.snapshot().get(conversationKey('d_1'))!.turns[0]!;
     expect(stopMessage(turn.stop)).toBe('Turn on agent access in Settings → AI agents first.');
     expect(unchangedSinceLastTurn('d_1', view, [], 'claude-code', true)).toBe(false);
   });
@@ -310,13 +349,13 @@ describe('the controller', () => {
     h.hostEvent({ type: 'companion', run: RUN, sequence: 3, event: { type: 'message-chunk', text: 'Arrived later.' } });
     recovered([{ runId: RUN, diagramId: 'd_1', agent: 'codex', prompt: 'Explain it', sequence: 2, events: [TURN[0]!, { type: 'message-chunk', text: 'Already in the snapshot. ' }] }]);
     await starting;
-    const turn = companion.snapshot().get('d_1')!.turns[0]!;
+    const turn = companion.snapshot().get(conversationKey('d_1', 'codex'))!.turns[0]!;
     expect(turn.reply).toBe('Already in the snapshot. Arrived later.');
     expect(turn.stop).toEqual({ kind: 'end-turn' });
-    expect(companion.snapshot().get('d_1')!.agent).toBe('codex');
+    expect(companion.snapshot().get(conversationKey('d_1', 'codex'))!.agent).toBe('codex');
     expect(companion.running('d_1')).toBeNull();
     h.hostEvent({ type: 'companion', run: RUN, sequence: 3, event: { type: 'message-chunk', text: 'Duplicate' } });
-    expect(companion.snapshot().get('d_1')!.turns[0]!.reply).toBe(turn.reply);
+    expect(companion.snapshot().get(conversationKey('d_1', 'codex'))!.turns[0]!.reply).toBe(turn.reply);
   });
 
   it('keeps buffered events for a turn begun by this page while recovery was pending', async () => {
@@ -329,7 +368,7 @@ describe('the controller', () => {
     h.hostEvent({ type: 'companion', run: RUN, sequence: 1, event: { type: 'message-chunk', text: 'Keep me' } });
     recovered([{ runId: RUN, diagramId: 'd_1', agent: 'codex', prompt: 'New turn', sequence: 1, events: [{ type: 'message-chunk', text: 'Keep me' }] }]);
     await starting;
-    expect(companion.snapshot().get('d_1')!.turns[0]!.reply).toBe('Keep me');
+    expect(companion.snapshot().get(conversationKey('d_1'))!.turns[0]!.reply).toBe('Keep me');
   });
 
   it('places older recovered turns before a newer turn begun by this page', async () => {
@@ -345,8 +384,9 @@ describe('the controller', () => {
       { runId: 'older-b', diagramId: 'd_1', agent: 'codex', prompt: 'Older B', sequence: 1, events: [TURN.at(-1)!] },
     ]);
     await starting;
-    const conversation = companion.snapshot().get('d_1')!;
-    expect(conversation.turns.map((turn) => turn.runId)).toEqual(['older-a', 'older-b', 'new-page-run']);
+    const conversation = companion.snapshot().get(conversationKey('d_1'))!;
+    expect(conversation.turns.map((turn) => turn.runId)).toEqual(['new-page-run']);
+    expect(companion.snapshot().get(conversationKey('d_1', 'codex'))?.turns.map((turn) => turn.runId)).toEqual(['older-a', 'older-b']);
     expect(conversation.agent).toBe('claude-code');
     expect(conversation.turns.at(-1)!.reply).toBe('Newest reply');
     expect(companion.running('d_1')?.runId).toBe('new-page-run');
@@ -362,7 +402,7 @@ describe('the controller', () => {
     h.hostEvent({ type: 'companion', run: RUN, sequence: 3, event: final });
     recovered([{ runId: RUN, diagramId: 'd_1', agent: 'codex', prompt: 'Explain it', sequence: 3, events: [TURN[0]!, { type: 'message-chunk', text: 'Finished before capture.' }, final] }]);
     await starting;
-    const restored = companion.snapshot().get('d_1')!.turns[0]!;
+    const restored = companion.snapshot().get(conversationKey('d_1', 'codex'))!.turns[0]!;
     expect(restored.reply).toBe('Finished before capture.');
     expect(restored.stop).toEqual({ kind: 'end-turn' });
     expect(companion.running('d_1')).toBeNull();
@@ -378,7 +418,7 @@ describe('the controller', () => {
     recovered([{ runId: RUN, diagramId: 'd_1', agent: 'codex', prompt: 'Too much', sequence: 0, events: [] }]);
     await starting;
     expect(companion.running('d_1')).toBeNull();
-    expect(companion.snapshot().get('d_1')!.turns[0]!.stop).toMatchObject({ kind: 'failed', message: expect.stringContaining('recovering') });
+    expect(companion.snapshot().get(conversationKey('d_1', 'codex'))!.turns[0]!.stop).toMatchObject({ kind: 'failed', message: expect.stringContaining('recovering') });
     expect(h.agent.companion.cancelled).toContain(RUN);
   });
 
@@ -398,7 +438,7 @@ describe('the controller', () => {
     companion.begin('d_1', 'done', 'First', null);
     companion.apply('done', { type: 'stopped', reason: { kind: 'end-turn' }, summary: null, costMicroUsd: null, usage: null });
     await h.controller.companionForget('d_1');
-    expect(companion.snapshot().has('d_1')).toBe(false);
+    expect(companion.snapshot().has(conversationKey('d_1'))).toBe(false);
     expect(h.agent.companion.forgotten).toEqual(['d_1']);
   });
 });

@@ -1,6 +1,7 @@
 import { getViewportForBounds } from '@xyflow/react';
 import { edgeRelationLabel } from '../document/connectorSemantics';
 import { displayNameFor } from '../document/factory';
+import { flowMemberNodeIds } from '../document/flow';
 import { boundsOf, type Bounds } from '../document/operations';
 import type { DraftDocument, DraftEdge, DraftNode } from '../document/types';
 import { pathKey, roomsOf, type DepthPath } from '../depth/tree';
@@ -215,17 +216,7 @@ function roomJumpCommands(document: DraftDocument, elsewhere: Elsewhere | null):
       run: (ctx) =>
         act(ctx, (fresh) => {
           fresh.editor.setSelectedFlowId(flow.id);
-          const edgesById = new Map(fresh.editor.document.edges.map((edge) => [edge.id, edge]));
-          const members = new Set<string>();
-          for (const step of flow.steps) {
-            const edge = step.edgeId ? edgesById.get(step.edgeId) : undefined;
-            if (edge) {
-              members.add(edge.source);
-              members.add(edge.target);
-            }
-            for (const extra of step.extraNodeIds ?? []) members.add(extra);
-          }
-          focusNodes(fresh, [...members]);
+          focusNodes(fresh, flowMemberNodeIds(fresh.editor.document, flow));
         }),
     });
   }

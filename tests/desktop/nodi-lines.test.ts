@@ -131,8 +131,19 @@ describe('what stops Nodi, and the next step it offers', () => {
     expect(blockedFolderOf('~/Work/Library/plan.dcanvas', [outer, inner])).toEqual({ handle: 'b', name: 'Library' });
     expect(blockedFolderOf('~/Work/Library/plan.dcanvas', [{ ...outer, agent: true }, inner])).toBeNull();
     // Not a folder just because the name starts the same.
-    expect(blockedFolderOf('~/Work/Library2/plan.dcanvas', [inner])).toBeNull();
+    expect(blockedFolderOf('~/Work/Library2/plan.dcanvas', [inner])).toEqual({ handle: null, name: '~/Work/Library2' });
     expect(blockedFolderOf('C:\\Work\\plan.dcanvas', [{ ...outer, displayPath: 'C:\\Work' }])).toEqual({ handle: 'a', name: 'Work' });
+  });
+
+  it('guides an unregistered folder through adding a project before granting access', () => {
+    const folder = blockedFolderOf('~/Work/Library/plan.dcanvas', []);
+    expect(folder).toEqual({ handle: null, name: '~/Work/Library' });
+    expect(snagOf({ ...ready, folder })).toMatchObject({
+      line: expect.stringContaining('~/Work/Library'),
+      steps: [{ kind: 'add-project', label: 'Add project…' }],
+    });
+    expect(blockedFolderOf('C:\\Work\\plan.dcanvas', [])).toEqual({ handle: null, name: 'C:\\Work' });
+    expect(blockedFolderOf('~/Work/plan.dcanvas', [{ handle: 'other', name: 'Other', displayPath: '~/Other', agent: true }])).toEqual({ handle: null, name: '~/Work' });
   });
 
   it('says it in Nodi’s voice, with a short line for rest', () => {
@@ -317,6 +328,15 @@ describe('small talk Nodi answers itself', () => {
 
   it('says its own name, whatever runs it', () => {
     for (let seed = 0; seed < 3; seed += 1) expect(smallTalkOf('what’s your name?', seed)).toMatch(/Nodi/);
+  });
+
+  it('passes short confirmations to an ongoing agent conversation', () => {
+    for (const said of ['yes', 'Yep!', 'sure', 'okay', 'sounds good', 'alright']) {
+      expect(smallTalkOf(said, 0, true), said).toBeNull();
+      expect(smallTalkOf(said, 0), said).not.toBeNull();
+    }
+    expect(smallTalkOf('thanks', 0, true)).not.toBeNull();
+    expect(smallTalkOf('hello', 0, true)).not.toBeNull();
   });
 
   it('sends anything more to the agent', () => {

@@ -135,7 +135,7 @@ export function ProposalPanel() {
   // off. One whose conversation is gone (a reload, a new conversation) is the badge's again.
   const conversations = useSyncExternalStore(companion.subscribe, companion.snapshot);
   const nodi = useNodiShown();
-  const inCompanion = useMemo(() => new Set(nodi ? [...conversations.values()].map((c) => c.turns.at(-1)?.proposalId) : []), [conversations, nodi]);
+  const inCompanion = useMemo(() => new Set(nodi && diagramId ? [companion.selected(diagramId)?.turns.at(-1)?.proposalId] : []), [conversations, nodi, diagramId]);
   const unreviewed = pending.filter((p) => !inCompanion.has(p.proposalId));
   if (!diagramId) return null;
 

@@ -47,7 +47,7 @@ export interface Conversation {
   turns: Turn[];
   /** What turns no longer kept (past `KEEP_TURNS`) used, so the conversation's total stays whole. */
   earlier?: Spent;
-  /** The agent the latest turn ran on: its session is the one Continue in Terminal carries on. */
+  /** The agent whose session and turns this conversation belongs to. */
   agent?: AgentKind;
 }
 
@@ -323,30 +323,36 @@ export function stopMessage(stop: StopReason | null): string | null {
 
 type Listener = () => void;
 
+/** Stable key for a diagram's separate conversation with each agent. */
+export function conversationKey(diagramId: string, agent: AgentKind = 'claude-code'): string {
+  return JSON.stringify([diagramId, agent]);
+}
+
 let conversations = new Map<string, Conversation>();
-/** Which diagram each run belongs to. */
+let selectedAgents = new Map<string, AgentKind>();
+/** Which conversation each run belongs to. */
 let runs = new Map<string, string>();
 const listeners = new Set<Listener>();
 
 function changed(): void {
-  for (const [diagramId, conversation] of conversations) {
+  for (const [key, conversation] of conversations) {
     if (conversations.size <= KEEP_CONVERSATIONS) break;
     if (conversation.turns.some((turn) => turn.stop === null)) continue;
     for (const turn of conversation.turns) runs.delete(turn.runId);
-    conversations.delete(diagramId);
-    forgetTurnSnapshot(diagramId);
+    conversations.delete(key);
+    forgetTurnSnapshot(conversation.diagramId);
   }
   conversations = new Map(conversations);
   for (const listener of listeners) listener();
 }
 
 function update(runId: string, change: (turn: Turn) => Turn): void {
-  const diagramId = runs.get(runId);
-  const conversation = diagramId === undefined ? undefined : conversations.get(diagramId);
-  if (!conversation || diagramId === undefined) return;
+  const key = runs.get(runId);
+  const conversation = key === undefined ? undefined : conversations.get(key);
+  if (!conversation || key === undefined) return;
   const turns = conversation.turns.map((turn) => (turn.runId === runId ? change(turn) : turn));
   if (turns.every((turn, i) => turn === conversation.turns[i])) return;
-  conversations.set(diagramId, { ...conversation, turns });
+  conversations.set(key, { ...conversation, turns });
   changed();
 }
 
@@ -356,31 +362,45 @@ export const companion = {
     return () => void listeners.delete(listener);
   },
 
-  /** Every conversation by diagram id. A new map after every change, so it can be compared by identity. */
+  /** Every conversation by `conversationKey(diagramId, agent)`. A new map after every change, so it can be compared by identity. */
   snapshot(): ReadonlyMap<string, Conversation> {
     return conversations;
+  },
+
+  /** Which conversation the on-canvas companion currently shows, also used by proposal badges. */
+  selectAgent(diagramId: string, agent: AgentKind): void {
+    if (selectedAgents.get(diagramId) === agent) return;
+    selectedAgents.delete(diagramId);
+    selectedAgents.set(diagramId, agent);
+    if (selectedAgents.size > KEEP_CONVERSATIONS) selectedAgents.delete(selectedAgents.keys().next().value!);
+    changed();
+  },
+
+  selected(diagramId: string): Conversation | undefined {
+    return conversations.get(conversationKey(diagramId, selectedAgents.get(diagramId)));
   },
 
   /** The person sent a prompt: a new turn, working until it stops. */
   begin(diagramId: string, runId: string, prompt: string, about: string | null, agent?: AgentKind): void {
     if (runs.has(runId)) return;
-    const conversation = conversations.get(diagramId) ?? { diagramId, turns: [] };
+    const key = conversationKey(diagramId, agent);
+    const conversation = conversations.get(key) ?? { diagramId, agent: agent ?? 'claude-code', turns: [] };
     // Move the used conversation to the end, so pruning keeps the most recently used.
-    conversations.delete(diagramId);
+    conversations.delete(key);
     const turns = [...conversation.turns, newTurn(runId, prompt, about)];
     // What a dropped turn used still counts: the total is the conversation's, not the kept turns'.
     const dropped = turns.slice(0, Math.max(0, turns.length - KEEP_TURNS));
     const earlier = dropped.reduce<Spent | null>(add, conversation.earlier ?? null);
     for (const turn of dropped) runs.delete(turn.runId);
-    conversations.set(diagramId, { ...conversation, turns: turns.slice(-KEEP_TURNS), ...(earlier ? { earlier } : {}), ...(agent ? { agent } : {}) });
-    runs.set(runId, diagramId);
+    conversations.set(key, { ...conversation, turns: turns.slice(-KEEP_TURNS), ...(earlier ? { earlier } : {}), ...(agent ? { agent } : {}) });
+    runs.set(runId, key);
     changed();
   },
 
   /** A turn Nodi answers itself, with no agent run: small talk, whole at once, costing nothing. */
-  answer(diagramId: string, prompt: string, reply: string, actions?: LocalAction[]): void {
+  answer(diagramId: string, prompt: string, reply: string, actions?: LocalAction[], agent?: AgentKind): void {
     const runId = `local-${crypto.randomUUID()}`;
-    companion.begin(diagramId, runId, prompt, null);
+    companion.begin(diagramId, runId, prompt, null, agent);
     update(runId, (turn) => ({ ...turn, reply, stop: { kind: 'end-turn' }, local: true, ...(actions?.length ? { actions } : {}) }));
   },
 
@@ -404,52 +424,67 @@ export const companion = {
   },
 
   diagramOf(runId: string): string | undefined {
-    return runs.get(runId);
+    const key = runs.get(runId);
+    return key === undefined ? undefined : conversations.get(key)?.diagramId;
+  },
+
+  agentOf(runId: string): AgentKind | undefined {
+    const key = runs.get(runId);
+    return key === undefined ? undefined : conversations.get(key)?.agent;
   },
 
   /** The run still working on `diagramId`, if any. */
   running(diagramId: string): Turn | null {
-    return conversations.get(diagramId)?.turns.find((turn) => turn.stop === null) ?? null;
+    for (const conversation of conversations.values()) {
+      if (conversation.diagramId === diagramId) {
+        const turn = conversation.turns.find((turn) => turn.stop === null);
+        if (turn) return turn;
+      }
+    }
+    return null;
   },
 
   /** Runs a reloaded page found still going: their turns, rebuilt from what they have said. */
   restore(snapshots: RunSnapshot[]): void {
     if (snapshots.length === 0) return;
-    const recovered = new Map<string, { turns: Turn[]; agent: AgentKind }>();
+    const recovered = new Map<string, { diagramId: string; turns: Turn[]; agent: AgentKind }>();
     for (const snapshot of snapshots) {
       if (runs.has(snapshot.runId)) continue;
       const turn = snapshot.events.reduce(applyRunEvent, newTurn(snapshot.runId, snapshot.prompt, null));
-      const previous = recovered.get(snapshot.diagramId);
-      recovered.set(snapshot.diagramId, { turns: [...(previous?.turns ?? []), turn], agent: snapshot.agent });
-      runs.set(snapshot.runId, snapshot.diagramId);
+      const key = conversationKey(snapshot.diagramId, snapshot.agent);
+      const previous = recovered.get(key);
+      recovered.set(key, { diagramId: snapshot.diagramId, turns: [...(previous?.turns ?? []), turn], agent: snapshot.agent });
+      runs.set(snapshot.runId, key);
     }
-    for (const [diagramId, history] of recovered) {
-      const conversation = conversations.get(diagramId) ?? { diagramId, turns: [] };
+    for (const [key, history] of recovered) {
+      const conversation = conversations.get(key) ?? { diagramId: history.diagramId, turns: [] };
       // A turn begun by this page while recovery was in flight is newer than its recovered history.
       const turns = [...history.turns, ...conversation.turns];
       const dropped = turns.slice(0, Math.max(0, turns.length - KEEP_TURNS));
       const earlier = dropped.reduce<Spent | null>(add, conversation.earlier ?? null);
       for (const previous of dropped) runs.delete(previous.runId);
-      conversations.set(diagramId, { ...conversation, agent: conversation.agent ?? history.agent, turns: turns.slice(-KEEP_TURNS), ...(earlier ? { earlier } : {}) });
+      conversations.set(key, { ...conversation, agent: conversation.agent ?? history.agent, turns: turns.slice(-KEEP_TURNS), ...(earlier ? { earlier } : {}) });
     }
     changed();
   },
 
-  /** A new conversation on `diagramId`: the old turns go. A run still working keeps its turn. */
-  clear(diagramId: string): void {
-    const conversation = conversations.get(diagramId);
-    if (!conversation) return;
+  /** Start the chosen agent over; an omitted agent clears all histories for older callers. */
+  clear(diagramId: string, agent?: AgentKind): void {
     forgetTurnSnapshot(diagramId);
-    const working = conversation.turns.filter((turn) => turn.stop === null);
-    for (const turn of conversation.turns) if (turn.stop !== null) runs.delete(turn.runId);
-    if (working.length) conversations.set(diagramId, { diagramId, agent: conversation.agent, turns: working });
-    else conversations.delete(diagramId);
+    for (const [key, conversation] of conversations) {
+      if (conversation.diagramId !== diagramId || (agent && conversation.agent !== agent)) continue;
+      const working = conversation.turns.filter((turn) => turn.stop === null);
+      for (const turn of conversation.turns) if (turn.stop !== null) runs.delete(turn.runId);
+      if (working.length) conversations.set(key, { diagramId, agent: conversation.agent, turns: working });
+      else conversations.delete(key);
+    }
     changed();
   },
 
   /** Test seam. */
   __reset(): void {
     conversations = new Map();
+    selectedAgents = new Map();
     runs = new Map();
     listeners.clear();
   },

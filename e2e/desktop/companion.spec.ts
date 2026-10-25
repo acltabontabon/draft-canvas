@@ -30,8 +30,9 @@ const ORDERS = {
 };
 
 /** `setup` runs once the page is loaded, before the diagram opens (and the editor asks the shell). */
-async function openOrders(page: Page, setup?: () => Promise<unknown>, { readOnly = false } = {}) {
+async function openOrders(page: Page, setup?: () => Promise<unknown>, { readOnly = false, project = true } = {}) {
   await page.goto('/');
+  if (project) await page.evaluate(() => window.__shell.seed({ projects: [{ name: 'work', path: '~/work', agent: true, diagrams: [] }] }));
   await setup?.();
   const text = await page.evaluate(async (orders) => {
     // oxlint-disable-next-line typescript/no-explicit-any
@@ -51,6 +52,56 @@ async function openOrders(page: Page, setup?: () => Promise<unknown>, { readOnly
   await chooseWorkFile(page, 'Order processing');
   await expect(page.locator('.dc-editor')).toBeVisible();
 }
+
+test('token breakdown stays visible after click and keyboard focus, within the viewport', async ({ page, browserName }) => {
+  await openOrders(page);
+  await page.getByRole('button', { name: 'Open Nodi' }).click();
+  const input = page.getByLabel('Message Claude Code');
+  await input.fill('Explain this diagram');
+  await input.press('Enter');
+  await expect.poll(() => page.evaluate(() => window.__shell.companionSent().length)).toBe(1);
+  await page.evaluate(() => {
+    const run = window.__shell.companionSent()[0]!.runId;
+    window.__shell.emit({ type: 'companion', run, event: { type: 'stopped', reason: { kind: 'end-turn' }, summary: 'An order flows from API to queue, worker and database.', costMicroUsd: null, usage: { input: 1000, cached: 600, output: 100 } } });
+  });
+  const count = page.getByRole('button', { name: 'Token usage: 500 new tokens so far' });
+  const tooltip = page.getByRole('tooltip').filter({ hasText: 'Token usage' });
+  await count.click();
+  await page.mouse.move(20, 180);
+  await expect(tooltip).toBeVisible();
+  await expect(tooltip).toContainText('Cached input');
+  await expect(count).toBeFocused();
+  await expect(tooltip).toHaveCSS('opacity', '1');
+  const geometry = await tooltip.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    const style = getComputedStyle(element);
+    return { x: rect.x, y: rect.y, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height, opacity: style.opacity, visibility: style.visibility, innerWidth, innerHeight };
+  });
+  expect(geometry.width).toBeGreaterThan(100);
+  expect(geometry.height).toBeGreaterThan(100);
+  expect(geometry.x).toBeGreaterThanOrEqual(0);
+  expect(geometry.y).toBeGreaterThanOrEqual(0);
+  expect(geometry.right).toBeLessThanOrEqual(geometry.innerWidth);
+  expect(geometry.bottom).toBeLessThanOrEqual(geometry.innerHeight);
+  expect(geometry.opacity).toBe('1');
+  expect(geometry.visibility).toBe('visible');
+  await page.screenshot({ path: test.info().outputPath('token-breakdown-click.png') });
+  await page.keyboard.press('Escape');
+  await expect(tooltip).toBeHidden();
+  await count.focus();
+  // Focus is still on the count after Escape, so move off it and back with the keyboard.
+  // Safari's default Tab traversal omits buttons; Option-Tab includes every focusable control.
+  const backward = browserName === 'webkit' ? 'Alt+Shift+Tab' : 'Shift+Tab';
+  const forward = browserName === 'webkit' ? 'Alt+Tab' : 'Tab';
+  await page.keyboard.press(backward);
+  await page.keyboard.press(forward);
+  await expect(count).toBeFocused();
+  await expect(tooltip).toBeVisible();
+  await expect(tooltip).toHaveCSS('opacity', '1');
+  await page.screenshot({ path: test.info().outputPath('token-breakdown-focus.png') });
+  await page.keyboard.press(backward);
+  await expect(tooltip).toBeHidden();
+});
 
 test('asks about the selection, follows the run in the bubble, and accepts its proposal on the canvas', async ({ page }) => {
   await openOrders(page);
@@ -246,6 +297,49 @@ test('a tidy-up is shown on tracing paper: the proposed diagram on one sheet, tr
   await expect(paper).toBeVisible();
 });
 
+test('a proposal honors its layout direction, and a short confirmation continues the agent conversation', async ({ page }) => {
+  await openOrders(page);
+  await page.getByRole('button', { name: 'Open Nodi' }).click();
+  const input = page.getByLabel('Message Claude Code');
+  await input.fill('Draw me a vertical version of this architecture');
+  await input.press('Enter');
+  await expect.poll(() => page.evaluate(() => window.__shell.companionSent().length)).toBe(1);
+  const run = await page.evaluate(() => window.__shell.companionSent()[0]!.runId);
+  await page.evaluate(({ diagramId, run }) => {
+    window.__shell.addProposal({
+      proposalId: 'p-vertical', version: 1, diagramId, run, path: [], status: 'pending',
+      baseRevision: 'o:seed.0', ops: [{ op: 'arrange' }],
+      layout: { direction: 'down', spacing: 'spacious' },
+      preconditions: { nodes: {}, edges: {} }, counts: { added: 0, updated: 4, removed: 0, arranged: 7 },
+      summary: 'Arrange the diagram vertically', rationale: '', assumptions: [], openQuestions: [],
+      sourceRef: null, createdAt: Date.now(), updatedAt: Date.now(), resolvedAt: null, stale: false,
+    });
+    window.__shell.emit({ type: 'agent-changed' });
+    window.__shell.emit({ type: 'companion', run, event: { type: 'message-chunk', text: 'I proposed a vertical layout. Shall I reorganize its inside too?' } });
+    window.__shell.emit({ type: 'companion', run, event: { type: 'stopped', reason: { kind: 'end-turn' }, summary: null, costMicroUsd: null, usage: null } });
+  }, { diagramId: DIAGRAM, run });
+  const review = page.getByRole('region', { name: 'Proposed change' });
+  await expect(page.locator('.dc-agent-preview[data-mode="sheet"] .dc-preview-sheet')).toBeVisible();
+  await expect(review.getByRole('button', { name: 'Accept' })).toBeEnabled();
+  await page.screenshot({ path: test.info().outputPath('companion-vertical-layout.png') });
+  await review.getByRole('button', { name: 'Accept' }).click();
+  await expect(review).toBeHidden();
+  const boxes = await Promise.all(['api', 'q', 'w', 'db'].map((id) => page.locator(`.react-flow__node[data-id="${id}"]`).boundingBox()));
+  for (let i = 1; i < boxes.length; i++) expect(boxes[i]!.y).toBeGreaterThan(boxes[i - 1]!.y + boxes[i - 1]!.height);
+  await input.fill('yes');
+  await input.press('Enter');
+  await expect.poll(() => page.evaluate(() => window.__shell.companionSent().length)).toBe(2);
+  expect(await page.evaluate(() => window.__shell.companionSent()[1]!.text)).toBe('yes');
+  await page.evaluate(() => {
+    const run = window.__shell.companionSent()[1]!.runId;
+    window.__shell.emit({ type: 'companion', run, event: { type: 'stopped', reason: { kind: 'end-turn' }, summary: 'Shall I change it?', costMicroUsd: null, usage: null } });
+  });
+  await input.fill('do it change it');
+  await input.press('Enter');
+  await expect.poll(() => page.evaluate(() => window.__shell.companionSent().length)).toBe(3);
+  await expect(page.locator('.react-flow__node')).toHaveCount(4);
+});
+
 test('an answer about the diagram is pinned on it: numbered points on their parts, lit together', async ({ page }) => {
   await openOrders(page);
   await page.getByRole('button', { name: 'Open Nodi' }).click();
@@ -396,6 +490,20 @@ test('stop asks the shell to end the run', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Send' })).toBeVisible();
 });
 
+test('asking whether I can delete a selected shape does not delete it', async ({ page }) => {
+  await openOrders(page);
+  await page.locator('.react-flow__node[data-id="api"]').click();
+  await page.getByRole('button', { name: 'Open Nodi' }).click();
+  const input = page.getByLabel('Message Claude Code');
+  await input.fill('could I delete that?');
+  await input.press('Enter');
+  const conversation = page.getByRole('region', { name: 'Conversation with Claude Code' });
+  await expect(conversation.getByRole('button', { name: /Delete/ }).first()).toBeVisible();
+  await expect(page.locator('.react-flow__node')).toHaveCount(4);
+  await expect(page.locator('.react-flow__node[data-id="api"]')).toBeVisible();
+  expect(await page.evaluate(() => window.__shell.companionSent())).toHaveLength(0);
+});
+
 /** Nodi's box while it can't take a message: its line, and the next steps as replies, with nothing to
  *  type into. Shot whole, in the dark theme, for the record. */
 async function expectBlocked(page: Page, says: string | RegExp, shot: string) {
@@ -441,6 +549,7 @@ test('a quick draft is saved to a folder from Nodi’s box, and then it can chat
   await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
   await page.goto('/');
   await page.evaluate(() => {
+    window.__shell.seed({ projects: [{ name: 'work', path: '~/work', agent: true, diagrams: [] }] });
     window.__shell.addFile('Notes', '{}');
     window.__shell.setAgent({ enabled: true, listening: true });
   });
@@ -458,6 +567,52 @@ test('a quick draft is saved to a folder from Nodi’s box, and then it can chat
   await expectChatting(page);
 });
 
+for (const colorScheme of ['dark', 'light'] as const) {
+  test(`an unregistered folder is set up from Nodi before an agent runs (${colorScheme})`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+    await openOrders(page, () => page.evaluate(() => window.__shell.seed({ explorer: [{ name: 'Other', path: '~/Other', diagrams: [] }] })), { project: false });
+    await page.getByRole('button', { name: 'Open Nodi' }).click();
+    const box = await expectBlocked(page, 'folder isn’t a project yet', `nodi-blocked-no-project-${colorScheme}`);
+    await expect(box).toContainText('~/work');
+    const add = box.getByRole('button', { name: 'Add project…' });
+    await expect(add).toBeFocused();
+    await page.keyboard.press('Enter');
+    const picker = page.getByRole('dialog', { name: 'Add a project', exact: true });
+    await expect(picker).toBeVisible();
+    // Cancelling leaves the diagram and its access untouched.
+    await page.keyboard.press('Escape');
+    await expect(picker).toBeHidden();
+    await expect(add).toBeVisible();
+    await expect(page.getByLabel('Message Claude Code')).toHaveCount(0);
+    // Adding an unrelated folder doesn't clear the blocker or grant access to it.
+    await add.click();
+    await picker.getByRole('option', { name: 'Other', exact: true }).dblclick();
+    await picker.getByRole('button', { name: 'Add project', exact: true }).click();
+    await expect(picker).toBeHidden();
+    await expect(add).toBeVisible();
+    await expect(page.getByLabel('Message Claude Code')).toHaveCount(0);
+    // Register the actual folder, then explicitly allow it in Nodi's box.
+    await add.click();
+    await picker.getByRole('option', { name: 'work', exact: true }).dblclick();
+    await picker.getByRole('button', { name: 'Add project', exact: true }).click();
+    await expect(picker).toBeHidden();
+    const allow = box.getByRole('button', { name: /Allow work$/ });
+    await expect(allow).toBeFocused();
+    expect(await page.evaluate(() => window.__shell.calls().filter((call) => call.command === 'agent_configure'))).toEqual([]);
+    expect(await page.evaluate(() => window.__shell.companionSent())).toEqual([]);
+    await page.keyboard.press('Enter');
+    await expectChatting(page);
+    const input = page.getByLabel('Message Claude Code');
+    await expect(input).toBeFocused();
+    await input.fill('What are the risks here?');
+    await input.press('Enter');
+    await expect.poll(() => page.evaluate(() => window.__shell.companionSent().length)).toBe(1);
+    await expect(box).not.toContainText('It fell over');
+    const grants = await page.evaluate(() => window.__shell.calls().filter((call) => call.command === 'agent_configure'));
+    expect(grants).toHaveLength(1);
+  });
+}
+
 test('a read-only file offers a copy through Save As, and the copy can chat', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
   await openOrders(page, undefined, { readOnly: true });
@@ -465,6 +620,7 @@ test('a read-only file offers a copy through Save As, and the copy can chat', as
   const box = await expectBlocked(page, 'read-only, boss', 'nodi-blocked-read-only');
   await box.getByRole('button', { name: 'Save a copy' }).click();
   const dialog = page.getByRole('dialog', { name: 'Save diagram as', exact: true });
+  await dialog.getByRole('option', { name: 'work', exact: true }).dblclick();
   await dialog.getByRole('textbox', { name: 'File name', exact: true }).fill('Order processing copy');
   await dialog.getByRole('button', { name: 'Save diagram', exact: true }).click();
   await expect(dialog).toBeHidden();

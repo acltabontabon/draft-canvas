@@ -80,8 +80,10 @@ export function readArrange(r: Reader, op: Json, at: string, view: DraftDocument
     move,
     layout: {
       ...base,
-      direction: direction ?? readingDirectionOf(view),
-      directionChosen: direction !== undefined,
+      // Proposals commonly put the requested direction in the shared layout. Keep that choice
+      // unless this particular op overrides it; ignoring it silently repeated the old arrangement.
+      direction: direction ?? (base.directionChosen ? base.direction : readingDirectionOf(view)),
+      directionChosen: direction !== undefined || base.directionChosen === true,
       spacing: spacing ?? base.spacing,
       // An existing diagram's manual sizes are kept unless the request's own top-level layout
       // explicitly asks to normalize peers — unlike a new diagram or a newly-added block, which

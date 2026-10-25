@@ -693,7 +693,7 @@ export function placeRoom(room: RoomSpec, layout: LayoutSpec, ctx: DescribeConte
   const places = new Map(room.nodes.flatMap((n) => (n.place ? [[n.id, n.place] as const] : [])));
   const routes = new Map(room.relationships.flatMap((e) => (e.route ? [[e.id, e.route] as const] : [])));
   if (places.size || routes.size) {
-    const view = applyRoutes(applyPlaces({ ...createDocument(), nodes, edges }, places, ctx), routes);
+    const view = applyRoutes(applyPlaces({ ...createDocument(), nodes, edges }, places, ctx, '/place', layout), routes);
     nodes = view.nodes;
     edges = view.edges;
   }

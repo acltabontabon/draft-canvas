@@ -130,6 +130,8 @@ export class GuestSession {
   private awaitingSnapshot = false;
   /** Commits held for a gesture overflowed and were dropped: a fresh copy is asked for once it ends. */
   private heldOut = false;
+  /** A local edit that cannot be shared must wait for its gesture to end before it can be taken back. */
+  private restorePending = false;
   /** Patches waiting their turn behind a paced resend (`sendOrDrop`), in the order they must go. */
   private outbox: PendingPatch[] = [];
   private outboxTimer: unknown = null;
@@ -243,15 +245,20 @@ export class GuestSession {
   localChanged(): void {
     if (!this.replica || this.ended || this.access !== 'editor') return;
     const changes = diffFile(this.replica.local, this.env.readFile());
-    if (changes.length === 0) return;
+    if (changes.length === 0) {
+      this.restorePending = false;
+      return;
+    }
     // Measured before it is recorded: an edit too big to carry would otherwise sit unconfirmed
     // forever, on screen here and nowhere else.
     // And no more moves than the owner takes in one: refused there, it would be undone all the same.
     if (!this.fits(changes)) {
-      this.env.applyRemote(this.replica.local);
+      this.restorePending = !this.env.applyRemote(this.replica.local);
+      if (this.restorePending) this.scheduleHold();
       this.events.tooLarge();
       return;
     }
+    this.restorePending = false;
     const patch = this.replica.propose(changes)!;
     // Behind anything older still waiting its turn: a newer patch arriving first made the owner take
     // the older ones for repeats.
@@ -359,6 +366,12 @@ export class GuestSession {
       case 'role':
         this.access = message.role;
         this.env.setAccess(message.role);
+        if (message.role === 'viewer') {
+          // The last drop may still be waiting for the bridge to send it. It can no longer be
+          // shared, and without another commit it would otherwise stay here as if it had been.
+          this.restorePending = this.env.isBusy() || !this.env.applyRemote(this.replica!.local);
+          if (this.restorePending) this.scheduleHold();
+        }
         this.events.joined(this.selfId!, message.role);
         return;
       case 'presence':
@@ -416,6 +429,7 @@ export class GuestSession {
       this.heldBytes = bytes;
       this.drainHeld();
     } else {
+      this.restorePending = false;
       this.replica = new Replica(parsed.document, message.seq);
       // A fresh page given an old place back numbers its patches on from where that place left off.
       if (message.handled !== undefined) this.replica.rebase(message.handled);
@@ -513,6 +527,10 @@ export class GuestSession {
 
   /** Applies what waited for a gesture to end, in the order it arrived. */
   drainHeld(): void {
+    // A rejected edit is not in the replica. Take it back before applying anything over it, even
+    // when the owner sends nothing else: the bridge's last send may have run mid-gesture.
+    if (this.restorePending && !this.env.isBusy()) this.restorePending = !this.env.applyRemote(this.replica!.local);
+    if (this.restorePending) return this.scheduleHold();
     const started = this.clock.now();
     let processed = 0;
     while (this.held.length > 0 && !this.env.isBusy() && processed < 32 && this.clock.now() - started < 8) {
@@ -562,6 +580,7 @@ export class GuestSession {
     this.held.length = 0;
     this.heldBytes = 0;
     this.heldOut = false;
+    this.restorePending = false;
     this.clearOutbox();
     this.events.status('ended', reason);
   }

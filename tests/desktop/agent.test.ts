@@ -123,6 +123,34 @@ function collaboratorEdit(edit: (file: DraftDocument) => DraftDocument, person =
   return session;
 }
 
+describe('companion layout snapshot', () => {
+  it('includes small current-room boxes without connector paths or changing ordinary reads', async () => {
+    const handle = await openOrders();
+    const doc = fileOf(useEditorStore.getState());
+    const row = { ...doc, nodes: doc.nodes.map((node, i) => ({ ...node, x: i * 500 + 0.2, y: 100.3 })) };
+    useEditorStore.getState().setDocument(row);
+    const snapshot = JSON.parse((await h.controller.companionSnapshot(row.metadata.id, []))!);
+    for (const node of row.nodes) {
+      expect(snapshot.elements.find((element: { id: string }) => element.id === node.id)).toMatchObject({ box: [Math.round(node.x), Math.round(node.y), Math.round(node.width), Math.round(node.height)] });
+    }
+    expect(snapshot.elements.every((element: object) => !('geometry' in element))).toBe(true);
+    expect(snapshot.relationships.every((relationship: object) => !('geometry' in relationship))).toBe(true);
+    const ordinary = await request('read_diagram', {}, { handle, open: true, diagramId: row.metadata.id });
+    expect((ordinary.value!.elements as object[]).every((element) => !('box' in element) && !('geometry' in element))).toBe(true);
+  });
+
+  it('sends boxes for the requested inside view without leaking the outer room', async () => {
+    await openOrders();
+    const doc = fileOf(useEditorStore.getState());
+    const inner = createNode({ id: 'inner-worker', type: 'service', text: 'Inner worker', x: 280.4, y: 160.2 });
+    const nested = { ...doc, nodes: doc.nodes.map((node) => node.id === 'api' ? { ...node, inside: { nodes: [inner], edges: [], flows: [], viewport: { x: 0, y: 0, zoom: 1 } } } : node) };
+    useEditorStore.getState().setDocument(nested);
+    const snapshot = JSON.parse((await h.controller.companionSnapshot(doc.metadata.id, ['api']))!);
+    expect(snapshot.elements.map((element: { id: string }) => element.id)).toEqual(['inner-worker']);
+    expect(snapshot.elements[0].box).toEqual([280, 160, Math.round(inner.width), Math.round(inner.height)]);
+  });
+});
+
 describe('collaborator provenance in agent reads', () => {
   it.each(['read_diagram', 'read_selection', 'get_implementation_context'])('marks returned attachments in %s and omits the field after hosting ends', async (tool) => {
     const handle = await openOrders();
@@ -330,6 +358,21 @@ describe('agent requests on desktop', () => {
     expect(useEditorStore.getState().document.nodes.some((n) => n.text === 'Mailer')).toBe(false);
     const applied = await request('update_diagram', addMailer(currentRevision()), { handle, open: true, diagramId: 'd_orders000001' });
     expect(applied?.ok).toBe(true);
+  });
+
+  it('refuses unchanged operations as a proposal, while keeping explicit no-impact findings valid', async () => {
+    const handle = await openOrders();
+    const context = { handle, open: true, diagramId: 'd_orders000001' };
+    const before = currentRevision();
+    const read = await request('read_diagram', { diagramId: 'd_orders000001' }, context);
+    const revision = read.value!.revision as string;
+    const unchanged = await request('submit_proposal', { requestId: 'unchanged-proposal', expectedRevision: revision, summary: 'Keep the existing name', ops: [{ op: 'update', id: 'api', set: { label: 'Orders API' } }] }, context);
+    expect(unchanged.ok).toBe(false);
+    expect(unchanged.error).toMatchObject({ code: 'INVALID_INPUT', details: { unchanged: true } });
+    expect(currentRevision()).toBe(before);
+    const finding = await request('submit_proposal', { requestId: 'no-impact-finding', expectedRevision: revision, summary: 'No architectural impact', ops: [] }, context);
+    expect(finding.ok).toBe(true);
+    expect(finding.value).toMatchObject({ noImpact: true });
   });
 
   it('applies to the open, clean document as one undo step and saves it', async () => {

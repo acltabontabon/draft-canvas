@@ -120,6 +120,24 @@ describe('arrange', () => {
     expect(a!.y < b!.y && b!.y < c!.y).toBe(true);
   });
 
+  it.each(['right', 'down'] as const)('honors a top-level layout direction of %s when arranging an existing view', (direction) => {
+    const opposite = direction === 'right' ? 'down' : 'right';
+    const base = build({
+      nodes: [{ id: 'a', type: 'service', label: 'A' }, { id: 'b', type: 'service', label: 'B' }],
+      relationships: [{ id: 'ab', from: 'a', to: 'b' }],
+      layout: { direction: opposite },
+    });
+    const topLevel = applyUpdate(base, [], [{ op: 'arrange' }], { direction, spacing: 'spacious' }).file;
+    const perOp = applyUpdate(base, [], [{ op: 'arrange', direction }], { spacing: 'spacious' }).file;
+    expect(readingDirectionOf(topLevel)).toBe(direction);
+    expect(topLevel.nodes).toEqual(perOp.nodes);
+    expect(topLevel.edges).toEqual(perOp.edges);
+    // A particular arrange may still override the defaults for the whole request.
+    const overridden = applyUpdate(base, [], [{ op: 'arrange', direction }], { direction: opposite, spacing: 'spacious' }).file;
+    expect(overridden.nodes).toEqual(perOp.nodes);
+    expect(overridden.edges).toEqual(perOp.edges);
+  });
+
   it('turns a whole view the other way only when that reads clearly better, and a scoped part never', () => {
     // A hub inside a boundary calling three externals, drawn reading right. Whether a cleanup turns
     // it is the rule a new diagram uses (`clearlyBetterDirection`, held to in the gallery's batch

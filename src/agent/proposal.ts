@@ -64,7 +64,7 @@ export function unreadableProposal(issues: readonly QualityIssue[], view: DraftD
   const first = issues[0]!.message.replace(/\.$/, '');
   const more = issues.length > 1 ? ` (and ${issues.length - 1} more)` : '';
   return new AgentError('LAYOUT_CONSTRAINED', `The proposal would leave unreadable content: ${first}${more}. ${unreadableFix(issues, suggestedOp)}`, {
-    hint: 'Nothing was submitted. Existing shapes only move by an arrange op in the same ops list; a top-level layout does not move them.',
+    hint: 'Nothing was submitted. Move existing shapes with set.place or an arrange op in the same ops list; a top-level layout does not move them.',
     details: { problems: issues, suggestedOp },
   });
 }
@@ -102,6 +102,14 @@ export function prepareProposal(file: DraftDocument, path: DepthPath, rawOps: un
     }
   }
   const diff = diffForReview(file, result.file, path);
+  // An arrange touches every element even when it leaves all geometry as it was. Its touched count
+  // must not turn an unchanged document into an actionable proposal with an Accept button.
+  if (diff.length === 0) {
+    throw new AgentError('INVALID_INPUT', 'These operations make no changes to the diagram. Nothing was submitted.', {
+      hint: 'The diagram already matches these operations. Tell the person no changes were made, or use different operations that implement the requested change.',
+      details: { unchanged: true },
+    });
+  }
   const counts = { added: diff.filter((row) => row.change === 'added').length, updated: diff.filter((row) => row.change === 'modified').length, removed: diff.filter((row) => row.change === 'removed').length, ...(result.counts.arranged ? { arranged: result.counts.arranged } : {}) };
   return { counts, advisories: result.advisories, preconditions };
 }
@@ -114,11 +122,11 @@ export function prepareProposal(file: DraftDocument, path: DepthPath, rawOps: un
 export interface PreconditionConflict {
   id: string;
   kind: EntitySnapshot['kind'];
-  was: Record<string, unknown>;
+  was: Record<string, unknown> | null;
   now: Record<string, unknown> | null;
 }
 
-export function preconditionConflicts(file: DraftDocument, path: DepthPath, preconditions: PreconditionSnapshot): PreconditionConflict[] {
+export function preconditionConflicts(file: DraftDocument, path: DepthPath, preconditions: PreconditionSnapshot, proposedFile?: DraftDocument): PreconditionConflict[] {
   const view = viewOf(file, path);
   const conflicts: PreconditionConflict[] = [];
   if (preconditions.entities) {
@@ -126,6 +134,16 @@ export function preconditionConflicts(file: DraftDocument, path: DepthPath, prec
     for (const [id, was] of Object.entries(preconditions.entities)) {
       const now = current[id];
       if (comparable(was) !== comparable(now)) conflicts.push({ id, kind: was.kind, was: was.value, now: now?.value ?? null });
+    }
+    if (proposedFile) {
+      const proposed = snapshotsOf(proposedFile);
+      // Re-running a removal or arrange can reach work added since submission: a new connector,
+      // room or open point was absent from the captured dependencies. It needs a revised proposal.
+      for (const [id, now] of Object.entries(current)) {
+        if (!Object.hasOwn(preconditions.entities, id) && comparable(now) !== comparable(proposed[id])) {
+          conflicts.push({ id, kind: now.kind, was: null, now: now.value });
+        }
+      }
     }
     return conflicts;
   }

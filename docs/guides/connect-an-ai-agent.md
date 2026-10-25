@@ -36,8 +36,10 @@ updates with Draft Canvas. An edited copy is kept until you click **Replace skil
 Nodi is the desktop app's companion: ask your own Claude Code or Codex about the diagram you are
 looking at, without leaving it for a terminal. It appears in the canvas corner once Draft Canvas finds
 one of them installed, and needs agent access on and the diagram saved in an allowed folder. Until
-then it says what is missing and offers the fix: **Let Nodi in** turns agent access on, and
-**Allow** *folder* opens the folder the diagram is in, both from Nodi's box without opening Settings.
+then it says what is missing and offers the fix: **Let Nodi in** turns agent access on. If the diagram
+is outside your listed projects, **Add project…** opens the folder picker; choose the folder containing
+the diagram, or a parent folder. Nodi then offers **Allow** *folder* to let agents use it. These steps
+are available from Nodi's box without opening Settings.
 
 ![Nodi offering replies about the diagram.](../media/guides/nodi-open.png)
 
@@ -83,6 +85,13 @@ applies it as one undo step. Ask Nodi to adjust it ("keep the cache, but use Red
 the same proposal; the chip lists earlier versions. **Review changes first** under the message box
 switches to **Apply changes directly**, where changes land at once and Undo takes them back.
 
+Ask for all nodes in one horizontal row or vertical column when you want them aligned; automatic
+layout's reading direction can put several nodes in the same layer. Nodi can place and route shapes
+exactly for a specific arrangement. Short replies such as **yes** or
+**okay** continue the agent's conversation, including when it asks you to confirm a change.
+To insert a starter directly, name it or use its alias (for example, **start Change Data Capture** or
+**start CDC**); a generic follow-up such as **do it, change it** goes to the agent.
+
 ![A proposal on the canvas, beside the change.](../media/guides/nodi-proposal.png)
 
 ![A tidy-up on the tracing sheet: each moved shape trails back to where it stands.](../media/guides/nodi-tracing.png)
@@ -98,12 +107,14 @@ switches to **Apply changes directly**, where changes land at once and Undo take
   build folders and secrets such as `.env` and keys. Folders allowed always are listed under
   **Settings → AI agents → Code Nodi may read**, where **Stop** takes one back.
 - **Two agents:** with both installed, the name under the message box switches between them. Each
-  diagram keeps one conversation per agent; the pencil starts over.
+  diagram keeps one conversation per agent; switching restores that agent's history and terminal
+  session. The pencil starts over with the chosen agent.
 - **Stopping:** **Stop** closes the run's access to diagram tools immediately, even while the agent
   is starting. Oversized agent output ends the run with an error; ask for a smaller answer and retry.
 - **What it uses:** the line under the message box shows the conversation's new tokens, and with an
-  API key its cost. Hover it to see what the agent also re-sent from its provider's cache each step:
-  billed at a discount (about a tenth of the usual price with Claude), not free.
+  API key its cost. Hover or keyboard-focus the dotted token count for a breakdown of new input,
+  cached input, output and totals. New tokens are new input plus output; cached input is reused
+  context, with pricing and plan limits set by the provider.
 - **Where conversations are kept:** the agent's own sessions (`~/.claude/projects`,
   `~/.codex/sessions`). Draft Canvas keeps the conversation shown only while the app runs.
 

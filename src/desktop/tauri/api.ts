@@ -142,7 +142,7 @@ export function createTauriApi(): DesktopApi {
     companionSend: (request) => call<void>('companion_send', { request }),
     companionCancel: (runId) => call<boolean>('companion_cancel', { runId }),
     companionRuns: () => call<RunSnapshot[]>('companion_runs'),
-    companionForget: (diagramId) => call<void>('companion_forget', { diagramId }),
+    companionForget: (diagramId, agent) => call<void>('companion_forget', { diagramId, agent }),
     companionCode: (diagramId) => call<CodeFolder>('companion_code', { diagramId }),
     companionAllowCode: (diagramId, grant) => call<CodeFolder>('companion_allow_code', { diagramId, grant }),
     companionChooseCode: (diagramId) => call<CodeFolder | null>('companion_choose_code', { diagramId }),

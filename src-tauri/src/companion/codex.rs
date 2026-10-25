@@ -10,6 +10,7 @@ use crate::agent::clients::{self, SERVER_NAME};
 use crate::errors::{AppError, ErrorKind};
 use serde_json::Value;
 use std::collections::HashSet;
+use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
 use std::process::Command;
 use std::time::Duration;
@@ -69,6 +70,19 @@ impl Backend for Codex {
         Box::new(Jsonl::default())
     }
 
+    fn parser_for(&self, session: Option<&str>) -> Box<dyn Parser> {
+        let baseline = match session {
+            None => Some(Usage::default()),
+            Some(id) => {
+                clients::codex_home().and_then(|home| session_usage(&home.join("sessions"), id))
+            }
+        };
+        Box::new(Jsonl {
+            baseline,
+            ..Jsonl::default()
+        })
+    }
+
     fn resume_args(&self, session: &str) -> Vec<String> {
         vec!["resume".into(), session.into()]
     }
@@ -86,7 +100,6 @@ const NOT_FOR_A_CANVAS: &[&str] = &[
     "browser_use_external",
     "computer_use",
     "code_mode",
-    "code_mode_host",
     "goals",
     "hooks",
     "image_generation",
@@ -194,6 +207,12 @@ fn args(spec: &RunSpec, available: &HashSet<String>) -> Vec<String> {
     for feature in NOT_FOR_A_CANVAS.iter().filter(|f| available.contains(**f)) {
         args.push("--disable".into());
         args.push((*feature).to_string());
+    }
+    // Some models expose MCP tools through exec even with the code_mode feature off. Its host is
+    // the tool dispatcher, not an extra tool: disabling it leaves that exec visible but every call
+    // fails with "code-mode host is disabled". The flags above still restrict what it can dispatch.
+    if available.contains("code_mode_host") {
+        args.extend(["--enable".to_string(), "code_mode_host".to_string()]);
     }
     if available.contains("skip_host_skill_discovery") {
         args.extend([
@@ -321,7 +340,6 @@ fn clipped(text: &str) -> String {
     }
 }
 
-#[derive(Default)]
 struct Jsonl {
     /// Tool calls this run has started, so each is announced once and finished once.
     calls: HashSet<String>,
@@ -329,6 +347,19 @@ struct Jsonl {
     spoke: bool,
     /// The last error Codex reported, for a turn that fails without saying why.
     last_error: Option<String>,
+    /// `turn.completed` includes the whole resumed session, not just this process's turn.
+    baseline: Option<Usage>,
+}
+
+impl Default for Jsonl {
+    fn default() -> Self {
+        Self {
+            calls: HashSet::new(),
+            spoke: false,
+            last_error: None,
+            baseline: Some(Usage::default()),
+        }
+    }
 }
 
 impl Parser for Jsonl {
@@ -346,12 +377,23 @@ impl Parser for Jsonl {
                 .collect(),
             Some("item.started") => self.item(&value["item"], false),
             Some("item.completed") => self.item(&value["item"], true),
-            Some("turn.completed") => vec![RunEvent::Stopped {
-                reason: StopReason::EndTurn,
-                summary: None,
-                cost_micro_usd: None,
-                usage: usage(&value["usage"]),
-            }],
+            Some("turn.completed") => {
+                let total = usage(&value["usage"]);
+                let turn_usage = total.zip(self.baseline).and_then(|(total, before)| {
+                    Some(Usage {
+                        input: total.input.checked_sub(before.input)?,
+                        cached: total.cached.checked_sub(before.cached)?,
+                        output: total.output.checked_sub(before.output)?,
+                    })
+                });
+                self.baseline = total;
+                vec![RunEvent::Stopped {
+                    reason: StopReason::EndTurn,
+                    summary: None,
+                    cost_micro_usd: None,
+                    usage: turn_usage,
+                }]
+            }
             Some("turn.failed") => {
                 let message = value["error"]["message"]
                     .as_str()
@@ -443,6 +485,72 @@ fn usage(value: &Value) -> Option<Usage> {
     })
 }
 
+/// Read only bounded token metadata from the person's own session, before resuming it. A session
+/// continued in a terminal may have advanced since Nodi last ran. Missing metadata means unknown
+/// usage, never the old session total passed off as the new turn's cost.
+fn session_usage(root: &Path, session: &str) -> Option<Usage> {
+    if session.is_empty()
+        || !session
+            .bytes()
+            .all(|c| c.is_ascii_alphanumeric() || c == b'-')
+    {
+        return None;
+    }
+    fn find(
+        root: &Path,
+        suffix: &str,
+        depth: usize,
+        remaining: &mut usize,
+    ) -> Option<std::path::PathBuf> {
+        if depth > 3 || *remaining == 0 {
+            return None;
+        }
+        let mut entries = std::fs::read_dir(root)
+            .ok()?
+            .filter_map(Result::ok)
+            .take(*remaining)
+            .collect::<Vec<_>>();
+        // Recent session folders first; do not follow symlinks or traverse arbitrary folders.
+        entries.sort_by_key(|entry| std::cmp::Reverse(entry.file_name()));
+        for entry in entries {
+            *remaining = remaining.checked_sub(1)?;
+            let kind = entry.file_type().ok()?;
+            let name = entry.file_name();
+            let name = name.to_str()?;
+            if kind.is_file() && name.ends_with(suffix) {
+                return Some(entry.path());
+            }
+            if kind.is_dir() && name.bytes().all(|c| c.is_ascii_digit()) {
+                if let Some(path) = find(&entry.path(), suffix, depth + 1, remaining) {
+                    return Some(path);
+                }
+            }
+        }
+        None
+    }
+    let path = find(root, &format!("-{session}.jsonl"), 0, &mut 10_000)?;
+    let mut file = std::fs::File::open(path).ok()?;
+    let len = file.metadata().ok()?.len();
+    file.seek(SeekFrom::Start(len.saturating_sub(1024 * 1024)))
+        .ok()?;
+    let mut bytes = Vec::new();
+    file.take(1024 * 1024).read_to_end(&mut bytes).ok()?;
+    for line in bytes.split(|byte| *byte == b'\n').rev() {
+        let Ok(value) = serde_json::from_slice::<Value>(line) else {
+            continue;
+        };
+        if value["type"] == "event_msg" && value["payload"]["type"] == "token_count" {
+            let total = &value["payload"]["info"]["total_token_usage"];
+            return Some(Usage {
+                input: total["input_tokens"].as_u64()?,
+                cached: total["cached_input_tokens"].as_u64()?,
+                output: total["output_tokens"].as_u64()?,
+            });
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -500,6 +608,94 @@ mod tests {
                 }),
             })
         );
+    }
+
+    #[test]
+    fn a_resumed_turn_counts_only_its_increase_not_the_previous_session_again() {
+        let mut parser = Jsonl {
+            baseline: Some(Usage {
+                input: 305_039,
+                cached: 278_144,
+                output: 1_744,
+            }),
+            ..Jsonl::default()
+        };
+        let events = parser.parse(r#"{"type":"turn.completed","usage":{"input_tokens":345041,"cached_input_tokens":316544,"output_tokens":1843}}"#);
+        assert!(matches!(
+            events.as_slice(),
+            [RunEvent::Stopped {
+                usage: Some(Usage {
+                    input: 40_002,
+                    cached: 38_400,
+                    output: 99
+                }),
+                ..
+            }]
+        ));
+        let events = parser.parse(r#"{"type":"turn.completed","usage":{"input_tokens":346041,"cached_input_tokens":317044,"output_tokens":1893}}"#);
+        assert!(matches!(
+            events.as_slice(),
+            [RunEvent::Stopped {
+                usage: Some(Usage {
+                    input: 1_000,
+                    cached: 500,
+                    output: 50
+                }),
+                ..
+            }]
+        ));
+    }
+
+    #[test]
+    fn missing_or_reset_session_counters_are_unknown_instead_of_inflated() {
+        for baseline in [
+            None,
+            Some(Usage {
+                input: 100,
+                cached: 80,
+                output: 50,
+            }),
+        ] {
+            let mut parser = Jsonl {
+                baseline,
+                ..Jsonl::default()
+            };
+            let events = parser.parse(r#"{"type":"turn.completed","usage":{"input_tokens":10,"cached_input_tokens":0,"output_tokens":5}}"#);
+            assert!(matches!(
+                events.as_slice(),
+                [RunEvent::Stopped { usage: None, .. }]
+            ));
+        }
+    }
+
+    #[test]
+    fn usage_baseline_reads_recent_token_metadata_from_the_resumed_transcript() {
+        let root = tempfile::tempdir().unwrap();
+        let day = root.path().join("2026/10/25");
+        std::fs::create_dir_all(&day).unwrap();
+        let path = day.join("rollout-2026-10-25T00-00-00-test-session.jsonl");
+        let record = |input| {
+            serde_json::json!({"type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":input,"cached_input_tokens":500,"output_tokens":30}}}}).to_string()
+        };
+        std::fs::write(
+            path,
+            format!(
+                "{}\n{}\n{{\"type\":\"event_msg\",\"payload\":{{\"type\":\"task_complete\"}}}}\n",
+                record(800),
+                record(1_200)
+            ),
+        )
+        .unwrap();
+        assert_eq!(
+            session_usage(root.path(), "test-session"),
+            Some(Usage {
+                input: 1_200,
+                cached: 500,
+                output: 30
+            })
+        );
+        assert_eq!(session_usage(root.path(), "missing-session"), None);
+        assert_eq!(session_usage(root.path(), "../test-session"), None);
     }
 
     #[test]
@@ -614,13 +810,16 @@ mod tests {
             "in_app_local_automation",
             "memories",
             "shell_snapshot",
-            "code_mode_host",
         ] {
             assert!(args.windows(2).any(|w| w == ["--disable", feature]));
         }
         assert!(args
             .windows(2)
             .any(|w| w == ["--enable", "skip_host_skill_discovery"]));
+        assert!(args.windows(2).any(|w| w == ["--enable", "code_mode_host"]));
+        assert!(!args
+            .windows(2)
+            .any(|w| w == ["--disable", "code_mode_host"]));
         assert!(args.contains(&r#"web_search="disabled""#.to_string()));
         assert_eq!(args.last().map(String::as_str), Some("-"));
         assert!(!args.contains(&"--ephemeral".to_string()));
@@ -639,7 +838,6 @@ mod tests {
                 "in_app_local_automation",
                 "memories",
                 "shell_snapshot",
-                "code_mode_host",
             ] {
                 assert!(
                     args.windows(2).any(|pair| pair == ["--disable", feature]),
@@ -649,6 +847,13 @@ mod tests {
             assert!(args
                 .windows(2)
                 .any(|pair| pair == ["--enable", "skip_host_skill_discovery"]));
+            // Both a first turn and a resumed conversation need the runtime behind MCP discovery.
+            assert!(args
+                .windows(2)
+                .any(|pair| pair == ["--enable", "code_mode_host"]));
+            assert!(!args
+                .windows(2)
+                .any(|pair| pair == ["--disable", "code_mode_host"]));
         }
     }
 

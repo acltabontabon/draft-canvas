@@ -3,6 +3,7 @@ import { useReactFlow, useStoreApi, useStore as useReactFlowStore } from '@xyflo
 import { useShallow } from 'zustand/react/shallow';
 import { Icon } from '../../ui/common/Icon';
 import { SegmentedControl } from '../../ui/common/SegmentedControl';
+import { Tooltip } from '../../ui/common/Tooltip';
 import { MOD_SYMBOL } from '../../lib/platform';
 import { readPreference, writePreference } from '../../lib/preferences';
 import { walkGraphs } from '../../depth/tree';
@@ -12,7 +13,7 @@ import type { DraftDocument } from '../../document/types';
 import { useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
 import type { AgentClientSetup, AgentInfo, AgentSkillSetup, ApplyMode, CodeFolder, CodeGrant, PromptRequest, Proposal } from '../api';
-import { activityOf, companion, newTokens, numberedBlocks, partsIn, replyBlocks, replyOf, replyPoints, spentOn, stepText, stopMessage, tokenCount, type ReplyEntry, type Spent, type Turn } from '../companion';
+import { activityOf, companion, conversationKey, newTokens, numberedBlocks, partsIn, replyBlocks, replyOf, replyPoints, spentOn, stepText, stopMessage, tokenCount, type ReplyEntry, type Spent, type Turn } from '../companion';
 import { useDesktopController, useDesktopState } from '../useDesktop';
 import { useNodiShown } from '../nodiShown';
 import { describeUpdate } from '../updates';
@@ -172,20 +173,41 @@ export function Companion({ buildCommandContext }: { buildCommandContext?: () =>
   }, [selection.nodes, onlyName]);
   const open = useUiStore((s) => s.companionOpen);
   const setOpen = useUiStore((s) => s.setCompanionOpen);
-  const yielded = useUiStore((s) => s.proposalPanelOpen || s.openPointsPanelOpen);
+  const panelOpen = useUiStore((s) => s.proposalPanelOpen || s.openPointsPanelOpen);
   const openProposal = useUiStore((s) => s.setProposalPanelOpen);
   const review = (id: string) => openProposal(true, id);
   const proposalPanelOpen = useUiStore((s) => s.proposalPanelOpen);
-  const { doc, agent: access, update: updateState } = useDesktopState();
+  const { doc, agent: access, update: updateState, explorerMode } = useDesktopState();
+  // The folder picker owns focus while it is open. Mount the next setup step only after it closes,
+  // or its focus callback fights the modal's focus trap when adding the project updates access.
+  const yielded = panelOpen || explorerMode != null;
   // A new version to mention: only while the app's own update chip would (not once dismissed).
   const updateView = describeUpdate(updateState);
   const newVersion = updateView.chip && updateView.version && (updateState?.state.phase === 'available' || updateState?.state.phase === 'ready') ? updateLine(updateView.version, updateState.state.phase === 'ready') : null;
-  const conversations = useSyncExternalStore(companion.subscribe, companion.snapshot);
-  const turns = conversations.get(diagramId)?.turns ?? NO_TURNS;
-  const last = turns.at(-1) ?? null;
-  const running = last !== null && last.stop === null;
-
   const [agents, setAgents] = useState<AgentInfo[] | null>(null);
+  // The agent the person chose, else the first one installed. Every agent-specific word comes from
+  // the shell (`AgentInfo.name`), so another agent needs no change here.
+  const [preferred, setPreferred] = useState(() => readPreference(AGENT_KEY));
+  const conversations = useSyncExternalStore(companion.subscribe, companion.snapshot);
+  // A recovered run can belong to another agent than the saved footer preference. Keep that run
+  // visible and block another send until it finishes; native allows one run per diagram.
+  const working = companion.running(diagramId);
+  const workingAgent = working ? companion.agentOf(working.runId) : undefined;
+  const agent = agents?.find((a) => a.agent === (workingAgent ?? preferred) && a.availability !== 'missing') ?? agents?.find((a) => a.availability === 'installed') ?? agents?.[0] ?? null;
+  useEffect(() => {
+    if (workingAgent && workingAgent !== preferred) {
+      writePreference(AGENT_KEY, workingAgent);
+      setPreferred(workingAgent);
+    }
+  }, [workingAgent, preferred]);
+  const conversation = conversations.get(conversationKey(diagramId, agent?.agent));
+  useEffect(() => {
+    companion.selectAgent(diagramId, agent?.agent ?? 'claude-code');
+  }, [diagramId, agent?.agent]);
+  const turns = conversation?.turns ?? NO_TURNS;
+  const last = turns.at(-1) ?? null;
+  const running = working !== null;
+
   const [draft, setDraft] = useState('');
   // The selection the person left out, by its ids: only that one. Choosing something else asks about
   // it again, rather than a switch staying off for every later selection.
@@ -245,10 +267,6 @@ export function Companion({ buildCommandContext }: { buildCommandContext?: () =>
     if (!proposalPanelOpen) void controller.refreshCompanionProposals();
   }, [proposalPanelOpen, controller]);
 
-  // The agent the person chose, else the first one installed. Every agent-specific word comes from
-  // the shell (`AgentInfo.name`), so another agent needs no change here.
-  const [preferred, setPreferred] = useState(() => readPreference(AGENT_KEY));
-  const agent = agents?.find((a) => a.agent === preferred && a.availability !== 'missing') ?? agents?.find((a) => a.availability === 'installed') ?? agents?.[0] ?? null;
   // With more than one on this computer, the footer's agent name switches to the next.
   const usable = agents?.filter((a) => a.availability !== 'missing') ?? [];
   const nextAgent = usable.length > 1 && agent ? usable[(usable.indexOf(agent) + 1) % usable.length]! : null;
@@ -260,8 +278,7 @@ export function Companion({ buildCommandContext }: { buildCommandContext?: () =>
   // Continue in Terminal: the line is copied, and the box says so for a moment.
   const [continued, setContinued] = useState<'copied' | 'failed' | null>(null);
   const continueInTerminal = async () => {
-    // The session to carry on is the one the conversation ran on, whichever agent is picked now.
-    const ran = conversations.get(diagramId)?.agent ?? agent?.agent;
+    const ran = agent?.agent;
     const line = ran ? await controller.companionContinue(diagramId, ran) : null;
     const ok = line !== null && (await useEditorStore.getState().copyText(line));
     setContinued(ok ? 'copied' : 'failed');
@@ -296,6 +313,7 @@ export function Companion({ buildCommandContext }: { buildCommandContext?: () =>
     if (step.kind === 'save') void controller.save();
     else if (step.kind === 'save-copy') void controller.saveAs();
     else if (step.kind === 'settings') controller.openAgentSettings();
+    else if (step.kind === 'add-project') controller.addProject();
     else if (step.kind === 'allow') void controller.configureAgent({ enabled: true });
     else if (step.kind === 'allow-folder') void controller.configureAgent({ project: { handle: step.handle, agent: true } });
     else void useEditorStore.getState().copyText(step.command).then((ok) => setCopied({ command: step.command, ok }));
@@ -384,7 +402,7 @@ export function Companion({ buildCommandContext }: { buildCommandContext?: () =>
   const selected = hasSelection ? aboutOf(selection.nodes, selection.edges, names) : null;
   const about = includeSelection ? selected : null;
   const showsCost = /api/i.test(agent?.signIn.method ?? '');
-  const spent = spentOn(conversations.get(diagramId));
+  const spent = spentOn(conversation);
 
   // The parts the latest reply points at: named in its text, pinned by number on the canvas, and lit
   // on both together.
@@ -502,11 +520,13 @@ export function Companion({ buildCommandContext }: { buildCommandContext?: () =>
     const prompt = text.trim();
     if (!prompt || running || blocker || sending.current) return;
     // Small talk, and what Nodi can answer or do itself, are its own: no agent run, no tokens.
-    const own = smallTalkOf(prompt, seedOf(diagramId) + turns.length);
+    // "Yes" may answer a question in the CLI's resumed session, even after a restart has cleared
+    // the on-screen conversation. With an agent available, never consume confirmations locally.
+    const own = smallTalkOf(prompt, seedOf(diagramId) + turns.length, !agentless);
     const local = own ? null : localAnswer(prompt, localFacts());
     if (own || local) {
       setDraft('');
-      companion.answer(diagramId, prompt, own ?? local!.text, local?.actions);
+      companion.answer(diagramId, prompt, own ?? local!.text, local?.actions, agent?.agent);
       if (local?.reveal) pointing.reveal(local.reveal);
       // Plainly asked for: done at once, no button to press.
       if (local?.run) runAction({ kind: 'command', id: local.run, label: local.text });
@@ -516,7 +536,7 @@ export function Companion({ buildCommandContext }: { buildCommandContext?: () =>
     if (agentless) {
       setDraft('');
       const reply = agentlessAnswer(seedOf(diagramId) + turns.length);
-      companion.answer(diagramId, prompt, reply.text, reply.actions);
+      companion.answer(diagramId, prompt, reply.text, reply.actions, agent?.agent);
       return;
     }
     const scoped = includeSelection && hasSelection;
@@ -733,7 +753,7 @@ export function Companion({ buildCommandContext }: { buildCommandContext?: () =>
   const resting = restingLine({
     blocked: blocker !== null,
     snag: blocker?.rest,
-    working: running ? (last.steps.length ? stepText(last.steps.at(-1)!.tool) : 'Thinking') : null,
+    working: working ? (working.steps.length ? stepText(working.steps.at(-1)!.tool) : 'Thinking') : null,
     waiting: Boolean(last?.proposalId),
     unseen,
     // What the message would be about: the selection, unless the person left it out.
@@ -900,7 +920,7 @@ export function Companion({ buildCommandContext }: { buildCommandContext?: () =>
                 title="New conversation"
                 onClick={() => {
                   forgetTurnSnapshot(diagramId);
-                  void controller.companionForget(diagramId);
+                  void controller.companionForget(diagramId, agent?.agent);
                 }}
               >
                 <Icon name="pencil" />
@@ -1085,7 +1105,7 @@ export function Companion({ buildCommandContext }: { buildCommandContext?: () =>
           onKeyDown={onKey}
         />
         {running ? (
-          <button type="button" className="dc-companion-stop" aria-label="Stop" title="Stop" onClick={() => void controller.companionCancel(last.runId)}>
+          <button type="button" className="dc-companion-stop" aria-label="Stop" title="Stop" onClick={() => void controller.companionCancel(working!.runId)}>
             <span aria-hidden="true" />
           </button>
         ) : (
@@ -1355,24 +1375,41 @@ function Doors({ reply }: { reply: string }) {
 /** What the conversation has used so far, beside its links: the person's own plan or key pays for it,
  *  so they see it as it adds up. A dollar figure only with an API key, where it is what is billed. */
 function SpentLine({ spent, showsCost }: { spent: Spent; showsCost: boolean }) {
-  const { cached } = spent.usage;
+  const { input, cached, output } = spent.usage;
   const fresh = tokenCount(newTokens(spent.usage));
   const cost = showsCost && spent.costMicroUsd !== null ? dollars(spent.costMicroUsd) : null;
   const turns = spent.turns === 1 ? '1 turn' : `${spent.turns} turns`;
-  // One line for the conversation, under the message box; a per-turn line in the bubble only said it
-  // again. What it leaves out, the cached re-reads, is told here as what it is: discounted, not free.
-  const detail =
-    `This conversation so far: ${fresh} new tokens over ${turns}.` +
-    (cached > 0
-      ? ` The agent also re-sent ${tokenCount(cached)} tokens it had already read (its instructions, the tools, the diagram), served from its provider's cache. Those are billed at a discount (about a tenth of the usual price with Claude), not free, and still count toward a plan's usage.`
-      : ''); 
+  const rows = [
+    ['New input', Math.max(0, input - cached).toLocaleString()],
+    ['Cached input', cached.toLocaleString()],
+    ['Output', output.toLocaleString()],
+    ['New tokens', newTokens(spent.usage).toLocaleString()],
+    ['All tokens', (input + output).toLocaleString()],
+    ...(cost ? [['API cost', cost]] : []),
+  ];
+  const hint = 'New tokens are new input + output. Cached input is reused context; provider pricing and plan limits still apply.';
   return (
-    <span className="dc-companion-spent" title={detail}>
-      <span className="dc-sr-only">{detail}</span>
-      <span aria-hidden="true">
-        {fresh} new tokens so far{cost ? ` · ${cost}` : ''}
-      </span>
-    </span>
+    <Tooltip
+      showOnClick
+      content={{ title: `Token usage · ${turns}`, description: rows.map(([label, value]) => `${label}: ${value}`).join('. '), usageHint: hint }}
+      body={
+        <dl className="dc-companion-token-breakdown">
+          {rows.map(([label, value]) => (
+            <div key={label} data-total={label === 'New tokens' ? 'true' : undefined}>
+              <dt>{label}</dt>
+              <dd>{value}</dd>
+            </div>
+          ))}
+        </dl>
+      }
+    >
+      {(tip) => (
+        <button type="button" className="dc-companion-link dc-companion-spent" aria-label={`Token usage: ${fresh} new tokens so far`} {...tip}>
+          {fresh} new tokens so far{cost ? ` · ${cost}` : ''}
+          <Icon name="info" />
+        </button>
+      )}
+    </Tooltip>
   );
 }
 
@@ -1530,33 +1567,34 @@ function ProposalChip({ proposal, onChanged, onDetails }: { proposal: Proposal; 
 }
 
 /**
- * The chip's place, from how tall it is as drawn and where Nodi is: measured after each draw, so a
- * chip grown by its history or a problem never runs off the canvas, and never sits under Nodi.
+ * The chip's place, from how tall it is as drawn and where Nodi and Depth are: measured after each
+ * draw, so a chip grown by its history or a problem stays on the canvas and clear of its chrome.
  */
 function ChipBox({ bounds, transform, view, children }: { bounds: ReturnType<typeof useProposalReview>['bounds']; transform: [number, number, number]; view: { width: number; height: number }; children: ReactNode }) {
   const box = useRef<HTMLElement>(null);
-  const [room, setRoom] = useState<{ height: number; keepOut: Box | null }>({ height: CHIP_HEIGHT, keepOut: null });
+  const [room, setRoom] = useState<{ height: number; keepOut: Box[] }>({ height: CHIP_HEIGHT, keepOut: [] });
   const measure = useCallback(() => {
     const chip = box.current;
     const parent = chip?.offsetParent;
     if (!chip || !parent) return;
     const base = parent.getBoundingClientRect();
-    const nodi = parent.querySelector('.dc-companion')?.getBoundingClientRect();
-    const keepOut = nodi && nodi.width > 0 ? { x: nodi.left - base.left, y: nodi.top - base.top, width: nodi.width, height: nodi.height } : null;
+    const keepOut = [...parent.querySelectorAll('.dc-companion, .dc-depth')]
+      .map((element) => element.getBoundingClientRect())
+      .filter((rect) => rect.width > 0 && rect.height > 0)
+      .map((rect) => ({ x: rect.left - base.left, y: rect.top - base.top, width: rect.width, height: rect.height }));
     const height = chip.offsetHeight || CHIP_HEIGHT;
     setRoom((now) =>
       now.height === height && JSON.stringify(now.keepOut) === JSON.stringify(keepOut) ? now : { height, keepOut },
     );
   }, []);
-  // After every draw (cheap, and set only on a change), and whenever the chip or Nodi resizes.
+  // After every draw (cheap, and set only on a change), and whenever the chip or chrome resizes.
   useLayoutEffect(measure);
   useEffect(() => {
     const chip = box.current;
     if (!chip || typeof ResizeObserver === 'undefined') return;
     const observer = new ResizeObserver(measure);
     observer.observe(chip);
-    const nodi = chip.offsetParent?.querySelector('.dc-companion');
-    if (nodi) observer.observe(nodi);
+    for (const chrome of chip.offsetParent?.querySelectorAll('.dc-companion, .dc-depth') ?? []) observer.observe(chrome);
     return () => observer.disconnect();
   }, [measure]);
   const place = chipPlace(bounds, transform, view, room.height, room.keepOut);

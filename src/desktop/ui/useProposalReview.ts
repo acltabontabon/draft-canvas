@@ -50,7 +50,7 @@ async function dryRunOf(base: DraftDocument, proposal: Proposal): Promise<Omit<D
     return {
       base,
       diff: diffForReview(base, result.file, path),
-      conflicts: preconditionConflicts(base, path, proposal.preconditions),
+      conflicts: preconditionConflicts(base, path, proposal.preconditions, result.file),
       dryRunProblem: result.quality.errors.length ? 'This proposal would leave unreadable content.' : null,
       resultFile: result.file,
       conflictingIds: undefined,
@@ -231,7 +231,7 @@ export function useProposalReview(proposal: Proposal, onChanged: ProposalChanged
     if (file.metadata.id !== proposal.diagramId) return { error: 'This proposal is for a different diagram than the one open now. Nothing was committed.' };
     const result = applyUpdate(file, proposal.path, proposal.ops, proposal.layout ?? undefined, proposal.scope ?? undefined);
     if (result.quality.errors.length) return { error: 'This proposal would leave unreadable content. Ask the agent to revise it.' };
-    if (preconditionConflicts(file, proposal.path, proposal.preconditions).length > 0) {
+    if (preconditionConflicts(file, proposal.path, proposal.preconditions, result.file).length > 0) {
       return { error: 'The diagram changed in a way this proposal conflicts with. Ask the agent to revise it.' };
     }
     // `applyToFile` refuses a change that changes nothing; accepting one is still a decision to record.

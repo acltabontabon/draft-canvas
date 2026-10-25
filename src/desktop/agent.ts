@@ -285,9 +285,26 @@ export const SNAPSHOT_MAX = 40_000;
  */
 export async function turnSnapshot(host: AgentHost, diagramId: string, room: readonly string[]): Promise<string | null> {
   try {
-    const result = await read(host, room.length ? { view: { inside: [...room] } } : {}, { diagramId, open: true });
+    const snapshot = await fileFor(host, { diagramId, open: true });
+    const args = room.length ? { view: { inside: [...room] } } : {};
+    const result = withCollaborators(readDiagram(snapshot.file, args, snapshot.revision, diagramId), snapshot);
+    const semanticText = JSON.stringify(result);
+    if (semanticText.length > SNAPSHOT_MAX) return null;
+    const view = room.length ? viewOf(snapshot.file, room) : snapshot.file;
+    const byId = new Map(view?.nodes.map((node) => [node.id, node]));
+    // A semantic read cannot distinguish a row from a fork. Small box tuples let a fresh session
+    // adjust spacing without replacing the arrangement. Use the same file/revision and room lens;
+    // avoid computing or sending connector paths, or making a second read just for coordinates.
+    for (const field of ['elements', 'groups', 'notes']) {
+      if (!Array.isArray(result[field])) continue;
+      result[field] = result[field].map((item: Record<string, unknown>) => {
+        const node = byId.get(String(item.id));
+        return node ? { ...item, box: [node.x, node.y, node.width, node.height].map(Math.round) } : item;
+      });
+    }
     const text = JSON.stringify(result);
-    return text.length <= SNAPSHOT_MAX ? text : null;
+    // Coordinates should never turn a view that already fits into another agent read round trip.
+    return text.length <= SNAPSHOT_MAX ? text : semanticText;
   } catch {
     return null;
   }

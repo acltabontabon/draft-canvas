@@ -114,11 +114,16 @@ export interface TooltipTriggerProps {
   onBlur: () => void;
   onKeyDown: (event: React.KeyboardEvent<HTMLElement>) => void;
   onPointerDown: () => void;
+  onClick?: (event: React.MouseEvent<HTMLElement>) => void;
   'aria-describedby'?: string;
 }
 
 interface TooltipProps {
   content: PrimitiveTooltipContent;
+  /** Structured visible detail; `content.description` still describes the trigger to screen readers. */
+  body?: ReactNode;
+  /** Informational controls can open on click and stay readable until Escape or focus leaves. */
+  showOnClick?: boolean;
   children: (triggerProps: TooltipTriggerProps) => ReactElement;
 }
 
@@ -142,13 +147,14 @@ interface Position {
  * Render-prop shaped so it adds zero DOM around its trigger (no layout shift, no dimension
  * change) and needs no `forwardRef` support from the trigger component.
  */
-export function Tooltip({ content, children }: TooltipProps) {
+export function Tooltip({ content, body, showOnClick = false, children }: TooltipProps) {
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState<Position | null>(null);
   const anchorRef = useRef<HTMLElement | null>(null);
   const bubbleRef = useRef<HTMLDivElement>(null);
   const showTimer = useRef<number | null>(null);
   const hideTimer = useRef<number | null>(null);
+  const retained = useRef(false);
   const warmth = useContext(TooltipWarmthContext);
   const id = useId();
   const description = [content.description, content.usageHint, content.shortcut && `Shortcut ${content.shortcut}`]
@@ -176,6 +182,7 @@ export function Tooltip({ content, children }: TooltipProps) {
       if (hideTimer.current !== null) window.clearTimeout(hideTimer.current);
       showTimer.current = null;
       hideTimer.current = null;
+      retained.current = false;
       setOpen(false);
     };
     warmth.enter(close);
@@ -197,6 +204,9 @@ export function Tooltip({ content, children }: TooltipProps) {
   };
 
   const scheduleHide = () => {
+    // Reading with the keyboard or after an explicit click must not depend on where the pointer
+    // happens to rest. Hover-only tooltips retain the toolbar's existing leave behavior.
+    if (retained.current) return;
     if (showTimer.current !== null) {
       window.clearTimeout(showTimer.current);
       showTimer.current = null;
@@ -211,6 +221,7 @@ export function Tooltip({ content, children }: TooltipProps) {
 
   const close = () => {
     clearTimers();
+    retained.current = false;
     setOpen(false);
   };
 
@@ -248,19 +259,33 @@ export function Tooltip({ content, children }: TooltipProps) {
     },
     onMouseLeave: scheduleHide,
     onFocus: (event) => {
-      // Keyboard focus only. A click focuses the button too, and the tooltip then popped up at
-      // once — skipping the hover delay, and opening again whenever a menu handed focus back.
-      if (focusFromPointer()) return;
+      // Ordinary toolbar actions wait for keyboard focus; an informational control explicitly
+      // opts into focus/click activation as well as hover.
+      if (focusFromPointer() && !showOnClick) return;
       anchorRef.current = event.currentTarget;
+      retained.current = showOnClick;
       show();
     },
     onBlur: close,
     onKeyDown: (event) => {
-      // No `stopPropagation` — `EditorScreen`'s global Escape handling (e.g. clearing the armed
-      // tool) must keep working exactly as it does today; closing the tooltip is purely additive.
-      if (event.key === 'Escape' && open) close();
+      if (event.key !== 'Escape' || !open) return;
+      close();
+      // An explicitly opened explanation owns the first Escape; the next can close its parent.
+      // Ordinary toolbar tooltips still let Escape reach the editor's armed tool and other chrome.
+      if (showOnClick) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
     },
-    onPointerDown: close,
+    onPointerDown: showOnClick ? clearTimers : close,
+    ...(showOnClick ? { onClick: (event: React.MouseEvent<HTMLElement>) => {
+      // WebKit on macOS does not always focus clicked buttons. Give this informational control
+      // focus explicitly so it can stay open while reading, then close on blur or Escape.
+      event.currentTarget.focus();
+      anchorRef.current = event.currentTarget;
+      retained.current = true;
+      show();
+    } } : {}),
     // Always wired, to text that is always in the DOM: the bubble only exists a render after focus,
     // and a screen reader reads the description at the moment focus lands. The name already comes
     // from the trigger itself, so only what the tooltip adds is described.
@@ -310,7 +335,7 @@ export function Tooltip({ content, children }: TooltipProps) {
                 </span>
               )}
             </div>
-            {content.description && <p className="dc-tooltip-description">{content.description}</p>}
+            {body ?? (content.description && <p className="dc-tooltip-description">{content.description}</p>)}
             {content.usageHint && <p className="dc-tooltip-hint">{content.usageHint}</p>}
           </div>,
           document.body,

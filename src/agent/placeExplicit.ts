@@ -10,12 +10,29 @@ import type { DraftDocument, DraftNode } from '../document/types';
 import type { DescribeContext } from '../nodes/describe';
 import { fitGroups, nearestShape } from './arrange';
 import { AgentError } from './errors';
-import { sizeToFit } from './place';
+import { edgeLabelSize, sizeToFit, spacingOf } from './place';
+import type { LayoutSpec } from './input';
 import type { PlaceSpec } from './placement';
 
 const DEFAULT_GAP = 48;
 /** How far a free note may sit from a shape and still move with it — `arrange`'s own reach. */
 const BESIDE_REACH = 48;
+
+/** Explicit layout spacing leaves the same caption air as the automatic layout. A numeric gap is
+ * exact; without either choice, preserve the published 48 px relative-placement default. */
+function relativeGap(view: DraftDocument, node: DraftNode, other: DraftNode, spec: PlaceSpec, ctx: DescribeContext, layout?: Pick<LayoutSpec, 'spacing' | 'spacingChosen'>): number {
+  if (spec.gap !== undefined) return spec.gap;
+  if (!layout?.spacingChosen) return DEFAULT_GAP;
+  const horizontal = spec.beside?.relation === 'rightOf' || spec.beside?.relation === 'leftOf';
+  let gap = spacingOf(layout).layer;
+  for (const edge of view.edges) {
+    if (!((edge.source === node.id && edge.target === other.id) || (edge.source === other.id && edge.target === node.id))) continue;
+    const size = edgeLabelSize(edge, edge.source === node.id ? node : other, edge.target === node.id ? node : other, ctx);
+    const caption = horizontal ? size.width : size.height;
+    if (caption > 0) gap = Math.max(gap, caption + 40);
+  }
+  return gap;
+}
 
 /** The smallest a shape may be made: what its text needs (the type's floor for a shape without). */
 function minimumSize(node: DraftNode, ctx: DescribeContext): { width: number; height: number } {
@@ -51,7 +68,7 @@ const isFreeNote = (node: DraftNode) => node.type === 'note' || node.type === 'c
  * itself being placed goes after it). Moving a group moves what it holds; a free note sitting right
  * beside a moved shape goes with it; boundaries grow to hold what moved into or across them.
  */
-export function applyPlaces(view: DraftDocument, places: ReadonlyMap<string, PlaceSpec>, ctx: DescribeContext, at = '/place'): DraftDocument {
+export function applyPlaces(view: DraftDocument, places: ReadonlyMap<string, PlaceSpec>, ctx: DescribeContext, at = '/place', layout?: Pick<LayoutSpec, 'spacing' | 'spacingChosen'>): DraftDocument {
   if (places.size === 0) return view;
   for (const id of places.keys()) {
     if (!view.nodes.some((n) => n.id === id)) throw new AgentError('INVALID_REFERENCE', `${at}: nothing called "${id}" in this view to place.`);
@@ -88,7 +105,7 @@ export function applyPlaces(view: DraftDocument, places: ReadonlyMap<string, Pla
     let y = node.y;
     if (spec.beside) {
       const other = next.nodes.find((n) => n.id === spec.beside!.id)!;
-      const gap = spec.gap ?? DEFAULT_GAP;
+      const gap = relativeGap(next, node, other, spec, ctx, layout);
       const along = (start: number, size: number, own: number) =>
         spec.align === 'start' ? start : spec.align === 'end' ? start + size - own : start + (size - own) / 2;
       switch (spec.beside.relation) {

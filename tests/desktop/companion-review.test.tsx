@@ -87,7 +87,7 @@ function fakeController(proposal: Proposal) {
   };
 }
 
-const ACCESS = { enabled: true, listening: true, connections: 0, sidecarPath: null, sidecarWarning: null, background: 'ready', projects: [] } as unknown as AgentSettings;
+const ACCESS: AgentSettings = { enabled: true, listening: true, connections: 0, sidecarPath: null, sidecarWarning: null, background: 'ready', projects: [{ handle: 'ready', name: 'Work', displayPath: '~/work', agent: true }] };
 
 function mount(controller: ReturnType<typeof fakeController>) {
   setDesktopController(controller as never);
@@ -115,7 +115,7 @@ beforeEach(() => {
   companion.__reset();
   useEditorStore.setState({ document: file(), history: { past: [], future: [] }, selection: { nodes: [], edges: [] }, revision: 0, mode: 'edit', path: [], outer: null });
   useUiStore.setState({ companionOpen: true, proposalPanelOpen: false, openPointsPanelOpen: false, readOnly: null, proposalPreview: null });
-  desktopStore.update({ doc: { kind: 'file', name: 'o', displayPath: 'o', dirty: false, readOnly: false }, agent: ACCESS });
+  desktopStore.update({ doc: { kind: 'file', name: 'o', displayPath: '~/work/o.draftcanvas', dirty: false, readOnly: false }, agent: ACCESS });
 });
 
 afterEach(() => {

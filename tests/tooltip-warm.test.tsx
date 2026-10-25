@@ -42,6 +42,16 @@ afterEach(() => {
 });
 
 describe('Tooltip warmth', () => {
+  it('keeps default action tooltips dismissible by pointer press', () => {
+    vi.useFakeTimers();
+    const { a } = mountPair();
+    fireEvent.mouseEnter(a);
+    advance(COLD_DELAY);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('A');
+    fireEvent.pointerDown(a);
+    expect(screen.queryByRole('tooltip')).toBeNull();
+  });
+
   it('makes the first tooltip in a group wait the full delay', () => {
     vi.useFakeTimers();
     const { a } = mountPair();

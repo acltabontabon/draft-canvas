@@ -89,6 +89,29 @@ describe('jumpCommands', () => {
     expect(Math.abs(centerX - (a.x + b.x + b.width) / 2)).toBeLessThan(1);
   });
 
+  it('frames the endpoints of extra connectors when jumping to a flow', () => {
+    const state = useEditorStore.getState();
+    const a = state.addNode({ type: 'service', x: 0, y: 0, text: 'A' });
+    const b = state.addNode({ type: 'service', x: 300, y: 0, text: 'B' });
+    const c = state.addNode({ type: 'service', x: 1200, y: 0, text: 'C' });
+    state.addNode({ type: 'service', x: 3000, y: 0, text: 'Unrelated' });
+    const primary = state.connect(a.id, b.id)!;
+    const extra = state.connect(b.id, c.id)!;
+    const flowId = state.createFlow('Parallel checkout')!;
+    state.addEdgeToFlow(flowId, primary.id);
+    const stepId = useEditorStore.getState().document.flows[0]!.steps[0]!.id;
+    state.addFlowStepExtraEdge(flowId, stepId, extra.id);
+    const ctx = stubContext();
+
+    jumpCommands(useEditorStore.getState().document).find((row) => row.id === `jump-flow:${flowId}`)!.run(ctx);
+
+    const [viewport] = (ctx.camera.setViewport as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    const centerX = (-viewport.x + 1200 / 2) / viewport.zoom;
+    expect(centerX).toBeCloseTo((a.x + c.x + c.width) / 2);
+    expect(viewport.x + c.x * viewport.zoom).toBeGreaterThanOrEqual(0);
+    expect(viewport.x + (c.x + c.width) * viewport.zoom).toBeLessThanOrEqual(1200);
+  });
+
   it('never grows past the cap once ranked', () => {
     const state = useEditorStore.getState();
     for (let i = 0; i < 20; i += 1) state.addNode({ type: 'service', x: i * 10, y: 0, text: `Service ${i}` });

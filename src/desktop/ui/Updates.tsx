@@ -1,4 +1,3 @@
-import { openLink } from '../../host/openLink';
 import { Button } from '../../ui/common/Button';
 import { Modal } from '../../ui/common/Modal';
 import { desktopStore } from '../store';
@@ -133,15 +132,8 @@ function ReleaseNotes({ notes }: { notes: string | null }) {
               ) : part.kind === 'code' ? (
                 <code key={at}>{part.text}</code>
               ) : part.kind === 'link' ? (
-                // The system browser, never the webview: the same route as every link the app opens.
-                <a
-                  key={at}
-                  href={part.href}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    openLink(part.href);
-                  }}
-                >
+                // useHostDocument opens anchors in the system browser; a second handler opens twice.
+                <a key={at} href={part.href}>
                   {part.text}
                 </a>
               ) : (

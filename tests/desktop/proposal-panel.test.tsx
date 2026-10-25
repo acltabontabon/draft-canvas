@@ -3,6 +3,7 @@ import { ReactFlowProvider } from '@xyflow/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { prepareProposal } from '../../src/agent/proposal';
 import type { Proposal, ProposalAction } from '../../src/desktop/api';
+import { companion } from '../../src/desktop/companion';
 import { ProposalPanel } from '../../src/desktop/ui/ProposalPanel';
 import { setDesktopController } from '../../src/desktop/useDesktop';
 import { createDocument, createNode } from '../../src/document/factory';
@@ -30,7 +31,7 @@ function proposalFor(doc: DraftDocument, id: string, ops: unknown[], summary = '
     baseRevision: 'r1',
     ops,
     layout: null,
-    preconditions: prepareProposal(doc, [], ops, undefined, undefined).preconditions,
+    preconditions: ops.length ? prepareProposal(doc, [], ops, undefined, undefined).preconditions : { nodes: {}, edges: {} },
     counts: { added: 0, updated: 1, removed: 0 },
     summary,
     rationale: '',
@@ -78,6 +79,7 @@ async function acceptButton() {
 }
 
 beforeEach(() => {
+  companion.__reset();
   __resetInteraction();
   const doc = file();
   useEditorStore.setState({ document: doc, history: { past: [], future: [] }, selection: { nodes: [], edges: [] }, revision: 0, mode: 'edit', path: [], outer: null });
@@ -89,6 +91,27 @@ afterEach(() => {
 });
 
 describe('ProposalPanel accept', () => {
+  it('preserves a new open point that a pending removal would cascade into during acceptance', async () => {
+    const doc = useEditorStore.getState().document;
+    const proposal = proposalFor(doc, 'p1', [{ op: 'remove', ids: ['api'] }], 'Remove the API');
+    const controller = fakeController([proposal]);
+    controller.beginAcceptProposal.mockImplementationOnce(async () => {
+      useEditorStore.getState().apply('Raise a question', (file) => ({
+        ...file,
+        openPoints: [{ id: 'new-question', kind: 'awaiting', context: 'Keep this API?', targets: [{ kind: 'node', id: 'api' }] }],
+      }));
+      return { ok: true, proposal: { ...proposal, status: 'accepting' } };
+    });
+    mount(controller, 'p1');
+    const accept = await acceptButton();
+    await act(async () => fireEvent.click(accept));
+    expect(controller.beginAcceptProposal).toHaveBeenCalledTimes(1);
+    expect(controller.resolveProposal).not.toHaveBeenCalled();
+    expect(useEditorStore.getState().document.nodes[0]?.id).toBe('api');
+    expect(useEditorStore.getState().document.openPoints[0]?.id).toBe('new-question');
+    expect(await screen.findByRole('alert')).toHaveTextContent(/conflicts with/);
+  });
+
   it('asks for a retry while a gesture is in progress, before the proposal is moved on', async () => {
     const doc = useEditorStore.getState().document;
     const controller = fakeController([proposalFor(doc, 'p1', [{ op: 'update', id: 'api', set: { label: 'Checkout API' } }])]);
@@ -103,7 +126,10 @@ describe('ProposalPanel accept', () => {
 
   it('records a proposal the diagram already matches as accepted, without a commit', async () => {
     const doc = useEditorStore.getState().document;
-    const controller = fakeController([proposalFor(doc, 'p1', [{ op: 'update', id: 'api', set: { label: 'Orders API' } }], 'Keep the name')]);
+    // Older app versions could store an unchanged proposal. It must still be possible to close its
+    // review, even though new submissions that change nothing are now refused.
+    const legacy = { ...proposalFor(doc, 'p1', [{ op: 'update', id: 'api', set: { label: 'Other API' } }]), ops: [{ op: 'update', id: 'api', set: { label: 'Orders API' } }], preconditions: { nodes: {}, edges: {} } };
+    const controller = fakeController([legacy]);
     mount(controller, 'p1');
     const accept = await acceptButton();
     await act(async () => fireEvent.click(accept));
@@ -143,6 +169,24 @@ describe('ProposalPanel accept', () => {
 });
 
 describe('ProposalPanel review presentation', () => {
+  it('keeps another agent’s pending proposal reachable when the companion switches histories', async () => {
+    const doc = useEditorStore.getState().document;
+    const proposal = { ...proposalFor(doc, 'codex-proposal', [{ op: 'update', id: 'api', set: { label: 'Checkout API' } }]), run: 'codex' };
+    companion.begin(doc.metadata.id, 'codex', 'Rename it', null, 'codex');
+    companion.apply('codex', { type: 'stopped', reason: { kind: 'end-turn' }, summary: null, costMicroUsd: null, usage: null });
+    companion.setProposal('codex', proposal.proposalId);
+    companion.selectAgent(doc.metadata.id, 'codex');
+    mount(fakeController([proposal]), proposal.proposalId);
+    await acceptButton();
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(screen.queryByRole('button', { name: '1 proposal to review' })).toBeNull();
+    act(() => companion.selectAgent(doc.metadata.id, 'claude-code'));
+    expect(await screen.findByRole('button', { name: '1 proposal to review' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '1 proposal to review' }));
+    await acceptButton();
+    expect(useUiStore.getState().proposalPanelId).toBe('codex-proposal');
+  });
+
   it('leads with one summary, colour-count labels and named changes grouped before rationale', async () => {
     const doc = useEditorStore.getState().document;
     const withLegacy = { ...doc, nodes: [...doc.nodes, createNode({ id: 'old', type: 'service', x: 300, y: 0, text: 'Legacy worker' })] };
@@ -176,7 +220,8 @@ describe('ProposalPanel review presentation', () => {
   it('keeps decided proposals in quiet history and clears the preview when switching or closing', async () => {
     const doc = useEditorStore.getState().document;
     const pending = proposalFor(doc, 'p1', [{ op: 'update', id: 'api', set: { label: 'Checkout API' } }]);
-    const old = { ...proposalFor(doc, 'old', [{ op: 'update', id: 'api', set: { label: 'Orders API' } }], 'An earlier change with a long summary'), status: 'accepted' as const };
+    const beforeOld = { ...doc, nodes: doc.nodes.map((node) => ({ ...node, text: 'Previous API' })) };
+    const old = { ...proposalFor(beforeOld, 'old', [{ op: 'update', id: 'api', set: { label: 'Orders API' } }], 'An earlier change with a long summary'), status: 'accepted' as const };
     mount(fakeController([old, pending]), 'p1');
     await acceptButton();
     await waitFor(() => expect(useUiStore.getState().proposalPreview?.proposalId).toBe('p1'));

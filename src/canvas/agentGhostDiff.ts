@@ -56,6 +56,15 @@ function nodeChanged(before: DraftNode, after: DraftNode): boolean {
     before.boundaryPreset !== after.boundaryPreset ||
     before.code !== after.code ||
     before.language !== after.language ||
+    // Styling can change the artwork without changing its box (for example, aligning a multiline
+    // label). It still needs an after-image; otherwise review shows the unchanged label until Accept.
+    before.annotation !== after.annotation ||
+    before.textRole !== after.textRole ||
+    before.textFont !== after.textFont ||
+    before.textBackground !== after.textBackground ||
+    before.textAlign !== after.textAlign ||
+    before.textBold !== after.textBold ||
+    before.textItalic !== after.textItalic ||
     JSON.stringify(before.attachments) !== JSON.stringify(after.attachments) ||
     JSON.stringify(before.evidence) !== JSON.stringify(after.evidence)
   );

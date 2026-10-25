@@ -376,9 +376,13 @@ pub async fn companion_continue(
 
 /// The next prompt on this diagram starts a new conversation.
 #[tauri::command]
-pub async fn companion_forget(app: AppHandle, diagram_id: String) -> Result<(), AppError> {
+pub async fn companion_forget(
+    app: AppHandle,
+    diagram_id: String,
+    agent: Option<AgentKind>,
+) -> Result<(), AppError> {
     run_blocking(&app, move |app, _| {
-        app.state::<Arc<Companion>>().forget(&diagram_id)
+        app.state::<Arc<Companion>>().forget(&diagram_id, agent)
     })
     .await
 }

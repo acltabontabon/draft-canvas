@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
 import type { Clock } from '../../src/collab/clock';
-import { GONE_MS, HEARTBEAT_MS, HELLO_TIMEOUT_MS, RESYNC_RETRY_MS, SILENT_MS } from '../../src/collab/clock';
+import { GONE_MS, HEARTBEAT_MS, HELLO_TIMEOUT_MS, HOLD_RETRY_MS, RESYNC_RETRY_MS, SILENT_MS } from '../../src/collab/clock';
 import { diffFile } from '../../src/collab/diff';
 import { GuestSession, type GuestEvents } from '../../src/collab/guestSession';
 import { HostSession } from '../../src/collab/hostSession';
@@ -468,6 +468,89 @@ describe('a quiet or abusive connection', () => {
 });
 
 describe('edits the editor holds but hasn’t sent', () => {
+  it('takes back an unsent gesture after the owner revokes editing access', () => {
+    const clock = manualClock();
+    const { host, state: owner } = ownerOf(base(), clock);
+    const { a, b, pump } = loopbackPair();
+    host.attach(a, { role: 'editor' });
+    let busy = false;
+    const guest = guestOf(clock, { busy: () => busy });
+    guest.session.connect(b);
+    settle(pump);
+
+    busy = true;
+    guest.state.file = updateNode(guest.state.file!, 'n_a', { x: 90 });
+    host.setRole(guest.session.id!, 'viewer');
+    settle(pump);
+    expect(guest.session.role).toBe('viewer');
+    expect(guest.state.file!.nodes[0]!.x).toBe(90);
+
+    busy = false;
+    clock.advance(HOLD_RETRY_MS);
+    expect(guest.state.file!.nodes[0]!.x).toBe(0);
+    expect(owner.file.nodes[0]!.x).toBe(0);
+  });
+
+  it('rolls back an oversized edit after its held gesture ends, even when no remote change arrives', () => {
+    const clock = manualClock();
+    const { host, state: owner } = ownerOf(base(), clock);
+    const { a, b, pump } = loopbackPair();
+    host.attach(a, { role: 'editor' });
+    let busy = false;
+    const guest = guestOf(clock, { busy: () => busy });
+    guest.session.connect(b);
+    settle(pump);
+
+    busy = true;
+    guest.state.file = addNodes(guest.state.file!, Array.from({ length: 22 }, (_, i) =>
+      createNode({ id: `code_${i}`, type: 'code', x: i * 300, y: 0, code: 'x'.repeat(199_000) }),
+    ));
+    guest.session.localChanged();
+    expect(guest.state.file!.nodes).toHaveLength(23);
+    expect(owner.file.nodes).toHaveLength(1);
+    clock.advance(HOLD_RETRY_MS * 2);
+    expect(guest.state.file!.nodes).toHaveLength(23);
+
+    busy = false;
+    clock.advance(HOLD_RETRY_MS);
+    expect(guest.state.file!.nodes).toHaveLength(1);
+    expect(guest.state.file!.nodes[0]!.text).toBe('A');
+
+    guest.state.file = updateNode(guest.state.file!, 'n_a', { text: 'Still editable' });
+    guest.session.localChanged();
+    settle(pump);
+    expect(owner.file.nodes[0]!.text).toBe('Still editable');
+    expect(guest.state.file!.nodes[0]!.text).toBe('Still editable');
+  });
+
+  it('keeps pending valid edits and held owner commits when a later oversized gesture is taken back', () => {
+    const clock = manualClock();
+    const { host, state: owner } = ownerOf(base(), clock);
+    const { a, b, pump } = loopbackPair();
+    host.attach(a, { role: 'editor' });
+    let busy = false;
+    const guest = guestOf(clock, { busy: () => busy });
+    guest.session.connect(b);
+    settle(pump);
+
+    guest.state.file = updateNode(guest.state.file!, 'n_a', { text: 'Pending rename' });
+    guest.session.localChanged();
+    busy = true;
+    guest.state.file = addNodes(guest.state.file!, Array.from({ length: 22 }, (_, i) =>
+      createNode({ id: `code_${i}`, type: 'code', x: i * 300, y: 0, code: 'x'.repeat(199_000) }),
+    ));
+    guest.session.localChanged();
+    owner.file = addNodes(owner.file, [createNode({ id: 'n_b', type: 'service', text: 'Owner addition', x: 300, y: 0 })]);
+    host.commitLocal();
+    settle(pump);
+
+    busy = false;
+    clock.advance(HOLD_RETRY_MS);
+    settle(pump);
+    expect(guest.state.file!.nodes.map((node) => node.text)).toEqual(['Pending rename', 'Owner addition']);
+    expect(owner.file.nodes.map((node) => node.text)).toEqual(['Pending rename', 'Owner addition']);
+  });
+
   it('sends a drop that an owner’s commit overtakes, instead of snapping it back', () => {
     const clock = manualClock();
     const { host, state: owner } = ownerOf(base(), clock);

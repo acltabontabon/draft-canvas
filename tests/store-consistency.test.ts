@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { createDocument, createNode } from '../src/document/factory';
+import { createDocument, createEdge, createNode } from '../src/document/factory';
 import { normalizeDocument } from '../src/document/validate';
 import type { DraftNode } from '../src/document/types';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
@@ -172,6 +172,23 @@ describe('changing a boundary kind', () => {
 });
 
 describe('setSelection', () => {
+  it('drops replaced elements after a file edit even when the element counts stay the same', () => {
+    const a = createNode({ type: 'service', x: 0, y: 0 });
+    const b = createNode({ type: 'service', x: 300, y: 0 });
+    const c = createNode({ type: 'service', x: 600, y: 0 });
+    const beforeEdge = createEdge({ source: a.id, target: b.id });
+    const afterEdge = createEdge({ source: b.id, target: c.id });
+    store.getState().setDocument({ ...createDocument(), nodes: [a, b], edges: [beforeEdge] });
+    store.getState().setSelection({ nodes: [a.id, b.id], edges: [beforeEdge.id] });
+
+    store.getState().applyToFile('Replace diagram elements', (doc) => ({ ...doc, nodes: [b, c], edges: [afterEdge] }));
+
+    expect(store.getState().selection).toEqual({ nodes: [b.id], edges: [] });
+    expect(store.getState().history.past.at(-1)!.selectionAfter).toEqual({ nodes: [b.id], edges: [] });
+    store.getState().undo();
+    expect(store.getState().selection).toEqual({ nodes: [a.id, b.id], edges: [beforeEdge.id] });
+  });
+
   it('a selection that changes nothing keeps the store state as it is', () => {
     store.setState({ selection: { nodes: [], edges: [] } });
     const before = store.getState();

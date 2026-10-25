@@ -10,7 +10,7 @@ import { OPEN_POINT_ID_PREFIX, pruneOpenPoints } from './openPoints';
 import { defaultSizeFor } from './factory';
 import { pruneFlowSteps } from './flow';
 import { LIMITS } from './limits';
-import { cleanTextFields } from './sanitize';
+import { cleanText, cleanTextFields } from './sanitize';
 import { centerOf, clamp, pointInBox } from '../lib/math';
 import { boundsOf, clampCoord, type Bounds } from './geometry';
 import type {
@@ -1493,19 +1493,30 @@ function matcherFor(find: string, options: ReplaceOptions): RegExp {
 export function replaceLabels<T extends Labelled>(doc: T, find: string, replace: string, options: ReplaceOptions = {}): { doc: T; count: number } {
   if (find.length === 0) return { doc, count: 0 };
   const matcher = matcherFor(find, options);
+  const replacement = cleanText(replace, LIMITS.maxTextLength);
   let count = 0;
-  const swap = (text: string | undefined): string | undefined => {
+  let changed = false;
+  const swap = (text: string | undefined, max: number): string | undefined => {
     if (!text) return text;
-    const found = text.match(matcher)?.length ?? 0;
-    if (found === 0) return text;
-    count += found;
-    return text.replace(matcher, () => replace);
+    let next = '';
+    let cursor = 0;
+    let found = false;
+    for (const match of text.matchAll(matcher)) {
+      found = true;
+      count += 1;
+      // Keep only what the field can hold as we go. Expanding every character to a long replacement
+      // before truncating can allocate hundreds of megabytes for one ordinary Text shape.
+      if (next.length < max) next += (text.slice(cursor, match.index) + replacement).slice(0, max - next.length);
+      cursor = match.index + match[0].length;
+    }
+    if (!found) return text;
+    return next + text.slice(cursor, cursor + max - next.length);
   };
   const attachments = (list: Attachment[] | undefined): Attachment[] | undefined => {
     if (!list) return list;
     let changed = false;
     const next = list.map((attachment) => {
-      const text = swap(attachment.text);
+      const text = swap(attachment.text, LIMITS.maxTextLength);
       if (text === attachment.text) return attachment;
       changed = true;
       return { ...attachment, text };
@@ -1513,22 +1524,26 @@ export function replaceLabels<T extends Labelled>(doc: T, find: string, replace:
     return changed ? next : list;
   };
   const nodes = doc.nodes.map((node) => {
-    const text = swap(node.text);
+    const text = swap(node.text, LIMITS.maxTextLength);
     const list = attachments(node.attachments);
     if (text === node.text && list === node.attachments) return node;
-    return { ...node, ...(text === node.text ? {} : { text }), ...(list === node.attachments ? {} : { attachments: list }) };
+    changed = true;
+    return { ...node, ...(text === node.text ? {} : { text, textOrigin: 'explicit' as const }), ...(list === node.attachments ? {} : { attachments: list }) };
   });
   const edges = doc.edges.map((edge) => {
-    const label = swap(edge.label);
+    const label = swap(edge.label, LIMITS.maxLabelLength);
     const list = attachments(edge.attachments);
     if (label === edge.label && list === edge.attachments) return edge;
+    changed = true;
     return { ...edge, ...(label === edge.label ? {} : { label }), ...(list === edge.attachments ? {} : { attachments: list }) };
   });
   const flows = doc.flows.map((flow) => {
-    const title = swap(flow.title);
-    return title === flow.title ? flow : { ...flow, title: title ?? flow.title };
+    const title = swap(flow.title, LIMITS.maxFlowTitleLength)?.trim() || 'Untitled flow';
+    if (title === flow.title) return flow;
+    changed = true;
+    return { ...flow, title };
   });
-  if (count === 0) return { doc, count: 0 };
+  if (!changed) return { doc, count };
   return { doc: { ...doc, nodes, edges, flows }, count };
 }
 

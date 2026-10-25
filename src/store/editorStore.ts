@@ -1394,7 +1394,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const moved = inside ? pathKey(path) !== pathKey(state.path) : state.path.length > 0;
     const document = room ?? nextFile;
     const cleared = moved ? resetViewSession() : undefined;
-    const selectionAfter = cleared ? EMPTY_SELECTION : selectionIn(document, state.document, state.selection);
+    // A file recipe can remove and add elements in one step, so equal or growing counts do not
+    // mean every selected id survived (unlike the room actions selectionIn optimizes for).
+    const selectionAfter = cleared ? EMPTY_SELECTION : selectionThatExists(document, state.selection);
     const keys = sharedKeys(file, nextFile);
     set((s) => ({
       ...(cleared ?? {}),

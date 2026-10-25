@@ -36,7 +36,7 @@ export interface ShellHandle {
     /** Project folders on the list, most recent first: each diagram by its path in the folder. */
     /** Folders on disk that have not been linked as projects. */
     explorer?: { name: string; path: string; diagrams: { path: string; text: string; ago: number }[] }[];
-    projects?: { name: string; path?: string; diagrams: { path: string; text: string; ago: number }[] }[];
+    projects?: { name: string; path?: string; agent?: boolean; diagrams: { path: string; text: string; ago: number }[] }[];
   }): void;
   failNextExplorer(message: string): void;
   /** What the next folder dialog picks: a project by name (from `seed`), or `null` to cancel. */
@@ -462,7 +462,15 @@ export async function installMockShell(page: Page): Promise<void> {
       // The agent companion: what the page sent is recorded; a test plays the run's events back
       // with `emit({ type: 'companion', run, event })`, as the shell would.
       companion_agents: () => companionAgents,
-      companion_send: (args: { request: { runId: string; diagramId: string; text: string; selection: unknown; mode: string } }) => void companionSent.push(args.request),
+      companion_send: (args: { request: { runId: string; diagramId: string; text: string; selection: unknown; mode: string } }) => {
+        const file = [...files.values()].find((file) => {
+          try { return JSON.parse(file.text).metadata?.id === args.request.diagramId; } catch { return false; }
+        });
+        if (!agentSettings.enabled || !file || !listedProjects.some((handle) => agentFolders.get(handle) && file.displayPath.startsWith(`${folder(handle).info.displayPath}/`))) {
+          throw { kind: 'PermissionDenied', message: 'Agents can’t use this diagram’s folder.' };
+        }
+        companionSent.push(args.request);
+      },
       companion_cancel: (args: { runId: string }) => {
         companionCancelled.push(args.runId);
         return true;
@@ -577,7 +585,10 @@ export async function installMockShell(page: Page): Promise<void> {
             info: { handle, name: project.name, displayPath: project.path?.startsWith('~/') ? project.path : `~/work/${project.path ?? project.name}` },
             files: new Map(project.diagrams.map((diagram) => [diagram.path, { text: diagram.text, mtimeMs: Date.now() - diagram.ago }])),
           });
-          if (projects.includes(project)) listedProjects.push(handle);
+          if (projects.includes(project)) {
+            listedProjects.push(handle);
+            if ('agent' in project) agentFolders.set(handle, project.agent === true);
+          }
         }
         for (const item of seeded) {
           const handle = addFile(item.name, item.text);

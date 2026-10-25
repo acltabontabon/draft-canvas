@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
-import { createDocument } from '../../src/document/factory';
+import { createDocument, createNode } from '../../src/document/factory';
+import { createFlow } from '../../src/document/flow';
+import { LIMITS } from '../../src/document/limits';
 import { parseDocument } from '../../src/document/validate';
 import { diffFile } from '../../src/collab/diff';
 import { HostCore, idsUnique } from '../../src/collab/hostCore';
@@ -51,6 +53,22 @@ describe('sanitizeChanges', () => {
       }),
       { seed: 33, numRuns: 200 },
     );
+  });
+
+  it('keeps every spotlight reference in a flow covering the maximum number of shapes', () => {
+    const nodes = Array.from({ length: LIMITS.maxNodes }, (_, i) => createNode({ id: `n_${i}`, type: 'service', x: i, y: 0 }));
+    const flow = createFlow({ title: 'Whole system' });
+    for (let i = 0; i < nodes.length; i += LIMITS.maxExtraMembersPerStep) {
+      flow.steps.push({ id: `step_${i}`, extraNodeIds: nodes.slice(i, i + LIMITS.maxExtraMembersPerStep).map((node) => node.id) });
+    }
+    const file = { ...createDocument('Full'), nodes, flows: [flow] };
+    const parsed = parseDocument(file);
+    expect(parsed.ok && parsed.repairs).toEqual([]);
+
+    const changes = [{ kind: 'flow', id: flow.id, room: '', value: flow }];
+    const result = sanitizeChanges(changes);
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.changes).toEqual(changes);
   });
 
   it('refuses ids validation would have to rename', () => {

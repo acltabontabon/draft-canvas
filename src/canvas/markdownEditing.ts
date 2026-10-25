@@ -94,8 +94,14 @@ const PREFIXES: Record<LineFormat, (index: number) => string> = {
   quote: () => '> ',
 };
 
+function lineStartAt(value: string, position: number): number {
+  // lastIndexOf clamps a negative position to zero, which would skip a leading newline when
+  // formatting the empty first line. The resulting reversed range duplicated that newline.
+  return position === 0 ? 0 : value.lastIndexOf('\n', position - 1) + 1;
+}
+
 function lineRange(value: string, start: number, end: number): { from: number; to: number } {
-  const from = value.lastIndexOf('\n', start - 1) + 1;
+  const from = lineStartAt(value, start);
   // A selection ending at the very start of a line doesn't include that line.
   const last = end > start && value[end - 1] === '\n' ? end - 1 : end;
   const next = value.indexOf('\n', last);
@@ -119,7 +125,7 @@ export function toggleLines({ value, start, end }: SourceSelection, format: Line
     if (format === 'quote') return prefix.startsWith('>');
     return prefix === PREFIXES[format](index);
   };
-  const removing = lines.every((line, index) => line.trim() === '' || matches(line, index));
+  const removing = lines.some(matches) && lines.every((line, index) => line.trim() === '' || matches(line, index));
   let counter = 0;
   const next = lines.map((line) => {
     const match = LINE_PREFIX.exec(line)!;
@@ -186,7 +192,7 @@ const CONTINUABLE = /^(\s*)([-*+] \[[ xX]\] |[-*+] |(\d+)([.)]) |> )/;
  */
 export function continueOnEnter({ value, start, end }: SourceSelection): SourceEdit | null {
   if (start !== end) return null;
-  const lineStart = value.lastIndexOf('\n', start - 1) + 1;
+  const lineStart = lineStartAt(value, start);
   const line = value.slice(lineStart, start);
 
   if (insideFence(value, lineStart)) {
@@ -212,13 +218,23 @@ export function continueOnEnter({ value, start, end }: SourceSelection): SourceE
   return { from: start, to: end, insert, start: start + insert.length, end: start + insert.length };
 }
 
-/** Whether the line starting at `lineStart` is inside a ``` fence that opened above it. */
+/** Whether the line starting at `lineStart` is inside a Markdown fence that opened above it. */
 function insideFence(value: string, lineStart: number): boolean {
-  let open = false;
+  let open: string | null = null;
   for (const line of value.slice(0, lineStart).split('\n')) {
-    if (/^\s*(```|~~~)/.test(line)) open = !open;
+    // A list item adds its own indentation before the fence's allowed indentation. Keep it here:
+    // applying a top-level three-space cap mistakes a nested code block for ordinary list text.
+    const match = /^[ \t]*(`{3,}|~{3,})(.*)$/.exec(line);
+    if (!match) continue;
+    const [, fence = '', rest = ''] = match;
+    if (open) {
+      // Literal shorter fences and the other marker are code, not a closing delimiter.
+      if (fence[0] === open[0] && fence.length >= open.length && rest.trim() === '') open = null;
+    } else if (fence[0] !== '`' || !rest.includes('`')) {
+      open = fence;
+    }
   }
-  return open;
+  return open !== null;
 }
 
 /**

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CHIP_HEIGHT, CHIP_WIDTH, chipPlace, revealViewport } from '../../src/desktop/ui/chipPlace';
+import { CHIP_HEIGHT, CHIP_WIDTH, chipPlace, revealViewport, type Box } from '../../src/desktop/ui/chipPlace';
 
 /** The proposal's chip sits beside the change it describes, never over it, and never off the canvas. */
 
@@ -41,6 +41,35 @@ describe('chipPlace', () => {
 
   it('waits at the top-left while the change is in another view', () => {
     expect(chipPlace(null, identity, view)).toEqual({ left: 12, top: 12 });
+  });
+
+  it('keeps proposals with no bounds clear of Depth and Nodi together', () => {
+    const chrome: Box[] = [
+      { x: 840, y: 240, width: 424, height: 384 },
+      { x: 12, y: 12, width: 420, height: 100 },
+    ];
+    const place = chipPlace(null, identity, view, CHIP_HEIGHT, chrome);
+    for (const box of chrome) {
+      const overlaps = place.left < box.x + box.width && place.left + CHIP_WIDTH > box.x && place.top < box.y + box.height && place.top + CHIP_HEIGHT > box.y;
+      expect(overlaps).toBe(false);
+    }
+  });
+
+  it('checks all obstacles after clamping and searches their free bands', () => {
+    const chrome: Box[] = [
+      { x: 450, y: 0, width: 350, height: 600 },
+      { x: 0, y: 0, width: 440, height: 200 },
+    ];
+    const place = chipPlace({ x: 5000, y: 5000, width: 100, height: 100 }, identity, { width: 800, height: 600 }, CHIP_HEIGHT, chrome);
+    expect(place.left).toBeGreaterThanOrEqual(12);
+    expect(place.top).toBeGreaterThanOrEqual(200);
+    expect(place.left + CHIP_WIDTH).toBeLessThanOrEqual(450);
+    expect(place.top + CHIP_HEIGHT).toBeLessThanOrEqual(600 - 12);
+  });
+
+  it('stays bounded when chrome leaves no room for the chip', () => {
+    const place = chipPlace(null, identity, { width: 340, height: 180 }, CHIP_HEIGHT, [{ x: 0, y: 0, width: 340, height: 180 }]);
+    expect(place).toEqual({ left: 12, top: 12 });
   });
 });
 

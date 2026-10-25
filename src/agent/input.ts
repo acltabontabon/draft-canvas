@@ -222,6 +222,8 @@ export interface LayoutSpec {
   /** The caller named the direction — a repair never overrides it. */
   directionChosen?: boolean;
   spacing: 'compact' | 'comfortable' | 'spacious';
+  /** Relative placements inherit spacing only when the caller named it; otherwise their gap is 48. */
+  spacingChosen?: boolean;
   primaryFlow?: string;
   allowDegraded: boolean;
   /**
@@ -826,6 +828,7 @@ export function readLayout(r: Reader, value: unknown, path: string, flowIds: Set
     direction,
     ...(raw.direction !== undefined ? { directionChosen: true } : {}),
     spacing,
+    ...(raw.spacing !== undefined ? { spacingChosen: true } : {}),
     ...(primaryFlow && flowIds.has(primaryFlow) ? { primaryFlow } : {}),
     allowDegraded,
     ...(normalizePeerSizes !== undefined ? { normalizePeerSizes } : {}),

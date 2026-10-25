@@ -40,6 +40,14 @@ const three = () =>
   });
 
 describe('explicit placement on create', () => {
+  it('inherits explicit spacing for relative placements and otherwise keeps the 48 px gap', () => {
+    const request = { nodes: [{ id: 'a', type: 'service', label: 'A', place: { x: 0, y: 0 } }, { id: 'b', type: 'service', label: 'B', place: { rightOf: 'a' } }] };
+    const ordinary = build(request);
+    const spacious = build({ ...request, layout: { spacing: 'spacious' } });
+    expect(node(ordinary, 'b').x - node(ordinary, 'a').x - node(ordinary, 'a').width).toBe(48);
+    expect(node(spacious, 'b').x - node(spacious, 'a').x - node(spacious, 'a').width).toBe(135);
+  });
+
   it('puts an element at the exact top-left it was given, and beside another one', () => {
     const file = build({
       nodes: [
@@ -115,6 +123,51 @@ describe('explicit placement on create', () => {
 });
 
 describe('explicit placement on update', () => {
+  it('uses explicit top-level spacing for omitted relative gaps, while numeric gaps stay exact', () => {
+    const file = three();
+    const place = (layout: unknown, gap?: number) => applyUpdate(file, [], [{ op: 'update', id: 'db', set: { place: { below: 'api', ...(gap === undefined ? {} : { gap }) } } }], layout).file;
+    const gapOf = (next: DraftDocument) => node(next, 'db').y - node(next, 'api').y - node(next, 'api').height;
+    expect(gapOf(place(undefined))).toBe(48);
+    expect(gapOf(place({ normalizePeerSizes: false }))).toBe(48);
+    const compact = gapOf(place({ spacing: 'compact' }));
+    const comfortable = gapOf(place({ spacing: 'comfortable' }));
+    const spacious = gapOf(place({ spacing: 'spacious' }));
+    expect(compact).toBeLessThan(comfortable);
+    expect(comfortable).toBeLessThan(spacious);
+    expect(spacious).toBe(135);
+    expect(gapOf(place({ spacing: 'spacious' }, 20))).toBe(20);
+  });
+
+  it('leaves enough room for a direct caption when explicit spacing supplies the gap', () => {
+    const file = build({ nodes: [{ id: 'a', type: 'service', label: 'A' }, { id: 'b', type: 'service', label: 'B' }], relationships: [{ id: 'ab', from: 'a', to: 'b', label: 'Sends the complete campaign report' }] });
+    const result = applyUpdate(file, [], [{ op: 'update', id: 'b', set: { place: { rightOf: 'a', align: 'center' } } }], { spacing: 'spacious' });
+    expect(node(result.file, 'b').x - node(result.file, 'a').x - node(result.file, 'a').width).toBeGreaterThan(135);
+    expect(result.quality.warnings.filter((warning) => warning.kind === 'label-over-node')).toEqual([]);
+  });
+
+  it('inherits top-level spacing when adding a relatively placed element', () => {
+    const file = three();
+    const result = applyUpdate(file, [], [{ op: 'add', nodes: [{ id: 'cache', type: 'cache', label: 'Cache', place: { below: 'db' } }] }], { spacing: 'spacious' }).file;
+    expect(node(result, 'cache').y).toBe(Math.round(node(result, 'db').y + node(result, 'db').height + 135));
+  });
+
+  it('places every node of a fork in one horizontal row without changing its content', () => {
+    const file = build({
+      nodes: [{ id: 'a', type: 'person', label: 'Advertiser' }, { id: 'b', type: 'service', label: 'Publisher' }, { id: 'c', type: 'service', label: 'Ads Platform' }],
+      relationships: [{ id: 'ac', from: 'a', to: 'c' }, { id: 'bc', from: 'b', to: 'c' }],
+    });
+    const result = applyUpdate(file, [], [
+      { op: 'update', id: 'b', set: { place: { rightOf: 'a', gap: 160, align: 'center' } } },
+      { op: 'update', id: 'c', set: { place: { rightOf: 'b', gap: 160, align: 'center' } } },
+    ], undefined).file;
+    const [a, b, c] = ['a', 'b', 'c'].map((id) => node(result, id));
+    expect(Math.abs(a!.y + a!.height / 2 - (b!.y + b!.height / 2))).toBeLessThanOrEqual(1);
+    expect(Math.abs(b!.y + b!.height / 2 - (c!.y + c!.height / 2))).toBeLessThanOrEqual(1);
+    expect(b!.x).toBeGreaterThan(a!.x + a!.width);
+    expect(c!.x).toBeGreaterThan(b!.x + b!.width);
+    expect(result.nodes.map((n) => ({ ...n, x: 0, y: 0 }))).toEqual(file.nodes.map((n) => ({ ...n, x: 0, y: 0 })));
+  });
+
   it('moves an existing element exactly, carrying a note beside it', () => {
     const file = build({
       nodes: [

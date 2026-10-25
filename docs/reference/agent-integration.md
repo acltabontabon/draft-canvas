@@ -156,7 +156,7 @@ pull request's architectural impact. It never applies anything. No MCP tool can 
 
 | Field | Rule |
 | --- | --- |
-| `ops` | Validated as `update_diagram` would. `ops: []` with a `summary` records "no architectural impact" (`informational`). |
+| `ops` | Validated as `update_diagram` would. Nonempty operations that make no changes are refused as `INVALID_INPUT`. `ops: []` with a `summary` records "no architectural impact" (`informational`). |
 | `revises` | Replaces a pending proposal in place. A resolved one is `PROPOSAL_CLOSED`; a revision that landed first is `PROPOSAL_CHANGED`. |
 | `sourceRef` | A PR's url, title or commits, shown to the person. Never fetched. |
 
@@ -164,7 +164,8 @@ Submission captures preconditions: the before-state of everything the ops change
 
 - **Stale** (`stale: true`): the revision moved. Informational; a non-blocking banner.
 - **Conflict**: something the proposal is about changed, found by comparing the preconditions with
-  the live document. A successful dry run is not proof. **Accept** stays disabled until the agent revises.
+  the live document. New work that a re-run would change or delete also conflicts. A successful dry
+  run is not proof. **Accept** stays disabled until the agent revises.
 
 **Review panel** (`src/desktop/ui/ProposalPanel.tsx`): summary, status, counts and the changes in the
 diagram's words (`reviewRows.ts`: what only moved is one layout line, boundaries by name, colours as
@@ -258,12 +259,18 @@ and calls are kept few:
   64.9k → 19.1k tokens with Claude Code; a change 174k → 43k with Codex.
 - The brief: no read when the view came with the turn, `get_capabilities` only when a change is refused
   for an unknown type, no preview before a proposal, no read after a change.
-- Small talk (a whole message of only "hello", "thanks", "ok", "bye", "how are you") is answered by Nodi
-  itself (`nodiLines.ts`'s `smallTalkOf`): no run, no tokens.
+- Small talk (a whole message of only "hello", "thanks", "bye", "how are you") is answered by Nodi
+  itself (`nodiLines.ts`'s `smallTalkOf`): no run, no tokens. Confirmations such as "yes" and "ok"
+  reach the selected agent, including its resumed session after an app restart.
 
 The agent's session id is kept per diagram and agent in `companion/sessions.json`; the conversation
-shown is the page's, in memory only. Replies may name parts as `[[id]]`; the companion shows their names
+shown is also separate per agent, in memory only. Replies may name parts as `[[id]]`; the companion shows their names
 and pins numbered points onto them.
+
+Codex reports cumulative session token counters when resumed. Before starting it, the app reads
+the last token metadata from a bounded tail of that session's local transcript, then reports only
+the turn's increase. This also accounts for turns continued in a terminal. If that baseline is
+unavailable, usage stays unknown instead of charging the old session to the new turn again.
 
 Run output is bounded independently of the agent's model budget: at most 128 MiB of raw stdout and
 stderr combined, 32 MiB per stdout line, and 1 MiB of parsed event text. Passing a limit fails the
@@ -274,7 +281,7 @@ Snapshots and live events carry per-run sequence numbers. Reload recovery buffer
 then applies only those newer than the snapshot; it does not duplicate text already recovered.
 The two most recent completed turns remain available in native memory, so a process finishing
 before the reload snapshot is captured does not lose its answer. **New conversation** clears them
-for that diagram.
+for the chosen agent on that diagram.
 The page caps conversations, reply text and tool steps; diagram snapshots used to skip redundant
 reads are weak references in a bounded cache, so visiting many diagrams does not keep their files alive.
 
@@ -399,7 +406,7 @@ Large one-shot requests (about 50+ elements) are often degraded or refused. Buil
 | Field | Values |
 | --- | --- |
 | `scope` | Whole view (default), `{group}` or `{nodes}`. Nothing outside moves. |
-| `direction` | Defaults to the view's current one. |
+| `direction` | Overrides the request's `layout.direction`; defaults to the view's current direction when neither is given. |
 | `connectors` | `tidy` (default) re-anchors and drops hand routes; `keep` keeps them; `orthogonal` also makes them right-angled. |
 | `move` | `false` only re-anchors connectors. |
 
@@ -408,10 +415,15 @@ Ids, labels, attachments, note text and flows never change. To keep a shape fixe
 ### Exact placement and routing
 
 Coordinates are view px, as `include: ["geometry"]` reports them.
+Use exact placement for a single row or column: `arrange.direction` sets the reading direction of
+the graph, and can stack several nodes within a layer. For one row, chain `set.place` updates with
+`rightOf` and `align: "center"`; for one column, use `below` instead.
 
 - **`place`** (on create, `add`, or `set.place`): `{x, y}`, or
   `{rightOf | leftOf | above | below: id, gap?, align?}`, plus `width`/`height`. Never smaller than
   the text needs. Groups move with their contents.
+  An omitted `gap` uses an explicitly supplied `layout.spacing`, with room for captions between the
+  two shapes. Without explicit spacing it remains 48 px; a numeric `gap` always wins.
 - **`route`** (on a relationship, or `set.route`): `{from?, to?, via?}`, with sides `top`, `right`,
   `bottom`, `left` and `via` as `[x, y]` bends, as in
   [Bend a connector by hand](../guides/shapes-and-connectors.md#bend-a-connector-by-hand).

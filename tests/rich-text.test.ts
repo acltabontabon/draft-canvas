@@ -248,6 +248,15 @@ describe('Format bar edits', () => {
     expect(apply('- a', toggleLines({ value: '- a', start: 3, end: 3 }, 'task')).value).toBe('- [ ] a');
   });
 
+  it('starts formatting on an empty line, including the first blank line of existing text', () => {
+    expect(apply('', toggleLines({ value: '', start: 0, end: 0 }, 'bullet')).value).toBe('- ');
+    expect(apply('', toggleLines({ value: '', start: 0, end: 0 }, 'h1')).value).toBe('# ');
+    const value = '\nKeep this paragraph';
+    const edit = toggleLines({ value, start: 0, end: 0 }, 'task');
+    expect(edit.from).toBeLessThanOrEqual(edit.to);
+    expect(apply(value, edit).value).toBe('- [ ] \nKeep this paragraph');
+  });
+
   it('continues a list on Enter, and ends it on an empty item', () => {
     expect(apply('1. one', continueOnEnter({ value: '1. one', start: 6, end: 6 })!).value).toBe('1. one\n2. ');
     expect(apply('- [x] done', continueOnEnter({ value: '- [x] done', start: 10, end: 10 })!).value).toBe('- [x] done\n- [ ] ');
@@ -260,9 +269,32 @@ describe('Format bar edits', () => {
     expect(apply(value, continueOnEnter({ value, start: value.length, end: value.length })!).value).toBe(`${value}\n  `);
   });
 
+  it.each(['```', '~~~'])('keeps literal code indentation in a %s fence nested under a list item', (fence) => {
+    const value = `- item\n\n    ${fence}\n    - literal`;
+    expect(parseMarkdown(value)).toContainEqual(expect.objectContaining({ kind: 'code', code: expect.stringMatching(/^ *- literal$/) }));
+    expect(apply(value, continueOnEnter({ value, start: value.length, end: value.length })!).value).toBe(`${value}\n    `);
+  });
+
+  it.each(['```', '~~~'])('keeps code literal after %s inside a longer backtick fence', (inner) => {
+    const value = `\`\`\`\`md\n${inner}\n  - literal`;
+    expect(apply(value, continueOnEnter({ value, start: value.length, end: value.length })!).value).toBe(`${value}\n  `);
+  });
+
+  it('ends fence indentation only at a matching closing fence', () => {
+    const value = '~~~md\n```\n~~~~\n  - item';
+    expect(apply(value, continueOnEnter({ value, start: value.length, end: value.length })!).value).toBe(`${value}\n  - `);
+  });
+
   it('nests and un-nests with Tab', () => {
     expect(apply('- a\n- b', indentLines({ value: '- a\n- b', start: 4, end: 7 }, false)).value).toBe('- a\n  - b');
     expect(apply('- a\n  - b', indentLines({ value: '- a\n  - b', start: 6, end: 9 }, true)).value).toBe('- a\n- b');
+  });
+
+  it('indents the first blank line without duplicating the newline or changing later text', () => {
+    const value = '\nKeep this paragraph';
+    const edit = indentLines({ value, start: 0, end: 0 }, false);
+    expect(edit.from).toBeLessThanOrEqual(edit.to);
+    expect(apply(value, edit).value).toBe('  \nKeep this paragraph');
   });
 
   it('inserts blocks on their own lines with the part to fill in selected', () => {

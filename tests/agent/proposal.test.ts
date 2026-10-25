@@ -64,9 +64,43 @@ describe('prepareProposal', () => {
     const file = base();
     expect(() => prepareProposal(file, [], [{ op: 'update', id: 'api', set: { label: 'Renamed' } }], { viewport: [1600, 900] }, undefined)).not.toThrow();
   });
+
+  it('refuses nonempty operations that would leave the diagram unchanged', () => {
+    const file = base();
+    const arranged = applyUpdate(file, [], [{ op: 'arrange' }], { direction: 'right', spacing: 'spacious' }).file;
+    for (const ops of [[{ op: 'arrange' }], [{ op: 'update', id: 'api', set: { label: 'Orders API' } }]]) {
+      try {
+        prepareProposal(arranged, [], ops, { direction: 'right', spacing: 'spacious' }, undefined);
+        expect.unreachable('expected an unchanged proposal to be refused');
+      } catch (error) {
+        expect(error).toBeInstanceOf(AgentError);
+        expect((error as AgentError).toJSON()).toMatchObject({ code: 'INVALID_INPUT', details: { unchanged: true } });
+      }
+    }
+  });
 });
 
 describe('preconditionConflicts', () => {
+  it('refuses a removal that would also erase an open point added after submission', () => {
+    const file = base();
+    const ops = [{ op: 'remove', ids: ['api'] }];
+    const { preconditions } = prepareProposal(file, [], ops, undefined, undefined);
+    const live: DraftDocument = { ...file, openPoints: [{ id: 'new-question', kind: 'awaiting', context: 'Keep this API?', targets: [{ kind: 'node', id: 'api' }] }] };
+    const proposed = applyUpdate(live, [], ops, undefined).file;
+    expect(proposed.openPoints).toHaveLength(0);
+    expect(preconditionConflicts(live, [], preconditions, proposed)).toEqual([
+      expect.objectContaining({ id: 'new-question', kind: 'open point', was: null }),
+    ]);
+  });
+
+  it('allows new work the proposal leaves untouched', () => {
+    const file = base();
+    const ops = [{ op: 'update', id: 'api', set: { label: 'Renamed' } }];
+    const { preconditions } = prepareProposal(file, [], ops, undefined, undefined);
+    const live: DraftDocument = { ...file, openPoints: [{ id: 'new-question', kind: 'awaiting', targets: [{ kind: 'node', id: 'api' }] }] };
+    expect(preconditionConflicts(live, [], preconditions, applyUpdate(live, [], ops, undefined).file)).toEqual([]);
+  });
+
   it('reports no conflict when nothing referenced has changed', () => {
     const file = base();
     const { preconditions } = prepareProposal(file, [], [{ op: 'update', id: 'api', set: { label: 'Renamed' } }], undefined, undefined);

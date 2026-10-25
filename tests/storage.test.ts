@@ -1096,6 +1096,30 @@ describe('autosave', () => {
     autosave.dispose();
   });
 
+  it('a single flush writes edits queued while it saves before it allows the canvas to close', async () => {
+    const repository = new MemoryRepository();
+    let release: () => void = () => {};
+    const realSave = repository.save.bind(repository);
+    let calls = 0;
+    repository.save = async (doc) => {
+      calls += 1;
+      if (calls === 1) await new Promise<void>((resolve) => (release = resolve));
+      return realSave(doc);
+    };
+    const autosave = new Autosave({ repository, onStateChange: () => {} });
+    const first = documentWith('First');
+    autosave.schedule(first);
+    const flushed = autosave.flush();
+    autosave.schedule({ ...first, metadata: { ...first.metadata, title: 'Last edit' } });
+    release();
+
+    expect(await flushed).toBe(true);
+    autosave.dispose();
+
+    expect((await repository.load(first.metadata.id))!.metadata.title).toBe('Last edit');
+    expect(autosave.hasPendingWork).toBe(false);
+  });
+
   it('keeps a version that failed to write so a later flush reports it unsaved', async () => {
     const repository = new FullRepository();
     const autosave = new Autosave({ repository, onStateChange: () => {}, debounceMs: 0 });

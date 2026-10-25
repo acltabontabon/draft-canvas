@@ -37,12 +37,13 @@ describe('AboutDialog — What\'s New', () => {
     expect(screen.queryByRole('button', { name: /What's New/i })).not.toBeInTheDocument();
   });
 
-  it('opening What\'s New leads with the current release, not CHANGELOG.md, and never a future one', async () => {
+  it('opening What\'s New leads with the latest applicable release, and never a future one', async () => {
     const user = userEvent.setup();
     render(<AboutDialog />);
     await user.click(screen.getByRole('button', { name: /What's New/i }));
 
-    expect(screen.getByRole('heading', { name: `v${PRODUCT.version}` })).toBeInTheDocument();
+    const latest = applicableReleases(PRODUCT.version)[0]!;
+    expect(screen.getByRole('heading', { name: `v${latest.version}` })).toBeInTheDocument();
 
     // A release curated ahead of shipping must never surface. Asserted against the catalog
     // itself rather than a hard-coded version, so this can't quietly expire the way pinning it
@@ -54,11 +55,12 @@ describe('AboutDialog — What\'s New', () => {
     }
   });
 
-  it('moves focus to the current release heading when opening What\'s New', async () => {
+  it('moves focus to the latest applicable release heading when opening What\'s New', async () => {
     const user = userEvent.setup();
     render(<AboutDialog />);
     await user.click(screen.getByRole('button', { name: /What's New/i }));
-    expect(screen.getByRole('heading', { name: `v${PRODUCT.version}` })).toHaveFocus();
+    const latest = applicableReleases(PRODUCT.version)[0]!;
+    expect(screen.getByRole('heading', { name: `v${latest.version}` })).toHaveFocus();
   });
 
   it('marks the release as seen on open, clearing the unread state', async () => {

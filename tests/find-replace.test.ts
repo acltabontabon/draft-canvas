@@ -4,6 +4,8 @@ import { addNodes, countLabelMatches, replaceLabels } from '../src/document/oper
 import type { DraftDocument } from '../src/document/types';
 import { viewOf } from '../src/depth/tree';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
+import { LIMITS } from '../src/document/limits';
+import { parseDocument } from '../src/document/validate';
 
 /** A root with "Orders API" owning a room that holds "Orders worker" and a flow "Place order". */
 function twoRooms(): DraftDocument {
@@ -51,6 +53,36 @@ describe('replaceLabels', () => {
     // `$&` in the replacement is text, not a back-reference.
     expect(replaceLabels(doc, 'DB', '$&!').doc.nodes[1]!.text).toBe('Orders $&!');
   });
+
+  it('keeps replacements within the text limits the next load preserves', () => {
+    const doc = twoRooms();
+    doc.edges = [{ id: 'e1', source: doc.nodes[0]!.id, target: doc.nodes[1]!.id, directed: true, routing: 'smoothstep', label: 'Orders' }];
+    doc.flows = [{ id: 'f1', title: 'Orders', steps: [] }];
+    const result = replaceLabels(doc, 'Orders', `\u0000${'x'.repeat(LIMITS.maxTextLength + 1)}`);
+
+    expect(result.doc.nodes[0]!.text).toHaveLength(LIMITS.maxTextLength);
+    expect(result.doc.edges[0]!.label).toHaveLength(LIMITS.maxLabelLength);
+    expect(result.doc.flows[0]!.title).toHaveLength(LIMITS.maxFlowTitleLength);
+    const reopened = parseDocument(result.doc);
+    expect(reopened.ok).toBe(true);
+    if (reopened.ok) expect(reopened.repairs).toEqual([]);
+  });
+
+  it('preserves document identity when replacements leave the text unchanged', () => {
+    const doc = twoRooms();
+    expect(replaceLabels(doc, 'Orders', 'Orders').doc).toBe(doc);
+  });
+
+  it('bounds repeated expansions and keeps an emptied flow title usable after reopening', () => {
+    const node = createNode({ type: 'text', x: 0, y: 0, text: 'a'.repeat(LIMITS.maxTextLength) });
+    const doc = addNodes(createDocument(), [node]);
+    doc.flows = [{ id: 'f1', title: 'Remove', steps: [] }];
+
+    const expanded = replaceLabels(doc, 'a', 'b'.repeat(LIMITS.maxTextLength));
+    expect(expanded.count).toBe(LIMITS.maxTextLength);
+    expect(expanded.doc.nodes[0]!.text).toBe('b'.repeat(LIMITS.maxTextLength));
+    expect(replaceLabels(doc, 'Remove', '').doc.flows[0]!.title).toBe('Untitled flow');
+  });
 });
 
 describe('findAndReplace (store)', () => {
@@ -95,5 +127,21 @@ describe('findAndReplace (store)', () => {
   it('records nothing when nothing matches', () => {
     expect(useEditorStore.getState().findAndReplace('inventory', 'stock')).toBe(0);
     expect(useEditorStore.getState().history.past).toHaveLength(0);
+  });
+
+  it('records nothing when a replacement leaves every matching label unchanged', () => {
+    expect(useEditorStore.getState().findAndReplace('Orders', 'Orders', { matchCase: true })).toBe(0);
+    expect(useEditorStore.getState().history.past).toHaveLength(0);
+  });
+
+  it('keeps a replaced automatic label when its shape kind changes later', () => {
+    const node = createNode({ type: 'service', serviceKind: 'api', x: 0, y: 0 });
+    useEditorStore.getState().setDocument(addNodes(createDocument(), [node]));
+
+    expect(useEditorStore.getState().findAndReplace(node.text!, 'Orders')).toBe(1);
+    useEditorStore.getState().updateNodeById(node.id, { serviceKind: 'worker' });
+
+    expect(useEditorStore.getState().document.nodes[0]!.text).toBe('Orders');
+    expect(useEditorStore.getState().document.nodes[0]!.textOrigin).toBe('explicit');
   });
 });
