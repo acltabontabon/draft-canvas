@@ -8,34 +8,20 @@ The retired VS Code extension has [its own changelog](https://github.com/acltabo
 
 ## [Unreleased]
 
-### Shared
-
-#### Fixed
-
-- Find and Replace preserves custom names, respects text limits and avoids empty undo steps.
-- Text formatting works on blank first lines and preserves literal Markdown fences while typing.
-- Finding a flow frames every participating shape, including extra connectors.
-- Collaboration takes back edits that cannot be shared after a gesture ends or editing access
-  changes, and large shared flows keep all their valid shape references.
-
-### Desktop
-
-#### Fixed
-
-- Proposal previews show text styling changes and keep their review card clear of Depth and Nodi.
-- The update dialog's full changelog link opens once in the system browser.
-- Proposal acceptance protects newer work attached to shapes it would remove.
-- Agent edits clear selection for elements they replace, even when the element count stays the same.
-
 ## [1.16.1] - 2026-10-25
 
-Fixes for diagram editing, saving and token reporting.
+Fixes for diagram editing, saving, collaboration and Nodi.
 
 ### Shared
 
 #### Fixed
 
 - Closing or reloading waits for the latest edits to finish saving.
+- Find and Replace preserves custom names and text limits without empty undo steps; Markdown editing
+  handles blank first lines and literal fences.
+- Flow search frames every participating shape, including extra connectors.
+- Collaboration rolls back edits that cannot be shared and keeps all valid references in large flows.
+- Share dialogs use a clearer starting-view selector.
 
 ### Desktop
 
@@ -45,7 +31,10 @@ Fixes for diagram editing, saving and token reporting.
   agents keeps each conversation, while questions and follow-ups avoid unintended edits. <!-- highlight -->
 - Layout requests honor rows, columns and spacing; short confirmations and layout feedback continue
   the task instead of stopping at an answer or an unchanged proposal.
+- Proposal previews show text styling changes and keep review controls clear of Depth and Nodi.
+- Agent reviews protect newer attached work, and replacing elements clears stale selections.
 - **Clearer token usage** — Totals count each turn once, with a breakdown on hover or focus. <!-- highlight -->
+- The update dialog opens changelog links once in the system browser.
 
 ## [1.16.0] - 2026-10-25
 
