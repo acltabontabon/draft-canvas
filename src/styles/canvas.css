@@ -2235,11 +2235,15 @@
 .dc-edge-inspector-caption,
 /* Said under a connector's controls when no clear line could be drawn; the quiet buttons after it
    let its pinned ends attach automatically. */
+.dc-edge-inspector-blocked {
+  flex-wrap: wrap;
+}
+
 .dc-edge-inspector-blocked-text {
-  padding: 0 6px;
+  flex: 1 1 100%;
+  padding: 2px 6px;
   color: var(--dc-text-muted);
   font-size: var(--dc-popover-font);
-  white-space: nowrap;
 }
 
 .dc-edge-inspector-flows {

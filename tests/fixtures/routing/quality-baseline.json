@@ -433,9 +433,9 @@
   },
   "gallery/09-incremental-pinned": {
     "obstruction": 0,
-    "overlap": 90,
-    "crossings": 1,
-    "cost": 2669,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 2689,
     "violations": {
       "endpoint": 0,
       "continuity": 0,
@@ -446,7 +446,7 @@
       "blocked": 0,
       "budget": 0,
       "crowded": 0,
-      "skipped": 1
+      "skipped": 0
     }
   },
   "gallery/10-dense": {

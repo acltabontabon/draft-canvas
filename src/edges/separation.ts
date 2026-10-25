@@ -207,27 +207,34 @@ function compute(nodes: readonly DraftNode[], edges: readonly DraftEdge[], scope
       skipped += 1;
       continue;
     }
-    let kept = false;
-    const attempts = [SPACING, NARROW_SPACING].flatMap((spacing) => orders(component).map((order) => place(order, spacing)));
-    for (const proposal of attempts) {
-      if (!proposal) continue;
-      const result = check(proposal, lines, together);
-      work += result.work;
-      if (!result.ok) continue;
-      for (const [line, corners] of result.shifted) {
-        line.corners = corners;
-        line.bounds = boundsOf(corners);
+    // Every order at the wider spacing first; of those that pass, the one leaving the fewest
+    // crossings — two lines that turn alike nest without crossing only one way round, and the first
+    // order to pass is not always that one. The narrower spacing only when the wider can't pass.
+    let best: { proposal: Map<Run, number>; result: ReturnType<typeof check> } | undefined;
+    for (const spacing of [SPACING, NARROW_SPACING]) {
+      for (const order of orders(component)) {
+        const proposal = place(order, spacing);
+        if (!proposal) continue;
+        const result = check(proposal, lines, together);
+        work += result.work;
+        if (result.ok && (!best || result.crossings < best.result.crossings)) best = { proposal, result };
       }
-      for (const [run, delta] of proposal) {
-        if (!delta) continue;
-        const map = shifts.get(run.line) ?? new Map<number, number>();
-        map.set(run.index, (map.get(run.index) ?? 0) + delta);
-        shifts.set(run.line, map);
-      }
-      kept = true;
-      break;
+      if (best) break;
     }
-    if (!kept) skipped += 1;
+    if (!best) {
+      skipped += 1;
+      continue;
+    }
+    for (const [line, corners] of best.result.shifted) {
+      line.corners = corners;
+      line.bounds = boundsOf(corners);
+    }
+    for (const [run, delta] of best.proposal) {
+      if (!delta) continue;
+      const map = shifts.get(run.line) ?? new Map<number, number>();
+      map.set(run.index, (map.get(run.index) ?? 0) + delta);
+      shifts.set(run.line, map);
+    }
   }
 
   if (shifts.size === 0) return skipped ? { tracksFor: () => undefined, skipped } : EMPTY;
@@ -355,7 +362,7 @@ function orders(component: readonly Run[]): Run[][] {
 }
 
 /** A proposal's lines, shifted, if every one passes the checks in this module's comment. */
-function check(proposal: ReadonlyMap<Run, number>, lines: readonly Line[], together: (a: Line, b: Line) => boolean): { ok: boolean; shifted: Map<Line, Point[]>; work: number } {
+function check(proposal: ReadonlyMap<Run, number>, lines: readonly Line[], together: (a: Line, b: Line) => boolean): { ok: boolean; shifted: Map<Line, Point[]>; work: number; crossings: number } {
   const byLine = new Map<Line, Track[]>();
   for (const [run, delta] of proposal) {
     if (!delta) continue;
@@ -367,7 +374,7 @@ function check(proposal: ReadonlyMap<Run, number>, lines: readonly Line[], toget
   let work = 0;
   for (const [line, tracks] of byLine) {
     const corners = shiftRuns(line.corners, tracks);
-    if (!corners) return { ok: false, shifted, work };
+    if (!corners) return { ok: false, shifted, work, crossings: Infinity };
     // The runs either side still run the same way, with room for their corners.
     for (let i = 1; i < corners.length; i += 1) {
       const [a0, a1, b0, b1] = [line.corners[i - 1]!, line.corners[i]!, corners[i - 1]!, corners[i]!];
@@ -375,12 +382,12 @@ function check(proposal: ReadonlyMap<Run, number>, lines: readonly Line[], toget
       const after = Math.hypot(b1.x - b0.x, b1.y - b0.y);
       if (before === after) continue;
       const sameWay = Math.sign(a1.x - a0.x) === Math.sign(b1.x - b0.x) && Math.sign(a1.y - a0.y) === Math.sign(b1.y - b0.y);
-      if (!sameWay || after < MIN_LEG) return { ok: false, shifted, work };
+      if (!sameWay || after < MIN_LEG) return { ok: false, shifted, work, crossings: Infinity };
     }
     // Checked as drawn: rounded corners cut inside the square ones.
     const drawn = flattenPath(roundedStepPath(corners, 10));
     work += line.blockers.length * drawn.length;
-    if (!polylineClear(drawn, line.blockers)) return { ok: false, shifted, work };
+    if (!polylineClear(drawn, line.blockers)) return { ok: false, shifted, work, crossings: Infinity };
     shifted.set(line, corners);
   }
   // Against every line nearby: no new crossing, and no new stretch drawn on top of another line.
@@ -400,10 +407,10 @@ function check(proposal: ReadonlyMap<Run, number>, lines: readonly Line[], toget
       crossingsBefore += crossingsOf(line.corners, other.corners);
       crossingsAfter += crossingsOf(now(line), now(other));
       if (together(line, other) && line.edge !== other.edge) continue;
-      if (sharedLength(now(line), now(other)) > sharedLength(line.corners, other.corners) + 0.5) return { ok: false, shifted, work };
+      if (sharedLength(now(line), now(other)) > sharedLength(line.corners, other.corners) + 0.5) return { ok: false, shifted, work, crossings: Infinity };
     }
   }
-  return { ok: crossingsAfter <= crossingsBefore, shifted, work };
+  return { ok: crossingsAfter <= crossingsBefore, shifted, work, crossings: crossingsAfter };
 }
 
 /** Where two polylines properly cross, away from each segment's ends. */
