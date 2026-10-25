@@ -38,6 +38,7 @@ import { pointer, useUiStore, type ContextMenuTarget } from '../../store/uiStore
 import { useCollabStore } from '../../store/collabStore';
 import { END_MESSAGES } from '../collab/collabCopy';
 import { PresenceDock } from '../collab/PresenceDock';
+import { SessionEnded } from '../collab/SessionEnded';
 import type { DocumentSession } from '../../store/useDocumentSession';
 import { useFlowPlayback } from '../../presentation/useFlowPlayback';
 import { presentationScope, revealIn } from '../../presentation/presentationAttachments';
@@ -162,6 +163,9 @@ function EditorScreen({ session }: { session: DocumentSession }) {
   const collabStatus = useCollabStore((state) => state.status);
   const collabGuest = useCollabStore((state) => state.role === 'guest');
   const collabEnd = useCollabStore((state) => state.endReason);
+  // The session ended on this collaborator (not left on purpose): the copy on screen is nobody's
+  // file now, so the canvas closes behind a card rather than staying there to fiddle with.
+  const sessionOver = collabGuest && collabStatus === 'ended' && collabEnd !== null && readOnly?.collaborative === true;
   const onCollabFailed = useCallback((error: Error, componentStack: string) => {
     logDiagnostic(error, { operation: 'collab-panel' }, componentStack);
     CollaborateChunk.reset();
@@ -544,9 +548,10 @@ function EditorScreen({ session }: { session: DocumentSession }) {
       data-tracing={tracing || undefined}
       data-armed={armed ? 'true' : undefined}
       data-reconnecting={reconnecting ? 'true' : undefined}
+      data-session-ended={sessionOver ? 'true' : undefined}
     >
       {!presenting && (
-        <div style={{ display: 'contents' }} inert={tracing}>
+        <div style={{ display: 'contents' }} inert={tracing || sessionOver}>
         <Toolbar
           title={title}
           onTitleChange={rename}
@@ -558,9 +563,9 @@ function EditorScreen({ session }: { session: DocumentSession }) {
         </div>
       )}
 
-      <div className="dc-editor-body">
+      <div className="dc-editor-body" inert={sessionOver}>
         <div className="dc-editor-canvas">
-          {readOnly && !presenting && (
+          {readOnly && !presenting && !sessionOver && (
             <div className="dc-read-only-banner" role="status">
               <span>
                 {!readOnly.collaborative
@@ -693,11 +698,21 @@ function EditorScreen({ session }: { session: DocumentSession }) {
         {!presenting && <OutlinePanel buildCommandContext={buildCommandContext} />}
       </div>
 
+      <div style={{ display: 'contents' }} inert={sessionOver}>
       <StatusBar
         durable={session.durable}
         presenting={presenting}
         onResolveConflict={(choice) => void session.resolveConflict(choice)}
       />
+      </div>
+      {sessionOver && (
+        <SessionEnded
+          // As the banner offers it: over the local network link's plain-http page, an export.
+          exportOnly={!window.isSecureContext}
+          onKeep={() => (window.isSecureContext ? void session.makeEditableCopy() : setExportOpen(true))}
+          onHome={() => returnHome(session.closeDocument)}
+        />
+      )}
 
       <ShortcutSheet />
       {exportMounted && (

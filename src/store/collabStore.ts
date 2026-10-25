@@ -21,6 +21,11 @@ export interface CollabState {
   status: SessionStatus;
   /** Why the session ended, while the banner saying so is up. */
   endReason: EndReason | null;
+  /**
+   * A collaborator's: who owned the session that just ended, for the card that says so — everyone
+   * else is cleared from `peers` the moment it ends.
+   */
+  endedOwner: { name: string; color: number } | null;
   /** This copy's id in the session; the owner's is fixed. */
   selfId: string | null;
   /** The name this person goes by in the session. */
@@ -72,6 +77,7 @@ export const COLLAB_AT_REST: CollabState = {
   role: 'off',
   status: 'idle',
   endReason: null,
+  endedOwner: null,
   selfId: null,
   selfName: '',
   selfColor: 0,

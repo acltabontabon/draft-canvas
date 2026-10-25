@@ -15,6 +15,11 @@ The retired VS Code extension has [its own changelog](https://github.com/acltabo
 - **Traffic** — Show traffic on the canvas to see drawn paths, flowing light, handwritten findings
   and open questions. Nothing is saved or shared.
 
+#### Changed
+
+- When a live session ends on a collaborator, their canvas closes behind a card that says why, with
+  the choice to keep a copy or go home. Someone the owner removes can only go home.
+
 ## [1.16.1] - 2026-10-25
 
 Fixes for diagram editing, saving, collaboration and Nodi.
