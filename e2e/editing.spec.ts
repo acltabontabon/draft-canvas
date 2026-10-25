@@ -288,6 +288,8 @@ test.describe('editing', () => {
     await page.mouse.move(corner.x + corner.width / 2, corner.y + corner.height / 2);
     await page.mouse.down();
     await page.mouse.move(targetRight, corner.y + corner.height / 2, { steps: 12 });
+    // WebKit can coalesce the final resize move; let it land before ending the gesture.
+    await nextFrames(page);
 
     // Both nodes share a height, so the unmoved bottom edge coincidentally
     // lines up with the neighbour's too — assert the x-axis guide this test
@@ -295,10 +297,12 @@ test.describe('editing', () => {
     await expect(page.locator('.dc-guide[data-axis="x"]')).toHaveCount(1);
     await page.mouse.up();
 
-    const after = (await resizing.boundingBox())!;
     // Pulled flush against the neighbour's left edge, not left a few pixels short.
-    expect(Math.abs(after.x + after.width - neighbour.x)).toBeLessThan(1.5);
-    expect(after.width).toBeGreaterThan(before.width);
+    await expect.poll(async () => {
+      const after = (await resizing.boundingBox())!;
+      return Math.abs(after.x + after.width - neighbour.x);
+    }).toBeLessThan(1.5);
+    expect((await resizing.boundingBox())!.width).toBeGreaterThan(before.width);
   });
 
   test('opening a diagram never shows stray guides for nodes that already line up', async ({ page }) => {

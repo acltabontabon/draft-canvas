@@ -326,6 +326,10 @@ test.describe('contextual connector toolbar', () => {
     await page.locator('.dc-node').nth(2).click();
 
     await expect(page.locator('.dc-edge-line')).toHaveCount(3);
+    // Connecting closes the inspector; reopen the parent before reading its recovery actions.
+    await expect(page.locator('.dc-edge-inspector')).toHaveCount(0);
+    const reopenedPoint = await captionPoint(page.locator('.dc-edge-caption').first());
+    await page.mouse.click(reopenedPoint.x, reopenedPoint.y);
     await expect(page.locator('.dc-recovery-action')).toHaveCount(2);
     await expect(page.locator('.dc-edge-caption').first()).toContainText('calls over HTTP');
   });
