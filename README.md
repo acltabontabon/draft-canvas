@@ -17,19 +17,13 @@ is yours to review.
 
 ## What it can do
 
-- **C4-aware.** Move from System Context to Containers to Components, and look inside services
-  without losing context.
-- **Tech-aware shapes.** Model services, APIs, workers, stores, queues, actors, and boundaries;
-  add technologies like Postgres or Rust.
-- **Presentation flows.** Trace requests through connectors and present happy or failure paths step
-  by step.
-- **Bring your own agent.** Connect Claude Code, Codex, Cursor, Gemini CLI, Junie, or any MCP client;
-  review proposed changes on the canvas.
-- **Live collaboration.** Share a canvas, control view/edit access, see pointers, and follow
-  presentations.
-- **Context for decisions.** Attach rich-text notes, code, source references, and open questions.
-- **Import and export.** Start with Mermaid; export images, editable files, Mermaid, PlantUML,
-  Structurizr, or draw.io.
+- **C4-aware.** System Context, Containers, Components, and nested views.
+- **Tech-aware shapes.** Services, APIs, workers, stores, queues, actors, and boundaries.
+- **Presentation flows.** Trace and present happy or failure paths.
+- **Bring your own agent.** Connect Claude Code, Codex, Cursor, or any MCP client.
+- **Live collaboration.** Share, manage access, and follow presentations.
+- **Context for decisions.** Notes, code, sources, and open questions.
+- **Import and export.** Mermaid, PlantUML, Structurizr, draw.io, images, and editable files.
 
 ## Get started
 
