@@ -169,6 +169,9 @@ describe('reviewing in the companion card', () => {
     const controller = fakeController(proposalFor([{ op: 'update', id: 'db', set: { label: 'Orders DB (primary)' } }]));
     const { unmount } = mount(controller);
     await acceptButton();
+    // Under a loaded run the companion's own preview could land after the takeover below, so the
+    // panel took over nothing and the companion's unmount then cleared its own late preview.
+    await waitFor(() => expect(useUiStore.getState().proposalPreview).toMatchObject({ proposalId: 'p1', owner: 'companion' }));
     // The panel takes the same proposal over, as it does when Details opens it.
     act(() => useUiStore.setState({ proposalPreview: { ...useUiStore.getState().proposalPreview!, owner: 'panel' } }));
     unmount();

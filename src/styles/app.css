@@ -5615,9 +5615,12 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   padding: 6px 10px;
   }
 
+  /* The undo, zoom and help cluster already fills a phone's bar; the Traffic chip pushed it over
+     "Saved locally". Traffic stays in the canvas menu and ⌘K. */
   .dc-status-hint,
   .dc-status-right > .dc-muted,
-  .dc-status-right > .dc-inspector-divider {
+  .dc-status-right > .dc-inspector-divider,
+  .dc-status-right > button.dc-status-traffic {
   display: none;
   }
 

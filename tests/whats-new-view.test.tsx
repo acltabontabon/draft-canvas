@@ -117,7 +117,7 @@ describe('AboutDialog — What\'s New', () => {
 
     expect(screen.getByRole('heading', { name: `v${recent.version}` })).toBeInTheDocument();
     // A release summary may repeat a highlight's title; verify the actual highlight list.
-    expect(within(screen.getByRole('list')).getByText(recent.highlights[0]!.title, { exact: false })).toBeInTheDocument();
+    expect(within(screen.getByRole('list')).getByText(recent.highlights[0]!.title, { exact: true })).toBeInTheDocument();
   });
 
   it('a release reached directly from What\'s New backs up into What\'s New, not Release History', async () => {

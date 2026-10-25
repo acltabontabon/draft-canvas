@@ -85,6 +85,8 @@ async function openOrders(browser: Browser): Promise<Page> {
   await page.evaluate((text) => {
     window.__shell.addFile('Order processing', text);
     window.__shell.setAgent({ enabled: true, listening: true });
+    // Nodi asks for the diagram's folder as an agent project before it takes a message.
+    window.__shell.seed({ projects: [{ name: 'work', path: '~/work', agent: true, diagrams: [] }] });
   }, text);
   await page.getByRole('button', { name: 'Open file…' }).click();
   await chooseWorkFile(page, 'Order processing');

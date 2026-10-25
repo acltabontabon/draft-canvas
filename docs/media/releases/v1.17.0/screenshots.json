@@ -1,0 +1,17 @@
+[
+  {
+    "file": "traffic.png",
+    "alt": "Traffic shown on the Microservices starter, with paths converging on the gateway and findings written on the canvas.",
+    "platform": "shared"
+  },
+  {
+    "file": "compensating-actions.png",
+    "alt": "A compensating action selected on the Saga orchestration starter, with its compact card open to name the undo action and choose its route.",
+    "platform": "shared"
+  },
+  {
+    "file": "agent-editing-parity.png",
+    "alt": "Nodi proposes compensating actions for a checkout: refund the card and release the stock, ready to compare and accept.",
+    "platform": "desktop"
+  }
+]

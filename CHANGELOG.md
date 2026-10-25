@@ -8,48 +8,54 @@ The retired VS Code extension has [its own changelog](https://github.com/acltabo
 
 ## [Unreleased]
 
+## [1.17.0] - 2026-10-25
+
+See where traffic meets. Plan the recovery for every call.
+
+Traffic shows how paths converge, with findings written on the canvas. Compensating actions draw
+the recovery for each call, and agents can edit them too.
+
 ### Shared
 
 #### Added
 
-- **Traffic** — Show traffic on the canvas to see drawn paths, flowing light, handwritten findings
-  and open questions. Nothing is saved or shared.
-- **Compensating actions** — Click **+ Add** on an interaction, then choose a target shape on the
-  canvas. Hover either arrow to light up the linked pair and see the original call in a tooltip.
-  A compact companion card edits the action and its route, with direct protocol choices and a
-  subtle thread back to the selected recovery.
-- **Agent editing parity** — MCP agents and Nodi can create, read and update a linked recovery's
-  parent call, business name, counteraction protocol, description and visible arrow state.
+- **Traffic** — See where a diagram's traffic meets: drawn paths, flowing light, handwritten
+  findings and open questions. Nothing is saved or shared. <!-- highlight -->
+- **Compensating actions** — Add the recovery for any interaction, then edit its protocol and route
+  in a compact card. Hover either arrow to light up the linked pair. <!-- highlight -->
 
 #### Changed
 
-- Connector editing puts the operation and editable reply together, gives a new reply a useful
-  default, and keeps route previews, arrowhead, colour, condition and flow controls in one compact
-  rail with tooltips.
-- A selected shape now has a compact two-row card: colour, kind, technology and quick edits above
-  its canvas actions. Simple marks get a content-sized card. Details use the card's full width
-  without an overflow menu. Compact shape cards fit their contents, and dragging a card's top edge
-  moves the shape or connector editor; the counteraction companion follows its parent. Clicking
-  empty canvas dismisses them.
-- When a live session ends on a collaborator, their canvas closes behind a card that says why, with
-  the choice to keep a copy or go home. Someone the owner removes can only go home.
+- Connector editing keeps an operation and its reply together, with route, arrowhead, colour,
+  condition and flow controls in one compact rail.
+- A selected shape shows a compact card with its colour, kind, technology and quick edits above its
+  canvas actions. Clicking empty canvas dismisses it.
+- When a live session ends, a collaborator's canvas closes behind a card that says why, with the
+  choice to keep a copy or go home.
+- Diagrams save in a newer file format. Older versions of Draft Canvas won't open a canvas saved by
+  this one, and say so rather than losing what's inside it.
 
 #### Fixed
 
-- Collaboration bounds edits waiting for confirmation during long outages and correctly paces
-  non-ASCII text, preserving earlier pending work when the backlog fills.
+- Long collaboration outages no longer let edits waiting for confirmation pile up without limit.
+  Earlier pending work is kept, and non-ASCII text is paced correctly.
+- Resized actor, queue and data store artwork fills its shape.
 
 ### Desktop
 
+#### Added
+
+- **Agent editing parity** — MCP agents and Nodi can create and edit a compensating action's parent
+  call, business name, protocol, description and arrow state. <!-- highlight -->
+
 #### Fixed
 
-- Stalled MCP connections release queued calls and close cleanly; retries keep their existing
-  request-id protection. Stopping an agent or turning access off also cancels work still connecting
-  or preparing, including after its client disconnects.
-- Nodi keeps streamed replies in order during cancellation and bounds conversation memory while
-  preserving active turns and accumulated usage totals.
-- Agent skill updates preserve customized links and backups, bound inspection of modified copies,
-  and skip named pipes and other nonregular files when surveying a repository.
+- Stalled agent connections release their queued calls and close cleanly. Stopping an agent or
+  turning access off also cancels work still connecting.
+- Nodi keeps streamed replies in order when you cancel, and keeps long conversations from growing
+  memory without limit.
+- Agent skill updates keep customized links and backups, and skip special files when scanning a
+  repository.
 
 ## [1.16.1] - 2026-10-25
 
@@ -2384,7 +2390,8 @@ pre-release milestone; this is the one meant for real use.
 - Fully local and private by design — no accounts, no cloud sync, nothing you draw ever leaves
   your device. Documents are encrypted at rest in your browser.
 
-[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.16.1...main
+[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.17.0...main
+[1.17.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.16.1...v1.17.0
 [1.16.1]: https://github.com/acltabontabon/draft-canvas/compare/v1.16.0...v1.16.1
 [1.16.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.15.2...v1.16.0
 [1.15.2]: https://github.com/acltabontabon/draft-canvas/compare/v1.15.1...v1.15.2
