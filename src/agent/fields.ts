@@ -43,7 +43,7 @@ export const SET_FIELDS = {
   note: ['label', 'text', 'kind', 'about', 'near', 'group', 'color', 'attach', 'place'],
   code: ['code', 'language', 'kind', 'about', 'near', 'group', 'color', 'attach', 'place'],
   label: ['label', 'text', 'kind', 'style', 'about', 'near', 'group', 'color', 'attach', 'place'],
-  relationship: ['label', 'semantic', 'kind', 'directed', 'async', 'condition', 'color', 'lineStyle', 'response', 'deliveryAttempts', 'from', 'to', 'evidence', 'route'],
+  relationship: ['label', 'semantic', 'kind', 'directed', 'async', 'condition', 'color', 'lineStyle', 'response', 'deliveryAttempts', 'from', 'to', 'compensationFor', 'compensationVisible', 'compensationName', 'compensationProtocol', 'compensationDescription', 'evidence', 'route'],
   flow: ['title', 'color', 'steps', 'variantOf'],
   attachment: ['label', 'text', 'kind', 'code', 'language', 'about', 'attach'],
   openPoint: ['kind', 'context', 'resolved', 'resolution', 'about'],
@@ -54,7 +54,7 @@ export const CREATE_FIELDS = {
   request: ['requestId', 'title', 'project', 'starter', ...ROOM_FIELDS, 'layout', 'open', 'allowDuplicateTitle', 'fallbackType'],
   group: ['id', 'label', 'kind', 'parent'],
   element: ['id', 'type', 'label', 'description', 'technology', 'group', 'color', 'attachments', 'inside', 'evidence', 'place'],
-  relationship: ['id', 'from', 'to', 'label', 'semantic', 'kind', 'directed', 'async', 'condition', 'color', 'lineStyle', 'response', 'deliveryAttempts', 'attachments', 'evidence', 'route'],
+  relationship: ['id', 'from', 'to', 'label', 'semantic', 'kind', 'directed', 'async', 'condition', 'color', 'lineStyle', 'response', 'deliveryAttempts', 'compensationFor', 'compensationVisible', 'compensationName', 'compensationProtocol', 'compensationDescription', 'attachments', 'evidence', 'route'],
   flow: ['id', 'title', 'color', 'variantOf', 'steps'],
   note: ['id', 'text', 'kind', 'code', 'language', 'about', 'near', 'attach', 'style'],
 } as const;

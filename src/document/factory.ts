@@ -359,6 +359,11 @@ export interface CreateEdgeInput {
   targetAnchor?: EdgeAnchor;
   kind?: ConnectorKind;
   semantic?: EdgeSemantic;
+  compensationFor?: string;
+  compensationVisible?: boolean;
+  compensationName?: string;
+  compensationProtocol?: DraftEdge['compensationProtocol'];
+  compensationDescription?: string;
   hasResponse?: boolean;
   semanticsOrigin?: DraftEdge['semanticsOrigin'];
   /** Set only when the user has explicitly taken this connector's routing over
@@ -385,6 +390,11 @@ export function createEdge(input: CreateEdgeInput): DraftEdge {
   if (input.targetAnchor) edge.targetAnchor = input.targetAnchor;
   if (input.kind) edge.kind = input.kind;
   if (input.semantic) edge.semantic = input.semantic;
+  if (input.compensationFor) edge.compensationFor = input.compensationFor;
+  if (input.compensationVisible !== undefined) edge.compensationVisible = input.compensationVisible;
+  if (input.compensationName) edge.compensationName = input.compensationName;
+  if (input.compensationProtocol) edge.compensationProtocol = input.compensationProtocol;
+  if (input.compensationDescription) edge.compensationDescription = input.compensationDescription;
   if (input.hasResponse) edge.hasResponse = input.hasResponse;
   if (input.semanticsOrigin) edge.semanticsOrigin = input.semanticsOrigin;
   if (input.routeMode) edge.routeMode = input.routeMode;

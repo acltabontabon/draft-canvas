@@ -299,8 +299,7 @@ async function technologyScreenshots(page: Page) {
   await title.fill('Technology at a glance');
   await title.blur();
   await drop(page, 'd', { x: 420, y: 310 }, 'Orders');
-  await page.locator('.dc-element-inspector').getByRole('button', { name: 'More options' }).click();
-  await page.getByRole('menuitem', { name: 'Edit details…' }).click();
+  await page.locator('.dc-element-inspector').getByRole('button', { name: 'Add technology' }).click();
   const technology = page.getByRole('combobox', { name: 'Technology', exact: true });
   await technology.fill('Postgres');
   await expect(page.getByRole('option', { name: 'PostgreSQL', exact: true })).toBeVisible();
@@ -309,8 +308,7 @@ async function technologyScreenshots(page: Page) {
   await page.locator(CANVAS).click({ position: { x: 12, y: 12 } });
 
   await drop(page, 's', { x: 720, y: 310 }, 'Internal worker');
-  await page.locator('.dc-element-inspector').getByRole('button', { name: 'More options' }).click();
-  await page.getByRole('menuitem', { name: 'Edit details…' }).click();
+  await page.locator('.dc-element-inspector').getByRole('button', { name: 'Add technology' }).click();
   await technology.fill('Private runtime');
   await technology.press('Enter');
   await page.locator(CANVAS).click({ position: { x: 12, y: 12 } });
@@ -495,15 +493,15 @@ async function main() {
     // Two connectors become a flow.
     await clickConnector(page, 0, 1);
     const inspector = page.locator('.dc-edge-inspector');
-    await expect(inspector.getByText('Add to flow', { exact: true })).toBeVisible();
+    await expect(inspector.getByRole('button', { name: 'Add to flow' })).toBeVisible();
     await shot(page, 'add-to-flow');
-    await inspector.getByText('Add to flow', { exact: true }).click();
+    await inspector.getByRole('button', { name: 'Add to flow' }).click();
     // The flow's name field opens with its default selected, so typing replaces it.
     await page.keyboard.type('Place an order');
     await page.keyboard.press('Enter');
     await page.keyboard.press('Escape');
     await page.locator('.dc-edge text', { hasText: 'consumed by' }).click({ force: true });
-    await inspector.getByText('Add to Place an order', { exact: true }).click();
+    await inspector.getByRole('button', { name: 'Add to Place an order' }).click();
     await page.mouse.click(700, 560); // empty canvas: deselect, leaving the Flows panel open
     await shot(page, 'flows-panel');
 

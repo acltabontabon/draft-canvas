@@ -115,6 +115,11 @@ export interface RelationshipSpec {
   attachments?: AttachmentSpec[];
   /** Its sides and bends, when the request says — see `placement.ts`. */
   route?: RouteSpec;
+  compensationFor?: string;
+  compensationVisible?: boolean;
+  compensationName?: string;
+  compensationProtocol?: 'http' | 'calls' | 'grpc';
+  compensationDescription?: string;
 }
 
 export interface GroupSpec {
@@ -385,7 +390,7 @@ export interface RoomContext {
   taken: Set<string>;
   /** Elements, groups and relationships already in the room being edited (updates only), and its
    *  flows (each with the flow it is a variant of, if any). */
-  existing?: { elements: Set<string>; groups: Set<string>; relationships: Set<string>; flows?: ReadonlyMap<string, string | undefined> };
+  existing?: { elements: Set<string>; groups: Set<string>; relationships: Set<string>; relationshipSemantics?: ReadonlyMap<string, EdgeSemantic | undefined>; flows?: ReadonlyMap<string, string | undefined> };
   depth: number;
   fallbackType?: NativeShape;
 }
@@ -515,6 +520,11 @@ export function readRoom(r: Reader, raw: Json, path: string, ctx: RoomContext): 
     const lineStyle = r.oneOf(item.lineStyle, `${at}/lineStyle`, LINE_STYLE_NAMES);
     const response = readResponse(r, item.response, `${at}/response`);
     const deliveryAttempts = readDeliveryAttempts(r, item.deliveryAttempts, `${at}/deliveryAttempts`);
+    const compensationFor = r.text(item.compensationFor, `${at}/compensationFor`, AGENT_LIMITS.idLength, { singleLine: true });
+    const compensationVisible = r.bool(item.compensationVisible, `${at}/compensationVisible`);
+    const compensationName = r.text(item.compensationName, `${at}/compensationName`, LIMITS.maxCompensationNameLength, { singleLine: true });
+    const compensationProtocol = r.oneOf(item.compensationProtocol, `${at}/compensationProtocol`, ['http', 'calls', 'grpc'] as const);
+    const compensationDescription = r.text(item.compensationDescription, `${at}/compensationDescription`, LIMITS.maxDescriptionLength);
     const evidence = readEvidence(r, item.evidence, `${at}/evidence`);
     const attachments = readAttachments(r, item.attachments, `${at}/attachments`);
     const route = item.route !== undefined ? readRoute(r, item.route, `${at}/route`) : undefined;
@@ -533,21 +543,43 @@ export function readRoom(r: Reader, raw: Json, path: string, ctx: RoomContext): 
       ...(lineStyle ? { lineStyle } : {}),
       ...(response !== undefined && response !== null ? { response } : {}),
       ...(deliveryAttempts !== undefined && deliveryAttempts !== null ? { deliveryAttempts } : {}),
+      ...(compensationFor ? { compensationFor } : {}),
+      ...(compensationVisible !== undefined ? { compensationVisible } : {}),
+      ...(compensationName ? { compensationName } : {}),
+      ...(compensationProtocol ? { compensationProtocol } : {}),
+      ...(compensationDescription ? { compensationDescription } : {}),
       ...(attachments ? { attachments } : {}),
       ...(evidence?.length ? { evidence } : {}),
       ...(route ? { route } : {}),
     };
     const key = `${from}\u0000${to}`;
     const same = pairs.get(key) ?? [];
-    // The editor's own rule (`connect`): one connector per direction between two shapes, plus a
-    // compensation twin. Two connectors the same way would draw on top of each other.
-    if (same.length >= 2 || (same.length === 1 && spec.semantic !== 'compensates' && same[0]?.semantic !== 'compensates')) {
-      r.problems.add('UNSUPPORTED', at, `a second relationship from "${from}" to "${to}" is only allowed as a compensation (semantic "compensates"); merge the labels, or draw the reverse direction`);
+    // Recovery actions can share a direction; ordinary relationships still have one line per pair.
+    if (spec.semantic !== 'compensates' && same.some((edge) => edge.semantic !== 'compensates')) {
+      r.problems.add('UNSUPPORTED', at, `an ordinary relationship already runs from "${from}" to "${to}"; merge the labels, or draw the reverse direction`);
       return;
     }
     same.push(spec);
     pairs.set(key, same);
     relationships.push(spec);
+  });
+
+  const semantics = new Map(ctx.existing?.relationshipSemantics ?? []);
+  for (const edge of relationships) semantics.set(edge.id, edge.semantic);
+  relationships.forEach((edge, i) => {
+    const at = `${path}/relationships/${i}`;
+    if (edge.compensationFor) {
+      const parent = semantics.get(edge.compensationFor);
+      if (!semantics.has(edge.compensationFor) || edge.compensationFor === edge.id || parent === 'compensates') {
+        r.problems.add('INVALID_REFERENCE', `${at}/compensationFor`, 'must name a different, non-compensation relationship in this view');
+      }
+      if (edge.semantic !== 'compensates') r.problems.add('INVALID_INPUT', `${at}/semantic`, 'a linked action needs semantic "compensates"');
+    } else if (edge.compensationVisible !== undefined) {
+      r.problems.add('INVALID_INPUT', `${at}/compensationVisible`, 'requires compensationFor');
+    }
+    if (edge.semantic !== 'compensates' && (edge.compensationName || edge.compensationProtocol || edge.compensationDescription)) {
+      r.problems.add('INVALID_INPUT', at, 'counteraction details require semantic "compensates"');
+    }
   });
 
   const relationshipIds = new Set([...relationships.map((e) => e.id), ...(ctx.existing?.relationships ?? [])]);
@@ -885,6 +917,7 @@ export function readCreate(raw: unknown): CreateSpec {
       elements: new Set(ids.nodes.filter((n) => !n.group).map((n) => n.id)),
       groups: new Set(ids.nodes.filter((n) => n.group).map((n) => n.id)),
       relationships: new Set(ids.edges),
+      relationshipSemantics: new Map(ids.edges.map((id, index) => [id, starterFor(starter.id).edges[index]?.semantic])),
     };
     for (const id of [...ids.nodes.map((n) => n.id), ...ids.edges, ...ids.flows]) taken.add(id);
   }

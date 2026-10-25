@@ -16,6 +16,8 @@ export function reconnectProblem(
   if (nodeId === edge[endpoint]) return undefined;
   const source = endpoint === 'source' ? nodeId : edge.source;
   const target = endpoint === 'target' ? nodeId : edge.target;
+  // Linked recovery actions may call the same participant as another action.
+  if (edge.semantic === 'compensates' && edge.compensationFor) return undefined;
   return graph.edges.some((other) => other.id !== edge.id && other.source === source && other.target === target)
     ? 'duplicate'
     : undefined;

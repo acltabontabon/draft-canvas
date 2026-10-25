@@ -5,6 +5,7 @@
  * stack keep whole snapshots cheaply.
  */
 import { reconnectProblem } from './reconnect';
+import { repairCompensationLinks } from './compensation';
 import { createId } from './ids';
 import { OPEN_POINT_ID_PREFIX, pruneOpenPoints } from './openPoints';
 import { defaultSizeFor } from './factory';
@@ -144,7 +145,7 @@ export function updateEdge(
     changed = true;
     return next;
   });
-  return changed ? withEdges(doc, edges) : doc;
+  return changed ? withEdges(doc, repairCompensationLinks(edges)) : doc;
 }
 
 /** `updateEdge` with one patch for several connectors, in one pass over the edges. */
@@ -163,7 +164,7 @@ export function updateEdges(
     changed = true;
     return next;
   });
-  return changed ? withEdges(doc, edges) : doc;
+  return changed ? withEdges(doc, repairCompensationLinks(edges)) : doc;
 }
 
 /**
@@ -244,7 +245,7 @@ export function reverseEdge(doc: DraftDocument, id: string): DraftDocument {
     if (edge.id !== id) return edge;
     // Same duplicate guard as `connect()`/`reconnectEdge`: with B→A already there, reversing A→B
     // would stack two identical arrows.
-    if (doc.edges.some((other) => other.id !== id && other.source === edge.target && other.target === edge.source)) {
+    if (!(edge.semantic === 'compensates' && edge.compensationFor) && doc.edges.some((other) => other.id !== id && other.source === edge.target && other.target === edge.source)) {
       return edge;
     }
     changed = true;
@@ -329,6 +330,15 @@ export function removeElements(
         grew = true;
       }
     }
+  }
+
+  // A compensating action belongs to the interaction it counteracts. Removing that interaction
+  // takes its linked actions in the same history step, including actions to other participants.
+  for (const edge of doc.edges) {
+    if (removingNodes.has(edge.source) || removingNodes.has(edge.target)) removingEdges.add(edge.id);
+  }
+  for (const edge of doc.edges) {
+    if (edge.compensationFor && removingEdges.has(edge.compensationFor)) removingEdges.add(edge.id);
   }
 
   const nodes = doc.nodes.filter((n) => !removingNodes.has(n.id));
@@ -427,6 +437,14 @@ function reidentifyInside(inside: DraftInside, renamed?: IdRenames): DraftInside
       target: nodeIds.get(edge.target)!,
     };
     if (edge.attachments) next.attachments = edge.attachments.map((a) => ({ ...a, id: createId('a') }));
+    if (edge.compensationFor) {
+      const parentId = edgeIds.get(edge.compensationFor);
+      if (parentId) next.compensationFor = parentId;
+      else {
+        delete next.compensationFor;
+        delete next.compensationVisible;
+      }
+    }
     return next;
   });
 
@@ -540,10 +558,9 @@ function instantiateFragment(
     return next;
   });
 
-  const edgeIdMap = new Map<string, string>();
+  const edgeIdMap = new Map(fragment.edges.map((edge) => [edge.id, createId('e')]));
   const edges = fragment.edges.map((edge) => {
-    const id = createId('e');
-    edgeIdMap.set(edge.id, id);
+    const id = edgeIdMap.get(edge.id)!;
     const next: DraftEdge = {
       ...edge,
       id,
@@ -555,6 +572,14 @@ function instantiateFragment(
     }
     // Its bends land where its shapes do.
     if (edge.waypoints) next.waypoints = translatePoints(edge.waypoints, offset.x, offset.y);
+    if (edge.compensationFor) {
+      const parentId = edgeIdMap.get(edge.compensationFor);
+      if (parentId) next.compensationFor = parentId;
+      else {
+        delete next.compensationFor;
+        delete next.compensationVisible;
+      }
+    }
     return next;
   });
 
@@ -631,9 +656,9 @@ export function pasteFragment(
     }),
     // An edge kept past the node cap would dangle, so it's dropped along with whatever edge-count
     // truncation removes — both filters collapse to one pass.
-    edges: instantiated.edges
+    edges: repairCompensationLinks(instantiated.edges
       .filter((e) => keptNodeIds.has(e.source) && keptNodeIds.has(e.target))
-      .slice(0, Math.max(0, edgeRoom - spentEdges)),
+      .slice(0, Math.max(0, edgeRoom - spentEdges))),
   };
   let next = addEdges(addNodes(doc, created.nodes), created.edges);
   // Only what actually landed can be pointed at; a point cut down to nothing by the cap is dropped,

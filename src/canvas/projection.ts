@@ -1,6 +1,7 @@
 import type { Edge, Node } from '@xyflow/react';
 import { handleIdForAnchor } from '../edges/routing';
 import type { DraftDocument, DraftEdge, DraftNode } from '../document/types';
+import { visibleEdges } from '../document/compensation';
 import { connectorReading, nodeLookupOf } from '../nodes/readings';
 
 /**
@@ -109,12 +110,13 @@ export function projectEdges(
   document: DraftDocument,
   previous: readonly DraftRfEdge[],
   options: ProjectionOptions,
+  displayEdges: readonly DraftEdge[] = visibleEdges(document.edges),
 ): DraftRfEdge[] {
   const before = new Map(previous.map((edge) => [edge.id, edge]));
-  let changed = previous.length !== document.edges.length;
+  let changed = previous.length !== displayEdges.length;
   const lookup = nodeLookupOf(document.nodes);
 
-  const projected = document.edges.map((edge) => {
+  const projected = displayEdges.map((edge) => {
     const selected = options.selectedEdges.has(edge.id);
     const existing = before.get(edge.id);
     const sourceHandle = handleIdForAnchor(edge.sourceAnchor);

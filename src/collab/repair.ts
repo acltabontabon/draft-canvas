@@ -15,6 +15,7 @@
 import { mapRooms, type Graph } from '../depth/tree';
 import { pruneFlowSteps } from '../document/flow';
 import { pruneOpenPoints } from '../document/openPoints';
+import { repairCompensationLinks } from '../document/compensation';
 import type { DraftDocument, DraftEdge, DraftFlow, DraftNode } from '../document/types';
 import { withinGroupDepth } from '../document/validate';
 import { indexOf } from './fileIndex';
@@ -32,6 +33,7 @@ function repairGraph<G extends Graph>(graph: G): G {
   if (graph.edges.some((edge) => !nodeIds.has(edge.source) || !nodeIds.has(edge.target) || edge.source === edge.target)) {
     edges = graph.edges.filter((edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target) && edge.source !== edge.target);
   }
+  edges = repairCompensationLinks(edges);
 
   const flows = repairFlows(graph.flows, nodeIds, new Set(edges.map((edge) => edge.id)));
   if (nodes === graph.nodes && edges === graph.edges && flows === graph.flows) return graph;

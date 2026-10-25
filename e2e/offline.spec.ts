@@ -43,8 +43,7 @@ test.describe('offline availability', () => {
     await create(page, 'Service', { x: 400, y: 300 });
     const node = page.locator('.dc-node').first();
     await node.click();
-    await page.locator('.dc-element-inspector').getByRole('button', { name: 'More options' }).click();
-    await page.getByRole('menuitem', { name: 'Edit details…' }).click();
+    await page.locator('.dc-element-inspector').getByRole('button', { name: 'Add technology' }).click();
     const technology = page.getByRole('combobox', { name: 'Technology', exact: true });
     await technology.fill('vuejs');
     await page.getByRole('option', { name: 'Vue.js', exact: true }).click();

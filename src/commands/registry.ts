@@ -1560,7 +1560,7 @@ export function edgeCommands(ctx: CommandContext, edge: DraftEdge): Command[] {
             title: 'Add compensation',
             group: 'connector',
             keywords: ['compensate', 'compensates', 'saga', 'undo', 'rollback', 'release'],
-            run: (inner: CommandContext) => inner.editor.addCompensation(edge.id),
+            run: (inner: CommandContext) => { inner.editor.addCompensation(edge.id); },
           } satisfies Command,
         ]
       : []),

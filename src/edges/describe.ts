@@ -15,6 +15,7 @@ import {
   RESPONSE_SEED_SUFFIX,
   arrowSeed,
   captionAnchor as captionBaseline,
+  captionAwayForLane,
   endTangent,
   labelChipSide,
   labelLaneOffset,
@@ -40,7 +41,8 @@ import { bridgePath } from './bridge';
 import type { Crossing } from './crossings';
 import { relationshipCaptionLabel } from '../document/edgeSemantics';
 import { capabilityFor, categoryOf } from '../document/connectorSemantics';
-import { LABEL_PADDING_X, LABEL_PADDING_Y, layoutEdgeLabel, layoutEdgeResponse } from './labelLayout';
+import { LABEL_PADDING_X, LABEL_PADDING_Y, RECOVERY_LABEL_GAP, layoutEdgeLabel, layoutEdgeResponse, layoutRecoveryLabel } from './labelLayout';
+import { compensationActionCaption, compensationDisplayLabel, compensationLabelParts } from './compensationMarker';
 
 export interface EdgeDescribeContext {
   theme: Theme;
@@ -51,6 +53,7 @@ export interface EdgeDescribeContext {
   stepIndex?: number;
   /** This edge's parallel-lane slot — see `laneIndex` in `edges/routing.ts`. */
   lane?: number;
+  /** Actions linked to this interaction, represented by one compact marker. */
   /**
    * The shared fan-out/fan-in trunk this connector travels along, if the
    * planner grouped it into one — see `edges/bundles.ts`. Absent means route
@@ -192,6 +195,8 @@ export function describeEdge(
   // reply's own chip has the outer side of its line to itself — see `labelChipSide`.
   const responseAway = responseAwayFor(edge.hasResponse, ctx.lane ?? 0);
   const labelSide = labelChipSide(route.labelSide, responseAway);
+  const recoveryParts = compensationLabelParts(edge);
+  const recoveryChipSide = recoveryParts && (labelSide === 'top' || labelSide === 'bottom') ? 'bottom' : labelSide;
 
   const color = resolveEdgeColor(edge, nodes.get(edge.source), ctx.theme);
 
@@ -362,7 +367,8 @@ export function describeEdge(
   // one differentiator that always applies, this is a bonus for the plain
   // connector case, not something worth fighting a label over. A step badge
   // only wins the spot when it is actually on it — see `badgeCrowds`.
-  if (!edge.label) {
+  const displayLabel = compensationDisplayLabel(edge);
+  if (!displayLabel) {
     if (!badgeOverMidpoint) {
       if (edge.kind === 'event') {
         overlay.push({ t: 'ellipse', cx: labelX, cy: labelY, rx: 3, ry: 3, fill: color });
@@ -391,12 +397,12 @@ export function describeEdge(
       const targetCategory = targetNode ? categoryOf(targetNode) : undefined;
       const status = sourceCategory && targetCategory ? capabilityFor(sourceCategory, targetCategory)?.status : undefined;
       const isUnusual = status === 'unusual' || status === 'questionable';
-      const label = relationshipCaptionLabel(edge.semantic, {
+      const label = compensationActionCaption(edge.compensationFor ? edge.compensationName : undefined, relationshipCaptionLabel(edge.semantic, {
         hasResponse: edge.hasResponse,
         deliveryAttempts: edge.deliveryAttempts,
         source: sourceCategory,
         target: targetCategory,
-      });
+      }));
       const text = isUnusual ? `▲ ${label}` : label;
       // A bundle's members all share one relationship, so repeating its
       // caption down every branch is pure noise — the exact "calls / calls /
@@ -421,7 +427,7 @@ export function describeEdge(
           measurer: ctx.measurer,
         });
         const captionSide = collapsed ? (route.trunkLabelSide ?? route.labelSide) : route.labelSide;
-        const caption = captionAnchor(captionSide, captionAt.x, captionAt.y, captionLayout, responseAway);
+        const caption = captionAnchor(captionSide, captionAt.x, captionAt.y, captionLayout, collapsed ? responseAway : captionAwayForLane(ctx.lane ?? 0, responseAway));
         overlay.push({
           t: 'text',
           x: caption.x,
@@ -470,15 +476,18 @@ export function describeEdge(
     });
   }
 
-  if (edge.label && ctx.sharedLabel?.draws !== false) {
-    const layout = layoutEdgeLabel(edge.label, ctx.measurer);
+  if (displayLabel && ctx.sharedLabel?.draws !== false) {
+    const layout = layoutEdgeLabel(displayLabel, ctx.measurer);
+    const recoveryLayout = recoveryParts ? layoutRecoveryLabel(recoveryParts.name, recoveryParts.operation, ctx.measurer) : null;
 
     // A numbered connector carries its step inside the label chip. Drawing the
     // two separately puts them on top of each other on any short connector.
     const stepWidth = hasStep ? BADGE_RADIUS * 2 + LABEL_GAP : 0;
-    const w = layout.width + stepWidth + LABEL_PADDING_X * 2;
-    const h = Math.max(layout.height, hasStep ? BADGE_RADIUS * 2 : 0) + LABEL_PADDING_Y * 2;
-    const chip = ctx.sharedLabel ?? { side: labelSide, x: labelX, y: labelY };
+    const contentWidth = recoveryLayout?.width ?? layout.width;
+    const contentHeight = recoveryLayout?.height ?? layout.height;
+    const w = contentWidth + stepWidth + LABEL_PADDING_X * 2;
+    const h = Math.max(contentHeight, hasStep ? BADGE_RADIUS * 2 : 0) + LABEL_PADDING_Y * 2;
+    const chip = ctx.sharedLabel ?? { side: recoveryChipSide, x: labelX, y: labelY };
     const { left, top } = labelChipRect(chip.side, chip.x, chip.y, w, h);
     const centerY = top + h / 2;
     // A shared label is drawn once, so only the member drawing it has a chip to sit beside.
@@ -528,16 +537,28 @@ export function describeEdge(
       );
     }
 
-    overlay.push({
-      t: 'text',
-      x: left + LABEL_PADDING_X + stepWidth + layout.width / 2,
-      y: centerY - layout.height / 2,
-      layout,
-      font: FONTS.edgeLabel,
-      // The caption's own tone, as on screen (full-strength only while hovered or edited).
-      fill: ctx.theme.textFaint,
-      align: 'middle',
-    });
+    const textX = left + LABEL_PADDING_X + stepWidth + contentWidth / 2;
+    if (recoveryLayout) {
+      const textTop = centerY - contentHeight / 2;
+      overlay.push(
+        {
+          t: 'text', x: textX, y: textTop, layout: recoveryLayout.primary,
+          font: FONTS.recoveryName, fill: ctx.theme.textFaint, align: 'middle',
+        },
+        {
+          t: 'text', x: textX, y: textTop + recoveryLayout.primary.height + RECOVERY_LABEL_GAP,
+          layout: recoveryLayout.secondary, font: FONTS.connectorCaption,
+          fill: ctx.theme.textFaint, opacity: 0.75, align: 'middle',
+        },
+      );
+    } else {
+      overlay.push({
+        t: 'text', x: textX, y: centerY - layout.height / 2, layout,
+        font: FONTS.edgeLabel,
+        // The caption's own tone, as on screen (full-strength only while hovered or edited).
+        fill: ctx.theme.textFaint, align: 'middle',
+      });
+    }
   } else if (hasStep) {
     // Non-null by construction: `badgeAt` is computed from this same `hasStep`.
     const at = badgeAt!;

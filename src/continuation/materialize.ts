@@ -11,6 +11,7 @@ import {
 } from '../document/operations';
 import type { DraftDocument, DraftEdge, DraftNode, EdgeAnchor } from '../document/types';
 import { connectorClearance } from '../edges/clearance';
+import { recoveryBranchAnchor } from '../edges/compensationMarker';
 import { chooseSides, type Rect } from '../edges/routing';
 import { FONTS } from '../render/text/fonts';
 import { getMeasurer } from '../render/text/measure';
@@ -119,6 +120,9 @@ export function materialize(
     const to = resolve(spec.to);
     if (!from || !to) return undefined;
     const relationship = inferRelationship(from, to);
+    const parent = spec.compensationFor ? doc.edges.find((edge) => edge.id === spec.compensationFor) : undefined;
+    const linkedRecovery = spec.semantic === 'compensates' && parent && parent.semantic !== 'compensates';
+    const parentTarget = linkedRecovery ? doc.nodes.find((node) => node.id === parent.target) : undefined;
     // A named semantic is the rule choosing among what the matrix offers (the engine has already
     // checked it's listed) — stamped explicit, as a starter's or the user's own pick would be, so
     // re-inference never quietly turns a compensation back into `calls`.
@@ -128,11 +132,17 @@ export function materialize(
         target: to.id,
         ...relationship,
         ...(spec.semantic ? { semantic: spec.semantic } : {}),
+        ...(linkedRecovery ? {
+          compensationFor: parent.id,
+          compensationVisible: true,
+          compensationProtocol: parent.semantic === 'http' || parent.semantic === 'grpc' ? parent.semantic : 'calls' as const,
+        } : {}),
         semanticsOrigin: spec.semantic ? 'explicit' : relationship ? 'inferred' : undefined,
         deliveryAttempts: spec.deliveryAttempts,
         // Pinned only between nodes placed here, together. A connector to a node the user drew
         // routes dynamically, like any connector drawn by hand to it — preview included.
         ...(existing.has(spec.from) || existing.has(spec.to) ? {} : anchorsForPlacement(from, to)),
+        ...(linkedRecovery && parent.source === from.id && parentTarget ? { sourceAnchor: recoveryBranchAnchor(parent, from, parentTarget, to) } : {}),
       }),
     );
   }

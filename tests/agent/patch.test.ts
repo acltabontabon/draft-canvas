@@ -42,6 +42,41 @@ const refusal = (run: () => unknown): AgentError => {
 };
 
 describe('update_diagram operations', () => {
+  it('creates, reads and edits a linked recovery through the agent contract', () => {
+    const file = build({
+      nodes: [
+        { id: 'orders', type: 'service', label: 'Orders' },
+        { id: 'stock', type: 'service', label: 'Stock' },
+        { id: 'release', type: 'service', label: 'Release' },
+      ],
+      relationships: [
+        { id: 'reserve', from: 'orders', to: 'stock', semantic: 'calls', label: 'Reserve stock' },
+        { id: 'undoReserve', from: 'orders', to: 'release', semantic: 'compensates', compensationFor: 'reserve', compensationName: 'Release stock', compensationProtocol: 'http', label: 'POST /release', compensationVisible: false },
+      ],
+    });
+    const recovery = file.edges.find((edge) => edge.id === 'undoReserve')!;
+    expect(recovery.compensationFor).toBe('reserve');
+    expect(recovery.compensationName).toBe('Release stock');
+    const read = readDiagram(file, {}, 'r1', 'diagram') as { relationships: Array<Record<string, unknown>> };
+    expect(read.relationships.find((edge) => edge.id === 'undoReserve')).toMatchObject({
+      compensationFor: 'reserve', compensationName: 'Release stock', compensationProtocol: 'http', compensationVisible: false,
+    });
+    const { file: updated } = applyUpdate(file, [], [{ op: 'update', id: 'undoReserve', set: { compensationName: 'Cancel hold', compensationProtocol: 'calls', compensationVisible: true } }], undefined);
+    expect(updated.edges.find((edge) => edge.id === 'undoReserve')).toMatchObject({
+      compensationFor: 'reserve', compensationName: 'Cancel hold', compensationProtocol: 'calls', compensationVisible: true,
+    });
+    expect(refusal(() => applyUpdate(updated, [], [{ op: 'update', id: 'undoReserve', set: { compensationFor: 'undoReserve' } }], undefined)).code).toBe('INVALID_REFERENCE');
+  });
+
+  it('repoints a recovery action onto a pair with an ordinary step and another recovery action', () => {
+    const original = base();
+    const first = createEdge({ source: 'api', target: 'db', semantic: 'compensates' });
+    const second = createEdge({ source: 'db', target: 'api', semantic: 'compensates' });
+    const file = { ...original, edges: [...original.edges, first, second] };
+    const { file: changed } = applyUpdate(file, [], [{ op: 'update', id: second.id, set: { from: 'api', to: 'db' } }], undefined);
+    expect(changed.edges.filter((edge) => edge.source === 'api' && edge.target === 'db')).toHaveLength(3);
+  });
+
   it('adds beside what the new part connects to without moving anything that was there', () => {
     const file = base();
     const before = new Map(file.nodes.map((n) => [n.id, [n.x, n.y, n.width, n.height]]));

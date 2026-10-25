@@ -460,6 +460,11 @@ export function relationshipOf(edge: DraftEdge, byId: Map<string, DraftNode>, wi
     ...(edge.routing !== 'smoothstep' ? { lineStyle: lineStyleOf(edge.routing) } : {}),
     ...(edge.hasResponse ? { response: edge.response ?? true } : {}),
     ...(edge.deliveryAttempts !== undefined ? { deliveryAttempts: edge.deliveryAttempts } : {}),
+    ...(edge.compensationFor ? { compensationFor: edge.compensationFor } : {}),
+    ...(edge.compensationVisible !== undefined ? { compensationVisible: edge.compensationVisible } : {}),
+    ...(edge.compensationName ? { compensationName: edge.compensationName } : {}),
+    ...(edge.compensationProtocol ? { compensationProtocol: edge.compensationProtocol } : {}),
+    ...(edge.compensationDescription ? { compensationDescription: edge.compensationDescription } : {}),
     ...(edge.attachments?.length ? (withAttachments ? { attachments: edge.attachments.map((a) => attachmentOf(a, fullText)) } : { attachmentCount: edge.attachments.length }) : {}),
   };
 }

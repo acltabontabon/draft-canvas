@@ -1459,6 +1459,32 @@
               "maximum": 50,
               "description": "On a deadLetters route: attempts first."
             },
+            "compensationFor": {
+              "type": "string",
+              "description": "For a compensates relationship: id of the original interaction in this view."
+            },
+            "compensationVisible": {
+              "type": "boolean",
+              "description": "Whether a linked compensating action has its own visible arrow. Defaults to true."
+            },
+            "compensationName": {
+              "type": "string",
+              "maxLength": 120,
+              "description": "Business name of this compensating action, shown with its operation on the arrow."
+            },
+            "compensationProtocol": {
+              "enum": [
+                "http",
+                "calls",
+                "grpc"
+              ],
+              "description": "Protocol of the counteraction. Its operation is the relationship label."
+            },
+            "compensationDescription": {
+              "type": "string",
+              "maxLength": 280,
+              "description": "Optional reason or context for the counteraction."
+            },
             "evidence": {
               "$ref": "#/$defs/evidence"
             },
@@ -2760,6 +2786,55 @@
                       "to": {
                         "type": "string"
                       },
+                      "compensationFor": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "compensationVisible": {
+                        "type": "boolean"
+                      },
+                      "compensationName": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 120
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "compensationProtocol": {
+                        "anyOf": [
+                          {
+                            "enum": [
+                              "http",
+                              "calls",
+                              "grpc"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "compensationDescription": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 280
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
                       "route": {
                         "anyOf": [
                           {
@@ -3498,6 +3573,32 @@
               "minimum": 1,
               "maximum": 50,
               "description": "On a deadLetters route: attempts first."
+            },
+            "compensationFor": {
+              "type": "string",
+              "description": "For a compensates relationship: id of the original interaction in this view."
+            },
+            "compensationVisible": {
+              "type": "boolean",
+              "description": "Whether a linked compensating action has its own visible arrow. Defaults to true."
+            },
+            "compensationName": {
+              "type": "string",
+              "maxLength": 120,
+              "description": "Business name of this compensating action, shown with its operation on the arrow."
+            },
+            "compensationProtocol": {
+              "enum": [
+                "http",
+                "calls",
+                "grpc"
+              ],
+              "description": "Protocol of the counteraction. Its operation is the relationship label."
+            },
+            "compensationDescription": {
+              "type": "string",
+              "maxLength": 280,
+              "description": "Optional reason or context for the counteraction."
             },
             "evidence": {
               "$ref": "#/$defs/evidence"

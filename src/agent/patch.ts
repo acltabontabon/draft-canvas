@@ -263,6 +263,7 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
         elements: new Set(view.nodes.filter((n) => n.type !== 'group' && n.type !== 'note' && n.type !== 'text' && n.type !== 'code').map((n) => n.id)),
         groups: new Set(view.nodes.filter((n) => n.type === 'group').map((n) => n.id)),
         relationships: new Set(view.edges.map((e) => e.id)),
+        relationshipSemantics: new Map(view.edges.map((e) => [e.id, e.semantic])),
         flows: new Map(view.flows.map((f) => [f.id, f.variantOf])),
       };
       const room = readRoom(r, op, at, { taken, depth: path.length, existing });
@@ -570,7 +571,7 @@ function attachmentHost(r: Reader, view: DraftDocument, about: unknown, at: stri
 
 /**
  * A relationship's new ends (`from`, `to`), checked by the rules a new one is: elements of this view,
- * never itself, one per direction between two elements plus a compensation twin. `undefined` when
+ * never itself, one ordinary relationship per direction between two elements. `undefined` when
  * neither end changes.
  */
 function readEnds(r: Reader, view: DraftDocument, edge: DraftEdge, set: Json, at: string, semantic: DraftEdge['semantic']): { source: string; target: string } | undefined {
@@ -594,8 +595,8 @@ function readEnds(r: Reader, view: DraftDocument, edge: DraftEdge, set: Json, at
     return undefined;
   }
   const same = view.edges.filter((e) => e.id !== edge.id && e.source === source && e.target === target);
-  if (same.length >= 2 || (same.length === 1 && semantic !== 'compensates' && same[0]?.semantic !== 'compensates')) {
-    r.problems.add('UNSUPPORTED', at, `"${same[0]!.id}" already runs from "${source}" to "${target}"; only a compensation (semantic "compensates") may share its direction`);
+  if (semantic !== 'compensates' && same.some((candidate) => candidate.semantic !== 'compensates')) {
+    r.problems.add('UNSUPPORTED', at, `an ordinary relationship already runs from "${source}" to "${target}"; merge the labels or draw the reverse direction`);
     return undefined;
   }
   return { source, target };
@@ -869,6 +870,34 @@ function updateOne(
         patch.semantic = current.semantic;
         delete patch.semanticsOrigin;
       }
+    }
+    const finalSemantic = 'semantic' in patch ? patch.semantic : current.semantic;
+    if (finalSemantic !== 'compensates') {
+      if (set.compensationFor !== undefined || set.compensationVisible !== undefined || set.compensationName !== undefined || set.compensationProtocol !== undefined || set.compensationDescription !== undefined) {
+        r.problems.add('INVALID_INPUT', at, 'counteraction fields require semantic "compensates"');
+      }
+      if (current.semantic === 'compensates') Object.assign(patch, {
+        compensationFor: undefined, compensationVisible: undefined, compensationName: undefined,
+        compensationProtocol: undefined, compensationDescription: undefined,
+      });
+    } else {
+      if (set.compensationFor !== undefined) {
+        if (set.compensationFor === null) {
+          patch.compensationFor = undefined;
+          patch.compensationVisible = undefined;
+        } else {
+          const parent = typeof set.compensationFor === 'string' ? next.edges.find((candidate) => candidate.id === set.compensationFor) : undefined;
+          if (!parent || parent.id === id || parent.semantic === 'compensates') r.problems.add('INVALID_REFERENCE', `${at}/compensationFor`, 'must name a different, non-compensation relationship in this view');
+          else patch.compensationFor = parent.id;
+        }
+      }
+      if (set.compensationVisible !== undefined) {
+        if (!('compensationFor' in patch ? patch.compensationFor : current.compensationFor)) r.problems.add('INVALID_INPUT', `${at}/compensationVisible`, 'requires compensationFor');
+        else patch.compensationVisible = r.bool(set.compensationVisible, `${at}/compensationVisible`);
+      } else if (patch.compensationFor && !current.compensationFor) patch.compensationVisible = true;
+      if (set.compensationName !== undefined) patch.compensationName = set.compensationName === null ? undefined : r.text(set.compensationName, `${at}/compensationName`, LIMITS.maxCompensationNameLength, { singleLine: true });
+      if (set.compensationProtocol !== undefined) patch.compensationProtocol = set.compensationProtocol === null ? undefined : r.oneOf(set.compensationProtocol, `${at}/compensationProtocol`, ['http', 'calls', 'grpc'] as const);
+      if (set.compensationDescription !== undefined) patch.compensationDescription = set.compensationDescription === null ? undefined : r.text(set.compensationDescription, `${at}/compensationDescription`, LIMITS.maxDescriptionLength);
     }
     // The reply line of a synchronous call — the inspector's "Show response path" and its label.
     if (response === null) Object.assign(patch, { hasResponse: undefined, response: undefined, semanticsOrigin: 'explicit' });

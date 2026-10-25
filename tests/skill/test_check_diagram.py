@@ -102,6 +102,14 @@ class Refuses(unittest.TestCase):
         errors = report(request).errors
         self.assertEqual(len([e for e in errors if 'placeholder' in e]), 2, errors)
 
+    def test_several_compensations_can_share_a_direction(self) -> None:
+        request = minimal()
+        request['relationships'].extend([
+            {'id': 'undo1', 'from': 'api', 'to': 'db', 'semantic': 'compensates', 'label': 'Release first hold'},
+            {'id': 'undo2', 'from': 'api', 'to': 'db', 'semantic': 'compensates', 'label': 'Release second hold'},
+        ])
+        self.assertFalse(any('a second relationship' in error for error in report(request).errors))
+
     def test_evidence_must_name_files_lines_and_symbols_that_exist(self) -> None:
         request = minimal()
         request['nodes'][1]['evidence'] = [

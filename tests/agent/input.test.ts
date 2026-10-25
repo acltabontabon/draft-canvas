@@ -92,6 +92,19 @@ describe('reading a create_diagram request', () => {
     expect(spec.relationships).toHaveLength(3);
   });
 
+  it('allows several compensation actions beside one ordinary relationship', () => {
+    const spec = readCreate({
+      title: 'T',
+      nodes: [{ id: 'a', type: 'service', label: 'A' }, { id: 'b', type: 'service', label: 'B' }],
+      relationships: [
+        { id: 'step', from: 'a', to: 'b' },
+        { id: 'undo1', from: 'a', to: 'b', semantic: 'compensates' },
+        { id: 'undo2', from: 'a', to: 'b', semantic: 'compensates' },
+      ],
+    });
+    expect(spec.relationships).toHaveLength(3);
+  });
+
   it('refuses a containment cycle and a reference to a group that is not there', () => {
     const error = refusal({
       title: 'T',

@@ -102,6 +102,7 @@ export const FONTS = {
   freeTextTechnical: { stack: 'mono', size: TEXT_SIZES.freeTextTechnical, weight: 500 } satisfies FontSpec,
   code: { stack: 'mono', size: TEXT_SIZES.code, weight: 400 } satisfies FontSpec,
   edgeLabel: { stack: 'sans', size: TEXT_SIZES.edgeLabel, weight: 500 } satisfies FontSpec,
+  recoveryName: { stack: 'sans', size: TEXT_SIZES.edgeLabel, weight: 500 } satisfies FontSpec,
   sequenceBadge: { stack: 'sans', size: TEXT_SIZES.sequenceBadge, weight: 700 } satisfies FontSpec,
   groupTitle: { stack: 'sans', size: TEXT_SIZES.groupTitle, weight: 600 } satisfies FontSpec,
   connectorCaption: { stack: 'sans', size: TEXT_SIZES.connectorCaption, weight: 500 } satisfies FontSpec,

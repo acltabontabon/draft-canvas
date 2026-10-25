@@ -249,6 +249,10 @@ export function connectorFor(spec: RelationshipSpec, source: DraftNode, target: 
     ...(origin ? { semanticsOrigin: origin } : {}),
     ...(spec.color ? { accent: spec.color } : {}),
     ...(spec.lineStyle ? { routing: LINE_STYLES[spec.lineStyle] } : {}),
+    ...(semantic === 'compensates' && spec.compensationFor ? { compensationFor: spec.compensationFor, compensationVisible: spec.compensationVisible ?? true } : {}),
+    ...(semantic === 'compensates' && spec.compensationName ? { compensationName: spec.compensationName } : {}),
+    ...(semantic === 'compensates' && spec.compensationProtocol ? { compensationProtocol: spec.compensationProtocol } : {}),
+    ...(semantic === 'compensates' && spec.compensationDescription ? { compensationDescription: spec.compensationDescription } : {}),
   });
   if (spec.response !== undefined) {
     // The inspector's own gate: a reply line belongs to a synchronous call.

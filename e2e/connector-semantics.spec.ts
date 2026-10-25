@@ -139,12 +139,17 @@ test.describe('contextual connector toolbar', () => {
     const badge = page.getByRole('button', { name: 'Async' });
     await expect(badge).toHaveAttribute('title', /Inferred from what this connects/);
 
-    // Clicking it reveals the full picker (and, with it, the condition field).
+    // Clicking it reveals the full picker and the compact condition control.
     await badge.click();
     const kind = inspectorSelect(page, 'Flow kind');
     await expect(kind).toBeVisible();
     await expect(kind).toHaveText('Async');
     await expect(page.getByLabel('Condition')).toBeVisible();
+    await page.getByRole('button', { name: 'Condition', exact: true }).click();
+    await expect(page.getByLabel('Condition text')).toBeFocused();
+    await page.getByLabel('Condition text').fill('retry needed');
+    await page.getByLabel('Condition text').press('Enter');
+    await expect(page.getByRole('button', { name: 'Condition', exact: true })).toHaveAttribute('data-active', 'true');
   });
 
   test('Service → Service defaults to Generic Call + Sync, with Request/Response offered but off', async ({ page }) => {
@@ -152,6 +157,10 @@ test.describe('contextual connector toolbar', () => {
     await create(page, 'Service', { x: 300, y: 200 });
     await create(page, 'Service', { x: 600, y: 200 });
     await connectAndOpen(page, 0, 1);
+    await expect(page.locator('.dc-edge-inspector')).toHaveCSS('opacity', '1');
+    const inspector = page.locator('.dc-edge-inspector .dc-popover-inner');
+    await expect(inspector).toBeVisible();
+    expect(await inspector.evaluate((element) => element.scrollHeight <= element.clientHeight)).toBe(true);
 
     // Service→Service gets the opinionated editor, not the generic Interaction section — its
     // Protocol/Mode selects replace "Interaction type"/"Flow kind" entirely for this pairing.
@@ -174,7 +183,139 @@ test.describe('contextual connector toolbar', () => {
     // architecture diagram works at the return path is implied, and drawing it
     // unasked doubles the lines on the busiest kind of diagram. One click here
     // brings it back.
-    await expect(page.getByTitle('Draw a quieter reply line back to the caller')).toHaveText('Off');
+    await expect(page.getByRole('button', { name: 'Add reply' })).toHaveText('+ Add reply');
+  });
+
+  test('a Saga recovery action connects on the canvas and edits beside its HTTP interaction', async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await newCanvas(page, 'Order reservation Saga');
+    await create(page, 'Service', { x: 220, y: 240 });
+    await create(page, 'Service', { x: 680, y: 240 });
+    await create(page, 'Service', { x: 680, y: 450 });
+    for (const [index, name] of ['Order Service', 'Inventory Service', 'Payment Service'].entries()) {
+      await page.locator('.dc-node').nth(index).dblclick();
+      const editor = page.locator('.dc-node-editor');
+      await editor.fill(name);
+      await editor.press('Enter');
+    }
+    await connectAndOpen(page, 0, 1);
+    await chooseInspectorOption(page, 'Protocol', 'HTTP');
+    await chooseInspectorOption(page, 'Request method', 'POST');
+    await page.getByRole('textbox', { name: 'Request resource' }).fill('/reservations');
+    await page.getByRole('textbox', { name: 'Request resource' }).blur();
+    await expect(page.locator('.dc-edge-inspector')).toBeVisible();
+
+    await page.getByRole('button', { name: '+ Add compensating action' }).click();
+    await expect(page.locator('.dc-recovery-connect-path')).toHaveCount(1);
+    await expect(page.locator('.dc-recovery-connect-prompt')).toContainText('Choose a recovery target');
+    await page.locator('.dc-node').nth(2).click();
+    await expect(page.locator('.dc-edge-line')).toHaveCount(2);
+    await expect(page.locator('.dc-edge-inspector')).toHaveCount(0);
+    await expect(page.locator('.dc-edge-compensation-marker')).toHaveCount(0);
+    const recoveryCaption = page.locator('.dc-edge-caption').filter({ hasText: 'compensates' });
+    await recoveryCaption.hover();
+    await expect(page.getByRole('tooltip')).toContainText('Order Service');
+    await expect(page.getByRole('tooltip')).toContainText('Inventory Service');
+    await expect(page.locator('.dc-edge[data-recovery-associated="true"]')).toHaveCount(2);
+    await recoveryCaption.click();
+    await expect(page.getByRole('button', { name: 'Hide compensation on canvas' })).toHaveCount(0);
+    const protocols = page.getByRole('group', { name: 'Compensation protocol' });
+    await expect(protocols.getByRole('button')).toHaveCount(3);
+    await protocols.getByRole('button', { name: 'Call' }).click();
+    await page.getByRole('textbox', { name: 'Compensation operation' }).fill('OK');
+    await page.getByRole('textbox', { name: 'Compensation operation' }).blur();
+    await protocols.getByRole('button', { name: 'HTTP' }).click();
+    await expect(page.getByRole('button', { name: 'Compensation operation method' })).toHaveText('POST');
+    await expect(page.getByRole('textbox', { name: 'Compensation operation resource' })).toHaveValue('');
+    await expect(recoveryCaption).toContainText('compensates');
+    await expect(page.getByRole('button', { name: '+ Add note' })).toHaveCount(0);
+    await page.getByRole('textbox', { name: 'Compensating action name' }).fill('Release reservation');
+    await page.getByRole('textbox', { name: 'Compensating action name' }).blur();
+    await expect(page.locator('.dc-recovery-operation-name')).toHaveText('Release reservation');
+    await expect(page.locator('.dc-recovery-thread')).toBeVisible();
+    const panel = (await page.locator('.dc-edge-inspector').boundingBox())!;
+    const companion = (await page.locator('.dc-recovery-action-fields').boundingBox())!;
+    expect(companion.x - (panel.x + panel.width)).toBeGreaterThanOrEqual(40);
+    await page.getByRole('textbox', { name: 'Compensation operation resource' }).fill('/reservations/{id}/release');
+    await page.getByRole('textbox', { name: 'Compensation operation resource' }).blur();
+    const recoveryLabel = page.locator('.dc-edge-label[data-recovery-detail="true"]');
+    await expect(recoveryLabel.locator('.dc-edge-recovery-name')).toHaveText('Release reservation');
+    await expect(recoveryLabel.locator('.dc-edge-recovery-operation')).toHaveText('POST /reservations/{id}/release');
+    const nameBox = (await recoveryLabel.locator('.dc-edge-recovery-name').boundingBox())!;
+    const editorBox = (await page.locator('.dc-edge-inspector').boundingBox())!;
+    expect(nameBox.y).toBeGreaterThan(editorBox.y + editorBox.height);
+    await page.getByRole('button', { name: 'Collapse compensating action' }).click();
+    await expect(page.locator('.dc-recovery-thread')).toHaveCount(0);
+    await page.getByRole('button', { name: /Release reservation/ }).click();
+    await expect(inspectorSelect(page, 'Compensation target')).toHaveText('Payment Service');
+    await expect(page.getByRole('textbox', { name: 'Compensating action name' })).toHaveValue('Release reservation');
+    await expect(page.getByRole('textbox', { name: 'Compensation operation resource' })).toHaveValue('/reservations/{id}/release');
+    await expect(page.locator('.dc-edge-inspector .dc-popover-inner')).toHaveCSS('overflow-y', 'visible');
+
+    const card = page.locator('.dc-recovery-action-fields');
+    const beforeCardMove = (await card.boundingBox())!;
+    await expect(page.getByRole('button', { name: 'Move counteraction popup' })).toHaveCount(0);
+    const editor = page.locator('.dc-edge-inspector');
+    const beforeEditorMove = (await editor.boundingBox())!;
+    const moveEdge = (await page.getByRole('button', { name: 'Move connector popup' }).boundingBox())!;
+    await page.mouse.move(moveEdge.x + moveEdge.width / 2, moveEdge.y + moveEdge.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(moveEdge.x + moveEdge.width / 2 - 35, moveEdge.y + moveEdge.height / 2 + 35, { steps: 5 });
+    await page.mouse.up();
+    const afterEditorMove = (await editor.boundingBox())!;
+    const afterCardMove = (await card.boundingBox())!;
+    expect(afterEditorMove.y).toBeGreaterThan(beforeEditorMove.y + 20);
+    expect(afterCardMove.y - beforeCardMove.y).toBeCloseTo(afterEditorMove.y - beforeEditorMove.y, 0);
+    await expect(page.locator('.dc-recovery-thread')).toBeVisible();
+    await page.locator('.react-flow__pane').click({ position: { x: 20, y: 20 } });
+    await expect(editor).toHaveCount(0);
+  });
+
+  test('a recovery arrow to the same service stays movable while its inspector is open', async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await newCanvas(page, 'Recovery arrow editing');
+    await create(page, 'Service', { x: 220, y: 240 });
+    await create(page, 'Service', { x: 680, y: 240 });
+    await connectAndOpen(page, 0, 1);
+    await page.getByRole('button', { name: '+ Add compensating action' }).click();
+    await page.locator('.dc-node').nth(1).click();
+    await page.locator('.dc-edge-caption').filter({ hasText: 'compensates' }).click();
+    await expect(page.locator('.dc-recovery-section[data-single-action="true"]')).toHaveCSS('border-top-width', '0px');
+
+    const bend = page.locator('.dc-edge-bend[data-kind="run"][data-level="true"]').last();
+    await expect(bend).toBeVisible();
+    const recoveryPath = page.locator('.dc-edge[data-selected="true"] .dc-edge-line');
+    const before = await recoveryPath.getAttribute('d');
+    const box = (await bend.boundingBox())!;
+    const x = box.x + box.width / 2;
+    const y = box.y + box.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x, y + 34, { steps: 3 });
+    await expect(page.locator('.dc-edge-inspector')).toHaveAttribute('data-reshaping', 'true');
+    await expect(page.locator('.dc-edge-inspector')).toHaveCSS('visibility', 'hidden');
+    await page.mouse.up();
+    await expect(page.locator('.dc-edge-inspector')).not.toHaveAttribute('data-reshaping', 'true');
+    expect(await recoveryPath.getAttribute('d')).not.toBe(before);
+  });
+
+  test('two recovery targets create two visible arrows', async ({ page }) => {
+    await newCanvas(page, 'Unlabelled recovery');
+    await create(page, 'Service', { x: 280, y: 280 });
+    await create(page, 'Service', { x: 670, y: 280 });
+    await create(page, 'Service', { x: 670, y: 490 });
+    await connectAndOpen(page, 0, 1);
+    await chooseInspectorOption(page, 'Protocol', 'HTTP');
+    await page.getByRole('button', { name: '+ Add compensating action' }).click();
+    await page.locator('.dc-node').nth(1).click();
+    await page.locator('.dc-edge-caption').first().click();
+    await expect(page.locator('.dc-edge-inspector')).toBeVisible();
+    await page.getByRole('button', { name: '+ Add compensating action' }).click();
+    await page.locator('.dc-node').nth(2).click();
+
+    await expect(page.locator('.dc-edge-line')).toHaveCount(3);
+    await expect(page.locator('.dc-recovery-action')).toHaveCount(2);
+    await expect(page.locator('.dc-edge-caption').first()).toContainText('calls over HTTP');
   });
 
   test('Service → Service: switching Protocol to HTTP splits Request into a method dropdown + text', async ({
@@ -197,10 +338,15 @@ test.describe('contextual connector toolbar', () => {
 
     // Scoped to the Request group specifically — Response's own resource field shares the same
     // "Customers" placeholder.
-    const resource = page.getByLabel('Request', { exact: true }).getByPlaceholder('Customers');
-    await resource.fill('Customers');
+    const resource = page.getByLabel('Request', { exact: true }).getByPlaceholder('/customers');
+    await resource.fill('/customers');
     await resource.blur();
-    await expect(page.locator('.dc-edge-label')).toHaveText('POST Customers');
+    await expect(page.locator('.dc-edge-label')).toHaveText('POST /customers');
+    await expect(page.locator('.dc-edge-inspector')).toHaveCSS('opacity', '1');
+    await page.getByRole('button', { name: 'Add reply' }).click();
+    await expect(page.getByRole('textbox', { name: 'Response status' })).toHaveValue('201');
+    await expect(page.getByRole('textbox', { name: 'Response resource' })).toHaveValue('Created');
+    await expect(page.getByRole('button', { name: 'Guess' })).toHaveCount(0);
   });
 
   test('Response keeps its label beside the reply line when toggled off and back on', async ({ page }) => {
@@ -209,20 +355,21 @@ test.describe('contextual connector toolbar', () => {
     await create(page, 'Service', { x: 600, y: 200 });
     await connectAndOpen(page, 0, 1);
 
-    const toggle = page.getByRole('button', { name: 'Response line', exact: true });
+    const addReply = page.getByRole('button', { name: 'Add reply', exact: true });
+    const hideReply = page.getByRole('button', { name: 'Hide reply', exact: true });
     const label = page.locator('.dc-edge-response-label');
-    await toggle.click();
+    await addReply.click();
     await page.getByRole('textbox', { name: 'Response', exact: true }).fill('Customer found');
     await page.getByRole('textbox', { name: 'Response', exact: true }).blur();
     await expect(label).toHaveText('Customer found');
     const position = await label.getAttribute('style');
 
     // The text is retained for reuse. With no reply route it must not become an orphan at (0, 0).
-    await toggle.click();
+    await hideReply.click();
     await expect(page.locator('.dc-edge-response-line')).toHaveCount(0);
     await expect(label).toHaveCount(0);
 
-    await toggle.click();
+    await addReply.click();
     await expect(page.locator('.dc-edge-response-line')).toHaveCount(1);
     await expect(label).toHaveText('Customer found');
     await expect(label).toHaveAttribute('style', position!);
@@ -236,17 +383,18 @@ test.describe('contextual connector toolbar', () => {
 
     // Offered, and off by default — this test is about Async *removing* the
     // section, so turn it on first to have something to remove.
-    const responseToggle = page.getByTitle('Draw a quieter reply line back to the caller');
-    await expect(responseToggle).toHaveText('Off');
-    await responseToggle.click();
-    await expect(responseToggle).toHaveText('On');
+    const addReply = page.getByRole('button', { name: 'Add reply' });
+    await expect(addReply).toHaveText('+ Add reply');
+    await addReply.click();
+    await expect(page.getByRole('button', { name: 'Hide reply' })).toHaveAttribute('title', 'Hide reply line');
     await page.getByRole('textbox', { name: 'Response', exact: true }).fill('OK');
     await page.getByRole('textbox', { name: 'Response', exact: true }).blur();
     await expect(page.locator('.dc-edge-response-label')).toHaveText('OK');
     await expect(page.locator('.dc-edge-async-marker')).toHaveCount(0);
 
     await chooseInspectorOption(page, 'Interaction mode', 'Async');
-    await expect(page.getByTitle('Draw a quieter reply line back to the caller')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Add reply' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Hide reply' })).toHaveCount(0);
     await expect(page.locator('.dc-edge-response-line')).toHaveCount(0);
     await expect(page.locator('.dc-edge-response-label')).toHaveCount(0);
     // The bug this section exists to fix: choosing Async is a semantic choice, not a line style —
@@ -256,7 +404,7 @@ test.describe('contextual connector toolbar', () => {
     await expect(page.locator('.dc-edge-async-marker')).toBeVisible();
 
     await chooseInspectorOption(page, 'Interaction mode', 'Sync');
-    await expect(page.getByTitle('Draw a quieter reply line back to the caller')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Add reply' })).toBeVisible();
     await expect(page.locator('.dc-edge-async-marker')).toHaveCount(0);
   });
 
@@ -365,9 +513,15 @@ test.describe('Junction connector', () => {
     await expect(page.getByLabel('Request', { exact: true })).toHaveCount(0);
     await expect(page.getByLabel('Response', { exact: true })).toHaveCount(0);
 
-    // Route and Style are untouched.
-    await expect(inspectorSelect(page, 'Connector shape')).toHaveText('Stepped');
+    // Route and style are visible without another disclosure.
+    await expect(page.getByRole('button', { name: /^Advanced/ })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Stepped route' })).toHaveAttribute('aria-pressed', 'true');
+    await page.getByRole('button', { name: 'Straight route' }).click();
+    await expect(page.getByRole('button', { name: 'Straight route' })).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByRole('button', { name: 'Arrow', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Connector colour' })).toBeVisible();
+    await page.getByRole('button', { name: 'Connector colour' }).hover();
+    await expect(page.getByRole('tooltip')).toContainText('Automatic colour');
 
     await expect(page.getByTitle('Rename connector')).toHaveText('Add label…');
   });

@@ -1,5 +1,14 @@
 import type { NodeCategory } from './connectorSemantics';
-import type { EdgeSemantic } from './types';
+import type { DraftEdge, EdgeSemantic } from './types';
+
+/** A short, editable reply when someone asks to show the return path for the first time. */
+export function defaultResponseFor(edge: Pick<DraftEdge, 'semantic' | 'label'>): string {
+  if (edge.semantic !== 'http') return 'OK';
+  const method = edge.label?.trim().split(/\s+/)[0]?.toUpperCase();
+  if (method === 'POST') return '201 Created';
+  if (method === 'DELETE') return '204 No Content';
+  return '200 OK';
+}
 
 /**
  * Convenience defaults for a connection's optional semantic type — label

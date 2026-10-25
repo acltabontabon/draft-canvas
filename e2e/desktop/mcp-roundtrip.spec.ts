@@ -78,7 +78,7 @@ test('real MCP sidecar: inspect a candidate, commit, submit a semantic proposal,
     // oxlint-disable-next-line typescript/no-explicit-any -- dev-server module imports are runtime URLs
     const load = (path: string) => import(/* @vite-ignore */ path) as Promise<any>;
     const { compose } = await load('/src/agent/compile.ts');
-    const text = compose({ title: 'MCP order', nodes: [{ id: 'api', type: 'api', label: 'Orders API', evidence: [{ path: 'src/orders.ts', basis: 'observed', line: 42 }] }, { id: 'db', type: 'database', label: 'Orders DB' }], relationships: [{ id: 'r', from: 'api', to: 'db' }], flows: [{ id: 'f', title: 'Order', steps: ['r'] }], notes: [{ id: 'decision', text: 'Old decision', about: 'api' }] }, 'd_mcp00000001').text;
+    const text = compose({ title: 'MCP order', nodes: [{ id: 'api', type: 'api', label: 'Orders API', evidence: [{ path: 'src/orders.ts', basis: 'observed', line: 42 }] }, { id: 'db', type: 'database', label: 'Orders DB' }, { id: 'release', type: 'service', label: 'Release service' }], relationships: [{ id: 'r', from: 'api', to: 'db' }], flows: [{ id: 'f', title: 'Order', steps: ['r'] }], notes: [{ id: 'decision', text: 'Old decision', about: 'api' }] }, 'd_mcp00000001').text;
     const handle = window.__shell.addFile('MCP order', text);
     return handle;
   });
@@ -89,8 +89,7 @@ test('real MCP sidecar: inspect a candidate, commit, submit a semantic proposal,
   const { client } = connection;
   try {
     await page.locator('.react-flow__node[data-id="api"]').click();
-    await page.locator('.dc-element-inspector').getByRole('button', { name: 'More options' }).click();
-    await page.getByRole('menuitem', { name: 'Edit details…' }).click();
+    await page.locator('.dc-element-inspector').getByRole('button', { name: 'Add technology' }).click();
     await page.locator('.dc-source-evidence summary').click();
     await expect(page.locator('.dc-source-evidence')).toContainText('src/orders.ts:42');
     await expect(page.locator('.dc-source-evidence')).toContainText('Observed');
@@ -128,5 +127,12 @@ test('real MCP sidecar: inspect a candidate, commit, submit a semantic proposal,
     await page.keyboard.press('ControlOrMeta+z');
     const undone = await client.call('read_diagram', { diagramId: 'd_mcp00000001', include: ['fullText'] });
     expect(undone.value.flows).toEqual([expect.objectContaining({ id: 'f', title: 'Order' })]);
+    const linked = await client.call('update_diagram', {
+      diagramId: 'd_mcp00000001', expectedRevision: undone.value.revision,
+      ops: [{ op: 'add', relationships: [{ id: 'release-stock', from: 'api', to: 'release', semantic: 'compensates', compensationFor: 'r', compensationName: 'Release stock', compensationProtocol: 'http', label: 'POST /release', compensationVisible: false }] }],
+    });
+    expect(linked.ok).toBe(true);
+    const linkedRead = await client.call('read_diagram', { diagramId: 'd_mcp00000001' });
+    expect(linkedRead.value.relationships).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'release-stock', compensationFor: 'r', compensationName: 'Release stock', compensationProtocol: 'http', compensationVisible: false })]));
   } finally { await connection.close(); }
 });

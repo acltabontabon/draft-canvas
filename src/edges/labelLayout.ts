@@ -11,6 +11,32 @@ export const LABEL_PADDING_Y = 3;
 
 /** A connector label's widest line before it wraps, in canvas units. */
 const EDGE_LABEL_MAX_WIDTH = 220;
+export const RECOVERY_LABEL_GAP = 2;
+
+/** A recovery's business name and concrete operation each get one line, so a long name cannot
+ * push the operation off the arrow. Shared by canvas and SVG export. */
+export function layoutRecoveryLabel(name: string, operation: string, measurer?: TextMeasurer) {
+  const primary = layoutText(name, {
+    font: FONTS.recoveryName,
+    maxWidth: 190,
+    lineHeight: FONTS.recoveryName.size * LINE_HEIGHTS.label,
+    maxLines: 1,
+    measurer,
+  });
+  const secondary = layoutText(operation, {
+    font: FONTS.connectorCaption,
+    maxWidth: 210,
+    lineHeight: FONTS.connectorCaption.size * LINE_HEIGHTS.label,
+    maxLines: 1,
+    measurer,
+  });
+  return {
+    primary,
+    secondary,
+    width: Math.max(primary.width, secondary.width),
+    height: primary.height + RECOVERY_LABEL_GAP + secondary.height,
+  };
+}
 
 /**
  * A connector's label, and its response label, laid out once for both renderers — the canvas chip

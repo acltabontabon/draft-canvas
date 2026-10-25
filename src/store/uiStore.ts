@@ -319,6 +319,7 @@ export interface UiStore {
    * state: never saved, never exported, cleared whenever a gesture or a tool takes the pointer.
    */
   hoveredEdgeId: string | null;
+  hoveredRecoveryParentId: string | null;
   /**
    * The specific anchor (not just the node) a reconnect drag is currently
    * hovering, so the one matching handle can highlight as "release here" —
@@ -392,6 +393,11 @@ export interface UiStore {
    * editing has actually started.
    */
   editRequestId: string | null;
+  /** One-shot request from a connector's recovery marker to open its linked action in the inspector. */
+  recoveryRequestEdgeId: string | null;
+  recoveryRequestActionId: string | null;
+  /** A new compensating action awaiting its destination on the canvas. Transient gesture only. */
+  recoveryConnect: { parentEdgeId: string; sourceNodeId: string } | null;
   /**
    * The Text element whose Markdown is open in its inline editor, if any. The element's popover
    * shows the format bar instead of its own row for exactly as long as this names it.
@@ -552,6 +558,7 @@ export interface UiStore {
   setReconnectHoverTarget: (nodeId: string | null) => void;
   setReconnectDragActive: (active: boolean) => void;
   setHoveredEdge: (id: string | null) => void;
+  setHoveredRecoveryParent: (id: string | null) => void;
   setArmedAnchor: (anchor: ArmedAnchor | null) => void;
   setOpenAttachmentDetail: (
     target: { hostKind: 'node' | 'edge'; hostId: string; attachmentId: string | null } | null,
@@ -572,6 +579,8 @@ export interface UiStore {
   setCompanionOpen: (open: boolean) => void;
   setInteractionActive: (active: boolean, movingNodeIds?: Iterable<string>) => void;
   requestEdit: (id: string | null) => void;
+  requestRecovery: (edgeId: string | null, actionId?: string | null) => void;
+  setRecoveryConnect: (gesture: UiStore['recoveryConnect']) => void;
   setEditingText: (id: string | null) => void;
   setQuietEdge: (id: string | null) => void;
   notify: (message: string, tone?: Toast['tone'], action?: ToastAction) => void;
@@ -684,6 +693,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   reconnectHoverTarget: null,
   reconnectDragActive: false,
   hoveredEdgeId: null,
+  hoveredRecoveryParentId: null,
   armedAnchor: null,
   openAttachmentDetail: null,
   presentationReveal: null,
@@ -700,6 +710,9 @@ export const useUiStore = create<UiStore>((set, get) => ({
   interactionActive: false,
   movingNodeIds: NO_MOVING_NODES,
   editRequestId: null,
+  recoveryRequestEdgeId: null,
+  recoveryRequestActionId: null,
+  recoveryConnect: null,
   editingTextId: null,
   quietEdgeId: null,
   updateReady: false,
@@ -771,6 +784,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   setReconnectDragActive: (reconnectDragActive) =>
     set((state) => (state.reconnectDragActive === reconnectDragActive ? state : { reconnectDragActive })),
   setHoveredEdge: (hoveredEdgeId) => set((state) => (state.hoveredEdgeId === hoveredEdgeId ? state : { hoveredEdgeId })),
+  setHoveredRecoveryParent: (hoveredRecoveryParentId) => set((state) => (state.hoveredRecoveryParentId === hoveredRecoveryParentId ? state : { hoveredRecoveryParentId })),
   setArmedAnchor: (next) =>
     set((state) => {
       const current = state.armedAnchor;
@@ -814,6 +828,8 @@ export const useUiStore = create<UiStore>((set, get) => ({
       return { interactionActive, movingNodeIds: moving.size === 0 ? NO_MOVING_NODES : moving };
     }),
   requestEdit: (editRequestId) => set({ editRequestId }),
+  requestRecovery: (recoveryRequestEdgeId, recoveryRequestActionId = null) => set({ recoveryRequestEdgeId, recoveryRequestActionId }),
+  setRecoveryConnect: (recoveryConnect) => set({ recoveryConnect }),
   setEditingText: (editingTextId) => set({ editingTextId }),
   setQuietEdge: (quietEdgeId) => set((state) => (state.quietEdgeId === quietEdgeId ? state : { quietEdgeId })),
 

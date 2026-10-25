@@ -588,6 +588,8 @@ const MIGRATIONS: Record<number, Migration> = {
   18: (document) => document,
   19: migrateAddWaypoints,
   20: everyRoom(migrateTextToMarkdown),
+  // Optional link/visibility fields on edges; existing independent compensation lines keep their look.
+  21: (document) => document,
 };
 
 export class UnsupportedVersionError extends Error {

@@ -25,8 +25,11 @@ Queue and Data Store artwork also grows when you drag a corner resize handle.
 
 - Rename: double-click, or select and press `Enter`.
 - A label cut short? Run **Fit shapes to text** from `⌘K`.
-- Technology: **⋯ → Edit details…** → **Technology**. `Postgres` or `Rust 1.90` work; the shape
-  shows a matching icon.
+- Technology: click **Tech** on the selected shape, then enter a name. `Postgres` or `Rust 1.90`
+  work; the shape shows a matching icon. Edit and delete are directly beside the shape's kind.
+  Small marks and simple notes get a content-sized card. Drag the card's top edge to move it
+  out of the way; click empty canvas to dismiss it. Resize the description box from its lower-right
+  corner. Right-click for attachment, copy and other actions.
 
 ![Technology suggestions for PostgreSQL.](../media/guides/technology-suggestions.png)
 
@@ -50,9 +53,34 @@ Right-click → **Reset route** restores automatic routing. **Tidy connectors** 
 
 ## Sync, async and the reply
 
-Between two services, the connector's **Interaction** section sets **HTTP** or **Generic Call**,
-and **Sync** (caller waits) or **Async** (shown with a break mark). Under **Response**, add a reply
-line and its label, or click **Guess**. Async has no reply.
+Between two services, choose **HTTP** or **Generic Call**, then describe the request. For HTTP,
+pick a method and enter the path. **Sync** and **Async** sit beside Protocol. Choose **Add reply**
+for an editable return path with a suggested response. Async shows a break mark and has no reply.
+The drawing rail shows straight, stepped and curved routes as small
+previews you can choose with one click, beside arrowhead, colour, condition and flow controls. The
+colour wheel means automatic colour, as it does for shapes; click it to choose a fixed colour. Click
+the condition icon to edit a condition without making the inspector taller. Hover an icon to see
+what it does.
+
+To show how a successful step could be counteracted later in a workflow, select its connector and
+choose **+ Add** in Recovery, then click the shape that should receive the recovery action. A
+temporary arrow follows your pointer; press `Esc` to cancel. The new dashed arrow stays on the
+canvas. Hover either arrow to see the linked pair glow; hovering the recovery arrow also shows the
+original call in a small canvas tooltip. Click the recovery arrow to name the business action and
+edit its protocol and operation in the compact companion card. The arrow shows the action name and
+operation together when both are set. Its editor clears the canvas while you drag a recovery arrow's
+bend or endpoint, then returns when you release it.
+Drag the top edge of the main popup; the counteraction card and linking thread move with it.
+Click empty canvas to dismiss both.
+The route is chosen from the canvas and can still be changed there.
+You can add several actions to one step. A compensation is a business operation, not an automatic
+HTTP retry or a claim that the earlier state is restored exactly.
+
+An AI agent using Draft Canvas MCP, including Nodi, can make the same association. Add a
+`compensates` relationship with `compensationFor` set to the original connector id; use
+`compensationName` for the business action, `label` for its operation, and
+`compensationProtocol` for `http`, `calls` or `grpc`. `read_diagram` returns the association, and
+`update_diagram` can edit or fold the recovery arrow with `compensationVisible: false`.
 
 ## More connector tools
 

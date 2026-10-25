@@ -1012,6 +1012,9 @@ export function useKeyboard({
       // …and Quick Connect, which owns only Escape/arrows/Enter/Tab: a letter would drop a shape behind
       // it, and Backspace would delete the very node it is connecting from.
       if (useUiStore.getState().quickConnect) return;
+      // Choosing a recovery destination owns the next canvas click and Escape; ordinary shape
+      // shortcuts must not create something behind its waiting arrow.
+      if (useUiStore.getState().recoveryConnect && event.key !== 'Escape') return;
       // A modal (Export, Settings, Shortcuts, About) focuses its own panel, which
       // `isEditableTarget` doesn't count — without this, Backspace deleted the selection
       // behind the dialog and letter keys dropped nodes under it. Its own Escape/Tab
@@ -1229,6 +1232,12 @@ export function useKeyboard({
           state.deleteSelection();
           return;
         case 'Escape': {
+          if (useUiStore.getState().recoveryConnect) {
+            useUiStore.getState().setRecoveryConnect(null);
+            useUiStore.getState().setQuietEdge(null);
+            event.preventDefault();
+            return;
+          }
           // Mid endpoint drag, Escape cancels that drag (the handle's own listener) — and only that.
           if (useUiStore.getState().reconnectDragActive) return;
           arm(null);

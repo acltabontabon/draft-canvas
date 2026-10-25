@@ -218,6 +218,11 @@ RELATIONSHIP_FIELDS = {
     'lineStyle',
     'response',
     'deliveryAttempts',
+    'compensationFor',
+    'compensationVisible',
+    'compensationName',
+    'compensationProtocol',
+    'compensationDescription',
     'attachments',
     'evidence',
     'route',
@@ -526,6 +531,7 @@ def check_view(view: View, r: Report, repo: str | None, request: dict, is_top: b
     pairs: dict[tuple, str] = {}
     connected: set[str] = set()
     unlabelled = []
+    relationship_by_id = {rel.get('id'): rel for rel in view.rels}
     for rel in view.rels:
         rid = rel.get('id')
         src, dst = rel.get('from'), rel.get('to')
@@ -537,11 +543,11 @@ def check_view(view: View, r: Report, repo: str | None, request: dict, is_top: b
                 r.error(f'{p} relationship {rid}', f'{end} "{value}" is not an element of this view{elsewhere}')
         if src == dst and src is not None:
             r.error(f'{p} relationship {rid}', 'connects an element to itself')
-        twin = rel.get('semantic') == 'compensates'
-        key = (src, dst, twin)
-        if key in pairs:
-            r.error(f'{p} relationship {rid}', f'a second relationship {src} → {dst} (first: {pairs[key]}) — one per direction; merge them')
-        pairs[key] = rid
+        if rel.get('semantic') != 'compensates':
+            key = (src, dst)
+            if key in pairs:
+                r.error(f'{p} relationship {rid}', f'a second relationship {src} → {dst} (first: {pairs[key]}) — one ordinary relationship per direction; merge them')
+            pairs[key] = rid
         connected.update(x for x in (src, dst) if isinstance(x, str))
         label = rel.get('label')
         if not label:
@@ -569,6 +575,23 @@ def check_view(view: View, r: Report, repo: str | None, request: dict, is_top: b
                 r.error(f'{p} relationship {rid}', f'{field} longer than {MAX[field]}')
         if rel.get('deliveryAttempts') is not None and rel.get('semantic') != 'deadLetters':
             r.warn(f'{p} relationship {rid}', 'deliveryAttempts only shows on a deadLetters relationship')
+        parent_id = rel.get('compensationFor')
+        if parent_id is not None:
+            parent = relationship_by_id.get(parent_id)
+            if not parent or parent_id == rid or parent.get('semantic') == 'compensates':
+                r.error(f'{p} relationship {rid}', 'compensationFor must name another, non-compensation relationship in this view')
+            if rel.get('semantic') != 'compensates':
+                r.error(f'{p} relationship {rid}', 'a linked action needs semantic "compensates"')
+        elif 'compensationVisible' in rel:
+            r.error(f'{p} relationship {rid}', 'compensationVisible requires compensationFor')
+        if rel.get('semantic') != 'compensates' and any(rel.get(field) is not None for field in ('compensationName', 'compensationProtocol', 'compensationDescription')):
+            r.error(f'{p} relationship {rid}', 'counteraction details require semantic "compensates"')
+        if rel.get('compensationProtocol') not in (None, 'http', 'calls', 'grpc'):
+            r.error(f'{p} relationship {rid}', 'compensationProtocol must be http, calls or grpc')
+        if isinstance(rel.get('compensationName'), str) and len(rel['compensationName']) > 120:
+            r.error(f'{p} relationship {rid}', 'compensationName longer than 120')
+        if isinstance(rel.get('compensationDescription'), str) and len(rel['compensationDescription']) > 280:
+            r.error(f'{p} relationship {rid}', 'compensationDescription longer than 280')
         check_attachments(rel, f'{p} relationship {rid}', r)
         check_evidence(rel, f'{p} relationship {rid}', r, repo)
     if unlabelled:

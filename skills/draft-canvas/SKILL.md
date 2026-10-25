@@ -2,7 +2,7 @@
 name: draft-canvas
 description: Draws a codebase's architecture as a detailed, editable Draft Canvas diagram — C4 views with look-inside drill-downs, presentation flows of the real request path, notes, code snippets and source evidence — through the Draft Canvas desktop app's MCP tools. Use when someone asks to diagram, draw, map, visualize or explain the architecture of a repository, service or system in Draft Canvas, to turn a codebase into a diagram, or to refresh such a diagram after the code changed.
 metadata:
-  version: "11"
+  version: "13"
   contract: "3"
   requires: Draft Canvas Desktop with agent access on (MCP server draft-canvas)
 ---
@@ -76,6 +76,12 @@ edit `request.json`:
   compensation, fallback, a rejection the caller shows — not every error that merely propagates; start
   it where the paths part and end it with a `{spotlight}` on where the failure lands, never by stepping
   a relationship backwards. Never invent an order.
+- **Compensating actions.** When code documents a recovery operation, draw it as a separate
+  relationship with `semantic: "compensates"`, `compensationFor` set to the original relationship
+  id, and `compensationName` for the business action. Use `label` for its wire operation and
+  `compensationProtocol` (`http`, `calls` or `grpc`) when known. It stays an ordinary editable
+  relationship; `compensationVisible: false` folds only its line. `read_diagram` returns these fields,
+  and `update_diagram` can change them. Do not infer a recovery from a failure path alone.
 - **Notes, three to eight in the whole diagram**, each with an `about`: `decision` (a choice the code or an ADR makes),
   `warning` (a risk you can see), `question` (what the code can't tell you), `code` (≤ 15 lines that say
   more than a sentence). A `label` is Markdown — a legend, an endpoint table, a runbook checklist or a

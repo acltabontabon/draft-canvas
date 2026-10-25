@@ -14,9 +14,23 @@ The retired VS Code extension has [its own changelog](https://github.com/acltabo
 
 - **Traffic** — Show traffic on the canvas to see drawn paths, flowing light, handwritten findings
   and open questions. Nothing is saved or shared.
+- **Compensating actions** — Click **+ Add** on an interaction, then choose a target shape on the
+  canvas. Hover either arrow to light up the linked pair and see the original call in a tooltip.
+  A compact companion card edits the action and its route, with direct protocol choices and a
+  subtle thread back to the selected recovery.
+- **Agent editing parity** — MCP agents and Nodi can create, read and update a linked recovery's
+  parent call, business name, counteraction protocol, description and visible arrow state.
 
 #### Changed
 
+- Connector editing puts the operation and editable reply together, gives a new reply a useful
+  default, and keeps route previews, arrowhead, colour, condition and flow controls in one compact
+  rail with tooltips.
+- A selected shape now has a compact two-row card: colour, kind, technology and quick edits above
+  its canvas actions. Simple marks get a content-sized card. Details use the card's full width
+  without an overflow menu. Compact shape cards fit their contents, and dragging a card's top edge
+  moves the shape or connector editor; the counteraction companion follows its parent. Clicking
+  empty canvas dismisses them.
 - When a live session ends on a collaborator, their canvas closes behind a card that says why, with
   the choice to keep a copy or go home. Someone the owner removes can only go home.
 

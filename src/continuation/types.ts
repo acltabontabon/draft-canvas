@@ -102,6 +102,8 @@ export interface FragmentEdgeSpec {
    * infers its default like any hand-drawn connector.
    */
   semantic?: EdgeSemantic;
+  /** A proposed recovery action belongs to this existing forward interaction. */
+  compensationFor?: string;
 }
 
 /**

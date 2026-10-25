@@ -10,7 +10,7 @@ A document (`DraftDocument` in `src/document/types.ts`) is JSON with these root 
 | Field | Contents |
 | --- | --- |
 | `format` | Always `"draft-canvas"` |
-| `version` | Format version, currently **21** (`CURRENT_VERSION`) |
+| `version` | Format version, currently **22** (`CURRENT_VERSION`) |
 | `metadata` | `id`, `title`, `createdAt`, `updatedAt`, optional `projectId` |
 | `nodes`, `edges`, `flows`, `viewport` | The top-level graph |
 | `settings` | Canvas settings, including the background |
@@ -61,9 +61,18 @@ Rules for a new version:
 | v18 → v19 | identity | No-op (optional source evidence) |
 | v19 → v20 | `migrateAddWaypoints` | No-op (connector `waypoints`) |
 | v20 → v21 | `migrateTextToMarkdown` | Text node and Text attachment `text` is escaped so it reads the same as Markdown |
+| v21 → v22 | identity | No-op (optional linked compensation fields on connectors) |
 
 Wrapped in `everyRoom`: the migrations from v1, v2, v6, v7, v10, v13, v17 and v20. `migrateActionsToNotes` is
 root-only but walks rooms itself to resolve anchors.
+
+Linked compensating actions remain ordinary connectors. A compensation can name its originating
+interaction with `compensationFor`, keep its line folded with `compensationVisible: false`, and
+carry a business name (`compensationName`), protocol (`compensationProtocol`) and optional context
+(`compensationDescription`). Its ordinary `label` remains the counteraction operation. These fields
+are available in MCP `create_diagram`, `read_diagram` and `update_diagram`, including through Nodi.
+Older, unlinked `compensates` connectors stay visible; migration never guesses which operation they
+counteract. An invalid link is removed while the action remains visible and editable.
 
 ## Validation
 

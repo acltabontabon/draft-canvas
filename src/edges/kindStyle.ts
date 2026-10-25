@@ -12,6 +12,7 @@ import { accentOf, type Theme } from '../render/theme/tokens';
  * `docs/reference/architecture.md`'s note on the two independent edge renderers.
  */
 export function dashForEdge(edge: DraftEdge): number[] | undefined {
+  if (edge.semantic === 'compensates' && edge.compensationFor && edge.compensationVisible !== false && (edge.kind === undefined || edge.kind === 'sync') && !edge.async) return [5, 4];
   switch (edge.kind) {
     case 'event':
       return [1, 4];
@@ -62,11 +63,12 @@ export function markerVariantForEdge(edge: DraftEdge): MarkerVariant {
  * theme's plain connector grey, exactly as an unaccented edge always has.
  */
 export function resolveEdgeColor(
-  edge: Pick<DraftEdge, 'accent'>,
+  edge: Pick<DraftEdge, 'accent'> & Partial<Pick<DraftEdge, 'semantic' | 'compensationFor'>>,
   sourceNode: { accent?: Accent } | undefined,
   theme: Theme,
 ): string {
   const explicit = edge.accent;
+  if (explicit === undefined && edge.semantic === 'compensates' && edge.compensationFor) return theme.accents.rose.line;
   const effective = explicit ?? sourceNode?.accent ?? 'neutral';
   if (effective === 'neutral') return theme.edge;
   const palette = accentOf(theme, effective);

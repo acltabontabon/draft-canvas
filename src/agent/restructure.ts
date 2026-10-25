@@ -1,4 +1,5 @@
 import { canCreateInside, embed, viewOf, walkGraphs, type DepthPath } from '../depth/tree';
+import { repairCompensationLinks } from '../document/compensation';
 import { freeOriginFor } from '../document/geometry';
 import { descendantsOf } from '../document/operations';
 import { LIMITS } from '../document/limits';
@@ -46,7 +47,8 @@ export function moveInside(file: DraftDocument, path: DepthPath, ownerId: unknow
   });
   const pairs = new Set<string>();
   for (const edge of outerEdges) {
-    const pair = `${edge.source}|${edge.target}|${edge.semantic === 'compensates' ? 'compensation' : 'normal'}`;
+    if (edge.semantic === 'compensates') continue;
+    const pair = `${edge.source}|${edge.target}`;
     if (pairs.has(pair)) throw new AgentError('UNSUPPORTED', 'Moving these shapes would merge distinct overview relationships. Consolidate them explicitly first.');
     pairs.add(pair);
   }
@@ -67,14 +69,14 @@ export function moveInside(file: DraftDocument, path: DepthPath, ownerId: unknow
     const placed = { ...n, x: Math.round(n.x - minX + origin.x), y: Math.round(n.y - minY + origin.y) };
     return placed.parentId && !ids.has(placed.parentId) ? { ...placed, parentId: undefined } : placed;
   });
-  let outer: DraftDocument = { ...view, nodes: view.nodes.filter((n) => !ids.has(n.id)), edges: outerEdges, flows: view.flows.filter((f) => !flowIds.has(f.id)) };
+  let outer: DraftDocument = { ...view, nodes: view.nodes.filter((n) => !ids.has(n.id)), edges: repairCompensationLinks(outerEdges), flows: view.flows.filter((f) => !flowIds.has(f.id)) };
   // A connector whose end is now the owner is a re-pointed connector: its inferred meaning follows
   // its new end, as `moveOutside`'s does.
   for (const edge of outerEdges) if (edge !== view.edges.find((e) => e.id === edge.id)) outer = reinferIfEligible(outer, edge.id, view);
   const without = path.length ? embed(file, path, outer) : outer;
   // Bends travel with their shapes, by the same amount.
   const movedEdges = innerEdges.map((edge) => carriedBends(edge, origin.x - minX, origin.y - minY));
-  return embed(without, childPath, { ...inside, nodes: [...inside.nodes, ...movedNodes], edges: [...inside.edges, ...movedEdges], flows: [...inside.flows, ...innerFlows] });
+  return embed(without, childPath, { ...inside, nodes: [...inside.nodes, ...movedNodes], edges: repairCompensationLinks([...inside.edges, ...movedEdges]), flows: [...inside.flows, ...innerFlows] });
 }
 
 /**
@@ -128,14 +130,15 @@ export function moveOutside(
     delete moved.waypoints;
     return moved;
   });
-  const pairs = new Set(parent.edges.map((e) => `${e.source}|${e.target}|${e.semantic === 'compensates' ? 'compensation' : 'normal'}`));
+  const pairs = new Set(parent.edges.filter((e) => e.semantic !== 'compensates').map((e) => `${e.source}|${e.target}`));
   for (const edge of redirected) {
-    const pair = `${edge.source}|${edge.target}|${edge.semantic === 'compensates' ? 'compensation' : 'normal'}`;
+    if (edge.semantic === 'compensates') continue;
+    const pair = `${edge.source}|${edge.target}`;
     if (pairs.has(pair)) throw new AgentError('UNSUPPORTED', `Relationship "${edge.id}" would merge with one the outer view already has between "${edge.source}" and "${edge.target}". Consolidate them explicitly first.`, { details: { relationship: edge.id } });
     pairs.add(pair);
   }
 
-  const room = { ...view, nodes: view.nodes.filter((n) => !ids.has(n.id)), edges: view.edges.filter((e) => !movedEdgeIds.has(e.id)), flows: view.flows.filter((f) => !flowIds.has(f.id)) };
+  const room = { ...view, nodes: view.nodes.filter((n) => !ids.has(n.id)), edges: repairCompensationLinks(view.edges.filter((e) => !movedEdgeIds.has(e.id))), flows: view.flows.filter((f) => !flowIds.has(f.id)) };
   const emptied = embed(file, path, room);
   const around = viewOf(emptied, parentPath)!;
   const touched = new Set<string>([...ids, ...movedEdgeIds, owner.id]);
@@ -161,7 +164,7 @@ export function moveOutside(
       return placed;
     });
     const movedEdges = innerEdges.map((edge) => carriedBends(edge, origin.x - minX, origin.y - minY));
-    let next: DraftDocument = { ...around, nodes: [...around.nodes, ...movedNodes], edges: [...around.edges, ...movedEdges, ...redirected], flows: [...around.flows, ...movedFlows] };
+    let next: DraftDocument = { ...around, nodes: [...around.nodes, ...movedNodes], edges: repairCompensationLinks([...around.edges, ...movedEdges, ...redirected]), flows: [...around.flows, ...movedFlows] };
     if (into) for (const node of movedNodes.filter((n) => n.parentId === into)) next = fitGroups(next, node.id);
     // A connector whose end changed is a re-pointed connector: its inferred meaning follows its new
     // end, and it is anchored from where both shapes are now.

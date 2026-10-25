@@ -28,6 +28,8 @@ export const TEXT_FIELD_LIMITS = {
   label: LIMITS.maxLabelLength,
   condition: LIMITS.maxConditionLength,
   response: LIMITS.maxResponseLength,
+  compensationName: LIMITS.maxCompensationNameLength,
+  compensationDescription: LIMITS.maxDescriptionLength,
 } as const;
 
 type LimitedField = keyof typeof TEXT_FIELD_LIMITS;

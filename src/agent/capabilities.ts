@@ -50,12 +50,13 @@ export function capabilities(args: { topics?: unknown; starter?: unknown }): Rec
     out.relationships = {
       semantics: EDGE_SEMANTICS,
       kinds: CONNECTOR_KINDS,
-      rule: 'Leave semantic out to infer it from the two element types (as the editor does). A semantic the pairing does not offer is replaced by the inferred one, with an advisory. One relationship per direction between two elements, plus a "compensates" twin. No self-loops.',
+      rule: 'Leave semantic out to infer it from the two element types (as the editor does). A semantic the pairing does not offer is replaced by the inferred one, with an advisory. One ordinary relationship per direction between two elements; multiple compensates actions may share that direction. No self-loops.',
       options: {
         color: 'One of the accents, like an element.',
         lineStyle: `${LINE_STYLE_NAMES.join(', ')} (stepped is the default).`,
         response: 'The reply line of a synchronous call — a person or a service calling a service, behaviour none or "sync": true draws it without a label, a string labels it ("200 Order"), false or null removes it. Reads report it the same way.',
         deliveryAttempts: 'On a dead-letter route (semantic "deadLetters"): how many attempts come first, 1–50.',
+        compensation: 'A recovery is another relationship with semantic "compensates" and compensationFor naming the original relationship id in the same view. compensationName is the business action; label is its operation; compensationProtocol is http, calls or grpc; compensationDescription adds context. compensationVisible false folds its line. create_diagram, update_diagram and read_diagram all support these fields.',
       },
       repoint: 'update set.from / set.to re-points a relationship in place (swap them to reverse it): its id, label, flows and attachments stay, and an inferred meaning is inferred again for what it now connects.',
     };

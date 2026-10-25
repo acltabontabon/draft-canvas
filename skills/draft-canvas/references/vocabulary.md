@@ -85,8 +85,12 @@ worker `consumes`) and dead-letter from that queue; only a stream's consumer par
 it on the main path's key calls, not everywhere. `condition` adds a short guard under the label
 ("amount > 0", "if cache miss").
 
-One relationship per direction between two elements. When a caller both reads and writes, that is one
-`readsWrites`, not two lines.
+One ordinary relationship per direction between two elements. When a caller both reads and writes,
+that is one `readsWrites`, not two lines. Multiple `compensates` recovery actions may share a direction.
+To associate one with the call it undoes, set its `compensationFor` to that call's relationship id.
+`compensationName` names the business action; `label` names its operation. Set
+`compensationProtocol` to `http`, `calls` or `grpc` when known. Use `compensationVisible: false` only
+when the person wants the recovery line folded on the canvas.
 
 Not every meaning fits every pair: a gateway `routes` to a service rather than `grpc`, a topic
 `deliversTo` its subscribers rather than being `consumes`d. A meaning the pair doesn't offer is

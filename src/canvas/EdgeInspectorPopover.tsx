@@ -1,5 +1,6 @@
 import { SourceEvidenceDetails } from './SourceEvidenceDetails';
-import { memo, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { autoSwatch } from './autoSwatch';
+import { memo, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useInternalNode, useStore } from '@xyflow/react';
 import {
@@ -11,8 +12,11 @@ import {
   type DraftFlow,
   type DraftNode,
   type EdgeSemantic,
+  type EdgeRouting,
 } from '../document/types';
 import { stepIndexOf } from '../document/flow';
+import { normalizeCompensationHttpLabel } from '../document/compensation';
+import { LIMITS } from '../document/limits';
 import {
   capabilityFor,
   categoryOf,
@@ -29,6 +33,7 @@ import { useUiStore } from '../store/uiStore';
 import { edgeIndex, nodeIndex } from '../store/selectors';
 import { useThemeValue } from '../ui/theme/useTheme';
 import { Button } from '../ui/common/Button';
+import { Tooltip, TooltipGroup } from '../ui/common/Tooltip';
 import {
   attachmentRowBelowsSourceOrTarget,
   clampPopoverCenterX,
@@ -38,6 +43,7 @@ import {
 } from './edgeGeometry';
 import { useToolbarHeight } from './useToolbarHeight';
 import { useOverlayPosition } from './useOverlayPosition';
+import { usePopoverDrag } from './usePopoverDrag';
 import { rightClearance } from './canvasFrame';
 import { clampCenterX } from './popoverPlacement';
 import { useLastPresent, usePopoverPresence } from './usePopoverPresence';
@@ -81,6 +87,12 @@ const EDGE_SEMANTIC_LABELS: Record<EdgeSemantic, string> = {
   escalates: 'Escalates to',
   notifies: 'Notifies',
 };
+
+const ROUTE_PREVIEWS: { value: EdgeRouting; label: string; path: string }[] = [
+  { value: 'straight', label: 'Straight', path: 'M4 15 30 5' },
+  { value: 'smoothstep', label: 'Stepped', path: 'M4 15h12V5h14' },
+  { value: 'bezier', label: 'Curved', path: 'M4 15C15 15 19 5 30 5' },
+];
 
 const CONNECTOR_KIND_LABELS: Record<ConnectorKind, string> = {
   sync: 'Sync',
@@ -145,7 +157,7 @@ export function EdgeInspectorPopover() {
   // The connector it was showing, kept for the fade-out after selection has already moved on.
   const shownEdgeId = useLastPresent(open ? selectedEdge.id : null);
   if (!mounted || !shownEdgeId) return null;
-  return <EdgeInspectorBody edgeId={shownEdgeId} closing={closing} />;
+  return <EdgeInspectorBody key={shownEdgeId} edgeId={shownEdgeId} closing={closing} />;
 }
 
 function EdgeInspectorBody({ edgeId, closing }: { edgeId: string; closing: boolean }) {
@@ -159,6 +171,7 @@ function EdgeInspectorBody({ edgeId, closing }: { edgeId: string; closing: boole
 
   const [membershipOpen, setMembershipOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
+  const dragControl = usePopoverDrag(panelRef, edgeId);
   usePopoverKeyboard(panelRef);
 
   // Observed rather than read per placement: a value that only changes when the toolbar wraps.
@@ -241,9 +254,12 @@ function EdgeInspectorBody({ edgeId, closing }: { edgeId: string; closing: boole
     // it — a static constant can't account for either. `TOOLBAR_CLEARANCE` stays as the fallback
     // for the (rare) frame where `.dc-toolbar` isn't in the DOM yet.
     const toolbarClearance = toolbarHeight ? toolbarHeight + 10 : TOOLBAR_CLEARANCE;
-    const notEnoughRoomAbove = screenLabelPoint.y - POPOVER_GAP - size.height < toolbarClearance;
-    const flipBelow =
-      attachmentRowBelowsSourceOrTarget(labelPoint.x, labelPoint.y, sourceRect, targetRect) || notEnoughRoomAbove;
+    const aboveSpace = Math.max(0, screenLabelPoint.y - POPOVER_GAP - Math.max(frame.root.top + SCREEN_MARGIN, toolbarClearance));
+    const belowSpace = Math.max(0, frame.root.bottom - SCREEN_MARGIN - screenLabelPoint.y - POPOVER_GAP);
+    const nearNode = attachmentRowBelowsSourceOrTarget(labelPoint.x, labelPoint.y, sourceRect, targetRect);
+    const flipBelow = belowSpace >= size.height
+      ? nearNode || aboveSpace < size.height
+      : aboveSpace < size.height && belowSpace > aboveSpace;
 
     // Horizontal collision guard: `attachmentRowBelowsSourceOrTarget` above only checks a single
     // point at the label's own x, so it can't see the popover's actual *width* reaching sideways
@@ -274,14 +290,25 @@ function EdgeInspectorBody({ edgeId, closing }: { edgeId: string; closing: boole
       SCREEN_MARGIN,
       rightClearance(useUiStore.getState().flowPanelOpen, SCREEN_MARGIN, frame.root.right),
     );
+    const sidecarWidth = 310;
+    const roomRight = frame.root.right - SCREEN_MARGIN - (onCanvasX + size.width / 2);
+    const roomLeft = onCanvasX - size.width / 2 - frame.root.left - SCREEN_MARGIN;
+    const sidecarGap = Math.max(10, Math.min(56, Math.max(roomRight, roomLeft) - sidecarWidth));
+    const sidecarLeft = roomRight >= sidecarWidth + sidecarGap || roomRight >= roomLeft
+      ? `calc(100% + ${sidecarGap}px)`
+      : `calc(-${sidecarWidth + sidecarGap}px)`;
     const labelAt = frame.screenToOverlay({ x: onCanvasX, y: screenLabelPoint.y });
     return {
       placement: flipBelow ? 'below' : 'above',
+      vars: {
+        '--dc-edge-popover-max-height': `${Math.max(100, flipBelow ? belowSpace : aboveSpace)}px`,
+        '--dc-recovery-sidecar-left': sidecarLeft,
+      },
       transform: flipBelow
         ? `translate(-50%, 0) translate(${labelAt.x}px, ${labelAt.y + POPOVER_GAP}px)`
         : `translate(-50%, -100%) translate(${labelAt.x}px, ${labelAt.y - POPOVER_GAP}px)`,
     };
-  });
+  }, dragControl.moved);
 
   if (!displayEdge || !labelPoint || !target) return null;
 
@@ -295,10 +322,13 @@ function EdgeInspectorBody({ edgeId, closing }: { edgeId: string; closing: boole
         role="toolbar"
         aria-label="Connector options"
         data-closing={closing ? 'true' : undefined}
+        data-reshaping={interactionActive && displayEdge.compensationFor ? 'true' : undefined}
         data-placement={placement}
+        data-moved={dragControl.moved ? 'true' : undefined}
         onPointerDown={(event) => event.stopPropagation()}
       >
         <span className="dc-popover-caret" aria-hidden="true" />
+        <button type="button" className="dc-popover-drag-zone" aria-label="Move connector popup" {...dragControl.handle} />
         <div className="dc-popover-inner">
           {/* Keyed on the edge id: the editor below is now always mounted (no more "⋯" to
               unmount it on collapse), so switching to a different connector must remount this
@@ -346,6 +376,43 @@ const EdgeInspectorRow = memo(function EdgeInspectorRow({
     : undefined;
   const caption = edge.label || relation || null;
   const flowChip = flowChipFor(flows, selectedFlowId, memberOf, edge.id);
+  const compactFlow = memberOf.length === 0;
+  const hasOperationEditor = Boolean(edge.compensationFor || (sourceNode && targetNode &&
+    defaultsToResponse(categoryOf(sourceNode), categoryOf(targetNode))));
+  const flowAction = (
+    <Tooltip content={{ title: flowChip.label }}>
+      {(tip) => (
+        <button
+          type="button"
+          className={`dc-edge-inspector-flows${compactFlow ? ' dc-edge-inspector-flow-icon' : ''}`}
+          data-empty={memberOf.length === 0 ? 'true' : undefined}
+          data-flow-state={flowChip.state}
+          aria-expanded={flowChip.state === 'list' ? membershipOpen : undefined}
+          aria-label={compactFlow ? flowChip.label : undefined}
+          {...tip}
+          onClick={() => {
+            const state = useEditorStore.getState();
+            switch (flowChip.state) {
+              case 'none':
+                startFlowWithEdge(edge.id);
+                return;
+              case 'add':
+                state.addEdgeToFlow(flowChip.flow.id, edge.id);
+                return;
+              default:
+                setMembershipOpen(!membershipOpen);
+            }
+          }}
+        >
+          {compactFlow ? (
+            <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M3.5 3.5h5v5h-5zM11.5 11.5h5v5h-5zM8.5 6h3v8h-3" />
+            </svg>
+          ) : flowChip.label}
+        </button>
+      )}
+    </Tooltip>
+  );
 
   // A connector fanning *out* of a Junction is a branch — the branching structure itself already
   // communicates that ("approved"/"rejected", "yes"/"no"), so a contextual placeholder nudges
@@ -356,8 +423,8 @@ const EdgeInspectorRow = memo(function EdgeInspectorRow({
 
   return (
     <>
-      <div className="dc-popover-row">
-        {editingLabel ? (
+      {(!hasOperationEditor || memberOf.length > 0) && <div className="dc-popover-row">
+        {!hasOperationEditor && (editingLabel ? (
           <input
             autoFocus
             className="dc-edge-inspector-caption-input"
@@ -391,38 +458,12 @@ const EdgeInspectorRow = memo(function EdgeInspectorRow({
           >
             {caption ?? emptyLabelText}
           </button>
-        )}
-        <button
-          type="button"
-          className="dc-edge-inspector-flows"
-          data-empty={memberOf.length === 0 ? 'true' : undefined}
-          data-flow-state={flowChip.state}
-          // Only the "list" state opens the checklist; the other two act in one click.
-          aria-expanded={flowChip.state === 'none' || flowChip.state === 'add' ? undefined : membershipOpen}
-          title="Flow membership"
-          onClick={() => {
-            const state = useEditorStore.getState();
-            switch (flowChip.state) {
-              case 'none':
-                // No flows at all: one click starts one with this connector, and the panel
-                // opens on its name — the same create-and-name motion as everywhere else.
-                startFlowWithEdge(edge.id);
-                return;
-              case 'add':
-                // The active flow is the context — one click, no picker.
-                state.addEdgeToFlow(flowChip.flow.id, edge.id);
-                return;
-              default:
-                setMembershipOpen(!membershipOpen);
-            }
-          }}
-        >
-          {flowChip.label}
-        </button>
-      </div>
+        ))}
+        {memberOf.length > 0 && flowAction}
+      </div>}
 
       {membershipOpen && <MembershipPanel edgeId={edge.id} />}
-      <ExpandedPanel edge={edge} sourceNode={sourceNode} targetNode={targetNode} theme={theme} />
+      <ExpandedPanel edge={edge} sourceNode={sourceNode} targetNode={targetNode} theme={theme} flowAction={memberOf.length === 0 ? flowAction : null} />
     </>
   );
 });
@@ -526,35 +567,12 @@ function behaviorBadgeLabel(kind: ConnectorKind): string {
   return kind === 'event' ? 'Event · Async' : CONNECTOR_KIND_LABELS[kind];
 }
 
-const SUCCESS_STATUS_BY_VERB: Record<string, string> = {
-  GET: '200',
-  POST: '201',
-  PUT: '200',
-  PATCH: '200',
-  DELETE: '204',
-};
-
-/** Best-effort "Success" default for a request/response connector, derived from the request's own
- *  label — e.g. "GET Customer" → "200 Customer", "POST Payment" → "201 Payment". Falls back to a
- *  bare "200" (or "200 <label>" for a label with no recognisable verb) when nothing more specific
- *  can be inferred; the user is always free to overwrite it afterward. */
-function inferSuccessResponse(label: string | undefined): string {
-  const trimmed = label?.trim();
-  if (!trimmed) return '200';
-  const [first, ...rest] = trimmed.split(/\s+/);
-  const verb = first!.toUpperCase();
-  const status = SUCCESS_STATUS_BY_VERB[verb];
-  if (!status) return `200 ${trimmed}`;
-  const resource = rest.join(' ').trim();
-  return resource ? `${status} ${resource}` : status;
-}
-
 /**
  * A small two-field editor for a "verb + subject"-shaped string (a request label like "GET
  * Customer", a response like "200 Customer") — splits purely for display/editing convenience,
  * never persisted as two values: both fields commit back to the same single string field
  * (`edge.label`/`edge.response`) the rest of the app already reads. `key`-remounted by the
- * caller whenever that string changes from elsewhere (e.g. the "Guess" button, undo/redo) since
+ * caller whenever that string changes from elsewhere (e.g. undo/redo) since
  * these inputs are intentionally uncontrolled.
  */
 function SplitTextEditor({
@@ -653,44 +671,63 @@ const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const;
  * Like `SplitTextEditor`, but the first field is a fixed-vocabulary `InspectorSelect` (HTTP
  * verbs) instead of free text — used only for a Service→Service Request in HTTP mode. Commits
  * to the same single string field `SplitTextEditor` does (`"METHOD resource"`, e.g. "GET
- * Customers"); switching protocols back to Generic Call just changes how this one string is
+ * /customers"); switching protocols back to Generic Call just changes how this one string is
  * *edited*, never its shape.
  */
-function HttpRequestEditor({ value, onCommit }: { value: string; onCommit: (next: string) => void }) {
+function HttpRequestEditor({
+  value,
+  onCommit,
+  ariaLabel = 'Request',
+  defaultMethod = 'GET',
+  resourcePlaceholder = '/customers',
+  unknownMethodAsResource = false,
+}: {
+  value: string;
+  onCommit: (next: string) => void;
+  ariaLabel?: string;
+  defaultMethod?: string;
+  resourcePlaceholder?: string;
+  unknownMethodAsResource?: boolean;
+}) {
   const restRef = useRef<HTMLInputElement>(null);
   const trimmed = value.trim();
   const spaceIndex = trimmed.indexOf(' ');
   const rawMethod = (spaceIndex === -1 ? trimmed : trimmed.slice(0, spaceIndex)).toUpperCase();
-  const initialRest = spaceIndex === -1 ? '' : trimmed.slice(spaceIndex + 1).trim();
-  const method = rawMethod || 'GET';
+  const isKnownMethod = (HTTP_METHODS as readonly string[]).includes(rawMethod);
+  // Older generic recovery labels are free text. When edited as HTTP, show POST as the
+  // method and carry that text into the resource field instead of offering "OK" as a verb.
+  const useAsResource = unknownMethodAsResource && rawMethod !== '' && !isKnownMethod;
+  const initialRest = useAsResource ? (rawMethod === 'OK' ? '' : trimmed)
+    : spaceIndex === -1 ? '' : trimmed.slice(spaceIndex + 1).trim();
+  const method = useAsResource ? defaultMethod : rawMethod || defaultMethod;
 
   // A pre-existing label whose first word isn't a real HTTP verb (free text written before
   // switching into HTTP mode) stays selectable rather than silently discarded — the same
   // "never clobber an unusual existing value" principle `ServiceInteractionSection`'s own
   // Protocol/Mode selects follow.
-  const isKnownMethod = (HTTP_METHODS as readonly string[]).includes(method);
   const methodOptions: InspectorSelectOption[] = [
-    ...(isKnownMethod ? [] : [{ value: method, label: method }]),
+    ...((HTTP_METHODS as readonly string[]).includes(method) ? [] : [{ value: method, label: method }]),
     ...HTTP_METHODS.map((m) => ({ value: m, label: m })),
   ];
 
   const commit = (nextMethod: string, rest: string) => onCommit([nextMethod, rest].filter(Boolean).join(' '));
 
   return (
-    <div className="dc-inspector-split" role="group" aria-label="Request">
+    <div className="dc-inspector-split" role="group" aria-label={ariaLabel}>
       <InspectorSelect
         className="dc-inspector-select-split-first"
         value={method}
         options={methodOptions}
-        ariaLabel="Request method"
+        ariaLabel={`${ariaLabel} method`}
+        preferredDirection={unknownMethodAsResource ? 'up' : 'down'}
         onChange={(nextMethod) => commit(nextMethod, restRef.current?.value.trim() ?? initialRest)}
       />
       <input
         ref={restRef}
-        aria-label="Request resource"
+        aria-label={`${ariaLabel} resource`}
         className="dc-inspector-control dc-inspector-split-rest"
         defaultValue={initialRest}
-        placeholder="Customers"
+        placeholder={resourcePlaceholder}
         spellCheck={false}
         onBlur={(event) => commit(method, event.currentTarget.value)}
         onKeyDown={(event) => {
@@ -727,6 +764,7 @@ const SERVICE_MODE_OPTIONS: InspectorSelectOption[] = [
  * and palette, preserving the same stroke and response visibility rule from every entry point.
  */
 function ServiceInteractionSection({ edge, relations }: { edge: DraftEdge; relations: readonly EdgeSemantic[] }) {
+  const isCompensation = edge.semantic === 'compensates';
   // Generic Call ('calls') is the fallback reading for anything outside {http, calls} too —
   // including an edge that predates this editor and was left on some other `EdgeSemantic`.
   const protocol = edge.semantic === 'http' ? 'http' : 'calls';
@@ -742,32 +780,23 @@ function ServiceInteractionSection({ edge, relations }: { edge: DraftEdge; relat
       ? offered
       : [...offered, { value: edge.semantic, label: EDGE_SEMANTIC_LABELS[edge.semantic] }];
 
-  // A step can have one undo drawn beside it (`addCompensation`) — the same twin a second drag
-  // between the pair draws. Offered on the step, never on the undo itself.
-  const hasCompensation = useEditorStore((state) =>
-    state.document.edges.some((e) => e.source === edge.source && e.target === edge.target && e.semantic === 'compensates'),
-  );
-  const canAddCompensation = relations.includes('compensates') && edge.semantic !== 'compensates' && !hasCompensation;
-
   const isAsync = edge.kind === 'async';
   const modeOptions: InspectorSelectOption[] =
     edge.kind === undefined || edge.kind === 'sync' || edge.kind === 'async'
       ? SERVICE_MODE_OPTIONS
       : [...SERVICE_MODE_OPTIONS, { value: edge.kind, label: CONNECTOR_KIND_LABELS[edge.kind] }];
 
-  const isHttp = protocol === 'http';
+  const isHttp = !isCompensation && protocol === 'http';
 
   return (
     <>
-      <section className="dc-inspector-section">
-        <div className="dc-inspector-section-header">
-          <span className="dc-inspector-section-label">Interaction</span>
-        </div>
-        <div className="dc-inspector-section-row">
+      <section className="dc-inspector-section dc-inspector-service-top" aria-label="Interaction">
+        {isCompensation && <span className="dc-inspector-section-label">Undo relationship</span>}
+        <div className="dc-inspector-section-row dc-inspector-interaction-row">
           <InspectorSelect
             value={edge.semantic ?? 'calls'}
             options={protocolOptions}
-            ariaLabel="Protocol"
+            ariaLabel={isCompensation ? 'Relationship' : 'Protocol'}
             // Deliberately not `setEdgeSemantic` — that action's "fill in the blank" convenience
             // (auto-labelling an unlabelled edge with the semantic's own default text, e.g.
             // "HTTP") is right for the generic vocabulary but wrong here: Protocol and Request
@@ -776,29 +805,26 @@ function ServiceInteractionSection({ edge, relations }: { edge: DraftEdge; relat
             onChange={(value) =>
               useEditorStore
                 .getState()
-                .updateEdgeById(edge.id, { semantic: value as EdgeSemantic, semanticsOrigin: 'explicit' }, 'Set protocol')
+                .updateEdgeById(edge.id, { semantic: value as EdgeSemantic, semanticsOrigin: 'explicit' }, 'Set relationship')
             }
           />
-          <InspectorSelect
-            value={edge.kind ?? 'sync'}
-            options={modeOptions}
-            ariaLabel="Interaction mode"
-            onChange={(value) => useEditorStore.getState().setEdgeInteractionMode(edge.id, value === 'async' ? 'async' : 'sync')}
-          />
+          {(!isCompensation || edge.hasResponse || edge.kind === 'async') && (
+            <InspectorSelect
+              className="dc-inspector-mode-select"
+              value={edge.kind ?? 'sync'}
+              options={modeOptions}
+              ariaLabel="Interaction mode"
+              onChange={(value) => useEditorStore.getState().setEdgeInteractionMode(edge.id, value === 'async' ? 'async' : 'sync')}
+            />
+          )}
         </div>
-        {canAddCompensation && (
-          <Button
-            variant="quiet"
-            title="Draw this step's undo — a compensates connector between the same two services"
-            onClick={() => useEditorStore.getState().addCompensation(edge.id)}
-          >
-            + Add compensation
-          </Button>
+        {isCompensation && (
+          <p className="dc-inspector-help">A business action that counteracts an earlier step.</p>
         )}
       </section>
 
-      <section className="dc-inspector-section">
-        <span className="dc-inspector-section-label">Request</span>
+      <section className="dc-inspector-section dc-inspector-request-section" aria-label={isCompensation ? 'Undo action' : 'Operation'}>
+        <span className="dc-inspector-section-label">{isCompensation ? 'Undo action' : 'Operation'}</span>
         {isHttp ? (
           <HttpRequestEditor
             key={edge.label ?? ''}
@@ -816,31 +842,26 @@ function ServiceInteractionSection({ edge, relations }: { edge: DraftEdge; relat
             <SingleTextEditor
               key={edge.label ?? ''}
               value={edge.label ?? ''}
-              placeholder="Validate customer"
-              ariaLabel="Request"
+              placeholder={isCompensation ? 'Release reservation' : 'Validate customer'}
+              ariaLabel={isCompensation ? 'Undo action' : 'Request'}
               onCommit={(next) => useEditorStore.getState().updateEdgeLabel(edge.id, next)}
             />
           </div>
         )}
-      </section>
-
-      {!isAsync && (
-        <section className="dc-inspector-section">
-          <div className="dc-inspector-section-header">
-            <span className="dc-inspector-section-label">Response</span>
-            <button
-              type="button"
-              className="dc-inspector-toggle"
-              data-active={edge.hasResponse ? 'true' : undefined}
-              aria-pressed={Boolean(edge.hasResponse)}
-              aria-label="Response line"
-              title="Draw a quieter reply line back to the caller"
-              onClick={() => useEditorStore.getState().setEdgeHasResponse(edge.id, !edge.hasResponse)}
-            >
-              {edge.hasResponse ? 'On' : 'Off'}
-            </button>
-          </div>
-          {edge.hasResponse && (
+        {!isAsync && (!isCompensation || edge.hasResponse) && !edge.hasResponse && (
+          <button
+            type="button"
+            className="dc-reply-add"
+            aria-label="Add reply"
+            title="Add a reply line from the target back to the caller"
+            onClick={() => useEditorStore.getState().setEdgeHasResponse(edge.id, true)}
+          >
+            + Add reply
+          </button>
+        )}
+        {!isAsync && edge.hasResponse && (
+          <div className="dc-inspector-reply-line">
+            <span className="dc-inspector-reply-label">Reply</span>
             <div className="dc-inspector-section-row">
               {isHttp ? (
                 <SplitTextEditor
@@ -861,21 +882,293 @@ function ServiceInteractionSection({ edge, relations }: { edge: DraftEdge; relat
                   onCommit={(next) => useEditorStore.getState().setEdgeResponse(edge.id, next)}
                 />
               )}
-              {isHttp && !edge.response && (
+            </div>
+            <button
+              type="button"
+              className="dc-inspector-reply-hide"
+              aria-label="Hide reply"
+              title="Hide reply line"
+              onClick={() => useEditorStore.getState().setEdgeHasResponse(edge.id, false)}
+            >
+              <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
+                <path d="M3 3l10 10M13 3 3 13" />
+              </svg>
+            </button>
+          </div>
+        )}
+      </section>
+    </>
+  );
+}
+
+const COMPENSATION_PROTOCOL_OPTIONS: InspectorSelectOption[] = [
+  { value: 'http', label: 'HTTP' },
+  { value: 'calls', label: 'Call' },
+  { value: 'grpc', label: 'gRPC' },
+];
+
+interface RecoveryThreadPoints {
+  actionId: string;
+  from: { x: number; y: number };
+  to: { x: number; y: number };
+}
+
+function RecoveryThread({ points }: { points: RecoveryThreadPoints }) {
+  const left = Math.min(points.from.x, points.to.x) - 6;
+  const top = Math.min(points.from.y, points.to.y) - 6;
+  const width = Math.max(points.from.x, points.to.x) - left + 6;
+  const height = Math.max(points.from.y, points.to.y) - top + 6;
+  const fx = points.from.x - left;
+  const fy = points.from.y - top;
+  const tx = points.to.x - left;
+  const ty = points.to.y - top;
+  const dx = tx - fx;
+  const dy = ty - fy;
+  const mx = (fx + tx) / 2;
+  // A tiny, repeatable wobble reads like a pencil thread between two pieces of UI, while
+  // the smoothstep/dashed connectors behind it keep their own distinct canvas vocabulary.
+  const ink = `M ${fx} ${fy} C ${fx + dx * 0.19} ${fy - 3}, ${mx - dx * 0.12} ${fy + dy * 0.12 + 5}, ${mx - dx * 0.04} ${fy + dy * 0.27} C ${mx + dx * 0.04} ${fy + dy * 0.42 - 5}, ${mx - dx * 0.05} ${fy + dy * 0.63 + 4}, ${mx + dx * 0.02} ${fy + dy * 0.75} C ${mx + dx * 0.13} ${fy + dy * 0.93 - 3}, ${tx - dx * 0.17} ${ty + 3}, ${tx} ${ty}`;
+  return (
+    <svg className="dc-recovery-thread" viewBox={`0 0 ${width} ${height}`} style={{ left, top, width, height }} aria-hidden="true">
+      <path className="dc-recovery-thread-path" d={ink} />
+      <circle className="dc-recovery-thread-end" cx={fx} cy={fy} r="2" />
+      <circle className="dc-recovery-thread-end" cx={tx} cy={ty} r="2" />
+    </svg>
+  );
+}
+
+/** Linked recovery actions are ordinary edges underneath, but edited in the context of the
+ * interaction they counteract. Nothing here guesses the business action for the user. */
+function RecoverySection({
+  parent,
+  actions,
+  nodes,
+  compact = false,
+  singleAction = false,
+}: {
+  parent: DraftEdge;
+  actions: readonly DraftEdge[];
+  nodes: readonly DraftNode[];
+  compact?: boolean;
+  singleAction?: boolean;
+}) {
+  const [openId, setOpenId] = useState<string | null>(singleAction ? actions[0]?.id ?? null : null);
+  const threadRowRef = useRef<HTMLDivElement>(null);
+  const threadCardRef = useRef<HTMLDivElement>(null);
+  const [threadPoints, setThreadPoints] = useState<RecoveryThreadPoints | null>(null);
+  useLayoutEffect(() => {
+    const row = threadRowRef.current;
+    const card = threadCardRef.current;
+    const host = row?.closest<HTMLElement>('.dc-edge-inspector');
+    if (!openId || !row || !card || !host) return;
+    const measure = () => {
+      const hostRect = host.getBoundingClientRect();
+      const rowRect = row.getBoundingClientRect();
+      const cardRect = card.getBoundingClientRect();
+      const scale = host.offsetWidth ? hostRect.width / host.offsetWidth : 1;
+      if (!scale) return;
+      const side = cardRect.left >= rowRect.right ? 'right' : 'left';
+      const from = {
+        x: ((side === 'right' ? rowRect.right : rowRect.left) - hostRect.left) / scale,
+        y: (rowRect.top + rowRect.height / 2 - hostRect.top) / scale,
+      };
+      const rowCenterY = rowRect.top + rowRect.height / 2;
+      const cardAttachmentY = Math.max(cardRect.top + 20, Math.min(rowCenterY, cardRect.bottom - 20));
+      const to = {
+        x: ((side === 'right' ? cardRect.left : cardRect.right) - hostRect.left) / scale,
+        y: (cardAttachmentY - hostRect.top) / scale,
+      };
+      setThreadPoints((previous) => previous && previous.actionId === openId && previous.from.x === from.x && previous.from.y === from.y && previous.to.x === to.x && previous.to.y === to.y
+        ? previous : { actionId: openId, from, to });
+    };
+    const frame = window.requestAnimationFrame(measure);
+    const resize = new ResizeObserver(measure);
+    resize.observe(host);
+    resize.observe(row);
+    resize.observe(card);
+    const movement = new MutationObserver(measure);
+    movement.observe(host, { attributes: true, attributeFilter: ['style'] });
+    window.addEventListener('resize', measure);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      resize.disconnect();
+      movement.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [openId]);
+  const recoveryRequestId = useUiStore((state) => state.recoveryRequestEdgeId);
+  const recoveryRequestActionId = useUiStore((state) => state.recoveryRequestActionId);
+  useEffect(() => {
+    if (recoveryRequestId !== parent.id || actions.length === 0) return;
+    // A canvas request opens this action after selecting its parent.
+    // oxlint-disable-next-line react/set-state-in-effect
+    setOpenId(actions.find((action) => action.id === recoveryRequestActionId)?.id ?? actions[0]!.id);
+    useUiStore.getState().requestRecovery(null);
+  }, [recoveryRequestId, recoveryRequestActionId, parent.id, actions]);
+  const eligible = nodes.filter((node) => {
+    const category = categoryOf(node);
+    return category === 'service' || category === 'external' || actions.some((action) => action.source === node.id || action.target === node.id);
+  });
+  const names = new Map<string, number>();
+  for (const node of eligible) names.set(node.text || node.type, (names.get(node.text || node.type) ?? 0) + 1);
+  const seenNames = new Map<string, number>();
+  const participants: InspectorSelectOption[] = eligible.map((node) => {
+    const name = node.text || node.type;
+    const ordinal = (seenNames.get(name) ?? 0) + 1;
+    seenNames.set(name, ordinal);
+    return { value: node.id, label: names.get(name) === 1 ? name : `${name} ${ordinal}` };
+  });
+  const byId = new Map(eligible.map((node) => [node.id, node]));
+  const supportsCompensation = (sourceId: string, targetId: string) => {
+    const source = byId.get(sourceId);
+    const target = byId.get(targetId);
+    return Boolean(source && target && sourceId !== targetId &&
+      capabilityFor(categoryOf(source), categoryOf(target))?.relations.includes('compensates'));
+  };
+
+  const add = () => {
+    const ui = useUiStore.getState();
+    ui.setRecoveryConnect({ parentEdgeId: parent.id, sourceNodeId: parent.source });
+    ui.setQuietEdge(parent.id);
+    ui.setContinuation(null);
+  };
+
+  if (compact && actions.length === 0) {
+    return <Button variant="quiet" onClick={add}>+ Add compensating action</Button>;
+  }
+
+  return (
+    <section className="dc-inspector-section dc-recovery-section" data-single-action={singleAction ? 'true' : undefined} aria-label="Recovery and compensation">
+      <div className="dc-recovery-section-heading">
+        <span className="dc-inspector-section-label">{singleAction ? 'Compensating action' : 'Recovery'}</span>
+        {!singleAction && (
+          <Button variant="quiet" className="dc-recovery-add" aria-label="+ Add compensating action" onClick={add}>
+            + Add
+          </Button>
+        )}
+      </div>
+      {actions.map((action, index) => {
+        const open = openId === action.id;
+        const protocol = action.compensationProtocol ?? (parent.semantic === 'http' ? 'http' : 'calls');
+        const operation = action.label?.trim() ?? '';
+        const hasOperation = Boolean(operation && !/^(?:GET|POST|PUT|PATCH|DELETE)$/i.test(operation));
+        const callers = participants.filter((option) => option.value === action.source || supportsCompensation(option.value, action.target));
+        const targets = participants.filter((option) => option.value === action.target || supportsCompensation(action.source, option.value));
+        return (
+          <div className="dc-recovery-action" data-open={open ? 'true' : undefined} key={action.id}>
+            <div className="dc-recovery-action-heading" ref={open ? threadRowRef : undefined}>
+              <span className="dc-recovery-action-symbol" aria-hidden="true">↶<small>{index + 1}</small></span>
+              {open ? (
+                <input
+                  className="dc-recovery-action-name"
+                  aria-label="Compensating action name"
+                  key={action.compensationName ?? ''}
+                  defaultValue={action.compensationName ?? ''}
+                  maxLength={LIMITS.maxCompensationNameLength}
+                  placeholder="Name the recovery action"
+                  onBlur={(event) => useEditorStore.getState().updateEdgeById(action.id, { compensationName: event.currentTarget.value.trim() || undefined }, 'Name compensating action')}
+                  onKeyDown={(event) => {
+                    event.stopPropagation();
+                    if (event.key === 'Enter' && !isImeKeyEvent(event)) event.currentTarget.blur();
+                  }}
+                />
+              ) : (
                 <button
                   type="button"
-                  className="dc-inspector-hint"
-                  title="Guess a response from the request's own verb"
-                  onClick={() => useEditorStore.getState().setEdgeResponse(edge.id, inferSuccessResponse(edge.label))}
+                  className="dc-recovery-action-title"
+                  aria-expanded={false}
+                  onClick={() => setOpenId(action.id)}
                 >
-                  Guess
+                  <span className="dc-recovery-action-summary">
+                    <span className={action.compensationName ? undefined : 'dc-recovery-action-unnamed'}>{action.compensationName || 'Name recovery action'}</span>
+                    <span className="dc-recovery-action-operation">{hasOperation ? operation : 'Add an operation'}</span>
+                  </span>
+                </button>
+              )}
+              {open && (
+                <button type="button" className="dc-recovery-collapse" aria-label="Collapse compensating action" title="Collapse action" onClick={() => setOpenId(null)}>
+                  <span className="dc-inspector-disclosure-chevron" aria-hidden="true" />
+                </button>
+              )}
+              {action.compensationVisible === false && (
+                <button type="button" className="dc-recovery-show-arrow" onClick={() => useEditorStore.getState().setCompensationVisible(action.id, true)}>
+                  Show arrow
                 </button>
               )}
             </div>
-          )}
-        </section>
-      )}
-    </>
+            {open && (
+              <div className="dc-recovery-action-fields" ref={threadCardRef}>
+                <div className="dc-recovery-operation-header">
+                  <span className="dc-recovery-operation-title">
+                    <span className="dc-inspector-section-label">Counteraction</span>
+                    {action.compensationName && <span className="dc-recovery-operation-name" title={action.compensationName}>{action.compensationName}</span>}
+                  </span>
+                  <div className="dc-recovery-protocols" role="group" aria-label="Compensation protocol">
+                    {COMPENSATION_PROTOCOL_OPTIONS.map((option) => (
+                      <button
+                        type="button"
+                        key={option.value}
+                        className="dc-recovery-protocol-button"
+                        aria-pressed={protocol === option.value}
+                        onClick={() => useEditorStore.getState().updateEdgeById(action.id, {
+                          compensationProtocol: option.value as DraftEdge['compensationProtocol'],
+                          ...(option.value === 'http' ? { label: normalizeCompensationHttpLabel(action.label) } : {}),
+                        }, 'Set compensating protocol')}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="dc-inspector-section-row dc-recovery-operation-input">
+                  {protocol === 'http' ? (
+                    <HttpRequestEditor
+                      key={action.label ?? ''}
+                      ariaLabel="Compensation operation"
+                      defaultMethod="POST"
+                      unknownMethodAsResource
+                      resourcePlaceholder="/reservations/{id}/release"
+                      value={action.label ?? ''}
+                      onCommit={(next) => useEditorStore.getState().updateEdgeLabel(action.id, next)}
+                    />
+                  ) : (
+                    <SingleTextEditor
+                      key={action.label ?? ''}
+                      ariaLabel="Compensation operation"
+                      placeholder={protocol === 'grpc' ? 'ReleaseReservation' : 'Release reservation'}
+                      value={action.label ?? ''}
+                      onCommit={(next) => useEditorStore.getState().updateEdgeLabel(action.id, next)}
+                    />
+                  )}
+                </div>
+                <div className="dc-recovery-route" role="group" aria-label="Compensation route">
+                  <InspectorSelect
+                    value={action.source}
+                    options={callers}
+                    ariaLabel="Compensation caller"
+                    onChange={(value) => useEditorStore.getState().setCompensationParticipants(action.id, value, action.target)}
+                  />
+                  <span className="dc-recovery-route-arrow" aria-hidden="true">→</span>
+                  <InspectorSelect
+                    value={action.target}
+                    options={targets}
+                    ariaLabel="Compensation target"
+                    onChange={(value) => useEditorStore.getState().setCompensationParticipants(action.id, action.source, value)}
+                  />
+                </div>
+                <div className="dc-recovery-action-footer">
+                  <Button variant="quiet" className="dc-recovery-remove" onClick={() => useEditorStore.getState().removeCompensation(action.id)}>
+                    Remove
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+      {openId && threadPoints?.actionId === openId && <RecoveryThread points={threadPoints} />}
+      {actions.length === 0 && <p className="dc-inspector-help">Counteract this step later.</p>}
+    </section>
   );
 }
 
@@ -947,14 +1240,17 @@ function ExpandedPanel({
   sourceNode,
   targetNode,
   theme,
+  flowAction,
 }: {
   edge: DraftEdge;
   sourceNode: DraftNode | undefined;
   targetNode: DraftNode | undefined;
   theme: ReturnType<typeof useThemeValue>;
+  flowAction: ReactNode;
 }) {
   const [editingBehavior, setEditingBehavior] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [conditionOpen, setConditionOpen] = useState(false);
 
   // A Junction is a routing/convergence point, not a system component of its own — it has no
   // semantic identity, so every capability lookup below resolves *through* it to whatever it
@@ -987,7 +1283,7 @@ function ExpandedPanel({
   // A Junction connector never gets the free-text Condition field either — see
   // `touchesJunction`'s own comment above: the connector's label is the one field that matters
   // here, whether that's a plain optional label or a branch name.
-  const showCondition = !touchesJunction && (showBehaviorPicker || Boolean(edge.condition));
+  const showCondition = !touchesJunction && (edge.semantic !== 'compensates' || Boolean(edge.condition)) && (showBehaviorPicker || Boolean(edge.condition));
 
   // Only offered where a connector already reads as an unambiguous synchronous call — see
   // `isSyncPairing`'s own doc comment for exactly which pairings that covers and why. A connector
@@ -1008,6 +1304,12 @@ function ExpandedPanel({
   const isServiceToService =
     Boolean(resolvedSourceCategory && resolvedTargetCategory) &&
     defaultsToResponse(resolvedSourceCategory!, resolvedTargetCategory!);
+  const compensations = edges.filter((candidate) => candidate.compensationFor === edge.id);
+  const linkedParent = edge.compensationFor ? edges.find((candidate) => candidate.id === edge.compensationFor) : undefined;
+  const canAddRecovery = Boolean(sourceNode && targetNode &&
+    capabilityFor(categoryOf(sourceNode), categoryOf(targetNode))?.relations.includes('compensates'));
+  const showRecovery = edge.semantic !== 'compensates' && (canAddRecovery || compensations.length > 0);
+  const deferGetRecovery = showRecovery && compensations.length === 0 && edge.semantic === 'http' && /^GET(?:\s|$)/i.test(edge.label?.trim() ?? '');
 
   const currentAccentChip = edge.accent !== undefined ? theme.accents[edge.accent].chip : undefined;
 
@@ -1031,18 +1333,19 @@ function ExpandedPanel({
         ...EDGE_SEMANTICS.map((semantic) => ({ value: semantic, label: EDGE_SEMANTIC_LABELS[semantic] })),
       ];
 
-  const routingOptions: InspectorSelectOption[] = [
-    { value: 'smoothstep', label: 'Stepped' },
-    { value: 'bezier', label: 'Curved' },
-    { value: 'straight', label: 'Straight' },
-  ];
-
   return (
     <div className="dc-edge-inspector-panel dc-edge-inspector-expanded">
       <RelationshipGuidance edge={edge} capability={capability} />
       <SourceEvidenceDetails sources={edge.evidence} />
-      {isServiceToService ? (
-        <ServiceInteractionSection edge={edge} relations={capability?.relations ?? []} />
+      {linkedParent ? (
+        <RecoverySection parent={linkedParent} actions={[edge]} nodes={nodes} singleAction />
+      ) : isServiceToService ? (
+        <>
+          <ServiceInteractionSection edge={edge} relations={capability?.relations ?? []} />
+          {showRecovery && (deferGetRecovery
+            ? <RecoverySection parent={edge} actions={compensations} nodes={nodes} compact />
+            : <RecoverySection parent={edge} actions={compensations} nodes={nodes} />)}
+        </>
       ) : (
         <>
           <section className="dc-inspector-section">
@@ -1125,16 +1428,6 @@ function ExpandedPanel({
                       restPlaceholder="Customer"
                       onCommit={(next) => useEditorStore.getState().setEdgeResponse(edge.id, next)}
                     />
-                    {!edge.response && (
-                      <button
-                        type="button"
-                        className="dc-inspector-hint"
-                        title="Guess a response from the request's own verb"
-                        onClick={() => useEditorStore.getState().setEdgeResponse(edge.id, inferSuccessResponse(edge.label))}
-                      >
-                        Guess
-                      </button>
-                    )}
                   </div>
                 )}
               </section>
@@ -1166,60 +1459,114 @@ function ExpandedPanel({
         </section>
       )}
 
-      <section className="dc-inspector-section">
-        <span className="dc-inspector-section-label">Route</span>
-        <div className="dc-inspector-section-row">
-          <InspectorSelect
-            value={edge.routing}
-            ariaLabel="Connector shape"
-            options={routingOptions}
-            onChange={(value) =>
-              useEditorStore
-                .getState()
-                .updateEdgeById(edge.id, { routing: value as typeof edge.routing }, 'Change routing')
-            }
-          />
-        </div>
-      </section>
-
-      <section className="dc-inspector-section">
-        <span className="dc-inspector-section-label">Style</span>
-        <div className="dc-inspector-section-row">
-          <Button
-            variant="ghost"
-            active={edge.directed}
-            title="Show an arrowhead"
-            onClick={() => useEditorStore.getState().updateEdgeById(edge.id, { directed: !edge.directed }, 'Change direction')}
-          >
-            Arrow
-          </Button>
-          <button
-            type="button"
-            className="dc-inspector-color-swatch"
-            data-auto={currentAccentChip ? undefined : 'true'}
-            aria-label="Connector colour"
-            aria-expanded={paletteOpen}
-            title={currentAccentChip ? 'Change colour' : 'Auto colour — click to override'}
-            style={currentAccentChip ? { background: currentAccentChip } : undefined}
-            onClick={() => setPaletteOpen((v) => !v)}
-          />
-          {showCondition && (
+      <section className="dc-connector-drawing-tools" aria-label="Route and style">
+        <TooltipGroup>
+          <div className="dc-connector-drawing-row">
+            <span className="dc-inspector-section-label">Draw</span>
+            <div className="dc-connector-route-picker" role="group" aria-label="Connector shape">
+              {ROUTE_PREVIEWS.map((route) => (
+                <Tooltip key={route.value} content={{ title: `${route.label} route` }}>
+                  {(tip) => (
+                    <button
+                      type="button"
+                      className="dc-connector-route-option"
+                      aria-label={`${route.label} route`}
+                      aria-pressed={edge.routing === route.value}
+                      {...tip}
+                      onClick={() => useEditorStore.getState().updateEdgeById(edge.id, { routing: route.value }, 'Change routing')}
+                    >
+                      <svg viewBox="0 0 34 20" width="27" height="17" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d={route.path} />
+                        <path d="m27 2 3 3-3 3" />
+                      </svg>
+                    </button>
+                  )}
+                </Tooltip>
+              ))}
+            </div>
+            <Tooltip content={{ title: edge.directed ? 'Remove arrowhead' : 'Add arrowhead', description: 'Choose whether this connection points to its target.' }}>
+              {(tip) => (
+                <Button
+                  variant="ghost"
+                  className="dc-connector-arrow-button"
+                  active={edge.directed}
+                  aria-label="Arrow"
+                  aria-pressed={edge.directed}
+                  {...tip}
+                  onClick={() => useEditorStore.getState().updateEdgeById(edge.id, { directed: !edge.directed }, 'Change direction')}
+                >
+                  <svg viewBox="0 0 20 20" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M2.5 10h14M11.5 5l5 5-5 5" />
+                  </svg>
+                </Button>
+              )}
+            </Tooltip>
+            <Tooltip content={{ title: currentAccentChip ? 'Connector colour' : 'Automatic colour', description: currentAccentChip ? 'Choose a fixed colour or return to automatic.' : 'This connection follows its source colour. Click to choose a fixed colour.' }}>
+              {(tip) => (
+                <button
+                  type="button"
+                  className="dc-inspector-color-swatch dc-connector-color-swatch"
+                  data-auto={currentAccentChip ? undefined : 'true'}
+                  aria-label="Connector colour"
+                  aria-expanded={paletteOpen}
+                  {...tip}
+                  style={{ background: currentAccentChip ?? autoSwatch(theme) }}
+                  onClick={() => {
+                    setConditionOpen(false);
+                    setPaletteOpen((open) => !open);
+                  }}
+                />
+              )}
+            </Tooltip>
+            {showCondition && (
+              <Tooltip content={{ title: edge.condition ? `Condition: ${edge.condition}` : 'Add condition', description: 'Show when this connection should be followed.' }}>
+                {(tip) => (
+                  <button
+                    type="button"
+                    className="dc-connector-icon-button dc-connector-condition-button"
+                    data-active={edge.condition ? 'true' : undefined}
+                    aria-label="Condition"
+                    aria-expanded={conditionOpen}
+                    {...tip}
+                    onClick={() => {
+                      setPaletteOpen(false);
+                      setConditionOpen((open) => !open);
+                    }}
+                  >
+                    <svg viewBox="0 0 20 20" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M4 4h5.5l-5.5 6 5.5 6H4M12 5.5h4M12 10h4M12 14.5h4" />
+                    </svg>
+                    {edge.condition && <span className="dc-connector-icon-dot" />}
+                  </button>
+                )}
+              </Tooltip>
+            )}
+            {flowAction && <div className="dc-inspector-flow-action">{flowAction}</div>}
+          </div>
+        </TooltipGroup>
+        {conditionOpen && showCondition && (
+          <div className="dc-connector-flyout dc-connector-condition-flyout">
             <input
+              autoFocus
               className="dc-inspector-control dc-inspector-condition"
-              aria-label="Condition"
+              aria-label="Condition text"
               placeholder="Condition…"
               defaultValue={edge.condition ?? ''}
               spellCheck={false}
-              onBlur={(event) => useEditorStore.getState().setEdgeCondition(edge.id, event.currentTarget.value)}
+              onBlur={(event) => {
+                useEditorStore.getState().setEdgeCondition(edge.id, event.currentTarget.value);
+                setConditionOpen(false);
+              }}
               onKeyDown={(event) => {
                 event.stopPropagation();
                 if (event.key === 'Enter' && !isImeKeyEvent(event)) event.currentTarget.blur();
+                if (event.key === 'Escape') setConditionOpen(false);
               }}
             />
-          )}
-        </div>
+          </div>
+        )}
         {paletteOpen && (
-          <div className="dc-inspector-section-row dc-swatches">
+          <div className="dc-connector-flyout dc-connector-palette-flyout dc-swatches">
             {ACCENTS.map((accent) => (
               <button
                 key={accent}

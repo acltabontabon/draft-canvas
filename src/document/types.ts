@@ -10,7 +10,7 @@
 export const DRAFT_FORMAT = 'draft-canvas' as const;
 
 /** Bump when the on-disk shape changes, and add a migration in `migrate.ts`. */
-export const CURRENT_VERSION = 21;
+export const CURRENT_VERSION = 22;
 
 export type DraftFormat = typeof DRAFT_FORMAT;
 
@@ -494,6 +494,16 @@ export interface DraftEdge {
    * none; never implies or changes `accent` or any other styling.
    */
   semantic?: EdgeSemantic;
+  /** A business action that counteracts this other interaction. Both edges live in the same room. */
+  compensationFor?: string;
+  /** `false` folds a linked action into an indicator on its parent; absence preserves legacy visibility. */
+  compensationVisible?: boolean;
+  /** User-provided business name, distinct from the wire operation in `label`. */
+  compensationName?: string;
+  /** The action's protocol may differ from the step it compensates. */
+  compensationProtocol?: 'http' | 'calls' | 'grpc';
+  /** Optional explanation of when or why this action counteracts the step. */
+  compensationDescription?: string;
   /**
    * Free-text condition chip, e.g. "approved", "timeout". Distinct from
    * `label`: the label describes what the connection represents in general,

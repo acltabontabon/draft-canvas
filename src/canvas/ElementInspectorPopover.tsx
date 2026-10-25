@@ -1,4 +1,5 @@
 import { SourceEvidenceDetails } from './SourceEvidenceDetails';
+import { autoSwatch } from './autoSwatch';
 import { TechnologyInput } from './TechnologyInput';
 import { useTechnologyIcon } from './useTechnologyIcon';
 import { GENERIC_TECHNOLOGY_ICON } from '../nodes/technology';
@@ -7,8 +8,7 @@ import { LIMITS } from '../document/limits';
 import { createPortal } from 'react-dom';
 import { useInternalNode, useReactFlow, useStore } from '@xyflow/react';
 import { nodeCommands, primaryCommandsFor } from '../commands/registry';
-import { menuLabelOf, type ContextMenuEntry } from '../commands/contextMenu';
-import { ContextMenu } from './ContextMenu';
+import { menuLabelOf } from '../commands/contextMenu';
 import { DepthGlyph } from './DepthGlyph';
 import { usePersonality } from '../ui/personality/usePersonality';
 import type { Command, CommandContext } from '../commands/types';
@@ -48,6 +48,7 @@ import { useUiStore } from '../store/uiStore';
 import { nodeIndex } from '../store/selectors';
 import { useThemeValue } from '../ui/theme/useTheme';
 import { Button } from '../ui/common/Button';
+import { Tooltip, TooltipGroup } from '../ui/common/Tooltip';
 import {
   BOUNDARY_PRESET_DESCRIPTIONS,
   BOUNDARY_PRESET_OPTION_LABELS,
@@ -62,6 +63,7 @@ import { rightClearance } from './canvasFrame';
 import { rectOfInternal } from './edgeGeometry';
 import { useToolbarHeight } from './useToolbarHeight';
 import { useOverlayPosition } from './useOverlayPosition';
+import { usePopoverDrag } from './usePopoverDrag';
 import { useLastPresent, usePopoverPresence } from './usePopoverPresence';
 import { InspectorSelect, type InspectorSelectOption } from './InspectorSelect';
 import { TextFormatBar } from './TextFormatBar';
@@ -180,7 +182,7 @@ export function ElementInspectorPopover({ buildCommandContext }: { buildCommandC
   // The element it was showing, kept for the fade-out after selection has already moved on.
   const shownNodeId = useLastPresent(open ? selectedNodeId : null);
   if (!mounted || !shownNodeId) return null;
-  return <ElementInspectorBody nodeId={shownNodeId} closing={closing} buildCommandContext={buildCommandContext} />;
+  return <ElementInspectorBody key={shownNodeId} nodeId={shownNodeId} closing={closing} buildCommandContext={buildCommandContext} />;
 }
 
 function ElementInspectorBody({
@@ -211,6 +213,7 @@ function ElementInspectorBody({
   // exclusive for free and keeps the reset/Escape/click-away plumbing below written once.
   const [openPanel, setOpenPanel] = useState<ElementPanel | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const dragControl = usePopoverDrag(panelRef, nodeId);
   usePopoverKeyboard(panelRef);
 
   // Selecting a *different* element, or the popover starting to close, closes the colour
@@ -304,7 +307,7 @@ function ElementInspectorBody({
   // `interactionActive` flips back to false), avoids that.
   // `frozen` while hidden mid-gesture: no layout read, no transform write per frame for a popover
   // nobody can see — it re-places on the render that ends the gesture.
-  const { target, placement } = useOverlayPosition<Placement>(panelRef, 'above', (frame, current) => {
+  const { target, placement } = useOverlayPosition<Placement>(panelRef, displayNode?.type === 'ellipse' ? 'right' : 'above', (frame, current) => {
     if (!anchors) return null;
     // Read at placement time, not render time: a docked panel changes where the canvas ends
     // after this rendered (see `useOverlayPosition`'s canvas observer) — plus the Flows panel while
@@ -317,7 +320,7 @@ function ElementInspectorBody({
       placement: next,
       transform: placementTransform(next, anchors, frame.size, clearances, frame.flowToScreenPosition, frame.screenToOverlay),
     };
-  }, interactionActive);
+  }, interactionActive || dragControl.moved);
 
   if (!displayNode || !displayInternal || !rect || !anchors || !target) return null;
 
@@ -345,10 +348,19 @@ function ElementInspectorBody({
         data-closing={closing ? 'true' : undefined}
         data-dragging={interactionActive ? 'true' : undefined}
         data-placement={placement}
+        data-node-type={displayNode.type}
+        data-moved={dragControl.moved ? 'true' : undefined}
+        onPointerDownCapture={(event) => {
+          const target = event.target;
+          if (!(target instanceof HTMLTextAreaElement)) return;
+          const box = target.getBoundingClientRect();
+          if (event.clientX >= box.right - 18 && event.clientY >= box.bottom - 18) dragControl.pin();
+        }}
         onPointerDown={(event) => event.stopPropagation()}
       >
         {/* The caret ties the popover to the element it belongs to — see `.dc-popover-caret`. */}
         <span className="dc-popover-caret" aria-hidden="true" />
+        <button type="button" className="dc-popover-drag-zone" aria-label="Move element popup" {...dragControl.handle} />
         <div className="dc-popover-inner">
           {editingText ? (
             <TextFormatBar theme={theme} />
@@ -368,17 +380,6 @@ function ElementInspectorBody({
       </div>,
     target,
   );
-}
-
-const autoSwatchCache = new WeakMap<object, string>();
-function autoSwatch(theme: ReturnType<typeof useThemeValue>): string {
-  let swatch = autoSwatchCache.get(theme.accents);
-  if (!swatch) {
-    const chips = ACCENTS.filter((accent) => accent !== 'neutral').map((accent) => theme.accents[accent].chip);
-    swatch = `conic-gradient(${chips.map((chip, index) => `${chip} ${(index * 100) / chips.length}% ${((index + 1) * 100) / chips.length}%`).join(', ')})`;
-    autoSwatchCache.set(theme.accents, swatch);
-  }
-  return swatch;
 }
 
 /** The one panel open under the row at a time: colours, text style, or an architecture shape's C4 details. */
@@ -560,53 +561,23 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
     }
   })();
 
-  // The ⋯ menu: what the row leaves out, one click away. Owned by this element — selecting another
-  // one closes it, as it closes an open panel.
-  const [more, setMore] = useState<{ nodeId: string; x: number; y: number; viaKeyboard: boolean } | null>(null);
-  const moreOpen = more?.nodeId === node.id;
-  const moreButton = useRef<HTMLButtonElement>(null);
-
-  const moreEntries = (): ContextMenuEntry[] => {
+  // These are the two actions people reach for first on any selected shape. Keep them in the
+  // row instead of hiding the only useful controls behind a generic overflow button; the full
+  // command surface remains available from the canvas context menu and command palette.
+  const directCommands = useMemo(() => {
     const commands = nodeCommands(buildCommandContext(), node);
-    const pick = (ids: string[]) =>
-      ids.map((id) => commands.find((command) => command.id === id)).filter((command): command is Command => command !== undefined);
-    const own = (id: string, title: string, run: () => void, shortcut?: string): Command => ({ id, title, group: 'selection', shortcut, run });
-    const details = C4_TYPES.has(node.type) ? [own('element-details', 'Edit details…', () => setOpenPanel('details'))] : [];
-    const moreActions = own(
-      'element-more-actions',
-      'More actions…',
-      () => {
-        // The full right-click menu, opened where this one was — it replaces the popover while it's up.
-        const box = moreButton.current?.getBoundingClientRect();
-        useUiStore.getState().setContextMenu({
-          target: { kind: 'node', id: node.id },
-          screenPosition: box ? { x: box.left + box.width / 2, y: box.bottom } : { x: 0, y: 0 },
-          flowPosition: { x: node.x + node.width / 2, y: node.y + node.height / 2 },
-          viaKeyboard: more?.viaKeyboard ?? false,
-        });
-      },
-      'Shift F10',
-    );
-    const groups = [[...details, ...pick(['spotlight'])], [...pick(['duplicate']), moreActions], pick(['delete'])];
-    return groups
-      .filter((group) => group.length > 0)
-      .flatMap((group, index) => [
-        ...(index > 0 ? [{ type: 'separator' as const }] : []),
-        ...group.map((command) => ({ type: 'command' as const, command, label: menuLabelOf(command) })),
-      ]);
-  };
+    const ids = ['edit-text', 'delete'];
+    return ids
+      .map((id) => commands.find((command) => command.id === id))
+      .filter((command): command is Command => command !== undefined);
+    // Position changes do not affect these commands; avoid rebuilding them during a drag.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [node.id, node.type, buildCommandContext]);
 
   return (
     <>
-      {/* One row: what the element is (colour, kind), then what can grow from it, then ⋯ for the
-          rest. Pressing any other control here closes an open ⋯ menu, since the popover keeps
-          its presses from reaching the menu's own click-away. */}
-      <div
-        className="dc-popover-row dc-popover-config"
-        onPointerDownCapture={(event) => {
-          if (moreOpen && !moreButton.current?.contains(event.target as Node)) setMore(null);
-        }}
-      >
+      {/* Identity stays near the shape; canvas actions have their own compact row. */}
+      <div className="dc-popover-row dc-popover-config dc-element-identity-row">
         <button
           type="button"
           className="dc-inspector-color-swatch"
@@ -655,78 +626,87 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
           />
         )}
         {C4_TYPES.has(node.type) && (
-          <Button
-            variant="quiet"
-            className="dc-element-technology"
-            aria-label={node.technology ? `Technology: ${node.technology}, edit` : 'Add technology'}
-            aria-expanded={openPanel === 'details'}
-            title={node.technology ? `Technology: ${node.technology}, edit` : 'Add technology'}
-            onClick={() => setOpenPanel(openPanel === 'details' ? null : 'details')}
-          >
-            {node.technology && (
-              <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
-                <path d={technologyIcon.path} fill="currentColor" />
-              </svg>
-            )}
-            <span>{node.technology || '+ Technology'}</span>
-          </Button>
-        )}
-        {primaryCommands.length > 0 && <span className="dc-popover-divider" aria-hidden="true" />}
-        {primaryCommands.map((command) => (
-          <Button
-            key={command.id}
-            variant="quiet"
-            className="dc-popover-action"
-            // An "Add …" continuation leads with a plus glyph; a toggle-off or dissolve doesn't.
-            data-adds={command.id.startsWith('add-') ? 'true' : undefined}
-            title={QUICK_ACTION_HINTS[command.id] ?? command.hint ?? command.title}
-            onClick={() => command.run(buildCommandContext())}
-          >
-            {/* The same depth glyph the shape itself carries, so the mark on the canvas and the
-                command that follows it are learned as one thing. */}
-            {command.id === 'look-inside' && <DepthGlyph className="dc-popover-glyph" preset={personality} seedId={node.id} />}
-            {menuLabelOf(command)}
-          </Button>
-        ))}
-        <span className="dc-popover-divider" aria-hidden="true" />
-        <Button
-          ref={moreButton}
-          icon="more"
-          variant="quiet"
-          className="dc-popover-more"
-          aria-label="More options"
-          aria-haspopup="menu"
-          aria-expanded={moreOpen}
-          active={moreOpen}
-          title="More options"
-          onClick={(event) => {
-            if (moreOpen) {
-              setMore(null);
-              return;
-            }
-            const box = event.currentTarget.getBoundingClientRect();
-            // `detail` is 0 for a click made with Enter or Space: start that menu on its first row.
-            setMore({ nodeId: node.id, x: box.left + box.width / 2, y: box.bottom, viaKeyboard: event.detail === 0 });
-          }}
-        />
-      </div>
-      {moreOpen &&
-        more &&
-        // To the page itself: the popover is placed by a transform, which would otherwise become
-        // the fixed-position menu's containing block.
-        createPortal(
-          <ContextMenu
-            screenPosition={{ x: more.x, y: more.y }}
-            entries={moreEntries()}
-            viaKeyboard={more.viaKeyboard}
-            onSelect={(command) => {
-              setMore(null);
-              command.run(buildCommandContext());
+          <Tooltip
+            content={{
+              title: node.technology ? 'Edit technology' : 'Add technology',
+              description: node.technology
+                ? 'Change the technology used by this element.'
+                : 'Choose the technology used by this element.',
             }}
-            onDismiss={() => setMore(null)}
-          />,
-          window.document.body,
+          >
+            {(tip) => (
+              <Button
+                variant="quiet"
+                className="dc-element-technology"
+                aria-label={node.technology ? `Technology: ${node.technology}, edit` : 'Add technology'}
+                aria-expanded={openPanel === 'details'}
+                {...tip}
+                onClick={() => setOpenPanel(openPanel === 'details' ? null : 'details')}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d={technologyIcon.path} fill="currentColor" />
+                </svg>
+                <span>{node.technology || 'Tech'}</span>
+              </Button>
+            )}
+          </Tooltip>
         )}
+        <span className="dc-popover-divider" aria-hidden="true" />
+        <TooltipGroup>
+          {directCommands.map((command) => {
+            const action = command.id === 'edit-text'
+              ? { icon: 'pencil' as const, label: node.type === 'group' ? 'Edit caption' : 'Edit text', description: 'Change the name shown on the canvas.' }
+              : { icon: 'trash' as const, label: 'Delete', description: 'Remove this shape and its connections.' };
+            return (
+              <Tooltip key={command.id} content={{ title: action.label, description: action.description }}>
+                {(tip) => (
+                  <Button
+                    icon={action.icon}
+                    variant={command.id === 'delete' ? 'danger' : 'quiet'}
+                    className="dc-popover-direct-action"
+                    aria-label={action.label}
+                    {...tip}
+                    onClick={() => command.run(buildCommandContext())}
+                  />
+                )}
+              </Tooltip>
+            );
+          })}
+        </TooltipGroup>
+      </div>
+
+      {primaryCommands.length > 0 && (
+        <div className="dc-element-action-row">
+          <TooltipGroup>
+            {primaryCommands.map((command) => {
+              const description = QUICK_ACTION_HINTS[command.id] ?? command.hint;
+              return (
+                <Tooltip
+                  key={command.id}
+                  content={{
+                    title: menuLabelOf(command),
+                    ...(description ? { description } : {}),
+                    ...(command.shortcut ? { shortcut: command.shortcut } : {}),
+                  }}
+                >
+                  {(tip) => (
+                    <Button
+                      variant="quiet"
+                      className="dc-popover-action dc-element-action-tile"
+                      data-adds={command.id.startsWith('add-') ? 'true' : undefined}
+                      {...tip}
+                      onClick={() => command.run(buildCommandContext())}
+                    >
+                      {command.id === 'look-inside' && <DepthGlyph className="dc-popover-glyph" preset={personality} seedId={node.id} />}
+                      {menuLabelOf(command)}
+                    </Button>
+                  )}
+                </Tooltip>
+              );
+            })}
+          </TooltipGroup>
+        </div>
+      )}
 
       {openPanel === 'color' && (
         <div className="dc-popover-panel dc-swatches">

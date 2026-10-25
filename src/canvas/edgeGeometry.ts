@@ -7,6 +7,7 @@
 import type { useInternalNode } from '@xyflow/react';
 import { anchorBandOf } from '../document/queueGeometry';
 import type { DraftEdge, DraftNode, DraftNodeType, Side } from '../document/types';
+import { visibleEdges } from '../document/compensation';
 import { routingPlan } from '../edges/bundles';
 import { labelGroupPlan } from '../edges/labelGroups';
 import { obstaclesForEdge } from '../edges/obstacles';
@@ -52,18 +53,19 @@ export function edgeLabelPoint(
   targetRect: Rect,
   { interactionActive = false }: { interactionActive?: boolean } = {},
 ): { x: number; y: number; side: Side } {
-  const lane = laneIndex(document.edges).get(edge.id)?.offset ?? 0;
+  const edges = visibleEdges(document.edges);
+  const lane = laneIndex(edges).get(edge.id)?.offset ?? 0;
   const route = routeBetween(sourceRect, targetRect, edge.routing, {
     anchors: { source: edge.sourceAnchor, target: edge.targetAnchor },
     waypoints: edge.waypoints,
     lane,
     label: edge.label ? { ...edgeLabelSize(edge.label), away: responseAwayFor(edge.hasResponse, lane) } : undefined,
     obstacles: interactionActive ? undefined : obstaclesForEdge(document.nodes, edge.source, edge.target),
-    spine: routingPlan(document.nodes, document.edges).spineFor(edge.id),
+    spine: routingPlan(document.nodes, edges).spineFor(edge.id),
   });
   // A connector sharing one label with others (`edges/labelGroups.ts`) is pointed at where that one
   // label is drawn, not at the spot its own would have taken.
-  const shared = interactionActive ? undefined : labelGroupPlan(document.nodes, document.edges).groupFor(edge.id);
+  const shared = interactionActive ? undefined : labelGroupPlan(document.nodes, edges).groupFor(edge.id);
   if (shared) return { x: shared.x, y: shared.y, side: shared.side };
   const labelNudge = labelLaneOffset(route.source.side, route.target.side, lane);
   const side = labelChipSide(route.labelSide, responseAwayFor(edge.hasResponse, lane));

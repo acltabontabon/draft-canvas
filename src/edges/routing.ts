@@ -758,6 +758,12 @@ export function labelLaneOffset(sourceSide: Side, targetSide: Side, lane: number
   return { x: 0, y: 0 };
 }
 
+/** Captions of parallel connectors face away from the neighbouring lane. A
+ * response line takes precedence and already has its own clearance rule. */
+export function captionAwayForLane(lane: number, responseAway: number): number {
+  return responseAway || (lane < 0 ? 1 : lane > 0 ? -1 : 0);
+}
+
 const OBSTACLE_MARGIN = 16;
 /** How far an obstacle's edge may sit from the direct run and still count as
  *  blocking it — a full node height/width would false-positive on anything

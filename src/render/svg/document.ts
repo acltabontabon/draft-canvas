@@ -3,6 +3,7 @@ import { obstaclesForEdge } from '../../edges/obstacles';
 import { describeNode, describeContext, type DescribeContext } from '../../nodes/describe';
 import { technologyMarkBounds } from '../../nodes/technology';
 import { findFlow, stepIndexOf } from '../../document/flow';
+import { visibleEdges } from '../../document/compensation';
 import { boundsOf } from '../../document/operations';
 import type { BackgroundFit, DraftDocument, DraftEdge, DraftFlow, DraftNode, OpenPoint } from '../../document/types';
 import { unresolvedOpenPoints, unresolvedOpenPointsFor } from '../../document/openPoints';
@@ -256,7 +257,8 @@ export function buildScene(
   // "selection only" export leaves some out). `routingPlan` and `crossingPlan` are memoized on
   // array identity, so a fresh copy here made every call re-plan the whole diagram: an animated
   // export builds one scene per frame, and paid for the full crossing analysis on each of them.
-  const edges = document.edges.every(isVisible) ? document.edges : document.edges.filter(isVisible);
+  const renderEdges = visibleEdges(document.edges);
+  const edges = renderEdges.every(isVisible) ? renderEdges : renderEdges.filter(isVisible);
 
   const nodeMap = new Map(nodes.map((node) => [node.id, node]));
   const lanes = laneIndex(edges);

@@ -449,6 +449,10 @@
   stroke-width: calc(12px / var(--dc-zoom, 1));
 }
 
+.dc-edge[data-recovery-associated='true'] .dc-edge-line {
+  filter: drop-shadow(0 0 4px var(--dc-selection));
+}
+
 /* Present keeps its own reveals on hover but has nothing to select. */
 .dc-editor[data-mode='present'] .react-flow__edge-interaction {
   cursor: default;
@@ -720,10 +724,92 @@
   white-space: pre;
 }
 
+.dc-edge-label[data-recovery-detail='true'] .dc-edge-label-text {
+  gap: 2px;
+}
+
+.dc-edge-recovery-name {
+  color: var(--dc-text-faint);
+  font-weight: 500;
+}
+
+.dc-edge-recovery-operation {
+  color: var(--dc-text-faint);
+  font-weight: 500;
+  opacity: 0.75;
+}
+
 .dc-edge-label:hover,
 .dc-edge-label:focus-within {
   background: var(--dc-edge-label-bg);
   color: var(--dc-text);
+}
+
+.dc-recovery-hover-tooltip {
+  position: absolute;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  max-width: 280px;
+  min-height: 46px;
+  padding: 7px 10px;
+  border: 1px solid color-mix(in srgb, var(--dc-selection) 42%, var(--dc-border));
+  border-radius: 10px;
+  background: var(--dc-surface);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--dc-canvas) 62%, transparent),
+    0 0 16px color-mix(in srgb, var(--dc-selection) 12%, transparent);
+  color: var(--dc-text);
+  pointer-events: none;
+}
+
+.dc-recovery-hover-glyph {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 27px;
+  height: 27px;
+  border: 1px solid var(--dc-selection);
+  border-radius: 50%;
+  background: var(--dc-selection-soft);
+  color: var(--dc-selection);
+  font-size: 17px;
+  line-height: 1;
+}
+
+.dc-recovery-hover-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.dc-recovery-hover-eyebrow {
+  color: var(--dc-selection);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.dc-recovery-hover-route {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.dc-recovery-hover-route > span:first-child,
+.dc-recovery-hover-route > span:last-child {
+  overflow: hidden;
+  max-width: 102px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dc-recovery-hover-route > span:nth-child(2) {
+  color: var(--dc-selection);
 }
 
 /* When a connector is both labelled and numbered, the step rides inside the
@@ -1690,6 +1776,32 @@
   pointer-events: none;
 }
 
+.dc-popover-drag-zone {
+  position: absolute;
+  z-index: 3;
+  top: -5px;
+  left: 8px;
+  width: calc(100% - 16px);
+  height: 12px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: grab;
+  touch-action: none;
+}
+
+.dc-popover-drag-zone:active { cursor: grabbing; }
+.dc-popover-drag-zone:focus-visible { outline: 2px solid var(--dc-selection); outline-offset: -1px; }
+
+.dc-popover[data-moved='true'] .dc-popover-caret { display: none; }
+
+/* Keep a selected recovery route exposed while its bend or endpoint is being dragged. The
+ * inspector stays mounted so the captured handle is never lost midway through the gesture. */
+.dc-edge-inspector[data-reshaping='true'] {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 /*
  * The caret: a rotated square sharing the popover's border and surface, sitting on the edge that
  * faces the selected element, so the popover visibly *belongs* to that element rather than
@@ -1743,9 +1855,9 @@
   border-left-color: transparent;
 }
 
-/* A row of controls. A shape's popover is one row — what it is (colour, kind), a hairline, what can
-   grow from it (Add consumer, Add DLQ, …), then ⋯ for the rest. A panel opened from the row
-   (colours, text style, C4 details) sits under it, separated by a rule. */
+/* A row of controls. A shape's popover is one row — what it is (colour, kind), a hairline, then
+   the few direct actions people need most. A panel opened from the row (colours, text style, C4
+   details) sits under it, separated by a rule. */
 .dc-popover-row {
   display: flex;
   align-items: center;
@@ -1806,14 +1918,29 @@
   flex: none;
 }
 
-/* One row holds a shape's kind and up to three actions, so it may run wider than a connector's. */
+/* A selected shape reads as a small canvas card: identity above, contextual actions below. */
 .dc-element-inspector {
-  max-width: 480px;
+  width: max-content;
+  max-width: min(340px, calc(100vw - 24px));
+}
+
+.dc-element-identity-row {
+  min-width: 0;
+  padding: 7px 8px;
+}
+
+.dc-element-identity-row > .dc-inspector-select {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.dc-element-identity-row > .dc-popover-divider {
+  margin-left: 3px;
 }
 
 .dc-element-inspector .dc-element-technology {
   min-width: 0;
-  max-width: 136px;
+  max-width: 110px;
   gap: 5px;
   color: var(--dc-text-muted);
 }
@@ -1828,12 +1955,57 @@
   white-space: nowrap;
 }
 
-/* The 24-unit dots are dust at 16px: drawn heavier, like the toolbar's own More, so ⋯ reads as a
-   control rather than a smudge at the end of the row. */
-.dc-popover-more svg[data-icon='more'] {
-  width: 18px;
-  height: 18px;
-  stroke-width: 3;
+/* Actor has both a kind and a frame picker. Keep the technology action legible as an icon
+   instead of squeezing its text into a meaningless "T…" between those controls. */
+.dc-element-inspector[data-node-type='actor'] .dc-element-technology {
+  flex: none;
+  justify-content: center;
+  width: var(--dc-popover-control);
+  padding: 0;
+}
+
+.dc-element-inspector[data-node-type='actor'] .dc-element-technology span {
+  display: none;
+}
+
+.dc-popover-direct-action {
+  width: var(--dc-popover-control);
+  padding: 0;
+  justify-content: center;
+}
+
+.dc-popover-direct-action svg {
+  width: 15px;
+  height: 15px;
+}
+
+.dc-element-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px;
+  border-top: 1px solid var(--dc-border);
+}
+
+.dc-element-action-tile {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 32px;
+  justify-content: flex-start;
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--dc-selection) 21%, var(--dc-border));
+  border-radius: var(--dc-radius-sm);
+  background: color-mix(in srgb, var(--dc-selection) 7%, var(--dc-surface-raised));
+  color: var(--dc-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dc-element-action-tile:hover,
+.dc-element-action-tile:focus-visible {
+  border-color: var(--dc-selection);
+  background: color-mix(in srgb, var(--dc-selection) 14%, var(--dc-surface-raised));
 }
 
 .dc-popover-panel {
@@ -1844,12 +2016,14 @@
   padding: 8px;
 }
 
-/* An architecture shape's C4 details: two labelled fields, stacked, at the row's control scale. */
+/* The details panel uses the inspector's full width, so the two fields do not leave an empty
+ * half-card under a wide action row. */
 .dc-c4-panel {
   flex-direction: column;
   align-items: stretch;
   gap: 8px;
-  width: 280px;
+  width: 100%;
+  min-width: 0;
 }
 
 .dc-c4-field {
@@ -1861,6 +2035,8 @@
 }
 
 .dc-c4-field textarea {
+  flex: none;
+  height: auto;
   resize: vertical;
   min-height: 52px;
   font: inherit;
@@ -2143,12 +2319,29 @@
  * reads better tall-and-narrow than wide-and-wrapped.
  */
 .dc-edge-inspector-expanded {
+  position: relative;
   flex-direction: column;
   flex-wrap: nowrap;
   align-items: stretch;
-  gap: 10px;
-  padding: 10px;
-  width: 240px;
+  gap: 9px;
+  padding: 11px 12px;
+  width: 310px;
+}
+
+.dc-edge-inspector .dc-popover-inner {
+  max-height: var(--dc-edge-popover-max-height, calc(100vh - 116px));
+  overflow-y: auto;
+}
+
+/* Recovery is a companion sketch beside the connector, so opening it does not turn the
+ * inspector into a tall form or make the person scroll past the operation they are editing. */
+.dc-edge-inspector:has(.dc-recovery-action[data-open='true'], .dc-connector-flyout) .dc-popover-inner {
+  max-height: none;
+  overflow: visible;
+}
+
+.dc-popover-inner > .dc-edge-inspector-expanded:first-child {
+  border-top: 0;
 }
 
 .dc-inspector-section {
@@ -2165,6 +2358,13 @@
   text-transform: uppercase;
 }
 
+.dc-inspector-help {
+  margin: 0;
+  color: var(--dc-text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
 /* The label sits right beside its toggle — pushing them to opposite edges of a wide popover
    separated a control from the word that names it. */
 .dc-inspector-section-header {
@@ -2177,6 +2377,590 @@
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.dc-inspector-mode-select {
+  flex: 0 0 76px;
+}
+
+.dc-inspector-interaction-row > .dc-inspector-select:first-child {
+  flex: 1;
+}
+
+.dc-inspector-disclosure-chevron {
+  width: 7px;
+  height: 7px;
+  margin-right: 4px;
+  border-right: 1.4px solid currentColor;
+  border-bottom: 1.4px solid currentColor;
+  transform: rotate(45deg);
+}
+
+.dc-connector-drawing-tools {
+  position: relative;
+  padding-top: 9px;
+  border-top: 1px solid color-mix(in srgb, var(--dc-selection) 25%, var(--dc-border));
+}
+
+.dc-connector-drawing-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dc-connector-drawing-row > .dc-inspector-section-label {
+  color: var(--dc-text-faint);
+  font-size: 9px;
+}
+
+.dc-connector-route-picker {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 25px;
+  padding: 2px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-sm);
+  background: var(--dc-surface-raised);
+}
+
+.dc-connector-route-option {
+  display: grid;
+  flex: 1 1 0;
+  min-width: 0;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dc-text-faint);
+  cursor: pointer;
+}
+
+.dc-connector-route-option:hover {
+  color: var(--dc-text);
+}
+
+.dc-connector-route-option[aria-pressed='true'] {
+  background: color-mix(in srgb, var(--dc-selection) 16%, var(--dc-surface-raised));
+  color: var(--dc-selection);
+}
+
+.dc-connector-arrow-button,
+.dc-connector-icon-button,
+.dc-edge-inspector-flow-icon {
+  min-height: 25px;
+  height: 25px;
+}
+
+.dc-connector-arrow-button,
+.dc-connector-icon-button,
+.dc-edge-inspector-flow-icon {
+  display: grid;
+  width: 25px;
+  place-items: center;
+  padding: 0;
+}
+
+.dc-connector-icon-button {
+  position: relative;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-sm);
+  background: var(--dc-surface-raised);
+  color: var(--dc-text-muted);
+  cursor: pointer;
+}
+
+.dc-connector-icon-button:hover,
+.dc-connector-icon-button[aria-expanded='true'],
+.dc-connector-icon-button[data-active='true'] {
+  border-color: var(--dc-selection);
+  color: var(--dc-selection);
+}
+
+.dc-connector-icon-dot {
+  position: absolute;
+  right: 2px;
+  top: 2px;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.dc-connector-color-swatch {
+  width: 20px;
+  height: 20px;
+  margin: 0 2px;
+}
+
+.dc-connector-flyout {
+  position: absolute;
+  z-index: 2;
+  right: 0;
+  bottom: calc(100% + 8px);
+  padding: 8px;
+  border: 1px solid var(--dc-border-strong);
+  border-radius: var(--dc-radius);
+  background: var(--dc-surface-raised);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 24%);
+}
+
+.dc-connector-condition-flyout {
+  width: min(230px, 100%);
+}
+
+.dc-connector-condition-flyout .dc-inspector-condition {
+  width: 100%;
+}
+
+.dc-connector-palette-flyout {
+  display: flex;
+  flex-wrap: wrap;
+  width: min(225px, 100%);
+}
+
+.dc-inspector-flow-action {
+  display: flex;
+  align-items: center;
+}
+
+.dc-inspector-flow-action .dc-edge-inspector-flows {
+  max-width: 100%;
+  background: transparent;
+  border-color: var(--dc-border);
+}
+
+.dc-inspector-flow-action .dc-edge-inspector-flow-icon {
+  border-radius: var(--dc-radius-sm);
+  color: var(--dc-text-muted);
+}
+
+.dc-inspector-flow-action .dc-edge-inspector-flow-icon:hover {
+  color: var(--dc-selection);
+  border-color: var(--dc-selection);
+}
+
+.dc-recovery-section {
+  padding-top: 9px;
+  border-top: 1px solid var(--dc-border);
+}
+
+.dc-recovery-section[data-single-action='true'] {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.dc-recovery-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 20px;
+}
+
+.dc-recovery-action {
+  position: relative;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius);
+  background: var(--dc-surface-raised);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.dc-recovery-action[data-open='true'] {
+  position: static;
+  border-color: color-mix(in srgb, var(--dc-selection) 38%, var(--dc-border));
+  box-shadow: inset 2px 0 color-mix(in srgb, var(--dc-selection) 55%, transparent);
+}
+
+.dc-recovery-action-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 42px;
+  padding: 5px 7px 5px 9px;
+}
+
+.dc-recovery-action[data-open='true'] .dc-recovery-action-heading {
+  border-bottom: 1px solid var(--dc-border);
+}
+
+.dc-recovery-action-symbol {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid color-mix(in srgb, var(--dc-selection) 38%, var(--dc-border));
+  border-radius: 50%;
+  background: var(--dc-selection-soft);
+  color: var(--dc-selection);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.dc-recovery-action-symbol small {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  min-width: 11px;
+  border-radius: var(--dc-radius-pill);
+  background: var(--dc-surface-raised);
+  color: var(--dc-text-muted);
+  font-size: 8px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.dc-recovery-action-name {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 0;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  background: transparent;
+  color: var(--dc-text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  outline: none;
+}
+
+.dc-recovery-action-name::placeholder {
+  color: var(--dc-text-muted);
+}
+
+.dc-recovery-action-name:hover,
+.dc-recovery-action-name:focus-visible {
+  border-bottom-color: var(--dc-selection);
+}
+
+.dc-recovery-action-title {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 30px;
+  padding: 1px 0;
+  border: 0;
+  background: transparent;
+  color: var(--dc-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dc-recovery-action-summary {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.dc-recovery-action-summary > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dc-recovery-action-unnamed,
+.dc-recovery-action-operation {
+  color: var(--dc-text-muted);
+}
+
+.dc-recovery-action-operation {
+  font-size: 10px;
+}
+
+.dc-recovery-collapse {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dc-radius-sm);
+  background: transparent;
+  color: var(--dc-text-muted);
+  cursor: pointer;
+}
+
+.dc-recovery-collapse .dc-inspector-disclosure-chevron {
+  transform: rotate(225deg);
+}
+
+.dc-recovery-collapse:hover,
+.dc-recovery-collapse:focus-visible {
+  background: var(--dc-selection-soft);
+  color: var(--dc-selection);
+  outline: none;
+}
+
+.dc-recovery-show-arrow {
+  flex: none;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: var(--dc-selection);
+  font: 600 10px/1 var(--dc-font);
+  cursor: pointer;
+}
+
+.dc-recovery-action-fields {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  left: var(--dc-recovery-sidecar-left, calc(100% + 56px));
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  width: 310px;
+  padding: 9px 10px 8px;
+  border: 1px solid color-mix(in srgb, var(--dc-selection) 38%, var(--dc-border));
+  border-radius: var(--dc-radius);
+  background: var(--dc-surface);
+  box-shadow: var(--dc-shadow-panel);
+}
+
+.dc-recovery-thread {
+  position: absolute;
+  z-index: 1;
+  overflow: visible;
+  pointer-events: none;
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--dc-selection) 22%, transparent));
+}
+
+.dc-recovery-thread-path {
+  fill: none;
+  stroke: var(--dc-selection);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.86;
+}
+
+.dc-recovery-thread-end {
+  fill: var(--dc-selection);
+  opacity: 0.78;
+}
+
+.dc-recovery-operation-header,
+.dc-recovery-action-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dc-recovery-operation-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.dc-recovery-operation-name {
+  max-width: 135px;
+  overflow: hidden;
+  color: var(--dc-text);
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dc-recovery-protocols {
+  display: inline-flex;
+  flex: none;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--dc-border);
+  border-radius: 8px;
+  background: var(--dc-surface-raised);
+}
+
+.dc-recovery-protocol-button {
+  min-height: 22px;
+  padding: 2px 7px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--dc-text-muted);
+  font: 600 10px/1 var(--dc-font);
+  cursor: pointer;
+}
+
+.dc-recovery-protocol-button:hover,
+.dc-recovery-protocol-button:focus-visible {
+  color: var(--dc-text);
+  outline: none;
+}
+
+.dc-recovery-protocol-button[aria-pressed='true'] {
+  background: var(--dc-selection-soft);
+  color: var(--dc-selection);
+}
+
+.dc-recovery-operation-input > :is(.dc-inspector-control, .dc-inspector-split) {
+  width: 100%;
+}
+
+.dc-recovery-operation-input .dc-inspector-split {
+  height: var(--dc-popover-field, 28px);
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-sm);
+  background: var(--dc-surface-raised);
+  transition: border-color 90ms ease, box-shadow 90ms ease;
+}
+
+.dc-recovery-operation-input .dc-inspector-split:focus-within {
+  border-color: var(--dc-selection);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--dc-selection) 22%, transparent);
+}
+
+.dc-recovery-operation-input .dc-inspector-select-split-first {
+  flex-basis: 74px;
+}
+
+.dc-recovery-operation-input .dc-inspector-select-split-first .dc-inspector-select-button {
+  height: 100%;
+  min-height: 0;
+  padding: 0 8px;
+  border: 0;
+  border-right: 1px solid var(--dc-border);
+  border-radius: 0;
+  background: transparent;
+}
+
+.dc-recovery-operation-input .dc-inspector-split-rest {
+  height: 100%;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.dc-recovery-operation-input .dc-inspector-split :is(button, input):focus-visible {
+  outline: none;
+}
+
+.dc-recovery-route {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 26px minmax(0, 1fr);
+  align-items: center;
+  gap: 4px;
+  padding: 7px 0 1px;
+  border-top: 1px dashed color-mix(in srgb, var(--dc-selection) 40%, var(--dc-border));
+}
+
+.dc-recovery-route::before {
+  position: absolute;
+  top: calc(50% + 3px);
+  right: 16%;
+  left: 16%;
+  border-top: 1px dashed color-mix(in srgb, var(--dc-selection) 55%, transparent);
+  content: '';
+  pointer-events: none;
+}
+
+.dc-recovery-route .dc-inspector-select {
+  z-index: 1;
+}
+
+.dc-recovery-route .dc-inspector-select-button {
+  min-height: 27px;
+  padding: 0 6px;
+  font-size: 11px;
+}
+
+.dc-recovery-route-arrow {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin: auto;
+  border: 1px solid color-mix(in srgb, var(--dc-selection) 45%, var(--dc-border));
+  border-radius: 50%;
+  background: var(--dc-surface-raised);
+  color: var(--dc-selection);
+  font-size: 13px;
+}
+
+.dc-recovery-action-footer {
+  justify-content: flex-end;
+  padding-top: 2px;
+}
+
+.dc-recovery-add {
+  min-height: 22px;
+  padding: 2px 4px;
+  color: var(--dc-selection);
+  font-size: 11px;
+}
+
+.dc-recovery-remove {
+  color: var(--dc-text-muted);
+  font-size: 11px;
+}
+
+.dc-recovery-remove:hover {
+  color: var(--dc-danger);
+}
+
+.dc-canvas[data-recovery-connecting='true'] .react-flow__pane,
+.dc-canvas[data-recovery-connecting='true'] .react-flow__node {
+  cursor: crosshair;
+}
+
+.dc-recovery-connect-ghost {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  color: var(--dc-selection);
+}
+
+.dc-recovery-connect-surface {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: visible;
+  color: var(--dc-selection);
+}
+
+.dc-recovery-connect-path {
+  stroke: var(--dc-selection);
+  stroke-width: 1.8;
+  stroke-dasharray: 7 5;
+  opacity: 0.85;
+}
+
+.dc-recovery-connect-target {
+  fill: var(--dc-selection-soft);
+  stroke: var(--dc-selection);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+}
+
+.dc-recovery-connect-prompt {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: max-content;
+  max-width: 230px;
+  padding: 5px 9px;
+  border: 1px solid color-mix(in srgb, var(--dc-selection) 48%, var(--dc-border));
+  border-radius: var(--dc-radius-pill);
+  background: var(--dc-surface);
+  box-shadow: var(--dc-shadow-panel);
+  color: var(--dc-text);
+  font-size: 11px;
+  white-space: nowrap;
 }
 
 /* Shared sizing for every select/input inside the expanded editor — one
@@ -2205,6 +2989,90 @@
 
 .dc-inspector-control::placeholder {
   color: var(--dc-text-faint);
+}
+
+.dc-inspector-request-section {
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-sm);
+  background: var(--dc-surface-raised);
+}
+
+.dc-inspector-request-section .dc-inspector-split {
+  gap: 6px;
+}
+
+.dc-inspector-request-section .dc-inspector-select-split-first .dc-inspector-select-button,
+.dc-inspector-request-section .dc-inspector-split-rest {
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-sm);
+}
+
+.dc-inspector-request-section .dc-inspector-select-split-first .dc-inspector-select-button {
+  background: var(--dc-selection-soft);
+  color: var(--dc-selection);
+}
+
+.dc-inspector-request-section .dc-inspector-split-rest {
+  padding-inline: 10px;
+}
+
+.dc-reply-add {
+  align-self: flex-start;
+  min-height: 20px;
+  padding: 0 2px;
+  border: 0;
+  background: transparent;
+  color: var(--dc-text-muted);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.dc-reply-add:hover,
+.dc-reply-add:focus-visible {
+  color: var(--dc-selection);
+}
+
+.dc-inspector-reply-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  padding-top: 9px;
+  border-top: 1px solid var(--dc-border);
+}
+
+.dc-inspector-reply-label {
+  flex: none;
+  color: var(--dc-text-muted);
+  font-size: 11px;
+}
+
+.dc-inspector-reply-line .dc-inspector-section-row {
+  flex: 1;
+  min-width: 0;
+}
+
+.dc-inspector-reply-hide {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dc-radius-sm);
+  background: transparent;
+  color: var(--dc-text-muted);
+  cursor: pointer;
+}
+
+.dc-inspector-reply-hide:hover,
+.dc-inspector-reply-hide:focus-visible {
+  background: var(--dc-selection-soft);
+  color: var(--dc-selection);
 }
 
 .dc-inspector-condition {
@@ -2237,8 +3105,9 @@
 
 .dc-inspector-select-value {
   min-width: 0;
-  white-space: normal;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dc-inspector-select-chevron {
@@ -2318,13 +3187,15 @@
  * `layout` is a per-picker choice, not a rule tied to having icons at all. */
 .dc-inspector-select-menu[data-layout='grid'] {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 2px;
-  width: 220px;
+  width: 280px;
 }
 
 .dc-inspector-select-menu[data-layout='grid'] .dc-inspector-select-option-label {
-  white-space: normal;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* One column of preview · name · purpose — the Boundary kind picker, where kinds differ more in
@@ -2440,24 +3311,6 @@
   color: var(--dc-selection);
 }
 
-/* A quiet, link-styled one-click convenience (guessing a response from the request's own verb)
- * — not a real form control, so it carries none of `.dc-inspector-control`'s chrome. */
-.dc-inspector-hint {
-  padding: 0 2px;
-  border: none;
-  background: none;
-  color: var(--dc-text-muted);
-  font-size: 11px;
-  text-decoration: underline;
-  text-decoration-style: dotted;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.dc-inspector-hint:hover {
-  color: var(--dc-text);
-}
-
 /*
  * A predetermined connector behaviour (see `capabilityFor` in
  * `document/connectorSemantics.ts`) — dashed border reads as "inferred, not a
@@ -2555,7 +3408,8 @@
 
 /* A shape's automatic colour is drawn as a wheel of the palette (inline, from the theme) and needs
    no dashed outline to say so. */
-.dc-element-inspector .dc-inspector-color-swatch[data-auto='true'] {
+.dc-element-inspector .dc-inspector-color-swatch[data-auto='true'],
+.dc-connector-color-swatch[data-auto='true'] {
   border-color: transparent;
 }
 

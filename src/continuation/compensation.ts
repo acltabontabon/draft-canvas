@@ -45,7 +45,7 @@ export function compensationCandidates(nb: Neighborhood): Continuation[] {
   }
   if (open.size < 2) return [];
 
-  return [...open.values()].slice(0, MAX_CANDIDATES).map(({ other }) => {
+  return [...open.values()].slice(0, MAX_CANDIDATES).map(({ other, edge }) => {
     const name = displayNameFor(other);
     return {
       id: `compensate:${other.id}`,
@@ -57,7 +57,7 @@ export function compensationCandidates(nb: Neighborhood): Continuation[] {
       actionLabel: `Compensate ${name}`,
       fragment: {
         nodes: [],
-        edges: [{ from: 'anchor', to: 'target', semantic: 'compensates' }],
+        edges: [{ from: 'anchor', to: 'target', semantic: 'compensates', compensationFor: edge.id }],
         existing: [{ key: 'target', nodeId: other.id }],
       },
       anchorId: nb.node.id,

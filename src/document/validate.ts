@@ -11,6 +11,7 @@ import { parseEvidence } from './evidence';
 import { createId } from './ids';
 import { LIMITS } from './limits';
 import { cleanText } from './sanitize';
+import { repairCompensationLinks } from './compensation';
 import { migrateToCurrent, UnsupportedVersionError } from './migrate';
 import { defaultSizeFor } from './factory';
 import {
@@ -640,11 +641,12 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
   /* --------------------------------------------------------------- edges -- */
 
   const seenEdgeIds = ctx.edgeIds;
-  const edges: DraftEdge[] = [];
+  let edges: DraftEdge[] = [];
   let droppedEdges = 0;
   let droppedSelfLoopEdges = 0;
   /** Maps the edge id as written in the file to the id we actually used — flows resolve through this. */
   const edgeIdRemap = new Map<string, string>();
+  const compensationParentIds = new Map<string, string>();
 
   for (const candidate of rawEdges.slice(0, Math.max(0, ctx.budget.edges))) {
     if (!isRecord(candidate)) {
@@ -716,6 +718,17 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
     // should not silently become e.g. "http".
     const semantic = oneOfOptional<EdgeSemantic>(candidate.semantic, EDGE_SEMANTICS);
     if (semantic) edge.semantic = semantic;
+    if (semantic === 'compensates') {
+      const parentId = safeId(candidate.compensationFor);
+      if (parentId) compensationParentIds.set(id, parentId);
+      if (typeof candidate.compensationVisible === 'boolean') edge.compensationVisible = candidate.compensationVisible;
+      const name = text(candidate.compensationName, LIMITS.maxCompensationNameLength)?.trim();
+      if (name) edge.compensationName = name;
+      const protocol = oneOfOptional<'http' | 'calls' | 'grpc'>(candidate.compensationProtocol, ['http', 'calls', 'grpc']);
+      if (protocol) edge.compensationProtocol = protocol;
+      const description = text(candidate.compensationDescription, LIMITS.maxDescriptionLength)?.trim();
+      if (description) edge.compensationDescription = description;
+    }
 
     // Not gated on `semantic === 'deadLetters'` at parse time — same "repair the value, don't
     // reject the field based on a sibling" discipline `response`/`hasResponse` already follow.
@@ -763,6 +776,12 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
     if (edgeEvidence) edge.evidence = edgeEvidence;
     edges.push(edge);
   }
+
+  for (const edge of edges) {
+    const authoredParent = compensationParentIds.get(edge.id);
+    if (authoredParent) edge.compensationFor = edgeIdRemap.get(authoredParent) ?? authoredParent;
+  }
+  edges = repairCompensationLinks(edges);
 
   if (droppedNodes > 0) repairs.push(`Dropped ${droppedNodes} unreadable node(s).`);
   if (renamedNodes > 0) {

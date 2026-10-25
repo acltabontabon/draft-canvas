@@ -55,9 +55,22 @@ describe('element details shortcut', () => {
   it.each(C4_TEXT_TYPES)('offers + Technology on an empty %s', (type) => {
     mount('', type);
     const chip = screen.getByRole('button', { name: 'Add technology' });
-    expect(chip).toHaveTextContent('+ Technology');
+    expect(chip).toHaveTextContent('Tech');
     fireEvent.click(chip);
     expect(screen.getByRole('combobox', { name: 'Technology' })).toHaveFocus();
+  });
+
+  it('uses the shared rich tooltip for the technology control', () => {
+    mount();
+    const chip = screen.getByRole('button', { name: 'Add technology' });
+
+    expect(chip).not.toHaveAttribute('title');
+    fireEvent.focus(chip);
+
+    const tooltip = screen.getByRole('tooltip');
+    expect(tooltip).toHaveAttribute('data-density', 'rich');
+    expect(tooltip).toHaveTextContent('Add technology');
+    expect(tooltip).toHaveTextContent('Choose the technology used by this element.');
   });
 
   it('does not offer the chip on a non-C4 shape', () => {
@@ -128,12 +141,30 @@ describe('element details shortcut', () => {
     expect(useEditorStore.getState().history.past).toHaveLength(0);
   });
 
-  it('still opens details from the More options menu', () => {
+  it('keeps the common actions visible without an overflow menu', () => {
     mount();
-    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
-    const item = screen.getByRole('menuitem', { name: 'Edit details…' });
-    fireEvent.pointerDown(item);
-    fireEvent.click(item);
-    expect(screen.getByRole('combobox', { name: 'Technology' })).toHaveFocus();
+    expect(screen.queryByRole('button', { name: 'Actions' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Edit text' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeVisible();
+  });
+
+  it('keeps a basic shape useful without an overflow menu', () => {
+    mount('', 'ellipse');
+    expect(screen.queryByRole('button', { name: 'Actions' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Edit text' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeVisible();
+  });
+
+  it('uses the shared rich tooltip for shape-native quick actions', () => {
+    mount();
+    const action = screen.getByRole('button', { name: 'Look inside' });
+
+    expect(action).not.toHaveAttribute('title');
+    fireEvent.focus(action);
+
+    const tooltip = screen.getByRole('tooltip');
+    expect(tooltip).toHaveAttribute('data-density', 'rich');
+    expect(tooltip).toHaveTextContent('Look inside');
+    expect(tooltip).toHaveTextContent('Draw what runs inside Orders');
   });
 });

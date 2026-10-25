@@ -108,6 +108,26 @@ describe('connector action consistency', () => {
     expect(commandsFor(stubContext()).some((item) => item.id === 'edge-response')).toBe(true);
   });
 
+  it('adds a useful HTTP reply in the same undo step and keeps later edits when hidden', () => {
+    const a = createNode({ id: 'orders', type: 'service', ...source });
+    const b = createNode({ id: 'inventory', type: 'service', ...target });
+    const request = createEdge({ id: 'reserve', source: a.id, target: b.id, semantic: 'http', label: 'POST /reservations' });
+    const document = addEdges(addNodes(createDocument('Reservation'), [a, b]), [request]);
+    useEditorStore.setState({ document });
+
+    useEditorStore.getState().setEdgeHasResponse(request.id, true);
+    expect(useEditorStore.getState().document.edges[0]).toMatchObject({ hasResponse: true, response: '201 Created' });
+    expect(useEditorStore.getState().history.past).toHaveLength(1);
+    useEditorStore.getState().undo();
+    expect(useEditorStore.getState().document.edges[0]?.response).toBeUndefined();
+    useEditorStore.getState().redo();
+
+    useEditorStore.getState().setEdgeResponse(request.id, '202 Accepted');
+    useEditorStore.getState().setEdgeHasResponse(request.id, false);
+    useEditorStore.getState().setEdgeHasResponse(request.id, true);
+    expect(useEditorStore.getState().document.edges[0]?.response).toBe('202 Accepted');
+  });
+
   it('rejects duplicate reconnects with feedback, no history entry and no palette target', () => {
     const { document, edge, c } = services();
     expect(reconnectProblem(document, edge, 'target', c.id)).toBe('duplicate');

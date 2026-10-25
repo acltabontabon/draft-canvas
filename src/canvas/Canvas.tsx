@@ -19,6 +19,7 @@ import {
   type XYPosition,
 } from '@xyflow/react';
 import { defaultTextFor, maxSizeFor } from '../document/factory';
+import { linkedCompensations, visibleEdges } from '../document/compensation';
 import { openFitViewport } from '../document/geometry';
 import { boundsOf, descendantsOf, hasAttachmentRoom } from '../document/operations';
 import type { DraftDocument, DraftEdge, DraftNode, Side } from '../document/types';
@@ -28,6 +29,7 @@ import { motionMs } from '../lib/motion';
 import { centerOf, pointInBox } from '../lib/math';
 import { pathKey } from '../depth/tree';
 import { findFlow } from '../document/flow';
+import { visibleEdgesForPlayback } from '../presentation/visibleEdges';
 import { accentOf } from '../render/theme/tokens';
 import { lensFlow, useEditorStore } from '../store/editorStore';
 import { PresentationPointer } from './presentation/PresentationPointer';
@@ -69,6 +71,7 @@ import { computeSnap, sameGuides, type Guide } from './snapping';
 import { minResizeSizeFor, snapResize } from './resizeSnap';
 import { AgentPreviewLayer, ProposalPreviewLayer } from './AgentPreviewLayer';
 import { ContinuationGhost } from './ContinuationGhost';
+import { RecoveryConnectGhost } from './RecoveryConnectGhost';
 import { RoomFrame } from './RoomFrame';
 import { PresenceLayer } from './PresenceLayer';
 import { FollowPrompt } from '../ui/collab/FollowPrompt';
@@ -183,6 +186,7 @@ interface ProjectionState {
     document: DraftDocument;
     selectedNodes: ReadonlySet<string>;
     selectedEdges: ReadonlySet<string>;
+    displayEdges: readonly DraftEdge[];
     interactive: boolean;
   } | null;
 }
@@ -479,6 +483,7 @@ function presenterMovedCamera(event: Event | null): void {
 
 const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, onEmptyCanvasMenu }: CanvasProps) {
   const document = useEditorStore((state) => state.document);
+  const displayEdges = useEditorStore((state) => visibleEdgesForPlayback(state.document, state.flowPlayback));
   const selection = useEditorStore((state) => state.selection);
   const mode = useEditorStore((state) => state.mode);
   const explainActive = useEditorStore((state) => state.flowPlayback.active);
@@ -581,6 +586,29 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   const tracing = useUiStore((state) => state.flowTrace !== null);
   const sharedReadOnly = useUiStore((state) => state.readOnly !== null && !state.readOnly.collaborative);
   const interactive = mode === 'edit' && !tracing && !sharedReadOnly;
+  const recoveryConnect = useUiStore((state) => state.recoveryConnect);
+  const finishRecoveryConnect = useCallback((targetId: string) => {
+    const ui = useUiStore.getState();
+    const gesture = ui.recoveryConnect;
+    if (!gesture) return;
+    const editor = useEditorStore.getState();
+    const actionId = editor.addCompensation(gesture.parentEdgeId, targetId);
+    if (!actionId) {
+      ui.notify('Choose a different service or external system for the recovery action.');
+      return;
+    }
+    ui.setRecoveryConnect(null);
+    ui.setQuietEdge(null);
+    // Keep the newly drawn arrow in view. Its marker opens the compact editor on demand.
+    editor.setSelection({ nodes: [], edges: [] });
+  }, []);
+  const onRecoveryNodeClick = useCallback((event: React.MouseEvent, node: { id: string }) => {
+    if (useUiStore.getState().recoveryConnect) {
+      event.preventDefault();
+      event.stopPropagation();
+      finishRecoveryConnect(node.id);
+    } else if (sharedReadOnly) selectSharedNode(event, node);
+  }, [finishRecoveryConnect, sharedReadOnly]);
   useContinuation(interactive);
 
   useZoomVariable();
@@ -725,6 +753,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
     // drag back to its pre-gesture position for a frame even though nothing it renders changed.
     view.from.document.nodes !== document.nodes ||
     view.from.document.edges !== document.edges ||
+    view.from.displayEdges !== displayEdges ||
     view.from.selectedNodes !== selectedNodes ||
     view.from.selectedEdges !== selectedEdges ||
     view.from.interactive !== interactive
@@ -739,12 +768,13 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       from === null ||
       from.document.nodes !== document.nodes ||
       from.document.edges !== document.edges ||
+      from.displayEdges !== displayEdges ||
       from.selectedEdges !== selectedEdges ||
       from.interactive !== interactive;
     setView((current) => ({
       nodes: nodesStale ? projectNodes(document, current.nodes, options) : current.nodes,
-      edges: edgesStale ? projectEdges(document, current.edges, options) : current.edges,
-      from: { document, selectedNodes, selectedEdges, interactive },
+      edges: edgesStale ? projectEdges(document, current.edges, options, displayEdges) : current.edges,
+      from: { document, selectedNodes, selectedEdges, displayEdges, interactive },
     }));
   }
 
@@ -1137,7 +1167,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
         nodeIds,
         baseline.nodes,
         reportedEdgeIds,
-        useEditorStore.getState().document.edges,
+        visibleEdges(useEditorStore.getState().document.edges),
       );
       const next = { nodes: nodeIds, edges: edgeIds };
       if (sameSelection(baseline, next)) return;
@@ -1711,12 +1741,24 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   }, []);
   // A hold still being timed when the canvas goes away must not open a menu over whatever replaced it.
   useEffect(() => cancelLongPress, [cancelLongPress]);
+  const recoveryClickConsumed = useRef(false);
 
   /** Every press reaches here first (capture phase): the right-click snapshot, then a long-press timer
    *  for a touch or pen. A mouse never qualifies — a held left button is a drag about to start — and
    *  a second finger cancels, since that is a pinch, not a hold. */
   const onCanvasPressStart = useCallback(
     (event: React.PointerEvent) => {
+      const recoveryTarget = useUiStore.getState().recoveryConnect && event.button === 0 && event.isPrimary &&
+        event.target instanceof Element ? event.target.closest<HTMLElement>('.react-flow__node') : null;
+      if (recoveryTarget?.dataset.id) {
+        // React Flow selects nodes on pointer-down. Complete the canvas gesture in capture so
+        // that selection cannot replace the parent interaction before its editor reopens.
+        event.preventDefault();
+        event.stopPropagation();
+        recoveryClickConsumed.current = true;
+        finishRecoveryConnect(recoveryTarget.dataset.id);
+        return;
+      }
       onCanvasPointerDown(event);
       cancelLongPress();
       longPressFired.current = false;
@@ -1734,7 +1776,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
         }, LONG_PRESS_MS),
       };
     },
-    [cancelLongPress, onCanvasPointerDown, openContextMenuFromPress],
+    [cancelLongPress, finishRecoveryConnect, onCanvasPointerDown, openContextMenuFromPress],
   );
 
   /** One ref read per move while nothing is pending — nothing is measured unless a hold is being timed. */
@@ -1793,7 +1835,11 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   const hoverAt = useRef<{ clientX: number; clientY: number } | null>(null);
   const hoverHandle = useRef<Element | null>(null);
   const setHover = useCallback((id: string | null, at?: { clientX: number; clientY: number }) => {
-    useUiStore.getState().setHoveredEdge(id);
+    const ui = useUiStore.getState();
+    ui.setHoveredEdge(id);
+    const edges = useEditorStore.getState().document.edges;
+    const hovered = id ? edgeIndex(edges).get(id) : undefined;
+    ui.setHoveredRecoveryParent(hovered?.compensationFor ?? (hovered && linkedCompensations(edges, hovered.id).length > 0 ? hovered.id : null));
     // A connection handle in front of the line keeps its own crosshair unless told otherwise. Only
     // the handle under the pointer is told: an attribute on the canvas restyled every handle in the
     // diagram (twelve a shape) each time the pointer met or left a connector — 18 ms at 500 shapes.
@@ -1861,10 +1907,24 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
    */
   const onCanvasClickCapture = useCallback(
     (event: React.MouseEvent) => {
+      if (recoveryClickConsumed.current) {
+        recoveryClickConsumed.current = false;
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
       // The lift after a long-press still produces a click; the menu is up and that click is not
       // a click on anything.
       if (longPressFired.current) {
         longPressFired.current = false;
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+      if (useUiStore.getState().recoveryConnect) {
+        // While the recovery arrow is armed, only a shape can complete it. Empty canvas and
+        // underlying connector clicks leave the gesture waiting instead of changing selection.
+        if (event.target instanceof Element && event.target.closest('.react-flow__node')) return;
         event.preventDefault();
         event.stopPropagation();
         return;
@@ -1983,6 +2043,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       data-lens={lensActive ? 'on' : undefined}
       data-traffic={trafficActive ? 'on' : undefined}
       data-connect-cancelled={connectionCancelled ? 'true' : undefined}
+      data-recovery-connecting={recoveryConnect ? 'true' : undefined}
       style={
         explainActive
           ? ({ '--dc-explain-accent': explainAccent ? accentOf(theme, explainAccent).chip : theme.selection } as CSSProperties)
@@ -2023,7 +2084,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onSelectionChange={onSelectionChange}
-        onNodeClick={sharedReadOnly ? selectSharedNode : undefined}
+        onNodeClick={onRecoveryNodeClick}
         onEdgeClick={sharedReadOnly ? selectSharedEdge : undefined}
         onNodeDragStart={onNodeDragStart}
         onNodeDragStop={onNodeDragStop}
@@ -2145,6 +2206,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
           <RoomFrame />
 
           {interactive && <ContinuationGhost />}
+          {interactive && <RecoveryConnectGhost />}
 
           {/* An AI agent's change still being prepared (desktop only): drawn over the diagram, never in it. */}
           <AgentPreviewLayer />

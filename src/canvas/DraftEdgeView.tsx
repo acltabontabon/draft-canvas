@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { LIMITS } from '../document/limits';
 import { reconnectProblem } from '../document/reconnect';
+import { visibleEdgesForPlayback } from '../presentation/visibleEdges';
 import { useInternalNode, useReactFlow, type EdgeProps } from '@xyflow/react';
 import { useShallow } from 'zustand/react/shallow';
 import type { DraftNode, DraftPoint } from '../document/types';
@@ -12,6 +13,7 @@ import {
   LABEL_LINE_GAP,
   RESPONSE_SEED_SUFFIX,
   arrowSeed,
+  captionAwayForLane,
   endTangent,
   labelChipSide,
   labelLaneOffset,
@@ -26,8 +28,9 @@ import {
 } from '../edges/routing';
 import { routingPlan } from '../edges/bundles';
 import { labelGroupPlan, labelLeader, pointAlong } from '../edges/labelGroups';
-import { LABEL_PADDING_X, LABEL_PADDING_Y, layoutEdgeLabel, layoutEdgeResponse } from '../edges/labelLayout';
+import { LABEL_PADDING_X, LABEL_PADDING_Y, layoutEdgeLabel, layoutEdgeResponse, layoutRecoveryLabel } from '../edges/labelLayout';
 import { RESPONSE_DASH, dashForEdge, markerVariantForEdge, resolveEdgeColor } from '../edges/kindStyle';
+import { compensationActionCaption, compensationDisplayLabel, compensationLabelParts } from '../edges/compensationMarker';
 import { EdgeLabels } from './EdgeLabels';
 import { ATTACHMENT_ROW_GAP, attachmentRowBelowsSourceOrTarget, captionSideOf, rectOfInternal } from './edgeGeometry';
 import { obstaclesForEdge, withoutNodes } from '../edges/obstacles';
@@ -61,6 +64,29 @@ import { translateWaypoints } from '../edges/waypoints';
 import { computeEdgeRoutes, edgeRoutes, type EdgeRouteInputs, type EdgeRoutes } from '../edges/edgeRoutes';
 
 const NO_OBSTACLES: readonly Rect[] = [];
+
+function RecoveryHoverTooltip({ parentId, x, y, side }: { parentId: string; x: number; y: number; side: Side }) {
+  const parent = useEditorStore((state) => selectEdge(state.document, parentId));
+  const source = useEditorStore((state) => selectNode(state.document, parent?.source ?? ''));
+  const target = useEditorStore((state) => selectNode(state.document, parent?.target ?? ''));
+  if (!parent) return null;
+  const anchor = side === 'right' ? `translate(0, -100%) translate(${x + 16}px, ${y - 10}px)`
+    : side === 'left' ? `translate(-100%, -100%) translate(${x - 16}px, ${y - 10}px)`
+      : `translate(-50%, -100%) translate(${x}px, ${y - 18}px)`;
+  return (
+    <div className="dc-recovery-hover-tooltip" role="tooltip" style={{ transform: anchor }}>
+      <span className="dc-recovery-hover-glyph" aria-hidden="true">↶</span>
+      <span className="dc-recovery-hover-copy">
+        <span className="dc-recovery-hover-eyebrow">Recovery for</span>
+        <span className="dc-recovery-hover-route">
+          <span title={source?.text || source?.type}>{source?.text || source?.type || 'Source'}</span>
+          <span aria-hidden="true">→</span>
+          <span title={target?.text || target?.type}>{target?.text || target?.type || 'Target'}</span>
+        </span>
+      </span>
+    </div>
+  );
+}
 
 /** Each connector's last routes and every input they were made from, compared by identity. Most
  *  renders (selection, lens, playback, hover) move none of them, and building the shared cache's
@@ -214,14 +240,16 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // A primitive, not the `LaneAssignment` object — see `laneIndex`'s comment.
   // Only the edges whose own lane actually shifts re-render when a sibling
   // connector is added or removed between the same two nodes.
-  const laneOffset = useEditorStore((state) => laneIndex(state.document.edges).get(id)?.offset ?? 0);
+  const laneOffset = useEditorStore((state) => laneIndex(visibleEdgesForPlayback(state.document, state.flowPlayback)).get(id)?.offset ?? 0);
+  const recoveryAssociated = useUiStore((state) => state.hoveredRecoveryParentId !== null &&
+    (state.hoveredRecoveryParentId === id || state.hoveredRecoveryParentId === edge?.compensationFor));
   // The shared fan-out/fan-in trunk this connector belongs to, if any. Safe to
   // subscribe to as an object: `routingPlan` is memoized on the (nodes, edges)
   // array pair, so an unchanged document hands back the very same spine and
   // zustand's default equality skips the re-render. A node move invalidates
   // the plan, but every bundled connector's geometry has genuinely changed by
   // then anyway.
-  const spine = useEditorStore((state) => routingPlan(state.document.nodes, state.document.edges).spineFor(id));
+  const spine = useEditorStore((state) => routingPlan(state.document.nodes, visibleEdgesForPlayback(state.document, state.flowPlayback)).spineFor(id));
   // The live pointer position while this edge's own endpoint is being dragged — local state, not the
   // shared store, so only this one edge re-renders per pointer-move frame. Exactly the same "stream to
   // the rendered element for smoothness, commit to the document only at the end" pattern node dragging
@@ -251,7 +279,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // as an array for the same reason `spine` is safe as an object: the plan is memoized on the
   // (nodes, edges) pair and hands back a frozen, identity-stable list — the very same empty one
   // for every connector that crosses nothing, which is most of them.
-  const planned = useEditorStore((state) => crossingPlan(state.document.nodes, state.document.edges).crossingsFor(id));
+  const planned = useEditorStore((state) => crossingPlan(state.document.nodes, visibleEdgesForPlayback(state.document, state.flowPlayback)).crossingsFor(id));
   // A gesture makes three kinds of crossing unreliable, and all three are dropped for its duration
   // rather than recomputed per frame: this connector's own endpoint moving, the crossed
   // connector's endpoint moving, and — the quiet one — this connector merely detouring around a
@@ -271,7 +299,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   );
   // Connectors leaving together under one label draw it once, on the run they share — see
   // `edges/labelGroups.ts`. The group is identity-stable out of a memoized plan, like `spine`.
-  const labelGroup = useEditorStore((state) => labelGroupPlan(state.document.nodes, state.document.edges).groupFor(id));
+  const labelGroup = useEditorStore((state) => labelGroupPlan(state.document.nodes, visibleEdgesForPlayback(state.document, state.flowPlayback)).groupFor(id));
   // A numbered step rides inside each connector's own label chip, so while a flow's steps show, a
   // group whose members carry them keeps separate labels.
   const groupStepped = useEditorStore((state) => {
@@ -453,6 +481,8 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const waypoints = bendPreview
     ? bendPreview.waypoints
     : carriedWaypoints(edge.waypoints, committedSource, committedTarget, sourceNode, targetNode);
+  const displayLabel = compensationDisplayLabel(edge);
+  const recoveryParts = compensationLabelParts(edge);
 
   const routeInputs = [
     edge,
@@ -480,7 +510,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
     source: effectiveSourceRect,
     target: effectiveTargetRect,
     routing: edge.routing,
-    label: edge.label,
+    label: displayLabel,
     // A dragged end's persisted anchor is set aside (see `effectiveSourceRect` above).
     sourceAnchor: dragOverride?.endpoint === 'source' ? undefined : edge.sourceAnchor,
     targetAnchor: dragOverride?.endpoint === 'target' ? undefined : edge.targetAnchor,
@@ -507,7 +537,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const labelSide = labelChipSide(route.labelSide, responseAway);
   const attachmentFlipBelow = attachmentRowBelowsSourceOrTarget(labelX, labelY, sourceRect, targetRect, captionSideOf(edge, labelSide));
 
-  const hasLabel = Boolean(edge.label);
+  const hasLabel = Boolean(displayLabel);
   // In a label group, the leader draws the one label at the group's point — along its own live line
   // while a gesture reroutes it, so the label rides the line instead of waiting for the drop — and
   // every other member draws none (unless it is the one being edited).
@@ -518,10 +548,12 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       ? (pointAlong(route.d, sharedLabel!.distance) ?? sharedLabel!)
       : sharedLabel!
     : null;
-  const chipSide = sharedAt ? sharedLabel!.side : labelSide;
+  const chipSide = sharedAt ? sharedLabel!.side
+    : recoveryParts && (labelSide === 'top' || labelSide === 'bottom') ? 'bottom' : labelSide;
   const chipX = sharedAt ? sharedAt.x : labelX;
   const chipY = sharedAt ? sharedAt.y : labelY;
-  const labelLayout = edge.label ? layoutEdgeLabel(edge.label) : null;
+  const labelLayout = displayLabel ? layoutEdgeLabel(displayLabel) : null;
+  const recoveryLayout = recoveryParts ? layoutRecoveryLabel(recoveryParts.name, recoveryParts.operation) : null;
   const responseLayout = edge.response ? layoutEdgeResponse(edge.response) : null;
   const hasStep = showSequence && typeof stepNumber === 'number';
   // The very point the exporter puts it at — one function, so the two can't drift apart.
@@ -562,24 +594,24 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
     if (hasLabel && !hidesOwnLabel && labelLayout && !sharedLabel) {
       // `.dc-edge-label`: 3px 6px padding, and — for a numbered step — a 16px badge plus a 6px gap.
       const stepWidth = hasStep ? 16 + 6 : 0;
-      const w = labelLayout.width + stepWidth + LABEL_PADDING_X * 2;
-      const h = Math.max(labelLayout.height, hasStep ? 16 : 0) + LABEL_PADDING_Y * 2;
+      const w = (recoveryLayout?.width ?? labelLayout.width) + stepWidth + LABEL_PADDING_X * 2;
+      const h = Math.max(recoveryLayout?.height ?? labelLayout.height, hasStep ? 16 : 0) + LABEL_PADDING_Y * 2;
       const { left, top } = labelChipRect(chipSide, chipX, chipY, w, h);
       occupied = { left, top, width: w, height: h };
     } else if (!hasLabel && !badgeOverCaption && edge.semantic && !captionCollapsed) {
-      const text = relationshipCaptionLabel(edge.semantic, {
+      const text = compensationActionCaption(edge.compensationFor ? edge.compensationName : undefined, relationshipCaptionLabel(edge.semantic, {
         hasResponse: edge.hasResponse,
         deliveryAttempts: edge.deliveryAttempts,
         source: sourceCategory,
         target: targetCategory,
-      });
+      }));
       const layout = layoutText(captionIsUnusual ? `▲ ${text}` : text, {
         font: FONTS.connectorCaption,
         maxWidth: 120,
         lineHeight: FONTS.connectorCaption.size * LINE_HEIGHTS.label,
         maxLines: 1,
       });
-      const caption = captionAnchorRect(route.labelSide, captionAt.x, captionAt.y, layout, responseAway);
+      const caption = captionAnchorRect(route.labelSide, captionAt.x, captionAt.y, layout, captionCollapsed ? responseAway : captionAwayForLane(laneOffset, responseAway));
       const left = caption.align === 'start' ? caption.x : caption.align === 'end' ? caption.x - layout.width : caption.x - layout.width / 2;
       occupied = { left, top: caption.y, width: layout.width, height: layout.height };
     }
@@ -671,6 +703,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       data-traffic={trafficReading ?? undefined}
       data-lens-pulse={lensPulsing ? 'true' : undefined}
       data-hovered={hoverShown ? 'true' : undefined}
+      data-recovery-associated={recoveryAssociated ? 'true' : undefined}
     >
 {/*
         Two sibling paths, same shape `BaseEdge` itself renders internally — but decoupled onto
@@ -917,13 +950,13 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
           landing on top of the response line's own label — see its own doc comment. */}
       {!hasLabel && !badgeOverCaption && edge.semantic && (() => {
         const captionSide = captionCollapsed ? (route.trunkLabelSide ?? route.labelSide) : route.labelSide;
-        const caption = captionAnchor(captionSide, captionAt.x, captionAt.y, responseAway);
-        const label = relationshipCaptionLabel(edge.semantic, {
+        const caption = captionAnchor(captionSide, captionAt.x, captionAt.y, captionCollapsed ? responseAway : captionAwayForLane(laneOffset, responseAway));
+        const label = compensationActionCaption(edge.compensationFor ? edge.compensationName : undefined, relationshipCaptionLabel(edge.semantic, {
           hasResponse: edge.hasResponse,
           deliveryAttempts: edge.deliveryAttempts,
           source: sourceCategory,
           target: targetCategory,
-        });
+        }));
         return (
           <text
             className="dc-edge-caption"
@@ -943,6 +976,9 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
         {/* `display: contents` — no box of its own, so every chip below still positions against the
             label layer. It only tells `edgePick.ts` whose chip the pointer is on. */}
         <div className="dc-edge-overlay" data-edge-overlay={edge.id}>
+          {hovering && edge.compensationFor && (
+            <RecoveryHoverTooltip parentId={edge.compensationFor} x={labelX} y={labelY} side={route.labelSide} />
+          )}
         {/* Where this connector starts and ends, hinted while it is hovered: the same dots selecting it
             makes draggable, smaller and hollow, and not yet anything to grab. */}
         {hoverShown && (
@@ -992,6 +1028,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
         {(hasLabel || editing) && !hidesOwnLabel && (
           <div
             className="dc-edge-label"
+            data-recovery-detail={recoveryLayout ? 'true' : undefined}
             data-editing={editing ? 'true' : undefined}
             // Named for `edgePick.ts`: a click on a label several connectors share steps through them.
             data-label-group={drawsSharedLabel ? sharedLabel!.members.join(' ') : undefined}
@@ -1001,7 +1038,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
             data-active={isActiveStep ? 'true' : undefined}
             data-lens-dimmed={lensDimmed ? 'true' : undefined}
             style={{ transform: labelChipTransform(chipSide, chipX, chipY) }}
-            onDoubleClick={() => mode === 'edit' && setEditing(true)}
+            onDoubleClick={() => mode === 'edit' && !edge.compensationFor && setEditing(true)}
           >
             {hasStep && (
               <span className="dc-edge-label-step" style={{ color }}>
@@ -1039,17 +1076,22 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
                 className="dc-edge-label-text"
                 dir="auto"
                 title={
-                  drawsSharedLabel && mode === 'edit'
-                    ? `${labelLayout?.truncated ? `${edge.label} — ` : ''}Shared by ${sharedLabel!.members.length} connectors. Click again for the next one.`
+                  recoveryLayout && (recoveryLayout.primary.truncated || recoveryLayout.secondary.truncated)
+                    ? `${recoveryParts!.name} · ${recoveryParts!.operation}`
+                    : drawsSharedLabel && mode === 'edit'
+                    ? `${labelLayout?.truncated ? `${displayLabel} — ` : ''}Shared by ${sharedLabel!.members.length} connectors. Click again for the next one.`
                     : labelLayout?.truncated
-                      ? edge.label
+                      ? displayLabel
                       : undefined
                 }
               >
-                {labelLayout?.lines.map((line, index) => (
-                  <span key={index} className="dc-edge-label-line">
-                    {line.text}
-                  </span>
+                {recoveryLayout ? (
+                  <>
+                    <span className="dc-edge-label-line dc-edge-recovery-name">{recoveryLayout.primary.lines[0]?.text}</span>
+                    <span className="dc-edge-label-line dc-edge-recovery-operation">{recoveryLayout.secondary.lines[0]?.text}</span>
+                  </>
+                ) : labelLayout?.lines.map((line, index) => (
+                  <span key={index} className="dc-edge-label-line">{line.text}</span>
                 ))}
               </span>
             )}

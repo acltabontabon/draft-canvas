@@ -119,7 +119,7 @@ import {
   setOpenPointKind as setOpenPointKindOp,
   setOpenPointResolution as setOpenPointResolutionOp,
 } from '../document/openPoints';
-import { relationshipCaptionLabel } from '../document/edgeSemantics';
+import { defaultResponseFor, relationshipCaptionLabel } from '../document/edgeSemantics';
 import { DEFAULTS, LIMITS } from '../document/limits';
 import { cleanText, cleanTextFields } from '../document/sanitize';
 import {
@@ -155,6 +155,7 @@ import type {
 import { ACTOR_KINDS, C4_TEXT_TYPES } from '../document/types';
 import { routingPlan } from '../edges/bundles';
 import { anchorPoint, rectOf, trunkCoordinate } from '../edges/routing';
+import { recoveryBranchAnchor } from '../edges/compensationMarker';
 import { centerOf, clamp } from '../lib/math';
 import {
   EMPTY_HISTORY,
@@ -450,8 +451,11 @@ export interface EditorStore {
   /** "Add DLQ" — creates a compact, connected Dead Letter Queue companion for a plain Queue. A
    *  no-op if the node isn't a plain queue, is itself a generated DLQ, or already has one. */
   addDeadLetterQueue: (queueId: string) => void;
-  /** A saga's undo for the step `edgeId` asks for: a `compensates` twin between the same two services. */
-  addCompensation: (edgeId: string) => void;
+  /** Adds a folded business action linked to this interaction; a canvas gesture may choose its target. */
+  addCompensation: (edgeId: string, targetId?: string) => string | null;
+  setCompensationVisible: (id: string, visible: boolean) => void;
+  setCompensationParticipants: (id: string, sourceId: string, targetId: string) => void;
+  removeCompensation: (id: string) => void;
   /** Removes a generated DLQ and its connecting edge — never deletes a node the edge was manually
    *  reconnected onto (see `deliveryRole` guard in the implementation). A no-op if there's no
    *  outgoing `deadLetters` edge. */
@@ -1007,6 +1011,10 @@ function resetViewSession(): Pick<EditorStore, 'selection' | 'flowPlayback' | 'e
     flowRenameRequestId: null,
     jumpFlashId: null,
     editRequestId: null,
+    recoveryRequestEdgeId: null,
+    recoveryRequestActionId: null,
+    recoveryConnect: null,
+    hoveredRecoveryParentId: null,
     // A shape hovered as the room changed is no longer under the pointer to say it has left.
     depthShapeHoverId: null,
     depthPlateFocusId: null,
@@ -1164,6 +1172,10 @@ function closeWhatPointsAtRemoved(document: DraftDocument): void {
   if (ui.quickConnect?.source !== undefined && !nodes.has(ui.quickConnect.source)) patch.quickConnect = null;
   if (ui.openPointPopover && gone(ui.openPointPopover.anchor)) patch.openPointPopover = null;
   if (ui.editRequestId !== null && !nodes.has(ui.editRequestId) && !edges.has(ui.editRequestId)) patch.editRequestId = null;
+  if (ui.recoveryRequestEdgeId !== null && !edges.has(ui.recoveryRequestEdgeId)) patch.recoveryRequestEdgeId = null;
+  if (ui.recoveryRequestActionId !== null && !edges.has(ui.recoveryRequestActionId)) patch.recoveryRequestActionId = null;
+  if (ui.recoveryConnect && (!edges.has(ui.recoveryConnect.parentEdgeId) || !nodes.has(ui.recoveryConnect.sourceNodeId))) patch.recoveryConnect = null;
+  if (ui.hoveredRecoveryParentId !== null && !edges.has(ui.hoveredRecoveryParentId)) patch.hoveredRecoveryParentId = null;
   if (Object.keys(patch).length > 0) useUiStore.setState(patch);
 }
 
@@ -1648,6 +1660,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       targetAnchor: targetSide ? { side: targetSide, offset: targetOffset } : undefined,
       kind: relationship?.kind,
       semantic: relationship?.semantic,
+      compensationFor: twinOf === 'step' ? between[0]!.id : undefined,
+      compensationVisible: twinOf === 'step' ? true : undefined,
       async: relationship?.async,
       // No reply line by default, even between two services. At the altitude
       // an architecture diagram works at the return path is implied, and
@@ -1930,36 +1944,63 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     });
   },
 
-  addCompensation(edgeId) {
+  addCompensation(edgeId, targetId) {
     const state = get();
     const step = state.document.edges.find((e) => e.id === edgeId);
-    if (!step || step.semantic === 'compensates') return;
+    if (!step || step.semantic === 'compensates') return null;
     const source = state.document.nodes.find((n) => n.id === step.source);
-    const target = state.document.nodes.find((n) => n.id === step.target);
-    if (!source || !target) return;
+    const target = state.document.nodes.find((n) => n.id === (targetId ?? step.target));
+    const stepTarget = state.document.nodes.find((n) => n.id === step.target);
+    if (!source || !target) return null;
     // Only where the matrix offers the relationship at all (`service>service`, `service>external`).
-    if (!capabilityFor(categoryOf(source), categoryOf(target))?.relations.includes('compensates')) return;
-    // One undo per step: asking again shows the one already there instead of stacking another.
-    const twin = state.document.edges.find(
-      (e) => e.source === step.source && e.target === step.target && e.semantic === 'compensates',
-    );
-    if (twin) {
-      state.setSelection({ nodes: [], edges: [twin.id] });
-      return;
-    }
-    if (!roomFor(0, 1)) return;
-    // The one second arrow allowed between a pair (see `connect()`'s own twin rule): a saga's step
-    // and its compensation are two different sentences between the same two services — the Saga
-    // starter ships exactly these twins. Stated explicit, like a starter's, so re-inference never
-    // turns it back into a call.
+    if (source.id === target.id || !capabilityFor(categoryOf(source), categoryOf(target))?.relations.includes('compensates')) return null;
+    if (!roomFor(0, 1)) return null;
+    // The target was chosen on the canvas, so the resulting action stays drawn there.
     const edge = createEdge({
       source: source.id,
       target: target.id,
-      ...inferRelationship(source, target),
       semantic: 'compensates',
       semanticsOrigin: 'explicit',
+      compensationFor: step.id,
+      compensationVisible: true,
+      compensationProtocol: step.semantic === 'http' || step.semantic === 'grpc' ? step.semantic : 'calls',
+      ...(stepTarget ? { sourceAnchor: recoveryBranchAnchor(step, source, stepTarget, target) } : {}),
     });
-    state.apply('Add compensation', (doc) => addEdges(doc, [edge]), { selection: { nodes: [], edges: [edge.id] } });
+    state.apply('Add compensating action', (doc) => addEdges(doc, [edge]), { selection: { nodes: [], edges: [step.id] } });
+    return edge.id;
+  },
+
+  setCompensationVisible(id, visible) {
+    const state = get();
+    const edge = state.document.edges.find((item) => item.id === id);
+    if (!edge || edge.semantic !== 'compensates' || !edge.compensationFor) return;
+    state.apply(visible ? 'Show compensation' : 'Fold compensation', (doc) => updateEdge(doc, id, { compensationVisible: visible }), {
+      selection: !visible && state.selection.edges.includes(id) ? { nodes: [], edges: [edge.compensationFor] } : state.selection,
+    });
+  },
+
+  setCompensationParticipants(id, sourceId, targetId) {
+    const state = get();
+    const edge = state.document.edges.find((item) => item.id === id);
+    if (!edge || edge.semantic !== 'compensates' || !edge.compensationFor || sourceId === targetId) return;
+    const source = state.document.nodes.find((node) => node.id === sourceId);
+    const target = state.document.nodes.find((node) => node.id === targetId);
+    if (!source || !target || !capabilityFor(categoryOf(source), categoryOf(target))?.relations.includes('compensates')) return;
+    if (sourceId === edge.source && targetId === edge.target) return;
+    state.apply('Set compensation participants', (doc) => ({ ...doc, edges: doc.edges.map((item) => {
+      if (item.id !== id) return item;
+      const { sourceAnchor: _sourceAnchor, targetAnchor: _targetAnchor, waypoints: _waypoints, routeMode: _routeMode, ...rest } = item;
+      return { ...rest, source: sourceId, target: targetId };
+    }) }));
+  },
+
+  removeCompensation(id) {
+    const state = get();
+    const edge = state.document.edges.find((item) => item.id === id);
+    if (!edge || edge.semantic !== 'compensates' || !edge.compensationFor) return;
+    state.apply('Remove compensating action', (doc) => removeElements(doc, [], [id]), {
+      selection: { nodes: [], edges: [edge.compensationFor] },
+    });
   },
 
   removeDeadLetterQueue(queueId) {
@@ -2083,7 +2124,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const edge = state.document.edges.find((item) => item.id === id);
     if (hasResponse && edge?.kind === 'async' && isServiceInteraction(state.document, edge)) return;
     get().apply('Toggle response', (doc) =>
-      updateEdge(doc, id, { hasResponse: hasResponse || undefined, semanticsOrigin: 'explicit' }),
+      updateEdge(doc, id, {
+        hasResponse: hasResponse || undefined,
+        // One click creates a useful editable reply, and undo removes both the line and its default.
+        response: hasResponse && edge && !edge.response ? defaultResponseFor(edge) : edge?.response,
+        semanticsOrigin: 'explicit',
+      }),
     );
   },
 

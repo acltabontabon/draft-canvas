@@ -34,6 +34,9 @@ test.describe('element inspector popover', () => {
     await page.getByRole('button', { name: 'Service type' }).click();
     await page.getByRole('option', { name: 'API' }).click();
     await page.getByRole('button', { name: 'Service type' }).click();
+    const scheduler = page.getByRole('option', { name: 'Scheduler' }).locator('.dc-inspector-select-option-label');
+    await expect(scheduler).toHaveCSS('white-space', 'nowrap');
+    expect(await scheduler.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
     for (const option of await page.getByRole('option').all()) {
       await expect
         .poll(() => option.evaluate((el) => el.scrollWidth <= el.clientWidth + 1))
@@ -43,34 +46,18 @@ test.describe('element inspector popover', () => {
     await page.getByRole('option', { name: 'External' }).click();
     await expect(page.locator('.dc-node').first()).toContainText('EXTERNAL');
 
-    // One row: colour, kind, technology and the shape's own actions; more options are behind ⋯.
+    // One row: colour, kind, technology and the two unambiguous actions — no overflow hop needed.
     const inspector = page.locator('.dc-element-inspector');
-    const more = inspector.getByRole('button', { name: 'More options' });
-    const moreMenu = page.getByRole('menu');
+    await expect(inspector.locator('.dc-element-action-row')).toBeVisible();
+    expect((await inspector.boundingBox())!.width).toBeLessThanOrEqual(340);
+    await expect(inspector.locator('.dc-popover-inner')).toHaveCSS('overflow-y', 'visible');
+    await expect(inspector.getByRole('button', { name: 'Actions' })).toHaveCount(0);
+    await expect(inspector.getByRole('button', { name: 'Edit text' })).toBeVisible();
+    await inspector.getByRole('button', { name: 'Edit text' }).hover();
+    await expect(page.getByRole('tooltip')).toContainText('Change the name shown on the canvas.');
 
-    // Spotlight, from ⋯.
-    await more.click();
-    await moreMenu.getByRole('menuitem', { name: 'Spotlight' }).click();
-    await expect(page.locator('.dc-canvas[data-focus="on"]')).toBeVisible();
-    await page.keyboard.press('Escape');
-    await page.keyboard.press('Escape');
-
-    // While ⋯ is open it owns bare keys: an arrow moves its highlight, never the shape behind it.
-    await page.locator('.dc-node').first().click();
-    const placed = await page.locator('.dc-node').first().boundingBox();
-    await more.click();
-    await page.keyboard.press('ArrowDown');
-    expect(await page.locator('.dc-node').first().boundingBox()).toEqual(placed);
-
-    // More actions… swaps ⋯ for the shape's full right-click menu.
-    await moreMenu.getByRole('menuitem', { name: 'More actions…' }).click();
-    await expect(page.locator('.dc-context-menu-header')).toContainText('Service');
-    await expect(inspector).toHaveCount(0);
-    await page.keyboard.press('Escape');
-
-    // Delete, from ⋯.
-    await more.click();
-    await moreMenu.getByRole('menuitem', { name: 'Delete' }).click();
+    // Delete is direct too, with the same command used by the palette and context menu.
+    await inspector.getByRole('button', { name: 'Delete' }).click();
     await expect(page.locator('.dc-node')).toHaveCount(0);
   });
 
@@ -126,9 +113,8 @@ test.describe('element inspector popover', () => {
       await expect(technology).toHaveCount(0);
     }
 
-    // The existing menu entry remains another way to open the same details panel.
-    await page.getByRole('button', { name: 'More options' }).click();
-    await page.getByRole('menuitem', { name: 'Edit details…' }).click();
+    // The technology chip remains the direct way to open the same details panel.
+    await page.getByRole('button', { name: `Technology: ${value}, edit` }).click();
     await expect(technology).toBeFocused();
   });
 
@@ -158,6 +144,95 @@ test.describe('element inspector popover', () => {
     // Settles back over the element at its new position, not stuck wherever it was before the drag
     // (grid snap means the exact landing spot isn't the raw pointer delta — just that it moved).
     expect(landed.x).toBeGreaterThan(start.x + 60);
+  });
+
+  test('a small junction gets a small movable popup that closes on canvas click', async ({ page }) => {
+    await newCanvas(page, 'Move a compact shape popup');
+    await create(page, 'Junction', { x: 400, y: 300 });
+    await page.locator('.dc-node').first().click();
+    const popup = page.locator('.dc-element-inspector');
+    await expect(popup).toBeVisible();
+    expect((await popup.boundingBox())!.width).toBeLessThan(150);
+    const start = (await popup.boundingBox())!;
+    const junction = (await page.locator('.dc-node').first().boundingBox())!;
+    expect(start.x).toBeGreaterThan(junction.x + junction.width + 8);
+    const moveEdge = (await page.getByRole('button', { name: 'Move element popup' }).boundingBox())!;
+    await page.mouse.move(moveEdge.x + moveEdge.width / 2, moveEdge.y + moveEdge.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(moveEdge.x + moveEdge.width / 2 + 80, moveEdge.y + moveEdge.height / 2 + 60, { steps: 5 });
+    await page.mouse.up();
+    const moved = (await popup.boundingBox())!;
+    expect(moved.x).toBeGreaterThan(start.x + 40);
+    expect(moved.y).toBeGreaterThan(start.y + 30);
+    await page.locator('.react-flow__pane').click({ position: { x: 50, y: 50 } });
+    await expect(popup).toHaveCount(0);
+
+    await page.locator('.dc-node').first().click();
+    const node = page.locator('.dc-node').first();
+    const beforeNodeDrag = (await node.boundingBox())!;
+    await page.mouse.move(beforeNodeDrag.x + beforeNodeDrag.width / 2, beforeNodeDrag.y + beforeNodeDrag.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(beforeNodeDrag.x + beforeNodeDrag.width / 2 + 100, beforeNodeDrag.y + beforeNodeDrag.height / 2 + 70, { steps: 5 });
+    await page.mouse.up();
+    expect((await node.boundingBox())!.x).toBeGreaterThan(beforeNodeDrag.x + 50);
+  });
+
+  test('note and code popups fit their controls', async ({ page }) => {
+    await newCanvas(page, 'Compact editors');
+    await create(page, 'Note', { x: 340, y: 300 });
+    await page.locator('.dc-node').first().click();
+    expect((await page.locator('.dc-element-inspector').boundingBox())!.width).toBeLessThan(230);
+    await page.getByRole('button', { name: 'Note kind: Note' }).click();
+    await page.getByRole('option', { name: 'Warning' }).click();
+    await expect(page.getByRole('button', { name: 'Note kind: Warning' })).toBeVisible();
+    await create(page, 'Code', { x: 670, y: 300 });
+    await page.locator('.dc-node').nth(1).click();
+    expect((await page.locator('.dc-element-inspector').boundingBox())!.width).toBeLessThan(250);
+  });
+
+  test('a single canvas action fills its compact card', async ({ page }) => {
+    await newCanvas(page, 'Single action card');
+    await create(page, 'Component', { x: 400, y: 300 });
+    await page.locator('.dc-node').first().click();
+    const card = page.locator('.dc-element-inspector');
+    const action = card.getByRole('button', { name: 'Look inside' });
+    await expect(action).toBeVisible();
+    const outer = (await card.boundingBox())!;
+    const tile = (await action.boundingBox())!;
+    expect(outer.width).toBeLessThan(340);
+    expect(tile.width).toBeGreaterThan(outer.width - 30);
+  });
+
+  test('actor technology stays readable beside both kind pickers', async ({ page }) => {
+    await newCanvas(page, 'Actor controls');
+    await create(page, 'Actor', { x: 400, y: 300 });
+    await page.locator('.dc-node').first().click();
+    await page.getByRole('button', { name: 'Actor frame' }).click();
+    await page.getByRole('option', { name: 'Borderless' }).click();
+    const card = page.locator('.dc-element-inspector');
+    const technology = card.getByRole('button', { name: 'Add technology' });
+    await expect(technology).toBeVisible();
+    await expect(technology.locator('span')).toHaveCSS('display', 'none');
+    expect((await technology.boundingBox())!.width).toBeLessThan(35);
+    await technology.hover();
+    await expect(page.getByRole('tooltip')).toContainText('Add technology');
+  });
+
+  test('the description field can be resized without moving its popup', async ({ page }) => {
+    await newCanvas(page, 'Resizable description');
+    await create(page, 'Service', { x: 400, y: 300 });
+    await page.locator('.dc-node').first().click();
+    await page.getByRole('button', { name: 'Add technology' }).click();
+    const popup = page.locator('.dc-element-inspector');
+    const description = page.getByLabel('Description');
+    const before = (await description.boundingBox())!;
+    const popupBefore = (await popup.boundingBox())!;
+    await page.mouse.move(before.x + before.width - 5, before.y + before.height - 5);
+    await page.mouse.down();
+    await page.mouse.move(before.x + before.width - 5, before.y + before.height + 55, { steps: 8 });
+    expect((await popup.boundingBox())!.x).toBeCloseTo(popupBefore.x, 0);
+    await page.mouse.up();
+    expect((await description.boundingBox())!.height).toBeGreaterThan(before.height + 30);
   });
 
   test('selecting two elements still shows the shared bottom bar, not the popover', async ({ page }) => {
