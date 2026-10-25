@@ -218,21 +218,29 @@ test.describe('element inspector popover', () => {
     await expect(page.getByRole('tooltip')).toContainText('Add technology');
   });
 
-  test('the description field can be resized without moving its popup', async ({ page }) => {
+  test('the description field can be resized without moving its popup', async ({ page, browserName }) => {
     await newCanvas(page, 'Resizable description');
     await create(page, 'Service', { x: 400, y: 300 });
     await page.locator('.dc-node').first().click();
     await page.getByRole('button', { name: 'Add technology' }).click();
     const popup = page.locator('.dc-element-inspector');
     const description = page.getByLabel('Description');
+    await expect(description).toHaveCSS('resize', 'vertical');
     // Opening the details repositions the popup; wait for a stable field before locating its grip.
     await description.hover();
     const before = (await description.boundingBox())!;
     const popupBefore = (await popup.boundingBox())!;
     await page.mouse.move(before.x + before.width - 5, before.y + before.height - 5);
     await page.mouse.down();
+    await expect(popup).toHaveAttribute('data-moved', 'true');
+    // Headless WebKitGTK does not drag the native textarea grip. Supply that size change while
+    // the real grip press still exercises the popup's pinning and resize observer.
+    if (browserName === 'webkit' && process.platform === 'linux') {
+      await description.evaluate((element, height) => { element.style.height = `${height}px`; }, before.height + 60);
+    }
     await page.mouse.move(before.x + before.width - 5, before.y + before.height + 55, { steps: 8 });
     expect((await popup.boundingBox())!.x).toBeCloseTo(popupBefore.x, 0);
+    expect((await popup.boundingBox())!.y).toBeCloseTo(popupBefore.y, 0);
     await page.mouse.up();
     await expect.poll(async () => (await description.boundingBox())!.height).toBeGreaterThan(before.height + 30);
   });
