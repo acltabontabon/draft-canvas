@@ -33,6 +33,7 @@ Fixes for diagram editing, saving, collaboration and Nodi.
   the task instead of stopping at an answer or an unchanged proposal.
 - Proposal previews show text styling changes and keep review controls clear of Depth and Nodi.
 - Agent reviews protect newer attached work, and replacing elements clears stale selections.
+- Stopping an agent stays consistent while its process finishes exiting.
 - **Clearer token usage** — Totals count each turn once, with a breakdown on hover or focus. <!-- highlight -->
 - The update dialog opens changelog links once in the system browser.
 

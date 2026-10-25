@@ -835,7 +835,7 @@ impl Companion {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// Stops a run; `false` if there is no such run. The bridge stops admitting its calls and
+    /// Stops an active run; `false` if it is missing or already terminal. The bridge stops admitting its calls and
     /// cancels what the page hasn't committed first, then the process is stopped: an update already
     /// past its commit gate finishes, and Undo is the way back from it.
     pub fn cancel(&self, run_id: &str) -> bool {
@@ -844,6 +844,11 @@ impl Companion {
             let Some(run) = runs.get_mut(run_id) else {
                 return false;
             };
+            // The terminal event reaches the page before finish removes the process record.
+            // Treat that whole cleanup window as finished, independent of OS shutdown timing.
+            if run.stopped {
+                return false;
+            }
             run.cancel_requested = true;
             run.control.clone()
         };
@@ -1550,6 +1555,33 @@ mod tests {
         ));
         assert!(!companion.cancel(&first.run_id));
         assert!(companion.check_room("d_1").is_ok());
+    }
+
+    #[test]
+    fn cancelling_a_terminal_run_during_process_cleanup_is_already_finished() {
+        for reason in [StopReason::Cancelled, StopReason::EndTurn] {
+            let dir = tempdir().unwrap();
+            let (companion, rx, ended) = companion(dir.path(), RunLimits::default());
+            parked(&companion, "winding-down");
+            companion.record(
+                "winding-down",
+                RunEvent::Stopped {
+                    reason,
+                    summary: None,
+                    cost_micro_usd: None,
+                    usage: None,
+                },
+            );
+            let events = until_stopped(&rx, "winding-down");
+            // Hold the state which Windows exposed: the page has seen Stopped but the runner
+            // has not removed its record yet. No sleep or process scheduling is needed.
+            assert!(lock(&companion.runs).contains_key("winding-down"));
+            assert!(!companion.cancel("winding-down"));
+            assert_eq!(companion.snapshot()[0].events, events);
+            assert_eq!(*lock(&ended), vec!["winding-down"]);
+            assert!(rx.try_recv().is_err());
+            assert!(companion.check_room("d_1").is_ok());
+        }
     }
 
     #[test]
