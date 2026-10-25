@@ -93,6 +93,14 @@ export function endHeadline(reason: EndReason, owner: string | null): string {
   }
 }
 
+/**
+ * Whether the copy on screen may be kept. Not after being removed: the owner took this person out of
+ * their canvas, and handing them a copy of it on the way out would undo what the owner just did.
+ */
+export function mayKeepCopy(reason: EndReason): boolean {
+  return reason !== 'removed';
+}
+
 export const ROLE_LABELS: Record<Role, string> = {
   editor: 'Can edit',
   viewer: 'Can view',

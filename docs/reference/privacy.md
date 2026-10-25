@@ -86,6 +86,7 @@ Only session members receive the diagram, and only the owner's copy is saved.
 
 - The relay's key exists only in the link's `#`. It stores only a hash of the owner's secret, until 12 hours after the owner was last connected.
 - Collaborators' copies are never saved unless they choose **Keep a copy** or **Make an editable copy**.
+  Someone the owner removes is not offered either.
 
 ## Optional AI agents
 

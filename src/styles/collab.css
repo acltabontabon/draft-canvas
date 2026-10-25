@@ -1469,6 +1469,12 @@
   animation: dc-end-drain 1.1s var(--dc-ease-out) both;
 }
 
+/* Removed by the owner, nothing of their canvas is left to look at: it fades out entirely. */
+.dc-session-end[data-keepable='false'] {
+  background: var(--dc-canvas);
+  animation-duration: 1.6s;
+}
+
 .dc-session-end-card {
   position: relative;
   display: flex;

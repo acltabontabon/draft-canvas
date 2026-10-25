@@ -18,7 +18,7 @@ The retired VS Code extension has [its own changelog](https://github.com/acltabo
 #### Changed
 
 - When a live session ends on a collaborator, their canvas closes behind a card that says why, with
-  the choice to keep a copy or go home.
+  the choice to keep a copy or go home. Someone the owner removes can only go home.
 
 ## [1.16.1] - 2026-10-25
 

@@ -235,7 +235,11 @@ test('two browsers edit one canvas live, and the owner stays in charge', async (
 
   // Removing them ends their session, and their screen says why.
   await dialog.getByRole('button', { name: 'Remove Gus from the session' }).click();
-  await expect(guest.page.getByRole('dialog', { name: 'Olive removed you from the session' })).toBeVisible();
+  const removed = guest.page.getByRole('dialog', { name: 'Olive removed you from the session' });
+  await expect(removed).toBeVisible();
+  // Taken out by the owner, they get no copy of the owner's canvas to carry off: only the way home.
+  await expect(removed.getByRole('button', { name: 'Back to home' })).toBeFocused();
+  await expect(removed.getByRole('button', { name: /copy/ })).toHaveCount(0);
   await expect(guest.page.locator('.dc-editor')).toHaveAttribute('data-session-ended', 'true');
   await expect(guest.page.locator('.dc-editor-body')).toHaveAttribute('inert', '');
   await expect(guest.page.locator('.dc-read-only-banner')).toHaveCount(0);

@@ -4,7 +4,7 @@ import type { EndReason } from '../../collab/protocol';
 import { useCollabStore } from '../../store/collabStore';
 import { Button } from '../common/Button';
 import { trapTab } from '../common/focusTrap';
-import { END_MESSAGES, endHeadline, initialsOf } from './collabCopy';
+import { END_MESSAGES, endHeadline, initialsOf, mayKeepCopy } from './collabCopy';
 
 interface SessionEndedProps {
   /**
@@ -24,9 +24,11 @@ const BREAKS: Partial<Record<EndReason, Break>> = { removed: 'self', timeout: 'f
 const SAID_IN_HEADLINE: ReadonlySet<EndReason> = new Set(['ended', 'owner-left', 'document-changed', 'removed', 'timeout']);
 
 /** The rest: why, where it says more than the headline, then what is true of the copy left here. */
-function endBody(reason: EndReason): string {
+function endBody(reason: EndReason, owner: string | null, exportOnly: boolean): string {
+  if (!mayKeepCopy(reason)) return `The canvas was ${owner?.trim() ? `${owner.trim()}’s` : 'the owner’s'}, and it goes with the session: nothing of it stays on this device.`;
   const kept = 'What’s on screen was a live copy, and it isn’t saved anywhere on this device.';
-  return SAID_IN_HEADLINE.has(reason) ? kept : `${END_MESSAGES[reason]} ${kept}`;
+  const ways = exportOnly ? 'Export a copy to keep it, or let it go.' : 'Keep a copy to carry on with it, or let it go.';
+  return `${SAID_IN_HEADLINE.has(reason) ? kept : `${END_MESSAGES[reason]} ${kept}`} ${ways}`;
 }
 
 // One coordinate space for the drawing and the seats laid over it, as in `SessionScene`.
@@ -41,7 +43,8 @@ const at = (point: { x: number; y: number }): CSSProperties => ({ left: `${(poin
  * The card a collaborator's canvas closes behind when the session ends on them: the session's own
  * picture (`SessionScene`), one last time — the line to the canvas snips, the owner's seat empties,
  * their pointer wanders off the sheet, and the sheet is postmarked. Everything under it is inert:
- * the copy on screen is nobody's file now, so the only ways on are keeping a copy or going home.
+ * the copy on screen is nobody's file now, so the only ways on are keeping a copy or going home —
+ * and, for someone the owner removed, only going home, with the canvas behind faded out entirely.
  */
 export function SessionEnded({ exportOnly, onKeep, onHome }: SessionEndedProps) {
   const { reason, owner, selfName, selfColor } = useCollabStore(
@@ -52,13 +55,14 @@ export function SessionEnded({ exportOnly, onKeep, onHome }: SessionEndedProps) 
   // Referenced through `url(#…)`, where React's own id punctuation doesn't parse.
   const worn = `dc-worn-${useId().replace(/[^\w-]/g, '')}`;
   const card = useRef<HTMLDivElement>(null);
-  const keep = useRef<HTMLButtonElement>(null);
+  const first = useRef<HTMLButtonElement>(null);
+  const keepable = mayKeepCopy(reason);
   const cut: Break = BREAKS[reason] ?? 'owner';
   // When it ended, as a postmark says it; fixed at the moment the card first drew.
   const [stamp] = useState(() => new Date().toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }));
 
   useEffect(() => {
-    keep.current?.focus({ preventScroll: true });
+    first.current?.focus({ preventScroll: true });
   }, []);
 
   // The card is the only thing that takes keys: Tab stays on it, and nothing else on the page hears
@@ -75,7 +79,7 @@ export function SessionEnded({ exportOnly, onKeep, onHome }: SessionEndedProps) 
   }, []);
 
   return (
-    <div className="dc-session-end" role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={bodyId} data-cut={cut}>
+    <div className="dc-session-end" role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={bodyId} data-cut={cut} data-keepable={keepable ? undefined : 'false'}>
       <div ref={card} className="dc-session-end-card">
         <div className="dc-session-end-art" aria-hidden="true">
           <svg viewBox={`0 0 ${W} ${H}`}>
@@ -146,13 +150,15 @@ export function SessionEnded({ exportOnly, onKeep, onHome }: SessionEndedProps) 
           {endHeadline(reason, owner?.name ?? null)}
         </h2>
         <p id={bodyId} className="dc-session-end-body">
-          {endBody(reason)} {exportOnly ? 'Export a copy to keep it, or let it go.' : 'Keep a copy to carry on with it, or let it go.'}
+          {endBody(reason, owner?.name ?? null, exportOnly)}
         </p>
         <div className="dc-session-end-actions">
-          <Button ref={keep} variant="solid" icon={exportOnly ? 'export' : 'copy'} onClick={onKeep}>
-            {exportOnly ? 'Export a copy' : 'Keep a copy'}
-          </Button>
-          <Button variant="quiet" onClick={onHome}>
+          {keepable && (
+            <Button ref={first} variant="solid" icon={exportOnly ? 'export' : 'copy'} onClick={onKeep}>
+              {exportOnly ? 'Export a copy' : 'Keep a copy'}
+            </Button>
+          )}
+          <Button ref={keepable ? undefined : first} variant={keepable ? 'quiet' : 'solid'} onClick={onHome}>
             Back to home
           </Button>
         </div>

@@ -37,11 +37,28 @@ describe('SessionEnded', () => {
     expect(onHome).toHaveBeenCalledOnce();
   });
 
-  it('snips this person’s own line when they were removed, and frays the owner’s when the connection went', () => {
+  it('offers no copy to someone the owner removed: only the way home, focused, with their own line snipped', () => {
     ended('removed');
-    const { unmount } = render(<SessionEnded exportOnly={false} onKeep={() => {}} onHome={() => {}} />);
-    expect(screen.getByRole('dialog').getAttribute('data-cut')).toBe('self');
-    unmount();
+    const onHome = vi.fn();
+    render(<SessionEnded exportOnly={false} onKeep={() => {}} onHome={onHome} />);
+    const dialog = screen.getByRole('dialog', { name: 'Olive removed you from the session' });
+    expect(dialog.getAttribute('data-cut')).toBe('self');
+    expect(dialog.getAttribute('data-keepable')).toBe('false');
+    expect(screen.queryByRole('button', { name: 'Keep a copy' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Export a copy' })).toBeNull();
+    expect(dialog.textContent).toContain('nothing of it stays on this device');
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Back to home' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Back to home' }));
+    expect(onHome).toHaveBeenCalledOnce();
+  });
+
+  it('removed over the local network link: still no export', () => {
+    ended('removed');
+    render(<SessionEnded exportOnly onKeep={() => {}} onHome={() => {}} />);
+    expect(screen.queryByRole('button', { name: 'Export a copy' })).toBeNull();
+  });
+
+  it('frays the owner’s line when the connection went', () => {
     ended('timeout');
     render(<SessionEnded exportOnly={false} onKeep={() => {}} onHome={() => {}} />);
     expect(screen.getByRole('dialog').getAttribute('data-cut')).toBe('fray');

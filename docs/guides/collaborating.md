@@ -49,10 +49,11 @@ it back to the owner.
 
 Your copy is never saved. When the session ends on you — the owner ends it, closes the canvas,
 removes you, or the connection is lost — your canvas closes behind a card that says why. Choose
-**Keep a copy** to carry on with an editable copy in this browser, or **Back to home**. Joined over a
-desktop's local network link, you get **Export a copy** instead: a copy kept in the browser at that
-plain `http://` address could be read by whatever answers there later. You can also ask the owner
-for an export.
+**Keep a copy** to carry on with an editable copy in this browser, or **Back to home**. Someone the
+owner removes gets **Back to home** only: no copy of the owner's canvas leaves with them. Joined
+over a desktop's local network link, you get **Export a copy** instead: a copy kept in the browser
+at that plain `http://` address could be read by whatever answers there later. You can also ask the
+owner for an export.
 
 ![A collaborator's canvas greyed out behind a card: Ada's line to the canvas snipped, her seat empty, the sheet stamped Session ended, with Keep a copy and Back to home.](../media/guides/collab-ended.png)
 
@@ -78,7 +79,7 @@ Hover a face in the people column, or open the faces beside **Share** in the too
 | --- | --- |
 | **Can edit** / **Can view** | Changes what that person may do, at once |
 | **Undo changes** | Takes back everything that person changed this session, even after they leave; one undo reverses it |
-| **Remove** | Takes them out of the session; offers **Undo their changes** if they edited |
+| **Remove** | Takes them out of the session, without a copy of the canvas; offers **Undo their changes** if they edited |
 | **Re-invite** | Makes a new direct invite for someone who joined by one |
 | **End session** | Disconnects everyone; their canvases close |
 
