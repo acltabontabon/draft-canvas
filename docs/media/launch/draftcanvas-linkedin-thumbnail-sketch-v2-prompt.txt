@@ -1,0 +1,17 @@
+Generator: built-in imagegen
+References: supplied monochrome sketch reference and the existing Nodi pixel mascot.
+
+Use case: ads-marketing / compositing.
+Create a finished LinkedIn video thumbnail for the Draft Canvas 1.16.0 release, landscape 16:9. Reference image 1 is the ART DIRECTION: faithfully follow its quiet, poetic hand-drawn off-white line work on almost-black charcoal, subtle film grain, generous negative space, understated cinematic lighting, and beautiful warm-white serif typography. Reference image 2 is the Nodi CHARACTER IDENTITY: keep its distinctive square pixel robot head, stepped folded top-right corner, two square eyes, tiny straight mouth, small rectangular torso, little hands and feet. This is a new composition; do not reproduce the reference's old caption.
+
+COMPOSITION: upper two thirds are an elegantly sparse, fine-line illustration of one shared architecture canvas. A few simple architecture boxes, a gateway and database are connected with delicate chalk/pencil lines. Two or three charming, minimal continuous-line human figures gather around the SAME drawing, contributing to it, with two small recognizable collaborator cursor arrows on the canvas to communicate LIVE collaboration. Make the scene feel collaborative, warm, thoughtful and human, not like a classroom lecture. Nodi is clearly visible beside the shared canvas, about as tall as a human figure's upper body, helping with the drawing. Preserve Nodi's pixel geometry but harmonize it with the sketch art direction: restrained off-white pixel outlines with a little desaturated mint, rather than a glossy 3D robot or bright neon block. Nodi and the people must form one integrated illustration. No photo-realism, no stock business illustration, no dense UI, no screenshot collage. Keep the fine lines clearly visible at feed size rather than disappearing into black.
+
+TEXT, exact and correctly spelled:
+Top-left, restrained small uppercase sans serif: "DRAFT CANVAS".
+Near the brand, clearly readable but secondary: "1.16.0 RELEASE".
+Across the lower-left third in large, elegant warm-white editorial serif typography, two lines:
+"Nodi + live"
+"collaboration"
+The headline must dominate and be readable at small thumbnail size. The release version must also remain readable. No additional text, no labels in the diagram, no invented logo, no watermark, no play button.
+
+PALETTE: nearly black #101113 background with very subtle charcoal texture. Warm off-white #e8e6df fine strokes and headline. Only the faintest desaturated mint #8cbcaf accent on Nodi and one active connector; no green background, no large teal fill, no colored gradient. The overall image should look like a beautifully considered illustrated frame from an independent software launch film, very close to the supplied monochrome sketch reference. Keep every important element within a 7% safe margin and preserve breathing room between illustration and headline. Output one polished final thumbnail, ideally 2048x1152.
