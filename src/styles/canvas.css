@@ -5001,6 +5001,8 @@
   left: 0;
   overflow: visible;
   pointer-events: none;
+  /* Above connector labels (20000), within the viewport and below editor chrome. */
+  z-index: 20001;
   --dc-sketch-ink: var(--dc-caution);
 }
 
@@ -5051,6 +5053,7 @@
   position: absolute;
   top: 0;
   left: 0;
+  z-index: 20002;
   --dc-sketch-ink: var(--dc-caution);
   --dc-sketch-highlight: color-mix(in srgb, var(--dc-caution) 22%, transparent);
 }
@@ -5058,7 +5061,7 @@
 .dc-hand {
   color: var(--dc-sketch-ink);
   font-weight: 700;
-  letter-spacing: 0.01em;
+  letter-spacing: 0;
   /* Legible over a connector or a dotted grid without a box behind it. */
   text-shadow:
     0 0 3px var(--dc-canvas),
@@ -5080,6 +5083,8 @@
 
 .dc-traffic-headline-note {
   max-width: 560px;
+  background: var(--dc-canvas);
+  border-radius: 3px;
 }
 
 .dc-traffic-note {
@@ -5089,9 +5094,10 @@
   padding: 1px 4px;
   border: 0;
   border-radius: 3px;
-  background: none;
+  background: var(--dc-canvas);
   font: inherit;
   font-size: 17px;
+  font-weight: 700;
   line-height: 21px;
   text-align: left;
   cursor: pointer;
@@ -5101,7 +5107,7 @@
   display: flex;
   flex-direction: column-reverse;
   /* Grows upward from where the words sit: the button is anchored by its bottom edge. */
-  translate: 0 calc(-100% + 23px);
+  translate: 0 calc(-100% + var(--dc-note-height));
 }
 
 .dc-traffic-note[data-up] .dc-traffic-note-more {
@@ -5114,9 +5120,18 @@
 }
 
 .dc-traffic-note-mark {
+  display: block;
+}
+
+.dc-traffic-note-line,
+.dc-hand-title-line {
+  display: block;
+  white-space: pre;
+}
+
+.dc-traffic-note-line {
+  width: max-content;
   background: linear-gradient(transparent 42%, var(--dc-sketch-highlight) 42%, var(--dc-sketch-highlight) 92%, transparent 92%);
-  box-decoration-break: clone;
-  -webkit-box-decoration-break: clone;
 }
 
 .dc-traffic-note:hover .dc-traffic-note-mark,
@@ -5132,11 +5147,10 @@
 
 .dc-traffic-note[data-tone='unknown'] {
   font-weight: 600;
-  opacity: 0.85;
+  color: color-mix(in srgb, var(--dc-sketch-ink) 85%, var(--dc-canvas));
 }
 
-/* Unfolded: the rest of the thought, written smaller underneath, as if added after a pause. A wash
-   of the canvas behind it only — it is still handwriting on the board, not a dialog. */
+/* The canvas mask erases underlying connector text as well as strokes. */
 .dc-traffic-note-more,
 .dc-hand-list {
   display: block;
@@ -5144,11 +5158,12 @@
   margin-top: 6px;
   padding: 6px 8px 7px;
   border-radius: 8px;
-  background: color-mix(in srgb, var(--dc-canvas) 90%, transparent);
+  background: var(--dc-canvas);
   color: var(--dc-text);
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.45;
+  font-family: var(--dc-font);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
   text-shadow: none;
 }
 
@@ -5170,6 +5185,7 @@
   background: none;
   font: inherit;
   font-size: 15px;
+  line-height: 21px;
   text-decoration: underline wavy color-mix(in srgb, var(--dc-caution) 55%, transparent);
   text-underline-offset: 4px;
   cursor: pointer;
@@ -5185,27 +5201,154 @@
   margin-top: 4px;
 }
 
-/* A selected shape's blast radius, written beside it. */
+/* A small field note: amber ink marks the reading; quiet type carries the evidence. */
 .dc-traffic-callout {
-  max-width: 300px;
-  padding: 6px 10px 7px;
-  border-radius: 10px;
-  /* A wash of the board behind the words, so they read over connectors — still not a card. */
-  background: color-mix(in srgb, var(--dc-canvas) 88%, transparent);
-  font-size: 15px;
-  line-height: 1.35;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--dc-caution) 24%, var(--dc-border));
+  border-radius: 3px 14px 14px 14px;
+  background: color-mix(in srgb, var(--dc-caution) 3%, var(--dc-canvas));
+  box-shadow: 0 3px 12px -6px var(--dc-shadow);
+  color: var(--dc-text);
+  font-family: var(--dc-font);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 18px;
+  text-shadow: none;
 }
 
-.dc-traffic-callout p {
-  margin: 0 0 3px;
+.dc-traffic-callout::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
 }
 
-.dc-traffic-callout-lead {
-  font-size: 17px;
+.dc-traffic-callout::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 17px;
+  width: 3px;
+  height: 32px;
+  border-radius: 50% 30% 40% 20%;
+  background: var(--dc-caution);
+  rotate: -2deg;
 }
 
-.dc-traffic-callout-lead::before {
-  content: '→ ';
+.dc-traffic-callout-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 52px;
+  gap: 10px;
+  align-items: start;
+}
+
+.dc-traffic-callout-title {
+  font-weight: 600;
+}
+
+.dc-traffic-callout-kicker {
+  color: var(--dc-text-muted);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-align: right;
+  text-transform: uppercase;
+}
+
+.dc-traffic-callout-line {
+  display: block;
+  white-space: pre;
+}
+
+.dc-traffic-callout-metric {
+  position: relative;
+  height: 40px;
+  margin-top: 2px;
+  color: var(--dc-caution);
+  font-weight: 700;
+  line-height: 40px;
+}
+
+.dc-traffic-callout-metric svg {
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1;
+  stroke-linecap: round;
+  opacity: 0.65;
+}
+
+.dc-traffic-callout-summary {
+  margin: 6px 0 0;
+  color: var(--dc-text-muted);
+}
+
+.dc-traffic-callout ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dc-traffic-callout .dc-traffic-callout-sources {
+  margin-top: 6px;
+}
+
+.dc-traffic-callout-sources li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 80px;
+  gap: 8px;
+}
+
+.dc-traffic-callout-count {
+  color: var(--dc-text-muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.dc-traffic-callout-section {
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 1px solid color-mix(in srgb, var(--dc-caution) 15%, var(--dc-border));
+}
+
+.dc-traffic-callout-section h3 {
+  margin: 0 0 4px;
+  color: var(--dc-text-muted);
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dc-traffic-callout-section[data-tone='caution'] h3 {
+  color: var(--dc-caution);
+}
+
+.dc-traffic-callout-section[data-tone='safe'] h3 {
+  color: var(--dc-selection);
+}
+
+.dc-traffic-callout-detail {
+  margin: 0 0 4px;
+  color: var(--dc-text-muted);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.dc-traffic-callout-more {
+  color: var(--dc-text-muted);
+  font-size: 11px;
+}
+
+.dc-traffic-callout:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 3px;
 }
 
 @media (prefers-reduced-motion: no-preference) {

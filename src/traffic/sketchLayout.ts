@@ -19,7 +19,8 @@ export interface Rect {
 export interface SketchRequest {
   id: string;
   targets: Rect[];
-  label: string;
+  /** Measured by the renderer, so arrows and collision checks use the text actually drawn. */
+  label: { width: number; height: number; lines: string[] };
   priority: number;
 }
 
@@ -31,17 +32,11 @@ export interface PlacedSketch {
 }
 
 export interface SketchLayoutOptions {
-  charWidth?: number;
-  lineHeight?: number;
-  maxChars?: number;
   gap?: number;
   ringPad?: number;
 }
 
 interface LayoutValues {
-  charWidth: number;
-  lineHeight: number;
-  maxChars: number;
   gap: number;
   ringPad: number;
 }
@@ -109,43 +104,6 @@ function distanceToRect(a: Rect, b: Rect): number {
 
 function compareId(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
-}
-
-function wrapLabel(label: string, maxChars: number): string[] {
-  const words = label.trim().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return [''];
-
-  const lines: string[] = [];
-  let line = '';
-  for (const word of words) {
-    const next = line ? `${line} ${word}` : word;
-    if (line && next.length > maxChars) {
-      lines.push(line);
-      line = word;
-    } else {
-      line = next;
-    }
-  }
-  if (line) lines.push(line);
-
-  if (lines.length <= 3) return lines;
-
-  const result = lines.slice(0, 3);
-  const last = result[2] ?? '';
-  result[2] = last.length >= maxChars
-    ? `${last.slice(0, Math.max(0, maxChars - 1))}…`
-    : `${last}…`;
-  return result;
-}
-
-function labelSize(label: string, values: LayoutValues): { width: number; height: number; lines: string[] } {
-  const lines = wrapLabel(label, values.maxChars);
-  const longest = lines.reduce((length, line) => Math.max(length, line.length), 0);
-  return {
-    width: longest * values.charWidth + 8,
-    height: lines.length * values.lineHeight + 6,
-    lines,
-  };
 }
 
 function candidateAt(ring: Rect, width: number, height: number, gap: number, compass: Compass): Rect {
@@ -259,9 +217,6 @@ function scoreCandidate(candidate: Candidate, obstacles: readonly Rect[], placed
 
 function valuesOf(options: SketchLayoutOptions | undefined): LayoutValues {
   return {
-    charWidth: options?.charWidth ?? 8.4,
-    lineHeight: options?.lineHeight ?? 21,
-    maxChars: Math.max(1, Math.floor(options?.maxChars ?? 24)),
     gap: options?.gap ?? 34,
     ringPad: options?.ringPad ?? 12,
   };
@@ -285,7 +240,7 @@ export function placeSketches(
     const rings = request.targets.map((target) => rectWithPadding(target, values.ringPad));
     const firstRing = rings[0]!;
     const relevantObstacles = paddedObstacles.filter((obstacle) => distanceToRect(obstacle, firstRing) <= 400);
-    const size = labelSize(request.label, values);
+    const size = request.label;
     const candidates = candidatesFor(firstRing, size.width, size.height, values);
     let best = candidates[0]!;
     let bestScore = scoreCandidate(best, relevantObstacles, placed);

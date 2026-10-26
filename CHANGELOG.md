@@ -12,6 +12,16 @@ The retired VS Code extension has [its own changelog](https://github.com/acltabo
 
 #### Fixed
 
+- Traffic findings stay above connector labels and arrows, with clear text backgrounds and placement
+  that accounts for wrapped notes and selected-shape explanations. Deleting every shape while Traffic
+  is showing no longer crashes the editor.
+- Traffic flows in the correct direction on parallel connectors drawn in opposite directions,
+  including routes through Junctions.
+
+#### Changed
+
+- Selected-shape traffic notes use a clear path summary, aligned source counts and distinct impact
+  and dependency sections, with quieter body text and a hand-drawn accent.
 - Looking inside shapes and backing out zooms prepared room images for smoother motion, avoids
   a competing camera move in empty rooms, and preserves visible layers when reversing direction.
 

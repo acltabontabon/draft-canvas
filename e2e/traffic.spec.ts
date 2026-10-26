@@ -1,57 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-type TrafficDocument = {
-  format: 'draft-canvas';
-  version: number;
-  metadata: { id: string; title: string; createdAt: number; updatedAt: number };
-  nodes: Array<Record<string, unknown>>;
-  edges: Array<Record<string, unknown>>;
-  viewport: { x: number; y: number; zoom: number };
-  settings: { showSequence: boolean; grid: 'dots'; background: { enabled: boolean; fit: 'cover'; dim: number; blur: number } };
-  flows: [];
-};
-
-const node = (id: string, type: string, text: string, x: number, y: number, extra: Record<string, unknown> = {}) => ({
-  id,
-  type,
-  x,
-  y,
-  width: type === 'database' ? 176 : 180,
-  height: type === 'note' ? 80 : 84,
-  z: 0,
-  text,
-  ...extra,
-});
-
-function trafficDocument(title = 'Traffic journey'): TrafficDocument {
-  return {
-    format: 'draft-canvas',
-    version: 21,
-    metadata: { id: 'traffic-journey', title, createdAt: 1, updatedAt: 2 },
-    nodes: [
-      node('gateway', 'service', 'API Gateway', 0, 0, { serviceKind: 'gateway' }),
-      node('mobile', 'service', 'Mobile App API', 0, 220),
-      node('checkout', 'service', 'Checkout', 360, 100),
-      node('billing', 'service', 'Billing', 720, 0),
-      node('postgres', 'database', 'PostgreSQL', 720, 240, { databaseKind: 'sql' }),
-      node('note', 'note', 'A note outside runtime traffic', 380, 360, { noteKind: 'note' }),
-    ],
-    edges: [
-      { id: 'gateway-checkout', source: 'gateway', target: 'checkout', directed: true, routing: 'smoothstep', semantic: 'calls' },
-      { id: 'mobile-checkout', source: 'mobile', target: 'checkout', directed: true, routing: 'smoothstep', semantic: 'calls' },
-      { id: 'checkout-postgres', source: 'checkout', target: 'postgres', directed: true, routing: 'smoothstep', semantic: 'readsWrites' },
-      { id: 'billing-postgres', source: 'billing', target: 'postgres', directed: true, routing: 'smoothstep', semantic: 'readsWrites' },
-    ],
-    viewport: { x: 0, y: 0, zoom: 1 },
-    settings: { showSequence: true, grid: 'dots', background: { enabled: false, fit: 'cover', dim: 0.55, blur: 0 } },
-    flows: [],
-  };
-}
-
-function notesOnlyDocument(): TrafficDocument {
-  const document = trafficDocument('Notes only');
-  return { ...document, nodes: [node('note', 'note', 'Only a note', 0, 0)], edges: [] };
-}
+import { notesOnlyDocument, trafficDocument, type TrafficDocument } from './fixtures/traffic';
 
 async function importDocument(page: Page, document: TrafficDocument, fileName: string) {
   await page.goto('/');
@@ -132,8 +81,27 @@ test.describe('Traffic', () => {
     await page.locator('.react-flow__node[data-id="checkout"] .dc-node').click();
     const callout = page.locator('.dc-traffic-callout');
     await expect(page.locator('.react-flow__node[data-id="checkout"] .dc-node[data-selected="true"]')).toBeVisible();
-    await expect(callout).toContainText('paths');
-    await expect(callout).toContainText("if it's down");
+    await expect(callout.locator('.dc-traffic-callout-metric')).toHaveText('2 paths');
+    await expect(callout.locator('.dc-traffic-callout-sources li')).toHaveCount(2);
+    await expect(callout.getByRole('heading', { name: /Calls waiting|If it goes down/ })).toBeVisible();
+    const frame = await page.locator('.dc-canvas').boundingBox();
+    const noteBounds = await callout.boundingBox();
+    expect(noteBounds!.x).toBeGreaterThanOrEqual(frame!.x);
+    expect(noteBounds!.y).toBeGreaterThanOrEqual(frame!.y);
+    expect(noteBounds!.x + noteBounds!.width).toBeLessThanOrEqual(frame!.x + frame!.width);
+    expect(noteBounds!.y + noteBounds!.height).toBeLessThanOrEqual(frame!.y + frame!.height);
+    const clearOfFindings = await callout.evaluate((element) => {
+      const at = element.getBoundingClientRect();
+      return [...window.document.querySelectorAll('.dc-traffic-note, .dc-traffic-headline-note')].every((note) => {
+        const other = note.getBoundingClientRect();
+        return at.right <= other.left || at.left >= other.right || at.bottom <= other.top || at.top >= other.bottom;
+      });
+    });
+    expect(clearOfFindings).toBe(true);
+
+    await page.getByRole('button', { name: 'Zoom out', exact: true }).click();
+    const zoomedBounds = await callout.boundingBox();
+    expect(Math.abs(zoomedBounds!.width - noteBounds!.width)).toBeLessThan(1);
 
     await page.locator('.dc-canvas').focus();
     await page.keyboard.press('Escape');
@@ -184,5 +152,108 @@ test.describe('Traffic', () => {
     await showTraffic(page);
     await expect(page.locator('.dc-traffic-badge').first()).toBeVisible();
     await expect(page.locator('button.dc-traffic-note').first()).toBeVisible();
+  });
+
+  for (const colorScheme of ['light', 'dark'] as const) {
+    test(`keeps traffic above overlapping connector labels and raised shapes in ${colorScheme} mode`, async ({ page }) => {
+      await page.emulateMedia({ reducedMotion: 'reduce', colorScheme });
+      const document = trafficDocument('Overlapping labels');
+      document.edges[0]!.label = 'A connector label under the traffic finding';
+      document.nodes[0]!.z = 10000;
+      await importDocument(page, document, 'traffic-overlap.draftcanvas');
+      await showTraffic(page);
+
+      const note = page.locator('button.dc-traffic-note').first();
+      // Force the collision a dense drawing can produce. Hit testing must reach the traffic
+      // finding even when a raised shape and an editable connector label sit directly below it.
+      await note.evaluate((element) => {
+        const label = window.document.querySelector<HTMLElement>('.dc-edge-label')!;
+        const shape = window.document.querySelector<HTMLElement>('.react-flow__node[data-id="gateway"]')!;
+        const at = element.getBoundingClientRect();
+        for (const obstacle of [label, shape]) {
+          const before = obstacle.getBoundingClientRect();
+          const zoom = new DOMMatrix(getComputedStyle(window.document.querySelector('.react-flow__viewport')!).transform).a;
+          obstacle.style.translate = `${(at.x - before.x) / zoom}px ${(at.y - before.y) / zoom}px`;
+        }
+      });
+      const bounds = await note.boundingBox();
+      expect(bounds).not.toBeNull();
+      const point = { x: bounds!.x + bounds!.width / 2, y: bounds!.y + bounds!.height / 2 };
+      const top = await page.evaluate(({ x, y }) => Boolean(window.document.elementFromPoint(x, y)?.closest('button.dc-traffic-note')), point);
+      expect(top).toBe(true);
+      // A solid board-coloured mask keeps underlying words from showing through the finding.
+      await expect(note).toHaveCSS('background-color', await page.locator('.dc-canvas').evaluate((element) => getComputedStyle(element).backgroundColor));
+      await note.click();
+      await expect(note).toHaveAttribute('aria-expanded', 'true');
+    });
+  }
+
+  test('can delete every shape and undo while traffic stays active', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await importDocument(page, trafficDocument(), 'traffic-delete-all.draftcanvas');
+    await showTraffic(page);
+    await page.locator('.dc-canvas').focus();
+    await page.keyboard.press('ControlOrMeta+a');
+    await page.keyboard.press('Backspace');
+    await expect(page.locator('.react-flow__node')).toHaveCount(0);
+    await expect(page.locator('.dc-editor')).toBeVisible();
+    await expect(page.locator('.dc-traffic-notes')).toHaveCount(0);
+    await page.keyboard.press('ControlOrMeta+z');
+    await expect(page.locator('.react-flow__node')).toHaveCount(6);
+    await expect(page.locator('button.dc-traffic-note').first()).toBeVisible();
+    expect(errors).toEqual([]);
+  });
+
+  test('lays out long findings once and keeps their lines anchored when expanded', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    const document = trafficDocument('Long traffic findings');
+    document.nodes[0]!.serviceKind = 'api';
+    document.nodes[0]!.text = 'International storefront for customers placing wholesale orders';
+    document.nodes[1]!.text = 'Mobile storefront for customers placing international wholesale orders';
+    document.nodes[2]!.text = 'Checkout for customers placing international wholesale orders with delivery tracking';
+    document.nodes[4]!.text = 'Database for customers placing international wholesale orders with delivery tracking';
+    document.edges.push({ id: 'checkout-billing', source: 'checkout', target: 'billing', directed: true, semantic: 'calls' });
+    await importDocument(page, document, 'traffic-long-notes.draftcanvas');
+    await showTraffic(page);
+    const title = page.locator('.dc-hand-title');
+    await expect(title.locator('.dc-hand-title-line')).toHaveCount(3);
+    const titleBounds = await title.boundingBox();
+    const firstNode = await page.locator('.react-flow__node[data-id="gateway"]').boundingBox();
+    expect(titleBounds!.y + titleBounds!.height).toBeLessThan(firstNode!.y);
+    const note = page.getByRole('button', { name: /^only way in/ }).first();
+    const rows = note.locator('.dc-traffic-note-line');
+    await expect(rows).toHaveCount(3);
+    const before = await rows.first().boundingBox();
+    await note.click();
+    const after = await rows.first().boundingBox();
+    expect(Math.abs(after!.y - before!.y)).toBeLessThan(1);
+    await expect(note.locator('.dc-traffic-note-more')).toContainText('International storefront');
+    for (const row of await rows.all()) await expect(row).toHaveCSS('white-space', 'pre');
+  });
+
+  test('scrolls a field note by keyboard without editing the selected shape', async ({ page }) => {
+    await page.setViewportSize({ width: 640, height: 460 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await importDocument(page, trafficDocument(), 'traffic-small-view.draftcanvas');
+    await runCommand(page, 'Show traffic');
+    await expect(page.locator('.dc-canvas')).toHaveAttribute('data-traffic', 'on');
+    await page.locator('.react-flow__node[data-id="checkout"] .dc-node').click();
+    const note = page.locator('.dc-traffic-callout');
+    const revision = await editorRevision(page);
+    await note.focus();
+    await note.press('ArrowDown');
+    await note.press('PageDown');
+    await expect.poll(() => note.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+    await note.press('Backspace');
+    expect(await editorRevision(page)).toBe(revision);
+    expect(await note.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    const at = await note.boundingBox();
+    const frame = await page.locator('.dc-canvas').boundingBox();
+    expect(at!.y + at!.height).toBeLessThanOrEqual(frame!.y + frame!.height);
+    await note.press('Escape');
+    await expect(note).toHaveCount(0);
+    await expect(page.locator('.dc-canvas')).toBeFocused();
+    await expect(page.locator('.dc-canvas')).toHaveAttribute('data-traffic', 'on');
   });
 });

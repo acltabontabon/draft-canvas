@@ -11,7 +11,7 @@ function overlapArea(a: Rect, b: Rect): number {
 }
 
 function request(id: string, target: Rect, priority = 0, label = 'Finding'): SketchRequest {
-  return { id, targets: [target], label, priority };
+  return { id, targets: [target], label: { width: label.length * 8.4 + 8, height: 27, lines: [label] }, priority };
 }
 
 describe('traffic sketch layout', () => {
@@ -21,18 +21,18 @@ describe('traffic sketch layout', () => {
 
   it('drops requests without targets', () => {
     expect(placeSketches([
-      { id: 'empty', targets: [], label: 'No target', priority: 0 },
+      { id: 'empty', targets: [], label: { width: 80, height: 27, lines: ['No target'] }, priority: 0 },
       request('kept', rect(0, 0, 100, 50)),
     ], [])).toHaveLength(1);
   });
 
-  it('wraps at word boundaries, caps at three lines, and adds an ellipsis', () => {
+  it('preserves measured multiline geometry for placement and arrows', () => {
+    const label = { width: 178, height: 69, lines: ['one two three', 'four five six', 'seven eight nine'] };
     const [sketch] = placeSketches([
-      request('wrap', rect(0, 0, 100, 50), 0, 'one two three four five six seven eight nine'),
-    ], [], { maxChars: 10, charWidth: 1, lineHeight: 10 });
-    expect(sketch?.label.lines).toEqual(['one two', 'three four', 'five six…']);
-    expect(sketch?.label.width).toBe(18);
-    expect(sketch?.label.height).toBe(36);
+      { ...request('wrap', rect(0, 0, 100, 50)), label },
+    ], []);
+    expect(sketch?.label).toMatchObject(label);
+    expect(sketch?.arrow.from.y).toBeLessThanOrEqual(sketch!.label.y + label.height);
   });
 
   it('places a lone note NE of its shape', () => {
