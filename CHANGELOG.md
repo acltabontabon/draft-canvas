@@ -12,6 +12,10 @@ The retired VS Code extension has [its own changelog](https://github.com/acltabo
 
 #### Added
 
+- Companion and MCP-created connectors release provisional layout pins when automatic attachments
+  make the whole view simpler without harming other routes or captions. Explicit pins and bends stay
+  fixed; agent geometry reads and previews use the same routing as the canvas.
+
 - Sculpted Ink is the default connector treatment, with sweeping corners and carved arrowheads.
   Shapes and arrows follow the existing Clean, Draft and Sketch drawing setting together; Sketch
   adds visible graphite drift and retraced strokes. Canvas and export share the same treatment.

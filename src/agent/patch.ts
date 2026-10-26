@@ -1117,10 +1117,10 @@ function addToView(
   }
   advisories.push(...best!.notes);
   let next = best!.view;
-  // The connectors this edit drew attach automatically wherever that draws the same picture; every
-  // connector that was already there keeps exactly what it had.
+  // New connectors may release provisional layout pins for a simpler readable picture; every
+  // connector that was already there keeps exactly what it had and how it was drawn.
   const requested = new Set(room.relationships.flatMap((r) => [...(r.route?.from && r.route.from !== 'auto' ? [`${r.id}:source`] : []), ...(r.route?.to && r.route.to !== 'auto' ? [`${r.id}:target`] : [])]));
-  next = { ...next, edges: relaxLayoutAnchors(new Set(room.relationships.map((r) => r.id)), next.nodes, next.edges, requested).edges };
+  next = { ...next, edges: relaxLayoutAnchors(new Set(room.relationships.map((r) => r.id)), next.nodes, next.edges, requested, { polish: true, caption: captionSizer(next.nodes, ctx) }).edges };
 
   // Notes: attached to their host, inside their boundary, or beside what they're about — clear of
   // shapes and of connectors as drawn.

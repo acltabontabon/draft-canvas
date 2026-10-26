@@ -58,11 +58,14 @@ function composeWithin(raw: unknown, diagramId: string, report: Report): Compose
   planInsideViews(spec, layout0, ctx, rooms);
   const { candidate, repaired, outOfTime } = chooseArrangement(spec, layout0, ctx,
     (layout) => spec.starter ? buildFromStarter(spec, layout, ctx, rooms) : placeRoom(spec, layout, ctx, undefined, rooms), report, true, !!spec.starter);
-  const { found, fit, layout: used, legibility } = candidate;
-  // The connectors this request drew attach automatically wherever that draws the same picture, so
-  // the diagram follows its shapes when a person moves them. A starter's pins are authored; kept.
-  const relaxed = spec.starter ? { placed: candidate.placed, kept: [] } : relaxPlaced(spec, candidate.placed);
+  const { layout: used } = candidate;
+  // Release provisional layout pins for the same or a measurably simpler readable picture, so
+  // generated diagrams follow moved shapes. A starter's pins are authored; kept.
+  const relaxed = spec.starter ? { placed: candidate.placed, kept: [] } : relaxPlaced(spec, candidate.placed, ctx);
   const placed = relaxed.placed;
+  const found = qualityOfEveryRoom(placed, ctx, explicitIds(spec));
+  const legibility = legibilityOf(placed.nodes, placed.edges, aboutOf(spec));
+  const fit = used.viewport ? checkFit(renderedBoundsOf(placed.nodes, placed.edges, ctx), smallestFontPresent(placed.nodes, placed.edges), used.viewport) : undefined;
   const issues = found.errors;
   report('finishing', { nodes: placed.nodes, edges: placed.edges, flows: placed.flows });
   if (issues.length > 0 && !spec.layout.allowDegraded) {
@@ -370,10 +373,10 @@ function requestedEnds(room: RoomSpec): Set<string> {
 
 /** A placed room, and every inside view in it, with `relaxLayoutAnchors` applied to the connectors
  *  the request drew; and the ends kept pinned, with the view each is in. */
-function relaxPlaced(room: RoomSpec, placed: PlacedRoom): { placed: PlacedRoom; kept: (KeptPin & { view?: string[] })[] } {
+function relaxPlaced(room: RoomSpec, placed: PlacedRoom, ctx: ReturnType<typeof measureContext>): { placed: PlacedRoom; kept: (KeptPin & { view?: string[] })[] } {
   const kept: (KeptPin & { view?: string[] })[] = [];
   const visit = (spec: RoomSpec, nodes: readonly DraftNode[], edges: readonly DraftEdge[], path: string[]): { nodes: DraftNode[]; edges: DraftEdge[] } => {
-    const done = relaxLayoutAnchors(new Set(edges.map((e) => e.id)), nodes, edges, requestedEnds(spec));
+    const done = relaxLayoutAnchors(new Set(edges.map((e) => e.id)), nodes, edges, requestedEnds(spec), { polish: true, caption: captionSizer(nodes, ctx) });
     kept.push(...done.kept.map((pin) => (path.length ? { ...pin, view: path } : pin)));
     const next = nodes.map((node) => {
       const inner = node.inside && spec.nodes.find((n) => n.id === node.id)?.inside;

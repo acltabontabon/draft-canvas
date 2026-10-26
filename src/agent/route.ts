@@ -699,7 +699,9 @@ function drawnKey(edge: DraftEdge, doc: { nodes: readonly DraftNode[]; edges: re
  *
  * Nothing is guessed about anyone's intent: only connectors this operation drew are touched, and an
  * end the agent placed itself (`requested`, `id:source` or `id:target`) stays pinned. Every connector
- * in `all` is compared as drawn before and after; a created connector whose line would change, or that
+ * in `all` is compared as drawn before and after. Authoring may opt into `polish`, which also accepts
+ * a substantially simpler automatic picture after checking every route and caption in the view.
+ * Otherwise a created connector whose line would change, or that
  * shares a shape with any connector that would, keeps its layout pins, until nothing changes — and if
  * that can't be shown in time, every layout pin stays. Returns a new edge list (plans are cached by
  * the list, so it is never edited in place) and the ends kept pinned.
@@ -709,6 +711,7 @@ export function relaxLayoutAnchors(
   nodes: readonly DraftNode[],
   all: readonly DraftEdge[],
   requested: ReadonlySet<string> = new Set(),
+  options: { polish?: boolean; caption?: CaptionSize } = {},
 ): { edges: DraftEdge[]; kept: KeptPin[] } {
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const snapshot = (edges: readonly DraftEdge[]) => new Map(edges.map((e) => [e.id, drawnKey(e, { nodes, edges }, byId)]));
@@ -729,11 +732,34 @@ export function relaxLayoutAnchors(
     if (ends.target) delete next.targetAnchor;
     return next;
   });
-  // Only a state checked to draw exactly as before is kept; anything else keeps every layout pin.
+  // Release only a checked state; an unproven candidate keeps every layout pin.
   let settled = relaxed.size === 0;
   if (!settled) {
     const before = snapshot(all);
-    for (let round = 0; round < 8 && relaxed.size; round += 1) {
+    // Layout pins are provisional for newly authored lines. Prefer the automatic picture when it
+    // is substantially simpler and the complete view stays readable; untouched lines stay exact.
+    // This matters after facing-side alignment: a layout's old offsets can otherwise freeze a loop.
+    if (options.polish && !pastDeadline()) {
+      const candidate = apply();
+      const now = snapshot(candidate);
+      if (all.every(e => created.has(e.id) || now.get(e.id) === before.get(e.id))) {
+        const original = othersOf(nodes, all, options.caption, undefined, byId);
+        const automatic = othersOf(nodes, candidate, options.caption, undefined, byId);
+        const was = assessRoutes(nodes, all, original, byId);
+        const next = assessRoutes(nodes, candidate, automatic, byId);
+        const costs = new Map(original.map(e => [e.id, routeCost(e.points)]));
+        if (!pastDeadline() && preservesReadability(was, next)
+          && next.obstruction <= was.obstruction && next.overlap <= was.overlap + 1
+          && next.bundled >= was.bundled && next.crossings <= was.crossings
+          && [...next.crossed].every(id => was.crossed.has(id))
+          && [...next.detours].every(id => was.detours.has(id))
+          && next.cost < was.cost - BEND_COST / 2
+          && automatic.every(e => routeCost(e.points) <= (costs.get(e.id) ?? 0) + 1)) {
+          settled = true;
+        }
+      }
+    }
+    for (let round = 0; !settled && round < 8 && relaxed.size; round += 1) {
       if (pastDeadline()) break;
       const now = snapshot(apply());
       const changed = all.filter((e) => now.get(e.id) !== before.get(e.id));

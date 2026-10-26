@@ -95,6 +95,12 @@ exactly for a specific arrangement. Short replies such as **yes** or
 To insert a starter directly, name it or use its alias (for example, **start Change Data Capture** or
 **start CDC**); a generic follow-up such as **do it, change it** goes to the agent.
 
+Nodi and external MCP agents use the canvas's smart connector routing. Newly drawn connectors
+attach automatically when that keeps the same picture or makes the complete view measurably simpler
+without crowding captions or worsening other routes. Automatic ends follow shapes when moved.
+Explicit attachment sides and hand-placed bends stay fixed; an agent can set `route.from` and
+`route.to` to `"auto"` to release the ends, or `route: null` to clear pins and bends together.
+
 ![A proposal on the canvas, beside the change.](../media/guides/nodi-proposal.png)
 
 ![A tidy-up on the tracing sheet: each moved shape trails back to where it stands.](../media/guides/nodi-tracing.png)

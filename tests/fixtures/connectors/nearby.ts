@@ -1,5 +1,15 @@
 import { createDocument, createEdge, createNode } from '../../../src/document/factory';
 
+/** Public agent input for the same geometry, without pins or manual routing instructions. */
+export function nearbyServicesRequest() {
+  const doc = nearbyServicesDocument();
+  return {
+    title: 'MCP nearby services',
+    nodes: doc.nodes.map(n => ({ id: n.id, type: 'service', label: n.text!, place: { x: n.x, y: n.y, width: n.width, height: n.height } })),
+    relationships: doc.edges.map(e => ({ id: e.id, from: e.source, to: e.target })),
+  };
+}
+
 /** Nearby, slightly offset services: a fixed bottom-to-top connector used to loop around them. */
 export function nearbyServicesDocument(pinned = false) {
   const document = createDocument('Nearby services');
