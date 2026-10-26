@@ -8,6 +8,13 @@ The retired VS Code extension has [its own changelog](https://github.com/acltabo
 
 ## [Unreleased]
 
+### Shared
+
+#### Fixed
+
+- Looking inside shapes and backing out zooms prepared room images for smoother motion, avoids
+  a competing camera move in empty rooms, and preserves visible layers when reversing direction.
+
 ## [1.17.0] - 2026-10-25
 
 See where traffic meets. Plan the recovery for every call.

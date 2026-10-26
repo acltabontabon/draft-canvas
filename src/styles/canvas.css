@@ -5906,7 +5906,8 @@
  * the same four the empty canvas uses, drawn in flow space so they sit around the room's contents
  * and pan and zoom with them. Inert, and behind everything: it is the paper, not a shape on it.
  */
-.dc-room {
+.dc-room,
+.dc-depth-room-frame {
   position: absolute;
   top: 0;
   left: 0;

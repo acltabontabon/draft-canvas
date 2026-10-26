@@ -37,7 +37,8 @@ function play(direction: 'in' | 'out', nodeId: string, from: ScreenRect | null):
 export async function lookInside(nodeId: string): Promise<void> {
   await commitEditing();
   const entrance = rectOfEntrance(nodeId);
-  if (!prefersReducedMotion()) pictureRoom({ grid: true });
+  const state = useEditorStore.getState();
+  if (!prefersReducedMotion()) pictureRoom({ grid: true, room: state.document, selectedFlowId: state.selectedFlowId });
   if (!useEditorStore.getState().enterInside(nodeId)) {
     takePicture(); // dropped: a move that didn't happen keeps no picture of the room
     return;
@@ -55,7 +56,7 @@ export async function backOut(depth?: number): Promise<void> {
   const owner = state.path[target];
   // Measured while it is still on screen: the climb closes from this frame onto the shape.
   const room = rectOfRoom();
-  if (!prefersReducedMotion()) pictureRoom({ grid: false });
+  if (!prefersReducedMotion()) pictureRoom({ grid: false, room: state.document, selectedFlowId: state.selectedFlowId });
   state.exitTo(target);
   // Refused (a drag or a resize is still under way): nothing moved, so nothing is selected or played.
   const after = useEditorStore.getState();

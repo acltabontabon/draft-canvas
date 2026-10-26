@@ -56,7 +56,7 @@ export function formatRun(result: InteractionResult): string {
   }
   lines.push('');
   lines.push('p50/p95/p99/max = frame time in ms during the gesture (16.7 = one 60 Hz frame); >20ms% and >33ms% = share of');
-  lines.push('frames past that; stalls = frames > 50 ms; lat95 = pointer event → next frame, p95; LT = long tasks (count, worst ms);');
+  lines.push('frames past that; stalls = frames > 50 ms; lat95 = input event → next frame, p95; LT = long tasks (count, worst ms);');
   lines.push('busy% = main-thread task time ÷ gesture wall time; tailLT / tailMax = long tasks and worst frame in the 0.4–1.6 s after.');
   for (const scenario of result.scenarios) {
     for (const problem of scenario.problems) lines.push(`  [${scenario.size}/${scenario.scenario}] ${problem}`);

@@ -33,7 +33,7 @@ export interface LongTaskSummary {
 
 export interface WindowSummary {
   frames: FrameStats;
-  /** From a pointer/wheel event's own timestamp to the first frame that ran after it. */
+  /** From a pointer/wheel/keydown event's timestamp to the first frame that ran after it. */
   inputLatency: Distribution;
   longTasks: LongTaskSummary;
   /** Long Animation Frames: frames whose script + style + layout kept the main thread > 50 ms. */
@@ -169,7 +169,7 @@ export async function runScenario(
   profileDir?: string,
 ): Promise<ScenarioSummary> {
   const { page, cdp, problems, area } = await openFixture(browser, baseUrl, fixture, manifest);
-  const context: ScenarioContext = { page, area, looseNoteIds: manifest.looseNoteIds };
+  const context: ScenarioContext = { page, area, looseNoteIds: manifest.looseNoteIds, depthOwnerId: manifest.depthOwnerId };
   const results: IterationResult[] = [];
   let canvasBroken = false;
 

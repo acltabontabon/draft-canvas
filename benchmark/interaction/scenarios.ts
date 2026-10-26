@@ -11,6 +11,7 @@
 
 import type { Page } from '@playwright/test';
 import { nextFrame, settle } from './recorder';
+import { distribution } from './stats';
 
 export interface ScenarioContext {
   page: Page;
@@ -18,6 +19,7 @@ export interface ScenarioContext {
   area: { x: number; y: number; width: number; height: number };
   /** Ids of the free-floating notes the fixture places on open canvas. */
   looseNoteIds: string[];
+  depthOwnerId?: string;
 }
 
 export type Notes = Record<string, number | string>;
@@ -133,7 +135,121 @@ async function pickContainer(context: ScenarioContext): Promise<Box> {
 
 const STEPS = 90;
 
+/** Wait for the actual transition to finish rather than padding its 640 ms with idle frames. */
+async function navigateDepth(page: Page, direction: 'in' | 'out'): Promise<void> {
+  const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
+  await page.keyboard.press(`${mod}+${direction === 'in' ? 'ArrowDown' : 'ArrowUp'}`);
+  await page.waitForFunction((inside) =>
+    document.querySelectorAll('.dc-room').length === (inside ? 1 : 0)
+      && document.querySelector('.dc-depth-sheet') === null,
+  direction === 'in');
+}
+
+/**
+ * A room mount can hold the starting pose while its nodes are measured. Separate that startup
+ * from intervals during the running flight, without dropping either from the overall recorder.
+ * Watch the ghost's WAAPI animation: older builds animate the viewport's parent instead of the
+ * viewport, but both use this same ghost. Install before the shortcut so no first frame is lost.
+ */
+async function measureDepth(page: Page, direction: 'in' | 'out'): Promise<Notes> {
+  await page.evaluate(`(() => {
+    window.__depthFlight?.cleanup();
+    const expectedKey = ${JSON.stringify(direction === 'in' ? 'ArrowDown' : 'ArrowUp')};
+    const sample = { keydownAt: null, firstRunningAt: null, firstTimelineMs: null, pictureCached: 'unavailable', frames: [] };
+    let previousRunningAt = null;
+    let animation = null;
+    let raf = 0;
+    const keydown = (event) => {
+      if (event.key === expectedKey && sample.keydownAt === null) sample.keydownAt = event.timeStamp;
+    };
+    const tick = (now) => {
+      animation ??= document.querySelector('.dc-depth-ghost')?.getAnimations()[0] ?? null;
+      const running = sample.keydownAt !== null && animation?.playState === 'running'
+        && !animation.pending && animation.startTime !== null && Number(animation.currentTime) > 0;
+      // Only the preceding frame decides whether the interval belongs to active motion. In
+      // particular, the interval leading out of a paused pose is startup, not a flight hitch.
+      if (previousRunningAt !== null) sample.frames.push(now - previousRunningAt);
+      previousRunningAt = running ? now : null;
+      if (running && sample.firstRunningAt === null) {
+        sample.firstRunningAt = now;
+        sample.firstTimelineMs = Number(animation.currentTime);
+        sample.pictureCached = document.querySelector('.dc-depth-arrival img')?.getAttribute('data-depth-cached') ?? 'unavailable';
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    window.addEventListener('keydown', keydown, true);
+    raf = requestAnimationFrame(tick);
+    window.__depthFlight = {
+      sample,
+      cleanup() {
+        cancelAnimationFrame(raf);
+        window.removeEventListener('keydown', keydown, true);
+      },
+    };
+  })()`);
+  let raw: { keydownAt: number | null; firstRunningAt: number | null; firstTimelineMs: number | null; pictureCached: string; frames: number[] };
+  try {
+    await navigateDepth(page, direction);
+  } finally {
+    raw = await page.evaluate(`(() => {
+      const observer = window.__depthFlight;
+      observer.cleanup();
+      delete window.__depthFlight;
+      return observer.sample;
+    })()`);
+  }
+  const frames = distribution(raw.frames);
+  if (raw.firstRunningAt === null || frames.count === 0) throw new Error('The depth move completed without an observed animation.');
+  const missing = 'not observed';
+  return {
+    depthPictureCached: raw.pictureCached,
+    depthStartupMs: raw.firstRunningAt !== null && raw.keydownAt !== null ? raw.firstRunningAt - raw.keydownAt : missing,
+    // A large initial timeline value exposes motion skipped before the first observed frame.
+    depthFirstTimelineMs: raw.firstTimelineMs ?? missing,
+    depthRunningFrameCount: frames.count,
+    depthRunningFrameP95: frames.count ? frames.p95 : missing,
+    depthRunningFrameMax: frames.count ? frames.max : missing,
+  };
+}
+
+async function selectDoorway({ page, depthOwnerId }: ScenarioContext): Promise<void> {
+  if (!depthOwnerId) throw new Error('Depth scenarios need the depth workload.');
+  const doorway = page.locator(`.react-flow__node[data-id="${depthOwnerId}"] .dc-node`);
+  await doorway.click({ force: true });
+  await page.waitForFunction((id) =>
+    document.querySelector(`.react-flow__node[data-id="${id}"] .dc-node`)?.getAttribute('data-selected') === 'true',
+  depthOwnerId);
+}
+
 export const SCENARIOS: Scenario[] = [
+  {
+    id: 'depth-enter',
+    title: 'Look inside a shape into an equally populated room',
+    tailMs: 1000,
+    async prepare(context) {
+      await selectDoorway(context);
+      return {};
+    },
+    async run({ page, depthOwnerId }) {
+      return { owner: depthOwnerId!, ...await measureDepth(page, 'in') };
+    },
+    restore: ({ page }) => navigateDepth(page, 'out'),
+  },
+  {
+    id: 'depth-exit',
+    title: 'Back out of a populated room into an equally populated parent',
+    tailMs: 1000,
+    async prepare(context) {
+      await selectDoorway(context);
+      await navigateDepth(context.page, 'in');
+      // The entering camera's debounced save is not part of the measured exit.
+      await context.page.waitForTimeout(1000);
+      return {};
+    },
+    async run({ page, depthOwnerId }) {
+      return { owner: depthOwnerId!, ...await measureDepth(page, 'out') };
+    },
+  },
   {
     id: 'pan-drag',
     title: 'Pan by dragging (middle button), then back',

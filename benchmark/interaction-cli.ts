@@ -30,6 +30,7 @@ import { runScenario, scenarioById, VIEWPORT } from './interaction/run';
 import { SCENARIO_IDS } from './interaction/scenarios';
 import { startBenchServer } from './server';
 import { buildScaleDocument, SCALE_NAMES, SCALE_SPECS, type ScaleName } from './workloads/scale';
+import { buildDepthDocument } from './workloads/depth';
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const DEFAULT_OUT = join(REPO_ROOT, 'benchmark/results/interaction.json');
@@ -99,10 +100,13 @@ async function main(): Promise<void> {
       );
       for (const id of scenarioIds) {
         const scenario = scenarioById(id);
+        const workload = id.startsWith('depth-') ? buildDepthDocument(SCALE_SPECS[size]) : { document, manifest };
+        if (id.startsWith('depth-')) fixtures[`${size}-depth`] = workload.manifest;
+        const scenarioFixture = id.startsWith('depth-') ? Buffer.from(JSON.stringify(workload.document)) : fixture;
         process.stdout.write(`   ${id} … `);
         try {
           const measure = (url: string, profile?: string) =>
-            runScenario(browser, url, fixture, manifest, scenario, iterations, warmup, profile);
+            runScenario(browser, url, scenarioFixture, workload.manifest, scenario, iterations, warmup, profile);
           let summary: Awaited<ReturnType<typeof measure>>;
           if (against) {
             // Alternate who goes first, so neither build always gets the machine at its freshest.

@@ -6,6 +6,7 @@ import { motionMs } from '../../lib/motion';
 import { useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
 import { takePicture, type RoomPicture } from './depthRects';
+import { clearRoomImages, createRoomImage } from './depthImage';
 
 const clamp01 = (t: number) => Math.min(1, Math.max(0, t));
 /** 0 before `from`, 1 after `to`, smoothly between: when each room is seen, over the move. */
@@ -30,7 +31,8 @@ const FRAMES = 32;
  * inside it never part: that is what makes it read as going through the shape rather than as a cut
  * and a pan. The far room fades in and the near one out, so a shape is never seen filling the
  * screen at full strength. The camera itself lands at once, and both rooms are moved as layers by
- * the compositor, so nothing on the page's own thread can make the move stutter.
+ * the compositor. The arriving room is measured at its landing camera before either layer starts
+ * moving; the browser then starts the animations together when their surfaces are ready.
  *
  * It is the picture of a move that has already happened: the editor is in the new room before this
  * runs, nothing waits on it, a second move replaces it mid-flight, and reaching for the canvas
@@ -40,19 +42,22 @@ const FRAMES = 32;
 export function DepthTransition() {
   const transition = useUiStore((state) => state.depthTransition);
   const anchorRef = useRef<HTMLDivElement>(null);
-  const { setViewport } = useReactFlow();
+  const { setViewport, getInternalNode } = useReactFlow();
 
   // Before paint, so neither room is ever seen at rest for the frame before it moves.
   useLayoutEffect(() => {
     if (!transition) return;
     const picture = takePicture();
-    const done = () => useUiStore.getState().setDepthTransition(null);
+    const done = () => {
+      if (useUiStore.getState().depthTransition === transition) useUiStore.getState().setDepthTransition(null);
+    };
     const root = anchorRef.current?.parentElement?.querySelector<HTMLElement>('.react-flow') ?? null;
     const live = root?.querySelector<HTMLElement>('.react-flow__viewport') ?? null;
     // The dot grid zooms with the camera: arriving from eleven times closer, it was giant dots.
     const grid = root?.querySelector<HTMLElement>('.react-flow__background') ?? null;
     const box = root?.getBoundingClientRect();
-    const room = useEditorStore.getState().document;
+    const state = useEditorStore.getState();
+    const room = state.document;
     const landing = box ? fitCamera(room.nodes, box) : null;
     const duration = motionMs(DEPTH_MOVE_MS);
     if (!root || !live || !box || box.width === 0 || duration === 0) {
@@ -75,6 +80,8 @@ export function DepthTransition() {
     // coming out, and the move stuttered.
     const to = plan.to;
     void setViewport(to);
+    // Keep the viewport at its landing scale. Animating it directly makes Chromium rasterize it
+    // repeatedly; the enclosing layer can instead carry its already-painted contents as one.
     const layer = live.parentElement ?? live;
     const frames = { room: [] as Keyframe[], picture: [] as Keyframe[], grid: [] as Keyframe[] };
     for (let i = 0; i <= FRAMES; i += 1) {
@@ -84,7 +91,6 @@ export function DepthTransition() {
       const cx = plan.anchorFrom.x + (plan.anchorTo.x - plan.anchorFrom.x) * e;
       const cy = plan.anchorFrom.y + (plan.anchorTo.y - plan.anchorFrom.y) * e;
       const camera = { x: cx - plan.anchor.x * zoom, y: cy - plan.anchor.y * zoom, zoom };
-      // The room as the camera would show it now, from the camera it has: a zoom about the origin.
       const s = camera.zoom / to.zoom;
       const arriving = between(t, ...plan.arriving);
       frames.room.push({ offset: t, transform: `translate(${camera.x - s * to.x}px, ${camera.y - s * to.y}px) scale(${s})`, opacity: arriving });
@@ -96,22 +102,98 @@ export function DepthTransition() {
       frames.grid.push({ offset: t, opacity: arriving });
     }
     const timing: KeyframeAnimationOptions = { duration, easing: 'linear' };
+    root.setAttribute('data-depth-moving', '');
+    const previousOpacity = layer.style.opacity;
+    const previousGridOpacity = grid?.style.opacity ?? '';
+    layer.style.opacity = '0';
     layer.style.transformOrigin = '0 0';
     layer.style.willChange = 'transform, opacity';
-    const animations = [layer.animate(frames.room, timing), ghost.animate(frames.picture, timing), ...(grid ? [grid.animate(frames.grid, timing)] : [])];
+    if (grid) grid.style.opacity = '0';
+    const animations: Animation[] = [];
+    let arrival: HTMLDivElement | null = null;
+    const images = Promise.all([
+      picture?.image ?? Promise.resolve(null),
+      createRoomImage(room, to, box, { selectedFlowId: state.selectedFlowId ?? undefined }).catch(() => null),
+    ]);
+    const changedRoom = () => {
+      const current = useEditorStore.getState();
+      return current.document.metadata.id !== room.metadata.id
+        || current.path.length !== state.path.length
+        || current.path.some((id, index) => id !== state.path[index]);
+    };
+
+    // ResizeObserver measures the arriving nodes after layout. Leave the layer unscaled until
+    // that measurement finishes: React Flow divides handle bounds
+    // by the viewport's scale, and cannot account for an extra scale on its parent.
+    const startFlight = () => {
+      if (changedRoom()) {
+        finish();
+        return;
+      }
+      // The observer can be delivered later on a busy frame. Never scale its parent until all
+      // arriving handles have been measured; an interrupted/replaced move cancels this wait.
+      // Check the current shapes: an edit can remove one while image decoding is pending.
+      if (useEditorStore.getState().document.nodes.some((node) => !getInternalNode(node.id)?.internals.handleBounds)) {
+        readyFrame = requestAnimationFrame(startFlight);
+        return;
+      }
+      void images.then(([outgoing, incoming]) => {
+        if (over) return;
+        if (changedRoom()) {
+          finish();
+          return;
+        }
+        if (outgoing && picture) picture.layer.querySelector('.react-flow__viewport')?.replaceWith(outgoing);
+        if (incoming) {
+          // Inline SVG text tracks its screen scale even beneath a compositor transform. An
+          // image boundary isolates that work; the editable room stays measured and stationary.
+          arrival = document.createElement('div');
+          arrival.className = 'dc-depth-arrival';
+          arrival.setAttribute('aria-hidden', 'true');
+          arrival.setAttribute('inert', '');
+          arrival.append(incoming);
+          const frame = live.querySelector('.dc-room');
+          if (frame) {
+            const frameCopy = frame.cloneNode(true) as HTMLElement;
+            frameCopy.classList.replace('dc-room', 'dc-depth-room-frame');
+            const camera = document.createElement('div');
+            camera.style.position = 'absolute';
+            camera.style.inset = '0';
+            camera.style.transformOrigin = '0 0';
+            camera.style.transform = `translate(${to.x}px, ${to.y}px) scale(${to.zoom})`;
+            camera.append(frameCopy);
+            arrival.append(camera);
+          }
+          root.insertBefore(arrival, ghost);
+        } else layer.style.opacity = previousOpacity;
+        if (grid) grid.style.opacity = previousGridOpacity;
+        animations.push((arrival ?? layer).animate(frames.room, timing), ghost.animate(frames.picture, timing), ...(grid ? [grid.animate(frames.grid, timing)] : []));
+        // The browser starts these together once their surfaces are ready.
+        void animations[0]!.finished.then(finish, () => {});
+      });
+    };
+    let readyFrame = requestAnimationFrame(() => {
+      readyFrame = requestAnimationFrame(startFlight);
+    });
 
     let over = false;
     const settle = () => {
       if (over) return;
       over = true;
+      cancelAnimationFrame(readyFrame);
       for (const animation of animations) animation.cancel();
+      arrival?.remove();
       ghost.remove();
+      layer.style.opacity = previousOpacity;
+      if (grid) grid.style.opacity = previousGridOpacity;
       layer.style.transformOrigin = '';
       layer.style.willChange = '';
+      root.removeAttribute('data-depth-moving');
       root.removeEventListener('wheel', interrupted, true);
       root.removeEventListener('pointerdown', interrupted, true);
     };
     const finish = () => {
+      if (over) return;
       settle();
       done();
     };
@@ -119,11 +201,26 @@ export function DepthTransition() {
     const interrupted = () => finish();
     root.addEventListener('wheel', interrupted, { capture: true, passive: true });
     root.addEventListener('pointerdown', interrupted, true);
-    void animations[0]!.finished.then(finish, () => {});
     return settle;
-  }, [transition, setViewport]);
+  }, [transition, setViewport, getInternalNode]);
 
-  useEffect(() => () => useUiStore.getState().setDepthTransition(null), []);
+  useEffect(() => {
+    // Navigation first captures the visible layers, then changes rooms, then requests its next
+    // flight. Also cancel a running image when a file switch/direct store navigation has no next
+    // flight, so an old room cannot remain over the newly opened one.
+    const unsubscribe = useEditorStore.subscribe((current, previous) => {
+      const changedFile = current.document.metadata.id !== previous.document.metadata.id;
+      if (changedFile) clearRoomImages();
+      if ((changedFile || current.navigation !== previous.navigation) && useUiStore.getState().depthTransition) {
+        useUiStore.getState().setDepthTransition(null);
+      }
+    });
+    return () => {
+      unsubscribe();
+      clearRoomImages();
+      useUiStore.getState().setDepthTransition(null);
+    };
+  }, []);
 
   // Only something to find the canvas from; everything seen is drawn inside the canvas itself.
   return transition ? <div className="dc-depth-sheet" ref={anchorRef} hidden /> : null;

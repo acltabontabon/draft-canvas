@@ -58,6 +58,222 @@ async function fitHasNothingToDo(page: Page): Promise<void> {
   expect(await page.locator('.react-flow__viewport').getAttribute('style')).toBe(landed);
 }
 
+/** Observe the actual layers while they fly: a stationary camera alone can also mean no animation. */
+async function flyingLayers(page: Page) {
+  await expect(page.locator('.dc-depth-ghost')).toHaveCount(1);
+  // A new room is measured and painted before its layers start moving. Capture the actual
+  // running animations, rather than an empty list from that preparation frame.
+  await page.waitForFunction(() => {
+    const root = document.querySelector('.react-flow');
+    const layer = root?.querySelector('.dc-depth-arrival') ?? root?.querySelector('.react-flow__viewport')?.parentElement;
+    return layer?.getAnimations().some((animation) => animation.playState === 'running');
+  });
+  return page.evaluateHandle(() => {
+    const root = document.querySelector<HTMLElement>('.react-flow')!;
+    const viewport = root.querySelector<HTMLElement>('.react-flow__viewport')!;
+    const ghost = root.querySelector<HTMLElement>('.dc-depth-ghost')!;
+    const arrival = root.querySelector<HTMLElement>('.dc-depth-arrival');
+    const layer = arrival ?? viewport.parentElement!;
+    const animations = [layer, ghost, root.querySelector('.react-flow__background')]
+      .flatMap((element) => element?.getAnimations() ?? []);
+    return { viewport, ghost, arrival, animations };
+  });
+}
+
+async function noDepthMotion(page: Page): Promise<void> {
+  await expect(page.locator('.dc-depth-ghost, .dc-depth-arrival, .dc-depth-sheet')).toHaveCount(0);
+  expect(await page.locator('.react-flow__viewport').evaluate((viewport) => {
+    const layer = viewport.parentElement!;
+    return {
+      animations: viewport.getAnimations().length + layer.getAnimations().length,
+      moving: viewport.closest('.react-flow')!.hasAttribute('data-depth-moving'),
+      opacity: layer.style.opacity,
+      transformOrigin: layer.style.transformOrigin,
+      willChange: layer.style.willChange,
+    };
+  })).toEqual({ animations: 0, moving: false, opacity: '', transformOrigin: '', willChange: '' });
+}
+
+/** Drop outside a handle's DOM hit area but inside its magnetic connection radius. A body drop
+ *  has a separate fallback, so only an actual handle snap proves the stored bounds were measured
+ *  at the same scale as the shape. */
+async function connectToMeasuredHandle(page: Page): Promise<void> {
+  const source = page.locator('.dc-node').nth(0);
+  const target = page.locator('.dc-node').nth(1);
+  await page.mouse.move(1, 1);
+  await source.hover();
+  const from = (await source.locator('[data-handleid="right@1"]').boundingBox())!;
+  const targetHandle = target.locator('[data-handleid="right@1"]');
+  const to = (await targetHandle.boundingBox())!;
+  const zoom = await page.locator('.react-flow__viewport').evaluate((viewport) =>
+    new DOMMatrixReadOnly(getComputedStyle(viewport).transform).a,
+  );
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x + to.width / 2 + 22 * zoom, to.y + to.height / 2, { steps: 12 });
+  await expect(targetHandle).toHaveClass(/connectingto/);
+  await expect(targetHandle).toHaveClass(/valid/);
+  await page.mouse.up();
+  await expect(page.locator('.dc-edge')).toHaveCount(1);
+}
+
+for (const populated of [false, true]) {
+  test(`room zoom animates layers with a stationary camera (${populated ? 'populated' : 'empty'})`, async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await newCanvas(page, 'Layer flight');
+    await create(page, 'Service', { x: 260, y: 260 });
+    if (populated) {
+      await lookInside(page);
+      await noDepthMotion(page);
+      await create(page, 'Component', { x: 320, y: 240 });
+      await backOut(page);
+      await noDepthMotion(page);
+    }
+
+    // An empty room must also land once, rather than racing a second camera animation.
+    const pane = (await page.locator(CANVAS).boundingBox())!;
+    await page.mouse.move(pane.x + 80, pane.y + 80);
+    await page.mouse.wheel(0, -180);
+    await cameraAtRest(page);
+    await lookInside(page);
+    const flight = await flyingLayers(page);
+    const observed = await flight.evaluate(async ({ viewport, ghost, arrival, animations }) => {
+      const camera = viewport.style.transform;
+      const before = getComputedStyle(ghost).transform;
+      const cameras = new Set([camera]);
+      for (let frame = 0; frame < 8; frame += 1) {
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        cameras.add(viewport.style.transform);
+      }
+      return {
+        cameras: cameras.size,
+        moving: before !== getComputedStyle(ghost).transform,
+        playing: animations.filter((animation) => animation.playState === 'running').length,
+        imageReady: arrival?.querySelector('img')?.complete === true,
+      };
+    });
+    expect(observed.cameras).toBe(1);
+    expect(observed.moving).toBe(true);
+    expect(observed.playing).toBeGreaterThanOrEqual(2);
+    expect(observed.imageReady).toBe(true);
+    await noDepthMotion(page);
+    await flight.dispose();
+  });
+}
+
+test('rapid opposite room moves replace the flight and release every old layer', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await newCanvas(page, 'Replace flight');
+  await create(page, 'Service', { x: 260, y: 260 });
+  await lookInside(page);
+  await noDepthMotion(page);
+  await create(page, 'Component', { x: 320, y: 240 });
+  await backOut(page);
+  await noDepthMotion(page);
+
+  await lookInside(page);
+  const entering = await flyingLayers(page);
+  // Freeze a visible intermediate pose so the copied room can be compared exactly, without
+  // racing the compositor between two browser commands.
+  const visible = await entering.evaluate(async ({ animations, ghost, arrival }) => {
+    for (const animation of animations) animation.pause();
+    await Promise.all(animations.map((animation) => animation.ready));
+    const pose = getComputedStyle(ghost);
+    const arriving = arrival ? getComputedStyle(arrival) : null;
+    return {
+      ghost: { transform: pose.transform, opacity: pose.opacity },
+      arrival: arriving ? { transform: arriving.transform, opacity: arriving.opacity } : null,
+    };
+  });
+  await backOut(page);
+  const leaving = await flyingLayers(page);
+  const remainder = page.locator('.dc-depth-ghost > .dc-depth-picture > .dc-depth-remainder');
+  await expect(remainder).toHaveCount(1);
+  expect(await remainder.evaluate((element: HTMLElement) => ({
+    transform: element.style.transform,
+    opacity: element.style.opacity,
+  }))).toEqual(visible.ghost);
+  const arrivalPicture = page.locator('.dc-depth-ghost > .dc-depth-picture > .dc-depth-arrival-picture');
+  await expect(arrivalPicture).toHaveCount(1);
+  expect(await arrivalPicture.evaluate((element: HTMLElement) => ({
+    transform: element.style.transform,
+    opacity: element.style.opacity,
+  }))).toEqual(visible.arrival);
+  expect(await entering.evaluate(({ animations, ghost }) => ({
+    canceled: animations.every((animation) => animation.playState === 'idle'),
+    attached: ghost.isConnected,
+  }))).toEqual({ canceled: true, attached: false });
+  await lookInside(page);
+  await expect(page.locator('.dc-room')).toHaveCount(1);
+  // A second reversal carries both preceding pictures under one new ghost, then clears them all.
+  await expect(page.locator('.dc-depth-ghost .dc-depth-remainder')).toHaveCount(2);
+  await expect(page.locator('.dc-depth-ghost .dc-depth-arrival-picture')).toHaveCount(2);
+  expect(await leaving.evaluate(({ animations, ghost }) => ({
+    canceled: animations.every((animation) => animation.playState === 'idle'),
+    attached: ghost.isConnected,
+  }))).toEqual({ canceled: true, attached: false });
+  await noDepthMotion(page);
+  await cameraAtRest(page);
+  await fitHasNothingToDo(page);
+  await entering.dispose();
+  await leaving.dispose();
+});
+
+test('handles still snap at their visible positions after entering and leaving a populated room', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await newCanvas(page, 'Measured handles');
+  await create(page, 'Service', { x: 260, y: 260 });
+  await create(page, 'Service', { x: 650, y: 260 });
+  await select(page, 0);
+  await lookInside(page);
+  await noDepthMotion(page);
+  await create(page, 'Component', { x: 260, y: 260 });
+  await create(page, 'Data Store', { x: 650, y: 260 });
+  await backOut(page);
+  await noDepthMotion(page);
+
+  await lookInside(page);
+  await noDepthMotion(page);
+  await connectToMeasuredHandle(page);
+  await backOut(page);
+  await noDepthMotion(page);
+  await connectToMeasuredHandle(page);
+});
+
+for (const interruption of ['pointer', 'wheel'] as const) {
+  test(`a ${interruption} gesture interrupts a room flight and removes its animations`, async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await newCanvas(page, 'Interrupt flight');
+    await create(page, 'Service', { x: 260, y: 260 });
+    await lookInside(page);
+    const flight = await flyingLayers(page);
+    const pane = (await page.locator(CANVAS).boundingBox())!;
+    await page.mouse.move(pane.x + 40, pane.y + pane.height - 40);
+    if (interruption === 'pointer') await page.mouse.click(pane.x + 40, pane.y + pane.height - 40);
+    else await page.mouse.wheel(0, 80);
+    await noDepthMotion(page);
+    expect(await flight.evaluate(({ animations, ghost }) => ({
+      canceled: animations.every((animation) => animation.playState === 'idle'),
+      attached: ghost.isConnected,
+    }))).toEqual({ canceled: true, attached: false });
+    await flight.dispose();
+  });
+}
+
+test('reduced motion never creates room flight layers', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await newCanvas(page, 'Still rooms');
+  await create(page, 'Service', { x: 260, y: 260 });
+  await lookInside(page);
+  await noDepthMotion(page);
+  await create(page, 'Component', { x: 320, y: 240 });
+  await backOut(page);
+  await noDepthMotion(page);
+  await lookInside(page);
+  await noDepthMotion(page);
+  expect(await cameraMovesWithin(page, 150)).toEqual([]);
+});
+
 for (const reducedMotion of ['no-preference', 'reduce'] as const) {
   test(`stepping in and back out fits and centres the content over its saved camera (${reducedMotion})`, async ({ page }) => {
     await page.emulateMedia({ reducedMotion });

@@ -411,6 +411,12 @@ function useZoomVariable() {
     const write = () => {
       timer = undefined;
       const { domNode, transform } = storeApi.getState();
+      // A room transition lands the camera once, then flies its layer. Publishing the inherited
+      // hit-area scale during that flight restyled every shape halfway through the animation.
+      if (domNode?.hasAttribute('data-depth-moving')) {
+        timer = window.setTimeout(write, ZOOM_VARIABLE_SETTLE_MS);
+        return;
+      }
       const zoom = quantized(transform);
       if (!domNode || (written?.node === domNode && written.zoom === zoom)) return;
       domNode.style.setProperty('--dc-zoom', String(zoom));
@@ -530,6 +536,10 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
     const duration = motionMs(DEPTH_MOVE_MS);
     const pane = paneRef.current?.getBoundingClientRect();
     const landing = pane ? fitCamera(state.document.nodes, pane) : null;
+    // The compositor flight owns populated and empty rooms alike. An empty room used to start a
+    // second camera animation here, racing the fixed camera underneath the departing picture.
+    const move = useUiStore.getState().depthTransition;
+    if (duration > 0 && move && (move.direction === 'out' || move.nodeId === path[path.length - 1])) return;
     // An empty room starts where a new canvas does. Never a `fitView`: React Flow holds one with
     // nothing to measure and springs it on the first shape drawn in here (or, backing out first,
     // on the room left behind — overriding the camera it had just restored).
@@ -537,10 +547,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       void setViewport(state.document.viewport, { duration });
       return;
     }
-    // A move being played is flown frame by frame by `DepthTransition`, which lands it here too.
-    // Only with motion (the move is never played without it), and only the move that just happened.
-    const move = useUiStore.getState().depthTransition;
-    if (duration > 0 && move && (move.direction === 'out' || move.nodeId === path[path.length - 1])) return;
+    // Direct store navigation has no picture to fly: move the camera itself instead.
     void setViewport(landing, { duration, ease: depthEase });
   }, [path, setViewport]);
 
