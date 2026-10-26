@@ -39,18 +39,22 @@ const geometry = (doc: DraftDocument) => {
   return JSON.stringify(out);
 };
 
-// Each case composes and lays out a whole diagram, and some sweep the entire gallery: seconds of real
-// work on a two-core CI runner, not a hang.
+// Each case composes and lays out a whole diagram: seconds of real work on a two-core CI runner.
+// Check straightness here too: a separate sweep regenerated the whole gallery under one timeout
+// and exceeded 30 seconds with CI coverage instrumentation.
 describe('layout gallery', { timeout: 30_000 }, () => {
   for (const entry of GALLERY) {
     it(`${entry.id}: ${entry.title}`, () => {
       const { doc, before, touched } = galleryDocument(entry);
       const ctx = measureContext();
+      const jogs: string[] = [];
       // Readable in every view, the drill-downs included.
       walkGraphs(doc, (graph, path) => {
         const view = path.length ? viewOf(doc, path)! : doc;
         const focus = touched && path.length === 0 ? touched : undefined;
-        expect(checkQuality(view.nodes, view.edges, ctx, focus).errors, `view ${path.join('/') || 'top'}`).toEqual([]);
+        const quality = checkQuality(view.nodes, view.edges, ctx, focus);
+        expect(quality.errors, `view ${path.join('/') || 'top'}`).toEqual([]);
+        jogs.push(...quality.warnings.filter(w => w.kind === 'jog').map(w => `${path.join('/') || 'top'}: ${w.message}`));
         // Every anchor the layout chose is one the router draws as given — never one it overrides
         // because the line would cut back through a shape (see `anchorsHold`).
         // Pins this edit didn't choose — ones a person moved shapes away from — are kept as given and
@@ -64,6 +68,11 @@ describe('layout gallery', { timeout: 30_000 }, () => {
         }
         void graph;
       });
+      // Dense captions permit one balanced jog; provisioning has two returning branches. Grouped
+      // batch externals can align with only one caller, and the overview reaches two deployments.
+      const allowedJogs = entry.id === '21-card-provisioning' ? 2
+        : ['10-dense', '22-credit-card-batch', '25-readme-architecture'].includes(entry.id) ? 1 : 0;
+      expect(jogs.length, jogs.join('\n')).toBeLessThanOrEqual(allowedJogs);
       // The same request lays out the same way, to the pixel.
       expect(geometry(galleryDocument(entry).doc)).toBe(geometry(doc));
       if (before) {
@@ -83,33 +92,6 @@ describe('layout gallery', { timeout: 30_000 }, () => {
       }
     });
   }
-
-  it('draws connectors straight wherever a straight one is possible', () => {
-    // A lone connector between facing sides that still steps sideways is a skew the layout could
-    // have avoided. The dense case falls back to a balanced arrangement to fit its captions, and
-    // keeps one; the card-provisioning case's two returns into the system (a reviewer's decision,
-    // the provisioning outcome under the main path) step on their way, and are held to it below.
-    // The batch case as the agent sent it gathers its externals in one boundary, a column that can
-    // line up with only one of its callers (the receipt says so — see case 23 for the fix).
-    // The repository overview's author reaches two separate deployments: one of those branches may
-    // bend; the component views themselves must come out without jogs or crossings.
-    const jogs = GALLERY.flatMap((entry) => {
-      const { doc, touched } = galleryDocument(entry);
-      const out: string[] = [];
-      walkGraphs(doc, (_graph, path) => {
-        const view = path.length ? viewOf(doc, path)! : doc;
-        const focus = touched && path.length === 0 ? touched : undefined;
-        out.push(...checkQuality(view.nodes, view.edges, measureContext(), focus).warnings.filter((w) => w.kind === 'jog').map((w) => `${entry.id}: ${w.message}`));
-      });
-      return out;
-    });
-    expect(jogs.filter((j) => !j.startsWith('10-dense') && !j.startsWith('21-card') && !j.startsWith('22-credit') && !j.startsWith('25-readme'))).toEqual([]);
-    expect(jogs.filter((j) => j.startsWith('10-dense')).length).toBeLessThanOrEqual(1);
-    expect(jogs.filter((j) => j.startsWith('21-card')).length).toBeLessThanOrEqual(2);
-    expect(jogs.filter((j) => j.startsWith('22-credit')).length).toBeLessThanOrEqual(1);
-    // (It used to; laid out with its components as one row, it no longer does.)
-    expect(jogs.filter((j) => j.startsWith('25-readme')).length).toBeLessThanOrEqual(1);
-  });
 
   it('25: independently arranges each component view around its own flow without manual routes', () => {
     const { doc } = galleryDocument(GALLERY.find((g) => g.id === '25-readme-architecture')!);
