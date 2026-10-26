@@ -322,6 +322,52 @@ pub fn rename_atomic(old: &Path, new: &Path) -> Result<(), AppError> {
     Ok(())
 }
 
+/// "Move to Project…": moves `old` into another folder as `new`. The same promise as `rename_atomic`
+/// (never replaces a different file), but the folder may sit on another volume (a project on an
+/// external drive) where no rename reaches. There the document is copied and made durable first, and
+/// only then is the original removed, so a failure part-way leaves it where it was.
+pub fn move_atomic(old: &Path, new: &Path) -> Result<(), AppError> {
+    if old.parent() == new.parent() {
+        return rename_atomic(old, new);
+    }
+    if fs::symlink_metadata(new).is_ok() {
+        return Err(AppError::already_exists(new));
+    }
+    match rename_no_replace(old, new) {
+        Ok(()) => {}
+        Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
+            return Err(AppError::already_exists(new))
+        }
+        Err(e) if crosses_devices(&e) => copy_then_remove(old, new)?,
+        Err(e) => return Err(AppError::from_io(&e, Verb::Save, Subject::Path(new))),
+    }
+    for dir in [old.parent(), new.parent()]
+        .into_iter()
+        .flatten()
+        .filter(|p| !p.as_os_str().is_empty())
+    {
+        sync_dir(dir);
+    }
+    Ok(())
+}
+
+fn crosses_devices(e: &io::Error) -> bool {
+    // EXDEV is 18 on Linux and macOS; Windows says ERROR_NOT_SAME_DEVICE (17).
+    const CROSS_DEVICE: i32 = if cfg!(windows) { 17 } else { 18 };
+    e.kind() == io::ErrorKind::CrossesDevices || e.raw_os_error() == Some(CROSS_DEVICE)
+}
+
+fn copy_then_remove(old: &Path, new: &Path) -> Result<(), AppError> {
+    let bytes = fs::read(old).map_err(|e| AppError::from_io(&e, Verb::Open, Subject::Path(old)))?;
+    create_new_atomic(new, &bytes)?;
+    if let Err(e) = fs::remove_file(old) {
+        // Kept in both places the person would find two copies with no word of which is current.
+        let _ = fs::remove_file(new);
+        return Err(AppError::from_io(&e, Verb::Save, Subject::Path(old)));
+    }
+    Ok(())
+}
+
 /// Moves `old` to `new`, failing with `AlreadyExists` rather than replacing a file that appeared at
 /// `new` after it was checked for — an agent's create picks a free name in the same folder, and a
 /// plain `rename` silently replaced that file with this one.
@@ -1151,6 +1197,47 @@ mod tests {
         assert_eq!(err.kind(), io::ErrorKind::AlreadyExists);
         assert_eq!(fs::read_to_string(&old).unwrap(), "mine");
         assert_eq!(fs::read_to_string(&new).unwrap(), "theirs");
+    }
+
+    #[test]
+    fn move_carries_the_file_into_another_folder() {
+        let dir = tempdir().unwrap();
+        fs::create_dir(dir.path().join("billing")).unwrap();
+        let old = dir.path().join("plan.draftcanvas");
+        let new = dir.path().join("billing").join("plan.draftcanvas");
+        fs::write(&old, "content").unwrap();
+        move_atomic(&old, &new).unwrap();
+        assert!(!old.exists());
+        assert_eq!(fs::read_to_string(&new).unwrap(), "content");
+    }
+
+    #[test]
+    fn move_refuses_to_replace_a_file_already_in_the_folder() {
+        let dir = tempdir().unwrap();
+        fs::create_dir(dir.path().join("billing")).unwrap();
+        let old = dir.path().join("plan.draftcanvas");
+        let new = dir.path().join("billing").join("plan.draftcanvas");
+        fs::write(&old, "mine").unwrap();
+        fs::write(&new, "theirs").unwrap();
+        let err = move_atomic(&old, &new).err().unwrap();
+        assert_eq!(err.kind, ErrorKind::AlreadyExists);
+        assert_eq!(fs::read_to_string(&old).unwrap(), "mine");
+        assert_eq!(fs::read_to_string(&new).unwrap(), "theirs");
+    }
+
+    #[test]
+    fn a_move_across_volumes_copies_and_then_removes_the_original() {
+        let dir = tempdir().unwrap();
+        fs::create_dir(dir.path().join("billing")).unwrap();
+        let old = dir.path().join("plan.draftcanvas");
+        let new = dir.path().join("billing").join("plan.draftcanvas");
+        fs::write(&old, "content").unwrap();
+        copy_then_remove(&old, &new).unwrap();
+        assert!(!old.exists());
+        assert_eq!(fs::read_to_string(&new).unwrap(), "content");
+        assert!(crosses_devices(&io::Error::from(
+            io::ErrorKind::CrossesDevices
+        )));
     }
 
     #[test]

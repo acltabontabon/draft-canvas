@@ -1,15 +1,18 @@
-import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { warmExplorer } from './DesktopExplorer';
 import { Button } from '../../ui/common/Button';
 import { Icon } from '../../ui/common/Icon';
 import { GalleryHeading } from '../../ui/Library/GalleryHeading';
 import { LibraryBrand } from '../../ui/Library/LibraryBrand';
-import type { Handle } from '../api';
+import { DesktopError, type Handle } from '../api';
 import { recallBrowse, rememberBrowse } from '../browseMemory';
 import type { DesktopController } from '../controller';
-import type { DesktopState, ProjectState } from '../store';
+import { desktopStore, type DesktopState, type FileTarget, type ProjectState } from '../store';
 import { DocTile, type DocTileProps } from './DocTile';
+import { folderOfPath, resolveFileTarget } from './fileTargets';
 import { childrenOf, descendantsOf, folderTile, projectTile } from './tiles';
+import { useTileDrag } from './useTileDrag';
 
 export type BrowseScope = 'all' | 'unsaved' | 'recent' | { project: Handle; relPath: string };
 
@@ -18,6 +21,8 @@ export type BrowseTile = Omit<DocTileProps, 'index' | 'onKeyDown'> & {
   /** What a search matches: the name, the folder it's in, the project. Empty for a folder tile, which
    * a search never matches directly — only what browsing into it would find. */
   haystack: string;
+  /** The file on disk a tile stands for: what dragging it onto a project moves. */
+  file?: FileTarget;
 };
 
 /** How many tiles show before "Show all": Everything, unsearched, is many groups' worth at once; every
@@ -144,18 +149,55 @@ export function DeskBrowse({
   const limit = scope === 'all' && !searching ? OVERVIEW : FOCUSED;
   const visible = showAll ? view.tiles : view.tiles.slice(0, limit);
 
-  const scopes: { key: string; value: BrowseScope; label: string; count?: number }[] = [
+  const scopes: { key: string; value: BrowseScope; label: string; count?: number; project?: Handle }[] = [
     { key: 'all', value: 'all', label: 'Everything' },
     ...(make.unsaved.length > 0 ? [{ key: 'unsaved', value: 'unsaved' as const, label: 'Drafts', count: make.unsaved.length }] : []),
     ...(make.recent.length > 0 ? [{ key: 'recent', value: 'recent' as const, label: 'Recent', count: make.recent.length }] : []),
     ...state.projects.map((project) => ({
       key: `project:${project.info.handle}`,
       value: { project: project.info.handle, relPath: '' },
+      project: project.info.handle,
       label: project.info.name,
       ...(project.status === 'ready' ? { count: project.files.length } : {}),
     })),
   ];
   const scopeKey = typeof scope === 'string' ? scope : `project:${scope.project}`;
+
+  // A file's tile picked up and dropped on a project's scope moves it there; see `useTileDrag`.
+  const canDrop = (tile: BrowseTile, project: Handle) => {
+    const target = tile.file && resolveFileTarget(tile.file, state, controller);
+    const into = state.projects.find((candidate) => candidate.info.handle === project);
+    return Boolean(target && into && into.status !== 'missing' && folderOfPath(target.fromPath) !== into.info.displayPath);
+  };
+  const { drag, ghostRef, onPointerDown } = useTileDrag<BrowseTile>({
+    canDrop,
+    onDrop: (tile, project, source) => {
+      const file = tile.file;
+      const target = file && resolveFileTarget(file, state, controller);
+      if (!file || !target) return;
+      // Faded where it was until the listings come back without it.
+      source.dataset.moving = '';
+      target.move(project, false).catch((error: unknown) => {
+        delete source.dataset.moving;
+        desktopStore.update({
+          moveTarget:
+            error instanceof DesktopError && error.kind === 'AlreadyExists'
+              ? { file, clash: project }
+              : { file, failed: { project, message: error instanceof DesktopError ? error.message : 'Draft Canvas couldn’t move that file.' } },
+        });
+      });
+    },
+  });
+  const pickUp = (event: PointerEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement;
+    const source = target.closest<HTMLElement>('.dc-desk-tile');
+    // The tile's own small buttons (Rename, Move) are only ever clicked.
+    if (!source || target.closest('.dc-desk-tile-actions')) return;
+    const entry = source.querySelector<HTMLElement>('[data-entry]')?.dataset.entry;
+    const tile = visible.find((candidate) => candidate.entryKey === entry);
+    if (tile?.file) onPointerDown(event, tile, source);
+  };
+  const ghostHost = rootRef.current?.closest<HTMLElement>('.dc-desk');
 
   return (
     <section className="dc-browse" aria-label="Your diagrams" ref={rootRef}>
@@ -180,6 +222,8 @@ export function DeskBrowse({
             type="button"
             className="dc-browse-scope"
             aria-pressed={option.key === scopeKey}
+            data-drop-project={option.project}
+            data-drop={drag && option.project ? (drag.armed === option.project ? 'armed' : canDrop(drag.item, option.project) ? 'accepts' : 'refuses') : undefined}
             onClick={() => {
               setScope(option.value);
               setShowAll(false);
@@ -251,9 +295,9 @@ export function DeskBrowse({
           {view.tiles.length === 0 && !searching ? (
             view.empty ?? <p className="dc-browse-summary">Nothing here yet. Add a project, or start a Quick Draft.</p>
           ) : (
-            <div className="dc-browse-grid dc-gallery-grid">
+            <div className="dc-browse-grid dc-gallery-grid" onPointerDown={pickUp}>
               {visible.map((tile, i) => {
-                const { haystack: _haystack, description: _description, ...props } = tile;
+                const { haystack: _haystack, description: _description, file: _file, ...props } = tile;
                 return <DocTile key={tile.entryKey} {...props} gallery index={Math.min(i, 12)} />;
               })}
             </div>
@@ -265,6 +309,23 @@ export function DeskBrowse({
           )}
         </section>
       </div>
+      {drag &&
+        ghostHost &&
+        createPortal(
+          // Outside `.dc-browse`, whose entrance animation would otherwise be what `position: fixed`
+          // measures from; the classes inside give the tile the same drawing it has in the grid.
+          <div className="dc-move-ghost" ref={ghostRef} aria-hidden="true">
+            <div className="dc-browse">
+              <div className="dc-browse-grid dc-gallery-grid">
+                {(() => {
+                  const { haystack: _haystack, description: _description, file: _file, fileActions: _actions, action: _action, ...props } = drag.item;
+                  return <DocTile {...props} gallery index={0} />;
+                })()}
+              </div>
+            </div>
+          </div>,
+          ghostHost,
+        )}
     </section>
   );
 }

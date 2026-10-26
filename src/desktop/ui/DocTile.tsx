@@ -34,8 +34,8 @@ export interface DocTileProps {
   onOpen: () => void;
   /** The one thing a tile can have done to it besides opening it: discard a draft, forget a recent. */
   action?: { label: string; icon: 'trash' | 'close'; run: () => void };
-  /** A second, independent thing a tile can have done to it: "Rename file…", for a file-backed tile. */
-  secondaryAction?: { label: string; icon: 'pencil'; run: () => void };
+  /** What can be done to the file behind a file-backed tile: "Rename file…", "Move to Project…". */
+  fileActions?: { label: string; icon: 'pencil' | 'move'; run: () => void }[];
   /** Holds work that isn't in a file yet: marked the way macOS marks a window with unsaved changes. */
   edited?: boolean;
   onKeyDown?: (event: KeyboardEvent<HTMLButtonElement>) => void;
@@ -46,7 +46,7 @@ export interface DocTileProps {
  * its name under it. The drawing is the diagram's — read once the tile is shown, reduced to a
  * silhouette with no words in it — so "the checkout one" is recognisable before it is opened.
  */
-export function DocTile({ entryKey, name, meta, label, index, gallery = false, shelf = false, description, kind, stack = 0, missing, glyph, thumbnail, onOpen, action, secondaryAction, edited, onKeyDown }: DocTileProps) {
+export function DocTile({ entryKey, name, meta, label, index, gallery = false, shelf = false, description, kind, stack = 0, missing, glyph, thumbnail, onOpen, action, fileActions, edited, onKeyDown }: DocTileProps) {
   const buttonRef = useRef<HTMLButtonElement>(null);
   // A drawing is read once its tile is on screen or nearly: a project of five hundred reads the few
   // in view, not five hundred.
@@ -98,13 +98,13 @@ export function DocTile({ entryKey, name, meta, label, index, gallery = false, s
         </span>
         {meta && <span className="dc-desk-tile-meta">{meta}</span>}
       </button>
-      {(action || secondaryAction) && (
+      {(action || fileActions?.length) && (
         <span className="dc-desk-tile-actions">
-          {secondaryAction && (
-            <button type="button" className="dc-desk-tile-action" aria-label={secondaryAction.label} title={secondaryAction.label} onClick={secondaryAction.run}>
-              <Icon name={secondaryAction.icon} size={12} />
+          {fileActions?.map((fileAction) => (
+            <button key={fileAction.icon} type="button" className="dc-desk-tile-action" aria-label={fileAction.label} title={fileAction.label} onClick={fileAction.run}>
+              <Icon name={fileAction.icon} size={12} />
             </button>
-          )}
+          ))}
           {action && (
             <button type="button" className="dc-desk-tile-action" aria-label={action.label} title={action.label} onClick={action.run}>
               <Icon name={action.icon} size={12} />

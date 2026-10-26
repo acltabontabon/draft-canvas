@@ -52,6 +52,16 @@ A project is an ordinary folder of `.draftcanvas` files. **New canvas here** add
 current folder. **Find a diagram** (`⌘F` on Home) searches projects, recent files and drafts.
 **Remove from Home** forgets a project; its files stay.
 
+To move a diagram to another project, point at its tile on Home or in **Find a diagram** and choose
+**Move to a project**, or drag the tile onto a project's name above the grid. For the open diagram,
+use **File → Move to Project…**. The diagram moves into the project's top folder with its name and
+background image. If that project already has a diagram with the same name, Draft Canvas asks first:
+**Keep both** adds a number to the moved diagram's name, and nothing is replaced.
+
+![Move "checkout": the project it is in now, and Payments asking to keep both copies.](../media/guides/desktop-move.png)
+
+![A diagram dragged onto the Fulfilment project in Find a diagram.](../media/guides/desktop-move-drag.png)
+
 To bring a browser diagram here, use **Export → Document → Editable** and open the file. Encrypted
 `.dcenc` files open only in the web app.
 

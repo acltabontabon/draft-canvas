@@ -281,6 +281,33 @@ export async function installMockShell(page: Page): Promise<void> {
         granted.set(handle, { project: args.projectHandle, relPath: args.relPath });
         return handle;
       },
+      project_move_file: (args: { handle: string; projectHandle: string; keepBoth: boolean }) => {
+        const file = files.get(args.handle);
+        if (!file) throw { kind: 'InvalidHandle', message: 'That file is no longer available.' };
+        const into = folder(args.projectHandle);
+        const taken = (stem: string) => into.files.has(`${stem}.draftcanvas`);
+        let name = file.name;
+        if (taken(name)) {
+          if (!args.keepBoth) throw { kind: 'AlreadyExists', message: `A file named ${name}.draftcanvas already exists there. Pick another name.` };
+          let n = 2;
+          while (taken(`${file.name} ${n}`)) n += 1;
+          name = `${file.name} ${n}`;
+        }
+        // Out of whichever project's listing it was in, as it would leave that folder on disk.
+        for (const handle of listedProjects) {
+          const prefix = `${folder(handle).info.displayPath}/`;
+          if (file.displayPath.startsWith(prefix)) folder(handle).files.delete(file.displayPath.slice(prefix.length));
+        }
+        into.files.set(`${name}.draftcanvas`, { text: file.text, mtimeMs: Date.now() });
+        files.delete(args.handle);
+        granted.delete(args.handle);
+        const handle = `h_${(handles += 1)}`;
+        const moved: Held = { name, displayPath: `${into.info.displayPath}/${name}.draftcanvas`, text: file.text, version: file.version };
+        files.set(handle, moved);
+        const recent = recents.findIndex((item) => item.handle === args.handle);
+        if (recent >= 0) recents[recent] = { ...recents[recent]!, handle, name, displayPath: moved.displayPath };
+        return { handle, name, displayPath: moved.displayPath };
+      },
       save_document: (bytes: unknown, options: unknown) => {
         const { handle, expectedStamp } = meta(options) as { handle: string; expectedStamp?: string };
         const file = files.get(handle)!;

@@ -34,6 +34,7 @@
     "allow-project-scan",
     "allow-project-open-file",
     "allow-project-grant-file",
+    "allow-project-move-file",
     "allow-project-save-new",
     "allow-recents-list",
     "allow-recents-remove",

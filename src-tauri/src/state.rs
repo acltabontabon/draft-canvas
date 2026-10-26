@@ -33,6 +33,8 @@ pub enum MenuCommand {
     Reveal,
     Revert,
     Rename,
+    /// "Move to Project…" for the open file.
+    Move,
     Settings,
     About,
     Shortcuts,
@@ -420,6 +422,7 @@ mod tests {
             (MenuCommand::Reveal, "reveal"),
             (MenuCommand::Revert, "revert"),
             (MenuCommand::Rename, "rename"),
+            (MenuCommand::Move, "move"),
             (MenuCommand::Settings, "settings"),
             (MenuCommand::About, "about"),
             (MenuCommand::Shortcuts, "shortcuts"),

@@ -1,6 +1,9 @@
+import { useEffect } from 'react';
 import { SettingsDialog, type SettingsCategory as SettingsCategoryEntry } from '../../../ui/settings/SettingsDialog';
 import { desktopStore, type SettingsCategory } from '../../store';
 import { useDesktopController, useDesktopState } from '../../useDesktop';
+import { resolveFileTarget } from '../fileTargets';
+import { MoveToProjectDialog } from '../MoveToProjectDialog';
 import { RenameFileDialog } from '../RenameFileDialog';
 import { UpdatePanel } from '../Updates';
 import { DesktopExplorer } from '../DesktopExplorer';
@@ -13,15 +16,16 @@ import '../desktop.css';
 import './settings.css';
 
 /**
- * The desktop app's own dialogs: Settings, the update panel the update chip opens, and "Rename file…",
- * however it was asked for (the menu, or a file's own action in Find a Diagram) — one dialog, reading
- * whichever target is set, plus the in-app project explorer.
+ * The desktop app's own dialogs: Settings, the update panel the update chip opens, "Rename file…" and
+ * "Move to Project…", however they were asked for (the menu, or a file's own action on Home or in Find
+ * a Diagram) — one dialog each, reading whichever target is set, plus the in-app project explorer.
  */
 export function DesktopSettings() {
   return (
     <>
       <DesktopSettingsDialog />
       <RenameTargetDialog />
+      <MoveTargetDialog />
       <UpdatePanel />
       <DesktopExplorer />
     </>
@@ -45,6 +49,34 @@ function RenameTargetDialog() {
   }
   const { project, relPath, name } = renameTarget;
   return <RenameFileDialog currentName={name} onSubmit={(newStem) => controller.renameProjectFile(project, relPath, newStem)} onClose={onClose} />;
+}
+
+function MoveTargetDialog() {
+  const state = useDesktopState();
+  const { moveTarget, projects } = state;
+  const controller = useDesktopController();
+  // Every project's count and names (for Keep both's preview): a listing each, names and dates only.
+  const handles = moveTarget ? projects.map((project) => project.info.handle).join('|') : '';
+  useEffect(() => {
+    if (handles) void controller.scanProjects(handles.split('|'));
+  }, [controller, handles]);
+  if (!moveTarget) return null;
+  const target = resolveFileTarget(moveTarget.file, state, controller);
+  // The open document may have closed (or changed) between the menu firing and this rendering.
+  if (!target) return null;
+  return (
+    <MoveToProjectDialog
+      name={target.name}
+      fromPath={target.fromPath}
+      projects={projects}
+      clash={moveTarget.clash}
+      failed={moveTarget.failed}
+      onMove={target.move}
+      // Stays open over the explorer: a project added there joins this list, ready to choose.
+      onAddProject={() => desktopStore.update({ explorerMode: 'project' })}
+      onClose={() => desktopStore.update({ moveTarget: null })}
+    />
+  );
 }
 
 /** Every page of Settings, in rail order. */

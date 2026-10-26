@@ -93,6 +93,7 @@ export function createTauriApi(): DesktopApi {
     projectGrantFile: (projectHandle, relPath) => call('project_grant_file', { projectHandle, relPath }),
     projectForget: (handle) => call('project_forget', { handle }),
     projectSaveNew: (projectHandle, name, bytes) => callRaw('project_save_new', { projectHandle, name }, bytes),
+    projectMoveFile: (handle, projectHandle, keepBoth) => call('project_move_file', { handle, projectHandle, keepBoth }),
 
     explorerOpen: (startIn) => call('explorer_open', { startIn }),
     explorerList: (session, handle, showHidden, query, offset) => call('explorer_list', { session, handle, showHidden, query, offset }),

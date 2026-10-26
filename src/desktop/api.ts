@@ -13,8 +13,8 @@ import type { AgentInfo, AgentKind, CodeFolder, CodeGrant, PromptRequest, RunSna
 export type { AgentInfo, AgentKind, ApplyMode, CodeFolder, CodeGrant, PromptRequest, RunEvent, RunSnapshot, StopReason, ToolStatus, Usage } from './wire';
 /** The agent context is refined by the bridge protocol beyond Rust's JSON value envelope. */
 export type HostEvent = Exclude<WireHostEvent, { type: 'agent-request' }> | (Omit<Extract<WireHostEvent, { type: 'agent-request' }>, 'args' | 'context'> & { args: Record<string, unknown>; context: AgentContext });
-import type { CollabLanStarted, ExplorerStart, ExplorerDirectory, ExplorerLocation, ExplorerSaveResult, OpenedDoc, SavedAs, SaveResult, ProjectInfo, Scan as ProjectScan } from './wire';
-export type { CollabLanStarted, ExplorerSaveResult, ExplorerStart, ExplorerDirectory, ExplorerEntry, ExplorerLocation, OpenedDoc, SavedAs, SaveResult, ProjectInfo, ProjectFile, Scan as ProjectScan } from './wire';
+import type { CollabLanStarted, ExplorerStart, ExplorerDirectory, ExplorerLocation, ExplorerSaveResult, MovedFile, OpenedDoc, SavedAs, SaveResult, ProjectInfo, Scan as ProjectScan } from './wire';
+export type { CollabLanStarted, ExplorerSaveResult, ExplorerStart, ExplorerDirectory, ExplorerEntry, ExplorerLocation, MovedFile, OpenedDoc, SavedAs, SaveResult, ProjectInfo, ProjectFile, Scan as ProjectScan } from './wire';
 
 export type Handle = string;
 
@@ -288,6 +288,9 @@ export interface DesktopApi {
    * has only ever listed (never opened) needs. */
   projectGrantFile(projectHandle: Handle, relPath: string): Promise<Handle>;
   projectSaveNew(projectHandle: Handle, name: string, bytes: Uint8Array): Promise<SavedAs>;
+  /** "Move to Project…": moves a file into a project's top folder under its own name. A name already
+   * taken there is `AlreadyExists`; `keepBoth` takes the next free one ("Checkout 2") instead. */
+  projectMoveFile(handle: Handle, projectHandle: Handle, keepBoth: boolean): Promise<MovedFile>;
 
   // Temporary explorer sessions. Browsing never adds a project or recent file.
   explorerOpen(startIn?: StartLocation): Promise<ExplorerStart>;

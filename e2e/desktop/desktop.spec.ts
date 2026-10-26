@@ -739,6 +739,56 @@ test('browses a project’s folders one level at a time, with breadcrumbs back u
   await expect(group.locator('.dc-desk-tile')).toHaveCount(3);
 });
 
+test('moves a diagram to another project from its tile, or by dropping it on the project, asking when the name is taken', async ({ page }) => {
+  await page.goto('/');
+  const text = await documentText(page, 'Flow', 1);
+  await page.addInitScript((text) => {
+    window.__shell.seed({
+      projects: [
+        { name: 'Shop', diagrams: [{ path: 'home.draftcanvas', text, ago: 60_000 }, { path: 'cart.draftcanvas', text, ago: 120_000 }] },
+        { name: 'Billing', diagrams: [{ path: 'cart.draftcanvas', text, ago: 30_000 }] },
+      ],
+    });
+  }, text);
+  await reloadSeeded(page);
+
+  await page.locator('.dc-desk-row').getByRole('button', { name: 'Show the Shop project' }).click();
+  const shop = page.getByRole('region', { name: 'Shop' });
+  const billingPill = page.locator('.dc-browse-scopes').getByRole('button', { name: /^Billing/ });
+  await expect(shop.locator('.dc-desk-tile')).toHaveCount(2);
+
+  // The tile's own Move: the project it is in can't be chosen, and one click elsewhere moves it.
+  await shop.getByRole('button', { name: 'Move home to a project…' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Move “home”' });
+  await expect(dialog.getByRole('button', { name: /Shop/ })).toBeDisabled();
+  await dialog.getByRole('button', { name: /Billing/ }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(shop.locator('.dc-desk-tile')).toHaveCount(1);
+  await expect(billingPill).toContainText('2');
+
+  // Dropped on Billing, which already has a cart: nothing moves until the person answers.
+  const cart = shop.locator('.dc-desk-tile').filter({ has: page.getByRole('button', { name: 'Open cart', exact: true }) });
+  const from = (await cart.boundingBox())!;
+  const to = (await billingPill.boundingBox())!;
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(from.x + from.width / 2 + 20, from.y + from.height / 2 - 20, { steps: 4 });
+  await expect(billingPill).toHaveAttribute('data-drop', 'accepts');
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 8 });
+  await expect(billingPill).toHaveAttribute('data-drop', 'armed');
+  await page.mouse.up();
+
+  const asking = page.getByRole('dialog', { name: 'Move “cart”' });
+  await expect(asking.getByRole('alert')).toContainText('Billing already has a diagram called “cart”');
+  await asking.getByRole('button', { name: 'Keep both as “cart 2”' }).click();
+  await expect(asking).toHaveCount(0);
+  await expect(shop.locator('.dc-desk-tile')).toHaveCount(0);
+  await billingPill.click();
+  await expect(page.getByRole('region', { name: 'Billing' }).getByRole('button', { name: 'Open cart 2', exact: true })).toBeVisible();
+  // The drop opened nothing: the click it ended in was the drag's.
+  await expect(page.locator(CANVAS)).toHaveCount(0);
+});
+
 test('opens diagrams from a project’s root and its subfolders, namesakes and nested projects included', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));

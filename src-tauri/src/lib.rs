@@ -80,6 +80,7 @@ pub fn run() {
             commands::projects::project_scan,
             commands::projects::project_open_file,
             commands::projects::project_grant_file,
+            commands::projects::project_move_file,
             commands::projects::project_save_new,
             commands::recents::recents_list,
             commands::recents::recents_remove,
