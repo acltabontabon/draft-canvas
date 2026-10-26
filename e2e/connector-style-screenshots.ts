@@ -1,5 +1,5 @@
 /** Reproducible PR screenshots: run against the before/after checkout's dev server on :5184. */
-import { CONNECTOR_APPEARANCES } from '../src/document/types';
+import { PERSONALITY_PRESETS } from '../src/ui/personality/usePersonality';
 import { mkdirSync } from 'node:fs';
 import { chromium, expect } from '@playwright/test';
 import { connectorStyleDocument } from '../tests/fixtures/connectors/checkout';
@@ -14,14 +14,14 @@ const phase = flag('phase', 'after');
 const out = flag('out', 'docs/media/connectors');
 const base = flag('base', 'http://localhost:5184');
 const document = connectorStyleDocument();
-const appearance = CONNECTOR_APPEARANCES.find(value => value === flag('appearance', ''));
-if (appearance) document.edges = document.edges.map(edge => ({ ...edge, appearance }));
+const preset = PERSONALITY_PRESETS.find(value => value === flag('style', 'clean')) ?? 'clean';
 
 mkdirSync(out, { recursive: true });
 const browser = await chromium.launch();
 try {
   for (const colorScheme of ['light', 'dark'] as const) {
     const page = await browser.newPage({ viewport: { width: 1280, height: 760 }, deviceScaleFactor: 2, colorScheme });
+    await page.addInitScript(value => localStorage.setItem('draft-canvas.personality', value), preset);
     await page.goto(base);
     await page.setInputFiles('input[type="file"]', { name: 'connector-style.draftcanvas', mimeType: 'application/json', buffer: Buffer.from(serializeDocument(document)) });
     await expect(page.locator('.dc-editor')).toBeVisible();
@@ -40,10 +40,9 @@ try {
         return { x: point.x, y: point.y };
       });
       await page.mouse.click(point.x, point.y);
-      await page.getByRole('button', { name: 'Arrow appearance: Sculpted Ink' }).click();
-      await expect(page.getByRole('listbox', { name: 'Arrow appearance' })).toBeVisible();
+      await expect(page.getByRole('toolbar', { name: 'Connector options' })).toBeVisible();
       await page.mouse.move(10, 100);
-      await page.screenshot({ path: `${out}/style-picker-${colorScheme}.png` });
+      await page.screenshot({ path: `${out}/style-inspector-${colorScheme}.png` });
     }
     await page.close();
   }

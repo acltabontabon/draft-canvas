@@ -91,9 +91,6 @@ export type Accent = (typeof ACCENTS)[number];
 export const EDGE_ROUTINGS = ['smoothstep', 'bezier', 'straight'] as const;
 export type EdgeRouting = (typeof EDGE_ROUTINGS)[number];
 
-export const CONNECTOR_APPEARANCES = ['sculpted', 'ribbon', 'technical', 'pencil'] as const;
-export type ConnectorAppearance = (typeof CONNECTOR_APPEARANCES)[number];
-
 /**
  * How much freedom the router has over a connector's path. Deliberately not a
  * full mode enum: "smart" is the absence of a value, so every edge ever
@@ -489,8 +486,6 @@ export interface DraftEdge {
   /** `false` renders a plain association line with no arrowhead. */
   directed: boolean;
   routing: EdgeRouting;
-  /** A drawing treatment, independent of routing and semantics. Absent means Sculpted Ink. */
-  appearance?: ConnectorAppearance;
   accent?: Accent;
   /** Expandable technical detail, shown on selection and in Explain Mode. */
   details?: EdgeDetails;

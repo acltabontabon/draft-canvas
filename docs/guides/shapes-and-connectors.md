@@ -91,15 +91,13 @@ colour wheel means automatic colour, as it does for shapes; click it to choose a
 the condition icon to edit a condition without making the inspector taller. Hover an icon to see
 what it does.
 
-Choose **Appearance** to give this connector a different drawing treatment: **Sculpted Ink**,
-**Flowing Ribbon**, **Technical Pen** or **Pencil Sketch**. Each choice includes a small preview.
-It keeps the connection’s pins, manual bends, labels and meaning. The choice is saved with the
-connector, supports undo, and appears in SVG and PNG exports. Explicit choices override the page’s
-drawing personality; untouched connectors still follow Draft or Sketch. Pencil Sketch adds visible
-graphite drift along the stroke, a separate retrace and an outlined nib; it stays stable as you
-select or move around the diagram.
+**Settings → Canvas → Drawing style** controls shapes and connectors together. **Clean** uses the
+Sculpted Ink default; **Draft** adds a restrained hand-drawn quality, and **Sketch** adds visible
+graphite drift and retraced strokes. This device preference applies to every diagram and its exports,
+without changing the diagram or its undo history. Connector colours follow the theme and their
+semantic accents.
 
-![Arrow appearance picker with previews of all four treatments.](../media/connectors/style-picker-light.png)
+![Connector controls for meaning, routing and colour.](../media/connectors/style-inspector-light.png)
 
 To show how a successful step could be counteracted later in a workflow, select its connector and
 choose **+ Add** in Recovery, then click the shape that should receive the recovery action. A

@@ -1,22 +1,22 @@
-import { CONNECTOR_APPEARANCES } from '../src/document/types';
+import { PERSONALITY_PRESETS } from '../src/ui/personality/usePersonality';
 import { expect, test } from '@playwright/test';
 import { serializeDocument } from '../src/export/project';
 import { connectorStyleDocument } from '../tests/fixtures/connectors/checkout';
 import { cameraAtRest } from './canvas';
 
 for (const colorScheme of ['light', 'dark'] as const) {
-  for (const appearance of CONNECTOR_APPEARANCES) {
-  test(`${appearance} connectors remain clean and match their export in ${colorScheme}`, async ({ page }) => {
+  for (const preset of PERSONALITY_PRESETS) {
+  test(`${preset} connectors remain clean and match their export in ${colorScheme}`, async ({ page }) => {
     await page.emulateMedia({ colorScheme });
     await page.setViewportSize({ width: 1280, height: 760 });
+    await page.addInitScript(value => localStorage.setItem('draft-canvas.personality', value), preset);
     await page.goto('/');
     const fixture = connectorStyleDocument();
-    fixture.edges = fixture.edges.map(edge => ({ ...edge, appearance }));
     await page.setInputFiles('input[type="file"]', { name: 'checkout.draftcanvas', mimeType: 'application/json', buffer: Buffer.from(serializeDocument(fixture)) });
     await expect(page.locator('.dc-editor')).toBeVisible();
     await cameraAtRest(page);
     await page.mouse.move(10, 100);
-    const parity = await page.evaluate(async (scheme) => {
+    const parity = await page.evaluate(async ({ scheme, preset }) => {
       // Browser URLs use Vite's module graph, independently of the test runner's module instances.
       // oxlint-disable-next-line typescript/no-explicit-any
       const load = (path: string) => import(/* @vite-ignore */ path) as Promise<any>;
@@ -29,12 +29,12 @@ for (const colorScheme of ['light', 'dark'] as const) {
       const doc = useEditorStore.getState().document;
       return doc.edges.map((edge: { id: string }) => {
         const routes = connectorRoutes(edge, doc, 'transient');
-        const described = describeEdge(edge, new Map(doc.nodes.map((n: { id: string }) => [n.id, n])), { routes, theme: THEMES[scheme], measurer: new StaticTextMeasurer(), showSequence: false });
+        const described = describeEdge(edge, new Map(doc.nodes.map((n: { id: string }) => [n.id, n])), { routes, preset, theme: THEMES[scheme], measurer: new StaticTextMeasurer(), showSequence: false });
         const line = document.querySelector<SVGPathElement>(`.react-flow__edge[data-id="${edge.id}"] .dc-edge-line`)!;
         const response = document.querySelector<SVGPathElement>(`.react-flow__edge[data-id="${edge.id}"] .dc-edge-response-line`);
         return { id: edge.id, drawn: line.getAttribute('d'), exported: described.line[0].d, width: Number(getComputedStyle(line).strokeWidth.replace('px', '')), exportedWidth: described.line[0].stroke.width, reply: response?.getAttribute('d') ?? null, exportedReply: described.responseLine?.[0].d ?? null, ys: stepPolyline(routes.request.d).map((p: { y: number }) => p.y) };
       });
-    }, colorScheme);
+    }, { scheme: colorScheme, preset });
     for (const edge of parity) {
       expect(edge.drawn, edge.id).toBe(edge.exported);
       expect(edge.width, edge.id).toBe(edge.exportedWidth);
@@ -83,56 +83,52 @@ test('hover traces once, is removed on leave and respects reduced motion', async
 });
 
 
-test('arrow appearance picker changes only this arrow, supports keyboard selection and undo, and survives reload', async ({ page }) => {
+test('global drawing style controls all arrows without per-arrow appearance controls or document edits', async ({ page }) => {
   await page.goto('/');
   await page.setInputFiles('input[type="file"]', { name: 'checkout.draftcanvas', mimeType: 'application/json', buffer: Buffer.from(serializeDocument(connectorStyleDocument())) });
   await expect(page.locator('.dc-editor')).toBeVisible();
   await cameraAtRest(page);
-  const edge = page.locator('.react-flow__edge[data-id="authorize"]');
-  const point = await edge.locator('.dc-edge-hit').first().evaluate(element => {
+  const snapshot = () => page.evaluate(async () => {
+    const { useEditorStore } = await import('/src/store/editorStore.ts');
+    const state = useEditorStore.getState();
+    return { document: JSON.stringify(state.document), history: state.history.past.length };
+  });
+  const before = await snapshot();
+  const cleanPaths = await page.locator('.dc-edge-line').evaluateAll(paths => paths.map(p => p.getAttribute('d')));
+  for (const style of ['Sketch', 'Draft', 'Clean']) {
+    await page.getByRole('button', { name: 'Canvas settings', exact: true }).click();
+    const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
+    await settings.getByRole('radio', { name: new RegExp(`^${style}`) }).check();
+    await settings.getByRole('button', { name: 'Close', exact: true }).click();
+    await expect(page.locator(':root')).toHaveAttribute('data-personality', style.toLowerCase());
+    const paths = await page.locator('.dc-edge-line').evaluateAll(paths => paths.map(p => p.getAttribute('d')));
+    if (style === 'Clean') expect(paths).toEqual(cleanPaths);
+    else for (let i = 0; i < paths.length; i += 1) expect(paths[i]).not.toBe(cleanPaths[i]);
+    await expect(page.locator('.dc-edge-retrace')).toHaveCount(style === 'Sketch' ? 6 : 0);
+    expect(await snapshot()).toEqual(before);
+  }
+  const point = await page.locator('.react-flow__edge[data-id="authorize"] .dc-edge-hit').first().evaluate(element => {
     const path = element as SVGPathElement;
-    const point = path.getPointAtLength(path.getTotalLength() * 0.7).matrixTransform(path.getScreenCTM()!);
-    return { x: point.x, y: point.y };
+    const at = path.getPointAtLength(path.getTotalLength() * 0.7).matrixTransform(path.getScreenCTM()!);
+    return { x: at.x, y: at.y };
   });
   await page.mouse.click(point.x, point.y);
-  const picker = page.getByRole('button', { name: /^Arrow appearance:/ });
-  await expect(picker).toHaveAccessibleName('Arrow appearance: Sculpted Ink');
-  const readGeometry = () => page.evaluate(async () => {
-    // oxlint-disable-next-line typescript/no-explicit-any
-    const { useEditorStore } = await import(/* @vite-ignore */ '/src/store/editorStore.ts' as string) as any;
-    const { appearance: _appearance, ...geometry } = useEditorStore.getState().document.edges.find((edge: { id: string }) => edge.id === 'authorize');
-    return geometry;
-  });
-  const canonicalGeometry = await readGeometry();
-  await page.mouse.move(10, 100);
-  await picker.focus();
-  await picker.press('Enter');
-  await expect(page.getByRole('listbox', { name: 'Arrow appearance' })).toBeFocused();
-  expect(await page.locator('.dc-edge-inspector .dc-popover-inner').evaluate(el => ({ x: el.scrollLeft, y: el.scrollTop }))).toEqual({ x: 0, y: 0 });
-  await page.keyboard.press('ArrowDown');
-  await expect(page.locator('[role="listbox"][aria-label="Arrow appearance"] [data-highlighted="true"]')).toContainText('Flowing Ribbon');
-  await page.getByRole('listbox', { name: 'Arrow appearance' }).press('Enter');
-  await expect(picker).toHaveAccessibleName('Arrow appearance: Flowing Ribbon');
-  for (const name of ['Technical Pen', 'Pencil Sketch', 'Sculpted Ink']) {
-    await picker.click();
-    await page.getByRole('option', { name: new RegExp(name) }).click();
-    await expect(picker).toHaveAccessibleName(`Arrow appearance: ${name}`);
-    // Styling has not overwritten the routing pins or manually chosen geometry.
-    expect(await readGeometry()).toEqual(canonicalGeometry);
-  }
-  expect(await page.locator('.dc-edge[data-appearance="sculpted"]').count()).toBe(6);
-  await page.getByRole('button', { name: 'Undo', exact: true }).click();
-  await expect(edge.locator('.dc-edge')).toHaveAttribute('data-appearance', 'pencil');
-  await page.waitForTimeout(600);
+  await expect(page.getByRole('toolbar', { name: 'Connector options' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Arrow appearance:/ })).toHaveCount(0);
+  await expect(page.getByRole('group', { name: 'Connector shape' })).toBeVisible();
+  await page.getByRole('button', { name: 'Canvas settings', exact: true }).click();
+  const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
+  await settings.getByRole('radio', { name: /^Sketch/ }).check();
+  await settings.getByRole('button', { name: 'Close', exact: true }).click();
   await page.reload();
   await expect(page.locator('.dc-editor')).toBeVisible();
-  await expect(page.locator('.react-flow__edge[data-id="authorize"] .dc-edge')).toHaveAttribute('data-appearance', 'pencil');
-  expect(await page.locator('.dc-edge[data-appearance="sculpted"]').count()).toBe(5);
+  await expect(page.locator(':root')).toHaveAttribute('data-personality', 'sketch');
+  await expect(page.locator('.dc-edge-retrace')).toHaveCount(6);
 });
 
-test('Pencil Sketch visibly changes the full stroke and retrace of a straight connector', async ({ page }) => {
+test('global Sketch visibly changes the full stroke and retrace of a straight connector', async ({ page }) => {
   const fixture = connectorStyleDocument();
-  fixture.edges = fixture.edges.map(edge => ({ ...edge, appearance: 'pencil' as const }));
+  await page.addInitScript(() => localStorage.setItem('draft-canvas.personality', 'sketch'));
   await page.goto('/');
   await page.setInputFiles('input[type="file"]', { name: 'pencil.draftcanvas', mimeType: 'application/json', buffer: Buffer.from(serializeDocument(fixture)) });
   await expect(page.locator('.dc-editor')).toBeVisible();

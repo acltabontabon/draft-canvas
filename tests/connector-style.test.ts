@@ -1,4 +1,3 @@
-import { CONNECTOR_APPEARANCES } from '../src/document/types';
 import { describe, expect, it } from 'vitest';
 import { markerDefs } from '../src/render/svg/markers';
 import { PERSONALITY_PROFILES } from '../src/render/roughness/presets';
@@ -7,7 +6,7 @@ describe('arrowhead marker viewports', () => {
   it('contains the entire head, including jitter and the open head’s round stroke', () => {
     for (const profile of Object.values(PERSONALITY_PROFILES)) {
       for (const color of ['#7c8492', '#6d7885', '#357a72']) {
-        for (const marker of markerDefs([color], profile.arrowJitter, CONNECTOR_APPEARANCES)) {
+        for (const marker of markerDefs([color], profile.arrowJitter)) {
           const [x, y, width, height] = String(marker.attrs!.viewBox).split(' ').map(Number) as [number, number, number, number];
           const path = marker.children![0]!;
           const stroke = Number(path.attrs!['stroke-width'] ?? 0) / 2;

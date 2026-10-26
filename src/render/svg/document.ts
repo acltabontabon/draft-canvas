@@ -21,7 +21,7 @@ import { getMeasurer } from '../text/measure';
 import { el, serialize, n, type SvgEl } from './element';
 import { beginClipScope, emitDisplayList, emitShape, shadowFilter } from './emit';
 import { beginIdScope, endIdScope, scopedId } from './ids';
-import { connectorDefs } from './markers';
+import { markerDefs } from './markers';
 import { PERSONALITY_PROFILES } from '../roughness/presets';
 import type { PersonalityPreset } from '../../ui/personality/usePersonality';
 import type { Shape } from '../displayList';
@@ -444,7 +444,7 @@ export function renderDocumentSvg(
 
   const defs: SvgEl[] = [
     shadowFilter(theme.shadow),
-    ...connectorDefs(scene.arrowColors, PERSONALITY_PROFILES[preset].arrowJitter),
+    ...markerDefs(scene.arrowColors, PERSONALITY_PROFILES[preset].arrowJitter),
   ];
 
   const showBackground = options.includeBackground !== false && options.background !== undefined;

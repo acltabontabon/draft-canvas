@@ -1,4 +1,3 @@
-import type { ConnectorAppearance } from '../../document/types';
 import { CONNECTOR_STYLE } from '../connectorStyle';
 import { headPath } from '../svg/markers';
 
@@ -9,9 +8,8 @@ export function sketchArrowPath(
   seedId: string,
   amplitude: number,
   variant: 'closed' | 'open' = 'closed',
-  appearance: ConnectorAppearance = 'sculpted',
 ): string {
-  return headPath(appearance, variant, seedId, amplitude).replace(/(-?\d*\.?\d+) (-?\d*\.?\d+)/g, (_, sx, sy) => {
+  return headPath(variant, seedId, amplitude).replace(/(-?\d*\.?\d+) (-?\d*\.?\d+)/g, (_, sx, sy) => {
     const x = Number(sx) - CONNECTOR_STYLE.arrowLength;
     const y = Number(sy) - CONNECTOR_STYLE.arrowWidth / 2;
     return `${tip.x + dir.x * x - dir.y * y} ${tip.y + dir.y * x + dir.x * y}`;

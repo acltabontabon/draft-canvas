@@ -38,7 +38,7 @@ export function pencilPath(d: string, seedId: string, cache = true): string {
 }
 
 function build(d: string, seedId: string): string {
-  if (/[^MLQC\d\s.,eE+\-]/.test(d)) return d;
+  if (/[^MLQC\d\s.,eE+-]/.test(d)) return d;
   const segments = [...d.matchAll(/([MLQC])([^MLQC]*)/g)];
   let current: Point | undefined;
   let result = '';

@@ -3,7 +3,7 @@ import type { DraftEdge, DraftNode } from '../document/types';
 import { useEditorStore } from '../store/editorStore';
 import { nodeIndex } from '../store/selectors';
 import { resolveEdgeColor } from '../edges/kindStyle';
-import { connectorDefs } from '../render/svg/markers';
+import { markerDefs } from '../render/svg/markers';
 import { shadowFilter } from '../render/svg/emit';
 import { serialize } from '../render/svg/element';
 import { PERSONALITY_PROFILES } from '../render/roughness/presets';
@@ -51,7 +51,7 @@ export const Markers = memo(function Markers() {
       ...Object.values(theme.accents).map((accent) => accent.chip),
       ...(colorKey ? colorKey.split('|') : []),
     ]);
-    const markup = [shadowFilter(theme.shadow), ...connectorDefs(colors, PERSONALITY_PROFILES[preset].arrowJitter)]
+    const markup = [shadowFilter(theme.shadow), ...markerDefs(colors, PERSONALITY_PROFILES[preset].arrowJitter)]
       .map(serialize)
       .join('');
     return { __html: `<defs>${markup}</defs>` };

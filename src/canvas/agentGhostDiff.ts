@@ -88,7 +88,6 @@ function edgeChanged(before: DraftEdge, after: DraftEdge): boolean {
     before.async !== after.async ||
     before.routing !== after.routing ||
     before.routeMode !== after.routeMode ||
-    before.appearance !== after.appearance ||
     JSON.stringify(before.waypoints) !== JSON.stringify(after.waypoints) ||
     before.accent !== after.accent ||
     before.hasResponse !== after.hasResponse ||

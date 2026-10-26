@@ -1,4 +1,4 @@
-import { CONNECTOR_STYLE, CONNECTOR_TREATMENTS, connectorProfile, connectorStrokePath, styledConnectorPath } from '../render/connectorStyle';
+import { CONNECTOR_STYLE, connectorStrokePath, styledConnectorPath } from '../render/connectorStyle';
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { LIMITS } from '../document/limits';
 import { reconnectProblem } from '../document/reconnect';
@@ -9,7 +9,7 @@ import type { DraftNode, DraftPoint } from '../document/types';
 import { capabilityFor, categoryOf, type NodeCategory } from '../document/connectorSemantics';
 import { edgeTierInPlayback, findFlow, lensEdgeTier, stepIndexOf, type ExplainTier } from '../document/flow';
 import { stepContextOf } from '../presentation/stepContext';
-import { markerRef, ribbonPaintRef } from '../render/svg/markers';
+import { markerRef } from '../render/svg/markers';
 import {
   LABEL_LINE_GAP,
   RESPONSE_SEED_SUFFIX,
@@ -642,10 +642,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // below reads from the styled route before roughening (never `drawnPath`), so it stays
   // exactly as precise as Clean regardless of how bold Sketch's wobble gets —
   // see the hit-path/decorative-path split further down.
-  const appearance = edge.appearance ?? 'sculpted';
-  const treatment = CONNECTOR_TREATMENTS[appearance];
-  const profile = connectorProfile(edge, PERSONALITY_PROFILES[preset]);
-  const strokePaint = appearance === 'ribbon' ? ribbonPaintRef(strokeColor) : strokeColor;
+  const profile = PERSONALITY_PROFILES[preset];
   const styledPath = styledConnectorPath(route.d, edge, !transient);
   // Bundle members each draw the whole shared trunk, so they must wobble it
   // identically or it frays into a rope — see `strokeSeed`.
@@ -658,10 +655,10 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // A gesture's frames each have a route no later frame repeats: wobbled, but never filed, so a long
   // drag can't push out the settled wobble of every other connector on screen.
   const keepWobble = !transient;
-  const drawnPath = bridgePath(connectorStrokePath(styledPath, edge, `${seed}:0`, profile, keepWobble), crossings);
+  const drawnPath = bridgePath(connectorStrokePath(styledPath, `${seed}:0`, profile, keepWobble, crossings.length > 0), crossings);
   const secondStrokePath =
     profile.strokes === 2
-      ? bridgePath(connectorStrokePath(styledPath, edge, `${seed}:1`, profile, keepWobble), crossings)
+      ? bridgePath(connectorStrokePath(styledPath, `${seed}:1`, profile, keepWobble, crossings.length > 0), crossings)
       : null;
   // Sketch draws its own arrowhead inline instead of referencing the shared marker — see
   // `render/roughness/roughArrow.ts`.
@@ -673,7 +670,6 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
         arrowSeed(edge.id, route.trunkLabel ? spine : undefined),
         profile.arrowJitter,
         markerVariantForEdge(edge),
-        appearance,
       )
     : null;
 
@@ -685,7 +681,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // "fix" the apparent reversal. See `responseLaneFor`'s own doc comment in `edges/routing.ts`.
   const responseRoute = routes.response;
   const responseDrawnPath = responseRoute
-    ? connectorStrokePath(styledConnectorPath(responseRoute.d, edge, keepWobble), edge, `${seed}${RESPONSE_SEED_SUFFIX}`, profile, keepWobble)
+    ? connectorStrokePath(styledConnectorPath(responseRoute.d, edge, keepWobble), `${seed}${RESPONSE_SEED_SUFFIX}`, profile, keepWobble)
     : null;
   const responseUsesHandDrawnArrow = responseRoute && edge.directed && profile.arrowStyle === 'per-edge-hand';
   const responseArrowPath = responseUsesHandDrawnArrow
@@ -695,7 +691,6 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
         `${edge.id}:response-head`,
         profile.arrowJitter,
         'open',
-        appearance,
       )
     : null;
   // Deliberately not labelLaneOffset: its extra clearance is for real sibling edges. Stacking
@@ -713,7 +708,6 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   return (
     <g
       className="dc-edge"
-      data-appearance={appearance}
       data-selected={selected ? 'true' : undefined}
       data-active={isActiveStep ? 'true' : undefined}
       data-shown={isShownStep ? 'true' : undefined}
@@ -773,10 +767,10 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
         d={drawnPath}
         fill="none"
         pointerEvents="none"
-        markerEnd={edge.directed && !usesHandDrawnArrow ? markerRef(strokeColor, markerVariantForEdge(edge), appearance) : undefined}
+        markerEnd={edge.directed && !usesHandDrawnArrow ? markerRef(strokeColor, markerVariantForEdge(edge)) : undefined}
         style={{
-          stroke: strokePaint,
-          strokeWidth: Math.max(treatment.lineWidth,
+          stroke: strokeColor,
+          strokeWidth: Math.max(CONNECTOR_STYLE.lineWidth,
             isActiveStep
               ? 2.6
               : selected || attachTarget
@@ -785,15 +779,11 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
                   ? 2.3
                   : lensMember || (overview && isShownStep) || hoverShown || trafficReading === 'flow'
                     ? 2.0
-                    : treatment.lineWidth),
+                    : CONNECTOR_STYLE.lineWidth),
           strokeLinecap: 'round',
           strokeDasharray: dashForEdge(edge)?.join(' '),
         }}
       />
-      {appearance === 'technical' && <circle cx={route.source.x} cy={route.source.y} r={3.4} fill={theme.canvas} stroke={strokeColor} strokeWidth={1.4} pointerEvents="none" />}
-      {appearance === 'ribbon' && (
-        <path className="dc-edge-ribbon-highlight" d={drawnPath} fill="none" stroke={theme.canvas} strokeWidth={0.7} opacity={0.35} strokeLinecap="round" pointerEvents="none" strokeDasharray={dashForEdge(edge)?.join(' ')} />
-      )}
       {/* Traffic, flowing: a stream of light along the very path drawn, in the direction the work
           travels (not always the arrow's — "read by" flows back up it), denser where more paths
           share the line, sparse where only some may take it. Started a beat later per hop from an
@@ -831,9 +821,9 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
         <path
           d={arrowPath}
           pointerEvents="none"
-          fill={markerVariantForEdge(edge) === 'closed' && appearance !== 'pencil' ? strokeColor : 'none'}
-          stroke={markerVariantForEdge(edge) === 'open' || appearance === 'pencil' ? strokeColor : undefined}
-          strokeWidth={appearance === 'pencil' ? 1.2 : markerVariantForEdge(edge) === 'open' ? CONNECTOR_STYLE.openArrowWidth : undefined}
+          fill={markerVariantForEdge(edge) === 'closed' ? strokeColor : 'none'}
+          stroke={markerVariantForEdge(edge) === 'open' ? strokeColor : undefined}
+          strokeWidth={markerVariantForEdge(edge) === 'open' ? CONNECTOR_STYLE.openArrowWidth : undefined}
           strokeLinecap="round"
           strokeLinejoin="round"
         />
@@ -849,10 +839,10 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
           data-revealed={responseRevealed ? 'true' : undefined}
           d={responseDrawnPath}
           fill="none"
-          markerEnd={edge.directed && !responseUsesHandDrawnArrow ? markerRef(strokeColor, 'open', appearance) : undefined}
+          markerEnd={edge.directed && !responseUsesHandDrawnArrow ? markerRef(strokeColor, 'open') : undefined}
           style={{
-            stroke: strokePaint,
-            strokeWidth: Math.max(1.1, treatment.lineWidth * 0.6),
+            stroke: strokeColor,
+            strokeWidth: Math.max(1.1, CONNECTOR_STYLE.lineWidth * 0.6),
             strokeLinecap: 'round',
             strokeDasharray: RESPONSE_DASH.join(' '),
           }}
