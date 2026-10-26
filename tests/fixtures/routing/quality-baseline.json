@@ -3,7 +3,7 @@
     "obstruction": 0,
     "overlap": 0,
     "crossings": 0,
-    "cost": 1701,
+    "cost": 1590,
     "violations": {
       "endpoint": 0,
       "continuity": 0,
@@ -40,6 +40,24 @@
     "overlap": 0,
     "crossings": 0,
     "cost": 809,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "case/checkout-clarity": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 1960,
     "violations": {
       "endpoint": 0,
       "continuity": 0,
@@ -122,7 +140,7 @@
       "blocked": 0,
       "budget": 0,
       "crowded": 0,
-      "skipped": 0
+      "skipped": 4
     }
   },
   "case/impossible": {
@@ -284,7 +302,7 @@
       "blocked": 0,
       "budget": 0,
       "crowded": 0,
-      "skipped": 1
+      "skipped": 0
     }
   },
   "gallery/01-request-path": {
@@ -1076,7 +1094,7 @@
       "blocked": 0,
       "budget": 0,
       "crowded": 0,
-      "skipped": 0
+      "skipped": 2
     }
   },
   "starter/transactional-outbox": {
@@ -1112,7 +1130,7 @@
       "blocked": 0,
       "budget": 0,
       "crowded": 0,
-      "skipped": 0
+      "skipped": 12
     }
   },
   "workload/typical": {
@@ -1130,7 +1148,7 @@
       "blocked": 0,
       "budget": 0,
       "crowded": 0,
-      "skipped": 0
+      "skipped": 2
     }
   }
 }

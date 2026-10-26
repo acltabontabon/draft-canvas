@@ -1,3 +1,4 @@
+import { CONNECTOR_STYLE } from '../connectorStyle';
 import { scopedId } from './ids';
 import { jitter } from '../roughness/seed';
 import { el, type SvgEl } from './element';
@@ -22,11 +23,10 @@ import { el, type SvgEl } from './element';
  * colour shares the one subtly-imperfect triangle at Draft, unlike Sketch's
  * per-instance one.
  */
-const ARROW_LENGTH = 9;
-const ARROW_WIDTH = 7;
+const { arrowLength: ARROW_LENGTH, arrowWidth: ARROW_WIDTH, arrowNotch: ARROW_NOTCH, openArrowWidth: OPEN_ARROW_WIDTH } = CONNECTOR_STYLE;
 
 /**
- * `closed` is the ordinary filled triangle every directed connector uses.
+ * `closed` is a slender filled dart with a shallow notch, used by directed connectors.
  * `open` is an unfilled outline — used for a `callback` connector's return
  * arrow, so a forward/return pair reads as distinct at a glance even before
  * lane separation or direction is noticed. Drawn as a stroke with no fill
@@ -45,8 +45,8 @@ export function markerRef(color: string, variant: MarkerVariant = 'closed'): str
 }
 
 /**
- * `amplitude === 0` (Clean) reproduces the original crisp triangle exactly, byte-for-byte — the
- * two back corners only move once `amplitude` is above zero, each independently, off a seed keyed
+ * At `amplitude === 0` (Clean) the dart is crisp and symmetric. The two back corners only
+ * move once `amplitude` is above zero, each independently, off a seed keyed
  * by colour+variant (not an edge id), so the wobble stays fixed across the whole document rather
  * than looking hand-picked per connector.
  */
@@ -61,21 +61,22 @@ function arrowMarker(color: string, variant: MarkerVariant, amplitude: number): 
           d: `M${back1.x + 0.7},${back1.y + 0.7} L${tip.x - 0.7},${tip.y} L${back2.x + 0.7},${back2.y - 0.7}`,
           fill: 'none',
           stroke: color,
-          'stroke-width': 1.3,
+          'stroke-width': OPEN_ARROW_WIDTH,
           'stroke-linejoin': 'round',
           'stroke-linecap': 'round',
         })
-      : el('path', { d: `M${back1.x},${back1.y} L${tip.x},${tip.y} L${back2.x},${back2.y} Z`, fill: color });
+      : el('path', { d: `M${back1.x},${back1.y} L${tip.x},${tip.y} L${back2.x},${back2.y} L${ARROW_NOTCH},${tip.y} Z`, fill: color });
 
+  const padding = Math.max(OPEN_ARROW_WIDTH / 2, amplitude);
   return el(
     'marker',
     {
       id: markerId(color, variant),
-      viewBox: `0 0 ${ARROW_LENGTH} ${ARROW_WIDTH}`,
+      viewBox: `${-padding} ${-padding} ${ARROW_LENGTH + padding * 2} ${ARROW_WIDTH + padding * 2}`,
       refX: ARROW_LENGTH - 0.5,
       refY: ARROW_WIDTH / 2,
-      markerWidth: ARROW_LENGTH,
-      markerHeight: ARROW_WIDTH,
+      markerWidth: ARROW_LENGTH + padding * 2,
+      markerHeight: ARROW_WIDTH + padding * 2,
       // Keeps the arrow a constant size regardless of the line's stroke width.
       markerUnits: 'userSpaceOnUse',
       orient: 'auto-start-reverse',

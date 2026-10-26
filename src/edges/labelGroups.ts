@@ -37,7 +37,7 @@ import {
   labelChipSide,
   labelLaneOffset,
   rectOf,
-  responseAwayFor,
+  responseAwayAt,
   type Rect,
   type Side,
 } from './routing';
@@ -218,8 +218,9 @@ function compute(nodes: readonly DraftNode[], edges: readonly DraftEdge[], scope
       const { lane } = inputs;
       // A connector with a reply keeps its label on the side away from the reply line, on both
       // renderers; routed without that, its chip was checked for room where it is never drawn.
-      const away = responseAwayFor(edge.hasResponse, lane);
-      const drawn = edgeRoutes(inputs, scope).request;
+      const routes = edgeRoutes(inputs, scope);
+      const drawn = routes.request;
+      const away = responseAwayAt(drawn, routes.response, lane);
       const poly = polyOf(drawn.d);
       if (poly) {
         let chip: Rect | undefined;

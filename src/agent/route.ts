@@ -20,7 +20,7 @@ import { labelChipBox, labelGroupPlan } from '../edges/labelGroups';
 import { obstaclesForEdge } from '../edges/obstacles';
 import { connectorRoutes } from '../edges/connectorRoutes';
 import { stepPolyline } from '../edges/waypoints';
-import { anchorsHold, labelChipSide, labelLaneOffset, labelSideAwayFromResponse, laneIndex, responseAwayFor, routeEdge } from '../edges/routing';
+import { anchorsHold, labelChipSide, labelLaneOffset, labelSideAwayFromResponse, laneIndex, responseAwayAt, routeEdge } from '../edges/routing';
 
 export interface Box {
   x: number;
@@ -220,13 +220,14 @@ export function drawnRoute(edge: DraftEdge, nodes: readonly DraftNode[], edges: 
   edges = visibleEdges(edges);
   const nodeMap = byId ?? new Map(nodes.map((n) => [n.id, n]));
   const spine = routingPlan(nodes, edges, 'transient').spineFor(edge.id);
-  let route;
+  let routes;
   try {
-    route = connectorRoutes(edge, { nodes, edges }, 'transient', nodeMap)?.request;
+    routes = connectorRoutes(edge, { nodes, edges }, 'transient', nodeMap);
   } catch {
     return null;
   }
-  if (!route) return null;
+  if (!routes) return null;
+  const route = routes.request;
   let chip: Box | null = null;
   const size = caption?.(edge);
   if (size && size.width > 0) {
@@ -238,16 +239,16 @@ export function drawnRoute(edge: DraftEdge, nodes: readonly DraftNode[], edges: 
       const nudge = labelLaneOffset(route.source.side, route.target.side, lane);
       if (edge.label) {
         // The side the renderers draw it on: away from the reply line, when there is one.
-        const side = labelChipSide(route.labelSide, responseAwayFor(edge.hasResponse, lane));
+        const side = labelChipSide(route.labelSide, responseAwayAt(route, routes.response, lane));
         chip = labelChipBox(side, route.labelX + nudge.x, route.labelY + nudge.y, size.width, size.height);
       } else {
         // A relationship caption (no label of its own) is drawn by `captionAnchor`, not as a chip: on a
         // shared trunk's one point when it collapses there, under a horizontal line whichever side a
         // chip would have taken, and off whichever side a request/response pair's reply line takes —
-        // which a single connector's reply has too (`responseAwayFor`), so this asks the same helpers.
+        // which a single connector's reply has too (`responseAwayAt`), so this asks the same helpers.
         const at = route.trunkLabel ?? { x: route.labelX + nudge.x, y: route.labelY + nudge.y };
         const chipSide = route.trunkLabel ? (route.trunkLabelSide ?? route.labelSide) : route.labelSide;
-        const side = labelSideAwayFromResponse(chipSide, responseAwayFor(edge.hasResponse, lane));
+        const side = labelSideAwayFromResponse(chipSide, responseAwayAt(route, routes.response, lane));
         if (side === 'left' || side === 'right') chip = labelChipBox(side, at.x, at.y, size.width, size.height);
         else {
           const baseline = side === 'top' ? at.y - CAPTION_DROP : at.y + CAPTION_DROP;

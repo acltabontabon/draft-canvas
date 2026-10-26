@@ -1,3 +1,4 @@
+import { CONNECTOR_STYLE } from '../render/connectorStyle';
 import type { DraftEdge, DraftNode, OpenPoint } from '../document/types';
 import { MARKER_SIZE, describeMarker, edgeMarkerCenter, type OccupiedRect } from '../openPoints/marker';
 import type { Shape, TextAlign } from '../render/displayList';
@@ -21,7 +22,7 @@ import {
   labelLaneOffset,
   labelSideAwayFromResponse,
   rectOf,
-  responseAwayFor,
+  responseAwayAt,
   responseLabelAnchor,
   strokeSeed,
   type EdgeSpine,
@@ -224,7 +225,7 @@ export function describeEdge(
   const labelY = route.labelY + labelNudge.y;
   // Everything that sits beside the label point takes the side away from the reply line, so the
   // reply's own chip has the outer side of its line to itself — see `labelChipSide`.
-  const responseAway = responseAwayFor(edge.hasResponse, ctx.lane ?? 0);
+  const responseAway = responseAwayAt(route, routes.response, ctx.lane ?? 0);
   const labelSide = labelChipSide(route.labelSide, responseAway);
   const recoveryParts = compensationLabelParts(edge);
   const recoveryChipSide = recoveryParts && (labelSide === 'top' || labelSide === 'bottom') ? 'bottom' : labelSide;
@@ -236,7 +237,7 @@ export function describeEdge(
   // label placement, direction, and attachment points stay exactly as legible
   // as Clean at every preset, and topology/routing never changes.
   const profile = PERSONALITY_PROFILES[ctx.preset ?? 'clean'];
-  const strokeBase = { color, width: 1.6, linecap: 'round' as const, dash: dashForEdge(edge) };
+  const strokeBase = { color, width: CONNECTOR_STYLE.lineWidth, linecap: 'round' as const, dash: dashForEdge(edge) };
   const variant = markerVariantForEdge(edge);
   // A bundle's members each draw the whole shared trunk, so they must wobble
   // it identically or it frays into a rope — see `strokeSeed`.
@@ -283,7 +284,7 @@ export function describeEdge(
               variant,
             ),
             fill: variant === 'closed' ? color : 'none',
-            stroke: variant === 'open' ? { color, width: 1.3, linecap: 'round' } : undefined,
+            stroke: variant === 'open' ? { color, width: CONNECTOR_STYLE.openArrowWidth, linecap: 'round' } : undefined,
           },
         ] as Shape[])
       : []),
@@ -331,7 +332,7 @@ export function describeEdge(
                   'open',
                 ),
                 fill: 'none',
-                stroke: { color, width: 1.3, linecap: 'round' },
+                stroke: { color, width: CONNECTOR_STYLE.openArrowWidth, linecap: 'round' },
                 opacity: 0.8,
               },
             ] as Shape[])

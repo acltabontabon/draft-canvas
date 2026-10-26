@@ -1,9 +1,9 @@
+import { CONNECTOR_STYLE } from '../connectorStyle';
 import { jitter } from './seed';
 
 /** Matches the shared marker geometry in `render/svg/markers.ts`, so a hand-drawn Sketch
  *  arrowhead reads as the same size as the crisp/shared-hand marker it replaces. */
-const ARROW_LENGTH = 9;
-const ARROW_WIDTH = 7;
+const { arrowLength: ARROW_LENGTH, arrowWidth: ARROW_WIDTH, arrowNotch: ARROW_NOTCH } = CONNECTOR_STYLE;
 
 /**
  * A hand-drawn arrowhead, drawn inline per-edge — Sketch only. (Clean and Draft use the shared,
@@ -39,5 +39,6 @@ export function sketchArrowPath(
   if (variant === 'open') {
     return `M${wing1.x},${wing1.y} L${tip.x},${tip.y} L${wing2.x},${wing2.y}`;
   }
-  return `M${tip.x},${tip.y} L${wing1.x},${wing1.y} L${wing2.x},${wing2.y} Z`;
+  const notch = { x: backX + dir.x * ARROW_NOTCH, y: backY + dir.y * ARROW_NOTCH };
+  return `M${tip.x},${tip.y} L${wing1.x},${wing1.y} L${notch.x},${notch.y} L${wing2.x},${wing2.y} Z`;
 }

@@ -40,6 +40,15 @@ Queue and Data Store artwork also grows when you drag a corner resize handle.
 - Click a connector to change its relationship
   ([rules](../reference/semantics.md#the-capability-matrix)). Drag its end to reconnect it.
 
+Hovering a connector briefly traces the request and then its reply, once. The canvas stays still
+otherwise, and reduced-motion preferences turn the trace off.
+
+The default uses a fine, rounded line and a slim arrowhead. Replies use a lighter dashed return
+rail, with each caption outside its own line. Two differently named operations keep separate exits;
+a repeated relationship can share a trunk. These details also appear in SVG and PNG exports.
+
+![Default connectors: distinct operations, separate return rails and straight glyph attachments.](../media/connectors/style-light-after.png)
+
 ## Pinned and automatic ends
 
 An automatic end faces the shape it joins and turns to follow it as shapes move. A pinned end keeps its

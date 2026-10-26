@@ -10,9 +10,9 @@
  *
  * - Only a stepped line's **inner** runs move, never its first or last (where it leaves and meets a
  *   shape — `endpoints.ts` decides those), and only runs long enough to round both corners.
- * - Lines drawn as one on purpose are left together: a trunk's members, connectors sharing a label,
- *   a connector and its own reply. Bent, straight and curved lines, and trunks, never move; another
- *   line may move clear of them.
+ * - Lines drawn as one on purpose stay together: a trunk's members and connectors sharing a label.
+ *   A request and its reply need distinct rails. Bent, straight and curved lines, and trunks, never
+ *   move; another line may move clear of them.
  * - Runs in one corridor are ordered by which way each turns at its two ends, so lines that leave on
  *   the same side stay on that side and the shift adds no crossing it can avoid.
  * - Every shifted line is checked whole before it is kept: its neighbouring runs still turn the same
@@ -130,7 +130,7 @@ function glyph(rect: EdgeRouteInputs['source']): Box {
 }
 
 function compute(nodes: readonly DraftNode[], edges: readonly DraftEdge[], scope: PlanScope): SeparationPlan {
-  if (edges.length < 2) return EMPTY;
+  if (edges.length < 2 && !edges.some((e) => e.hasResponse)) return EMPTY;
   const byId = new Map(nodes.map((node) => [node.id, node]));
   const spines = routingPlan(nodes, edges, scope);
   const lines: Line[] = [];
@@ -180,7 +180,7 @@ function compute(nodes: readonly DraftNode[], edges: readonly DraftEdge[], scope
   }
 
   const together = (a: Line, b: Line) =>
-    a.edge === b.edge || Boolean(a.spine && a.spine === b.spine) || Boolean(a.label && a.label === b.label);
+    Boolean(a.spine && a.spine === b.spine && a.role === b.role) || Boolean(a.label && a.label === b.label);
 
   // Corridors: runs of one direction within `SAME_LINE` of the one before, `CORRIDOR` wide at most.
   const components: Run[][] = [];
@@ -188,12 +188,25 @@ function compute(nodes: readonly DraftNode[], edges: readonly DraftEdge[], scope
     const ordered = runs.filter((r) => r.horizontal === horizontal).sort((a, b) => a.coord - b.coord || a.from - b.from || (a.line.key < b.line.key ? -1 : 1));
     let corridor: Run[] = [];
     const flush = () => {
-      if (corridor.length > 1) components.push(...overlapping(corridor, together));
+      for (const group of overlapping(corridor, together)) {
+        if (hasReplyPair(group)) components.push(group);
+        else {
+          // The wider constraint neighbourhood is for coupled request/reply rails. Ordinary
+          // corridors retain their established grouping, so tidy fans do not reshuffle.
+          let narrow: Run[] = [];
+          const append = () => { if (narrow.length > 1) components.push(...overlapping(narrow, together)); narrow = []; };
+          for (const run of group.sort((a, b) => a.coord - b.coord)) {
+            if (narrow.length && run.coord - narrow[narrow.length - 1]!.coord > SAME_LINE) append();
+            narrow.push(run);
+          }
+          append();
+        }
+      }
       corridor = [];
     };
     for (const run of ordered) {
       const previous = corridor[corridor.length - 1];
-      if (previous && (run.coord - previous.coord > SAME_LINE || run.coord - corridor[0]!.coord > CORRIDOR)) flush();
+      if (previous && (run.coord - previous.coord > CORRIDOR || run.coord - corridor[0]!.coord > CORRIDOR)) flush();
       corridor.push(run);
     }
     flush();
@@ -207,6 +220,12 @@ function compute(nodes: readonly DraftNode[], edges: readonly DraftEdge[], scope
       skipped += 1;
       continue;
     }
+    // Include nearby rails in the constraint group: separating one return rail can otherwise
+    // cross the next call's short elbow. Already distinct, non-crossing rails stay untouched.
+    const dirty = component.some((a, i) => component.slice(i + 1).some((b) =>
+      !together(a.line, b.line) && (sharedLength(a.line.corners, b.line.corners) >= MIN_OVERLAP || crossingsOf(a.line.corners, b.line.corners) > 0),
+    ));
+    if (!dirty) continue;
     // Every order at the wider spacing first; of those that pass, the one leaving the fewest
     // crossings — two lines that turn alike nest without crossing only one way round, and the first
     // order to pass is not always that one. The narrower spacing only when the wider can't pass.
@@ -350,6 +369,16 @@ function place(ordered: readonly Run[], spacing: number): Map<Run, number> | nul
   return out;
 }
 
+function hasReplyPair(runs: readonly Run[]): boolean {
+  const roles = new Map<DraftEdge, Line['role']>();
+  for (const run of runs) {
+    const previous = roles.get(run.line.edge);
+    if (previous && previous !== run.line.role) return true;
+    roles.set(run.line.edge, run.line.role);
+  }
+  return false;
+}
+
 /**
  * The orders worth trying for a corridor: by how each run's line turns at its two ends (lines that
  * leave towards one side stay on that side), ties broken one way and then the other — two lines that
@@ -358,7 +387,13 @@ function place(ordered: readonly Run[], spacing: number): Map<Run, number> | nul
 function orders(component: readonly Run[]): Run[][] {
   const key = (r: Run) => `${r.line.key}#${r.index}`;
   const base = (tie: 1 | -1) => [...component].sort((a, b) => turns(a) - turns(b) || tie * (a.coord - b.coord) || tie * (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0));
-  return [base(1), base(-1)];
+  // Z-shaped rails all have one leg on either side, so their turn sum ties. Their spans still
+  // encode nesting: an earlier pair of endpoint heights must turn before a later pair. Trying
+  // both span orders resolves that constraint without an unbounded permutation search.
+  const nested = (direction: 1 | -1) => [...component].sort((a, b) =>
+    turns(a) - turns(b) || direction * (a.from + a.to - b.from - b.to) || (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0),
+  );
+  return hasReplyPair(component) ? [base(1), base(-1), nested(1), nested(-1)] : [base(1), base(-1)];
 }
 
 /** A proposal's lines, shifted, if every one passes the checks in this module's comment. */

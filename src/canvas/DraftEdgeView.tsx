@@ -1,3 +1,4 @@
+import { CONNECTOR_STYLE } from '../render/connectorStyle';
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { LIMITS } from '../document/limits';
 import { reconnectProblem } from '../document/reconnect';
@@ -18,7 +19,7 @@ import {
   labelChipSide,
   labelLaneOffset,
   laneIndex,
-  responseAwayFor,
+  responseAwayAt,
   strokeSeed,
   type Rect,
   type Side,
@@ -551,7 +552,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // Everything that sits beside the label point takes the side away from the reply line, so the
   // reply's own chip has the outer side of its line to itself — see `labelChipSide`.
   // Mirrors `edges/describe.ts`.
-  const responseAway = responseAwayFor(edge.hasResponse, laneOffset);
+  const responseAway = responseAwayAt(route, routes.response, laneOffset);
   const labelSide = labelChipSide(route.labelSide, responseAway);
   const attachmentFlipBelow = attachmentRowBelowsSourceOrTarget(labelX, labelY, sourceRect, targetRect, captionSideOf(edge, labelSide));
 
@@ -778,7 +779,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
                   ? 2.3
                   : lensMember || (overview && isShownStep) || hoverShown || trafficReading === 'flow'
                     ? 2.0
-                    : 1.6,
+                    : CONNECTOR_STYLE.lineWidth,
           strokeLinecap: 'round',
           strokeDasharray: dashForEdge(edge)?.join(' '),
         }}
@@ -821,7 +822,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
           pointerEvents="none"
           fill={markerVariantForEdge(edge) === 'closed' ? strokeColor : 'none'}
           stroke={markerVariantForEdge(edge) === 'open' ? strokeColor : undefined}
-          strokeWidth={markerVariantForEdge(edge) === 'open' ? 1.3 : undefined}
+          strokeWidth={markerVariantForEdge(edge) === 'open' ? CONNECTOR_STYLE.openArrowWidth : undefined}
           strokeLinecap="round"
           strokeLinejoin="round"
         />
@@ -852,11 +853,19 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
           pointerEvents="none"
           fill="none"
           stroke={strokeColor}
-          strokeWidth={1.3}
+          strokeWidth={CONNECTOR_STYLE.openArrowWidth}
           strokeLinecap="round"
           strokeLinejoin="round"
           opacity={0.8}
         />
+      )}
+      {/* One short directional cue per hover. CSS opts in only when motion is welcome; the paths
+          unmount as soon as the pointer leaves, a gesture starts or presentation takes over. */}
+      {hoverShown && !routeUnsettled && trafficReading === null && (
+        <>
+          <path className="dc-edge-trace" d={drawnPath} pathLength={1} fill="none" stroke={theme.selection} strokeWidth={2} pointerEvents="none" />
+          {responseDrawnPath && <path className="dc-edge-trace dc-edge-trace-reply" d={responseDrawnPath} pathLength={1} fill="none" stroke={theme.selection} strokeWidth={1.6} pointerEvents="none" />}
+        </>
       )}
 
       {/* Presentation's signal: one stroke that travels this connector's own drawn path, source to

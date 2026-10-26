@@ -99,8 +99,8 @@ describe('sketchArrowPath — hand-drawn arrowhead', () => {
   it('the two wings differ from each other (asymmetric, not just narrower/wider)', () => {
     const d = sketchArrowPath(tip, dir, 'e1', 2);
     const points = d.match(/-?\d*\.?\d+,-?\d*\.?\d+/g)!;
-    // [tip, wing1, wing2] — wing1 and wing2 should not be mirror-identical after jitter.
-    expect(points[1]).not.toBe(points[2]);
+    // [tip, wing1, notch, wing2] — the wings should not be mirror-identical after jitter.
+    expect(points[1]).not.toBe(points[3]);
   });
 
   it('is deterministic per edge id', () => {

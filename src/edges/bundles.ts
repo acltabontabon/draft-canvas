@@ -479,6 +479,9 @@ function computePlan(nodes: readonly DraftNode[], edges: readonly DraftEdge[], s
     if (budget.remaining <= 0) break;
     const free = group.members.filter((candidate) => !assigned.has(candidate.edge.id));
     if (free.length < MIN_SPINE_MEMBERS) continue;
+    // Two separately named operations read as independent arrows, not a T-junction in one line.
+    // Keep the compact two-member fan for a repeated caption; larger fans still benefit from a trunk.
+    if (free.length === 2 && free.every((c) => c.edge.label?.trim()) && free[0]!.edge.label!.trim() !== free[1]!.edge.label!.trim()) continue;
 
     const hubNode = nodeMap.get(group.hubId);
     if (!hubNode) continue;

@@ -4,6 +4,7 @@
  * measures every view of every entry and holds the result to `quality-baseline.json`.
  */
 
+import { connectorStyleDocument } from '../connectors/checkout';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { createEdge, createNode } from '../../../src/document/factory';
@@ -130,6 +131,8 @@ function cases(): RoutingFixture[] {
     edge('ab', 'a', 'b', { sourceAnchor: pin('right'), targetAnchor: pin('left') }),
     edge('cd', 'c', 'd'),
   ]);
+  const checkout = connectorStyleDocument();
+  add('checkout-clarity', checkout.nodes, checkout.edges);
   return out;
 }
 

@@ -9,7 +9,7 @@ import { connectorRouteInputs } from '../../../src/edges/connectorRoutes';
 import { edgeRoutes } from '../../../src/edges/edgeRoutes';
 import { LABEL_PADDING_X, LABEL_PADDING_Y, layoutEdgeLabel } from '../../../src/edges/labelLayout';
 import { labelChipBox, labelGroupPlan } from '../../../src/edges/labelGroups';
-import { labelChipSide, labelLaneOffset, laneIndex, responseAwayFor, type Rect, type Side } from '../../../src/edges/routing';
+import { labelChipSide, labelLaneOffset, laneIndex, responseAwayAt, type Rect, type Side } from '../../../src/edges/routing';
 
 export interface DrawnLine {
   d: string;
@@ -53,7 +53,7 @@ export function drawnConnectors(nodes: readonly DraftNode[], edges: readonly Dra
         if (group.members[0] === edge.id) chip = labelChipBox(group.side, group.x, group.y, w, h);
       } else {
         const nudge = labelLaneOffset(request.source.side, request.target.side, lane);
-        chip = labelChipBox(labelChipSide(request.labelSide, responseAwayFor(edge.hasResponse, lane)), request.labelX + nudge.x, request.labelY + nudge.y, w, h);
+        chip = labelChipBox(labelChipSide(request.labelSide, responseAwayAt(request, routes.response, lane)), request.labelX + nudge.x, request.labelY + nudge.y, w, h);
       }
     }
     out.push({

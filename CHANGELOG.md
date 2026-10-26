@@ -12,6 +12,9 @@ The retired VS Code extension has [its own changelog](https://github.com/acltabo
 
 #### Added
 
+- Connector defaults use finer strokes and slim, notched arrowheads. Request/reply lines keep
+  separate rails, and automatic ends avoid tiny steps into queue and data store glyphs. A short
+  hover trace follows the request and its reply once, respecting reduced motion.
 - Connectors route around shapes, spread automatic ends and separate overlapping runs. Auto attach
   lets ends follow shapes, including after reconnecting; Pin ends here keeps their exact attachment.
   Existing diagrams retain pins.

@@ -4,7 +4,7 @@ import { relationshipCaptionLabel } from '../document/edgeSemantics';
 import type { DraftEdge, DraftNode } from '../document/types';
 import { edgeRoutes } from '../edges/edgeRoutes';
 import { RESPONSE_DASH, dashForEdge, markerVariantForEdge } from '../edges/kindStyle';
-import { captionAnchor, labelLaneOffset, responseAwayFor } from '../edges/routing';
+import { captionAnchor, labelLaneOffset, responseAwayAt } from '../edges/routing';
 import { describeContext, describeNode } from '../nodes/describe';
 import { markerRef } from '../render/svg/markers';
 import { beginClipScope, emitDisplayList } from '../render/svg/emit';
@@ -217,7 +217,7 @@ export const GhostEdge = memo(function GhostEdge({
   // Placed the way both renderers place it: nudged off its parallel siblings, and on the side away
   // from its reply line.
   const nudge = labelLaneOffset(route.source.side, route.target.side, lane);
-  const at = captionAnchor(route.labelSide, route.labelX + nudge.x, route.labelY + nudge.y, responseAwayFor(edge.hasResponse, lane));
+  const at = captionAnchor(route.labelSide, route.labelX + nudge.x, route.labelY + nudge.y, responseAwayAt(route, routes.response, lane));
   const response = routes.response;
   // Always a literal colour from `theme`, on both branches: `Markers` mints every arrowhead once,
   // as static SVG markup keyed by exact colour string (`Markers.tsx`'s `colors` Set) — a CSS custom

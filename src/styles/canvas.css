@@ -466,6 +466,34 @@
   stroke-opacity: 0.12;
 }
 
+/* A single pen-like glint follows the request, then its reply. Resting diagrams stay still.
+   A gap longer than the whole normalized path prevents a second dash wrapping in at the far end. */
+.dc-edge-trace {
+  display: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dc-edge-trace {
+    display: initial;
+    stroke-linecap: round;
+    stroke-dasharray: 0.08 1.1;
+    stroke-dashoffset: 0.08;
+    opacity: 0;
+    animation: dc-edge-trace-once 600ms linear both;
+  }
+
+  .dc-edge-trace-reply {
+    animation-delay: 500ms;
+  }
+}
+
+@keyframes dc-edge-trace-once {
+  0% { stroke-dashoffset: 0.08; opacity: 0; }
+  12% { opacity: 0.65; }
+  80% { opacity: 0.65; }
+  100% { stroke-dashoffset: -1; opacity: 0; }
+}
+
 /* Where a hovered connector starts and ends: the endpoint dot's look, smaller and hollow, and nothing
    to grab — dragging one takes selecting the connector first, as before. */
 .dc-edge-endpoint-hint {

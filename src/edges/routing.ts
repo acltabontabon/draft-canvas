@@ -1341,6 +1341,15 @@ function pairedResponsePoint(request: RoutedEdge, response: RoutedEdge): { x: nu
   return best;
 }
 
+/** Which side of the request's label run the actual reply occupies, after routing and separation. */
+export function responseAwayAt(request: RoutedEdge, response: RoutedEdge | null | undefined, lane = 0): number {
+  if (!response) return 0;
+  const at = pairedResponsePoint(request, response);
+  if (!at) return responseAwayFor(true, lane);
+  const delta = isVerticalSide(request.labelSide) ? at.y - request.labelY : at.x - request.labelX;
+  return Math.abs(delta) > 0.01 ? Math.sign(delta) : responseAwayFor(true, lane);
+}
+
 /**
  * Keep a reply's words paired with the request's, on the reply path itself. Independently picking
  * the two routes' longest runs lets a one-pixel move switch only the reply to another leg of an L.
@@ -1363,7 +1372,7 @@ export function responseLabelAnchor(
     : { x: response.labelX, y: response.labelY, side: response.labelSide };
   const horizontal = isVerticalSide(at.side);
   const delta = horizontal ? at.y - request.labelY : at.x - request.labelX;
-  const requestSide = labelChipSide(request.labelSide, responseAwayFor(true, lane));
+  const requestSide = labelChipSide(request.labelSide, responseAwayAt(request, response, lane));
   let side = at.side;
   if (Math.abs(delta) > 0.01) {
     side = horizontal ? (delta > 0 ? 'bottom' : 'top') : (delta > 0 ? 'right' : 'left');
@@ -1654,11 +1663,12 @@ function endsFor(
     if (isHorizontalSide(sourceSide) && isHorizontalSide(targetSide) && sourceSide !== targetSide) {
       if (Math.abs(from.y - to.y) < LEVEL_SNAP) to.y = from.y;
       else if (!targetPinned && !targetPlaced) to.y = levelOnto(targetRect, targetSide, from.y, to.y);
-      else if (!sourcePinned && !sourcePlaced) from.y = levelOnto(sourceRect, sourceSide, to.y, from.y);
+      // A narrow glyph may have no room to move its end; the ordinary box at the other end may.
+      if (from.y !== to.y && !sourcePinned && !sourcePlaced) from.y = levelOnto(sourceRect, sourceSide, to.y, from.y);
     } else if (isVerticalSide(sourceSide) && isVerticalSide(targetSide) && sourceSide !== targetSide) {
       if (Math.abs(from.x - to.x) < LEVEL_SNAP) to.x = from.x;
       else if (!targetPinned && !targetPlaced) to.x = levelOnto(targetRect, targetSide, from.x, to.x);
-      else if (!sourcePinned && !sourcePlaced) from.x = levelOnto(sourceRect, sourceSide, to.x, from.x);
+      if (from.x !== to.x && !sourcePinned && !sourcePlaced) from.x = levelOnto(sourceRect, sourceSide, to.x, from.x);
     }
   }
   return { from, to, sourceSide, targetSide };
@@ -1755,7 +1765,23 @@ function drawBetween(
         labelX = built.labelX;
         labelY = built.labelY;
       } else {
-        const [d, lx, ly] = getSmoothStepPath({ ...params, borderRadius: 10 });
+        // Endpoint lanes alone leave the two Z-shaped lines on the same middle run. Nest the
+        // reply's run outside the request's turns, with at least one stub left beside each shape.
+        const centre: { centerX?: number; centerY?: number } = {};
+        const replyStep = options?.replyStep ?? 0;
+        if (replyStep && sourceSide !== targetSide && isHorizontalSide(sourceSide) === isHorizontalSide(targetSide)) {
+          const horizontal = isHorizontalSide(sourceSide);
+          const axis = horizontal ? 'x' : 'y';
+          const cross = horizontal ? 'y' : 'x';
+          const normal = sourceSide === 'right' || sourceSide === 'bottom' ? 1 : -1;
+          const start = from[axis] + normal * 20;
+          const end = to[axis] - normal * 20;
+          const shift = -normal * Math.sign(to[cross] - from[cross]) * replyStep * LANE_SPACING;
+          const at = clamp((start + end) / 2 + shift, Math.min(start, end), Math.max(start, end));
+          if (horizontal) centre.centerX = at;
+          else centre.centerY = at;
+        }
+        const [d, lx, ly] = getSmoothStepPath({ ...params, ...centre, borderRadius: 10 });
         path = d;
         labelX = lx;
         labelY = ly;

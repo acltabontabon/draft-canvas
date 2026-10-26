@@ -93,6 +93,12 @@ pairing stays free; an unusual one gets guidance, not rejection. Rules: [Semanti
   shared corridor can move lines that share no endpoint. After selecting the layout, a bounded
   polish pass removes avoidable crossings and detours only if it preserves readable neighbours,
   shared trunks and overall quality. Explicit routes and hand-placed bends remain authored.
+- A request/reply Z nests its middle runs; endpoint lane offsets alone would stack them. Caption
+  sides follow the final drawn rails, including corridor separation. A small glyph that cannot
+  align its automatic end may instead align the other, unpinned end. Two differently labelled
+  operations keep independent exits rather than forming a two-member fork.
+- Hover traces are transient SVG paths: once per hover, absent during gestures, Traffic and
+  presentation, disabled by reduced-motion CSS, and never exported or persisted.
 - Spine geometry is relative to the hub, so it follows a drag without writing the document.
 - The connection target shows where a release will land before the pointer is released.
 
