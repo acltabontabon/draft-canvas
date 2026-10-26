@@ -155,8 +155,8 @@
       "pins": 0
     },
     "unresolved": {
-      "blocked": 1,
-      "budget": 0,
+      "blocked": 0,
+      "budget": 1,
       "crowded": 0,
       "skipped": 0
     }
@@ -165,7 +165,7 @@
     "obstruction": 0,
     "overlap": 0,
     "crossings": 0,
-    "cost": 1285,
+    "cost": 1157,
     "violations": {
       "endpoint": 0,
       "continuity": 0,
@@ -202,6 +202,42 @@
     "overlap": 0,
     "crossings": 0,
     "cost": 585,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "case/nearby-auto-attach": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 616,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "case/nearby-fixed-ends": {
+    "obstruction": 1,
+    "overlap": 205,
+    "crossings": 2,
+    "cost": 1316,
     "violations": {
       "endpoint": 0,
       "continuity": 0,

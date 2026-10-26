@@ -1572,6 +1572,18 @@ function ExpandedPanel({
             {flowAction && <div className="dc-inspector-flow-action">{flowAction}</div>}
           </div>
         </TooltipGroup>
+        {(edge.sourceAnchor || edge.targetAnchor) && (
+          <div className="dc-connector-attachment-mode">
+            <span>{edge.sourceAnchor && edge.targetAnchor ? 'Fixed ends' : edge.sourceAnchor ? 'Fixed start' : 'Fixed end'}</span>
+            <Button
+              variant="quiet"
+              aria-label="Auto attach connector"
+              onClick={() => useEditorStore.getState().autoAttachEnds([edge.id], 'both')}
+            >
+              Auto attach
+            </Button>
+          </div>
+        )}
         {conditionOpen && showCondition && (
           <div className="dc-connector-flyout dc-connector-condition-flyout">
             <input

@@ -19,7 +19,9 @@ The retired VS Code extension has [its own changelog](https://github.com/acltabo
   store glyphs. A short hover trace follows the request and reply once, respecting reduced motion.
 - Connectors route around shapes, spread automatic ends and separate overlapping runs. Auto attach
   lets ends follow shapes, including after reconnecting; Pin ends here keeps their exact attachment.
-  Existing diagrams retain pins.
+  Nearby automatic ends align along their overlapping sides, and blocked approaches can slide
+  to a clear point. Fixed ends are identified in the inspector with a one-click Auto attach action.
+  Existing diagrams retain explicit pins.
 - Agents can set automatic or pinned ends and receive unresolved-route and crowded-side advice.
   Create and arrange also tidy avoidable crossings and detours, keeping clean neighbours and shared
   trunks intact. Hand-routed connectors stay as authored.

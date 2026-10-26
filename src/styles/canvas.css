@@ -2437,6 +2437,16 @@
   gap: 6px;
 }
 
+.dc-connector-attachment-mode {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+  color: var(--dc-text-muted);
+  font-size: var(--dc-popover-font);
+}
+
 .dc-connector-drawing-row > .dc-inspector-section-label {
   color: var(--dc-text-faint);
   font-size: 9px;

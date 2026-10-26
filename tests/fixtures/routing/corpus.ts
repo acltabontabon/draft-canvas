@@ -4,6 +4,7 @@
  * measures every view of every entry and holds the result to `quality-baseline.json`.
  */
 
+import { nearbyServicesDocument } from '../connectors/nearby';
 import { connectorStyleDocument } from '../connectors/checkout';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -133,6 +134,10 @@ function cases(): RoutingFixture[] {
   ]);
   const checkout = connectorStyleDocument();
   add('checkout-clarity', checkout.nodes, checkout.edges);
+  for (const pinned of [false, true]) {
+    const nearby = nearbyServicesDocument(pinned);
+    add(pinned ? 'nearby-fixed-ends' : 'nearby-auto-attach', nearby.nodes, nearby.edges);
+  }
   return out;
 }
 

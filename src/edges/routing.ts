@@ -384,6 +384,41 @@ function levelOnto(rect: Rect, side: Side, coordinate: number, current: number):
   return coordinate;
 }
 
+/** Facing sides can share a straight run even when their centres are more than NEAR_LEVEL
+ * apart. Use a generous shared band, rather than threading a line through two near corners.
+ * Planned attachment slots and explicit pins are fixed; only an unoccupied automatic end moves. */
+function alignFacingEnds(
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  source: Rect,
+  target: Rect,
+  sourceSide: Side,
+  targetSide: Side,
+  sourceFixed: boolean,
+  targetFixed: boolean,
+): void {
+  if (sourceFixed && targetFixed) return;
+  const horizontal = isHorizontalSide(sourceSide);
+  const axis = horizontal ? 'y' : 'x';
+  if (from[axis] === to[axis]) return;
+  const forward = sourceSide === 'right' || sourceSide === 'bottom' ? 1 : -1;
+  if (forward * ((horizontal ? to.x - from.x : to.y - from.y)) <= 0) return;
+  const a = sideSpan(source, sourceSide);
+  const b = sideSpan(target, targetSide);
+  const aLow = a.start + NEAR_LEVEL_INSET, aHigh = a.start + a.length - NEAR_LEVEL_INSET;
+  const bLow = b.start + NEAR_LEVEL_INSET, bHigh = b.start + b.length - NEAR_LEVEL_INSET;
+  if (aLow > aHigh || bLow > bHigh) return;
+  if (sourceFixed) {
+    if (from[axis] >= bLow && from[axis] <= bHigh) to[axis] = from[axis];
+  } else if (targetFixed) {
+    if (to[axis] >= aLow && to[axis] <= aHigh) from[axis] = to[axis];
+  } else {
+    const low = Math.max(aLow, bLow), high = Math.min(aHigh, bHigh);
+    if (high - low < Math.min(aHigh - aLow, bHigh - bLow) * 0.35) return;
+    from[axis] = to[axis] = clamp((from[axis] + to[axis]) / 2, low, high);
+  }
+}
+
 export interface LaneAssignment {
   /** This edge's signed slot within its parallel-edge group; `0` for a lone edge. */
   offset: number;
@@ -613,6 +648,8 @@ export interface RouteOptions {
   /** Whether this line may search for a clear route when the quick one is blocked — `false` once a
    *  diagram's shared search budget is spent (see `edgeRoutes.ts`). Default `true`. */
   fallback?: boolean;
+  /** Remaining work when retrying a blocked automatic attachment, shared with the first search. */
+  searchLimit?: number;
   /** A line to keep apart from: the request line, when routing its reply. */
   avoid?: readonly { x: number; y: number }[];
   /**
@@ -1452,11 +1489,57 @@ export function routeBetween(
   routing: EdgeRouting,
   options?: RouteOptions,
 ): RoutedEdge {
-  const route = withTracks(drawBetween(sourceRect, targetRect, routing, resolveEnds(sourceRect, targetRect, routing, options), options), routing, options);
+  const initial = withTracks(drawBetween(sourceRect, targetRect, routing, resolveEnds(sourceRect, targetRect, routing, options), options), routing, options);
+  const route = clearAutomaticEntry(initial, sourceRect, targetRect, routing, options);
   if (!options?.label) return route;
   const label = clearLabel(route.d, { x: route.labelX, y: route.labelY, side: route.labelSide }, options.label,
     sourceRect, targetRect, options.obstacles ?? [], options.lane ?? 0, route.source.side, route.target.side);
   return { ...route, labelX: label.x, labelY: label.y, labelSide: label.side };
+}
+
+/** A shape immediately beside an automatic end can block its approach stub even though another
+ * point on the same facing side is clear. Try the nearest obstacle boundaries and usable side
+ * limits before declaring it blocked. Pins, shared slots, manual bends and trunks stay authored;
+ * all retries share the original line's search budget. Already-clear routes are never revisited. */
+function clearAutomaticEntry(route: RoutedEdge, source: Rect, target: Rect, routing: EdgeRouting, options: RouteOptions | undefined): RoutedEdge {
+  if (route.status !== 'blocked' || routing !== 'smoothstep' || options?.mode === 'gesture' || options?.fallback === false || options?.spine || options?.waypoints?.length || options?.tracks?.length || options?.replyStep) return route;
+  const obstacles = options?.obstacles ?? [];
+  const blockers = [...obstacles, glyphOf(source), glyphOf(target)];
+  let best = route, cost = Infinity, work = route.work;
+  let exhausted = false;
+  for (const end of ['target', 'source'] as const) {
+    if (options?.anchors?.[end] || options?.spread?.[end]) continue;
+    const rect = end === 'source' ? source : target;
+    const original = route[end];
+    const side = original.side;
+    const axis = isHorizontalSide(side) ? 'y' : 'x';
+    const span = sideSpan(rect, side);
+    const low = span.start + NEAR_LEVEL_INSET, high = span.start + span.length - NEAR_LEVEL_INSET;
+    if (low >= high) continue;
+    const coordinates = [...new Set([low, high, ...obstacles.flatMap(o => [o[axis] - OBSTACLE_MARGIN, o[axis] + (axis === 'x' ? o.width : o.height) + OBSTACLE_MARGIN])])]
+      .filter(at => at >= low && at <= high && Math.abs(at - original[axis]) > 0.5)
+      .sort((a, b) => Math.abs(a - original[axis]) - Math.abs(b - original[axis]) || a - b)
+      .slice(0, 4);
+    for (const at of coordinates) {
+      if (work >= MAX_POPS) break;
+      const point = anchorPoint(rect, side, (at - span.start) / span.length);
+      const normal = INWARD[side];
+      if (!polylineClear([point, { x: point.x - normal.x * DETOUR_LEG, y: point.y - normal.y * DETOUR_LEG }], blockers)) continue;
+      const candidate = drawBetween(source, target, routing, {
+        from: end === 'source' ? point : route.source,
+        to: end === 'target' ? point : route.target,
+        sourceSide: route.source.side, targetSide: route.target.side,
+      }, { ...options, searchLimit: MAX_POPS - work });
+      work += candidate.work;
+      exhausted ||= candidate.status === 'budget';
+      if (candidate.status !== 'clear') continue;
+      const points = stepPolyline(candidate.d);
+      const length = points.slice(1).reduce((sum, p, i) => sum + Math.hypot(p.x - points[i]!.x, p.y - points[i]!.y), 0);
+      const score = length + Math.max(0, points.length - 2) * 24;
+      if (score < cost) { best = candidate; cost = score; }
+    }
+  }
+  return best === route && work === route.work ? route : { ...best, work, status: best === route && exhausted ? 'budget' : best.status };
 }
 
 /**
@@ -1665,10 +1748,12 @@ function endsFor(
       else if (!targetPinned && !targetPlaced) to.y = levelOnto(targetRect, targetSide, from.y, to.y);
       // A narrow glyph may have no room to move its end; the ordinary box at the other end may.
       if (from.y !== to.y && !sourcePinned && !sourcePlaced) from.y = levelOnto(sourceRect, sourceSide, to.y, from.y);
+      alignFacingEnds(from, to, sourceRect, targetRect, sourceSide, targetSide, sourcePinned || sourcePlaced, targetPinned || targetPlaced);
     } else if (isVerticalSide(sourceSide) && isVerticalSide(targetSide) && sourceSide !== targetSide) {
       if (Math.abs(from.x - to.x) < LEVEL_SNAP) to.x = from.x;
       else if (!targetPinned && !targetPlaced) to.x = levelOnto(targetRect, targetSide, from.x, to.x);
       if (from.x !== to.x && !sourcePinned && !sourcePlaced) from.x = levelOnto(sourceRect, sourceSide, to.x, from.x);
+      alignFacingEnds(from, to, sourceRect, targetRect, sourceSide, targetSide, sourcePinned || sourcePlaced, targetPinned || targetPlaced);
     }
   }
   return { from, to, sourceSide, targetSide };
@@ -1797,7 +1882,7 @@ function drawBetween(
       }
       const found = orthogonalRoute(
         { from, fromSide: sourceSide, to, toSide: targetSide, obstacles, ends: [glyphOf(sourceRect), glyphOf(targetRect)], bounds: searchBounds(sourceRect, targetRect), avoid: options?.avoid },
-        options?.fallback === false ? 0 : MAX_POPS,
+        options?.fallback === false ? 0 : options?.searchLimit ?? MAX_POPS,
       );
       work = found.work;
       status = found.status;

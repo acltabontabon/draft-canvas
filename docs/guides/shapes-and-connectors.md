@@ -52,7 +52,9 @@ a repeated relationship can share a trunk. These details also appear in SVG and 
 ## Pinned and automatic ends
 
 An automatic end faces the shape it joins and turns to follow it as shapes move. A pinned end keeps its
-side and point.
+side and point. When facing sides overlap enough, automatic ends line up across their shared band
+for a short, straight connection. If another shape blocks the approach, an automatic end can slide
+to a nearby clear point on the same side. Pins, hand-placed bends and shared attachment slots stay fixed.
 
 | Draw it | The end is |
 | --- | --- |
@@ -61,7 +63,9 @@ side and point.
 | Reconnected to a shape or a dot | Automatic at the reconnected end |
 | Set with **Pin ends here** | Pinned at its drawn position |
 
-A selected connector shows a pinned end filled and an automatic end as a ring. Right-click a connector
+A selected connector shows a pinned end filled and an automatic end as a ring. Its inspector also
+shows **Fixed start**, **Fixed end** or **Fixed ends**, with **Auto attach** to let them follow
+the shapes again. Right-click a connector
 → **Auto attach start**, **Auto attach end**, **Auto attach both ends** or **Pin ends here**.
 **Auto attach all connectors** (`⌘K`) frees every end in the view, including the pins of diagrams
 drawn before automatic ends existed.
