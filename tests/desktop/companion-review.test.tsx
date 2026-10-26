@@ -1,4 +1,4 @@
-import { ReactFlowProvider } from '@xyflow/react';
+import { ReactFlowProvider, useStoreApi } from '@xyflow/react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentSettings, Proposal, ProposalAction } from '../../src/desktop/api';
@@ -89,6 +89,13 @@ function fakeController(proposal: Proposal) {
 
 const ACCESS: AgentSettings = { enabled: true, listening: true, connections: 0, sidecarPath: null, sidecarWarning: null, background: 'ready', projects: [{ handle: 'ready', name: 'Work', displayPath: '~/work', agent: true }] };
 
+/** React Flow's store, for putting the camera somewhere: jsdom never measures the canvas. */
+let flow: ReturnType<typeof useStoreApi> | null = null;
+function FlowStore() {
+  flow = useStoreApi();
+  return null;
+}
+
 function mount(controller: ReturnType<typeof fakeController>) {
   setDesktopController(controller as never);
   const diagramId = useEditorStore.getState().document.metadata.id;
@@ -97,6 +104,7 @@ function mount(controller: ReturnType<typeof fakeController>) {
   companion.setProposal(RUN, 'p1');
   return render(
     <ReactFlowProvider>
+      <FlowStore />
       <Companion />
     </ReactFlowProvider>,
   );
@@ -187,11 +195,16 @@ describe('reviewing in the companion card', () => {
     expect(screen.queryByRole('region', { name: 'Proposed change' })).toBeNull();
   });
 
-  it('can bring the change back into view', async () => {
+  it('offers Show me only while the change is out of view', async () => {
     const controller = fakeController(proposalFor([{ op: 'update', id: 'db', set: { label: 'Orders DB (primary)' } }]));
     mount(controller);
     await acceptButton();
-    expect((screen.getByRole('button', { name: 'Show me' }) as HTMLButtonElement).disabled).toBe(false);
+    // On screen, beside the chip: there is nowhere to take the person, so nothing is offered.
+    act(() => flow!.setState({ width: 1200, height: 800, transform: [100, 100, 1] }));
+    expect(screen.queryByRole('button', { name: 'Show me' })).toBeNull();
+    // Panned away: the chip stays on the canvas and offers the way back.
+    act(() => flow!.setState({ transform: [-3000, 100, 1] }));
+    expect(screen.getByRole('button', { name: 'Show me' })).toBeTruthy();
   });
 
   it('the badge leaves the card’s proposal to the card, and takes it back once the conversation is gone', async () => {
