@@ -106,7 +106,7 @@ export function adviceFor(room: RoomSpec, legibility: Legibility, primaryFlow?: 
     const where = [...legibility.detours, ...legibility.throughBoundaries];
     const pairs = legibility.crossed.slice(0, 3).map(([a, b]) => `"${a}" × "${b}"`);
     out.push(
-      `The arrangement has ${legibility.crossings} crossing(s)${pairs.length ? ` (${pairs.join(', ')}${legibility.crossed.length > 3 ? ', …' : ''})` : ''}${where.length ? `, and connector(s) ${quote([...new Set(where)])} run around or through other parts` : ''}. Crossings come from what connects to what, not from spacing, and a direction left out is chosen by comparing both. To help: ${hint}.`,
+      `The arrangement has ${legibility.crossings} crossing(s)${pairs.length ? ` (${pairs.join(', ')}${legibility.crossed.length > 3 ? ', …' : ''})` : ''}${where.length ? `, and connector(s) ${quote([...new Set(where)])} run around or through other parts` : ''}. Automatic routing could not remove these without worsening the drawing; a direction left out is chosen by comparing both. To help: ${hint}.`,
     );
   }
   return out;

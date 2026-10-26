@@ -539,7 +539,8 @@ export interface UiStore {
   setReconnectHoverTarget: (nodeId: string | null) => void;
   setReconnectDragActive: (active: boolean) => void;
   setHoveredEdge: (id: string | null) => void;
-  setHoveredRecoveryParent: (id: string | null) => void;  setOpenAttachmentDetail: (
+  setHoveredRecoveryParent: (id: string | null) => void;
+  setOpenAttachmentDetail: (
     target: { hostKind: 'node' | 'edge'; hostId: string; attachmentId: string | null } | null,
   ) => void;
   setPresentationReveal: (target: PresentationReveal | null) => void;
@@ -672,7 +673,8 @@ export const useUiStore = create<UiStore>((set, get) => ({
   reconnectHoverTarget: null,
   reconnectDragActive: false,
   hoveredEdgeId: null,
-  hoveredRecoveryParentId: null,  openAttachmentDetail: null,
+  hoveredRecoveryParentId: null,
+  openAttachmentDetail: null,
   presentationReveal: null,
   presentation: PRESENTATION_AT_REST,
   openPointPopover: null,
@@ -761,7 +763,8 @@ export const useUiStore = create<UiStore>((set, get) => ({
   setReconnectDragActive: (reconnectDragActive) =>
     set((state) => (state.reconnectDragActive === reconnectDragActive ? state : { reconnectDragActive })),
   setHoveredEdge: (hoveredEdgeId) => set((state) => (state.hoveredEdgeId === hoveredEdgeId ? state : { hoveredEdgeId })),
-  setHoveredRecoveryParent: (hoveredRecoveryParentId) => set((state) => (state.hoveredRecoveryParentId === hoveredRecoveryParentId ? state : { hoveredRecoveryParentId })),  setOpenAttachmentDetail: (openAttachmentDetail) => set({ openAttachmentDetail }),
+  setHoveredRecoveryParent: (hoveredRecoveryParentId) => set((state) => (state.hoveredRecoveryParentId === hoveredRecoveryParentId ? state : { hoveredRecoveryParentId })),
+  setOpenAttachmentDetail: (openAttachmentDetail) => set({ openAttachmentDetail }),
   setPresentationReveal: (presentationReveal) => set({ presentationReveal }),
   setPresentation: (patch) =>
     set((state) => {

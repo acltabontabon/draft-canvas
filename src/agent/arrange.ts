@@ -229,6 +229,19 @@ export function arrangeView(view: DraftDocument, request: ArrangeRequest, ctx: D
     problems.add('LAYOUT_CONSTRAINED', at, 'the arranged part would run into shapes outside the scope, and there is no free space beside it; arrange the whole view instead ({op:"arrange"})');
     return undefined;
   }
+  if (best && !pastDeadline()) {
+    const edges = best.arranged.view.edges.map((e) => ({ ...e }));
+    const targets = edges.filter((e) => best!.arranged.touched.has(e.id));
+    repairAnchors(targets, best.arranged.view.nodes, captionSizer(best.arranged.view.nodes, ctx), edges, undefined, true);
+    const arranged = { ...best.arranged, view: { ...best.arranged.view, edges } };
+    const polished: Judged = {
+      ...best,
+      arranged,
+      report: checkQuality(arranged.view.nodes, edges, ctx, arranged.touched),
+      fit: best.layout.viewport ? checkFit(renderedBoundsOf(arranged.view.nodes, edges, ctx), smallestFontPresent(arranged.view.nodes, edges), best.layout.viewport) : undefined,
+    };
+    if (betterByErrors(polished, best) || (tied(polished, best) && cost(polished) < cost(best))) best = polished;
+  }
   return best && relaxArranged(view, best.arranged);
 }
 

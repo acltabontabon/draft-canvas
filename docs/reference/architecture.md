@@ -89,6 +89,10 @@ pairing stays free; an unusual one gets guidance, not rejection. Rules: [Semanti
   line is checked against the shapes; when it is blocked, `edges/pathfinder.ts` searches for a clear
   one within the area its shapes were collected from, and a line it cannot clear says `blocked` or
   `budget` rather than passing as clear. Gesture frames are never searched.
+- Agent repair screens candidates locally, then checks the complete view before accepting one: a
+  shared corridor can move lines that share no endpoint. After selecting the layout, a bounded
+  polish pass removes avoidable crossings and detours only if it preserves readable neighbours,
+  shared trunks and overall quality. Explicit routes and hand-placed bends remain authored.
 - Spine geometry is relative to the hub, so it follows a drag without writing the document.
 - The connection target shows where a release will land before the pointer is released.
 

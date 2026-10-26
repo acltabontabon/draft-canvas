@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { createEdge, createNode } from '../src/document/factory';
 import type { DraftEdge, DraftNode } from '../src/document/types';
+import { othersOf } from '../src/agent/route';
+import { legibilityOf } from '../src/agent/legibility';
 import { routingPlan } from '../src/edges/bundles';
 import { describeEdge } from '../src/edges/describe';
 import { connectorRoutes } from '../src/edges/connectorRoutes';
@@ -49,6 +51,20 @@ describe('the shared route accessor', () => {
       }
     }
     expect(compared).toBeGreaterThan(200);
+  });
+
+  it('excludes folded compensations from endpoint spreading, lanes and agent checks', () => {
+    const nodes = [
+      createNode({ id: 'a', type: 'service', x: 0, y: 0 }),
+      createNode({ id: 'b', type: 'service', x: 400, y: 0 }),
+    ];
+    const call = createEdge({ id: 'call', source: 'a', target: 'b' });
+    const folded = createEdge({ id: 'undo', source: 'a', target: 'b', semantic: 'compensates', compensationFor: 'call', compensationVisible: false });
+    const baseline = connectorRoutes(call, { nodes, edges: [call] }, 'transient');
+    const edges = [call, folded];
+    expect(connectorRoutes(call, { nodes, edges }, 'transient')).toEqual(baseline);
+    expect(othersOf(nodes, edges).map((e) => e.id)).toEqual(['call']);
+    expect(legibilityOf(nodes, edges)).toEqual(legibilityOf(nodes, [call]));
   });
 
   it('hands back the same routes object while nothing it depends on changes', () => {

@@ -14,6 +14,7 @@
  * the canvas already worked out but never files its own routes, which would push out the ones on
  * screen.
  */
+import { visibleEdges } from '../document/compensation';
 import { LIMITS } from '../document/limits';
 import type { DraftEdge, DraftNode, DraftPoint, EdgeAnchor, EdgeRouting } from '../document/types';
 import { Lru } from '../lib/lru';
@@ -163,6 +164,7 @@ export function rawRouteInputs(
   overrides: RouteOverrides = {},
   obstacleNodes: readonly DraftNode[] = doc.nodes,
 ): EdgeRouteInputs | null {
+  doc = { nodes: doc.nodes, edges: visibleEdges(doc.edges) };
   const inputs = connectorInputsWithin(edge, doc, scope, byId, overrides, obstacleNodes);
   if (!inputs || searchAllowed(edge.id, doc, scope)) return inputs;
   return { ...inputs, fallback: false };

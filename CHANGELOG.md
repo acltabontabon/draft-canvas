@@ -16,6 +16,8 @@ The retired VS Code extension has [its own changelog](https://github.com/acltabo
   lets ends follow shapes, including after reconnecting; Pin ends here keeps their exact attachment.
   Existing diagrams retain pins.
 - Agents can set automatic or pinned ends and receive unresolved-route and crowded-side advice.
+  Create and arrange also tidy avoidable crossings and detours, keeping clean neighbours and shared
+  trunks intact. Hand-routed connectors stay as authored.
 
 #### Fixed
 

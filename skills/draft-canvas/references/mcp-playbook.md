@@ -39,6 +39,10 @@ A create or update answers with:
 - `advisories` — sentences naming what in the request to change, often with the exact ops. At most
   ten on a create, five on an update; `advisoriesDropped` counts the rest.
 
+Create and arrange already try bounded routing repairs, then polish avoidable crossings and detours
+without moving shapes again or sacrificing readable neighbours and shared trunks. Manual routes
+and explicitly requested create pins stay as authored. A clean receipt needs no extra arrange pass.
+
 Apply the advisories that make sense in **one** `update_diagram`, then render. Two rounds of polish
 is plenty; past that, tell the person what you would still change.
 

@@ -13,10 +13,10 @@ import { deserializeDocument, serializeDocument } from '../export/project';
 import { AgentError } from './errors';
 import { readCreate, type CreateSpec, type LayoutSpec, type RoomSpec } from './input';
 import { hasPeerCalls } from '../layout/layered';
-import { measureContext, placeRoom, type PlacedRoom } from './place';
+import { captionSizer, measureContext, placeRoom, type PlacedRoom } from './place';
 import { silent, type Report } from './progress';
 import { checkFit, isBetterCandidate, isCleanCandidate, checkQuality, renderedBoundsOf, smallestFontPresent, type FitReport, type QualityIssue, type QualityReport } from './quality';
-import { pastDeadline, relaxLayoutAnchors, withDeadline, type KeptPin } from './route';
+import { pastDeadline, relaxLayoutAnchors, repairAnchors, withDeadline, type KeptPin } from './route';
 import { buildFromStarter } from './starter';
 import { legibilityCost, legibilityOf, type Legibility } from './legibility';
 import { reviewFile } from './review';
@@ -249,7 +249,23 @@ function chooseArrangement(
   }
   const repaired = tried - 1;
   if (!best) throw new AgentError('INTERNAL', 'Nothing was laid out.');
-  return { candidate: best as Candidate, repaired, outOfTime };
+  // Choose the reading direction and trunk layout before polishing individual connectors. Otherwise
+  // a locally cheaper crossing fix can make a less coherent arrangement win the layout comparison.
+  if (!starter && !pastDeadline()) {
+    const explicitRoutes = new Set(room.relationships.filter((r) => r.route).map((r) => r.id));
+    const edges = best.placed.edges.map((e) => ({ ...e }));
+    repairAnchors(edges.filter((e) => !explicitRoutes.has(e.id)), best.placed.nodes, captionSizer(best.placed.nodes, ctx), edges, undefined, true);
+    const placed = { ...best.placed, edges };
+    const polished: Candidate = {
+      ...best,
+      placed,
+      found: qualityOfEveryRoom(placed, ctx, explicit),
+      legibility: legibilityOf(placed.nodes, edges, about),
+      fit: best.layout.viewport ? checkFit(renderedBoundsOf(placed.nodes, edges, ctx), smallestFontPresent(placed.nodes, edges), best.layout.viewport) : undefined,
+    };
+    if (isBetterArrangement(polished, best, keepDirection ? layout0.direction : undefined)) best = polished;
+  }
+  return { candidate: best, repaired, outOfTime };
 }
 
 /**

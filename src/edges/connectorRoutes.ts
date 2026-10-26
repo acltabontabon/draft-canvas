@@ -8,6 +8,7 @@
  * and this adds the tracks. Document-level readers use this accessor; the canvas shares the route
  * engine while keeping its live-geometry hot path.
  */
+import { visibleEdges } from '../document/compensation';
 import type { DraftEdge, DraftNode } from '../document/types';
 import { edgeRoutes, rawRouteInputs, type EdgeRouteInputs, type EdgeRoutes, type RouteOverrides } from './edgeRoutes';
 import { separationPlan } from './separation';
@@ -25,6 +26,7 @@ export function connectorRouteInputs(
   overrides: RouteOverrides = {},
   obstacleNodes: readonly DraftNode[] = doc.nodes,
 ): EdgeRouteInputs | null {
+  doc = { nodes: doc.nodes, edges: visibleEdges(doc.edges) };
   const inputs = rawRouteInputs(edge, doc, scope, byId, overrides, obstacleNodes);
   if (!inputs || overrides.source || overrides.target || overrides.obstacles || obstacleNodes !== doc.nodes) return inputs;
   const tracks = separationPlan(doc.nodes, doc.edges, scope).tracksFor(edge.id);
