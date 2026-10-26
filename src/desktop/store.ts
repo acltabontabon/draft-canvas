@@ -2,14 +2,22 @@ import type { ExplorerSaveRequest } from './saveExplorer';
 import type { AgentSettings, DesktopSettings, Handle, ProjectFile, ProjectInfo, RecentItem, RecoveryEntry, UpdateSnapshot } from './api';
 
 /**
- * "Rename file…", wherever it was asked for: the file open right now (its name comes from `doc`, not
- * carried here), a Recent entry, or a file Find a Diagram has only ever scanned. One dialog, rendered
- * once, reads whichever of these is set.
+ * The file "Rename file…" or "Move to Project…" was asked for: the file open right now (its name comes
+ * from `doc`, not carried here), a Recent entry, or a file Find a Diagram has only ever scanned. One
+ * dialog of each, rendered once, reads whichever of these is set.
  */
-export type RenameTarget =
+export type FileTarget =
   | { kind: 'open' }
-  | { kind: 'recent'; handle: Handle; name: string }
+  | { kind: 'recent'; handle: Handle; name: string; displayPath: string }
   | { kind: 'project'; project: Handle; relPath: string; name: string };
+
+/** "Move to Project…": the file, and — when a drop onto a project couldn't finish — why, so the dialog
+ * opens on that project's question (its name is taken there) or its error rather than the bare list. */
+export interface MoveTarget {
+  file: FileTarget;
+  clash?: Handle;
+  failed?: { project: Handle; message: string };
+}
 
 /** The pages of Settings, in rail order (see `settings/SettingsDialog.tsx`). */
 export type SettingsCategory = 'general' | 'canvas' | 'agents' | 'updates' | 'support';
@@ -64,7 +72,8 @@ export interface DesktopState {
   explorerSave: ExplorerSaveRequest | null;
   /** The Settings page showing; kept across openings so Settings reopens where it was left. */
   settingsCategory: SettingsCategory;
-  renameTarget: RenameTarget | null;
+  renameTarget: FileTarget | null;
+  moveTarget: MoveTarget | null;
   /** Where an update stands, as the shell last said. Null until it has. */
   update: UpdateSnapshot | null;
   /** The update panel is open. */
@@ -89,6 +98,7 @@ const INITIAL: DesktopState = {
   explorerSave: null,
   settingsCategory: 'general',
   renameTarget: null,
+  moveTarget: null,
   update: null,
   updateOpen: false,
   agent: null,

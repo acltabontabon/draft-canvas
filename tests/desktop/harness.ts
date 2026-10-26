@@ -275,6 +275,31 @@ export function createHarness() {
       files.set(handle, { name, displayPath, text: decoder.decode(bytes), version: 1 });
       return { handle, name, displayPath, stamp: stampOf(files.get(handle)!) };
     }),
+    projectMoveFile: vi.fn(async (handle: string, project: string, keepBoth: boolean) => {
+      const file = files.get(handle);
+      if (!file) throw new DesktopError('InvalidHandle', 'Draft Canvas no longer has access to that file.');
+      const into = folder(project);
+      const taken = (name: string) => into.files.has(`${name}.draftcanvas`);
+      let name = file.name;
+      if (taken(name)) {
+        if (!keepBoth) throw new DesktopError('AlreadyExists', `A file named ${name}.draftcanvas already exists there. Pick another name.`);
+        let n = 2;
+        while (taken(`${file.name} ${n}`)) n += 1;
+        name = `${file.name} ${n}`;
+      }
+      // Out of whichever project's listing it was in, as it would leave that folder on disk.
+      for (const source of folders.values()) {
+        const prefix = `${source.info.displayPath}/`;
+        if (file.displayPath.startsWith(prefix)) source.files.delete(file.displayPath.slice(prefix.length));
+      }
+      into.files.set(`${name}.draftcanvas`, { text: file.text, mtimeMs: Date.now() });
+      const newHandle = `h_${nextHandle++}`;
+      const displayPath = `${into.info.displayPath}/${name}.draftcanvas`;
+      files.delete(handle);
+      granted.delete(handle);
+      files.set(newHandle, { ...file, name, displayPath });
+      return { handle: newHandle, name, displayPath };
+    }),
     recentsList: vi.fn(async (): Promise<RecentItem[]> => []),
     recentsRemove: vi.fn(async () => {}),
     recentsClear: vi.fn(async () => {}),
@@ -418,6 +443,7 @@ export function createHarness() {
     editCommand: vi.fn(),
     canvasCommand: vi.fn(),
     openRename: vi.fn(),
+    openMove: vi.fn(),
   };
 
   const store = new DesktopStore();

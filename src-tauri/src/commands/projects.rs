@@ -5,7 +5,9 @@ use super::documents::{opened_doc, OpenedDoc, SavedAs};
 use super::raw::raw_request;
 use super::{last_dir, recents_changed, remember_file, remember_project, run_blocking};
 use crate::dialogs;
-use crate::docio::{create_new_atomic, ensure_document_size, unique_name};
+use crate::docio::{
+    create_new_atomic, ensure_document_size, move_atomic, sidecar_move, unique_name,
+};
 use crate::errors::AppError;
 use crate::grants::Handle;
 use crate::paths::{display_path, sanitize_stem, DOC_EXT};
@@ -169,6 +171,65 @@ pub async fn project_grant_file(
     .await
 }
 
+#[derive(Debug, Serialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+pub struct MovedFile {
+    pub handle: Handle,
+    pub name: String,
+    pub display_path: String,
+}
+
+/// "Move to Project…": moves a file into a project's top folder, keeping its name. A name already
+/// taken there is refused (`AlreadyExists`) so the page can ask; `keep_both` answers that question
+/// with the next free name ("Checkout 2"). Never an overwrite, never a touch of the document's title.
+fn move_file_now(
+    state: &AppState,
+    handle: &str,
+    project_handle: &str,
+    keep_both: bool,
+) -> Result<MovedFile, AppError> {
+    let grant = state.file(handle)?;
+    let root = state.project(project_handle)?.root;
+    let target = if grant.path.parent() == Some(root.as_path()) {
+        // Already there: nothing to move, however the question was asked.
+        grant.path.clone()
+    } else if keep_both {
+        root.join(unique_name(&root, &grant.name, &format!(".{DOC_EXT}")))
+    } else {
+        root.join(format!("{}.{DOC_EXT}", grant.name))
+    };
+    if target != grant.path {
+        move_atomic(&grant.path, &target)?;
+    }
+    let new_handle = state.grant_file(&target)?;
+    let new_grant = state.file(&new_handle)?;
+    // Best effort, as for a rename: the move has already happened.
+    let _ = sidecar_move(&grant.path, &new_grant.path);
+    state
+        .recents
+        .rename(&grant.path, &new_grant.path, &new_grant.name)?;
+    Ok(MovedFile {
+        handle: new_handle,
+        display_path: display_path(&new_grant.path),
+        name: new_grant.name,
+    })
+}
+
+#[tauri::command]
+pub async fn project_move_file(
+    app: AppHandle,
+    handle: String,
+    project_handle: String,
+    keep_both: bool,
+) -> Result<MovedFile, AppError> {
+    run_blocking(&app, move |app, state| {
+        let moved = move_file_now(state, &handle, &project_handle, keep_both)?;
+        recents_changed(app);
+        Ok(moved)
+    })
+    .await
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct NewInProjectMeta {
@@ -286,6 +347,63 @@ mod tests {
             ErrorKind::InvalidPath
         );
         assert!(state.recents.list().unwrap().items.is_empty());
+    }
+
+    #[test]
+    fn moving_a_file_carries_its_background_and_recent_entry_into_the_project() {
+        let (dir, state) = test_state();
+        let path = doc(&dir, "inbox/checkout.draftcanvas", "{\"x\":1}");
+        crate::docio::sidecar_write(&path, "image/webp", b"bg").unwrap();
+        fs::create_dir(dir.path().join("Payments")).unwrap();
+        let project = open_project_at(&state, &dir.path().join("Payments")).unwrap();
+        let handle = state.grant_file(&path).unwrap();
+        remember_file(&state, &state.file(&handle).unwrap().path, "checkout");
+
+        let moved = move_file_now(&state, &handle, &project.handle, false).unwrap();
+        let target = dunce::canonicalize(dir.path().join("Payments"))
+            .unwrap()
+            .join("checkout.draftcanvas");
+        assert_eq!(moved.name, "checkout");
+        assert_eq!(state.file(&moved.handle).unwrap().path, target);
+        assert!(!path.exists());
+        assert_eq!(fs::read_to_string(&target).unwrap(), "{\"x\":1}");
+        assert_eq!(
+            crate::docio::sidecar_read(&target).unwrap().unwrap().bytes,
+            b"bg"
+        );
+        let recents = state.recents.list().unwrap().items;
+        assert_eq!(recents.len(), 1);
+        assert_eq!(Path::new(&recents[0].path), target);
+
+        // Asked again, it is already there: nothing moves, nothing is renumbered.
+        let again = move_file_now(&state, &moved.handle, &project.handle, true).unwrap();
+        assert_eq!(state.file(&again.handle).unwrap().path, target);
+    }
+
+    #[test]
+    fn a_name_taken_in_the_project_is_refused_unless_both_are_kept() {
+        let (dir, state) = test_state();
+        let path = doc(&dir, "inbox/checkout.draftcanvas", "mine");
+        doc(&dir, "Payments/checkout.draftcanvas", "theirs");
+        let project = open_project_at(&state, &dir.path().join("Payments")).unwrap();
+        let handle = state.grant_file(&path).unwrap();
+
+        let err = move_file_now(&state, &handle, &project.handle, false)
+            .err()
+            .unwrap();
+        assert_eq!(err.kind, ErrorKind::AlreadyExists);
+        assert_eq!(fs::read_to_string(&path).unwrap(), "mine");
+
+        let moved = move_file_now(&state, &handle, &project.handle, true).unwrap();
+        assert_eq!(moved.name, "checkout 2");
+        assert_eq!(
+            fs::read_to_string(dir.path().join("Payments/checkout.draftcanvas")).unwrap(),
+            "theirs"
+        );
+        assert_eq!(
+            fs::read_to_string(dir.path().join("Payments/checkout 2.draftcanvas")).unwrap(),
+            "mine"
+        );
     }
 
     #[test]

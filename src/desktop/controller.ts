@@ -36,6 +36,7 @@ import {
   type ProjectInfo,
   type ProjectScan,
   type PromptRequest,
+  type MovedFile,
   type RecoveryEntry,
   type RenamedFile,
   type SavedAs,
@@ -54,6 +55,8 @@ export interface DesktopUi {
   /** "Rename file…"/"Rename draft" from the menu: what it offers depends on whether the open document
    * has a file yet, which only the app layer (holding `DesktopState.doc`) can tell. */
   openRename(): void;
+  /** "Move to Project…" from the menu, for the open file. */
+  openMove(): void;
   /** Undo, Redo and Select All from the native Edit menu: see `dispatchEditCommand`. */
   editCommand(command: 'undo' | 'redo' | 'select-all'): void;
   /** What acts on the open diagram, from the menu bar (it used to sit behind the toolbar's ⋯). */
@@ -270,8 +273,8 @@ export class DesktopController {
   /** Projects a change arrived for while they were being listed (`scanProjects`). */
   private readonly rescanWanted = new Set<Handle>();
   private saving: Promise<void> | null = null;
-  /** A "Rename file…" in flight; saves and snapshots wait for it so a delayed write can't recreate the
-   * file under its old name once the rename has moved it. */
+  /** A "Rename file…" or "Move to Project…" in flight; saves and snapshots wait for it so a delayed
+   * write can't recreate the file at its old path once it has gone. */
   private renaming: Promise<void> | null = null;
   private flushCount = 0;
   private readonly flushes = new Map<number, () => void>();
@@ -562,6 +565,8 @@ export class DesktopController {
         return this.revert();
       case 'rename':
         return this.ui.openRename();
+      case 'move':
+        return this.ui.openMove();
       case 'settings':
         return this.ui.openSettings();
       case 'about':
@@ -1212,31 +1217,70 @@ export class DesktopController {
     return renamed;
   }
 
-  /**
-   * "Rename file…": changes a file's name in place. `handle` need not be the open document's — Find a
-   * Diagram can rename any file it has a handle for, open or not. Waits for a save already in flight
-   * first, so the rename never lands mid-write; a save or autosave that starts while this is running
-   * waits for it in turn (`renaming`, checked at the top of `saveNow`/`saveAsNow`/`snapshotNow`), so a
-   * delayed write can never recreate the file under its old name. Application state — the open
-   * session's handle, name and path — is only ever touched after the filesystem rename has succeeded.
-   */
+  /** "Rename file…": changes a file's name in place. `handle` need not be the open document's — Find a
+   * Diagram can rename any file it has a handle for, open or not. */
   async renameFile(handle: Handle, newStem: string): Promise<RenamedFile> {
+    return this.relocate(handle, () => this.api.renameFile(handle, newStem));
+  }
+
+  /** "Move to Project…" from the menu, for the file that's open right now. */
+  async moveOpenFile(project: Handle, options?: { keepBoth?: boolean }): Promise<MovedFile> {
+    if (this.session.kind !== 'file') throw new DesktopError('InvalidHandle', 'Nothing is open to move.');
+    return this.moveFile(this.session.handle, this.session.displayPath, project, options);
+  }
+
+  /** "Move to Project…" from Find a Diagram, for a file that's only ever been scanned, not opened. */
+  async moveProjectFile(from: Handle, relPath: string, project: Handle, options?: { keepBoth?: boolean }): Promise<MovedFile> {
+    const handle = await this.api.projectGrantFile(from, relPath);
+    const source = this.projects.find((candidate) => candidate.info.handle === from);
+    return this.moveFile(handle, source ? `${source.info.displayPath}/${relPath}` : relPath, project, options);
+  }
+
+  /**
+   * "Move to Project…": moves a file into a project's top folder. `fromPath` is where it was, so the
+   * project it left is listed again along with the one it went to — every other listing stays as it is.
+   * A name already taken there rejects with `AlreadyExists` for the caller to ask about; `keepBoth` is
+   * the answer that takes the next free name.
+   */
+  async moveFile(handle: Handle, fromPath: string, project: Handle, { keepBoth = false }: { keepBoth?: boolean } = {}): Promise<MovedFile> {
+    const moved = await this.relocate(handle, () => this.api.projectMoveFile(handle, project, keepBoth));
+    const left = this.projects.filter(
+      (candidate) => candidate.status === 'ready' && [`${candidate.info.displayPath}/`, `${candidate.info.displayPath}\\`].some((root) => fromPath.startsWith(root)),
+    );
+    // Listed again before this resolves, so the tile a dialog or drop returns to is already the new one.
+    await this.scanProjects([...new Set([project, ...left.map((candidate) => candidate.info.handle)])], { again: true });
+    const destination = this.projects.find((candidate) => candidate.info.handle === project)?.info.name ?? 'the project';
+    this.ui.notify(`“${moved.name}” is now in ${destination}.`, {
+      label: 'Show',
+      run: () => void this.guard('Couldn’t show the file', () => this.api.reveal(moved.handle)),
+    });
+    return moved;
+  }
+
+  /**
+   * Renames and moves alike: the file's path changes under a new handle. Waits for a save already in
+   * flight first, so the change never lands mid-write; a save or autosave that starts while this is
+   * running waits for it in turn (`renaming`, checked at the top of `saveNow`/`saveAsNow`/`snapshotNow`),
+   * so a delayed write can never recreate the file at its old path. Application state — the open
+   * session's handle, name and path — is only ever touched after the filesystem change has succeeded.
+   */
+  private async relocate<T extends { handle: Handle; name: string; displayPath: string }>(handle: Handle, change: () => Promise<T>): Promise<T> {
     // `this.renaming` must be set before anything here awaits, in the same tick this is called on —
     // otherwise a `save()` issued right after this returns could run its own "wait for a rename"
     // check before this has had a chance to record that one is starting.
     const waitFor = this.saving;
-    const task = (async (): Promise<RenamedFile> => {
+    const task = (async (): Promise<T> => {
       if (waitFor) await waitFor;
-      const renamed = await this.api.renameFile(handle, newStem);
+      const changed = await change();
       if (this.session.kind === 'file' && this.session.handle === handle) {
-        this.session = { ...this.session, handle: renamed.handle, name: renamed.name, displayPath: renamed.displayPath };
+        this.session = { ...this.session, handle: changed.handle, name: changed.name, displayPath: changed.displayPath };
         this.publish();
         // The recovery copy names the file by its old handle and path, and a crash now would offer it
-        // back for a file that is no longer there. Rewritten once this rename is over (it waits for it).
+        // back for a file that is no longer there. Rewritten once this change is over (it waits for it).
         if (this.dirty) void this.snapshotNow();
       }
       void this.refreshRecents();
-      return renamed;
+      return changed;
     })();
     this.renaming = task.then(
       () => undefined,

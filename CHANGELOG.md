@@ -25,6 +25,14 @@ The retired VS Code extension has [its own changelog](https://github.com/acltabo
 - Looking inside shapes and backing out zooms prepared room images for smoother motion, avoids
   a competing camera move in empty rooms, and preserves visible layers when reversing direction.
 
+### Desktop
+
+#### Added
+
+- **Move to Project** — Move a diagram to another project from its tile on Home or in Find a
+  Diagram, by dragging it onto a project, or with **File → Move to Project…**. When the name is
+  already taken there, it asks before keeping both. <!-- highlight -->
+
 ## [1.17.0] - 2026-10-25
 
 See where traffic meets. Plan the recovery for every call.

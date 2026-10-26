@@ -32,6 +32,7 @@ const COMMANDS: &[&str] = &[
     "project_scan",
     "project_open_file",
     "project_grant_file",
+    "project_move_file",
     "project_save_new",
     "recents_list",
     "recents_remove",

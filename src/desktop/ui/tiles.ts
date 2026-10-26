@@ -1,7 +1,7 @@
 import { relativeTime } from '../../lib/relativeTime';
 import type { ProjectFile, ProjectInfo, RecentItem, RecoveryEntry } from '../api';
 import type { DesktopController } from '../controller';
-import { desktopStore, type DesktopState, type ProjectState } from '../store';
+import { desktopStore, type DesktopState, type FileTarget, type ProjectState } from '../store';
 import type { BrowseTile } from './DeskBrowse';
 
 /** Tile-building shared by Home's row and the browse view, so each diagram looks the same in both. */
@@ -42,11 +42,18 @@ export function recentTile(item: RecentItem, controller: DesktopController): Bro
     thumbnail: { key: `${item.displayPath}:${item.lastOpenedMs}`, load: () => controller.peek({ kind: 'recent', handle: item.handle }) },
     onOpen: () => void controller.openHandle(item.handle),
     action: { label: `Remove ${item.name} from Recent`, icon: 'close', run: () => void controller.forgetRecent(item.handle) },
-    secondaryAction: {
-      label: `Rename ${item.name}…`,
-      icon: 'pencil',
-      run: () => desktopStore.update({ renameTarget: { kind: 'recent', handle: item.handle, name: item.name } }),
-    },
+    ...fileBacked(item.name, { kind: 'recent', handle: item.handle, name: item.name, displayPath: item.displayPath }),
+  };
+}
+
+/** Rename and Move, for any tile that stands for a file on disk — and the file, for a drag to carry. */
+function fileBacked(name: string, file: FileTarget): Pick<BrowseTile, 'file' | 'fileActions'> {
+  return {
+    file,
+    fileActions: [
+      { label: `Rename ${name}…`, icon: 'pencil', run: () => desktopStore.update({ renameTarget: file }) },
+      { label: `Move ${name} to a project…`, icon: 'move', run: () => desktopStore.update({ moveTarget: { file } }) },
+    ],
   };
 }
 
@@ -63,11 +70,7 @@ export function projectTile(file: ProjectFile, project: ProjectInfo, controller:
     haystack: `${file.relPath} ${project.name}`.toLowerCase(),
     thumbnail: { key: `${key}:${file.mtimeMs}:${file.size}`, load: () => controller.peek({ kind: 'project', project: project.handle, relPath: file.relPath }) },
     onOpen: () => void controller.openProjectFile(project.handle, file.relPath),
-    secondaryAction: {
-      label: `Rename ${file.name}…`,
-      icon: 'pencil',
-      run: () => desktopStore.update({ renameTarget: { kind: 'project', project: project.handle, relPath: file.relPath, name: file.name } }),
-    },
+    ...fileBacked(file.name, { kind: 'project', project: project.handle, relPath: file.relPath, name: file.name }),
   };
 }
 

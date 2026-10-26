@@ -9,6 +9,7 @@ fn desktop_wire_types_match_rust() {
         crate::commands::documents::SavedAs::decl(&config),
         crate::commands::documents::SaveResult::decl(&config),
         crate::commands::projects::ProjectInfo::decl(&config),
+        crate::commands::projects::MovedFile::decl(&config),
         crate::project::ProjectFile::decl(&config),
         crate::project::Scan::decl(&config),
         crate::explorer::ExplorerKind::decl(&config),

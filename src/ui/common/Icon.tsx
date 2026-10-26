@@ -50,6 +50,8 @@ const PATHS = {
   mail: 'M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z M22 6l-10 7L2 6',
   help: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M9.6 9.4a2.5 2.5 0 1 1 3.3 2.4c-.6.2-.9.7-.9 1.3v.4 M12 16.8h.01',
   folder: 'M3 6h6l2 2h10v11H3z',
+  // The folder, with an arrow carrying something into it: "Move to Project…".
+  move: 'M3 6h6l2 2h10v11H3z M8 13.5h7 M12.5 11l2.5 2.5-2.5 2.5',
   search: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z M21 21l-4.35-4.35',
   image: 'M4 4h16v16H4z M8 10a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z M4 16l5-5 4 4 3-3 4 4',
   code: 'M9 6l-6 6 6 6 M15 6l6 6-6 6',

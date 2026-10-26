@@ -49,6 +49,12 @@ const ui: DesktopUi = {
       })
       .catch((error: unknown) => notifyLoadFailure(error, ARRANGE_FAILED));
   },
+  openMove: () => {
+    const { doc } = desktopStore.getSnapshot();
+    if (doc.kind === 'file') desktopStore.update({ moveTarget: { file: { kind: 'open' } } });
+    // A draft has no file to move yet; saving it is what puts it somewhere.
+    else if (doc.kind === 'quick') useUiStore.getState().notify('Save this draft to a file first, then move it to a project.');
+  },
   openRename: () => {
     const { doc } = desktopStore.getSnapshot();
     if (doc.kind === 'file') {

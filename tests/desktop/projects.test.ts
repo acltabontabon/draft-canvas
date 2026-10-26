@@ -75,6 +75,57 @@ describe('many projects', () => {
     expect(h.store.getSnapshot().doc).toMatchObject({ kind: 'file', name: 'checkout-v2' });
   });
 
+  it('moving a file to another project lists both again and says where it went', async () => {
+    const payments = h.addProject('payments', ['flows/checkout.draftcanvas', 'overview.draftcanvas']);
+    const billing = h.addProject('billing', ['invoices.draftcanvas']);
+    const search = h.addProject('search', ['index.draftcanvas']);
+    h.listProjects(payments, billing, search);
+    await h.controller.start();
+    await h.controller.scanProjects([payments, billing, search]);
+    h.api.projectScan.mockClear();
+
+    const moved = await h.controller.moveProjectFile(payments, 'flows/checkout.draftcanvas', billing);
+
+    expect(moved).toMatchObject({ name: 'checkout', displayPath: '~/work/billing/checkout.draftcanvas' });
+    const files = (handle: string) => projects().find((project) => project.info.handle === handle)!.files.map((file) => file.relPath).sort();
+    expect(files(payments)).toEqual(['overview.draftcanvas']);
+    expect(files(billing)).toEqual(['checkout.draftcanvas', 'invoices.draftcanvas']);
+    // Only the two projects the file left and joined are listed again.
+    expect(h.api.projectScan.mock.calls.map(([handle]) => handle).sort()).toEqual([billing, payments].sort());
+    expect(h.notices.at(-1)).toBe('“checkout” is now in billing.');
+  });
+
+  it('a name already taken in the project is refused until both are kept', async () => {
+    const payments = h.addProject('payments', ['checkout.draftcanvas']);
+    const billing = h.addProject('billing', ['checkout.draftcanvas']);
+    h.listProjects(payments, billing);
+    await h.controller.start();
+    await h.controller.scanProjects([payments, billing]);
+
+    await expect(h.controller.moveProjectFile(payments, 'checkout.draftcanvas', billing)).rejects.toMatchObject({ kind: 'AlreadyExists' });
+    expect(projects()[0]!.files.map((file) => file.relPath)).toEqual(['checkout.draftcanvas']);
+
+    const moved = await h.controller.moveProjectFile(payments, 'checkout.draftcanvas', billing, { keepBoth: true });
+    expect(moved.name).toBe('checkout 2');
+    expect(h.api.projectMoveFile).toHaveBeenLastCalledWith(expect.any(String), billing, true);
+    expect(projects()[1]!.files.map((file) => file.relPath).sort()).toEqual(['checkout 2.draftcanvas', 'checkout.draftcanvas']);
+  });
+
+  it('moving the open file carries on in its new place: the next save writes there', async () => {
+    const payments = h.addProject('payments', ['checkout.draftcanvas']);
+    const billing = h.addProject('billing');
+    h.listProjects(payments, billing);
+    await h.controller.start();
+    await h.controller.openProjectFile(payments, 'checkout.draftcanvas');
+    h.edit(documentText('Checkout, edited'));
+
+    const moved = await h.controller.moveOpenFile(billing);
+
+    expect(h.store.getSnapshot().doc).toMatchObject({ kind: 'file', name: 'checkout', displayPath: '~/work/billing/checkout.draftcanvas', dirty: true });
+    await h.controller.save();
+    expect(h.api.saveDocument.mock.calls.at(-1)![0]).toBe(moved.handle);
+  });
+
   it('lists many projects two at a time', async () => {
     const handles = Array.from({ length: 12 }, (_, i) => h.addProject(`p${i}`, [`d${i}.draftcanvas`]));
     h.listProjects(...handles);
