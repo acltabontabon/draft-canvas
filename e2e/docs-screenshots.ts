@@ -1,4 +1,5 @@
 import { openGallery } from './library';
+import { node, trafficDocument } from './fixtures/traffic';
 /**
  * Regenerates the screenshots the user guides in `docs/guides/` embed (`docs/media/guides/*.png`).
  *
@@ -21,6 +22,7 @@ import { openGallery } from './library';
  *   npx tsx e2e/docs-screenshots.ts --rich-text-only
  *   npx tsx e2e/docs-screenshots.ts --collab-only
  *   npx tsx e2e/docs-screenshots.ts --empty-canvas-only
+ *   npx tsx e2e/docs-screenshots.ts --traffic-only
  *
  * The guides' own set is what you get with no arguments, unchanged.
  */
@@ -378,6 +380,40 @@ async function richTextScreenshots(page: Page) {
   await page.keyboard.press('Escape');
 }
 
+async function trafficScreenshots(page: Page) {
+  await page.setViewportSize({ width: 1440, height: 860 });
+  const document = trafficDocument('Online store');
+  document.nodes = [
+    node('gateway', 'service', 'Web Storefront', 0, 0, { serviceKind: 'api' }),
+    node('mobile', 'service', 'Mobile BFF', 0, 240, { serviceKind: 'api' }),
+    node('checkout', 'service', 'Checkout', 360, 160),
+    node('billing', 'service', 'Catalog', 360, -100),
+    node('postgres', 'database', 'PostgreSQL', 760, 40, { databaseKind: 'sql' }),
+    node('stripe', 'service', 'Stripe', 760, 300, { serviceKind: 'external' }),
+    node('paypal', 'service', 'PayPal', 760, 440, { serviceKind: 'external' }),
+  ];
+  document.edges.push(
+    { id: 'checkout-stripe', source: 'checkout', target: 'stripe', directed: true, routing: 'smoothstep', semantic: 'calls' },
+    { id: 'checkout-paypal', source: 'checkout', target: 'paypal', directed: true, routing: 'smoothstep', semantic: 'calls' },
+  );
+  await page.locator('input[type="file"]').setInputFiles({
+    name: 'traffic-guide.draftcanvas',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(document)),
+  });
+  await expect(page.locator('.dc-editor')).toBeVisible();
+  await page.locator('.dc-status-traffic').click();
+  await expect(page.locator('button.dc-traffic-note').last()).toHaveCSS('opacity', '1', { timeout: 10000 });
+  await shot(page, 'traffic-overview');
+  const fallback = page.getByRole('button', { name: /^no fallback!/ }).first();
+  await fallback.click();
+  await shot(page, 'traffic-note');
+  await fallback.press('Escape');
+  await page.locator('.react-flow__node[data-id="checkout"] .dc-node').click();
+  await expect(page.locator('.dc-traffic-callout')).toBeVisible();
+  await shot(page, 'traffic-detail');
+}
+
 async function main() {
   mkdirSync(OUT, { recursive: true });
   log(`${THEME} theme -> ${OUT}`);
@@ -395,6 +431,11 @@ async function main() {
     });
     const page = await context.newPage();
     await page.goto(URL);
+
+    if (process.argv.includes('--traffic-only')) {
+      await trafficScreenshots(page);
+      return;
+    }
 
     if (process.argv.includes('--empty-canvas-only')) {
       await page.getByRole('button', { name: 'New canvas', exact: true }).click();

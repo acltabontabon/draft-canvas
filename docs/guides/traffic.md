@@ -29,6 +29,8 @@ out of a shape, presenting or turning on a spotlight also ends it.
 - Up to seven findings appear as handwritten notes beside the shapes they describe: a marker loop,
   a short note and sometimes an arrow between shapes. Tap or click a note, or Tab to it and press
   `Enter`, to unfold the explanation in place. Activate it again or press `Esc` to fold it.
+  Notes sit above connector labels and arrows, with the canvas colour behind their text so dense
+  drawings stay readable. A selected shape's explanation also avoids nearby findings.
 
   ![The "no fallback!" note unfolded beside the payment providers, explaining what to draw to contain it.](../media/guides/traffic-note.png)
 
@@ -40,7 +42,7 @@ Select a shape while traffic shows to read how many paths reach it and through w
 says which services wait if it is slow or down, whose journeys stall, what it waits on itself, and
 what is safely behind a queue or topic.
 
-![A selected shape with a handwritten traffic note explaining its paths, waiting services and queue protection.](../media/guides/traffic-detail.png)
+![A selected shape with a handwritten traffic note explaining its paths, waiting services and dependencies.](../media/guides/traffic-detail.png)
 
 If nothing can be read — there are no runtime connectors, or every service is reached from another
 so no path has a start — Traffic says so instead.

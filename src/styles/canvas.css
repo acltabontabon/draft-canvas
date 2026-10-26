@@ -5001,6 +5001,8 @@
   left: 0;
   overflow: visible;
   pointer-events: none;
+  /* Above connector labels (20000), within the viewport and below editor chrome. */
+  z-index: 20001;
   --dc-sketch-ink: var(--dc-caution);
 }
 
@@ -5051,6 +5053,7 @@
   position: absolute;
   top: 0;
   left: 0;
+  z-index: 20002;
   --dc-sketch-ink: var(--dc-caution);
   --dc-sketch-highlight: color-mix(in srgb, var(--dc-caution) 22%, transparent);
 }
@@ -5058,7 +5061,7 @@
 .dc-hand {
   color: var(--dc-sketch-ink);
   font-weight: 700;
-  letter-spacing: 0.01em;
+  letter-spacing: 0;
   /* Legible over a connector or a dotted grid without a box behind it. */
   text-shadow:
     0 0 3px var(--dc-canvas),
@@ -5080,6 +5083,8 @@
 
 .dc-traffic-headline-note {
   max-width: 560px;
+  background: var(--dc-canvas);
+  border-radius: 3px;
 }
 
 .dc-traffic-note {
@@ -5089,9 +5094,10 @@
   padding: 1px 4px;
   border: 0;
   border-radius: 3px;
-  background: none;
+  background: var(--dc-canvas);
   font: inherit;
   font-size: 17px;
+  font-weight: 700;
   line-height: 21px;
   text-align: left;
   cursor: pointer;
@@ -5101,7 +5107,7 @@
   display: flex;
   flex-direction: column-reverse;
   /* Grows upward from where the words sit: the button is anchored by its bottom edge. */
-  translate: 0 calc(-100% + 23px);
+  translate: 0 calc(-100% + var(--dc-note-height));
 }
 
 .dc-traffic-note[data-up] .dc-traffic-note-more {
@@ -5114,9 +5120,18 @@
 }
 
 .dc-traffic-note-mark {
+  display: block;
+}
+
+.dc-traffic-note-line,
+.dc-hand-title-line {
+  display: block;
+  white-space: pre;
+}
+
+.dc-traffic-note-line {
+  width: max-content;
   background: linear-gradient(transparent 42%, var(--dc-sketch-highlight) 42%, var(--dc-sketch-highlight) 92%, transparent 92%);
-  box-decoration-break: clone;
-  -webkit-box-decoration-break: clone;
 }
 
 .dc-traffic-note:hover .dc-traffic-note-mark,
@@ -5132,11 +5147,10 @@
 
 .dc-traffic-note[data-tone='unknown'] {
   font-weight: 600;
-  opacity: 0.85;
+  color: color-mix(in srgb, var(--dc-sketch-ink) 85%, var(--dc-canvas));
 }
 
-/* Unfolded: the rest of the thought, written smaller underneath, as if added after a pause. A wash
-   of the canvas behind it only — it is still handwriting on the board, not a dialog. */
+/* The canvas mask erases underlying connector text as well as strokes. */
 .dc-traffic-note-more,
 .dc-hand-list {
   display: block;
@@ -5144,7 +5158,7 @@
   margin-top: 6px;
   padding: 6px 8px 7px;
   border-radius: 8px;
-  background: color-mix(in srgb, var(--dc-canvas) 90%, transparent);
+  background: var(--dc-canvas);
   color: var(--dc-text);
   font-size: 14px;
   font-weight: 600;
@@ -5170,6 +5184,7 @@
   background: none;
   font: inherit;
   font-size: 15px;
+  line-height: 21px;
   text-decoration: underline wavy color-mix(in srgb, var(--dc-caution) 55%, transparent);
   text-underline-offset: 4px;
   cursor: pointer;
@@ -5190,8 +5205,8 @@
   max-width: 300px;
   padding: 6px 10px 7px;
   border-radius: 10px;
-  /* A wash of the board behind the words, so they read over connectors — still not a card. */
-  background: color-mix(in srgb, var(--dc-canvas) 88%, transparent);
+  /* Erase connector text and strokes beneath the explanation. */
+  background: var(--dc-canvas);
   font-size: 15px;
   line-height: 1.35;
 }

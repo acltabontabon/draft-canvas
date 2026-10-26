@@ -143,7 +143,7 @@ export function trafficEdgeOf(
 export function trafficEdgeMotionOf(state: Pick<EditorStore, 'document' | 'traffic'>, id: string): string | null {
   const analysis = trafficOf(state);
   if (!analysis) return null;
-  return motionOf(analysis, state.document.edges).get(id) ?? null;
+  return motionOf(analysis).get(id) ?? null;
 }
 
 /** Past this many lit connectors the flow is drawn still: dozens of moving lines read as a picture,
@@ -154,7 +154,7 @@ const MAX_WAVE_DEPTH = 8;
 
 const motions = new WeakMap<TrafficAnalysis, Map<string, string>>();
 
-function motionOf(analysis: TrafficAnalysis, edges: readonly DraftEdge[]): Map<string, string> {
+function motionOf(analysis: TrafficAnalysis): Map<string, string> {
   const known = motions.get(analysis);
   if (known) return known;
   // A loop moves only where traffic actually reaches it — a loop nothing feeds stays still.
@@ -178,21 +178,17 @@ function motionOf(analysis: TrafficAnalysis, edges: readonly DraftEdge[]): Map<s
       pending.push(to);
     }
   }
-  const drawn = new Map(edges.map((edge) => [edge.id, edge]));
   // The busiest connectors keep moving when there are too many to animate.
   const lit = analysis.interactions
     .filter(flows)
     .sort((a, b) => b.paths.possible - a.paths.possible || (a.id < b.id ? -1 : 1));
   const result = new Map<string, string>();
   for (const interaction of lit) {
-    // The first connector of a route leaves from where the walk started; when that isn't where the
-    // work starts, the route was drawn against the work (Database → Service "read by").
-    const first = drawn.get(interaction.edgeIds[0]!);
-    const reverse = first !== undefined && first.source !== interaction.from;
+    const reversed = new Set(interaction.reverseEdgeIds);
     const hops = Math.min(depth.get(interaction.from) ?? 0, MAX_WAVE_DEPTH);
     for (const edgeId of interaction.edgeIds) {
       if (result.has(edgeId)) continue;
-      result.set(edgeId, result.size >= MAX_FLOWING_EDGES ? 's' : `${reverse ? 'r' : 'f'}${hops}`);
+      result.set(edgeId, result.size >= MAX_FLOWING_EDGES ? 's' : `${reversed.has(edgeId) ? 'r' : 'f'}${hops}`);
     }
   }
   motions.set(analysis, result);

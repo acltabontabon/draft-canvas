@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type Keyboard
 import { useReactFlow } from '@xyflow/react';
 import { displayNameFor } from '../document/factory';
 import { familyOf } from '../render/text/fonts';
+import { layoutText } from '../render/text/layout';
 import type { DraftNode } from '../document/types';
 import { motionMs } from '../lib/motion';
 import { createRng } from '../render/roughness/seed';
@@ -12,6 +13,7 @@ import { impactOf, type TrafficAnalysis, type TrafficInsight } from '../traffic'
 import { arrowFor, placeSketches, type Rect, type SketchRequest } from '../traffic/sketchLayout';
 import { pathsLabel } from './trafficLabels';
 import { markerArrow, markerLoop } from './trafficSketchPaths';
+import { placeCallout } from '../traffic/calloutLayout';
 
 /**
  * Traffic, told on the canvas — the way someone reviewing the diagram would mark up a whiteboard.
@@ -33,7 +35,6 @@ import { markerArrow, markerLoop } from './trafficSketchPaths';
 /** A glance, not a report: past this many notes the canvas would be written over. */
 const MAX_SKETCHES = 7;
 const LINE_HEIGHT = 21;
-const CHAR_WIDTH = 8.6;
 /** The traffic wave has spread by then (`.dc-traffic-flow`'s per-hop delay). */
 const FIRST_STROKE_MS = 1100;
 const STROKE_STAGGER_MS = 520;
@@ -49,6 +50,7 @@ interface Note {
   x: number;
   y: number;
   tilt: number;
+  label: Rect & { lines: string[] };
 }
 
 type Bounds = { minX: number; minY: number; maxX: number; maxY: number };
@@ -93,11 +95,12 @@ export function TrafficSketches() {
     return () => window.removeEventListener('pointerdown', close, true);
   }, [open]);
 
-  const drawn = useMemo(() => (analysis && nodes ? layout(analysis, nodes) : null), [analysis, nodes]);
+  const headline = analysis && nodes ? headlineOf(analysis, level, nodes) : '';
+  const drawn = useMemo(() => (analysis && nodes ? layout(analysis, nodes, headline) : null), [analysis, nodes, headline]);
   useFrameNotes(drawn?.extent ?? null);
   const callout = useMemo(
-    () => (analysis && nodes && selectedId ? calloutFor(analysis, nodes, selectedId) : null),
-    [analysis, nodes, selectedId],
+    () => (analysis && nodes && drawn && selectedId ? calloutFor(analysis, nodes, selectedId, drawn.obstacles) : null),
+    [analysis, nodes, drawn, selectedId],
   );
 
   if (!analysis || !nodes || !drawn) return null;
@@ -110,7 +113,6 @@ export function TrafficSketches() {
   };
   // Pressing a note must not start a selection box or a pan underneath it.
   const hold = (event: PointerEvent) => event.stopPropagation();
-  const headline = headlineOf(analysis, level, nodes);
   const questions = analysis.insights.filter((insight) => insight.severity === 'unknown' && !drawn.notes.some((note) => note.insight.id === insight.id));
 
   return (
@@ -151,7 +153,9 @@ export function TrafficSketches() {
           style={{ transform: `translate(${drawn.headline.x}px, ${drawn.headline.y}px) rotate(-1deg)` }}
           onPointerDown={hold}
         >
-          <p className="dc-hand dc-hand-title">{headline}</p>
+          <p className="dc-hand dc-hand-title" title={headline}>
+            {drawn.headline.lines.map((line, index) => <span key={index} className="dc-hand-title-line">{line}</span>)}
+          </p>
           {questions.length > 0 && (
             <>
               <button
@@ -189,13 +193,16 @@ export function TrafficSketches() {
                 {
                   transform: `translate(${note.x}px, ${note.y}px) rotate(${note.tilt.toFixed(2)}deg)`,
                   '--dc-sketch-delay': `${note.delay + 380}ms`,
+                  '--dc-note-height': `${note.label.height}px`,
                 } as CSSProperties
               }
               onPointerDown={hold}
               onClick={() => toggle(note.insight.id)}
               onKeyDown={onKey(note.insight.id)}
             >
-              <span className="dc-traffic-note-mark">{note.insight.note}</span>
+              <span className="dc-traffic-note-mark">
+                {note.label.lines.map((line, index) => <span key={index} className="dc-traffic-note-line">{line}</span>)}
+              </span>
               {unfolded && <span className="dc-traffic-note-more">{note.insight.text}</span>}
             </button>
           );
@@ -226,30 +233,55 @@ export function TrafficSketches() {
 }
 
 /** Where the notes go: the finding's own few words, beside what it circles, clear of the shapes. */
-function layout(analysis: TrafficAnalysis, nodes: readonly DraftNode[]) {
+function layout(analysis: TrafficAnalysis, nodes: readonly DraftNode[], title: string) {
+  if (nodes.length === 0) return null;
   const rects = new Map<string, Rect>(nodes.map((node) => [node.id, { x: node.x, y: node.y, width: node.width, height: node.height }]));
   const obstacles = nodes.filter((node) => node.type !== 'group').map((node) => rects.get(node.id)!);
   const bounds = boundsOf(nodes)!;
 
   const chosen = analysis.insights.filter((insight) => insight.note && insight.focus?.some((id) => rects.has(id))).slice(0, MAX_SKETCHES);
   const requests: SketchRequest[] = [];
+  const labelFor = (insight: TrafficInsight) => {
+    const text = layoutText(insight.note!, {
+      font: { stack: 'hand', size: 17, weight: insight.severity === 'unknown' ? 600 : 700 },
+      maxWidth: 244,
+      lineHeight: LINE_HEIGHT,
+      maxLines: 3,
+    });
+    return { width: Math.ceil(text.width) + 8, height: text.height + 2, lines: text.lines.map((line) => line.text) };
+  };
   const numbered: { id: string; at: Rect; n: number }[] = [];
   chosen.forEach((insight, index) => {
     const focus = insight.focus!.filter((id) => rects.has(id));
     if (insight.kind === 'sync-chain') {
       // The chain is numbered hop by hop; its note points at where the wait ends.
       focus.forEach((id, hop) => numbered.push({ id: `${insight.id}:${id}`, at: rects.get(id)!, n: hop + 1 }));
-      requests.push({ id: insight.id, targets: [rects.get(focus[focus.length - 1]!)!], label: insight.note!, priority: index });
+      requests.push({ id: insight.id, targets: [rects.get(focus[focus.length - 1]!)!], label: labelFor(insight), priority: index });
       return;
     }
-    requests.push({ id: insight.id, targets: focus.map((id) => rects.get(id)!), label: insight.note!, priority: index });
+    requests.push({ id: insight.id, targets: focus.map((id) => rects.get(id)!), label: labelFor(insight), priority: index });
   });
   // The headline's own corner is taken before any note is placed.
-  const headline = { x: bounds.minX, y: bounds.minY - 104 };
-  const placed = placeSketches(requests, [...obstacles, { x: headline.x, y: headline.y, width: 420, height: 64 }], {
-    charWidth: CHAR_WIDTH,
-    lineHeight: LINE_HEIGHT,
-    maxChars: 26,
+  const titleLayout = layoutText(title, {
+    font: { stack: 'hand', size: 22, weight: 700 },
+    maxWidth: 560,
+    lineHeight: 26.4,
+    maxLines: 3,
+  });
+  const questions = analysis.insights.filter((insight) => insight.severity === 'unknown' && !chosen.some((note) => note.id === insight.id)).length;
+  const linkWidth = questions > 0 ? layoutText(`+ ${questions} ${questions === 1 ? 'open question' : 'open questions'}`, {
+    font: { stack: 'hand', size: 15, weight: 700 },
+    maxWidth: 560,
+    lineHeight: 21,
+  }).width : 0;
+  const headlineHeight = titleLayout.height + (questions > 0 ? 25 : 0);
+  const headline = {
+    x: bounds.minX,
+    y: bounds.minY - Math.max(104, headlineHeight + 24),
+    lines: titleLayout.lines.map((line) => line.text),
+  };
+  const headlineRect = { x: headline.x, y: headline.y, width: Math.ceil(Math.max(titleLayout.width, linkWidth)), height: headlineHeight };
+  const placed = placeSketches(requests, [...obstacles, headlineRect], {
     gap: 30,
   });
 
@@ -278,6 +310,7 @@ function layout(analysis: TrafficAnalysis, nodes: readonly DraftNode[]) {
       x: sketch.label.x,
       y: sketch.label.y,
       tilt: (rng() - 0.5) * 4,
+      label: sketch.label,
     };
   });
   const marks = numbered.map(({ id, at, n }) => ({
@@ -288,15 +321,14 @@ function layout(analysis: TrafficAnalysis, nodes: readonly DraftNode[]) {
     loop: markerLoop({ x: at.x - 17, y: at.y - 17, width: 22, height: 22 }, id),
   }));
   // Everything written, shapes included: what the camera has to show for the notes to be read.
-  const extent = { ...bounds, minY: headline.y };
+  const extent = { ...bounds, minY: headline.y, maxX: Math.max(bounds.maxX, headlineRect.x + headlineRect.width) };
   for (const note of notes) {
-    const width = (note.insight.note?.length ?? 0) * CHAR_WIDTH + 16;
     extent.minX = Math.min(extent.minX, note.x);
     extent.minY = Math.min(extent.minY, note.y);
-    extent.maxX = Math.max(extent.maxX, note.x + width);
-    extent.maxY = Math.max(extent.maxY, note.y + LINE_HEIGHT * 2);
+    extent.maxX = Math.max(extent.maxX, note.x + note.label.width);
+    extent.maxY = Math.max(extent.maxY, note.y + note.label.height);
   }
-  return { notes, marks, headline, extent };
+  return { notes, marks, headline, extent, obstacles: [headlineRect, ...notes.map((note) => note.label)] };
 }
 
 function listOf(names: string[]): string {
@@ -324,7 +356,7 @@ function headlineOf(analysis: TrafficAnalysis, level: ReturnType<typeof viewLeve
 }
 
 /** A selected shape's blast radius, in a few handwritten lines beside it. */
-function calloutFor(analysis: TrafficAnalysis, nodes: readonly DraftNode[], id: string) {
+function calloutFor(analysis: TrafficAnalysis, nodes: readonly DraftNode[], id: string, obstacles: readonly Rect[] = []) {
   const node = nodes.find((item) => item.id === id);
   if (!node) return null;
   const result = analysis.nodes.get(id);
@@ -362,24 +394,24 @@ function calloutFor(analysis: TrafficAnalysis, nodes: readonly DraftNode[], id: 
     if (impact.mayDependOn.length > 0) lines.push(`may wait on ${listOf(impact.mayDependOn.map(name))}`);
     if (impact.decoupled.length > 0) lines.push(`safe behind a queue: ${listOf(impact.decoupled.map(name))}`);
   }
-  // The clearest side of the shape: right, left, below, then above — whichever covers least.
-  const width = Math.min(300, Math.max(...lines.map((line) => line.length)) * 7.4 + 24);
-  const height = lines.length * 21 + 14;
-  const sides = [
-    { x: node.x + node.width + 26, y: node.y - 6 },
-    { x: node.x - width - 26, y: node.y - 6 },
-    { x: node.x, y: node.y + node.height + 30 },
-    { x: node.x, y: node.y - height - 30 },
-  ];
+  // Long resource names wrap: counting paragraphs as single lines placed the lower half over
+  // nearby shapes. Measure the same hand, leading arrow and padding that the callout renders.
+  const paragraphs = lines.map((line, index) => ({
+    text: index === 0 ? `→ ${line}` : line,
+    font: { stack: 'hand' as const, size: index === 0 ? 17 : 15, weight: 700 as const },
+    lineHeight: (index === 0 ? 17 : 15) * 1.35,
+  }));
+  const width = Math.min(300, Math.max(...paragraphs.map((paragraph) => layoutText(paragraph.text, {
+    ...paragraph,
+    maxWidth: Infinity,
+  }).width)) + 20);
+  const height = 13 + paragraphs.reduce((sum, paragraph) => sum + layoutText(paragraph.text, {
+    ...paragraph,
+    maxWidth: width - 20,
+  }).height + 3, 0);
   const others = nodes.filter((other) => other.id !== id && other.type !== 'group');
-  const covered = (at: { x: number; y: number }) =>
-    others.reduce((sum, other) => {
-      const w = Math.max(0, Math.min(at.x + width, other.x + other.width) - Math.max(at.x, other.x));
-      const h = Math.max(0, Math.min(at.y + height, other.y + other.height) - Math.max(at.y, other.y));
-      return sum + w * h;
-    }, 0);
-  const best = sides.reduce((pick, side) => (covered(side) < covered(pick) ? side : pick), sides[0]!);
-  return { title, lines, x: best.x, y: best.y };
+  const at = placeCallout(node, width, height, [...others, ...obstacles]);
+  return { title, lines, x: at.x, y: at.y };
 }
 
 /**

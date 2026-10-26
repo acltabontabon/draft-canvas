@@ -103,6 +103,9 @@ export interface TrafficInteraction {
   workload?: WorkloadKind;
   /** The drawn connectors this interaction was read from, in document order. */
   edgeIds: string[];
+  /** Connectors drawn against the work direction, recorded before parallel routes are merged.
+   *  If a connector belongs to routes in both directions, its first route decides its motion. */
+  reverseEdgeIds: string[];
   /** Junctions crossed, in document order. Empty for a direct connector. */
   junctionIds: string[];
   /** Whether arrivals are definite or only possible, and why. */

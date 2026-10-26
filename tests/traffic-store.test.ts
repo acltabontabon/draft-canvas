@@ -10,6 +10,7 @@ import {
 } from '../src/store/editorStore';
 import {
   roomMayHaveTraffic,
+  trafficEdgeMotionOf,
   trafficEdgeOf,
   trafficNodeReading,
   trafficOf,
@@ -155,6 +156,78 @@ describe('traffic view state', () => {
 });
 
 describe('traffic selectors and memoization', () => {
+  it('moves opposite parallel drawings toward the same logical data resource', () => {
+    const source = service('source');
+    const data = database('data');
+    const forward = edge('forward', source.id, data.id, 'reads');
+    const reverse = edge('reverse', data.id, source.id, 'reads');
+    reset(documentWith([source, data], [forward, reverse]));
+    store.getState().showTraffic();
+
+    expect(trafficOf(store.getState())!.interactions).toHaveLength(1);
+    expect(trafficEdgeMotionOf(store.getState(), forward.id)).toBe('f0');
+    expect(trafficEdgeMotionOf(store.getState(), reverse.id)).toBe('r0');
+  });
+
+  it('keeps each opposite Junction route flowing toward the data resource', () => {
+    const source = service('source');
+    const data = database('data');
+    const forwardJunction = createNode({ id: 'forward-junction', type: 'ellipse', x: 0, y: 0 });
+    const reverseJunction = createNode({ id: 'reverse-junction', type: 'ellipse', x: 0, y: 0 });
+    const connectors = [
+      edge('forward-in', source.id, forwardJunction.id, 'reads'),
+      edge('forward-out', forwardJunction.id, data.id, 'reads'),
+      edge('reverse-in', data.id, reverseJunction.id, 'reads'),
+      edge('reverse-out', reverseJunction.id, source.id, 'reads'),
+    ];
+    reset(documentWith([source, data, forwardJunction, reverseJunction], connectors));
+    store.getState().showTraffic();
+
+    expect(trafficOf(store.getState())!.interactions).toHaveLength(1);
+    for (const connector of connectors) {
+      expect(trafficEdgeMotionOf(store.getState(), connector.id)).toBe(connector.id.startsWith('reverse') ? 'r0' : 'f0');
+    }
+  });
+
+  it('keeps opposite routes distinct when they share a Junction', () => {
+    const source = service('source');
+    const data = database('data');
+    const junction = createNode({ id: 'junction', type: 'ellipse', x: 0, y: 0 });
+    const connectors = [
+      edge('forward-in', source.id, junction.id, 'reads'),
+      edge('forward-out', junction.id, data.id, 'reads'),
+      edge('reverse-in', data.id, junction.id, 'reads'),
+      edge('reverse-out', junction.id, source.id, 'reads'),
+    ];
+    reset(documentWith([source, data, junction], connectors));
+    store.getState().showTraffic();
+
+    for (const connector of connectors) {
+      expect(trafficEdgeMotionOf(store.getState(), connector.id)).toBe(connector.id.startsWith('reverse') ? 'r0' : 'f0');
+    }
+  });
+
+  it('preserves route direction through a shared chain of Junctions', () => {
+    const source = service('source');
+    const data = database('data');
+    const j1 = createNode({ id: 'j1', type: 'ellipse', x: 0, y: 0 });
+    const j2 = createNode({ id: 'j2', type: 'ellipse', x: 0, y: 0 });
+    const connectors = [
+      edge('forward-in', source.id, j1.id, 'reads'),
+      edge('forward-middle', j1.id, j2.id, 'reads'),
+      edge('forward-out', j2.id, data.id, 'reads'),
+      edge('reverse-in', data.id, j2.id, 'reads'),
+      edge('reverse-middle', j2.id, j1.id, 'reads'),
+      edge('reverse-out', j1.id, source.id, 'reads'),
+    ];
+    reset(documentWith([source, data, j1, j2], connectors));
+    store.getState().showTraffic();
+
+    for (const connector of connectors) {
+      expect(trafficEdgeMotionOf(store.getState(), connector.id)).toBe(connector.id.startsWith('reverse') ? 'r0' : 'f0');
+    }
+  });
+
   it('memoizes semantic-equivalent node arrays but invalidates analysis for graph edits and undo/redo', () => {
     const source = service('source', 'Gateway', 'gateway');
     const middle = service('middle', 'Order Service');

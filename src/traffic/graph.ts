@@ -184,14 +184,19 @@ export function buildTrafficGraph(input: TrafficInput, limits: TrafficLimits): G
     return true;
   };
 
-  const addInteraction = (classified: Classified, edgeIds: string[], junctionIds: string[]): void => {
+  const addInteraction = (classified: Classified, edgeIds: string[], junctionIds: string[], drawnSource: string): void => {
     let { from, to } = classified;
     // An undirected line has no work direction; its two ends are stored in a stable order.
     if (classified.class === 'association' && compareText(to, from) < 0) [from, to] = [to, from];
     const id = `${from}>${to}>${classified.class}`;
+    const reverse = classified.from !== drawnSource;
     const existing = interactionsById.get(id);
     if (existing) {
-      mergeIds(existing.edgeIds, edgeIds);
+      for (const edgeId of edgeIds) {
+        if (existing.edgeIds.includes(edgeId)) continue;
+        existing.edgeIds.push(edgeId);
+        if (reverse) existing.reverseEdgeIds.push(edgeId);
+      }
       mergeIds(existing.junctionIds, junctionIds);
       if (classified.certainty === 'definite') {
         existing.certainty = 'definite';
@@ -215,6 +220,7 @@ export function buildTrafficGraph(input: TrafficInput, limits: TrafficLimits): G
       class: classified.class,
       ...(classified.workload ? { workload: classified.workload } : {}),
       edgeIds: [...edgeIds],
+      reverseEdgeIds: reverse ? [...edgeIds] : [],
       junctionIds: [...junctionIds],
       certainty: classified.certainty,
       ...(classified.uncertainty ? { uncertainty: classified.uncertainty } : {}),
@@ -230,7 +236,7 @@ export function buildTrafficGraph(input: TrafficInput, limits: TrafficLimits): G
     const source = nodes.get(edge.source);
     const target = nodes.get(edge.target);
     if (!source || !target || !isConcrete(roleOf(source.id)) || !isConcrete(roleOf(target.id))) continue;
-    addInteraction({ ...classifyConnector(edge, source, target), conflict: false }, [edge.id], []);
+    addInteraction({ ...classifyConnector(edge, source, target), conflict: false }, [edge.id], [], source.id);
     if (!edge.directed) diagnostics.push({ kind: 'undirected', nodeIds: [source.id, target.id].sort(compareText), edgeIds: [edge.id] });
   }
 
@@ -307,6 +313,7 @@ export function buildTrafficGraph(input: TrafficInput, limits: TrafficLimits): G
         split ? { ...classified, certainty: 'possible', uncertainty: 'junction-split' } : classified,
         route.edges.map((edge) => edge.id),
         route.junctionIds,
+        route.source.id,
       );
     }
   };
