@@ -71,7 +71,6 @@ test('duplicate reconnect gives feedback without advertising a valid target or a
   await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 12 });
   await nextFrames(page);
   await expect(page.locator('.dc-node[data-reconnect-target="true"]')).toHaveCount(0);
-  await expect(page.locator('.dc-handle[data-armed="true"]')).toHaveCount(0);
   await page.mouse.up();
   await expect(page.getByText('Already connected to that shape.', { exact: true })).toBeVisible();
   await expect(path).toHaveAttribute('d', before!);

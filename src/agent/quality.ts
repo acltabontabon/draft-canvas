@@ -21,6 +21,7 @@ import { isC4Element } from '../depth/c4';
 import { TEXT_SIZES } from '../render/text/fonts';
 import { captionSizer } from './place';
 import { routingPlan } from '../edges/bundles';
+import { connectorRoutes } from '../edges/connectorRoutes';
 import { captionsTogether, crosses, drawnRoute, othersOf, overlaps, routeProblem, stacked, together, type Box, type Other } from './route';
 
 export interface QualityIssue {
@@ -254,22 +255,29 @@ export function checkQuality(
   // one of several connectors leaving (or reaching) the same side can be straight — the rest of a
   // fan must step — so only a connector alone on both its sides counts.
   const plan = routingPlan(nodes, edges, 'transient');
+  // The sides each connector is drawn on — pinned or automatic alike.
+  const sides = new Map(edges.map((edge) => {
+    const request = connectorRoutes(edge, { nodes, edges }, 'transient', byId)?.request;
+    return [edge.id, { source: request?.source.side, target: request?.target.side }] as const;
+  }));
   const onSide = new Map<string, number>();
   const sideKey = (node: string, side?: string) => `${node}|${side ?? ''}`;
   for (const edge of edges) {
-    for (const key of [sideKey(edge.source, edge.sourceAnchor?.side), sideKey(edge.target, edge.targetAnchor?.side)]) onSide.set(key, (onSide.get(key) ?? 0) + 1);
+    const drawnSides = sides.get(edge.id)!;
+    for (const key of [sideKey(edge.source, drawnSides.source), sideKey(edge.target, drawnSides.target)]) onSide.set(key, (onSide.get(key) ?? 0) + 1);
   }
   const facing = (a?: string, b?: string) =>
     (a === 'right' && b === 'left') || (a === 'left' && b === 'right') || (a === 'bottom' && b === 'top') || (a === 'top' && b === 'bottom');
   for (const edge of edges) {
     if (!judged(edge.id, edge.source, edge.target) || plan.spineFor(edge.id)) continue;
-    if (!facing(edge.sourceAnchor?.side, edge.targetAnchor?.side)) continue;
-    if (onSide.get(sideKey(edge.source, edge.sourceAnchor?.side)) !== 1 || onSide.get(sideKey(edge.target, edge.targetAnchor?.side)) !== 1) continue;
+    const drawnSides = sides.get(edge.id)!;
+    if (!facing(drawnSides.source, drawnSides.target)) continue;
+    if (onSide.get(sideKey(edge.source, drawnSides.source)) !== 1 || onSide.get(sideKey(edge.target, drawnSides.target)) !== 1) continue;
     const route = drawnById.get(edge.id);
     const start = route?.points[0];
     const end = route?.points[route.points.length - 1];
     if (!start || !end) continue;
-    const across = edge.sourceAnchor?.side === 'left' || edge.sourceAnchor?.side === 'right' ? Math.abs(start.y - end.y) : Math.abs(start.x - end.x);
+    const across = drawnSides.source === 'left' || drawnSides.source === 'right' ? Math.abs(start.y - end.y) : Math.abs(start.x - end.x);
     if (across > 1) warnings.push({ kind: 'jog', ids: [edge.id], message: `connector ${edge.id} steps sideways between ${edge.source} and ${edge.target}.` });
   }
   for (let i = 0; i < drawn.length; i += 1) {

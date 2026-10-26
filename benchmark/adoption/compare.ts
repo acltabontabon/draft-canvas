@@ -5,6 +5,8 @@ import type { ElkNode } from 'elkjs';
 import Ajv from 'ajv';
 import standaloneCode from 'ajv/dist/standalone/index.js';
 import { GALLERY } from '../../tests/fixtures/agent/gallery';
+import { withElkRoutes } from './elkRoutes';
+import { legibilityOf } from '../../src/agent/legibility';
 import { TOOLS } from '../../src/agent/schema';
 import { compose } from '../../src/agent/compile';
 import { assignAnchors } from '../../src/layout/anchors';
@@ -48,11 +50,13 @@ for (const fixture of GALLERY) {
     const placed = doc.nodes.map((n) => ({ ...n, ...positions.get(n.id)! }));
     const anchors = assignAnchors(doc.edges, new Map(placed.map((n) => [n.id, anchorRectOf(n)])), direction);
     const edges = doc.edges.map((e) => ({ ...e, ...anchors.get(e.id) }));
+    const routed = withElkRoutes(result, placed, edges);
     for (const theme of ['light', 'dark'] as const) {
       writeFileSync(`benchmark/results/adoption/${fixture.id}-${theme}-baseline.svg`, renderDocumentSvg(doc, { theme }).svg);
       writeFileSync(`benchmark/results/adoption/${fixture.id}-${theme}-elk.svg`, renderDocumentSvg({ ...doc, nodes: placed, edges }, { theme }).svg);
+      writeFileSync(`benchmark/results/adoption/${fixture.id}-${theme}-elk-routed.svg`, renderDocumentSvg({ ...doc, nodes: placed, edges: routed.edges }, { theme }).svg);
     }
-    reports.push({ id: fixture.id, schemaValid, schemaErrors, elapsedMs, baseline: checkQuality(doc.nodes, doc.edges, measureContext()), elk: checkQuality(placed, edges, measureContext()), deterministic: JSON.stringify(await elk.layout(root)) === JSON.stringify(result) });
+    reports.push({ id: fixture.id, schemaValid, schemaErrors, elapsedMs, baseline: checkQuality(doc.nodes, doc.edges, measureContext()), elk: checkQuality(placed, edges, measureContext()), elkRouted: checkQuality(placed, routed.edges, measureContext()), adaptedRoutes: routed.adapted, totalRoutes: edges.length, legibility: { baseline: legibilityOf(doc.nodes, doc.edges), elk: legibilityOf(placed, edges), elkRouted: legibilityOf(placed, routed.edges) }, deterministic: JSON.stringify(await elk.layout(root)) === JSON.stringify(result) });
   } catch (error) {
     reports.push({ id: fixture.id, schemaValid, schemaErrors, error: String(error) });
   }

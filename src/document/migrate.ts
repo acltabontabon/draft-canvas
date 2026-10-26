@@ -590,6 +590,9 @@ const MIGRATIONS: Record<number, Migration> = {
   20: everyRoom(migrateTextToMarkdown),
   // Optional link/visibility fields on edges; existing independent compensation lines keep their look.
   21: (document) => document,
+  // Keep preview-build v23 files readable. Connector styling is a device preference;
+  // normalization discards the retired per-connector overrides.
+  22: (document) => document,
 };
 
 export class UnsupportedVersionError extends Error {

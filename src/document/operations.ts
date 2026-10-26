@@ -23,6 +23,7 @@ import type {
   DraftInside,
   DraftNode,
   DraftPoint,
+  EdgeAnchor,
   DraftViewport,
   DraftSettings,
   Side,
@@ -227,6 +228,48 @@ export function reconnectEdge(
     if (anchor) next[anchorKey] = anchor;
     else delete next[anchorKey];
     return next;
+  });
+  return changed ? withEdges(doc, edges) : doc;
+}
+
+/** Which end (or both) of a connector an action is about. */
+export type EdgeEnd = 'source' | 'target' | 'both';
+
+/**
+ * Lets connectors' ends attach automatically again: the anchor at `end` is dropped, so the end faces
+ * the other shape and follows it as shapes move. The other end, and everything else, is untouched.
+ */
+export function autoAttachEnds(doc: DraftDocument, ids: ReadonlySet<string>, end: EdgeEnd): DraftDocument {
+  let changed = false;
+  const edges = doc.edges.map((edge) => {
+    if (!ids.has(edge.id)) return edge;
+    const clearSource = end !== 'target' && edge.sourceAnchor !== undefined;
+    const clearTarget = end !== 'source' && edge.targetAnchor !== undefined;
+    if (!clearSource && !clearTarget) return edge;
+    changed = true;
+    const next: DraftEdge = { ...edge };
+    if (clearSource) delete next.sourceAnchor;
+    if (clearTarget) delete next.targetAnchor;
+    return next;
+  });
+  return changed ? withEdges(doc, edges) : doc;
+}
+
+/** Pins connectors' ends: each given anchor is stored as given (see the pin contract in
+ *  `edges/routing.ts`'s `resolveEnds`). An end with no anchor given is left as it was. */
+export function pinEnds(doc: DraftDocument, pins: ReadonlyMap<string, { source?: EdgeAnchor; target?: EdgeAnchor }>): DraftDocument {
+  let changed = false;
+  const edges = doc.edges.map((edge) => {
+    const pin = pins.get(edge.id);
+    if (!pin) return edge;
+    const same = (a: EdgeAnchor | undefined, b: EdgeAnchor | undefined) => !b || (a?.side === b.side && a.offset === b.offset);
+    if (same(edge.sourceAnchor, pin.source) && same(edge.targetAnchor, pin.target)) return edge;
+    changed = true;
+    return {
+      ...edge,
+      ...(pin.source ? { sourceAnchor: { ...pin.source } } : {}),
+      ...(pin.target ? { targetAnchor: { ...pin.target } } : {}),
+    };
   });
   return changed ? withEdges(doc, edges) : doc;
 }

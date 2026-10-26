@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { McpSession } from '../agent-conversations';
 import { installMockShell } from './mockShell';
 import { chooseWorkFile } from './explorer';
+import { nearbyServicesRequest } from '../../tests/fixtures/connectors/nearby';
 
 /** A real stdio MCP client and sidecar joined to the real browser editor. Only the OS broker/disk
  *  are faked here; native admission, journaling and access checks have their Rust integration tests. */
@@ -44,6 +45,11 @@ async function connect(page: Page, handle: string) {
             await expect.poll(() => page.evaluate((id) => !!window.__shell.agentResponse(id), id)).toBe(true);
             const outcome = await page.evaluate((id) => window.__shell.agentResponse(id), id) as { ok: boolean; value?: Record<string, unknown>; error?: unknown };
             let value = outcome.value;
+            if (tool === 'create_diagram' && outcome.ok) {
+              // The real worker composes the file; only native disk persistence is mocked.
+              handle = await page.evaluate(value => window.__shell.addFile(String(value.title), String(value.text)), value!);
+              value = { ...(value!.receipt as Record<string, unknown>), diagramId: 'd_mcp00000001', revision: 'f:1' };
+            }
             if (tool === 'submit_proposal' && outcome.ok) {
               const proposalId = `p_${id}`;
               await page.evaluate(({ value, proposalId }) => {
@@ -68,6 +74,48 @@ async function connect(page: Page, handle: string) {
     rmSync(dir, { recursive: true, force: true });
   } };
 }
+
+test('real MCP sidecar: create smart attachments, render them, and accept a proposal that moves a shape', async ({ page }) => {
+  test.skip(process.platform === 'win32', 'The fixture broker uses a Unix socket.');
+  test.skip(!existsSync(process.env.DRAFT_CANVAS_MCP_BINARY ?? join(process.cwd(), 'src-tauri/target/debug/draft-canvas-mcp')), 'Build the real MCP sidecar first.');
+  await installMockShell(page);
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'New Quick Draft' })).toBeVisible();
+  const connection = await connect(page, '');
+  const { client } = connection;
+  try {
+    const created = await client.call('create_diagram', { requestId: 'nearby-create', ...nearbyServicesRequest() });
+    expect(created.ok).toBe(true);
+    await page.getByRole('button', { name: 'Open file…' }).click();
+    await chooseWorkFile(page, 'MCP nearby services');
+    await expect(page.locator('.dc-editor')).toBeVisible();
+    const initial = await client.call('read_diagram', { diagramId: 'd_mcp00000001', include: ['geometry'] });
+    expect(initial.ok).toBe(true);
+    expect(initial.value.relationships).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'nearby', geometry: { from: 'right', to: 'left', path: [[350, 75], [410, 75]], pins: {} } }),
+      expect.objectContaining({ id: 'through', geometry: expect.objectContaining({ to: 'left', pins: {} }) }),
+    ]));
+    const path = page.locator('.react-flow__edge[data-id="nearby"] .dc-edge-hit').first();
+    expect(await path.evaluate(e => (e as SVGPathElement).getTotalLength())).toBeCloseTo(60, 1);
+    const image = await client.call('render_diagram', { diagramId: 'd_mcp00000001' });
+    expect(image.ok).toBe(true);
+    expect(image.record.imageBlocks).toBe(1);
+    await page.screenshot({ path: test.info().outputPath('mcp-smart-create.png') });
+    const proposed = await client.call('submit_proposal', { requestId: 'nearby-move', diagramId: 'd_mcp00000001', expectedRevision: initial.value.revision, summary: 'Move Service B to the left', ops: [{ op: 'update', id: 'near', set: { place: { x: -410, y: 41 } } }] });
+    expect(proposed.ok).toBe(true);
+    await page.getByRole('button', { name: '1 proposal to review' }).click();
+    await page.getByRole('region', { name: 'Proposal review' }).getByRole('button', { name: 'Accept', exact: true }).click();
+    const after = await client.call('read_diagram', { diagramId: 'd_mcp00000001', include: ['geometry'] });
+    expect(after.ok).toBe(true);
+    expect(after.value.relationships).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'nearby', geometry: expect.objectContaining({ from: 'left', to: 'right', pins: {} }) })]));
+    await page.screenshot({ path: test.info().outputPath('mcp-smart-attachments.png') });
+    await page.getByRole('button', { name: 'Undo', exact: true }).click();
+    const undone = await client.call('read_diagram', { diagramId: 'd_mcp00000001', include: ['geometry'] });
+    expect(undone.value.relationships).toEqual(initial.value.relationships);
+  } finally {
+    await connection.close();
+  }
+});
 
 test('real MCP sidecar: inspect a candidate, commit, submit a semantic proposal, review and accept', async ({ page }) => {
   test.skip(process.platform === 'win32', 'The fixture broker uses a Unix socket; the Windows bridge has native tests.');

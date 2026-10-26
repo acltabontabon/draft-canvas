@@ -405,13 +405,25 @@ describe('SVG export', () => {
     expect(ids.size).toBeGreaterThan(0);
   });
 
-  it('sizes the canvas to the content plus padding', () => {
-    const doc = exportFixture();
+  it('sizes a label-free canvas to its node content plus padding', () => {
+    const fixture = exportFixture();
+    const doc = { ...fixture, edges: fixture.edges.map((edge) => ({ ...edge, label: undefined })) };
     const { width, height } = renderDocumentSvg(doc, { padding: 40 });
     const right = Math.max(...doc.nodes.map((node) => node.x + node.width));
     const bottom = Math.max(...doc.nodes.map((node) => node.y + node.height));
     expect(width).toBe(Math.round(right + 80));
     expect(height).toBe(Math.round(bottom + 80));
+  });
+
+  it('includes a straight connector’s caption above the node bounds in its padded frame', () => {
+    const doc = exportFixture();
+    const plain = { ...doc, edges: doc.edges.map((edge) => ({ ...edge, label: undefined })) };
+    // Aligning the source onto the queue's narrow glyph band removes a jog. The caption then sits
+    // slightly above the first row; exporting only node bounds would crop its top padding.
+    const labelled = renderDocumentSvg(doc, { padding: 40 });
+    const unlabelled = renderDocumentSvg(plain, { padding: 40 });
+    expect(labelled.height).toBeGreaterThan(unlabelled.height);
+    expect(labelled.width).toBe(unlabelled.width);
   });
 
   it('carries connector labels and step numbers into the image', () => {

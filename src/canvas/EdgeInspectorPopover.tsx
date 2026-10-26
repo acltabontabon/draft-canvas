@@ -28,6 +28,8 @@ import {
 } from '../document/connectorSemantics';
 import { relationLabel } from '../document/edgeSemantics';
 import type { Rect } from '../edges/routing';
+import { connectorRoutes } from '../edges/connectorRoutes';
+import type { EdgeEnd } from '../document/operations';
 import { useEditorStore } from '../store/editorStore';
 import { useUiStore } from '../store/uiStore';
 import { edgeIndex, nodeIndex } from '../store/selectors';
@@ -50,7 +52,6 @@ import { useLastPresent, usePopoverPresence } from './usePopoverPresence';
 import { usePopoverKeyboard } from './usePopoverKeyboard';
 import { InspectorSelect, type InspectorSelectOption } from './InspectorSelect';
 import { isImeKeyEvent, overlayAboveCanvasIsOpen } from '../lib/isEditableTarget';
-
 const EDGE_SEMANTIC_LABELS: Record<EdgeSemantic, string> = {
   http: 'HTTP',
   grpc: 'gRPC',
@@ -240,6 +241,9 @@ function EdgeInspectorBody({ edgeId, closing }: { edgeId: string; closing: boole
     displayEdge && sourceRect && targetRect
       ? edgeLabelPoint(document, displayEdge, sourceRect, targetRect, { interactionActive })
       : null;
+  // Whether the line is drawn clear of the shapes — from the routes the canvas draws. Not asked while
+  // a gesture reshapes it: those frames are never checked.
+  const routeStatus = displayEdge && !interactionActive ? connectorRoutes(displayEdge, document, 'transient')?.request.status : undefined;
 
   const { target, placement } = useOverlayPosition<'above' | 'below'>(panelRef, 'above', (frame) => {
     if (!labelPoint || !sourceRect || !targetRect) return null;
@@ -343,9 +347,33 @@ function EdgeInspectorBody({ edgeId, closing }: { edgeId: string; closing: boole
             setMembershipOpen={setMembershipOpen}
             theme={theme}
           />
+          {(routeStatus === 'blocked' || routeStatus === 'budget') && <RouteBlockedNotice edge={displayEdge} status={routeStatus} />}
         </div>
       </div>,
     target,
+  );
+}
+
+/**
+ * Said when no clear line could be drawn: from pinned ends (which the router never moves — see the
+ * pin contract in `edges/routing.ts`), between shapes with nothing clear between them, or in a
+ * diagram too busy to search. Offers to let the pinned ends attach automatically.
+ */
+function RouteBlockedNotice({ edge, status }: { edge: DraftEdge; status: 'blocked' | 'budget' }) {
+  const pinned = Boolean(edge.sourceAnchor || edge.targetAnchor);
+  const text = status === 'budget'
+    ? 'Too busy here to find a clear line.'
+    : pinned ? 'No clear line from these pinned ends.' : 'No clear line between these shapes.';
+  const autoAttach = (end: EdgeEnd) => useEditorStore.getState().autoAttachEnds([edge.id], end);
+  return (
+    <div className="dc-popover-row dc-edge-inspector-blocked" role="status">
+      <span className="dc-edge-inspector-blocked-text">{text}</span>
+      {edge.sourceAnchor && edge.targetAnchor && (
+        <Button variant="quiet" onClick={() => autoAttach('both')}>Auto attach both</Button>
+      )}
+      {edge.sourceAnchor && <Button variant="quiet" onClick={() => autoAttach('source')}>Auto attach start</Button>}
+      {edge.targetAnchor && <Button variant="quiet" onClick={() => autoAttach('target')}>Auto attach end</Button>}
+    </div>
   );
 }
 
@@ -1544,6 +1572,18 @@ function ExpandedPanel({
             {flowAction && <div className="dc-inspector-flow-action">{flowAction}</div>}
           </div>
         </TooltipGroup>
+        {(edge.sourceAnchor || edge.targetAnchor) && (
+          <div className="dc-connector-attachment-mode">
+            <span>{edge.sourceAnchor && edge.targetAnchor ? 'Fixed ends' : edge.sourceAnchor ? 'Fixed start' : 'Fixed end'}</span>
+            <Button
+              variant="quiet"
+              aria-label="Auto attach connector"
+              onClick={() => useEditorStore.getState().autoAttachEnds([edge.id], 'both')}
+            >
+              Auto attach
+            </Button>
+          </div>
+        )}
         {conditionOpen && showCondition && (
           <div className="dc-connector-flyout dc-connector-condition-flyout">
             <input

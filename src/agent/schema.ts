@@ -289,10 +289,15 @@ const place: Schema = {
   properties: { x: num, y: num, rightOf: { type: 'string' }, leftOf: { type: 'string' }, above: { type: 'string' }, below: { type: 'string' }, gap: num, align: { enum: ['start', 'center', 'end'] }, width: num, height: num },
   additionalProperties: false,
 };
+/** One end of a hand route: a side, an exact pin, or "auto". Shared through `$defs`: both ends of
+ *  every route use it. */
+const routeEnd: Schema = {
+  oneOf: [{ enum: [...SIDES, 'auto'] }, { type: 'object', properties: { side: { enum: SIDES }, offset: num }, required: ['side'], additionalProperties: false }],
+};
 const route: Schema = {
   type: 'object',
-  description: 'from/to: sides. via: [x,y] bends in order; stepped adds right angles; [] drops them. null on update: automatic.',
-  properties: { from: { enum: SIDES }, to: { enum: SIDES }, via: { type: 'array', maxItems: 32, items: { type: 'array', items: num, minItems: 2, maxItems: 2 } } },
+  description: 'Ends follow their shapes unless pinned: a side pins its middle, {side, offset 0-1} pins exactly, "auto" unpins; pins are kept. via: [x,y] bends in order; [] drops them. null on update: automatic, no bends.',
+  properties: { from: ref('routeEnd'), to: ref('routeEnd'), via: { type: 'array', maxItems: 32, items: { type: 'array', items: num, minItems: 2, maxItems: 2 } } },
   additionalProperties: false,
 };
 
@@ -311,6 +316,7 @@ const roomDefs: Record<string, Schema> = {
   evidence,
   place,
   route,
+  routeEnd,
   steps,
   attachment,
   relationship,

@@ -40,6 +40,39 @@ Queue and Data Store artwork also grows when you drag a corner resize handle.
 - Click a connector to change its relationship
   ([rules](../reference/semantics.md#the-capability-matrix)). Drag its end to reconnect it.
 
+Hovering a connector briefly traces the request and then its reply, once. The canvas stays still
+otherwise, and reduced-motion preferences turn the trace off.
+
+The default, **Sculpted Ink**, uses sweeping corners and a carved arrowhead. Replies use a lighter dashed return
+rail, with each caption outside its own line. Two differently named operations keep separate exits;
+a repeated relationship can share a trunk. These details also appear in SVG and PNG exports.
+
+![Default connectors: distinct operations, separate return rails and straight glyph attachments.](../media/connectors/style-light-after.png)
+
+## Pinned and automatic ends
+
+An automatic end faces the shape it joins and turns to follow it as shapes move. A pinned end keeps its
+side and point. When facing sides overlap enough, automatic ends line up across their shared band
+for a short, straight connection. If another shape blocks the approach, an automatic end can slide
+to a nearby clear point on the same side. Pins, hand-placed bends and shared attachment slots stay fixed.
+
+| Draw it | The end is |
+| --- | --- |
+| Drawn from any dot | Automatic |
+| Dropped on a shape or a dot | Automatic |
+| Reconnected to a shape or a dot | Automatic at the reconnected end |
+| Set with **Pin ends here** | Pinned at its drawn position |
+
+A selected connector shows a pinned end filled and an automatic end as a ring. Its inspector also
+shows **Fixed start**, **Fixed end** or **Fixed ends**, with **Auto attach** to let them follow
+the shapes again. Right-click a connector
+→ **Auto attach start**, **Auto attach end**, **Auto attach both ends** or **Pin ends here**.
+**Auto attach all connectors** (`⌘K`) frees every end in the view, including the pins of diagrams
+drawn before automatic ends existed.
+
+Connectors route around shapes. When no clear line exists, such as from pins facing away from each other, the line is
+drawn anyway and its toolbar says so, with **Auto attach** to fix it.
+
 ## Bend a connector by hand
 
 Select a connector, then:
@@ -61,6 +94,14 @@ previews you can choose with one click, beside arrowhead, colour, condition and 
 colour wheel means automatic colour, as it does for shapes; click it to choose a fixed colour. Click
 the condition icon to edit a condition without making the inspector taller. Hover an icon to see
 what it does.
+
+**Settings → Canvas → Drawing style** controls shapes and connectors together. **Clean** uses the
+Sculpted Ink default; **Draft** adds a restrained hand-drawn quality, and **Sketch** adds visible
+graphite drift and retraced strokes. This device preference applies to every diagram and its exports,
+without changing the diagram or its undo history. Connector colours follow the theme and their
+semantic accents.
+
+![Connector controls for meaning, routing and colour.](../media/connectors/style-inspector-light.png)
 
 To show how a successful step could be counteracted later in a workflow, select its connector and
 choose **+ Add** in Recovery, then click the shape that should receive the recovery action. A

@@ -72,7 +72,33 @@ pairing stays free; an unusual one gets guidance, not rejection. Rules: [Semanti
 
 - **Semantic graph vs. routing graph.** Spines, bundles and line jumps are presentation: never nodes,
   never saved, no effect on semantics.
-- Routing never moves an anchor the user chose. **Tidy connectors** clears only route modes and bends.
+- A stored anchor is a pin: routing never changes its side or point (only its own reply line steps
+  beside it, and connectors pinned to one point spread within a quarter of a handle gap). An end
+  without one is automatic: it faces the other shape and moves with it. Nothing guesses a pin from
+  geometry; **Auto attach** and **Pin ends here** are the only ways one becomes the other.
+  **Tidy connectors** clears only route modes and bends.
+- Export and agent checks read `connectorRouteInputs` / `connectorRoutes` in
+  `edges/connectorRoutes.ts`. The canvas gathers live geometry through per-connector subscriptions
+  and passes equivalent inputs to the same `edgeRoutes` function, so a drag remains responsive. A
+  browser check compares the settled canvas path with the accessor's path. The passes run in one
+  order with no cycles: sides and trunk membership, then where automatic ends sit
+  on a side (`edges/endpoints.ts` spreads ends sharing a side, and pins sharing one point within
+  their band), then the raw routes (`edges/edgeRoutes.ts`), then parallel tracks for runs sharing a
+  corridor (`edges/separation.ts`, each shift checked and kept only if it clears shapes and adds no
+  crossing), then labels, label groups and line jumps on the final lines. A stepped
+  line is checked against the shapes; when it is blocked, `edges/pathfinder.ts` searches for a clear
+  one within the area its shapes were collected from, and a line it cannot clear says `blocked` or
+  `budget` rather than passing as clear. Gesture frames are never searched.
+- Agent repair screens candidates locally, then checks the complete view before accepting one: a
+  shared corridor can move lines that share no endpoint. After selecting the layout, a bounded
+  polish pass removes avoidable crossings and detours only if it preserves readable neighbours,
+  shared trunks and overall quality. Explicit routes and hand-placed bends remain authored.
+- A request/reply Z nests its middle runs; endpoint lane offsets alone would stack them. Caption
+  sides follow the final drawn rails, including corridor separation. A small glyph that cannot
+  align its automatic end may instead align the other, unpinned end. Two differently labelled
+  operations keep independent exits rather than forming a two-member fork.
+- Hover traces are transient SVG paths: once per hover, absent during gestures, Traffic and
+  presentation, disabled by reduced-motion CSS, and never exported or persisted.
 - Spine geometry is relative to the hub, so it follows a drag without writing the document.
 - The connection target shows where a release will land before the pointer is released.
 

@@ -688,6 +688,18 @@ export function canvasCommands(ctx: CommandContext): Command[] {
       run: (inner) => inner.editor.tidyConnections(),
     });
   }
+  // Diagrams drawn before ends could attach automatically keep their pins; this is the one step that
+  // lets every connector in the view follow its shapes.
+  if (!ctx.ui.readOnly && ctx.editor.document.edges.some((edge) => edge.sourceAnchor || edge.targetAnchor)) {
+    commands.push({
+      id: 'auto-attach-all',
+      title: 'Auto attach all connectors',
+      group: 'canvas',
+      keywords: ['anchor', 'attach', 'unpin', 'pins', 'automatic', 'route', 'routing', 'follow', 'sides'],
+      hint: 'Let every connector’s ends follow the shapes — one undo step',
+      run: (inner) => inner.editor.autoAttachEnds(inner.editor.document.edges.map((edge) => edge.id), 'both'),
+    });
+  }
   // Only with shapes to move: the layout engine has nothing to do with an empty room, and a
   // command that does nothing is worse than one that is absent.
   if (!ctx.ui.readOnly && ctx.editor.document.nodes.some((node) => node.type !== 'group' && node.type !== 'note' && node.type !== 'text' && node.type !== 'code')) {
@@ -1505,6 +1517,58 @@ function isBundled(ctx: CommandContext, edge: DraftEdge): boolean {
   return routingPlan(ctx.editor.document.nodes, ctx.editor.document.edges).spineFor(edge.id) !== undefined;
 }
 
+/**
+ * Pinning and unpinning a connector's ends (see the pin contract in `edges/routing.ts`). A pinned end
+ * keeps its side and point however the shapes move; an automatic one faces the other shape. Each
+ * applies to every selected connector when this one is among them.
+ */
+function attachCommands(ctx: CommandContext, edge: DraftEdge): Command[] {
+  const ids = ctx.editor.selection.edges.includes(edge.id) ? ctx.editor.selection.edges : [edge.id];
+  const keywords = ['anchor', 'attach', 'pin', 'unpin', 'side', 'automatic', 'route', 'routing', 'follow'];
+  const commands: Command[] = [];
+  if (edge.sourceAnchor && edge.targetAnchor) {
+    commands.push({
+      id: 'edge-auto-attach',
+      title: 'Auto attach both ends',
+      group: 'connector',
+      keywords,
+      hint: 'Let both ends follow the shapes as they move',
+      run: (inner) => inner.editor.autoAttachEnds(ids, 'both'),
+    });
+  }
+  if (edge.sourceAnchor) {
+    commands.push({
+      id: 'edge-auto-attach-start',
+      title: 'Auto attach start',
+      group: 'connector',
+      keywords,
+      hint: 'Let the start follow the shapes as they move',
+      run: (inner) => inner.editor.autoAttachEnds(ids, 'source'),
+    });
+  }
+  if (edge.targetAnchor) {
+    commands.push({
+      id: 'edge-auto-attach-end',
+      title: 'Auto attach end',
+      group: 'connector',
+      keywords,
+      hint: 'Let the end follow the shapes as they move',
+      run: (inner) => inner.editor.autoAttachEnds(ids, 'target'),
+    });
+  }
+  if (!edge.sourceAnchor || !edge.targetAnchor) {
+    commands.push({
+      id: 'edge-pin-ends',
+      title: 'Pin ends here',
+      group: 'connector',
+      keywords,
+      hint: 'Keep the ends exactly where they are drawn now',
+      run: (inner) => inner.editor.pinEnds(ids, 'both'),
+    });
+  }
+  return commands;
+}
+
 export function edgeCommands(ctx: CommandContext, edge: DraftEdge): Command[] {
   const doc = ctx.editor.document;
   const serviceCall = isServiceInteraction(doc, edge);
@@ -1611,6 +1675,7 @@ export function edgeCommands(ctx: CommandContext, edge: DraftEdge): Command[] {
       hint: edge.routeMode === 'direct' ? 'Let the router bundle this again' : 'Route this one on its own',
       run: (inner) => inner.editor.setEdgeRouteMode(edge.id, edge.routeMode === 'direct' ? undefined : 'direct'),
     },
+    ...attachCommands(ctx, edge),
     ...(edge.waypoints
       ? [
           {

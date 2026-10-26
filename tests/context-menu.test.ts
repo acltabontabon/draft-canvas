@@ -309,6 +309,7 @@ describe('contextMenuCommandsFor — an edge', () => {
       'edge-async',
       'edge-response',
       'edge-route-direct',
+      'edge-pin-ends',
       'sep',
       'attach-note',
       'attach-code',

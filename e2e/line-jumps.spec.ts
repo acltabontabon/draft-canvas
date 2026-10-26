@@ -117,6 +117,19 @@ function doubleCrossingDocument() {
 }
 
 test.describe('line jumps', () => {
+  test('Sketch retains crossing humps and matches the exported path', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('draft-canvas.personality', 'sketch'));
+    await crossingDiagram(page);
+    expect(await humps(page, 'across')).toBe(1);
+    const live = await page.locator('.react-flow__edge[data-id="across"] .dc-edge-line').getAttribute('d');
+    const svg = await page.evaluate(async text => {
+      const { deserializeDocument } = await import('/src/export/project.ts');
+      const { renderDocumentSvg } = await import('/src/render/svg/document.ts');
+      return renderDocumentSvg(deserializeDocument(text).document, { preset: 'sketch' }).svg;
+    }, JSON.stringify(crossingDocument()));
+    expect(svg).toContain(`d="${live}"`);
+  });
+
   test('dragging a shape that only some of a connector\'s crossings involve keeps the canvas alive', async ({
     page,
   }) => {
@@ -225,7 +238,7 @@ test.describe('line jumps', () => {
       const project = await import('/src/export/project.ts');
       const svgmod = await import('/src/render/svg/document.ts');
       const parsed = project.deserializeDocument(text);
-      const svg = svgmod.renderDocumentSvg(parsed.document, { theme: 'dark' }).svg;
+      const svg = svgmod.renderDocumentSvg(parsed.document, { theme: 'dark' }).svg.replace(/<defs>[\s\S]*?<\/defs>/g, '');
       return [...svg.matchAll(/<path d="([^"]+)"/g)].map((m) => m[1]!).filter((d) => d.includes('C'));
     }, JSON.stringify(crossingDocument()));
 

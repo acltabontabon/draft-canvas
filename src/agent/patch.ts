@@ -71,7 +71,7 @@ import {
   type RoomSpec,
 } from './input';
 import { anchorRectOf, attachNote, captionSizer, connectorFor, edgeLabelSize, flowFromSpec, lineOf, measureContext, noteNode, placeBlock, placeRoom, sizeToFit } from './place';
-import { pastDeadline, repairAnchors } from './route';
+import { pastDeadline, relaxLayoutAnchors, repairAnchors } from './route';
 import { arrangeView, fitGroups, placeBeside, placeInGroup, readArrange, scopeOf } from './arrange';
 import { arrangeFreshRoom } from './compile';
 import { checkQuality, isBetterReport, isClean, type QualityReport } from './quality';
@@ -485,7 +485,7 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
       explicit.add(id);
     }
     if (route !== undefined) {
-      view = touchedBy(view, route === null ? automaticRoute(view, id, layout.direction, ctx) : applyRoutes(view, new Map<string, RouteSpec>([[id, route]])), touched);
+      view = touchedBy(view, route === null ? automaticRoute(view, id) : applyRoutes(view, new Map<string, RouteSpec>([[id, route]])), touched);
       touched.add(id);
       if (route) explicit.add(id);
     }
@@ -1117,6 +1117,10 @@ function addToView(
   }
   advisories.push(...best!.notes);
   let next = best!.view;
+  // New connectors may release provisional layout pins for a simpler readable picture; every
+  // connector that was already there keeps exactly what it had and how it was drawn.
+  const requested = new Set(room.relationships.flatMap((r) => [...(r.route?.from && r.route.from !== 'auto' ? [`${r.id}:source`] : []), ...(r.route?.to && r.route.to !== 'auto' ? [`${r.id}:target`] : [])]));
+  next = { ...next, edges: relaxLayoutAnchors(new Set(room.relationships.map((r) => r.id)), next.nodes, next.edges, requested, { polish: true, caption: captionSizer(next.nodes, ctx) }).edges };
 
   // Notes: attached to their host, inside their boundary, or beside what they're about — clear of
   // shapes and of connectors as drawn.
@@ -1446,16 +1450,14 @@ function touchedBy(view: DraftDocument, next: DraftDocument, touched: Set<string
 
 /** A hand-routed connector handed back to the layout: no bends, and anchored afresh from where both
  *  of its shapes are now — what `repoint` does for a moved end. */
-function automaticRoute(view: DraftDocument, id: string, direction: LayoutSpec['direction'], ctx: ReturnType<typeof measureContext>): DraftDocument {
+function automaticRoute(view: DraftDocument, id: string): DraftDocument {
   const edge = view.edges.find((e) => e.id === id);
   if (!edge) return view;
+  // Both ends automatic and no bends: the connector faces its shapes and follows them as they move,
+  // drawn by the router like any connector a person drew from a shape's middle onto another.
   const fresh: DraftEdge = { ...edge };
   delete fresh.waypoints;
   delete fresh.sourceAnchor;
   delete fresh.targetAnchor;
-  const anchors = assignAnchors([fresh], new Map(view.nodes.map((n) => [n.id, anchorRectOf(n)])), direction).get(id);
-  if (anchors) Object.assign(fresh, anchors);
-  const edges = view.edges.map((e) => (e.id === id ? fresh : e));
-  repairAnchors([fresh], view.nodes, captionSizer(view.nodes, ctx), edges);
   return { ...view, edges: view.edges.map((e) => (e.id === id ? fresh : e)) };
 }

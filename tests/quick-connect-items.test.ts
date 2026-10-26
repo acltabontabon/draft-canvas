@@ -15,8 +15,6 @@ function topicDoc() {
 
 const drop = (source?: string): QuickConnectState => ({
   source,
-  sourceSide: 'right',
-  sourceOffset: 0.5,
   flowPosition: { x: 712, y: -34 },
   screenPosition: { x: 800, y: 300 },
   center: { x: 800, y: 0 },

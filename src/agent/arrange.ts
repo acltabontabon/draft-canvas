@@ -33,7 +33,7 @@ import { anchorRectOf, arrangeParts, captionSizer, placeBlock, sizeToFit } from 
 import { clearlyBetterDirection, hasLabelledTrunk, hasSharedSideTrunk, JOG_COST } from './compile';
 import { legibilityCost, legibilityOf } from './legibility';
 import { checkFit, checkQuality, isBetterCandidate, isCleanCandidate, renderedBoundsOf, smallestFontPresent, type FitReport, type QualityReport } from './quality';
-import { drawnRoute, overlaps, pastDeadline, repairAnchors, segmentHitsBox } from './route';
+import { drawnRoute, overlaps, pastDeadline, relaxLayoutAnchors, repairAnchors, segmentHitsBox } from './route';
 
 type Json = Record<string, unknown>;
 
@@ -229,7 +229,36 @@ export function arrangeView(view: DraftDocument, request: ArrangeRequest, ctx: D
     problems.add('LAYOUT_CONSTRAINED', at, 'the arranged part would run into shapes outside the scope, and there is no free space beside it; arrange the whole view instead ({op:"arrange"})');
     return undefined;
   }
-  return best?.arranged;
+  if (best && !pastDeadline()) {
+    const edges = best.arranged.view.edges.map((e) => ({ ...e }));
+    const targets = edges.filter((e) => best!.arranged.touched.has(e.id));
+    repairAnchors(targets, best.arranged.view.nodes, captionSizer(best.arranged.view.nodes, ctx), edges, undefined, true);
+    const arranged = { ...best.arranged, view: { ...best.arranged.view, edges } };
+    const polished: Judged = {
+      ...best,
+      arranged,
+      report: checkQuality(arranged.view.nodes, edges, ctx, arranged.touched),
+      fit: best.layout.viewport ? checkFit(renderedBoundsOf(arranged.view.nodes, edges, ctx), smallestFontPresent(arranged.view.nodes, edges), best.layout.viewport) : undefined,
+    };
+    if (betterByErrors(polished, best) || (tied(polished, best) && cost(polished) < cost(best))) best = polished;
+  }
+  return best && relaxArranged(view, best.arranged);
+}
+
+/**
+ * The connectors this arrange anchored afresh attach automatically wherever that draws the same
+ * picture (`relaxLayoutAnchors`); a connector it left as it was keeps exactly what it had.
+ */
+function relaxArranged(before: DraftDocument, arranged: Arranged): Arranged {
+  const was = new Map(before.edges.map((e) => [e.id, e]));
+  const sameAnchor = (a: DraftEdge['sourceAnchor'], b: DraftEdge['sourceAnchor']) => a?.side === b?.side && a?.offset === b?.offset;
+  const anchored = new Set(arranged.view.edges.filter((e) => {
+    const old = was.get(e.id);
+    return !old || !sameAnchor(old.sourceAnchor, e.sourceAnchor) || !sameAnchor(old.targetAnchor, e.targetAnchor);
+  }).map((e) => e.id));
+  if (anchored.size === 0) return arranged;
+  const { edges } = relaxLayoutAnchors(anchored, arranged.view.nodes, arranged.view.edges);
+  return { ...arranged, view: { ...arranged.view, edges } };
 }
 
 /** The other reading direction at its best: both layerings when peers call each other (see `peers`). */

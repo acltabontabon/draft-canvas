@@ -29,11 +29,19 @@ A create or update answers with:
 - `quality` — `errors` (a create is refused unless `allowDegraded`; an update with errors is refused) and `warnings` such as a connector that jogs
   sideways. A warning is worth a look, not always a change.
 - `legibility` — `crossings` (and `crossed`, the pairs of relationships that cross), plus connectors
-  that detour or cut through a boundary they're not in:
+  that detour or cut through a boundary they're not in, connectors no clear line could be drawn for
+  (`unresolved`) and shape sides too crowded to give each end its own point (`crowded`):
   the top view's at the top level, and every inside view's under `views`, each with its `view` path.
   Advice about an inside view starts "Inside <path>:".
+- `pinned` (create) — connector ends the layout kept pinned because an automatic end would draw them
+  differently. Every other end is automatic: it faces its shape and follows it when the person moves
+  shapes, so leave ends alone unless the person wants one fixed.
 - `advisories` — sentences naming what in the request to change, often with the exact ops. At most
   ten on a create, five on an update; `advisoriesDropped` counts the rest.
+
+Create and arrange already try bounded routing repairs, then polish avoidable crossings and detours
+without moving shapes again or sacrificing readable neighbours and shared trunks. Manual routes
+and explicitly requested create pins stay as authored. A clean receipt needs no extra arrange pass.
 
 Apply the advisories that make sense in **one** `update_diagram`, then render. Two rounds of polish
 is plenty; past that, tell the person what you would still change.
@@ -76,7 +84,8 @@ after ten minutes and is never saved.
 { "op": "add", "nodes": [...], "relationships": [...], "groups": [...], "flows": [...], "notes": [...] }
 { "op": "update", "id": "orders", "set": { "label": "Orders API", "technology": "Node.js 22", "description": null } }
 { "op": "update", "id": "checkout", "set": { "steps": [ ... ] } }
-{ "op": "update", "id": "r9", "set": { "route": { "from": "bottom", "to": "left" } } }
+{ "op": "update", "id": "r9", "set": { "route": { "from": "bottom", "to": { "side": "left", "offset": 0.25 } } } }
+{ "op": "update", "id": "r9", "set": { "route": { "from": "auto" } } }
 { "op": "remove", "ids": ["legacy-api"], "cascade": true }
 { "op": "arrange" }
 { "op": "arrange", "scope": { "group": "platform" }, "spacing": "spacious" }
@@ -86,6 +95,11 @@ after ten minutes and is never saved.
 ```
 
 `null` in `set` clears a field. Ops run in order as one change — one undo step for the person.
+A route end is a side (pinned at its middle), `{side, offset}` (pinned exactly, 0–1 along the side) or
+`"auto"` (unpinned: it faces the other shape and follows it). A pin is kept even when the shapes later
+face away; `set.route: null` makes both ends automatic and drops the bends. `read_diagram` with
+`include: ["geometry"]` gives each relationship's `pins` (an end missing there is automatic) and a
+`status` when its line couldn't be drawn clear.
 A new element is placed beside what it connects to; existing ones never move unless you arrange
 or `set.place` them. A flow's steps keep their captions and highlights when `set.steps` keeps their
 relationship.

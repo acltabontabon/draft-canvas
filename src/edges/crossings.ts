@@ -13,16 +13,14 @@
  * whose crossings didn't change.
  */
 import type { DraftEdge, DraftNode } from '../document/types';
-import { routingPlan } from './bundles';
 import { dashForEdge } from './kindStyle';
-import { obstaclesForEdge } from './obstacles';
 import { sameNodeGeometry, type PlanScope } from './sameGeometry';
 import { BRIDGE_RADIUS } from './bridge';
+import { connectorRouteInputs } from './connectorRoutes';
 import { edgeRoutes } from './edgeRoutes';
 import {
   flattenPath,
   labelLaneOffset,
-  laneIndex,
   rectOf,
   type Rect,
 } from './routing';
@@ -215,28 +213,22 @@ function linesOf(
   memoize = false,
 ): Line[] {
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
-  const lanes = laneIndex(edges);
-  const plan = routingPlan(nodes, edges, scope);
   const lines: Line[] = [];
   const nextMemo = memoize ? new Map<string, { key: string; lines: Line[] }>() : null;
 
   for (const edge of edges) {
-    const source = nodeById.get(edge.source);
-    const target = nodeById.get(edge.target);
-    if (!source || !target) continue;
-    const lane = lanes.get(edge.id)?.offset ?? 0;
-    const spine = plan.spineFor(edge.id);
-    const obstacles = obstaclesForEdge(obstacleNodes, edge.source, edge.target, scope);
-    const sourceRect = rectOf(source);
-    const targetRect = rectOf(target);
+    // The same inputs, and so the same routes, the canvas draws (`edgeRoutes.ts`).
+    const inputs = connectorRouteInputs(edge, { nodes, edges }, scope, nodeById, {}, obstacleNodes);
+    if (!inputs) continue;
+    const { lane, spine, obstacles } = inputs;
 
     let key = '';
     if (nextMemo) {
       key = [
         edge.source,
         edge.target,
-        rectKey(sourceRect),
-        rectKey(targetRect),
+        rectKey(inputs.source),
+        rectKey(inputs.target),
         JSON.stringify([edge.sourceAnchor, edge.targetAnchor, spine, edge.waypoints]),
         edge.routing,
         edge.label,
@@ -256,25 +248,9 @@ function linesOf(
     }
     const firstLine = lines.length;
 
-    // The same routes the canvas draws, from the cache it reads (`edgeRoutes.ts`): on the canvas,
-    // this pass runs inside the first connector's render, and every connector then finds its routes
-    // already worked out.
-    const routes = edgeRoutes(
-      {
-        source: sourceRect,
-        target: targetRect,
-        routing: edge.routing,
-        label: edge.label,
-        sourceAnchor: edge.sourceAnchor,
-        targetAnchor: edge.targetAnchor,
-        hasResponse: edge.hasResponse,
-        lane,
-        spine,
-        obstacles,
-        waypoints: edge.waypoints,
-      },
-      scope,
-    );
+    // On the canvas, this pass runs inside the first connector's render, and every connector then
+    // finds its routes already worked out.
+    const routes = edgeRoutes(inputs, scope);
     const route = routes.request;
     const points = flattenPath(route.d);
     if (points.length >= 2) {

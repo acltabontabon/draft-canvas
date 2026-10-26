@@ -4,12 +4,10 @@
  * set of nearby nodes instead of every node on the canvas.
  */
 import type { DraftNode } from '../document/types';
-import { rectOf, type Rect } from './routing';
+import { OBSTACLE_REACH, rectOf, type Rect } from './routing';
 import { sameNodeGeometry, type PlanScope } from './sameGeometry';
 
 const OBSTACLE_CELL = 512;
-/** Include the full reach of a wrapped label, not just the stroke's corridor. */
-const OBSTACLE_REACH = 256;
 const NO_RECTS: readonly Rect[] = [];
 
 interface ObstacleGrid {

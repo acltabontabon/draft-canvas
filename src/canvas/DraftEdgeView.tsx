@@ -1,3 +1,4 @@
+import { CONNECTOR_STYLE, connectorStrokePath, styledConnectorPath } from '../render/connectorStyle';
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { LIMITS } from '../document/limits';
 import { reconnectProblem } from '../document/reconnect';
@@ -18,9 +19,7 @@ import {
   labelChipSide,
   labelLaneOffset,
   laneIndex,
-  rectOf,
-  responseAwayFor,
-  snappedAnchorForDrop,
+  responseAwayAt,
   strokeSeed,
   type Rect,
   type Side,
@@ -46,7 +45,6 @@ import { layoutText } from '../render/text/layout';
 import { LINE_HEIGHTS } from '../render/text/fonts';
 import { relationshipCaptionLabel } from '../document/edgeSemantics';
 import { PERSONALITY_PROFILES } from '../render/roughness/presets';
-import { roughenPath } from '../render/roughness/roughPath';
 import { sketchArrowPath } from '../render/roughness/roughArrow';
 import { accentOf } from '../render/theme/tokens';
 import { isEdgeFocused, lensFlow, useEditorStore, type EditorStore } from '../store/editorStore';
@@ -61,7 +59,9 @@ import { pointInBox } from '../lib/math';
 import { isImeKeyEvent } from '../lib/isEditableTarget';
 import { EdgeBendHandles, type BendPreview } from './EdgeBendHandles';
 import { translateWaypoints } from '../edges/waypoints';
-import { computeEdgeRoutes, edgeRoutes, type EdgeRouteInputs, type EdgeRoutes } from '../edges/edgeRoutes';
+import { computeEdgeRoutes, edgeRoutes, searchAllowed, type EdgeRouteInputs, type EdgeRoutes } from '../edges/edgeRoutes';
+import { endpointPlan } from '../edges/endpoints';
+import { separationPlan } from '../edges/separation';
 
 const NO_OBSTACLES: readonly Rect[] = [];
 
@@ -250,6 +250,14 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // the plan, but every bundled connector's geometry has genuinely changed by
   // then anyway.
   const spine = useEditorStore((state) => routingPlan(state.document.nodes, visibleEdgesForPlayback(state.document, state.flowPlayback)).spineFor(id));
+  // Whether this connector may still search for a clear line: a boolean, from a plan memoized on the
+  // document's arrays (`searchAllowed`).
+  const searchable = useEditorStore((state) => searchAllowed(id, { nodes: state.document.nodes, edges: visibleEdgesForPlayback(state.document, state.flowPlayback) }, 'canvas'));
+  // Where this connector's automatic ends sit among others on the same sides: an interned object
+  // that keeps its identity while it doesn't change (`endpointPlan`).
+  const spread = useEditorStore((state) => endpointPlan(state.document.nodes, visibleEdgesForPlayback(state.document, state.flowPlayback)).spreadFor(id));
+  // This connector's runs moved onto their own tracks, clear of others' (`separationPlan`); interned.
+  const tracks = useEditorStore((state) => separationPlan(state.document.nodes, visibleEdgesForPlayback(state.document, state.flowPlayback)).tracksFor(id));
   // The live pointer position while this edge's own endpoint is being dragged — local state, not the
   // shared store, so only this one edge re-renders per pointer-move frame. Exactly the same "stream to
   // the rendered element for smoothness, commit to the document only at the end" pattern node dragging
@@ -497,6 +505,9 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
     laneOffset,
     spine,
     routeObstacles,
+    searchable,
+    spread,
+    tracks,
   ] as const;
   const known = LAST_ROUTES.get(id) ?? null;
   const unmoved = known !== null && known.inputs.every((input, index) => input === routeInputs[index]);
@@ -521,6 +532,13 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
     spine: dragOverride ? undefined : spine,
     obstacles: routeObstacles,
     waypoints,
+    // A gesture's frames are drawn the quick way; the drop checks and, if need be, searches.
+    ...(transient ? { mode: 'gesture' as const } : {}),
+    ...(searchable ? {} : { fallback: false }),
+    // A dragged end is on its way to another shape: its planned point means nothing there.
+    ...(spread ? { spread: dragOverride ? { [dragOverride.endpoint === 'source' ? 'target' : 'source']: spread[dragOverride.endpoint === 'source' ? 'target' : 'source'] } : spread } : {}),
+    // Tracks were planned for the shapes at rest; a gesture's frames go without them.
+    ...(tracks && !transient ? { tracks } : {}),
   };
   const routes = unmoved ? known.routes : transient ? computeEdgeRoutes(routeRequest) : edgeRoutes(routeRequest);
   if (!unmoved) LAST_ROUTES.set(id, { inputs: routeInputs, routes });
@@ -533,7 +551,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // Everything that sits beside the label point takes the side away from the reply line, so the
   // reply's own chip has the outer side of its line to itself — see `labelChipSide`.
   // Mirrors `edges/describe.ts`.
-  const responseAway = responseAwayFor(edge.hasResponse, laneOffset);
+  const responseAway = responseAwayAt(route, routes.response, laneOffset);
   const labelSide = labelChipSide(route.labelSide, responseAway);
   const attachmentFlipBelow = attachmentRowBelowsSourceOrTarget(labelX, labelY, sourceRect, targetRect, captionSideOf(edge, labelSide));
 
@@ -621,10 +639,11 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // Only the drawn stroke wobbles — every geometry value above (`route`,
   // `labelX`/`labelY`, attachment points) already reads from the unperturbed
   // route, matching `edges/describe.ts`'s dual-renderer contract. Hit-testing
-  // below reads from `route.d` directly (never `drawnPath`), so it stays
+  // below reads from the styled route before roughening (never `drawnPath`), so it stays
   // exactly as precise as Clean regardless of how bold Sketch's wobble gets —
   // see the hit-path/decorative-path split further down.
   const profile = PERSONALITY_PROFILES[preset];
+  const styledPath = styledConnectorPath(route.d, edge, !transient);
   // Bundle members each draw the whole shared trunk, so they must wobble it
   // identically or it frays into a rope — see `strokeSeed`.
   const seed = strokeSeed(edge.id, route.trunkLabel ? spine : undefined);
@@ -636,10 +655,10 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // A gesture's frames each have a route no later frame repeats: wobbled, but never filed, so a long
   // drag can't push out the settled wobble of every other connector on screen.
   const keepWobble = !transient;
-  const drawnPath = bridgePath(roughenPath(route.d, `${seed}:0`, profile.outline, profile.bow, keepWobble), crossings);
+  const drawnPath = bridgePath(connectorStrokePath(styledPath, `${seed}:0`, profile, keepWobble, crossings.length > 0), crossings);
   const secondStrokePath =
     profile.strokes === 2
-      ? bridgePath(roughenPath(route.d, `${seed}:1`, profile.outline, profile.bow, keepWobble), crossings)
+      ? bridgePath(connectorStrokePath(styledPath, `${seed}:1`, profile, keepWobble, crossings.length > 0), crossings)
       : null;
   // Sketch draws its own arrowhead inline instead of referencing the shared marker — see
   // `render/roughness/roughArrow.ts`.
@@ -662,7 +681,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // "fix" the apparent reversal. See `responseLaneFor`'s own doc comment in `edges/routing.ts`.
   const responseRoute = routes.response;
   const responseDrawnPath = responseRoute
-    ? roughenPath(responseRoute.d, `${seed}${RESPONSE_SEED_SUFFIX}`, profile.outline, profile.bow, keepWobble)
+    ? connectorStrokePath(styledConnectorPath(responseRoute.d, edge, keepWobble), `${seed}${RESPONSE_SEED_SUFFIX}`, profile, keepWobble)
     : null;
   const responseUsesHandDrawnArrow = responseRoute && edge.directed && profile.arrowStyle === 'per-edge-hand';
   const responseArrowPath = responseUsesHandDrawnArrow
@@ -707,7 +726,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
     >
 {/*
         Two sibling paths, same shape `BaseEdge` itself renders internally — but decoupled onto
-        different `d`s. The invisible, wide interaction path always uses the canonical `route.d`,
+        different `d`s. The invisible, wide interaction path always uses the styled route before roughening,
         never `drawnPath`, so this edge's click/hover/reconnect hit area stays exactly as precise
         as Clean at every preset, regardless of how far Sketch's wobble pushes the visible stroke.
         Class names match what `BaseEdge` used, so React Flow's own click dispatch (bound to the
@@ -720,7 +739,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
           all, and a bent one's stops at its outermost run, so half of the band past it was dead. */}
       <path
         className="dc-edge-hit react-flow__edge-interaction"
-        d={route.d}
+        d={styledPath}
         fill="none"
         stroke="#000"
         strokeOpacity={0}
@@ -730,7 +749,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       {responseRoute && (
         <path
           className="dc-edge-hit react-flow__edge-interaction"
-          d={responseRoute.d}
+          d={styledConnectorPath(responseRoute.d, edge, keepWobble)}
           fill="none"
           stroke="#000"
           strokeOpacity={0}
@@ -751,7 +770,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
         markerEnd={edge.directed && !usesHandDrawnArrow ? markerRef(strokeColor, markerVariantForEdge(edge)) : undefined}
         style={{
           stroke: strokeColor,
-          strokeWidth:
+          strokeWidth: Math.max(CONNECTOR_STYLE.lineWidth,
             isActiveStep
               ? 2.6
               : selected || attachTarget
@@ -760,7 +779,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
                   ? 2.3
                   : lensMember || (overview && isShownStep) || hoverShown || trafficReading === 'flow'
                     ? 2.0
-                    : 1.6,
+                    : CONNECTOR_STYLE.lineWidth),
           strokeLinecap: 'round',
           strokeDasharray: dashForEdge(edge)?.join(' '),
         }}
@@ -786,6 +805,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       )}
       {secondStrokePath && (
         <path
+          className="dc-edge-retrace"
           d={secondStrokePath}
           fill="none"
           pointerEvents="none"
@@ -803,7 +823,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
           pointerEvents="none"
           fill={markerVariantForEdge(edge) === 'closed' ? strokeColor : 'none'}
           stroke={markerVariantForEdge(edge) === 'open' ? strokeColor : undefined}
-          strokeWidth={markerVariantForEdge(edge) === 'open' ? 1.3 : undefined}
+          strokeWidth={markerVariantForEdge(edge) === 'open' ? CONNECTOR_STYLE.openArrowWidth : undefined}
           strokeLinecap="round"
           strokeLinejoin="round"
         />
@@ -822,7 +842,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
           markerEnd={edge.directed && !responseUsesHandDrawnArrow ? markerRef(strokeColor, 'open') : undefined}
           style={{
             stroke: strokeColor,
-            strokeWidth: 1,
+            strokeWidth: Math.max(1.1, CONNECTOR_STYLE.lineWidth * 0.6),
             strokeLinecap: 'round',
             strokeDasharray: RESPONSE_DASH.join(' '),
           }}
@@ -834,11 +854,19 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
           pointerEvents="none"
           fill="none"
           stroke={strokeColor}
-          strokeWidth={1.3}
+          strokeWidth={CONNECTOR_STYLE.openArrowWidth}
           strokeLinecap="round"
           strokeLinejoin="round"
           opacity={0.8}
         />
+      )}
+      {/* One short directional cue per hover. CSS opts in only when motion is welcome; the paths
+          unmount as soon as the pointer leaves, a gesture starts or presentation takes over. */}
+      {hoverShown && !routeUnsettled && trafficReading === null && (
+        <>
+          <path className="dc-edge-trace" d={drawnPath} pathLength={1} fill="none" stroke={theme.selection} strokeWidth={2} pointerEvents="none" />
+          {responseDrawnPath && <path className="dc-edge-trace dc-edge-trace-reply" d={responseDrawnPath} pathLength={1} fill="none" stroke={theme.selection} strokeWidth={1.6} pointerEvents="none" />}
+        </>
       )}
 
       {/* Presentation's signal: one stroke that travels this connector's own drawn path, source to
@@ -1006,6 +1034,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
               endpoint="source"
               x={route.source.x}
               y={route.source.y}
+              pinned={edge.sourceAnchor !== undefined}
               oppositeNodeId={edge.target}
               onDrag={setDragOverride}
             />
@@ -1014,6 +1043,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
               endpoint="target"
               x={route.target.x}
               y={route.target.y}
+              pinned={edge.targetAnchor !== undefined}
               oppositeNodeId={edge.source}
               onDrag={setDragOverride}
             />
@@ -1250,6 +1280,7 @@ function EdgeEndpointHandle({
   endpoint,
   x,
   y,
+  pinned,
   oppositeNodeId,
   onDrag,
 }: {
@@ -1257,6 +1288,8 @@ function EdgeEndpointHandle({
   endpoint: 'source' | 'target';
   x: number;
   y: number;
+  /** Pinned ends show filled, automatic ones as a ring — see the pin contract in `edges/routing.ts`. */
+  pinned: boolean;
   /** The other end's node — never a drop target, since `reconnectEdge` refuses a self-loop. */
   oppositeNodeId: string;
   onDrag: (override: DragOverride | null) => void;
@@ -1308,7 +1341,6 @@ function EdgeEndpointHandle({
     if (onKeyDownRef.current) window.removeEventListener('keydown', onKeyDownRef.current);
     useUiStore.getState().setReconnectHoverTarget(null);
     useUiStore.getState().setReconnectDragActive(false);
-    useUiStore.getState().setArmedAnchor(null);
     useUiStore.getState().setInteractionActive(false);
     lastHover.current = null;
     dragStarted.current = false;
@@ -1380,14 +1412,6 @@ function EdgeEndpointHandle({
         lastHover.current = hoverId;
         useUiStore.getState().setReconnectHoverTarget(hoverId);
       }
-      // Live "release here" preview — the hand-rolled counterpart to React
-      // Flow's own `.connectingto.valid`, which only tracks its native
-      // connection-creation drag, not this one. Snapped, and `undefined`
-      // exactly when the eventual drop would leave the anchor dynamic (see
-      // `snappedAnchorForDrop`), so the highlight never promises a specific
-      // point the commit wouldn't actually capture.
-      const anchor = node ? snappedAnchorForDrop(rectOf(node), point) : undefined;
-      useUiStore.getState().setArmedAnchor(anchor && node ? { nodeId: node.id, ...anchor } : null);
     },
     [edgeId, endpoint, findDropNode, onDrag, screenToFlowPosition],
   );
@@ -1404,8 +1428,7 @@ function EdgeEndpointHandle({
       const point = screenToFlowPosition({ x: event.clientX, y: event.clientY });
       const node = findDropNode(point);
       if (!node) return; // Empty canvas: leave the connection exactly as it was.
-      const anchor = snappedAnchorForDrop(rectOf(node), point);
-      useEditorStore.getState().reconnectEdge(edgeId, endpoint, node.id, anchor?.side, anchor?.offset);
+      useEditorStore.getState().reconnectEdge(edgeId, endpoint, node.id, undefined);
     },
     [edgeId, endDrag, endpoint, findDropNode, screenToFlowPosition],
   );
@@ -1426,6 +1449,8 @@ function EdgeEndpointHandle({
   return (
     <div
       className="dc-edge-endpoint"
+      data-pinned={pinned ? 'true' : undefined}
+      title={pinned ? 'Pinned here. Drag to reconnect; right-click to auto attach.' : 'Attaches automatically. Drag to reconnect.'}
       style={{ transform: `translate(-50%, -50%) translate(${x}px, ${y}px)` }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}

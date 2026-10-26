@@ -393,8 +393,6 @@ describe('the vocabulary itself', () => {
 describe('Quick Connect and Intent Continuation from architecture-aware shapes', () => {
   const drop = (source: string): QuickConnectState => ({
     source,
-    sourceSide: 'right',
-    sourceOffset: 0.5,
     flowPosition: { x: 400, y: 0 },
     screenPosition: { x: 400, y: 0 },
     center: { x: 400, y: 0 },

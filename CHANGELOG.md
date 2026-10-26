@@ -10,6 +10,26 @@ The retired VS Code extension has [its own changelog](https://github.com/acltabo
 
 ### Shared
 
+#### Added
+
+- Companion and MCP-created connectors release provisional layout pins when automatic attachments
+  make the whole view simpler without harming other routes or captions. Explicit pins and bends stay
+  fixed; agent geometry reads and previews use the same routing as the canvas.
+
+- Sculpted Ink is the default connector treatment, with sweeping corners and carved arrowheads.
+  Shapes and arrows follow the existing Clean, Draft and Sketch drawing setting together; Sketch
+  adds visible graphite drift and retraced strokes. Canvas and export share the same treatment.
+  Request/reply lines keep separate rails, and automatic ends avoid tiny steps into queue and data
+  store glyphs. A short hover trace follows the request and reply once, respecting reduced motion.
+- Connectors route around shapes, spread automatic ends and separate overlapping runs. Auto attach
+  lets ends follow shapes, including after reconnecting; Pin ends here keeps their exact attachment.
+  Nearby automatic ends align along their overlapping sides, and blocked approaches can slide
+  to a clear point. Fixed ends are identified in the inspector with a one-click Auto attach action.
+  Existing diagrams retain explicit pins.
+- Agents can set automatic or pinned ends and receive unresolved-route and crowded-side advice.
+  Create and arrange also tidy avoidable crossings and detours, keeping clean neighbours and shared
+  trunks intact. Hand-routed connectors stay as authored.
+
 #### Fixed
 
 - Traffic findings stay above connector labels and arrows, with clear text backgrounds and placement

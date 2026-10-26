@@ -12,12 +12,15 @@
  * route or caption would run over a shape, tries the other side pairs in a fixed order.
  */
 
+import { isCollapsedCompensation, visibleEdges } from '../document/compensation';
+import { crossingsBetween, isDetour, runsOf } from './routeMetrics';
 import type { DraftEdge, DraftNode, Side } from '../document/types';
 import { routingPlan } from '../edges/bundles';
 import { labelChipBox, labelGroupPlan } from '../edges/labelGroups';
 import { obstaclesForEdge } from '../edges/obstacles';
+import { connectorRoutes } from '../edges/connectorRoutes';
 import { stepPolyline } from '../edges/waypoints';
-import { anchorsHold, labelChipSide, labelLaneOffset, labelSideAwayFromResponse, laneIndex, responseAwayFor, routeEdge } from '../edges/routing';
+import { anchorsHold, labelChipSide, labelLaneOffset, labelSideAwayFromResponse, laneIndex, responseAwayAt, routeEdge } from '../edges/routing';
 
 export interface Box {
   x: number;
@@ -133,29 +136,35 @@ export interface Drawn {
   ownChip?: boolean;
   /** The Smart Routing trunk it shares, if any: members of one run along it together on purpose. */
   spine?: string;
+  /** Set when the line could not be drawn clear of every shape (`pathfinder.ts`). */
+  status?: 'blocked' | 'budget';
 }
 
 /**
  * Where a connector is drawn, for `read_diagram`'s geometry: the side each end uses, and its path as
  * the points where it turns, ends included (a curved line's are its ends and bends — between them it
  * curves). The same numbers `route.via` takes back, so an agent can read a line, move a point, and
- * send it.
+ * send it. `pins` holds the offset of each pinned end (an end not there attaches automatically and
+ * follows its shape), and `status` says when the line could not be drawn clear of every shape.
  */
-export function routeGeometry(edge: DraftEdge, nodes: readonly DraftNode[], edges: readonly DraftEdge[], byId?: Map<string, DraftNode>): { from: Side; to: Side; path: [number, number][] } | undefined {
+export function routeGeometry(edge: DraftEdge, nodes: readonly DraftNode[], edges: readonly DraftEdge[], byId?: Map<string, DraftNode>): { from: Side; to: Side; path: [number, number][]; pins: { from?: number; to?: number }; status?: 'blocked' | 'budget' } | undefined {
+  if (isCollapsedCompensation(edge)) return undefined;
+  edges = visibleEdges(edges);
   const nodeMap = byId ?? new Map(nodes.map((n) => [n.id, n]));
   let route;
   try {
-    route = routeEdge(edge, nodeMap, {
-      obstacles: obstaclesForEdge(nodes, edge.source, edge.target, 'transient'),
-      spine: routingPlan(nodes, edges, 'transient').spineFor(edge.id),
-      lane: laneIndex(edges).get(edge.id)?.offset ?? 0,
-    });
+    route = connectorRoutes(edge, { nodes, edges }, 'transient', nodeMap)?.request;
   } catch {
     return undefined;
   }
   if (!route) return undefined;
   const turns = route.points ?? (edge.routing === 'smoothstep' ? stepPolyline(route.d) : [route.source, route.target]);
-  return { from: route.source.side, to: route.target.side, path: turns.map((p) => [Math.round(p.x), Math.round(p.y)]) };
+  const pins = {
+    ...(edge.sourceAnchor ? { from: edge.sourceAnchor.offset } : {}),
+    ...(edge.targetAnchor ? { to: edge.targetAnchor.offset } : {}),
+  };
+  const unresolved = route.status === 'blocked' || route.status === 'budget' ? { status: route.status } : {};
+  return { from: route.source.side, to: route.target.side, path: turns.map((p) => [Math.round(p.x), Math.round(p.y)]), pins, ...unresolved };
 }
 
 /** Longer than a connector's stub off its shape (20) — two leaving one point share that much. */
@@ -207,19 +216,18 @@ export function together(a: { id?: string; spine?: string }, b: Other): boolean 
  *  the caller already has every node keyed by id, saves rebuilding that map — this runs inside
  *  `repairAnchors`'s per-candidate loop, up to `MAX_CHECKS` times per problem connector. */
 export function drawnRoute(edge: DraftEdge, nodes: readonly DraftNode[], edges: readonly DraftEdge[], caption?: CaptionSize, byId?: Map<string, DraftNode>): Drawn | null {
+  if (isCollapsedCompensation(edge)) return null;
+  edges = visibleEdges(edges);
   const nodeMap = byId ?? new Map(nodes.map((n) => [n.id, n]));
   const spine = routingPlan(nodes, edges, 'transient').spineFor(edge.id);
-  let route;
+  let routes;
   try {
-    route = routeEdge(edge, nodeMap, {
-      obstacles: obstaclesForEdge(nodes, edge.source, edge.target, 'transient'),
-      spine,
-      lane: laneIndex(edges).get(edge.id)?.offset ?? 0,
-    });
+    routes = connectorRoutes(edge, { nodes, edges }, 'transient', nodeMap);
   } catch {
     return null;
   }
-  if (!route) return null;
+  if (!routes) return null;
+  const route = routes.request;
   let chip: Box | null = null;
   const size = caption?.(edge);
   if (size && size.width > 0) {
@@ -231,16 +239,16 @@ export function drawnRoute(edge: DraftEdge, nodes: readonly DraftNode[], edges: 
       const nudge = labelLaneOffset(route.source.side, route.target.side, lane);
       if (edge.label) {
         // The side the renderers draw it on: away from the reply line, when there is one.
-        const side = labelChipSide(route.labelSide, responseAwayFor(edge.hasResponse, lane));
+        const side = labelChipSide(route.labelSide, responseAwayAt(route, routes.response, lane));
         chip = labelChipBox(side, route.labelX + nudge.x, route.labelY + nudge.y, size.width, size.height);
       } else {
         // A relationship caption (no label of its own) is drawn by `captionAnchor`, not as a chip: on a
         // shared trunk's one point when it collapses there, under a horizontal line whichever side a
         // chip would have taken, and off whichever side a request/response pair's reply line takes —
-        // which a single connector's reply has too (`responseAwayFor`), so this asks the same helpers.
+        // which a single connector's reply has too (`responseAwayAt`), so this asks the same helpers.
         const at = route.trunkLabel ?? { x: route.labelX + nudge.x, y: route.labelY + nudge.y };
         const chipSide = route.trunkLabel ? (route.trunkLabelSide ?? route.labelSide) : route.labelSide;
-        const side = labelSideAwayFromResponse(chipSide, responseAwayFor(edge.hasResponse, lane));
+        const side = labelSideAwayFromResponse(chipSide, responseAwayAt(route, routes.response, lane));
         if (side === 'left' || side === 'right') chip = labelChipBox(side, at.x, at.y, size.width, size.height);
         else {
           const baseline = side === 'top' ? at.y - CAPTION_DROP : at.y + CAPTION_DROP;
@@ -249,7 +257,8 @@ export function drawnRoute(edge: DraftEdge, nodes: readonly DraftNode[], edges: 
       }
     }
   }
-  return { points: pathPoints(route.d), chip, ...(chip && edge.label ? { ownChip: true } : {}), ...(spine ? { spine: spine.id } : {}) };
+  const unresolved = route.status === 'blocked' || route.status === 'budget' ? { status: route.status } : {};
+  return { points: pathPoints(route.d), chip, ...(chip && edge.label ? { ownChip: true } : {}), ...(spine ? { spine: spine.id } : {}), ...unresolved };
 }
 
 /** Two captions that may legitimately share a spot: one label drawn for a group, or one relationship
@@ -261,13 +270,9 @@ export function captionsTogether(a: Drawn & { id?: string }, b: Other): boolean 
 
 /** Another connector as drawn, for judging this one against it. `shares` names connectors that draw
  *  one caption between them (a label group), whose lines run through it by design. */
-export interface Other {
+export interface Other extends Drawn {
   id: string;
-  chip: Box | null;
-  ownChip?: boolean;
-  points: Point[];
   shares?: readonly string[];
-  spine?: string;
 }
 
 /** How far a line may graze a caption's chip — its rounded ends — before it runs through the words. */
@@ -287,13 +292,14 @@ export function crosses(a: Drawn & { id?: string }, b: Other): boolean {
 
 /** Every connector in `edges` as drawn, for `routeProblem`'s `others`. */
 export function othersOf(nodes: readonly DraftNode[], edges: readonly DraftEdge[], caption?: CaptionSize, except?: string, byId?: Map<string, DraftNode>): Other[] {
+  edges = visibleEdges(edges);
   const groups = labelGroupPlan(nodes, edges, 'transient');
   const nodeMap = byId ?? new Map(nodes.map((n) => [n.id, n]));
   return edges.flatMap((e) => {
     if (e.id === except) return [];
     const drawn = drawnRoute(e, nodes, edges, caption, nodeMap);
     const members = groups.groupFor(e.id)?.members;
-    return drawn ? [{ id: e.id, chip: drawn.chip, points: drawn.points, ...(drawn.ownChip ? { ownChip: true } : {}), ...(drawn.spine ? { spine: drawn.spine } : {}), ...(members ? { shares: members } : {}) }] : [];
+    return drawn ? [{ ...drawn, id: e.id, ...(members ? { shares: members } : {}) }] : [];
   });
 }
 
@@ -329,7 +335,11 @@ export function routeProblem(
 ): RouteProblem | undefined {
   const nodeMap = byId ?? new Map(nodes.map((n) => [n.id, n]));
   const drawn = drawnRoute(edge, nodes, edges, caption, nodeMap);
-  if (!drawn) return undefined;
+  return drawn ? problemOf(edge, drawn, nodes, others, nodeMap) : undefined;
+}
+
+/** Judge an already drawn route so whole-view checks do not route it a second time. */
+function problemOf(edge: DraftEdge, drawn: Drawn, nodes: readonly DraftNode[], others: readonly Other[] | undefined, nodeMap: Map<string, DraftNode>): RouteProblem | undefined {
   if (drawn.chip) {
     const covered = nodes.find((n) => n.type !== 'group' && overlaps(drawn.chip!, inset(n, CAPTION_INSET)));
     if (covered) return { kind: 'label-over-node', node: covered.id };
@@ -403,13 +413,80 @@ function skewed(edge: Pick<DraftEdge, 'sourceAnchor' | 'targetAnchor'>, points: 
   return false;
 }
 
+interface RouteAssessment {
+  problems: Map<string, RouteProblem>;
+  unresolved: Set<string>;
+  crossings: number;
+  crossed: Set<string>;
+  detours: Set<string>;
+  cost: number;
+  obstruction: number;
+  overlap: number;
+  bundled: number;
+}
+
+/** Score the complete view: shared corridors can move connectors that share neither endpoint. */
+function assessRoutes(nodes: readonly DraftNode[], edges: readonly DraftEdge[], drawn: readonly Other[], byId: Map<string, DraftNode>): RouteAssessment {
+  const problems = new Map<string, RouteProblem>();
+  const unresolved = new Set<string>();
+  const crossed = new Set<string>();
+  const detours = new Set<string>();
+  const places = new Set<string>();
+  const edgeMap = new Map(edges.map((e) => [e.id, e]));
+  const runs = drawn.map((d) => runsOf(d.points));
+  let cost = 0;
+  let obstruction = 0;
+  let overlap = 0;
+  let bundled = 0;
+  for (let i = 0; i < drawn.length; i += 1) {
+    const route = drawn[i]!;
+    const edge = edgeMap.get(route.id)!;
+    const problem = problemOf(edge, route, nodes, drawn, byId);
+    if (problem) {
+      problems.set(edge.id, problem);
+      if (problem.kind !== 'through-boundary' && problem.kind !== 'shared-run') obstruction += 1;
+    }
+    if (route.spine) bundled += 1;
+    if (route.status) unresolved.add(edge.id);
+    const source = byId.get(edge.source);
+    const target = byId.get(edge.target);
+    if (source && target && isDetour(route.points, source, target)) detours.add(edge.id);
+    cost += routeCost(route.points);
+    for (let j = 0; j < i; j += 1) {
+      const other = drawn[j]!;
+      if (together(route, other)) continue;
+      overlap += sharedRun(route.points, other.points);
+      const pair = [route.spine ?? route.id, other.spine ?? other.id].sort().join('\0');
+      for (const p of crossingsBetween(runs[i]!, runs[j]!)) {
+        places.add(`${pair}\0${Math.round(p.x)}\0${Math.round(p.y)}`);
+        crossed.add(route.id);
+        crossed.add(other.id);
+      }
+    }
+  }
+  return { problems, unresolved, crossings: places.size, crossed, detours, cost, obstruction, overlap, bundled };
+}
+
+/** A repair may never make a previously readable connector unreadable, including outside its scope. */
+function preservesReadability(before: RouteAssessment, after: RouteAssessment): boolean {
+  for (const id of after.unresolved) if (!before.unresolved.has(id)) return false;
+  for (const [id, problem] of after.problems) {
+    const old = before.problems.get(id);
+    if (!old || (old.kind === 'through-boundary' && problem.kind !== 'through-boundary')) return false;
+  }
+  if (after.obstruction !== before.obstruction) return after.obstruction < before.obstruction;
+  if (after.overlap > before.overlap + 1) return false;
+  if (after.overlap < before.overlap - 1) return true;
+  return after.crossings <= before.crossings && after.detours.size <= before.detours.size;
+}
+
 /**
  * Re-anchors, in place, every edge in `targets` whose drawn route or caption runs over a shape or
  * another caption, judged among `all` edges (fan-out spines and lanes depend on the neighbours).
  *
  * Work is bounded: the whole diagram is drawn once, and a candidate re-draws only the connectors
- * sharing an end with the one being moved (they are all its anchors can disturb), planned over
- * their neighbourhood rather than the whole diagram. Candidates are
+ * sharing an end with the one being moved as a cheap screen. Surviving candidates are checked
+ * against the whole view, including unrelated connectors sharing a corridor. Candidates are
  * ranked by a route drawn without trunks or lanes — cheap, and close enough to order them — and at
  * most `MAX_CHECKS` are drawn in full. `deadline` (a `performance.now()` time) stops the search
  * early; what is left unrepaired, the quality check then reports.
@@ -420,36 +497,53 @@ export function repairAnchors(
   caption?: CaptionSize,
   all: readonly DraftEdge[] = targets,
   deadline = activeDeadline,
+  polish = false,
 ): void {
+  targets = targets.filter((e) => !isCollapsedCompensation(e));
+  all = visibleEdges(all);
+  if (!targets.length || performance.now() > deadline) return;
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const moving = new Map(targets.map((t) => [t.id, t]));
   const current = () => all.map((e) => moving.get(e.id) ?? e);
   let edges = current();
   let drawn = new Map(othersOf(nodes, edges, caption, undefined, byId).map((o) => [o.id, o]));
+  let assessment = assessRoutes(nodes, edges, [...drawn.values()], byId);
+  // The side an automatic end of a connector this repair isn't moving is drawn on — fixed for it.
+  const autoSides = new Map<string, { source?: Side; target?: Side }>();
+  for (const e of all) {
+    if (moving.has(e.id) || (e.sourceAnchor && e.targetAnchor)) continue;
+    const request = connectorRoutes(e, { nodes, edges }, 'transient', byId)?.request;
+    if (request) autoSides.set(e.id, { source: request.source.side, target: request.target.side });
+  }
+  const sideOf = (e: DraftEdge, end: 'source' | 'target') => (end === 'source' ? e.sourceAnchor?.side : e.targetAnchor?.side) ?? autoSides.get(e.id)?.[end];
   /**
    * Re-anchors `mover` until every connector in `clean` is drawn without a problem — the first such
    * anchoring, cheapest first — or puts it back and says it couldn't.
    */
-  const tryMove = (mover: DraftEdge, clean: readonly DraftEdge[], why: RouteProblem['kind'] | 'tidiness'): boolean => {
+  const tryMove = (mover: DraftEdge, clean: readonly DraftEdge[], why: RouteProblem['kind'] | 'tidiness' | 'crossing' | 'detour' | 'unresolved'): boolean => {
+    if (mover.waypoints?.length || mover.routeMode === 'direct') return false;
+    const soft = why === 'tidiness' || why === 'crossing' || why === 'detour';
+    const before = assessment;
     const original = { sourceAnchor: mover.sourceAnchor, targetAnchor: mover.targetAnchor };
     const occupied = (id: string, side: Side | undefined) => edges.some((e) => e.id !== mover.id && (
-      (e.source === id && e.sourceAnchor?.side === side) || (e.target === id && e.targetAnchor?.side === side)
+      (e.source === id && sideOf(e, 'source') === side) || (e.target === id && sideOf(e, 'target') === side)
     ));
     if (why === 'tidiness' && (occupied(mover.source, original.sourceAnchor?.side) || occupied(mover.target, original.targetAnchor?.side))) return false;
     // Crossing a boundary is the mildest problem: fixing a worse one may leave a line crossing one
     // (the best of those is kept in case nothing clears everything), and neither case is worth a
     // detour much longer than the route it would replace.
     const originalCost = roughCost(mover, nodes, byId) ?? Number.POSITIVE_INFINITY;
-    let fallback: { source: DraftEdge['sourceAnchor']; target: DraftEdge['targetAnchor']; next: DraftEdge[]; others: Other[]; cost: number } | undefined;
+    let fallback: { source: DraftEdge['sourceAnchor']; target: DraftEdge['targetAnchor']; next: DraftEdge[]; others: Other[]; assessment: RouteAssessment; cost: number } | undefined;
     const ends = new Set(clean.flatMap((e) => [e.source, e.target]));
     const touching = edges.filter((e) => ends.has(e.source) || ends.has(e.target));
     const neighbours = new Set(touching.map((e) => e.id));
     const hood = new Set(touching.flatMap((e) => [e.source, e.target]));
     const edge = mover;
     const candidates: { source: DraftEdge['sourceAnchor']; target: DraftEdge['targetAnchor']; cost: number }[] = [];
-    for (const [sourceOffset, targetOffset] of OFFSET_PAIRS) {
+    offsets: for (const [sourceOffset, targetOffset] of OFFSET_PAIRS) {
       for (const source of SIDES) {
         for (const target of SIDES) {
+          if (performance.now() > deadline) break offsets;
           const sourceAnchor = { side: source, offset: sourceOffset };
           const targetAnchor = { side: target, offset: targetOffset };
           const cost = roughCost({ ...edge, sourceAnchor, targetAnchor }, nodes, byId);
@@ -483,8 +577,8 @@ export function repairAnchors(
       edge.sourceAnchor = candidate.source;
       edge.targetAnchor = candidate.target;
       // A fresh array per arrangement (the routing caches are keyed by it), and planned over the
-      // neighbourhood only: trunks, lanes and label groups form among connectors sharing an end, so
-      // two hops out is everything that can move. The final quality check plans the whole diagram.
+      // neighbourhood first for a cheap screen. The full-view check below also catches separation
+      // changes along shared corridors beyond these two hops.
       const next = current();
       const local = next.filter((e) => hood.has(e.source) || hood.has(e.target));
       const fresh = new Map(othersOf(nodes, local, caption, undefined, byId).filter((o) => neighbours.has(o.id)).map((o) => [o.id, o]));
@@ -499,19 +593,38 @@ export function repairAnchors(
         return routeCost(after.points) > routeCost(before.points) - (e.id === mover.id ? BEND_COST / 2 : -1);
       })) continue;
       const problems = clean.map((e) => routeProblem(moving.get(e.id) ?? e, nodes, local, caption, others, byId));
-      if (problems.every((p) => !p)) {
+      // Local checks only screen candidates. Separation and endpoint plans depend on the whole
+      // view, so accept using fresh full-view geometry, never the neighbourhood approximation.
+      if (problems.some((p) => p && p.kind !== 'through-boundary')) continue;
+      const full = othersOf(nodes, next, caption, undefined, byId);
+      const after = assessRoutes(nodes, next, full, byId);
+      if (performance.now() > deadline || !preservesReadability(before, after)) continue;
+      if (why === 'unresolved' && after.unresolved.has(mover.id)) continue;
+      if (soft) {
+        if (after.obstruction > before.obstruction || after.overlap > before.overlap + 1 || after.bundled < before.bundled || after.crossings > before.crossings || after.detours.size > before.detours.size) continue;
+        if ([...after.crossed].some((id) => !before.crossed.has(id)) || [...after.detours].some((id) => !before.detours.has(id))) continue;
+        const simpler = after.cost < before.cost - BEND_COST / 2;
+        const fewerCrossings = after.crossings < before.crossings;
+        const fewerDetours = after.detours.size < before.detours.size;
+        if (why === 'crossing' ? !fewerCrossings : why === 'detour' ? !fewerDetours && !simpler : !simpler) continue;
+        if (after.cost > before.cost + BOUNDARY_DETOUR) continue;
+      }
+      const finalProblems = clean.map((e) => after.problems.get(e.id));
+      if (finalProblems.every((p) => !p)) {
         fixed = true;
+        assessment = after;
         edges = next;
-        drawn = new Map(others.map((o) => [o.id, o]));
+        drawn = new Map(full.map((o) => [o.id, o]));
         break;
       }
-      if (!fallback && why !== 'through-boundary' && why !== 'tidiness' && problems.every((p) => !p || p.kind === 'through-boundary')) {
-        fallback = { source: candidate.source, target: candidate.target, next, others, cost: candidate.cost };
+      if (!fallback && why !== 'through-boundary' && !soft && finalProblems.every((p) => !p || p.kind === 'through-boundary')) {
+        fallback = { source: candidate.source, target: candidate.target, next, others: full, assessment: after, cost: candidate.cost };
       }
     }
     if (!fixed && fallback) {
       edge.sourceAnchor = fallback.source;
       edge.targetAnchor = fallback.target;
+      assessment = fallback.assessment;
       edges = fallback.next;
       drawn = new Map(fallback.others.map((o) => [o.id, o]));
       fixed = true;
@@ -522,17 +635,23 @@ export function repairAnchors(
 
   for (const edge of targets) {
     if (performance.now() > deadline) return;
-    const problem = routeProblem(edge, nodes, edges, caption, [...drawn.values()], byId);
+    if (edge.waypoints?.length || edge.routeMode === 'direct') continue;
+    const problem = assessment.problems.get(edge.id);
+    if (!problem && assessment.unresolved.has(edge.id)) {
+      tryMove(edge, [edge], 'unresolved');
+      continue;
+    }
     if (!problem) {
       // Hard readability checks do not flag a needless elbow. Tidy only automatic routes, and
       // require the already-readable neighbours to remain readable when their shared routing moves.
       const route = drawn.get(edge.id);
-      if (edge.waypoints?.length || edge.routeMode === 'direct' || !route || bendsOf(route.points) < 2) continue;
+      const why = polish && assessment.crossed.has(edge.id) ? 'crossing' : polish && assessment.detours.has(edge.id) ? 'detour' : 'tidiness';
+      if (!route || (why === 'tidiness' && bendsOf(route.points) < 2)) continue;
       const touching = edges.filter((e) => e.source === edge.source || e.target === edge.source || e.source === edge.target || e.target === edge.target);
       const plan = routingPlan(nodes, edges, 'transient');
       if (touching.some((e) => plan.spineFor(e.id))) continue;
       const clean = touching.filter((e) => !routeProblem(e, nodes, edges, caption, [...drawn.values()], byId));
-      tryMove(edge, clean, 'tidiness');
+      tryMove(edge, clean, why);
       continue;
     }
     // Trouble between two connectors (a line through the other's caption, the two on top of each
@@ -556,4 +675,123 @@ function roughCost(edge: DraftEdge, nodes: readonly DraftNode[], byId: Map<strin
   } catch {
     return undefined;
   }
+}
+
+/** A pin the layout kept on a connector it drew, for the receipt: the end, and why. */
+export interface KeptPin {
+  id: string;
+  end: 'source' | 'target';
+  /** `layout`: an automatic end would draw this line differently, so the layout's choice stays. */
+  reason: 'layout';
+}
+
+/** How a connector is drawn, as one comparable string: both lines and where the label sits. */
+function drawnKey(edge: DraftEdge, doc: { nodes: readonly DraftNode[]; edges: readonly DraftEdge[] }, byId: Map<string, DraftNode>): string {
+  const routes = connectorRoutes(edge, doc, 'transient', byId);
+  if (!routes) return '';
+  return `${routes.request.d}|${routes.request.labelX},${routes.request.labelY}|${routes.response?.d ?? ''}`;
+}
+
+/**
+ * Lets the ends a layout chose for connectors it drew (`created`, by id) attach automatically wherever
+ * that draws the very same picture — so a diagram an agent drew follows its shapes when a person moves
+ * them, the way one they drew themselves does (see the pin contract in `edges/routing.ts`).
+ *
+ * Nothing is guessed about anyone's intent: only connectors this operation drew are touched, and an
+ * end the agent placed itself (`requested`, `id:source` or `id:target`) stays pinned. Every connector
+ * in `all` is compared as drawn before and after. Authoring may opt into `polish`, which also accepts
+ * a substantially simpler automatic picture after checking every route and caption in the view.
+ * Otherwise a created connector whose line would change, or that
+ * shares a shape with any connector that would, keeps its layout pins, until nothing changes — and if
+ * that can't be shown in time, every layout pin stays. Returns a new edge list (plans are cached by
+ * the list, so it is never edited in place) and the ends kept pinned.
+ */
+export function relaxLayoutAnchors(
+  created: ReadonlySet<string>,
+  nodes: readonly DraftNode[],
+  all: readonly DraftEdge[],
+  requested: ReadonlySet<string> = new Set(),
+  options: { polish?: boolean; caption?: CaptionSize } = {},
+): { edges: DraftEdge[]; kept: KeptPin[] } {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const snapshot = (edges: readonly DraftEdge[]) => new Map(edges.map((e) => [e.id, drawnKey(e, { nodes, edges }, byId)]));
+  const mine = all.filter((e) => created.has(e.id));
+  // Which ends may go automatic: an end with a layout pin, not one the agent asked for, not a bent line.
+  const relaxed = new Map<string, { source: boolean; target: boolean }>();
+  for (const edge of mine) {
+    if (edge.waypoints?.length) continue;
+    const source = Boolean(edge.sourceAnchor) && !requested.has(`${edge.id}:source`);
+    const target = Boolean(edge.targetAnchor) && !requested.has(`${edge.id}:target`);
+    if (source || target) relaxed.set(edge.id, { source, target });
+  }
+  const apply = () => all.map((e) => {
+    const ends = relaxed.get(e.id);
+    if (!ends) return e;
+    const next = { ...e };
+    if (ends.source) delete next.sourceAnchor;
+    if (ends.target) delete next.targetAnchor;
+    return next;
+  });
+  // Release only a checked state; an unproven candidate keeps every layout pin.
+  let settled = relaxed.size === 0;
+  if (!settled) {
+    const before = snapshot(all);
+    // Layout pins are provisional for newly authored lines. Prefer the automatic picture when it
+    // is substantially simpler and the complete view stays readable; untouched lines stay exact.
+    // This matters after facing-side alignment: a layout's old offsets can otherwise freeze a loop.
+    if (options.polish && !pastDeadline()) {
+      const candidate = apply();
+      const now = snapshot(candidate);
+      if (all.every(e => created.has(e.id) || now.get(e.id) === before.get(e.id))) {
+        const original = othersOf(nodes, all, options.caption, undefined, byId);
+        const automatic = othersOf(nodes, candidate, options.caption, undefined, byId);
+        const was = assessRoutes(nodes, all, original, byId);
+        const next = assessRoutes(nodes, candidate, automatic, byId);
+        const costs = new Map(original.map(e => [e.id, routeCost(e.points)]));
+        if (!pastDeadline() && preservesReadability(was, next)
+          && next.obstruction <= was.obstruction && next.overlap <= was.overlap + 1
+          && next.bundled >= was.bundled && next.crossings <= was.crossings
+          && [...next.crossed].every(id => was.crossed.has(id))
+          && [...next.detours].every(id => was.detours.has(id))
+          && next.cost < was.cost - BEND_COST / 2
+          && automatic.every(e => routeCost(e.points) <= (costs.get(e.id) ?? 0) + 1)) {
+          settled = true;
+        }
+      }
+    }
+    for (let round = 0; !settled && round < 8 && relaxed.size; round += 1) {
+      if (pastDeadline()) break;
+      const now = snapshot(apply());
+      const changed = all.filter((e) => now.get(e.id) !== before.get(e.id));
+      if (changed.length === 0) {
+        settled = true;
+        break;
+      }
+      let restored = false;
+      for (const edge of changed) {
+        if (relaxed.delete(edge.id)) {
+          restored = true;
+          continue;
+        }
+        // Someone else's line moved: the created connectors sharing a shape with it go back.
+        for (const other of mine) {
+          const shares = other.source === edge.source || other.source === edge.target || other.target === edge.source || other.target === edge.target;
+          if (shares && relaxed.delete(other.id)) restored = true;
+        }
+      }
+      if (!restored) break;
+      if (relaxed.size === 0) settled = true;
+    }
+  }
+  if (!settled) relaxed.clear();
+  const edges = apply();
+  const kept: KeptPin[] = [];
+  for (const edge of edges) {
+    if (!created.has(edge.id) || edge.waypoints?.length) continue;
+    for (const end of ['source', 'target'] as const) {
+      const anchor = end === 'source' ? edge.sourceAnchor : edge.targetAnchor;
+      if (anchor && !requested.has(`${edge.id}:${end}`)) kept.push({ id: edge.id, end, reason: 'layout' });
+    }
+  }
+  return { edges, kept };
 }

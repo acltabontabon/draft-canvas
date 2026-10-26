@@ -1,0 +1,45 @@
+/**
+ * The document-level way to read a connector's routes for export and agent checks. The canvas
+ * supplies live geometry through its per-connector subscriptions to the same `edgeRoutes` function.
+ *
+ * Built in two layers so the plans that look at every connector at once can read the layer below the
+ * one they shape: `edgeRoutes.ts` holds the routes before separation (`rawRouteInputs` — rects, lane,
+ * trunk, nearby shapes, spread ends, search budget), `separation.ts` plans parallel tracks from those,
+ * and this adds the tracks. Document-level readers use this accessor; the canvas shares the route
+ * engine while keeping its live-geometry hot path.
+ */
+import { visibleEdges } from '../document/compensation';
+import type { DraftEdge, DraftNode } from '../document/types';
+import { edgeRoutes, rawRouteInputs, type EdgeRouteInputs, type EdgeRoutes, type RouteOverrides } from './edgeRoutes';
+import { separationPlan } from './separation';
+import type { PlanScope } from './sameGeometry';
+
+/**
+ * A connector's route inputs, read from its document. Live geometry (`overrides`, or obstacles less
+ * the shapes a gesture is moving) gets no tracks: they were planned for where the shapes rest.
+ */
+export function connectorRouteInputs(
+  edge: DraftEdge,
+  doc: { nodes: readonly DraftNode[]; edges: readonly DraftEdge[] },
+  scope: PlanScope,
+  byId?: ReadonlyMap<string, DraftNode>,
+  overrides: RouteOverrides = {},
+  obstacleNodes: readonly DraftNode[] = doc.nodes,
+): EdgeRouteInputs | null {
+  doc = { nodes: doc.nodes, edges: visibleEdges(doc.edges) };
+  const inputs = rawRouteInputs(edge, doc, scope, byId, overrides, obstacleNodes);
+  if (!inputs || overrides.source || overrides.target || overrides.obstacles || obstacleNodes !== doc.nodes) return inputs;
+  const tracks = separationPlan(doc.nodes, doc.edges, scope).tracksFor(edge.id);
+  return tracks ? { ...inputs, tracks } : inputs;
+}
+
+/** A connector's routes as every renderer draws them (see `connectorRouteInputs`). */
+export function connectorRoutes(
+  edge: DraftEdge,
+  doc: { nodes: readonly DraftNode[]; edges: readonly DraftEdge[] },
+  scope: PlanScope,
+  byId?: ReadonlyMap<string, DraftNode>,
+): EdgeRoutes | null {
+  const inputs = connectorRouteInputs(edge, doc, scope, byId);
+  return inputs ? edgeRoutes(inputs, scope) : null;
+}

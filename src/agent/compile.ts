@@ -13,10 +13,10 @@ import { deserializeDocument, serializeDocument } from '../export/project';
 import { AgentError } from './errors';
 import { readCreate, type CreateSpec, type LayoutSpec, type RoomSpec } from './input';
 import { hasPeerCalls } from '../layout/layered';
-import { measureContext, placeRoom, type PlacedRoom } from './place';
+import { captionSizer, measureContext, placeRoom, type PlacedRoom } from './place';
 import { silent, type Report } from './progress';
 import { checkFit, isBetterCandidate, isCleanCandidate, checkQuality, renderedBoundsOf, smallestFontPresent, type FitReport, type QualityIssue, type QualityReport } from './quality';
-import { pastDeadline, withDeadline } from './route';
+import { pastDeadline, relaxLayoutAnchors, repairAnchors, withDeadline, type KeptPin } from './route';
 import { buildFromStarter } from './starter';
 import { legibilityCost, legibilityOf, type Legibility } from './legibility';
 import { reviewFile } from './review';
@@ -58,7 +58,14 @@ function composeWithin(raw: unknown, diagramId: string, report: Report): Compose
   planInsideViews(spec, layout0, ctx, rooms);
   const { candidate, repaired, outOfTime } = chooseArrangement(spec, layout0, ctx,
     (layout) => spec.starter ? buildFromStarter(spec, layout, ctx, rooms) : placeRoom(spec, layout, ctx, undefined, rooms), report, true, !!spec.starter);
-  const { placed, found, fit, layout: used, legibility } = candidate;
+  const { layout: used } = candidate;
+  // Release provisional layout pins for the same or a measurably simpler readable picture, so
+  // generated diagrams follow moved shapes. A starter's pins are authored; kept.
+  const relaxed = spec.starter ? { placed: candidate.placed, kept: [] } : relaxPlaced(spec, candidate.placed, ctx);
+  const placed = relaxed.placed;
+  const found = qualityOfEveryRoom(placed, ctx, explicitIds(spec));
+  const legibility = legibilityOf(placed.nodes, placed.edges, aboutOf(spec));
+  const fit = used.viewport ? checkFit(renderedBoundsOf(placed.nodes, placed.edges, ctx), smallestFontPresent(placed.nodes, placed.edges), used.viewport) : undefined;
   const issues = found.errors;
   report('finishing', { nodes: placed.nodes, edges: placed.edges, flows: placed.flows });
   if (issues.length > 0 && !spec.layout.allowDegraded) {
@@ -107,6 +114,7 @@ function composeWithin(raw: unknown, diagramId: string, report: Report): Compose
         ...(insides.length ? { views: insides.map(({ path, legibility: l }) => ({ view: path, ...legibilityReceipt(l) })) } : {}),
       },
       ...(fit ? { fit } : {}),
+      ...(relaxed.kept.length ? { pinned: relaxed.kept.slice(0, 20) } : {}),
       ...advisoriesReceipt(advice, 10),
       ...(review.length ? { review } : {}),
     },
@@ -244,7 +252,23 @@ function chooseArrangement(
   }
   const repaired = tried - 1;
   if (!best) throw new AgentError('INTERNAL', 'Nothing was laid out.');
-  return { candidate: best as Candidate, repaired, outOfTime };
+  // Choose the reading direction and trunk layout before polishing individual connectors. Otherwise
+  // a locally cheaper crossing fix can make a less coherent arrangement win the layout comparison.
+  if (!starter && !pastDeadline()) {
+    const explicitRoutes = new Set(room.relationships.filter((r) => r.route).map((r) => r.id));
+    const edges = best.placed.edges.map((e) => ({ ...e }));
+    repairAnchors(edges.filter((e) => !explicitRoutes.has(e.id)), best.placed.nodes, captionSizer(best.placed.nodes, ctx), edges, undefined, true);
+    const placed = { ...best.placed, edges };
+    const polished: Candidate = {
+      ...best,
+      placed,
+      found: qualityOfEveryRoom(placed, ctx, explicit),
+      legibility: legibilityOf(placed.nodes, edges, about),
+      fit: best.layout.viewport ? checkFit(renderedBoundsOf(placed.nodes, edges, ctx), smallestFontPresent(placed.nodes, edges), best.layout.viewport) : undefined,
+    };
+    if (isBetterArrangement(polished, best, keepDirection ? layout0.direction : undefined)) best = polished;
+  }
+  return { candidate: best, repaired, outOfTime };
 }
 
 /**
@@ -337,6 +361,35 @@ export function hasSharedSideTrunk(room: { nodes: readonly DraftNode[]; edges: r
   });
 }
 
+/** The ends a request placed itself (`route.from` / `route.to`): pins it asked for, never relaxed. */
+function requestedEnds(room: RoomSpec): Set<string> {
+  const out = new Set<string>();
+  for (const r of room.relationships) {
+    if (r.route?.from && r.route.from !== 'auto') out.add(`${r.id}:source`);
+    if (r.route?.to && r.route.to !== 'auto') out.add(`${r.id}:target`);
+  }
+  return out;
+}
+
+/** A placed room, and every inside view in it, with `relaxLayoutAnchors` applied to the connectors
+ *  the request drew; and the ends kept pinned, with the view each is in. */
+function relaxPlaced(room: RoomSpec, placed: PlacedRoom, ctx: ReturnType<typeof measureContext>): { placed: PlacedRoom; kept: (KeptPin & { view?: string[] })[] } {
+  const kept: (KeptPin & { view?: string[] })[] = [];
+  const visit = (spec: RoomSpec, nodes: readonly DraftNode[], edges: readonly DraftEdge[], path: string[]): { nodes: DraftNode[]; edges: DraftEdge[] } => {
+    const done = relaxLayoutAnchors(new Set(edges.map((e) => e.id)), nodes, edges, requestedEnds(spec), { polish: true, caption: captionSizer(nodes, ctx) });
+    kept.push(...done.kept.map((pin) => (path.length ? { ...pin, view: path } : pin)));
+    const next = nodes.map((node) => {
+      const inner = node.inside && spec.nodes.find((n) => n.id === node.id)?.inside;
+      if (!node.inside || !inner) return node;
+      const inside = visit(inner, node.inside.nodes, node.inside.edges, [...path, node.id]);
+      return { ...node, inside: { ...node.inside, nodes: inside.nodes, edges: inside.edges } };
+    });
+    return { nodes: next, edges: done.edges };
+  };
+  const { nodes, edges } = visit(room, placed.nodes, placed.edges, []);
+  return { placed: { ...placed, nodes, edges }, kept };
+}
+
 /** What a receipt says about legibility: the counts, and which connectors or notes to look at. */
 export function legibilityReceipt(l: Legibility) {
   return {
@@ -346,6 +399,9 @@ export function legibilityReceipt(l: Legibility) {
     ...(l.detours.length ? { detours: l.detours.slice(0, 10) } : {}),
     ...(l.throughBoundaries.length ? { throughBoundaries: l.throughBoundaries.slice(0, 10) } : {}),
     ...(l.farNotes.length ? { farNotes: l.farNotes.slice(0, 10) } : {}),
+    // Lines that couldn't be drawn clear, and sides too crowded to give each end its own point.
+    ...(l.unresolved.length ? { unresolved: l.unresolved.slice(0, 10) } : {}),
+    ...(l.crowded.length ? { crowded: l.crowded.slice(0, 10) } : {}),
     fill: l.fill,
   };
 }

@@ -27,7 +27,6 @@ export const DraftHandle = memo(function DraftHandle({
   to,
   className,
   style,
-  armed,
 }: {
   nodeId: string;
   id: string;
@@ -39,7 +38,6 @@ export const DraftHandle = memo(function DraftHandle({
   to: boolean;
   className?: string;
   style?: CSSProperties;
-  armed?: boolean;
 }) {
   const store = useStoreApi();
   // Neither changes while the canvas is mounted; read, not subscribed to.
@@ -104,7 +102,6 @@ export const DraftHandle = memo(function DraftHandle({
       data-nodeid={nodeId}
       data-handlepos={position}
       data-id={`${rfId}-${nodeId}-${id}-source`}
-      data-armed={armed ? 'true' : undefined}
       className={classes.filter(Boolean).join(' ')}
       style={style}
       onMouseDown={onPointerDown}

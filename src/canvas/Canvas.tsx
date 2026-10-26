@@ -22,8 +22,8 @@ import { defaultTextFor, maxSizeFor } from '../document/factory';
 import { linkedCompensations, visibleEdges } from '../document/compensation';
 import { openFitViewport } from '../document/geometry';
 import { boundsOf, descendantsOf, hasAttachmentRoom } from '../document/operations';
-import type { DraftDocument, DraftEdge, DraftNode, Side } from '../document/types';
-import { parseAnchorId, rectOf, snappedAnchorForDrop, type Rect } from '../edges/routing';
+import type { DraftDocument, DraftEdge, DraftNode } from '../document/types';
+import type { Rect } from '../edges/routing';
 import { isEditableTarget } from '../lib/isEditableTarget';
 import { motionMs } from '../lib/motion';
 import { centerOf, pointInBox } from '../lib/math';
@@ -459,8 +459,6 @@ export interface CanvasProps {
    */
   onQuickConnectMenu?: (
     sourceId: string,
-    sourceSide: Side | undefined,
-    sourceOffset: number | undefined,
     flowPosition: { x: number; y: number },
     screenPosition: { x: number; y: number },
     center: { x: number; y: number },
@@ -1444,22 +1442,9 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
     (connection: Connection) => {
       if (connectCancelled.current) return;
       if (!connection.source || !connection.target) return;
-      // A handle id encodes exactly which of the 12 anchors it is (see
-      // `HANDLE_ANCHORS`/`parseAnchorId` in `edges/routing.ts`), so this is
-      // the drag's actual start/end point, not a guess — see `EdgeAnchor` in
-      // `document/types.ts`.
-      const sourceAnchor = parseAnchorId(connection.sourceHandle);
-      const targetAnchor = parseAnchorId(connection.targetHandle);
-      useEditorStore
-        .getState()
-        .connect(
-          connection.source,
-          connection.target,
-          sourceAnchor?.side,
-          targetAnchor?.side,
-          sourceAnchor?.offset,
-          targetAnchor?.offset,
-        );
+      // Handles start the gesture, but a new connector follows its shapes by default. Pinning is
+      // explicit through "Pin ends here" after the line is drawn.
+      useEditorStore.getState().connect(connection.source, connection.target);
     },
     [],
   );
@@ -1485,8 +1470,6 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       if (connectionState.isValid) return;
       const source = connectionState.fromNode?.id;
       if (!source) return;
-      const sourceAnchor = parseAnchorId(connectionState.fromHandle?.id);
-
       const point = 'changedTouches' in event ? event.changedTouches[0] : event;
       if (!point) return;
       const position = screenToFlowPosition({ x: point.clientX, y: point.clientY });
@@ -1503,20 +1486,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
 
       if (droppedOn) {
         if (droppedOn.id !== source) {
-          // A body-hit, not a handle — a drop that clearly favours one side
-          // attaches close to where the user actually dropped it (snapped to
-          // the same 3-point grid a real handle sits on); a drop near dead
-          // centre keeps the dynamic side choice `chooseSides` would pick
-          // anyway. See `snappedAnchorForDrop` in `edges/routing.ts`.
-          const targetAnchor = snappedAnchorForDrop(rectOf(droppedOn), position);
-          state.connect(
-            source,
-            droppedOn.id,
-            sourceAnchor?.side,
-            targetAnchor?.side,
-            sourceAnchor?.offset,
-            targetAnchor?.offset,
-          );
+          state.connect(source, droppedOn.id);
         }
         return;
       }
@@ -1526,8 +1496,6 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       // decides what appears.
       onQuickConnectMenu?.(
         source,
-        sourceAnchor?.side,
-        sourceAnchor?.offset,
         { x: Math.round(position.x - 88), y: Math.round(position.y - 34) },
         { x: point.clientX, y: point.clientY },
         position,

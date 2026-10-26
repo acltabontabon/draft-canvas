@@ -106,8 +106,36 @@ export function adviceFor(room: RoomSpec, legibility: Legibility, primaryFlow?: 
     const where = [...legibility.detours, ...legibility.throughBoundaries];
     const pairs = legibility.crossed.slice(0, 3).map(([a, b]) => `"${a}" × "${b}"`);
     out.push(
-      `The arrangement has ${legibility.crossings} crossing(s)${pairs.length ? ` (${pairs.join(', ')}${legibility.crossed.length > 3 ? ', …' : ''})` : ''}${where.length ? `, and connector(s) ${quote([...new Set(where)])} run around or through other parts` : ''}. Crossings come from what connects to what, not from spacing, and a direction left out is chosen by comparing both. To help: ${hint}.`,
+      `The arrangement has ${legibility.crossings} crossing(s)${pairs.length ? ` (${pairs.join(', ')}${legibility.crossed.length > 3 ? ', …' : ''})` : ''}${where.length ? `, and connector(s) ${quote([...new Set(where)])} run around or through other parts` : ''}. Automatic routing could not remove these without worsening the drawing; a direction left out is chosen by comparing both. To help: ${hint}.`,
     );
   }
+  return out;
+}
+
+/**
+ * What an edit's own connectors could change to read better, for an update receipt — each with the
+ * op that does it, so the agent can apply it in the same turn. Only connectors the edit touched, or
+ * that run to a shape it touched: an edit is not told to fix what it never went near.
+ */
+export function routingAdvice(view: { edges: readonly { id: string; source: string; target: string; sourceAnchor?: unknown; targetAnchor?: unknown }[] }, l: Legibility, touched: ReadonlySet<string>): string[] {
+  const byId = new Map(view.edges.map((e) => [e.id, e]));
+  const mine = (id: string) => {
+    const edge = byId.get(id);
+    return Boolean(edge && (touched.has(id) || touched.has(edge.source) || touched.has(edge.target)));
+  };
+  const out: string[] = [];
+  for (const id of l.unresolved.filter(mine).slice(0, 3)) {
+    const edge = byId.get(id)!;
+    const pinned = [edge.sourceAnchor ? 'from' : null, edge.targetAnchor ? 'to' : null].filter(Boolean) as string[];
+    out.push(pinned.length
+      ? `Relationship "${id}" can't be drawn clear of the shapes from its pinned ${pinned.join(' and ')} end${pinned.length > 1 ? 's' : ''}; let ${pinned.length > 1 ? 'them' : 'it'} attach automatically: ${JSON.stringify({ op: 'update', id, set: { route: Object.fromEntries(pinned.map((end) => [end, 'auto'])) } })}.`
+      : `Relationship "${id}" has no clear line between its shapes: move one of them, or ${JSON.stringify({ op: 'arrange', move: false })} to choose its sides again.`);
+  }
+  const crossed = l.crossed.filter(([a, b]) => mine(a) || mine(b)).slice(0, 3);
+  if (crossed.length) {
+    out.push(`${crossed.map(([a, b]) => `"${a}" crosses "${b}"`).join('; ')}. ${JSON.stringify({ op: 'arrange', move: false })} chooses their sides again without moving a shape; ${JSON.stringify({ op: 'update', id: crossed[0]![0], set: { route: null } })} lets one attach automatically.`);
+  }
+  const detours = l.detours.filter(mine).slice(0, 3);
+  if (detours.length) out.push(`${quote(detours)} ${detours.length > 1 ? 'go' : 'goes'} the long way round: ${JSON.stringify({ op: 'arrange', move: false })} chooses ${detours.length > 1 ? 'their' : 'its'} sides again.`);
   return out;
 }
