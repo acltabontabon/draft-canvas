@@ -64,6 +64,8 @@ export interface ExportOptions {
    * approval.
    */
   openPoints?: boolean;
+  /** The exported legend is unnecessary when drawing a transient camera-sized room picture. */
+  openPointKey?: boolean;
 }
 
 /**
@@ -128,6 +130,8 @@ export interface RenderedSvg {
   svg: string;
   width: number;
   height: number;
+  /** Document coordinates at the exported SVG's origin, before its content translation. */
+  origin: { x: number; y: number };
 }
 
 const DEFAULT_PADDING = 32;
@@ -416,7 +420,7 @@ export function renderDocumentSvg(
   // no key at all. Below the architecture, inside the margin, so it never reads as part of it.
   const shown = scene.markerEls.length || scene.edgeEntries.some((entry) => unresolvedOpenPointsFor(openPoints, { kind: 'edge', id: entry.edge.id }).length);
   let key: ReturnType<typeof describeMarkerKey> | null = null;
-  if (shown) {
+  if (shown && options.openPointKey !== false) {
     // Sets, not a scan of every shape and connector per target: at the limits that was millions of
     // comparisons per export.
     const nodeIds = new Set(scene.nodes.map((node) => node.id));
@@ -483,7 +487,7 @@ export function renderDocumentSvg(
   );
 
   endIdScope();
-  return { svg: serialize(root), width, height };
+  return { svg: serialize(root), width, height, origin: { x: originX, y: originY } };
 }
 
 function paintOrder(a: DraftNode, b: DraftNode): number {

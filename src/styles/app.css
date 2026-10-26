@@ -2168,13 +2168,25 @@ button.dc-status-level:focus-visible {
 /* The room being left, carried off as a picture while the camera zooms through the shape (see
    `DepthTransition`). Inside the canvas, above the room arriving and below every control; inert,
    and only ever on screen for a fraction of a second. */
-.dc-depth-ghost {
+.dc-depth-ghost,
+.dc-depth-remainder,
+.dc-depth-arrival,
+.dc-depth-arrival-picture {
   position: absolute;
   inset: 0;
   z-index: 4;
   pointer-events: none;
   transform-origin: 0 0;
+}
+
+.dc-depth-ghost,
+.dc-depth-arrival {
   will-change: transform, opacity;
+}
+
+.dc-depth-picture {
+  position: absolute;
+  inset: 0;
 }
 
 /* Where you are, when you are inside something — the layers you came down through (see

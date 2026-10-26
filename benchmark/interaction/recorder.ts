@@ -31,7 +31,9 @@ export const RECORDER_SOURCE = `
     if (state.on) state.pending.push(event.timeStamp);
   };
   window.addEventListener('pointermove', onPointer, { capture: true, passive: true });
+  window.addEventListener('pointerdown', onPointer, { capture: true, passive: true });
   window.addEventListener('wheel', onPointer, { capture: true, passive: true });
+  window.addEventListener('keydown', onPointer, { capture: true, passive: true });
 
   const tick = (now) => {
     if (state.on) {
@@ -78,7 +80,8 @@ export const RECORDER_SOURCE = `
       state.longTasks = [];
       state.loaf = [];
       state.events = [];
-      state.lastFrame = 0;
+      // Retain the last idle frame: clearing it loses the first frame's gap, exactly where a
+      // room snapshot or mount can block after the shortcut. At most one idle interval is added.
       state.on = true;
     },
     stop() {

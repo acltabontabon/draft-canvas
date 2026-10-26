@@ -65,6 +65,8 @@ export interface ScaleManifest {
   flows: number;
   /** Free-floating notes placed on open canvas, for the attach/drag scenarios. */
   looseNoteIds: string[];
+  /** The doorway in the dedicated depth-navigation fixture, when one was requested. */
+  depthOwnerId?: string;
 }
 
 /** mulberry32 — tiny, fast, and identical on every platform. */
