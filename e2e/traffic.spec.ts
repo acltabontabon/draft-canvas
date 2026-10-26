@@ -81,8 +81,15 @@ test.describe('Traffic', () => {
     await page.locator('.react-flow__node[data-id="checkout"] .dc-node').click();
     const callout = page.locator('.dc-traffic-callout');
     await expect(page.locator('.react-flow__node[data-id="checkout"] .dc-node[data-selected="true"]')).toBeVisible();
-    await expect(callout).toContainText('paths');
-    await expect(callout).toContainText("if it's down");
+    await expect(callout.locator('.dc-traffic-callout-metric')).toHaveText('2 paths');
+    await expect(callout.locator('.dc-traffic-callout-sources li')).toHaveCount(2);
+    await expect(callout.getByRole('heading', { name: /Calls waiting|If it goes down/ })).toBeVisible();
+    const frame = await page.locator('.dc-canvas').boundingBox();
+    const noteBounds = await callout.boundingBox();
+    expect(noteBounds!.x).toBeGreaterThanOrEqual(frame!.x);
+    expect(noteBounds!.y).toBeGreaterThanOrEqual(frame!.y);
+    expect(noteBounds!.x + noteBounds!.width).toBeLessThanOrEqual(frame!.x + frame!.width);
+    expect(noteBounds!.y + noteBounds!.height).toBeLessThanOrEqual(frame!.y + frame!.height);
     const clearOfFindings = await callout.evaluate((element) => {
       const at = element.getBoundingClientRect();
       return [...window.document.querySelectorAll('.dc-traffic-note, .dc-traffic-headline-note')].every((note) => {
@@ -91,6 +98,10 @@ test.describe('Traffic', () => {
       });
     });
     expect(clearOfFindings).toBe(true);
+
+    await page.getByRole('button', { name: 'Zoom out', exact: true }).click();
+    const zoomedBounds = await callout.boundingBox();
+    expect(Math.abs(zoomedBounds!.width - noteBounds!.width)).toBeLessThan(1);
 
     await page.locator('.dc-canvas').focus();
     await page.keyboard.press('Escape');
@@ -219,5 +230,30 @@ test.describe('Traffic', () => {
     expect(Math.abs(after!.y - before!.y)).toBeLessThan(1);
     await expect(note.locator('.dc-traffic-note-more')).toContainText('International storefront');
     for (const row of await rows.all()) await expect(row).toHaveCSS('white-space', 'pre');
+  });
+
+  test('scrolls a field note by keyboard without editing the selected shape', async ({ page }) => {
+    await page.setViewportSize({ width: 640, height: 460 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await importDocument(page, trafficDocument(), 'traffic-small-view.draftcanvas');
+    await runCommand(page, 'Show traffic');
+    await expect(page.locator('.dc-canvas')).toHaveAttribute('data-traffic', 'on');
+    await page.locator('.react-flow__node[data-id="checkout"] .dc-node').click();
+    const note = page.locator('.dc-traffic-callout');
+    const revision = await editorRevision(page);
+    await note.focus();
+    await note.press('ArrowDown');
+    await note.press('PageDown');
+    await expect.poll(() => note.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+    await note.press('Backspace');
+    expect(await editorRevision(page)).toBe(revision);
+    expect(await note.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    const at = await note.boundingBox();
+    const frame = await page.locator('.dc-canvas').boundingBox();
+    expect(at!.y + at!.height).toBeLessThanOrEqual(frame!.y + frame!.height);
+    await note.press('Escape');
+    await expect(note).toHaveCount(0);
+    await expect(page.locator('.dc-canvas')).toBeFocused();
+    await expect(page.locator('.dc-canvas')).toHaveAttribute('data-traffic', 'on');
   });
 });

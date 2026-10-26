@@ -35,4 +35,22 @@ describe('traffic callout placement', () => {
     expect(overlaps(result, crowded)).toBe(false);
     expect(overlaps(result, anchor)).toBe(false);
   });
+
+  it('keeps a tall note visible near the bottom of the canvas', () => {
+    const visible = { x: -100, y: -100, width: 900, height: 500 };
+    const nearBottom = { ...anchor, y: 280 };
+    const result = placeCallout(nearBottom, 300, 306, [], visible);
+    expect(result.y).toBeGreaterThanOrEqual(visible.y);
+    expect(result.y + result.height).toBeLessThanOrEqual(visible.y + visible.height);
+    expect(overlaps(result, nearBottom)).toBe(false);
+  });
+
+  it('stays on the canvas when clear nearby sides are off-screen', () => {
+    const visible = { x: 0, y: 0, width: 620, height: 480 };
+    const crowded = { x: 0, y: 0, width: 310, height: 480 };
+    const result = placeCallout(anchor, 300, 300, [crowded], visible);
+    expect(result.x).toBeGreaterThanOrEqual(310);
+    expect(result.x + result.width).toBeLessThanOrEqual(visible.width);
+    expect(result.y + result.height).toBeLessThanOrEqual(visible.height);
+  });
 });

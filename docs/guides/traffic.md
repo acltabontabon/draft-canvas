@@ -38,11 +38,15 @@ out of a shape, presenting or turning on a spotlight also ends it.
   it unfolds what the diagram does not say: unknown split shares, conditions, loops, retries,
   schedules, connectors through components, and gateways that are also called directly.
 
-Select a shape while traffic shows to read how many paths reach it and through what. Its note also
-says which services wait if it is slow or down, whose journeys stall, what it waits on itself, and
-what is safely behind a queue or topic.
+Select a shape while traffic shows to open a field note: a large path count, a row for each incoming
+source, then separate sections for outage impact and dependencies. When the waiting services are
+also the stalled journeys, their names appear once. The note also shows what is safely behind a
+queue or topic.
 
-![A selected shape with a handwritten traffic note explaining its paths, waiting services and dependencies.](../media/guides/traffic-detail.png)
+The field note keeps a readable text size as you zoom and stays inside the canvas. Longer notes
+scroll within the available space; focus the note to scroll it with the keyboard.
+
+![A selected shape's field note with a large path count, source rows, outage impact and dependencies.](../media/guides/traffic-detail.png)
 
 If nothing can be read — there are no runtime connectors, or every service is reached from another
 so no path has a start — Traffic says so instead.

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
-import { useReactFlow } from '@xyflow/react';
+import { useReactFlow, useStore } from '@xyflow/react';
 import { displayNameFor } from '../document/factory';
 import { familyOf } from '../render/text/fonts';
 import { layoutText } from '../render/text/layout';
@@ -9,10 +9,10 @@ import { createRng } from '../render/roughness/seed';
 import { useEditorStore, viewLevel } from '../store/editorStore';
 import { trafficOf } from '../store/traffic';
 import { useUiStore } from '../store/uiStore';
-import { impactOf, type TrafficAnalysis, type TrafficInsight } from '../traffic';
+import type { TrafficAnalysis, TrafficInsight } from '../traffic';
 import { arrowFor, placeSketches, type Rect, type SketchRequest } from '../traffic/sketchLayout';
-import { pathsLabel } from './trafficLabels';
 import { markerArrow, markerLoop } from './trafficSketchPaths';
+import { trafficCalloutFor } from './trafficCallout';
 import { placeCallout } from '../traffic/calloutLayout';
 
 /**
@@ -21,11 +21,12 @@ import { placeCallout } from '../traffic/calloutLayout';
  * At a glance: a handwritten headline above the diagram, and beside the shapes that matter a marker
  * loop, a few words ("no fallback!", "3 services, one store", "only way in") and an arrow flicked
  * from one to the other, with the hops of the longest wait numbered along the way. On demand: tap a
- * note and it unfolds, in place and in the same hand, into the whole explanation; tap the headline's
+ * note and it unfolds, in place, into the whole explanation in quiet type; tap the headline's
  * "+N open questions" for what the diagram leaves unsaid; select a shape and its blast radius is
  * written beside it. Nothing else — no panel competing with the drawing.
  *
- * Drawn in flow space, so it pans and zooms with the shapes, and only while traffic shows. Chrome,
+ * Drawn in flow space, so it pans with the shapes; the selected shape's field note keeps a readable
+ * type size at every zoom. Only shown while traffic shows. Chrome,
  * not content: nothing here is saved, undone, shared or exported, and nothing can be dragged. The
  * notes are buttons, so a keyboard reaches each one, and the findings are announced as they appear.
  * Every stroke draws itself on in turn after the traffic has spread; under reduced motion it is
@@ -98,9 +99,33 @@ export function TrafficSketches() {
   const headline = analysis && nodes ? headlineOf(analysis, level, nodes) : '';
   const drawn = useMemo(() => (analysis && nodes ? layout(analysis, nodes, headline) : null), [analysis, nodes, headline]);
   useFrameNotes(drawn?.extent ?? null);
+  const camera = useStore((state) => state.transform);
+  const canvasWidth = useStore((state) => state.width);
+  const canvasHeight = useStore((state) => state.height);
+  const visible = useMemo(() => {
+    const [x, y, zoom] = camera;
+    return canvasWidth > 32 && canvasHeight > TOP_CLEARANCE + 24 ? {
+      x: (16 - x) / zoom,
+      y: (TOP_CLEARANCE - y) / zoom,
+      width: (canvasWidth - 32) / zoom,
+      height: (canvasHeight - TOP_CLEARANCE - 24) / zoom,
+    } : undefined;
+  }, [camera, canvasWidth, canvasHeight]);
+  const availableWidth = canvasWidth > 32 ? canvasWidth - 32 : undefined;
+  const content = useMemo(
+    () => analysis && nodes && drawn && selectedId ? trafficCalloutFor(analysis, nodes, selectedId, drawn.obstacles, availableWidth) : null,
+    [analysis, nodes, drawn, selectedId, availableWidth],
+  );
   const callout = useMemo(
-    () => (analysis && nodes && drawn && selectedId ? calloutFor(analysis, nodes, selectedId, drawn.obstacles) : null),
-    [analysis, nodes, drawn, selectedId],
+    () => {
+      if (!content) return null;
+      // This is reading chrome. Its type stays readable when the drawing is zoomed out, while its
+      // footprint is converted back to flow space for the same collision checks as the findings.
+      const scale = 1 / camera[2];
+      const at = placeCallout(content.anchor, content.width * scale, Math.min(content.height * scale, visible?.height ?? content.height * scale), content.obstacles, visible);
+      return { ...content, x: at.x, y: at.y, scale, maxHeight: visible ? visible.height / scale : undefined };
+    },
+    [content, visible, camera],
   );
 
   if (!analysis || !nodes || !drawn) return null;
@@ -210,16 +235,58 @@ export function TrafficSketches() {
 
         {callout && (
           <div
-            className="dc-traffic-callout dc-hand nodrag nopan nowheel"
-            style={{ transform: `translate(${callout.x}px, ${callout.y}px) rotate(0.6deg)` }}
+            className="dc-traffic-callout nodrag nopan nowheel"
+            style={{ transform: `translate(${callout.x}px, ${callout.y}px) scale(${callout.scale})`, width: callout.width, maxHeight: callout.maxHeight }}
             onPointerDown={hold}
             role="note"
-            aria-label={`${callout.title}: ${callout.lines.join('. ')}`}
+            tabIndex={0}
+            data-dc-keyboard-region=""
+            aria-label={callout.description}
+            onKeyDown={(event) => {
+              // On WebKit, Backspace on a focused read-only surface can navigate browser history.
+              if (event.key === 'Backspace' || event.key === 'Delete') {
+                event.preventDefault();
+                event.stopPropagation();
+                return;
+              }
+              if (event.key !== 'Escape') return;
+              event.preventDefault();
+              event.stopPropagation();
+              useEditorStore.getState().setSelection({ nodes: [], edges: [] });
+              event.currentTarget.closest<HTMLElement>('.dc-canvas')?.focus();
+            }}
           >
-            {callout.lines.map((line, index) => (
-              <p key={index} className={index === 0 ? 'dc-traffic-callout-lead' : undefined}>
-                {line}
-              </p>
+            <div className="dc-traffic-callout-heading">
+              <div className="dc-traffic-callout-title" title={callout.title.text}>
+                {callout.title.lines.map((line, index) => <span key={index} className="dc-traffic-callout-line">{line}</span>)}
+              </div>
+              <span className="dc-traffic-callout-kicker">Traffic</span>
+            </div>
+            <div className="dc-traffic-callout-metric" style={{ fontFamily: familyOf('hand'), fontSize: callout.metricSize }}>
+              {callout.metric}
+              <svg width="72" height="7" viewBox="0 0 72 7" aria-hidden="true"><path d="M2 4 Q27 1 68 3 M6 6 Q33 4 54 5" /></svg>
+            </div>
+            {callout.summary && <p className="dc-traffic-callout-summary">{callout.summary.lines.map((line, index) => <span key={index} className="dc-traffic-callout-line">{line}</span>)}</p>}
+            {callout.sources.length > 0 && (
+              <ul className="dc-traffic-callout-sources" aria-label="Incoming paths">
+                {callout.sources.map((source, index) => (
+                  <li key={index}>
+                    <span title={source.name.text}>{source.name.lines.map((line, index) => <span key={index} className="dc-traffic-callout-line">{line}</span>)}</span>
+                    <span className="dc-traffic-callout-count">{source.count}</span>
+                  </li>
+                ))}
+                {callout.moreSources > 0 && <li className="dc-traffic-callout-more">+ {callout.moreSources} more connections</li>}
+              </ul>
+            )}
+            {callout.sections.map((section) => (
+              <section key={section.label} className="dc-traffic-callout-section" data-tone={section.tone} aria-label={section.label}>
+                <h3>{section.label}</h3>
+                {section.detail && <p className="dc-traffic-callout-detail">{section.detail.lines.map((line, index) => <span key={index} className="dc-traffic-callout-line">{line}</span>)}</p>}
+                <ul>
+                  {section.items.map((item, index) => <li key={index} title={item.text}>{item.lines.map((line, index) => <span key={index} className="dc-traffic-callout-line">{line}</span>)}</li>)}
+                  {section.more > 0 && <li className="dc-traffic-callout-more">+ {section.more} more</li>}
+                </ul>
+              </section>
             ))}
           </div>
         )}
@@ -353,65 +420,6 @@ function headlineOf(analysis: TrafficAnalysis, level: ReturnType<typeof viewLeve
   const top = analysis.hotspots.filter((id) => analysis.nodes.get(id)?.tier === 'top');
   if (top.length === 0) return 'Traffic doesn’t pile up anywhere — every part is reached by one path.';
   return `Most paths meet at ${listOf(top.map(name))}`;
-}
-
-/** A selected shape's blast radius, in a few handwritten lines beside it. */
-function calloutFor(analysis: TrafficAnalysis, nodes: readonly DraftNode[], id: string, obstacles: readonly Rect[] = []) {
-  const node = nodes.find((item) => item.id === id);
-  if (!node) return null;
-  const result = analysis.nodes.get(id);
-  const name = (other: string) => {
-    const found = nodes.find((item) => item.id === other);
-    return found ? displayNameFor(found) : 'Untitled';
-  };
-  const title = displayNameFor(node);
-  const lines: string[] = [];
-  if (!result || result.role === 'excluded') {
-    lines.push('not a runtime resource — traffic stops here');
-  } else if (result.role === 'junction') {
-    const routes = analysis.interactions.filter((item) => item.junctionIds.includes(id) && item.paths.possible > 0).length;
-    lines.push(routes > 0 ? `routes ${routes} ${routes === 1 ? 'path' : 'paths'}, adds none of its own` : 'no counted route crosses it');
-  } else {
-    const impact = impactOf(analysis, id);
-    if (result.role === 'origin') {
-      lines.push('traffic starts here');
-    } else if (result.paths.possible === 0) {
-      lines.push('no counted path reaches this');
-    } else {
-      const incoming = analysis.interactions
-        .filter((item) => item.to === id && item.paths.possible > 0)
-        .sort((a, b) => b.paths.possible - a.paths.possible);
-      const via = incoming.length > 1 ? ` — ${listOf(incoming.map((item) => `${pathsLabel(item.paths).replace(/ paths?$/, '')} via ${name(item.from)}`))}` : '';
-      lines.push(`${pathsLabel(result.paths)}${via}`);
-    }
-    if (impact.waiting.length > 0 || (impact.journeys.length > 0 && result.role !== 'origin')) {
-      const journeys = impact.journeys.filter((entry) => entry !== id);
-      lines.push(
-        `if it's down: ${impact.waiting.length > 0 ? `${listOf(impact.waiting.map(name))} wait` : 'requests wait'}${journeys.length > 0 ? ` · ${listOf(journeys.map(name))} stall` : ''}`,
-      );
-    }
-    if (impact.dependsOn.length > 0) lines.push(`waits on ${listOf(impact.dependsOn.map(name))}`);
-    if (impact.mayDependOn.length > 0) lines.push(`may wait on ${listOf(impact.mayDependOn.map(name))}`);
-    if (impact.decoupled.length > 0) lines.push(`safe behind a queue: ${listOf(impact.decoupled.map(name))}`);
-  }
-  // Long resource names wrap: counting paragraphs as single lines placed the lower half over
-  // nearby shapes. Measure the same hand, leading arrow and padding that the callout renders.
-  const paragraphs = lines.map((line, index) => ({
-    text: index === 0 ? `→ ${line}` : line,
-    font: { stack: 'hand' as const, size: index === 0 ? 17 : 15, weight: 700 as const },
-    lineHeight: (index === 0 ? 17 : 15) * 1.35,
-  }));
-  const width = Math.min(300, Math.max(...paragraphs.map((paragraph) => layoutText(paragraph.text, {
-    ...paragraph,
-    maxWidth: Infinity,
-  }).width)) + 20);
-  const height = 13 + paragraphs.reduce((sum, paragraph) => sum + layoutText(paragraph.text, {
-    ...paragraph,
-    maxWidth: width - 20,
-  }).height + 3, 0);
-  const others = nodes.filter((other) => other.id !== id && other.type !== 'group');
-  const at = placeCallout(node, width, height, [...others, ...obstacles]);
-  return { title, lines, x: at.x, y: at.y };
 }
 
 /**

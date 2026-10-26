@@ -5160,9 +5160,10 @@
   border-radius: 8px;
   background: var(--dc-canvas);
   color: var(--dc-text);
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.45;
+  font-family: var(--dc-font);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
   text-shadow: none;
 }
 
@@ -5200,27 +5201,154 @@
   margin-top: 4px;
 }
 
-/* A selected shape's blast radius, written beside it. */
+/* A small field note: amber ink marks the reading; quiet type carries the evidence. */
 .dc-traffic-callout {
-  max-width: 300px;
-  padding: 6px 10px 7px;
-  border-radius: 10px;
-  /* Erase connector text and strokes beneath the explanation. */
-  background: var(--dc-canvas);
-  font-size: 15px;
-  line-height: 1.35;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--dc-caution) 24%, var(--dc-border));
+  border-radius: 3px 14px 14px 14px;
+  background: color-mix(in srgb, var(--dc-caution) 3%, var(--dc-canvas));
+  box-shadow: 0 3px 12px -6px var(--dc-shadow);
+  color: var(--dc-text);
+  font-family: var(--dc-font);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 18px;
+  text-shadow: none;
 }
 
-.dc-traffic-callout p {
-  margin: 0 0 3px;
+.dc-traffic-callout::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
 }
 
-.dc-traffic-callout-lead {
-  font-size: 17px;
+.dc-traffic-callout::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 17px;
+  width: 3px;
+  height: 32px;
+  border-radius: 50% 30% 40% 20%;
+  background: var(--dc-caution);
+  rotate: -2deg;
 }
 
-.dc-traffic-callout-lead::before {
-  content: '→ ';
+.dc-traffic-callout-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 52px;
+  gap: 10px;
+  align-items: start;
+}
+
+.dc-traffic-callout-title {
+  font-weight: 600;
+}
+
+.dc-traffic-callout-kicker {
+  color: var(--dc-text-muted);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-align: right;
+  text-transform: uppercase;
+}
+
+.dc-traffic-callout-line {
+  display: block;
+  white-space: pre;
+}
+
+.dc-traffic-callout-metric {
+  position: relative;
+  height: 40px;
+  margin-top: 2px;
+  color: var(--dc-caution);
+  font-weight: 700;
+  line-height: 40px;
+}
+
+.dc-traffic-callout-metric svg {
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1;
+  stroke-linecap: round;
+  opacity: 0.65;
+}
+
+.dc-traffic-callout-summary {
+  margin: 6px 0 0;
+  color: var(--dc-text-muted);
+}
+
+.dc-traffic-callout ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dc-traffic-callout .dc-traffic-callout-sources {
+  margin-top: 6px;
+}
+
+.dc-traffic-callout-sources li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 80px;
+  gap: 8px;
+}
+
+.dc-traffic-callout-count {
+  color: var(--dc-text-muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.dc-traffic-callout-section {
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 1px solid color-mix(in srgb, var(--dc-caution) 15%, var(--dc-border));
+}
+
+.dc-traffic-callout-section h3 {
+  margin: 0 0 4px;
+  color: var(--dc-text-muted);
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dc-traffic-callout-section[data-tone='caution'] h3 {
+  color: var(--dc-caution);
+}
+
+.dc-traffic-callout-section[data-tone='safe'] h3 {
+  color: var(--dc-selection);
+}
+
+.dc-traffic-callout-detail {
+  margin: 0 0 4px;
+  color: var(--dc-text-muted);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.dc-traffic-callout-more {
+  color: var(--dc-text-muted);
+  font-size: 11px;
+}
+
+.dc-traffic-callout:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 3px;
 }
 
 @media (prefers-reduced-motion: no-preference) {

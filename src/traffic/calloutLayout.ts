@@ -6,7 +6,7 @@ function overlap(a: Rect, b: Rect): number {
 }
 
 /** A selected shape's explanation must also clear the findings already written beside it. */
-export function placeCallout(anchor: Rect, width: number, height: number, obstacles: readonly Rect[]): Rect {
+export function placeCallout(anchor: Rect, width: number, height: number, obstacles: readonly Rect[], visible?: Rect): Rect {
   const padded = [anchor, ...obstacles].map((rect) => ({
     x: rect.x - 6,
     y: rect.y - 6,
@@ -34,5 +34,16 @@ export function placeCallout(anchor: Rect, width: number, height: number, obstac
     { x: anchor.x, y: maxY + 20, width, height },
     { x: anchor.x, y: minY - height - 20, width, height },
   );
-  return candidates.find((candidate) => padded.every((rect) => overlap(candidate, rect) === 0))!;
+  if (!visible) return candidates.find((candidate) => padded.every((rect) => overlap(candidate, rect) === 0))!;
+  const clampX = (x: number) => Math.max(visible.x, Math.min(visible.x + visible.width - width, x));
+  const clampY = (y: number) => Math.max(visible.y, Math.min(visible.y + visible.height - height, y));
+  const framed = candidates.filter((rect) => rect.x >= visible.x && rect.y >= visible.y && rect.x + width <= visible.x + visible.width && rect.y + height <= visible.y + visible.height);
+  // At the edge of the view, a clear margin is more useful than an off-screen explanation.
+  for (const x of [clampX(anchor.x + anchor.width + 26), clampX(anchor.x - width - 26), visible.x, visible.x + visible.width - width]) {
+    for (const y of [clampY(anchor.y - 6), visible.y, visible.y + visible.height - height]) framed.push({ x, y, width, height });
+  }
+  const clear = framed.find((candidate) => padded.every((rect) => overlap(candidate, rect) === 0));
+  if (clear) return clear;
+  const covered = (candidate: Rect) => padded.reduce((sum, rect) => sum + overlap(candidate, rect), 0);
+  return framed.reduce((best, candidate) => covered(candidate) < covered(best) ? candidate : best);
 }

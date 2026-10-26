@@ -412,6 +412,8 @@ async function trafficScreenshots(page: Page) {
   await page.locator('.react-flow__node[data-id="checkout"] .dc-node').click();
   await expect(page.locator('.dc-traffic-callout')).toBeVisible();
   await shot(page, 'traffic-detail');
+  await page.locator('.dc-traffic-callout').screenshot({ path: join(OUT, 'traffic-callout.png') });
+  log('  traffic-callout.png');
 }
 
 async function main() {
