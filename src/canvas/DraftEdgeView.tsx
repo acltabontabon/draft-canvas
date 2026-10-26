@@ -1,4 +1,4 @@
-import { CONNECTOR_STYLE, CONNECTOR_TREATMENTS, connectorProfile, styledConnectorPath } from '../render/connectorStyle';
+import { CONNECTOR_STYLE, CONNECTOR_TREATMENTS, connectorProfile, connectorStrokePath, styledConnectorPath } from '../render/connectorStyle';
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { LIMITS } from '../document/limits';
 import { reconnectProblem } from '../document/reconnect';
@@ -45,7 +45,6 @@ import { layoutText } from '../render/text/layout';
 import { LINE_HEIGHTS } from '../render/text/fonts';
 import { relationshipCaptionLabel } from '../document/edgeSemantics';
 import { PERSONALITY_PROFILES } from '../render/roughness/presets';
-import { roughenPath } from '../render/roughness/roughPath';
 import { sketchArrowPath } from '../render/roughness/roughArrow';
 import { accentOf } from '../render/theme/tokens';
 import { isEdgeFocused, lensFlow, useEditorStore, type EditorStore } from '../store/editorStore';
@@ -659,10 +658,10 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // A gesture's frames each have a route no later frame repeats: wobbled, but never filed, so a long
   // drag can't push out the settled wobble of every other connector on screen.
   const keepWobble = !transient;
-  const drawnPath = bridgePath(roughenPath(styledPath, `${seed}:0`, profile.outline, profile.bow, keepWobble), crossings);
+  const drawnPath = bridgePath(connectorStrokePath(styledPath, edge, `${seed}:0`, profile, keepWobble), crossings);
   const secondStrokePath =
     profile.strokes === 2
-      ? bridgePath(roughenPath(styledPath, `${seed}:1`, profile.outline, profile.bow, keepWobble), crossings)
+      ? bridgePath(connectorStrokePath(styledPath, edge, `${seed}:1`, profile, keepWobble), crossings)
       : null;
   // Sketch draws its own arrowhead inline instead of referencing the shared marker — see
   // `render/roughness/roughArrow.ts`.
@@ -686,7 +685,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // "fix" the apparent reversal. See `responseLaneFor`'s own doc comment in `edges/routing.ts`.
   const responseRoute = routes.response;
   const responseDrawnPath = responseRoute
-    ? roughenPath(styledConnectorPath(responseRoute.d, edge, keepWobble), `${seed}${RESPONSE_SEED_SUFFIX}`, profile.outline, profile.bow, keepWobble)
+    ? connectorStrokePath(styledConnectorPath(responseRoute.d, edge, keepWobble), edge, `${seed}${RESPONSE_SEED_SUFFIX}`, profile, keepWobble)
     : null;
   const responseUsesHandDrawnArrow = responseRoute && edge.directed && profile.arrowStyle === 'per-edge-hand';
   const responseArrowPath = responseUsesHandDrawnArrow
@@ -816,6 +815,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       )}
       {secondStrokePath && (
         <path
+          className="dc-edge-retrace"
           d={secondStrokePath}
           fill="none"
           pointerEvents="none"
@@ -831,9 +831,9 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
         <path
           d={arrowPath}
           pointerEvents="none"
-          fill={markerVariantForEdge(edge) === 'closed' ? strokeColor : 'none'}
-          stroke={markerVariantForEdge(edge) === 'open' ? strokeColor : undefined}
-          strokeWidth={markerVariantForEdge(edge) === 'open' ? CONNECTOR_STYLE.openArrowWidth : undefined}
+          fill={markerVariantForEdge(edge) === 'closed' && appearance !== 'pencil' ? strokeColor : 'none'}
+          stroke={markerVariantForEdge(edge) === 'open' || appearance === 'pencil' ? strokeColor : undefined}
+          strokeWidth={appearance === 'pencil' ? 1.2 : markerVariantForEdge(edge) === 'open' ? CONNECTOR_STYLE.openArrowWidth : undefined}
           strokeLinecap="round"
           strokeLinejoin="round"
         />

@@ -42,9 +42,9 @@ function arrowMarker(color: string, variant: MarkerVariant, amplitude: number, a
     orient: 'auto-start-reverse',
   }, [el('path', {
     d: headPath(appearance, variant, `marker:${color}:${variant}`, amplitude),
-    fill: open ? 'none' : color,
-    stroke: open ? color : undefined,
-    'stroke-width': open ? openArrowWidth : undefined,
+    fill: open || appearance === 'pencil' ? 'none' : color,
+    stroke: open || appearance === 'pencil' ? color : undefined,
+    'stroke-width': appearance === 'pencil' ? 1.2 : open ? openArrowWidth : undefined,
     'stroke-linejoin': 'round',
     'stroke-linecap': 'round',
   })]);

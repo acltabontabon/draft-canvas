@@ -129,3 +129,23 @@ test('arrow appearance picker changes only this arrow, supports keyboard selecti
   await expect(page.locator('.react-flow__edge[data-id="authorize"] .dc-edge')).toHaveAttribute('data-appearance', 'pencil');
   expect(await page.locator('.dc-edge[data-appearance="sculpted"]').count()).toBe(5);
 });
+
+test('Pencil Sketch visibly changes the full stroke and retrace of a straight connector', async ({ page }) => {
+  const fixture = connectorStyleDocument();
+  fixture.edges = fixture.edges.map(edge => ({ ...edge, appearance: 'pencil' as const }));
+  await page.goto('/');
+  await page.setInputFiles('input[type="file"]', { name: 'pencil.draftcanvas', mimeType: 'application/json', buffer: Buffer.from(serializeDocument(fixture)) });
+  await expect(page.locator('.dc-editor')).toBeVisible();
+  await cameraAtRest(page);
+  const edge = page.locator('.react-flow__edge[data-id="record"]');
+  const strokes = await edge.locator('.dc-edge-line, .dc-edge-retrace').evaluateAll(elements => elements.map(element => {
+    const path = element as SVGPathElement;
+    const length = path.getTotalLength();
+    const points = Array.from({ length: 101 }, (_, i) => path.getPointAtLength(i * length / 100));
+    return { d: path.getAttribute('d'), height: Math.max(...points.map(p => p.y)) - Math.min(...points.map(p => p.y)) };
+  }));
+  expect(strokes).toHaveLength(2);
+  expect(strokes[0]!.height).toBeGreaterThan(1.8);
+  expect(strokes[1]!.height).toBeGreaterThan(1.8);
+  expect(strokes[0]!.d).not.toBe(strokes[1]!.d);
+});

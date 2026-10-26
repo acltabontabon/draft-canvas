@@ -14,7 +14,8 @@ The retired VS Code extension has [its own changelog](https://github.com/acltabo
 
 - Sculpted Ink is the default connector treatment, with sweeping corners and carved arrowheads.
   Select an arrow to choose Flowing Ribbon, Technical Pen or Pencil Sketch; choices are saved,
-  undoable and shared by canvas and export. Request/reply lines keep
+  undoable and shared by canvas and export. Pencil Sketch has visible graphite drift along long
+  strokes, a separate retrace and an outlined hand-drawn nib. Request/reply lines keep
   separate rails, and automatic ends avoid tiny steps into queue and data store glyphs. A short
   hover trace follows the request and its reply once, respecting reduced motion.
 - Connectors route around shapes, spread automatic ends and separate overlapping runs. Auto attach

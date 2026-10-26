@@ -1,9 +1,8 @@
-import { CONNECTOR_STYLE, CONNECTOR_TREATMENTS, connectorProfile, styledConnectorPath } from '../render/connectorStyle';
+import { CONNECTOR_STYLE, CONNECTOR_TREATMENTS, connectorProfile, connectorStrokePath, styledConnectorPath } from '../render/connectorStyle';
 import type { DraftEdge, DraftNode, OpenPoint } from '../document/types';
 import { MARKER_SIZE, describeMarker, edgeMarkerCenter, type OccupiedRect } from '../openPoints/marker';
 import type { Shape, TextAlign } from '../render/displayList';
 import { PERSONALITY_PROFILES } from '../render/roughness/presets';
-import { roughenPath } from '../render/roughness/roughPath';
 import { sketchArrowPath } from '../render/roughness/roughArrow';
 import { markerRef, ribbonPaintRef } from '../render/svg/markers';
 import type { Theme } from '../render/theme/tokens';
@@ -256,7 +255,7 @@ export function describeEdge(
   // exact path string it always had.
   const crossings = ctx.crossings ?? [];
   const drawn = (suffix: string) =>
-    bridgePath(roughenPath(styledPath, `${seed}:${suffix}`, profile.outline, profile.bow), crossings);
+    bridgePath(connectorStrokePath(styledPath, edge, `${seed}:${suffix}`, profile), crossings);
   const line: Shape[] = [
     {
       t: 'path',
@@ -290,8 +289,8 @@ export function describeEdge(
               variant,
               appearance,
             ),
-            fill: variant === 'closed' ? color : 'none',
-            stroke: variant === 'open' ? { color, width: CONNECTOR_STYLE.openArrowWidth, linecap: 'round' } : undefined,
+            fill: variant === 'closed' && appearance !== 'pencil' ? color : 'none',
+            stroke: appearance === 'pencil' || variant === 'open' ? { color, width: appearance === 'pencil' ? 1.2 : CONNECTOR_STYLE.openArrowWidth, linecap: 'round' } : undefined,
           },
         ] as Shape[])
       : []),
@@ -316,7 +315,7 @@ export function describeEdge(
       // which meant the reply line stayed perfectly crisp in every export while the live canvas
       // (`DraftEdgeView.tsx`) already wobbled it; fixed to match, using the same shared seed
       // suffix so the two renderers can't quietly disagree on it again.
-      const responseD = roughenPath(styledConnectorPath(responseRoute.d, edge), `${seed}${RESPONSE_SEED_SUFFIX}`, profile.outline, profile.bow);
+      const responseD = connectorStrokePath(styledConnectorPath(responseRoute.d, edge), edge, `${seed}${RESPONSE_SEED_SUFFIX}`, profile);
       const responseHandDrawnArrow = edge.directed && profile.arrowStyle === 'per-edge-hand';
       responseLine = [
         {

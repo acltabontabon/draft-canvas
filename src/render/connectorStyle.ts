@@ -4,6 +4,8 @@ import { stepPolyline } from '../edges/waypoints';
 import { Lru } from '../lib/lru';
 import { LIMITS } from '../document/limits';
 import { PERSONALITY_PROFILES, type PersonalityProfile } from './roughness/presets';
+import { pencilPath } from './roughness/pencilPath';
+import { roughenPath } from './roughness/roughPath';
 
 /** Physical units, shared by canvas, export and the appearance picker. */
 export const CONNECTOR_STYLE = {
@@ -27,6 +29,12 @@ const PENCIL_PROFILE: PersonalityProfile = { ...PERSONALITY_PROFILES.sketch, out
 export function connectorProfile(edge: Pick<DraftEdge, 'appearance'>, fallback: PersonalityProfile): PersonalityProfile {
   if (edge.appearance === 'pencil') return PENCIL_PROFILE;
   return edge.appearance ? PERSONALITY_PROFILES.clean : fallback;
+}
+
+export function connectorStrokePath(d: string, edge: Pick<DraftEdge, 'appearance'>, seedId: string, profile: PersonalityProfile, cache = true): string {
+  return edge.appearance === 'pencil'
+    ? pencilPath(d, seedId, cache)
+    : roughenPath(d, seedId, profile.outline, profile.bow, cache);
 }
 
 const styled = new Lru<string, string>(LIMITS.maxEdges * 2);

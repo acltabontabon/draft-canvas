@@ -53,6 +53,7 @@ import { useLastPresent, usePopoverPresence } from './usePopoverPresence';
 import { usePopoverKeyboard } from './usePopoverKeyboard';
 import { InspectorSelect, type InspectorSelectOption } from './InspectorSelect';
 import { isImeKeyEvent, overlayAboveCanvasIsOpen } from '../lib/isEditableTarget';
+import { pencilPath } from '../render/roughness/pencilPath';
 import { CONNECTOR_TREATMENTS, connectorHead } from '../render/connectorStyle';
 
 const APPEARANCE_OPTIONS: InspectorSelectOption[] = CONNECTOR_APPEARANCES.map((appearance) => ({
@@ -62,10 +63,11 @@ const APPEARANCE_OPTIONS: InspectorSelectOption[] = CONNECTOR_APPEARANCES.map((a
   icon: (
     <svg viewBox="0 0 52 32" width="48" height="32" aria-hidden="true">
       <path
-        d={appearance === 'ribbon' ? 'M3 25 C25 25 19 8 45 8' : appearance === 'technical' ? 'M3 25 H24 V8 H45' : appearance === 'pencil' ? 'M3 25 Q15 26 20 24 Q25 22 24 17 Q23 7 45 8' : 'M3 25 H14 Q25 25 25 14 Q25 8 45 8'}
+        d={appearance === 'ribbon' ? 'M3 25 C25 25 19 8 45 8' : appearance === 'technical' ? 'M3 25 H24 V8 H45' : appearance === 'pencil' ? pencilPath('M3 25 C25 25 19 8 45 8', 'picker:0') : 'M3 25 H14 Q25 25 25 14 Q25 8 45 8'}
         fill="none" stroke="currentColor" strokeWidth={CONNECTOR_TREATMENTS[appearance].lineWidth} strokeLinecap="round" strokeLinejoin="round"
       />
-      <path d={connectorHead(appearance)} transform="translate(31 3)" fill="currentColor" />
+      {appearance === 'pencil' && <path d={pencilPath('M3 25 C25 25 19 8 45 8', 'picker:1')} fill="none" stroke="currentColor" strokeWidth={0.8} opacity={0.5} />}
+      <path d={connectorHead(appearance)} transform="translate(31 3)" fill={appearance === 'pencil' ? 'none' : 'currentColor'} stroke={appearance === 'pencil' ? 'currentColor' : undefined} strokeWidth={1.2} />
     </svg>
   ),
 }));

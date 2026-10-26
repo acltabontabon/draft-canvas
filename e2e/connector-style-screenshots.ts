@@ -1,4 +1,5 @@
 /** Reproducible PR screenshots: run against the before/after checkout's dev server on :5184. */
+import { CONNECTOR_APPEARANCES } from '../src/document/types';
 import { mkdirSync } from 'node:fs';
 import { chromium, expect } from '@playwright/test';
 import { connectorStyleDocument } from '../tests/fixtures/connectors/checkout';
@@ -13,6 +14,8 @@ const phase = flag('phase', 'after');
 const out = flag('out', 'docs/media/connectors');
 const base = flag('base', 'http://localhost:5184');
 const document = connectorStyleDocument();
+const appearance = CONNECTOR_APPEARANCES.find(value => value === flag('appearance', ''));
+if (appearance) document.edges = document.edges.map(edge => ({ ...edge, appearance }));
 
 mkdirSync(out, { recursive: true });
 const browser = await chromium.launch();

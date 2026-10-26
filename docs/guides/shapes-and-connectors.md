@@ -95,7 +95,9 @@ Choose **Appearance** to give this connector a different drawing treatment: **Sc
 **Flowing Ribbon**, **Technical Pen** or **Pencil Sketch**. Each choice includes a small preview.
 It keeps the connection’s pins, manual bends, labels and meaning. The choice is saved with the
 connector, supports undo, and appears in SVG and PNG exports. Explicit choices override the page’s
-drawing personality; untouched connectors still follow Draft or Sketch.
+drawing personality; untouched connectors still follow Draft or Sketch. Pencil Sketch adds visible
+graphite drift along the stroke, a separate retrace and an outlined nib; it stays stable as you
+select or move around the diagram.
 
 ![Arrow appearance picker with previews of all four treatments.](../media/connectors/style-picker-light.png)
 
