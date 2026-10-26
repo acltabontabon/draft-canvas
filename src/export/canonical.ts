@@ -82,6 +82,7 @@ const EDGE_KEYS = [
   'label',
   'directed',
   'routing',
+  'appearance',
   'accent',
   'details',
   'semantic',

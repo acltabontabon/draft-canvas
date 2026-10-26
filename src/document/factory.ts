@@ -352,6 +352,7 @@ export interface CreateEdgeInput {
   condition?: string;
   directed?: boolean;
   routing?: DraftEdge['routing'];
+  appearance?: DraftEdge['appearance'];
   accent?: Accent;
   id?: string;
   /** The side the user actually dragged the connection from/to, if known. */
@@ -384,6 +385,7 @@ export function createEdge(input: CreateEdgeInput): DraftEdge {
     routing: input.routing ?? 'smoothstep',
   };
   if (input.label) edge.label = input.label;
+  if (input.appearance) edge.appearance = input.appearance;
   if (input.condition) edge.condition = input.condition;
   if (input.accent !== undefined) edge.accent = input.accent;
   if (input.sourceAnchor) edge.sourceAnchor = input.sourceAnchor;

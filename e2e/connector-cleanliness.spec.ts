@@ -1,14 +1,18 @@
+import { CONNECTOR_APPEARANCES } from '../src/document/types';
 import { expect, test } from '@playwright/test';
 import { serializeDocument } from '../src/export/project';
 import { connectorStyleDocument } from '../tests/fixtures/connectors/checkout';
 import { cameraAtRest } from './canvas';
 
 for (const colorScheme of ['light', 'dark'] as const) {
-  test(`checkout connectors remain clean and match their export in ${colorScheme}`, async ({ page }) => {
+  for (const appearance of CONNECTOR_APPEARANCES) {
+  test(`${appearance} connectors remain clean and match their export in ${colorScheme}`, async ({ page }) => {
     await page.emulateMedia({ colorScheme });
     await page.setViewportSize({ width: 1280, height: 760 });
     await page.goto('/');
-    await page.setInputFiles('input[type="file"]', { name: 'checkout.draftcanvas', mimeType: 'application/json', buffer: Buffer.from(serializeDocument(connectorStyleDocument())) });
+    const fixture = connectorStyleDocument();
+    fixture.edges = fixture.edges.map(edge => ({ ...edge, appearance }));
+    await page.setInputFiles('input[type="file"]', { name: 'checkout.draftcanvas', mimeType: 'application/json', buffer: Buffer.from(serializeDocument(fixture)) });
     await expect(page.locator('.dc-editor')).toBeVisible();
     await cameraAtRest(page);
     await page.mouse.move(10, 100);
@@ -44,6 +48,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
     expect(reply).not.toBeNull();
     expect(reply!.x + reply!.width).toBeLessThan(request!.x);
   });
+  }
 }
 
 
@@ -75,4 +80,52 @@ test('hover traces once, is removed on leave and respects reduced motion', async
   await page.mouse.move(point.x, point.y);
   await expect(edge.locator('.dc-edge-trace').first()).toBeHidden();
   expect(await edge.locator('.dc-edge-trace').first().evaluate((path) => path.getAnimations().length)).toBe(0);
+});
+
+
+test('arrow appearance picker changes only this arrow, supports keyboard selection and undo, and survives reload', async ({ page }) => {
+  await page.goto('/');
+  await page.setInputFiles('input[type="file"]', { name: 'checkout.draftcanvas', mimeType: 'application/json', buffer: Buffer.from(serializeDocument(connectorStyleDocument())) });
+  await expect(page.locator('.dc-editor')).toBeVisible();
+  await cameraAtRest(page);
+  const edge = page.locator('.react-flow__edge[data-id="authorize"]');
+  const point = await edge.locator('.dc-edge-hit').first().evaluate(element => {
+    const path = element as SVGPathElement;
+    const point = path.getPointAtLength(path.getTotalLength() * 0.7).matrixTransform(path.getScreenCTM()!);
+    return { x: point.x, y: point.y };
+  });
+  await page.mouse.click(point.x, point.y);
+  const picker = page.getByRole('button', { name: /^Arrow appearance:/ });
+  await expect(picker).toHaveAccessibleName('Arrow appearance: Sculpted Ink');
+  const readGeometry = () => page.evaluate(async () => {
+    // oxlint-disable-next-line typescript/no-explicit-any
+    const { useEditorStore } = await import(/* @vite-ignore */ '/src/store/editorStore.ts' as string) as any;
+    const { appearance: _appearance, ...geometry } = useEditorStore.getState().document.edges.find((edge: { id: string }) => edge.id === 'authorize');
+    return geometry;
+  });
+  const canonicalGeometry = await readGeometry();
+  await page.mouse.move(10, 100);
+  await picker.focus();
+  await picker.press('Enter');
+  await expect(page.getByRole('listbox', { name: 'Arrow appearance' })).toBeFocused();
+  expect(await page.locator('.dc-edge-inspector .dc-popover-inner').evaluate(el => ({ x: el.scrollLeft, y: el.scrollTop }))).toEqual({ x: 0, y: 0 });
+  await page.keyboard.press('ArrowDown');
+  await expect(page.locator('[role="listbox"][aria-label="Arrow appearance"] [data-highlighted="true"]')).toContainText('Flowing Ribbon');
+  await page.getByRole('listbox', { name: 'Arrow appearance' }).press('Enter');
+  await expect(picker).toHaveAccessibleName('Arrow appearance: Flowing Ribbon');
+  for (const name of ['Technical Pen', 'Pencil Sketch', 'Sculpted Ink']) {
+    await picker.click();
+    await page.getByRole('option', { name: new RegExp(name) }).click();
+    await expect(picker).toHaveAccessibleName(`Arrow appearance: ${name}`);
+    // Styling has not overwritten the routing pins or manually chosen geometry.
+    expect(await readGeometry()).toEqual(canonicalGeometry);
+  }
+  expect(await page.locator('.dc-edge[data-appearance="sculpted"]').count()).toBe(6);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect(edge.locator('.dc-edge')).toHaveAttribute('data-appearance', 'pencil');
+  await page.waitForTimeout(600);
+  await page.reload();
+  await expect(page.locator('.dc-editor')).toBeVisible();
+  await expect(page.locator('.react-flow__edge[data-id="authorize"] .dc-edge')).toHaveAttribute('data-appearance', 'pencil');
+  expect(await page.locator('.dc-edge[data-appearance="sculpted"]').count()).toBe(5);
 });

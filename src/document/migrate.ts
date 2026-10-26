@@ -590,6 +590,8 @@ const MIGRATIONS: Record<number, Migration> = {
   20: everyRoom(migrateTextToMarkdown),
   // Optional link/visibility fields on edges; existing independent compensation lines keep their look.
   21: (document) => document,
+  // Optional appearance; absence uses Sculpted Ink in every room.
+  22: (document) => document,
 };
 
 export class UnsupportedVersionError extends Error {

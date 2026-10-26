@@ -6,6 +6,7 @@ import { useInternalNode, useStore } from '@xyflow/react';
 import {
   ACCENTS,
   CONNECTOR_KINDS,
+  CONNECTOR_APPEARANCES,
   EDGE_SEMANTICS,
   type ConnectorKind,
   type DraftEdge,
@@ -52,6 +53,22 @@ import { useLastPresent, usePopoverPresence } from './usePopoverPresence';
 import { usePopoverKeyboard } from './usePopoverKeyboard';
 import { InspectorSelect, type InspectorSelectOption } from './InspectorSelect';
 import { isImeKeyEvent, overlayAboveCanvasIsOpen } from '../lib/isEditableTarget';
+import { CONNECTOR_TREATMENTS, connectorHead } from '../render/connectorStyle';
+
+const APPEARANCE_OPTIONS: InspectorSelectOption[] = CONNECTOR_APPEARANCES.map((appearance) => ({
+  value: appearance,
+  label: CONNECTOR_TREATMENTS[appearance].label,
+  description: CONNECTOR_TREATMENTS[appearance].description,
+  icon: (
+    <svg viewBox="0 0 52 32" width="48" height="32" aria-hidden="true">
+      <path
+        d={appearance === 'ribbon' ? 'M3 25 C25 25 19 8 45 8' : appearance === 'technical' ? 'M3 25 H24 V8 H45' : appearance === 'pencil' ? 'M3 25 Q15 26 20 24 Q25 22 24 17 Q23 7 45 8' : 'M3 25 H14 Q25 25 25 14 Q25 8 45 8'}
+        fill="none" stroke="currentColor" strokeWidth={CONNECTOR_TREATMENTS[appearance].lineWidth} strokeLinecap="round" strokeLinejoin="round"
+      />
+      <path d={connectorHead(appearance)} transform="translate(31 3)" fill="currentColor" />
+    </svg>
+  ),
+}));
 
 const EDGE_SEMANTIC_LABELS: Record<EdgeSemantic, string> = {
   http: 'HTTP',
@@ -1573,6 +1590,19 @@ function ExpandedPanel({
             {flowAction && <div className="dc-inspector-flow-action">{flowAction}</div>}
           </div>
         </TooltipGroup>
+        <div className="dc-connector-appearance-row">
+          <span className="dc-inspector-section-label">Appearance</span>
+          <InspectorSelect
+            ariaLabel="Arrow appearance"
+            value={edge.appearance ?? 'sculpted'}
+            options={APPEARANCE_OPTIONS}
+            layout="rich"
+            onChange={(value) => {
+              const appearance = CONNECTOR_APPEARANCES.find((item) => item === value);
+              if (appearance) useEditorStore.getState().updateEdgeById(edge.id, { appearance }, 'Change arrow appearance');
+            }}
+          />
+        </div>
         {conditionOpen && showCondition && (
           <div className="dc-connector-flyout dc-connector-condition-flyout">
             <input

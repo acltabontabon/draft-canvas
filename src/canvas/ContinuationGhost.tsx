@@ -1,3 +1,4 @@
+import { CONNECTOR_TREATMENTS, styledConnectorPath } from '../render/connectorStyle';
 import { memo, useMemo } from 'react';
 import { categoryOf } from '../document/connectorSemantics';
 import { relationshipCaptionLabel } from '../document/edgeSemantics';
@@ -230,26 +231,26 @@ export const GhostEdge = memo(function GhostEdge({
   return (
     <g>
       <path
-        d={route.d}
+        d={styledConnectorPath(route.d, edge)}
         fill="none"
         stroke={color}
-        strokeWidth={1.6}
+        strokeWidth={CONNECTOR_TREATMENTS[edge.appearance ?? 'sculpted'].lineWidth}
         strokeLinecap="round"
         strokeDasharray={removed ? REMOVED_EDGE_DASH : dashForEdge(edge)?.join(' ')}
-        markerEnd={edge.directed ? markerRef(color, markerVariantForEdge(edge)) : undefined}
+        markerEnd={edge.directed ? markerRef(color, markerVariantForEdge(edge), edge.appearance) : undefined}
       />
       {/* A request/response connector's reply — its own lane, back to the source, as both renderers
           draw it. */}
       {response && (
         <path
-          d={response.d}
+          d={styledConnectorPath(response.d, edge)}
           fill="none"
           stroke={color}
           strokeWidth={1}
           strokeLinecap="round"
           strokeDasharray={RESPONSE_DASH.join(' ')}
           opacity={0.8}
-          markerEnd={edge.directed ? markerRef(color, 'open') : undefined}
+          markerEnd={edge.directed ? markerRef(color, 'open', edge.appearance) : undefined}
         />
       )}
       {caption && (

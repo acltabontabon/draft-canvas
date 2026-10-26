@@ -1,3 +1,4 @@
+import { styledConnectorPath } from '../src/render/connectorStyle';
 import { describe, expect, it } from 'vitest';
 import { createEdge, createNode } from '../src/document/factory';
 import type { DraftEdge, DraftNode } from '../src/document/types';
@@ -44,9 +45,9 @@ describe('the shared route accessor', () => {
         });
         expect(Boolean(described), `${fixture.id}:${edge.id}`).toBe(Boolean(routes));
         if (!routes || !described) continue;
-        expect(described.line[0]!.t === 'path' && described.line[0]!.d, `${fixture.id}:${edge.id}`).toBe(routes.request.d);
+        expect(described.line[0]!.t === 'path' && described.line[0]!.d, `${fixture.id}:${edge.id}`).toBe(styledConnectorPath(routes.request.d, edge));
         const reply = described.responseLine?.[0];
-        expect(reply && reply.t === 'path' ? reply.d : null, `${fixture.id}:${edge.id} reply`).toBe(routes.response?.d ?? null);
+        expect(reply && reply.t === 'path' ? reply.d : null, `${fixture.id}:${edge.id} reply`).toBe(routes.response ? styledConnectorPath(routes.response.d, edge) : null);
         compared += 1;
       }
     }

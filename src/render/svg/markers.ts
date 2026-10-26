@@ -1,93 +1,76 @@
-import { CONNECTOR_STYLE } from '../connectorStyle';
+import { CONNECTOR_APPEARANCES, type ConnectorAppearance } from '../../document/types';
+import { CONNECTOR_STYLE, connectorHead } from '../connectorStyle';
 import { scopedId } from './ids';
 import { jitter } from '../roughness/seed';
 import { el, type SvgEl } from './element';
 
-/**
- * Arrowheads.
- *
- * React Flow's built-in `MarkerType.ArrowClosed` is not used: its geometry lives
- * inside the library, so the exporter would have to reverse-engineer it and would
- * silently diverge on any upgrade. Defining the arrow once here means the canvas
- * and the exported file reference identical marker definitions.
- *
- * `context-stroke` would avoid per-colour markers but is unevenly supported and
- * fails during PNG rasterization in some browsers, so a marker is minted per
- * colour instead. There are at most eight colours in the whole design system.
- *
- * Only Clean and Draft ever *reference* a minted marker — Sketch draws its
- * arrowheads inline, per-edge (`render/roughness/roughArrow.ts`), since a shared
- * `<marker>` def has no way to vary per edge the way Sketch's other primitives do.
- * A marker is still minted for every preset regardless (defensive completeness,
- * near-zero cost), seeded by a *fixed*, non-per-edge string — every edge of a
- * colour shares the one subtly-imperfect triangle at Draft, unlike Sketch's
- * per-instance one.
- */
-const { arrowLength: ARROW_LENGTH, arrowWidth: ARROW_WIDTH, arrowNotch: ARROW_NOTCH, openArrowWidth: OPEN_ARROW_WIDTH } = CONNECTOR_STYLE;
-
-/**
- * `closed` is a slender filled dart with a shallow notch, used by directed connectors.
- * `open` is an unfilled outline — used for a `callback` connector's return
- * arrow, so a forward/return pair reads as distinct at a glance even before
- * lane separation or direction is noticed. Drawn as a stroke with no fill
- * rather than "punched through" to a background colour, so it looks correct
- * against any theme or export background without needing to know either.
- */
+/** Shared definitions keep the canvas and exported arrowheads identical. Literal colours avoid
+ * context-stroke, which is unevenly supported during PNG rasterization. */
 export type MarkerVariant = 'closed' | 'open';
 
-function markerId(color: string, variant: MarkerVariant = 'closed'): string {
-  const suffix = variant === 'open' ? '-open' : '';
-  return scopedId(`dc-arrow-${color.replace(/[^a-zA-Z0-9]/g, '')}${suffix}`);
+function markerId(color: string, variant: MarkerVariant, appearance: ConnectorAppearance): string {
+  const style = appearance === 'sculpted' ? '' : `-${appearance}`;
+  return scopedId(`dc-arrow-${color.replace(/[^a-zA-Z0-9]/g, '')}${style}${variant === 'open' ? '-open' : ''}`);
 }
 
-export function markerRef(color: string, variant: MarkerVariant = 'closed'): string {
-  return `url(#${markerId(color, variant)})`;
+export function markerRef(color: string, variant: MarkerVariant = 'closed', appearance: ConnectorAppearance = 'sculpted'): string {
+  return `url(#${markerId(color, variant, appearance)})`;
 }
 
-/**
- * At `amplitude === 0` (Clean) the dart is crisp and symmetric. The two back corners only
- * move once `amplitude` is above zero, each independently, off a seed keyed
- * by colour+variant (not an edge id), so the wobble stays fixed across the whole document rather
- * than looking hand-picked per connector.
- */
-function arrowMarker(color: string, variant: MarkerVariant, amplitude: number): SvgEl {
-  const j = (i: number) => jitter(`marker:${color}:${variant}`, i, amplitude);
-  const tip = { x: ARROW_LENGTH, y: ARROW_WIDTH / 2 };
-  const back1 = { x: j(0), y: j(1) };
-  const back2 = { x: j(2), y: ARROW_WIDTH + j(3) };
-  const shape =
-    variant === 'open'
-      ? el('path', {
-          d: `M${back1.x + 0.7},${back1.y + 0.7} L${tip.x - 0.7},${tip.y} L${back2.x + 0.7},${back2.y - 0.7}`,
-          fill: 'none',
-          stroke: color,
-          'stroke-width': OPEN_ARROW_WIDTH,
-          'stroke-linejoin': 'round',
-          'stroke-linecap': 'round',
-        })
-      : el('path', { d: `M${back1.x},${back1.y} L${tip.x},${tip.y} L${back2.x},${back2.y} L${ARROW_NOTCH},${tip.y} Z`, fill: color });
-
-  const padding = Math.max(OPEN_ARROW_WIDTH / 2, amplitude);
-  return el(
-    'marker',
-    {
-      id: markerId(color, variant),
-      viewBox: `${-padding} ${-padding} ${ARROW_LENGTH + padding * 2} ${ARROW_WIDTH + padding * 2}`,
-      refX: ARROW_LENGTH - 0.5,
-      refY: ARROW_WIDTH / 2,
-      markerWidth: ARROW_LENGTH + padding * 2,
-      markerHeight: ARROW_WIDTH + padding * 2,
-      // Keeps the arrow a constant size regardless of the line's stroke width.
-      markerUnits: 'userSpaceOnUse',
-      orient: 'auto-start-reverse',
-    },
-    [shape],
-  );
+/** Jitter the back of a head while fixing its tip. Used for shared Draft markers and per-edge
+ * pencil heads; the same seeded point is repeated identically when a curve revisits it. */
+export function headPath(appearance: ConnectorAppearance, variant: MarkerVariant, seed: string, amplitude = 0): string {
+  return connectorHead(appearance, variant === 'open').replace(/(-?\d*\.?\d+) (-?\d*\.?\d+)/g, (_, sx, sy) => {
+    const x = Number(sx), y = Number(sy);
+    if (x === 14 && y === 5) return '14 5';
+    return `${x + jitter(seed, x * 20 + y * 2, amplitude)} ${y + jitter(seed, x * 20 + y * 2 + 1, amplitude)}`;
+  });
 }
 
-/** Marker definitions — both variants, for every colour the document actually uses, at the active
- *  preset's `arrowJitter` amplitude (0 for Clean, the original untouched default). */
-export function markerDefs(colors: Iterable<string>, arrowJitter = 0): SvgEl[] {
+function arrowMarker(color: string, variant: MarkerVariant, amplitude: number, appearance: ConnectorAppearance): SvgEl {
+  const open = variant === 'open';
+  const { arrowLength, arrowWidth, openArrowWidth } = CONNECTOR_STYLE;
+  const padding = amplitude + openArrowWidth / 2;
+  return el('marker', {
+    id: markerId(color, variant, appearance),
+    viewBox: `${-padding} ${-padding} ${arrowLength + padding * 2} ${arrowWidth + padding * 2}`,
+    refX: arrowLength - 0.5,
+    refY: arrowWidth / 2,
+    markerWidth: arrowLength + padding * 2,
+    markerHeight: arrowWidth + padding * 2,
+    markerUnits: 'userSpaceOnUse',
+    orient: 'auto-start-reverse',
+  }, [el('path', {
+    d: headPath(appearance, variant, `marker:${color}:${variant}`, amplitude),
+    fill: open ? 'none' : color,
+    stroke: open ? color : undefined,
+    'stroke-width': open ? openArrowWidth : undefined,
+    'stroke-linejoin': 'round',
+    'stroke-linecap': 'round',
+  })]);
+}
+
+export function markerDefs(colors: Iterable<string>, arrowJitter = 0, appearances: readonly ConnectorAppearance[] = ['sculpted']): SvgEl[] {
+  return [...new Set(colors)].flatMap((color) => appearances.flatMap((appearance) =>
+    (['closed', 'open'] as const).map((variant) => arrowMarker(color, variant, appearance === 'sculpted' ? arrowJitter : 0, appearance)),
+  ));
+}
+
+function ribbonId(color: string): string {
+  return scopedId(`dc-ribbon-${color.replace(/[^a-zA-Z0-9]/g, '')}`);
+}
+
+export function ribbonPaintRef(color: string): string {
+  return `url(#${ribbonId(color)})`;
+}
+
+/** User-space gradients also paint perfectly horizontal/vertical strokes (zero-area bounds). */
+export function connectorDefs(colors: Iterable<string>, arrowJitter = 0): SvgEl[] {
   const unique = [...new Set(colors)];
-  return unique.flatMap((color) => [arrowMarker(color, 'closed', arrowJitter), arrowMarker(color, 'open', arrowJitter)]);
+  return [
+    ...markerDefs(unique, arrowJitter, CONNECTOR_APPEARANCES),
+    ...unique.map((color) => el('linearGradient', {
+      id: ribbonId(color), gradientUnits: 'userSpaceOnUse', x1: 0, y1: 0, x2: 480, y2: 240, spreadMethod: 'reflect',
+    }, [el('stop', { offset: 0, 'stop-color': color, 'stop-opacity': 0.72 }), el('stop', { offset: 1, 'stop-color': color })])),
+  ];
 }

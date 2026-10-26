@@ -43,7 +43,7 @@ Queue and Data Store artwork also grows when you drag a corner resize handle.
 Hovering a connector briefly traces the request and then its reply, once. The canvas stays still
 otherwise, and reduced-motion preferences turn the trace off.
 
-The default uses a fine, rounded line and a slim arrowhead. Replies use a lighter dashed return
+The default, **Sculpted Ink**, uses sweeping corners and a carved arrowhead. Replies use a lighter dashed return
 rail, with each caption outside its own line. Two differently named operations keep separate exits;
 a repeated relationship can share a trunk. These details also appear in SVG and PNG exports.
 
@@ -90,6 +90,14 @@ previews you can choose with one click, beside arrowhead, colour, condition and 
 colour wheel means automatic colour, as it does for shapes; click it to choose a fixed colour. Click
 the condition icon to edit a condition without making the inspector taller. Hover an icon to see
 what it does.
+
+Choose **Appearance** to give this connector a different drawing treatment: **Sculpted Ink**,
+**Flowing Ribbon**, **Technical Pen** or **Pencil Sketch**. Each choice includes a small preview.
+It keeps the connection’s pins, manual bends, labels and meaning. The choice is saved with the
+connector, supports undo, and appears in SVG and PNG exports. Explicit choices override the page’s
+drawing personality; untouched connectors still follow Draft or Sketch.
+
+![Arrow appearance picker with previews of all four treatments.](../media/connectors/style-picker-light.png)
 
 To show how a successful step could be counteracted later in a workflow, select its connector and
 choose **+ Add** in Recovery, then click the shape that should receive the recovery action. A

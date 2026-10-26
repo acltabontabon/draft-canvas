@@ -10,7 +10,7 @@
 export const DRAFT_FORMAT = 'draft-canvas' as const;
 
 /** Bump when the on-disk shape changes, and add a migration in `migrate.ts`. */
-export const CURRENT_VERSION = 22;
+export const CURRENT_VERSION = 23;
 
 export type DraftFormat = typeof DRAFT_FORMAT;
 
@@ -90,6 +90,9 @@ export type Accent = (typeof ACCENTS)[number];
 
 export const EDGE_ROUTINGS = ['smoothstep', 'bezier', 'straight'] as const;
 export type EdgeRouting = (typeof EDGE_ROUTINGS)[number];
+
+export const CONNECTOR_APPEARANCES = ['sculpted', 'ribbon', 'technical', 'pencil'] as const;
+export type ConnectorAppearance = (typeof CONNECTOR_APPEARANCES)[number];
 
 /**
  * How much freedom the router has over a connector's path. Deliberately not a
@@ -486,6 +489,8 @@ export interface DraftEdge {
   /** `false` renders a plain association line with no arrowhead. */
   directed: boolean;
   routing: EdgeRouting;
+  /** A drawing treatment, independent of routing and semantics. Absent means Sculpted Ink. */
+  appearance?: ConnectorAppearance;
   accent?: Accent;
   /** Expandable technical detail, shown on selection and in Explain Mode. */
   details?: EdgeDetails;

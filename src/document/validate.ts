@@ -24,6 +24,7 @@ import {
   CODE_LANGUAGES,
   COMPONENT_KINDS,
   CONNECTOR_KINDS,
+  CONNECTOR_APPEARANCES,
   CURRENT_VERSION,
   DATABASE_KINDS,
   DELIVERY_ROLES,
@@ -53,6 +54,7 @@ import {
   type CodeLanguage,
   type ComponentKind,
   type ConnectorKind,
+  type ConnectorAppearance,
   type DraftPoint,
   type DatabaseKind,
   type DeliveryRole,
@@ -756,6 +758,8 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
     // silently strip the user's choice on every paste.
     const routeMode = oneOfOptional<RouteMode>(candidate.routeMode, ROUTE_MODES);
     if (routeMode) edge.routeMode = routeMode;
+    const appearance = oneOfOptional<ConnectorAppearance>(candidate.appearance, CONNECTOR_APPEARANCES);
+    if (appearance) edge.appearance = appearance;
 
     // Carried through copy/paste for the same reason as `routeMode` above.
     const waypoints = parseWaypoints(candidate.waypoints);

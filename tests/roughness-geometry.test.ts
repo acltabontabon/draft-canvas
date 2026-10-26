@@ -93,14 +93,14 @@ describe('sketchArrowPath — hand-drawn arrowhead', () => {
 
   it('never moves the tip, regardless of amplitude', () => {
     const d = sketchArrowPath(tip, dir, 'e1', 2);
-    expect(d.startsWith('M100,50')).toBe(true);
+    expect(d.startsWith('M100 50')).toBe(true);
   });
 
   it('the two wings differ from each other (asymmetric, not just narrower/wider)', () => {
     const d = sketchArrowPath(tip, dir, 'e1', 2);
-    const points = d.match(/-?\d*\.?\d+,-?\d*\.?\d+/g)!;
-    // [tip, wing1, notch, wing2] — the wings should not be mirror-identical after jitter.
-    expect(points[1]).not.toBe(points[3]);
+    const points = d.match(/-?\d*\.?\d+ -?\d*\.?\d+/g)!.map(p => p.split(' ').map(Number));
+    // The curved nib's back wings are the third and seventh control-path points.
+    expect(points[3]![1]! - tip.y).not.toBe(tip.y - points[7]![1]!);
   });
 
   it('is deterministic per edge id', () => {

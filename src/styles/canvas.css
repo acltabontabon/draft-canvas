@@ -2364,7 +2364,7 @@
 
 /* Recovery is a companion sketch beside the connector, so opening it does not turn the
  * inspector into a tall form or make the person scroll past the operation they are editing. */
-.dc-edge-inspector:has(.dc-recovery-action[data-open='true'], .dc-connector-flyout) .dc-popover-inner {
+.dc-edge-inspector:has(.dc-recovery-action[data-open='true'], .dc-connector-flyout, .dc-connector-appearance-row .dc-inspector-select-menu) .dc-popover-inner {
   max-height: none;
   overflow: visible;
 }
@@ -2435,6 +2435,18 @@
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.dc-connector-appearance-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.dc-connector-appearance-row > .dc-inspector-select {
+  flex: 1;
+  min-width: 0;
 }
 
 .dc-connector-drawing-row > .dc-inspector-section-label {

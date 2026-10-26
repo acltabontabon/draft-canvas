@@ -225,7 +225,7 @@ test.describe('line jumps', () => {
       const project = await import('/src/export/project.ts');
       const svgmod = await import('/src/render/svg/document.ts');
       const parsed = project.deserializeDocument(text);
-      const svg = svgmod.renderDocumentSvg(parsed.document, { theme: 'dark' }).svg;
+      const svg = svgmod.renderDocumentSvg(parsed.document, { theme: 'dark' }).svg.replace(/<defs>[\s\S]*?<\/defs>/g, '');
       return [...svg.matchAll(/<path d="([^"]+)"/g)].map((m) => m[1]!).filter((d) => d.includes('C'));
     }, JSON.stringify(crossingDocument()));
 

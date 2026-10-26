@@ -198,7 +198,7 @@ describe('an exported image', () => {
 
   it('draws the same humps the canvas does', () => {
     const { nodes, edges } = squareCrossing();
-    const svg = renderDocumentSvg(documentWith(nodes, edges)).svg;
+    const svg = renderDocumentSvg(documentWith(nodes, edges)).svg.replace(/<defs>[\s\S]*?<\/defs>/g, '');
     const humped = [...svg.matchAll(/<path d="([^"]+)"/g)].map((match) => match[1]!).filter((d) => d.includes('C'));
 
     expect(humped).toHaveLength(1);
@@ -212,7 +212,7 @@ describe('an exported image', () => {
       createEdge({ id: 'top', source: 'a', target: 'b' }),
       createEdge({ id: 'bottom', source: 'c', target: 'd' }),
     ];
-    const svg = renderDocumentSvg(documentWith(nodes, edges)).svg;
+    const svg = renderDocumentSvg(documentWith(nodes, edges)).svg.replace(/<defs>[\s\S]*?<\/defs>/g, '');
 
     // A bridge is a cubic arc (`C`) in a connector's path data; the filter primitives in the defs
     // spell their inputs in capitals too, so only the path data is read.

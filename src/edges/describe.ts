@@ -1,11 +1,11 @@
-import { CONNECTOR_STYLE } from '../render/connectorStyle';
+import { CONNECTOR_STYLE, CONNECTOR_TREATMENTS, connectorProfile, styledConnectorPath } from '../render/connectorStyle';
 import type { DraftEdge, DraftNode, OpenPoint } from '../document/types';
 import { MARKER_SIZE, describeMarker, edgeMarkerCenter, type OccupiedRect } from '../openPoints/marker';
 import type { Shape, TextAlign } from '../render/displayList';
 import { PERSONALITY_PROFILES } from '../render/roughness/presets';
 import { roughenPath } from '../render/roughness/roughPath';
 import { sketchArrowPath } from '../render/roughness/roughArrow';
-import { markerRef } from '../render/svg/markers';
+import { markerRef, ribbonPaintRef } from '../render/svg/markers';
 import type { Theme } from '../render/theme/tokens';
 import { FONTS, LINE_HEIGHTS } from '../render/text/fonts';
 import { baselineOf, layoutText, type TextLayout } from '../render/text/layout';
@@ -236,8 +236,12 @@ export function describeEdge(
   // from the unperturbed `route` object — only the drawn stroke wobbles, so
   // label placement, direction, and attachment points stay exactly as legible
   // as Clean at every preset, and topology/routing never changes.
-  const profile = PERSONALITY_PROFILES[ctx.preset ?? 'clean'];
-  const strokeBase = { color, width: CONNECTOR_STYLE.lineWidth, linecap: 'round' as const, dash: dashForEdge(edge) };
+  const appearance = edge.appearance ?? 'sculpted';
+  const treatment = CONNECTOR_TREATMENTS[appearance];
+  const profile = connectorProfile(edge, PERSONALITY_PROFILES[ctx.preset ?? 'clean']);
+  const strokePaint = appearance === 'ribbon' ? ribbonPaintRef(color) : color;
+  const styledPath = styledConnectorPath(route.d, edge);
+  const strokeBase = { color: strokePaint, width: treatment.lineWidth, linecap: 'round' as const, dash: dashForEdge(edge) };
   const variant = markerVariantForEdge(edge);
   // A bundle's members each draw the whole shared trunk, so they must wobble
   // it identically or it frays into a rope — see `strokeSeed`.
@@ -246,13 +250,13 @@ export function describeEdge(
   // `render/roughness/roughArrow.ts`. `roughenPath` is the identity function at
   // `outline === 0 && bow === 0` (Clean), so the base line needs no separate branch.
   const usesHandDrawnArrow = edge.directed && profile.arrowStyle === 'per-edge-hand';
-  const markerEnd = edge.directed && !usesHandDrawnArrow ? markerRef(color, variant) : undefined;
+  const markerEnd = edge.directed && !usesHandDrawnArrow ? markerRef(color, variant, appearance) : undefined;
   // Crossing bridges go on *after* the wobble — see the matching note in `DraftEdgeView.tsx`.
   // `bridgePath` is the identity with no crossings, so a connector that crosses nothing keeps the
   // exact path string it always had.
   const crossings = ctx.crossings ?? [];
   const drawn = (suffix: string) =>
-    bridgePath(roughenPath(route.d, `${seed}:${suffix}`, profile.outline, profile.bow), crossings);
+    bridgePath(roughenPath(styledPath, `${seed}:${suffix}`, profile.outline, profile.bow), crossings);
   const line: Shape[] = [
     {
       t: 'path',
@@ -261,6 +265,8 @@ export function describeEdge(
       stroke: strokeBase,
       markerEnd,
     },
+    ...(appearance === 'technical' ? [{ t: 'ellipse' as const, cx: route.source.x, cy: route.source.y, rx: 3.4, ry: 3.4, fill: ctx.theme.canvas, stroke: { color, width: 1.4 } }] : []),
+    ...(appearance === 'ribbon' ? [{ t: 'path' as const, d: drawn('0'), fill: 'none', stroke: { color: ctx.theme.canvas, width: 0.7, linecap: 'round' as const, dash: dashForEdge(edge) }, opacity: 0.35 }] : []),
     ...(profile.strokes === 2
       ? ([
           {
@@ -282,6 +288,7 @@ export function describeEdge(
               arrowSeed(edge.id, ctx.spine),
               profile.arrowJitter,
               variant,
+              appearance,
             ),
             fill: variant === 'closed' ? color : 'none',
             stroke: variant === 'open' ? { color, width: CONNECTOR_STYLE.openArrowWidth, linecap: 'round' } : undefined,
@@ -309,15 +316,15 @@ export function describeEdge(
       // which meant the reply line stayed perfectly crisp in every export while the live canvas
       // (`DraftEdgeView.tsx`) already wobbled it; fixed to match, using the same shared seed
       // suffix so the two renderers can't quietly disagree on it again.
-      const responseD = roughenPath(responseRoute.d, `${seed}${RESPONSE_SEED_SUFFIX}`, profile.outline, profile.bow);
+      const responseD = roughenPath(styledConnectorPath(responseRoute.d, edge), `${seed}${RESPONSE_SEED_SUFFIX}`, profile.outline, profile.bow);
       const responseHandDrawnArrow = edge.directed && profile.arrowStyle === 'per-edge-hand';
       responseLine = [
         {
           t: 'path',
           d: responseD,
           fill: 'none',
-          stroke: { color, width: 1, linecap: 'round', dash: RESPONSE_DASH },
-          markerEnd: edge.directed && !responseHandDrawnArrow ? markerRef(color, 'open') : undefined,
+          stroke: { color: strokePaint, width: Math.max(1.1, treatment.lineWidth * 0.6), linecap: 'round', dash: RESPONSE_DASH },
+          markerEnd: edge.directed && !responseHandDrawnArrow ? markerRef(color, 'open', appearance) : undefined,
           opacity: 0.8,
         },
         ...(responseHandDrawnArrow
@@ -330,6 +337,7 @@ export function describeEdge(
                   `${edge.id}:response-head`,
                   profile.arrowJitter,
                   'open',
+                  appearance,
                 ),
                 fill: 'none',
                 stroke: { color, width: CONNECTOR_STYLE.openArrowWidth, linecap: 'round' },

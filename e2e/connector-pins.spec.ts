@@ -49,9 +49,11 @@ async function expectRouteParity(page: Page, id: string) {
   const expected = await page.evaluate(async (edgeId) => {
     const { useEditorStore } = await import('/src/store/editorStore.ts');
     const { connectorRoutes } = await import('/src/edges/connectorRoutes.ts');
+    const { styledConnectorPath } = await import('/src/render/connectorStyle.ts');
     const doc = useEditorStore.getState().document;
     const edge = doc.edges.find((item: { id: string }) => item.id === edgeId);
-    return edge ? connectorRoutes(edge, doc, 'transient')?.request.d : null;
+    const routes = edge && connectorRoutes(edge, doc, 'transient');
+    return edge && routes ? styledConnectorPath(routes.request.d, edge) : null;
   }, id);
   expect(await page.locator(`.react-flow__edge[data-id="${id}"] .dc-edge-hit`).first().getAttribute('d')).toBe(expected);
 }
