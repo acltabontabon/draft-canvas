@@ -109,8 +109,6 @@ export function StatusBar({ durable, presenting = false, onResolveConflict }: St
   // last saved before it.
   const leftCopy = useUiStore((state) => state.readOnly?.collaborative === true);
   const save = useEditorStore((state) => state.save);
-  const nodeCount = useEditorStore((state) => state.document.nodes.length);
-  const edgeCount = useEditorStore((state) => state.document.edges.length);
 
   // A cross-tab conflict (another tab changed or deleted this canvas) can arrive while presenting;
   // the rest of the status bar stays out of the way, but the conflict itself must still be
@@ -152,13 +150,9 @@ export function StatusBar({ durable, presenting = false, onResolveConflict }: St
           </span>
           {collab === 'host' && durable && !save.conflict ? (
             <LiveStatus role="host" />
-          ) : (
-            <span className="dc-muted dc-status-hint" hidden={Boolean(save.conflict)}>
-              {durable
-                ? 'Your diagrams stay in this browser. Nothing you draw is uploaded.'
-                : 'This browser is blocking storage — export to keep your work.'}
-            </span>
-          )}
+          ) : !durable && !save.conflict ? (
+            <span className="dc-muted dc-status-hint">This browser is blocking storage — export to keep your work.</span>
+          ) : null}
         </div>
       )}
 
@@ -166,11 +160,6 @@ export function StatusBar({ durable, presenting = false, onResolveConflict }: St
         <TrafficChip />
         <OpenPointsChip />
         <LevelChip />
-        <span className="dc-muted">
-          {nodeCount} {nodeCount === 1 ? 'element' : 'elements'} · {edgeCount}{' '}
-          {edgeCount === 1 ? 'connector' : 'connectors'}
-        </span>
-        <span className="dc-inspector-divider" />
         <HistoryControls />
         <ZoomControls />
         <CanvasSettingsButton />

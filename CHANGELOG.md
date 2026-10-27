@@ -12,6 +12,9 @@ The retired VS Code extension has [its own changelog](https://github.com/acltabo
 
 #### Added
 
+- The editor footer keeps save status and canvas controls compact, without element counts or the
+  repeated privacy sentence. Collapsing Recovery work now keeps the chosen replay example visible.
+
 - A quiet note beside each DLQ describes its replay scenario. Zero messages clears the extra
   replay numbers without implying a live queue is empty.
 

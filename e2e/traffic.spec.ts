@@ -368,6 +368,13 @@ test('replay batches show total recovery work without editing the diagram or bas
   await expect(page.locator('.dc-traffic-replay-badge').filter({ hasText: 'data ops' })).toContainText('Replay +1,000 data ops total');
   await expect(page.locator('.dc-traffic-replay-badge').filter({ hasText: 'data ops' })).toContainText('~1,000 data ops/min');
   await expect(workerRate).toContainText('1,000 calls/min');
+  await count.fill('800');
+  await recovery.locator('summary').click();
+  await expect(count).not.toBeVisible();
+  await expect(page.locator('.dc-traffic-dlq-note')).toHaveText('800 messages to replay.');
+  await expect(page.locator('.dc-traffic-replay-badge').filter({ hasText: 'data ops' })).toContainText('Replay +800 data ops total');
+  await recovery.locator('summary').click();
+  await expect(count).toHaveValue('800');
   await count.fill('500');
   await count.press('Backspace');
   await expect(count).toHaveValue('50');
@@ -422,5 +429,26 @@ for (const colorScheme of ['light', 'dark'] as const) {
     await expect(page.locator('.dc-traffic-database input')).toHaveCount(0);
     expect(await editorRevision(page)).toBe(revision);
     await page.screenshot({ path: `/tmp/database-work-${colorScheme}.png` });
+  });
+}
+
+for (const width of [390, 800, 1280]) {
+  test(`footer stays compact at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await importDocument(page, recoveryDocument(), 'footer.draftcanvas');
+    const footer = page.locator('.dc-status');
+    await expect(footer).toContainText('Saved locally');
+    await expect(footer).not.toContainText('Your diagrams stay');
+    await expect(footer).not.toContainText('connectors');
+    const bounds = await footer.boundingBox();
+    expect(bounds!.height).toBeLessThanOrEqual(48);
+    for (const name of ['Undo', 'Redo', 'Zoom out', 'Zoom in']) {
+      const button = footer.getByRole('button', { name, exact: true });
+      await expect(button).toBeVisible();
+      const rect = await button.boundingBox();
+      expect(rect!.x).toBeGreaterThanOrEqual(0);
+      expect(rect!.x + rect!.width).toBeLessThanOrEqual(width);
+    }
+    await page.screenshot({ path: `/tmp/footer-${width}.png` });
   });
 }

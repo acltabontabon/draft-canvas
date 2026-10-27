@@ -26,7 +26,7 @@ export function TrafficRecovery({ analysis, nodes, plan, width, onExplore }: {
     return node ? displayNameFor(node) : 'Untitled';
   };
   return (
-    <details className="dc-traffic-work dc-traffic-recovery" onToggle={(event) => onExplore(event.currentTarget.open && plan.kind === 'replay' ? count : null)}>
+    <details className="dc-traffic-work dc-traffic-recovery" onToggle={(event) => { if (event.currentTarget.open && plan.kind === 'replay') onExplore(count); }}>
       <summary style={{ fontFamily: familyOf('hand') }}>Recovery work</summary>
       <div className="dc-traffic-work-paper">
         {plan.kind === 'replay' && !plan.missing && (

@@ -145,9 +145,10 @@ An idle DLQ does not start normal traffic. Recovery follows the routes you drew 
 dependencies also used by normal work. Without an outgoing replay route, it asks you to draw one.
 Compensation remains a range because the diagram cannot tell which earlier steps completed.
 Retries and new failures can add more work; loops have no finite total. The optional count is local,
-resets when you select another shape, and never edits the diagram. While the replay section is open,
+resets when you select another shape, and never edits the diagram. While exploring a replay,
 affected shapes include **Replay +… total** in their top traffic chip, alongside the normal rate.
-The replay total updates with the count. A small note beside the DLQ describes the example.
+The replay total updates with the count. Collapsing **Recovery work** hides its controls while
+keeping the chosen example visible on the diagram. A small note beside the DLQ describes the example.
 Enter zero to show “Nothing to replay in this example” and hide extra replay numbers; this does
 not claim the live queue is empty. Normal RPM
 stays unchanged; a batch size does not establish a replay rate.

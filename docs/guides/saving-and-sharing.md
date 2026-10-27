@@ -6,6 +6,9 @@
 - **Desktop:** `⌘S` saves to a file; see [desktop files](desktop.md#files).
 
 Browser diagrams do not sync between devices, browsers or sites, and clearing site data deletes them.
+The footer keeps the save status and canvas controls together, without diagram counts or a repeating
+privacy message.
+
 If the status bar says **In memory only**, nothing is stored: export before closing.
 If another tab changed the same diagram, choose **Keep mine** or **Load the other tab's**.
 

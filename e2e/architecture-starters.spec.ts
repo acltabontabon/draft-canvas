@@ -44,7 +44,7 @@ test.describe('architecture starters', () => {
     await expect(page.locator('.dc-node')).toHaveCount(14);
     // Selected, so the next thing typed acts on what was just inserted.
     await expect(page.locator('.dc-node[data-selected="true"]')).toHaveCount(14);
-    await expect(page.locator('.dc-status-right')).toContainText('14 elements · 8 connectors');
+    await expect(page.locator('.react-flow__edge')).toHaveCount(8);
 
     await page.keyboard.press('ControlOrMeta+z');
     await expect(page.locator('.dc-node')).toHaveCount(0);
