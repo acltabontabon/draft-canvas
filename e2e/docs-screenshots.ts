@@ -1,5 +1,5 @@
 import { openGallery } from './library';
-import { node, trafficDocument } from './fixtures/traffic';
+import { node, recoveryDocument, trafficDocument } from './fixtures/traffic';
 /**
  * Regenerates the screenshots the user guides in `docs/guides/` embed (`docs/media/guides/*.png`).
  *
@@ -419,6 +419,16 @@ async function trafficScreenshots(page: Page) {
   await shot(page, 'traffic-work');
   await page.getByRole('button', { name: 'How to read this' }).click();
   await shot(page, 'traffic-reading-guide');
+  await page.goto(URL);
+  await page.locator('input[type="file"]').setInputFiles({
+    name: 'recovery-guide.draftcanvas', mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(recoveryDocument())),
+  });
+  await page.locator('.dc-status-traffic').click();
+  await page.locator('.react-flow__node[data-id="dlq"] .dc-node').click();
+  await page.locator('.dc-traffic-recovery summary').click();
+  await page.getByRole('textbox', { name: 'Messages to replay' }).fill('500');
+  await shot(page, 'traffic-recovery');
 }
 
 async function main() {

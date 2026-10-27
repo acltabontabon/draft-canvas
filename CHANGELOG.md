@@ -12,6 +12,10 @@ The retired VS Code extension has [its own changelog](https://github.com/acltabo
 
 #### Added
 
+- Traffic notes show recovery work for drawn DLQ replay and compensation routes. Start with one
+  attempt or optionally explore a replay batch, with total work and shared dependencies kept
+  separate from normal traffic rates.
+
 - Traffic’s “How to read this” guide opens as a compact popover at the lower-left canvas edge,
   with clear limits on what the numbers can tell you. It closes on Escape or an outside click.
 

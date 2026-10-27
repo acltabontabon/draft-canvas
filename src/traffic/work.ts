@@ -27,7 +27,7 @@ const NOUNS: Record<WorkKind, [string, string]> = {
 /** One arrival at the selected shape, independent of RPM and other entry points. Propagate counts
  * in topological order so converging work continues downstream once per arrival, not once per node.
  * Reachable cycles and bounded analyses cannot establish a finite total. */
-export function workPerArrival(analysis: TrafficAnalysis, id: string): { items: string[]; uncertain: boolean; unknown: boolean } {
+export function workPerArrival(analysis: TrafficAnalysis, id: string, arrivals = 1): { items: string[]; uncertain: boolean; unknown: boolean } {
   const outgoing = new Map<string, TrafficInteraction[]>();
   for (const item of analysis.interactions) {
     if (!item.workload) continue;
@@ -73,8 +73,8 @@ export function workPerArrival(analysis: TrafficAnalysis, id: string): { items: 
   const items = KINDS.flatMap((kind) => {
     const count = totals.get(kind)!;
     if (count.possible === 0) return [];
-    const amount = count.definite === count.possible ? String(count.possible) : `${count.definite}–${count.possible}`;
-    return [`${amount} ${NOUNS[kind][count.possible === 1 ? 0 : 1]}`];
+    const amount = count.definite === count.possible ? (count.possible * arrivals).toLocaleString('en-US') : `${(count.definite * arrivals).toLocaleString('en-US')}–${(count.possible * arrivals).toLocaleString('en-US')}`;
+    return [`${amount} ${NOUNS[kind][count.possible * arrivals === 1 ? 0 : 1]}`];
   });
   return { items: items.length ? items : ['No downstream work drawn.'], uncertain, unknown: false };
 }

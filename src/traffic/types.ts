@@ -202,6 +202,7 @@ export interface TrafficInsight {
 }
 
 export type TrafficStatus =
+  | 'recovery-only'
   /** Nothing runtime here: no compute, messaging or data node takes part in a runtime interaction. */
   | 'nothing-to-analyze'
   /** Runtime nodes exist but no entry point starts a path (every one sits in a loop, say). */

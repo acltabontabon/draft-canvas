@@ -123,6 +123,22 @@ path that runs through one stops there.
 
 When a flow is in view when traffic is shown, that flow's connectors are analyzed.
 
+## Recovery work
+
+Select a dead-letter queue or a shape with an outgoing compensation connector, then unfold
+**Recovery work** in its traffic note. One replay or compensation attempt is the default.
+For a drawn replay route, optionally enter a batch size such as **500 messages** to see the total
+downstream calls, data operations and message deliveries. These are totals, not requests per minute:
+a backlog alone cannot tell us how quickly it drains.
+
+An idle DLQ does not start normal traffic. Recovery follows the routes you drew and highlights
+dependencies also used by normal work. Without an outgoing replay route, it asks you to draw one.
+Compensation remains a range because the diagram cannot tell which earlier steps completed.
+Retries and new failures can add more work; loops have no finite total. The optional count is local,
+resets when you select another shape, and never edits the diagram.
+
+![A replay batch and its downstream recovery work](../media/guides/traffic-recovery.png)
+
 ## Junctions
 
 Junctions route traffic but never receive it. A route through several Junctions counts once. When a

@@ -31,6 +31,13 @@ export function trafficScenario(analysis: TrafficAnalysis): Map<string, string> 
       pending.push(target);
     }
   }
+  const activeWorkloads = new Map<string, Set<string>>();
+  for (const item of analysis.interactions) {
+    if (!item.workload || (analysis.nodes.get(item.from)?.paths.possible ?? 0) === 0) continue;
+    const kinds = activeWorkloads.get(item.to) ?? new Set<string>();
+    kinds.add(item.workload);
+    activeWorkloads.set(item.to, kinds);
+  }
   const labels = new Map<string, string>();
   for (const node of analysis.nodes.values()) {
     if (node.role === 'excluded' || node.role === 'junction') continue;
@@ -39,10 +46,11 @@ export function trafficScenario(analysis: TrafficAnalysis): Map<string, string> 
       continue;
     }
     if (node.paths.possible === 0) continue;
+    const workloads = [...(activeWorkloads.get(node.id) ?? [])];
     const unit = node.isEntry ? 'starts/min'
-      : node.workloads.length !== 1 ? 'arrivals/min'
-        : node.workloads[0] === 'request' ? 'calls/min'
-          : node.workloads[0] === 'message' ? 'messages/min' : 'data ops/min';
+      : workloads.length !== 1 ? 'arrivals/min'
+        : workloads[0] === 'request' ? 'calls/min'
+          : workloads[0] === 'message' ? 'messages/min' : 'data ops/min';
     labels.set(node.id, scenarioRateLabel(node.paths, unit));
   }
   return labels;

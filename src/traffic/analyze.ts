@@ -302,10 +302,16 @@ export function analyzeTraffic(input: TrafficInput, limits: TrafficLimits = DEFA
   const nodes = new Map<string, TrafficNode>();
   for (const id of runtimeIds) nodes.set(id, nodeResult(id, graph));
 
+  // A failure destination is not an independent source of normal work. In particular, a DLQ
+  // holding messages starts no baseline traffic until a person explicitly explores a replay.
+  const recoveryDestinations = new Set(graph.interactions.filter((item) => item.class === 'failure').map((item) => item.to));
+  const hasRecovery = [...graph.nodes.values()].some((node) => node.deliveryRole === 'dead-letter')
+    || graph.edgeList.some((edge) => edge.semantic === 'compensates');
   const entries = new Set(
     runtimeIds.filter((id) => {
       const role = graph.roles.get(id);
-      return (role === 'origin' || role === 'compute' || role === 'messaging') && outgoing.has(id) && !incoming.has(id);
+      return (role === 'origin' || role === 'compute' || role === 'messaging') && outgoing.has(id) && !incoming.has(id)
+        && !recoveryDestinations.has(id) && graph.nodes.get(id)?.deliveryRole !== 'dead-letter';
     }),
   );
 
@@ -382,7 +388,7 @@ export function analyzeTraffic(input: TrafficInput, limits: TrafficLimits = DEFA
   readEdges(graph, graph.interactions, nodes);
 
   const anyBaseline = graph.interactions.some((interaction) => isBaselineClass(interaction.class));
-  const status = !anyBaseline ? 'nothing-to-analyze' : entries.size > 0 ? 'ok' : 'no-entry';
+  const status = entries.size > 0 ? 'ok' : hasRecovery ? 'recovery-only' : !anyBaseline ? 'nothing-to-analyze' : 'no-entry';
 
   // Excluded shapes appear only where a path stopped at one, so the canvas can say why.
   for (const diagnostic of graph.diagnostics) {

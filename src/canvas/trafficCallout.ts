@@ -1,6 +1,7 @@
+import { recoveryPlan } from '../traffic/recovery';
 import { rateBreakdown, workPerArrival } from '../traffic/work';
 import { displayNameFor } from '../document/factory';
-import type { DraftNode } from '../document/types';
+import type { DraftEdge, DraftNode } from '../document/types';
 import { fitLabel, layoutText } from '../render/text/layout';
 import { impactOf, type TrafficAnalysis } from '../traffic';
 import type { Rect } from '../traffic/sketchLayout';
@@ -28,7 +29,7 @@ function textOf(text: string, width: number, size = 13, weight: 400 | 600 = 400,
 }
 
 /** A field note: keep the count, its sources and its consequences visually distinct. */
-export function trafficCalloutFor(analysis: TrafficAnalysis, nodes: readonly DraftNode[], id: string, obstacles: readonly Rect[], availableWidth = WIDTH, scenarioLabel?: string) {
+export function trafficCalloutFor(analysis: TrafficAnalysis, nodes: readonly DraftNode[], id: string, obstacles: readonly Rect[], availableWidth = WIDTH, scenarioLabel?: string, edges: readonly DraftEdge[] = []) {
   const node = nodes.find((item) => item.id === id);
   if (!node) return null;
   const width = Math.min(WIDTH, availableWidth);
@@ -102,6 +103,12 @@ export function trafficCalloutFor(analysis: TrafficAnalysis, nodes: readonly Dra
     };
   }
 
+  const recovery = recoveryPlan(analysis, nodes, edges, id);
+  if (recovery && result?.paths.possible === 0) {
+    metric = 'Recovery only';
+    summary = textOf('No normal traffic starts here.', inner);
+  }
+
   const title = textOf(displayNameFor(node), inner - 62, 13, 600);
   const hero = fitLabel(metric, { font: { stack: 'hand', size: 32, weight: 700 }, minFontSize: 18, maxWidth: inner, maxHeight: 40, lineHeightRatio: 1.25, maxLines: 1 });
   // These are the same line boxes, section gaps and padding rendered by TrafficSketches. Keeping
@@ -111,7 +118,8 @@ export function trafficCalloutFor(analysis: TrafficAnalysis, nodes: readonly Dra
     + (sources.length > 0 ? 6 + sources.reduce((sum, source) => sum + source.name.height, 0) : 0)
     + (moreSources > 0 ? 18 : 0)
     + (work ? 36 + sources.length * 28 : 0)
+    + (recovery ? 36 : 0)
     + sections.reduce((sum, section) => sum + 32 + (section.detail ? section.detail.height + 4 : 0) + section.items.reduce((height, item) => height + item.height, 0) + (section.more > 0 ? 18 : 0), 0);
   const description = [title.text, metric, summary?.text, ...sources.map((source) => `${source.name.text}: ${source.count}`), ...sections.map((section) => `${section.label}. ${section.detail?.text ?? ''} ${section.items.map((item) => item.text).join(', ')}${section.more > 0 ? `, plus ${section.more} more` : ''}`)].filter(Boolean).join('. ');
-  return { anchor: node, obstacles: [...nodes.filter((other) => other.id !== id && other.type !== 'group'), ...obstacles], width, height, title, metric: hero.layout.lines[0]?.text ?? metric, metricSize: hero.font.size, summary, sources, moreSources, sections, work, description };
+  return { anchor: node, obstacles: [...nodes.filter((other) => other.id !== id && other.type !== 'group'), ...obstacles], width, height, title, metric: hero.layout.lines[0]?.text ?? metric, metricSize: hero.font.size, summary, sources, moreSources, sections, work, recovery, description };
 }

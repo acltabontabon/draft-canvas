@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { notesOnlyDocument, trafficDocument, type TrafficDocument } from './fixtures/traffic';
+import { notesOnlyDocument, recoveryDocument, trafficDocument, type TrafficDocument } from './fixtures/traffic';
 
 async function importDocument(page: Page, document: TrafficDocument, fileName: string) {
   await page.goto('/');
@@ -345,3 +345,47 @@ test('the unfolded work note stays inside a phone-width canvas', async ({ page }
   expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(844);
   await page.screenshot({ path: '/tmp/traffic-work-mobile.png' });
 });
+
+test('replay batches show total recovery work without editing the diagram or baseline', async ({ page }) => {
+  await importDocument(page, recoveryDocument(), 'recovery.draftcanvas');
+  await page.locator('.dc-status-traffic').click();
+  const revision = await editorRevision(page);
+  const workerRate = page.locator('.react-flow__node[data-id="worker"] .dc-traffic-badge');
+  await expect(workerRate).toContainText('1,000 calls/min');
+  await page.locator('.react-flow__node[data-id="dlq"] .dc-node').click();
+  const recovery = page.locator('.dc-traffic-recovery');
+  await recovery.locator('summary').click();
+  const count = page.getByRole('textbox', { name: 'Messages to replay' });
+  await expect(count).toHaveValue('1');
+  await count.fill('500');
+  await expect(recovery.getByLabel('Recovery totals')).toContainText('500 data operations');
+  await expect(recovery.getByLabel('Recovery totals')).toContainText('500 message deliveries');
+  await expect(workerRate).toContainText('1,000 calls/min');
+  await count.press('Backspace');
+  await expect(count).toHaveValue('50');
+  await count.fill('0');
+  await expect(recovery.getByRole('alert')).toBeVisible();
+  await count.fill('500');
+  expect(await editorRevision(page)).toBe(revision);
+  await page.screenshot({ path: '/tmp/traffic-recovery-preview.png' });
+  await recovery.getByRole('button', { name: 'Worker', exact: true }).click();
+  await expect(page.locator('.dc-traffic-callout')).toContainText('Worker');
+});
+
+for (const colorScheme of ['light', 'dark'] as const) {
+  test(`recovery notes stay compact on a narrow canvas in ${colorScheme}`, async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+    await importDocument(page, recoveryDocument(), 'recovery-narrow.draftcanvas');
+    await runCommand(page, 'Show traffic');
+    await page.locator('.react-flow__node[data-id="dlq"] .dc-node').click();
+    await page.locator('.dc-traffic-recovery summary').click();
+    await page.getByRole('textbox', { name: 'Messages to replay' }).fill('500');
+    const bounds = await page.locator('.dc-traffic-callout').boundingBox();
+    expect(bounds!.x).toBeGreaterThanOrEqual(0);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
+    expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(844);
+    expect(bounds!.height).toBeLessThanOrEqual(500);
+    await page.screenshot({ path: `/tmp/traffic-recovery-mobile-${colorScheme}.png` });
+  });
+}

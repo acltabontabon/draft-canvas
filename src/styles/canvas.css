@@ -6789,3 +6789,44 @@
   line-height: 16px;
   color: var(--dc-text-muted);
 }
+
+.dc-traffic-replay-count {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+.dc-traffic-replay-count input {
+  width: 76px;
+  min-height: 30px;
+  padding: 3px 6px;
+  color: var(--dc-text);
+  background: var(--dc-surface);
+  border: 1px solid var(--dc-border);
+  border-radius: 4px;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+.dc-traffic-replay-count input:focus-visible,
+.dc-traffic-recovery-shared button:focus-visible {
+  outline: 2px solid var(--dc-accent);
+  outline-offset: 2px;
+}
+.dc-traffic-recovery-shared {
+  margin-top: 10px;
+  border-top: 1px dashed var(--dc-border);
+}
+.dc-traffic-recovery-shared button {
+  display: block;
+  padding: 4px 0;
+  background: transparent;
+  border: 0;
+  color: var(--dc-caution);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  text-decoration: underline;
+  cursor: pointer;
+}

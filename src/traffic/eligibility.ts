@@ -69,7 +69,7 @@ export function mayHaveTraffic(nodes: ReadonlyMap<string, DraftNode>, edges: rea
     const target = nodes.get(edge.target);
     if (!source || !target || !isRuntime(source)) continue;
     if (isRuntime(target)) {
-      if (isBaselineClass(classifyConnector(edge, source, target).class)) return true;
+      if (isBaselineClass(classifyConnector(edge, source, target).class) || edge.semantic === 'compensates' || edge.semantic === 'deadLetters') return true;
     } else if (trafficRoleOf(target) === 'junction') {
       (legs ??= []).push(edge);
     }

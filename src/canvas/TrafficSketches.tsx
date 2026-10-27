@@ -1,3 +1,4 @@
+import { TrafficRecovery } from './TrafficRecovery';
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
 import { useReactFlow, useStore } from '@xyflow/react';
 import { displayNameFor } from '../document/factory';
@@ -69,6 +70,8 @@ function boundsOf(nodes: readonly DraftNode[]): Bounds | null {
 
 export function TrafficSketches() {
   const analysis = useEditorStore(trafficOf);
+  const edges = useEditorStore((state) => state.document.edges);
+  const trafficScope = useEditorStore((state) => state.traffic.flowId);
   const scenario = useEditorStore(trafficScenarioOf);
   const live = useEditorStore((state) => (state.traffic.active ? state.document.nodes : null));
   const level = useEditorStore(viewLevel);
@@ -115,8 +118,8 @@ export function TrafficSketches() {
   }, [camera, canvasWidth, canvasHeight]);
   const availableWidth = canvasWidth > 32 ? canvasWidth - 32 : undefined;
   const content = useMemo(
-    () => analysis && nodes && drawn && selectedId ? trafficCalloutFor(analysis, nodes, selectedId, drawn.obstacles, availableWidth, scenario?.get(selectedId)) : null,
-    [analysis, nodes, drawn, selectedId, availableWidth, scenario],
+    () => analysis && nodes && drawn && selectedId ? trafficCalloutFor(analysis, nodes, selectedId, drawn.obstacles, availableWidth, scenario?.get(selectedId), edges) : null,
+    [analysis, nodes, drawn, selectedId, availableWidth, scenario, edges],
   );
   const callout = useMemo(
     () => {
@@ -130,7 +133,7 @@ export function TrafficSketches() {
       // Let the field note unfold when there is room; on crowded canvases try shorter scrollable
       // notes before allowing an overlap. Reserve its expanded height to avoid a jump when opened.
       const workHeight = content.work ? content.work.items.reduce((sum, item) => sum + item.height + 6, 0) + content.work.detail.height + 30 : 0;
-      const desired = Math.min(content.height + workHeight, visible ? visible.height / scale : 420);
+      const desired = Math.min(content.height + workHeight + (content.recovery ? 220 : 0), visible ? visible.height / scale : 420);
       const heights = [...new Set([desired, Math.min(desired, 420), Math.min(desired, 360), Math.min(desired, 300), Math.min(desired, 270)])];
       let maxHeight = heights[heights.length - 1]!;
       let at = placeCallout(content.anchor, content.width * scale, maxHeight * scale, obstacles, visible);
@@ -261,6 +264,7 @@ export function TrafficSketches() {
             data-dc-keyboard-region=""
             aria-label={callout.description}
             onKeyDown={(event) => {
+              if (event.target instanceof HTMLInputElement && event.key !== 'Escape') return;
               // On WebKit, Backspace on a focused read-only surface can navigate browser history.
               if (event.key === 'Backspace' || event.key === 'Delete') {
                 event.preventDefault();
@@ -307,6 +311,7 @@ export function TrafficSketches() {
                 </div>
               </details>
             )}
+            {callout.recovery && <TrafficRecovery key={`${selectedId}:${trafficScope}`} analysis={analysis} nodes={nodes} plan={callout.recovery} width={callout.width - 46} />}
             {callout.sections.map((section) => (
               <section key={section.label} className="dc-traffic-callout-section" data-tone={section.tone} aria-label={section.label}>
                 <h3>{section.label}</h3>
@@ -445,6 +450,7 @@ function headlineOf(analysis: TrafficAnalysis, level: ReturnType<typeof viewLeve
       ? 'These are the parts inside one service — step out to see traffic between services.'
       : 'Nothing here carries traffic yet — connect services, queues and data stores.';
   }
+  if (analysis.status === 'recovery-only') return 'Recovery paths only — select a DLQ or compensation source to follow the work.';
   if (analysis.status === 'no-entry') return 'Everything is reached from something else — draw what starts the traffic.';
   const top = analysis.hotspots.filter((id) => analysis.nodes.get(id)?.tier === 'top');
   if (top.length === 0) return 'Traffic doesn’t pile up anywhere — every part is reached by one path.';
