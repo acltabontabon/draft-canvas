@@ -109,6 +109,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   // which is the same discipline as `isAttachTarget` above with one extra step.
   const capsule = useUiStore((state) => (state.dragCapsule?.nodeId === id ? state.dragCapsule : null));
   // Same boolean-not-id discipline as `isAttachTarget` — see its comment.
+  const reconnectHandle = useUiStore((state) => state.reconnectHoverTarget === id ? state.reconnectHoverHandle : null);
   const isReconnectTarget = useUiStore((state) => state.reconnectHoverTarget === id);
   const jumpFlash = useUiStore((state) => state.jumpFlashId === id);
   const pointed = useUiStore((state) => state.pointedIds?.has(id) ?? false);
@@ -747,7 +748,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
             style={handleStyles.get(anchor.id)}
             connectable={!readOnly}
             from={connecting.from === anchor.id}
-            to={connecting.to === anchor.id}
+            to={connecting.to === anchor.id || reconnectHandle === anchor.id}
           />
         ),
       )}

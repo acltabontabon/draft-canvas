@@ -68,6 +68,9 @@ The retired VS Code extension has [its own changelog](https://github.com/acltabo
 
 #### Fixed
 
+- Attachment dots shade on hover and highlight the precise pin during endpoint dragging; center
+  drops clear that highlight to indicate automatic attachment.
+
 - Attachment dots remain visible on a valid target while dragging a connector endpoint.
 
 - Dragging a connector endpoint to a specific side pins it there again. Center drops keep smart

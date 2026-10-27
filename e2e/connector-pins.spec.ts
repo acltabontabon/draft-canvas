@@ -180,8 +180,14 @@ test('manual left-side attachment persists, undoes, and can return to automatic 
     const targetHandles = page.locator('.react-flow__node[data-id="b"] .dc-handle');
     await expect(targetHandles.first()).toHaveCSS('visibility', 'visible');
     await expect(targetHandles.first()).toHaveCSS('opacity', '1');
+    const aimed = page.locator('.react-flow__node[data-id="b"] .dc-handle.connectingto.valid');
+    if (x < b.x + b.width / 4) {
+      await expect(aimed).toHaveAttribute('data-handleid', 'left@1');
+      await expect(aimed).toHaveCSS('width', '14px');
+    } else await expect(aimed).toHaveCount(0);
     await page.mouse.up();
     await nextFrames(page);
+    await expect(page.locator('.dc-handle.connectingto.valid')).toHaveCount(0);
   };
   const anchor = () => page.evaluate(async () => {
     const edge = (await import('/src/store/editorStore.ts')).useEditorStore.getState().document.edges.find((item: { id: string }) => item.id === 'auto');
