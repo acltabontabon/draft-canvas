@@ -5,7 +5,7 @@
 
 use super::protocol::AgentKind;
 use crate::docio::write_private;
-use crate::errors::{AppError, Subject};
+use crate::errors::{AppError, ErrorKind, Subject};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -15,6 +15,19 @@ pub const FILE: &str = "sessions.json";
 pub const CAP: usize = 200;
 /// A conversation not continued for this long starts afresh.
 pub const MAX_AGE_MS: u64 = 30 * 24 * 60 * 60 * 1000;
+
+/// Session names come from CLI output and later become resume arguments (and a copied shell line).
+/// Keep opaque identifiers, never options, paths, shell syntax or whole transcripts.
+pub(crate) fn valid_session(session: &str) -> bool {
+    session.len() <= 128
+        && session
+            .bytes()
+            .next()
+            .is_some_and(|c| c.is_ascii_alphanumeric())
+        && session
+            .bytes()
+            .all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_')
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -39,6 +52,7 @@ struct LegacyStored {
 pub struct Sessions {
     path: PathBuf,
     entries: BTreeMap<String, Vec<Entry>>,
+    dirty: bool,
 }
 
 impl Sessions {
@@ -65,7 +79,11 @@ impl Sessions {
                     })
             })
             .unwrap_or_default();
-        Self { path, entries }
+        Self {
+            path,
+            entries,
+            dirty: false,
+        }
     }
 
     /// The session to resume for `diagram` with `agent`, if one is recent enough.
@@ -73,9 +91,11 @@ impl Sessions {
         self.entries
             .get(diagram)
             .and_then(|entries| {
-                entries
-                    .iter()
-                    .find(|e| e.agent == agent && now.saturating_sub(e.updated_at) < MAX_AGE_MS)
+                entries.iter().find(|e| {
+                    e.agent == agent
+                        && valid_session(&e.session)
+                        && now.saturating_sub(e.updated_at) < MAX_AGE_MS
+                })
             })
             .map(|e| e.session.clone())
     }
@@ -87,6 +107,13 @@ impl Sessions {
         session: &str,
         now: u64,
     ) -> Result<(), AppError> {
+        if !valid_session(session) {
+            return Err(AppError::new(
+                ErrorKind::InvalidPath,
+                "The agent returned an invalid conversation id.",
+            ));
+        }
+        self.dirty = true;
         let entries = self.entries.entry(diagram.to_string()).or_default();
         entries.retain(|entry| entry.agent != agent);
         entries.push(Entry {
@@ -114,22 +141,30 @@ impl Sessions {
 
     pub fn forget(&mut self, diagram: &str, agent: Option<AgentKind>) -> Result<(), AppError> {
         if let Some(entries) = self.entries.get_mut(diagram) {
+            self.dirty = true;
             entries.retain(|entry| agent.is_some_and(|agent| entry.agent != agent));
             if entries.is_empty() {
                 self.entries.remove(diagram);
             }
-            self.save()?;
         }
-        Ok(())
+        // A previous save may have failed after removing the entry in memory. A retry must still
+        // persist the removal, or restarting the app silently resurrects the forgotten session.
+        if self.dirty {
+            self.save()
+        } else {
+            Ok(())
+        }
     }
 
-    fn save(&self) -> Result<(), AppError> {
+    fn save(&mut self) -> Result<(), AppError> {
         let stored = Stored {
             v: 2,
             entries: self.entries.clone(),
         };
         let json = serde_json::to_vec_pretty(&stored).map_err(|_| AppError::internal())?;
-        write_private(&self.path, &json, Subject::Preferences)
+        write_private(&self.path, &json, Subject::Preferences)?;
+        self.dirty = false;
+        Ok(())
     }
 }
 
@@ -250,5 +285,56 @@ mod tests {
             .is_none());
         std::fs::write(dir.path().join(FILE), b"{not json").unwrap();
         assert!(Sessions::open(dir.path()).entries.is_empty());
+    }
+
+    #[test]
+    fn forgetting_retries_the_disk_write_after_a_failed_save() {
+        let dir = tempdir().unwrap();
+        let mut sessions = Sessions::open(dir.path());
+        sessions
+            .remember("d_1", AgentKind::ClaudeCode, "session", 1)
+            .unwrap();
+        let path = dir.path().join(FILE);
+        let backup = dir.path().join("backup");
+        std::fs::rename(&path, &backup).unwrap();
+        std::fs::create_dir(&path).unwrap();
+        assert!(sessions.forget("d_1", None).is_err());
+        std::fs::remove_dir(&path).unwrap();
+        std::fs::rename(backup, path).unwrap();
+        sessions.forget("d_1", None).unwrap();
+        assert!(Sessions::open(dir.path())
+            .get("d_1", AgentKind::ClaudeCode, 2)
+            .is_none());
+    }
+
+    #[test]
+    fn forgetting_a_never_started_conversation_needs_no_disk_write() {
+        let dir = tempdir().unwrap();
+        let missing = dir.path().join("not-created");
+        Sessions::open(&missing).forget("d_1", None).unwrap();
+        assert!(!missing.exists());
+    }
+
+    #[test]
+    fn invalid_session_ids_are_neither_remembered_nor_resumed_from_disk() {
+        let dir = tempdir().unwrap();
+        let mut sessions = Sessions::open(dir.path());
+        for session in [
+            "",
+            "--last",
+            "../other",
+            "a&calc",
+            "a%PATH%",
+            &"s".repeat(129),
+        ] {
+            assert!(sessions
+                .remember("d_1", AgentKind::Codex, session, 1)
+                .is_err());
+            let stored = serde_json::json!({"v": 2, "entries": {"d_1": [{"agent": "codex", "session": session, "updatedAt": 1}]}});
+            std::fs::write(dir.path().join(FILE), serde_json::to_vec(&stored).unwrap()).unwrap();
+            assert!(Sessions::open(dir.path())
+                .get("d_1", AgentKind::Codex, 2)
+                .is_none());
+        }
     }
 }

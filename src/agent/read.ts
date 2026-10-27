@@ -12,7 +12,7 @@
  */
 
 import { continuationsFor } from '../continuation';
-import { classify } from '../depth/c4';
+import { classify, type C4Classification } from '../depth/c4';
 import { effectiveLevel } from '../depth/level';
 import { canCreateInside, hasInside, ownerAt, resolvePath, roomsOf, viewOf, type DepthPath } from '../depth/tree';
 import { relationshipCaptionLabel } from '../document/edgeSemantics';
@@ -101,6 +101,8 @@ export function stepOf(step: DraftFlowStep): unknown {
   if (!step.edgeId) return { frame: step.id, ...(lit.length ? { spotlight: lit } : {}), ...rest };
   return lit.length || step.caption || step.viewport ? { relationship: step.edgeId, ...(lit.length ? { highlight: lit } : {}), ...rest } : step.edgeId;
 }
+
+const hundredths = (n: number) => Math.round(n * 100) / 100;
 
 function truncated(text: string, max: number): { text: string; truncated?: true } {
   const chars = [...text];
@@ -261,7 +263,8 @@ function project(
   const groups: unknown[] = [];
   const notes: unknown[] = [];
   for (const node of page) {
-    const geometry = includes.has('geometry') ? { geometry: { x: node.x, y: node.y, width: node.width, height: node.height } } : {};
+    // Display numbers, to the hundredth: the document keeps its own exact coordinates.
+    const geometry = includes.has('geometry') ? { geometry: { x: hundredths(node.x), y: hundredths(node.y), width: hundredths(node.width), height: hundredths(node.height) } } : {};
     const group = node.parentId ? { group: node.parentId } : {};
     // In full when asked for, or when the read is focused on a few elements (their notes are part of
     // what the agent is about to edit); a count otherwise.
@@ -271,7 +274,7 @@ function project(
         : { attachmentCount: node.attachments.length }
       : {};
     if (node.type === 'group') {
-      groups.push({ id: node.id, label: node.text ?? '', kind: groupKindOf(node.boundaryPreset), ...(node.parentId ? { parent: node.parentId } : {}), ...attachments, ...geometry });
+      groups.push({ id: node.id, label: node.text ?? '', kind: groupKindOf(node.boundaryPreset), ...(node.parentId ? { parent: node.parentId } : {}), ...(node.accent ? { color: node.accent } : {}), ...attachments, ...geometry });
       continue;
     }
     if (node.type === 'note' || node.type === 'text' || node.type === 'code') {
@@ -292,7 +295,7 @@ function project(
       continue;
     }
     const systemBoundary = [...ancestorsOf(node, byId)].map((id) => byId.get(id)).find((g) => g?.boundaryPreset === 'system');
-    const c4 = classify(node, { level, ...(owner ? { insideOwner: owner } : {}), ...(systemBoundary ? { systemBoundary } : {}) });
+    const c4 = c4Of(classify(node, { level, ...(owner ? { insideOwner: owner } : {}), ...(systemBoundary ? { systemBoundary } : {}) }));
     const inside = hasInside(node) && node.inside
       ? { inside: { level: node.inside.level ?? null, elements: node.inside.nodes.length, relationships: node.inside.edges.length } }
       : {};
@@ -303,6 +306,8 @@ function project(
       ...(node.evidence?.length ? { evidence: node.evidence } : {}),
       ...(node.description ? { description: node.description } : {}),
       ...(node.technology ? { technology: node.technology } : {}),
+      // Set by create, add and set.color; read back so an edit can keep or change it knowingly.
+      ...(node.accent ? { color: node.accent } : {}),
       ...group,
       // "No role, no scope" is what every element says before a level is set: not worth ~80 bytes each.
       ...(c4 && (c4.role !== 'unspecified' || c4.scope !== 'unspecified') ? { c4 } : {}),
@@ -322,7 +327,9 @@ function project(
     const s = inPage.has(edge.source);
     const t = inPage.has(edge.target);
     if (includes.has('geometry') && !geometryCache.has(edge.id)) geometryCache.set(edge.id, routeGeometry(edge, view.nodes, view.edges, byId));
-    const geometry = geometryCache.get(edge.id);
+    const drawn = geometryCache.get(edge.id);
+    // No pins is the common case (both ends automatic): left out rather than sent as {}.
+    const geometry = drawn && Object.keys(drawn.pins).length === 0 ? (({ pins: _none, ...rest }) => rest)(drawn) : drawn;
     relationships.push({
       ...relationshipOf(edge, byId, includes.has('attachments') || includes.has('fullText') || focused, includes.has('fullText')),
       // Its sides and the points where it turns, as drawn; `via` are the bends it was given by hand.
@@ -349,7 +356,8 @@ function project(
 
   const allFlows = typeof focus?.flow === 'string' ? view.flows.filter((f) => f.id === focus.flow) : view.flows;
   const here = new Set([...view.nodes.map((n) => n.id), ...view.edges.map((e) => e.id)]);
-  const allPoints = (file.openPoints ?? []).filter((p) => (path.length === 0 || p.targets.some((t) => here.has(t.id))) && (!focused || p.targets.some((t) => allIds.has(t.id) || allRelationships.some((e) => e.id === t.id))));
+  const focusedRelationships = focused ? new Set(allRelationships.map((e) => e.id)) : undefined;
+  const allPoints = (file.openPoints ?? []).filter((p) => (path.length === 0 || p.targets.some((t) => here.has(t.id))) && (!focusedRelationships || p.targets.some((t) => allIds.has(t.id) || focusedRelationships.has(t.id))));
   const totals = [all.length, allRelationships.length, allFlows.length, allPoints.length];
   const next = totals.map((total, i) => Math.min(total, offsets[i]! + sizes[i]!));
   const complete = next.every((offset, i) => offset >= totals[i]!);
@@ -365,7 +373,10 @@ function project(
       ...(level && ownLevel === undefined ? { levelInherited: true } : {}),
       // An inside view nothing has been drawn in yet: the first add with this view creates it.
       ...(owner && view.nodes.length === 0 ? { empty: true } : {}),
-      insideViews: page.filter((n) => hasInside(n)).map((n) => n.id),
+      ...(() => {
+        const insideViews = page.filter((n) => hasInside(n)).map((n) => n.id);
+        return insideViews.length ? { insideViews } : {};
+      })(),
     },
     ...(includes.has('views') ? viewsOutline(file) : {}),
     elements,
@@ -467,6 +478,20 @@ export function relationshipOf(edge: DraftEdge, byId: Map<string, DraftNode>, wi
     ...(edge.compensationDescription ? { compensationDescription: edge.compensationDescription } : {}),
     ...(edge.attachments?.length ? (withAttachments ? { attachments: edge.attachments.map((a) => attachmentOf(a, fullText)) } : { attachmentCount: edge.attachments.length }) : {}),
   };
+}
+
+/**
+ * An element's C4 classification as reads report it: its role and scope, always derived and never
+ * stored (said once, in the docs and get_capabilities c4), and why only where the role is ambiguous.
+ * Every element repeating "service at container level; inside system boundary …" with `derived: true`
+ * was about a fifth of a large read, and said nothing the type, level and group don't.
+ */
+export function c4Of(c4: C4Classification | undefined): { role: string; scope: string; basis?: string } | undefined {
+  if (!c4) return undefined;
+  // `classify` joins the role's reason and the scope's with "; ": only the first says why the role
+  // is open (the scope's reason is the element's group or owner, which the read already gives).
+  const why = c4.role === 'unspecified' ? c4.basis.split('; ')[0] : undefined;
+  return { role: c4.role, scope: c4.scope, ...(why ? { basis: why } : {}) };
 }
 
 /** Complete attachment retrieval in bounded Unicode chunks, tied to the revision being read. */

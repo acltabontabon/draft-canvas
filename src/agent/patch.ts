@@ -26,7 +26,7 @@ import {
   setOpenPointResolution,
 } from '../document/openPoints';
 import { OPEN_POINT_KINDS } from '../document/types';
-import { inferRelationship, isEligibleForReinference, isSyncPairing, resolveTransparentCategory } from '../document/connectorSemantics';
+import { capabilityFor, categoryOf, inferRelationship, isEligibleForReinference, isSyncPairing, resolveTransparentCategory } from '../document/connectorSemantics';
 import { createAttachment } from '../document/factory';
 import { deleteFlow, setFlowVariantOf } from '../document/flow';
 import {
@@ -50,7 +50,7 @@ import { DEFAULTS, LIMITS } from '../document/limits';
 import type { Accent, AttachableType, Attachment, DraftDocument, DraftEdge, DraftFlow, DraftFlowStep, DraftNode } from '../document/types';
 import { ACCENTS, CODE_LANGUAGES, CONNECTOR_KINDS, EDGE_SEMANTICS } from '../document/types';
 import { embed, totals, viewOf, walkGraphs, type DepthPath } from '../depth/tree';
-import { effectiveLevel } from '../depth/level';
+import { effectiveLevel, inheritedLevel } from '../depth/level';
 import { assignAnchors } from '../layout/anchors';
 import { naturalCodeSize, naturalTextSize } from '../nodes/describe';
 import { AgentError, Problems } from './errors';
@@ -264,6 +264,7 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
         groups: new Set(view.nodes.filter((n) => n.type === 'group').map((n) => n.id)),
         relationships: new Set(view.edges.map((e) => e.id)),
         relationshipSemantics: new Map(view.edges.map((e) => [e.id, e.semantic])),
+        pairs: pairsOf(view.edges),
         flows: new Map(view.flows.map((f) => [f.id, f.variantOf])),
       };
       const room = readRoom(r, op, at, { taken, depth: path.length, existing });
@@ -326,9 +327,14 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
     if (kind === 'setLevel') {
       const level = op.level === null ? null : r.oneOf(op.level, `${at}/level`, ['context', 'container', 'component'] as const);
       if (level === undefined) return;
+      // "Not a C4 view", as the editor's "Nothing in particular" says it: an inside view that would
+      // otherwise inherit a level from the view around it stores 'none', which stops the inheritance.
+      // Deleting the field alone left such a view reading as the inherited level.
+      const stored = level ?? (path.length && inheritedLevel(base, path) !== undefined ? 'none' : undefined);
+      if (stored === view.level) return;
       const next: DraftDocument = { ...view };
-      if (level === null) delete next.level;
-      else next.level = level;
+      if (stored === undefined) delete next.level;
+      else next.level = stored;
       view = next;
       counts.updated += 1;
       return;
@@ -684,7 +690,9 @@ function updateOne(
     // A note's or a label's words come as text (or label); an element's or a boundary's name as label.
     const textField = set.text !== undefined ? 'text' : set.label !== undefined ? 'label' : undefined;
     if (textField) {
-      const text = r.text(set[textField], `${at}/${textField}`, card ? AGENT_LIMITS.noteLength : AGENT_LIMITS.labelLength, { required: true });
+      // A boundary's name is held to the same length a new one is.
+      const max = card ? AGENT_LIMITS.noteLength : node.type === 'group' ? AGENT_LIMITS.groupLabelLength : AGENT_LIMITS.labelLength;
+      const text = r.text(set[textField], `${at}/${textField}`, max, { required: true, ...(node.type === 'group' ? { singleLine: true } : {}) });
       if (text) Object.assign(patch, { text, textOrigin: 'explicit' });
     }
     if (node.type === 'code') {
@@ -871,6 +879,14 @@ function updateOne(
         delete patch.semanticsOrigin;
       }
     }
+    // A behaviour the pairing doesn't offer is refused, as the inspector never offers it and a new
+    // relationship's would not be kept (`connectorFor`).
+    if (patch.kind) {
+      const offered = capabilityFor(categoryOf(byId.get(current.source) as DraftNode), categoryOf(byId.get(current.target) as DraftNode));
+      if (offered && offered.behaviors.length > 0 && !offered.behaviors.includes(patch.kind)) {
+        r.problems.add('UNSUPPORTED', `${at}/kind`, `behaviour "${patch.kind}" isn't offered between these two; this pairing takes ${offered.behaviors.map((b) => `"${b}"`).join(', ')}`);
+      }
+    }
     const finalSemantic = 'semantic' in patch ? patch.semantic : current.semantic;
     if (finalSemantic !== 'compensates') {
       if (set.compensationFor !== undefined || set.compensationVisible !== undefined || set.compensationName !== undefined || set.compensationProtocol !== undefined || set.compensationDescription !== undefined) {
@@ -1022,8 +1038,13 @@ function addToView(
   const newIds = new Set([...room.nodes.map((n) => n.id), ...room.groups.map((g) => g.id), ...room.notes.map((n) => n.id)]);
   const inner = room.relationships.filter((e) => newIds.has(e.from) && newIds.has(e.to));
   const bridging = room.relationships.filter((e) => !(newIds.has(e.from) && newIds.has(e.to)));
-  // New elements that belong to an existing boundary are laid out as its (virtual) contents.
-  const intoExisting = room.nodes.filter((n) => n.group && existingIds.has(n.group));
+  // New elements — and new boundaries nested in one — that belong to an existing boundary are laid
+  // out as its (virtual) contents. A new boundary was left out of this, so it kept its parent but was
+  // placed beside that parent like any loose block, and the add was refused as spilling out of it.
+  const intoExisting: { id: string; group: string }[] = [
+    ...room.nodes.flatMap((n) => (n.group && existingIds.has(n.group) ? [{ id: n.id, group: n.group }] : [])),
+    ...room.groups.flatMap((g) => (g.parent && existingIds.has(g.parent) ? [{ id: g.id, group: g.parent }] : [])),
+  ];
   const hostGroup = intoExisting[0]?.group;
   // One add places its new elements as one block, so into one existing boundary at most. Elements
   // naming a second one used to land silently in the first.
@@ -1036,6 +1057,7 @@ function addToView(
     // Explicit placement and routing are applied once the block is in the view (`applyUpdate`): they
     // may name what was already there.
     nodes: room.nodes.map(({ place: _place, ...n }) => (n.group && existingIds.has(n.group) ? { ...n, group: undefined } : n)) as RoomSpec['nodes'],
+    groups: room.groups.map(({ parent, ...g }) => (parent && !existingIds.has(parent) ? { ...g, parent } : g)),
     relationships: inner.map(({ route: _route, ...e }) => e),
     flows: [],
     notes: [],
@@ -1207,6 +1229,18 @@ function updateOpenPointOp(r: Reader, view: DraftDocument, id: string, set: Json
     }
   }
   return next;
+}
+
+/** The semantics of the relationships already running between each ordered pair of elements. */
+function pairsOf(edges: readonly DraftEdge[]): Map<string, (DraftEdge['semantic'])[]> {
+  const out = new Map<string, DraftEdge['semantic'][]>();
+  for (const edge of edges) {
+    const key = `${edge.source}\u0000${edge.target}`;
+    const list = out.get(key);
+    if (list) list.push(edge.semantic);
+    else out.set(key, [edge.semantic]);
+  }
+  return out;
 }
 
 /** Two titles name the same thing: case, surrounding and repeated spaces ignored. */
@@ -1454,10 +1488,13 @@ function automaticRoute(view: DraftDocument, id: string): DraftDocument {
   const edge = view.edges.find((e) => e.id === id);
   if (!edge) return view;
   // Both ends automatic and no bends: the connector faces its shapes and follows them as they move,
-  // drawn by the router like any connector a person drew from a shape's middle onto another.
+  // drawn by the router like any connector a person drew from a shape's middle onto another — and
+  // handed back to Smart Routing, so it may share a trunk again (`routeMode`, the editor's "Use direct
+  // routing"; its Tidy connectors clears it too).
   const fresh: DraftEdge = { ...edge };
   delete fresh.waypoints;
   delete fresh.sourceAnchor;
   delete fresh.targetAnchor;
+  delete fresh.routeMode;
   return { ...view, edges: view.edges.map((e) => (e.id === id ? fresh : e)) };
 }

@@ -32,6 +32,8 @@ pub enum Stage {
 
 struct Pending {
     stage: Stage,
+    started: tokio::time::Instant,
+    committing: Option<tokio::time::Instant>,
     acked: bool,
     reply: Option<oneshot::Sender<Reply>>,
 }
@@ -72,6 +74,8 @@ impl PageLink {
             id,
             Pending {
                 stage: Stage::Live,
+                started: tokio::time::Instant::now(),
+                committing: None,
                 acked: false,
                 reply: Some(tx),
             },
@@ -92,14 +96,19 @@ impl PageLink {
 
     /// The commit gate. True moves the request to `Committing`; false means stop, change nothing.
     pub fn gate(&self, id: u64) -> bool {
-        match lock(&self.pending).get_mut(&id) {
+        let passed = match lock(&self.pending).get_mut(&id) {
             Some(p) if p.stage == Stage::Live => {
                 p.stage = Stage::Committing;
+                // Reaching the gate also proves the page received the request.
+                p.acked = true;
+                p.committing = Some(tokio::time::Instant::now());
                 true
             }
             Some(p) => p.stage == Stage::Committing,
             None => false,
-        }
+        };
+        self.acks.notify_waiters();
+        passed
     }
 
     pub fn respond(&self, id: u64, value: Value) {
@@ -168,7 +177,11 @@ impl PageLink {
             Err(_) => Err(dropped),
         };
         // 1. The acknowledgement.
-        let ack_deadline = tokio::time::Instant::now() + budgets.ack;
+        let started = lock(&self.pending)
+            .get(&id)
+            .map(|p| p.started)
+            .unwrap_or_else(tokio::time::Instant::now);
+        let ack_deadline = started + budgets.ack;
         loop {
             // Registered before looking, so an ack landing in between still wakes this.
             let notified = self.acks.notified();
@@ -187,17 +200,28 @@ impl PageLink {
                 }
             }
         }
-        // 2. The answer, within the pre-commit budget — or, once past the gate, the post-commit one.
-        tokio::select! {
-            reply = &mut *rx => return settle(reply, Failure::OutcomeUnknown),
-            _ = tokio::time::sleep(budgets.pre_commit) => {}
-        }
-        if self.expire_if_live(id) == Stage::Expired {
-            return Err(Failure::TimedOutBeforeCommit);
-        }
-        tokio::select! {
-            reply = &mut *rx => settle(reply, Failure::OutcomeUnknown),
-            _ = tokio::time::sleep(budgets.post_commit) => Err(Failure::OutcomeUnknown),
+        // 2. Measure each deadline from the event it bounds. Waiting out the pre-commit budget
+        // before starting the receipt timer gave an early commit an extra thirty seconds.
+        loop {
+            let notified = self.acks.notified();
+            tokio::pin!(notified);
+            notified.as_mut().enable();
+            let committing = lock(&self.pending).get(&id).and_then(|p| p.committing);
+            let deadline =
+                committing.map_or(started + budgets.pre_commit, |at| at + budgets.post_commit);
+            tokio::select! {
+                biased;
+                reply = &mut *rx => return settle(reply, Failure::OutcomeUnknown),
+                _ = notified => continue,
+                _ = tokio::time::sleep_until(deadline) => {}
+            }
+            if committing.is_some() {
+                return Err(Failure::OutcomeUnknown);
+            }
+            if self.expire_if_live(id) == Stage::Expired {
+                return Err(Failure::TimedOutBeforeCommit);
+            }
+            // The gate raced the pre-commit deadline. Its own timestamp now bounds the receipt.
         }
     }
 }
@@ -283,13 +307,27 @@ mod tests {
         assert!(link.gate(id));
         let page = link.clone();
         tokio::spawn(async move {
-            tokio::time::sleep(Duration::from_millis(120)).await;
+            tokio::time::sleep(Duration::from_millis(40)).await;
             page.respond(id, json!("late but committed"));
         });
         assert_eq!(
             link.wait(id, rx, quick()).await,
             Ok(json!("late but committed"))
         );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn the_receipt_deadline_starts_at_the_gate_and_not_after_the_pre_commit_wait() {
+        let link = PageLink::default();
+        let (id, rx) = link.register();
+        link.ack(id);
+        assert!(link.gate(id));
+        let started = tokio::time::Instant::now();
+        assert_eq!(
+            link.wait(id, rx, Budgets::default()).await,
+            Err(Failure::OutcomeUnknown)
+        );
+        assert_eq!(started.elapsed(), POST_COMMIT_BUDGET);
     }
 
     #[tokio::test]

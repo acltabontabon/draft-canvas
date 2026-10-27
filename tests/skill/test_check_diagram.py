@@ -86,7 +86,12 @@ class Refuses(unittest.TestCase):
             {'id': 'r5', 'from': 'api', 'to': 'db', 'label': 'Writes again'},
         ]
         request['flows'][0]['steps'].append({'relationship': 'r1', 'caption': 'Again'})
+        request['groups'] = [{'id': 'g', 'label': 'Platform', 'color': 'blue'}, {'id': 'g2', 'label': 'Edge', 'color': 'mauve'}]
+        request['notes'] = [{'id': 'n', 'text': 'Why.', 'about': 'api', 'color': 'pink'}]
         errors = '\n'.join(report(request).errors)
+        self.assertIn('group g2: color "mauve" is not one of', errors)
+        self.assertIn('note n: color "pink" is not one of', errors)
+        self.assertNotIn('group g:', errors)
         self.assertIn('id already used', errors)
         self.assertIn('must start with a letter', errors)
         self.assertIn('unknown type "wizard"', errors)

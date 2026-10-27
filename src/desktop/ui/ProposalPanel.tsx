@@ -5,6 +5,7 @@ import { ownerAt, pathKey, type DepthPath } from '../../depth/tree';
 import { displayNameFor } from '../../document/factory';
 import type { DraftDocument } from '../../document/types';
 import { useEditorStore } from '../../store/editorStore';
+import { proposalStale } from '../../host/agentBridge';
 import { useUiStore } from '../../store/uiStore';
 import { Button } from '../../ui/common/Button';
 import type { Proposal } from '../api';
@@ -249,6 +250,9 @@ function ProposalDetail({ proposal, onChanged }: { proposal: Proposal; onChanged
   // was decided, with no canvas toggles and no actions (they stayed after an accept, still offering
   // Accept and Reject on a proposal already in the diagram).
   const decided = proposal.status === 'accepted' || proposal.status === 'rejected' || proposal.status === 'dismissed';
+  // Subscribed so the banner follows edits; a proposal made on unsaved edits is judged here, not by the shell.
+  useEditorStore((state) => state.revision);
+  const stale = proposalStale(proposal.baseRevision, proposal.stale);
   const pathKeyStr = pathKey(path);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- `path`'s content is `pathKeyStr`; keyed on content, not the array's own (churning) reference
   const breadcrumb = useMemo(() => pathBreadcrumb(live, path), [live, pathKeyStr]);
@@ -337,7 +341,7 @@ function ProposalDetail({ proposal, onChanged }: { proposal: Proposal; onChanged
             <p className="dc-muted">Checking it against the diagram…</p>
           ) : (
             <>
-              {proposal.stale && !decided && !dryRunProblem && conflicts.length === 0 && <p className="dc-proposal-banner dc-proposal-banner-stale">The diagram changed elsewhere since this was submitted (unrelated to this proposal).</p>}
+              {stale && !decided && !dryRunProblem && conflicts.length === 0 && <p className="dc-proposal-banner dc-proposal-banner-stale">The diagram changed elsewhere since this was submitted (unrelated to this proposal).</p>}
               {conflicts.length > 0 && (
                 <p className="dc-proposal-banner dc-proposal-banner-conflict">
                   {conflicts.length === 1 ? 'One thing this proposal is about has' : `${conflicts.length} things this proposal is about have`} changed since it was written — ask the agent to revise it.

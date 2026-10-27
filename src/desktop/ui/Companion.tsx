@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from 'react';
+import { createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from 'react';
 import { useReactFlow, useStoreApi, useStore as useReactFlowStore } from '@xyflow/react';
 import { useShallow } from 'zustand/react/shallow';
 import { Icon } from '../../ui/common/Icon';
@@ -9,8 +9,8 @@ import { readPreference, writePreference } from '../../lib/preferences';
 import { walkGraphs } from '../../depth/tree';
 import { categoryOf } from '../../document/connectorSemantics';
 import { boundsOf } from '../../document/geometry';
-import type { DraftDocument } from '../../document/types';
-import { useEditorStore } from '../../store/editorStore';
+import type { DraftDocument, DraftEdge, DraftNode } from '../../document/types';
+import { isInteracting, useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
 import type { AgentClientSetup, AgentInfo, AgentSkillSetup, ApplyMode, CodeFolder, CodeGrant, PromptRequest, Proposal } from '../api';
 import { activityOf, companion, conversationKey, newTokens, numberedBlocks, partsIn, replyBlocks, replyOf, replyPoints, spentOn, stepText, stopMessage, tokenCount, type ReplyEntry, type Spent, type Turn } from '../companion';
@@ -23,7 +23,7 @@ import { Mascot } from './mascot/Mascot';
 import { CHANNEL_MS, CHANNELS, channelClock, type Channel, type Mood } from './mascot/pixels';
 import { CHIP_HEIGHT, chipPlace, revealViewport, type Box } from './chipPlace';
 import { canCreateInside, hasInside } from '../../depth/tree';
-import { lookInside } from '../../ui/Editor/depthNavigation';
+import { lookInside, navigateToRoom } from '../../ui/Editor/depthNavigation';
 import { agentlessAnswer, localAnswer, type LocalAction, type LocalFacts } from './nodiLocal';
 import { commandsFor } from '../../commands/registry';
 import { isStage, type CommandContext } from '../../commands/types';
@@ -116,8 +116,18 @@ const FADE_MS = 200;
 /** How long the bubble lingers once nothing keeps it up, plus its exit (`desktop.css`'s `.dc-companion-say`). */
 const SAY_GONE_MS = 2500 + 200;
 
-/** Asked once per app run: finding the agent can start a login shell. */
+/** Asked once per app run: finding the agent can start a login shell. Asked again only while none
+ *  was found, when the box opens (see `CompanionFor`). */
 let agentsOnce: Promise<AgentInfo[]> | null = null;
+/** What `agentsOnce` answered, so a box mounted again (another diagram) has it from its first draw. */
+let knownAgents: AgentInfo[] | null = null;
+
+function askAgents(controller: { companionAgents(): Promise<AgentInfo[]> }): Promise<AgentInfo[]> {
+  return controller
+    .companionAgents()
+    .catch((): AgentInfo[] => [])
+    .then((found) => (knownAgents = found));
+}
 /** Clicks on Nodi this close together, this many times, and it has had enough. */
 const POKE_WINDOW_MS = 2500;
 const POKES = 4;
@@ -145,8 +155,20 @@ function aboutOf(nodes: string[], edges: string[], names: Map<string, string>): 
  */
 /** One empty list, so a diagram with no conversation keeps the same `turns` across renders. */
 const NO_TURNS: readonly Turn[] = [];
+const NO_NODES: readonly DraftNode[] = [];
+const NO_EDGES: readonly DraftEdge[] = [];
+const NO_NAMES: ReadonlyMap<string, string> = new Map();
+const NO_LINES: string[] = [];
 
-export function Companion({ buildCommandContext }: { buildCommandContext?: () => CommandContext } = {}) {
+export function Companion(props: { buildCommandContext?: () => CommandContext } = {}) {
+  const diagramId = useEditorStore((s) => s.document.metadata.id);
+  // Everything the box holds is about one diagram: a draft, a folded thread, a lit point, a greeting
+  // still to give. The editor stays mounted when another diagram opens in its place, and the draft
+  // typed about the last one went to this one's agent on Enter; this one never got its walk-on.
+  return <CompanionFor key={diagramId} {...props} />;
+}
+
+function CompanionFor({ buildCommandContext }: { buildCommandContext?: () => CommandContext }) {
   const controller = useDesktopController();
   const shown = useNodiShown();
   const diagramId = useEditorStore((s) => s.document.metadata.id);
@@ -184,7 +206,7 @@ export function Companion({ buildCommandContext }: { buildCommandContext?: () =>
   // A new version to mention: only while the app's own update chip would (not once dismissed).
   const updateView = describeUpdate(updateState);
   const newVersion = updateView.chip && updateView.version && (updateState?.state.phase === 'available' || updateState?.state.phase === 'ready') ? updateLine(updateView.version, updateState.state.phase === 'ready') : null;
-  const [agents, setAgents] = useState<AgentInfo[] | null>(null);
+  const [agents, setAgents] = useState<AgentInfo[] | null>(() => knownAgents);
   // The agent the person chose, else the first one installed. Every agent-specific word comes from
   // the shell (`AgentInfo.name`), so another agent needs no change here.
   const [preferred, setPreferred] = useState(() => readPreference(AGENT_KEY));
@@ -222,7 +244,7 @@ export function Companion({ buildCommandContext }: { buildCommandContext?: () =>
   // Asked from the start, not on opening: Nodi only shows up when there is an agent for it to run.
   useEffect(() => {
     if (agents) return;
-    agentsOnce ??= controller.companionAgents().catch(() => []);
+    agentsOnce ??= askAgents(controller);
     let live = true;
     void agentsOnce.then((found) => live && setAgents(found));
     return () => {
@@ -277,17 +299,32 @@ export function Companion({ buildCommandContext }: { buildCommandContext?: () =>
   };
   // Continue in Terminal: the line is copied, and the box says so for a moment.
   const [continued, setContinued] = useState<'copied' | 'failed' | null>(null);
+  // One timer: a second click's word was taken away by the first click's, a moment after it appeared.
+  const continuedTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(continuedTimer.current), []);
   const continueInTerminal = async () => {
     const ran = agent?.agent;
     const line = ran ? await controller.companionContinue(diagramId, ran) : null;
     const ok = line !== null && (await useEditorStore.getState().copyText(line));
     setContinued(ok ? 'copied' : 'failed');
-    window.setTimeout(() => setContinued(null), 4000);
+    window.clearTimeout(continuedTimer.current);
+    continuedTimer.current = window.setTimeout(() => setContinued(null), 4000);
   };
   const agentName = agent?.name ?? 'your agent';
   // No coding agent on this computer: Nodi still answers what it can itself, and says plainly that
   // the thinking needs one (`nodiLocal.ts`).
   const agentless = agents !== null && !agents.some((a) => a.availability !== 'missing');
+  // None found is asked again each time the box opens: an agent installed while the app runs, or a
+  // shell that couldn't answer the first time, otherwise left Nodi without one until a restart.
+  useEffect(() => {
+    if (!expanded || !agentless) return;
+    let live = true;
+    agentsOnce = askAgents(controller);
+    void agentsOnce.then((found) => live && setAgents(found));
+    return () => {
+      live = false;
+    };
+  }, [expanded, agentless, controller]);
   // Why Nodi can't take a message yet, with the next steps it offers in place of the composer.
   const blocker = useMemo(
     () =>
@@ -406,11 +443,13 @@ export function Companion({ buildCommandContext }: { buildCommandContext?: () =>
 
   // The parts the latest reply points at: named in its text, pinned by number on the canvas, and lit
   // on both together.
-  const docNodes = useEditorStore((s) => s.document.nodes);
-  const docEdges = useEditorStore((s) => s.document.edges);
-  const view = useEditorStore((s) => s.document);
-  const outerFile = useEditorStore((s) => s.outer);
-  const partNames = useMemo(() => partNamesOf(outerFile ?? view, view), [outerFile, view]);
+  // Read only while the box is open, where they are shown: at rest, every frame of a drag re-rendered
+  // Nodi and walked every view of the file for names nothing at rest says.
+  const view = useEditorStore((s) => (expanded ? s.document : null));
+  const outerFile = useEditorStore((s) => (expanded ? s.outer : null));
+  const docNodes = view?.nodes ?? NO_NODES;
+  const docEdges = view?.edges ?? NO_EDGES;
+  const partNames = useMemo(() => (view ? partNamesOf(outerFile ?? view, view) : NO_NAMES), [outerFile, view]);
   const partsHere = useMemo(() => new Set([...docNodes.map((n) => n.id), ...docEdges.map((e) => e.id)]), [docNodes, docEdges]);
   const doors = useMemo(() => new Map(docNodes.filter(hasInside).map((n) => [n.id, partNames.get(n.id) ?? 'it'])), [docNodes, partNames]);
   // What Nodi can offer to look inside: the selected shape's inside, or draw one it could have; else
@@ -421,10 +460,6 @@ export function Companion({ buildCommandContext }: { buildCommandContext?: () =>
     if (only) return { drawable: canCreateInside(only) };
     return { into: doorOf(docNodes, [], (n) => partNames.get(n.id) ?? 'it') ?? undefined };
   }, [selection.nodes, selection.edges, docNodes, partNames]);
-  // What Nodi can say about this very diagram: its queues, stores, crons and loose ends, by name.
-  const flowCount = useEditorStore((s) => s.document.flows.length);
-  const openPointCount = useEditorStore((s) => s.document.openPoints?.filter((p) => !p.resolved).length ?? 0);
-  const aboutDiagram = useMemo(() => diagramLines(docNodes, docEdges, flowCount, openPointCount), [docNodes, docEdges, flowCount, openPointCount]);
   const points = useMemo(() => pointsOf(turns.at(-1) ?? null, partsHere), [turns, partsHere]);
   const [hot, setHot] = useState<number | null>(null);
   const setPointedIds = useUiStore((s) => s.setPointedIds);
@@ -444,6 +479,15 @@ export function Companion({ buildCommandContext }: { buildCommandContext?: () =>
     setHot(null);
     setPointedIds(null);
   }, [expanded, setPointedIds]);
+  // Pins taken away from under the pointer (the next turn began, its answer became a proposal) never
+  // get their mouseleave: what one lit stayed lit on the canvas through the whole next run, and its
+  // number came back lit with the next reply.
+  const pinsUp = points.length > 0;
+  useEffect(() => {
+    if (pinsUp) return;
+    setHot(null);
+    if (useUiStore.getState().pointedIds) setPointedIds(null);
+  }, [pinsUp, setPointedIds]);
   const pointing = useMemo<Pointing>(
     () => ({
       names: partNames,
@@ -565,6 +609,14 @@ export function Companion({ buildCommandContext }: { buildCommandContext?: () =>
       }
     })();
   };
+
+  // One function for every turn's buttons, so a streamed token re-renders only the turn it is part of:
+  // with a new one each render, every earlier turn's reply was parsed again for every token.
+  const actions = useRef(runAction);
+  useLayoutEffect(() => {
+    actions.current = runAction;
+  });
+  const onAction = useCallback((action: LocalAction) => actions.current(action), []);
 
   const onKey = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.nativeEvent.isComposing) return;
@@ -750,6 +802,15 @@ export function Companion({ buildCommandContext }: { buildCommandContext?: () =>
   useEffect(() => {
     if (expanded && last && last.stop !== null) seenRun.set(diagramId, last.runId);
   }, [expanded, last, diagramId]);
+  // What Nodi can say about this very diagram: its queues, stores, crons and loose ends, by name. Only
+  // while it could be said (open, or the bubble up): worked out at rest, the semantic review it starts
+  // with ran on every frame of every drag.
+  const speaking = expanded || hovered || focused || peeking || helloHeld;
+  const sayNodes = useEditorStore((s) => (speaking ? s.document.nodes : NO_NODES));
+  const sayEdges = useEditorStore((s) => (speaking ? s.document.edges : NO_EDGES));
+  const flowCount = useEditorStore((s) => (speaking ? s.document.flows.length : 0));
+  const openPointCount = useEditorStore((s) => (speaking ? (s.document.openPoints?.filter((p) => !p.resolved).length ?? 0) : 0));
+  const aboutDiagram = useMemo(() => (speaking ? diagramLines(sayNodes, sayEdges, flowCount, openPointCount) : NO_LINES), [speaking, sayNodes, sayEdges, flowCount, openPointCount]);
   const resting = restingLine({
     blocked: blocker !== null,
     snag: blocker?.rest,
@@ -986,7 +1047,7 @@ export function Companion({ buildCommandContext }: { buildCommandContext?: () =>
                   </button>
                 )}
                 {turns.slice(folded).map((turn) => (
-                  <TurnView key={turn.runId} turn={turn} pinned={turn === last} onAction={runAction} />
+                  <TurnView key={turn.runId} turn={turn} pinned={turn === last} onAction={onAction} />
                 ))}
                 {last && last.stop !== null && last.steps.some((step) => step.tool === 'ask_to_read_code') && (
                   <CodeAsk key={last.runId} diagramId={diagramId} turn={last} onAllowed={send} />
@@ -1157,7 +1218,7 @@ export function Companion({ buildCommandContext }: { buildCommandContext?: () =>
 }
 
 /** What the mascot says about the latest turn: the step it is on, then its reply as it streams in. */
-function TurnView({ turn, pinned, onAction }: { turn: Turn; pinned: boolean; onAction: (action: LocalAction) => void }) {
+const TurnView = memo(function TurnView({ turn, pinned, onAction }: { turn: Turn; pinned: boolean; onAction: (action: LocalAction) => void }) {
   const reply = replyOf(turn);
   const activity = activityOf(turn.steps, turn.stop === null);
   const stopped = stopMessage(turn.stop);
@@ -1216,7 +1277,7 @@ function TurnView({ turn, pinned, onAction }: { turn: Turn; pinned: boolean; onA
       )}
     </article>
   );
-}
+});
 
 /** How the person answered each run that asked to read the code, this app run: answered once, the
  *  card stays answered, however often the box is opened again. */
@@ -1478,7 +1539,7 @@ function ProposalOnCanvas({ runId, proposalId, onDetails }: { runId: string; pro
 
 function ProposalChip({ proposal, onChanged, onDetails }: { proposal: Proposal; onChanged: (record?: Proposal) => void; onDetails: () => void }) {
   const review = useProposalReview(proposal, onChanged, 'companion');
-  const { busy, checking, conflicts, dryRunProblem, error, alreadyApplied, recoveringAccept, bounds } = review;
+  const { busy, checking, conflicts, dryRunProblem, error, alreadyApplied, recoveringAccept, bounds, targetsCurrentView } = review;
   const { setViewport } = useReactFlow();
   const viewWidth = useReactFlowStore((state) => state.width);
   const viewHeight = useReactFlowStore((state) => state.height);
@@ -1494,12 +1555,19 @@ function ProposalChip({ proposal, onChanged, onDetails }: { proposal: Proposal; 
   const show = () => {
     if (reveal) void setViewport(reveal, { duration: 320 });
   };
+  // A change to another view of the diagram (inside a shape, or out of the one on screen) has no place
+  // on this canvas: the chip offered Accept on a change nobody could see, and no way to it but Details.
+  // Show me goes there; the change is framed once it is worked out in that view.
+  const elsewhere = !targetsCurrentView;
   // Once, when the change is first worked out: it is what the person is waiting to see. After that the
   // camera is theirs, and Show me brings it back. Show me is offered only while the change is out of
   // view: offered always, it sat beside a change already on screen and did nothing.
   const framed = useRef(false);
   useEffect(() => {
     if (!bounds || framed.current) return;
+    // Not under a drag or a label being typed, where the camera moved beneath the person's hands. Their
+    // edit lands, the change is checked again and `bounds` comes back: framed then.
+    if (isInteracting()) return;
     framed.current = true;
     show();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- framed once, on the first bounds
@@ -1532,6 +1600,7 @@ function ProposalChip({ proposal, onChanged, onDetails }: { proposal: Proposal; 
           onChange={(value) => setPreviewVisible(value === 'proposed')}
         />
       )}
+      {elsewhere && <p className="dc-companion-review-note">It’s in another view of this diagram.</p>}
       {checking && <p className="dc-companion-review-note">Checking it against the diagram…</p>}
       {problem && <p className="dc-companion-review-problem">{problem}</p>}
       {error && (
@@ -1553,8 +1622,8 @@ function ProposalChip({ proposal, onChanged, onDetails }: { proposal: Proposal; 
               Reject
             </button>
             <span className="dc-companion-review-links">
-              {reveal && (
-                <button type="button" className="dc-companion-link" onClick={show}>
+              {(reveal || elsewhere) && (
+                <button type="button" className="dc-companion-link" onClick={elsewhere ? () => void navigateToRoom(proposal.path) : show}>
                   Show me
                 </button>
               )}
@@ -1696,7 +1765,9 @@ function ReplyText({ text, pinned = false }: { text: string; pinned?: boolean })
           {entry.point}
         </span>
       )}
-      {inline(entry.text, entry)}
+      {/* An earlier turn's chips light their part alone: its own numbers are not the pins on the
+          canvas, and hovering one lit the latest reply's point of the same number. */}
+      {inline(entry.text, pinned ? entry : null)}
     </>
   );
   return (

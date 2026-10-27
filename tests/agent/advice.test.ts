@@ -14,6 +14,10 @@ describe('technology advice', () => {
     // Nothing known first, or too short to be sure it's the brand.
     expect(productNamedIn('In-house rules engine')).toBeUndefined();
     expect(productNamedIn('Go service')).toBeUndefined();
+    // Another product whose name starts with a known one: never advised to become it.
+    expect(productNamedIn('React Native')).toBeUndefined();
+    expect(productNamedIn('React Native 0.76 mobile app')).toBeUndefined();
+    expect(productNamedIn('React single-page app')).toBe('React');
   });
 
   it('gives the update that fixes each, a few at a time', () => {

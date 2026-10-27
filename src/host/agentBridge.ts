@@ -38,6 +38,16 @@ export function currentRevision(): string {
   return `o:${EPOCH}.${useEditorStore.getState().revision}`;
 }
 
+/**
+ * Whether a proposal made against `baseRevision` is out of date for the document open here. One made
+ * on unsaved edits carries this page's editor revision, which the shell (judging against the file on
+ * disk) always called stale: it is current exactly while the editor still stands there — saving
+ * doesn't move it. A file revision is the shell's to judge (`shellStale`).
+ */
+export function proposalStale(baseRevision: string, shellStale: boolean): boolean {
+  return baseRevision.startsWith('o:') ? baseRevision !== currentRevision() : shellStale;
+}
+
 /** How long after the last keystroke a focused field still counts as being typed in. Focus alone
  *  isn't enough: counted as busy, an idle title or inspector field held every agent change back
  *  until the person happened to click elsewhere. */

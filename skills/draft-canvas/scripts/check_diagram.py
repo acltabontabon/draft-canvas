@@ -202,7 +202,7 @@ REQUEST_FIELDS = {
     'fallbackType',
 }
 ROOM_FIELDS = {'level', 'nodes', 'relationships', 'groups', 'flows', 'notes'}
-GROUP_FIELDS = {'id', 'label', 'kind', 'parent'}
+GROUP_FIELDS = {'id', 'label', 'kind', 'parent', 'color'}
 ELEMENT_FIELDS = {'id', 'type', 'label', 'description', 'technology', 'group', 'color', 'attachments', 'inside', 'evidence', 'place'}
 RELATIONSHIP_FIELDS = {
     'id',
@@ -228,7 +228,7 @@ RELATIONSHIP_FIELDS = {
     'route',
 }
 FLOW_FIELDS = {'id', 'title', 'color', 'variantOf', 'steps'}
-NOTE_FIELDS = {'id', 'text', 'kind', 'code', 'language', 'about', 'near', 'attach', 'style'}
+NOTE_FIELDS = {'id', 'text', 'kind', 'code', 'language', 'about', 'near', 'attach', 'style', 'color'}
 
 # Hard limits (the app refuses past these) and soft ones (past these it still draws, but reads worse).
 MAX = {
@@ -506,6 +506,8 @@ def check_view(view: View, r: Report, repo: str | None, request: dict, is_top: b
             r.error(f'{p} group {gid}', f'label longer than {MAX["groupLabel"]}')
         if g.get('kind') is not None and g['kind'] not in GROUP_KINDS:
             r.error(f'{p} group {gid}', f'kind "{g["kind"]}" is not one of {sorted(GROUP_KINDS)}')
+        if g.get('color') is not None and g['color'] not in COLORS:
+            r.error(f'{p} group {gid}', f'color "{g["color"]}" is not one of {sorted(COLORS)}')
         if g.get('parent') is not None and g['parent'] not in view.group_ids:
             r.error(f'{p} group {gid}', f'parent "{g["parent"]}" is not a group of this view')
         inner = members.get(gid, [])
@@ -689,6 +691,8 @@ def check_view(view: View, r: Report, repo: str | None, request: dict, is_top: b
         where = f'{p} note {nid}'
         if kind not in NOTE_KINDS:
             r.error(where, f'kind "{kind}" is not one of {sorted(NOTE_KINDS)}')
+        if note.get('color') is not None and note['color'] not in COLORS:
+            r.error(where, f'color "{note["color"]}" is not one of {sorted(COLORS)}')
         about = note.get('about', note.get('near'))
         if about is None:
             r.warn(where, 'no about — it would go after the diagram, far from what it means')

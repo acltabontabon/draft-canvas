@@ -646,7 +646,7 @@ export function placeRoom(room: RoomSpec, layout: LayoutSpec, ctx: DescribeConte
   for (const g of room.groups) {
     groupNodes.set(
       g.id,
-      createNode({ id: g.id, type: 'group', x: 0, y: 0, text: g.label, boundaryPreset: GROUP_KINDS[g.kind]?.preset ?? "boundary", ...(g.parent ? { parentId: g.parent } : {}) }),
+      createNode({ id: g.id, type: 'group', x: 0, y: 0, text: g.label, boundaryPreset: GROUP_KINDS[g.kind]?.preset ?? "boundary", ...(g.parent ? { parentId: g.parent } : {}), ...(g.color ? { accent: g.color } : {}) }),
     );
   }
   const elements = new Map<string, DraftNode>();
@@ -817,13 +817,14 @@ export function placeBlock(
  * paste makes one), a label as wide as its words — inside its boundary when it names one.
  */
 export function noteNode(spec: NoteSpec, ctx: DescribeContext): DraftNode {
-  const parent = spec.group ? { parentId: spec.group } : {};
+  // A label's `style.color` is its colour too, and the more specific of the two.
+  const parent = { ...(spec.group ? { parentId: spec.group } : {}), ...(spec.color ? { accent: spec.color } : {}) };
   if (spec.type === 'code') {
     const code = spec.code ?? '';
     return createNode({ id: spec.id, type: 'code', x: 0, y: 0, code, language: spec.language ?? 'plaintext', ...naturalCodeSize(code, ctx), ...parent });
   }
   if (spec.type === 'text') {
-    const node = createNode({ id: spec.id, type: 'text', x: 0, y: 0, text: spec.text, ...spec.style, ...parent });
+    const node = createNode({ id: spec.id, type: 'text', x: 0, y: 0, text: spec.text, ...parent, ...spec.style });
     return { ...node, ...naturalTextSize(node, spec.text, ctx, { width: 40, height: DEFAULTS.textHeight }) };
   }
   return sizeToFit(createNode({ id: spec.id, type: 'note', x: 0, y: 0, text: spec.text, noteKind: spec.kind, ...parent }), ctx);
@@ -831,12 +832,13 @@ export function noteNode(spec: NoteSpec, ctx: DescribeContext): DraftNode {
 
 /** The attachment a spec folds into, under the spec's own id — sized as the card it detaches to. */
 export function attachmentFor(spec: NoteSpec, ctx: DescribeContext): Attachment {
+  const accent = spec.color ? { accent: spec.color } : {};
   if (spec.type === 'code') {
     const code = spec.code ?? '';
-    return createAttachment({ id: spec.id, type: 'code', code, language: spec.language ?? 'plaintext', ...naturalCodeSize(code, ctx) });
+    return createAttachment({ id: spec.id, type: 'code', code, language: spec.language ?? 'plaintext', ...naturalCodeSize(code, ctx), ...accent });
   }
-  if (spec.type === 'text') return createAttachment({ id: spec.id, type: 'text', text: spec.text });
-  return createAttachment({ id: spec.id, type: 'note', text: spec.text, noteKind: spec.kind });
+  if (spec.type === 'text') return createAttachment({ id: spec.id, type: 'text', text: spec.text, ...accent });
+  return createAttachment({ id: spec.id, type: 'note', text: spec.text, noteKind: spec.kind, ...accent });
 }
 
 /**

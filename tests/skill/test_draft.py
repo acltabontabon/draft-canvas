@@ -137,6 +137,25 @@ class Drafts(unittest.TestCase):
         for value in ids:
             self.assertRegex(value, r'^[A-Za-z][A-Za-z0-9_.-]{0,63}$')
 
+    def test_each_technology_is_one_product_the_one_behind_the_type(self) -> None:
+        # Draft Canvas shows a logo only for one product's own name; "TypeScript, Express" would draw a
+        # plain mark and an advisory, and the agent an extra update to fix it.
+        files = {
+            'desktop/package.json': json.dumps({'name': 'desktop', 'dependencies': {'react-dom': '18', '@tauri-apps/api': '2'}}),
+            'desktop/src/main.tsx': 'render()\n',
+            'api/package.json': json.dumps({'name': 'api', 'dependencies': {'commander': '12', 'express': '4', '@anthropic-ai/sdk': '1'}}),
+            'api/server.ts': "app.get('/', h)\n",
+            'tool/go.mod': 'module example.com/tool\n',
+            'tool/main.go': 'package main\nfunc main() {}\n',
+        }
+        request, _, _ = build(files)
+        technology = {n['id']: n.get('technology') for n in view_of(request)['nodes']}
+        self.assertEqual(technology['desktop'], 'Tauri')
+        self.assertEqual(technology['api'], 'Express')
+        self.assertEqual(technology['tool'], 'Go')
+        self.assertEqual(technology['anthropic-api'], 'Anthropic')
+        self.assertEqual(draft.product('Django REST framework'), 'Django')
+
 
 class CommandLine(unittest.TestCase):
     def test_writes_survey_and_request_outside_the_repository(self) -> None:

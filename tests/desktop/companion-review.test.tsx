@@ -221,4 +221,17 @@ describe('reviewing in the companion card', () => {
     act(() => companion.clear(useEditorStore.getState().document.metadata.id));
     expect(await screen.findByRole('button', { name: '1 proposal to review' })).toBeTruthy();
   });
+  it('a change to another view says so, and Show me goes there', async () => {
+    const inner = createNode({ id: 'c_api', type: 'component', x: 0, y: 0, text: 'Orders endpoint' });
+    const room = { nodes: [inner], edges: [], flows: [], viewport: { x: 0, y: 0, zoom: 1 } };
+    useEditorStore.setState({ document: { ...file(), nodes: [{ ...file().nodes[0]!, inside: room }] } });
+    const ops = [{ op: 'update', id: 'c_api', set: { label: 'Orders API' } }];
+    const doc = useEditorStore.getState().document;
+    const proposal = { ...proposalFor([{ op: 'update', id: 'db', set: { label: 'Orders DB' } }]), ops, path: ['db'], preconditions: prepareProposal(doc, ['db'], ops, undefined, undefined).preconditions };
+    mount(fakeController(proposal));
+    expect(await screen.findByText('It’s in another view of this diagram.')).toBeTruthy();
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Show me' })));
+    await waitFor(() => expect(useEditorStore.getState().path).toEqual(['db']));
+    await waitFor(() => expect(screen.queryByText('It’s in another view of this diagram.')).toBeNull());
+  });
 });

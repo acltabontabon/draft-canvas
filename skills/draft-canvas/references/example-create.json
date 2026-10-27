@@ -33,7 +33,7 @@
       "id": "catalog",
       "type": "api",
       "label": "Catalog API",
-      "technology": "Go, chi",
+      "technology": "Go",
       "description": "Serves products, prices and stock levels.",
       "evidence": [{"path": "services/catalog/cmd/catalog/main.go", "basis": "observed", "line": 41}]
      },
@@ -49,7 +49,7 @@
       "id": "orders",
       "type": "api",
       "label": "Orders API",
-      "technology": "Node.js, Fastify",
+      "technology": "Fastify",
       "description": "Takes orders and records them with their events.",
       "evidence": [{"path": "services/orders/src/server.ts", "basis": "observed", "line": 12}],
       "inside": {
@@ -59,7 +59,7 @@
          "id": "o.routes",
          "type": "component",
          "label": "Orders Routes",
-         "technology": "Fastify routes",
+         "technology": "Fastify",
          "description": "Validates the request body and answers 201.",
          "evidence": [{"path": "services/orders/src/routes/orders.ts", "basis": "observed", "line": 18, "symbol": "postOrder"}]
         },
@@ -83,7 +83,7 @@
          "id": "o.catalog",
          "type": "api",
          "label": "Catalog API",
-         "technology": "Go, chi",
+         "technology": "Go",
          "description": "Serves products, prices and stock levels.",
          "evidence": [{"path": "services/orders/src/clients/catalog.ts", "basis": "observed", "symbol": "CATALOG_URL"}]
         },
@@ -189,7 +189,7 @@
       "id": "billing",
       "type": "worker",
       "label": "Billing Worker",
-      "technology": "Node.js, kafkajs",
+      "technology": "Node.js",
       "description": "Charges the customer for each placed order.",
       "evidence": [{"path": "services/billing/src/consumer.ts", "basis": "observed", "symbol": "onOrderPlaced"}]
      },
@@ -205,7 +205,7 @@
       "id": "notify",
       "type": "worker",
       "label": "Notification Worker",
-      "technology": "Node.js, kafkajs",
+      "technology": "Node.js",
       "description": "Emails the order confirmation.",
       "evidence": [{"path": "services/notify/src/consumer.ts", "basis": "observed", "symbol": "onOrderPlaced"}]
      },
@@ -213,7 +213,7 @@
       "id": "c.stripe",
       "type": "external-system",
       "label": "Stripe",
-      "technology": "Stripe API",
+      "technology": "Stripe",
       "description": "Takes card payments.",
       "evidence": [{"path": "services/billing/src/charge.ts", "basis": "observed", "symbol": "chargeOrder"}]
      },
@@ -221,7 +221,7 @@
       "id": "c.sendgrid",
       "type": "external-system",
       "label": "SendGrid",
-      "technology": "SendGrid API",
+      "technology": "SendGrid",
       "description": "Delivers transactional email.",
       "evidence": [{"path": "services/notify/src/mailer.ts", "basis": "observed", "symbol": "sendConfirmation"}]
      }
@@ -336,7 +336,7 @@
    "id": "stripe",
    "type": "external-system",
    "label": "Stripe",
-   "technology": "Stripe API",
+   "technology": "Stripe",
    "description": "Takes card payments.",
    "evidence": [{"path": "services/billing/src/charge.ts", "basis": "observed", "symbol": "chargeOrder"}]
   },
@@ -344,7 +344,7 @@
    "id": "sendgrid",
    "type": "external-system",
    "label": "SendGrid",
-   "technology": "SendGrid API",
+   "technology": "SendGrid",
    "description": "Delivers transactional email.",
    "evidence": [{"path": "services/notify/src/mailer.ts", "basis": "observed", "symbol": "sendConfirmation"}]
   }

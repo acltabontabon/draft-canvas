@@ -72,6 +72,10 @@ impl ProposalStatus {
 #[serde(rename_all = "camelCase")]
 pub struct Proposal {
     pub id: String,
+    /// Exact submission that wrote this version; timestamps alone cannot prove crash recovery when
+    /// two revisions share a millisecond or another request revised the same proposal meanwhile.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub submission: Option<String>,
     /// 1 at creation, +1 on every revise-in-place. Accept must be checked against the exact version
     /// that was on screen when the person clicked it, so a revision racing the click is caught.
     pub version: u32,
@@ -181,27 +185,32 @@ impl Proposals {
             Err(e) => return Err(e),
         };
         let mut reader = BufReader::new(file);
-        let (mut lines, mut clean) = (0, true);
-        let mut line = String::new();
+        let (mut lines, mut clean, mut preserved) = (0, true, false);
+        let mut line = Vec::new();
         loop {
             line.clear();
-            match reader.read_line(&mut line) {
-                Ok(0) => break,
-                Ok(_) => lines += 1,
-                Err(_) => {
-                    clean = false;
-                    break;
-                }
+            if reader.read_until(b'\n', &mut line)? == 0 {
+                break;
             }
-            // A line without its newline is one a crash cut short. It must not be left in place even
-            // when it parses: the next record appended would join it on the same line.
-            clean &= line.ends_with('\n');
-            // A line that doesn't parse is the one a crash cut short; everything before it stands.
-            match serde_json::from_str::<Proposal>(line.trim_end()) {
+            lines += 1;
+            let complete = line.ends_with(b"\n");
+            clean &= complete;
+            match serde_json::from_slice::<Proposal>(&line) {
                 Ok(proposal) => {
                     self.entries.insert(proposal.id.clone(), proposal);
                 }
-                Err(_) => clean = false,
+                // Only an unterminated final record can be a torn append.
+                Err(_) if !complete => break,
+                // A complete record that doesn't parse may have been a commit or a decision, so
+                // the journal as it stood is kept beside it before the rewrite drops that line.
+                // Refusing to open instead left agent access broken until someone deleted the file.
+                Err(_) => {
+                    if !preserved {
+                        preserved = true;
+                        fs::copy(&self.file, self.file.with_extension("jsonl.corrupt"))?;
+                    }
+                    clean = false;
+                }
             }
         }
         Ok(clean && lines == self.entries.len())
@@ -251,7 +260,10 @@ impl Proposals {
         let mut file = private(OpenOptions::new().create(true).append(true)).open(&self.file)?;
         file.write_all(&line)?;
         file.sync_data()?;
+        let now = proposal.updated_at;
         self.entries.insert(proposal.id.clone(), proposal);
+        // Retention also applies to an app left running for weeks, not just its next launch.
+        self.evict(now);
         self.appended += 1;
         if self.appended >= COMPACT_AFTER {
             self.compact()?;
@@ -325,6 +337,7 @@ mod tests {
     fn proposal(id: &str, status: ProposalStatus, updated_at: u64) -> Proposal {
         Proposal {
             id: id.into(),
+            submission: None,
             version: 1,
             diagram_id: "d_1".into(),
             path: vec![],
@@ -443,11 +456,38 @@ mod tests {
                 .put(proposal(&format!("p{i}"), ProposalStatus::Rejected, i))
                 .unwrap();
         }
+        assert_eq!(
+            store.entries.len(),
+            RESOLVED_CAP,
+            "bounded without a restart"
+        );
+        assert!(store.get("p0").is_none());
         drop(store);
         let store = Proposals::open(dir.path(), RESOLVED_CAP as u64 + 3).unwrap();
         assert!(store.get("p0").is_none());
         assert!(store.get("p2").is_none());
         assert!(store.get("p3").is_some());
+    }
+
+    #[test]
+    fn new_writes_expire_old_resolved_proposals_without_a_restart() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut store = Proposals::open(dir.path(), 0).unwrap();
+        store
+            .put(proposal("done", ProposalStatus::Accepted, 0))
+            .unwrap();
+        store
+            .put(proposal("waiting", ProposalStatus::Pending, 0))
+            .unwrap();
+        store
+            .put(proposal(
+                "new",
+                ProposalStatus::Pending,
+                RESOLVED_RETENTION_MS + 1,
+            ))
+            .unwrap();
+        assert!(store.get("done").is_none());
+        assert!(store.get("waiting").is_some());
     }
 
     #[test]
@@ -502,5 +542,21 @@ mod tests {
         let listed = store.list(Some("d_1"));
         assert_eq!(listed.len(), 2);
         assert_eq!(listed[0].id, "newer");
+    }
+
+    #[test]
+    fn a_complete_corrupt_record_is_kept_aside_and_the_journal_still_opens() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("proposals.jsonl");
+        let bytes = b"{broken}\n";
+        fs::write(&file, bytes).unwrap();
+        // Refusing to open left agent access unusable until the file was deleted by hand.
+        let store = Proposals::open(dir.path(), 1).unwrap();
+        assert!(store.entries.is_empty());
+        assert_eq!(
+            fs::read(dir.path().join("proposals.jsonl.corrupt")).unwrap(),
+            bytes
+        );
+        assert!(fs::read(file).unwrap().is_empty());
     }
 }

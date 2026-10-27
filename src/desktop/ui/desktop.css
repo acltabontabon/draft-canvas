@@ -2227,8 +2227,7 @@
 }
 
 .dc-companion-review-head span,
-.dc-companion-review-note,
-.dc-companion-review-more {
+.dc-companion-review-note {
   color: var(--dc-text-muted);
   font-size: 11.5px;
 }
@@ -2248,31 +2247,6 @@
 
 .dc-companion-review-problem {
   color: var(--dc-danger);
-}
-
-.dc-companion-review-rows {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  font-size: 12px;
-}
-
-.dc-companion-review-mark {
-  display: inline-block;
-  width: 14px;
-  color: var(--dc-selection);
-  font-family: var(--dc-mono);
-}
-
-.dc-companion-review-rows li[data-change='removed'] .dc-companion-review-mark {
-  color: var(--dc-danger);
-}
-
-.dc-companion-review-rows li[data-change='modified'] .dc-companion-review-mark {
-  color: var(--dc-caution);
 }
 
 .dc-companion-review-actions {

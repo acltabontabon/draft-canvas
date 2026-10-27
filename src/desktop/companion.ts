@@ -460,7 +460,9 @@ export const companion = {
 
   /** The turn submitted `proposalId`, waiting for review; null once it is resolved. */
   setProposal(runId: string, proposalId: string | null): void {
-    update(runId, (turn) => (turn.proposalId === proposalId ? turn : { ...turn, proposalId }));
+    // Decided is final: a lookup begun before the person accepted, answering after, put the proposal
+    // back up as waiting, and nothing looks a decided turn up again to take it down.
+    update(runId, (turn) => (turn.proposalId === proposalId || (proposalId !== null && turn.outcome !== null) ? turn : { ...turn, proposalId }));
   },
 
   /** The person accepted or rejected the turn's proposal: it is no longer waiting. */

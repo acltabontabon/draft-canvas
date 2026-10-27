@@ -92,12 +92,6 @@
   filter: grayscale(1);
 }
 
-.dc-peer-more {
-  background: var(--dc-surface-raised);
-  color: var(--dc-text-muted);
-  box-shadow: 0 0 0 2px var(--dc-surface), inset 0 0 0 1px var(--dc-border);
-}
-
 /* -------------------------------------------------------- toolbar control -- */
 
 /* The faces of a live session, piled up beside Share. */
@@ -160,16 +154,6 @@
 .dc-collab-stack > .dc-peer-badge:nth-child(3) { z-index: 3; }
 .dc-collab-stack > .dc-peer-badge:nth-child(4) { z-index: 2; }
 .dc-collab-stack > .dc-peer-badge:nth-child(5) { z-index: 1; }
-
-/* Someone at the door, seen from the bar. */
-.dc-collab-waiting-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--dc-selection);
-  box-shadow: 0 0 0 2px var(--dc-surface);
-  animation: dc-collab-breathe 1.8s ease-in-out infinite;
-}
 
 /* A live session says so with a small breathing dot on the pile's shoulder. */
 .dc-collab-live-dot {
@@ -1365,19 +1349,6 @@
 
 @keyframes dc-dock-in {
   from { opacity: 0; transform: translateX(8px); }
-}
-
-
-.dc-collab-direct > summary {
-  font-size: 12.5px;
-}
-
-.dc-collab-direct[open] {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding-top: 14px;
-  border-top: 1px solid var(--dc-border);
 }
 
 .dc-knock-seat .dc-peer-badge {

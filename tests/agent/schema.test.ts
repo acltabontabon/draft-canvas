@@ -233,7 +233,8 @@ describe('MCP tool definitions', () => {
     // shared through $defs. Explicit placement and routing (place, route) added ~4 KB, both shared
     // through $defs too. The ai-agent element type and the asks/delegates/escalates/notifies
     // relationships added ~0.3 KB. Linked compensation fields add ~1.7 KB across the create and
-    // update tools, because each tool's schema stands alone. Pinned and automatic route ends add ~0.6 KB. Keep a measured ceiling on growth.
-    expect(JSON.stringify(TOOLS).length).toBeLessThan(70_600);
+    // update tools, because each tool's schema stands alone. Pinned and automatic route ends add ~0.6 KB. Tightening the longest descriptions
+    // took ~1.5 KB back (68.6 KB). Keep a measured ceiling on growth.
+    expect(JSON.stringify(TOOLS).length).toBeLessThan(69_200);
   });
 });

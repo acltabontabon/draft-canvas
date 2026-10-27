@@ -13,7 +13,8 @@ const REPO = 'acltabontabon/draft-canvas';
  * What's New for every release through 1.9.4, as it was written at the time — frozen. From 1.10.0 on,
  * a release's What's New is read out of CHANGELOG.md instead (the bullets marked `<!-- highlight -->`,
  * filtered to this build's platform; see `releaseHighlights` in vite.config.ts), so the words are
- * written once. Nothing is added here any more: a shipped release's notes don't change.
+ * written once. Nothing is added here any more: a shipped release's notes don't change, except that
+ * notes about a retired distribution were dropped (a release that had only those has no entry).
  *
  * History only goes back to `0.1.0` ("the first production-ready release," per CHANGELOG.md) —
  * the `alpha`/`beta` milestones before it were never a real release anyone upgraded from, and a
@@ -59,11 +60,6 @@ export const ARCHIVED_RELEASES: ProductRelease[] = [
       {
         title: 'Data Stores fill their box',
         description: 'A new Data Store starts narrower and taller, and its drawing fills more of the box, so it reads clearly beside a Service.',
-      },
-      {
-        title: 'Better in VS Code',
-        description:
-          'Copy, paste, select all and undo work inside text fields, VS Code\'s own shortcuts reach it from the canvas, and a background image is saved beside the diagram. Needs the latest extension.',
       },
     ],
   },
@@ -222,21 +218,6 @@ export const ARCHIVED_RELEASES: ProductRelease[] = [
     ],
   },
   {
-    version: '1.6.2',
-    date: '2026-09-14',
-    highlights: [
-      {
-        title: 'Copy and paste shortcuts work in VS Code',
-        description:
-          '⌘C, ⌘X and ⌘V copy, cut and paste shapes again in VS Code, and paste into your other diagrams with the latest Draft Canvas for VS Code.',
-      },
-      {
-        title: 'Paste without the clipboard warning',
-        description: 'Paste from the right-click menu or the command palette in VS Code no longer says clipboard access is blocked.',
-      },
-    ],
-  },
-  {
     version: '1.6.1',
     date: '2026-09-14',
     highlights: [
@@ -259,11 +240,6 @@ export const ARCHIVED_RELEASES: ProductRelease[] = [
         title: 'Escape does just one thing',
         description:
           "Escape closes a shape's colour or text panel and keeps the suggestion beside it, and cancels a connector-end drag without deselecting the connector.",
-      },
-      {
-        title: 'Copy and paste across VS Code diagrams',
-        description:
-          'Shapes copied or cut with ⌘C or ⌘X in VS Code paste into your other diagrams and other apps.',
       },
       {
         title: 'Smoother on small screens',
@@ -305,27 +281,6 @@ export const ARCHIVED_RELEASES: ProductRelease[] = [
         title: 'Keys go where you expect',
         description:
           "Keys pressed in menus and prompts stay there instead of creating or moving shapes behind them, and Escape closes only what's on top.",
-      },
-    ],
-  },
-  {
-    version: '1.5.1',
-    date: '2026-09-14',
-    highlights: [
-      {
-        title: 'Links open in VS Code',
-        description: 'The links in About now open in your browser or mail app when Draft Canvas is running inside VS Code.',
-      },
-    ],
-  },
-  {
-    version: '1.5.0',
-    date: '2026-09-14',
-    highlights: [
-      {
-        title: 'Draft Canvas for VS Code',
-        description:
-          "Keep diagrams next to your code: the new VS Code extension opens a .draftcanvas file straight into the canvas and saves your edits back to that file, ready to commit.",
       },
     ],
   },

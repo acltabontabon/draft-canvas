@@ -156,12 +156,16 @@ impl Agent {
     }
 
     /// Everything a connected sidecar should be told before the app goes away — and the connection
-    /// file and socket removed, so nothing points at an app that isn't there. The listener itself is
-    /// left to die with the process, so the goodbye frames still go out.
+    /// file and socket removed, so nothing points at an app that isn't there. Connection writers
+    /// finish their goodbye independently of the listener.
     pub fn shutdown(&self, reason: &str) {
         if let Some(running) = lock(&self.running).as_ref() {
             running.announce_shutdown(reason);
             running.remove_socket();
+        }
+        let calls: Vec<_> = lock(&self.calls).iter().filter_map(Weak::upgrade).collect();
+        for call in calls {
+            call.cancel(self);
         }
         endpoint::remove_info(&self.dir);
     }

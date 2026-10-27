@@ -2,8 +2,8 @@
 
 Shipped work is listed in the [changelog](../../CHANGELOG.md): share links, editable PNG and SVG,
 Mermaid import and draw.io export (1.12); flow tracing, the Order processing example, share links
-that open at a level or flow, and Arrange selection (1.13); live collaboration and protected sharing
-with Guided reader and Focus view (unreleased).
+that open at a level or flow, and Arrange selection (1.13); live collaboration, Nodi, and protected
+sharing with Guided reader and Focus view (1.16); Traffic (1.17).
 
 ## Planned
 

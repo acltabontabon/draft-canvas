@@ -10,7 +10,7 @@ import { AgentError } from './errors';
 import { AGENT_LIMITS } from './input';
 import { READ_LIMITS } from './read';
 import { starterIds } from './starter';
-import { ELEMENT_TYPES, GROUP_KINDS, LINE_STYLE_NAMES, NOTE_KIND_NAMES } from './vocabulary';
+import { ELEMENT_TYPES, GROUP_KINDS, LINE_STYLE_NAMES, NOTE_FORM_NAMES, NOTE_KIND_NAMES } from './vocabulary';
 
 /**
  * Bumped when the tools' contract changes incompatibly; additions keep it. 2: an update reaches a
@@ -21,7 +21,22 @@ export const CONTRACT_VERSION = 3;
 
 const TOPICS = ['types', 'relationships', 'c4', 'flows', 'notes', 'starters', 'limits', 'layout', 'readability'] as const;
 
+/** What each topic holds — the whole answer when no topic is asked for, so one call stays small. */
+const TOPIC_INDEX: Record<(typeof TOPICS)[number], string> = {
+  types: 'What each element type and boundary kind means.',
+  relationships: 'Semantics, behaviours, one line per direction, reply lines, dead letters, compensation, re-pointing, pinned ends.',
+  c4: 'Levels, inside views, moveInside/moveOutside, derived role and scope.',
+  flows: 'Flows as presentations: order, steps, highlights, spotlights, variants.',
+  notes: 'Notes, code snippets, Markdown labels and their style, attaching and detaching.',
+  starters: 'Starter names and categories; {starter: id} describes one.',
+  limits: 'Per-request and read limits.',
+  layout: 'Automatic layout, exact place and route, arrange, previews, evidence.',
+  readability: 'How to send a request that reads clearly, and how to read the receipt.',
+};
+
 export function capabilities(args: { topics?: unknown; starter?: unknown }): Record<string, unknown> {
+  // A starter with topics answers both; alone it is just the starter, as it always was.
+  if (typeof args.starter === 'string' && Array.isArray(args.topics)) return { ...capabilities({ topics: args.topics }), ...capabilities({ starter: args.starter }) };
   if (typeof args.starter === 'string') {
     const starter = ARCHITECTURE_STARTERS.find((s) => s.id === args.starter);
     if (!starter) throw new AgentError('NOT_FOUND', `No starter "${args.starter}".`);
@@ -38,12 +53,26 @@ export function capabilities(args: { topics?: unknown; starter?: unknown }): Rec
       },
     };
   }
-  const topics = Array.isArray(args.topics) ? new Set(args.topics.filter((t): t is (typeof TOPICS)[number] => (TOPICS as readonly unknown[]).includes(t))) : undefined;
-  const want = (topic: (typeof TOPICS)[number]) => !topics || topics.has(topic);
+  if (!Array.isArray(args.topics)) {
+    // No topic: an index of the topics and the words most requests need. Every topic in full was
+    // about 16 KB of guidance an agent mostly didn't need for the request at hand.
+    return {
+      contract: CONTRACT_VERSION,
+      topics: TOPIC_INDEX,
+      more: 'get_capabilities({topics: [names]}) returns those topics in full.',
+      types: Object.keys(ELEMENT_TYPES),
+      groupKinds: Object.keys(GROUP_KINDS),
+      noteKinds: NOTE_FORM_NAMES,
+      lineStyles: LINE_STYLE_NAMES,
+      starters: ARCHITECTURE_STARTERS.map((s) => s.id),
+    };
+  }
+  const topics = new Set(args.topics.filter((t): t is (typeof TOPICS)[number] => (TOPICS as readonly unknown[]).includes(t)));
+  const want = (topic: (typeof TOPICS)[number]) => topics.has(topic);
   const out: Record<string, unknown> = { contract: CONTRACT_VERSION };
   if (want('types')) {
-    out.types = topics ? Object.fromEntries(Object.entries(ELEMENT_TYPES).map(([k, v]) => [k, v.summary])) : Object.keys(ELEMENT_TYPES);
-    out.groupKinds = topics ? Object.fromEntries(Object.entries(GROUP_KINDS).map(([k, v]) => [k, v.summary])) : Object.keys(GROUP_KINDS);
+    out.types = Object.fromEntries(Object.entries(ELEMENT_TYPES).map(([k, v]) => [k, v.summary]));
+    out.groupKinds = Object.fromEntries(Object.entries(GROUP_KINDS).map(([k, v]) => [k, v.summary]));
     out.noteKinds = NOTE_KIND_NAMES;
   }
   if (want('relationships')) {
@@ -69,7 +98,7 @@ export function capabilities(args: { topics?: unknown; starter?: unknown }): Rec
       views: 'A view is the top level or the inside of an element (element.inside), nested up to 3 deep: context → container → component. The focal system of a container view is the element whose inside it is.',
       lookInside: 'Only a service-like element or a (non-port) component has an inside view. To draw one for an element that has none yet, update_diagram with view.inside [its id] and an add op (level optional, e.g. "component"): the first add creates it. read_diagram with view.inside reads one (an empty one says empty: true); include ["views"] outlines every inside view in the file.',
       restructure: '{op:"moveInside", owner, ids} moves shapes one level down into owner; {op:"moveOutside", ids}, sent with view.inside, moves shapes one level up beside the owner, into the owner\'s boundary when it has room. Both keep ids; a connector across the levels meets the owner.',
-      roles: 'Reads return c4.role (person, software-system, container, component, unspecified) and c4.scope (internal, external, unspecified), derived from type and level — never stored, and "unspecified" rather than a guess.',
+      roles: 'Reads return c4.role (person, software-system, container, component, unspecified) and c4.scope (internal, external, unspecified), derived from type, level and boundary — never stored, and "unspecified" rather than a guess, with a basis saying why.',
       notSupported: 'No landscape, deployment, dynamic or code views; no relationship technology field (use semantic and label); no shared elements across views.',
     };
   }
@@ -84,7 +113,8 @@ export function capabilities(args: { topics?: unknown; starter?: unknown }): Rec
       variants: 'variantOf names the flow this one is an alternative telling of (a failure path). One level deep: a link that would chain is left out, with an advisory.',
     };
   }
-  if (want('flows') || want('notes')) {
+  // Its own topic: the Markdown catalogue is most of it, and a flow lookup never needs it.
+  if (want('notes')) {
     out.notes = {
       kinds: `${NOTE_KIND_NAMES.join(', ')}; or "code" — a code snippet (code + language, shown as code and never run, indentation kept) — or "label", a Text label written in Markdown.`,
       labels: 'A label\'s text is Markdown, drawn on the canvas and in exports: # headings, **bold**, _italic_, ~~strike~~, `inline code`, ==highlight==, [words]{.rose} in a diagram colour, links, - lists, 1. numbered, - [ ] / - [x] tasks, > quotes, > [!NOTE] / [!TIP] / [!IMPORTANT] / [!WARNING] / [!CAUTION] callouts, | tables |, --- dividers and ```lang fenced code``` (highlighted: ts, js, java, sql, json, yaml, xml, bash, http, log, diff). A single newline is a line break. style sets its look — role (body, label, heading, title, technical), font (sans, serif, mono, hand), background (card, marker, banner, in its color), align, bold, italic, color — on a free label only (attach: false, or no about); an attached label is a chip. Use it for a readable legend, a runbook step list, a decision with its trade-offs, an API table or the snippet a box stands for — not to restate what the shapes already say.',
@@ -95,7 +125,7 @@ export function capabilities(args: { topics?: unknown; starter?: unknown }): Rec
     };
   }
   if (want('starters')) {
-    out.starters = topics ? ARCHITECTURE_STARTERS.map((s) => ({ id: s.id, name: s.name, category: s.category })) : ARCHITECTURE_STARTERS.map((s) => s.id);
+    out.starters = ARCHITECTURE_STARTERS.map((s) => ({ id: s.id, name: s.name, category: s.category }));
   }
   if (want('limits')) out.limits = { ...AGENT_LIMITS, read: READ_LIMITS };
   if (want('layout')) {

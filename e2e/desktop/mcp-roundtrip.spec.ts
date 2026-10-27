@@ -92,8 +92,8 @@ test('real MCP sidecar: create smart attachments, render them, and accept a prop
     const initial = await client.call('read_diagram', { diagramId: 'd_mcp00000001', include: ['geometry'] });
     expect(initial.ok).toBe(true);
     expect(initial.value.relationships).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: 'nearby', geometry: { from: 'right', to: 'left', path: [[350, 75], [410, 75]], pins: {} } }),
-      expect.objectContaining({ id: 'through', geometry: expect.objectContaining({ to: 'left', pins: {} }) }),
+      expect.objectContaining({ id: 'nearby', geometry: { from: 'right', to: 'left', path: [[350, 75], [410, 75]] } }),
+      expect.objectContaining({ id: 'through', geometry: expect.not.objectContaining({ pins: expect.anything() }) }),
     ]));
     const path = page.locator('.react-flow__edge[data-id="nearby"] .dc-edge-hit').first();
     expect(await path.evaluate(e => (e as SVGPathElement).getTotalLength())).toBeCloseTo(60, 1);
@@ -107,7 +107,7 @@ test('real MCP sidecar: create smart attachments, render them, and accept a prop
     await page.getByRole('region', { name: 'Proposal review' }).getByRole('button', { name: 'Accept', exact: true }).click();
     const after = await client.call('read_diagram', { diagramId: 'd_mcp00000001', include: ['geometry'] });
     expect(after.ok).toBe(true);
-    expect(after.value.relationships).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'nearby', geometry: expect.objectContaining({ from: 'left', to: 'right', pins: {} }) })]));
+    expect(after.value.relationships).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'nearby', geometry: { from: 'left', to: 'right', path: expect.any(Array) } })]));
     await page.screenshot({ path: test.info().outputPath('mcp-smart-attachments.png') });
     await page.getByRole('button', { name: 'Undo', exact: true }).click();
     const undone = await client.call('read_diagram', { diagramId: 'd_mcp00000001', include: ['geometry'] });

@@ -55,7 +55,7 @@ Report only checks you ran; pending CI has not passed.
 | `src/nodes/`, `src/edges/`, `src/render/` | Drawing, connector routing and text layout |
 | `src/commands/` | Command palette, context menus and jump targets |
 | `src/presentation/`, `src/sequence/` | Presentation camera and callouts; sequence export |
-| `src/starters/`, `src/continuation/`, `src/openPoints/` | Starters, next-step suggestions, open points |
+| `src/starters/`, `src/continuation/`, `src/openPoints/`, `src/traffic/` | Starters, next-step suggestions, open points, Traffic |
 | `src/storage/`, `src/crypto/`, `src/export/`, `src/import/`, `src/share/` | Persistence, exports, Mermaid import, share links |
 | `src/collab/` | Live collaboration; network code only in `src/collab/transport/` |
 | `src/agent/`, `src/layout/` | Agent operations and automatic layout |

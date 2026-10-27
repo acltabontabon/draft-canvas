@@ -42,6 +42,18 @@ LIBRARY_KEYS = {'celery', 'sidekiq', 'rq', 'bullmq'}
 CHANNEL_SUFFIX = re.compile(r'[-_.:](exchange|queue|topic|stream|q|ex)$', re.I)
 ORDER = {'person': 0, 'gateway': 1, 'service': 2, 'api': 3, 'worker': 4, 'scheduler': 5}
 ACRONYMS = {'api': 'API', 'db': 'DB', 'ui': 'UI', 'grpc': 'gRPC', 'http': 'HTTP', 'sql': 'SQL', 'bff': 'BFF', 'cdn': 'CDN', 'id': 'ID'}
+#: Survey names whose product, as Draft Canvas names its logo, is shorter. A technology the app shows
+#: as a plain mark although it starts with a product draws an advisory and costs an update to fix.
+PRODUCTS = {
+    'Actix Web': 'Actix',
+    'Django REST framework': 'Django',
+    'GraphQL server': 'GraphQL',
+    'MQTT broker': 'MQTT',
+    'Firebase Cloud Messaging': 'Firebase',
+    'Google Maps Platform': 'Google Maps',
+}
+#: Framework names in the survey that aren't products: never a technology.
+NOT_PRODUCTS = {'CLI', 'scheduler library'}
 
 
 def slug(name: str) -> str:
@@ -97,7 +109,7 @@ class Draft:
             if kind != 'person':
                 node['description'] = TODO_DESCRIPTION
             if technology:
-                node['technology'] = technology[:60]
+                node['technology'] = product(technology)[:60]
             if evidence:
                 node['evidence'] = evidence
             self.nodes.append(node)
@@ -323,12 +335,26 @@ def element_type(unit: dict | None) -> str:
     return kind if kind in ('api', 'worker', 'scheduler', 'service') else 'service'
 
 
+def product(name: str) -> str:
+    """A technology as Draft Canvas shows its logo: one product's own name ("Anthropic API" →
+    "Anthropic"); the rest belongs in the description. tests/agent-skill.test.ts holds every name the
+    survey knows to the app's own rule."""
+    name = PRODUCTS.get(name, name)
+    return name[: -len(' API')] if name.endswith(' API') else name
+
+
 def technology_of(unit: dict | None, image: str | None) -> str | None:
+    """One product: the framework behind the unit's suggested type (Tauri for a desktop app, Express
+    for an API), else its first framework, else its language. The survey lists the rest."""
     if unit:
-        parts = [*unit['frameworks'][:2]] or [*unit['languages'][:1]]
-        if parts and unit['languages'] and unit['languages'][0].split('/')[0] not in ' '.join(parts):
-            parts.insert(0, unit['languages'][0].split('/')[0])
-        return ', '.join(parts) or None
+        roles = {name: (rank, role) for rank, (_, name, role) in enumerate(scan.FRAMEWORKS)}
+        found = sorted((f for f in unit['frameworks'] if f in roles and f not in NOT_PRODUCTS), key=lambda f: roles[f][0])
+        suggested = unit.get('suggested_type', '')
+        wanted = next(
+            (role for role in ('mobile', 'desktop', 'web') if f'{role} app' in suggested), 'api' if suggested.startswith('api') else None
+        )
+        chosen = next((f for f in found if roles[f][1] == wanted), found[0] if found else None)
+        return chosen or (unit['languages'][0].split('/')[0] if unit['languages'] else None)
     return image.split('@', 1)[0] if image else None
 
 

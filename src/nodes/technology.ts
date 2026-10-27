@@ -115,9 +115,14 @@ export function leadingProduct(technology: string): string | undefined {
  * mark: what an agent should have written ("Spring Boot" for "Spring Boot modular monolith").
  * Undefined when the technology already has its logo or names no known product first.
  */
+const OTHER_PRODUCTS = new Set(['react native']);
+
 export function productNamedIn(technology: string | undefined): string | undefined {
   if (!technology?.trim() || technologyIcon(technology) !== GENERIC_TECHNOLOGY_ICON) return undefined;
   const tokens = cleanName(technology).split(' ').map(word);
+  // A product of its own whose name starts with another's, with no logo here: naming the shorter one
+  // would tell an agent to relabel a React Native app as React.
+  if (OTHER_PRODUCTS.has(tokens.slice(0, 2).join(' '))) return undefined;
   for (let length = Math.min(4, tokens.length); length >= 1; length -= 1) {
     const slug = NAMES.get(tokens.slice(0, length).join(' '));
     const icon = slug ? CATALOG.find((entry) => entry.slug === slug) : undefined;

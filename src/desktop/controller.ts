@@ -75,6 +75,8 @@ type CompanionEvent = Extract<HostEvent, { type: 'companion' }>;
 const MAX_COMPANION_RECOVERY_EVENTS = 4096;
 const MAX_COMPANION_RECOVERY_BYTES = 4 * 1024 * 1024;
 const MAX_COMPANION_RECOVERY_RUNS = 128;
+/** How long a Stop the shell didn't recognise waits for a terminal event before ending the turn here. */
+const COMPANION_CANCEL_GRACE_MS = 1500;
 
 interface CompanionRecovery {
   events: CompanionEvent[];
@@ -710,8 +712,7 @@ export class DesktopController {
     this.outside = null;
     this.snapshotFirstAt = null;
     this.clearSnapshotTimer();
-    // `background` says the shell keeps the canvas's image beside the file rather than inside it.
-    const message: LoadMessage = { type: 'draft-canvas:load', text, title, seq: this.seq, background: true };
+    const message: LoadMessage = { type: 'draft-canvas:load', text, title, seq: this.seq };
     this.link.deliver(message);
   }
 
@@ -1903,10 +1904,23 @@ export class DesktopController {
         break;
       }
     }
+    let known = true;
     try {
-      await this.api.companionCancel(runId);
+      known = await this.api.companionCancel(runId);
     } catch (error) {
       logDiagnostic(error, { operation: 'desktop-companion-cancel' });
+    }
+    // The shell no longer has the run, so no `stopped` is coming for a turn that is still open —
+    // it stayed "working" for good, with Send blocked and Stop doing nothing. A run that had just
+    // ended also answers false, its terminal event already on the way: give that one a moment to
+    // land so its summary and usage aren't covered by a local stop.
+    if (!known) {
+      setTimeout(() => {
+        const diagramId = companion.diagramOf(runId);
+        if (diagramId && companion.running(diagramId)?.runId === runId) {
+          companion.apply(runId, { type: 'stopped', reason: { kind: 'cancelled' }, summary: null, costMicroUsd: null, usage: null });
+        }
+      }, COMPANION_CANCEL_GRACE_MS);
     }
   }
 
@@ -2029,7 +2043,14 @@ export class DesktopController {
   /** Which of the companion's turns have a proposal waiting for review: looked up when a run stops,
    *  when the shell says agent state changed (a proposal submitted or resolved), and when the review
    *  panel closes. */
+  private companionProposalSeq = 0;
+  /** The newest lookup whose answer each run has taken; runs are few and short-lived. */
+  private readonly companionProposalAnswered = new Map<string, number>();
+
   async refreshCompanionProposals(): Promise<void> {
+    // Lookups overlap and can answer out of order: an older list must not put back a proposal state
+    // a newer one has already applied. Not queued — one lookup that never answered held every later one.
+    const seq = ++this.companionProposalSeq;
     const watched = new Map<string, string[]>();
     for (const conversation of companion.snapshot().values()) {
       const last = conversation.turns.at(-1);
@@ -2040,6 +2061,8 @@ export class DesktopController {
     for (const [diagramId, runIds] of watched) {
       const proposals = await this.listProposals(diagramId);
       for (const runId of runIds) {
+        if (seq < (this.companionProposalAnswered.get(runId) ?? 0)) continue;
+        this.companionProposalAnswered.set(runId, seq);
         const own = proposals.filter((p) => p.run === runId);
         const waiting = own.find((p) => p.status === 'pending' || p.status === 'accepting');
         const decided = own.find((p) => p.status === 'accepted' || p.status === 'rejected' || p.status === 'dismissed');

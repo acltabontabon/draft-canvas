@@ -145,11 +145,13 @@ describe('MCP fidelity regressions', () => {
     expect(new TextEncoder().encode(JSON.stringify(first)).length).toBeLessThanOrEqual(READ_LIMITS.bytes);
     const relationships = first.relationships as { id: string; geometry: unknown }[];
     expect(relationships.length).toBeGreaterThan(0);
-    for (const edge of relationships) expect(edge.geometry).toEqual(routeGeometry(file.edges.find((e) => e.id === edge.id)!, file.nodes, file.edges));
+    // As a read shows it: pins left out when there are none.
+    const shown = (geometry: ReturnType<typeof routeGeometry>) => (geometry && Object.keys(geometry.pins).length === 0 ? (({ pins: _none, ...rest }) => rest)(geometry) : geometry);
+    for (const edge of relationships) expect(edge.geometry).toEqual(shown(routeGeometry(file.edges.find((e) => e.id === edge.id)!, file.nodes, file.edges)));
     const changed = { ...file, nodes: file.nodes.map((n, i) => i === 0 ? { ...n, x: n.x - 100 } : n) };
     const next = readDiagram(changed, args, 'f:two', 'd_one').relationships as { id: string; geometry: unknown }[];
     expect(next[0]!.geometry).not.toEqual(relationships[0]!.geometry);
-    expect(next[0]!.geometry).toEqual(routeGeometry(changed.edges[0]!, changed.nodes, changed.edges));
+    expect(next[0]!.geometry).toEqual(shown(routeGeometry(changed.edges[0]!, changed.nodes, changed.edges)));
   });
 
   it('packs large collections separately when their first items do not fit on the same page', () => {

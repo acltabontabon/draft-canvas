@@ -2,7 +2,7 @@
   {
     "name": "ask_to_read_code",
     "title": "Ask to read the project",
-    "description": "You cannot read the project’s code. When an answer needs it (how something is implemented, whether the diagram matches the code), call this once with why, then end your turn in one short sentence: the person is asked in Draft Canvas, and their answer comes with their next message.",
+    "description": "You cannot read the project’s code. When an answer needs it (how something is implemented, whether the diagram matches the code), call this once with why, then end your turn in one short sentence: Draft Canvas asks the person, and their answer comes with their next message.",
     "inputSchema": {
       "type": "object",
       "properties": {

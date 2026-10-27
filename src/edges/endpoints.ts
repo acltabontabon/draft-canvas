@@ -466,4 +466,4 @@ function findEnd(sides: ReadonlyMap<string, End[]>, edge: DraftEdge, role: 'sour
   return undefined;
 }
 
-export { SPACING as ENDPOINT_SPACING, MIN_SPACING as ENDPOINT_MIN_SPACING };
+export { MIN_SPACING as ENDPOINT_MIN_SPACING };

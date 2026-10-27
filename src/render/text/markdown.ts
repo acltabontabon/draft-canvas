@@ -22,7 +22,6 @@ import { Lru } from '../../lib/lru';
  */
 
 export type CalloutKind = 'note' | 'tip' | 'important' | 'warning' | 'caution';
-export const CALLOUT_KINDS: readonly CalloutKind[] = ['note', 'tip', 'important', 'warning', 'caution'];
 
 export interface InlineStyle {
   bold?: boolean;
@@ -299,9 +298,4 @@ export function parseMarkdown(source: string): RichBlock[] {
     blocks.push({ kind: 'text', level: 'body', runs: [{ text: source, style: {} }], indent: 0, frames: [] });
   }
   return cache.set(source, blocks);
-}
-
-/** Test seam: `tests/setup.ts` empties it between tests. */
-export function clearMarkdownCache(): void {
-  cache.clear();
 }

@@ -4,8 +4,6 @@ Notable changes to Draft Canvas. Web and desktop share one version; **Shared**, 
 **Web** identify who each change is for. Release notes and in-app What's New are generated from
 this file. See [Release notes](docs/reference/releases.md#release-notes).
 
-The retired VS Code extension has [its own changelog](https://github.com/acltabontabon/draft-canvas/blob/extension-v0.2.0/vscode-extension/CHANGELOG.md).
-
 ## [Unreleased]
 
 ### Shared
@@ -119,6 +117,21 @@ The retired VS Code extension has [its own changelog](https://github.com/acltabo
 
 - Nodi's proposed-change card offers Show me only when the change is out of view, instead of a
   button that did nothing while the change was already on screen.
+- Nodi starts fresh when you open another diagram, instead of carrying over the text you were
+  typing and the last reply's highlights.
+- Nodi notices an agent you install while the app is running.
+- A change Nodi proposes in another view of the diagram can be reached with Show me.
+- Stop always ends Nodi's turn, even when the agent had already gone away.
+- An accepted proposal no longer comes back as waiting for review.
+- Nodi's animation pauses while the window is hidden, and long replies stream without slowing the
+  canvas.
+- Quitting stops an agent that ignores the request to stop, and a forgotten conversation stays
+  forgotten even if the agent was mid-turn.
+- A proposal made on a diagram with unsaved edits is no longer reported out of date right away, and
+  saving no longer invalidates a prepared change.
+- Agents can set a boundary's or note's colour when adding it, read colours back, and get a clear
+  refusal for a duplicate connector, as on the canvas.
+- Agents' tool descriptions and diagram reads are smaller, so each conversation spends fewer tokens.
 
 ## [1.17.0] - 2026-10-25
 
@@ -586,12 +599,6 @@ On a Mac, install with Homebrew.
 
 ### Web
 
-#### Removed
-
-- The Docker image is no longer published. To run Draft Canvas on your own server, build the static
-  web editor and serve it from any web server; see
-  [Self-hosting](https://acltabontabon.com/draft-canvas/docs/self-hosting/).
-
 #### Fixed
 
 - Pressing Enter on the home screen starts a blank canvas as soon as the screen appears.
@@ -855,7 +862,6 @@ long list of fixes to saving, editing and exporting. Every diagram you already h
   More menu. The shortcut sheet (`?`) stays.
 - **GIF export.** Present the flow live or record your screen. PNG, SVG and the other exports are
   unchanged.
-- **Draft Canvas for VS Code.** Your `.draftcanvas` files open in the desktop app or the web editor.
 
 ### Web
 
@@ -1085,7 +1091,6 @@ words it was already showing.
 
 - Your diagrams are untouched by the move: they are saved per browser, not per address. A bookmark
   to the old address lands on the new page, which takes you straight to your work.
-- Draft Canvas for VS Code keeps working without being updated.
 
 ## [1.10.0] - 2026-09-22
 
@@ -1264,14 +1269,6 @@ disk. It's early — expect rough edges, and please tell us about them.
   reads for what it is at a glance. Diagrams that already use them pick up the new look.
 - A new Data Store starts narrower and taller, and its cylinder, folder, bucket or card fills more of
   the box. Stores already in a diagram keep their size.
-
-### Fixed
-
-- In VS Code, Select All, Copy, Cut, Paste and Undo work inside text fields, and ⌘P, ⌘⇧P, ⌘W and a
-  few more VS Code shortcuts work from the canvas. Needs extension 0.1.6.
-- In VS Code, a canvas background image is saved beside the diagram
-  (`name.draftcanvas.background.png`) instead of being lost when the tab closes. Needs extension
-  0.1.6.
 
 ## [1.9.2] - 2026-09-20
 
@@ -1476,10 +1473,7 @@ disk. It's early — expect rough edges, and please tell us about them.
 
 ### Fixed
 
-- In VS Code, Cmd/Ctrl+C, Cmd/Ctrl+X and Cmd/Ctrl+V copy, cut and paste shapes again. Pasting into
-  another diagram needs Draft Canvas for VS Code 0.1.3 or later.
-- In VS Code, Paste from the right-click menu or command palette no longer says clipboard access is
-  blocked.
+- Fixes for an integration that has since been retired.
 
 ## [1.6.1] - 2026-09-14
 
@@ -1516,9 +1510,6 @@ disk. It's early — expect rough edges, and please tell us about them.
 - Pressing Escape while editing a Text box puts the box back to its size.
 - Adding a selection to a flow step is now a single undo.
 - On a phone-width window the canvas title no longer runs under Undo and Redo.
-- In VS Code, a diagram file that needed repairs says what was repaired when it opens.
-- In VS Code, shapes copied or cut with ⌘C/⌘X (Ctrl+C/Ctrl+X) now paste into other diagrams and
-  other apps, not only back into the same diagram.
 - If the browser closes its connection to local storage, Draft Canvas now says it can't save and
   asks you to export and reload.
 - A duplicate whose background image couldn't be copied is no longer left half-made.
@@ -1587,10 +1578,6 @@ disk. It's early — expect rough edges, and please tell us about them.
   in Safari.
 - Presentation callouts no longer stay squeezed after the window grows back.
 - Loading local storage for a long time now suggests closing other Draft Canvas tabs.
-- In the VS Code extension, a file whose text isn't a valid diagram no longer gets overwritten by the
-  next canvas edit. The canvas keeps its last valid version and says so.
-- In the VS Code extension, ⌘S saves text you were still typing in a label or field, and the About
-  dialog's website link opens.
 - Small buttons (About, Back, flow step actions) are easier to hit, and focus rings on the search and
   title fields are easier to see.
 - Choosing "Discard" when another tab changed the canvas no longer makes that other tab report a
@@ -1612,14 +1599,13 @@ disk. It's early — expect rough edges, and please tell us about them.
 
 ### Fixed
 
-- In the VS Code extension, links in the About dialog now open.
+- Fixes for an integration that has since been retired.
 
 ## [1.5.0] - 2026-09-14
 
 ### Added
 
-- Draft Canvas can now edit a `.draftcanvas` file for the new VS Code extension. Opened this way,
-  it goes straight to that diagram, and edits go back to the file instead of the browser's library.
+- Support for an integration that has since been retired.
 
 ## [1.4.0] - 2026-09-14
 
