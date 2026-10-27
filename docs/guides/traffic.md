@@ -69,9 +69,11 @@ Traffic points out consequences such as:
 
 Traffic starts at **1,000 starts/min per entry**, a round example rather than measured usage or a
 recommended operating rate. It is a fixed reference to make the drawing easier to read, with no
-rate controls or required input. **Assumptions** below the canvas explains how to read it; select a
+rate controls or required input. **How to read this** below the canvas opens three short notes explaining the example; select a
 shape to see where its traffic comes from and unfold the work caused by one arrival. The floating
 edit toolbar stays out of the way while Traffic is open.
+
+![How to read this, with three numbered notes and the limits of the illustrative rates.](../media/guides/traffic-reading-guide.png)
 
 Each drawn baseline call is assumed to run once per incoming arrival. Rates use **calls/min**,
 **messages/min**, or **data ops/min**; mixed work uses **arrivals/min**. Entry points use

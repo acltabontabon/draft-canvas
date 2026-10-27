@@ -267,10 +267,15 @@ test('illustrative traffic explains the fixed example without rate controls', as
   await expect(scenario).toContainText('Select a shape. Follow the work.');
   await expect(scenario.getByRole('button')).toHaveCount(1);
   const revision = await editorRevision(page);
-  await scenario.getByRole('button', { name: 'Traffic assumptions' }).focus();
+  await scenario.getByRole('button', { name: 'How to read this' }).focus();
   await page.keyboard.press('Enter');
-  await expect(scenario).toContainText('not measured traffic or capacity');
+  await expect(scenario).toContainText('not live measurements');
   expect(await editorRevision(page)).toBe(revision);
+  await expect(scenario.getByRole('heading')).toHaveCount(3);
+  await scenario.getByRole('region', { name: 'Traffic reading guide' }).focus();
+  await page.keyboard.press('Escape');
+  await expect(scenario.getByRole('button', { name: 'How to read this' })).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('.dc-canvas')).toHaveAttribute('data-traffic', 'on');
 });
 
 for (const colorScheme of ['light', 'dark'] as const) {
@@ -280,8 +285,8 @@ for (const colorScheme of ['light', 'dark'] as const) {
     await importDocument(page, trafficDocument(), 'traffic-narrow.draftcanvas');
     await runCommand(page, 'Show traffic');
     const scenario = page.locator('.dc-traffic-scenario');
-    await scenario.getByRole('button', { name: 'Traffic assumptions' }).click();
-    await expect(scenario).toContainText('A round example');
+    await scenario.getByRole('button', { name: 'How to read this' }).click();
+    await expect(scenario).toContainText('Start with an example');
     const bounds = await scenario.boundingBox();
     expect(bounds!.x).toBeGreaterThanOrEqual(0);
     expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);

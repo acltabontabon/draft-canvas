@@ -417,6 +417,8 @@ async function trafficScreenshots(page: Page) {
   await page.locator('.dc-traffic-work summary').click();
   await page.getByRole('list', { name: 'Work per arrival' }).scrollIntoViewIfNeeded();
   await shot(page, 'traffic-work');
+  await page.getByRole('button', { name: 'How to read this' }).click();
+  await shot(page, 'traffic-reading-guide');
 }
 
 async function main() {

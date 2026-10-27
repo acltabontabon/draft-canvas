@@ -6719,11 +6719,64 @@
   outline-offset: 2px;
 }
 
+.dc-traffic-scenario[data-expanded] {
+  width: 400px;
+}
+
 .dc-traffic-scenario-help {
-  max-width: 390px;
-  max-height: 180px;
-  overflow: auto;
-  line-height: 1.5;
+  max-height: min(360px, 48vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed color-mix(in srgb, var(--dc-caution) 30%, var(--dc-border));
+  line-height: 18px;
+}
+
+.dc-traffic-scenario-help ol {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.dc-traffic-scenario-help li {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.dc-traffic-guide-number {
+  color: var(--dc-caution);
+  font-size: 20px;
+  text-align: center;
+  border-bottom: 2px solid color-mix(in srgb, var(--dc-caution) 40%, transparent);
+  align-self: start;
+  line-height: 24px;
+  transform: rotate(-5deg);
+}
+
+.dc-traffic-scenario-help h3 {
+  color: var(--dc-caution);
+  font-size: 17px;
+  line-height: 22px;
+  margin: 0 0 4px;
+}
+
+.dc-traffic-scenario-help p {
+  margin: 0;
+}
+
+.dc-traffic-scenario-help .dc-traffic-guide-footer {
+  padding-top: 10px;
+  border-top: 1px solid var(--dc-border);
+  color: var(--dc-text-muted);
+}
+
+.dc-traffic-scenario-help:focus-visible {
+  outline: 2px solid var(--dc-accent);
+  outline-offset: 3px;
 }
 
 @media (max-width: 520px) {
