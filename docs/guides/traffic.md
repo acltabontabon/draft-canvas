@@ -165,12 +165,15 @@ stays unchanged; a batch size does not establish a replay rate.
 
 Select a network, deployment, domain or system boundary to see its incoming and outgoing modeled
 routes. Resource notes and selected connectors also show their boundary crossings. **Waits for
-response** comes from synchronous calls and data operations; message handoffs say **Does not wait
-for downstream work**. Conditional routes say **If taken**.
+response (as drawn)** comes from calls and data operations modeled as synchronous, including the
+connector default. Message handoffs say **Message handoff · wait unspecified**: the diagram does
+not establish acknowledgement behavior or whether an application waits for a reply. Conditional
+routes say **If taken**.
 
 Membership determines a crossing, not where a bent line runs. Each logical route counts once,
 even across nested boundaries or duplicate connectors. Plain visual groups add no architectural
-meaning. These notes do not infer latency, security, isolation or capacity. Failure, compensation
+meaning. A logical crossing is not a physical network hop. These notes do not infer latency,
+security, isolation or capacity. Failure, compensation
 and background connectors remain outside these normal-route readings.
 
 ![Incoming calls and message handoffs across a deployment boundary](../media/guides/traffic-boundaries.png)

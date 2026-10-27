@@ -31,8 +31,8 @@ export function boundaryCrossings(analysis: TrafficAnalysis, nodes: readonly Dra
     const crossed = [...new Set([...from, ...to])].filter((id) => from.has(id) !== to.has(id));
     if (!crossed.length || selection.boundaryId && !crossed.includes(selection.boundaryId)) return [];
     const direction = selection.boundaryId ? to.has(selection.boundaryId) ? 'Incoming' : 'Outgoing' : undefined;
-    const wait = item.sync ? 'Waits for response'
-      : item.class === 'publish' || item.class === 'deliver' ? 'Does not wait for downstream work' : 'No synchronous wait drawn';
+    const wait = item.sync ? 'Waits for response (as drawn)'
+      : item.class === 'publish' || item.class === 'deliver' ? 'Message handoff · wait unspecified' : 'No synchronous wait drawn';
     return [{ id: item.id, from: item.from, to: item.to, crossed, direction,
       wait: `${item.certainty === 'possible' ? 'If taken · ' : ''}${wait}` }];
   });

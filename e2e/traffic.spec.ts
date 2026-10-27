@@ -508,8 +508,8 @@ for (const colorScheme of ['light', 'dark'] as const) {
     await page.locator('.react-flow__node[data-id="deployment"] .dc-node').click({ position: { x: 20, y: 15 } });
     const note = page.locator('.dc-traffic-callout');
     await expect(note).toContainText('3 crossings');
-    await expect(note.getByRole('region', { name: 'Boundary crossings' })).toContainText('Waits for response');
-    await expect(note).toContainText('Does not wait for downstream work');
+    await expect(note.getByRole('region', { name: 'Boundary crossings' })).toContainText('Waits for response (as drawn)');
+    await expect(note).toContainText('Message handoff · wait unspecified');
     await expect(note).toContainText('Incoming');
     await page.screenshot({ path: `/tmp/boundary-crossings-${colorScheme}.png` });
     await page.locator('.react-flow__edge[data-id="call"] .react-flow__edge-interaction').click({ force: true });

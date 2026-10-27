@@ -11,8 +11,8 @@ describe('boundary crossings', () => {
     const routes = boundaryCrossings(analysis, nodes, { boundaryId: 'outer' });
     expect(routes).toHaveLength(3);
     expect(routes.every((route) => route.direction === 'Incoming')).toBe(true);
-    expect(routes.find((route) => route.from === 'api' && route.to === 'db')?.wait).toBe('Waits for response');
-    expect(routes.find((route) => route.from === 'queue')?.wait).toBe('Does not wait for downstream work');
+    expect(routes.find((route) => route.from === 'api' && route.to === 'db')?.wait).toBe('Waits for response (as drawn)');
+    expect(routes.find((route) => route.from === 'queue')?.wait).toBe('Message handoff · wait unspecified');
     const call = boundaryCrossings(analysis, nodes, { edgeId: 'call' });
     expect(call).toHaveLength(1);
     expect(call[0]!.crossed).toEqual(['inner', 'outer']);
