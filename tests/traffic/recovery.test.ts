@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { analyzeTraffic } from '../../src/traffic';
-import { recoveryPlan, recoveryWork } from '../../src/traffic/recovery';
+import { recoveryArrivals, recoveryPlan, recoveryWork } from '../../src/traffic/recovery';
 import { trafficScenario } from '../../src/traffic/scenario';
 import { edge, node } from './helpers';
 
@@ -22,6 +22,8 @@ describe('recovery work', () => {
     expect(recoveryWork(analysis, plan)!.items).toEqual(['1 data operation', '1 message delivery']);
     expect(recoveryWork(analysis, plan, 500)!.items).toEqual(['500 data operations', '500 message deliveries']);
     expect(plan.shared).toEqual(['worker', 'db']);
+    expect(recoveryArrivals(analysis, plan, 1000).get('db')).toEqual({ definite: 1000, possible: 1000 });
+    expect(recoveryArrivals(analysis, plan, 1000).get('worker')).toEqual({ definite: 1000, possible: 1000 });
     expect(trafficScenario(analysis)).toEqual(before);
   });
 
@@ -62,6 +64,7 @@ describe('recovery work', () => {
     const analysis = analyzeTraffic({ nodes, edges });
     const plan = recoveryPlan(analysis, nodes, edges, 'dlq')!;
     expect(recoveryWork(analysis, plan, 500)!.unknown).toBe(true);
+    expect(recoveryArrivals(analysis, plan, 500).size).toBe(0);
     expect(recoveryWork({ ...analysis, truncated: true }, plan)!.unknown).toBe(true);
     for (const count of [0, -1, 1.5, NaN, Infinity, 1_000_001]) expect(recoveryWork(analysis, plan, count)).toBeNull();
   });

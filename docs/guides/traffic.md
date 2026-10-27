@@ -123,6 +123,16 @@ path that runs through one stops there.
 
 When a flow is in view when traffic is shown, that flow's connectors are analyzed.
 
+## Database work
+
+Select a data store and unfold **Database work** for illustrative logical reads and writes per
+minute, derived from its incoming connectors. No input is needed. Mixed or unspecified routes stay
+combined, including parallel connectors merged into one modeled route; Traffic does not invent a
+read/write ratio. Unknown branch shares remain ranges. These operations are not disk IOPS,
+throughput capacity or latency: caches, query complexity, batching and indexes affect physical work.
+
+![Illustrative database work from drawn connectors](../media/guides/traffic-database.png)
+
 ## Recovery work
 
 Select a dead-letter queue or a shape with an outgoing compensation connector, then unfold
@@ -135,7 +145,9 @@ An idle DLQ does not start normal traffic. Recovery follows the routes you drew 
 dependencies also used by normal work. Without an outgoing replay route, it asks you to draw one.
 Compensation remains a range because the diagram cannot tell which earlier steps completed.
 Retries and new failures can add more work; loops have no finite total. The optional count is local,
-resets when you select another shape, and never edits the diagram.
+resets when you select another shape, and never edits the diagram. While the replay section is open,
+affected shapes show separate **Replay +… total** badges that update with the count. Normal RPM
+stays unchanged; a batch size does not establish a replay rate.
 
 ![A replay batch and its downstream recovery work](../media/guides/traffic-recovery.png)
 

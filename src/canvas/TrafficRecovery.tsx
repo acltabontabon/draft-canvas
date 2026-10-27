@@ -8,11 +8,12 @@ import type { TrafficAnalysis } from '../traffic';
 import { MAX_REPLAY_MESSAGES, recoveryWork, type recoveryPlan } from '../traffic/recovery';
 
 /** A deliberately local what-if: neither the pending count nor exploring recovery edits a file. */
-export function TrafficRecovery({ analysis, nodes, plan, width }: {
+export function TrafficRecovery({ analysis, nodes, plan, width, onExplore }: {
   analysis: TrafficAnalysis;
   nodes: readonly DraftNode[];
   plan: NonNullable<ReturnType<typeof recoveryPlan>>;
   width: number;
+  onExplore: (count: number | null) => void;
 }) {
   const [pending, setPending] = useState('1');
   const count = /^\d+$/.test(pending) ? Number(pending) : NaN;
@@ -25,14 +26,14 @@ export function TrafficRecovery({ analysis, nodes, plan, width }: {
     return node ? displayNameFor(node) : 'Untitled';
   };
   return (
-    <details className="dc-traffic-work dc-traffic-recovery">
+    <details className="dc-traffic-work dc-traffic-recovery" onToggle={(event) => onExplore(event.currentTarget.open && plan.kind === 'replay' ? count : null)}>
       <summary style={{ fontFamily: familyOf('hand') }}>Recovery work</summary>
       <div className="dc-traffic-work-paper">
         {plan.kind === 'replay' && !plan.missing && (
           <label className="dc-traffic-replay-count">
             Messages to replay
-            <input aria-label="Messages to replay" inputMode="numeric" value={pending} onChange={(event) => setPending(event.target.value)}
-              onBlur={() => { if (pending === '') setPending('1'); }} aria-invalid={!result || undefined} />
+            <input aria-label="Messages to replay" inputMode="numeric" value={pending} onChange={(event) => { setPending(event.target.value); onExplore(/^\d+$/.test(event.target.value) ? Number(event.target.value) : null); }}
+              onBlur={() => { if (pending === '') { setPending('1'); onExplore(1); } }} aria-invalid={!result || undefined} />
           </label>
         )}
         <p>{text(plan.kind === 'replay' ? 'If each message is replayed once. Totals, not a rate.' : 'For one compensation attempt. Which actions apply depends on what completed before failure.')}</p>

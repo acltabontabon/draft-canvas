@@ -429,6 +429,9 @@ async function trafficScreenshots(page: Page) {
   await page.locator('.dc-traffic-recovery summary').click();
   await page.getByRole('textbox', { name: 'Messages to replay' }).fill('500');
   await shot(page, 'traffic-recovery');
+  await page.locator('.react-flow__node[data-id="db"] .dc-node').click();
+  await page.locator('.dc-traffic-database summary').click();
+  await shot(page, 'traffic-database');
 }
 
 async function main() {

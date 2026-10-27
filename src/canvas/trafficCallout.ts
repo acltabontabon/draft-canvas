@@ -1,3 +1,4 @@
+import { databaseWork } from '../traffic/database';
 import { recoveryPlan } from '../traffic/recovery';
 import { rateBreakdown, workPerArrival } from '../traffic/work';
 import { displayNameFor } from '../document/factory';
@@ -103,6 +104,11 @@ export function trafficCalloutFor(analysis: TrafficAnalysis, nodes: readonly Dra
     };
   }
 
+  const database = databaseWork(analysis, edges, id);
+  const databaseNote = database ? {
+    items: (database.length ? database : ['No normal database work drawn.']).map((item) => textOf(item, inner - 16, 13, 600, 3)),
+    detail: textOf('Illustrative logical operations, not disk IOPS or capacity. Mixed routes keep their read/write split unspecified.', inner - 16, 11, 400, 5),
+  } : null;
   const recovery = recoveryPlan(analysis, nodes, edges, id);
   if (recovery && result?.paths.possible === 0) {
     metric = 'Recovery only';
@@ -119,7 +125,8 @@ export function trafficCalloutFor(analysis: TrafficAnalysis, nodes: readonly Dra
     + (moreSources > 0 ? 18 : 0)
     + (work ? 36 + sources.length * 28 : 0)
     + (recovery ? 36 : 0)
+    + (databaseNote ? 36 : 0)
     + sections.reduce((sum, section) => sum + 32 + (section.detail ? section.detail.height + 4 : 0) + section.items.reduce((height, item) => height + item.height, 0) + (section.more > 0 ? 18 : 0), 0);
   const description = [title.text, metric, summary?.text, ...sources.map((source) => `${source.name.text}: ${source.count}`), ...sections.map((section) => `${section.label}. ${section.detail?.text ?? ''} ${section.items.map((item) => item.text).join(', ')}${section.more > 0 ? `, plus ${section.more} more` : ''}`)].filter(Boolean).join('. ');
-  return { anchor: node, obstacles: [...nodes.filter((other) => other.id !== id && other.type !== 'group'), ...obstacles], width, height, title, metric: hero.layout.lines[0]?.text ?? metric, metricSize: hero.font.size, summary, sources, moreSources, sections, work, recovery, description };
+  return { anchor: node, obstacles: [...nodes.filter((other) => other.id !== id && other.type !== 'group'), ...obstacles], width, height, title, metric: hero.layout.lines[0]?.text ?? metric, metricSize: hero.font.size, summary, sources, moreSources, sections, work, recovery, databaseNote, description };
 }

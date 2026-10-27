@@ -6830,3 +6830,16 @@
   text-decoration: underline;
   cursor: pointer;
 }
+
+.dc-traffic-replay-badge {
+  position: absolute;
+  padding: 4px 6px;
+  border: 1px dashed var(--dc-caution);
+  border-radius: 6px;
+  background: var(--dc-surface);
+  color: var(--dc-caution);
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 16px;
+  pointer-events: none;
+}

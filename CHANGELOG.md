@@ -12,6 +12,9 @@ The retired VS Code extension has [its own changelog](https://github.com/acltabo
 
 #### Added
 
+- Traffic’s Database work note separates illustrative logical reads and writes from drawn connectors,
+  keeping mixed routes combined. Replay batches now show extra work on affected canvas shapes.
+
 - Traffic notes show recovery work for drawn DLQ replay and compensation routes. Start with one
   attempt or optionally explore a replay batch, with total work and shared dependencies kept
   separate from normal traffic rates.

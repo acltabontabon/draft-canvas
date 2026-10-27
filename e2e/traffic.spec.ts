@@ -323,8 +323,9 @@ for (const colorScheme of ['light', 'dark'] as const) {
     await callout.getByRole('list', { name: 'Work per arrival' }).scrollIntoViewIfNeeded();
     await page.screenshot({ path: `/tmp/traffic-work-${colorScheme}.png` });
     await page.locator('.react-flow__node[data-id="postgres"] .dc-node').click();
-    await expect(callout.locator('details')).not.toHaveAttribute('open');
-    await callout.locator('summary').click();
+    const downstream = callout.locator('details').filter({ hasText: 'One operation from here' });
+    await expect(downstream).not.toHaveAttribute('open');
+    await downstream.locator('summary').click();
     await expect(callout.getByRole('list', { name: 'Work per arrival' })).toHaveText('No downstream work drawn.');
   });
 }
@@ -361,6 +362,11 @@ test('replay batches show total recovery work without editing the diagram or bas
   await expect(recovery.getByLabel('Recovery totals')).toContainText('500 data operations');
   await expect(recovery.getByLabel('Recovery totals')).toContainText('500 message deliveries');
   await expect(workerRate).toContainText('1,000 calls/min');
+  await expect(page.locator('.dc-traffic-replay-badge')).toHaveCount(2);
+  await count.fill('1000');
+  await expect(page.locator('.dc-traffic-replay-badge').filter({ hasText: 'data ops' })).toHaveText('Replay +1,000 data ops total');
+  await expect(workerRate).toContainText('1,000 calls/min');
+  await count.fill('500');
   await count.press('Backspace');
   await expect(count).toHaveValue('50');
   await count.fill('0');
@@ -370,6 +376,7 @@ test('replay batches show total recovery work without editing the diagram or bas
   await page.screenshot({ path: '/tmp/traffic-recovery-preview.png' });
   await recovery.getByRole('button', { name: 'Worker', exact: true }).click();
   await expect(page.locator('.dc-traffic-callout')).toContainText('Worker');
+  await expect(page.locator('.dc-traffic-replay-badge')).toHaveCount(0);
 });
 
 for (const colorScheme of ['light', 'dark'] as const) {
@@ -387,5 +394,24 @@ for (const colorScheme of ['light', 'dark'] as const) {
     expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(844);
     expect(bounds!.height).toBeLessThanOrEqual(500);
     await page.screenshot({ path: `/tmp/traffic-recovery-mobile-${colorScheme}.png` });
+  });
+}
+
+for (const colorScheme of ['light', 'dark'] as const) {
+  test(`database work separates reads and writes in ${colorScheme}`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+    const document = recoveryDocument();
+    document.edges.push({ id: 'read', source: 'api', target: 'db', semantic: 'reads', directed: true });
+    await importDocument(page, document, 'database-work.draftcanvas');
+    await page.locator('.dc-status-traffic').click();
+    const revision = await editorRevision(page);
+    await page.locator('.react-flow__node[data-id="db"] .dc-node').click();
+    await page.locator('.dc-traffic-database summary').click();
+    const work = page.getByRole('list', { name: 'Database work', exact: true });
+    await expect(work).toContainText('~1,000 reads/min');
+    await expect(work).toContainText('~1,000 writes/min');
+    await expect(page.locator('.dc-traffic-database input')).toHaveCount(0);
+    expect(await editorRevision(page)).toBe(revision);
+    await page.screenshot({ path: `/tmp/database-work-${colorScheme}.png` });
   });
 }

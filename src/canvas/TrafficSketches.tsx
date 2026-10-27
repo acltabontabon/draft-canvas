@@ -1,3 +1,4 @@
+import { recoveryArrivals, type recoveryPlan } from '../traffic/recovery';
 import { TrafficRecovery } from './TrafficRecovery';
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
 import { useReactFlow, useStore } from '@xyflow/react';
@@ -88,6 +89,7 @@ export function TrafficSketches() {
     if (!moving) setNodes(live);
   }, [live, moving]);
   const [open, setOpen] = useState<string | null>(null);
+  const [replay, setReplay] = useState<{ plan: NonNullable<ReturnType<typeof recoveryPlan>>; count: number | null } | null>(null);
   const root = useRef<HTMLDivElement>(null);
 
 
@@ -121,6 +123,17 @@ export function TrafficSketches() {
     () => analysis && nodes && drawn && selectedId ? trafficCalloutFor(analysis, nodes, selectedId, drawn.obstacles, availableWidth, scenario?.get(selectedId), edges) : null,
     [analysis, nodes, drawn, selectedId, availableWidth, scenario, edges],
   );
+  const replayBadges = useMemo(() => {
+    if (!analysis || !nodes || !replay || replay.count === null || replay.plan !== content?.recovery) return [];
+    const counts = recoveryArrivals(analysis, replay.plan, replay.count);
+    return nodes.flatMap((node) => {
+      const count = counts.get(node.id);
+      if (!count) return [];
+      const amount = count.definite === count.possible ? count.possible.toLocaleString('en-US') : `${count.definite.toLocaleString('en-US')}–${count.possible.toLocaleString('en-US')}`;
+      const label = `Replay +${amount} ${analysis.nodes.get(node.id)?.role === 'data' ? 'data ops' : 'arrivals'} total`;
+      return [{ node, label, text: layoutText(label, { font: { stack: 'sans', size: 12, weight: 600 }, maxWidth: node.width - 12, lineHeight: 16 }) }];
+    });
+  }, [analysis, nodes, replay, content]);
   const callout = useMemo(
     () => {
       if (!content) return null;
@@ -133,7 +146,7 @@ export function TrafficSketches() {
       // Let the field note unfold when there is room; on crowded canvases try shorter scrollable
       // notes before allowing an overlap. Reserve its expanded height to avoid a jump when opened.
       const workHeight = content.work ? content.work.items.reduce((sum, item) => sum + item.height + 6, 0) + content.work.detail.height + 30 : 0;
-      const desired = Math.min(content.height + workHeight + (content.recovery ? 220 : 0), visible ? visible.height / scale : 420);
+      const desired = Math.min(content.height + workHeight + (content.databaseNote ? 160 : 0) + (content.recovery ? 220 : 0), visible ? visible.height / scale : 420);
       const heights = [...new Set([desired, Math.min(desired, 420), Math.min(desired, 360), Math.min(desired, 300), Math.min(desired, 270)])];
       let maxHeight = heights[heights.length - 1]!;
       let at = placeCallout(content.anchor, content.width * scale, maxHeight * scale, obstacles, visible);
@@ -224,6 +237,11 @@ export function TrafficSketches() {
           )}
         </div>
 
+        {replayBadges.map(({ node, label, text }) => (
+          <div key={node.id} className="dc-traffic-replay-badge" aria-label={label} style={{ fontFamily: familyOf('sans'), transform: `translate(${node.x}px, ${node.y + node.height + 8}px)`, width: node.width }}>
+            {text.lines.map((line, index) => <span className="dc-traffic-callout-line" key={index}>{line.text}{' '}</span>)}
+          </div>
+        ))}
         {drawn.notes.map((note) => {
           const unfolded = open === note.insight.id;
           return (
@@ -300,6 +318,17 @@ export function TrafficSketches() {
                 {callout.moreSources > 0 && <li className="dc-traffic-callout-more">+ {callout.moreSources} more connections</li>}
               </ul>
             )}
+            {callout.databaseNote && (
+              <details className="dc-traffic-work dc-traffic-database" key={`database:${selectedId}`}>
+                <summary style={{ fontFamily: familyOf('hand') }}>Database work</summary>
+                <div className="dc-traffic-work-paper">
+                  <ul aria-label="Database work">
+                    {callout.databaseNote.items.map((item, index) => <li key={index}>{item.lines.map((line, index) => <span className="dc-traffic-callout-line" key={index}>{line}</span>)}</li>)}
+                  </ul>
+                  <p>{callout.databaseNote.detail.lines.map((line, index) => <span className="dc-traffic-callout-line" key={index}>{line}</span>)}</p>
+                </div>
+              </details>
+            )}
             {callout.work && (
               <details className="dc-traffic-work" key={selectedId}>
                 <summary style={{ fontFamily: familyOf('hand') }}>{callout.work.heading}</summary>
@@ -311,7 +340,7 @@ export function TrafficSketches() {
                 </div>
               </details>
             )}
-            {callout.recovery && <TrafficRecovery key={`${selectedId}:${trafficScope}`} analysis={analysis} nodes={nodes} plan={callout.recovery} width={callout.width - 46} />}
+            {callout.recovery && <TrafficRecovery key={`${selectedId}:${trafficScope}`} analysis={analysis} nodes={nodes} plan={callout.recovery} onExplore={(count) => setReplay({ plan: callout.recovery!, count })} width={callout.width - 46} />}
             {callout.sections.map((section) => (
               <section key={section.label} className="dc-traffic-callout-section" data-tone={section.tone} aria-label={section.label}>
                 <h3>{section.label}</h3>
