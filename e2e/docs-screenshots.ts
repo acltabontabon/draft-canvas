@@ -103,6 +103,8 @@ async function startServer(): Promise<() => Promise<void>> {
 }
 
 async function shot(page: Page, name: string, clip?: { x: number; y: number; width: number; height: number }) {
+  // Import notices are transient feedback, not part of the guide's resting UI.
+  for (const dismiss of await page.locator('.dc-toast-dismiss').all()) await dismiss.click();
   // Let motion settle (popovers, ghosts, camera) so the picture is the resting state.
   await page.waitForTimeout(1300);
   await page.screenshot({ path: join(OUT, `${name}.png`), clip });

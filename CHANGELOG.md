@@ -60,7 +60,7 @@ The retired VS Code extension has [its own changelog](https://github.com/acltabo
 - Connectors route around shapes, spread automatic ends and separate overlapping runs. Auto attach
   lets ends follow shapes, including after reconnecting; Pin ends here keeps their exact attachment.
   Nearby automatic ends align along their overlapping sides, and blocked approaches can slide
-  to a clear point. Fixed ends are identified in the inspector with a one-click Auto attach action.
+  to a clear point. The inspector shows Attachment · Auto / Pinned, with one-click switching.
   Existing diagrams retain explicit pins.
 - Agents can set automatic or pinned ends and receive unresolved-route and crowded-side advice.
   Create and arrange also tidy avoidable crossings and detours, keeping clean neighbours and shared
@@ -85,6 +85,11 @@ The retired VS Code extension has [its own changelog](https://github.com/acltabo
   including routes through Junctions.
 
 #### Changed
+
+- Connector inspectors use aligned Operation, Reply, Recovery, Route, Style and Attachment controls.
+  Auto / Pinned shows the current attachment mode; choosing Pinned from Auto fixes the drawn ends.
+- Shape toolbars label the empty technology shortcut **Details**, covering technology and description,
+  and distribute controls evenly without unused trailing space. Assigned technology names stay visible.
 
 - DLQs default to a muted amber outline and message icon with neutral fill; explicit colours remain unchanged.
 

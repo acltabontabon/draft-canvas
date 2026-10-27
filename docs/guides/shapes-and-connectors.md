@@ -26,12 +26,15 @@ Queue and Data Store artwork also grows when you drag a corner resize handle.
 - Rename: double-click, or select and press `Enter`.
 - A label cut short? Run **Fit shapes to text** from `⌘K`.
 - Technology: click **Details** on the selected shape, then enter a name. `Postgres` or `Rust 1.90`
-  work; the shape shows a matching icon. Edit and delete are directly beside the shape's kind.
+  work; the shape shows a matching icon. Once assigned, its technology name replaces Details.
+  The same panel edits the description. Edit and delete are directly beside the shape's kind.
   Small marks and simple notes get a content-sized card. Drag the card's top edge to move it
   out of the way; click empty canvas to dismiss it. Resize the description box from its lower-right
   corner. Right-click for attachment, copy and other actions.
 
 ![Technology suggestions for PostgreSQL.](../media/guides/technology-suggestions.png)
+
+![Shape toolbar with the Details shortcut and aligned actions.](../media/inspectors/shape-toolbar.png)
 
 ## Connect shapes
 
@@ -48,6 +51,8 @@ rail, with each caption outside its own line. Two differently named operations k
 a repeated relationship can share a trunk. These details also appear in SVG and PNG exports.
 
 ![Default connectors: distinct operations, separate return rails and straight glyph attachments.](../media/connectors/style-light-after.png)
+
+![Compact connector panel with aligned request, reply and attachment controls.](../media/inspectors/connector-panel.png)
 
 ## Pinned and automatic ends
 
@@ -94,8 +99,9 @@ Right-click → **Reset route** restores automatic routing. **Tidy connectors** 
 Between two services, choose **HTTP** or **Generic Call**, then describe the request. For HTTP,
 pick a method and enter the path. **Sync** and **Async** sit beside Protocol. Choose **Add reply**
 for an editable return path with a suggested response. Async shows a break mark and has no reply.
-The drawing rail shows straight, stepped and curved routes as small
-previews you can choose with one click, beside arrowhead, colour, condition and flow controls. The
+Operation and Reply share an aligned field column. Recovery keeps its add action and explanation
+compact. The Route row shows straight, stepped and curved previews; Style groups arrowhead, colour,
+condition and flow controls. Attachment switches between Auto and Pinned. The
 colour wheel means automatic colour, as it does for shapes; click it to choose a fixed colour. Click
 the condition icon to edit a condition without making the inspector taller. Hover an icon to see
 what it does.
