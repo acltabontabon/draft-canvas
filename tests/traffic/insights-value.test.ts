@@ -230,3 +230,15 @@ describe('traffic insight honesty sweep', () => {
     expect(analysis.insights.map((insight) => insight.text)).not.toEqual(expect.arrayContaining([expect.stringMatching(HONESTY)]));
   });
 });
+
+
+describe('shared store semantic limits', () => {
+  it('does not turn mixed or unspecified operations into reads or infer shared schema', () => {
+    const nodes = [node('a', 'service', { text: 'Mixed' }), node('b', 'service', { text: 'Unspecified' }), node('db', 'database', { text: 'Store' })];
+    const analysis = analyzeTraffic({ nodes, edges: [edge('a-db', 'a', 'db', { semantic: 'readsWrites' }), edge('b-db', 'b', 'db')] });
+    const shared = insightsOf(analysis, 'shared-dependency')[0]!;
+    expect(shared.text).toContain('Mixed and Unspecified access Store');
+    expect(shared.text).not.toMatch(/reads|writes|no single service clearly owns/);
+    expect(shared.text).toContain('does not establish shared tables');
+  });
+});

@@ -63,7 +63,7 @@ test('Technology typeahead supports pointer, keyboard, generic fallback and clea
   });
   const node = page.locator('.react-flow__node[data-id="orders"]');
   await node.click();
-  await page.locator('.dc-element-inspector').getByRole('button', { name: 'Add technology' }).click();
+  await page.locator('.dc-element-inspector').getByRole('button', { name: 'Details' }).click();
   const field = page.getByRole('combobox', { name: 'Technology', exact: true });
   await field.fill('post 16');
   const option = page.getByRole('option', { name: 'PostgreSQL 16', exact: true });

@@ -1,3 +1,5 @@
+import { TrafficReplayProvider } from './TrafficReplayContext';
+import { TrafficScenario } from './TrafficScenario';
 import { FlowTraceBadges } from './FlowTraceBadges';
 import { TrafficSketches } from './TrafficSketches';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
@@ -2146,6 +2148,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
           />
         )}
 
+        <TrafficReplayProvider active={trafficActive}>
         <ViewportLayer>
           {tracing && <FlowTraceBadges />}
           {/*
@@ -2204,6 +2207,8 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
             </div>
           )}
         </ViewportLayer>
+        {trafficActive && <TrafficScenario />}
+        </TrafficReplayProvider>
       </ReactFlow>
     </div>
   );

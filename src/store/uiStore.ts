@@ -288,10 +288,11 @@ export interface UiStore {
    * real pointer events (see their own CSS comment), which is what makes a
    * reconnect drag have to be driven by hand rather than through React
    * Flow's own reconnect machinery — this is that drag's one piece of
-   * reactive state, kept to "which node" rather than a raw pointer position
+   * reactive state, kept to discrete node/attachment ids rather than a raw pointer position
    * so a drag does not re-render anything on every pointer-move frame.
    */
   reconnectHoverTarget: string | null;
+  reconnectHoverHandle: string | null;
   /**
    * True for the duration of a reconnect drag (dragging an existing
    * connector's endpoint) — distinct from `reconnectHoverTarget` (which node,
@@ -536,7 +537,7 @@ export interface UiStore {
   setAttachArmedTarget: (nodeId: string | null) => void;
   setAttachArmedEdgeTarget: (edgeId: string | null) => void;
   setDragCapsule: (dragCapsule: DragCapsuleState | null) => void;
-  setReconnectHoverTarget: (nodeId: string | null) => void;
+  setReconnectHoverTarget: (nodeId: string | null, handleId?: string | null) => void;
   setReconnectDragActive: (active: boolean) => void;
   setHoveredEdge: (id: string | null) => void;
   setHoveredRecoveryParent: (id: string | null) => void;
@@ -671,6 +672,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   attachArmedEdgeTarget: null,
   dragCapsule: null,
   reconnectHoverTarget: null,
+  reconnectHoverHandle: null,
   reconnectDragActive: false,
   hoveredEdgeId: null,
   hoveredRecoveryParentId: null,
@@ -758,8 +760,8 @@ export const useUiStore = create<UiStore>((set, get) => ({
       }
       return { dragCapsule };
     }),
-  setReconnectHoverTarget: (reconnectHoverTarget) =>
-    set((state) => (state.reconnectHoverTarget === reconnectHoverTarget ? state : { reconnectHoverTarget })),
+  setReconnectHoverTarget: (reconnectHoverTarget, reconnectHoverHandle = null) =>
+    set((state) => (state.reconnectHoverTarget === reconnectHoverTarget && state.reconnectHoverHandle === reconnectHoverHandle ? state : { reconnectHoverTarget, reconnectHoverHandle })),
   setReconnectDragActive: (reconnectDragActive) =>
     set((state) => (state.reconnectDragActive === reconnectDragActive ? state : { reconnectDragActive })),
   setHoveredEdge: (hoveredEdgeId) => set((state) => (state.hoveredEdgeId === hoveredEdgeId ? state : { hoveredEdgeId })),

@@ -139,6 +139,7 @@ export function EditorRoute({ session }: { session: DocumentSession }) {
 }
 
 function EditorScreen({ session }: { session: DocumentSession }) {
+  const readingTraffic = useEditorStore((state) => state.traffic.active);
   const tracing = useUiStore((state) => state.flowTrace !== null);
   const title = useEditorStore((state) => state.document.metadata.title);
   const mode = useEditorStore((state) => state.mode);
@@ -650,8 +651,8 @@ function EditorScreen({ session }: { session: DocumentSession }) {
           {/* A right-click selects what it lands on, which would also raise that element's inspector
               right under the menu; an open point's popover sits beside the same element — one
               floating surface at a time. */}
-          {!presenting && !tracing && !contextMenu && !openPointPopoverOpen && <EdgeInspectorPopover />}
-          {!presenting && !tracing && !contextMenu && !openPointPopoverOpen && (
+          {!presenting && !tracing && !readingTraffic && !contextMenu && !openPointPopoverOpen && <EdgeInspectorPopover />}
+          {!presenting && !tracing && !readingTraffic && !contextMenu && !openPointPopoverOpen && (
             <ElementInspectorPopover buildCommandContext={buildCommandContext} />
           )}
           {!presenting && !tracing && <ExampleBanner onPresent={onPresent} />}
@@ -659,7 +660,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
           <PresentationCalloutLayer />
           <EmptyState onInsertStarter={insertStarter} />
           {!presenting && <ContinuationAnnouncer />}
-          {!presenting && !tracing && <Inspector />}
+          {!presenting && !tracing && !readingTraffic && <Inspector />}
           {!presenting && !tracing && <FlowPanel onPresent={onPresent} />}
           {!presenting && ProposalPanelChunk && (
             <Suspense fallback={null}>

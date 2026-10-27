@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { notesOnlyDocument, trafficDocument, type TrafficDocument } from './fixtures/traffic';
+import { boundaryDocument, notesOnlyDocument, recoveryDocument, trafficDocument, type TrafficDocument } from './fixtures/traffic';
 
 async function importDocument(page: Page, document: TrafficDocument, fileName: string) {
   await page.goto('/');
@@ -81,9 +81,9 @@ test.describe('Traffic', () => {
     await page.locator('.react-flow__node[data-id="checkout"] .dc-node').click();
     const callout = page.locator('.dc-traffic-callout');
     await expect(page.locator('.react-flow__node[data-id="checkout"] .dc-node[data-selected="true"]')).toBeVisible();
-    await expect(callout.locator('.dc-traffic-callout-metric')).toHaveText('2 paths');
+    await expect(callout.locator('.dc-traffic-callout-metric')).toHaveText('~2,000 calls/min');
     await expect(callout.locator('.dc-traffic-callout-sources li')).toHaveCount(2);
-    await expect(callout.getByRole('heading', { name: /Calls waiting|If it goes down/ })).toBeVisible();
+    await expect(callout.getByRole('heading', { name: /Upstream dependencies|Potential impact/ })).toBeVisible();
     const frame = await page.locator('.dc-canvas').boundingBox();
     const noteBounds = await callout.boundingBox();
     expect(noteBounds!.x).toBeGreaterThanOrEqual(frame!.x);
@@ -257,3 +257,298 @@ test.describe('Traffic', () => {
     await expect(page.locator('.dc-canvas')).toHaveAttribute('data-traffic', 'on');
   });
 });
+
+
+test('illustrative traffic explains the fixed example without rate controls', async ({ page }) => {
+  await importDocument(page, trafficDocument(), 'traffic-scenario.draftcanvas');
+  await showTraffic(page);
+  const scenario = page.locator('.dc-traffic-scenario');
+  await expect(scenario).toContainText('1,000 starts/min per entry');
+  await expect(scenario.getByRole('button')).toHaveCount(1);
+  const revision = await editorRevision(page);
+  const closedBounds = await scenario.boundingBox();
+  await scenario.getByRole('button', { name: 'How to read this' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(scenario).toContainText('not live measurements');
+  expect(await editorRevision(page)).toBe(revision);
+  expect((await scenario.boundingBox())!.height).toBe(closedBounds!.height);
+  const helpBounds = await scenario.getByRole('region', { name: 'Traffic reading guide' }).boundingBox();
+  expect(helpBounds!.height).toBeLessThanOrEqual(180);
+  expect(helpBounds!.width).toBeLessThanOrEqual(320);
+  await scenario.getByRole('region', { name: 'Traffic reading guide' }).focus();
+  await page.keyboard.press('Escape');
+  await expect(scenario.getByRole('button', { name: 'How to read this' })).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('.dc-canvas')).toHaveAttribute('data-traffic', 'on');
+});
+
+for (const colorScheme of ['light', 'dark'] as const) {
+  test(`traffic controls fit a narrow canvas in ${colorScheme} mode`, async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+    await importDocument(page, trafficDocument(), 'traffic-narrow.draftcanvas');
+    await runCommand(page, 'Show traffic');
+    const scenario = page.locator('.dc-traffic-scenario');
+    await scenario.getByRole('button', { name: 'How to read this' }).click();
+    await expect(scenario).toContainText('Example only:');
+    const guide = scenario.getByRole('region', { name: 'Traffic reading guide' });
+    const helpBounds = await guide.boundingBox();
+    expect(helpBounds!.height).toBeLessThanOrEqual(180);
+    expect(helpBounds!.width).toBeLessThanOrEqual(320);
+    const bounds = await scenario.boundingBox();
+    expect(bounds!.x).toBeGreaterThanOrEqual(0);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
+    await expect(scenario).toContainText('1,000 starts/min per entry');
+    await page.screenshot({ path: `/tmp/traffic-mobile-${colorScheme}.png` });
+    await page.locator('.react-flow__pane').click({ position: { x: 20, y: 220 } });
+    await expect(guide).toHaveCount(0);
+  });
+}
+
+for (const colorScheme of ['light', 'dark'] as const) {
+  test(`explains incoming rates and unfolds work per request in ${colorScheme} mode`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+    await importDocument(page, trafficDocument(), 'traffic-work.draftcanvas');
+    await showTraffic(page);
+    await page.locator('.react-flow__node[data-id="checkout"] .dc-node').click();
+    const callout = page.locator('.dc-traffic-callout');
+    await expect(callout.getByRole('list', { name: 'Rate breakdown' })).toContainText('API Gateway');
+    await expect(callout.locator('.dc-traffic-callout-count')).toHaveText(['~1,000 calls/min', '~1,000 calls/min']);
+    const fold = callout.locator('summary');
+    await expect(fold).toHaveText('One request from here…');
+    await fold.focus();
+    await page.keyboard.press('Enter');
+    await expect(callout.locator('details')).toHaveAttribute('open', '');
+    await expect(callout.getByRole('list', { name: 'Work per arrival' })).toHaveText('1 data operation');
+    await expect(page.getByRole('toolbar', { name: 'Selection options' })).toHaveCount(0);
+    await callout.getByRole('list', { name: 'Work per arrival' }).scrollIntoViewIfNeeded();
+    await page.screenshot({ path: `/tmp/traffic-work-${colorScheme}.png` });
+    await page.locator('.react-flow__node[data-id="postgres"] .dc-node').click();
+    const downstream = callout.locator('details').filter({ hasText: 'One operation from here' });
+    await expect(downstream).not.toHaveAttribute('open');
+    await downstream.locator('summary').click();
+    await expect(callout.getByRole('list', { name: 'Work per arrival' })).toHaveText('No downstream work drawn.');
+  });
+}
+
+
+test('the unfolded work note stays inside a phone-width canvas', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await importDocument(page, trafficDocument(), 'traffic-work-mobile.draftcanvas');
+  await runCommand(page, 'Show traffic');
+  await page.locator('.react-flow__node[data-id="checkout"] .dc-node').click();
+  const callout = page.locator('.dc-traffic-callout');
+  await callout.locator('summary').click();
+  await expect(callout.getByRole('list', { name: 'Work per arrival' })).toHaveText('1 data operation');
+  const bounds = await callout.boundingBox();
+  expect(bounds!.x).toBeGreaterThanOrEqual(0);
+  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
+  expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(844);
+  await page.screenshot({ path: '/tmp/traffic-work-mobile.png' });
+});
+
+test('replay batches show total recovery work without editing the diagram or baseline', async ({ page }) => {
+  await importDocument(page, recoveryDocument(), 'recovery.draftcanvas');
+  await page.locator('.dc-status-traffic').click();
+  const revision = await editorRevision(page);
+  const workerRate = page.locator('.react-flow__node[data-id="worker"] .dc-traffic-badge');
+  await expect(workerRate).toContainText('1,000 calls/min');
+  await page.locator('.react-flow__node[data-id="dlq"] .dc-node').click();
+  const recovery = page.locator('.dc-traffic-recovery');
+  await recovery.locator('summary').click();
+  const count = page.getByRole('textbox', { name: 'Messages to replay' });
+  await expect(count).toHaveValue('1');
+  await expect(page.locator('.dc-traffic-dlq-note')).toHaveText('1 message to replay.');
+  await count.fill('500');
+  await expect(recovery.getByLabel('Recovery totals')).toContainText('500 data operations');
+  await expect(recovery.getByLabel('Recovery totals')).toContainText('500 message deliveries');
+  await expect(workerRate).toContainText('1,000 calls/min');
+  await expect(page.locator('.dc-traffic-replay-badge')).toHaveCount(2);
+  await count.fill('1000');
+  await expect(page.locator('.dc-traffic-replay-badge').filter({ hasText: 'data ops' })).toContainText('Replay +1,000 data ops total');
+  await expect(page.locator('.dc-traffic-replay-badge').filter({ hasText: 'data ops' })).toContainText('~1,000 data ops/min');
+  await expect(workerRate).toContainText('1,000 calls/min');
+  await count.fill('800');
+  await recovery.locator('summary').click();
+  await expect(count).not.toBeVisible();
+  await expect(page.locator('.dc-traffic-dlq-note')).toHaveText('800 messages to replay.');
+  await expect(page.locator('.dc-traffic-replay-badge').filter({ hasText: 'data ops' })).toContainText('Replay +800 data ops total');
+  await recovery.locator('summary').click();
+  await expect(count).toHaveValue('800');
+  await count.fill('500');
+  await count.press('Backspace');
+  await expect(count).toHaveValue('50');
+  await count.fill('0');
+  await expect(recovery.getByRole('alert')).toHaveCount(0);
+  await expect(page.locator('.dc-traffic-dlq-note')).toHaveText('Nothing to replay in this example.');
+  await expect(recovery.getByLabel('Recovery totals')).toHaveText('Nothing to replay in this example.');
+  await expect(page.locator('.dc-traffic-replay-badge')).toHaveCount(0);
+  await expect(workerRate).toBeVisible();
+  await count.fill('-1');
+  await expect(recovery.getByRole('alert')).toBeVisible();
+  await count.fill('500');
+  await expect(page.locator('.dc-traffic-dlq-note')).toHaveText('500 messages to replay.');
+  expect(await editorRevision(page)).toBe(revision);
+  await page.screenshot({ path: '/tmp/traffic-recovery-preview.png' });
+  await recovery.getByRole('button', { name: 'Worker', exact: true }).click();
+  await expect(page.locator('.dc-traffic-callout')).toContainText('Worker');
+  await expect(page.getByRole('region', { name: 'Shared workload' })).toContainText('Replay and normal traffic can use this resource.');
+  await expect(page.locator('.dc-traffic-replay-badge')).toHaveCount(2);
+  await page.locator('.react-flow__node[data-id="db"] .dc-node').click();
+  await page.locator('.dc-traffic-database summary').click();
+  await expect(page.getByRole('region', { name: 'Shared workload' })).toBeVisible();
+  await page.locator('.react-flow__node[data-id="api"] .dc-node').click();
+  await expect(page.getByRole('region', { name: 'Shared workload' })).toHaveCount(0);
+  await page.locator('.react-flow__node[data-id="db"] .dc-node').click();
+  await expect(page.locator('.dc-traffic-replay-badge').filter({ hasText: 'data ops' })).toContainText('Replay +500 data ops total');
+  await expect(page.locator('.dc-traffic-dlq-note')).toHaveText('500 messages to replay.');
+  await page.locator('.react-flow__node[data-id="dlq"] .dc-node').click();
+  await page.locator('.dc-traffic-recovery summary').click();
+  await expect(page.getByRole('textbox', { name: 'Messages to replay' })).toHaveValue('500');
+  await page.getByRole('textbox', { name: 'Messages to replay' }).fill('0');
+  await page.locator('.react-flow__node[data-id="db"] .dc-node').click();
+  await expect(page.locator('.dc-traffic-replay-badge')).toHaveCount(0);
+  await expect(page.locator('.dc-traffic-dlq-note')).toHaveText('Nothing to replay in this example.');
+  await expect(page.getByRole('region', { name: 'Shared workload' })).toHaveCount(0);
+  const clear = page.getByRole('button', { name: 'Clear replay', exact: true });
+  await clear.click();
+  await expect(clear).toHaveCount(0);
+  await expect(page.locator('.dc-canvas')).toHaveAttribute('data-traffic', 'on');
+  await expect(page.locator('.dc-traffic-callout')).toContainText('Database');
+  await expect(page.locator('.dc-traffic-dlq-note')).toHaveText('Replay route starts here.');
+  await page.locator('.react-flow__node[data-id="dlq"] .dc-node').click();
+  await page.locator('.dc-traffic-recovery summary').click();
+  await expect(page.getByRole('textbox', { name: 'Messages to replay' })).toHaveValue('1');
+  await page.getByRole('textbox', { name: 'Messages to replay' }).fill('800');
+  await clear.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.dc-traffic-replay-badge')).toHaveCount(0);
+  await expect(page.locator('.dc-traffic-recovery')).not.toHaveAttribute('open');
+  await expect(page.getByRole('button', { name: 'How to read this' })).toBeFocused();
+  await page.locator('.dc-traffic-recovery summary').click();
+  await page.locator('.dc-status-traffic').click();
+  await page.locator('.dc-status-traffic').click();
+  await expect(clear).toHaveCount(0);
+  expect(await editorRevision(page)).toBe(revision);
+});
+
+for (const colorScheme of ['light', 'dark'] as const) {
+  test(`recovery notes stay compact on a narrow canvas in ${colorScheme}`, async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+    await importDocument(page, recoveryDocument(), 'recovery-narrow.draftcanvas');
+    await runCommand(page, 'Show traffic');
+    await page.locator('.react-flow__node[data-id="dlq"] .dc-node').click();
+    await page.locator('.dc-traffic-recovery summary').click();
+    await page.getByRole('textbox', { name: 'Messages to replay' }).fill('500');
+    const clear = page.getByRole('button', { name: 'Clear replay', exact: true });
+    await expect(clear).toBeVisible();
+    const clearBounds = await clear.boundingBox();
+    expect(clearBounds!.x + clearBounds!.width).toBeLessThanOrEqual(390);
+    const bounds = await page.locator('.dc-traffic-callout').boundingBox();
+    expect(bounds!.x).toBeGreaterThanOrEqual(0);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
+    expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(844);
+    expect(bounds!.height).toBeLessThanOrEqual(500);
+    await page.screenshot({ path: `/tmp/traffic-recovery-mobile-${colorScheme}.png` });
+    await page.locator('.react-flow__node[data-id="worker"] .dc-node').click();
+    await expect(page.getByRole('region', { name: 'Shared workload' })).toBeVisible();
+    const sharedBounds = await page.locator('.dc-traffic-callout').boundingBox();
+    expect(sharedBounds!.x).toBeGreaterThanOrEqual(0);
+    expect(sharedBounds!.x + sharedBounds!.width).toBeLessThanOrEqual(390);
+    await page.screenshot({ path: `/tmp/traffic-shared-mobile-${colorScheme}.png` });
+  });
+}
+
+for (const colorScheme of ['light', 'dark'] as const) {
+  test(`database work separates reads and writes in ${colorScheme}`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+    const document = recoveryDocument();
+    document.edges.push({ id: 'read', source: 'api', target: 'db', semantic: 'reads', directed: true });
+    await importDocument(page, document, 'database-work.draftcanvas');
+    await page.locator('.dc-status-traffic').click();
+    const revision = await editorRevision(page);
+    await page.locator('.react-flow__node[data-id="db"] .dc-node').click();
+    await page.locator('.dc-traffic-database summary').click();
+    const work = page.getByRole('list', { name: 'Database work', exact: true });
+    await expect(work).toContainText('~1,000 reads/min');
+    await expect(work).toContainText('~1,000 writes/min');
+    await expect(page.locator('.dc-traffic-database input')).toHaveCount(0);
+    expect(await editorRevision(page)).toBe(revision);
+    await page.screenshot({ path: `/tmp/database-work-${colorScheme}.png` });
+  });
+}
+
+for (const width of [390, 800, 1280]) {
+  test(`footer stays compact at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await importDocument(page, recoveryDocument(), 'footer.draftcanvas');
+    const footer = page.locator('.dc-status');
+    await expect(footer).toContainText('Saved locally');
+    await expect(footer).not.toContainText('Your diagrams stay');
+    await expect(footer).not.toContainText('connectors');
+    const bounds = await footer.boundingBox();
+    expect(bounds!.height).toBeLessThanOrEqual(48);
+    for (const name of ['Undo', 'Redo', 'Zoom out', 'Zoom in']) {
+      const button = footer.getByRole('button', { name, exact: true });
+      await expect(button).toBeVisible();
+      const rect = await button.boundingBox();
+      expect(rect!.x).toBeGreaterThanOrEqual(0);
+      expect(rect!.x + rect!.width).toBeLessThanOrEqual(width);
+    }
+    await page.screenshot({ path: `/tmp/footer-${width}.png` });
+  });
+}
+
+for (const colorScheme of ['light', 'dark'] as const) {
+  test(`boundary crossings explain waiting in ${colorScheme}`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+    await importDocument(page, boundaryDocument(), 'boundary-crossings.draftcanvas');
+    await page.locator('.dc-status-traffic').click();
+    await page.locator('.react-flow__node[data-id="deployment"] .dc-node').click({ position: { x: 20, y: 15 } });
+    const note = page.locator('.dc-traffic-callout');
+    await expect(note).toContainText('3 crossings');
+    await expect(note.getByRole('region', { name: 'Boundary crossings' })).toContainText('Waits for response (as drawn)');
+    await expect(note).toContainText('Message handoff · wait unspecified');
+    await expect(note).toContainText('Incoming');
+    await page.screenshot({ path: `/tmp/boundary-crossings-${colorScheme}.png` });
+    await page.locator('.react-flow__edge[data-id="call"] .react-flow__edge-interaction').click({ force: true });
+    await expect(note).toContainText('1 crossing');
+    await expect(note).toContainText('API → Worker');
+  });
+}
+
+for (const colorScheme of ['light', 'dark'] as const) {
+  test(`technology notes use assigned products in ${colorScheme}`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+    await page.setViewportSize({ width: 390, height: 844 });
+    const document = recoveryDocument();
+    document.nodes.find((node) => node.id === 'db')!.technology = 'PostgreSQL 16';
+    document.nodes.find((node) => node.id === 'dlq')!.technology = 'Amazon SQS';
+    await importDocument(page, document, 'technology-traffic.draftcanvas');
+    const revision = await editorRevision(page);
+    await runCommand(page, 'Show traffic');
+    await page.locator('.react-flow__node[data-id="db"] .dc-node').click();
+    const note = page.getByRole('region', { name: 'Technology note' });
+    await expect(note).toContainText('PostgreSQL');
+    await expect(note).toContainText('do not estimate query cost or disk I/O');
+    await page.keyboard.press('Escape');
+    await page.locator('.react-flow__node[data-id="dlq"] .dc-node').click();
+    await expect(note).toContainText('Amazon SQS');
+    await expect(note).toContainText('Queue type and retry settings are not inferred');
+    expect(await editorRevision(page)).toBe(revision);
+    const bounds = await page.locator('.dc-traffic-callout').boundingBox();
+    expect(bounds!.x).toBeGreaterThanOrEqual(0);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
+    await page.screenshot({ path: `/tmp/traffic-technology-${colorScheme}.png` });
+    const topic = document.nodes.find((node) => node.id === 'dlq')!;
+    topic.deliveryRole = undefined;
+    topic.queueKind = 'topic';
+    topic.technology = 'Amazon SNS';
+    topic.text = 'Events';
+    await importDocument(page, document, 'sns-traffic.draftcanvas');
+    await runCommand(page, 'Show traffic');
+    await page.locator('.react-flow__node[data-id="dlq"] .dc-node').click();
+    await expect(note).toContainText('Subscription filters can change who receives a message');
+  });
+}

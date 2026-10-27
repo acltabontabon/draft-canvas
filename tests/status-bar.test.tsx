@@ -26,7 +26,7 @@ describe('StatusBar while presenting', () => {
   it('still surfaces a cross-tab conflict, so it is not invisible until the presenter exits', () => {
     // A conflict (another tab changed or deleted this canvas) must stay resolvable even while
     // presenting — see EditorScreen.tsx / StatusBar.tsx. Only the conflict choice is shown; the
-    // rest of the bar (element counts, zoom controls) stays out of the presentation chrome.
+    // rest of the bar (save status, zoom controls) stays out of the presentation chrome.
     useEditorStore.setState({ save: { status: 'error', conflict: 'changed' } });
     mount(true);
     expect(screen.getByText('Keep mine')).toBeInTheDocument();
@@ -47,7 +47,8 @@ describe('StatusBar while editing', () => {
     useEditorStore.setState({ save: { status: 'error', conflict: 'deleted' } });
     mount(false);
     expect(screen.getByText('Keep this canvas')).toBeInTheDocument();
-    expect(screen.getByText(/connectors/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '100%, fit to view' })).toBeInTheDocument();
+    expect(screen.queryByText(/connectors/)).toBeNull();
   });
 
   it('shows the zoom as a whole percentage that fits to view', () => {

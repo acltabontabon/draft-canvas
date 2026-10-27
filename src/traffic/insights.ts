@@ -8,8 +8,8 @@ import { MAX_INSIGHTS, type TrafficAnalysis, type TrafficInsight, type TrafficIn
 /**
  * Deterministic observations about the analysis, each one sentence about named elements.
  *
- * The wording is held to what the diagram establishes: where drawn paths meet, what a topology
- * implies (a queue decouples, a topic copies), and — just as plainly — what it leaves unsaid. Never
+ * The wording is held to what the diagram establishes: where drawn paths meet, what the example
+ * assumes (queue sharing, topic copies), and — just as plainly — what it leaves unsaid. Never
  * a rate, a latency, a utilisation or a verdict like "bottleneck": none of that is in a diagram.
  */
 
@@ -142,11 +142,11 @@ export function buildInsights(analysis: TrafficAnalysis, context: AnalysisContex
     return group === 'data' ? ['operation', 'operations'] : group === 'messaging' ? ['message', 'messages'] : ['call', 'calls'];
   };
   /** What a service does to a store, in the words of the connectors that say so. */
-  const verbOf = (interaction: TrafficInteraction): 'reads' | 'writes' | 'reads and writes' => {
-    const semantics = new Set(interaction.edgeIds.map((id) => drawn.get(id)?.semantic));
-    if (semantics.has('readsWrites') || (semantics.has('writes') && semantics.has('reads'))) return 'reads and writes';
-    if (semantics.has('writes') || semantics.has('indexes') || semantics.has('invalidates') || semantics.has('ingests')) return 'writes';
-    return 'reads';
+  const verbOf = (interaction: TrafficInteraction): 'reads' | 'writes' | 'accesses' => {
+    const semantics = interaction.edgeIds.map((id) => drawn.get(id)?.semantic);
+    if (semantics.every((value) => value === 'reads' || value === 'query' || value === 'searches')) return 'reads';
+    if (semantics.every((value) => value === 'writes' || value === 'indexes' || value === 'invalidates')) return 'writes';
+    return 'accesses';
   };
 
   // Blast radius: elements on several journeys at once, said once per set of journeys they share.
@@ -178,13 +178,13 @@ export function buildInsights(analysis: TrafficAnalysis, context: AnalysisContex
     const one = ids.length === 1;
     add({
       kind: 'convergence',
-      note: `${journeys.length === analysis.entries.length ? 'on every journey' : `on ${journeys.length} journeys`} — protect first`,
+      note: `${journeys.length === analysis.entries.length ? 'on every journey' : `on ${journeys.length} journeys`} — shared paths`,
       focus: ids,
       severity: 'notable',
       basis: 'modeled',
       nodeIds: [...ids, ...journeys],
       edgeIds: [],
-      text: `${names(ids)} ${one ? 'is' : 'are each'} on ${journeys.length} separate journeys — ${names(journeys)}. A slowdown or outage there reaches all of them at once, so ${one ? 'it is the place' : 'they are the places'} to protect first: redundancy and timeouts pay off most there.`,
+      text: `${names(ids)} ${one ? 'is' : 'are each'} on ${journeys.length} separate journeys — ${names(journeys)}. A slowdown or outage could affect these journeys. Check which operations need this resource and what fallback behavior exists.`,
     });
   }
 
@@ -193,14 +193,16 @@ export function buildInsights(analysis: TrafficAnalysis, context: AnalysisContex
     if (node.group !== 'data') continue;
     const writers: string[] = [];
     const readers: string[] = [];
+    const unspecified: string[] = [];
     for (const interaction of inOf(node.id)) {
       if (interaction.class !== 'data' || graph.roles.get(interaction.from) !== 'compute') continue;
       const verb = verbOf(interaction);
-      (verb === 'reads' ? readers : writers).push(interaction.from);
+      (verb === 'reads' ? readers : verb === 'writes' ? writers : unspecified).push(interaction.from);
     }
-    const services = [...new Set([...writers, ...readers])];
+    const services = [...new Set([...writers, ...readers, ...unspecified])];
     if (services.length < 2) continue;
     const who = [
+      unspecified.length > 0 ? `${names(unspecified)} ${unspecified.length === 1 ? 'accesses' : 'access'} ${name(node.id)}` : '',
       writers.length > 0 ? `${names(writers)} ${writers.length === 1 ? 'writes' : 'write'} ${name(node.id)}` : '',
       readers.length > 0 ? `${names(readers)} ${readers.length === 1 ? 'reads' : 'read'} ${writers.length > 0 ? 'it' : name(node.id)}` : '',
     ]
@@ -216,8 +218,8 @@ export function buildInsights(analysis: TrafficAnalysis, context: AnalysisContex
       edgeIds: [],
       text:
         writers.length >= 2
-          ? `${who} — ${services.length} services coupled through one store: a schema change, a lock or an outage there touches every one of them, their writes can contend, and no single service clearly owns it.`
-          : `${who} — ${services.length} services coupled through one store: a schema change, a slow query or an outage there reaches every one of them.`,
+          ? `${who} — ${services.length} services use one store. Check whether they share tables or contend for resources; ownership and isolation are not shown.`
+          : `${who} — ${services.length} services use one store. The diagram does not establish shared tables, lock contention or outage impact.`,
     });
   }
 
@@ -239,11 +241,11 @@ export function buildInsights(analysis: TrafficAnalysis, context: AnalysisContex
       basis: 'structural',
       nodeIds: [caller, ...externals],
       edgeIds: [],
-      note: fallback ? 'fallback covers this?' : 'no fallback!',
+      note: fallback ? 'fallback covers this?' : 'no fallback drawn',
       focus: externals,
       text: fallback
         ? `${name(caller)} waits on ${names(externals)} synchronously. A fallback is drawn from ${name(caller)}, but not which of its calls it covers — check that ${externals.length === 1 ? 'this one is' : 'these are'} among them.`
-        : `${name(caller)} waits on ${names(externals)} synchronously and no fallback is drawn — when ${externals.length === 1 ? 'it is' : 'they are'} down or slow, ${name(caller)} is too. To contain it, draw what ${name(caller)} falls back to — another provider, a cached answer, a queue to retry from — and set that connector's behaviour to Fallback.`,
+        : `${name(caller)} waits on ${names(externals)} synchronously and no fallback is drawn — slowdowns or failures could affect ${name(caller)}. Timeouts and error handling are not shown. If a fallback exists, draw what ${name(caller)} falls back to — another provider, a cached answer, a queue to retry from — and set that connector's behaviour to Fallback.`,
     });
   }
   for (const node of analysis.nodes.values()) {
@@ -258,7 +260,7 @@ export function buildInsights(analysis: TrafficAnalysis, context: AnalysisContex
       basis: 'modeled',
       nodeIds: [node.id, ...callers],
       edgeIds: [],
-      text: `${names(callers)} all depend on ${name(node.id)}, which you don't run: its outages and limits become theirs, and none of them can fix it.`,
+      text: `${names(callers)} all depend on ${name(node.id)}, which you don't run: its outages and limits could affect them. Check their timeouts, fallbacks and provider guarantees.`,
     });
   }
 
@@ -281,11 +283,11 @@ export function buildInsights(analysis: TrafficAnalysis, context: AnalysisContex
       basis: 'structural',
       nodeIds: [node.id, ...producers],
       edgeIds: [],
-      note: deadLetter ? 'nobody drains this' : 'nobody reads this',
+      note: deadLetter ? 'no replay route drawn' : 'no consumer drawn',
       focus: [node.id],
       text: deadLetter
-        ? `Failed messages land in ${name(node.id)} and nothing drawn handles them — they will sit there unseen. Draw who replays or inspects them, or at least alert on its depth.`
-        : `${names(producers)} ${producers.length === 1 ? 'publishes' : 'publish'} to ${name(node.id)}, but nothing drawn consumes it — either a consumer is missing from the diagram, or that work goes nowhere.`,
+        ? `Failed messages land in ${name(node.id)} and nothing drawn handles them — replay, inspection and retention are not shown. Draw the recovery route if there is one.`
+        : `${names(producers)} ${producers.length === 1 ? 'publishes' : 'publish'} to ${name(node.id)}, but nothing drawn consumes it — check whether a consumer or another delivery route is missing from the diagram.`,
     });
   }
 
@@ -346,7 +348,7 @@ export function buildInsights(analysis: TrafficAnalysis, context: AnalysisContex
       basis: 'modeled',
       nodeIds: [id, ...entries],
       edgeIds: [],
-      text: `Everything from ${names(entries)} goes through ${name(id)} — if it is down, ${names(entries)} ${entries.length === 1 ? 'is' : 'are'} cut off however healthy the rest is${others.length > 0 ? `, while ${names(others)} ${others.length === 1 ? 'comes' : 'come'} in another way` : ''}. Run more than one, or give it a fallback.`,
+      text: `All drawn routes from ${names(entries)} to these resources pass through ${name(id)}${others.length > 0 ? `, while ${names(others)} ${others.length === 1 ? 'comes' : 'come'} in another way` : ''}. Replicas and fallback behavior are not established by this drawing.`,
     });
   }
 
@@ -408,7 +410,7 @@ export function buildInsights(analysis: TrafficAnalysis, context: AnalysisContex
     const [one, many] = unitOf(item.to);
     add({
       kind: 'amplification',
-      note: `hit ${item.count}× per ${name(item.from)}`,
+      note: `${item.count} routes from ${name(item.from)}`,
       focus: [item.to],
       severity: 'notable',
       basis: 'modeled',
@@ -433,9 +435,9 @@ export function buildInsights(analysis: TrafficAnalysis, context: AnalysisContex
       basis: 'structural',
       nodeIds: [node.id, ...node.targets],
       edgeIds: [],
-      note: `needs ${blocking.length} things up`,
+      note: `${blocking.length} sync dependencies`,
       focus: [node.id],
-      text: `A ${name(node.id)} request needs ${names(blocking)} all up at once${covered ? '' : ', and no fallback is drawn for any of them'} — any one failing blocks it, so it can be no more available than all of them together.${handedOff.length > 0 ? ` ${names(handedOff)} ${handedOff.length === 1 ? 'is' : 'are'} already handed off asynchronously and can't block it.` : ''}`,
+      text: `${name(node.id)} has synchronous paths to ${names(blocking)}${covered ? '; fallback coverage is unspecified' : '; no fallback is drawn'}. Which operations are required for success and how failures are handled are not shown.${handedOff.length > 0 ? ` ${names(handedOff)} ${handedOff.length === 1 ? 'uses' : 'use'} message handoffs; acknowledgements and backpressure are unspecified.` : ''}`,
     });
   }
 
@@ -488,10 +490,10 @@ export function buildInsights(analysis: TrafficAnalysis, context: AnalysisContex
       const from = chain[index]!;
       const to = chain[index + 1]!;
       if (graph.roles.get(from) === 'compute' && graph.roles.get(to) === 'compute') {
-        return `Every hop adds its latency and failures; if ${name(from)} doesn't need ${name(to)}'s answer to respond, that is the call to put behind a queue.`;
+        return `These are synchronous dependencies as drawn. If ${name(from)} does not need ${name(to)}'s answer immediately, consider whether a message handoff fits the operation.`;
       }
     }
-    return 'Every hop adds its latency and failures to what the caller sees.';
+    return 'These are synchronous dependencies as drawn; timing, timeouts and failure handling are not shown.';
   };
   const byTail = new Map<string, string[][]>();
   for (const chain of analysis.entries.filter((id) => waitNext.has(id)).map(chainFrom).filter((chain) => chain.length - 1 >= 3)) {
@@ -505,7 +507,7 @@ export function buildInsights(analysis: TrafficAnalysis, context: AnalysisContex
     const tail = group[0]!.slice(2).map(name);
     add({
       kind: 'sync-chain',
-      note: `${group[0]!.length - 1} hops, all waiting`,
+      note: `${group[0]!.length - 1} sync hops drawn`,
       focus: group[0]!.slice(1),
       severity: 'info',
       basis: 'structural',
@@ -518,7 +520,7 @@ export function buildInsights(analysis: TrafficAnalysis, context: AnalysisContex
     const [start, ...hops] = chain;
     add({
       kind: 'sync-chain',
-      note: `${hops.length} hops, all waiting`,
+      note: `${hops.length} sync hops drawn`,
       focus: hops,
       severity: 'info',
       basis: 'structural',
@@ -541,13 +543,13 @@ export function buildInsights(analysis: TrafficAnalysis, context: AnalysisContex
     if (category === 'queue') {
       add({
         kind: 'async-buffer',
-        note: 'backlog shows here',
+        note: 'buffering point',
         focus: [node.id],
         severity: 'info',
         basis: 'structural',
         nodeIds: [node.id, ...producerIds, ...consumerIds],
         edgeIds: [...producers[0]!.edgeIds, ...consumers[0]!.edgeIds],
-        text: `${name(node.id)} lets ${names(consumerIds)} fall behind or fail without slowing ${names(producerIds)} — the work waits instead. Whether a backlog builds depends on rates the diagram doesn't hold, so it is the queue to watch and alert on.`,
+        text: `${name(node.id)} separates publication by ${names(producerIds)} from processing by ${names(consumerIds)}. Buffering can absorb a mismatch, but limits and backpressure can still affect producers. Backlog and drain time need runtime measurements.`,
       });
       if (consumers.length >= 2) {
         add({
@@ -558,20 +560,20 @@ export function buildInsights(analysis: TrafficAnalysis, context: AnalysisContex
           basis: 'structural',
           nodeIds: [node.id, ...consumerIds],
           edgeIds: consumers.flatMap((interaction) => interaction.edgeIds),
-          text: `${names(consumerIds)} take turns on ${name(node.id)} — each message goes to one of them, in a share the diagram doesn't give, and one stuck consumer leaves its share to the rest.`,
+          text: `The example treats ${names(consumerIds)} as competing consumers of ${name(node.id)}, with an unknown share each. Assignment, acknowledgements and redelivery behavior are not shown.`,
         });
       }
     }
     if ((category === 'topic' || category === 'stream') && consumers.length >= 2) {
       add({
         kind: 'message-distribution',
-        note: `every message ×${consumers.length}`,
+        note: `${consumers.length} modeled deliveries`,
         focus: [node.id],
         severity: 'info',
         basis: 'modeled',
         nodeIds: [node.id, ...consumerIds],
         edgeIds: consumers.flatMap((interaction) => interaction.edgeIds),
-        text: `Every message ${names(producerIds)} ${producerIds.length === 1 ? 'puts' : 'put'} on ${name(node.id)} is handled ${consumers.length === 2 ? 'twice' : `${consumers.length} times`} — by ${names(consumerIds)} — each at its own pace, none of them slowing ${names(producerIds)}. Each new subscriber adds a full copy of that work.`,
+        text: `The example models one delivery per drawn subscriber of ${name(node.id)}: ${names(consumerIds)}. Consumer groups, filters and redelivery can change actual delivery counts; independent processing is not a guarantee against backpressure.`,
       });
     }
   }
@@ -582,7 +584,7 @@ export function buildInsights(analysis: TrafficAnalysis, context: AnalysisContex
       const attempts = interaction.edgeIds.map((id) => drawn.get(id)?.deliveryAttempts).find((value) => value !== undefined);
       add({
         kind: 'retry-amplification',
-        note: 'retries pile on',
+        note: 'retries can add work',
         focus: [interaction.to],
         severity: 'unknown',
         basis: 'structural',
@@ -590,8 +592,8 @@ export function buildInsights(analysis: TrafficAnalysis, context: AnalysisContex
         edgeIds: interaction.edgeIds,
         text:
           attempts === undefined
-            ? `${name(interaction.from)} retries ${name(interaction.to)}: when ${name(interaction.to)} struggles, it gets more traffic, not less. How many retries isn't drawn — backoff and a cap keep it from piling on.`
-            : `${name(interaction.from)} retries ${name(interaction.to)} up to ${attempts} times: when ${name(interaction.to)} struggles, it can see up to ${attempts}× the traffic.`,
+            ? `${name(interaction.from)} retries ${name(interaction.to)}: retries can add work when they occur. The diagram does not give their frequency or timing.`
+            : `The retry connector from ${name(interaction.from)} to ${name(interaction.to)} is annotated with ${attempts} attempts. Actual added traffic depends on failures and retry policy; no rate multiplier is inferred.`,
       });
     }
     if (interaction.uncertainty === 'conditional') {
@@ -602,7 +604,7 @@ export function buildInsights(analysis: TrafficAnalysis, context: AnalysisContex
         basis: 'structural',
         nodeIds: [interaction.to, interaction.from],
         edgeIds: interaction.edgeIds,
-        text: `Only some traffic from ${name(interaction.from)} takes the ${condition ? `'${condition}' ` : ''}branch to ${name(interaction.to)}, so ${name(interaction.to)} is counted as possibly reached, not certainly.`,
+        text: `Traffic from ${name(interaction.from)} may take the ${condition ? `'${condition}' ` : ''}branch to ${name(interaction.to)}, so ${name(interaction.to)} is counted as possibly reached, not certainly.`,
       });
     }
   }
@@ -611,7 +613,7 @@ export function buildInsights(analysis: TrafficAnalysis, context: AnalysisContex
     if (!component.loop) continue;
     add({
       kind: 'loop',
-      note: 'feeds itself',
+      note: 'loop drawn',
       focus: component.members,
       severity: 'unknown',
       basis: 'structural',
@@ -629,13 +631,13 @@ export function buildInsights(analysis: TrafficAnalysis, context: AnalysisContex
     const reached = [...new Set(outOf(id).map((interaction) => interaction.to))];
     add({
       kind: 'scheduler',
-      note: 'bursts on a timer',
+      note: 'scheduled work',
       focus: [id],
       severity: 'unknown',
       basis: 'structural',
       nodeIds: [id, ...reached],
       edgeIds: [],
-      text: `${name(id)} starts work on its own schedule, so ${names(reached)} ${reached.length === 1 ? 'gets' : 'get'} bursts no user caused — worth knowing when they run alongside peak traffic.`,
+      text: `${name(id)} starts scheduled work toward ${names(reached)}. Frequency, batch size and overlap with other traffic are not shown.`,
     });
   }
 

@@ -20,7 +20,7 @@ describe('traffic graph propagation', () => {
     const result = analyzeTraffic({ nodes: [...services, database], edges: services.map((value) => edge(`${value.id}-postgres`, value.id, database.id, { semantic: 'writes' })) });
     expect(result.nodes.get(database.id)).toMatchObject({ paths: { definite: 3, possible: 3 }, sources: services.map((value) => value.id).sort(), tier: 'top' });
     expect(result.hotspots).toContain(database.id);
-    expect(insight(result, 'shared-dependency').text).toMatch(/3 services coupled through one store/);
+    expect(insight(result, 'shared-dependency').text).toMatch(/3 services use one store/);
   });
 
   it('models a service to queue to worker as an async buffer', () => {
@@ -29,7 +29,7 @@ describe('traffic graph propagation', () => {
     const worker = node('worker', 'service', { serviceKind: 'worker' });
     const result = analyzeTraffic({ nodes: [producer, queue, worker], edges: [edge('publish', producer.id, queue.id, { semantic: 'publishes', async: true }), edge('consume', queue.id, worker.id, { semantic: 'consumes', async: true })] });
     expect(result.nodes.get(worker.id)?.paths).toEqual({ definite: 1, possible: 1 });
-    expect(insight(result, 'async-buffer').text).toMatch(/fall behind or fail without slowing/);
+    expect(insight(result, 'async-buffer').text).toMatch(/backpressure can still affect producers/);
   });
 
   it('delivers a topic message definitely to all three subscribers', () => {
@@ -41,7 +41,7 @@ describe('traffic graph propagation', () => {
       ...subscribers.map((value) => edge(`consume-${value.id}`, topic.id, value.id, { semantic: 'consumes' })),
     ] });
     expect(subscribers.map((value) => result.nodes.get(value.id)?.paths)).toEqual(subscribers.map(() => ({ definite: 1, possible: 1 })));
-    expect(insight(result, 'message-distribution').text).toMatch(/handled 3 times/);
+    expect(insight(result, 'message-distribution').text).toMatch(/one delivery per drawn subscriber/);
   });
 
   it('marks two queue consumers possible and reports competing consumers', () => {
@@ -50,7 +50,7 @@ describe('traffic graph propagation', () => {
     const workers = ['a', 'b'].map((id) => node(id, 'service', { serviceKind: 'worker' }));
     const result = analyzeTraffic({ nodes: [producer, queue, ...workers], edges: [edge('publish', producer.id, queue.id, { semantic: 'publishes' }), ...workers.map((value) => edge(`consume-${value.id}`, queue.id, value.id, { semantic: 'consumes' }))] });
     expect(workers.map((value) => result.nodes.get(value.id)?.paths)).toEqual(workers.map(() => ({ definite: 0, possible: 1 })));
-    expect(insight(result, 'competing-consumers').text).toMatch(/take turns on/);
+    expect(insight(result, 'competing-consumers').text).toMatch(/competing consumers/);
   });
 
   it('handles file, object and search storage operations as data workload', () => {
@@ -88,7 +88,7 @@ describe('traffic graph propagation', () => {
     const worker = node('worker', 'service', { serviceKind: 'worker' });
     const result = analyzeTraffic({ nodes: [scheduler, worker], edges: [edge('run', scheduler.id, worker.id, { semantic: 'triggers' })] });
     expect(result.entries).toEqual([scheduler.id]);
-    expect(insight(result, 'scheduler').text).toMatch(/on its own schedule/);
+    expect(insight(result, 'scheduler').text).toMatch(/starts scheduled work/);
   });
 
   it('keeps nodes present with zero paths when they are not reached', () => {

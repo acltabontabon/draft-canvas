@@ -7,8 +7,9 @@
  * The one unit is a **modeled path**: each entry point (an Actor, a Scheduler, or a service or queue
  * nothing drawn feeds) starts one path, and every runtime interaction it reaches carries it on. A
  * node reached by three paths is not receiving three requests per second — it is where three drawn
- * routes meet. Paths are never converted into rates, latencies, utilisation or capacity; the diagram
- * holds none of those, and nothing here pretends otherwise.
+ * routes meet. Paths alone establish no rates, latencies, utilisation or capacity; the diagram
+ * holds none of those. `scenario.ts` separately scales paths by an explicitly illustrative input;
+ * it never estimates capacity or latency.
  *
  * Paths come in two strengths. `definite` paths follow interactions the diagram states plainly. A
  * `possible` path also crosses something whose share is unknown — a Junction that splits, a
@@ -201,6 +202,7 @@ export interface TrafficInsight {
 }
 
 export type TrafficStatus =
+  | 'recovery-only'
   /** Nothing runtime here: no compute, messaging or data node takes part in a runtime interaction. */
   | 'nothing-to-analyze'
   /** Runtime nodes exist but no entry point starts a path (every one sits in a loop, say). */

@@ -25,13 +25,16 @@ Queue and Data Store artwork also grows when you drag a corner resize handle.
 
 - Rename: double-click, or select and press `Enter`.
 - A label cut short? Run **Fit shapes to text** from `⌘K`.
-- Technology: click **Tech** on the selected shape, then enter a name. `Postgres` or `Rust 1.90`
-  work; the shape shows a matching icon. Edit and delete are directly beside the shape's kind.
+- Technology: click **Details** on the selected shape, then enter a name. `Postgres` or `Rust 1.90`
+  work; the shape shows a matching icon. Once assigned, its technology name replaces Details.
+  The same panel edits the description. Edit and delete are directly beside the shape's kind.
   Small marks and simple notes get a content-sized card. Drag the card's top edge to move it
   out of the way; click empty canvas to dismiss it. Resize the description box from its lower-right
   corner. Right-click for attachment, copy and other actions.
 
 ![Technology suggestions for PostgreSQL.](../media/guides/technology-suggestions.png)
+
+![Shape toolbar with the Details shortcut and aligned actions.](../media/inspectors/shape-toolbar.png)
 
 ## Connect shapes
 
@@ -49,6 +52,8 @@ a repeated relationship can share a trunk. These details also appear in SVG and 
 
 ![Default connectors: distinct operations, separate return rails and straight glyph attachments.](../media/connectors/style-light-after.png)
 
+![Compact connector panel with aligned request, reply and attachment controls.](../media/inspectors/connector-panel.png)
+
 ## Pinned and automatic ends
 
 An automatic end faces the shape it joins and turns to follow it as shapes move. A pinned end keeps its
@@ -60,12 +65,17 @@ to a nearby clear point on the same side. Pins, hand-placed bends and shared att
 | --- | --- |
 | Drawn from any dot | Automatic |
 | Dropped on a shape or a dot | Automatic |
-| Reconnected to a shape or a dot | Automatic at the reconnected end |
+| Endpoint dragged to a side or attachment dot | Pinned at that side and nearest attachment point |
+| Endpoint dragged to the center of a shape | Automatic at the reconnected end |
 | Set with **Pin ends here** | Pinned at its drawn position |
 
+While dragging an endpoint over a valid target, its attachment dots stay visible and the targeted dot fills in so you can choose a pin.
+Moving to the center clears the dot highlight to indicate automatic attachment.
+
 A selected connector shows a pinned end filled and an automatic end as a ring. Its inspector also
-shows **Fixed start**, **Fixed end** or **Fixed ends**, with **Auto attach** to let them follow
-the shapes again. Right-click a connector
+shows **Attachment · Auto / Pinned**. **Pinned** means at least one end is fixed; choosing it from
+Auto fixes both ends where they are. Choose **Auto** to let both ends follow the shapes again.
+Right-click a connector
 → **Auto attach start**, **Auto attach end**, **Auto attach both ends** or **Pin ends here**.
 **Auto attach all connectors** (`⌘K`) frees every end in the view, including the pins of diagrams
 drawn before automatic ends existed.
@@ -89,8 +99,9 @@ Right-click → **Reset route** restores automatic routing. **Tidy connectors** 
 Between two services, choose **HTTP** or **Generic Call**, then describe the request. For HTTP,
 pick a method and enter the path. **Sync** and **Async** sit beside Protocol. Choose **Add reply**
 for an editable return path with a suggested response. Async shows a break mark and has no reply.
-The drawing rail shows straight, stepped and curved routes as small
-previews you can choose with one click, beside arrowhead, colour, condition and flow controls. The
+Operation and Reply share an aligned field column. Recovery keeps its add action and explanation
+compact. The Route row shows straight, stepped and curved previews; Style groups arrowhead, colour,
+condition and flow controls. Attachment switches between Auto and Pinned. The
 colour wheel means automatic colour, as it does for shapes; click it to choose a fixed colour. Click
 the condition icon to edit a condition without making the inspector taller. Hover an icon to see
 what it does.
@@ -127,6 +138,8 @@ An AI agent using Draft Canvas MCP, including Nodi, can make the same associatio
 
 - **Attach note** / **Attach code** (right-click), or drag a note onto the line and hold.
 - **Add DLQ** on a Queue adds a dead-letter queue; click its connector to set delivery attempts.
+  DLQs use a muted amber outline and message icon by default, with a neutral fill. This identifies
+  the recovery role, not a live error. Any explicit colour choice overrides the default.
 - A Junction (`J`) shares a route. Right-click a bundle → **Convert to junction**.
 
 ## Boundaries

@@ -852,34 +852,36 @@ function ServiceInteractionSection({ edge, relations }: { edge: DraftEdge; relat
       </section>
 
       <section className="dc-inspector-section dc-inspector-request-section" aria-label={isCompensation ? 'Undo action' : 'Operation'}>
-        <span className="dc-inspector-section-label">{isCompensation ? 'Undo action' : 'Operation'}</span>
-        {isHttp ? (
-          <HttpRequestEditor
-            key={edge.label ?? ''}
-            value={edge.label ?? ''}
-            onCommit={(next) => useEditorStore.getState().updateEdgeLabel(edge.id, next)}
-          />
-        ) : (
-          // Wrapped in the same `.dc-inspector-section-row` every other single-control row in
-          // this panel uses (Response's own Generic Call field included) — `.dc-inspector-control`'s
-          // `flex: 1` assumes a *row* flex context to size its width; as a bare child of this
-          // section's own *column* flex container, `flex: 1` instead governs the column's main
-          // (vertical) axis, collapsing the input's height down to its content minimum instead of
-          // the intended 32px.
-          <div className="dc-inspector-section-row">
-            <SingleTextEditor
+        <div className="dc-inspector-operation-row">
+          <span className="dc-inspector-section-label">{isCompensation ? 'Undo action' : 'Operation'}</span>
+          {isHttp ? (
+            <HttpRequestEditor
               key={edge.label ?? ''}
               value={edge.label ?? ''}
-              placeholder={isCompensation ? 'Release reservation' : 'Validate customer'}
-              ariaLabel={isCompensation ? 'Undo action' : 'Request'}
               onCommit={(next) => useEditorStore.getState().updateEdgeLabel(edge.id, next)}
             />
-          </div>
-        )}
+          ) : (
+            // Wrapped in the same `.dc-inspector-section-row` every other single-control row in
+            // this panel uses (Response's own Generic Call field included) — `.dc-inspector-control`'s
+            // `flex: 1` assumes a *row* flex context to size its width; as a bare child of this
+            // section's own *column* flex container, `flex: 1` instead governs the column's main
+            // (vertical) axis, collapsing the input's height down to its content minimum instead of
+            // the intended 32px.
+            <div className="dc-inspector-section-row">
+              <SingleTextEditor
+                key={edge.label ?? ''}
+                value={edge.label ?? ''}
+                placeholder={isCompensation ? 'Release reservation' : 'Validate customer'}
+                ariaLabel={isCompensation ? 'Undo action' : 'Request'}
+                onCommit={(next) => useEditorStore.getState().updateEdgeLabel(edge.id, next)}
+              />
+            </div>
+          )}
+        </div>
         {!isAsync && (!isCompensation || edge.hasResponse) && !edge.hasResponse && (
           <button
             type="button"
-            className="dc-reply-add"
+            className="dc-reply-add dc-inspector-add-reply-row"
             aria-label="Add reply"
             title="Add a reply line from the target back to the caller"
             onClick={() => useEditorStore.getState().setEdgeHasResponse(edge.id, true)}
@@ -1490,7 +1492,7 @@ function ExpandedPanel({
       <section className="dc-connector-drawing-tools" aria-label="Route and style">
         <TooltipGroup>
           <div className="dc-connector-drawing-row">
-            <span className="dc-inspector-section-label">Draw</span>
+            <span className="dc-inspector-section-label">Route</span>
             <div className="dc-connector-route-picker" role="group" aria-label="Connector shape">
               {ROUTE_PREVIEWS.map((route) => (
                 <Tooltip key={route.value} content={{ title: `${route.label} route` }}>
@@ -1512,6 +1514,9 @@ function ExpandedPanel({
                 </Tooltip>
               ))}
             </div>
+          </div>
+          <div className="dc-connector-drawing-row">
+            <span className="dc-inspector-section-label">Style</span>
             <Tooltip content={{ title: edge.directed ? 'Remove arrowhead' : 'Add arrowhead', description: 'Choose whether this connection points to its target.' }}>
               {(tip) => (
                 <Button
@@ -1572,18 +1577,29 @@ function ExpandedPanel({
             {flowAction && <div className="dc-inspector-flow-action">{flowAction}</div>}
           </div>
         </TooltipGroup>
-        {(edge.sourceAnchor || edge.targetAnchor) && (
-          <div className="dc-connector-attachment-mode">
-            <span>{edge.sourceAnchor && edge.targetAnchor ? 'Fixed ends' : edge.sourceAnchor ? 'Fixed start' : 'Fixed end'}</span>
-            <Button
-              variant="quiet"
-              aria-label="Auto attach connector"
+        <div className="dc-connector-attachment-mode">
+          <span className="dc-inspector-section-label">Attachment</span>
+          <div className="dc-connector-route-picker dc-connector-attachment-picker" role="group" aria-label="Attachment">
+            <button
+              type="button"
+              className="dc-connector-route-option"
+              aria-pressed={!edge.sourceAnchor && !edge.targetAnchor}
               onClick={() => useEditorStore.getState().autoAttachEnds([edge.id], 'both')}
             >
-              Auto attach
-            </Button>
+              Auto
+            </button>
+            <button
+              type="button"
+              className="dc-connector-route-option"
+              aria-pressed={Boolean(edge.sourceAnchor || edge.targetAnchor)}
+              onClick={() => {
+                if (!edge.sourceAnchor && !edge.targetAnchor) useEditorStore.getState().pinEnds([edge.id], 'both');
+              }}
+            >
+              Pinned
+            </button>
           </div>
-        )}
+        </div>
         {conditionOpen && showCondition && (
           <div className="dc-connector-flyout dc-connector-condition-flyout">
             <input

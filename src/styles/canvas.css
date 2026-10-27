@@ -339,13 +339,17 @@
   }
 }
 
+/* Endpoint drags capture the pointer, so the target does not receive normal hover. */
 .dc-node:hover .dc-handle,
+.dc-node[data-reconnect-target='true'] .dc-handle,
 .dc-node[data-selected='true'] .dc-handle {
   opacity: 1;
   visibility: visible;
 }
 
 .dc-handle:hover {
+  background: color-mix(in srgb, var(--dc-selection) 35%, var(--dc-canvas));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dc-selection) 15%, transparent);
   width: 12px;
   height: 12px;
   opacity: 1;
@@ -1945,7 +1949,7 @@
   padding: 7px 8px;
 }
 
-.dc-element-identity-row > .dc-inspector-select {
+.dc-popover-config.dc-element-identity-row > .dc-inspector-select {
   flex: 1 1 auto;
   min-width: 0;
 }
@@ -2427,8 +2431,11 @@
 
 .dc-connector-drawing-tools {
   position: relative;
-  padding-top: 9px;
-  border-top: 1px solid color-mix(in srgb, var(--dc-selection) 25%, var(--dc-border));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--dc-border);
 }
 
 .dc-connector-drawing-row {
@@ -2440,16 +2447,21 @@
 .dc-connector-attachment-mode {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: 6px;
-  color: var(--dc-text-muted);
-  font-size: var(--dc-popover-font);
+  gap: 6px;
 }
 
-.dc-connector-drawing-row > .dc-inspector-section-label {
-  color: var(--dc-text-faint);
-  font-size: 9px;
+.dc-connector-drawing-row > .dc-inspector-section-label,
+.dc-connector-attachment-mode > .dc-inspector-section-label,
+.dc-inspector-operation-row > .dc-inspector-section-label,
+.dc-inspector-reply-line > .dc-inspector-reply-label,
+.dc-recovery-section-heading > .dc-inspector-section-label {
+  flex: 0 0 70px;
+  margin: 0;
+  color: var(--dc-text-muted);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .dc-connector-route-picker {
@@ -2483,6 +2495,15 @@
 .dc-connector-route-option[aria-pressed='true'] {
   background: color-mix(in srgb, var(--dc-selection) 16%, var(--dc-surface-raised));
   color: var(--dc-selection);
+}
+
+.dc-connector-attachment-picker {
+  flex: 1 1 auto;
+}
+
+.dc-connector-attachment-picker .dc-connector-route-option {
+  font: inherit;
+  font-size: 11px;
 }
 
 .dc-connector-arrow-button,
@@ -2593,8 +2614,13 @@
 .dc-recovery-section-heading {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  min-height: 20px;
+  gap: 6px;
+  min-height: 25px;
+}
+
+.dc-recovery-section > .dc-inspector-help {
+  margin-left: 76px;
+  font-size: 11px;
 }
 
 .dc-recovery-action {
@@ -3032,10 +3058,24 @@
 
 .dc-inspector-request-section {
   gap: 8px;
-  padding: 10px;
-  border: 1px solid var(--dc-border);
-  border-radius: var(--dc-radius-sm);
-  background: var(--dc-surface-raised);
+}
+
+.dc-inspector-operation-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 25px;
+}
+
+/* Keep request and reply fields on the same control column as Route and Attachment. */
+.dc-inspector-operation-row > .dc-inspector-section-row,
+.dc-inspector-operation-row > .dc-inspector-split {
+  flex: 1;
+  min-width: 0;
+}
+
+.dc-inspector-add-reply-row {
+  margin-left: 76px;
 }
 
 .dc-inspector-request-section .dc-inspector-split {
@@ -3078,9 +3118,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-top: 2px;
-  padding-top: 9px;
-  border-top: 1px solid var(--dc-border);
+  position: relative;
 }
 
 .dc-inspector-reply-label {
@@ -3094,7 +3132,16 @@
   min-width: 0;
 }
 
+.dc-inspector-reply-line .dc-inspector-control,
+.dc-inspector-reply-line .dc-inspector-split-rest {
+  padding-right: 27px;
+}
+
 .dc-inspector-reply-hide {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -5471,7 +5518,7 @@
    and the open-point marker sits past the right edge. */
 .dc-traffic-badge {
   position: absolute;
-  top: -22px;
+  top: -34px;
   left: 6px;
   display: inline-flex;
   align-items: center;
@@ -5489,7 +5536,8 @@
   box-shadow: var(--dc-shadow-panel);
 }
 
-.dc-traffic-badge[data-tier='raised'] {
+.dc-traffic-badge[data-tier='raised'],
+.dc-traffic-badge[data-tier='none'] {
   border-color: var(--dc-border);
   color: var(--dc-text-muted);
   font-weight: 500;
@@ -6666,3 +6714,232 @@
 .dc-source-evidence p { opacity: 0.7; margin: 8px 0 0; }
 
 .dc-proposal-diff-before, .dc-proposal-diff-after { white-space: pre-wrap; }
+
+/* Traffic's reference stays at the canvas edge; help floats above it without growing the bar. */
+.dc-traffic-scenario {
+  max-width: calc(100% - 32px);
+  margin: 16px;
+  padding: 2px 8px;
+  border: 1px solid var(--dc-border);
+  border-radius: 6px;
+  background: var(--dc-surface);
+  color: var(--dc-text-muted);
+  font-size: 11px;
+}
+
+.dc-traffic-scenario-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.dc-traffic-scenario-rate {
+  white-space: nowrap;
+}
+
+.dc-traffic-scenario button {
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--dc-text-muted);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.dc-traffic-scenario button:hover,
+.dc-traffic-scenario button[aria-expanded='true'] {
+  color: var(--dc-caution);
+}
+
+.dc-traffic-scenario button:focus-visible,
+.dc-traffic-scenario-help:focus-visible {
+  outline: 2px solid var(--dc-accent);
+  outline-offset: 3px;
+}
+
+.dc-traffic-scenario-help {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  width: min(320px, calc(100vw - 32px));
+  max-height: min(180px, 26vh);
+  padding: 10px 12px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  border: 1px solid var(--dc-border);
+  border-left: 2px solid var(--dc-caution);
+  border-radius: 3px 8px 8px 3px;
+  background: var(--dc-surface);
+  box-shadow: var(--dc-shadow-panel);
+  color: var(--dc-text);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.dc-traffic-scenario-help p {
+  margin: 0 0 8px;
+}
+
+.dc-traffic-scenario-help p:last-child {
+  margin-bottom: 0;
+  color: var(--dc-text-muted);
+}
+
+/* A small tally and a folded field note: the explanation keeps Traffic's whiteboard voice. */
+.dc-traffic-callout-sources[data-rates] li {
+  display: block;
+  padding: 5px 0;
+  border-bottom: 1px dashed color-mix(in srgb, var(--dc-caution) 22%, transparent);
+}
+.dc-traffic-callout-sources[data-rates] .dc-traffic-callout-count {
+  display: block;
+  font-size: 11px;
+  color: var(--dc-caution);
+}
+.dc-traffic-callout-sources[data-rates] .dc-traffic-callout-count::before {
+  content: '↳ ';
+}
+.dc-traffic-work {
+  margin-top: 8px;
+  color: var(--dc-caution);
+}
+.dc-traffic-work summary {
+  cursor: pointer;
+  font-size: 17px;
+  line-height: 28px;
+  text-decoration: underline;
+  text-decoration-style: wavy;
+  text-decoration-color: color-mix(in srgb, var(--dc-caution) 30%, transparent);
+  text-underline-offset: 4px;
+}
+.dc-traffic-work summary:focus-visible {
+  outline: 2px solid var(--dc-accent);
+  outline-offset: 2px;
+}
+.dc-traffic-work-paper {
+  border-left: 2px solid color-mix(in srgb, var(--dc-caution) 35%, transparent);
+  padding-left: 10px;
+  margin: 8px 0;
+  color: var(--dc-text);
+}
+.dc-traffic-work-paper li {
+  padding: 3px 0;
+}
+.dc-traffic-work-paper p {
+  margin: 6px 0 0;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dc-text-muted);
+}
+
+.dc-traffic-replay-count {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+.dc-traffic-replay-count input {
+  width: 76px;
+  min-height: 30px;
+  padding: 3px 6px;
+  color: var(--dc-text);
+  background: var(--dc-surface);
+  border: 1px solid var(--dc-border);
+  border-radius: 4px;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+.dc-traffic-replay-count input:focus-visible,
+.dc-traffic-recovery-shared button:focus-visible {
+  outline: 2px solid var(--dc-accent);
+  outline-offset: 2px;
+}
+.dc-traffic-recovery-shared {
+  margin-top: 10px;
+  border-top: 1px dashed var(--dc-border);
+}
+.dc-traffic-recovery-shared button {
+  display: block;
+  padding: 4px 0;
+  background: transparent;
+  border: 0;
+  color: var(--dc-caution);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.dc-traffic-replay-badge,
+.dc-traffic-baseline-chip {
+  position: absolute;
+  padding: 4px 6px;
+  border: 1px solid var(--dc-caution);
+  border-radius: 6px;
+  background: var(--dc-surface);
+  color: var(--dc-caution);
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 16px;
+  pointer-events: none;
+}
+
+.dc-traffic-replay-badge,
+.dc-traffic-baseline-chip {
+  translate: 0 -100%;
+  box-shadow: var(--dc-shadow-panel);
+}
+.dc-traffic-chip-normal {
+  display: block;
+  color: var(--dc-text);
+  padding-bottom: 3px;
+}
+.dc-traffic-baseline-chip {
+  color: var(--dc-text-muted);
+  border-color: var(--dc-border);
+}
+.dc-canvas:has(.dc-traffic-replay-badge) .dc-traffic-badge {
+  visibility: hidden;
+}
+
+.dc-traffic-dlq-note {
+  position: absolute;
+  color: var(--dc-caution);
+  font-size: 14px;
+  line-height: 19px;
+  pointer-events: none;
+  opacity: 0.85;
+}
+
+.dc-traffic-shared-work {
+  margin: 10px 0;
+  padding-left: 10px;
+  border-left: 2px solid var(--dc-caution);
+}
+.dc-traffic-shared-work h3 {
+  margin: 0 0 4px;
+  color: var(--dc-caution);
+  font-size: 16px;
+  line-height: 21px;
+  font-weight: 400;
+}
+.dc-traffic-shared-work p {
+  margin: 0;
+  color: var(--dc-text-muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.dc-traffic-crossings { margin: 12px 0; }
+.dc-traffic-crossings h3 { margin: 0 0 8px; color: var(--dc-caution); font-size: 16px; font-weight: 400; }
+.dc-traffic-crossing { margin-top: 10px; padding-left: 10px; border-left: 1px dashed var(--dc-border); }
+.dc-traffic-crossing strong { font-size: 12px; line-height: 18px; }
+.dc-traffic-crossings p { margin: 3px 0; font-size: 11px; line-height: 16px; color: var(--dc-text-muted); }

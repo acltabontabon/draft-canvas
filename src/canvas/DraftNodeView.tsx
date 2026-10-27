@@ -42,7 +42,7 @@ import { SvgSurface } from './SvgSurface';
 import { layerBehind } from './insideMark';
 import { emphasisColorOf, emphasisOf } from './emphasis';
 import { pathsLabel } from './trafficLabels';
-import { trafficNodeOf, trafficNodeReading } from '../store/traffic';
+import { trafficNodeOf, trafficNodeReading, trafficScenarioOf } from '../store/traffic';
 import { OpenPointMarker } from './OpenPointMarker';
 import { unresolvedOpenPointsFor } from '../document/openPoints';
 import { nodeMarkerOrigin } from '../openPoints/marker';
@@ -90,10 +90,11 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   });
   const trafficReading = useEditorStore((state) => trafficNodeReading(state, id));
   // The analysis's own object for this node, identity-stable until the room changes — read only
-  // where a badge is drawn.
+  // while the traffic reading is visible.
   const trafficNode = useEditorStore((state) =>
-    trafficReading === 'top' || trafficReading === 'raised' ? trafficNodeOf(state, id) : undefined,
+    state.traffic.active ? trafficNodeOf(state, id) : undefined,
   );
+  const scenarioLabel = useEditorStore((state) => trafficScenarioOf(state)?.get(id));
   const focused = useEditorStore((state) => isNodeFocused(state.focus, id));
   const lensMember = useEditorStore((state) => lensMemberFor(state, id));
   const theme = useThemeValue();
@@ -108,6 +109,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   // which is the same discipline as `isAttachTarget` above with one extra step.
   const capsule = useUiStore((state) => (state.dragCapsule?.nodeId === id ? state.dragCapsule : null));
   // Same boolean-not-id discipline as `isAttachTarget` — see its comment.
+  const reconnectHandle = useUiStore((state) => state.reconnectHoverTarget === id ? state.reconnectHoverHandle : null);
   const isReconnectTarget = useUiStore((state) => state.reconnectHoverTarget === id);
   const jumpFlash = useUiStore((state) => state.jumpFlashId === id);
   const pointed = useUiStore((state) => state.pointedIds?.has(id) ?? false);
@@ -625,12 +627,12 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
         {shapes}
       </SvgSurface>
 
-      {/* How many modeled paths meet here, in words as well as the halo — never a colour alone.
+      {/* Illustrative work per minute, in words as well as the halo — never a colour alone.
           Chrome, like the halo: it never reaches an export. */}
-      {trafficNode && !capsule && (
+      {trafficNode && scenarioLabel && !capsule && (
         <span className="dc-traffic-badge" data-tier={trafficNode.tier}>
           <span className="dc-sr-only">Traffic: </span>
-          {pathsLabel(trafficNode.paths)}
+          {scenarioLabel ?? pathsLabel(trafficNode.paths)}
         </span>
       )}
 
@@ -746,7 +748,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
             style={handleStyles.get(anchor.id)}
             connectable={!readOnly}
             from={connecting.from === anchor.id}
-            to={connecting.to === anchor.id}
+            to={connecting.to === anchor.id || reconnectHandle === anchor.id}
           />
         ),
       )}

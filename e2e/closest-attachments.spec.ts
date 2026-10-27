@@ -33,9 +33,9 @@ test('fixed attachment points are visible and one click switches the old loop to
     return { x: p.x, y: p.y };
   });
   await page.mouse.click(click.x, click.y);
-  await expect(page.getByText('Fixed ends', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Auto attach connector', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Auto attach connector', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Pinned', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Auto', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Auto', exact: true })).toHaveAttribute('aria-pressed', 'true');
   const routed = await ends(page);
   const source = (await page.locator('.react-flow__node[data-id="source"]').boundingBox())!;
   const target = (await page.locator('.react-flow__node[data-id="near"]').boundingBox())!;
@@ -43,6 +43,11 @@ test('fixed attachment points are visible and one click switches the old loop to
   expect(routed.to.x).toBeCloseTo(target.x, 1);
   expect(routed.from.y).toBeCloseTo(routed.to.y, 1);
   expect(routed.length).toBeCloseTo(60, 1);
+  const automatic = await pathFor(page).getAttribute('d');
+  await page.getByRole('button', { name: 'Pinned', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Pinned', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  expect(await pathFor(page).getAttribute('d')).toBe(automatic);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
   await page.getByRole('button', { name: 'Undo', exact: true }).click();
   expect(await pathFor(page).getAttribute('d')).toBe(before);
 });

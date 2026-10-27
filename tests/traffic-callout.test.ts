@@ -11,7 +11,7 @@ describe('traffic field note', () => {
     expect(note.metric).toBe('2 paths');
     expect(note.sources.map((source) => source.count)).toEqual(['1 path', '1 path']);
     expect(note.sections).toHaveLength(1);
-    expect(note.sections[0]!.detail?.text).toBe('Calls wait · journeys stall');
+    expect(note.sections[0]!.detail?.text).toBe('Synchronous paths as drawn');
     expect(note.sections[0]!.items.map((item) => item.text).sort()).toEqual(['Mobile BFF', 'Web Storefront']);
   });
 
@@ -20,8 +20,8 @@ describe('traffic field note', () => {
     const analysis = analyzeTraffic({ nodes, edges: [edge('customer-web', 'customer', 'web', { semantic: 'calls' }), edge('web-checkout', 'web', 'checkout', { semantic: 'calls' })] });
     const note = trafficCalloutFor(analysis, nodes, 'checkout', [])!;
     expect(note.sections.map((section) => ({ label: section.label, names: section.items.map((item) => item.text) }))).toEqual([
-      { label: 'Calls waiting', names: ['Web Storefront'] },
-      { label: 'Journeys stalled', names: ['Customer'] },
+      { label: 'Upstream dependencies', names: ['Web Storefront'] },
+      { label: 'Potentially affected entries', names: ['Customer'] },
     ]);
   });
 

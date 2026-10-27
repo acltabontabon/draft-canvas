@@ -1,5 +1,5 @@
 import { openGallery } from './library';
-import { node, trafficDocument } from './fixtures/traffic';
+import { boundaryDocument, node, recoveryDocument, trafficDocument } from './fixtures/traffic';
 /**
  * Regenerates the screenshots the user guides in `docs/guides/` embed (`docs/media/guides/*.png`).
  *
@@ -103,6 +103,8 @@ async function startServer(): Promise<() => Promise<void>> {
 }
 
 async function shot(page: Page, name: string, clip?: { x: number; y: number; width: number; height: number }) {
+  // Import notices are transient feedback, not part of the guide's resting UI.
+  for (const dismiss of await page.locator('.dc-toast-dismiss').all()) await dismiss.click();
   // Let motion settle (popovers, ghosts, camera) so the picture is the resting state.
   await page.waitForTimeout(1300);
   await page.screenshot({ path: join(OUT, `${name}.png`), clip });
@@ -301,7 +303,7 @@ async function technologyScreenshots(page: Page) {
   await title.fill('Technology at a glance');
   await title.blur();
   await drop(page, 'd', { x: 420, y: 310 }, 'Orders');
-  await page.locator('.dc-element-inspector').getByRole('button', { name: 'Add technology' }).click();
+  await page.locator('.dc-element-inspector').getByRole('button', { name: 'Details' }).click();
   const technology = page.getByRole('combobox', { name: 'Technology', exact: true });
   await technology.fill('Postgres');
   await expect(page.getByRole('option', { name: 'PostgreSQL', exact: true })).toBeVisible();
@@ -310,7 +312,7 @@ async function technologyScreenshots(page: Page) {
   await page.locator(CANVAS).click({ position: { x: 12, y: 12 } });
 
   await drop(page, 's', { x: 720, y: 310 }, 'Internal worker');
-  await page.locator('.dc-element-inspector').getByRole('button', { name: 'Add technology' }).click();
+  await page.locator('.dc-element-inspector').getByRole('button', { name: 'Details' }).click();
   await technology.fill('Private runtime');
   await technology.press('Enter');
   await page.locator(CANVAS).click({ position: { x: 12, y: 12 } });
@@ -405,7 +407,7 @@ async function trafficScreenshots(page: Page) {
   await page.locator('.dc-status-traffic').click();
   await expect(page.locator('button.dc-traffic-note').last()).toHaveCSS('opacity', '1', { timeout: 10000 });
   await shot(page, 'traffic-overview');
-  const fallback = page.getByRole('button', { name: /^no fallback!/ }).first();
+  const fallback = page.getByRole('button', { name: /^no fallback drawn/ }).first();
   await fallback.click();
   await shot(page, 'traffic-note');
   await fallback.press('Escape');
@@ -414,6 +416,42 @@ async function trafficScreenshots(page: Page) {
   await shot(page, 'traffic-detail');
   await page.locator('.dc-traffic-callout').screenshot({ path: join(OUT, 'traffic-callout.png') });
   log('  traffic-callout.png');
+  await page.locator('.dc-traffic-work summary').click();
+  await page.getByRole('list', { name: 'Work per arrival' }).scrollIntoViewIfNeeded();
+  await shot(page, 'traffic-work');
+  await page.getByRole('button', { name: 'How to read this' }).click();
+  await shot(page, 'traffic-reading-guide');
+  await page.goto(URL);
+  await page.locator('input[type="file"]').setInputFiles({
+    name: 'recovery-guide.draftcanvas', mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(recoveryDocument())),
+  });
+  await page.locator('.dc-status-traffic').click();
+  await page.locator('.react-flow__node[data-id="dlq"] .dc-node').click();
+  await page.locator('.dc-traffic-recovery summary').click();
+  await page.getByRole('textbox', { name: 'Messages to replay' }).fill('500');
+  await shot(page, 'traffic-recovery');
+  await page.locator('.react-flow__node[data-id="db"] .dc-node').click();
+  await page.locator('.dc-traffic-database summary').click();
+  await shot(page, 'traffic-database');
+  await page.locator('.dc-status-traffic').click();
+  await page.getByRole('button', { name: 'Details', exact: true }).click();
+  const assigned = page.getByRole('combobox', { name: 'Technology', exact: true });
+  await assigned.fill('PostgreSQL');
+  await assigned.press('Enter');
+  await page.keyboard.press('Escape');
+  await page.locator('.dc-status-traffic').click();
+  await expect(page.getByRole('region', { name: 'Technology note' })).toContainText('PostgreSQL');
+  await shot(page, 'traffic-technology');
+
+  await page.goto(URL);
+  await page.locator('input[type="file"]').setInputFiles({
+    name: 'boundary-guide.draftcanvas', mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(boundaryDocument())),
+  });
+  await page.locator('.dc-status-traffic').click();
+  await page.locator('.react-flow__node[data-id="deployment"] .dc-node').click({ position: { x: 20, y: 15 } });
+  await shot(page, 'traffic-boundaries');
 }
 
 async function main() {

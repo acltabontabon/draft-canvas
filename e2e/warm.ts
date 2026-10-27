@@ -17,6 +17,10 @@ export default async function warm(config: FullConfig): Promise<void> {
   try {
     const page = await browser.newPage();
     await page.goto(baseURL, { waitUntil: 'load', timeout: 120_000 });
+    // The brand also renders while storage opens. Wait for the actual home screen so its
+    // replacement cannot swallow the About click on a cold CI startup.
+    const newCanvas = page.getByRole('button', { name: 'New canvas' }).first();
+    await newCanvas.waitFor({ state: 'visible', timeout: 120_000 });
     // About is a lazy chunk too, carrying every release's notes, and the first test to open it on a
     // cold server (Firefox in CI) waited past its own expectation for the dialog.
     const about = page.getByRole('button', { name: 'About Draft Canvas' }).first();
@@ -28,7 +32,6 @@ export default async function warm(config: FullConfig): Promise<void> {
     await dialog.waitFor({ state: 'visible', timeout: 120_000 });
     await page.keyboard.press('Escape');
     await dialog.waitFor({ state: 'hidden', timeout: 10_000 });
-    const newCanvas = page.getByRole('button', { name: 'New canvas' }).first();
     await newCanvas.click();
     await page.locator('.dc-editor').waitFor({ state: 'visible', timeout: 120_000 });
   } finally {

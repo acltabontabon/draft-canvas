@@ -51,3 +51,25 @@ export function notesOnlyDocument(): TrafficDocument {
   return { ...document, nodes: [node('note', 'note', 'Only a note', 0, 0)], edges: [] };
 }
 
+
+export function recoveryDocument(): TrafficDocument {
+  const document = trafficDocument('Recovery work');
+  return { ...document, nodes: [
+    node('api', 'service', 'API', 0, 0),
+    node('worker', 'service', 'Worker', 340, 0),
+    node('db', 'database', 'Database', 680, 0),
+    node('dlq', 'queue', 'Dead-letter queue', 340, 240, { deliveryRole: 'dead-letter' }),
+  ], edges: [
+    { id: 'call', source: 'api', target: 'worker', semantic: 'calls', directed: true },
+    { id: 'write', source: 'worker', target: 'db', semantic: 'writes', directed: true },
+    { id: 'dead', source: 'worker', target: 'dlq', semantic: 'deadLetters', directed: true },
+    { id: 'replay', source: 'dlq', target: 'worker', semantic: 'deliversTo', directed: true },
+  ] };
+}
+
+export function boundaryDocument(): TrafficDocument {
+  const document = recoveryDocument();
+  document.nodes = [node('deployment', 'group', 'Processing deployment', 300, -60, { width: 600, height: 200, boundaryPreset: 'deployment' }), ...document.nodes.map((item) => item.id === 'worker' || item.id === 'db' ? { ...item, parentId: 'deployment' } : item)];
+  document.edges.push({ id: 'read', source: 'api', target: 'db', semantic: 'reads', directed: true });
+  return document;
+}

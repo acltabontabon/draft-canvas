@@ -12,6 +12,42 @@ The retired VS Code extension has [its own changelog](https://github.com/acltabo
 
 #### Added
 
+- Traffic shows short notes for nine common assigned database and messaging technologies, including
+  SNS, without extra inputs or inferred deployment settings.
+
+- Traffic explains boundary crossings and whether drawn calls wait for responses, using existing
+  boundary membership and connector semantics without extra input.
+
+- Traffic notes highlight shared workload when replay and normal traffic can use the selected
+  resource, without extra inputs or capacity predictions.
+
+- A small Clear replay control removes the temporary recovery example without turning Traffic off.
+
+- The editor footer keeps save status and canvas controls compact, without element counts or the
+  repeated privacy sentence. Collapsing Recovery work or inspecting another shape keeps the chosen replay example visible.
+
+- A quiet note beside each DLQ describes its replay scenario. Zero messages clears the extra
+  replay numbers without implying a live queue is empty.
+
+- Traffic’s Database work note separates illustrative logical reads and writes from drawn connectors,
+  keeping mixed routes combined. Replay batches now show extra work on affected canvas shapes.
+
+- Traffic notes show recovery work for drawn DLQ replay and compensation routes. Start with one
+  attempt or optionally explore a replay batch, with total work and shared dependencies kept
+  separate from normal traffic rates.
+
+- Traffic’s “How to read this” guide opens as a compact popover at the lower-left canvas edge,
+  with clear limits on what the numbers can tell you. It closes on Escape or an outside click.
+
+- Traffic notes explain incoming rates as a source tally and unfold a handwritten “One request
+  from here…” summary of downstream work, with no new inputs. Messages published and delivered
+  stay distinct; uncertain branches and loops retain their limits. Floating edit toolbars stay out
+  of the way while reading Traffic.
+
+- Traffic opens with a fixed illustrative 1,000 starts/min per entry, with no setup or rate controls.
+  Runtime shapes show calls, messages or data operations per minute; unknown shares remain ranges,
+  and loops have no rate estimate. The scenario stays local and never changes the diagram.
+
 - Companion and MCP-created connectors release provisional layout pins when automatic attachments
   make the whole view simpler without harming other routes or captions. Explicit pins and bends stay
   fixed; agent geometry reads and previews use the same routing as the canvas.
@@ -24,7 +60,7 @@ The retired VS Code extension has [its own changelog](https://github.com/acltabo
 - Connectors route around shapes, spread automatic ends and separate overlapping runs. Auto attach
   lets ends follow shapes, including after reconnecting; Pin ends here keeps their exact attachment.
   Nearby automatic ends align along their overlapping sides, and blocked approaches can slide
-  to a clear point. Fixed ends are identified in the inspector with a one-click Auto attach action.
+  to a clear point. The inspector shows Attachment · Auto / Pinned, with one-click switching.
   Existing diagrams retain explicit pins.
 - Agents can set automatic or pinned ends and receive unresolved-route and crowded-side advice.
   Create and arrange also tidy avoidable crossings and detours, keeping clean neighbours and shared
@@ -32,6 +68,16 @@ The retired VS Code extension has [its own changelog](https://github.com/acltabo
 
 #### Fixed
 
+- Attachment dots shade on hover and highlight the precise pin during endpoint dragging; center
+  drops clear that highlight to indicate automatic attachment.
+
+- Attachment dots remain visible on a valid target while dragging a connector endpoint.
+
+- Dragging a connector endpoint to a specific side pins it there again. Center drops keep smart
+  attachment, and the opposite end retains its existing behavior.
+
+- Traffic explanations distinguish modeled dependencies from runtime failure, buffering and delivery
+  guarantees; messaging assumptions are explicit. Compact notes keep nearby shapes accessible.
 - Traffic findings stay above connector labels and arrows, with clear text backgrounds and placement
   that accounts for wrapped notes and selected-shape explanations. Deleting every shape while Traffic
   is showing no longer crashes the editor.
@@ -39,6 +85,13 @@ The retired VS Code extension has [its own changelog](https://github.com/acltabo
   including routes through Junctions.
 
 #### Changed
+
+- Connector inspectors use aligned Operation, Reply, Recovery, Route, Style and Attachment controls.
+  Auto / Pinned shows the current attachment mode; choosing Pinned from Auto fixes the drawn ends.
+- Shape toolbars label the empty technology shortcut **Details**, covering technology and description,
+  and distribute controls evenly without unused trailing space. Assigned technology names stay visible.
+
+- DLQs default to a muted amber outline and message icon with neutral fill; explicit colours remain unchanged.
 
 - Selected-shape traffic notes use a clear path summary, aligned source counts and distinct impact
   and dependency sections, with quieter body text and a hand-drawn accent.
