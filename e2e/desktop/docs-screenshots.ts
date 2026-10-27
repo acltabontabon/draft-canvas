@@ -84,9 +84,10 @@ async function openOrders(browser: Browser): Promise<Page> {
   }, ORDERS);
   await page.evaluate((text) => {
     window.__shell.addFile('Order processing', text);
-    window.__shell.setAgent({ enabled: true, listening: true });
-    // Nodi asks for the diagram's folder as an agent project before it takes a message.
+    // Nodi asks for the diagram's folder as an agent project before it takes a message. Seed it
+    // before `setAgent`: its agent-changed event is what makes the app read the projects again.
     window.__shell.seed({ projects: [{ name: 'work', path: '~/work', agent: true, diagrams: [] }] });
+    window.__shell.setAgent({ enabled: true, listening: true });
   }, text);
   await page.getByRole('button', { name: 'Open file…' }).click();
   await chooseWorkFile(page, 'Order processing');
@@ -144,6 +145,9 @@ async function proposal(page: Page, run: string, id: string, ops: unknown[], sum
 async function capture(browser: Browser): Promise<void> {
   const welcome = await openOrders(browser);
   await expect(welcome.getByRole('button', { name: 'Open Nodi' })).toBeVisible();
+  // The resting picture is the greeting, never the "add this folder as a project" snag (1.18.0's
+  // run caught it when the project was seeded after the agent refresh).
+  await expect(welcome.getByText('Add this diagram’s folder as a project, boss.')).toHaveCount(0);
   await shot(welcome, 'nodi-rest');
   await welcome.getByRole('button', { name: 'Open Nodi' }).click();
   await expect(welcome.getByRole('list', { name: 'Ask Nodi' })).toBeVisible();
