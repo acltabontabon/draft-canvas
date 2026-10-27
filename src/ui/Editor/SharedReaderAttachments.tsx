@@ -2,6 +2,8 @@ import { useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useInternalNode, useStore, useStoreApi } from '@xyflow/react';
 import { ReadOnlyCode } from '../../canvas/AttachmentPresentation';
+import { markerLoop } from '../../canvas/trafficSketchPaths';
+import { familyOf } from '../../render/text/fonts';
 import { OpenPointGlyph } from '../../canvas/OpenPointGlyph';
 import { rectOfInternal } from '../../canvas/edgeGeometry';
 import { edgeAnchor } from '../../canvas/presentation/presentationAnchor';
@@ -89,6 +91,7 @@ function useDetailAnchor(target: ElementTarget) {
 function AttachmentMarker({ group, selected, onSelect, onClose }: Pick<Props, 'selected' | 'onSelect' | 'onClose'> & { group: AttachmentGroup }) {
   const ref = useRef<HTMLButtonElement>(null);
   const anchor = useDetailAnchor(group.target);
+  const loop = useMemo(() => markerLoop({ x: 6, y: 5, width: 108, height: 22 }, `reader:${group.target.kind}:${group.target.id}`), [group.target.kind, group.target.id]);
   const active = selected?.target.id === group.target.id && group.items.some((item) => item.id === selected.id);
   const item = group.items.find((entry) => entry.id === selected?.id) ?? group.items.find((entry) => !entry.point?.resolved) ?? group.items[0]!;
   const { target } = useOverlayPosition(ref, 'above', (frame) => {
@@ -97,8 +100,12 @@ function AttachmentMarker({ group, selected, onSelect, onClose }: Pick<Props, 's
     return { placement: 'above', transform: `translate(${point.x - frame.size.width / 2}px, ${point.y - frame.size.height - 10}px)` };
   });
   if (!target || !anchor) return null;
-  return createPortal(<button type="button" ref={ref} className="dc-reader-attachment-marker nodrag nopan" data-reader-host={`${group.target.kind}:${group.target.id}`} aria-label={`Attachments on ${group.target.label}`} aria-expanded={active}
+  return createPortal(<button type="button" ref={ref} className="dc-reader-attachment-marker nodrag nopan" style={{ fontFamily: familyOf('hand') }} data-reader-host={`${group.target.kind}:${group.target.id}`} aria-label={`Attachments on ${group.target.label}`} aria-expanded={active}
     onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); event.currentTarget.focus(); if (active) onClose(); else onSelect(item, group.target); }}>
+    <svg className="dc-reader-annotation-strokes" viewBox="0 0 120 32" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+      <path className="dc-reader-annotation-underline" d="M9 27 Q49 29 110 25 M20 30 Q63 28 102 29" />
+      <path className="dc-reader-annotation-loop" d={loop} />
+    </svg>
     <DetailGlyph item={item} /><span>{group.items.length > 1 ? 'Details' : item.point && !item.point.resolved ? 'Pending' : labelOf(item)}</span>{group.items.length > 1 && <span className="dc-reader-attachment-count">{group.items.length}</span>}
   </button>, target);
 }
@@ -151,7 +158,7 @@ function FloatingDetail({ target, children }: { target: ElementTarget; children:
     });
     return detailPlacement(frame, placed);
   });
-  return portal && anchor ? createPortal(<div className="dc-reader-floating-detail" ref={ref} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}><span className="dc-reader-attachment-leader" aria-hidden="true" />{children}</div>, portal) : null;
+  return portal && anchor ? createPortal(<div className="dc-reader-floating-detail" ref={ref} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}><svg className="dc-reader-attachment-leader" viewBox="0 0 100 12" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path d="M0 6 Q28 0 52 6 T100 6" /></svg>{children}</div>, portal) : null;
 }
 
 function detailPlacement(frame: OverlayFrame, placed: ReturnType<typeof placeCallout>) {
@@ -183,7 +190,7 @@ function DetailCard({ item, target, index, count, onClose, onBrowse, onTarget }:
     return () => observer.disconnect();
   }, [item.id]);
   return <section className="dc-reader-attachment-card" aria-label={`${labelOf(item)} for ${target.label}`}>
-    <header><span><DetailGlyph item={item} />{labelOf(item)}</span><Button variant="quiet" icon="close" aria-label="Close attachment" onClick={onClose} /></header>
+    <header><span style={{ fontFamily: familyOf('hand') }}><DetailGlyph item={item} />{labelOf(item)}</span><Button variant="quiet" icon="close" aria-label="Close attachment" onClick={onClose} /></header>
     <p className="dc-reader-attachment-owner">{target.room ? `${target.room} / ` : ''}{target.label}</p>
     <div className="dc-reader-attachment-text" key={item.id} ref={text} aria-live="polite">
       {item.code ? <ReadOnlyCode code={item.code.code ?? ''} language={item.code.language ?? 'plaintext'} /> : <p>{item.text}</p>}

@@ -12,6 +12,15 @@ The retired VS Code extension has [its own changelog](https://github.com/acltabo
 
 #### Added
 
+- Shared readers show attachments as handwritten annotations, with sketch underlines, a circle
+  around the selected label, and a drawn line to its readable note.
+
+- Presentation keeps the current step’s enclosing boundaries in focus, including nested boundaries
+  and explicitly highlighted shapes. Shared readers and protected links use the standard product logo.
+
+- Shared diagrams have a calmer reader with an editorial title, a framed canvas, grouped controls,
+  and responsive spacing in light and dark themes.
+
 - Traffic shows short notes for nine common assigned database and messaging technologies, including
   SNS, without extra inputs or inferred deployment settings.
 

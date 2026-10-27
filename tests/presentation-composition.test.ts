@@ -124,6 +124,31 @@ describe('stepContextOf', () => {
     expect([...reply.crossed]).toEqual(['g']);
   });
 
+  it('keeps shared and nested enclosing boundaries without inventing a crossing', () => {
+    const document = createDocument('Contained step');
+    document.nodes = [
+      boundary('outer', 0, 0, 1600, 800),
+      boundary('inner', 20, 20, 800, 400, 'outer'),
+      boundary('other', 1800, 0, 600, 400),
+      node('a', 40, 80, { parentId: 'inner' }),
+      node('b', 400, 80, { parentId: 'inner' }),
+      node('c', 1840, 80, { parentId: 'other' }),
+    ];
+    document.edges = [edge('e', 'a', 'b')];
+    document.flows = [{ id: 'f', title: 'Flow', steps: [
+      { id: 's1', edgeId: 'e' },
+      { id: 's2', extraNodeIds: ['c'] },
+    ] }];
+    const flowPlayback = { active: true, flowId: 'f', step: 1 };
+    const context = stepContextOf({ document, flowPlayback })!;
+    expect([...context.containing]).toEqual(['inner', 'outer']);
+    expect([...context.crossed]).toEqual([]);
+    expect(stepContextOf({ document, flowPlayback: { ...flowPlayback, phase: 'response' } })!.containing).toEqual(context.containing);
+    const next = stepContextOf({ document, flowPlayback: { ...flowPlayback, step: 2 } })!;
+    expect([...next.containing]).toEqual(['other']);
+    expect([...next.crossed]).toEqual([]);
+  });
+
   it('has no step context in an overview or with nothing playing', () => {
     const document = createDocument('Context');
     expect(stepContextOf({ document, flowPlayback: { active: false, flowId: null, step: 0 } })).toBeNull();

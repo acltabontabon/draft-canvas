@@ -77,6 +77,17 @@ test.describe('Presentation journey', () => {
     await signalArrived(page);
     await expect(page.locator('.dc-signal')).toHaveCount(1);
 
+    // The next interaction stays inside Command side: its boundary remains fully readable,
+    // without falsely naming another crossing or lighting unrelated boundaries.
+    await page.keyboard.press('ArrowRight');
+    await expect(page.locator('.dc-explain-count')).toHaveText('Step 2 / 7');
+    const commandBoundary = page.locator('.dc-node[data-type="group"]').filter({ hasText: 'Command side' });
+    await expect(commandBoundary).toHaveAttribute('data-explain-active', 'true');
+    await expect(page.locator('.react-flow__node').filter({ has: commandBoundary })).toHaveCSS('opacity', '1');
+    await expect(page.locator('.dc-node[data-explain-crossed="true"]')).toHaveCount(0);
+    const readBoundary = page.locator('.dc-node[data-type="group"]').filter({ hasText: 'Query side' });
+    await expect(readBoundary).not.toHaveAttribute('data-explain-active', 'true');
+
     // The last step, then the closing: the whole path again, replay and the next flow offered.
     await page.keyboard.press('End');
     await expect(page.locator('.dc-explain-count')).toHaveText('Step 7 / 7');

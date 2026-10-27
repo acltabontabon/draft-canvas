@@ -105,7 +105,11 @@ is too large. Background images are omitted.
 ### Read a shared diagram
 
 The reader uses the actual shapes and connectors. Shapes stay fixed; recipients can pan, zoom,
-fit the diagram and inspect details. **Contents** holds the existing levels and shapes.
+fit the diagram and inspect details. **Contents** holds the existing levels and shapes. The reader
+frames the diagram beneath its title,
+with zoom controls in the lower-right corner and walkthrough controls below the canvas. Handwritten,
+underlined attachment labels sit beside their shapes; the selected label is circled and linked to its
+open note. The note’s body stays in regular type.
 There are no editing, download or editable-copy controls.
 
 **Guided reader** has a compact manual walkthrough. Choose **Start walkthrough**, then **Back** or
@@ -113,6 +117,8 @@ There are no editing, download or editable-copy controls.
 A level without a playable Flow opens in **Focus view**, with no walkthrough controls.
 
 ![Guided reader with a selected Flow step and its attachment.](../media/guides/share-guided-reader.png)
+
+[Guided reader in dark mode](../media/guides/share-guided-reader-dark.png).
 
 **Attachments** opens one card beside its shape or connector. Diagram markers show notes,
 decisions, code and pending items. The card's previous and next arrows browse details across
@@ -124,6 +130,8 @@ Pending items keep their Tentative, Awaiting input or Parked status. Resolved po
 resolution notes. Browsing never changes the snapshot.
 
 ![Focus view with a pending item and attachment browsing controls.](../media/guides/share-focus-view.png)
+
+[Focus view in dark mode](../media/guides/share-focus-view-dark.png).
 
 Run **Share from here…** or **Copy share link** in `⌘K`, or use **Start at** in **Share → Export → Share**.
 It defaults to the selected playable Flow, then the current level, then the overview.

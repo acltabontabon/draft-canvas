@@ -1,4 +1,5 @@
 import { openGallery } from './library';
+import { createReaderExample } from './reader-example';
 import { boundaryDocument, node, recoveryDocument, trafficDocument } from './fixtures/traffic';
 /**
  * Regenerates the screenshots the user guides in `docs/guides/` embed (`docs/media/guides/*.png`).
@@ -22,6 +23,7 @@ import { boundaryDocument, node, recoveryDocument, trafficDocument } from './fix
  *   npx tsx e2e/docs-screenshots.ts --rich-text-only
  *   npx tsx e2e/docs-screenshots.ts --collab-only
  *   npx tsx e2e/docs-screenshots.ts --empty-canvas-only
+ *   npx tsx e2e/docs-screenshots.ts --reader-only
  *   npx tsx e2e/docs-screenshots.ts --traffic-only
  *
  * The guides' own set is what you get with no arguments, unchanged.
@@ -454,6 +456,37 @@ async function trafficScreenshots(page: Page) {
   await shot(page, 'traffic-boundaries');
 }
 
+/** Import a real example and follow the same share-link route as a recipient. */
+async function readerScreenshots(page: Page) {
+  await page.setViewportSize({ width: VIEWPORT.width, height: 760 });
+  for (const guided of [true, false]) {
+    await page.goto(URL);
+    await page.locator('input[type="file"]').setInputFiles({
+      name: 'order-processing.draftcanvas', mimeType: 'application/json',
+      buffer: Buffer.from(JSON.stringify(createReaderExample(guided))),
+    });
+    await page.getByRole('button', { name: 'Share', exact: true }).click();
+    await page.getByRole('menuitem', { name: /^Share read-only link/ }).click();
+    const dialog = page.getByRole('dialog', { name: 'Export & share' });
+    await dialog.getByRole('checkbox', { name: /Require a passphrase/ }).uncheck();
+    await dialog.getByRole('button', { name: 'Copy share link', exact: true }).click();
+    const link = dialog.getByRole('textbox', { name: 'Share link', exact: true });
+    await expect(link).toBeVisible();
+    await page.goto(await link.inputValue());
+    await expect(page.locator('.dc-shared-reader')).toBeVisible();
+    if (guided) {
+      await page.getByRole('button', { name: 'Start walkthrough', exact: true }).click();
+      await page.getByRole('button', { name: 'Next', exact: true }).click();
+      await expect(page.locator('.dc-reader-position')).toHaveText('2 / 3');
+    } else {
+      await page.getByRole('button', { name: 'Attachments on Orders database', exact: true }).click();
+    }
+    await expect(page.locator('.dc-reader-attachment-card')).toBeVisible();
+    await shot(page, guided ? 'share-guided-reader' : 'share-focus-view');
+    await page.getByRole('button', { name: 'Close shared diagram' }).click();
+  }
+}
+
 async function main() {
   mkdirSync(OUT, { recursive: true });
   log(`${THEME} theme -> ${OUT}`);
@@ -471,6 +504,11 @@ async function main() {
     });
     const page = await context.newPage();
     await page.goto(URL);
+
+    if (process.argv.includes('--reader-only')) {
+      await readerScreenshots(page);
+      return;
+    }
 
     if (process.argv.includes('--traffic-only')) {
       await trafficScreenshots(page);
