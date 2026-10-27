@@ -12,7 +12,12 @@ The retired VS Code extension has [its own changelog](https://github.com/acltabo
 
 #### Added
 
-- Traffic opens with an illustrative 1,000 starts/min per entry, with Double and Reset controls.
+- Traffic notes explain incoming rates as a source tally and unfold a handwritten “One request
+  from here…” summary of downstream work, with no new inputs. Messages published and delivered
+  stay distinct; uncertain branches and loops retain their limits. Floating edit toolbars stay out
+  of the way while reading Traffic.
+
+- Traffic opens with a fixed illustrative 1,000 starts/min per entry, with no setup or rate controls.
   Runtime shapes show calls, messages or data operations per minute; unknown shares remain ranges,
   and loops have no rate estimate. The scenario stays local and never changes the diagram.
 

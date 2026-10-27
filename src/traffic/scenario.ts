@@ -2,11 +2,10 @@ import { PATH_CAP, type PathCount, type TrafficAnalysis } from './types';
 
 /** A round illustrative input, not a capacity estimate or an observed workload. */
 export const DEFAULT_TRAFFIC_RATE = 1000;
-export const MAX_TRAFFIC_MULTIPLIER = 64;
 
-export function scenarioRateLabel(paths: PathCount, multiplier: number, unit: string): string {
+export function scenarioRateLabel(paths: PathCount, unit: string): string {
   if (paths.possible >= PATH_CAP) return 'Rate unknown';
-  const amount = (count: number) => (count * DEFAULT_TRAFFIC_RATE * multiplier).toLocaleString('en-US');
+  const amount = (count: number) => (count * DEFAULT_TRAFFIC_RATE).toLocaleString('en-US');
   if (paths.definite === paths.possible) return `~${amount(paths.possible)} ${unit}`;
   if (paths.definite === 0) return `0–${amount(paths.possible)} ${unit}`;
   return `${amount(paths.definite)}–${amount(paths.possible)} ${unit}`;
@@ -14,7 +13,7 @@ export function scenarioRateLabel(paths: PathCount, multiplier: number, unit: st
 
 /** Rates are a separate reading of the baseline paths. Repeated work in loops has no finite upper
  * bound in the drawing, including downstream, so never multiply its once-counted paths into RPM. */
-export function trafficScenario(analysis: TrafficAnalysis, multiplier: number): Map<string, string> {
+export function trafficScenario(analysis: TrafficAnalysis): Map<string, string> {
   const unknown = new Set<string>();
   const outgoing = new Map<string, string[]>();
   for (const interaction of analysis.interactions) {
@@ -44,7 +43,7 @@ export function trafficScenario(analysis: TrafficAnalysis, multiplier: number): 
       : node.workloads.length !== 1 ? 'arrivals/min'
         : node.workloads[0] === 'request' ? 'calls/min'
           : node.workloads[0] === 'message' ? 'messages/min' : 'data ops/min';
-    labels.set(node.id, scenarioRateLabel(node.paths, multiplier, unit));
+    labels.set(node.id, scenarioRateLabel(node.paths, unit));
   }
   return labels;
 }

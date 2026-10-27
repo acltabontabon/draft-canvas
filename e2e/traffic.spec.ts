@@ -259,26 +259,18 @@ test.describe('Traffic', () => {
 });
 
 
-test('illustrative traffic starts ready, doubles, resets and stays out of document history', async ({ page }) => {
+test('illustrative traffic explains the fixed example without rate controls', async ({ page }) => {
   await importDocument(page, trafficDocument(), 'traffic-scenario.draftcanvas');
   await showTraffic(page);
   const scenario = page.locator('.dc-traffic-scenario');
-  const badge = page.locator('.react-flow__node[data-id="checkout"] .dc-traffic-badge');
   await expect(scenario).toContainText('1,000 starts/min per entry');
-  await expect(badge).toContainText('~2,000 calls/min');
+  await expect(scenario).toContainText('Select a shape. Follow the work.');
+  await expect(scenario.getByRole('button')).toHaveCount(1);
   const revision = await editorRevision(page);
-  await scenario.getByRole('button', { name: 'Double traffic' }).focus();
+  await scenario.getByRole('button', { name: 'Traffic assumptions' }).focus();
   await page.keyboard.press('Enter');
-  await expect(scenario).toContainText('2,000 starts/min per entry');
-  await expect(badge).toContainText('~4,000 calls/min');
-  expect(await editorRevision(page)).toBe(revision);
-  await scenario.getByRole('button', { name: 'Traffic assumptions' }).click();
   await expect(scenario).toContainText('not measured traffic or capacity');
-  await scenario.getByRole('button', { name: 'Reset traffic rate' }).click();
-  await expect(badge).toContainText('~2,000 calls/min');
-  await expect(scenario.getByRole('button', { name: 'Reset traffic rate' })).toBeDisabled();
-  await page.locator('.dc-status-traffic').click();
-  await expect(scenario).toHaveCount(0);
+  expect(await editorRevision(page)).toBe(revision);
 });
 
 for (const colorScheme of ['light', 'dark'] as const) {
@@ -293,8 +285,49 @@ for (const colorScheme of ['light', 'dark'] as const) {
     const bounds = await scenario.boundingBox();
     expect(bounds!.x).toBeGreaterThanOrEqual(0);
     expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
-    await scenario.getByRole('button', { name: 'Double traffic' }).click();
-    await expect(scenario).toContainText('2,000 starts/min per entry');
+    await expect(scenario).toContainText('1,000 starts/min per entry');
     await page.screenshot({ path: `/tmp/traffic-mobile-${colorScheme}.png` });
   });
 }
+
+for (const colorScheme of ['light', 'dark'] as const) {
+  test(`explains incoming rates and unfolds work per request in ${colorScheme} mode`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+    await importDocument(page, trafficDocument(), 'traffic-work.draftcanvas');
+    await showTraffic(page);
+    await page.locator('.react-flow__node[data-id="checkout"] .dc-node').click();
+    const callout = page.locator('.dc-traffic-callout');
+    await expect(callout.getByRole('list', { name: 'Rate breakdown' })).toContainText('API Gateway');
+    await expect(callout.locator('.dc-traffic-callout-count')).toHaveText(['~1,000 calls/min', '~1,000 calls/min']);
+    const fold = callout.locator('summary');
+    await expect(fold).toHaveText('One request from here…');
+    await fold.focus();
+    await page.keyboard.press('Enter');
+    await expect(callout.locator('details')).toHaveAttribute('open', '');
+    await expect(callout.getByRole('list', { name: 'Work per arrival' })).toHaveText('1 data operation');
+    await expect(page.getByRole('toolbar', { name: 'Selection options' })).toHaveCount(0);
+    await callout.getByRole('list', { name: 'Work per arrival' }).scrollIntoViewIfNeeded();
+    await page.screenshot({ path: `/tmp/traffic-work-${colorScheme}.png` });
+    await page.locator('.react-flow__node[data-id="postgres"] .dc-node').click();
+    await expect(callout.locator('details')).not.toHaveAttribute('open');
+    await callout.locator('summary').click();
+    await expect(callout.getByRole('list', { name: 'Work per arrival' })).toHaveText('No downstream work drawn.');
+  });
+}
+
+
+test('the unfolded work note stays inside a phone-width canvas', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await importDocument(page, trafficDocument(), 'traffic-work-mobile.draftcanvas');
+  await runCommand(page, 'Show traffic');
+  await page.locator('.react-flow__node[data-id="checkout"] .dc-node').click();
+  const callout = page.locator('.dc-traffic-callout');
+  await callout.locator('summary').click();
+  await expect(callout.getByRole('list', { name: 'Work per arrival' })).toHaveText('1 data operation');
+  const bounds = await callout.boundingBox();
+  expect(bounds!.x).toBeGreaterThanOrEqual(0);
+  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
+  expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(844);
+  await page.screenshot({ path: '/tmp/traffic-work-mobile.png' });
+});

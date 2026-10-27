@@ -6734,3 +6734,57 @@
     flex-basis: 100%;
   }
 }
+
+/* A small tally and a folded field note: the explanation keeps Traffic's whiteboard voice. */
+.dc-traffic-callout-sources[data-rates] li {
+  display: block;
+  padding: 5px 0;
+  border-bottom: 1px dashed color-mix(in srgb, var(--dc-caution) 22%, transparent);
+}
+.dc-traffic-callout-sources[data-rates] .dc-traffic-callout-count {
+  display: block;
+  font-size: 11px;
+  color: var(--dc-caution);
+}
+.dc-traffic-callout-sources[data-rates] .dc-traffic-callout-count::before {
+  content: '↳ ';
+}
+.dc-traffic-work {
+  margin-top: 8px;
+  color: var(--dc-caution);
+}
+.dc-traffic-work summary {
+  cursor: pointer;
+  font-size: 17px;
+  line-height: 28px;
+  text-decoration: underline;
+  text-decoration-style: wavy;
+  text-decoration-color: color-mix(in srgb, var(--dc-caution) 30%, transparent);
+  text-underline-offset: 4px;
+}
+.dc-traffic-work summary:focus-visible {
+  outline: 2px solid var(--dc-accent);
+  outline-offset: 2px;
+}
+.dc-traffic-work-paper {
+  border-left: 2px solid color-mix(in srgb, var(--dc-caution) 35%, transparent);
+  padding-left: 10px;
+  margin: 8px 0;
+  color: var(--dc-text);
+}
+.dc-traffic-work-paper li {
+  padding: 3px 0;
+}
+.dc-traffic-work-paper p {
+  margin: 6px 0 0;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dc-text-muted);
+}
+
+.dc-traffic-scenario-prompt {
+  white-space: nowrap;
+  margin: 7px 0 0;
+  color: var(--dc-text-muted);
+  font-size: 11px;
+}

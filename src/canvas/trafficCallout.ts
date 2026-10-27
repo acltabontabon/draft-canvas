@@ -1,3 +1,4 @@
+import { rateBreakdown, workPerArrival } from '../traffic/work';
 import { displayNameFor } from '../document/factory';
 import type { DraftNode } from '../document/types';
 import { fitLabel, layoutText } from '../render/text/layout';
@@ -81,8 +82,24 @@ export function trafficCalloutFor(analysis: TrafficAnalysis, nodes: readonly Dra
     add('Behind a queue', impact.decoupled, 'safe', 'Can lag without holding this up');
   }
 
+  let work: { heading: string; items: Text[]; detail: Text } | undefined;
   if (scenarioLabel) {
     metric = scenarioLabel;
+    sources.length = 0;
+    const breakdown = rateBreakdown(analysis, id);
+    for (const source of breakdown.slice(0, 50)) sources.push({ name: textOf(name(source.from), inner), count: source.rate });
+    moreSources = Math.max(0, breakdown.length - 50);
+    const perArrival = workPerArrival(analysis, id);
+    const noun = result?.role === 'messaging' || result?.workloads.length === 1 && result.workloads[0] === 'message' ? 'message'
+      : result?.role === 'origin' || node.serviceKind === 'scheduler' ? 'start'
+        : result?.role === 'compute' && (result.workloads.length === 0 || result.workloads.length === 1 && result.workloads[0] === 'request') ? 'request' : result?.role === 'data' ? 'operation' : 'arrival';
+    work = {
+      heading: `One ${noun} from here…`,
+      items: perArrival.items.map((item) => textOf(item, inner - 16, 13, 600, 3)),
+      detail: textOf(perArrival.unknown ? 'No finite estimate from this drawing.'
+        : perArrival.uncertain ? 'Branch shares are unknown. Bounds may not occur together.'
+          : 'Across the drawn downstream paths. Independent of the example rate.', inner - 16, 11, 400, 3),
+    };
   }
 
   const title = textOf(displayNameFor(node), inner - 62, 13, 600);
@@ -93,7 +110,8 @@ export function trafficCalloutFor(analysis: TrafficAnalysis, nodes: readonly Dra
     + (summary ? summary.height + 6 : 0)
     + (sources.length > 0 ? 6 + sources.reduce((sum, source) => sum + source.name.height, 0) : 0)
     + (moreSources > 0 ? 18 : 0)
+    + (work ? 36 + sources.length * 28 : 0)
     + sections.reduce((sum, section) => sum + 32 + (section.detail ? section.detail.height + 4 : 0) + section.items.reduce((height, item) => height + item.height, 0) + (section.more > 0 ? 18 : 0), 0);
   const description = [title.text, metric, summary?.text, ...sources.map((source) => `${source.name.text}: ${source.count}`), ...sections.map((section) => `${section.label}. ${section.detail?.text ?? ''} ${section.items.map((item) => item.text).join(', ')}${section.more > 0 ? `, plus ${section.more} more` : ''}`)].filter(Boolean).join('. ');
-  return { anchor: node, obstacles: [...nodes.filter((other) => other.id !== id && other.type !== 'group'), ...obstacles], width, height, title, metric: hero.layout.lines[0]?.text ?? metric, metricSize: hero.font.size, summary, sources, moreSources, sections, description };
+  return { anchor: node, obstacles: [...nodes.filter((other) => other.id !== id && other.type !== 'group'), ...obstacles], width, height, title, metric: hero.layout.lines[0]?.text ?? metric, metricSize: hero.font.size, summary, sources, moreSources, sections, work, description };
 }

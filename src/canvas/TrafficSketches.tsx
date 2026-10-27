@@ -126,8 +126,22 @@ export function TrafficSketches() {
       const scale = 1 / camera[2];
       const controlWidth = Math.min(450, canvasWidth - 24);
       const controls = { x: ((canvasWidth - controlWidth) / 2 - camera[0]) * scale, y: (canvasHeight - BOTTOM_CLEARANCE - camera[1]) * scale, width: controlWidth * scale, height: BOTTOM_CLEARANCE * scale };
-      const at = placeCallout(content.anchor, content.width * scale, Math.min(content.height * scale, visible?.height ?? content.height * scale), [...content.obstacles, controls], visible);
-      return { ...content, x: at.x, y: at.y, scale, maxHeight: visible ? visible.height / scale : undefined };
+      const obstacles = [...content.obstacles, controls];
+      // Let the field note unfold when there is room; on crowded canvases try shorter scrollable
+      // notes before allowing an overlap. Reserve its expanded height to avoid a jump when opened.
+      const workHeight = content.work ? content.work.items.reduce((sum, item) => sum + item.height + 6, 0) + content.work.detail.height + 30 : 0;
+      const desired = Math.min(content.height + workHeight, visible ? visible.height / scale : 420);
+      const heights = [...new Set([desired, Math.min(desired, 420), Math.min(desired, 360), Math.min(desired, 300), Math.min(desired, 270)])];
+      let maxHeight = heights[heights.length - 1]!;
+      let at = placeCallout(content.anchor, content.width * scale, maxHeight * scale, obstacles, visible);
+      for (const height of heights) {
+        const candidate = placeCallout(content.anchor, content.width * scale, height * scale, obstacles, visible);
+        if (![content.anchor, ...obstacles].every((rect) => candidate.x + candidate.width <= rect.x - 6 || candidate.x >= rect.x + rect.width + 6 || candidate.y + candidate.height <= rect.y - 6 || candidate.y >= rect.y + rect.height + 6)) continue;
+        at = candidate;
+        maxHeight = height;
+        break;
+      }
+      return { ...content, x: at.x, y: at.y, scale, maxHeight };
     },
     [content, visible, camera, canvasWidth, canvasHeight],
   );
@@ -272,7 +286,7 @@ export function TrafficSketches() {
             </div>
             {callout.summary && <p className="dc-traffic-callout-summary">{callout.summary.lines.map((line, index) => <span key={index} className="dc-traffic-callout-line">{line}</span>)}</p>}
             {callout.sources.length > 0 && (
-              <ul className="dc-traffic-callout-sources" aria-label="Incoming paths">
+              <ul className="dc-traffic-callout-sources" aria-label="Rate breakdown" data-rates={callout.work ? true : undefined}>
                 {callout.sources.map((source, index) => (
                   <li key={index}>
                     <span title={source.name.text}>{source.name.lines.map((line, index) => <span key={index} className="dc-traffic-callout-line">{line}</span>)}</span>
@@ -281,6 +295,17 @@ export function TrafficSketches() {
                 ))}
                 {callout.moreSources > 0 && <li className="dc-traffic-callout-more">+ {callout.moreSources} more connections</li>}
               </ul>
+            )}
+            {callout.work && (
+              <details className="dc-traffic-work" key={selectedId}>
+                <summary style={{ fontFamily: familyOf('hand') }}>{callout.work.heading}</summary>
+                <div className="dc-traffic-work-paper">
+                  <ul aria-label="Work per arrival">
+                    {callout.work.items.map((item, index) => <li key={index}>{item.lines.map((line, index) => <span className="dc-traffic-callout-line" key={index}>{line}</span>)}</li>)}
+                  </ul>
+                  <p>{callout.work.detail.lines.map((line, index) => <span className="dc-traffic-callout-line" key={index}>{line}</span>)}</p>
+                </div>
+              </details>
             )}
             {callout.sections.map((section) => (
               <section key={section.label} className="dc-traffic-callout-section" data-tone={section.tone} aria-label={section.label}>

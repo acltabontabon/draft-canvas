@@ -414,6 +414,9 @@ async function trafficScreenshots(page: Page) {
   await shot(page, 'traffic-detail');
   await page.locator('.dc-traffic-callout').screenshot({ path: join(OUT, 'traffic-callout.png') });
   log('  traffic-callout.png');
+  await page.locator('.dc-traffic-work summary').click();
+  await page.getByRole('list', { name: 'Work per arrival' }).scrollIntoViewIfNeeded();
+  await shot(page, 'traffic-work');
 }
 
 async function main() {

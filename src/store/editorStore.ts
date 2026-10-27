@@ -1,4 +1,3 @@
-import { MAX_TRAFFIC_MULTIPLIER } from '../traffic/scenario';
 import { create } from 'zustand';
 import { reconnectProblem } from '../document/reconnect';
 import { decodeClipboard, encodeClipboard } from '../document/clipboardCodec';
@@ -237,12 +236,11 @@ export interface FocusState {
  * `resetViewSession` along with everything else about the room being left.
  */
 export interface TrafficView {
-  multiplier: number;
   active: boolean;
   flowId: string | null;
 }
 
-export const TRAFFIC_OFF: TrafficView = { active: false, flowId: null, multiplier: 1 };
+export const TRAFFIC_OFF: TrafficView = { active: false, flowId: null };
 
 /**
  * An edge counts as focused if it was explicitly added, or if both of its
@@ -689,7 +687,6 @@ export interface EditorStore {
    *  system at a time. Refused while presenting. */
   showTraffic: (flowId?: string | null) => void;
   hideTraffic: () => void;
-  setTrafficMultiplier: (multiplier: number) => void;
 
   /* Depth */
   /** Step into a shape's inside. Pure navigation: nothing is written, and an inside that does not
@@ -3222,16 +3219,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       const scoped = flowId && findFlow(s.document, flowId) ? flowId : null;
       if (s.traffic.active && s.traffic.flowId === scoped) return s;
       return {
-        traffic: { active: true, flowId: scoped, multiplier: 1 },
+        traffic: { active: true, flowId: scoped },
         focus: s.focus.active ? { active: false, nodeIds: [], edgeIds: [] } : s.focus,
       };
     });
-  },
-
-  setTrafficMultiplier(multiplier) {
-    if (!Number.isInteger(multiplier) || multiplier < 1 || multiplier > MAX_TRAFFIC_MULTIPLIER) return;
-    set((s) => s.traffic.active && s.traffic.multiplier !== multiplier
-      ? { traffic: { ...s.traffic, multiplier } } : s);
   },
 
   hideTraffic() {

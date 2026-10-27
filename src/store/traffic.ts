@@ -218,15 +218,14 @@ export function roomMayHaveTraffic(state: Pick<EditorStore, 'document'>): boolea
 const hintMemo = new WeakMap<readonly DraftEdge[], { nodes: readonly DraftNode[]; value: boolean }>();
 
 // Each node reads a cached string; no per-node graph walk or allocation on store updates.
-const scenarios = new WeakMap<TrafficAnalysis, { multiplier: number; labels: Map<string, string> }>();
+const scenarios = new WeakMap<TrafficAnalysis, Map<string, string>>();
 
 export function trafficScenarioOf(state: Pick<EditorStore, 'document' | 'traffic'>): Map<string, string> | null {
   const analysis = trafficOf(state);
   if (!analysis) return null;
-  const multiplier = state.traffic.multiplier;
   const known = scenarios.get(analysis);
-  if (known?.multiplier === multiplier) return known.labels;
-  const labels = trafficScenario(analysis, multiplier);
-  scenarios.set(analysis, { multiplier, labels });
+  if (known) return known;
+  const labels = trafficScenario(analysis);
+  scenarios.set(analysis, labels);
   return labels;
 }

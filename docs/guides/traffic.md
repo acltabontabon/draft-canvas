@@ -35,7 +35,7 @@ out of a shape, presenting or turning on a spotlight also ends it.
   it unfolds what the diagram does not say: unknown split shares, conditions, loops, retries,
   schedules, connectors through components, and gateways that are also called directly.
 
-Select a shape while traffic shows to open a field note: a large illustrative rate, a row of modeled paths for each incoming
+Select a shape while traffic shows to open a field note: a large illustrative rate, a rate contribution for each incoming
 source, then separate sections for outage impact and dependencies. When the waiting services are
 also the stalled journeys, their names appear once. The note also shows what is safely behind a
 queue or topic.
@@ -65,12 +65,13 @@ Traffic points out consequences such as:
 - queues or topics nobody consumes, a dead-letter queue nobody drains, and a gateway that is also
   called directly.
 
-## Try more traffic
+## Follow the work
 
 Traffic starts at **1,000 starts/min per entry**, a round example rather than measured usage or a
-recommended operating rate. The control below the canvas offers **Double**, **Reset**, and **?**
-for the assumptions. Double can be repeated up to 64×; Reset returns to 1,000. Reopening Traffic
-also resets the example. There is no required input.
+recommended operating rate. It is a fixed reference to make the drawing easier to read, with no
+rate controls or required input. **Assumptions** below the canvas explains how to read it; select a
+shape to see where its traffic comes from and unfold the work caused by one arrival. The floating
+edit toolbar stays out of the way while Traffic is open.
 
 Each drawn baseline call is assumed to run once per incoming arrival. Rates use **calls/min**,
 **messages/min**, or **data ops/min**; mixed work uses **arrivals/min**. Entry points use
@@ -78,10 +79,23 @@ Each drawn baseline call is assumed to run once per incoming arrival. Rates use 
 entries feeding the same service each contribute their example rate. A topic copies messages to
 each subscriber; competing consumers and conditional routes keep ranges instead of invented shares.
 
-Select a shape to see its illustrative rate alongside incoming path counts and outage analysis.
+Select a shape to see its illustrative rate alongside a tally of the incoming sources and outage analysis. The tally uses the current example
+rate. Different types of work from one source stay separate.
+
+Unfold **One request from here…** in the selected shape’s note to see the downstream calls, data
+operations, messages published and message deliveries caused by one arrival at that shape. Queues
+say **One message**; schedulers say **One start**. No additional input is needed. This follows all
+drawn downstream work in the current view (or selected flow), rather than only immediate neighbours,
+and is independent of the example rate. A published message and its deliveries are counted
+separately, so a topic with two subscribers reads as one publication and two deliveries. Unknown
+branches stay ranges; reachable loops or analysis limits withhold the total. Retries and failure
+paths remain outside the baseline.
+
+![The handwritten per-request note unfolded beneath incoming rates.](../media/guides/traffic-work.png)
+
 Loops and their downstream work show **Rate unknown**, as do capped counts or incomplete analysis.
-Retries, failure paths and background work remain outside this baseline. Doubling does not predict
-latency, utilisation, capacity or overload, and does not change animation speed.
+Retries, failure paths and background work remain outside this baseline. The example does not predict
+latency, utilisation, capacity or overload.
 
 ## Paths and assumptions
 
