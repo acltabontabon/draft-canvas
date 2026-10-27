@@ -358,9 +358,10 @@ undo of an accepted proposal keeps remote changes; access turned off mid-run sto
 [principle](principles.md) that the canvas stays the subject and the agent is a collaborator:
 
 - **The review is on the canvas, not in a panel.** A "Proposed change" chip sits beside the dashed
-  ghost (left of it first, then above, right or below; never over it), with Accept, Reject, **Show me**
-  and **Details** (the full review panel). When a proposal arrives the camera moves only as far as it
-  takes to clear the companion, at the person's zoom.
+  ghost (left of it first, then above, right or below; never over it), with Accept, Reject and
+  **Details** (the full review panel). When a proposal arrives the camera moves only as far as it
+  takes to clear the companion, at the person's zoom. **Show me** joins them only while the change is
+  out of view, and brings it back: offered always, it did nothing beside a change already on screen.
 - **A proposal under review is the boldest thing on the canvas.** A faint ghost over a diagram at full
   strength read as hardly anything proposed, so while a proposal is shown it is drawn solid, outlined
   in teal (boundaries with their names), and the diagram around it steps back. An agent still working

@@ -84,7 +84,8 @@ that point.
 A question gets an answer and changes nothing; Nodi offers to make the change, or to record the risks
 it found as open points. A change comes back as a proposal on the canvas, drawn solid with what changes in teal; a change that
 moves shapes is shown on a tracing sheet over the diagram. **Now / Proposed** compares, and **Accept**
-applies it as one undo step. Ask Nodi to adjust it ("keep the cache, but use Redis") and it revises
+applies it as one undo step. If you pan away from the change, **Show me** on the chip brings it back
+into view. Ask Nodi to adjust it ("keep the cache, but use Redis") and it revises
 the same proposal; the chip lists earlier versions. **Review changes first** under the message box
 switches to **Apply changes directly**, where changes land at once and Undo takes them back.
 

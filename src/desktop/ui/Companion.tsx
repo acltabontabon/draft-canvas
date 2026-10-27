@@ -1490,12 +1490,13 @@ function ProposalChip({ proposal, onChanged, onDetails }: { proposal: Proposal; 
   // Brought into the canvas left of the companion, where the dashed change can be seen, moving the
   // camera no more than that takes: not at all if it is already there, otherwise just far enough, at
   // the person's own zoom (out only if it wouldn't fit), so what it connects to stays in view.
+  const reveal = revealViewport(bounds, [tx, ty, zoom], { width: viewWidth - RESERVED_WIDTH, height: viewHeight });
   const show = () => {
-    const viewport = revealViewport(bounds, [tx, ty, zoom], { width: viewWidth - RESERVED_WIDTH, height: viewHeight });
-    if (viewport) void setViewport(viewport, { duration: 320 });
+    if (reveal) void setViewport(reveal, { duration: 320 });
   };
   // Once, when the change is first worked out: it is what the person is waiting to see. After that the
-  // camera is theirs, and Show me brings it back.
+  // camera is theirs, and Show me brings it back. Show me is offered only while the change is out of
+  // view: offered always, it sat beside a change already on screen and did nothing.
   const framed = useRef(false);
   useEffect(() => {
     if (!bounds || framed.current) return;
@@ -1552,9 +1553,11 @@ function ProposalChip({ proposal, onChanged, onDetails }: { proposal: Proposal; 
               Reject
             </button>
             <span className="dc-companion-review-links">
-              <button type="button" className="dc-companion-link" disabled={!bounds} onClick={show}>
-                Show me
-              </button>
+              {reveal && (
+                <button type="button" className="dc-companion-link" onClick={show}>
+                  Show me
+                </button>
+              )}
               <button type="button" className="dc-companion-link" onClick={onDetails}>
                 Details
               </button>

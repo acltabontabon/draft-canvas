@@ -53,6 +53,11 @@ The retired VS Code extension has [its own changelog](https://github.com/acltabo
   Diagram, by dragging it onto a project, or with **File → Move to Project…**. When the name is
   already taken there, it asks before keeping both. <!-- highlight -->
 
+#### Fixed
+
+- Nodi's proposed-change card offers Show me only when the change is out of view, instead of a
+  button that did nothing while the change was already on screen.
+
 ## [1.17.0] - 2026-10-25
 
 See where traffic meets. Plan the recovery for every call.
