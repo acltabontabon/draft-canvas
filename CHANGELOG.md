@@ -78,6 +78,8 @@ The retired VS Code extension has [its own changelog](https://github.com/acltabo
 
 #### Changed
 
+- DLQs default to a muted amber outline and message icon with neutral fill; explicit colours remain unchanged.
+
 - Selected-shape traffic notes use a clear path summary, aligned source counts and distinct impact
   and dependency sections, with quieter body text and a hand-drawn accent.
 - Looking inside shapes and backing out zooms prepared room images for smoother motion, avoids

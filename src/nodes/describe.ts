@@ -1658,6 +1658,8 @@ const DLQ_OPACITY = 0.75;
 function queue(node: DraftNode, ctx: DescribeContext): Shape[] {
   const isDlq = node.deliveryRole === 'dead-letter';
   const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
+  // Recovery is recognizable by default; explicit accents (including neutral) remain the user's.
+  const line = isDlq && node.accent === undefined ? accentOf(ctx.theme, 'amber').line : palette.line;
   const w = node.width - 1.5;
   const x = 0.75;
   const span = queueTubeSpan(node.height, node.width);
@@ -1773,11 +1775,11 @@ function queue(node: DraftNode, ctx: DescribeContext): Shape[] {
 
   const dlqOpacity = isDlq ? DLQ_OPACITY : undefined;
   const iconShapes: Shape[] = [
-    { t: 'path', d: icons, fill: 'none', stroke: { color: palette.line, width: 1.2 }, opacity: dlqOpacity },
+    { t: 'path', d: icons, fill: 'none', stroke: { color: line, width: 1.2 }, opacity: dlqOpacity },
   ];
   const shapes: Shape[] = [
-    { t: 'path', d: body, fill: palette.fill, stroke: { color: palette.line, width: 1.5 }, opacity: dlqOpacity },
-    { t: 'path', d: lid, fill: 'none', stroke: { color: palette.line, width: 1.5 }, opacity: dlqOpacity },
+    { t: 'path', d: body, fill: palette.fill, stroke: { color: line, width: 1.5 }, opacity: dlqOpacity },
+    { t: 'path', d: lid, fill: 'none', stroke: { color: line, width: 1.5 }, opacity: dlqOpacity },
   ];
   // A DLQ's dash belongs on the undelivered message, not on the pipe: the queue itself is a real,
   // working queue, and what's exceptional about it is the message sitting in it. So the tube stays
@@ -1789,7 +1791,7 @@ function queue(node: DraftNode, ctx: DescribeContext): Shape[] {
       t: 'path',
       d: envelope(dlqStartX + DLQ_ICON_W + DLQ_ICON_GAP, y + tubeH / 2 - DLQ_ICON_H / 2, DLQ_ICON_W, DLQ_ICON_H),
       fill: 'none',
-      stroke: { color: palette.line, width: 1.2, dash: DLQ_DASH },
+      stroke: { color: line, width: 1.2, dash: DLQ_DASH },
       opacity: dlqOpacity,
     });
   }
@@ -1801,8 +1803,8 @@ function queue(node: DraftNode, ctx: DescribeContext): Shape[] {
   if (profile.retrace) {
     const retrace = tubePaths(x, y, w, tubeH, rx, `${node.id}:retrace`, profile.outline, profile.bow);
     shapes.push(
-      { t: 'path', d: retrace.body, fill: 'none', stroke: { color: palette.line, width: 1 }, opacity: 0.5 },
-      { t: 'path', d: retrace.lid, fill: 'none', stroke: { color: palette.line, width: 1 }, opacity: 0.5 },
+      { t: 'path', d: retrace.body, fill: 'none', stroke: { color: line, width: 1 }, opacity: 0.5 },
+      { t: 'path', d: retrace.lid, fill: 'none', stroke: { color: line, width: 1 }, opacity: 0.5 },
     );
   }
 

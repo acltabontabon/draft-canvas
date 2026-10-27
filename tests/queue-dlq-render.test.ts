@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createNode } from '../src/document/factory';
 import { describeContext, describeNode } from '../src/nodes/describe';
-import { LIGHT } from '../src/render/theme/tokens';
+import { DARK, LIGHT } from '../src/render/theme/tokens';
 import type { PathShape, TextShape } from '../src/render/displayList';
 
 const clean = describeContext(LIGHT, 'clean');
@@ -23,7 +23,7 @@ describe('a generated DLQ node renders with visibly subordinate treatment', () =
     expect(textOf(dlq)).not.toContain('QUEUE');
   });
 
-  it('gets a dashed tube outline and reduced opacity a plain queue does not', () => {
+  it('gets a dashed message icon and reduced opacity a plain queue does not', () => {
     const plain = createNode({ type: 'queue', x: 0, y: 0 });
     const dlq = createNode({ type: 'queue', deliveryRole: 'dead-letter', x: 0, y: 0 });
 
@@ -60,5 +60,17 @@ describe('a generated DLQ node renders with visibly subordinate treatment', () =
     const plain = createNode({ type: 'queue', x: 0, y: 0 });
     expect(textOf(plain)).toContain('QUEUE');
     expect(pathShapes(plain).every((s) => s.stroke?.dash === undefined && s.opacity === undefined)).toBe(true);
+  });
+});
+
+
+describe.each([LIGHT, DARK])('DLQ default recovery accent in $name', (theme) => {
+  it('accents only the outline and glyph while keeping neutral fill and explicit colors', () => {
+    for (const accent of [undefined, 'neutral', 'teal'] as const) {
+      const node = createNode({ type: 'queue', deliveryRole: 'dead-letter', accent, x: 0, y: 0 });
+      const paths = describeNode(node, describeContext(theme, 'clean')).shapes.filter((shape): shape is PathShape => shape.t === 'path');
+      expect(paths[0]!.fill).toBe(theme.accents[accent ?? 'neutral'].fill);
+      expect(paths.every((path) => path.stroke?.color === theme.accents[accent ?? 'amber'].line)).toBe(true);
+    }
   });
 });

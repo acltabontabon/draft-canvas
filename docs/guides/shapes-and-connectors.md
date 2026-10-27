@@ -127,6 +127,8 @@ An AI agent using Draft Canvas MCP, including Nodi, can make the same associatio
 
 - **Attach note** / **Attach code** (right-click), or drag a note onto the line and hold.
 - **Add DLQ** on a Queue adds a dead-letter queue; click its connector to set delivery attempts.
+  DLQs use a muted amber outline and message icon by default, with a neutral fill. This identifies
+  the recovery role, not a live error. Any explicit colour choice overrides the default.
 - A Junction (`J`) shares a route. Right-click a bundle → **Convert to junction**.
 
 ## Boundaries
