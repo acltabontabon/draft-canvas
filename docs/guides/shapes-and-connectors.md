@@ -60,7 +60,8 @@ to a nearby clear point on the same side. Pins, hand-placed bends and shared att
 | --- | --- |
 | Drawn from any dot | Automatic |
 | Dropped on a shape or a dot | Automatic |
-| Reconnected to a shape or a dot | Automatic at the reconnected end |
+| Endpoint dragged to a side or attachment dot | Pinned at that side and nearest attachment point |
+| Endpoint dragged to the center of a shape | Automatic at the reconnected end |
 | Set with **Pin ends here** | Pinned at its drawn position |
 
 A selected connector shows a pinned end filled and an automatic end as a ring. Its inspector also

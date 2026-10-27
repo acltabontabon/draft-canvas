@@ -116,7 +116,7 @@ test('a new connector follows its shapes even when drawn between off-centre dots
   await expectRouteParity(page, edgeId);
 });
 
-test('reconnecting a pinned end to a dot makes that end automatic', async ({ page }) => {
+test('reconnecting an end near a specific dot pins that end', async ({ page }) => {
   await open(page);
   await clickEdge(page, page.locator('.react-flow__edge[data-id="pinned"] .dc-edge-hit').first());
   const endpoint = (await page.locator('.dc-edge-endpoint').first().boundingBox())!;
@@ -130,9 +130,9 @@ test('reconnecting a pinned end to a dot makes that end automatic', async ({ pag
 
   const changed = await page.evaluate(async () => {
     const edge = (await import('/src/store/editorStore.ts')).useEditorStore.getState().document.edges.find((item: { id: string }) => item.id === 'pinned');
-    return { source: edge.source, pinned: edge.sourceAnchor !== undefined };
+    return { source: edge.source, anchor: edge.sourceAnchor };
   });
-  expect(changed).toEqual({ source: 'b', pinned: false });
+  expect(changed).toEqual({ source: 'b', anchor: { side: 'top', offset: 0.25 } });
   await expectRouteParity(page, 'pinned');
 });
 
@@ -162,4 +162,36 @@ test('Auto attach start lets a pinned end face the shape again, in one undo step
   await page.keyboard.press(process.platform === 'darwin' ? 'Meta+z' : 'Control+z');
   await nextFrames(page);
   expect((await start(page, 'pinned')).x).toBeCloseTo(a.x + a.width, 0);
+});
+
+
+test('manual left-side attachment persists, undoes, and can return to automatic at the center', async ({ page }) => {
+  await open(page);
+  await clickEdge(page, page.locator('.react-flow__edge[data-id="auto"] .dc-edge-hit').first());
+  const endpoint = page.locator('.dc-edge-endpoint').last();
+  const b = await boxOf(page, 'b');
+  const dragTo = async (x: number, y: number) => {
+    const handle = (await endpoint.boundingBox())!;
+    await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+    await page.mouse.down();
+    // Start a real drag even when pinning the point currently chosen by automatic routing.
+    await page.mouse.move(handle.x + handle.width / 2, handle.y - 30, { steps: 4 });
+    await page.mouse.move(x, y, { steps: 12 });
+    await page.mouse.up();
+    await nextFrames(page);
+  };
+  const anchor = () => page.evaluate(async () => {
+    const edge = (await import('/src/store/editorStore.ts')).useEditorStore.getState().document.edges.find((item: { id: string }) => item.id === 'auto');
+    return edge.targetAnchor ?? null;
+  });
+  await dragTo(b.x + 2, b.y + b.height / 2);
+  await expect.poll(anchor).toEqual({ side: 'left', offset: 0.5 });
+  await expectRouteParity(page, 'auto');
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect.poll(anchor).toBeNull();
+  await page.keyboard.press('ControlOrMeta+Shift+z');
+  await expect.poll(anchor).toEqual({ side: 'left', offset: 0.5 });
+  await dragTo(b.x + b.width / 2, b.y + b.height / 2);
+  await expect.poll(anchor).toBeNull();
+  await expectRouteParity(page, 'auto');
 });

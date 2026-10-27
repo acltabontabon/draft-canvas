@@ -11,6 +11,8 @@ import { edgeTierInPlayback, findFlow, lensEdgeTier, stepIndexOf, type ExplainTi
 import { stepContextOf } from '../presentation/stepContext';
 import { markerRef } from '../render/svg/markers';
 import {
+  rectOf,
+  snappedAnchorForDrop,
   LABEL_LINE_GAP,
   RESPONSE_SEED_SUFFIX,
   arrowSeed,
@@ -1428,7 +1430,9 @@ function EdgeEndpointHandle({
       const point = screenToFlowPosition({ x: event.clientX, y: event.clientY });
       const node = findDropNode(point);
       if (!node) return; // Empty canvas: leave the connection exactly as it was.
-      useEditorStore.getState().reconnectEdge(edgeId, endpoint, node.id, undefined);
+      // A deliberate side drop is a pin; a body-center drop keeps smart attachment.
+      const anchor = snappedAnchorForDrop(rectOf(node), point);
+      useEditorStore.getState().reconnectEdge(edgeId, endpoint, node.id, anchor?.side, anchor?.offset);
     },
     [edgeId, endDrag, endpoint, findDropNode, screenToFlowPosition],
   );
