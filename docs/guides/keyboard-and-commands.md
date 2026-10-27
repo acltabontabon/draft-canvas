@@ -68,7 +68,7 @@ Press `⌘K`, type part of a command or name, then `Enter`.
 ![The command palette finding Add Queue.](../media/guides/command-palette.png)
 
 It runs editor actions, inserts [starters](examples.md), jumps to named shapes, connectors and flows
-in any room, and tidies up (**Arrange diagram**, **Tidy connectors**, **Fit shapes to text**).
+in any room, and tidies up (**Arrange diagram**, **Tidy connectors**, **Auto attach all connectors**, **Fit shapes to text**).
 
 ## Presenting
 

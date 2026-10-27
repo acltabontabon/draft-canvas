@@ -28,11 +28,11 @@ const out = join(www, 'public', 'clips');
 
 /** `poster` is the offset into the clip to freeze for its poster frame, not into the reel. */
 const CLIPS = [
-  { name: 'draw', start: 9.6, duration: 16.4, poster: 12.8 },
+  { name: 'draw', start: 9.4, duration: 16.4, poster: 12.8 },
   { name: 'compose', start: 34.4, duration: 8.8, poster: 5.7 },
-  { name: 'present', start: 61, duration: 18, poster: 8 },
+  { name: 'present', start: 60.8, duration: 18, poster: 8 },
   { name: 'inside', start: 94.8, duration: 20, poster: 3.5 },
-  { name: 'io', start: 129.6, duration: 22, poster: 6 },
+  { name: 'io', start: 130, duration: 22, poster: 6 },
 ];
 
 if (!existsSync(reel)) {

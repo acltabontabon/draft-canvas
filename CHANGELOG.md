@@ -6,104 +6,45 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 ## [Unreleased]
 
+## [1.18.0] - 2026-10-27
+
+Connectors find their own way. Traffic shows what a diagram carries.
+
+Arrows route around shapes and attach to the nearest clear side, and Traffic explains how requests
+cross boundaries and what recovery work each replay adds. Agents can set connector ends too.
+
 ### Shared
 
 #### Added
 
-- Shared readers show attachments as handwritten annotations, with sketch underlines, a circle
-  around the selected label, and a drawn line to its readable note.
-
-- Presentation keeps the current step’s enclosing boundaries in focus, including nested boundaries
-  and explicitly highlighted shapes. Shared readers and protected links use the standard product logo.
-
-- Shared diagrams have a calmer reader with an editorial title, a framed canvas, grouped controls,
-  and responsive spacing in light and dark themes.
-
-- Traffic shows short notes for nine common assigned database and messaging technologies, including
-  SNS, without extra inputs or inferred deployment settings.
-
-- Traffic explains boundary crossings and whether drawn calls wait for responses, using existing
-  boundary membership and connector semantics without extra input.
-
-- Traffic notes highlight shared workload when replay and normal traffic can use the selected
-  resource, without extra inputs or capacity predictions.
-
-- A small Clear replay control removes the temporary recovery example without turning Traffic off.
-
-- The editor footer keeps save status and canvas controls compact, without element counts or the
-  repeated privacy sentence. Collapsing Recovery work or inspecting another shape keeps the chosen replay example visible.
-
-- A quiet note beside each DLQ describes its replay scenario. Zero messages clears the extra
-  replay numbers without implying a live queue is empty.
-
-- Traffic’s Database work note separates illustrative logical reads and writes from drawn connectors,
-  keeping mixed routes combined. Replay batches now show extra work on affected canvas shapes.
-
-- Traffic notes show recovery work for drawn DLQ replay and compensation routes. Start with one
-  attempt or optionally explore a replay batch, with total work and shared dependencies kept
-  separate from normal traffic rates.
-
-- Traffic’s “How to read this” guide opens as a compact popover at the lower-left canvas edge,
-  with clear limits on what the numbers can tell you. It closes on Escape or an outside click.
-
-- Traffic notes explain incoming rates as a source tally and unfold a handwritten “One request
-  from here…” summary of downstream work, with no new inputs. Messages published and delivered
-  stay distinct; uncertain branches and loops retain their limits. Floating edit toolbars stay out
-  of the way while reading Traffic.
-
-- Traffic opens with a fixed illustrative 1,000 starts/min per entry, with no setup or rate controls.
-  Runtime shapes show calls, messages or data operations per minute; unknown shares remain ranges,
-  and loops have no rate estimate. The scenario stays local and never changes the diagram.
-
-- Companion and MCP-created connectors release provisional layout pins when automatic attachments
-  make the whole view simpler without harming other routes or captions. Explicit pins and bends stay
-  fixed; agent geometry reads and previews use the same routing as the canvas.
-
-- Sculpted Ink is the default connector treatment, with sweeping corners and carved arrowheads.
-  Shapes and arrows follow the existing Clean, Draft and Sketch drawing setting together; Sketch
-  adds visible graphite drift and retraced strokes. Canvas and export share the same treatment.
-  Request/reply lines keep separate rails, and automatic ends avoid tiny steps into queue and data
-  store glyphs. A short hover trace follows the request and reply once, respecting reduced motion.
-- Connectors route around shapes, spread automatic ends and separate overlapping runs. Auto attach
-  lets ends follow shapes, including after reconnecting; Pin ends here keeps their exact attachment.
-  Nearby automatic ends align along their overlapping sides, and blocked approaches can slide
-  to a clear point. The inspector shows Attachment · Auto / Pinned, with one-click switching.
-  Existing diagrams retain explicit pins.
-- Agents can set automatic or pinned ends and receive unresolved-route and crowded-side advice.
-  Create and arrange also tidy avoidable crossings and detours, keeping clean neighbours and shared
-  trunks intact. Hand-routed connectors stay as authored.
-
-#### Fixed
-
-- Attachment dots shade on hover and highlight the precise pin during endpoint dragging; center
-  drops clear that highlight to indicate automatic attachment.
-
-- Attachment dots remain visible on a valid target while dragging a connector endpoint.
-
-- Dragging a connector endpoint to a specific side pins it there again. Center drops keep smart
-  attachment, and the opposite end retains its existing behavior.
-
-- Traffic explanations distinguish modeled dependencies from runtime failure, buffering and delivery
-  guarantees; messaging assumptions are explicit. Compact notes keep nearby shapes accessible.
-- Traffic findings stay above connector labels and arrows, with clear text backgrounds and placement
-  that accounts for wrapped notes and selected-shape explanations. Deleting every shape while Traffic
-  is showing no longer crashes the editor.
-- Traffic flows in the correct direction on parallel connectors drawn in opposite directions,
-  including routes through Junctions.
+- **Smart arrows** — Connectors route around shapes and attach to the nearest clear side. Ends follow
+  their shapes as you move them, and a pinned end stays exactly where you put it. <!-- highlight -->
+- **Sculpted Ink** — Connectors now have sweeping corners and carved arrowheads, following the Clean,
+  Draft and Sketch setting. Sketch adds visible graphite drift. <!-- highlight -->
+- **Traffic notes** — Traffic explains boundary crossings, which calls wait for replies, and the work
+  a replay adds. It uses your diagram as drawn, with no extra inputs. <!-- highlight -->
+- Traffic shows short notes for nine common database and messaging technologies, including SNS.
 
 #### Changed
 
 - Connector inspectors use aligned Operation, Reply, Recovery, Route, Style and Attachment controls.
-  Auto / Pinned shows the current attachment mode; choosing Pinned from Auto fixes the drawn ends.
-- Shape toolbars label the empty technology shortcut **Details**, covering technology and description,
-  and distribute controls evenly without unused trailing space. Assigned technology names stay visible.
+  Choosing Pinned from Auto fixes the drawn ends.
+- Diagrams save in a newer file format. Older versions of Draft Canvas won't open a canvas saved by
+  this one, and say so rather than losing what's inside it.
+- Shared diagrams open in a calmer reader, with an editorial title, a framed canvas and handwritten
+  notes on attachments.
+- Zooming into a shape and back out is smoother, with no competing camera move in empty rooms.
+- Presentation keeps the current step's enclosing boundaries in focus, including nested ones.
+- Dead-letter queues default to a muted amber outline and message icon.
 
-- DLQs default to a muted amber outline and message icon with neutral fill; explicit colours remain unchanged.
+#### Fixed
 
-- Selected-shape traffic notes use a clear path summary, aligned source counts and distinct impact
-  and dependency sections, with quieter body text and a hand-drawn accent.
-- Looking inside shapes and backing out zooms prepared room images for smoother motion, avoids
-  a competing camera move in empty rooms, and preserves visible layers when reversing direction.
+- Traffic findings stay above connector labels and arrows, and deleting every shape while Traffic is
+  open no longer crashes the editor.
+- Traffic flows in the correct direction on parallel connectors drawn in opposite directions,
+  including through Junctions.
+- Dragging a connector end to a specific side pins it there, and attachment dots stay visible on a
+  valid target while you drag.
 
 ### Desktop
 
@@ -112,26 +53,26 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 - **Move to Project** — Move a diagram to another project from its tile on Home or in Find a
   Diagram, by dragging it onto a project, or with **File → Move to Project…**. When the name is
   already taken there, it asks before keeping both. <!-- highlight -->
+- Agents can set connector ends to automatic or pinned, and get advice about unresolved routes and
+  crowded sides. Hand-routed connectors stay as authored.
+- Agents can set a boundary's or note's colour when adding it, and read colours back.
+
+#### Changed
+
+- Agent tool descriptions and diagram reads are smaller, so each conversation spends fewer tokens.
 
 #### Fixed
 
-- Nodi's proposed-change card offers Show me only when the change is out of view, instead of a
-  button that did nothing while the change was already on screen.
-- Nodi starts fresh when you open another diagram, instead of carrying over the text you were
-  typing and the last reply's highlights.
+- Nodi's proposed-change card offers Show me only when the change is out of view, and Show me reaches
+  a change proposed in another view of the diagram.
+- Nodi starts fresh when you open another diagram, instead of carrying over typed text and the last
+  reply's highlights.
 - Nodi notices an agent you install while the app is running.
-- A change Nodi proposes in another view of the diagram can be reached with Show me.
-- Stop always ends Nodi's turn, even when the agent had already gone away.
-- An accepted proposal no longer comes back as waiting for review.
-- Nodi's animation pauses while the window is hidden, and long replies stream without slowing the
-  canvas.
-- Quitting stops an agent that ignores the request to stop, and a forgotten conversation stays
-  forgotten even if the agent was mid-turn.
-- A proposal made on a diagram with unsaved edits is no longer reported out of date right away, and
-  saving no longer invalidates a prepared change.
-- Agents can set a boundary's or note's colour when adding it, read colours back, and get a clear
-  refusal for a duplicate connector, as on the canvas.
-- Agents' tool descriptions and diagram reads are smaller, so each conversation spends fewer tokens.
+- Stop always ends Nodi's turn, even when the agent has already gone away.
+- An accepted proposal no longer comes back as waiting for review, and saving no longer makes a
+  prepared change out of date.
+- Nodi's animation pauses while the window is hidden, and long replies no longer slow the canvas.
+- Quitting stops an agent that ignores the request to stop.
 
 ## [1.17.0] - 2026-10-25
 
@@ -2488,7 +2429,8 @@ pre-release milestone; this is the one meant for real use.
 - Fully local and private by design — no accounts, no cloud sync, nothing you draw ever leaves
   your device. Documents are encrypted at rest in your browser.
 
-[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.17.0...main
+[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.18.0...main
+[1.18.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.17.0...v1.18.0
 [1.17.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.16.1...v1.17.0
 [1.16.1]: https://github.com/acltabontabon/draft-canvas/compare/v1.16.0...v1.16.1
 [1.16.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.15.2...v1.16.0

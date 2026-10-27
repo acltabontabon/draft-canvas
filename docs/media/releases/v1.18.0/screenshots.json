@@ -1,0 +1,22 @@
+[
+  {
+    "file": "smart-arrows.png",
+    "alt": "The Microservices starter with its connectors routed around shapes and attached to the nearest clear sides.",
+    "platform": "shared"
+  },
+  {
+    "file": "sculpted-ink.png",
+    "alt": "Sculpted Ink connectors in the Event-Driven starter: a topic fanning out to queues with sweeping corners and carved arrowheads.",
+    "platform": "shared"
+  },
+  {
+    "file": "traffic-notes.png",
+    "alt": "Traffic on the Microservices starter with a selected service's handwritten note explaining its incoming calls and downstream work.",
+    "platform": "shared"
+  },
+  {
+    "file": "move-to-project.png",
+    "alt": "The Move to Project dialog for an open diagram, listing the projects it can move into.",
+    "platform": "desktop"
+  }
+]
