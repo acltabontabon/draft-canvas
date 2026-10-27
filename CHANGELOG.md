@@ -68,6 +68,8 @@ The retired VS Code extension has [its own changelog](https://github.com/acltabo
 
 #### Fixed
 
+- Attachment dots remain visible on a valid target while dragging a connector endpoint.
+
 - Dragging a connector endpoint to a specific side pins it there again. Center drops keep smart
   attachment, and the opposite end retains its existing behavior.
 

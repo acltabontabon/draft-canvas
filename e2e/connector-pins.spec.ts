@@ -177,6 +177,9 @@ test('manual left-side attachment persists, undoes, and can return to automatic 
     // Start a real drag even when pinning the point currently chosen by automatic routing.
     await page.mouse.move(handle.x + handle.width / 2, handle.y - 30, { steps: 4 });
     await page.mouse.move(x, y, { steps: 12 });
+    const targetHandles = page.locator('.react-flow__node[data-id="b"] .dc-handle');
+    await expect(targetHandles.first()).toHaveCSS('visibility', 'visible');
+    await expect(targetHandles.first()).toHaveCSS('opacity', '1');
     await page.mouse.up();
     await nextFrames(page);
   };

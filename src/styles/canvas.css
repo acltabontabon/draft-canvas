@@ -339,7 +339,9 @@
   }
 }
 
+/* Endpoint drags capture the pointer, so the target does not receive normal hover. */
 .dc-node:hover .dc-handle,
+.dc-node[data-reconnect-target='true'] .dc-handle,
 .dc-node[data-selected='true'] .dc-handle {
   opacity: 1;
   visibility: visible;

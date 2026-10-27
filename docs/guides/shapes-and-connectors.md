@@ -64,6 +64,8 @@ to a nearby clear point on the same side. Pins, hand-placed bends and shared att
 | Endpoint dragged to the center of a shape | Automatic at the reconnected end |
 | Set with **Pin ends here** | Pinned at its drawn position |
 
+While dragging an endpoint over a valid target, its attachment dots stay visible so you can choose a pin.
+
 A selected connector shows a pinned end filled and an automatic end as a ring. Its inspector also
 shows **Fixed start**, **Fixed end** or **Fixed ends**, with **Auto attach** to let them follow
 the shapes again. Right-click a connector
