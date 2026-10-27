@@ -89,7 +89,9 @@ export function TrafficSketches() {
     if (!moving) setNodes(live);
   }, [live, moving]);
   const [open, setOpen] = useState<string | null>(null);
-  const [replay, setReplay] = useState<{ plan: NonNullable<ReturnType<typeof recoveryPlan>>; count: number | null } | null>(null);
+  const [replay, setReplay] = useState<{ id: string; analysis: TrafficAnalysis; plan: NonNullable<ReturnType<typeof recoveryPlan>>; count: number | null } | null>(null);
+  // Selection only opens a reading. Keep the scenario until Traffic closes or its graph changes.
+  const activeReplay = replay?.analysis === analysis ? replay : null;
   const root = useRef<HTMLDivElement>(null);
 
 
@@ -127,16 +129,16 @@ export function TrafficSketches() {
     if (!analysis || !nodes) return [];
     return nodes.filter((node) => node.deliveryRole === 'dead-letter').map((node) => {
       const hasRoute = analysis.interactions.some((item) => item.from === node.id && item.workload);
-      const count = node.id === selectedId && replay?.plan === content?.recovery ? replay?.count : null;
+      const count = node.id === activeReplay?.id ? activeReplay.count : null;
       const valid = count !== null && count !== undefined && Number.isSafeInteger(count) && count >= 0 && count <= MAX_REPLAY_MESSAGES;
       const label = !hasRoute ? 'No replay path drawn.' : !valid ? 'Work waits here until replayed.'
         : count === 0 ? 'Nothing to replay in this example.' : `${count.toLocaleString('en-US')} ${count === 1 ? 'message' : 'messages'} to replay.`;
       return { node, label, text: layoutText(label, { font: { stack: 'hand', size: 14, weight: 400 }, maxWidth: 260, lineHeight: 19 }) };
     });
-  }, [analysis, nodes, selectedId, replay, content]);
+  }, [analysis, nodes, activeReplay]);
   const replayBadges = useMemo(() => {
-    if (!analysis || !nodes || !replay || replay.count === null || replay.plan !== content?.recovery) return [];
-    const counts = recoveryArrivals(analysis, replay.plan, replay.count);
+    if (!analysis || !nodes || !activeReplay || activeReplay.count === null) return [];
+    const counts = recoveryArrivals(analysis, activeReplay.plan, activeReplay.count);
     if (counts.size === 0) return [];
     return nodes.flatMap((node) => {
       const count = counts.get(node.id);
@@ -146,7 +148,7 @@ export function TrafficSketches() {
       const label = !count ? baseline! : `Replay +${amount} ${analysis.nodes.get(node.id)?.role === 'data' ? 'data ops' : 'arrivals'} total`;
       return [{ node, label, baseline: count ? baseline : undefined, recovery: !!count, text: layoutText(label, { font: { stack: 'sans', size: 12, weight: 600 }, maxWidth: node.width - 12, lineHeight: 16 }) }];
     });
-  }, [analysis, nodes, replay, content, scenario]);
+  }, [analysis, nodes, activeReplay, scenario]);
   const callout = useMemo(
     () => {
       if (!content) return null;
@@ -359,7 +361,7 @@ export function TrafficSketches() {
                 </div>
               </details>
             )}
-            {callout.recovery && <TrafficRecovery key={`${selectedId}:${trafficScope}`} analysis={analysis} nodes={nodes} plan={callout.recovery} onExplore={(count) => setReplay({ plan: callout.recovery!, count })} width={callout.width - 46} />}
+            {callout.recovery && <TrafficRecovery key={`${selectedId}:${trafficScope}`} analysis={analysis} nodes={nodes} plan={callout.recovery} initialCount={activeReplay?.id === selectedId ? activeReplay.count ?? 1 : 1} onExplore={(count) => setReplay({ id: selectedId!, analysis, plan: callout.recovery!, count })} width={callout.width - 46} />}
             {callout.sections.map((section) => (
               <section key={section.label} className="dc-traffic-callout-section" data-tone={section.tone} aria-label={section.label}>
                 <h3>{section.label}</h3>

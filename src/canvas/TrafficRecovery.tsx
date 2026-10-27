@@ -8,14 +8,15 @@ import type { TrafficAnalysis } from '../traffic';
 import { MAX_REPLAY_MESSAGES, recoveryWork, type recoveryPlan } from '../traffic/recovery';
 
 /** A deliberately local what-if: neither the pending count nor exploring recovery edits a file. */
-export function TrafficRecovery({ analysis, nodes, plan, width, onExplore }: {
+export function TrafficRecovery({ analysis, nodes, plan, width, onExplore, initialCount = 1 }: {
   analysis: TrafficAnalysis;
   nodes: readonly DraftNode[];
   plan: NonNullable<ReturnType<typeof recoveryPlan>>;
   width: number;
+  initialCount?: number;
   onExplore: (count: number | null) => void;
 }) {
-  const [pending, setPending] = useState('1');
+  const [pending, setPending] = useState(() => String(initialCount));
   const count = /^\d+$/.test(pending) ? Number(pending) : NaN;
   const result = useMemo(() => recoveryWork(analysis, plan, count), [analysis, plan, count]);
   const text = (value: string) => layoutText(value, {
