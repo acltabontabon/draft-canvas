@@ -1,6 +1,6 @@
 # Traffic
 
-Traffic reads the runtime connectors in your diagram and marks the consequences on the canvas.
+Traffic reads the runtime connectors in your diagram and marks modeled paths and dependencies on the canvas.
 It starts with an illustrative traffic rate; there is nothing to fill in.
 
 ## Show traffic
@@ -29,16 +29,17 @@ out of a shape, presenting or turning on a spotlight also ends it.
   Notes sit above connector labels and arrows, with the canvas colour behind their text so dense
   drawings stay readable. A selected shape's explanation also avoids nearby findings.
 
-  ![The "no fallback!" note unfolded beside the payment providers, explaining what to draw to contain it.](../media/guides/traffic-note.png)
+  ![The "no fallback drawn" note unfolded beside the payment providers, explaining what to draw to contain it.](../media/guides/traffic-note.png)
 
 - A handwritten headline above the diagram says where most paths meet. **+N open questions** below
   it unfolds what the diagram does not say: unknown split shares, conditions, loops, retries,
   schedules, connectors through components, and gateways that are also called directly.
 
 Select a shape while traffic shows to open a field note: a large illustrative rate, a rate contribution for each incoming
-source, then separate sections for outage impact and dependencies. When the waiting services are
-also the stalled journeys, their names appear once. The note also shows what is safely behind a
-queue or topic.
+source, then separate sections for potential impact and synchronous dependencies as drawn. These
+show reachability, not guaranteed outages: timeouts, optional calls and fallback behavior affect
+what actually happens. Resources after message handoffs are identified without promising isolation
+from backpressure or acknowledgement waits.
 
 The field note keeps a readable text size as you zoom and stays inside the canvas. Longer notes
 scroll within the available space; focus the note to scroll it with the keyboard.
@@ -50,20 +51,19 @@ so no path has a start — Traffic says so instead.
 
 ## What it finds
 
-Traffic points out consequences such as:
+Traffic points out observations such as:
 
-- elements on several journeys: protect these first;
-- a store that several services write: coupled schema, locks and outage risk, with no clear owner;
-- an external service on a synchronous path with no fallback. To draw one, connect the caller to
-  what it falls back to and set that connector's behaviour to **Fallback**. The note then becomes
-  a question about coverage;
-- a single way in for a journey;
-- a store hit twice by one request, directly and through a callee;
-- a request that needs many things up at once;
-- the longest synchronous wait chain, including which call to put behind a queue;
-- what a queue or topic decouples or copies;
-- queues or topics nobody consumes, a dead-letter queue nobody drains, and a gateway that is also
-  called directly.
+- resources on several modeled journeys;
+- stores used by several services, without assuming shared tables, locks or ownership;
+- synchronous external dependencies with no fallback drawn (absence from a diagram is not proof
+  of absence in the implementation);
+- a single drawn way in, or several routes to one resource;
+- synchronous dependencies and chains worth reviewing for failure handling;
+- message handoffs, with buffering and delivery semantics left explicit as assumptions;
+- queues with no consumer or replay route drawn, and paths around a gateway.
+
+Topology alone cannot establish availability, failure isolation, real backlog, or which component
+is most important to protect. A single shape can represent multiple replicas.
 
 ## Follow the work
 
@@ -78,10 +78,11 @@ edit toolbar stays out of the way while Traffic is open.
 Each drawn baseline call is assumed to run once per incoming arrival. Rates use **calls/min**,
 **messages/min**, or **data ops/min**; mixed work uses **arrivals/min**. Entry points use
 **starts/min**, so a scheduler or source queue is not presented as HTTP traffic. Two independent
-entries feeding the same service each contribute their example rate. A topic copies messages to
-each subscriber; competing consumers and conditional routes keep ranges instead of invented shares.
+entries feeding the same service each contribute their example rate. The example models topic/stream subscribers as independent recipients and queue consumers as
+sharing deliveries. Consumer groups, filters, acknowledgements and redelivery can change real
+counts. Competing consumers and conditional routes keep ranges instead of invented shares.
 
-Select a shape to see its illustrative rate alongside a tally of the incoming sources and outage analysis. The tally uses the current example
+Select a shape to see its illustrative rate alongside a tally of the incoming sources and potential dependency impact. The tally uses the current example
 rate. Different types of work from one source stay separate.
 
 Unfold **One request from here…** in the selected shape’s note to see the downstream calls, data
@@ -182,8 +183,8 @@ and background connectors remain outside these normal-route readings.
 
 Junctions route traffic but never receive it. A route through several Junctions counts once. When a
 Junction sends traffic to more than one place, each branch is only a possible path — the split isn't
-drawn, so none is assumed. A Topic or Stream behind a Junction delivers to every subscriber, so its
-branches stay certain.
+drawn, so none is assumed. A Topic or Stream behind a Junction is modeled as delivering to each drawn subscriber, so its
+branches stay certain within that assumption.
 
 ## Loops
 

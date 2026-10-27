@@ -405,7 +405,7 @@ async function trafficScreenshots(page: Page) {
   await page.locator('.dc-status-traffic').click();
   await expect(page.locator('button.dc-traffic-note').last()).toHaveCSS('opacity', '1', { timeout: 10000 });
   await shot(page, 'traffic-overview');
-  const fallback = page.getByRole('button', { name: /^no fallback!/ }).first();
+  const fallback = page.getByRole('button', { name: /^no fallback drawn/ }).first();
   await fallback.click();
   await shot(page, 'traffic-note');
   await fallback.press('Escape');

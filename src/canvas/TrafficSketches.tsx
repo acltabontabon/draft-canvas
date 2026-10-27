@@ -137,7 +137,7 @@ export function TrafficSketches() {
       const hasRoute = analysis.interactions.some((item) => item.from === node.id && item.workload);
       const count = node.id === activeReplay?.id ? activeReplay.count : null;
       const valid = count !== null && count !== undefined && Number.isSafeInteger(count) && count >= 0 && count <= MAX_REPLAY_MESSAGES;
-      const label = !hasRoute ? 'No replay path drawn.' : !valid ? 'Work waits here until replayed.'
+      const label = !hasRoute ? 'No replay path drawn.' : !valid ? 'Replay route starts here.'
         : count === 0 ? 'Nothing to replay in this example.' : `${count.toLocaleString('en-US')} ${count === 1 ? 'message' : 'messages'} to replay.`;
       return { node, label, text: layoutText(label, { font: { stack: 'hand', size: 14, weight: 400 }, maxWidth: 260, lineHeight: 19 }) };
     });
@@ -176,7 +176,7 @@ export function TrafficSketches() {
       // notes before allowing an overlap. Reserve its expanded height to avoid a jump when opened.
       const workHeight = content.work ? content.work.items.reduce((sum, item) => sum + item.height + 6, 0) + content.work.detail.height + 30 : 0;
       const desired = Math.min(content.height + (sharedWork ? sharedWork.height + 45 : 0) + workHeight + (content.databaseNote ? 160 : 0) + (content.recovery ? 220 : 0), visible ? visible.height / scale : 420);
-      const heights = [...new Set([desired, Math.min(desired, 420), Math.min(desired, 360), Math.min(desired, 300), Math.min(desired, 270)])];
+      const heights = [...new Set([desired, Math.min(desired, 420), Math.min(desired, 360), Math.min(desired, 300), Math.min(desired, 270), Math.min(desired, 220)])];
       let maxHeight = heights[heights.length - 1]!;
       let at = placeCallout(content.anchor, content.width * scale, maxHeight * scale, obstacles, visible);
       for (const height of heights) {
@@ -537,7 +537,7 @@ function headlineOf(analysis: TrafficAnalysis, level: ReturnType<typeof viewLeve
   if (analysis.status === 'recovery-only') return 'Recovery paths only — select a DLQ or compensation source to follow the work.';
   if (analysis.status === 'no-entry') return 'Everything is reached from something else — draw what starts the traffic.';
   const top = analysis.hotspots.filter((id) => analysis.nodes.get(id)?.tier === 'top');
-  if (top.length === 0) return 'Traffic doesn’t pile up anywhere — every part is reached by one path.';
+  if (top.length === 0) return 'No concentration of modeled paths is highlighted.';
   return `Most paths meet at ${listOf(top.map(name))}`;
 }
 

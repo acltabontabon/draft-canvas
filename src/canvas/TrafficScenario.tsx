@@ -18,7 +18,8 @@ export function TrafficScenario() {
   const canvasWidth = useStore((state) => state.width);
   const help = useMemo(() => [
     'Example only: 1,000 starts/min at each entry, not live measurements.',
-    'Each drawn call runs once per arrival.',
+    'The example assumes each drawn call runs once per arrival.',
+    'Messaging assumes one copy per topic/stream subscriber and shared queue deliveries; groups, filters and redelivery are unspecified.',
     'Ranges show unknown shares; their peaks may not happen together. Loops have no rate estimate.',
     'Retries, failure paths and background work are excluded. No latency or capacity predictions.',
   ].map((text) => layoutText(text, {

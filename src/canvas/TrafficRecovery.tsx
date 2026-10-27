@@ -37,7 +37,7 @@ export function TrafficRecovery({ analysis, nodes, plan, width, onExplore, initi
               onBlur={() => { if (pending === '') { setPending('1'); onExplore(1); } }} aria-invalid={!result || undefined} />
           </label>
         )}
-        {count !== 0 && <p>{text(plan.kind === 'replay' ? 'If each message is replayed once. Totals, not a rate.' : 'For one compensation attempt. Which actions apply depends on what completed before failure.')}</p>}
+        {count !== 0 && <p>{text(plan.kind === 'replay' ? 'If each message is replayed once along the modeled downstream paths. Totals, not a rate.' : 'For one compensation attempt. Which actions apply depends on what completed before failure.')}</p>}
         {!result ? <p role="alert">{text(`Enter a whole number from 0 to ${MAX_REPLAY_MESSAGES.toLocaleString('en-US')}.`)}</p> : (
           <ul aria-label="Recovery totals" aria-live="polite">
             {result.items.map((item) => <li key={item}>{text(item)}</li>)}
@@ -52,7 +52,7 @@ export function TrafficRecovery({ analysis, nodes, plan, width, onExplore, initi
         )}
         {count !== 0 && plan.shared.length > 0 && (
           <div className="dc-traffic-recovery-shared">
-            <p>{text('Also used by normal work')}</p>
+            <p>{text('Also on normal-work paths')}</p>
             {plan.shared.slice(0, 3).map((id) => (
               <button key={id} type="button" onClick={() => useEditorStore.getState().setSelection({ nodes: [id], edges: [] })}>{text(name(id))}</button>
             ))}

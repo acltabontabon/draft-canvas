@@ -83,7 +83,7 @@ test.describe('Traffic', () => {
     await expect(page.locator('.react-flow__node[data-id="checkout"] .dc-node[data-selected="true"]')).toBeVisible();
     await expect(callout.locator('.dc-traffic-callout-metric')).toHaveText('~2,000 calls/min');
     await expect(callout.locator('.dc-traffic-callout-sources li')).toHaveCount(2);
-    await expect(callout.getByRole('heading', { name: /Calls waiting|If it goes down/ })).toBeVisible();
+    await expect(callout.getByRole('heading', { name: /Upstream dependencies|Potential impact/ })).toBeVisible();
     const frame = await page.locator('.dc-canvas').boundingBox();
     const noteBounds = await callout.boundingBox();
     expect(noteBounds!.x).toBeGreaterThanOrEqual(frame!.x);
@@ -415,7 +415,7 @@ test('replay batches show total recovery work without editing the diagram or bas
   await expect(clear).toHaveCount(0);
   await expect(page.locator('.dc-canvas')).toHaveAttribute('data-traffic', 'on');
   await expect(page.locator('.dc-traffic-callout')).toContainText('Database');
-  await expect(page.locator('.dc-traffic-dlq-note')).toHaveText('Work waits here until replayed.');
+  await expect(page.locator('.dc-traffic-dlq-note')).toHaveText('Replay route starts here.');
   await page.locator('.react-flow__node[data-id="dlq"] .dc-node').click();
   await page.locator('.dc-traffic-recovery summary').click();
   await expect(page.getByRole('textbox', { name: 'Messages to replay' })).toHaveValue('1');

@@ -65,6 +65,8 @@ The retired VS Code extension has [its own changelog](https://github.com/acltabo
 
 #### Fixed
 
+- Traffic explanations distinguish modeled dependencies from runtime failure, buffering and delivery
+  guarantees; messaging assumptions are explicit. Compact notes keep nearby shapes accessible.
 - Traffic findings stay above connector labels and arrows, with clear text backgrounds and placement
   that accounts for wrapped notes and selected-shape explanations. Deleting every shape while Traffic
   is showing no longer crashes the editor.

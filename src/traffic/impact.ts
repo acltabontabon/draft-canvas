@@ -1,14 +1,7 @@
 import type { TrafficAnalysis, TrafficInteraction } from './types';
 
-/**
- * What depends on one element, and what it depends on — the questions someone asks of a shape
- * before changing, scaling or taking it down: "if this is slow, who waits?", "if it's down, which
- * journeys stop?", "what does it wait on itself?", "what is safely behind a queue?".
- *
- * Waiting follows synchronous calls and data operations — a caller holds its request open for both
- * — and stops at an asynchronous hand-off (publishing, delivery), which is exactly what a queue or
- * topic buys. Pure topology: nothing here says how long anyone waits.
- */
+/** Synchronous reachability as drawn, not an outage prediction. Messaging ends the
+ * synchronous traversal, but acknowledgements and backpressure can still affect callers. */
 export interface TrafficImpact {
   /** Runtime elements whose requests wait on this one, nearest first. */
   waiting: string[];
@@ -18,7 +11,7 @@ export interface TrafficImpact {
   dependsOn: string[];
   /** What it may wait on, across a split, route or condition whose share isn't drawn. */
   mayDependOn: string[];
-  /** Downstream of it, but behind an asynchronous hand-off: they can lag or fail without holding it up. */
+  /** Downstream of it, but behind an asynchronous hand-off: no synchronous chain is inferred across that handoff. */
   decoupled: string[];
 }
 
@@ -63,7 +56,7 @@ export function impactOf(analysis: TrafficAnalysis, id: string): TrafficImpact {
     for (const next of [...(async.get(at) ?? []), ...(callees.get(at) ?? [])]) pending.push(next);
   }
 
-  // A journey that only may reach it (one of a gateway's routes) still stalls when it does.
+  // Include possible upstream journeys without predicting whether an outage stops them.
   const either = new Map(callers);
   for (const [to, froms] of mayCall) for (const from of froms) push(either, to, from);
   const journeys = [...walk(either, id), id].filter((at) => entries.has(at));

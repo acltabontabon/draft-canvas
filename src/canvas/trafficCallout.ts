@@ -91,14 +91,14 @@ export function trafficCalloutFor(analysis: TrafficAnalysis, nodes: readonly Dra
     const impact = impactOf(analysis, id);
     const journeys = impact.journeys.filter((entry) => entry !== id);
     const samePeople = impact.waiting.length > 0 && impact.waiting.length === journeys.length && impact.waiting.every((entry) => journeys.includes(entry));
-    if (samePeople) add('If it goes down', impact.waiting, 'caution', 'Calls wait · journeys stall');
+    if (samePeople) add('Potential impact', impact.waiting, 'caution', 'Synchronous paths as drawn');
     else {
-      add('Calls waiting', impact.waiting, 'caution', 'If this shape is slow or down');
-      if (result.role !== 'origin') add('Journeys stalled', journeys, 'caution');
+      add('Upstream dependencies', impact.waiting, 'caution', 'Could be affected by delays or failures');
+      if (result.role !== 'origin') add('Potentially affected entries', journeys, 'caution');
     }
-    add('Waits on', impact.dependsOn, 'quiet');
+    add('Sync dependencies', impact.dependsOn, 'quiet');
     add('May wait on', impact.mayDependOn, 'quiet');
-    add('Behind a queue', impact.decoupled, 'safe', 'Can lag without holding this up');
+    add('After message handoffs', impact.decoupled, 'quiet', 'Buffering and backpressure depend on configuration');
   }
 
   let work: { heading: string; items: Text[]; detail: Text } | undefined;
