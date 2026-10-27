@@ -2431,8 +2431,11 @@
 
 .dc-connector-drawing-tools {
   position: relative;
-  padding-top: 9px;
-  border-top: 1px solid color-mix(in srgb, var(--dc-selection) 25%, var(--dc-border));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--dc-border);
 }
 
 .dc-connector-drawing-row {
@@ -2444,16 +2447,21 @@
 .dc-connector-attachment-mode {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: 6px;
-  color: var(--dc-text-muted);
-  font-size: var(--dc-popover-font);
+  gap: 6px;
 }
 
-.dc-connector-drawing-row > .dc-inspector-section-label {
-  color: var(--dc-text-faint);
-  font-size: 9px;
+.dc-connector-drawing-row > .dc-inspector-section-label,
+.dc-connector-attachment-mode > .dc-inspector-section-label,
+.dc-inspector-operation-row > .dc-inspector-section-label,
+.dc-inspector-reply-line > .dc-inspector-reply-label,
+.dc-recovery-section-heading > .dc-inspector-section-label {
+  flex: 0 0 70px;
+  margin: 0;
+  color: var(--dc-text-muted);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .dc-connector-route-picker {
@@ -2487,6 +2495,15 @@
 .dc-connector-route-option[aria-pressed='true'] {
   background: color-mix(in srgb, var(--dc-selection) 16%, var(--dc-surface-raised));
   color: var(--dc-selection);
+}
+
+.dc-connector-attachment-picker {
+  flex: 1 1 auto;
+}
+
+.dc-connector-attachment-picker .dc-connector-route-option {
+  font: inherit;
+  font-size: 11px;
 }
 
 .dc-connector-arrow-button,
@@ -2597,8 +2614,13 @@
 .dc-recovery-section-heading {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  min-height: 20px;
+  gap: 6px;
+  min-height: 25px;
+}
+
+.dc-recovery-section > .dc-inspector-help {
+  margin-left: 76px;
+  font-size: 11px;
 }
 
 .dc-recovery-action {
@@ -3036,10 +3058,24 @@
 
 .dc-inspector-request-section {
   gap: 8px;
-  padding: 10px;
-  border: 1px solid var(--dc-border);
-  border-radius: var(--dc-radius-sm);
-  background: var(--dc-surface-raised);
+}
+
+.dc-inspector-operation-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 25px;
+}
+
+/* Keep request and reply fields on the same control column as Route and Attachment. */
+.dc-inspector-operation-row > .dc-inspector-section-row,
+.dc-inspector-operation-row > .dc-inspector-split {
+  flex: 1;
+  min-width: 0;
+}
+
+.dc-inspector-add-reply-row {
+  margin-left: 76px;
 }
 
 .dc-inspector-request-section .dc-inspector-split {
@@ -3082,9 +3118,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-top: 2px;
-  padding-top: 9px;
-  border-top: 1px solid var(--dc-border);
+  position: relative;
 }
 
 .dc-inspector-reply-label {
@@ -3098,7 +3132,16 @@
   min-width: 0;
 }
 
+.dc-inspector-reply-line .dc-inspector-control,
+.dc-inspector-reply-line .dc-inspector-split-rest {
+  padding-right: 27px;
+}
+
 .dc-inspector-reply-hide {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
   display: inline-flex;
   align-items: center;
   justify-content: center;

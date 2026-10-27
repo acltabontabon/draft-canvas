@@ -68,8 +68,9 @@ While dragging an endpoint over a valid target, its attachment dots stay visible
 Moving to the center clears the dot highlight to indicate automatic attachment.
 
 A selected connector shows a pinned end filled and an automatic end as a ring. Its inspector also
-shows **Fixed start**, **Fixed end** or **Fixed ends**, with **Auto attach** to let them follow
-the shapes again. Right-click a connector
+shows **Attachment · Auto / Pinned**. **Pinned** means at least one end is fixed; choosing it from
+Auto fixes both ends where they are. Choose **Auto** to let both ends follow the shapes again.
+Right-click a connector
 → **Auto attach start**, **Auto attach end**, **Auto attach both ends** or **Pin ends here**.
 **Auto attach all connectors** (`⌘K`) frees every end in the view, including the pins of diagrams
 drawn before automatic ends existed.
