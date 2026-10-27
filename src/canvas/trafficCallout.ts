@@ -1,3 +1,4 @@
+import { boundaryCrossings } from '../traffic/boundaries';
 import { databaseWork } from '../traffic/database';
 import { recoveryPlan } from '../traffic/recovery';
 import { rateBreakdown, workPerArrival } from '../traffic/work';
@@ -30,7 +31,7 @@ function textOf(text: string, width: number, size = 13, weight: 400 | 600 = 400,
 }
 
 /** A field note: keep the count, its sources and its consequences visually distinct. */
-export function trafficCalloutFor(analysis: TrafficAnalysis, nodes: readonly DraftNode[], id: string, obstacles: readonly Rect[], availableWidth = WIDTH, scenarioLabel?: string, edges: readonly DraftEdge[] = []) {
+export function trafficCalloutFor(analysis: TrafficAnalysis, nodes: readonly DraftNode[], id: string, obstacles: readonly Rect[], availableWidth = WIDTH, scenarioLabel?: string, edges: readonly DraftEdge[] = [], focusedEdgeId?: string) {
   const node = nodes.find((item) => item.id === id);
   if (!node) return null;
   const width = Math.min(WIDTH, availableWidth);
@@ -42,6 +43,19 @@ export function trafficCalloutFor(analysis: TrafficAnalysis, nodes: readonly Dra
     const found = index.get(id);
     return found ? displayNameFor(found) : 'Untitled';
   };
+  const boundaryMode = node.type === 'group' || !!focusedEdgeId;
+  const crossingRoutes = boundaryCrossings(analysis, nodes, focusedEdgeId ? { edgeId: focusedEdgeId } : node.type === 'group' ? { boundaryId: id } : { nodeId: id });
+  const crossingNote = boundaryMode || crossingRoutes.length ? {
+    rows: crossingRoutes.slice(0, 6).map((route) => ({
+      route: textOf(`${name(route.from)} → ${name(route.to)}`, inner - 12, 12, 600, 3),
+      detail: textOf([route.direction, route.wait].filter(Boolean).join(' · '), inner - 12, 11, 400, 3),
+      boundaries: route.crossed.some((at) => at !== (node.type === 'group' ? id : undefined)) ? textOf(route.crossed.filter((at) => at !== (node.type === 'group' ? id : undefined)).map((at) => {
+        const boundary = index.get(at)!;
+        return `${boundary.boundaryPreset ?? 'boundary'}: ${name(at)}`;
+      }).join(' · '), inner - 12, 11, 400, 3) : undefined,
+    })),
+    more: Math.max(0, crossingRoutes.length - 6),
+  } : null;
   const result = analysis.nodes.get(id);
   const sections: Section[] = [];
   const sources: { name: Text; count: string }[] = [];
@@ -53,7 +67,10 @@ export function trafficCalloutFor(analysis: TrafficAnalysis, nodes: readonly Dra
     sections.push({ label, tone, detail: detail ? textOf(detail, inner, 11) : undefined, items: ids.slice(0, 3).map((id) => textOf(name(id), inner)), more: Math.max(0, ids.length - 3) });
   };
 
-  if (!result || result.role === 'excluded') {
+  if (boundaryMode) {
+    metric = `${crossingRoutes.length} ${crossingRoutes.length === 1 ? 'crossing' : 'crossings'}`;
+    summary = textOf(analysis.truncated ? 'Partial view — analysis limit reached.' : 'Drawn routes, counted once. No latency or isolation assumed.', inner, 11, 400, 3);
+  } else if (!result || result.role === 'excluded') {
     metric = 'Outside runtime';
     summary = textOf('Traffic stops here. This shape is not a runtime resource.', inner);
   } else if (result.role === 'junction') {
@@ -85,7 +102,7 @@ export function trafficCalloutFor(analysis: TrafficAnalysis, nodes: readonly Dra
   }
 
   let work: { heading: string; items: Text[]; detail: Text } | undefined;
-  if (scenarioLabel) {
+  if (scenarioLabel && !boundaryMode) {
     metric = scenarioLabel;
     sources.length = 0;
     const breakdown = rateBreakdown(analysis, id);
@@ -104,18 +121,18 @@ export function trafficCalloutFor(analysis: TrafficAnalysis, nodes: readonly Dra
     };
   }
 
-  const database = databaseWork(analysis, edges, id);
+  const database = boundaryMode ? null : databaseWork(analysis, edges, id);
   const databaseNote = database ? {
     items: (database.length ? database : ['No normal database work drawn.']).map((item) => textOf(item, inner - 16, 13, 600, 3)),
     detail: textOf('Illustrative logical operations, not disk IOPS or capacity. Mixed routes keep their read/write split unspecified.', inner - 16, 11, 400, 5),
   } : null;
-  const recovery = recoveryPlan(analysis, nodes, edges, id);
+  const recovery = boundaryMode ? null : recoveryPlan(analysis, nodes, edges, id);
   if (recovery && result?.paths.possible === 0) {
     metric = 'Recovery only';
     summary = textOf('No normal traffic starts here.', inner);
   }
 
-  const title = textOf(displayNameFor(node), inner - 62, 13, 600);
+  const title = textOf(focusedEdgeId ? 'Boundary crossings' : displayNameFor(node), inner - 62, 13, 600);
   const hero = fitLabel(metric, { font: { stack: 'hand', size: 32, weight: 700 }, minFontSize: 18, maxWidth: inner, maxHeight: 40, lineHeightRatio: 1.25, maxLines: 1 });
   // These are the same line boxes, section gaps and padding rendered by TrafficSketches. Keeping
   // them measured keeps the note clear of its neighbours when names wrap.
@@ -126,7 +143,8 @@ export function trafficCalloutFor(analysis: TrafficAnalysis, nodes: readonly Dra
     + (work ? 36 + sources.length * 28 : 0)
     + (recovery ? 36 : 0)
     + (databaseNote ? 36 : 0)
+    + (crossingNote ? 40 + crossingNote.rows.reduce((sum, row) => sum + row.route.height + row.detail.height + (row.boundaries?.height ?? 0) + 12, 0) : 0)
     + sections.reduce((sum, section) => sum + 32 + (section.detail ? section.detail.height + 4 : 0) + section.items.reduce((height, item) => height + item.height, 0) + (section.more > 0 ? 18 : 0), 0);
   const description = [title.text, metric, summary?.text, ...sources.map((source) => `${source.name.text}: ${source.count}`), ...sections.map((section) => `${section.label}. ${section.detail?.text ?? ''} ${section.items.map((item) => item.text).join(', ')}${section.more > 0 ? `, plus ${section.more} more` : ''}`)].filter(Boolean).join('. ');
-  return { anchor: node, obstacles: [...nodes.filter((other) => other.id !== id && other.type !== 'group'), ...obstacles], width, height, title, metric: hero.layout.lines[0]?.text ?? metric, metricSize: hero.font.size, summary, sources, moreSources, sections, work, recovery, databaseNote, description };
+  return { anchor: node, obstacles: [...nodes.filter((other) => other.id !== id && other.type !== 'group'), ...obstacles], width, height, title, metric: hero.layout.lines[0]?.text ?? metric, metricSize: hero.font.size, summary, sources, moreSources, sections, work, recovery, databaseNote, crossingNote, description };
 }

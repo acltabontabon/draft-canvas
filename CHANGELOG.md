@@ -12,6 +12,9 @@ The retired VS Code extension has [its own changelog](https://github.com/acltabo
 
 #### Added
 
+- Traffic explains boundary crossings and whether drawn calls wait for responses, using existing
+  boundary membership and connector semantics without extra input.
+
 - Traffic notes highlight shared workload when replay and normal traffic can use the selected
   resource, without extra inputs or capacity predictions.
 

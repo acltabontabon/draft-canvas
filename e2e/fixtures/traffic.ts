@@ -66,3 +66,10 @@ export function recoveryDocument(): TrafficDocument {
     { id: 'replay', source: 'dlq', target: 'worker', semantic: 'deliversTo', directed: true },
   ] };
 }
+
+export function boundaryDocument(): TrafficDocument {
+  const document = recoveryDocument();
+  document.nodes = [node('deployment', 'group', 'Processing deployment', 300, -60, { width: 600, height: 200, boundaryPreset: 'deployment' }), ...document.nodes.map((item) => item.id === 'worker' || item.id === 'db' ? { ...item, parentId: 'deployment' } : item)];
+  document.edges.push({ id: 'read', source: 'api', target: 'db', semantic: 'reads', directed: true });
+  return document;
+}

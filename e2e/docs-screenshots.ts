@@ -1,5 +1,5 @@
 import { openGallery } from './library';
-import { node, recoveryDocument, trafficDocument } from './fixtures/traffic';
+import { boundaryDocument, node, recoveryDocument, trafficDocument } from './fixtures/traffic';
 /**
  * Regenerates the screenshots the user guides in `docs/guides/` embed (`docs/media/guides/*.png`).
  *
@@ -432,6 +432,14 @@ async function trafficScreenshots(page: Page) {
   await page.locator('.react-flow__node[data-id="db"] .dc-node').click();
   await page.locator('.dc-traffic-database summary').click();
   await shot(page, 'traffic-database');
+  await page.goto(URL);
+  await page.locator('input[type="file"]').setInputFiles({
+    name: 'boundary-guide.draftcanvas', mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(boundaryDocument())),
+  });
+  await page.locator('.dc-status-traffic').click();
+  await page.locator('.react-flow__node[data-id="deployment"] .dc-node').click({ position: { x: 20, y: 15 } });
+  await shot(page, 'traffic-boundaries');
 }
 
 async function main() {

@@ -6890,3 +6890,9 @@
   font-size: 12px;
   line-height: 18px;
 }
+
+.dc-traffic-crossings { margin: 12px 0; }
+.dc-traffic-crossings h3 { margin: 0 0 8px; color: var(--dc-caution); font-size: 16px; font-weight: 400; }
+.dc-traffic-crossing { margin-top: 10px; padding-left: 10px; border-left: 1px dashed var(--dc-border); }
+.dc-traffic-crossing strong { font-size: 12px; line-height: 18px; }
+.dc-traffic-crossings p { margin: 3px 0; font-size: 11px; line-height: 16px; color: var(--dc-text-muted); }

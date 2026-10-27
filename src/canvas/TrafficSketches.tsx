@@ -80,6 +80,7 @@ export function TrafficSketches() {
   const selectedId = useEditorStore((state) =>
     state.selection.nodes.length === 1 && state.selection.edges.length === 0 ? state.selection.nodes[0]! : null,
   );
+  const selectedEdgeId = useEditorStore((state) => state.selection.edges.length === 1 && state.selection.nodes.length === 0 ? state.selection.edges[0]! : null);
   // While a shape is being dragged the notes hold still (faded) and are placed again on release:
   // laying them out sixty times a second would be work nobody can read.
   const moving = useUiStore((state) => state.interactionActive);
@@ -123,8 +124,12 @@ export function TrafficSketches() {
   }, [camera, canvasWidth, canvasHeight]);
   const availableWidth = canvasWidth > 32 ? canvasWidth - 32 : undefined;
   const content = useMemo(
-    () => analysis && nodes && drawn && selectedId ? trafficCalloutFor(analysis, nodes, selectedId, drawn.obstacles, availableWidth, scenario?.get(selectedId), edges) : null,
-    [analysis, nodes, drawn, selectedId, availableWidth, scenario, edges],
+    () => {
+      if (!analysis || !nodes || !drawn) return null;
+      const anchorId = selectedId ?? edges.find((edge) => edge.id === selectedEdgeId)?.source;
+      return anchorId ? trafficCalloutFor(analysis, nodes, anchorId, drawn.obstacles, availableWidth, selectedId ? scenario?.get(selectedId) : undefined, edges, selectedEdgeId ?? undefined) : null;
+    },
+    [analysis, nodes, drawn, selectedId, selectedEdgeId, availableWidth, scenario, edges],
   );
   const dlqNotes = useMemo(() => {
     if (!analysis || !nodes) return [];
@@ -353,6 +358,20 @@ export function TrafficSketches() {
                 ))}
                 {callout.moreSources > 0 && <li className="dc-traffic-callout-more">+ {callout.moreSources} more connections</li>}
               </ul>
+            )}
+            {callout.crossingNote && (
+              <section className="dc-traffic-crossings" aria-label="Boundary crossings">
+                <h3 style={{ fontFamily: familyOf('hand') }}>Across boundaries</h3>
+                {callout.crossingNote.rows.length === 0 && <p>No boundary crossing drawn.</p>}
+                {callout.crossingNote.rows.map((row, index) => (
+                  <div className="dc-traffic-crossing" key={index}>
+                    <strong title={row.route.text}>{row.route.lines.map((line, index) => <span className="dc-traffic-callout-line" key={index}>{line}{' '}</span>)}</strong>
+                    <p>{row.detail.lines.map((line, index) => <span className="dc-traffic-callout-line" key={index}>{line}{' '}</span>)}</p>
+                    {row.boundaries && <p title={row.boundaries.text}>{row.boundaries.lines.map((line, index) => <span className="dc-traffic-callout-line" key={index}>{line}{' '}</span>)}</p>}
+                  </div>
+                ))}
+                {callout.crossingNote.more > 0 && <p>+ {callout.crossingNote.more} more routes</p>}
+              </section>
             )}
             {callout.databaseNote && (
               <details className="dc-traffic-work dc-traffic-database" key={`database:${selectedId}`}>

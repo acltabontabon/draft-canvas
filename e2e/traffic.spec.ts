@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { notesOnlyDocument, recoveryDocument, trafficDocument, type TrafficDocument } from './fixtures/traffic';
+import { boundaryDocument, notesOnlyDocument, recoveryDocument, trafficDocument, type TrafficDocument } from './fixtures/traffic';
 
 async function importDocument(page: Page, document: TrafficDocument, fileName: string) {
   await page.goto('/');
@@ -497,5 +497,23 @@ for (const width of [390, 800, 1280]) {
       expect(rect!.x + rect!.width).toBeLessThanOrEqual(width);
     }
     await page.screenshot({ path: `/tmp/footer-${width}.png` });
+  });
+}
+
+for (const colorScheme of ['light', 'dark'] as const) {
+  test(`boundary crossings explain waiting in ${colorScheme}`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+    await importDocument(page, boundaryDocument(), 'boundary-crossings.draftcanvas');
+    await page.locator('.dc-status-traffic').click();
+    await page.locator('.react-flow__node[data-id="deployment"] .dc-node').click({ position: { x: 20, y: 15 } });
+    const note = page.locator('.dc-traffic-callout');
+    await expect(note).toContainText('3 crossings');
+    await expect(note.getByRole('region', { name: 'Boundary crossings' })).toContainText('Waits for response');
+    await expect(note).toContainText('Does not wait for downstream work');
+    await expect(note).toContainText('Incoming');
+    await page.screenshot({ path: `/tmp/boundary-crossings-${colorScheme}.png` });
+    await page.locator('.react-flow__edge[data-id="call"] .react-flow__edge-interaction').click({ force: true });
+    await expect(note).toContainText('1 crossing');
+    await expect(note).toContainText('API → Worker');
   });
 }
