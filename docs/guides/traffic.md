@@ -147,7 +147,9 @@ Compensation remains a range because the diagram cannot tell which earlier steps
 Retries and new failures can add more work; loops have no finite total. The optional count is local,
 resets when you select another shape, and never edits the diagram. While the replay section is open,
 affected shapes include **Replay +… total** in their top traffic chip, alongside the normal rate.
-The replay total updates with the count. Normal RPM
+The replay total updates with the count. A small note beside the DLQ describes the example.
+Enter zero to show “Nothing to replay in this example” and hide extra replay numbers; this does
+not claim the live queue is empty. Normal RPM
 stays unchanged; a batch size does not establish a replay rate.
 
 ![A replay batch and its downstream recovery work](../media/guides/traffic-recovery.png)

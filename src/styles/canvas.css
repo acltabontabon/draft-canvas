@@ -6862,3 +6862,12 @@
 .dc-canvas:has(.dc-traffic-replay-badge) .dc-traffic-badge {
   visibility: hidden;
 }
+
+.dc-traffic-dlq-note {
+  position: absolute;
+  color: var(--dc-caution);
+  font-size: 14px;
+  line-height: 19px;
+  pointer-events: none;
+  opacity: 0.85;
+}

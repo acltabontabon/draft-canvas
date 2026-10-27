@@ -22,6 +22,8 @@ describe('recovery work', () => {
     expect(recoveryWork(analysis, plan)!.items).toEqual(['1 data operation', '1 message delivery']);
     expect(recoveryWork(analysis, plan, 500)!.items).toEqual(['500 data operations', '500 message deliveries']);
     expect(plan.shared).toEqual(['worker', 'db']);
+    expect(recoveryWork(analysis, plan, 0)!.items).toEqual(['Nothing to replay in this example.']);
+    expect(recoveryArrivals(analysis, plan, 0).size).toBe(0);
     expect(recoveryArrivals(analysis, plan, 1000).get('db')).toEqual({ definite: 1000, possible: 1000 });
     expect(recoveryArrivals(analysis, plan, 1000).get('worker')).toEqual({ definite: 1000, possible: 1000 });
     expect(trafficScenario(analysis)).toEqual(before);
@@ -66,6 +68,6 @@ describe('recovery work', () => {
     expect(recoveryWork(analysis, plan, 500)!.unknown).toBe(true);
     expect(recoveryArrivals(analysis, plan, 500).size).toBe(0);
     expect(recoveryWork({ ...analysis, truncated: true }, plan)!.unknown).toBe(true);
-    for (const count of [0, -1, 1.5, NaN, Infinity, 1_000_001]) expect(recoveryWork(analysis, plan, count)).toBeNull();
+    for (const count of [-1, 1.5, NaN, Infinity, 1_000_001]) expect(recoveryWork(analysis, plan, count)).toBeNull();
   });
 });

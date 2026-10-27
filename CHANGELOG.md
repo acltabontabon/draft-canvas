@@ -12,6 +12,9 @@ The retired VS Code extension has [its own changelog](https://github.com/acltabo
 
 #### Added
 
+- A quiet note beside each DLQ describes its replay scenario. Zero messages clears the extra
+  replay numbers without implying a live queue is empty.
+
 - Traffic’s Database work note separates illustrative logical reads and writes from drawn connectors,
   keeping mixed routes combined. Replay batches now show extra work on affected canvas shapes.
 

@@ -36,20 +36,20 @@ export function TrafficRecovery({ analysis, nodes, plan, width, onExplore }: {
               onBlur={() => { if (pending === '') { setPending('1'); onExplore(1); } }} aria-invalid={!result || undefined} />
           </label>
         )}
-        <p>{text(plan.kind === 'replay' ? 'If each message is replayed once. Totals, not a rate.' : 'For one compensation attempt. Which actions apply depends on what completed before failure.')}</p>
-        {!result ? <p role="alert">{text(`Enter a whole number from 1 to ${MAX_REPLAY_MESSAGES.toLocaleString('en-US')}.`)}</p> : (
+        {count !== 0 && <p>{text(plan.kind === 'replay' ? 'If each message is replayed once. Totals, not a rate.' : 'For one compensation attempt. Which actions apply depends on what completed before failure.')}</p>}
+        {!result ? <p role="alert">{text(`Enter a whole number from 0 to ${MAX_REPLAY_MESSAGES.toLocaleString('en-US')}.`)}</p> : (
           <ul aria-label="Recovery totals" aria-live="polite">
             {result.items.map((item) => <li key={item}>{text(item)}</li>)}
           </ul>
         )}
-        {plan.missing ? <p>{text('Draw a consumer or replay route out of this DLQ to follow its work.')}</p> : (
+        {plan.missing ? <p>{text('Draw a consumer or replay route out of this DLQ to follow its work.')}</p> : count !== 0 && (
           <>
             <p>{text(`Starts with ${plan.targets.slice(0, 3).map(name).join(', ')}${plan.targets.length > 3 ? ` +${plan.targets.length - 3} more` : ''}.`)}</p>
             <p>{text('Drain time unknown. Retries and new failures may add more work.')}</p>
             {result?.uncertain && !result.unknown && <p>{text('Unknown branch shares stay ranges; their peaks may not happen together.')}</p>}
           </>
         )}
-        {plan.shared.length > 0 && (
+        {count !== 0 && plan.shared.length > 0 && (
           <div className="dc-traffic-recovery-shared">
             <p>{text('Also used by normal work')}</p>
             {plan.shared.slice(0, 3).map((id) => (

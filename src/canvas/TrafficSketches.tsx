@@ -1,4 +1,4 @@
-import { recoveryArrivals, type recoveryPlan } from '../traffic/recovery';
+import { MAX_REPLAY_MESSAGES, recoveryArrivals, type recoveryPlan } from '../traffic/recovery';
 import { TrafficRecovery } from './TrafficRecovery';
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
 import { useReactFlow, useStore } from '@xyflow/react';
@@ -123,6 +123,17 @@ export function TrafficSketches() {
     () => analysis && nodes && drawn && selectedId ? trafficCalloutFor(analysis, nodes, selectedId, drawn.obstacles, availableWidth, scenario?.get(selectedId), edges) : null,
     [analysis, nodes, drawn, selectedId, availableWidth, scenario, edges],
   );
+  const dlqNotes = useMemo(() => {
+    if (!analysis || !nodes) return [];
+    return nodes.filter((node) => node.deliveryRole === 'dead-letter').map((node) => {
+      const hasRoute = analysis.interactions.some((item) => item.from === node.id && item.workload);
+      const count = node.id === selectedId && replay?.plan === content?.recovery ? replay?.count : null;
+      const valid = count !== null && count !== undefined && Number.isSafeInteger(count) && count >= 0 && count <= MAX_REPLAY_MESSAGES;
+      const label = !hasRoute ? 'No replay path drawn.' : !valid ? 'Work waits here until replayed.'
+        : count === 0 ? 'Nothing to replay in this example.' : `${count.toLocaleString('en-US')} ${count === 1 ? 'message' : 'messages'} to replay.`;
+      return { node, label, text: layoutText(label, { font: { stack: 'hand', size: 14, weight: 400 }, maxWidth: 260, lineHeight: 19 }) };
+    });
+  }, [analysis, nodes, selectedId, replay, content]);
   const replayBadges = useMemo(() => {
     if (!analysis || !nodes || !replay || replay.count === null || replay.plan !== content?.recovery) return [];
     const counts = recoveryArrivals(analysis, replay.plan, replay.count);
@@ -144,7 +155,7 @@ export function TrafficSketches() {
       const scale = 1 / camera[2];
       const controlWidth = Math.min(360, canvasWidth - 32);
       const controls = { x: (16 - camera[0]) * scale, y: (canvasHeight - BOTTOM_CLEARANCE - camera[1]) * scale, width: controlWidth * scale, height: BOTTOM_CLEARANCE * scale };
-      const obstacles = [...content.obstacles, controls];
+      const obstacles = [...content.obstacles, controls, ...dlqNotes.map(({ node, text }) => ({ x: node.x, y: node.y + node.height + 10, width: 260, height: text.height }))];
       // Let the field note unfold when there is room; on crowded canvases try shorter scrollable
       // notes before allowing an overlap. Reserve its expanded height to avoid a jump when opened.
       const workHeight = content.work ? content.work.items.reduce((sum, item) => sum + item.height + 6, 0) + content.work.detail.height + 30 : 0;
@@ -161,7 +172,7 @@ export function TrafficSketches() {
       }
       return { ...content, x: at.x, y: at.y, scale, maxHeight };
     },
-    [content, visible, camera, canvasWidth, canvasHeight],
+    [content, visible, camera, canvasWidth, canvasHeight, dlqNotes],
   );
 
   if (!analysis || !nodes || !drawn) return null;
@@ -239,6 +250,11 @@ export function TrafficSketches() {
           )}
         </div>
 
+        {dlqNotes.map(({ node, label, text }) => (
+          <div key={node.id} className="dc-traffic-dlq-note" aria-label={label} style={{ transform: `translate(${node.x}px, ${node.y + node.height + 10}px)`, width: 260 }}>
+            {text.lines.map((line, index) => <span className="dc-traffic-callout-line" key={index}>{line.text}{' '}</span>)}
+          </div>
+        ))}
         {replayBadges.map(({ node, label, text, baseline, recovery }) => (
           <div key={node.id} className={recovery ? "dc-traffic-replay-badge" : "dc-traffic-baseline-chip"} aria-label={baseline ? `${baseline}; ${label}` : label} style={{ fontFamily: familyOf('sans'), transform: `translate(${node.x + 6}px, ${node.y - 12}px)`, width: node.width }}>
             {baseline && <span className="dc-traffic-chip-normal">{baseline}</span>}

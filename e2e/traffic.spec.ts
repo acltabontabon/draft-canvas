@@ -358,6 +358,7 @@ test('replay batches show total recovery work without editing the diagram or bas
   await recovery.locator('summary').click();
   const count = page.getByRole('textbox', { name: 'Messages to replay' });
   await expect(count).toHaveValue('1');
+  await expect(page.locator('.dc-traffic-dlq-note')).toHaveText('1 message to replay.');
   await count.fill('500');
   await expect(recovery.getByLabel('Recovery totals')).toContainText('500 data operations');
   await expect(recovery.getByLabel('Recovery totals')).toContainText('500 message deliveries');
@@ -371,8 +372,15 @@ test('replay batches show total recovery work without editing the diagram or bas
   await count.press('Backspace');
   await expect(count).toHaveValue('50');
   await count.fill('0');
+  await expect(recovery.getByRole('alert')).toHaveCount(0);
+  await expect(page.locator('.dc-traffic-dlq-note')).toHaveText('Nothing to replay in this example.');
+  await expect(recovery.getByLabel('Recovery totals')).toHaveText('Nothing to replay in this example.');
+  await expect(page.locator('.dc-traffic-replay-badge')).toHaveCount(0);
+  await expect(workerRate).toBeVisible();
+  await count.fill('-1');
   await expect(recovery.getByRole('alert')).toBeVisible();
   await count.fill('500');
+  await expect(page.locator('.dc-traffic-dlq-note')).toHaveText('500 messages to replay.');
   expect(await editorRevision(page)).toBe(revision);
   await page.screenshot({ path: '/tmp/traffic-recovery-preview.png' });
   await recovery.getByRole('button', { name: 'Worker', exact: true }).click();

@@ -53,7 +53,8 @@ export function recoveryPlan(analysis: TrafficAnalysis, nodes: readonly DraftNod
 }
 
 export function recoveryWork(analysis: TrafficAnalysis, plan: NonNullable<ReturnType<typeof recoveryPlan>>, messages = 1) {
-  if (!Number.isSafeInteger(messages) || messages < 1 || messages > MAX_REPLAY_MESSAGES) return null;
+  if (!Number.isSafeInteger(messages) || messages < 0 || messages > MAX_REPLAY_MESSAGES) return null;
+  if (plan.kind === 'replay' && messages === 0) return { items: ['Nothing to replay in this example.'], uncertain: false, unknown: false };
   if (plan.missing) return { items: ['No replay path drawn.'], uncertain: true, unknown: true };
   return workPerArrival({ ...analysis, interactions: plan.interactions }, plan.start, plan.kind === 'replay' ? messages : 1);
 }
@@ -61,7 +62,7 @@ export function recoveryWork(analysis: TrafficAnalysis, plan: NonNullable<Return
 /** Per-shape batch arrivals for the temporary canvas overlay. Unknown totals never become badges. */
 export function recoveryArrivals(analysis: TrafficAnalysis, plan: NonNullable<ReturnType<typeof recoveryPlan>>, messages: number) {
   const work = recoveryWork(analysis, plan, messages);
-  if (!work || work.unknown) return new Map<string, { definite: number; possible: number }>();
+  if (messages === 0 || !work || work.unknown) return new Map<string, { definite: number; possible: number }>();
   const outgoing = new Map<string, TrafficInteraction[]>();
   for (const item of plan.interactions) {
     const list = outgoing.get(item.from) ?? [];
