@@ -5471,7 +5471,7 @@
    and the open-point marker sits past the right edge. */
 .dc-traffic-badge {
   position: absolute;
-  top: -22px;
+  top: -34px;
   left: 6px;
   display: inline-flex;
   align-items: center;
@@ -5489,7 +5489,8 @@
   box-shadow: var(--dc-shadow-panel);
 }
 
-.dc-traffic-badge[data-tier='raised'] {
+.dc-traffic-badge[data-tier='raised'],
+.dc-traffic-badge[data-tier='none'] {
   border-color: var(--dc-border);
   color: var(--dc-text-muted);
   font-weight: 500;
@@ -6666,3 +6667,70 @@
 .dc-source-evidence p { opacity: 0.7; margin: 8px 0 0; }
 
 .dc-proposal-diff-before, .dc-proposal-diff-after { white-space: pre-wrap; }
+
+/* Scenario controls stay at screen scale, separate from the handwritten findings. */
+.dc-traffic-scenario {
+  max-width: calc(100% - 24px);
+  padding: 10px 12px;
+  border: 1px solid var(--dc-border);
+  border-radius: 12px;
+  background: var(--dc-surface);
+  color: var(--dc-text);
+  box-shadow: 0 4px 18px #0002;
+  font-size: 12px;
+}
+
+.dc-traffic-scenario-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dc-traffic-scenario-row strong,
+.dc-traffic-scenario-caption {
+  display: block;
+  white-space: nowrap;
+}
+
+.dc-traffic-scenario-caption {
+  color: var(--dc-text-muted);
+  font-size: 11px;
+  margin-bottom: 3px;
+}
+
+.dc-traffic-scenario button {
+  min-height: 32px;
+  min-width: 32px;
+  padding: 4px 8px;
+  border: 1px solid var(--dc-border);
+  border-radius: 6px;
+  background: var(--dc-surface);
+  color: var(--dc-text);
+  cursor: pointer;
+}
+
+.dc-traffic-scenario button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.dc-traffic-scenario button:focus-visible {
+  outline: 2px solid var(--dc-accent);
+  outline-offset: 2px;
+}
+
+.dc-traffic-scenario-help {
+  max-width: 390px;
+  max-height: 180px;
+  overflow: auto;
+  line-height: 1.5;
+}
+
+@media (max-width: 520px) {
+  .dc-traffic-scenario-row {
+    flex-wrap: wrap;
+  }
+  .dc-traffic-scenario-row > div {
+    flex-basis: 100%;
+  }
+}

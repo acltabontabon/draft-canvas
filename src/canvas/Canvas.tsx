@@ -1,3 +1,4 @@
+import { TrafficScenario } from './TrafficScenario';
 import { FlowTraceBadges } from './FlowTraceBadges';
 import { TrafficSketches } from './TrafficSketches';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
@@ -2204,6 +2205,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
             </div>
           )}
         </ViewportLayer>
+        {trafficActive && <TrafficScenario />}
       </ReactFlow>
     </div>
   );

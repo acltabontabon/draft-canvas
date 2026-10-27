@@ -76,7 +76,7 @@ describe('traffic view state', () => {
     const revision = before.revision;
 
     before.showTraffic();
-    expect(store.getState().traffic).toEqual({ active: true, flowId: null });
+    expect(store.getState().traffic).toEqual({ active: true, flowId: null, multiplier: 1 });
     expect(store.getState().document).toBe(document);
     expect(store.getState().history).toBe(history);
     expect(store.getState().save).toBe(save);
@@ -102,7 +102,7 @@ describe('traffic view state', () => {
     expect(lensFlow(store.getState())?.id).toBe(flow.id);
     store.getState().showTraffic(flow.id);
 
-    expect(store.getState().traffic).toEqual({ active: true, flowId: flow.id });
+    expect(store.getState().traffic).toEqual({ active: true, flowId: flow.id, multiplier: 1 });
     expect(lensFlow(store.getState())).toBeUndefined();
   });
 
@@ -118,7 +118,7 @@ describe('traffic view state', () => {
     expect(store.getState().traffic.flowId).toBe(flow.id);
 
     store.getState().showTraffic('missing-flow');
-    expect(store.getState().traffic).toEqual({ active: true, flowId: null });
+    expect(store.getState().traffic).toEqual({ active: true, flowId: null, multiplier: 1 });
   });
 
   it('clears traffic when the document or a competing view lifecycle starts', () => {
@@ -322,5 +322,26 @@ describe('roomMayHaveTraffic', () => {
     const data = database('data');
     reset(documentWith([source, data], [edge('reads', source.id, data.id, 'readsWrites')]));
     expect(roomMayHaveTraffic(store.getState())).toBe(true);
+  });
+});
+
+
+describe('traffic scenario state', () => {
+  it('doubles transient rates without changing the diagram, history or analysis, and resets on reopening', () => {
+    reset(documentWith([service('a'), service('b')], [edge('ab', 'a', 'b', 'calls')]));
+    store.getState().showTraffic();
+    const before = store.getState();
+    const analysis = trafficOf(before);
+    store.getState().setTrafficMultiplier(2);
+    expect(store.getState().traffic.multiplier).toBe(2);
+    expect(store.getState().document).toBe(before.document);
+    expect(store.getState().history).toBe(before.history);
+    expect(store.getState().revision).toBe(before.revision);
+    expect(trafficOf(store.getState())).toBe(analysis);
+    for (const invalid of [0, -1, NaN, Infinity, 128, 1.5]) store.getState().setTrafficMultiplier(invalid);
+    expect(store.getState().traffic.multiplier).toBe(2);
+    store.getState().hideTraffic();
+    store.getState().showTraffic();
+    expect(store.getState().traffic.multiplier).toBe(1);
   });
 });

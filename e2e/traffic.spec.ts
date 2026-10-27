@@ -81,7 +81,7 @@ test.describe('Traffic', () => {
     await page.locator('.react-flow__node[data-id="checkout"] .dc-node').click();
     const callout = page.locator('.dc-traffic-callout');
     await expect(page.locator('.react-flow__node[data-id="checkout"] .dc-node[data-selected="true"]')).toBeVisible();
-    await expect(callout.locator('.dc-traffic-callout-metric')).toHaveText('2 paths');
+    await expect(callout.locator('.dc-traffic-callout-metric')).toHaveText('~2,000 calls/min');
     await expect(callout.locator('.dc-traffic-callout-sources li')).toHaveCount(2);
     await expect(callout.getByRole('heading', { name: /Calls waiting|If it goes down/ })).toBeVisible();
     const frame = await page.locator('.dc-canvas').boundingBox();
@@ -257,3 +257,44 @@ test.describe('Traffic', () => {
     await expect(page.locator('.dc-canvas')).toHaveAttribute('data-traffic', 'on');
   });
 });
+
+
+test('illustrative traffic starts ready, doubles, resets and stays out of document history', async ({ page }) => {
+  await importDocument(page, trafficDocument(), 'traffic-scenario.draftcanvas');
+  await showTraffic(page);
+  const scenario = page.locator('.dc-traffic-scenario');
+  const badge = page.locator('.react-flow__node[data-id="checkout"] .dc-traffic-badge');
+  await expect(scenario).toContainText('1,000 starts/min per entry');
+  await expect(badge).toContainText('~2,000 calls/min');
+  const revision = await editorRevision(page);
+  await scenario.getByRole('button', { name: 'Double traffic' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(scenario).toContainText('2,000 starts/min per entry');
+  await expect(badge).toContainText('~4,000 calls/min');
+  expect(await editorRevision(page)).toBe(revision);
+  await scenario.getByRole('button', { name: 'Traffic assumptions' }).click();
+  await expect(scenario).toContainText('not measured traffic or capacity');
+  await scenario.getByRole('button', { name: 'Reset traffic rate' }).click();
+  await expect(badge).toContainText('~2,000 calls/min');
+  await expect(scenario.getByRole('button', { name: 'Reset traffic rate' })).toBeDisabled();
+  await page.locator('.dc-status-traffic').click();
+  await expect(scenario).toHaveCount(0);
+});
+
+for (const colorScheme of ['light', 'dark'] as const) {
+  test(`traffic controls fit a narrow canvas in ${colorScheme} mode`, async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+    await importDocument(page, trafficDocument(), 'traffic-narrow.draftcanvas');
+    await runCommand(page, 'Show traffic');
+    const scenario = page.locator('.dc-traffic-scenario');
+    await scenario.getByRole('button', { name: 'Traffic assumptions' }).click();
+    await expect(scenario).toContainText('A round example');
+    const bounds = await scenario.boundingBox();
+    expect(bounds!.x).toBeGreaterThanOrEqual(0);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
+    await scenario.getByRole('button', { name: 'Double traffic' }).click();
+    await expect(scenario).toContainText('2,000 starts/min per entry');
+    await page.screenshot({ path: `/tmp/traffic-mobile-${colorScheme}.png` });
+  });
+}

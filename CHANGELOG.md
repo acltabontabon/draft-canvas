@@ -12,6 +12,10 @@ The retired VS Code extension has [its own changelog](https://github.com/acltabo
 
 #### Added
 
+- Traffic opens with an illustrative 1,000 starts/min per entry, with Double and Reset controls.
+  Runtime shapes show calls, messages or data operations per minute; unknown shares remain ranges,
+  and loops have no rate estimate. The scenario stays local and never changes the diagram.
+
 - Companion and MCP-created connectors release provisional layout pins when automatic attachments
   make the whole view simpler without harming other routes or captions. Explicit pins and bends stay
   fixed; agent geometry reads and previews use the same routing as the canvas.

@@ -1,9 +1,7 @@
 # Traffic
 
 Traffic reads the runtime connectors in your diagram and marks the consequences on the canvas.
-There is no panel to fill in or open.
-
-![Traffic turning on: light flows from the entry points, then the findings are written on the diagram one by one.](../media/guides/traffic.gif)
+It starts with an illustrative traffic rate; there is nothing to fill in.
 
 ## Show traffic
 
@@ -16,16 +14,15 @@ out of a shape, presenting or turning on a spotlight also ends it.
 
 ## Read the canvas
 
-![Traffic view on the canvas, with flowing light on connectors, a handwritten headline, path counts and notes beside shapes.](../media/guides/traffic-overview.png)
+![Traffic view on the canvas, with flowing light on connectors, a handwritten headline, illustrative rates and notes beside shapes.](../media/guides/traffic-overview.png)
 
 - Flowing light runs along every connector that carries traffic, in the direction the work travels.
   A backwards **read by** arrow still flows from the reader to the store. Busier lines carry denser
   streams. A branch that only some traffic may take — after a Junction split, through one of a
   gateway's routes, toward competing consumers, or behind a condition — is sparse and faint. When
   traffic starts, the streams begin at entry points and spread hop by hop.
-- Where paths meet, the shape is lit along its outline with a count such as **3 paths**. **2–4
-  paths** means two are certain and up to two more may arrive across a split whose share is not
-  drawn.
+- Where paths meet, the shape is lit along its outline with illustrative rates beside runtime shapes, such as **~3,000 calls/min**. A range
+  keeps unknown branch shares explicit; its upper bounds need not occur together.
 - Up to seven findings appear as handwritten notes beside the shapes they describe: a marker loop,
   a short note and sometimes an arrow between shapes. Tap or click a note, or Tab to it and press
   `Enter`, to unfold the explanation in place. Activate it again or press `Esc` to fold it.
@@ -38,7 +35,7 @@ out of a shape, presenting or turning on a spotlight also ends it.
   it unfolds what the diagram does not say: unknown split shares, conditions, loops, retries,
   schedules, connectors through components, and gateways that are also called directly.
 
-Select a shape while traffic shows to open a field note: a large path count, a row for each incoming
+Select a shape while traffic shows to open a field note: a large illustrative rate, a row of modeled paths for each incoming
 source, then separate sections for outage impact and dependencies. When the waiting services are
 also the stalled journeys, their names appear once. The note also shows what is safely behind a
 queue or topic.
@@ -46,7 +43,7 @@ queue or topic.
 The field note keeps a readable text size as you zoom and stays inside the canvas. Longer notes
 scroll within the available space; focus the note to scroll it with the keyboard.
 
-![A selected shape's field note with a large path count, source rows, outage impact and dependencies.](../media/guides/traffic-detail.png)
+![A selected shape's field note with an illustrative rate, source rows, outage impact and dependencies.](../media/guides/traffic-detail.png)
 
 If nothing can be read — there are no runtime connectors, or every service is reached from another
 so no path has a start — Traffic says so instead.
@@ -68,13 +65,31 @@ Traffic points out consequences such as:
 - queues or topics nobody consumes, a dead-letter queue nobody drains, and a gateway that is also
   called directly.
 
-## Paths, not load
+## Try more traffic
+
+Traffic starts at **1,000 starts/min per entry**, a round example rather than measured usage or a
+recommended operating rate. The control below the canvas offers **Double**, **Reset**, and **?**
+for the assumptions. Double can be repeated up to 64×; Reset returns to 1,000. Reopening Traffic
+also resets the example. There is no required input.
+
+Each drawn baseline call is assumed to run once per incoming arrival. Rates use **calls/min**,
+**messages/min**, or **data ops/min**; mixed work uses **arrivals/min**. Entry points use
+**starts/min**, so a scheduler or source queue is not presented as HTTP traffic. Two independent
+entries feeding the same service each contribute their example rate. A topic copies messages to
+each subscriber; competing consumers and conditional routes keep ranges instead of invented shares.
+
+Select a shape to see its illustrative rate alongside incoming path counts and outage analysis.
+Loops and their downstream work show **Rate unknown**, as do capped counts or incomplete analysis.
+Retries, failure paths and background work remain outside this baseline. Doubling does not predict
+latency, utilisation, capacity or overload, and does not change animation speed.
+
+## Paths and assumptions
 
 Each entry point — an Actor, a Scheduler, or a service or queue that nothing drawn leads into —
 starts one path. Every runtime connector carries the paths that reach its source on to its target.
 A count is the number of drawn routes that meet at a shape.
 
-Counts assume every drawn call happens; how often each is taken is not drawn. Traffic never shows a
+Counts assume every drawn call happens; how often each is taken is not drawn. The illustrative scenario scales these paths by the example input; it does not establish an actual
 rate, latency number, utilisation or capacity. Requests, messages and data operations are ranked
 separately because they are different kinds of work.
 

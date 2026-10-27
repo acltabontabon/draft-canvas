@@ -7,7 +7,7 @@ import type { DraftNode } from '../document/types';
 import { motionMs } from '../lib/motion';
 import { createRng } from '../render/roughness/seed';
 import { useEditorStore, viewLevel } from '../store/editorStore';
-import { trafficOf } from '../store/traffic';
+import { trafficOf, trafficScenarioOf } from '../store/traffic';
 import { useUiStore } from '../store/uiStore';
 import type { TrafficAnalysis, TrafficInsight } from '../traffic';
 import { arrowFor, placeSketches, type Rect, type SketchRequest } from '../traffic/sketchLayout';
@@ -42,6 +42,7 @@ const STROKE_STAGGER_MS = 520;
 const FRAME_MARGIN = 40;
 /** The toolbar floats over the top of the canvas; the headline must clear it. */
 const TOP_CLEARANCE = 76;
+const BOTTOM_CLEARANCE = 120;
 
 interface Note {
   insight: TrafficInsight;
@@ -68,6 +69,7 @@ function boundsOf(nodes: readonly DraftNode[]): Bounds | null {
 
 export function TrafficSketches() {
   const analysis = useEditorStore(trafficOf);
+  const scenario = useEditorStore(trafficScenarioOf);
   const live = useEditorStore((state) => (state.traffic.active ? state.document.nodes : null));
   const level = useEditorStore(viewLevel);
   const selectedId = useEditorStore((state) =>
@@ -113,8 +115,8 @@ export function TrafficSketches() {
   }, [camera, canvasWidth, canvasHeight]);
   const availableWidth = canvasWidth > 32 ? canvasWidth - 32 : undefined;
   const content = useMemo(
-    () => analysis && nodes && drawn && selectedId ? trafficCalloutFor(analysis, nodes, selectedId, drawn.obstacles, availableWidth) : null,
-    [analysis, nodes, drawn, selectedId, availableWidth],
+    () => analysis && nodes && drawn && selectedId ? trafficCalloutFor(analysis, nodes, selectedId, drawn.obstacles, availableWidth, scenario?.get(selectedId)) : null,
+    [analysis, nodes, drawn, selectedId, availableWidth, scenario],
   );
   const callout = useMemo(
     () => {
@@ -122,10 +124,12 @@ export function TrafficSketches() {
       // This is reading chrome. Its type stays readable when the drawing is zoomed out, while its
       // footprint is converted back to flow space for the same collision checks as the findings.
       const scale = 1 / camera[2];
-      const at = placeCallout(content.anchor, content.width * scale, Math.min(content.height * scale, visible?.height ?? content.height * scale), content.obstacles, visible);
+      const controlWidth = Math.min(450, canvasWidth - 24);
+      const controls = { x: ((canvasWidth - controlWidth) / 2 - camera[0]) * scale, y: (canvasHeight - BOTTOM_CLEARANCE - camera[1]) * scale, width: controlWidth * scale, height: BOTTOM_CLEARANCE * scale };
+      const at = placeCallout(content.anchor, content.width * scale, Math.min(content.height * scale, visible?.height ?? content.height * scale), [...content.obstacles, controls], visible);
       return { ...content, x: at.x, y: at.y, scale, maxHeight: visible ? visible.height / scale : undefined };
     },
-    [content, visible, camera],
+    [content, visible, camera, canvasWidth, canvasHeight],
   );
 
   if (!analysis || !nodes || !drawn) return null;
@@ -260,7 +264,7 @@ export function TrafficSketches() {
               <div className="dc-traffic-callout-title" title={callout.title.text}>
                 {callout.title.lines.map((line, index) => <span key={index} className="dc-traffic-callout-line">{line}</span>)}
               </div>
-              <span className="dc-traffic-callout-kicker">Traffic</span>
+              <span className="dc-traffic-callout-kicker">{selectedId && scenario?.has(selectedId) ? 'Example' : 'Traffic'}</span>
             </div>
             <div className="dc-traffic-callout-metric" style={{ fontFamily: familyOf('hand'), fontSize: callout.metricSize }}>
               {callout.metric}
@@ -442,13 +446,13 @@ function useFrameNotes(extent: Bounds | null) {
       const maxX = extent.maxX + 16;
       const maxY = extent.maxY + 16;
       const { x, y, zoom } = getViewport();
-      const fits = x + minX * zoom >= 0 && y + minY * zoom >= TOP_CLEARANCE && x + maxX * zoom <= pane.width && y + maxY * zoom <= pane.height;
+      const fits = x + minX * zoom >= 0 && y + minY * zoom >= TOP_CLEARANCE && x + maxX * zoom <= pane.width && y + maxY * zoom <= pane.height - BOTTOM_CLEARANCE;
       if (fits) return;
-      const next = Math.max(0.1, Math.min(zoom, (pane.width - FRAME_MARGIN * 2) / (maxX - minX), (pane.height - TOP_CLEARANCE - FRAME_MARGIN) / (maxY - minY)));
+      const next = Math.max(0.1, Math.min(zoom, (pane.width - FRAME_MARGIN * 2) / (maxX - minX), (pane.height - TOP_CLEARANCE - BOTTOM_CLEARANCE - FRAME_MARGIN) / (maxY - minY)));
       void setViewport(
         {
           x: (pane.width - (maxX - minX) * next) / 2 - minX * next,
-          y: TOP_CLEARANCE + (pane.height - TOP_CLEARANCE - (maxY - minY) * next) / 2 - minY * next,
+          y: TOP_CLEARANCE + (pane.height - TOP_CLEARANCE - BOTTOM_CLEARANCE - (maxY - minY) * next) / 2 - minY * next,
           zoom: next,
         },
         { duration: motionMs(420) },

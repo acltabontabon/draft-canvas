@@ -27,7 +27,7 @@ function textOf(text: string, width: number, size = 13, weight: 400 | 600 = 400,
 }
 
 /** A field note: keep the count, its sources and its consequences visually distinct. */
-export function trafficCalloutFor(analysis: TrafficAnalysis, nodes: readonly DraftNode[], id: string, obstacles: readonly Rect[], availableWidth = WIDTH) {
+export function trafficCalloutFor(analysis: TrafficAnalysis, nodes: readonly DraftNode[], id: string, obstacles: readonly Rect[], availableWidth = WIDTH, scenarioLabel?: string) {
   const node = nodes.find((item) => item.id === id);
   if (!node) return null;
   const width = Math.min(WIDTH, availableWidth);
@@ -79,6 +79,10 @@ export function trafficCalloutFor(analysis: TrafficAnalysis, nodes: readonly Dra
     add('Waits on', impact.dependsOn, 'quiet');
     add('May wait on', impact.mayDependOn, 'quiet');
     add('Behind a queue', impact.decoupled, 'safe', 'Can lag without holding this up');
+  }
+
+  if (scenarioLabel) {
+    metric = scenarioLabel;
   }
 
   const title = textOf(displayNameFor(node), inner - 62, 13, 600);

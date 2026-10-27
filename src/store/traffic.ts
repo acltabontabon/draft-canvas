@@ -1,3 +1,4 @@
+import { trafficScenario } from '../traffic/scenario';
 import { findFlow } from '../document/flow';
 import type { DraftEdge, DraftFlow, DraftNode } from '../document/types';
 import { analyzeTraffic, mayHaveTraffic, type TrafficAnalysis, type TrafficInteraction, type TrafficNode } from '../traffic';
@@ -215,3 +216,17 @@ export function roomMayHaveTraffic(state: Pick<EditorStore, 'document'>): boolea
 }
 
 const hintMemo = new WeakMap<readonly DraftEdge[], { nodes: readonly DraftNode[]; value: boolean }>();
+
+// Each node reads a cached string; no per-node graph walk or allocation on store updates.
+const scenarios = new WeakMap<TrafficAnalysis, { multiplier: number; labels: Map<string, string> }>();
+
+export function trafficScenarioOf(state: Pick<EditorStore, 'document' | 'traffic'>): Map<string, string> | null {
+  const analysis = trafficOf(state);
+  if (!analysis) return null;
+  const multiplier = state.traffic.multiplier;
+  const known = scenarios.get(analysis);
+  if (known?.multiplier === multiplier) return known.labels;
+  const labels = trafficScenario(analysis, multiplier);
+  scenarios.set(analysis, { multiplier, labels });
+  return labels;
+}
