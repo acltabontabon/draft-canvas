@@ -628,17 +628,15 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
         {C4_TYPES.has(node.type) && (
           <Tooltip
             content={{
-              title: node.technology ? 'Edit technology' : 'Add technology',
-              description: node.technology
-                ? 'Change the technology used by this element.'
-                : 'Choose the technology used by this element.',
+              title: 'Element details',
+              description: 'Edit the technology and description of this element.',
             }}
           >
             {(tip) => (
               <Button
                 variant="quiet"
                 className="dc-element-technology"
-                aria-label={node.technology ? `Technology: ${node.technology}, edit` : 'Add technology'}
+                aria-label={node.technology ? `Technology: ${node.technology}, edit` : 'Details'}
                 aria-expanded={openPanel === 'details'}
                 {...tip}
                 onClick={() => setOpenPanel(openPanel === 'details' ? null : 'details')}
@@ -646,7 +644,7 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
                 <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
                   <path d={technologyIcon.path} fill="currentColor" />
                 </svg>
-                <span>{node.technology || 'Tech'}</span>
+                <span>{node.technology || 'Details'}</span>
               </Button>
             )}
           </Tooltip>

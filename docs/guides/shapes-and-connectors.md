@@ -25,7 +25,7 @@ Queue and Data Store artwork also grows when you drag a corner resize handle.
 
 - Rename: double-click, or select and press `Enter`.
 - A label cut short? Run **Fit shapes to text** from `⌘K`.
-- Technology: click **Tech** on the selected shape, then enter a name. `Postgres` or `Rust 1.90`
+- Technology: click **Details** on the selected shape, then enter a name. `Postgres` or `Rust 1.90`
   work; the shape shows a matching icon. Edit and delete are directly beside the shape's kind.
   Small marks and simple notes get a content-sized card. Drag the card's top edge to move it
   out of the way; click empty canvas to dismiss it. Resize the description box from its lower-right

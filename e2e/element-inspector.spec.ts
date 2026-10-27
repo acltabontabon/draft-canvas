@@ -65,7 +65,7 @@ test.describe('element inspector popover', () => {
     await newCanvas(page, 'Details undo');
     await create(page, 'Service', { x: 400, y: 300 });
     await page.locator('.dc-node').first().click();
-    await page.getByRole('button', { name: 'Add technology' }).click();
+    await page.getByRole('button', { name: 'Details' }).click();
     // By role: the chip that opened it is named for technology too.
     const technology = page.getByRole('combobox', { name: 'Technology' });
     await expect(technology).toBeFocused();
@@ -89,7 +89,7 @@ test.describe('element inspector popover', () => {
     await newCanvas(page, 'Technology shortcut');
     await create(page, 'Service', { x: 400, y: 300 });
     await page.locator('.dc-node').first().click();
-    await page.getByRole('button', { name: 'Add technology' }).click();
+    await page.getByRole('button', { name: 'Details' }).click();
     const technology = page.getByRole('combobox', { name: 'Technology' });
     // Long enough to overflow the chip, inside the field's own limit (longer is cut on commit).
     const value = 'Internal application runtime, long-named on purpose';
@@ -210,19 +210,19 @@ test.describe('element inspector popover', () => {
     await page.getByRole('button', { name: 'Actor frame' }).click();
     await page.getByRole('option', { name: 'Borderless' }).click();
     const card = page.locator('.dc-element-inspector');
-    const technology = card.getByRole('button', { name: 'Add technology' });
+    const technology = card.getByRole('button', { name: 'Details' });
     await expect(technology).toBeVisible();
     await expect(technology.locator('span')).toHaveCSS('display', 'none');
     expect((await technology.boundingBox())!.width).toBeLessThan(35);
     await technology.hover();
-    await expect(page.getByRole('tooltip')).toContainText('Add technology');
+    await expect(page.getByRole('tooltip')).toContainText('Element details');
   });
 
   test('the description field can be resized without moving its popup', async ({ page, browserName }) => {
     await newCanvas(page, 'Resizable description');
     await create(page, 'Service', { x: 400, y: 300 });
     await page.locator('.dc-node').first().click();
-    await page.getByRole('button', { name: 'Add technology' }).click();
+    await page.getByRole('button', { name: 'Details' }).click();
     const popup = page.locator('.dc-element-inspector');
     const description = page.getByLabel('Description');
     await expect(description).toHaveCSS('resize', 'vertical');

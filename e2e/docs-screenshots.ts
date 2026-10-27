@@ -301,7 +301,7 @@ async function technologyScreenshots(page: Page) {
   await title.fill('Technology at a glance');
   await title.blur();
   await drop(page, 'd', { x: 420, y: 310 }, 'Orders');
-  await page.locator('.dc-element-inspector').getByRole('button', { name: 'Add technology' }).click();
+  await page.locator('.dc-element-inspector').getByRole('button', { name: 'Details' }).click();
   const technology = page.getByRole('combobox', { name: 'Technology', exact: true });
   await technology.fill('Postgres');
   await expect(page.getByRole('option', { name: 'PostgreSQL', exact: true })).toBeVisible();
@@ -310,7 +310,7 @@ async function technologyScreenshots(page: Page) {
   await page.locator(CANVAS).click({ position: { x: 12, y: 12 } });
 
   await drop(page, 's', { x: 720, y: 310 }, 'Internal worker');
-  await page.locator('.dc-element-inspector').getByRole('button', { name: 'Add technology' }).click();
+  await page.locator('.dc-element-inspector').getByRole('button', { name: 'Details' }).click();
   await technology.fill('Private runtime');
   await technology.press('Enter');
   await page.locator(CANVAS).click({ position: { x: 12, y: 12 } });
@@ -433,7 +433,7 @@ async function trafficScreenshots(page: Page) {
   await page.locator('.dc-traffic-database summary').click();
   await shot(page, 'traffic-database');
   await page.locator('.dc-status-traffic').click();
-  await page.getByRole('button', { name: 'Add technology', exact: true }).click();
+  await page.getByRole('button', { name: 'Details', exact: true }).click();
   const assigned = page.getByRole('combobox', { name: 'Technology', exact: true });
   await assigned.fill('PostgreSQL');
   await assigned.press('Enter');

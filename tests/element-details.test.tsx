@@ -54,33 +54,33 @@ describe('element details shortcut', () => {
 
   it.each(C4_TEXT_TYPES)('offers + Technology on an empty %s', (type) => {
     mount('', type);
-    const chip = screen.getByRole('button', { name: 'Add technology' });
-    expect(chip).toHaveTextContent('Tech');
+    const chip = screen.getByRole('button', { name: 'Details' });
+    expect(chip).toHaveTextContent('Details');
     fireEvent.click(chip);
     expect(screen.getByRole('combobox', { name: 'Technology' })).toHaveFocus();
   });
 
   it('uses the shared rich tooltip for the technology control', () => {
     mount();
-    const chip = screen.getByRole('button', { name: 'Add technology' });
+    const chip = screen.getByRole('button', { name: 'Details' });
 
     expect(chip).not.toHaveAttribute('title');
     fireEvent.focus(chip);
 
     const tooltip = screen.getByRole('tooltip');
     expect(tooltip).toHaveAttribute('data-density', 'rich');
-    expect(tooltip).toHaveTextContent('Add technology');
-    expect(tooltip).toHaveTextContent('Choose the technology used by this element.');
+    expect(tooltip).toHaveTextContent('Element details');
+    expect(tooltip).toHaveTextContent('Edit the technology and description of this element.');
   });
 
   it('does not offer the chip on a non-C4 shape', () => {
     mount('', 'note');
-    expect(screen.queryByRole('button', { name: 'Add technology' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Details' })).toBeNull();
   });
 
   it('commits custom technology with Enter, moves to Description, and keeps the value after Escape', () => {
     mount();
-    fireEvent.click(screen.getByRole('button', { name: 'Add technology' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Details' }));
     const field = screen.getByRole('combobox', { name: 'Technology' });
     fireEvent.change(field, { target: { value: 'Internal runtime' } });
     fireEvent.keyDown(field, { key: 'Enter' });
@@ -97,7 +97,7 @@ describe('element details shortcut', () => {
 
   it('keeps arrows and Enter for suggestions before a second Enter moves to Description', () => {
     mount();
-    fireEvent.click(screen.getByRole('button', { name: 'Add technology' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Details' }));
     const field = screen.getByRole('combobox', { name: 'Technology' });
     fireEvent.change(field, { target: { value: 'sql' } });
     const options = screen.getAllByRole('option');
@@ -130,7 +130,7 @@ describe('element details shortcut', () => {
 
   it('shows an undo without committing the old draft again on blur', () => {
     mount();
-    fireEvent.click(screen.getByRole('button', { name: 'Add technology' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Details' }));
     const field = screen.getByRole('combobox', { name: 'Technology' });
     fireEvent.change(field, { target: { value: 'Internal runtime' } });
     fireEvent.keyDown(field, { key: 'Enter' });
