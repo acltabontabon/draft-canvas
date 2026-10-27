@@ -6871,3 +6871,22 @@
   pointer-events: none;
   opacity: 0.85;
 }
+
+.dc-traffic-shared-work {
+  margin: 10px 0;
+  padding-left: 10px;
+  border-left: 2px solid var(--dc-caution);
+}
+.dc-traffic-shared-work h3 {
+  margin: 0 0 4px;
+  color: var(--dc-caution);
+  font-size: 16px;
+  line-height: 21px;
+  font-weight: 400;
+}
+.dc-traffic-shared-work p {
+  margin: 0;
+  color: var(--dc-text-muted);
+  font-size: 12px;
+  line-height: 18px;
+}

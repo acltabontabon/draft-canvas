@@ -150,6 +150,14 @@ export function TrafficSketches() {
       return [{ node, label, baseline: count ? baseline : undefined, recovery: !!count, text: layoutText(label, { font: { stack: 'sans', size: 12, weight: 600 }, maxWidth: node.width - 12, lineHeight: 16 }) }];
     });
   }, [analysis, nodes, activeReplay, scenario]);
+  const sharedWork = useMemo(() => {
+    if (!content || !selectedId || !activeReplay || activeReplay.count === null
+      || !Number.isSafeInteger(activeReplay.count) || activeReplay.count <= 0 || activeReplay.count > MAX_REPLAY_MESSAGES
+      || !activeReplay.plan.shared.includes(selectedId)) return null;
+    return layoutText('Replay and normal traffic can use this resource.', {
+      font: { stack: 'sans', size: 12, weight: 400 }, maxWidth: content.width - 66, lineHeight: 18,
+    });
+  }, [content, selectedId, activeReplay]);
   const callout = useMemo(
     () => {
       if (!content) return null;
@@ -162,7 +170,7 @@ export function TrafficSketches() {
       // Let the field note unfold when there is room; on crowded canvases try shorter scrollable
       // notes before allowing an overlap. Reserve its expanded height to avoid a jump when opened.
       const workHeight = content.work ? content.work.items.reduce((sum, item) => sum + item.height + 6, 0) + content.work.detail.height + 30 : 0;
-      const desired = Math.min(content.height + workHeight + (content.databaseNote ? 160 : 0) + (content.recovery ? 220 : 0), visible ? visible.height / scale : 420);
+      const desired = Math.min(content.height + (sharedWork ? sharedWork.height + 45 : 0) + workHeight + (content.databaseNote ? 160 : 0) + (content.recovery ? 220 : 0), visible ? visible.height / scale : 420);
       const heights = [...new Set([desired, Math.min(desired, 420), Math.min(desired, 360), Math.min(desired, 300), Math.min(desired, 270)])];
       let maxHeight = heights[heights.length - 1]!;
       let at = placeCallout(content.anchor, content.width * scale, maxHeight * scale, obstacles, visible);
@@ -175,7 +183,7 @@ export function TrafficSketches() {
       }
       return { ...content, x: at.x, y: at.y, scale, maxHeight };
     },
-    [content, visible, camera, canvasWidth, canvasHeight, dlqNotes],
+    [content, visible, camera, canvasWidth, canvasHeight, dlqNotes, sharedWork],
   );
 
   if (!analysis || !nodes || !drawn) return null;
@@ -329,6 +337,12 @@ export function TrafficSketches() {
               <svg width="72" height="7" viewBox="0 0 72 7" aria-hidden="true"><path d="M2 4 Q27 1 68 3 M6 6 Q33 4 54 5" /></svg>
             </div>
             {callout.summary && <p className="dc-traffic-callout-summary">{callout.summary.lines.map((line, index) => <span key={index} className="dc-traffic-callout-line">{line}</span>)}</p>}
+            {sharedWork && (
+              <section className="dc-traffic-shared-work" aria-label="Shared workload">
+                <h3 style={{ fontFamily: familyOf('hand') }}>Shared workload</h3>
+                <p>{sharedWork.lines.map((line, index) => <span className="dc-traffic-callout-line" key={index}>{line.text}{' '}</span>)}</p>
+              </section>
+            )}
             {callout.sources.length > 0 && (
               <ul className="dc-traffic-callout-sources" aria-label="Rate breakdown" data-rates={callout.work ? true : undefined}>
                 {callout.sources.map((source, index) => (

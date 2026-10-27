@@ -392,9 +392,14 @@ test('replay batches show total recovery work without editing the diagram or bas
   await page.screenshot({ path: '/tmp/traffic-recovery-preview.png' });
   await recovery.getByRole('button', { name: 'Worker', exact: true }).click();
   await expect(page.locator('.dc-traffic-callout')).toContainText('Worker');
+  await expect(page.getByRole('region', { name: 'Shared workload' })).toContainText('Replay and normal traffic can use this resource.');
   await expect(page.locator('.dc-traffic-replay-badge')).toHaveCount(2);
   await page.locator('.react-flow__node[data-id="db"] .dc-node').click();
   await page.locator('.dc-traffic-database summary').click();
+  await expect(page.getByRole('region', { name: 'Shared workload' })).toBeVisible();
+  await page.locator('.react-flow__node[data-id="api"] .dc-node').click();
+  await expect(page.getByRole('region', { name: 'Shared workload' })).toHaveCount(0);
+  await page.locator('.react-flow__node[data-id="db"] .dc-node').click();
   await expect(page.locator('.dc-traffic-replay-badge').filter({ hasText: 'data ops' })).toContainText('Replay +500 data ops total');
   await expect(page.locator('.dc-traffic-dlq-note')).toHaveText('500 messages to replay.');
   await page.locator('.react-flow__node[data-id="dlq"] .dc-node').click();
@@ -404,6 +409,7 @@ test('replay batches show total recovery work without editing the diagram or bas
   await page.locator('.react-flow__node[data-id="db"] .dc-node').click();
   await expect(page.locator('.dc-traffic-replay-badge')).toHaveCount(0);
   await expect(page.locator('.dc-traffic-dlq-note')).toHaveText('Nothing to replay in this example.');
+  await expect(page.getByRole('region', { name: 'Shared workload' })).toHaveCount(0);
   const clear = page.getByRole('button', { name: 'Clear replay', exact: true });
   await clear.click();
   await expect(clear).toHaveCount(0);
@@ -445,6 +451,12 @@ for (const colorScheme of ['light', 'dark'] as const) {
     expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(844);
     expect(bounds!.height).toBeLessThanOrEqual(500);
     await page.screenshot({ path: `/tmp/traffic-recovery-mobile-${colorScheme}.png` });
+    await page.locator('.react-flow__node[data-id="worker"] .dc-node').click();
+    await expect(page.getByRole('region', { name: 'Shared workload' })).toBeVisible();
+    const sharedBounds = await page.locator('.dc-traffic-callout').boundingBox();
+    expect(sharedBounds!.x).toBeGreaterThanOrEqual(0);
+    expect(sharedBounds!.x + sharedBounds!.width).toBeLessThanOrEqual(390);
+    await page.screenshot({ path: `/tmp/traffic-shared-mobile-${colorScheme}.png` });
   });
 }
 

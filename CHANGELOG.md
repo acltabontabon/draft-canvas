@@ -12,6 +12,9 @@ The retired VS Code extension has [its own changelog](https://github.com/acltabo
 
 #### Added
 
+- Traffic notes highlight shared workload when replay and normal traffic can use the selected
+  resource, without extra inputs or capacity predictions.
+
 - A small Clear replay control removes the temporary recovery example without turning Traffic off.
 
 - The editor footer keeps save status and canvas controls compact, without element counts or the

@@ -143,6 +143,10 @@ a backlog alone cannot tell us how quickly it drains.
 
 An idle DLQ does not start normal traffic. Recovery follows the routes you drew and highlights
 dependencies also used by normal work. Without an outgoing replay route, it asks you to draw one.
+While a positive replay example is active, selecting a resource used by both replay and normal
+traffic shows a short **Shared workload** takeaway. It points out shared use, without predicting
+overload or latency.
+
 Compensation remains a range because the diagram cannot tell which earlier steps completed.
 Retries and new failures can add more work; loops have no finite total. The optional count is local,
 stays while you inspect other shapes, and never edits the diagram. Returning to the DLQ keeps
