@@ -12,8 +12,8 @@ The retired VS Code extension has [its own changelog](https://github.com/acltabo
 
 #### Added
 
-- Traffic’s “How to read this” guide explains the example in three short, handwritten notes,
-  with clear limits on what the numbers can tell you.
+- Traffic’s “How to read this” guide opens as a compact popover at the lower-left canvas edge,
+  with clear limits on what the numbers can tell you. It closes on Escape or an outside click.
 
 - Traffic notes explain incoming rates as a source tally and unfold a handwritten “One request
   from here…” summary of downstream work, with no new inputs. Messages published and delivered

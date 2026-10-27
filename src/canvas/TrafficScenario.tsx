@@ -1,7 +1,6 @@
-import { familyOf } from '../render/text/fonts';
 import { layoutText } from '../render/text/layout';
 import { Panel, useStore } from '@xyflow/react';
-import { useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useEditorStore } from '../store/editorStore';
 import { trafficOf } from '../store/traffic';
 import { DEFAULT_TRAFFIC_RATE } from '../traffic/scenario';
@@ -11,27 +10,30 @@ export function TrafficScenario() {
   const analysis = useEditorStore(trafficOf);
   const [expanded, setExpanded] = useState(false);
   const helpId = useId();
+  const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const canvasWidth = useStore((state) => state.width);
-  const help = useMemo(() => {
-    const width = Math.max(160, Math.min(400, canvasWidth - 24) - 26);
-    const lines = (text: string, maxWidth: number, hand = false) => layoutText(text, {
-      font: { stack: hand ? 'hand' : 'sans', size: hand ? 17 : 12, weight: hand ? 700 : 400 },
-      maxWidth, lineHeight: hand ? 22 : 18,
-    }).lines.map((line) => line.text);
-    return {
-      notes: [
-        ['Start with an example', 'Each entry starts at 1,000 arrivals a minute. These are example numbers, not live measurements.'],
-        ['Follow one arrival', 'Each drawn call happens once per arrival. Select a shape to see where its work comes from.'],
-        ['Leave room for the unknown', 'Ranges mean a branch may be taken. Their highest values may not happen together. Loops have no estimate.'],
-      ].map(([title, body]) => ({ title: lines(title!, width - 36, true), body: lines(body!, width - 36) })),
-      footer: lines('Retries, failure paths and background work are left out. Traffic does not predict response times or set performance targets.', width),
+  const help = useMemo(() => [
+    'Example only: 1,000 starts/min at each entry, not live measurements.',
+    'Each drawn call runs once per arrival.',
+    'Ranges show unknown shares; their peaks may not happen together. Loops have no rate estimate.',
+    'Retries, failure paths and background work are excluded. No latency or capacity predictions.',
+  ].map((text) => layoutText(text, {
+    font: { stack: 'sans', size: 12, weight: 400 },
+    maxWidth: Math.max(120, Math.min(320, canvasWidth - 32) - 36), lineHeight: 18,
+  }).lines.map((line) => line.text)), [canvasWidth]);
+  useEffect(() => {
+    if (!expanded) return;
+    const close = (event: globalThis.PointerEvent) => {
+      if (event.target instanceof Node && !root.current?.contains(event.target)) setExpanded(false);
     };
-  }, [canvasWidth]);
+    window.addEventListener('pointerdown', close, true);
+    return () => window.removeEventListener('pointerdown', close, true);
+  }, [expanded]);
   if (!analysis || analysis.status !== 'ok') return null;
   const rate = DEFAULT_TRAFFIC_RATE.toLocaleString('en-US');
   return (
-    <Panel position="bottom-center" className="dc-traffic-scenario nodrag nopan nowheel" aria-label="Traffic scenario" data-dc-keyboard-region="" data-expanded={expanded || undefined}
+    <Panel ref={root} position="bottom-left" className="dc-traffic-scenario nodrag nopan nowheel" aria-label="Traffic scenario" data-dc-keyboard-region="" data-expanded={expanded || undefined}
       onKeyDown={(event) => {
         if (event.key !== 'Escape' || !expanded) return;
         event.preventDefault();
@@ -41,29 +43,14 @@ export function TrafficScenario() {
       }}
     >
       <div className="dc-traffic-scenario-row">
-        <div>
-          <span className="dc-traffic-scenario-caption">Illustrative traffic</span>
-          <strong role="status">{rate} starts/min per entry</strong>
-        </div>
+        <span className="dc-traffic-scenario-rate">Example · {rate} starts/min per entry</span>
         <button ref={trigger} type="button" aria-expanded={expanded} aria-controls={helpId} onClick={() => setExpanded(!expanded)}>
-          How to read this <span aria-hidden="true">{expanded ? '⌃' : '⌄'}</span>
+          How to read this
         </button>
       </div>
-      <p className="dc-traffic-scenario-prompt">Select a shape. Follow the work.</p>
       {expanded && (
         <div id={helpId} className="dc-traffic-scenario-help" role="region" aria-label="Traffic reading guide" tabIndex={0}>
-          <ol>
-            {help.notes.map((note, index) => (
-              <li key={index}>
-                <span className="dc-traffic-guide-number" aria-hidden="true" style={{ fontFamily: familyOf('hand') }}>{index + 1}</span>
-                <div>
-                  <h3 style={{ fontFamily: familyOf('hand') }}>{note.title.map((line, index) => <span className="dc-traffic-callout-line" key={index}>{line}</span>)}</h3>
-                  <p>{note.body.map((line, index) => <span className="dc-traffic-callout-line" key={index}>{line}</span>)}</p>
-                </div>
-              </li>
-            ))}
-          </ol>
-          <p className="dc-traffic-guide-footer">{help.footer.map((line, index) => <span className="dc-traffic-callout-line" key={index}>{line}</span>)}</p>
+          {help.map((lines, index) => <p key={index}>{lines.map((line, index) => <span className="dc-traffic-callout-line" key={index}>{line}{index < lines.length - 1 ? ' ' : ''}</span>)}</p>)}
         </div>
       )}
     </Panel>

@@ -264,14 +264,17 @@ test('illustrative traffic explains the fixed example without rate controls', as
   await showTraffic(page);
   const scenario = page.locator('.dc-traffic-scenario');
   await expect(scenario).toContainText('1,000 starts/min per entry');
-  await expect(scenario).toContainText('Select a shape. Follow the work.');
   await expect(scenario.getByRole('button')).toHaveCount(1);
   const revision = await editorRevision(page);
+  const closedBounds = await scenario.boundingBox();
   await scenario.getByRole('button', { name: 'How to read this' }).focus();
   await page.keyboard.press('Enter');
   await expect(scenario).toContainText('not live measurements');
   expect(await editorRevision(page)).toBe(revision);
-  await expect(scenario.getByRole('heading')).toHaveCount(3);
+  expect((await scenario.boundingBox())!.height).toBe(closedBounds!.height);
+  const helpBounds = await scenario.getByRole('region', { name: 'Traffic reading guide' }).boundingBox();
+  expect(helpBounds!.height).toBeLessThanOrEqual(180);
+  expect(helpBounds!.width).toBeLessThanOrEqual(320);
   await scenario.getByRole('region', { name: 'Traffic reading guide' }).focus();
   await page.keyboard.press('Escape');
   await expect(scenario.getByRole('button', { name: 'How to read this' })).toHaveAttribute('aria-expanded', 'false');
@@ -286,12 +289,18 @@ for (const colorScheme of ['light', 'dark'] as const) {
     await runCommand(page, 'Show traffic');
     const scenario = page.locator('.dc-traffic-scenario');
     await scenario.getByRole('button', { name: 'How to read this' }).click();
-    await expect(scenario).toContainText('Start with an example');
+    await expect(scenario).toContainText('Example only:');
+    const guide = scenario.getByRole('region', { name: 'Traffic reading guide' });
+    const helpBounds = await guide.boundingBox();
+    expect(helpBounds!.height).toBeLessThanOrEqual(180);
+    expect(helpBounds!.width).toBeLessThanOrEqual(320);
     const bounds = await scenario.boundingBox();
     expect(bounds!.x).toBeGreaterThanOrEqual(0);
     expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
     await expect(scenario).toContainText('1,000 starts/min per entry');
     await page.screenshot({ path: `/tmp/traffic-mobile-${colorScheme}.png` });
+    await page.locator('.react-flow__pane').click({ position: { x: 20, y: 220 } });
+    await expect(guide).toHaveCount(0);
   });
 }
 

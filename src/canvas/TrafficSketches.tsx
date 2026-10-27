@@ -42,7 +42,7 @@ const STROKE_STAGGER_MS = 520;
 const FRAME_MARGIN = 40;
 /** The toolbar floats over the top of the canvas; the headline must clear it. */
 const TOP_CLEARANCE = 76;
-const BOTTOM_CLEARANCE = 120;
+const BOTTOM_CLEARANCE = 76;
 
 interface Note {
   insight: TrafficInsight;
@@ -124,8 +124,8 @@ export function TrafficSketches() {
       // This is reading chrome. Its type stays readable when the drawing is zoomed out, while its
       // footprint is converted back to flow space for the same collision checks as the findings.
       const scale = 1 / camera[2];
-      const controlWidth = Math.min(450, canvasWidth - 24);
-      const controls = { x: ((canvasWidth - controlWidth) / 2 - camera[0]) * scale, y: (canvasHeight - BOTTOM_CLEARANCE - camera[1]) * scale, width: controlWidth * scale, height: BOTTOM_CLEARANCE * scale };
+      const controlWidth = Math.min(360, canvasWidth - 32);
+      const controls = { x: (16 - camera[0]) * scale, y: (canvasHeight - BOTTOM_CLEARANCE - camera[1]) * scale, width: controlWidth * scale, height: BOTTOM_CLEARANCE * scale };
       const obstacles = [...content.obstacles, controls];
       // Let the field note unfold when there is room; on crowded canvases try shorter scrollable
       // notes before allowing an overlap. Reserve its expanded height to avoid a jump when opened.
