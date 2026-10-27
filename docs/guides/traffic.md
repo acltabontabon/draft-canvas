@@ -146,7 +146,8 @@ dependencies also used by normal work. Without an outgoing replay route, it asks
 Compensation remains a range because the diagram cannot tell which earlier steps completed.
 Retries and new failures can add more work; loops have no finite total. The optional count is local,
 resets when you select another shape, and never edits the diagram. While the replay section is open,
-affected shapes show separate **Replay +… total** badges that update with the count. Normal RPM
+affected shapes include **Replay +… total** in their top traffic chip, alongside the normal rate.
+The replay total updates with the count. Normal RPM
 stays unchanged; a batch size does not establish a replay rate.
 
 ![A replay batch and its downstream recovery work](../media/guides/traffic-recovery.png)

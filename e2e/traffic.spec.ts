@@ -364,7 +364,8 @@ test('replay batches show total recovery work without editing the diagram or bas
   await expect(workerRate).toContainText('1,000 calls/min');
   await expect(page.locator('.dc-traffic-replay-badge')).toHaveCount(2);
   await count.fill('1000');
-  await expect(page.locator('.dc-traffic-replay-badge').filter({ hasText: 'data ops' })).toHaveText('Replay +1,000 data ops total');
+  await expect(page.locator('.dc-traffic-replay-badge').filter({ hasText: 'data ops' })).toContainText('Replay +1,000 data ops total');
+  await expect(page.locator('.dc-traffic-replay-badge').filter({ hasText: 'data ops' })).toContainText('~1,000 data ops/min');
   await expect(workerRate).toContainText('1,000 calls/min');
   await count.fill('500');
   await count.press('Backspace');

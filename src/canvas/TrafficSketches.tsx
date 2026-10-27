@@ -126,14 +126,16 @@ export function TrafficSketches() {
   const replayBadges = useMemo(() => {
     if (!analysis || !nodes || !replay || replay.count === null || replay.plan !== content?.recovery) return [];
     const counts = recoveryArrivals(analysis, replay.plan, replay.count);
+    if (counts.size === 0) return [];
     return nodes.flatMap((node) => {
       const count = counts.get(node.id);
-      if (!count) return [];
-      const amount = count.definite === count.possible ? count.possible.toLocaleString('en-US') : `${count.definite.toLocaleString('en-US')}–${count.possible.toLocaleString('en-US')}`;
-      const label = `Replay +${amount} ${analysis.nodes.get(node.id)?.role === 'data' ? 'data ops' : 'arrivals'} total`;
-      return [{ node, label, text: layoutText(label, { font: { stack: 'sans', size: 12, weight: 600 }, maxWidth: node.width - 12, lineHeight: 16 }) }];
+      const baseline = scenario?.get(node.id);
+      if (!count && !baseline) return [];
+      const amount = !count ? null : count.definite === count.possible ? count.possible.toLocaleString('en-US') : `${count.definite.toLocaleString('en-US')}–${count.possible.toLocaleString('en-US')}`;
+      const label = !count ? baseline! : `Replay +${amount} ${analysis.nodes.get(node.id)?.role === 'data' ? 'data ops' : 'arrivals'} total`;
+      return [{ node, label, baseline: count ? baseline : undefined, recovery: !!count, text: layoutText(label, { font: { stack: 'sans', size: 12, weight: 600 }, maxWidth: node.width - 12, lineHeight: 16 }) }];
     });
-  }, [analysis, nodes, replay, content]);
+  }, [analysis, nodes, replay, content, scenario]);
   const callout = useMemo(
     () => {
       if (!content) return null;
@@ -237,8 +239,9 @@ export function TrafficSketches() {
           )}
         </div>
 
-        {replayBadges.map(({ node, label, text }) => (
-          <div key={node.id} className="dc-traffic-replay-badge" aria-label={label} style={{ fontFamily: familyOf('sans'), transform: `translate(${node.x}px, ${node.y + node.height + 8}px)`, width: node.width }}>
+        {replayBadges.map(({ node, label, text, baseline, recovery }) => (
+          <div key={node.id} className={recovery ? "dc-traffic-replay-badge" : "dc-traffic-baseline-chip"} aria-label={baseline ? `${baseline}; ${label}` : label} style={{ fontFamily: familyOf('sans'), transform: `translate(${node.x + 6}px, ${node.y - 12}px)`, width: node.width }}>
+            {baseline && <span className="dc-traffic-chip-normal">{baseline}</span>}
             {text.lines.map((line, index) => <span className="dc-traffic-callout-line" key={index}>{line.text}{' '}</span>)}
           </div>
         ))}

@@ -6831,10 +6831,11 @@
   cursor: pointer;
 }
 
-.dc-traffic-replay-badge {
+.dc-traffic-replay-badge,
+.dc-traffic-baseline-chip {
   position: absolute;
   padding: 4px 6px;
-  border: 1px dashed var(--dc-caution);
+  border: 1px solid var(--dc-caution);
   border-radius: 6px;
   background: var(--dc-surface);
   color: var(--dc-caution);
@@ -6842,4 +6843,22 @@
   font-size: 12px;
   line-height: 16px;
   pointer-events: none;
+}
+
+.dc-traffic-replay-badge,
+.dc-traffic-baseline-chip {
+  translate: 0 -100%;
+  box-shadow: var(--dc-shadow-panel);
+}
+.dc-traffic-chip-normal {
+  display: block;
+  color: var(--dc-text);
+  padding-bottom: 3px;
+}
+.dc-traffic-baseline-chip {
+  color: var(--dc-text-muted);
+  border-color: var(--dc-border);
+}
+.dc-canvas:has(.dc-traffic-replay-badge) .dc-traffic-badge {
+  visibility: hidden;
 }
