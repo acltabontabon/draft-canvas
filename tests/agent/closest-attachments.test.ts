@@ -33,7 +33,9 @@ describe('closest attachments through agent authoring', () => {
       expect(through.path.at(-1)).toEqual([776, 25]);
     }
     const read = readDiagram(doc, { include: ['geometry'] }, 'r:1', 'd_nearbyservices');
-    expect(read.relationships).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'nearby', geometry: nearby })]));
+    // A read leaves out pins when there are none: both ends automatic.
+    const { pins: _none, ...drawn } = nearby;
+    expect(read.relationships).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'nearby', geometry: drawn })]));
   });
 
   it('uses the same attachments inside an agent-created service view', () => {

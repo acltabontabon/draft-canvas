@@ -336,3 +336,27 @@ async fn cancelling_during_the_bridge_handshake_never_sends_the_tool_call() {
         .unwrap()
         .unwrap();
 }
+
+#[tokio::test]
+async fn an_unknown_tool_is_a_tool_error_even_without_a_running_app() {
+    let dir = tempfile::tempdir().unwrap();
+    let client = ()
+        .serve(
+            TokioChildProcess::new(Command::new(sidecar()).configure(|c| {
+                c.env("DRAFT_CANVAS_AGENT_DIR", dir.path());
+            }))
+            .unwrap(),
+        )
+        .await
+        .unwrap();
+    let result = client
+        .call_tool(CallToolRequestParams::new("unknown_tool"))
+        .await
+        .unwrap();
+    assert_eq!(result.is_error, Some(true));
+    assert_eq!(
+        result.structured_content.unwrap()["error"]["code"],
+        "UNKNOWN_TOOL"
+    );
+    client.cancel().await.unwrap();
+}

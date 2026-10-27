@@ -8,13 +8,13 @@ signals that point to each one.
 
 | You found | `type` | `technology` example |
 | --- | --- | --- |
-| A web/mobile UI that is deployed on its own (SPA, Next.js app, iOS app) | `service` | `React, Vite` · `Next.js 15` · `SwiftUI` |
-| An HTTP/gRPC/GraphQL backend whose job is serving an API | `api` | `Spring Boot 3` · `FastAPI` · `Go, chi` |
-| A process that consumes a queue/stream or runs background jobs | `worker` | `Celery` · `Sidekiq` · `Node, BullMQ` |
-| Cron, scheduled tasks, `@Scheduled`, Celery beat, CronJob | `scheduler` | `Kubernetes CronJob` |
+| A web/mobile UI that is deployed on its own (SPA, Next.js app, iOS app) | `service` | `React` · `Next.js 15` · `SwiftUI` |
+| An HTTP/gRPC/GraphQL backend whose job is serving an API | `api` | `Spring Boot 3` · `FastAPI` · `Go` |
+| A process that consumes a queue/stream or runs background jobs | `worker` | `Celery` · `Sidekiq` · `Node.js` |
+| Cron, scheduled tasks, `@Scheduled`, Celery beat, CronJob | `scheduler` | `Kubernetes` |
 | Ingress, API gateway, reverse proxy, load balancer, BFF router | `gateway` | `NGINX` · `Kong` · `AWS API Gateway` |
 | Any other deployable of this system | `service` | |
-| A system you call but don't own (Stripe, Auth0, a partner API, another team's service) | `external-system` | `Stripe API` · `REST` |
+| A system you call but don't own (Stripe, Auth0, a partner API, another team's service) | `external-system` | `Stripe` |
 | PostgreSQL, MySQL, SQL Server, Oracle, SQLite | `sql-database` | `PostgreSQL 16` |
 | MongoDB, DynamoDB, Cassandra, Firestore, Cosmos DB | `nosql-database` | `MongoDB 7` |
 | Redis/Memcached used as a cache | `cache` | `Redis 7` |
@@ -29,10 +29,10 @@ signals that point to each one.
 | A partner or provider that *starts* interactions (a webhook sender) | `external-actor` | |
 | A device that talks to the system (POS terminal, IoT sensor) | `device` | |
 | An AI agent, assistant or chatbot that acts on the system (an MCP client, a support bot) | `ai-agent` | `Claude` · `MCP client` |
-| A controller, handler, use case, domain module inside one container | `component` | `Spring MVC Controller` · `Express router` |
+| A controller, handler, use case, domain module inside one container | `component` | `Spring` · `Express` |
 | A package/module boundary in a modular monolith | `module` | |
-| A repository/gateway/client class that adapts to infrastructure | `adapter` | `JPA repository` · `Stripe SDK` |
-| An interface the core defines and adapters implement | `port` | `Java interface` |
+| A repository/gateway/client class that adapts to infrastructure | `adapter` | `Hibernate` · `Stripe` |
+| An interface the core defines and adapters implement | `port` | `Java` |
 
 Redis is the usual trap: used with `GET/SET/EXPIRE` in front of another store it is a `cache`; when it
 is the only place the data lives (a cart, sessions kept nowhere else) it is the store itself — a
@@ -108,6 +108,9 @@ those queues.
 - **Elements:** Title Case, the name people say: "Orders API", "Checkout Web", "Payments Worker". Not
   the repository folder (`orders-svc-v2`), and never the technology — that has its own field.
   Ideally ≤ 24 characters.
+- **Technology:** one product's own name, optionally with a version — "Spring Boot 3", "PostgreSQL 16"
+  — which the canvas draws with its logo. A list ("Node.js, Fastify") or a qualified name ("Stripe
+  API") shows a plain mark and draws an advisory; the rest belongs in the description.
 - **Descriptions:** one sentence, a verb first, ≤ 90 characters: "Takes orders and reserves stock."
 - **Relationships:** a verb phrase from the caller's side, ≤ 32 characters: "Places order",
   "Publishes OrderPlaced", "Reads product prices", "Charges card". Name the message or event when the

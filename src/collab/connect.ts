@@ -5,7 +5,7 @@
  */
 import { MAX_GUEST_MESSAGE_BYTES } from './protocol';
 import { CollabCodeError, decodeInvite, invitePayloadFromHash, inviteFragment, INVITE_LIFETIME_MS } from './transport/invite';
-import type { CollabTransport, IceConfig } from './transport/types';
+import type { IceConfig } from './transport/types';
 import { createHostOffer, joinFromInvite, peerConnectionsAvailable, type HostOffer, type JoinResult } from './transport/webrtc';
 
 export type { CollabTransport, TransportState } from './transport/types';
@@ -84,8 +84,4 @@ export function inviteLink(offer: HostOffer, base: string): string {
  */
 export function answerInvite(payload: string, server: string): Promise<JoinResult> {
   return joinFromInvite(payload, followOwner(payload, server));
-}
-
-export function isTransport(value: unknown): value is CollabTransport {
-  return typeof value === 'object' && value !== null && 'send' in value && 'onMessage' in value;
 }

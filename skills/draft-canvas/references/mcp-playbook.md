@@ -26,8 +26,8 @@ descriptions themselves are the contract; this is the working knowledge around t
 A create or update answers with:
 
 - `revision` — pass it as `expectedRevision` next time.
-- `quality` — `errors` (a create is refused unless `allowDegraded`; an update with errors is refused) and `warnings` such as a connector that jogs
-  sideways. A warning is worth a look, not always a change.
+- `quality` — `errors` (a create is refused unless `layout.allowDegraded`; an update with errors is
+  refused) and `warnings` such as a connector that jogs sideways. A warning is worth a look, not always a change.
 - `legibility` — `crossings` (and `crossed`, the pairs of relationships that cross), plus connectors
   that detour or cut through a boundary they're not in, connectors no clear line could be drawn for
   (`unresolved`) and shape sides too crowded to give each end its own point (`crowded`):
@@ -106,18 +106,21 @@ relationship.
 
 ## When something is refused
 
+Every refusal carries a `hint` saying what to do; this is the short version.
+
 | Code | Meaning | Do |
 | --- | --- | --- |
 | `INVALID_INPUT`, `INVALID_REFERENCE` | A field or an id is wrong; the message names the path | Fix that field and resend with a new `requestId` |
 | `DUPLICATE_ID` | An id is taken (ids are file-wide) | Rename it |
 | `UNSUPPORTED_TYPE` | Unknown element type | Use a listed type, or set `fallbackType` |
 | `DUPLICATE_TITLE` | A diagram with that title exists | Update that one, or ask the person; `allowDuplicateTitle` only on their say-so |
-| `LAYOUT_FAILED` | No readable layout | Fewer elements per view (move detail inside), or send `allowDegraded` and fix after |
+| `LAYOUT_FAILED` | No readable layout | Fewer elements per view (move detail inside), or send `layout: {allowDegraded: true}` and fix after |
 | `LAYOUT_CONSTRAINED` | A new element didn't fit beside its neighbours | Add the `suggestedOp` (an arrange) to the same update |
 | `REVISION_CONFLICT` | The person edited meanwhile | `read_diagram`, rebuild the change on the new revision; or `onConflict: "rebase"` when your change doesn't touch what they edited |
 | `LIMIT_EXCEEDED` | Too much in one request | Split it into a create plus updates |
 | `OUT_OF_SCOPE` | Folder not enabled, or an id outside the `scope` you passed | Folder: tell the person which one to tick in Settings → AI agents. Scope: pass only ids from `read_selection`, or leave `scope` out |
-| `BUSY` | The app is applying another change | Retry the same request (same `requestId`) shortly |
+| `BUSY`, `TIMEOUT`, `APP_UNRESPONSIVE` | Nothing was changed | Retry the same request (same `requestId`) shortly |
+| `OUTCOME_UNKNOWN` | The app stopped answering mid-change | `read_diagram` and compare before sending anything again |
 | `DOCUMENT_BUSY` | The person has unsaved or recovered changes to that diagram, or the file changed on disk under them | Don't retry. Ask them to save or discard, then `read_diagram` and rebuild the change |
 | `NOT_FOUND` | No such diagram or view | `list_diagrams` again |
 

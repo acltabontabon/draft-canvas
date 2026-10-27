@@ -1736,10 +1736,8 @@ kbd {
   box-shadow: var(--dc-island-shadow);
 }
 
-.dc-toolbar-history,
 .dc-toolbar-modes,
-.dc-toolbar-share,
-.dc-toolbar-utilities {
+.dc-toolbar-share {
   display: flex;
   align-items: center;
   gap: 2px;
@@ -1859,58 +1857,6 @@ kbd {
   font-weight: 400;
   white-space: nowrap;
   text-overflow: ellipsis;
-}
-
-/* --- utilities --- */
-
-/* Square, identical hit targets. `.dc-button`'s icon-only padding gives a 30px-wide box whose
-   width drifts with the glyph inside it; these are pinned to 28x28 so undo, redo, commands,
-   export and more are interchangeable slots. */
-.dc-toolbar-history .dc-button,
-.dc-toolbar-utilities .dc-button {
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  justify-content: center;
-  color: var(--dc-text-faint);
-}
-
-.dc-toolbar-history .dc-button:hover:not(:disabled),
-.dc-toolbar-utilities .dc-button:hover:not(:disabled) {
-  background: var(--dc-surface-hover);
-  color: var(--dc-text);
-}
-
-.dc-toolbar-history .dc-button:disabled,
-.dc-toolbar-utilities .dc-button:disabled {
-  opacity: 0.32;
-}
-
-.dc-toolbar-utilities .dc-button[data-active='true'] {
-  background: var(--dc-selection-soft);
-  color: var(--dc-selection);
-}
-
-/* Optical sizing, not nominal — a row that measures correct can still look ragged. */
-.dc-toolbar-utilities .dc-button svg {
-  width: 16px;
-  height: 16px;
-}
-
-/* The magnifier's ring sits inside its box, so it reads a touch small next to the arrows. */
-.dc-toolbar-utilities .dc-button svg[data-icon='search'] {
-  width: 17px;
-  height: 17px;
-}
-
-/* `more` is three zero-length segments drawn as round caps, so its dots render at the stroke
-   width itself — barely over a pixel, which left it visibly fainter than every sibling no matter
-   how large the box got. Weight, not size, is what was missing: thickening the stroke gives the
-   dots actual mass and puts the glyph back in parity with the arrows and the magnifier. */
-.dc-toolbar-utilities .dc-button svg[data-icon='more'] {
-  width: 18px;
-  height: 18px;
-  stroke-width: 3;
 }
 
 /* ---- width tiers -------------------------------------------------------

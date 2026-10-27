@@ -386,6 +386,7 @@ struct Run {
     control: Option<RunControl>,
     /// The agent's session, once it has said.
     session: Option<String>,
+    remember_session: bool,
     stopped: bool,
     cancel_requested: bool,
     terminal_grace: bool,
@@ -430,7 +431,11 @@ pub struct Companion {
     /// Lock only while holding `runs`, so moving a run here and taking a snapshot are atomic.
     completed: Mutex<Vec<Completed>>,
     next_order: AtomicU64,
+    /// More than one caller may drain runs (quit, access off, updater) at the same time.
+    stopping: AtomicU64,
     sessions: Mutex<Option<sessions::Sessions>>,
+    /// Sweep leftovers once, before this instance creates any run folders.
+    swept_runs: Mutex<bool>,
     /// Project folders the person let runs read until the app quits ("Just for now").
     code_now: Mutex<HashSet<PathBuf>>,
 }
@@ -456,7 +461,9 @@ impl Companion {
             runs: Mutex::default(),
             completed: Mutex::default(),
             next_order: AtomicU64::new(0),
+            stopping: AtomicU64::new(0),
             sessions: Mutex::new(None),
+            swept_runs: Mutex::new(false),
             code_now: Mutex::default(),
         }
     }
@@ -478,6 +485,28 @@ impl Companion {
         }
         let parent = self.dir.join("runs");
         private_dir(&parent)?;
+        {
+            let mut swept = lock(&self.swept_runs);
+            if !*swept {
+                // A crash bypasses finish. Only UUID directories belong to runs; leave unrelated
+                // files and symlinks alone. Serialize this sweep before any new folder is created.
+                let cleanup_error = |error| {
+                    AppError::new(
+                        ErrorKind::Io,
+                        format!("Draft Canvas couldn’t clean up its old run folders: {error}"),
+                    )
+                };
+                for entry in std::fs::read_dir(&parent).map_err(cleanup_error)? {
+                    let entry = entry.map_err(cleanup_error)?;
+                    if uuid::Uuid::parse_str(&entry.file_name().to_string_lossy()).is_ok()
+                        && entry.file_type().map_err(cleanup_error)?.is_dir()
+                    {
+                        std::fs::remove_dir_all(entry.path()).map_err(cleanup_error)?;
+                    }
+                }
+                *swept = true;
+            }
+        }
         let dir = parent.join(run_id);
         // Exclusive creation keeps a duplicate send from overwriting a live run's configuration.
         std::fs::create_dir(&dir).map_err(|error| {
@@ -508,10 +537,14 @@ impl Companion {
         });
         // A terminal result may still have a process winding down. Forgetting must also prevent
         // that later exit from putting the conversation back in reload recovery.
-        for run in runs.values_mut().filter(|run| {
-            run.diagram_id == diagram && run.stopped && agent.is_none_or(|agent| run.agent == agent)
-        }) {
-            run.recover = false;
+        for run in runs
+            .values_mut()
+            .filter(|run| run.diagram_id == diagram && agent.is_none_or(|agent| run.agent == agent))
+        {
+            run.remember_session = false;
+            if run.stopped {
+                run.recover = false;
+            }
         }
         self.with_sessions(|s| s.forget(diagram, agent))
     }
@@ -538,6 +571,12 @@ impl Companion {
     /// Reserve the run before any blocking discovery so Stop works throughout startup.
     pub fn prepare(self: &Arc<Self>, request: &PromptRequest) -> Result<Preparation, AppError> {
         let mut runs = lock(&self.runs);
+        if self.stopping.load(Ordering::SeqCst) > 0 {
+            return Err(AppError::new(
+                ErrorKind::PermissionDenied,
+                "Nodi is stopping its requests. Try again after it has stopped.",
+            ));
+        }
         if let Some(error) = busy(&runs, &request.diagram_id) {
             return Err(error);
         }
@@ -556,6 +595,7 @@ impl Companion {
                 text: request.text.clone(),
                 control: None,
                 session: None,
+                remember_session: true,
                 stopped: false,
                 cancel_requested: false,
                 terminal_grace: false,
@@ -594,22 +634,6 @@ impl Companion {
             ..
         } = launch;
         let run_id = run_id.as_str();
-        {
-            let mut runs = lock(&self.runs);
-            let run = runs.get_mut(run_id).ok_or_else(AppError::internal)?;
-            if run.diagram_id != launch.diagram_id || run.text != launch.text {
-                return Err(AppError::internal());
-            }
-            if run.cancel_requested {
-                return Err(AppError::new(
-                    ErrorKind::PermissionDenied,
-                    "The person stopped this request in Draft Canvas.",
-                ));
-            }
-            open_policy();
-            run.dir = dir.clone();
-            preparation.started = true;
-        }
         let session = self.session_for(&launch.diagram_id, agent);
         let parser = Mutex::new(backend(agent).parser_for(session.as_deref()));
         let companion = Arc::downgrade(self);
@@ -631,13 +655,30 @@ impl Companion {
                 Output::Exit(exit) => companion.finish(&run, exit),
             }
         });
+        // Publish the control in the same critical section that admits the spawn. Stop/quit must
+        // see either a cancelled preparation or a process it can stop AND wait for.
+        let mut runs = lock(&self.runs);
+        let run = runs.get_mut(run_id).ok_or_else(AppError::internal)?;
+        if run.diagram_id != launch.diagram_id || run.text != launch.text || run.agent != agent {
+            return Err(AppError::internal());
+        }
+        if run.cancel_requested {
+            return Err(AppError::new(
+                ErrorKind::PermissionDenied,
+                "The person stopped this request in Draft Canvas.",
+            ));
+        }
+        open_policy();
+        run.dir = dir.clone();
+        preparation.started = true;
         match runner::spawn(command, stdin, self.limits, sink) {
             Ok(control) => {
-                self.attach_control(run_id, control);
+                run.control = Some(control);
                 Ok(())
             }
             Err(error) => {
-                lock(&self.runs).remove(run_id);
+                runs.remove(run_id);
+                drop(runs);
                 (self.end_run)(run_id);
                 let _ = std::fs::remove_dir_all(&dir);
                 Err(AppError::new(
@@ -664,6 +705,7 @@ impl Companion {
         self.start_prepared(launch, preparation, || {})
     }
 
+    #[cfg(test)]
     fn attach_control(&self, run_id: &str, control: RunControl) {
         if let Some(run) = lock(&self.runs).get_mut(run_id) {
             if run.cancel_requested {
@@ -696,6 +738,16 @@ impl Companion {
 
     /// Keeps `event` for a reloaded page and sends it to the page now. A run says `Stopped` once.
     fn record(&self, run_id: &str, mut event: RunEvent) {
+        if matches!(&event, RunEvent::Started { session } if !sessions::valid_session(session)) {
+            event = RunEvent::Stopped {
+                reason: StopReason::Failed {
+                    message: "The agent returned an invalid conversation id.".into(),
+                },
+                summary: None,
+                cost_micro_usd: None,
+                usage: None,
+            };
+        }
         // Assigning a sequence under `runs` alone let a later cancellation emit first. The page
         // then correctly discarded the delayed reply as old. Keep delivery ordered without holding
         // `runs` while calling the event sink.
@@ -748,7 +800,7 @@ impl Companion {
                         run.policy_closed = true;
                         (self.end_run)(run_id);
                     }
-                    if let Some(session) = &run.session {
+                    if let Some(session) = run.session.as_ref().filter(|_| run.remember_session) {
                         if let Err(error) = self.with_sessions(|sessions| {
                             sessions.remember(&run.diagram_id, run.agent, session, now_ms())
                         }) {
@@ -907,10 +959,18 @@ impl Companion {
     /// Stops every run and waits up to `timeout` for them to be gone: before the app quits, or an
     /// update replaces it.
     pub fn stop_all(&self, timeout: Duration) -> bool {
-        let runs: Vec<(String, Option<RunControl>)> = lock(&self.runs)
-            .iter()
-            .map(|(id, run)| (id.clone(), run.control.clone()))
-            .collect();
+        self.stopping.fetch_add(1, Ordering::SeqCst);
+        let runs: Vec<(String, Option<RunControl>)> = {
+            let mut runs = lock(&self.runs);
+            runs.iter_mut()
+                .map(|(id, run)| {
+                    // A preparation may finish discovery while we cancel other runs. It must not
+                    // spawn after this snapshot without being included in the wait below.
+                    run.cancel_requested = true;
+                    (id.clone(), run.control.clone())
+                })
+                .collect()
+        };
         let mut controls = Vec::new();
         for (id, control) in runs {
             self.cancel(&id);
@@ -919,7 +979,16 @@ impl Companion {
                 controls.push(control);
             }
         }
-        runner::wait_all(&controls, timeout)
+        let finished = runner::wait_all(&controls, timeout);
+        if !finished {
+            // Quit's deadline can equal the normal SIGTERM grace. Send SIGKILL synchronously
+            // before returning, rather than trusting a timer thread the exiting app may end.
+            for control in &controls {
+                control.kill();
+            }
+        }
+        self.stopping.fetch_sub(1, Ordering::SeqCst);
+        finished
     }
 }
 
@@ -1073,6 +1142,7 @@ mod tests {
                 text: "Hi".into(),
                 control: None,
                 session: None,
+                remember_session: true,
                 stopped: false,
                 cancel_requested: false,
                 terminal_grace: false,
@@ -1288,6 +1358,67 @@ mod tests {
     }
 
     #[test]
+    fn forgetting_an_active_turn_does_not_resurrect_its_session_at_completion() {
+        let dir = tempdir().unwrap();
+        let (companion, _, _) = companion(dir.path(), RunLimits::default());
+        parked(&companion, "r");
+        companion.record(
+            "r",
+            RunEvent::Started {
+                session: "old-session".into(),
+            },
+        );
+        companion
+            .forget("d_1", Some(AgentKind::ClaudeCode))
+            .unwrap();
+        // A late init (or terminal result) cannot undo New conversation.
+        companion.record(
+            "r",
+            RunEvent::Started {
+                session: "late-session".into(),
+            },
+        );
+        companion.finish(
+            "r",
+            Exit {
+                cause: Cause::Exited,
+                code: Some(0),
+                stderr: String::new(),
+            },
+        );
+        assert!(companion
+            .session_for("d_1", AgentKind::ClaudeCode)
+            .is_none());
+        assert!(sessions::Sessions::open(&dir.path().join("companion"))
+            .get("d_1", AgentKind::ClaudeCode, now_ms())
+            .is_none());
+    }
+
+    #[test]
+    fn an_invalid_cli_session_stops_before_it_can_be_delivered_or_persisted() {
+        let dir = tempdir().unwrap();
+        let (companion, rx, ended) = companion(dir.path(), RunLimits::default());
+        parked(&companion, "r");
+        companion.record(
+            "r",
+            RunEvent::Started {
+                session: "--last".into(),
+            },
+        );
+        assert!(matches!(
+            until_stopped(&rx, "r").as_slice(),
+            [RunEvent::Stopped {
+                reason: StopReason::Failed { .. },
+                ..
+            }]
+        ));
+        assert_eq!(*lock(&ended), vec!["r"]);
+        assert!(companion
+            .session_for("d_1", AgentKind::ClaudeCode)
+            .is_none());
+    }
+
+    #[test]
     fn excessive_event_payloads_stop_the_run_and_close_its_authority() {
         let dir = tempdir().unwrap();
         let (companion, rx, ended) = companion(dir.path(), RunLimits::default());
@@ -1491,6 +1622,26 @@ mod tests {
     }
 
     #[test]
+    fn abandoned_run_folders_are_removed_before_the_next_instances_first_run() {
+        let dir = tempdir().unwrap();
+        let (previous, _, _) = companion(dir.path(), RunLimits::default());
+        let stale = previous.run_dir(&uuid::Uuid::new_v4().to_string()).unwrap();
+        std::fs::write(stale.join("mcp.json"), "old config").unwrap();
+        let keep = stale.parent().unwrap().join("unrelated");
+        std::fs::create_dir(&keep).unwrap();
+        drop(previous);
+        let (next, _, _) = companion(dir.path(), RunLimits::default());
+        let current = next.run_dir(&uuid::Uuid::new_v4().to_string()).unwrap();
+        assert!(!stale.exists());
+        assert!(keep.exists());
+        next.run_dir(&uuid::Uuid::new_v4().to_string()).unwrap();
+        assert!(
+            current.exists(),
+            "later calls must not sweep this instance's live runs"
+        );
+    }
+
+    #[test]
     fn a_whole_turn_reaches_the_page_and_its_session_is_kept() {
         let dir = tempdir().unwrap();
         let fixture = dir.path().join("turn.jsonl");
@@ -1666,6 +1817,138 @@ mod tests {
         assert!(lock(&ended).len() >= 2);
         assert!(lock(&companion.runs).is_empty());
         assert_eq!(companion.snapshot().len(), MAX_RUNS);
+    }
+
+    #[test]
+    fn stop_all_closes_every_preparation_before_delivering_cancellation() {
+        let dir = tempdir().unwrap();
+        let (entered_tx, entered_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let release_rx = Mutex::new(release_rx);
+        let first = std::sync::atomic::AtomicBool::new(true);
+        let companion = Arc::new(Companion::new(
+            dir.path(),
+            Arc::new(|_, _, _| {}),
+            Arc::new(move |id| {
+                if first.swap(false, Ordering::SeqCst) {
+                    entered_tx.send(id.to_string()).unwrap();
+                    lock(&release_rx).recv().unwrap();
+                }
+            }),
+        ));
+        let a = request("Hi");
+        let b = PromptRequest {
+            diagram_id: "d_2".into(),
+            ..request("Hi")
+        };
+        let prep_a = companion.prepare(&a).unwrap();
+        let prep_b = companion.prepare(&b).unwrap();
+        let stopping = {
+            let companion = companion.clone();
+            std::thread::spawn(move || companion.stop_all(Duration::ZERO))
+        };
+        entered_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        let all_cancelled = lock(&companion.runs)
+            .values()
+            .all(|run| run.cancel_requested);
+        release_tx.send(()).unwrap();
+        assert!(stopping.join().unwrap());
+        assert!(
+            all_cancelled,
+            "no preparation can spawn during shutdown delivery"
+        );
+        for (r, preparation) in [(a, prep_a), (b, prep_b)] {
+            assert!(companion
+                .start_prepared(
+                    launch(
+                        &r.run_id,
+                        &r.diagram_id,
+                        shell("exit 0", "exit /b 0"),
+                        PathBuf::new()
+                    ),
+                    preparation,
+                    || panic!("a stopped preparation must not open authority"),
+                )
+                .is_err());
+        }
+    }
+
+    #[test]
+    fn shutdown_refuses_new_preparations_until_its_drain_returns() {
+        let dir = tempdir().unwrap();
+        let (entered_tx, entered_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let release_rx = Mutex::new(release_rx);
+        let first = std::sync::atomic::AtomicBool::new(true);
+        let companion = Arc::new(Companion::new(
+            dir.path(),
+            Arc::new(|_, _, _| {}),
+            Arc::new(move |_| {
+                if first.swap(false, Ordering::SeqCst) {
+                    entered_tx.send(()).unwrap();
+                    lock(&release_rx).recv().unwrap();
+                }
+            }),
+        ));
+        let prep = companion.prepare(&request("Hi")).unwrap();
+        let stopping = {
+            let companion = companion.clone();
+            std::thread::spawn(move || companion.stop_all(Duration::ZERO))
+        };
+        entered_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        let next = PromptRequest {
+            diagram_id: "d_2".into(),
+            ..request("Hi")
+        };
+        let admitted = companion.prepare(&next).is_ok();
+        release_tx.send(()).unwrap();
+        assert!(stopping.join().unwrap());
+        assert!(
+            !admitted,
+            "the free second slot is unavailable during shutdown"
+        );
+        drop(prep);
+        drop(companion.prepare(&next).unwrap());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn shutdown_forces_a_term_ignoring_process_before_returning_at_its_deadline() {
+        let dir = tempdir().unwrap();
+        let ready = dir.path().join("ready");
+        let (companion, _, _) = companion(
+            dir.path(),
+            RunLimits {
+                grace: Duration::from_secs(30),
+                ..RunLimits::default()
+            },
+        );
+        let r = request("Hi");
+        companion
+            .start(launch(
+                &r.run_id,
+                &r.diagram_id,
+                shell(
+                    &format!(
+                        "trap '' TERM; touch '{}'; while :; do sleep 1; done",
+                        ready.display()
+                    ),
+                    "",
+                ),
+                companion.run_dir(&r.run_id).unwrap(),
+            ))
+            .unwrap();
+        let control = lock(&companion.runs)[&r.run_id].control.clone().unwrap();
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while !ready.exists() {
+            assert!(std::time::Instant::now() < deadline);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(!companion.stop_all(Duration::from_millis(20)));
+        assert!(
+            control.wait(Duration::from_secs(5)),
+            "SIGKILL cannot depend on a later timer"
+        );
     }
 
     #[test]

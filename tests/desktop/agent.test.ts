@@ -4,7 +4,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { compose } from '../../src/agent/compile';
-import { handleAgentRequest as answerInEditor, currentRevision } from '../../src/host/agentBridge';
+import { handleAgentRequest as answerInEditor, currentRevision, proposalStale } from '../../src/host/agentBridge';
 import { deserializeDocument, serializeDocument } from '../../src/export/project';
 import { __resetInteraction, fileOf, useEditorStore } from '../../src/store/editorStore';
 import type { CommandMessage } from '../../src/host/embeddedHost';
@@ -621,7 +621,8 @@ describe('agent requests on desktop', () => {
   it('describes the open diagram — title, revision, the view the person is in — without its contents', async () => {
     const handle = await openOrders();
     const out = await request('active_context', {}, {});
-    expect(out.value).toEqual({ title: 'Orders', revision: `f:${h.files.get(handle)!.version}`, view: { path: [] } });
+    // editorRevision is for the shell's staleness check; list_diagrams passes on only the rest.
+    expect(out.value).toEqual({ title: 'Orders', revision: `f:${h.files.get(handle)!.version}`, editorRevision: currentRevision(), view: { path: [] } });
   });
 
   it('reads a diagram as sequence-diagram source when asked, open or not, with its revision', async () => {
@@ -933,5 +934,71 @@ describe('MCP candidates', () => {
     const commit = await request('update_diagram', { requestId: 'nested-preview', diagramId: context.diagramId, expectedRevision: read.value!.revision, previewId: candidate.value!.previewId }, context);
     expect(commit.ok).toBe(true);
     expect(fileOf(useEditorStore.getState()).nodes.find((n) => n.id === 'api')?.inside?.nodes[0]?.id).toBe('handler');
+  });
+});
+
+describe('revisions a clean open diagram answers to', () => {
+  it('takes the editor revision update_diagram accepts for a preview, a proposal and an attachment read', async () => {
+    const handle = await openOrders();
+    const context = { handle, open: true, diagramId: 'd_orders000001', session: 'agent-a' };
+    // A receipt or read handed out while unsaved carries the editor revision; with nothing unsaved
+    // reads hand out the file revision, and update_diagram still accepts the editor one.
+    const editor = currentRevision();
+    const read = await request('read_diagram', {}, context);
+    expect(read.value!.revision).not.toBe(editor);
+    const candidate = await request('preview_diagram', { diagramId: context.diagramId, expectedRevision: editor, ops: [{ op: 'update', id: 'api', set: { label: 'Candidate API' } }] }, context);
+    expect(candidate.ok).toBe(true);
+    const proposed = await request('submit_proposal', { ...addMailer(editor), summary: 'Add a mailer.' }, context);
+    expect(proposed.ok).toBe(true);
+    const missing = await request('read_attachment', { diagramId: context.diagramId, expectedRevision: editor, attachmentId: 'nope' }, context);
+    expect(missing.error?.code).toBe('NOT_FOUND');
+    const stale = await request('preview_diagram', { diagramId: context.diagramId, expectedRevision: 'o:other.1', ops: [{ op: 'update', id: 'api', set: { label: 'X' } }] }, context);
+    expect(stale.error?.code).toBe('REVISION_CONFLICT');
+  });
+
+  it('applies a candidate prepared on unsaved edits after the person saves, the diagram itself unchanged', async () => {
+    const handle = await openOrders();
+    const context = { handle, open: true, diagramId: 'd_orders000001', session: 'agent-a' };
+    useEditorStore.getState().apply('Rename', (doc) => ({ ...doc, nodes: doc.nodes.map((n) => (n.id === 'db' ? { ...n, text: 'Orders store' } : n)) }));
+    h.edit(serializeDocument(fileOf(useEditorStore.getState())));
+    const read = await request('read_diagram', {}, context);
+    const revision = String(read.value!.revision);
+    expect(revision.startsWith('o:')).toBe(true);
+    const candidate = await request('preview_diagram', { diagramId: context.diagramId, expectedRevision: revision, ops: [{ op: 'update', id: 'api', set: { label: 'Candidate API' } }] }, context);
+    expect(candidate.ok).toBe(true);
+    // Saving moves what reads hand out (o: to f:), not the diagram.
+    expect((await (h.controller as unknown as { saveQuietly(handle: string): Promise<{ saved: boolean }> }).saveQuietly(handle)).saved).toBe(true);
+    const commit = await request('update_diagram', { requestId: 'after-save', diagramId: context.diagramId, expectedRevision: revision, previewId: candidate.value!.previewId }, context);
+    expect(commit.ok).toBe(true);
+    expect(fileOf(useEditorStore.getState()).nodes.find((n) => n.id === 'api')?.text).toBe('Candidate API');
+  });
+
+  it('answers save-failed, not INTERNAL, when the save after an applied change throws', async () => {
+    const handle = await openOrders();
+    const controller = h.controller as unknown as { saveQuietly(handle: string): Promise<unknown> };
+    const spy = vi.spyOn(controller, 'saveQuietly').mockRejectedValueOnce(new Error('disk went away'));
+    const out = await request('update_diagram', addMailer(currentRevision()), { handle, open: true });
+    spy.mockRestore();
+    expect(out.ok).toBe(true);
+    expect(out.value).toMatchObject({ applied: true, persisted: false, state: 'save-failed' });
+    expect(fileOf(useEditorStore.getState()).nodes.some((n) => n.id === 'mail')).toBe(true);
+  });
+
+  it('judges a proposal made on unsaved edits by the editor, which a save does not move', async () => {
+    const handle = await openOrders();
+    useEditorStore.getState().apply('Rename', (doc) => ({ ...doc, nodes: doc.nodes.map((n) => (n.id === 'db' ? { ...n, text: 'Orders store' } : n)) }));
+    h.edit(serializeDocument(fileOf(useEditorStore.getState())));
+    const base = currentRevision();
+    const active = await request('active_context', {}, {});
+    expect(active.value).toMatchObject({ revision: base, editorRevision: base });
+    // The shell, judging against the file, calls it stale; the editor knows better.
+    expect(proposalStale(base, true)).toBe(false);
+    await (h.controller as unknown as { saveQuietly(handle: string): Promise<unknown> }).saveQuietly(handle);
+    expect(proposalStale(base, true)).toBe(false);
+    useEditorStore.getState().apply('Rename', (doc) => ({ ...doc, nodes: doc.nodes.map((n) => (n.id === 'db' ? { ...n, text: 'Orders DB' } : n)) }));
+    expect(proposalStale(base, false)).toBe(true);
+    // A file revision is the shell's to judge.
+    expect(proposalStale('f:0123456789abcdef', false)).toBe(false);
+    expect(proposalStale('f:0123456789abcdef', true)).toBe(true);
   });
 });

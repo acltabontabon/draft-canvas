@@ -248,7 +248,8 @@ describe('notes and flows through update_diagram', () => {
 describe('read_diagram', () => {
   it('is semantic and compact by default, with derived C4 detail', () => {
     const out = readDiagram(base(), {}, 'o:x.1', 'd_patchtest00');
-    expect(out.elements).toContainEqual(expect.objectContaining({ id: 'db', type: 'database', technology: 'PostgreSQL', group: 'sys', c4: expect.objectContaining({ scope: 'internal', derived: true }) }));
+    // Role and scope only; why is said only where the role is ambiguous.
+    expect(out.elements).toContainEqual(expect.objectContaining({ id: 'db', type: 'database', technology: 'PostgreSQL', group: 'sys', c4: { role: 'unspecified', scope: 'internal', basis: 'no level set' } }));
     expect(JSON.stringify(out)).not.toContain('"x":');
     expect(out.actions).toBeUndefined();
     expect(out.partial).toBeUndefined();

@@ -107,27 +107,32 @@ impl Ledger {
             Err(e) => return Err(e),
         };
         let mut reader = BufReader::new(file);
-        let (mut lines, mut clean) = (0, true);
-        let mut line = String::new();
+        let (mut lines, mut clean, mut preserved) = (0, true, false);
+        let mut line = Vec::new();
         loop {
             line.clear();
-            match reader.read_line(&mut line) {
-                Ok(0) => break,
-                Ok(_) => lines += 1,
-                Err(_) => {
-                    clean = false;
-                    break;
-                }
+            if reader.read_until(b'\n', &mut line)? == 0 {
+                break;
             }
-            // A line without its newline is one a crash cut short. It must not be left in place even
-            // when it parses: the next record appended would join it on the same line.
-            clean &= line.ends_with('\n');
-            // A line that doesn't parse is the one a crash cut short; everything before it stands.
-            match serde_json::from_str::<Entry>(line.trim_end()) {
+            lines += 1;
+            let complete = line.ends_with(b"\n");
+            clean &= complete;
+            match serde_json::from_slice::<Entry>(&line) {
                 Ok(entry) => {
                     self.entries.insert(entry.key.clone(), entry);
                 }
-                Err(_) => clean = false,
+                // Only an unterminated final record can be a torn append.
+                Err(_) if !complete => break,
+                // A complete record that doesn't parse may have been a commit or a decision, so
+                // the journal as it stood is kept beside it before the rewrite drops that line.
+                // Refusing to open instead left agent access broken until someone deleted the file.
+                Err(_) => {
+                    if !preserved {
+                        preserved = true;
+                        fs::copy(&self.file, self.file.with_extension("jsonl.corrupt"))?;
+                    }
+                    clean = false;
+                }
             }
         }
         Ok(clean && lines == self.entries.len())
@@ -142,9 +147,6 @@ impl Ledger {
     pub fn begin(&self, key: &str, fingerprint: &str) -> Begin {
         match self.entries.get(key) {
             None => Begin::Fresh,
-            // Refused before anything changed, so a corrected request may reuse the id: the agent
-            // that fixes an INVALID_INPUT and resends shouldn't be told its id is spent.
-            Some(entry) if entry.stage == Stage::Failed => Begin::Fresh,
             Some(entry) if entry.fingerprint != fingerprint => Begin::Mismatch,
             Some(entry) => match entry.stage {
                 Stage::Failed => Begin::Fresh,
@@ -320,8 +322,8 @@ mod tests {
         let mut ledger = Ledger::open(dir.path(), 1).unwrap();
         ledger.record(entry("k", Stage::Failed, 1)).unwrap();
         assert_eq!(ledger.begin("k", "fp"), Begin::Fresh);
-        // Including with the corrections the agent made after the refusal.
-        assert_eq!(ledger.begin("k", "corrected"), Begin::Fresh);
+        // Refusal permits an identical retry; a different intended change still needs a new id.
+        assert_eq!(ledger.begin("k", "corrected"), Begin::Mismatch);
     }
 
     #[test]
@@ -421,5 +423,21 @@ mod tests {
         drop(ledger);
         let ledger = Ledger::open(dir.path(), 2).unwrap();
         assert!(ledger.get("a").is_some() && ledger.get("b").is_some());
+    }
+
+    #[test]
+    fn a_complete_corrupt_record_is_kept_aside_and_the_journal_still_opens() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("ledger.jsonl");
+        let bytes = b"{broken}\n";
+        fs::write(&file, bytes).unwrap();
+        // Refusing to open left agent access unusable until the file was deleted by hand.
+        let store = Ledger::open(dir.path(), 1).unwrap();
+        assert!(store.entries.is_empty());
+        assert_eq!(
+            fs::read(dir.path().join("ledger.jsonl.corrupt")).unwrap(),
+            bytes
+        );
+        assert!(fs::read(file).unwrap().is_empty());
     }
 }

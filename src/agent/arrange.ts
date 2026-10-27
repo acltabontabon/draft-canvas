@@ -57,7 +57,9 @@ export function readArrange(r: Reader, op: Json, at: string, view: DraftDocument
   let scope: ArrangeRequest['scope'];
   if (scopeRaw) {
     const byId = new Map(view.nodes.map((n) => [n.id, n]));
-    if (scopeRaw.group !== undefined) {
+    // One or the other: with both, the listed shapes used to be dropped without a word.
+    if (scopeRaw.group !== undefined && scopeRaw.nodes !== undefined) r.problems.add('INVALID_INPUT', `${at}/scope`, 'name a group or some nodes, not both; to rearrange a group with shapes beside it, list them all in nodes (a listed group brings its contents)');
+    else if (scopeRaw.group !== undefined) {
       if (typeof scopeRaw.group !== 'string' || byId.get(scopeRaw.group)?.type !== 'group') r.problems.add('INVALID_REFERENCE', `${at}/scope/group`, `no group "${String(scopeRaw.group)}" in this view`);
       else scope = { group: scopeRaw.group };
     } else if (scopeRaw.nodes !== undefined) {

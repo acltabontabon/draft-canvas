@@ -741,4 +741,4 @@ export function withoutMoving(crossings: readonly Crossing[], moving: ReadonlySe
   return kept.length === crossings.length ? crossings : kept.length === 0 ? NO_CROSSINGS : kept;
 }
 
-export { BRIDGE_CLEARANCE, GLYPH_CLEARANCE, NO_CROSSINGS };
+export { NO_CROSSINGS };

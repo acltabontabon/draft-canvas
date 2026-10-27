@@ -226,6 +226,16 @@ describe('the store', () => {
     companion.clear('d_1');
     expect(companion.snapshot().has(conversationKey('d_1'))).toBe(false);
   });
+
+  it('never puts a decided proposal back up for review when a slower lookup answers late', () => {
+    companion.begin('d_1', RUN, 'Rename it', null);
+    companion.apply(RUN, { type: 'stopped', reason: { kind: 'end-turn' }, summary: null, costMicroUsd: null, usage: null });
+    companion.setProposal(RUN, 'p1');
+    companion.resolve(RUN, 'accepted');
+    // A lookup begun before the accept, answering after it.
+    companion.setProposal(RUN, 'p1');
+    expect(companion.snapshot().get(conversationKey('d_1'))!.turns[0]).toMatchObject({ proposalId: null, outcome: 'accepted' });
+  });
 });
 
 describe('what a conversation uses', () => {
@@ -344,6 +354,26 @@ describe('the controller', () => {
     await h.controller.companionCancel(RUN);
     expect(h.agent.companion.cancelled).toEqual([RUN]);
     expect(unchangedSinceLastTurn('d_cancelled', view, [], 'claude-code', true)).toBe(false);
+  });
+
+  it('ends a turn the shell no longer knows when Stop is pressed, so it is not stuck working', async () => {
+    vi.useFakeTimers();
+    try {
+      const h = createHarness();
+      await h.controller.start();
+      await h.controller.companionSend(
+        { runId: RUN, diagramId: 'd_lost', text: 'Explain', selection: null, room: [], agent: 'claude-code', mode: 'proposal' },
+        null,
+      );
+      vi.mocked(h.api.companionCancel).mockResolvedValueOnce(false);
+      await h.controller.companionCancel(RUN);
+      expect(companion.running('d_lost')?.runId).toBe(RUN);
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(companion.running('d_lost')).toBeNull();
+      expect(companion.snapshot().get(conversationKey('d_lost'))!.turns.at(-1)!.stop).toEqual({ kind: 'cancelled' });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('tells every proposal list when one is resolved, so a badge never keeps an accepted proposal', async () => {

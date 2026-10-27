@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -6,6 +7,7 @@ import { CONTRACT_VERSION } from '../src/agent/capabilities';
 import { CREATE_FIELDS, ROOM_FIELDS } from '../src/agent/fields';
 import { ELEMENT_TYPE_NAMES, GROUP_KINDS, NOTE_FORM_NAMES, resolveType } from '../src/agent/vocabulary';
 import { ACCENTS, CODE_LANGUAGES, CONNECTOR_KINDS, EDGE_SEMANTICS } from '../src/document/types';
+import { productNamedIn } from '../src/nodes/technology';
 import { skillPairingsJson } from '../scripts/agent-schemas';
 
 /**
@@ -17,6 +19,29 @@ import { skillPairingsJson } from '../scripts/agent-schemas';
 const SKILL = join(__dirname, '..', 'skills', 'draft-canvas');
 const checker = readFileSync(join(SKILL, 'scripts', 'check_diagram.py'), 'utf8');
 const skillMd = readFileSync(join(SKILL, 'SKILL.md'), 'utf8');
+
+function python(): string | undefined {
+  for (const command of ['python3', 'python']) {
+    const found = spawnSync(command, ['-c', 'import sys; print(sys.version_info >= (3, 9))'], { encoding: 'utf8' });
+    if (found.status === 0 && found.stdout.trim() === 'True') return command;
+  }
+  return undefined;
+}
+const interpreter = python();
+
+/** Every technology `draft.py` can write: the survey's stores, brokers and providers, its frameworks
+ *  and its languages, each as `product` names it. Run from the scripts folder, which `-I` leaves off
+ *  the path, so it is added by hand. */
+const DRAFTED_TECHNOLOGIES = `
+import json, os, sys
+sys.dont_write_bytecode = True
+sys.path.insert(0, os.getcwd())
+import draft, scan_repo as s
+names = {name for name, _, _ in s.KNOWN.values()}
+names |= {name for _, name, _ in s.FRAMEWORKS if name not in draft.NOT_PRODUCTS}
+names |= {language.split('/')[0] for language in s.LANGUAGES.values()}
+print(json.dumps(sorted({draft.product(name) for name in names})))
+`;
 
 /** The quoted strings of one `NAME = {...}` set in the Python checker. */
 function pythonSet(name: string): string[] {
@@ -54,6 +79,50 @@ describe('the agent skill', () => {
 
   it('accepts only aliases the app resolves', () => {
     for (const alias of pythonSet('ALIASES')) expect(resolveType(alias), alias).toBeDefined();
+  });
+
+  it('names only error codes the tools answer with, and every code language', () => {
+    const playbook = readFileSync(join(SKILL, 'references', 'mcp-playbook.md'), 'utf8');
+    const named = [...playbook.matchAll(/`([A-Z][A-Z_]{2,})`/g)].map((m) => m[1]!);
+    expect(named.length).toBeGreaterThan(10);
+    // The app's codes, and the ones the desktop broker answers with before a request reaches it.
+    const known = new Set(
+      [readFileSync(join(__dirname, '..', 'src', 'agent', 'errors.ts'), 'utf8'), readFileSync(join(__dirname, '..', 'src-tauri', 'src', 'agent', 'broker.rs'), 'utf8')]
+        .flatMap((source) => [...source.matchAll(/['"]([A-Z][A-Z_]{2,})['"]/g)].map((m) => m[1]!)),
+    );
+    expect(named.filter((code) => !known.has(code))).toEqual([]);
+    const modeling = readFileSync(join(SKILL, 'references', 'modeling.md'), 'utf8');
+    const languages = /`language` — one of ([^.]+)\./.exec(modeling)?.[1] ?? '';
+    expect([...languages.matchAll(/`([a-z]+)`/g)].map((m) => m[1]!).sort()).toEqual([...CODE_LANGUAGES].sort());
+  });
+
+  it('teaches technologies the app shows as logos', () => {
+    // Agents copy the example and the vocabulary's examples, so neither may draw the advisory below.
+    const technologies: string[] = [];
+    const walk = (room: { nodes?: { technology?: string; inside?: object }[] }) => {
+      for (const node of room.nodes ?? []) {
+        if (node.technology) technologies.push(node.technology);
+        if (node.inside) walk(node.inside);
+      }
+    };
+    walk(JSON.parse(readFileSync(join(SKILL, 'references', 'example-create.json'), 'utf8')));
+    const vocabulary = readFileSync(join(SKILL, 'references', 'vocabulary.md'), 'utf8');
+    for (const row of vocabulary.matchAll(/^\|[^|\n]*\| `[a-z-]+`[^|\n]*\|([^|\n]*)\|$/gm)) {
+      technologies.push(...[...row[1]!.matchAll(/`([^`]+)`/g)].map((m) => m[1]!));
+    }
+    expect(technologies.length).toBeGreaterThan(30);
+    expect(technologies.filter((t) => productNamedIn(t))).toEqual([]);
+  });
+
+  it.skipIf(!interpreter)('drafts each technology as the product whose logo the app shows', () => {
+    // A technology that starts with a known product but isn't one ("Anthropic API", "TypeScript,
+    // Express") shows a plain mark and draws an advisory on create: an update to fix every draft.
+    const run = spawnSync(interpreter!, ['-I', '-c', DRAFTED_TECHNOLOGIES], { cwd: join(SKILL, 'scripts'), encoding: 'utf8' });
+    expect(run.status, run.stderr).toBe(0);
+    const technologies = JSON.parse(run.stdout) as string[];
+    expect(technologies.length).toBeGreaterThan(100);
+    const flagged = technologies.filter((t) => productNamedIn(t));
+    expect(flagged).toEqual([]);
   });
 
   it('warns at the app’s own crowding thresholds', () => {

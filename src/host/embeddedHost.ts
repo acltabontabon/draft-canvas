@@ -12,8 +12,8 @@ export type ToHostMessage =
   /** A link the host opens in the system browser. */
   | { type: 'draft-canvas:open-external'; url: string }
   /**
-   * Only to a host whose load said `background`: the canvas's background image as it stands now
-   * (base64), for the host to keep beside the file. It says so again on every change.
+   * The canvas's background image as it stands now (base64), for the host to keep beside the file.
+   * It says so again on every change.
    */
   | { type: 'draft-canvas:background-write'; mime: string; data: string }
   /** Likewise: the canvas no longer has a background image. */
@@ -61,9 +61,4 @@ export interface LoadMessage {
    * its way, the host can drop that edit instead of writing the old contents over the new ones.
    */
   seq?: number;
-  /**
-   * The host keeps the canvas's background image beside the file. The app asks for it
-   * (`background-read`) when the file turns one on that it doesn't hold, and reports each change.
-   */
-  background?: boolean;
 }

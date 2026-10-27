@@ -201,8 +201,30 @@ pub async fn call(agent: &Agent, tool: &str, args: Value, calls: &CallRegistry) 
         "create_diagram" => create(agent, &app, &projects, &args, calls).await,
         "update_diagram" => update(agent, &app, &projects, &args, calls).await,
         "submit_proposal" => submit_proposal(agent, &app, &projects, &args, calls).await,
-        "get_proposal" => get_proposal(agent, &projects, &args),
-        "list_proposals" => list_proposals(agent, &projects, &args),
+        "get_proposal" => {
+            // The proposal's own diagram, if it is the one open: only then can a page revision help.
+            let wanted = args
+                .get("proposalId")
+                .and_then(Value::as_str)
+                .and_then(|id| agent.with_proposals(|s| s.get(id).map(|p| p.diagram_id.clone())))
+                .flatten();
+            let live = open_revisions(agent, &app, &projects, calls, |id| {
+                wanted.as_deref() == Some(id)
+            })
+            .await;
+            get_proposal(agent, &projects, &args, live.as_ref())
+        }
+        "list_proposals" => {
+            let filter = args.get("diagramId").and_then(Value::as_str);
+            let live = open_revisions(agent, &app, &projects, calls, |id| {
+                filter.is_none_or(|f| f == id)
+                    && agent
+                        .with_proposals(|s| !s.list(Some(id)).is_empty())
+                        .unwrap_or(false)
+            })
+            .await;
+            list_proposals(agent, &projects, &args, live.as_ref())
+        }
         _ => unreachable!(),
     }
 }
@@ -301,6 +323,24 @@ fn locate(agent: &Agent, projects: &[Project], id: &str) -> Result<Diagram, Tool
             .hint("Ask the person which one to use, or to rename one in Draft Canvas.")
             .details(json!({"paths": paths})),
         })
+}
+
+/// Resolve again at the point of use: a page may spend seconds preparing a change, during which a
+/// directory or document can be replaced with a symlink leading outside the granted folders.
+fn checked_path(projects: &[Project], path: &std::path::Path) -> Result<PathBuf, ToolError> {
+    let path = dunce::canonicalize(path).map_err(|_| {
+        ToolError::new(
+            "NOT_FOUND",
+            "That diagram or folder is no longer available.",
+        )
+    })?;
+    if !projects.iter().any(|p| path.starts_with(&p.root)) {
+        return Err(ToolError::new(
+            "OUT_OF_SCOPE",
+            "That path is no longer in a folder agents may use.",
+        ));
+    }
+    Ok(path)
 }
 
 // ─── list_diagrams ──────────────────────────────────────────────────────────────────────────────
@@ -478,6 +518,7 @@ struct CallState {
 #[derive(Default)]
 pub struct CallRegistry {
     state: std::sync::Mutex<CallState>,
+    cancelled: tokio::sync::Notify,
     /// The agent session the call came from (see `session.rs`).
     pub session: String,
     /// The companion run the call's agent belongs to, if the companion started it (see `runs.rs`).
@@ -492,6 +533,7 @@ impl CallRegistry {
     pub fn new(session: String) -> Self {
         Self {
             state: std::sync::Mutex::default(),
+            cancelled: tokio::sync::Notify::new(),
             session,
             run: None,
             progress: None,
@@ -545,6 +587,20 @@ impl CallRegistry {
         state.cancelled = true;
         if let Some(page_id) = state.current {
             agent.page.cancel(page_id);
+        }
+        drop(state);
+        self.cancelled.notify_waiters();
+    }
+
+    async fn wait_cancelled(&self) {
+        loop {
+            let notified = self.cancelled.notified();
+            tokio::pin!(notified);
+            notified.as_mut().enable();
+            if self.is_cancelled() {
+                return;
+            }
+            notified.await;
         }
     }
 
@@ -696,9 +752,14 @@ fn page_error(error: Option<&Value>) -> ToolError {
 
 /// What the page is told about a diagram a request names.
 fn diagram_context(agent: &Agent, diagram: &Diagram, with_text: bool) -> Result<Value, ToolError> {
-    let active = agent.active().filter(|a| {
-        dunce::canonicalize(&a.path).ok() == dunce::canonicalize(&diagram.absolute).ok()
-    });
+    let app = agent.app().ok_or_else(unavailable)?;
+    let absolute = checked_path(
+        &enabled_projects(&app.state::<AppState>()),
+        &diagram.absolute,
+    )?;
+    let active = agent
+        .active()
+        .filter(|a| dunce::canonicalize(&a.path).ok() == Some(absolute.clone()));
     let mut context = json!({
         "diagramId": diagram.diagram_id,
         "project": diagram.project,
@@ -706,15 +767,13 @@ fn diagram_context(agent: &Agent, diagram: &Diagram, with_text: bool) -> Result<
         "displayPath": display_path(&diagram.absolute),
         "open": active.is_some(),
     });
-    let app = agent.app().ok_or_else(unavailable)?;
     let handle = app
         .state::<AppState>()
-        .grant_file_unwatched(&diagram.absolute)
+        .grant_file_unwatched(&absolute)
         .map_err(|e| ToolError::new("NOT_FOUND", e.message))?;
     context["handle"] = json!(handle);
     if with_text && active.is_none() {
-        let read =
-            read_document(&diagram.absolute).map_err(|e| ToolError::new("NOT_FOUND", e.message))?;
+        let read = read_document(&absolute).map_err(|e| ToolError::new("NOT_FOUND", e.message))?;
         context["text"] = json!(read.text);
         context["stamp"] = json!(read.stamp);
     }
@@ -833,16 +892,23 @@ async fn admit<'a>(
     tool: &str,
     args: &Value,
     projects: &[Project],
+    calls: &CallRegistry,
     recover: impl Fn(&Entry) -> Option<Value>,
 ) -> Result<Admission<'a>, ToolError> {
     let key = format!("{tool}:{}", request_id(args)?);
     let fp = fingerprint(tool, args);
     loop {
+        if calls.is_cancelled() {
+            return Err(failure_error(Failure::Cancelled));
+        }
         let guard = match agent.claim(&key) {
             Ok(guard) => guard,
             Err(mut done) => {
                 // An identical request is running: its outcome is this one's.
-                let _ = done.wait_for(|finished| *finished).await;
+                tokio::select! {
+                    _ = done.wait_for(|finished| *finished) => {}
+                    _ = calls.wait_cancelled() => return Err(failure_error(Failure::Cancelled)),
+                }
                 continue;
             }
         };
@@ -871,11 +937,38 @@ async fn admit<'a>(
                         projects,
                     )?))
                 }
-                None if entry.stage == Stage::Pending => Ok(Admission::Go { key, fp, guard }),
+                None if legacy_proposal_outcome_uncertain(agent, &entry) => Err(outcome_unknown()),
+                None if safe_to_resume(&entry) => Ok(Admission::Go { key, fp, guard }),
                 None => Err(outcome_unknown()),
             },
         };
     }
+}
+
+/// Older app versions left proposal writes Pending and had no exact submission marker. If such a
+/// record could have written the stored version, preserve uncertainty rather than duplicate it.
+fn legacy_proposal_outcome_uncertain(agent: &Agent, entry: &Entry) -> bool {
+    entry.tool == "submit_proposal"
+        && entry.diagram_id.as_deref().is_some_and(|id| {
+            agent
+                .with_proposals(|store| {
+                    store
+                        .get(id)
+                        .is_some_and(|p| p.submission.is_none() && p.updated_at >= entry.at)
+                })
+                .unwrap_or(true)
+        })
+}
+
+/// A create has no editor mutation: a missing target proves its recorded disk gate never wrote a
+/// file. An update past the gate has no equivalent proof and must keep its unknown outcome.
+fn safe_to_resume(entry: &Entry) -> bool {
+    entry.stage == Stage::Pending
+        || entry.tool == "create_diagram"
+            && entry.path.as_ref().is_some_and(|path| {
+                std::fs::symlink_metadata(path)
+                    .is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound)
+            })
 }
 
 enum Admission<'a> {
@@ -907,6 +1000,16 @@ fn replay_receipt(entry: &Entry, projects: &[Project]) -> Result<Value, ToolErro
         }
     }
     let mut receipt = entry.receipt.clone().unwrap_or_else(|| json!({}));
+    // A page can report failure after an editor mutation (for example a save throws). Its replay
+    // must remain an isError result, rather than a success receipt with code/message fields.
+    if receipt.get("code").and_then(Value::as_str).is_some()
+        && receipt.get("message").and_then(Value::as_str).is_some()
+    {
+        let mut error = page_error(Some(&receipt));
+        let details = error.details.get_or_insert_with(|| json!({}));
+        details["replayed"] = json!(true);
+        return Err(error);
+    }
     receipt["replayed"] = json!(true);
     if receipt.get("persisted").and_then(Value::as_bool) == Some(false) {
         // The first answer said the change was only in the editor. Whether it outlived an app
@@ -944,7 +1047,7 @@ async fn create(
             .details(json!({"path": "/project", "projects": projects.iter().map(|p| &p.name).collect::<Vec<_>>()})))
         }
     };
-    let admission = admit(agent, "create_diagram", args, projects, |entry| {
+    let admission = admit(agent, "create_diagram", args, projects, calls, |entry| {
         recover_create(&agent.index, projects, entry)
     })
     .await?;
@@ -1032,7 +1135,7 @@ async fn create(
     })?;
 
     // The write, recorded first so a crash during it is recoverable by looking for the id.
-    let folder = project.root.clone();
+    let folder = checked_path(&enabled_projects(&app.state::<AppState>()), &project.root)?;
     let file = unique_name(&folder, &sanitize_stem(&title), &format!(".{DOC_EXT}"));
     let target = folder.join(file);
     let now = now_ms();
@@ -1190,7 +1293,7 @@ async fn update(
 ) -> ToolResult {
     let id = diagram_id(args)?;
     let diagram = locate(agent, projects, &id)?;
-    let admission = admit(agent, "update_diagram", args, projects, |_| None).await?;
+    let admission = admit(agent, "update_diagram", args, projects, calls, |_| None).await?;
     let (key, fp, _guard) = match admission {
         Admission::Replay(receipt) => return Ok(receipt),
         Admission::Go { key, fp, guard } => (key, fp, guard),
@@ -1258,7 +1361,7 @@ async fn update(
         }
         Ok(value) if value.get("ok").and_then(Value::as_bool) == Some(true) => {
             let mut receipt = value.get("value").cloned().unwrap_or(Value::Null);
-            if let Some(write) = receipt.get("write").cloned() {
+            if let Some(write) = receipt.as_object_mut().and_then(|map| map.remove("write")) {
                 receipt = write_in_background(
                     agent,
                     app,
@@ -1345,7 +1448,12 @@ fn write_in_background(
     }
     ensure_document_size(text.len())
         .map_err(|e| refuse(ToolError::new("LIMIT_EXCEEDED", e.message)))?;
-    match write_atomic(&diagram.absolute, text.as_bytes(), Some(stamp)) {
+    let absolute = checked_path(
+        &enabled_projects(&app.state::<AppState>()),
+        &diagram.absolute,
+    )
+    .map_err(refuse)?;
+    match write_atomic(&absolute, text.as_bytes(), Some(stamp)) {
         Ok(WriteOutcome::Saved { stamp }) => {
             if let Some(map) = receipt.as_object_mut() {
                 map.remove("write");
@@ -1405,7 +1513,7 @@ async fn submit_proposal(
     let id = diagram_id(args)?;
     let diagram = locate(agent, projects, &id)?;
 
-    let admission = admit(agent, "submit_proposal", args, projects, |entry| {
+    let admission = admit(agent, "submit_proposal", args, projects, calls, |entry| {
         recover_submit_proposal(agent, entry)
     })
     .await?;
@@ -1421,24 +1529,13 @@ async fn submit_proposal(
         .and_then(Value::as_str)
         .map(str::to_string);
     let existing = match &revises {
-        Some(rid) => {
-            match agent.with_proposals(|s| s.get(rid).cloned()).flatten() {
-                None => {
-                    let e = ToolError::new("NOT_FOUND", format!("No proposal with id {rid}."));
-                    fail(agent, &key, &e);
-                    return Err(e);
-                }
-                Some(p) if p.status != ProposalStatus::Pending => {
-                    let e = ToolError::new(
-                    "PROPOSAL_CLOSED",
-                    format!("That proposal is already {:?}; submit a new one instead of revising it.", p.status),
-                );
-                    fail(agent, &key, &e);
-                    return Err(e);
-                }
-                Some(p) => Some(p),
+        Some(rid) => match revisable(agent, rid, &id) {
+            Ok(p) => Some(p),
+            Err(e) => {
+                fail(agent, &key, &e);
+                return Err(e);
             }
-        }
+        },
         None => None,
     };
 
@@ -1452,7 +1549,7 @@ async fn submit_proposal(
         Entry {
             key: key.clone(),
             tool: "submit_proposal".into(),
-            fingerprint: fp,
+            fingerprint: fp.clone(),
             stage: Stage::Pending,
             at: now_ms(),
             diagram_id: Some(proposal_id.clone()),
@@ -1505,6 +1602,7 @@ async fn submit_proposal(
 
     let proposal = Proposal {
         id: proposal_id.clone(),
+        submission: Some(format!("{key}:{fp}")),
         version,
         diagram_id: id.clone(),
         path,
@@ -1545,13 +1643,15 @@ async fn submit_proposal(
             .unwrap_or_default(),
     };
 
-    match persist_proposal(agent, calls, &proposal, existing.as_ref()) {
+    match persist_proposal(agent, calls, &key, &proposal, existing.as_ref()) {
         // The review panel lists proposals when told to rather than polling for them all the time.
         Ok(()) => {
             app.state::<AppState>().events.emit(HostEvent::AgentChanged);
         }
         Err(error) => {
-            fail(agent, &key, &error);
+            if error.code != "OUTCOME_UNKNOWN" {
+                fail(agent, &key, &error);
+            }
             return Err(error);
         }
     }
@@ -1575,6 +1675,7 @@ async fn submit_proposal(
 fn persist_proposal(
     agent: &Agent,
     calls: &CallRegistry,
+    key: &str,
     proposal: &Proposal,
     existing: Option<&Proposal>,
 ) -> Result<(), ToolError> {
@@ -1608,23 +1709,45 @@ fn persist_proposal(
                         .hint("Ask the person to review the waiting proposals, or revise one of them instead."));
                 }
             }
-            store.put(proposal.clone()).map_err(|_| unavailable())
+            // A crash after the store append but before the receipt must never repeat a revise.
+            agent.with_ledger(|ledger| ledger.advance(key, Stage::Committing, now_ms(), |_| {}))
+                .ok_or_else(unavailable)?
+                .map_err(|_| unavailable())?;
+            store.put(proposal.clone()).map_err(|_| outcome_unknown())
         }).unwrap_or_else(|| Err(unavailable()))
     })
 }
 
 /// What an unfinished `submit_proposal` left behind, after a crash. Mirrors `recover_create`: the
-/// evidence is the proposal id minted for this request before anything was written, holding a version
-/// written no earlier than the request began — found, it proves the store write succeeded even though
-/// the ledger never heard; not found, nothing happened, and the request may run from scratch (the page
-/// round-trip has no side effect of its own to repeat safely). The time matters for a revise, whose id
-/// already existed: its earlier version is not this request's write.
+/// evidence is the proposal id and the exact submission marker written with that version. A timestamp
+/// cannot distinguish another revise (or the previous version saved in the same millisecond). A call
+/// interrupted before its store gate may run again; past it, only this proof can recover its receipt.
+/// The pending proposal `rid` that a submit on `diagram_id` may revise in place.
+fn revisable(agent: &Agent, rid: &str, diagram_id: &str) -> Result<Proposal, ToolError> {
+    match agent.with_proposals(|s| s.get(rid).cloned()).flatten() {
+        None => Err(ToolError::new("NOT_FOUND", format!("No proposal with id {rid}."))),
+        Some(p) if p.status != ProposalStatus::Pending => Err(ToolError::new(
+            "PROPOSAL_CLOSED",
+            format!("That proposal is already {:?}; submit a new one instead of revising it.", p.status),
+        )),
+        // A revise keeps the proposal's id and history, so one naming another diagram's proposal
+        // would have replaced that review with a change to this diagram.
+        Some(p) if p.diagram_id != diagram_id => Err(ToolError::new(
+            "INVALID_INPUT",
+            format!("Proposal {rid} is for another diagram; revise it with that diagramId, or submit a new proposal."),
+        )),
+        Some(p) => Ok(p),
+    }
+}
+
 fn recover_submit_proposal(agent: &Agent, entry: &Entry) -> Option<Value> {
     let proposal_id = entry.diagram_id.as_deref()?;
     let proposal = agent
         .with_proposals(|s| s.get(proposal_id).cloned())
         .flatten()
-        .filter(|p| p.updated_at >= entry.at)?;
+        .filter(|p| {
+            p.submission.as_deref() == Some(&format!("{}:{}", entry.key, entry.fingerprint))
+        })?;
     Some(json!({
         "proposalId": proposal.id,
         "version": proposal.version,
@@ -1636,7 +1759,64 @@ fn recover_submit_proposal(agent: &Agent, entry: &Entry) -> Option<Value> {
     }))
 }
 
-fn get_proposal(agent: &Agent, projects: &[Project], args: &Value) -> ToolResult {
+/// The open document's revisions, as the page hands them out: `revision` (its file revision while it
+/// has no unsaved edits) and `editor` (`o:…`, which a change made on unsaved edits carries). The file
+/// index only knows the file on disk, so without these a proposal submitted on unsaved edits read
+/// as stale the moment it was stored.
+pub(crate) struct OpenRevisions {
+    diagram_id: String,
+    revision: String,
+    editor: Option<String>,
+}
+
+/// `OpenRevisions` for the diagram open now, when `wanted` says it matters — one page call, or none.
+async fn open_revisions(
+    agent: &Agent,
+    app: &AppHandle,
+    projects: &[Project],
+    calls: &CallRegistry,
+    wanted: impl Fn(&str) -> bool,
+) -> Option<OpenRevisions> {
+    let active = agent.active()?;
+    let open = dunce::canonicalize(&active.path).ok()?;
+    let diagram = agent
+        .index
+        .list(projects)
+        .into_iter()
+        .find(|d| dunce::canonicalize(&d.absolute).ok().as_ref() == Some(&open))?;
+    if !wanted(&diagram.diagram_id) {
+        return None;
+    }
+    let page = to_page(agent, app, "active_context", &json!({}), json!({}), calls)
+        .await
+        .ok()?;
+    Some(OpenRevisions {
+        diagram_id: diagram.diagram_id,
+        revision: page.get("revision")?.as_str()?.to_string(),
+        editor: page
+            .get("editorRevision")
+            .and_then(Value::as_str)
+            .map(str::to_string),
+    })
+}
+
+/// Whether the diagram has moved since `proposal` was made. Open, it is judged against the page's
+/// revisions — either one it would accept as current; closed, against the file. An editor revision
+/// outlives neither the page nor the document's closing, so one is stale whenever the diagram isn't
+/// open (or the page can't say).
+pub(crate) fn proposal_stale(base: &str, diagram: &Diagram, live: Option<&OpenRevisions>) -> bool {
+    match live.filter(|l| l.diagram_id == diagram.diagram_id) {
+        Some(live) => base != live.revision && live.editor.as_deref() != Some(base),
+        None => base != diagram.revision,
+    }
+}
+
+fn get_proposal(
+    agent: &Agent,
+    projects: &[Project],
+    args: &Value,
+    live: Option<&OpenRevisions>,
+) -> ToolResult {
     let proposal_id = args
         .get("proposalId")
         .and_then(Value::as_str)
@@ -1653,10 +1833,15 @@ fn get_proposal(agent: &Agent, projects: &[Project], args: &Value) -> ToolResult
         })?;
     // Re-checked on every read, not cached from submit time: a folder disabled since then hides it.
     let diagram = locate(agent, projects, &proposal.diagram_id)?;
-    Ok(proposal_receipt(&proposal, &diagram))
+    Ok(proposal_receipt(&proposal, &diagram, live))
 }
 
-fn list_proposals(agent: &Agent, projects: &[Project], args: &Value) -> ToolResult {
+fn list_proposals(
+    agent: &Agent,
+    projects: &[Project],
+    args: &Value,
+    live: Option<&OpenRevisions>,
+) -> ToolResult {
     let diagram_filter = args.get("diagramId").and_then(Value::as_str);
     let limit = args
         .get("limit")
@@ -1688,7 +1873,7 @@ fn list_proposals(agent: &Agent, projects: &[Project], args: &Value) -> ToolResu
         .iter()
         .skip(offset)
         .take(limit)
-        .map(|p| proposal_summary(p, byid.get(&p.diagram_id)))
+        .map(|p| proposal_summary(p, byid.get(&p.diagram_id), live))
         .collect();
     let next = offset + page.len();
     let mut result = json!({ "proposals": page, "complete": next >= in_scope.len() });
@@ -1698,7 +1883,7 @@ fn list_proposals(agent: &Agent, projects: &[Project], args: &Value) -> ToolResu
     Ok(result)
 }
 
-fn proposal_receipt(proposal: &Proposal, diagram: &Diagram) -> Value {
+fn proposal_receipt(proposal: &Proposal, diagram: &Diagram, live: Option<&OpenRevisions>) -> Value {
     json!({
         "proposalId": proposal.id,
         "version": proposal.version,
@@ -1706,19 +1891,23 @@ fn proposal_receipt(proposal: &Proposal, diagram: &Diagram) -> Value {
         "diagramId": proposal.diagram_id,
         "summary": proposal.summary,
         "counts": proposal.counts,
-        "stale": proposal.base_revision != diagram.revision,
+        "stale": proposal_stale(&proposal.base_revision, diagram, live),
         "createdAt": proposal.created_at,
         "updatedAt": proposal.updated_at,
     })
 }
 
-fn proposal_summary(proposal: &Proposal, diagram: Option<&Diagram>) -> Value {
+fn proposal_summary(
+    proposal: &Proposal,
+    diagram: Option<&Diagram>,
+    live: Option<&OpenRevisions>,
+) -> Value {
     json!({
         "proposalId": proposal.id,
         "diagramId": proposal.diagram_id,
         "status": serde_json::to_value(proposal.status).unwrap_or(Value::Null),
         "summary": proposal.summary,
-        "stale": diagram.is_some_and(|d| proposal.base_revision != d.revision),
+        "stale": diagram.is_some_and(|d| proposal_stale(&proposal.base_revision, d, live)),
         "updatedAt": proposal.updated_at,
     })
 }
@@ -1807,6 +1996,34 @@ mod tests {
         assert_eq!(error.code, "CANCELLED");
         assert_eq!(call.current(), None);
         assert!(crate::util::lock(&agent.gates).is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_cancelled_duplicate_does_not_wait_for_the_first_request_to_finish() {
+        let dir = tempfile::tempdir().unwrap();
+        let agent = Agent::new(dir.path());
+        agent.ensure_ledger().unwrap();
+        let _first = agent
+            .claim("update_diagram:same")
+            .unwrap_or_else(|_| panic!("fresh"));
+        let calls = CallRegistry::new("external".into());
+        let args = json!({"requestId": "same"});
+        let waiting = async {
+            match admit(&agent, "update_diagram", &args, &[], &calls, |_| None).await {
+                Err(error) => error.code,
+                Ok(_) => panic!("the cancelled waiter must not be admitted"),
+            }
+        };
+        let cancelling = async {
+            tokio::task::yield_now().await;
+            calls.cancel(&agent);
+        };
+        let (code, ()) = tokio::time::timeout(std::time::Duration::from_secs(1), async {
+            tokio::join!(waiting, cancelling)
+        })
+        .await
+        .expect("cancellation releases the duplicate while the first key is still held");
+        assert_eq!(code, "CANCELLED");
     }
 
     #[test]
@@ -1909,6 +2126,22 @@ mod tests {
     }
 
     #[test]
+    fn quitting_cancels_pre_gate_work_even_after_the_client_disconnected() {
+        let dir = tempfile::tempdir().unwrap();
+        let agent = Agent::new(dir.path());
+        let call = std::sync::Arc::new(CallRegistry::new("external".into()));
+        agent.track_call(&call);
+        let committing = std::sync::Arc::new(CallRegistry::new("committing".into()));
+        agent.track_call(&committing);
+        let (id, _rx) = agent.page.register();
+        committing.track(&agent, id);
+        assert!(agent.page.gate(id));
+        agent.shutdown("quit");
+        assert!(call.is_cancelled());
+        assert!(agent.page.gate(id), "already gated work may finish");
+    }
+
+    #[test]
     fn global_call_tracking_does_not_keep_finished_requests_alive() {
         let dir = tempfile::tempdir().unwrap();
         let agent = Agent::new(dir.path());
@@ -1938,6 +2171,34 @@ mod tests {
             title_key("Order Processing")
         );
         assert!(title_key("Order Processing v2").contains(&title_key("processing")));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_path_swapped_to_an_out_of_scope_symlink_is_refused_before_file_io() {
+        let dir = tempfile::tempdir().unwrap();
+        let allowed = dir.path().join("allowed");
+        let outside = dir.path().join("outside");
+        std::fs::create_dir_all(&allowed).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        let target = allowed.join("a.draftcanvas");
+        std::fs::write(&target, "original").unwrap();
+        let projects = [Project {
+            root: dunce::canonicalize(&allowed).unwrap(),
+            name: "P".into(),
+        }];
+        assert!(checked_path(&projects, &target).is_ok());
+        std::fs::write(outside.join("a.draftcanvas"), "private").unwrap();
+        std::fs::remove_file(&target).unwrap();
+        std::os::unix::fs::symlink(outside.join("a.draftcanvas"), &target).unwrap();
+        assert_eq!(
+            checked_path(&projects, &target).unwrap_err().code,
+            "OUT_OF_SCOPE"
+        );
+        assert_eq!(
+            std::fs::read_to_string(outside.join("a.draftcanvas")).unwrap(),
+            "private"
+        );
     }
 
     #[test]
@@ -2074,6 +2335,26 @@ mod tests {
     }
 
     #[test]
+    fn an_interrupted_create_can_resume_only_when_its_target_is_missing() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("New.draftcanvas");
+        let mut entry = pending_create("d_new");
+        entry.path = Some(target.to_string_lossy().into_owned());
+        assert!(safe_to_resume(&entry));
+        std::fs::write(&target, "existing").unwrap();
+        assert!(
+            !safe_to_resume(&entry),
+            "an existing file needs recovery, never another create"
+        );
+        entry.tool = "update_diagram".into();
+        std::fs::remove_file(target).unwrap();
+        assert!(
+            !safe_to_resume(&entry),
+            "a missing update target does not prove no mutation"
+        );
+    }
+
+    #[test]
     fn a_replayed_unsaved_receipt_says_its_durability_is_unverified() {
         let entry = Entry {
             key: "k".into(),
@@ -2090,6 +2371,17 @@ mod tests {
         assert_eq!(receipt["durability"], json!("unverified"));
     }
 
+    #[test]
+    fn a_replayed_post_commit_error_remains_an_error() {
+        let mut entry = pending_create("d_1");
+        entry.stage = Stage::Committed;
+        entry.receipt =
+            Some(ToolError::new("INTERNAL", "Saving failed after applying.").to_value());
+        let error = replay_receipt(&entry, &[]).unwrap_err();
+        assert_eq!(error.code, "INTERNAL");
+        assert_eq!(error.details.unwrap()["replayed"], true);
+    }
+
     fn stored_proposal(
         id: &str,
         diagram_id: &str,
@@ -2098,6 +2390,7 @@ mod tests {
     ) -> Proposal {
         Proposal {
             id: id.into(),
+            submission: None,
             version: 1,
             diagram_id: diagram_id.into(),
             path: vec![],
@@ -2158,7 +2451,7 @@ mod tests {
         record(&agent, entry.clone()).unwrap();
         // The page has finished its dry run, but the proposal has not been saved yet.
         call.cancel(&agent);
-        let error = persist_proposal(&agent, &call, &proposal, None).unwrap_err();
+        let error = persist_proposal(&agent, &call, &entry.key, &proposal, None).unwrap_err();
         assert_eq!(error.code, "CANCELLED");
         fail(&agent, &entry.key, &error);
         assert!(agent
@@ -2242,12 +2535,10 @@ mod tests {
         assert_eq!(recover_submit_proposal(&agent, &entry), None);
         agent
             .with_proposals(|s| {
-                s.put(stored_proposal(
-                    "p_minted00001",
-                    "d_1",
-                    ProposalStatus::Pending,
-                    1,
-                ))
+                let mut proposal =
+                    stored_proposal("p_minted00001", "d_1", ProposalStatus::Pending, 1);
+                proposal.submission = Some(format!("{}:{}", entry.key, entry.fingerprint));
+                s.put(proposal)
             })
             .unwrap()
             .unwrap();
@@ -2256,6 +2547,53 @@ mod tests {
         assert_eq!(receipt["recovered"], json!(true));
         assert_eq!(receipt["proposalId"], json!("p_minted00001"));
         assert_eq!(receipt["version"], json!(1));
+    }
+
+    #[test]
+    fn legacy_proposal_recovery_never_repeats_an_ambiguous_store_write() {
+        let dir = tempfile::tempdir().unwrap();
+        let agent = Agent::new(dir.path());
+        let mut entry = pending_create("p_legacy");
+        entry.tool = "submit_proposal".into();
+        entry.stage = Stage::Pending;
+        entry.at = 10;
+        agent
+            .with_proposals(|store| {
+                store.put(stored_proposal(
+                    "p_legacy",
+                    "d_1",
+                    ProposalStatus::Pending,
+                    10,
+                ))
+            })
+            .unwrap()
+            .unwrap();
+        assert!(legacy_proposal_outcome_uncertain(&agent, &entry));
+        assert_eq!(recover_submit_proposal(&agent, &entry), None);
+        entry.at = 11;
+        assert!(
+            !legacy_proposal_outcome_uncertain(&agent, &entry),
+            "an older version proves this revise never wrote"
+        );
+    }
+
+    #[test]
+    fn a_revise_cannot_take_over_another_diagrams_proposal() {
+        let dir = tempfile::tempdir().unwrap();
+        let agent = Agent::new(dir.path());
+        agent
+            .with_proposals(|s| s.put(stored_proposal("p_b", "d_b", ProposalStatus::Pending, 1)))
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            revisable(&agent, "p_b", "d_a").unwrap_err().code,
+            "INVALID_INPUT"
+        );
+        assert_eq!(revisable(&agent, "p_b", "d_b").unwrap().id, "p_b");
+        assert_eq!(
+            revisable(&agent, "p_none", "d_b").unwrap_err().code,
+            "NOT_FOUND"
+        );
     }
 
     #[test]
@@ -2287,6 +2625,13 @@ mod tests {
         assert_eq!(recover_submit_proposal(&agent, &entry), None);
         let mut revised = stored_proposal("p_revised0001", "d_1", ProposalStatus::Pending, 12);
         revised.version = 2;
+        // A newer timestamp alone is not evidence this request wrote the version.
+        agent
+            .with_proposals(|s| s.put(revised.clone()))
+            .unwrap()
+            .unwrap();
+        assert_eq!(recover_submit_proposal(&agent, &entry), None);
+        revised.submission = Some(format!("{}:{}", entry.key, entry.fingerprint));
         agent.with_proposals(|s| s.put(revised)).unwrap().unwrap();
         assert_eq!(
             recover_submit_proposal(&agent, &entry).unwrap()["version"],
@@ -2310,11 +2655,67 @@ mod tests {
             })
             .unwrap()
             .unwrap();
-        let receipt = get_proposal(&agent, &[project], &json!({"proposalId": "p1"})).unwrap();
+        let receipt = get_proposal(&agent, &[project], &json!({"proposalId": "p1"}), None).unwrap();
         assert_eq!(receipt["status"], json!("pending"));
         assert_eq!(receipt["summary"], json!("Summary"));
         // The proposal's base revision won't match a freshly indexed file's own revision.
         assert_eq!(receipt["stale"], json!(true));
+    }
+
+    #[test]
+    fn a_proposal_on_unsaved_edits_is_current_while_the_open_document_still_stands_there() {
+        let diagram = Diagram {
+            diagram_id: "d_orders0001".into(),
+            title: "Orders".into(),
+            project: "P".into(),
+            path: "Orders.draftcanvas".into(),
+            revision: "f:0123456789abcdef".into(),
+            absolute: std::path::PathBuf::from("/tmp/Orders.draftcanvas"),
+        };
+        let live = |revision: &str, editor: &str| OpenRevisions {
+            diagram_id: "d_orders0001".into(),
+            revision: revision.into(),
+            editor: Some(editor.into()),
+        };
+        // Submitted on unsaved edits: an editor revision, never the file's.
+        assert!(!proposal_stale(
+            "o:ab.7",
+            &diagram,
+            Some(&live("o:ab.7", "o:ab.7"))
+        ));
+        // Saved since without another edit: the page hands out the file revision, the editor's stands.
+        assert!(!proposal_stale(
+            "o:ab.7",
+            &diagram,
+            Some(&live("f:fedcba9876543210", "o:ab.7"))
+        ));
+        // Edited since.
+        assert!(proposal_stale(
+            "o:ab.7",
+            &diagram,
+            Some(&live("o:ab.8", "o:ab.8"))
+        ));
+        // Closed, or the page can't say: an editor revision is gone with it.
+        assert!(proposal_stale("o:ab.7", &diagram, None));
+        // A file revision: the page's word when open (unsaved edits on top move it), the file's otherwise.
+        assert!(!proposal_stale("f:0123456789abcdef", &diagram, None));
+        assert!(proposal_stale(
+            "f:0123456789abcdef",
+            &diagram,
+            Some(&live("o:ab.9", "o:ab.9"))
+        ));
+        assert!(!proposal_stale(
+            "f:0123456789abcdef",
+            &diagram,
+            Some(&live("f:0123456789abcdef", "o:ab.9"))
+        ));
+        // Another diagram's revisions say nothing about this one.
+        let other = OpenRevisions {
+            diagram_id: "d_other".into(),
+            revision: "o:ab.7".into(),
+            editor: Some("o:ab.7".into()),
+        };
+        assert!(proposal_stale("o:ab.7", &diagram, Some(&other)));
     }
 
     #[test]
@@ -2332,7 +2733,7 @@ mod tests {
             })
             .unwrap()
             .unwrap();
-        let error = get_proposal(&agent, &[], &json!({"proposalId": "p1"})).unwrap_err();
+        let error = get_proposal(&agent, &[], &json!({"proposalId": "p1"}), None).unwrap_err();
         assert_eq!(error.code, "NOT_ENABLED");
     }
 
@@ -2364,7 +2765,7 @@ mod tests {
             })
             .unwrap()
             .unwrap();
-        let result = list_proposals(&agent, &[project], &json!({"limit": 1})).unwrap();
+        let result = list_proposals(&agent, &[project], &json!({"limit": 1}), None).unwrap();
         let page = result["proposals"].as_array().unwrap();
         assert_eq!(page.len(), 1);
         assert_eq!(page[0]["proposalId"], json!("newer"), "newest first");
@@ -2377,6 +2778,7 @@ mod tests {
                 name: "P".into(),
             }],
             &json!({"cursor": cursor}),
+            None,
         )
         .unwrap();
         let next_page = next["proposals"].as_array().unwrap();

@@ -39,7 +39,7 @@ reports `contract: 3`.
 
 | Tool | Kind | Purpose |
 | --- | --- | --- |
-| `get_capabilities({topics?, starter?})` | read | Vocabulary and rules. Topics: `types`, `relationships`, `c4`, `flows`, `notes`, `starters`, `limits`, `layout`, `readability`. |
+| `get_capabilities({topics?, starter?})` | read | Vocabulary and rules. Without `topics`, an index of the topics and the common word lists; each topic in full on request: `types`, `relationships`, `c4`, `flows`, `notes`, `starters`, `limits`, `layout`, `readability`. |
 | `list_diagrams({query?, project?, cursor?, limit?})` | read | Diagrams in allowed folders, plus `active` (the open one) and `thisSession` (ones this session changed). |
 | `read_diagram({diagramId, view?, focus?, include?, cursor?, format?})` | read | One view, semantically. See [Reading](#reading). |
 | `read_attachment({diagramId, expectedRevision, attachmentId, offset?, view?})` | read | Full note or code text in 8,192-character chunks. |
@@ -59,14 +59,20 @@ reports `contract: 3`.
 
 ### Reading
 
-`read_diagram` returns elements with derived C4 role and scope, relationships by endpoint, and notes,
-attachments and flows with their ids.
+`read_diagram` returns elements with their C4 `role` and `scope`, relationships by endpoint, and notes,
+attachments and flows with their ids. Elements, boundaries, notes, relationships and flows carry the
+`color` they were given, in the form an update takes.
+
+- C4 `role` and `scope` are always derived from type, level and boundary, never stored. An element
+  whose role is `unspecified` also carries `basis`, saying why.
+- Empty values are left out: no `insideViews` when nothing in the page has one, no geometry `pins`
+  when both ends are automatic. Display geometry is rounded to hundredths.
 
 | Option | Effect |
 | --- | --- |
 | `view.inside: [ids…]` | A nested view. A service or component with none reads as empty. |
 | `focus` | Elements, a group or a flow. Adds `partial: true` and the relationships crossing the edge. |
-| `include: ["geometry"]` | Boxes, and relationship `geometry: {from, to, path, via?}`: the numbers `place` and `route` take. |
+| `include: ["geometry"]` | Boxes, and relationship `geometry: {from, to, path, pins?, via?}`: the numbers `place` and `route` take. |
 | `include: ["attachments"]` / `["fullText"]` | Attachment previews, or complete text. |
 | `include: ["suggestions"]` | Up to 5 next-step suggestions per element. Never applied. |
 | `include: ["views"]` | An outline of every inside view. |
@@ -119,12 +125,16 @@ it in `view`). An update or preview adds the findings the change brought in to i
 | `{op:"add", nodes?, relationships?, groups?, flows?, notes?, openPoints?}` | Adds content beside what it connects to. |
 | `{op:"update", id, set:{…}}` | Edits anything by id. Omitted fields stay; `null` clears an optional field. |
 | `{op:"remove", ids, cascade?}` | Removes. A non-empty group needs `cascade`. |
-| `{op:"setLevel", level}` | Sets the view's C4 level. |
+| `{op:"setLevel", level}` | Sets the view's C4 level. `null` makes it a non-C4 view, also an inside view that would otherwise inherit one. |
 | `{op:"arrange", …}` | Re-lays out in place. See [Arrange](#arrange). |
 | `{op:"moveInside", owner, ids}` / `{op:"moveOutside", ids}` | One C4 level down or up. See [C4 support](#c4-support). |
 
 - `view.inside` names the view to change. The first `add` inside a service or component creates its inside view.
 - Existing elements never move except by `arrange` or `set.place`. Boundaries grow to hold new members.
+- As in the editor, one ordinary relationship runs each way between two elements; a second, added or
+  re-pointed, is `UNSUPPORTED` (a `compensates` action may sit beside its step). A `set.kind` the
+  pairing doesn't offer is `UNSUPPORTED`; on a new relationship it is left out with an advisory.
+- Boundaries and notes take `color` when added, as elements, relationships and flows do.
 - If new content cannot fit, `LAYOUT_CONSTRAINED` carries `suggestedOp`, an `arrange` to add to the request.
 
 **Previews.** `preview_diagram` makes a candidate with no file, history, recovery copy or proposal.
@@ -506,7 +516,7 @@ attachments and flow steps stay.
 - **Boundaries** are groups of kind `system`, `domain`, `network`, `deployment`, `group` or `boundary`, by `parentId`.
 - **Relationship technology** goes in the label: "Makes API calls [JSON/HTTPS]".
 
-**Role and scope are derived, never stored** (`src/depth/c4.ts`). Reads return `{role, scope, derived: true, basis}`.
+**Role and scope are derived, never stored** (`src/depth/c4.ts`). Reads return `{role, scope}`, with `basis` (why) when the role is `unspecified`.
 
 | Element | Context | Container | Component | No level |
 | --- | --- | --- | --- | --- |

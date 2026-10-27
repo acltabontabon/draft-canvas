@@ -2,7 +2,7 @@
 name: draft-canvas
 description: Draws a codebase's architecture as a detailed, editable Draft Canvas diagram — C4 views with look-inside drill-downs, presentation flows of the real request path, notes, code snippets and source evidence — through the Draft Canvas desktop app's MCP tools. Use when someone asks to diagram, draw, map, visualize or explain the architecture of a repository, service or system in Draft Canvas, to turn a codebase into a diagram, or to refresh such a diagram after the code changed.
 metadata:
-  version: "16"
+  version: "17"
   contract: "3"
   requires: Draft Canvas Desktop with agent access on (MCP server draft-canvas)
 ---
@@ -53,7 +53,8 @@ edit `request.json`:
   rigs, observability); add what the survey missed. A survey finding is a hint, not a fact.
 - **Fill every `TODO:`.** Descriptions: one sentence, a verb first ("Takes orders and reserves
   stock."). Relationship labels: a verb phrase from the caller's side, ≤ 32 characters ("Places
-  order", "Publishes OrderPlaced"). Add `semantic` and `kind` when the code says
+  order", "Publishes OrderPlaced"). `technology`: one product, optionally versioned ("Spring Boot
+  3"), so its logo shows. Add `semantic` and `kind` when the code says
   ([vocabulary.md](references/vocabulary.md) maps code to them).
 - **Sharpen the evidence**: add `symbol` and `line` for what you read; `basis: "inferred"` for what you
   concluded without seeing it.

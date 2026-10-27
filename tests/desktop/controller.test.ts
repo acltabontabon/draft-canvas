@@ -54,7 +54,7 @@ describe('opening a file', () => {
     const load = h.loads()[0]!;
     expect(load.text).toBe(h.files.get(handle)!.text);
     expect(load.title).toBe('payments');
-    expect(load).toMatchObject({ background: true, seq: 1 });
+    expect(load).toMatchObject({ seq: 1 });
     expect(doc()).toMatchObject({ kind: 'file', name: 'payments', dirty: false, displayPath: '~/work/payments.draftcanvas' });
     expect(h.api.reportState).toHaveBeenLastCalledWith({ kind: 'file', dirty: false, name: 'payments', handle });
   });

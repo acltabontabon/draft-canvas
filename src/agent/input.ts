@@ -127,6 +127,7 @@ export interface GroupSpec {
   label: string;
   kind: keyof typeof GROUP_KINDS;
   parent?: string;
+  color?: Accent;
 }
 
 export interface FlowSpec {
@@ -174,6 +175,8 @@ export interface NoteSpec {
   attachTo?: { kind: 'node' | 'edge'; id: string };
   /** A label's look on the canvas. Labels only. */
   style?: LabelStyle;
+  /** Its colour: the card's, or the attachment's when it folds onto a host. */
+  color?: Accent;
 }
 
 /** A Text label's look, as the node fields it sets. */
@@ -390,7 +393,17 @@ export interface RoomContext {
   taken: Set<string>;
   /** Elements, groups and relationships already in the room being edited (updates only), and its
    *  flows (each with the flow it is a variant of, if any). */
-  existing?: { elements: Set<string>; groups: Set<string>; relationships: Set<string>; relationshipSemantics?: ReadonlyMap<string, EdgeSemantic | undefined>; flows?: ReadonlyMap<string, string | undefined> };
+  existing?: {
+    elements: Set<string>;
+    groups: Set<string>;
+    relationships: Set<string>;
+    relationshipSemantics?: ReadonlyMap<string, EdgeSemantic | undefined>;
+    /** The semantics of the relationships already running each way between two elements, keyed
+     *  `from\u0000to` — so an add is held to the editor's one-ordinary-line-per-direction rule
+     *  against what is there, not only against the rest of its own batch. */
+    pairs?: ReadonlyMap<string, readonly (EdgeSemantic | undefined)[]>;
+    flows?: ReadonlyMap<string, string | undefined>;
+  };
   depth: number;
   fallbackType?: NativeShape;
 }
@@ -409,7 +422,8 @@ export function readRoom(r: Reader, raw: Json, path: string, ctx: RoomContext): 
     const kind = r.oneOf(item.kind, `${at}/kind`, Object.keys(GROUP_KINDS) as (keyof typeof GROUP_KINDS)[]) ?? 'boundary';
     const parent = typeof item.parent === 'string' ? item.parent : undefined;
     if (item.parent !== undefined && parent === undefined) r.problems.add('INVALID_INPUT', `${at}/parent`, 'must be a group id');
-    if (id && label) groups.push({ id, label, kind, ...(parent ? { parent } : {}) });
+    const color = r.oneOf(item.color, `${at}/color`, ACCENTS);
+    if (id && label) groups.push({ id, label, kind, ...(parent ? { parent } : {}), ...(color ? { color } : {}) });
   });
   const groupIds = new Set([...groups.map((g) => g.id), ...(ctx.existing?.groups ?? [])]);
   groups.forEach((g, i) => {
@@ -499,7 +513,10 @@ export function readRoom(r: Reader, raw: Json, path: string, ctx: RoomContext): 
 
   const elementIds = new Set([...nodes.map((n) => n.id), ...(ctx.existing?.elements ?? [])]);
   const relationships: RelationshipSpec[] = [];
-  const pairs = new Map<string, RelationshipSpec[]>();
+  // Seeded with what the view already holds: an add drawing a second ordinary line beside an existing
+  // one used to pass here (only its own batch was compared) and land as a duplicate the editor's own
+  // Connect refuses.
+  const pairs = new Map<string, { semantic?: EdgeSemantic }[]>([...(ctx.existing?.pairs ?? [])].map(([key, semantics]) => [key, semantics.map((semantic) => ({ semantic }))]));
   r.array(raw.relationships, `${path}/relationships`, AGENT_LIMITS.relationshipsPerRequest).forEach((e, i) => {
     const at = `${path}/relationships/${i}`;
     const item = r.object(e, at, CREATE_FIELDS.relationship);
@@ -621,7 +638,8 @@ export function readRoom(r: Reader, raw: Json, path: string, ctx: RoomContext): 
         style = readLabelStyle(r, item.style, `${at}/style`);
       }
     }
-    if (id && body && relation) notes.push({ id, ...body, ...relation, ...(style && Object.keys(style).length > 0 ? { style } : {}) });
+    const color = r.oneOf(item.color, `${at}/color`, ACCENTS);
+    if (id && body && relation) notes.push({ id, ...body, ...relation, ...(color ? { color } : {}), ...(style && Object.keys(style).length > 0 ? { style } : {}) });
   });
 
   return { ...(level ? { level } : {}), nodes, relationships, groups, flows, notes };

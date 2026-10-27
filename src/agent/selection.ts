@@ -11,10 +11,10 @@
 import type { Selection } from '../history/HistoryStack';
 import { classify } from '../depth/c4';
 import { effectiveLevel } from '../depth/level';
-import { viewOf, type DepthPath } from '../depth/tree';
+import { ownerAt, viewOf, type DepthPath } from '../depth/tree';
 import type { DraftDocument } from '../document/types';
 import { collectNotes, collectSnippets } from './context';
-import { relationshipOf } from './read';
+import { c4Of, relationshipOf } from './read';
 import { typeWordOf } from './vocabulary';
 
 /** How many context (unselected) elements/relationships ride along, at most. */
@@ -33,6 +33,16 @@ export function readSelectionContext(file: DraftDocument, path: DepthPath, selec
 
   const byId = new Map(view.nodes.map((n) => [n.id, n]));
   const level = effectiveLevel(file, path);
+  // Classified as read_diagram classifies it: inside its owner, within any system boundary.
+  const owner = path.length ? ownerAt(file, path) : undefined;
+  const systemBoundaryOf = (id: string) => {
+    const seen = new Set<string>();
+    for (let at = byId.get(id)?.parentId; at && !seen.has(at); at = byId.get(at)?.parentId) {
+      seen.add(at);
+      if (byId.get(at)?.boundaryPreset === 'system') return byId.get(at);
+    }
+    return undefined;
+  };
 
   // Context: edges touching a selected node, and the node at their other end — bounded, and always
   // distinguishable from the selection itself.
@@ -63,7 +73,8 @@ export function readSelectionContext(file: DraftDocument, path: DepthPath, selec
       groups.push({ id: node.id, label: node.text ?? '', role, ...(node.parentId ? { parent: node.parentId } : {}) });
       continue;
     }
-    const c4 = classify(node, { level });
+    const systemBoundary = systemBoundaryOf(node.id);
+    const c4 = c4Of(classify(node, { level, ...(owner ? { insideOwner: owner } : {}), ...(systemBoundary ? { systemBoundary } : {}) }));
     elements.push({
       id: node.id,
       type: typeWordOf(node),
@@ -71,6 +82,7 @@ export function readSelectionContext(file: DraftDocument, path: DepthPath, selec
       role,
       ...(node.description ? { description: node.description } : {}),
       ...(node.technology ? { technology: node.technology } : {}),
+      ...(node.accent ? { color: node.accent } : {}),
       ...(node.parentId ? { group: node.parentId } : {}),
       ...(c4 ? { c4 } : {}),
     });
@@ -80,7 +92,10 @@ export function readSelectionContext(file: DraftDocument, path: DepthPath, selec
   for (const id of [...selectedEdges, ...contextEdges]) {
     const edge = view.edges.find((e) => e.id === id);
     if (!edge) continue;
-    relationships.push({ ...relationshipOf(edge, byId, true), role: selectedEdges.has(id) ? 'selected' : 'context' });
+    const selected = selectedEdges.has(id);
+    // A selected relationship's notes and snippets come once, in notes/snippets (about its id); its
+    // own entry counts them rather than carrying every body a second time.
+    relationships.push({ ...relationshipOf(edge, byId, !selected), role: selected ? 'selected' : 'context' });
   }
 
   const { notes, truncated: notesTruncated } = collectNotes(view, { aboutIds: new Set([...selectedNodes, ...selectedEdges]) });

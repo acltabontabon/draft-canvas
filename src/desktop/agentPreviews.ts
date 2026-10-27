@@ -8,7 +8,9 @@ type UpdateResult = Extract<JobResult, { kind: 'update' }>;
 interface Preview {
   diagramId: string;
   session: string;
-  revision: string;
+  /** Every revision that named the diagram as it was prepared from: the one handed out and, for the
+   *  open document, its editor revision — the same state answers to both once the person saves. */
+  revision: string | readonly string[];
   path: DepthPath;
   result: UpdateResult;
   baseFingerprint: string;
@@ -47,13 +49,22 @@ export function holdPreview(value: Omit<Preview, 'expiresAt' | 'bytes' | 'baseFi
   return id;
 }
 
-export function readPreview(id: unknown, diagramId: string, session: string, revision: string, path?: DepthPath, file?: DraftDocument): Preview {
+/** Whether two revision lists name one state: any revision in common. */
+function sameState(a: string | readonly string[], b: string | readonly string[]): boolean {
+  const ours = typeof a === 'string' ? [a] : a;
+  return (typeof b === 'string' ? [b] : b).some((revision) => ours.includes(revision));
+}
+
+/** `revision`: the revisions the diagram answers to now (see `Preview.revision`). Saving between the
+ *  preview and its apply moves what is handed out (`o:` to `f:`) but not the diagram, and used to
+ *  refuse the candidate as changed. */
+export function readPreview(id: unknown, diagramId: string, session: string, revision: string | readonly string[], path?: DepthPath, file?: DraftDocument): Preview {
   const preview = typeof id === 'string' ? previews.get(id) : undefined;
   if (!preview || preview.expiresAt <= Date.now() || preview.session !== session || preview.diagramId !== diagramId) {
     if (preview?.expiresAt && preview.expiresAt <= Date.now()) previews.delete(String(id));
     throw new AgentError('NOT_FOUND', 'That candidate expired or does not belong to this session and diagram. Preview the change again.');
   }
-  if ((file && fingerprint(file) !== preview.baseFingerprint) || preview.revision !== revision || (path && JSON.stringify(path) !== JSON.stringify(preview.path))) throw new AgentError('REVISION_CONFLICT', 'The diagram or target view changed since this candidate was prepared. Preview the change again.');
+  if ((file && fingerprint(file) !== preview.baseFingerprint) || !sameState(preview.revision, revision) || (path && JSON.stringify(path) !== JSON.stringify(preview.path))) throw new AgentError('REVISION_CONFLICT', 'The diagram or target view changed since this candidate was prepared. Preview the change again.');
   return preview;
 }
 

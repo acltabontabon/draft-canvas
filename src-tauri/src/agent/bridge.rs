@@ -63,6 +63,7 @@ impl Running {
 
     pub fn announce_shutdown(&self, reason: &str) {
         let _ = self.stop.send(reason.to_string());
+        self.task.abort();
     }
 
     /// The socket's file, gone: a sidecar connecting now is told plainly the app isn't running.
@@ -301,6 +302,12 @@ async fn read_frame<R: AsyncRead + Unpin>(
             "frame too large",
         ));
     }
+    if !line.ends_with(b"\n") {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::UnexpectedEof,
+            "incomplete frame",
+        ));
+    }
     serde_json::from_slice(&line)
         .map(Some)
         .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidData, "not a JSON frame"))
@@ -507,11 +514,9 @@ async fn serve<R, W>(
             }
             reason = stop.recv() => {
                 let reason = reason.unwrap_or_else(|_| "disabled".into());
-                if reason == "disabled" {
-                    cancel_calls(&agent, &calls);
-                }
+                cancel_calls(&agent, &calls);
                 let _ = out_tx.send(json!({"type": "shutdown", "reason": reason})).await;
-                if reason == "disabled" { break; }
+                break;
             }
         }
     }
@@ -705,6 +710,28 @@ mod tests {
         let started = tokio::time::Instant::now();
         tokio::join!(serve, hello);
         assert_eq!(started.elapsed(), WRITE_TIMEOUT);
+    }
+
+    #[tokio::test]
+    async fn a_frame_requires_its_newline_even_when_the_partial_json_parses() {
+        let mut reader = BufReader::new(&b"{\"type\":\"call\"}"[..]);
+        assert_eq!(
+            read_frame(&mut reader).await.unwrap_err().kind(),
+            std::io::ErrorKind::UnexpectedEof
+        );
+        let (mut writer, read) = tokio::io::duplex(8);
+        let sending = tokio::spawn(async move {
+            writer.write_all(b"{\"type\":").await.unwrap();
+            tokio::task::yield_now().await;
+            writer.write_all(b"\"call\"}\n").await.unwrap();
+        });
+        let mut reader = BufReader::new(read);
+        assert_eq!(
+            read_frame(&mut reader).await.unwrap().unwrap()["type"],
+            "call"
+        );
+        sending.await.unwrap();
+        assert!(read_frame(&mut reader).await.unwrap().is_none());
     }
 
     #[tokio::test]

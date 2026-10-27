@@ -146,7 +146,12 @@ impl DiagramIndex {
                 walked.push(project.root.clone());
             }
             for file in found.files {
-                let absolute = project.root.join(&file.rel_path);
+                let Ok(absolute) = dunce::canonicalize(project.root.join(&file.rel_path)) else {
+                    continue;
+                };
+                if !absolute.starts_with(&project.root) {
+                    continue;
+                }
                 // Parent and child folders may both be enabled. One physical file is still one diagram.
                 if !seen.insert(absolute.clone()) {
                     continue;

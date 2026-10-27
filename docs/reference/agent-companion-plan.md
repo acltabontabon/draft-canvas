@@ -92,8 +92,7 @@ pub trait Backend: Send + Sync {
 
 ## Claude Code backend (`src-tauri/src/companion/claude.rs`)
 
-Reuses helpers that are private today and become `pub(crate)` (or move to a shared
-`src-tauri/src/agent/cli.rs`): `find_claude` and `path_with` from `agent/clients.rs`,
+Reuses helpers made `pub(crate)` for it: `find_claude` and `path_with` from `agent/clients.rs`,
 `connectable_sidecar` from `commands/agent.rs`, and the free function `agent::sidecar_path()`.
 
 Flags checked against Claude Code 2.1.295:
@@ -191,7 +190,7 @@ the agent's own transcript.
 
 ### Commands and events
 
-Each new command goes in the three lists `src/wiring.rs` checks (`lib.rs`, `build.rs` `COMMANDS`,
+Each new command goes in the three lists `src-tauri/src/wiring.rs` checks (`lib.rs`, `build.rs` `COMMANDS`,
 `capabilities/default.json`), and the handler count in `wiring.rs` goes from 66 to 71. `src/desktop/wire.ts`
 is regenerated with `npm run desktop:bindings`.
 

@@ -89,9 +89,6 @@ export function useHostDocument(session: DocumentSession, channel?: HostChannel 
 
     const post = (message: ToHostMessage) => host.post(message);
 
-    // What the host said it does for the app (see `LoadMessage`): not used until then.
-    let hostKeepsBackground = false;
-
     let backgroundReadId = 0;
     const backgroundReads = new Map<number, (image: Partial<BackgroundMessage>) => void>();
     /** The host's stored image, or null when it has none — or doesn't answer, which mustn't hold the file's opening. */
@@ -115,7 +112,7 @@ export function useHostDocument(session: DocumentSession, channel?: HostChannel 
     /** The file turns on a background the app doesn't hold yet (a fresh tab, memory only): fetch it from the host. */
     const restoreBackground = async (document: { metadata: { id: string }; settings: { background: { enabled: boolean; imageId?: string } } }) => {
       const { enabled, imageId } = document.settings.background;
-      if (!hostKeepsBackground || !enabled || !repository) return;
+      if (!enabled || !repository) return;
       const id = document.metadata.id;
       if (await repository.loadBackgroundImage(id, imageId)) return;
       const blob = await readBackground();
@@ -184,7 +181,7 @@ export function useHostDocument(session: DocumentSession, channel?: HostChannel 
       // is then told to keep it beside the file like any other background, and the next save
       // writes the file without it.
       const document = await adoptEmbeddedBackground(loaded, repository);
-      if (document !== loaded && hostKeepsBackground && document.settings.background.enabled) {
+      if (document !== loaded && document.settings.background.enabled) {
         reportBackground(document.metadata.id, document.settings.background);
       }
       const { useEditorStore, fileWithLiveViewport } = await import('../store/editorStore');
@@ -199,7 +196,7 @@ export function useHostDocument(session: DocumentSession, channel?: HostChannel 
         // Only the image itself is the host's to keep; how it's drawn (dim, blur) is in the file.
         const now = current.document.settings.background;
         const was = previous.document.settings.background;
-        if (hostKeepsBackground && (now.enabled !== was.enabled || now.imageId !== was.imageId)) {
+        if (now.enabled !== was.enabled || now.imageId !== was.imageId) {
           reportBackground(current.document.metadata.id, now);
         }
       });
@@ -272,7 +269,6 @@ export function useHostDocument(session: DocumentSession, channel?: HostChannel 
       }
       const data = message as Partial<LoadMessage> | null;
       if (data?.type !== 'draft-canvas:load' || typeof data.text !== 'string') return;
-      hostKeepsBackground = data.background === true;
       const seq = typeof data.seq === 'number' ? data.seq : undefined;
       // Only while a document is open: after Home has been showing, the same text is a file to open again.
       if (data.text === hostText && !queued && !invalid && sessionRef.current.openId !== null) {

@@ -871,8 +871,3 @@ function markerOf(
   // Right-aligned against the text, so 9. and 10. line their full stops up.
   return { kind: 'number', text, x: left + gutter - width - font.size * 0.3, width, font: numberFont };
 }
-
-/** Test seam, alongside `clearLayoutCache`. */
-export function clearRichLayoutCache(): void {
-  richCaches.delete(getMeasurer());
-}

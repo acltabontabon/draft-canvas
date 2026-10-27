@@ -149,8 +149,19 @@ pub fn constrain(
             }
             args["diagramId"] = json!(policy.diagram_id);
         }
-        "get_proposal" => {
-            let proposal = args.get("proposalId").and_then(Value::as_str).unwrap_or("");
+        "get_proposal" | "submit_proposal" => {
+            if tool == "submit_proposal" && named != Some(policy.diagram_id.as_str()) {
+                return Err(outside(format!(
+                    "Only the diagram {} is available.",
+                    policy.diagram_id
+                )));
+            }
+            let key = if tool == "submit_proposal" {
+                "revises"
+            } else {
+                "proposalId"
+            };
+            let proposal = args.get(key).and_then(Value::as_str).unwrap_or("");
             // An unknown id is left to the tool's own NOT_FOUND.
             if let Some(diagram) = proposal_diagram(proposal) {
                 if diagram != policy.diagram_id {
@@ -286,6 +297,36 @@ mod tests {
         );
         let own = |_: &str| Some("d_1".to_string());
         assert!(constrain(&p, "get_proposal", json!({"proposalId": "p"}), own).is_ok());
+    }
+
+    #[test]
+    fn revising_a_proposal_cannot_overwrite_another_diagrams_proposal() {
+        let args = json!({"diagramId": "d_1", "revises": "p_other", "ops": []});
+        assert_eq!(
+            code(constrain(
+                &policy(false),
+                "submit_proposal",
+                args.clone(),
+                |_| Some("d_2".into())
+            )),
+            "RUN_LIMIT"
+        );
+        assert!(
+            constrain(&policy(false), "submit_proposal", args.clone(), |_| Some(
+                "d_1".into()
+            ))
+            .is_ok()
+        );
+        assert!(constrain(&policy(false), "submit_proposal", args, |_| None).is_ok());
+        assert_eq!(
+            code(constrain(
+                &policy(false),
+                "submit_proposal",
+                json!({"diagramId": "d_2"}),
+                |_| None
+            )),
+            "RUN_LIMIT"
+        );
     }
 
     #[test]

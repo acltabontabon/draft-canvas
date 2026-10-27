@@ -400,7 +400,9 @@ fn diagrams_by_id(state: &AppState, agent: &Agent) -> HashMap<String, scope::Dia
 }
 
 /// The full record the review UI needs to render a diff and act on it. `stale` is a courtesy — the
-/// panel always re-checks the live document itself before ever offering Accept.
+/// panel always re-checks the live document itself before ever offering Accept. Judged against the
+/// file here; a proposal made on unsaved edits carries the editor's revision (`o:…`), which only the
+/// page can judge, and the panel does (`host/agentBridge.ts`'s `proposalStale`).
 fn proposal_json(proposal: &Proposal, diagram: Option<&scope::Diagram>) -> Value {
     json!({
         "proposalId": proposal.id,
@@ -423,7 +425,7 @@ fn proposal_json(proposal: &Proposal, diagram: Option<&scope::Diagram>) -> Value
         "createdAt": proposal.created_at,
         "updatedAt": proposal.updated_at,
         "resolvedAt": proposal.resolved_at,
-        "stale": diagram.is_some_and(|d| proposal.base_revision != d.revision),
+        "stale": diagram.is_some_and(|d| crate::agent::broker::proposal_stale(&proposal.base_revision, d, None)),
     })
 }
 

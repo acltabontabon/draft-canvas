@@ -84,8 +84,9 @@ and ids are unique across the whole file.
   the honest picture. Put the dispatch in the main flow and the report-back in a second flow ("A
   station reports an item ready") rather than re-arranging until the line disappears — no arrange can
   remove a cycle.
-- **Fan-outs bundle.** Three or more relationships leaving one element with the same `semantic` and
-  `kind` are drawn as one trunk with branches. Give genuinely different paths different meanings.
+- **Fans bundle.** Two or more relationships leaving (or reaching) one element from the same side,
+  with the same `semantic` and `kind`, are drawn as one trunk with branches. Give genuinely different
+  paths different meanings.
 - **Direction.** Leave `layout.direction` out; both are tried and the clearer one kept.
 - **Boundaries only when real:** the system, a bounded context/domain, a deployment or network zone.
 
@@ -141,7 +142,7 @@ Three to eight for the whole diagram; each earns its place.
   beside the element — only for a callout meant to be read without clicking.
 - Code snippets: ≤ 15 lines, the lines that matter, real code (trimmed, never invented), with
   `language` — one of `java`, `javascript`, `typescript`, `json`, `yaml`, `xml`, `sql`, `bash`, `http`,
-  `log` or `plaintext`. Go, Python, Rust, C#, Ruby and the rest go in as `plaintext` (indentation is
+  `log`, `diff` or `plaintext`. Go, Python, Rust, C#, Ruby and the rest go in as `plaintext` (indentation is
   kept). Good candidates: the idempotency key on a payment call, the event schema, the consumer's
   retry/backoff config, the SQL of an important query.
 - Mark inferences: "Inferred from the retry config; not verified at runtime."

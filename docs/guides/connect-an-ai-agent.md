@@ -139,9 +139,9 @@ Open your agent in the repository and ask:
 > reads badly before you finish.
 
 The skill picks the C4 levels from the size of the system: a context view with the containers
-inside once there are more than about eight, and a component view for the container that does the
-main path's work. Draft Canvas shows source evidence but does not check it, so read the inferred
-parts and open questions first.
+inside once there are more than about eight and external systems around them, and a component view
+for the container that does the main path's work. Draft Canvas shows source evidence but does not
+check it, so read the inferred parts and open questions first.
 
 ![A storefront diagram with services, stores, an event stream and workers.](../media/guides/agent-skill-example.png)
 

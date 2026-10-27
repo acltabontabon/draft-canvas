@@ -78,6 +78,9 @@ struct Shared {
     output_bytes: AtomicU64,
     max_output: u64,
     grace: Duration,
+    /// Serialize final tree cleanup with delayed cancellation signals: a retained control must
+    /// never signal a process group id the OS may have reused after this run ended.
+    tree_closed: Mutex<bool>,
 }
 
 /// Stops a run, or waits for it to end.
@@ -91,6 +94,12 @@ impl RunControl {
     /// period. Returns at once.
     pub fn stop(&self) {
         self.end(Cause::Cancelled);
+    }
+
+    /// Force termination before a caller's shutdown deadline returns, even if its grace expired.
+    pub fn kill(&self) {
+        self.end(Cause::Cancelled);
+        terminate(&self.shared, true);
     }
 
     /// Let a CLI flush its transcript after its terminal result, then stop a process that lingers.
@@ -179,6 +188,7 @@ pub fn spawn(
         output_bytes: AtomicU64::new(0),
         max_output: limits.max_output,
         grace: limits.grace,
+        tree_closed: Mutex::new(false),
     });
     let control = RunControl {
         shared: shared.clone(),
@@ -242,7 +252,11 @@ pub fn spawn(
         };
         // A descendant may still hold the pipes after its parent exited. End the owned group/job
         // before joining the readers, rather than waiting forever for that descendant's pipe EOF.
-        terminate(&shared, true);
+        {
+            let mut closed = lock(&shared.tree_closed);
+            terminate_tree(&shared, true);
+            *closed = true;
+        }
         let _ = stdout.join();
         let _ = stderr.join();
         let stderr = String::from_utf8_lossy(lock(&stderr_tail).make_contiguous()).into_owned();
@@ -305,8 +319,15 @@ fn text_of(line: &[u8]) -> String {
 }
 
 /// Asks the process group to stop, or (`force`) kills it. Harmless once it is gone.
-#[cfg(unix)]
 fn terminate(shared: &Shared, force: bool) {
+    let closed = lock(&shared.tree_closed);
+    if !*closed {
+        terminate_tree(shared, force);
+    }
+}
+
+#[cfg(unix)]
+fn terminate_tree(shared: &Shared, force: bool) {
     extern "C" {
         fn kill(pid: i32, sig: i32) -> i32;
     }
@@ -324,7 +345,7 @@ fn terminate(shared: &Shared, force: bool) {
 
 /// Windows ends the owned job at once; its membership survives the root process exiting.
 #[cfg(windows)]
-fn terminate(shared: &Shared, _force: bool) {
+fn terminate_tree(shared: &Shared, _force: bool) {
     if let Err(error) = shared.tree.terminate() {
         eprintln!("Draft Canvas: the companion process tree could not be stopped ({error})");
     }
@@ -419,6 +440,34 @@ pub(crate) mod tests {
         // `more` may add a blank line of its own.
         let lines: Vec<_> = lines.into_iter().filter(|l| !l.is_empty()).collect();
         assert_eq!(lines, vec!["hello", "world"]);
+    }
+
+    #[test]
+    fn final_tree_cleanup_closes_signalling_before_exit_delivery_completes() {
+        let (entered_tx, entered_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let release_rx = Mutex::new(release_rx);
+        let control = spawn(
+            shell("exit 0", "exit /b 0"),
+            String::new(),
+            RunLimits::default(),
+            Arc::new(move |output| {
+                if matches!(output, Output::Exit(_)) {
+                    entered_tx.send(()).unwrap();
+                    lock(&release_rx).recv().unwrap();
+                }
+            }),
+        )
+        .unwrap();
+        entered_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        let closed = *lock(&control.shared.tree_closed);
+        // Completion delivery can block well beyond process exit. A late shutdown must leave the
+        // closed tree closed rather than signal its now reusable Unix process group id.
+        control.kill();
+        release_tx.send(()).unwrap();
+        assert!(closed);
+        assert!(control.wait(Duration::from_secs(5)));
+        assert!(*lock(&control.shared.tree_closed));
     }
 
     #[test]

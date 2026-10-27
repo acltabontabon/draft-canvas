@@ -77,7 +77,7 @@ describe('schema refusals are reported against the op that was meant', () => {
       openPoints: [{ id: 'dlq-operations', target: 'order-events-dlq', text: 'Who monitors and triages this queue?' }],
     }];
     const problems = schemaProblems(proposal, submit(ops));
-    expect(problems[0]).toBe('/ops/0/notes/0/target: unknown field; use about (takes id, text, kind, code, language, about, attach, near, style)');
+    expect(problems[0]).toBe('/ops/0/notes/0/target: unknown field; use about (takes id, text, kind, code, language, about, attach, near, style, color)');
     expect(problems).toContain('/ops/0/openPoints/0/target: unknown field; use about (takes id, kind, context, about)');
   });
 

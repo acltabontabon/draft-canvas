@@ -53,8 +53,6 @@ export type Change =
    */
   | { kind: 'order'; room: RoomId; collection: Collection; ids: string[] };
 
-export type ChangeKind = Change['kind'];
-
 /**
  * A key naming what a change is about, so two changes about the same thing can be recognised — undo
  * reverting only what an edit touched, a rebase refusing work both sides changed. Elements keep

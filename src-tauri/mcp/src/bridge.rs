@@ -190,11 +190,14 @@ impl Bridge {
         };
         on_id(id);
         match rx.await {
-            Ok(frame) => {
+            Ok(mut frame) => {
                 if frame.get("ok").and_then(Value::as_bool) == Some(true) {
-                    Ok(frame.get("value").cloned().unwrap_or(Value::Null))
+                    Ok(frame
+                        .get_mut("value")
+                        .map(Value::take)
+                        .unwrap_or(Value::Null))
                 } else {
-                    Err(frame.get("error").cloned().unwrap_or_else(|| {
+                    Err(frame.get_mut("error").map(Value::take).unwrap_or_else(|| {
                         error("INTERNAL", "Draft Canvas reported a failure.", "", false)
                     }))
                 }
@@ -418,7 +421,14 @@ async fn read_frame<R: AsyncRead + Unpin>(
     loop {
         let buf = reader.fill_buf().await?;
         if buf.is_empty() {
-            return Ok(None);
+            return if line.is_empty() {
+                Ok(None)
+            } else {
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::UnexpectedEof,
+                    "incomplete frame",
+                ))
+            };
         }
         let end = buf.iter().position(|b| *b == b'\n');
         let len = end.unwrap_or(buf.len());
@@ -455,6 +465,28 @@ mod tests {
         let data = format!("\"{}\"\n", "x".repeat(MAX_FRAME - 2));
         let mut reader = BufReader::with_capacity(data.len(), data.as_bytes());
         assert!(read_frame(&mut reader).await.unwrap().is_some());
+    }
+
+    #[tokio::test]
+    async fn partial_frames_are_reassembled_but_eof_mid_frame_is_an_error() {
+        let mut reader = BufReader::new(&b"{\"type\":\"result\"}"[..]);
+        assert_eq!(
+            read_frame(&mut reader).await.unwrap_err().kind(),
+            std::io::ErrorKind::UnexpectedEof
+        );
+        let (mut writer, read) = tokio::io::duplex(8);
+        let sending = tokio::spawn(async move {
+            writer.write_all(b"{\"type\":").await.unwrap();
+            tokio::task::yield_now().await;
+            writer.write_all(b"\"result\"}\n").await.unwrap();
+        });
+        let mut reader = BufReader::new(read);
+        assert_eq!(
+            read_frame(&mut reader).await.unwrap().unwrap()["type"],
+            "result"
+        );
+        sending.await.unwrap();
+        assert!(read_frame(&mut reader).await.unwrap().is_none());
     }
 
     #[test]
