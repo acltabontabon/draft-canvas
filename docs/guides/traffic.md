@@ -162,6 +162,31 @@ stays unchanged; a batch size does not establish a replay rate.
 
 ![A replay batch and its downstream recovery work](../media/guides/traffic-recovery.png)
 
+## Technology notes
+
+Selecting a data store or messaging shape with a supported **Technology** shows one short note
+in its Traffic explanation. Nothing else needs filling in, and the note does not change the
+illustrative counts or infer deployment settings. It uses the assigned technology, never the
+shape name. Common aliases and numeric versions such as “Postgres 16” are recognized; custom,
+combined or unsupported values keep the existing generic explanation.
+
+The first set covers PostgreSQL, MySQL, MongoDB, Redis, DynamoDB, Kafka, RabbitMQ, SQS and SNS.
+Notes apply to the corresponding data-store or messaging shape, not to a service using a client
+library. SNS highlights subscription filtering; SQS leaves queue type unspecified.
+
+![A short PostgreSQL note alongside illustrative database work](../media/guides/traffic-technology.png)
+
+Product references for these deliberately limited notes:
+[PostgreSQL indexes](https://www.postgresql.org/docs/current/indexes.html),
+[MySQL indexes](https://dev.mysql.com/doc/refman/8.0/en/optimization-indexes.html),
+[MongoDB write performance](https://www.mongodb.com/docs/manual/core/write-performance/),
+[Redis eviction](https://redis.io/docs/latest/develop/reference/eviction/),
+[DynamoDB capacity consumption](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/read-write-operations.html),
+[Kafka consumer groups](https://kafka.apache.org/22/javadoc/org/apache/kafka/clients/consumer/KafkaConsumer.html),
+[RabbitMQ acknowledgements](https://www.rabbitmq.com/docs/confirms) and [flow control](https://www.rabbitmq.com/docs/flow-control),
+[SQS delivery](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/standard-queues.html),
+[SNS filtering](https://docs.aws.amazon.com/sns/latest/dg/sns-message-filtering.html).
+
 ## Boundary crossings
 
 Select a network, deployment, domain or system boundary to see its incoming and outgoing modeled

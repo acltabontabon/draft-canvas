@@ -12,6 +12,9 @@ The retired VS Code extension has [its own changelog](https://github.com/acltabo
 
 #### Added
 
+- Traffic shows short notes for nine common assigned database and messaging technologies, including
+  SNS, without extra inputs or inferred deployment settings.
+
 - Traffic explains boundary crossings and whether drawn calls wait for responses, using existing
   boundary membership and connector semantics without extra input.
 

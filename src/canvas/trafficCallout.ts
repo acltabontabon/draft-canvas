@@ -1,3 +1,4 @@
+import { technologyNote } from '../traffic/technology';
 import { boundaryCrossings } from '../traffic/boundaries';
 import { databaseWork } from '../traffic/database';
 import { recoveryPlan } from '../traffic/recovery';
@@ -121,6 +122,8 @@ export function trafficCalloutFor(analysis: TrafficAnalysis, nodes: readonly Dra
     };
   }
 
+  const product = boundaryMode ? null : technologyNote(node);
+  const technology = product ? { name: product.name, detail: textOf(product.text, inner - 12, 11, 400, 8) } : null;
   const database = boundaryMode ? null : databaseWork(analysis, edges, id);
   const databaseNote = database ? {
     items: (database.length ? database : ['No normal database work drawn.']).map((item) => textOf(item, inner - 16, 13, 600, 3)),
@@ -143,8 +146,9 @@ export function trafficCalloutFor(analysis: TrafficAnalysis, nodes: readonly Dra
     + (work ? 36 + sources.length * 28 : 0)
     + (recovery ? 36 : 0)
     + (databaseNote ? 36 : 0)
+    + (technology ? technology.detail.height + 44 : 0)
     + (crossingNote ? 40 + crossingNote.rows.reduce((sum, row) => sum + row.route.height + row.detail.height + (row.boundaries?.height ?? 0) + 12, 0) : 0)
     + sections.reduce((sum, section) => sum + 32 + (section.detail ? section.detail.height + 4 : 0) + section.items.reduce((height, item) => height + item.height, 0) + (section.more > 0 ? 18 : 0), 0);
   const description = [title.text, metric, summary?.text, ...sources.map((source) => `${source.name.text}: ${source.count}`), ...sections.map((section) => `${section.label}. ${section.detail?.text ?? ''} ${section.items.map((item) => item.text).join(', ')}${section.more > 0 ? `, plus ${section.more} more` : ''}`)].filter(Boolean).join('. ');
-  return { anchor: node, obstacles: [...nodes.filter((other) => other.id !== id && other.type !== 'group'), ...obstacles], width, height, title, metric: hero.layout.lines[0]?.text ?? metric, metricSize: hero.font.size, summary, sources, moreSources, sections, work, recovery, databaseNote, crossingNote, description };
+  return { anchor: node, obstacles: [...nodes.filter((other) => other.id !== id && other.type !== 'group'), ...obstacles], width, height, title, metric: hero.layout.lines[0]?.text ?? metric, metricSize: hero.font.size, summary, sources, moreSources, sections, work, recovery, databaseNote, technology, crossingNote, description };
 }

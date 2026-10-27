@@ -432,6 +432,16 @@ async function trafficScreenshots(page: Page) {
   await page.locator('.react-flow__node[data-id="db"] .dc-node').click();
   await page.locator('.dc-traffic-database summary').click();
   await shot(page, 'traffic-database');
+  await page.locator('.dc-status-traffic').click();
+  await page.getByRole('button', { name: 'Add technology', exact: true }).click();
+  const assigned = page.getByRole('combobox', { name: 'Technology', exact: true });
+  await assigned.fill('PostgreSQL');
+  await assigned.press('Enter');
+  await page.keyboard.press('Escape');
+  await page.locator('.dc-status-traffic').click();
+  await expect(page.getByRole('region', { name: 'Technology note' })).toContainText('PostgreSQL');
+  await shot(page, 'traffic-technology');
+
   await page.goto(URL);
   await page.locator('input[type="file"]').setInputFiles({
     name: 'boundary-guide.draftcanvas', mimeType: 'application/json',

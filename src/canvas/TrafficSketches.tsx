@@ -373,6 +373,14 @@ export function TrafficSketches() {
                 {callout.crossingNote.more > 0 && <p>+ {callout.crossingNote.more} more routes</p>}
               </section>
             )}
+            {callout.technology && (
+              <section className="dc-traffic-crossings dc-traffic-technology" aria-label="Technology note">
+                <h3 style={{ fontFamily: familyOf('hand') }}>{callout.technology.name}</h3>
+                <div className="dc-traffic-crossing">
+                  <p>{callout.technology.detail.lines.map((line, index) => <span className="dc-traffic-callout-line" key={index}>{line}{' '}</span>)}</p>
+                </div>
+              </section>
+            )}
             {callout.databaseNote && (
               <details className="dc-traffic-work dc-traffic-database" key={`database:${selectedId}`}>
                 <summary style={{ fontFamily: familyOf('hand') }}>Database work</summary>

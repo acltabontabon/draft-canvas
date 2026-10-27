@@ -517,3 +517,38 @@ for (const colorScheme of ['light', 'dark'] as const) {
     await expect(note).toContainText('API → Worker');
   });
 }
+
+for (const colorScheme of ['light', 'dark'] as const) {
+  test(`technology notes use assigned products in ${colorScheme}`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+    await page.setViewportSize({ width: 390, height: 844 });
+    const document = recoveryDocument();
+    document.nodes.find((node) => node.id === 'db')!.technology = 'PostgreSQL 16';
+    document.nodes.find((node) => node.id === 'dlq')!.technology = 'Amazon SQS';
+    await importDocument(page, document, 'technology-traffic.draftcanvas');
+    const revision = await editorRevision(page);
+    await runCommand(page, 'Show traffic');
+    await page.locator('.react-flow__node[data-id="db"] .dc-node').click();
+    const note = page.getByRole('region', { name: 'Technology note' });
+    await expect(note).toContainText('PostgreSQL');
+    await expect(note).toContainText('do not estimate query cost or disk I/O');
+    await page.keyboard.press('Escape');
+    await page.locator('.react-flow__node[data-id="dlq"] .dc-node').click();
+    await expect(note).toContainText('Amazon SQS');
+    await expect(note).toContainText('Queue type and retry settings are not inferred');
+    expect(await editorRevision(page)).toBe(revision);
+    const bounds = await page.locator('.dc-traffic-callout').boundingBox();
+    expect(bounds!.x).toBeGreaterThanOrEqual(0);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
+    await page.screenshot({ path: `/tmp/traffic-technology-${colorScheme}.png` });
+    const topic = document.nodes.find((node) => node.id === 'dlq')!;
+    topic.deliveryRole = undefined;
+    topic.queueKind = 'topic';
+    topic.technology = 'Amazon SNS';
+    topic.text = 'Events';
+    await importDocument(page, document, 'sns-traffic.draftcanvas');
+    await runCommand(page, 'Show traffic');
+    await page.locator('.react-flow__node[data-id="dlq"] .dc-node').click();
+    await expect(note).toContainText('Subscription filters can change who receives a message');
+  });
+}
