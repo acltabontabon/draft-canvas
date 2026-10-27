@@ -1,3 +1,4 @@
+import { useTrafficReplay } from './TrafficReplayContext';
 import { layoutText } from '../render/text/layout';
 import { Panel, useStore } from '@xyflow/react';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
@@ -8,6 +9,8 @@ import { DEFAULT_TRAFFIC_RATE } from '../traffic/scenario';
 /** A ready-to-use example, kept outside the zooming drawing so its controls remain readable. */
 export function TrafficScenario() {
   const analysis = useEditorStore(trafficOf);
+  const { replay, clearReplay } = useTrafficReplay();
+  const hasReplay = !!analysis && replay?.analysis === analysis;
   const [expanded, setExpanded] = useState(false);
   const helpId = useId();
   const root = useRef<HTMLDivElement>(null);
@@ -30,7 +33,7 @@ export function TrafficScenario() {
     window.addEventListener('pointerdown', close, true);
     return () => window.removeEventListener('pointerdown', close, true);
   }, [expanded]);
-  if (!analysis || analysis.status !== 'ok') return null;
+  if (!analysis || (analysis.status !== 'ok' && !hasReplay)) return null;
   const rate = DEFAULT_TRAFFIC_RATE.toLocaleString('en-US');
   return (
     <Panel ref={root} position="bottom-left" className="dc-traffic-scenario nodrag nopan nowheel" aria-label="Traffic scenario" data-dc-keyboard-region="" data-expanded={expanded || undefined}
@@ -43,7 +46,11 @@ export function TrafficScenario() {
       }}
     >
       <div className="dc-traffic-scenario-row">
-        <span className="dc-traffic-scenario-rate">Example · {rate} starts/min per entry</span>
+        <span className="dc-traffic-scenario-rate">{analysis.status === 'ok' ? `Example · ${rate} starts/min per entry` : 'Recovery example'}</span>
+        {hasReplay && <button type="button" onClick={() => {
+          clearReplay();
+          trigger.current?.focus();
+        }}>Clear replay</button>}
         <button ref={trigger} type="button" aria-expanded={expanded} aria-controls={helpId} onClick={() => setExpanded(!expanded)}>
           How to read this
         </button>

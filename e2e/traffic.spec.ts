@@ -404,9 +404,25 @@ test('replay batches show total recovery work without editing the diagram or bas
   await page.locator('.react-flow__node[data-id="db"] .dc-node').click();
   await expect(page.locator('.dc-traffic-replay-badge')).toHaveCount(0);
   await expect(page.locator('.dc-traffic-dlq-note')).toHaveText('Nothing to replay in this example.');
-  await page.locator('.dc-status-traffic').click();
-  await page.locator('.dc-status-traffic').click();
+  const clear = page.getByRole('button', { name: 'Clear replay', exact: true });
+  await clear.click();
+  await expect(clear).toHaveCount(0);
+  await expect(page.locator('.dc-canvas')).toHaveAttribute('data-traffic', 'on');
+  await expect(page.locator('.dc-traffic-callout')).toContainText('Database');
   await expect(page.locator('.dc-traffic-dlq-note')).toHaveText('Work waits here until replayed.');
+  await page.locator('.react-flow__node[data-id="dlq"] .dc-node').click();
+  await page.locator('.dc-traffic-recovery summary').click();
+  await expect(page.getByRole('textbox', { name: 'Messages to replay' })).toHaveValue('1');
+  await page.getByRole('textbox', { name: 'Messages to replay' }).fill('800');
+  await clear.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.dc-traffic-replay-badge')).toHaveCount(0);
+  await expect(page.locator('.dc-traffic-recovery')).not.toHaveAttribute('open');
+  await expect(page.getByRole('button', { name: 'How to read this' })).toBeFocused();
+  await page.locator('.dc-traffic-recovery summary').click();
+  await page.locator('.dc-status-traffic').click();
+  await page.locator('.dc-status-traffic').click();
+  await expect(clear).toHaveCount(0);
   expect(await editorRevision(page)).toBe(revision);
 });
 
@@ -419,6 +435,10 @@ for (const colorScheme of ['light', 'dark'] as const) {
     await page.locator('.react-flow__node[data-id="dlq"] .dc-node').click();
     await page.locator('.dc-traffic-recovery summary').click();
     await page.getByRole('textbox', { name: 'Messages to replay' }).fill('500');
+    const clear = page.getByRole('button', { name: 'Clear replay', exact: true });
+    await expect(clear).toBeVisible();
+    const clearBounds = await clear.boundingBox();
+    expect(clearBounds!.x + clearBounds!.width).toBeLessThanOrEqual(390);
     const bounds = await page.locator('.dc-traffic-callout').boundingBox();
     expect(bounds!.x).toBeGreaterThanOrEqual(0);
     expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);

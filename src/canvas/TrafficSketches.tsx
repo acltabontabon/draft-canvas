@@ -1,4 +1,5 @@
-import { MAX_REPLAY_MESSAGES, recoveryArrivals, type recoveryPlan } from '../traffic/recovery';
+import { useTrafficReplay } from './TrafficReplayContext';
+import { MAX_REPLAY_MESSAGES, recoveryArrivals } from '../traffic/recovery';
 import { TrafficRecovery } from './TrafficRecovery';
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
 import { useReactFlow, useStore } from '@xyflow/react';
@@ -89,7 +90,7 @@ export function TrafficSketches() {
     if (!moving) setNodes(live);
   }, [live, moving]);
   const [open, setOpen] = useState<string | null>(null);
-  const [replay, setReplay] = useState<{ id: string; analysis: TrafficAnalysis; plan: NonNullable<ReturnType<typeof recoveryPlan>>; count: number | null } | null>(null);
+  const { replay, setReplay, revision: replayRevision } = useTrafficReplay();
   // Selection only opens a reading. Keep the scenario until Traffic closes or its graph changes.
   const activeReplay = replay?.analysis === analysis ? replay : null;
   const root = useRef<HTMLDivElement>(null);
@@ -361,7 +362,7 @@ export function TrafficSketches() {
                 </div>
               </details>
             )}
-            {callout.recovery && <TrafficRecovery key={`${selectedId}:${trafficScope}`} analysis={analysis} nodes={nodes} plan={callout.recovery} initialCount={activeReplay?.id === selectedId ? activeReplay.count ?? 1 : 1} onExplore={(count) => setReplay({ id: selectedId!, analysis, plan: callout.recovery!, count })} width={callout.width - 46} />}
+            {callout.recovery && <TrafficRecovery key={`${selectedId}:${trafficScope}:${replayRevision}`} analysis={analysis} nodes={nodes} plan={callout.recovery} initialCount={activeReplay?.id === selectedId ? activeReplay.count ?? 1 : 1} onExplore={(count) => setReplay({ id: selectedId!, analysis, plan: callout.recovery!, count })} width={callout.width - 46} />}
             {callout.sections.map((section) => (
               <section key={section.label} className="dc-traffic-callout-section" data-tone={section.tone} aria-label={section.label}>
                 <h3>{section.label}</h3>

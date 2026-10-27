@@ -12,6 +12,8 @@ The retired VS Code extension has [its own changelog](https://github.com/acltabo
 
 #### Added
 
+- A small Clear replay control removes the temporary recovery example without turning Traffic off.
+
 - The editor footer keeps save status and canvas controls compact, without element counts or the
   repeated privacy sentence. Collapsing Recovery work or inspecting another shape keeps the chosen replay example visible.
 
