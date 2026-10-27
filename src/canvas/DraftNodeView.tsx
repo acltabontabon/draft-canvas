@@ -908,6 +908,9 @@ function editorStyle(
 /** This node's Presentation Mode dimming tier — `hidden` whenever playback is off. In the opening
  *  and closing overviews every member reads `shown` at once (`nodeTierInPlayback`). */
 function explainTierFor(state: EditorStore, id: string): ExplainTier {
+  // Containment is context even when the step never crosses the boundary. Resolve once per step,
+  // not by walking the parent chain in every node selector.
+  if (stepContextOf(state)?.containing.has(id)) return 'active';
   if (!state.flowPlayback.active || !state.flowPlayback.flowId) return 'hidden';
   const flow = state.document.flows.find((f) => f.id === state.flowPlayback.flowId);
   return nodeTierInPlayback(flow, state.document.edges, id, state.flowPlayback);

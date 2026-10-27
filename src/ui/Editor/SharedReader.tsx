@@ -17,6 +17,7 @@ import { useUiStore } from '../../store/uiStore';
 import type { DocumentSession } from '../../store/useDocumentSession';
 import { ReadOnlyCode } from '../../canvas/AttachmentPresentation';
 import { Button } from '../common/Button';
+import { BrandMark } from '../common/BrandMark';
 import { Icon } from '../common/Icon';
 import { navigateToRoom } from './depthNavigation';
 import { SharedReaderAttachments, type ReaderAttachmentSelection } from './SharedReaderAttachments';
@@ -148,8 +149,8 @@ export function SharedReader({ session, playback, children }: {
   return (
     <div className="dc-editor dc-shared-reader" data-mode="present" data-reading-mode={chosen ? 'guided' : 'focus'} data-contents={contentsOpen || undefined}>
       <header className="dc-reader-header">
-        <span className="dc-reader-brand"><Icon name="layers" size={18} />{PRODUCT.name}<span className="dc-reader-muted">Shared diagram</span></span>
-        <div className="dc-reader-header-actions"><span className="dc-reader-view-only"><Icon name="present" size={14} />View only</span><Button className="dc-reader-toggle" icon="alignLeft" active={contentsOpen} aria-expanded={contentsOpen} aria-controls={contentsId} onClick={() => setContentsOpen(!contentsOpen)}>Contents</Button>{attachments.length > 0 && <Button icon="file" active={attachment !== null} aria-expanded={attachment !== null} onClick={() => {
+        <span className="dc-reader-brand"><BrandMark />{PRODUCT.name}</span>
+        <div className="dc-reader-header-actions"><Button className="dc-reader-toggle" icon="alignLeft" active={contentsOpen} aria-expanded={contentsOpen} aria-controls={contentsId} onClick={() => setContentsOpen(!contentsOpen)}>Contents</Button>{attachments.length > 0 && <Button icon="file" active={attachment !== null} aria-expanded={attachment !== null} onClick={() => {
           if (attachment) { setAttachment(null); return; }
           const first = attachments.find((item) => item.targets.some((target) => pathKey(target.path) === pathKey(path))) ?? attachments[0]!;
           const target = first.targets.find((target) => pathKey(target.path) === pathKey(path)) ?? first.targets[0];
@@ -164,7 +165,7 @@ export function SharedReader({ session, playback, children }: {
           {elementsOpen && <ul className="dc-reader-elements">{document.nodes.map((entry) => <li key={entry.id}><button type="button" onClick={() => useEditorStore.getState().setSelection({ nodes: [entry.id], edges: [] })}>{displayNameFor(entry)}</button></li>)}</ul>}
         </aside>
         <main className="dc-reader-main" onPointerDown={() => { if (contentsOpen) setContentsOpen(false); }}>
-          <section className="dc-reader-heading" aria-label={chosen ? 'Guided reader' : 'Focus view'}><div><h1>{document.metadata.title || 'Untitled diagram'}</h1><nav aria-label="Current level"><button type="button" onClick={() => void visit([])}>Overview</button>{path.length > 0 && <span> / {currentRoom?.owners.map(displayNameFor).join(' / ')}</span>}</nav></div><span className="dc-reader-mode-label">{chosen ? 'Guided reader' : 'Focus view'}</span></section>
+          <section className="dc-reader-heading" aria-label={chosen ? 'Guided reader' : 'Focus view'}><div><p className="dc-reader-eyebrow">Shared diagram<span aria-hidden="true"> / </span><span>{chosen ? 'Guided reader' : 'Focus view'}</span></p><h1>{document.metadata.title || 'Untitled diagram'}</h1>{path.length > 0 && <nav aria-label="Current level"><button type="button" onClick={() => void visit([])}>Overview</button>{path.length > 0 && <span> / {currentRoom?.owners.map(displayNameFor).join(' / ')}</span>}</nav>}</div><span className="dc-reader-view-only"><Icon name="present" size={14} />View only</span></section>
           <div className="dc-reader-canvas dc-editor-canvas">
             {children}
             {document.nodes.length === 0 && <p className="dc-reader-empty">This shared diagram has no shapes.</p>}
@@ -175,7 +176,7 @@ export function SharedReader({ session, playback, children }: {
           {(node || edge) && <section className="dc-reader-details" aria-label="Element details"><div><h2>{detailTitle}</h2>{node?.technology && <p className="dc-reader-muted">{node.technology}</p>}<p>{node ? node.description || ((node.type === 'note' || node.type === 'text') ? node.text : '') : edge?.label || effectiveConnectorText(edge!)}</p>{node?.code && <ReadOnlyCode code={node.code} language={node.language ?? 'plaintext'} />}</div><div>{node && hasInside(node) && <Button icon="forward" onClick={() => void visit([...path, node.id])}>Look inside</Button>}<Button icon="close" variant="quiet" aria-label="Close details" onClick={() => useEditorStore.getState().setSelection({ nodes: [], edges: [] })} /></div></section>}
         </main>
       </div>
-      <footer className="dc-reader-footer"><span>Shared snapshot · changes to the original are not synced</span><span>{session.sharedLink ? <><Icon name="lock" size={12} />Passphrase protected</> : 'View only'}</span></footer>
+      <footer className="dc-reader-footer"><span>Shared snapshot · changes to the original are not synced</span><span>{session.sharedLink ? <><Icon name="lock" size={12} />Passphrase protected</> : 'Made with Draft Canvas'}</span></footer>
     </div>
   );
 }

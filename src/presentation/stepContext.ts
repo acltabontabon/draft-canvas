@@ -9,7 +9,7 @@ import { findFlow } from '../document/flow';
 import type { DraftDocument } from '../document/types';
 import type { FlowPlaybackState } from '../store/editorStore';
 import { edgeIndex, nodeIndex } from '../store/selectors';
-import { crossedBoundaries } from './composition';
+import { ancestorsOf, crossedBoundaries } from './composition';
 import { resolveFlowStep } from './useFlowPlayback';
 
 export interface StepContext {
@@ -19,6 +19,8 @@ export interface StepContext {
   targets: ReadonlySet<string>;
   /** Boundaries the step's connectors cross. */
   crossed: ReadonlySet<string>;
+  /** Enclosing boundaries of every active endpoint and explicitly highlighted shape. */
+  containing: ReadonlySet<string>;
 }
 
 const NONE: ReadonlySet<string> = new Set();
@@ -61,11 +63,18 @@ function compute(document: DraftDocument, playback: FlowPlaybackState): StepCont
       targets.add(replying ? edge.source : edge.target);
       for (const boundary of crossedBoundaries(nodesById, edge.source, edge.target)) crossed.add(boundary.id);
     }
+    const containing = new Set<string>();
+    for (const id of [...sources, ...targets, ...resolved.extraNodes.map((node) => node.id)]) {
+      for (const boundary of ancestorsOf(nodesById, id)) {
+        if (boundary.type === 'group') containing.add(boundary.id);
+      }
+    }
     return {
       transitionKey: `${playback.flowId}:${playback.step}:${playback.phase ?? 'request'}`,
       sources,
       targets: targets.size > 0 ? targets : NONE,
       crossed: crossed.size > 0 ? crossed : NONE,
+      containing: containing.size > 0 ? containing : NONE,
     };
   }
   return null;

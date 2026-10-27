@@ -45,7 +45,8 @@ selected. Opening a diagram always shows the whole diagram.
 ## Present
 
 Click **Present** (`⌘Enter`) and pick a flow if there are several. The opening shows the whole
-path; advance to start.
+path; advance to start. During a step, the boundaries containing its highlighted shapes stay
+in focus too, including nested boundaries. Unrelated boundaries remain subdued.
 
 ![A presentation step highlighting its connector and showing the queue's note.](../media/guides/presenting.png)
 

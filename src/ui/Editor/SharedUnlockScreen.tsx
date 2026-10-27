@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { DocumentSession } from '../../store/useDocumentSession';
 import { PRODUCT } from '../../product';
 import { Button } from '../common/Button';
+import { BrandMark } from '../common/BrandMark';
 import { Icon } from '../common/Icon';
 
 export function SharedUnlockScreen({ link, ready }: { link: NonNullable<DocumentSession['sharedLink']>; ready: boolean }) {
@@ -32,7 +33,7 @@ export function SharedUnlockScreen({ link, ready }: { link: NonNullable<Document
   };
   return (
     <main className="dc-share-unlock">
-      <header className="dc-reader-header"><span className="dc-reader-brand"><Icon name="layers" size={18} />{PRODUCT.name}</span><span className="dc-reader-muted">Protected diagram</span></header>
+      <header className="dc-reader-header"><span className="dc-reader-brand"><BrandMark />{PRODUCT.name}</span><span className="dc-reader-muted">Protected diagram</span></header>
       <div className="dc-share-unlock-body"><form className="dc-share-unlock-form" onSubmit={(event) => { event.preventDefault(); void unlock(); }}>
         <div className="dc-share-unlock-heading"><span className="dc-share-unlock-icon"><Icon name="lock" size={19} /></span><h1>Shared with you</h1></div>
         <p>Enter the sender’s passphrase to view this diagram.</p>
