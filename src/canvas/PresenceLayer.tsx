@@ -9,8 +9,8 @@ import { edgeIndex, nodeIndex } from '../store/selectors';
 import { useCollabStore } from '../store/collabStore';
 import { useEditorStore } from '../store/editorStore';
 import { holdingsOf, peersInRoom, roomOf, type PeerPresence } from '../ui/collab/presence/model';
-import { usePersonality } from '../ui/personality/usePersonality';
-import { useThemeValue } from '../ui/theme/useTheme';
+import { usePersonality } from '../theme/usePersonality';
+import { useThemeValue } from '../theme/useTheme';
 import { emphasisOf } from './emphasis';
 import '../styles/presence.css';
 

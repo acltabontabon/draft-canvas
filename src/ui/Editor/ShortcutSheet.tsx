@@ -1,6 +1,6 @@
 import { PRODUCT } from '../../product';
 import { useMemo, useState } from 'react';
-import { ALL_PRESETS } from '../../canvas/presets';
+import { ALL_PRESETS } from '../../lib/presets';
 import { shortcutFor, titleFor } from '../../commands/shortcutLookup';
 import { hostKind } from '../../host/hostInfo';
 import { useUiStore } from '../../store/uiStore';

@@ -12,7 +12,7 @@ import { count } from '../lib/plural';
 // A static import although that module imports this one: the cycle is safe (neither runs the
 // other at load), and the old dynamic import was ineffective — the registry and the editor already
 // import it statically, so it never left the editor chunk and only drew a build warning.
-import { navigateToRoom } from '../ui/Editor/depthNavigation';
+import { navigateToRoom } from './depthNavigation';
 
 /**
  * The same palette is the fastest way to find something on a big canvas. Every

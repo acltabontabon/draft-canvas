@@ -1,4 +1,4 @@
-import type { ThemeName } from '../../render/theme/tokens';
+import type { ThemeName } from '../render/theme/tokens';
 
 const DARK_QUERY = '(prefers-color-scheme: dark)';
 

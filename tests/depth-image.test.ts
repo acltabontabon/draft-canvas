@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createDocument } from '../src/document/factory';
 import { renderDocumentSvg } from '../src/render/svg/document';
-import { clearRoomImages, createRoomImage } from '../src/ui/Editor/depthImage';
+import { clearRoomImages, createRoomImage } from '../src/commands/depthImage';
 
 vi.mock('../src/nodes/technology', () => ({ loadTechnologyIcons: vi.fn(async () => {}) }));
 vi.mock('../src/render/svg/document', () => ({

@@ -17,7 +17,7 @@ import { memo } from 'react';
 import type { CSSProperties } from 'react';
 import type { DraftNode } from '../document/types';
 import { attachmentLookFor } from '../nodes/attachmentLook';
-import { useThemeValue } from '../ui/theme/useTheme';
+import { useThemeValue } from '../theme/useTheme';
 import type { DragCapsuleState } from '../store/uiStore';
 
 export const DragCapsule = memo(function DragCapsule({ node, capsule }: { node: DraftNode; capsule: DragCapsuleState }) {

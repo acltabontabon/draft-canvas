@@ -1,6 +1,6 @@
 import { useLayoutEffect, useMemo, useSyncExternalStore, type ReactNode } from 'react';
 import { applyThemeVariables, themeFor, type ThemeName } from '../../render/theme/tokens';
-import { ThemeContext } from './useTheme';
+import { ThemeContext } from '../../theme/useTheme';
 
 const DARK_QUERY = '(prefers-color-scheme: dark)';
 

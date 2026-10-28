@@ -8,9 +8,9 @@ import { getRepository } from '../../storage';
 import { QuotaExceededError } from '../../storage/DraftRepository';
 import { Button } from '../common/Button';
 import { SegmentedControl } from '../common/SegmentedControl';
-import { PERSONALITY_PRESETS, usePersonality, type PersonalityPreset } from '../personality/usePersonality';
+import { PERSONALITY_PRESETS, usePersonality, type PersonalityPreset } from '../../theme/usePersonality';
 import { PersonalityPreview } from '../personality/PersonalityPreview';
-import { useTheme } from '../theme/useTheme';
+import { useTheme } from '../../theme/useTheme';
 import { ChoiceRow, RangeRow, SettingRow, SettingsPage, SettingsSection } from './layout';
 
 const STYLES: Record<PersonalityPreset, { label: string; description: string }> = {

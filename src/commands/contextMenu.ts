@@ -1,9 +1,9 @@
-import { ALL_PRESETS } from '../canvas/presets';
+import { ALL_PRESETS } from '../lib/presets';
 import { categoryOf, edgeRelationLabel } from '../document/connectorSemantics';
 import { displayNameFor } from '../document/factory';
 import type { DraftEdge, DraftNode } from '../document/types';
 import { count } from '../lib/plural';
-import { QUEUE_KIND_OPTION_LABELS } from '../ui/Editor/nodeKindLabels';
+import { QUEUE_KIND_OPTION_LABELS } from '../lib/nodeKindLabels';
 import {
   canvasCommands,
   arrangeSelectionCommands,

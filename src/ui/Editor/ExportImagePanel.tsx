@@ -1,6 +1,6 @@
 import { SegmentedControl } from '../common/SegmentedControl';
 import type { ThemeName } from '../../render/theme/tokens';
-import { PNG_SCALES, type ImageFormat, type PngScale } from './exportTypes';
+import { PNG_SCALES, type ImageFormat, type PngScale } from '../../export/exportTypes';
 
 interface ImagePanelProps {
   format: ImageFormat;

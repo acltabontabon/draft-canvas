@@ -36,8 +36,8 @@ import { isNodeFocused, lensFlow, useEditorStore, type EditorStore } from '../st
 import { accentOf, type Theme } from '../render/theme/tokens';
 import { selectNode } from '../store/selectors';
 import { useUiStore } from '../store/uiStore';
-import { usePersonality } from '../ui/personality/usePersonality';
-import { useThemeValue } from '../ui/theme/useTheme';
+import { usePersonality } from '../theme/usePersonality';
+import { useThemeValue } from '../theme/useTheme';
 import { SvgSurface } from './SvgSurface';
 import { layerBehind } from './insideMark';
 import { emphasisColorOf, emphasisOf } from './emphasis';

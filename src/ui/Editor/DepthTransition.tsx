@@ -5,8 +5,8 @@ import { boundsOf, type Bounds } from '../../document/geometry';
 import { motionMs } from '../../lib/motion';
 import { useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
-import { takePicture, type RoomPicture } from './depthRects';
-import { clearRoomImages, createRoomImage } from './depthImage';
+import { takePicture, type RoomPicture } from '../../commands/depthRects';
+import { clearRoomImages, createRoomImage } from '../../commands/depthImage';
 
 const clamp01 = (t: number) => Math.min(1, Math.max(0, t));
 /** 0 before `from`, 1 after `to`, smoothly between: when each room is seen, over the move. */

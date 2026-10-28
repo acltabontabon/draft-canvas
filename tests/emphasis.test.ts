@@ -5,7 +5,7 @@ import { EMPHASIS_STROKE_GAIN, emphasisColorOf, emphasisOf } from '../src/canvas
 import { describeContext, describeNode } from '../src/nodes/describe';
 import type { Shape } from '../src/render/displayList';
 import { DARK, LIGHT } from '../src/render/theme/tokens';
-import { PERSONALITY_PRESETS } from '../src/ui/personality/usePersonality';
+import { PERSONALITY_PRESETS } from '../src/theme/usePersonality';
 
 const outlined = (shapes: readonly Shape[]): Extract<Shape, { stroke?: unknown }>[] =>
   shapes.flatMap((shape) => (shape.t === 'group' ? outlined(shape.children) : shape.t === 'text' || shape.t === 'rich' || shape.t === 'code' ? [] : [shape]));

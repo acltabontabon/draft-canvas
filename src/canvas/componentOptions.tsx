@@ -1,5 +1,5 @@
 import { COMPONENT_KINDS } from '../document/types';
-import { COMPONENT_KIND_OPTION_LABELS } from '../ui/Editor/nodeKindLabels';
+import { COMPONENT_KIND_OPTION_LABELS } from '../lib/nodeKindLabels';
 import { shapeVariantOptions } from './shapeVariantOptions';
 
 /** The Component kind picker's shared option list — see `dataStoreOptions.tsx`. Every kind draws

@@ -6,7 +6,7 @@ import { describeContext, describeNode } from '../../nodes/describe';
 import { beginClipScope, emitDisplayList } from '../../render/svg/emit';
 import { el, serialize } from '../../render/svg/element';
 import type { Theme } from '../../render/theme/tokens';
-import type { PersonalityPreset } from './usePersonality';
+import type { PersonalityPreset } from '../../theme/usePersonality';
 
 const WIDTH = 96;
 const HEIGHT = 36;

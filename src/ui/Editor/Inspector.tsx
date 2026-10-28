@@ -23,9 +23,9 @@ import { SERVICE_ICON_OPTIONS } from '../../canvas/serviceOptions';
 import { LANGUAGE_LABELS } from '../../render/code/highlight';
 import { useEditorStore } from '../../store/editorStore';
 import { nodeIndex, edgeIndex } from '../../store/selectors';
-import { useThemeValue } from '../theme/useTheme';
+import { useThemeValue } from '../../theme/useTheme';
 import { Button } from '../common/Button';
-import { NOTE_LABELS, BOUNDARY_PRESET_OPTION_LABELS } from './nodeKindLabels';
+import { NOTE_LABELS, BOUNDARY_PRESET_OPTION_LABELS } from '../../lib/nodeKindLabels';
 
 /**
  * A contextual strip that appears only when something is selected, and shows

@@ -15,7 +15,7 @@ import type { PresentationSubject } from '../../presentation/presentationAttachm
 import { useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
 import { edgeIndex, nodeIndex } from '../../store/selectors';
-import { useThemeValue } from '../../ui/theme/useTheme';
+import { useThemeValue } from '../../theme/useTheme';
 import { ReadOnlyCode } from '../AttachmentPresentation';
 import { attachmentLookFor } from '../../nodes/attachmentLook';
 import { flattenPath } from '../../edges/routing';

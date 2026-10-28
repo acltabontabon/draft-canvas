@@ -8,7 +8,7 @@ import { describeContext, describeNode, naturalArchitectureSize } from '../src/n
 import { DARK, LIGHT } from '../src/render/theme/tokens';
 import { renderDocumentSvg } from '../src/render/svg/document';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
-import { PERSONALITY_PRESETS } from '../src/ui/personality/usePersonality';
+import { PERSONALITY_PRESETS } from '../src/theme/usePersonality';
 
 describe('actor frames', () => {
   it('creates borderless actors and keeps an explicit framed choice', () => {

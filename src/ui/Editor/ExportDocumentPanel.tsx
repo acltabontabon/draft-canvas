@@ -1,5 +1,5 @@
 import { SegmentedControl } from '../common/SegmentedControl';
-import type { DocumentFormat } from './exportTypes';
+import type { DocumentFormat } from '../../export/exportTypes';
 
 const DESCRIPTIONS: Record<DocumentFormat, string> = {
   editable: 'Plain, diffable JSON. Reopen it in Draft Canvas and keep editing.',

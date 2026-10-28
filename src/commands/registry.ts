@@ -1,6 +1,6 @@
 import { PRODUCT } from '../product';
 import { openLink } from '../host/openLink';
-import { ALL_PRESETS, DEV_PRESETS, type Preset } from '../canvas/presets';
+import { ALL_PRESETS, DEV_PRESETS, type Preset } from '../lib/presets';
 import { reconnectProblem } from '../document/reconnect';
 import { capabilityFor, categoryOf, edgeRelationLabel, isServiceInteraction } from '../document/connectorSemantics';
 import { relationLabel } from '../document/edgeSemantics';
@@ -19,13 +19,13 @@ import {
   type DraftNode,
   type ViewLevel,
 } from '../document/types';
-import { TEXT_ROLE_OPTION_LABELS } from '../ui/Editor/nodeKindLabels';
+import { TEXT_ROLE_OPTION_LABELS } from '../lib/nodeKindLabels';
 import { requestClipboardRead } from '../lib/clipboardPermission';
 import { effectiveTextRole } from '../nodes/describe';
 import { continuationsFor, materialize } from '../continuation';
 import { ALT_SYMBOL, MOD_SYMBOL } from '../lib/platform';
 import { canCreateInside, hasInside, ownerAt, totals } from '../depth/tree';
-import { backOut, lookInside } from '../ui/Editor/depthNavigation';
+import { backOut, lookInside } from './depthNavigation';
 import { inheritedLevel, LEVEL_HINTS, LEVEL_LABELS } from '../depth/level';
 import { fileOf, fileWithLiveViewport, lensFlow, ownsData, viewLevel } from '../store/editorStore';
 import { pointer, type UiStore } from '../store/uiStore';
@@ -50,8 +50,8 @@ const clipboard = () => import('../export/clipboard');
 export function warmCopyExports(): void {
   void clipboard().catch(() => {});
 }
-import { readEditableImagePreference } from '../ui/Editor/exportPreferences';
-import { systemTheme } from '../ui/theme/systemTheme';
+import { readEditableImagePreference } from '../export/exportPreferences';
+import { systemTheme } from '../theme/systemTheme';
 import { copyText } from '../ui/collab/clipboard';
 import { ARRANGE_FAILED, notifyLoadFailure } from '../ui/common/notifyLoadFailure';
 import { focusBounds, focusNodes } from './search';

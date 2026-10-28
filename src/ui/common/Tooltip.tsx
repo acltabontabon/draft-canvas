@@ -11,7 +11,7 @@ import {
   type ReactNode,
 } from 'react';
 import { createPortal } from 'react-dom';
-import type { PrimitiveTooltipContent } from '../../canvas/presets';
+import type { PrimitiveTooltipContent } from '../../lib/presets';
 import { clamp } from '../../lib/math';
 
 /** Hover must clear this before the tooltip appears — long enough that a pointer merely

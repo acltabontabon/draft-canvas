@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { Tooltip, TooltipGroup } from '../src/ui/common/Tooltip';
-import type { PrimitiveTooltipContent } from '../src/canvas/presets';
+import type { PrimitiveTooltipContent } from '../src/lib/presets';
 
 /**
  * One tooltip surface, two densities. A conventional action (no `description`) must not be given

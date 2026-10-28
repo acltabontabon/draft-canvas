@@ -1,8 +1,8 @@
-import type { DraftDocument, DraftViewport } from '../../document/types';
-import { loadTechnologyIcons } from '../../nodes/technology';
-import { renderDocumentSvg, type ExportOptions } from '../../render/svg/document';
-import type { ThemeName } from '../../render/theme/tokens';
-import type { PersonalityPreset } from '../personality/usePersonality';
+import type { DraftDocument, DraftViewport } from '../document/types';
+import { loadTechnologyIcons } from '../nodes/technology';
+import { renderDocumentSvg, type ExportOptions } from '../render/svg/document';
+import type { ThemeName } from '../render/theme/tokens';
+import type { PersonalityPreset } from '../theme/usePersonality';
 
 export type RoomImageOptions = Pick<ExportOptions, 'theme' | 'preset' | 'selectedFlowId'>;
 

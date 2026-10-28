@@ -1,5 +1,5 @@
 import { Icon, type IconName } from '../common/Icon';
-import type { ExportMode } from './exportTypes';
+import type { ExportMode } from '../../export/exportTypes';
 
 const MODE_ORDER: ExportMode[] = ['share', 'document', 'image', 'sequence'];
 

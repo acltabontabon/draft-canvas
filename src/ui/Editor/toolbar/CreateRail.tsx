@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useUiStore } from '../../../store/uiStore';
-import { DEV_PRESETS, PRESETS, SELECT_TOOLTIP, tooltipContentFor, type Preset } from '../../../canvas/presets';
+import { DEV_PRESETS, PRESETS, SELECT_TOOLTIP, tooltipContentFor, type Preset } from '../../../lib/presets';
 import { prefersReducedMotion } from '../../../lib/motion';
 import { Button } from '../../common/Button';
 import { Tooltip } from '../../common/Tooltip';

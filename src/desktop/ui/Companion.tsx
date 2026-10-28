@@ -24,7 +24,7 @@ import { Mascot } from './mascot/Mascot';
 import { CHANNEL_MS, CHANNELS, channelClock, type Channel, type Mood } from './mascot/pixels';
 import { CHIP_HEIGHT, chipPlace, revealViewport, type Box } from './chipPlace';
 import { canCreateInside, hasInside } from '../../depth/tree';
-import { lookInside, navigateToRoom } from '../../ui/Editor/depthNavigation';
+import { lookInside, navigateToRoom } from '../../commands/depthNavigation';
 import { agentlessAnswer, localAnswer, type LocalAction, type LocalFacts } from './nodiLocal';
 import { commandsFor } from '../../commands/registry';
 import { isStage, type CommandContext } from '../../commands/types';

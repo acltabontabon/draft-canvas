@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { pictureRoom, rectOfRoom, takePicture } from '../src/ui/Editor/depthRects';
+import { pictureRoom, rectOfRoom, takePicture } from '../src/commands/depthRects';
 import { createDocument } from '../src/document/factory';
 
 afterEach(() => {

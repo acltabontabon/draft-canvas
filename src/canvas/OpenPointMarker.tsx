@@ -4,7 +4,7 @@ import { OPEN_POINT_LABELS } from '../document/openPoints';
 import { MARKER_SIZE, describeMarker, describeMarkerText } from '../openPoints/marker';
 import { beginClipScope, emitDisplayList } from '../render/svg/emit';
 import { useUiStore } from '../store/uiStore';
-import { useThemeValue } from '../ui/theme/useTheme';
+import { useThemeValue } from '../theme/useTheme';
 import { SvgSurface } from './SvgSurface';
 
 /**

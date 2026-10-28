@@ -133,6 +133,9 @@ The reasoning behind these rules is in [Architecture](docs/reference/architectur
 ## Architecture
 
 Dependencies flow `ui/` → `canvas/` → `document/`; storage and export consume the document model.
+`canvas/`, `commands/` and `store/` import no `ui/` modules except the shared primitives in `ui/common/`
+and the presence hooks in `ui/collab/`. The theme and personality hooks live in `theme/`, and shared
+labels and presets in `lib/`.
 Library and editor are states of `src/App.tsx`, with no router. Keep the editor's Vite `base: './'`.
 
 `depth/`, `starters/` and `traffic/` import only `document/`; `layout/` also imports `edges/bundles`. `collab/`

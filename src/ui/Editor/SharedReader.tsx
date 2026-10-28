@@ -19,7 +19,7 @@ import { ReadOnlyCode } from '../../canvas/AttachmentPresentation';
 import { Button } from '../common/Button';
 import { BrandMark } from '../common/BrandMark';
 import { Icon } from '../common/Icon';
-import { navigateToRoom } from './depthNavigation';
+import { navigateToRoom } from '../../commands/depthNavigation';
 import { SharedReaderAttachments, type ReaderAttachmentSelection } from './SharedReaderAttachments';
 import { SharedReaderWalkthrough } from './SharedReaderWalkthrough';
 

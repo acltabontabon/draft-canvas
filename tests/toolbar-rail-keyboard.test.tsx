@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useEditorStore } from '../src/store/editorStore';
 import { useUiStore } from '../src/store/uiStore';
-import { ALL_PRESETS } from '../src/canvas/presets';
+import { ALL_PRESETS } from '../src/lib/presets';
 import { Toolbar } from '../src/ui/Editor/Toolbar';
 
 /**

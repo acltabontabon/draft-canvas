@@ -5,7 +5,7 @@ import { describeContext, describeNode } from '../src/nodes/describe';
 import type { Shape, TextShape } from '../src/render/displayList';
 import { renderDocumentSvg } from '../src/render/svg/document';
 import { THEMES, type ThemeName } from '../src/render/theme/tokens';
-import { PERSONALITY_PRESETS } from '../src/ui/personality/usePersonality';
+import { PERSONALITY_PRESETS } from '../src/theme/usePersonality';
 import { ARCHITECTURE_STARTERS } from '../src/starters';
 import { buildStarter } from '../src/starters/build';
 

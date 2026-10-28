@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Preset } from '../canvas/presets';
+import type { Preset } from '../lib/presets';
 import { ANY_CANDIDATE, dismissalKey } from '../continuation/dismissal';
 import type { DismissalKey, MaterializedContinuation } from '../continuation';
 import type { DraftEdge, DraftNode, OpenPointTarget } from '../document/types';

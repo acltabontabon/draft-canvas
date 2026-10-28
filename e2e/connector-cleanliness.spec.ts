@@ -1,4 +1,4 @@
-import { PERSONALITY_PRESETS } from '../src/ui/personality/usePersonality';
+import { PERSONALITY_PRESETS } from '../src/theme/usePersonality';
 import { expect, test } from '@playwright/test';
 import { serializeDocument } from '../src/export/project';
 import { connectorStyleDocument } from '../tests/fixtures/connectors/checkout';

@@ -3,7 +3,7 @@ import { defaultSizeFor } from '../document/factory';
 import { placeNear } from '../document/operations';
 import type { DraftDocument, ViewLevel } from '../document/types';
 import type { ContinuationOffer, QuickConnectState } from '../store/uiStore';
-import { quickConnectPresets, type Preset } from './presets';
+import { quickConnectPresets, type Preset } from '../lib/presets';
 
 /**
  * One row of the Quick Connect picker. A `continuation` row is what Intent Continuation would

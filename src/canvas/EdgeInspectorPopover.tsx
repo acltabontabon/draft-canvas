@@ -33,7 +33,7 @@ import type { EdgeEnd } from '../document/operations';
 import { useEditorStore } from '../store/editorStore';
 import { useUiStore } from '../store/uiStore';
 import { edgeIndex, nodeIndex } from '../store/selectors';
-import { useThemeValue } from '../ui/theme/useTheme';
+import { useThemeValue } from '../theme/useTheme';
 import { Button } from '../ui/common/Button';
 import { Tooltip, TooltipGroup } from '../ui/common/Tooltip';
 import {

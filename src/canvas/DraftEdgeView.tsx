@@ -54,8 +54,8 @@ import { isEdgeFocused, lensFlow, useEditorStore, type EditorStore } from '../st
 import { trafficEdgeMotionOf, trafficEdgeOf } from '../store/traffic';
 import { selectEdge, selectNode } from '../store/selectors';
 import { useUiStore } from '../store/uiStore';
-import { usePersonality } from '../ui/personality/usePersonality';
-import { useThemeValue } from '../ui/theme/useTheme';
+import { usePersonality } from '../theme/usePersonality';
+import { useThemeValue } from '../theme/useTheme';
 import { FONTS, cssFont } from '../render/text/fonts';
 import { Lru } from '../lib/lru';
 import { pointInBox } from '../lib/math';

@@ -23,7 +23,7 @@ import { beginClipScope, emitDisplayList, emitShape, shadowFilter } from './emit
 import { beginIdScope, endIdScope, scopedId } from './ids';
 import { markerDefs } from './markers';
 import { PERSONALITY_PROFILES } from '../roughness/presets';
-import type { PersonalityPreset } from '../../ui/personality/usePersonality';
+import type { PersonalityPreset } from '../../theme/usePersonality';
 import type { Shape } from '../displayList';
 
 const BACKGROUND_BLUR_FILTER_ID = 'dc-bg-blur';

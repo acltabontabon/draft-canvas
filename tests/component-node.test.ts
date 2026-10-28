@@ -6,7 +6,7 @@ import { DEFAULTS } from '../src/document/limits';
 import { deserializeDocument, serializeDocument } from '../src/export/project';
 import { describeContext, describeNode } from '../src/nodes/describe';
 import { THEMES } from '../src/render/theme/tokens';
-import { PERSONALITY_PRESETS } from '../src/ui/personality/usePersonality';
+import { PERSONALITY_PRESETS } from '../src/theme/usePersonality';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
 import { COMPONENT_KINDS, type ComponentKind } from '../src/document/types';
 

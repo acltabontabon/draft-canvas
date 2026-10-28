@@ -4,7 +4,7 @@ import { tokenizeCode } from '../render/code/highlight';
 import { CODE_THEMES, colorForScope } from '../render/code/theme';
 import { useEditorStore } from '../store/editorStore';
 import { useUiStore } from '../store/uiStore';
-import { useTheme, useThemeValue } from '../ui/theme/useTheme';
+import { useTheme, useThemeValue } from '../theme/useTheme';
 import { Icon } from '../ui/common/Icon';
 import { isImeKeyEvent, overlayAboveCanvasIsOpen } from '../lib/isEditableTarget';
 import { motionMs } from '../lib/motion';

@@ -1,10 +1,10 @@
-import type { PrimitiveTooltipContent } from '../../../canvas/presets';
+import type { PrimitiveTooltipContent } from '../../../lib/presets';
 import { shortcutFor } from '../../../commands/shortcutLookup';
 import { MOD_SYMBOL } from '../../../lib/platform';
 
 /**
  * Tooltip copy for the toolbar's *actions* — what you do to the workspace, as opposed to the
- * primitives you put on the canvas. Those live in `canvas/presets.ts`, which is the canvas's
+ * primitives you put on the canvas. Those live in `lib/presets.ts`, which is the canvas's
  * shape vocabulary and has no business growing a "Canvas settings" entry.
  *
  * Shortcuts are read from the command registry rather than typed out here, so a rebinding can't

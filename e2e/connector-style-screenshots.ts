@@ -1,5 +1,5 @@
 /** Reproducible PR screenshots: run against the before/after checkout's dev server on :5184. */
-import { PERSONALITY_PRESETS } from '../src/ui/personality/usePersonality';
+import { PERSONALITY_PRESETS } from '../src/theme/usePersonality';
 import { mkdirSync } from 'node:fs';
 import { chromium, expect } from '@playwright/test';
 import { nearbyServicesDocument } from '../tests/fixtures/connectors/nearby';
