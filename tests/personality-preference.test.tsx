@@ -13,7 +13,7 @@ vi.mock('../src/lib/preferences', () => ({
 }));
 
 const { PersonalityProvider } = await import('../src/ui/personality/PersonalityProvider');
-const { usePersonality } = await import('../src/ui/personality/usePersonality');
+const { usePersonality } = await import('../src/theme/usePersonality');
 
 function Probe({ onReady }: { onReady: (api: ReturnType<typeof usePersonality>) => void }) {
   const api = usePersonality();

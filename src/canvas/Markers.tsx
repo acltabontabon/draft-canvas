@@ -8,8 +8,8 @@ import { shadowFilter } from '../render/svg/emit';
 import { serialize } from '../render/svg/element';
 import { PERSONALITY_PROFILES } from '../render/roughness/presets';
 import type { Theme } from '../render/theme/tokens';
-import { usePersonality } from '../ui/personality/usePersonality';
-import { useThemeValue } from '../ui/theme/useTheme';
+import { usePersonality } from '../theme/usePersonality';
+import { useThemeValue } from '../theme/useTheme';
 
 /**
  * Arrowheads and the one drop shadow, mounted once for the whole canvas.

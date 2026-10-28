@@ -11,7 +11,7 @@
   },
   "overrides": [
     {
-      "files": ["benchmark/**", "demo/**", "scripts/**", "www/scripts/**"],
+      "files": ["benchmark/**", "scripts/**", "www/scripts/**"],
       "rules": { "no-console": "off" }
     }
   ],

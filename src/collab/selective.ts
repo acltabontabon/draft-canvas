@@ -153,13 +153,17 @@ function placeArrivals(file: DraftDocument, arrivals: readonly Arrival[]): { fil
     const ordered = list.arrivals
       .map((arrival) => ({ arrival, was: idsIn(arrival.found, list.room, list.collection) ?? [] }))
       .sort((a, b) => a.was.indexOf(a.arrival.id) - b.was.indexOf(b.arrival.id));
+    // Arrivals not yet placed still sit at the end of the list. Skipped as a following neighbour, two
+    // arrivals at the head would each pick the other and both stay at the end.
+    const unplaced = new Set(ordered.map(({ arrival }) => arrival.id));
     for (const { arrival, was } of ordered) {
+      unplaced.delete(arrival.id);
       const from = ids.indexOf(arrival.id);
       const at = was.indexOf(arrival.id);
       if (from === -1 || at === -1) continue;
       ids.splice(from, 1);
       const previous = was.slice(0, at).reverse().find((id) => ids.includes(id));
-      const following = previous === undefined ? was.slice(at + 1).find((id) => ids.includes(id)) : undefined;
+      const following = previous === undefined ? was.slice(at + 1).find((id) => ids.includes(id) && !unplaced.has(id)) : undefined;
       const index = previous !== undefined ? ids.indexOf(previous) + 1 : following !== undefined ? ids.indexOf(following) : ids.length;
       ids.splice(index, 0, arrival.id);
     }

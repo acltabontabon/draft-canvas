@@ -47,14 +47,19 @@ export function deserializeDocument(text: string): NormalizeResult {
 /** Turns a title into something safe to hand to a file system. */
 export function fileNameFor(title: string, extension = FILE_EXTENSION): string {
   const base =
-    title
-      .trim()
-      .toLowerCase()
-      // Any script's letters and digits survive ("café", "設計"); everything else — path separators
-      // and reserved characters included — becomes a dash.
-      .replace(/[^\p{L}\p{M}\p{N}]+/gu, '-')
-      .replace(/^-+|-+$/g, '')
-      .slice(0, 60) || 'draft-canvas';
+    // Truncate by code point, not UTF-16 unit: `.slice` could cut an astral letter in half and
+    // leave a lone surrogate in the file name.
+    Array.from(
+      title
+        .trim()
+        .toLowerCase()
+        // Any script's letters and digits survive ("café", "設計"); everything else — path separators
+        // and reserved characters included — becomes a dash.
+        .replace(/[^\p{L}\p{M}\p{N}]+/gu, '-')
+        .replace(/^-+|-+$/g, ''),
+    )
+      .slice(0, 60)
+      .join('') || 'draft-canvas';
   return `${base}${extension}`;
 }
 

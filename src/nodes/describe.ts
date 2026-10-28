@@ -25,7 +25,7 @@ import { FONTS, LINE_HEIGHTS, TEXT_SIZES, type FontSpec } from '../render/text/f
 import { baselineOf, fitLabel, layoutRichText, layoutText, type RichBox, type RichRun, type TextLayout } from '../render/text/layout';
 import type { CalloutKind } from '../render/text/markdown';
 import { getMeasurer, type TextMeasurer } from '../render/text/measure';
-import type { PersonalityPreset } from '../ui/personality/usePersonality';
+import type { PersonalityPreset } from '../theme/usePersonality';
 import { clamp } from '../lib/math';
 import { nodeTechnologyIcon, technologyIconSnapshot, technologyMarkBounds, TECHNOLOGY_MARK_SIZE, type TechnologyIconSnapshot } from './technology';
 

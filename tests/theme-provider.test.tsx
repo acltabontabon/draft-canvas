@@ -11,7 +11,7 @@ vi.mock('../src/lib/preferences', () => ({
 }));
 
 const { ThemeProvider } = await import('../src/ui/theme/ThemeProvider');
-const { useTheme } = await import('../src/ui/theme/useTheme');
+const { useTheme } = await import('../src/theme/useTheme');
 
 /** A `prefers-color-scheme: dark` query whose answer the test can flip, firing `change`. */
 function fakeSystem(initiallyDark: boolean) {

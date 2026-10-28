@@ -8,10 +8,10 @@ import { libraryShapeOf } from '../../document/shape';
 import { accentOf } from '../../render/theme/tokens';
 import { fileOf, useEditorStore } from '../../store/editorStore';
 import { isImeKeyEvent, overlayAboveCanvasIsOpen } from '../../lib/isEditableTarget';
-import { useThemeValue } from '../theme/useTheme';
+import { useThemeValue } from '../../theme/useTheme';
 import { Fingerprint } from '../Library/Fingerprint';
 import { useUiStore } from '../../store/uiStore';
-import { backOut, lookInside } from './depthNavigation';
+import { backOut, lookInside } from '../../commands/depthNavigation';
 
 /**
  * Where you are in the architecture — as planes.

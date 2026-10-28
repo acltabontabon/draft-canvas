@@ -41,7 +41,6 @@ New here? Start with [Getting started](guides/getting-started.md).
   [Agent instructions](../AGENTS.md) · [Changelog](../CHANGELOG.md)
 - Releases: [workflow](reference/releases.md) · [desktop updates](reference/desktop-updates.md) ·
   [website](reference/website.md)
-- Planning: [roadmap](reference/roadmap.md) · [usability](reference/explanation-usability.md) ·
-  [release acceptance](reference/reliability.md) · [connector audit](reference/connector-ux-audit.md)
+- Reliability: [recovery, diagnostics and release withdrawal](reference/reliability.md)
 - Dependencies: [library adoption](reference/library-adoption.md) ·
   [third-party credits](reference/third-party.md)

@@ -2,7 +2,7 @@ import type { Accent, DraftNode } from '../document/types';
 import type { Shape } from '../render/displayList';
 import { PERSONALITY_PROFILES } from '../render/roughness/presets';
 import { roughenPath } from '../render/roughness/roughPath';
-import type { PersonalityPreset } from '../ui/personality/usePersonality';
+import type { PersonalityPreset } from '../theme/usePersonality';
 
 /** The glyph's drawing box, in its own units (1 unit = 1px at 100%). */
 export const DEPTH_GLYPH_SIZE = 14;

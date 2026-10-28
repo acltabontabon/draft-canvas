@@ -1,5 +1,5 @@
 import { ACTOR_FRAMES, ACTOR_KINDS } from '../document/types';
-import { ACTOR_KIND_OPTION_LABELS } from '../ui/Editor/nodeKindLabels';
+import { ACTOR_KIND_OPTION_LABELS } from '../lib/nodeKindLabels';
 import { shapeVariantOptions } from './shapeVariantOptions';
 
 /** The Actor kind picker's shared option list — see `dataStoreOptions.tsx`. Human/System/Device

@@ -12,7 +12,7 @@ import { boundaryDocument, node, recoveryDocument, trafficDocument } from './fix
  *
  * Runs its own dev server, and the dev collaboration relay (`scripts/dev-relay.mjs`) it points at, on
  * ports of their own (never 5180, which the e2e suite shares, and never
- * a name-based kill: this working copy is used by several sessions at once), in a light theme, and
+ * a name-based kill), in a light theme, and
  * a clean browser profile, so the Library it captures holds only what this script drew.
  *
  * The same walkthrough can be captured in the dark palette and kept somewhere else — one harness,

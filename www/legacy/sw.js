@@ -8,8 +8,7 @@
  * in this browser. This file replaces it at its own URL, takes itself out of the picture, and never
  * comes back — the editor registers its own worker at its new address, scoped to /editor/.
  *
- * It is deliberately surgical. acltabontabon.com is one origin shared with Scuttle, Vortex and the
- * personal site: a blanket `caches.keys()` sweep, a `localStorage.clear()`, or an
+ * It is deliberately surgical. acltabontabon.com is one origin shared with other sites: a blanket `caches.keys()` sweep, a `localStorage.clear()`, or an
  * `indexedDB.deleteDatabase` here would take their data with it. So the only thing deleted is a
  * cache whose own name contains this worker's scope — which is exactly how Workbox names them
  * (`workbox-precache-v2-https://acltabontabon.com/draft-canvas/`) and no way anything else is

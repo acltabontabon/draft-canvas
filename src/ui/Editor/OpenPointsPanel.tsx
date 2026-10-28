@@ -10,7 +10,7 @@ import { useUiStore } from '../../store/uiStore';
 import type { ElementTarget } from '../../openPoints/locate';
 import { Button } from '../common/Button';
 import { Icon } from '../common/Icon';
-import { navigateToElement } from './depthNavigation';
+import { navigateToElement } from '../../commands/depthNavigation';
 
 /**
  * Open points — the return visit.

@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { useReactFlow, useStore } from '@xyflow/react';
-import type { Preset } from '../canvas/presets';
+import type { Preset } from '../lib/presets';
 import type { DraftNode } from '../document/types';
 import type { FlowPlaybackController } from '../presentation/useFlowPlayback';
 import { flowFitViewNodes, hasSomethingToFit, useEditorStore } from '../store/editorStore';

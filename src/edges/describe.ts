@@ -9,7 +9,7 @@ import type { Theme } from '../render/theme/tokens';
 import { FONTS, LINE_HEIGHTS } from '../render/text/fonts';
 import { baselineOf, layoutText, type TextLayout } from '../render/text/layout';
 import type { TextMeasurer } from '../render/text/measure';
-import type { PersonalityPreset } from '../ui/personality/usePersonality';
+import type { PersonalityPreset } from '../theme/usePersonality';
 import {
   LABEL_LINE_GAP,
   RESPONSE_SEED_SUFFIX,

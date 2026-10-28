@@ -102,17 +102,19 @@ export function DeskBrowse({
   useEffect(() => {
     const element = scroller();
     if (!element) return;
-    let ticking = false;
+    let frame = 0;
     const onScroll = () => {
-      if (ticking) return;
-      ticking = true;
-      requestAnimationFrame(() => {
-        ticking = false;
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
         rememberBrowse({ scope, query, scrollTop: element.scrollTop });
       });
     };
     element.addEventListener('scroll', onScroll, { passive: true });
-    return () => element.removeEventListener('scroll', onScroll);
+    return () => {
+      element.removeEventListener('scroll', onScroll);
+      cancelAnimationFrame(frame);
+    };
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [scope, query]);
 

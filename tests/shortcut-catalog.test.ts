@@ -48,7 +48,7 @@ describe('shortcutCatalog', () => {
     expect(shortcutOf('ungroup')).toBe(`${MOD_SYMBOL} Shift G`);
 
     // A representative sample of `ALL_PRESETS`' node-creation letter shortcuts, single-sourced
-    // through `canvas/presets.ts` already — confirms this catalog reaches those too.
+    // through `lib/presets.ts` already — confirms this catalog reaches those too.
     expect(shortcutOf('add-service')).toBe('S');
     expect(shortcutOf('add-note')).toBe('N');
   });
@@ -83,7 +83,7 @@ describe('ShortcutSheet cross-check', () => {
     SECTIONS.flatMap((section) => section.rows).flatMap((row) => ('commandId' in row ? [row.commandId] : [])),
   );
   // Node-creation letter shortcuts (`add-service`, `add-note`, …) are covered by the sheet's
-  // separate "Create" section, generated straight from `canvas/presets.ts` — not from `SECTIONS`,
+  // separate "Create" section, generated straight from `lib/presets.ts` — not from `SECTIONS`,
   // so they're excluded here rather than double-counted.
   const catalogIdsOutsideCreate = [...catalog.keys()].filter((id) => !id.startsWith('add-'));
 

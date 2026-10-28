@@ -7,7 +7,7 @@ import type {
   QueueKind,
   ServiceKind,
   TextRole,
-} from '../../document/types';
+} from '../document/types';
 
 /**
  * Per-type option labels for a node's "kind"/preset field — shared between `Inspector.tsx`'s

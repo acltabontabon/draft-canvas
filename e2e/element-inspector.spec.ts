@@ -161,9 +161,9 @@ test.describe('element inspector popover', () => {
     await page.mouse.down();
     await page.mouse.move(moveEdge.x + moveEdge.width / 2 + 80, moveEdge.y + moveEdge.height / 2 + 60, { steps: 5 });
     await page.mouse.up();
-    const moved = (await popup.boundingBox())!;
-    expect(moved.x).toBeGreaterThan(start.x + 40);
-    expect(moved.y).toBeGreaterThan(start.y + 30);
+    // The drop commits on the next frame; WebKit can report the box before it lands.
+    await expect.poll(async () => (await popup.boundingBox())!.x).toBeGreaterThan(start.x + 40);
+    await expect.poll(async () => (await popup.boundingBox())!.y).toBeGreaterThan(start.y + 30);
     await page.locator('.react-flow__pane').click({ position: { x: 50, y: 50 } });
     await expect(popup).toHaveCount(0);
 
@@ -174,7 +174,7 @@ test.describe('element inspector popover', () => {
     await page.mouse.down();
     await page.mouse.move(beforeNodeDrag.x + beforeNodeDrag.width / 2 + 100, beforeNodeDrag.y + beforeNodeDrag.height / 2 + 70, { steps: 5 });
     await page.mouse.up();
-    expect((await node.boundingBox())!.x).toBeGreaterThan(beforeNodeDrag.x + 50);
+    await expect.poll(async () => (await node.boundingBox())!.x).toBeGreaterThan(beforeNodeDrag.x + 50);
   });
 
   test('note and code popups fit their controls', async ({ page }) => {

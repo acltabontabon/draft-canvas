@@ -192,7 +192,10 @@ function parseWaypoints(value: unknown): DraftPoint[] | undefined {
  */
 function parseEmbeddedBackground(value: unknown): EmbeddedBackgroundImage | undefined {
   if (!isRecord(value) || typeof value.dataUri !== 'string') return undefined;
-  const match = /^data:image\/[a-z0-9.+-]+;base64,([A-Za-z0-9+/]*={0,2})$/i.exec(value.dataUri);
+  // Strict base64 (whole four-character groups, padding only at the end): `atob` throws on
+  // anything looser such as "AAAAA" or "QQ=", and a damaged image must be dropped here rather than
+  // crash whoever decodes it later (a backup restore aborted on one).
+  const match = /^data:image\/[a-z0-9.+-]+;base64,((?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?)$/i.exec(value.dataUri);
   if (!match) return undefined;
   // Decoded size, from the payload's length: three bytes for every four characters.
   if (Math.floor((match[1]!.length * 3) / 4) > LIMITS.maxEmbeddedBackgroundBytes) return undefined;

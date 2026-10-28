@@ -75,7 +75,6 @@ npx playwright show-trace 'test-results/<failed-test>/trace.zip'
 - Wait for UI state; never add fixed sleeps.
 - Editor specs use the dev server (Playwright reuses one already on :5180). Offline and deployment
   specs use production builds.
-- The optional, untracked `demo/` harness is type-checked only when present.
 
 ## CI
 

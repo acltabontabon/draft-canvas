@@ -1,4 +1,4 @@
-import type { DraftDocument } from '../../document/types';
+import type { DraftDocument } from '../document/types';
 import { createRoomImage } from './depthImage';
 
 /** A rectangle in viewport pixels, as `getBoundingClientRect` gives it. */

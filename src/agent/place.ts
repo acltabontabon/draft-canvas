@@ -59,7 +59,7 @@ export function spacingOf(layout: Pick<LayoutSpec, 'spacing'>) {
   };
 }
 
-export function attachmentsOf(specs: AttachmentSpec[] | undefined) {
+function attachmentsOf(specs: AttachmentSpec[] | undefined) {
   return (specs ?? []).map((a) =>
     createAttachment(
       a.kind === 'code'
@@ -70,7 +70,7 @@ export function attachmentsOf(specs: AttachmentSpec[] | undefined) {
 }
 
 /** A native element for a spec, at its natural size (grown, never shrunk, from the type's default). */
-export function elementFor(spec: NodeSpec, ctx: DescribeContext, parentId?: string): DraftNode {
+function elementFor(spec: NodeSpec, ctx: DescribeContext, parentId?: string): DraftNode {
   const node = createNode({
     id: spec.id,
     type: spec.shape.type,
@@ -831,7 +831,7 @@ export function noteNode(spec: NoteSpec, ctx: DescribeContext): DraftNode {
 }
 
 /** The attachment a spec folds into, under the spec's own id — sized as the card it detaches to. */
-export function attachmentFor(spec: NoteSpec, ctx: DescribeContext): Attachment {
+function attachmentFor(spec: NoteSpec, ctx: DescribeContext): Attachment {
   const accent = spec.color ? { accent: spec.color } : {};
   if (spec.type === 'code') {
     const code = spec.code ?? '';

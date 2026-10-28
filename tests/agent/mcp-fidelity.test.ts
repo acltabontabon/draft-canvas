@@ -28,7 +28,7 @@ describe('MCP fidelity regressions', () => {
     const proposal = prepareProposal(file, [], [{ op: 'remove', ids: ['api'] }], undefined, undefined);
     const changed = { ...file, nodes: file.nodes.map((n) => n.id === 'api' ? { ...n, text: 'Changed by person' } : n) };
     expect(preconditionConflicts(changed, [], proposal.preconditions).map((c) => c.id)).toContain('api');
-    expect(proposal.preconditions.entities?.r).toBeDefined();
+    expect(proposal.preconditions.entities?.['edge:r']).toBeDefined();
   });
 
   it('detects concurrent edits to technology, attachments, flows and connector direction', () => {
@@ -51,7 +51,7 @@ describe('MCP fidelity regressions', () => {
   it('captures added connector endpoints as dependencies without blocking unrelated changes', () => {
     const file = base();
     const proposal = prepareProposal(file, [], [{ op: 'add', nodes: [{ id: 'worker', type: 'worker', label: 'Worker' }], relationships: [{ id: 'new', from: 'api', to: 'worker' }] }], undefined, undefined);
-    expect(proposal.preconditions.entities?.api).toBeDefined();
+    expect(proposal.preconditions.entities?.['node:api']).toBeDefined();
     const other = { ...file, nodes: file.nodes.map((n) => n.id === 'db' ? { ...n, text: 'Unrelated' } : n) };
     expect(preconditionConflicts(other, [], proposal.preconditions)).toEqual([]);
   });
@@ -234,7 +234,7 @@ describe('MCP fidelity regressions', () => {
     const result = applyUpdate(file, [], [{ op: 'update', id: 'api', set: { evidence } }], undefined);
     expect(result.file.nodes[0]).toMatchObject({ x: 0, y: 0, width: 24, height: 24 });
     expect(result.quality.errors).toEqual([]);
-    expect(prepareProposal(file, [], [{ op: 'update', id: 'api', set: { evidence } }], undefined, undefined).preconditions.entities?.api).toBeDefined();
+    expect(prepareProposal(file, [], [{ op: 'update', id: 'api', set: { evidence } }], undefined, undefined).preconditions.entities?.['node:api']).toBeDefined();
     expect(() => build({ nodes: [{ id: 'api', type: 'api', label: 'API', evidence: [{ path: 'https://example.com/source.ts', basis: 'observed' }] }] })).toThrow();
   });
 

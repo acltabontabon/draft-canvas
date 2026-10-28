@@ -28,7 +28,7 @@ import {
   readSourceFormatPreference,
   writeEditableImagePreference,
   writeSourceFormatPreference,
-} from './exportPreferences';
+} from '../../export/exportPreferences';
 import { fileOf, fileWithLiveViewport, useEditorStore } from '../../store/editorStore';
 import { ownerAt, viewOf } from '../../depth/tree';
 import { displayNameFor } from '../../document/factory';
@@ -40,8 +40,8 @@ import { ExportSharePanel, type ShareChoice } from './ExportSharePanel';
 import { ExportShareResult } from './ExportShareResult';
 import { ExportShareProgress } from './ExportShareProgress';
 import type { ShareStage } from '../../share/compress';
-import { usePersonality } from '../personality/usePersonality';
-import { useTheme } from '../theme/useTheme';
+import { usePersonality } from '../../theme/usePersonality';
+import { useTheme } from '../../theme/useTheme';
 import { Button } from '../common/Button';
 import { Icon } from '../common/Icon';
 import { Modal } from '../common/Modal';
@@ -51,7 +51,7 @@ import { ExportImagePanel } from './ExportImagePanel';
 import { ExportSequencePanel } from './ExportSequencePanel';
 import { ExportArtifact, type ArtifactVisual } from './ExportArtifact';
 import { SecureExportPrompt } from './SecureExportPrompt';
-import { DEFAULT_PNG_SCALE, PNG_SCALES, type DocumentFormat, type ExportMode, type ImageFormat, type PngScale } from './exportTypes';
+import { DEFAULT_PNG_SCALE, PNG_SCALES, type DocumentFormat, type ExportMode, type ImageFormat, type PngScale } from '../../export/exportTypes';
 import type { ThemeName } from '../../render/theme/tokens';
 import { fittedScale } from '../../render/png/rasterize';
 import { count } from '../../lib/plural';

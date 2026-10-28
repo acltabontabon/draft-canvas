@@ -1,5 +1,5 @@
 import { SERVICE_KINDS } from '../document/types';
-import { SERVICE_KIND_OPTION_LABELS } from '../ui/Editor/nodeKindLabels';
+import { SERVICE_KIND_OPTION_LABELS } from '../lib/nodeKindLabels';
 import { shapeVariantOptions } from './shapeVariantOptions';
 
 /** The Service kind picker's shared option list — see `dataStoreOptions.tsx`. */

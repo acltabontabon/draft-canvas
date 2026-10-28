@@ -628,6 +628,40 @@ it('selective undo of a delete puts the element back where it was in its list', 
   expect(redo.file.flows.map((flow) => flow.title)).toEqual(['First', 'Third', 'Theirs']);
 });
 
+it('selective undo restores several deleted items from the head of a list in their order', () => {
+  const a = createNode({ type: 'service', x: 0, y: 0, text: 'A' });
+  const b = createNode({ type: 'service', x: 200, y: 0, text: 'B' });
+  let f0 = addNodes(createDocument('Order'), [a, b]);
+  f0 = addEdges(f0, ['one', 'two', 'three'].map((label) => createEdge({ source: a.id, target: b.id, label })));
+  for (const title of ['First', 'Second', 'Third']) f0 = addFlow(f0, createFlow({ title }));
+  // Both at the head: each used to take the other, still parked at the end, as its next neighbour.
+  const f1 = deleteFlow(deleteFlow(removeElements(f0, [], [f0.edges[0]!.id, f0.edges[1]!.id]), f0.flows[0]!.id), f0.flows[1]!.id);
+
+  const step = revertKeys(f1, f1, f0, changeKeys(f0, f1));
+  expect(step.blocked).toBe(false);
+  expect(step.file.edges.map((edge) => edge.label)).toEqual(['one', 'two', 'three']);
+  expect(step.file.flows.map((flow) => flow.title)).toEqual(['First', 'Second', 'Third']);
+});
+
+it('selective undo of any set of deletions restores the list order exactly', () => {
+  fc.assert(
+    fc.property(fc.array(fc.boolean(), { minLength: 6, maxLength: 6 }), fc.array(fc.boolean(), { minLength: 5, maxLength: 5 }), (edgeMask, flowMask) => {
+      const a = createNode({ type: 'service', x: 0, y: 0, text: 'A' });
+      const b = createNode({ type: 'service', x: 200, y: 0, text: 'B' });
+      let f0 = addNodes(createDocument('Order'), [a, b]);
+      f0 = addEdges(f0, edgeMask.map((_, i) => createEdge({ source: a.id, target: b.id, label: `e${i}` })));
+      flowMask.forEach((_, i) => { f0 = addFlow(f0, createFlow({ title: `f${i}` })); });
+      let f1 = removeElements(f0, [], f0.edges.filter((_, i) => edgeMask[i]).map((edge) => edge.id));
+      for (const flow of f0.flows.filter((_, i) => flowMask[i])) f1 = deleteFlow(f1, flow.id);
+
+      const step = revertKeys(f1, f1, f0, changeKeys(f0, f1));
+      expect(step.file.edges.map((edge) => edge.id)).toEqual(f0.edges.map((edge) => edge.id));
+      expect(step.file.flows.map((flow) => flow.id)).toEqual(f0.flows.map((flow) => flow.id));
+    }),
+    { seed: 4242, numRuns: 200 },
+  );
+});
+
 it('selective undo refuses to take away a connector somebody else changed, even one the undone edit added', () => {
   const a = createNode({ type: 'service', x: 0, y: 0, text: 'A' });
   const f0 = addNodes(createDocument('Theirs'), [a]);

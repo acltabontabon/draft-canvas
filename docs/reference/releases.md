@@ -12,13 +12,10 @@ are generated from it (`scripts/changelog.mjs`).
 - Highlight a bullet with a **bold title** and `<!-- highlight -->`.
 - Minor and major releases get a launch-style page; a patch opts in with `<!-- launch -->` on its own
   line in a platform section.
-- A launch page can include screenshots from `docs/media/releases/vX.Y.Z/screenshots.json`.
-  Add an array of `{ "file": "nodi.png", "alt": "What the screenshot shows", "platform": "desktop" }`
-  entries, where platform is `shared`, `desktop` or `web`. Images must be regular PNG files in the
-  same directory, with lowercase kebab-case filenames. The generator checks every image and filters
-  the gallery for platform previews. No manifest means no gallery; historical releases need no changes.
-  Screenshots appear between the highlights and full notes, and their URLs and the README link point
-  to the release tag so later edits cannot change a published release's examples.
+- A launch page can include screenshots listed in `docs/media/releases/vX.Y.Z/screenshots.json`: an
+  array of `{ "file": "nodi.png", "alt": "What it shows", "platform": "desktop" }`, where platform is
+  `shared`, `desktop` or `web` and `file` is a lowercase kebab-case PNG in the same directory. The
+  generator validates the images. Without a manifest there is no gallery.
 
 ```markdown
 ### Shared
@@ -53,23 +50,6 @@ The tag runs [release.yml](../../.github/workflows/release.yml): full CI, a draf
 [desktop release](desktop-updates.md#what-a-release-does). After that succeeds, the
 [website](website.md) deploys and, for stable tags, [Homebrew](desktop-updates.md#homebrew-releases)
 updates.
-
-## Editorial updates after publication
-
-A launch page can be curated as an illustrated tour, with the tagged changelog and README linked
-for the complete notes. Keep setup steps and privacy boundaries accurate: distinguish encrypted
-peer collaboration from the unencrypted desktop LAN option, and explain the agent provider's access
-to diagram context and permitted code. Give informative images descriptive alt text.
-
-Commit new media separately and pin its public URLs to that media commit. Keep the published release
-tag and installer assets in place. Preview the Markdown with GitHub's renderer before editing the
-published notes with `gh release edit`, then inspect the live page, animations, links and narrow layouts.
-
-For wide screenshot galleries, use a `<picture>` with a phone layout selected by
-`<source media="(max-width: 600px)">`. Stack close-ups from the same captures so controls and text
-remain readable; link the picture to the full desktop image. Use an appropriately sized animation
-for phones too. Verify the rendered page at 320, 390 and 430 pixels, check intermediate widths for
-button wrapping, and restore the browser viewport after reviewing.
 
 ## Desktop previews
 

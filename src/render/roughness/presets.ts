@@ -1,4 +1,4 @@
-import type { PersonalityPreset } from '../../ui/personality/usePersonality';
+import type { PersonalityPreset } from '../../theme/usePersonality';
 
 export interface PersonalityProfile {
   /** Corner/vertex jitter magnitude, in canvas units. 0 = no change from Clean. */

@@ -1,5 +1,5 @@
 import type { useReactFlow } from '@xyflow/react';
-import type { Preset } from '../canvas/presets';
+import type { Preset } from '../lib/presets';
 import type { DraftNode } from '../document/types';
 import type { FlowPlaybackController } from '../presentation/useFlowPlayback';
 import type { EditorStore } from '../store/editorStore';

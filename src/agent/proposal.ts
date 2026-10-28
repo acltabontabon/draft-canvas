@@ -21,6 +21,27 @@ export interface EntitySnapshot {
   value: Record<string, unknown>;
 }
 
+const KEY_PREFIX = { node: 'node', edge: 'edge', flow: 'flow', 'open point': 'point' } as const;
+
+/**
+ * Snapshots are keyed by kind and id because the id spaces are separate: a file may hold a node and a
+ * connector both called `a`, and one dictionary on the bare id let the later kind hide the earlier,
+ * so an edit to the node went unnoticed. Views keep their `@view:` key, which no id can start with.
+ */
+function snapshotKey(kind: EntitySnapshot['kind'], id: string): string {
+  return kind === 'view' ? id : `${KEY_PREFIX[kind]}:${id}`;
+}
+
+/**
+ * The key and bare id of a stored entry. Proposals persisted before keys carried a kind are keyed by
+ * the bare id, so an entry whose key lacks its kind's prefix is read as that old form.
+ */
+function entryKey(key: string, was: EntitySnapshot): { key: string; id: string } {
+  if (was.kind === 'view') return { key, id: key };
+  const prefix = `${KEY_PREFIX[was.kind]}:`;
+  return key.startsWith(prefix) ? { key, id: key.slice(prefix.length) } : { key: prefix + key, id: key };
+}
+
 /** Comparable content includes geometry and nested removals, not just labels. */
 export function snapshotsOf(file: DraftDocument): Record<string, EntitySnapshot> {
   const out = Object.create(null) as Record<string, EntitySnapshot>;
@@ -28,12 +49,12 @@ export function snapshotsOf(file: DraftDocument): Record<string, EntitySnapshot>
     out[`@view:${path.join('/')}`] = { kind: 'view', path: [...path], value: { level: ('level' in graph ? graph.level : undefined) ?? null } };
     for (const node of graph.nodes) {
       const { inside: _inside, ...own } = node;
-      out[node.id] = { kind: 'node', path: [...path], value: own };
+      out[snapshotKey('node', node.id)] = { kind: 'node', path: [...path], value: own };
     }
-    for (const edge of graph.edges) out[edge.id] = { kind: 'edge', path: [...path], value: { ...edge } };
-    for (const flow of graph.flows) out[flow.id] = { kind: 'flow', path: [...path], value: { ...flow } };
+    for (const edge of graph.edges) out[snapshotKey('edge', edge.id)] = { kind: 'edge', path: [...path], value: { ...edge } };
+    for (const flow of graph.flows) out[snapshotKey('flow', flow.id)] = { kind: 'flow', path: [...path], value: { ...flow } };
   });
-  for (const point of file.openPoints ?? []) out[point.id] = { kind: 'open point', path: [], value: { ...point } };
+  for (const point of file.openPoints ?? []) out[snapshotKey('open point', point.id)] = { kind: 'open point', path: [], value: { ...point } };
   return out;
 }
 
@@ -75,14 +96,19 @@ export function prepareProposal(file: DraftDocument, path: DepthPath, rawOps: un
   const original = snapshotsOf(file);
   const proposed = snapshotsOf(result.file);
   const entities = Object.create(null) as Record<string, EntitySnapshot>;
-  for (const [id, snapshot] of Object.entries(original)) {
-    if (comparable(snapshot) !== comparable(proposed[id])) entities[id] = snapshot;
+  for (const [key, snapshot] of Object.entries(original)) {
+    if (comparable(snapshot) !== comparable(proposed[key])) entities[key] = snapshot;
   }
   // Referenced existing elements (an added connector's endpoints, attachment destinations and
   // flow members) are dependencies even when the patch does not change their own fields.
   const dependencies = (value: unknown): void => {
-    if (typeof value === 'string' && original[value]) entities[value] = original[value]!;
-    else if (Array.isArray(value)) value.forEach(dependencies);
+    if (typeof value === 'string') {
+      // An id could name any kind; depending on all of them is the safe reading.
+      for (const kind of ['node', 'edge', 'flow', 'open point'] as const) {
+        const key = snapshotKey(kind, value);
+        if (original[key]) entities[key] = original[key]!;
+      }
+    } else if (Array.isArray(value)) value.forEach(dependencies);
     else if (value && typeof value === 'object') for (const [key, field] of Object.entries(value)) if (['id', 'ids', 'from', 'to', 'group', 'parent', 'about', 'near', 'relationship', 'steps', 'owner', 'nodes', 'relationships', 'flows', 'ops', 'set'].includes(key)) dependencies(field);
   };
   dependencies(rawOps);
@@ -131,17 +157,20 @@ export function preconditionConflicts(file: DraftDocument, path: DepthPath, prec
   const conflicts: PreconditionConflict[] = [];
   if (preconditions.entities) {
     const current = snapshotsOf(file);
-    for (const [id, was] of Object.entries(preconditions.entities)) {
-      const now = current[id];
+    const captured = new Set<string>();
+    for (const [stored, was] of Object.entries(preconditions.entities)) {
+      const { key, id } = entryKey(stored, was);
+      captured.add(key);
+      const now = current[key];
       if (comparable(was) !== comparable(now)) conflicts.push({ id, kind: was.kind, was: was.value, now: now?.value ?? null });
     }
     if (proposedFile) {
       const proposed = snapshotsOf(proposedFile);
       // Re-running a removal or arrange can reach work added since submission: a new connector,
       // room or open point was absent from the captured dependencies. It needs a revised proposal.
-      for (const [id, now] of Object.entries(current)) {
-        if (!Object.hasOwn(preconditions.entities, id) && comparable(now) !== comparable(proposed[id])) {
-          conflicts.push({ id, kind: now.kind, was: null, now: now.value });
+      for (const [key, now] of Object.entries(current)) {
+        if (!captured.has(key) && comparable(now) !== comparable(proposed[key])) {
+          conflicts.push({ id: entryKey(key, now).id, kind: now.kind, was: null, now: now.value });
         }
       }
     }

@@ -10,7 +10,7 @@ import { useInternalNode, useReactFlow, useStore } from '@xyflow/react';
 import { nodeCommands, primaryCommandsFor } from '../commands/registry';
 import { menuLabelOf } from '../commands/contextMenu';
 import { DepthGlyph } from './DepthGlyph';
-import { usePersonality } from '../ui/personality/usePersonality';
+import { usePersonality } from '../theme/usePersonality';
 import type { Command, CommandContext } from '../commands/types';
 import {
   ACCENTS,
@@ -46,7 +46,7 @@ import { familyOf } from '../render/text/fonts';
 import { useEditorStore } from '../store/editorStore';
 import { useUiStore } from '../store/uiStore';
 import { nodeIndex } from '../store/selectors';
-import { useThemeValue } from '../ui/theme/useTheme';
+import { useThemeValue } from '../theme/useTheme';
 import { Button } from '../ui/common/Button';
 import { Tooltip, TooltipGroup } from '../ui/common/Tooltip';
 import {
@@ -54,7 +54,7 @@ import {
   BOUNDARY_PRESET_OPTION_LABELS,
   NOTE_LABELS,
   TEXT_ROLE_OPTION_LABELS,
-} from '../ui/Editor/nodeKindLabels';
+} from '../lib/nodeKindLabels';
 import { shapeVariantOptions } from './shapeVariantOptions';
 import { ACTOR_FRAME_OPTIONS, ACTOR_ICON_OPTIONS } from './actorOptions';
 import { COMPONENT_ICON_OPTIONS } from './componentOptions';

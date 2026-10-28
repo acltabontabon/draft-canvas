@@ -37,7 +37,7 @@ import { lensFlow, useEditorStore } from '../store/editorStore';
 import { PresentationPointer } from './presentation/PresentationPointer';
 import { edgeIndex, nodeIndex } from '../store/selectors';
 import { pointer, useUiStore } from '../store/uiStore';
-import { useThemeValue } from '../ui/theme/useTheme';
+import { useThemeValue } from '../theme/useTheme';
 import { CanvasBackground } from './CanvasBackground';
 import { ATTACH_DWELL_MS, evaluateAttachCandidates } from './dragTargets';
 import {

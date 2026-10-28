@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { readPreference, writePreference } from '../../lib/preferences';
-import { PERSONALITY_PRESETS, PersonalityContext, type PersonalityPreset } from './usePersonality';
+import { PERSONALITY_PRESETS, PersonalityContext, type PersonalityPreset } from '../../theme/usePersonality';
 
 const STORAGE_KEY = 'personality';
 

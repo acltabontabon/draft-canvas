@@ -209,7 +209,7 @@ export function titleOf(text: string): string | null {
  * look inside a project's folders threw on `undefined.includes`. Entries that aren't a diagram's
  * listing are dropped rather than trusted.
  */
-export function scanOf(raw: unknown): ProjectScan {
+function scanOf(raw: unknown): ProjectScan {
   const value = (raw ?? {}) as { files?: unknown; truncatedDirs?: unknown };
   const files = Array.isArray(value.files)
     ? value.files.filter(

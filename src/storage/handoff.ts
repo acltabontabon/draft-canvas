@@ -165,8 +165,9 @@ export function sendDiagrams(options: SendOptions): Promise<SendOutcome> {
   if (!popup) return Promise.resolve({ kind: 'blocked' });
 
   /** The next message `step` from the new tab — and only from it, at its origin. */
-  const next = <T>(parse: (data: unknown) => T | null, timeoutMs: number, stage: 'ready' | 'ack') =>
-    new Promise<T | SendOutcome>((resolve) => {
+  const next = <T>(parse: (data: unknown) => T | null, timeoutMs: number, stage: 'ready' | 'ack') => {
+    let cancel = () => {};
+    const promise = new Promise<T | SendOutcome>((resolve) => {
       const finish = (value: T | SendOutcome) => {
         target.removeEventListener('message', onMessage);
         clearTimeout(timer);
@@ -183,10 +184,13 @@ export function sendDiagrams(options: SendOptions): Promise<SendOutcome> {
       const poll = setInterval(() => {
         if (popup.closed) finish({ kind: 'closed' });
       }, closedPollMs);
+      cancel = () => finish({ kind: 'closed' });
     });
+    return { promise, cancel };
+  };
 
   return (async (): Promise<SendOutcome> => {
-    const ready = await next((data) => parseHandoff(data, 'ready'), readyTimeoutMs, 'ready');
+    const ready = await next((data) => parseHandoff(data, 'ready'), readyTimeoutMs, 'ready').promise;
     if ('kind' in ready) return ready;
     let backup;
     try {
@@ -209,9 +213,11 @@ export function sendDiagrams(options: SendOptions): Promise<SendOutcome> {
       const message: HandoffBackup = { ...envelope('backup'), bytes: buffer, count };
       popup.postMessage(message, appOrigin, [buffer]);
     } catch (error) {
+      // Nobody will answer a message that was never sent: release the listener, timer and poll now.
+      answer.cancel();
       return { kind: 'failed', message: error instanceof Error ? error.message : 'Your diagrams could not be sent.' };
     }
-    const ack = await answer;
+    const ack = await answer.promise;
     if ('kind' in ack) return ack;
     if (ack.error !== undefined) return { kind: 'failed', message: ack.error };
     return { kind: 'moved', restored: ack.restored, renamed: ack.renamed, skipped: ack.skipped, unreadable: skipped.length };

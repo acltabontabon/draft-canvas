@@ -1,9 +1,9 @@
-import { flash, focusNodes } from '../../commands/search';
-import type { CommandContext } from '../../commands/types';
-import { isEditableTarget } from '../../lib/isEditableTarget';
-import { prefersReducedMotion } from '../../lib/motion';
-import { useEditorStore } from '../../store/editorStore';
-import { useUiStore } from '../../store/uiStore';
+import { flash, focusNodes } from './search';
+import type { CommandContext } from './types';
+import { isEditableTarget } from '../lib/isEditableTarget';
+import { prefersReducedMotion } from '../lib/motion';
+import { useEditorStore } from '../store/editorStore';
+import { useUiStore } from '../store/uiStore';
 import { pictureRoom, takePicture, rectOfEntrance, rectOfRoom, type ScreenRect } from './depthRects';
 
 /**

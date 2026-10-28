@@ -9,7 +9,7 @@ import { describeEdge } from '../src/edges/describe';
 import { StaticTextMeasurer } from '../src/render/text/measure';
 import { THEMES } from '../src/render/theme/tokens';
 import { sanitizeChanges } from '../src/collab/sanitize';
-import { PERSONALITY_PRESETS } from '../src/ui/personality/usePersonality';
+import { PERSONALITY_PRESETS } from '../src/theme/usePersonality';
 
 const retired = ['sculpted', 'ribbon', 'technical', 'pencil'];
 

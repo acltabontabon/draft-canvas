@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import type { OpenPointKind } from '../document/types';
 import { MARKER_SIZE, describeKindTab } from '../openPoints/marker';
 import { beginClipScope, emitDisplayList } from '../render/svg/emit';
-import { useThemeValue } from '../ui/theme/useTheme';
+import { useThemeValue } from '../theme/useTheme';
 import { SvgSurface } from './SvgSurface';
 
 /**

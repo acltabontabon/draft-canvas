@@ -124,6 +124,25 @@ describe('preconditionConflicts', () => {
     expect(conflicts).toEqual([expect.objectContaining({ id: 'db', now: null })]);
   });
 
+  it('tells a node and a connector that share an id apart', () => {
+    const file = base();
+    // Ids are separate per kind, so a connector may carry a node's id.
+    const shared: DraftDocument = { ...file, edges: file.edges.map((edge) => ({ ...edge, id: 'api' })) };
+    const { preconditions } = prepareProposal(shared, [], [{ op: 'update', id: 'api', set: { label: 'Renamed' } }], undefined, undefined);
+    expect(Object.keys(preconditions.entities ?? {})).toEqual(expect.arrayContaining(['node:api', 'edge:api']));
+    const edited = { ...shared, nodes: shared.nodes.map((n) => (n.id === 'api' ? { ...n, text: 'Edited by person' } : n)) };
+    expect(preconditionConflicts(edited, [], preconditions)).toEqual([expect.objectContaining({ id: 'api', kind: 'node' })]);
+  });
+
+  it('still reads a proposal persisted with bare-id snapshot keys', () => {
+    const file = base();
+    const { preconditions } = prepareProposal(file, [], [{ op: 'update', id: 'api', set: { label: 'Renamed' } }], undefined, undefined);
+    const legacy = { ...preconditions, entities: Object.fromEntries(Object.entries(preconditions.entities ?? {}).map(([key, value]) => [key.startsWith('node:') || key.startsWith('edge:') ? key.slice(key.indexOf(':') + 1) : key, value])) };
+    expect(preconditionConflicts(file, [], legacy)).toEqual([]);
+    const edited = { ...file, nodes: file.nodes.map((n) => (n.id === 'api' ? { ...n, text: 'Edited by person' } : n)) };
+    expect(preconditionConflicts(edited, [], legacy)).toEqual([expect.objectContaining({ id: 'api', kind: 'node' })]);
+  });
+
   it('does not flag unrelated document drift as a conflict', () => {
     const file = base();
     const { preconditions } = prepareProposal(file, [], [{ op: 'update', id: 'api', set: { label: 'Renamed' } }], undefined, undefined);

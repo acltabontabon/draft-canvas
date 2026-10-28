@@ -249,6 +249,13 @@ describe('.draftcanvas round trip', () => {
     expect(fileNameFor('決済フロー', '.png')).toBe('決済フロー.png');
     expect(fileNameFor('a\\b:c*d?"e<f>g|h')).toBe('a-b-c-d-e-f-g-h.draftcanvas');
   });
+
+  it('truncates a long title on code points, never leaving half a surrogate pair', () => {
+    const name = fileNameFor('a'.repeat(59) + '\u{1D49C}' + 'b', '.x');
+    expect(name).toBe(`${'a'.repeat(59)}\u{1D49C}.x`.toLowerCase());
+    expect(name).not.toMatch(/[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/);
+    expect(Array.from(fileNameFor('x'.repeat(100), '')).length).toBe(60);
+  });
 });
 
 /**

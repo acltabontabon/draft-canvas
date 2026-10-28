@@ -1,13 +1,13 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Toolbar } from '../src/ui/Editor/Toolbar';
-import { ALL_PRESETS, SELECT_TOOLTIP, tooltipContentFor } from '../src/canvas/presets';
+import { ALL_PRESETS, SELECT_TOOLTIP, tooltipContentFor } from '../src/lib/presets';
 import { useEditorStore } from '../src/store/editorStore';
 import { useUiStore } from '../src/store/uiStore';
 
 /**
  * Every toolbar primitive teaches its own architectural semantics on hover/focus instead of just
- * repeating its label — see `src/canvas/presets.ts`'s `description`/`usageHint` fields and
+ * repeating its label — see `src/lib/presets.ts`'s `description`/`usageHint` fields and
  * `ui/common/Tooltip.tsx`. These tests read expected copy from that same canonical source (never
  * a hardcoded duplicate string) so the tooltip can never silently drift from it.
  */

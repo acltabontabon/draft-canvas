@@ -1,5 +1,5 @@
 import { DATABASE_KINDS } from '../document/types';
-import { DATABASE_KIND_OPTION_LABELS } from '../ui/Editor/nodeKindLabels';
+import { DATABASE_KIND_OPTION_LABELS } from '../lib/nodeKindLabels';
 import { shapeVariantOptions } from './shapeVariantOptions';
 
 /** The Data Store kind picker's shared option list — icon + label — so `Inspector.tsx`'s and

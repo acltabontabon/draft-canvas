@@ -3,7 +3,7 @@ import type { DraftNode } from '../document/types';
 import { describeContext, describeNode } from '../nodes/describe';
 import { serialize } from '../render/svg/element';
 import { emitDisplayList } from '../render/svg/emit';
-import { useThemeValue } from '../ui/theme/useTheme';
+import { useThemeValue } from '../theme/useTheme';
 import { useTechnologyIcon } from './useTechnologyIcon';
 
 /**

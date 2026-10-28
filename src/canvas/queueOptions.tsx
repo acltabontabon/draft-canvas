@@ -1,5 +1,5 @@
 import { QUEUE_KINDS } from '../document/types';
-import { QUEUE_KIND_OPTION_LABELS } from '../ui/Editor/nodeKindLabels';
+import { QUEUE_KIND_OPTION_LABELS } from '../lib/nodeKindLabels';
 import { shapeVariantOptions } from './shapeVariantOptions';
 
 /** The Queue kind picker's shared option list — see `dataStoreOptions.tsx`. */

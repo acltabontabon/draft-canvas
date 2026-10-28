@@ -251,7 +251,9 @@ export function useHostDocument(session: DocumentSession, channel?: HostChannel 
           const id = command.id;
           // An agent's flush (see `desktop/controller.ts`) keeps the field the person is typing in.
           const keepFocus = command.keepFocus === true;
-          void flush({ keepFocus }).then(() => post({ type: 'draft-canvas:flushed', id }));
+          void flush({ keepFocus })
+            .then(() => post({ type: 'draft-canvas:flushed', id }))
+            .catch((error: unknown) => logDiagnostic(error, { operation: 'host-flush-ack' }));
         } else if (command.command === 'close') {
           void sessionRef.current.closeDocument();
         } else if (__DESKTOP__ && command.command === 'agent' && host.kind === 'desktop' && typeof command.id === 'number' && command.request) {
@@ -309,7 +311,9 @@ export function useHostDocument(session: DocumentSession, channel?: HostChannel 
     const onKeyDown = (event: KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey) || event.altKey || event.key.toLowerCase() !== 's') return;
       event.preventDefault();
-      void flush().then(() => post({ type: 'draft-canvas:save', saveAs: event.shiftKey }));
+      void flush()
+        .then(() => post({ type: 'draft-canvas:save', saveAs: event.shiftKey }))
+        .catch((error: unknown) => logDiagnostic(error, { operation: 'host-save-request' }));
     };
 
     const onLinkClick = (event: MouseEvent) => {

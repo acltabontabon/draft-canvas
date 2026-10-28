@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { Preset } from '../../canvas/presets';
+import type { Preset } from '../../lib/presets';
 import { rank, type RankedEntry } from '../../commands/fuzzy';
 import { commandsFor, warmCopyExports } from '../../commands/registry';
 import { frequencyBonus, recentIds, recordUse } from '../../commands/history';

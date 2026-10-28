@@ -1,5 +1,5 @@
 import { memo, useMemo } from 'react';
-import type { PersonalityPreset } from '../ui/personality/usePersonality';
+import type { PersonalityPreset } from '../theme/usePersonality';
 import { DEPTH_GLYPH_SIZE, depthGlyphPaths } from './insideMark';
 
 /**
