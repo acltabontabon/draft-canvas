@@ -7,7 +7,7 @@
     <title>Draft Canvas — Draw software. Explain how it works.</title>
     <meta
       name="description"
-      content="A local-first canvas for turning software architecture into a clear visual story. Shapes that know what they are, depth you can step into, flows you can present, and a coding agent that can draw with you. In your browser with no account, or on your desktop."
+      content="A desktop canvas for software architecture, for macOS and Windows. Draw systems beside your code, reason with Nodi and your own agent, and explain how it works. Free and open source."
     />
     <link rel="canonical" href="https://draftcanvas.dev/" />
 
@@ -17,7 +17,7 @@
     <meta property="og:title" content="Draft Canvas — Draw software. Explain how it works." />
     <meta
       property="og:description"
-      content="A local-first canvas for turning software architecture into a clear visual story. No account, nothing uploaded."
+      content="Your architecture, your agents, your decisions. Draft Canvas Desktop brings diagrams, local files and your own coding agent together on macOS and Windows. Free and open source."
     />
     <meta property="og:image" content="https://draftcanvas.dev/og-image.png" />
     <meta property="og:image:width" content="1200" />
@@ -30,7 +30,7 @@
     <meta name="twitter:title" content="Draft Canvas — Draw software. Explain how it works." />
     <meta
       name="twitter:description"
-      content="A local-first canvas for turning software architecture into a clear visual story. No account, nothing uploaded."
+      content="Your architecture, your agents, your decisions. Draft Canvas Desktop brings diagrams, local files and your own coding agent together on macOS and Windows. Free and open source."
     />
     <meta name="twitter:image" content="https://draftcanvas.dev/og-image.png" />
     <meta
@@ -47,352 +47,106 @@
     <link rel="stylesheet" href="./src/styles.css" />
   </head>
 
-  <body>
+  <body class="studio">
+    <svg class="ink-filter-defs" width="0" height="0" aria-hidden="true" focusable="false">
+      <defs>
+        <filter id="charcoal-ink" color-interpolation-filters="sRGB" x="0" y="0" width="100%" height="100%">
+          <feColorMatrix type="matrix" values="0 0 0 0 .78  0 0 0 0 .81  0 0 0 0 .85  .2126 .7152 .0722 0 -.10"/>
+          <feComponentTransfer><feFuncA type="linear" slope="1.3"/></feComponentTransfer>
+          <feComposite in2="SourceAlpha" operator="in"/>
+        </filter>
+        <filter id="editor-ink" color-interpolation-filters="sRGB">
+          <feColorMatrix type="matrix" values="0 0 0 0 .78 0 0 0 0 .82 0 0 0 0 .88 -.2126 -.7152 -.0722 0 .97"/>
+          <feComponentTransfer><feFuncA type="gamma" amplitude="1" exponent=".55" offset="0"/></feComponentTransfer>
+          <feComposite in2="SourceAlpha" operator="in"/>
+        </filter>
+        <filter id="editor-session-ink" color-interpolation-filters="sRGB">
+          <feColorMatrix type="matrix" values="0 0 0 0 .78 0 0 0 0 .82 0 0 0 0 .88 -.2126 -.7152 -.0722 0 .90"/>
+          <feComponentTransfer><feFuncA type="gamma" amplitude="1" exponent=".55" offset="0"/></feComponentTransfer>
+          <feComposite in2="SourceAlpha" operator="in"/>
+        </filter>
+        <filter id="editor-dark-ink" color-interpolation-filters="sRGB">
+          <feColorMatrix type="matrix" values="0 0 0 0 .82 0 0 0 0 .85 0 0 0 0 .9 .2126 .7152 .0722 0 -.12"/>
+          <feComponentTransfer><feFuncA type="gamma" amplitude="1" exponent=".48" offset="0"/></feComponentTransfer>
+          <feComposite in2="SourceAlpha" operator="in"/>
+        </filter>
+      </defs>
+    </svg>
     <a class="skip" href="#main">Skip to content</a>
-
-    <header class="masthead" id="masthead">
-      <a class="wordmark" href="#top" aria-label="Draft Canvas, top of page">
-        <svg class="mark" viewBox="0 0 32 32" width="24" height="24" aria-hidden="true" focusable="false">
-          <rect x="6" y="8" width="11" height="7" rx="2" fill="none" stroke="currentColor" stroke-width="2" />
-          <rect x="15" y="18" width="11" height="7" rx="2" fill="none" stroke="var(--ink-ghost)" stroke-width="2" />
-          <path d="M11.5 15.5v3.5h4" fill="none" stroke="currentColor" stroke-width="1.6" />
-        </svg>
-        <span>Draft Canvas</span>
-      </a>
-      <nav class="masthead-nav" aria-label="Site">
-        <a href="#features">Features</a>
-        <a href="./docs/">Docs</a>
-      </nav>
-      <a class="button button-primary masthead-cta" href="https://app.draftcanvas.dev/">Open editor</a>
+    <header class="studio-header">
+      <a class="studio-brand" href="#top" aria-label="Draft Canvas, top of page"><svg viewBox="0 0 32 32" width="25" height="25" aria-hidden="true"><rect x="3" y="4" width="16" height="11" rx="3"/><rect x="13" y="19" width="16" height="10" rx="3"/><path d="M11 15v9h2"/></svg>Draft Canvas</a>
+      <nav aria-label="Site"><a href="#features">Explore</a><a href="./docs/">Documentation ↗</a></nav>
+      <a class="studio-button header-button" href="#download" data-download>Get desktop <span>↓</span></a>
     </header>
-
     <main id="main">
-      <!-- ================================================================
-           THE SHEET. A pencil sketch, inked over — what the product does
-           to the diagram a meeting starts with, as the first thing you see.
-      ================================================================= -->
-      <section class="hero" id="top">
-        <div class="hero-words">
-          <h1>Draw software. <em>Explain</em> how it&nbsp;works.</h1>
-          <p class="lead">
-            A local-first canvas for turning architecture into a clear story. Sketch the idea, step
-            inside the detail, walk the room through the flow.
-          </p>
-          <div class="hero-actions">
-            <a class="button button-primary button-lg" href="https://app.draftcanvas.dev/" id="hero-cta">
-              <span id="hero-cta-label">Open live editor</span>
-              <small id="hero-cta-note">nothing to install</small>
-            </a>
-            <a class="button button-lg" href="#download" data-download>
-              <span class="downloads-label">Download desktop</span>
-              <small>macOS · Windows</small>
-            </a>
-          </div>
-          <p class="hero-fine">Free and open source <span aria-hidden="true">·</span> No account <span aria-hidden="true">·</span> Nothing you draw is uploaded</p>
-        </div>
-
-        <!-- Generated by www/scripts/hero-art.mjs, which rewrites everything between the markers.
-             Every ink silhouette follows src/nodes/describe.ts: the API's socket notch, the Worker's
-             second card, the plane behind a shape that has an inside view. -->
-        <figure class="hero-art hero-art-wide" role="img" aria-labelledby="art-caption">
-          <!-- art:wide -->
-          <svg class="art art-wide" viewBox="0 0 760 520" aria-hidden="true" focusable="false">
-            <defs>
-              <filter id="graphite-wide" x="-2%" y="-2%" width="104%" height="104%">
-                <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="49" result="grain"/>
-                <feDisplacementMap in="SourceGraphic" in2="grain" scale="1.6" xChannelSelector="R" yChannelSelector="G"/>
-              </filter>
-            </defs>
-            <g class="reg"><path d="M4 10h12M10 4v12"/><path d="M744 10h12M750 4v12"/><path d="M4 510h12M10 504v12"/><path d="M744 510h12M750 504v12"/></g>
-            <g class="guides"><path d="M0 114H760" pathLength="1" style="--d:0.1"/><path d="M0 341H760" pathLength="1" style="--d:0.2"/><path d="M104 30V470" pathLength="1" style="--d:0.3"/><path d="M380 30V470" pathLength="1" style="--d:0.3"/><path d="M600 30V470" pathLength="1" style="--d:0.4"/></g>
-            <g class="pencil" filter="url(#graphite-wide)"><path d="M20.2 79.2Q102.9 76.9 185.6 78.8" pathLength="1" style="--d:0.35"/><path d="M182.8 75.7Q182.5 113.9 184.3 152.1" pathLength="1" style="--d:0.42"/><path d="M188 148.8Q104.3 147.5 20.6 149.4" pathLength="1" style="--d:0.49"/><path d="M25.1 155.4Q23.9 115.2 23.6 74.9" pathLength="1" style="--d:0.56"/><path d="M34.4 77.4Q99.1 78.4 163.9 79.5" pathLength="1" style="--d:0.63"/><path d="M21.8 86.9Q23.2 114.7 25.7 142.5" pathLength="1" style="--d:0.7"/><path d="M290 78.1Q380.9 75.8 471.9 78.7" pathLength="1" style="--d:0.51"/><path d="M469.1 75.4Q469.3 113.4 466.9 151.5" pathLength="1" style="--d:0.58"/><path d="M469.6 151.1Q379.6 150.6 289.5 150" pathLength="1" style="--d:0.65"/><path d="M292.3 155.5Q291.4 115.1 293.2 74.8" pathLength="1" style="--d:0.72"/><path d="M304.4 80Q363 79.8 421.6 78" pathLength="1" style="--d:0.79"/><path d="M293.2 86.7Q293.7 116.1 293.3 145.5" pathLength="1" style="--d:0.86"/><path d="M570.4 99.2Q635.9 100.9 701.4 98.5" pathLength="1" style="--d:0.67"/><path d="M700.3 129.2Q635.7 129.6 571.2 129.9" pathLength="1" style="--d:0.74"/><path d="M573.9 129.9C573.3 129.9 571.1 130 569.9 129.6C568.7 129.2 567.9 128.4 566.8 127.6C565.8 126.7 564.3 125.7 563.5 124.6C562.7 123.5 562.3 122.2 561.8 120.9C561.3 119.6 560.9 118.2 560.6 116.9C560.4 115.5 560.3 114.3 560.4 112.8C560.4 111.4 560.5 109.6 560.8 108.2C561.2 106.9 561.8 105.9 562.6 104.7C563.3 103.6 564.4 102.1 565.4 101.1C566.3 100.2 567.2 99.4 568.4 98.9C569.5 98.4 571.2 98.4 572.4 98.3C573.7 98.1 575.4 98.1 575.9 98.1" pathLength="1" style="--d:0.81"/><path d="M696.6 129.8C695.6 129.6 692.4 129.8 690.6 128.8C688.8 127.9 687.1 126 685.7 124.2C684.3 122.4 682.8 120.2 682.3 118C681.8 115.7 682.4 113 682.8 110.6C683.2 108.2 683.5 105.4 684.7 103.5C686 101.6 688.3 100.1 690.3 99.2C692.2 98.2 694.3 97.6 696.4 97.8C698.5 97.9 700.9 98.9 702.9 100.1C704.9 101.3 707.2 102.9 708.5 104.9C709.8 106.9 710.6 109.7 710.7 112.1C710.9 114.6 710.4 117.1 709.6 119.4C708.7 121.7 707.4 124.3 705.8 126C704.2 127.8 702.2 129.6 700.1 130.1C698 130.7 694.3 129.6 693.2 129.5" pathLength="1" style="--d:0.88"/><path d="M395.4 306.4C397.6 306.7 404.7 307.6 408.5 308.3C412.2 309.1 414.8 309.9 417.7 311C420.7 312 424.4 313.5 426.1 314.8C427.7 316 427.8 317.4 427.7 318.7C427.7 320 427 321.6 425.9 322.8C424.7 324 423.4 325 420.9 325.9C418.5 326.9 414.9 327.8 411.2 328.5C407.5 329.3 403.2 330 398.8 330.4C394.4 330.8 389.6 331 384.8 331C380 331.1 374.5 331 369.8 330.7C365.1 330.3 361 329.8 356.8 329C352.6 328.3 348.1 327.1 344.6 326.1C341 325.2 337.8 324.2 335.5 323.1C333.2 322 331.4 320.9 330.9 319.5C330.4 318.1 331.5 316.4 332.3 315C333.1 313.6 333.8 312.4 335.7 311.3C337.5 310.1 340.3 308.9 343.4 308C346.6 307 350.6 306.1 354.9 305.6C359.1 305.2 364.1 305.5 368.9 305.3C373.7 305.1 378.8 304.3 383.6 304.5C388.5 304.7 393.2 305.7 397.9 306.4C402.6 307.1 409.5 308.2 411.8 308.6" pathLength="1" style="--d:0.83"/><path d="M332.8 315.8Q333.9 341.2 332.4 366.6" pathLength="1" style="--d:0.9"/><path d="M428.7 315.5Q428.4 340.7 428 365.9" pathLength="1" style="--d:0.97"/><path d="M428 363.7C427.8 364.3 427.6 366.1 426.5 367.3C425.4 368.4 423.6 369.5 421.4 370.4C419.3 371.4 416.5 372.2 413.6 372.9C410.7 373.7 407.7 374.3 404.2 374.9C400.7 375.5 396.5 376.2 392.5 376.5C388.5 376.9 384.3 377 380.2 377C376.1 377 371.8 376.7 367.7 376.5C363.6 376.2 359.3 375.8 355.6 375.3C352 374.7 348.6 374.1 345.7 373.3C342.9 372.6 340.6 371.7 338.6 370.7C336.6 369.7 334.8 368.4 333.8 367.3C332.7 366.1 332.5 364.4 332.3 363.8" pathLength="1" style="--d:1.04"/><path d="M549.8 300.1Q631.9 301.3 713.9 300.7" pathLength="1" style="--d:0.99"/><path d="M711.7 296.3Q712.3 337 711.3 377.8" pathLength="1" style="--d:1.06"/><path d="M715 372.5Q630.5 372.8 546 371.1" pathLength="1" style="--d:1.13"/><path d="M553 376.9Q552.2 336.9 552.1 296.9" pathLength="1" style="--d:1.2"/><path d="M710.4 307.7Q714.9 310.7 720.1 312.7" pathLength="1" style="--d:1.27"/><path d="M717.6 309.8Q718.2 344.9 718.7 380" pathLength="1" style="--d:1.34"/><path d="M721.1 377Q640 378.4 559 378.6" pathLength="1" style="--d:1.41"/><path d="M29.6 299.6Q134.8 301 240 300.6" pathLength="1" style="--d:1.15"/><path d="M236.5 297.1Q235.1 343.1 236.1 389.1" pathLength="1" style="--d:1.22"/><path d="M240.4 383.3Q136.8 383.5 33.2 384.3" pathLength="1" style="--d:1.29"/><path d="M35.2 386Q36.7 341.9 37.2 297.9" pathLength="1" style="--d:1.36"/><path d="M50.4 301.3Q129.1 301.5 207.8 301.7" pathLength="1" style="--d:1.43"/><path d="M35.7 309.8Q37.6 336.3 37 362.8" pathLength="1" style="--d:1.5"/><path d="M181.4 116.6Q237.9 119.2 294.5 118" pathLength="1" style="--d:1.31"/><path d="M284.7 120.6L292.6 116.3L284.7 112" pathLength="1" style="--d:1.43"/><path d="M377.5 146.9Q375.9 227.8 377.1 308.8" pathLength="1" style="--d:1.41"/><path d="M373.9 296.9L377.8 305L381.7 296.9" pathLength="1" style="--d:1.53"/><path d="M465.2 112.7Q514.6 112.4 563.9 111" pathLength="1" style="--d:1.51"/><path d="M552.4 117.1L560.6 113.3L552.4 109.5" pathLength="1" style="--d:1.63"/><path d="M603.4 128Q605.5 215.6 603.6 303.2" pathLength="1" style="--d:1.61"/><path d="M599 291.6L603.1 299.6L607.3 291.6" pathLength="1" style="--d:1.73"/><path d="M272.6 142.3C278.3 136.2 294.5 117.8 306.7 106C318.9 94.1 329.8 79.9 345.6 71.2C361.3 62.4 383.1 59.6 401.2 53.4C419.3 47.1 435.4 37.2 454.2 33.4C473 29.7 494.2 30.2 514.1 30.8C534 31.5 554.9 32.7 573.4 37.2C592 41.7 608 50.4 625.3 57.9C642.7 65.4 662.7 72 677.5 82.1C692.4 92.2 702 106.4 714.4 118.4C726.9 130.4 744.1 140.1 752.1 154C760.2 168 759.1 186.6 762.9 202.1C766.6 217.6 773.7 231.8 774.6 247C775.6 262.1 773.5 278 768.5 293.1C763.4 308.1 753.3 323.2 744.5 337.2C735.7 351.2 727.7 365.3 715.8 377.3C704 389.4 688.5 399.6 673.4 409.5C658.3 419.3 642.7 429.9 625 436.7C607.4 443.5 586.9 447.7 567.3 450.4C547.6 453.1 526.8 453.5 507.2 452.9C487.5 452.2 468.8 449.4 449.4 446.4C429.9 443.5 409 440.8 390.5 435.1C371.9 429.4 353 422.2 338 412C322.9 401.8 312 386.6 300 373.8C287.9 361.1 275.5 349.1 265.6 335.4C255.7 321.7 246.1 306.7 240.8 291.6C235.4 276.6 232.6 260.7 233.3 245.1C234.1 229.5 241.2 213.7 245.1 198.1C249.1 182.4 250.1 166 257 151.4C263.8 136.7 273.3 122 286.1 110.1C298.9 98.3 325.8 85.1 333.8 80.1" pathLength="1" style="--d:1.71"/><g class="scribble"><path d="M72 108.3C72.5 109.3 73.7 114 74.9 114.2C76.1 114.4 78 109.2 79.2 109.3C80.4 109.3 80.8 114.7 81.9 114.6C83.1 114.6 85 108.8 86.2 108.8C87.5 108.8 88.3 114.4 89.3 114.6C90.4 114.8 91.6 110 92.6 110C93.7 110.1 94.5 115 95.6 114.7C96.7 114.4 98.7 109.4 99.3 108.4" pathLength="1" style="--d:0.6"/><path d="M111.3 114.7C111.8 113.8 113.5 108.9 114.7 108.9C115.9 108.9 117.1 114.6 118.5 114.7C119.8 114.9 121.4 109.7 122.6 109.7C123.7 109.8 124.3 115.3 125.2 115.2C126.1 115.1 126.8 109.1 127.9 109.1C129 109 130.7 115 132 114.9C133.3 114.7 134.9 109.3 135.4 108.2" pathLength="1" style="--d:0.6"/><path d="M348 108C348.5 109.2 349.7 114.9 350.7 115.2C351.7 115.5 352.8 109.8 354.1 109.7C355.4 109.6 357.3 114.9 358.5 114.9C359.7 114.9 360.1 109.6 361.2 109.5C362.4 109.4 364 114.3 365.3 114.3C366.5 114.3 367.7 109.2 368.7 109.3C369.8 109.4 370.8 114.9 371.7 115C372.7 115.1 373.7 110.2 374.6 110.1C375.5 109.9 376.9 113.4 377.3 114" pathLength="1" style="--d:0.76"/><path d="M388.3 109.1C389 110 391.2 114.8 392.4 114.7C393.5 114.6 394.2 108.5 395.3 108.5C396.3 108.4 397.6 114.5 398.8 114.4C400 114.3 401.3 107.8 402.5 107.9C403.7 107.9 405 114.4 406.1 114.8C407.2 115.2 407.8 110.2 408.9 110.2C410 110.1 411.4 114.6 412.7 114.3C414 114 416.2 109.2 416.9 108.2" pathLength="1" style="--d:0.76"/><path d="M615 147.2C615.6 148.2 617.2 152.8 618.4 152.9C619.6 153 620.7 148.2 622 148.1C623.3 148 624.9 152.2 626.1 152.1C627.4 152 628.4 147.4 629.5 147.5C630.6 147.6 631.5 152.5 632.6 152.6C633.7 152.7 635 148.1 636.2 148C637.4 147.9 638.7 152.2 639.9 152C641.1 151.9 642.3 147.1 643.5 147.1C644.7 147.1 645.6 152 646.8 152.2C648.1 152.3 650.2 148.7 650.8 148" pathLength="1" style="--d:0.92"/><path d="M352 400.4C352.5 401.2 353.8 405.6 355.1 405.2C356.3 404.8 358 397.9 359.4 397.9C360.9 397.9 362.4 404.7 363.6 405C364.8 405.4 365.4 399.9 366.6 399.9C367.7 399.8 369.2 404.8 370.4 404.6C371.7 404.5 372.7 398.9 374 398.9C375.4 398.9 376.9 404.6 378.4 404.5C379.8 404.4 381.4 398.3 382.7 398.4C384.1 398.5 385.1 405 386.4 405.1C387.6 405.2 389.1 399.2 390.3 399.2C391.4 399.2 392 404.7 393 404.8C393.9 405 394.9 400 396 400C397.1 399.9 398.5 404.9 399.6 404.5C400.7 404.2 401.6 397.8 402.6 397.9C403.6 398 405 403.8 405.5 405" pathLength="1" style="--d:1.08"/><path d="M601 326.9C601.7 327.8 604.1 332.2 605.3 332.3C606.5 332.4 607 327.5 608.2 327.5C609.4 327.6 611.4 332.7 612.5 332.7C613.7 332.6 614.1 327.4 615.2 327.3C616.2 327.2 617.8 332.1 618.9 332.2C620.1 332.3 621 328.1 622.2 328.1C623.4 328.1 624.9 332.3 626.2 332.1C627.5 331.8 629.4 327.4 630 326.4" pathLength="1" style="--d:1.24"/><path d="M641.6 332.5C642.1 331.4 643.2 325.8 644.4 325.9C645.5 325.9 647.4 332.3 648.6 332.7C649.7 333.1 650.2 328.4 651.3 328.3C652.4 328.2 653.8 332.6 655.2 332.2C656.5 331.8 658.7 327 659.3 325.9" pathLength="1" style="--d:1.24"/><path d="M45 333.2C45.6 334 47.5 338.6 48.5 338.4C49.5 338.2 50.2 331.9 51.1 332C52 332.1 52.8 339 53.8 339C54.7 339.1 55.8 332.3 56.8 332.4C57.9 332.4 58.8 339 60 339.1C61.3 339.3 62.8 333.2 64.1 333.1C65.5 333 66.9 338.3 68.2 338.5C69.5 338.7 70.8 334.4 72 334.4C73.1 334.4 74.1 338.9 75 338.5C76 338.1 76.8 331.8 77.7 331.9C78.6 331.9 79.4 338.7 80.3 339C81.3 339.3 82.2 333.7 83.3 333.7C84.4 333.7 85.7 339.1 86.9 338.9C88.2 338.7 89.6 332.6 90.9 332.6C92.1 332.6 93.2 338.8 94.5 338.8C95.9 338.9 97.6 332.7 98.9 332.8C100.2 332.8 101.1 339.3 102.4 339.1C103.6 339 105.1 331.8 106.3 331.8C107.5 331.8 108.5 338.7 109.6 339.1C110.7 339.6 111.8 334.5 112.9 334.5C114 334.5 115.1 339.2 116.4 339C117.7 338.9 119.6 333.6 120.8 333.5C122.1 333.3 123.5 337.4 124 338.2" pathLength="1" style="--d:1.4"/><path d="M135.9 333.4C136.6 334.2 138.8 338.3 140 338.4C141.3 338.6 142.2 334.1 143.4 334.1C144.7 334.1 146.4 338.4 147.6 338.4C148.7 338.4 149.4 334.2 150.3 334.1C151.3 334.1 152.2 338.2 153.2 338C154.3 337.8 155.4 332.9 156.6 333C157.8 333 159.4 338.5 160.6 338.4C161.8 338.4 162.6 332.5 163.8 332.5C165.1 332.6 166.7 338.7 168 338.9C169.4 339.1 170.8 334.1 172 334C173.3 333.8 174.3 338.4 175.5 338.2C176.8 338.1 178.1 333 179.5 333.2C180.9 333.3 182.4 339.3 183.8 339.1C185.2 339 186.6 332.3 188 332.3C189.4 332.3 191.6 337.9 192.3 339" pathLength="1" style="--d:1.4"/><path d="M50 346.8C50.6 347.6 52.2 351.6 53.4 351.6C54.6 351.5 56.1 346.6 57.4 346.7C58.8 346.7 60.2 351.7 61.5 351.8C62.8 352 64 347.5 65.2 347.4C66.4 347.4 67.4 351.8 68.5 351.5C69.5 351.1 70.5 345.1 71.5 345.2C72.4 345.3 73.2 352 74.1 352C74.9 352 75.7 345 76.7 344.9C77.7 344.8 78.9 350.9 80.1 351.2C81.2 351.5 82.6 346.4 83.7 346.5C84.8 346.6 85.6 351.9 86.6 351.9C87.5 351.8 88.2 346.3 89.3 346.3C90.5 346.3 92.6 351.6 93.7 351.7C94.9 351.8 95.4 347 96.3 347C97.2 346.9 98.1 351.4 99.1 351.4C100.1 351.4 101.2 346.7 102.4 346.8C103.6 346.9 105.3 352.1 106.4 352C107.5 351.9 108 346.4 109.1 346.3C110.2 346.2 112 351.4 113.3 351.6C114.5 351.8 115.5 347.6 116.5 347.6C117.4 347.6 118.2 351.8 119.1 351.6C120 351.5 121.3 347.6 121.8 346.8" pathLength="1" style="--d:1.48"/><path d="M132.6 351.9C133.3 351.1 135.5 347 136.8 347C138.2 347 139.3 352.3 140.4 351.9C141.6 351.5 142.8 344.9 143.8 344.9C144.8 344.8 145.6 351.5 146.6 351.5C147.6 351.6 148.5 345.1 149.8 345.1C151 345.2 152.7 352 154.1 352C155.4 352 156.6 345.3 157.7 345.2C158.8 345.1 159.5 351.4 160.7 351.3C161.8 351.2 163.4 344.6 164.5 344.7C165.6 344.8 166.4 351.4 167.4 351.9C168.4 352.3 169.5 347.6 170.5 347.5C171.6 347.4 172.7 351.6 173.7 351.2C174.7 350.8 175.4 345.1 176.6 345C177.8 345 179.6 350.7 180.8 351.1C182 351.5 182.7 347.1 183.7 347.2C184.8 347.3 186.6 351.1 187.1 351.9" pathLength="1" style="--d:1.48"/><path d="M90 360.1C90.7 360.9 93 365.2 94.2 364.9C95.5 364.5 96.5 357.9 97.6 357.9C98.6 357.9 99.2 364.4 100.3 364.7C101.4 365 102.9 359.5 104.1 359.5C105.4 359.5 106.4 364.5 107.7 364.7C109 364.9 110.7 360.5 111.8 360.6C113 360.6 113.4 365.2 114.6 365.1C115.8 365 117.6 360.3 118.8 360.1C120.1 359.9 120.7 364.1 122 364C123.2 363.9 125.1 359.4 126.3 359.4C127.4 359.5 128 364.4 129 364.3C129.9 364.3 130.8 359 132 359.1C133.3 359.2 134.9 365.1 136.3 365.1C137.8 365 139.5 358.9 140.7 358.7C141.9 358.6 142.5 364.2 143.5 364.2C144.5 364.1 145.7 358.1 146.7 358.2C147.7 358.3 149 363.8 149.4 364.9" pathLength="1" style="--d:1.56"/></g></g>
-            <g class="ink">
-              <g class="bnd" style="--d:3.1"><path d="M268 72V56H284M728 56H744V72M744 412V428H728M284 428H268V412"/><text class="t-bnd" x="268" y="46">ORDERS<tspan class="t-bnd-kind" dx="8">SYSTEM</tspan></text></g>
-              <g class="wire w-h" style="--d:2.9"><path class="w-line" d="M184 114L292 114" pathLength="1"/><path class="w-head" d="M284 118.5L292 114L284 109.5Z"/><text class="t-edge" x="238" y="104" text-anchor="middle">calls</text></g>
-              <g class="wire w-v" style="--d:3"><path class="w-line" d="M380 150L380 305" pathLength="1"/><path class="w-head" d="M375.5 297L380 305L384.5 297Z"/><text class="t-edge" x="392" y="240" text-anchor="start">writes to</text></g>
-              <g class="wire w-h async" style="--d:3.2"><path class="w-line" d="M468 114L560 114" pathLength="1"/><path class="w-head" d="M552 118.5L560 114L552 109.5Z"/><text class="t-edge" x="514" y="104" text-anchor="middle">publishes to</text></g>
-              <g class="wire w-v async" style="--d:3.4"><path class="w-line" d="M600 130L600 300" pathLength="1"/><path class="w-head" d="M595.5 292L600 300L604.5 292Z"/><text class="t-edge" x="588" y="240" text-anchor="end">consumed by</text></g>
-              <g class="node n-service" style="--d:1.9"><path class="n-fill" d="M32 78H176Q184 78 184 86V142Q184 150 176 150H32Q24 150 24 142V86Q24 78 32 78Z"/><path class="n-cap" d="M32 78H176Q184 78 184 86V82H24V86Q24 78 32 78Z"/><path class="n-line" d="M32 78H176Q184 78 184 86V142Q184 150 176 150H32Q24 150 24 142V86Q24 78 32 78Z" pathLength="1"/><g class="dots"><circle cx="172" cy="91" r="1.7"/><circle cx="167" cy="91" r="1.7"/><circle cx="162" cy="91" r="1.7"/></g><text class="t-name" x="104" y="116" text-anchor="middle">Storefront</text><text class="t-tech" x="104" y="133" text-anchor="middle">[Next.js]</text></g>
-              <g class="node n-api" style="--d:2.1"><path class="plane" d="M306 84H466Q474 84 474 92V148Q474 156 466 156H306Q298 156 298 148V92Q298 84 306 84Z"/><path class="n-fill" d="M300 78H460Q468 78 468 86V142Q468 150 460 150H300Q292 150 292 142V126.2H297Q300 126.2 300 123.2V104.8Q300 101.8 297 101.8H292V86Q292 78 300 78Z"/><path class="n-cap" d="M300 78H460Q468 78 468 86V82H292V86Q292 78 300 78Z"/><path class="n-line" d="M300 78H460Q468 78 468 86V142Q468 150 460 150H300Q292 150 292 142V126.2H297Q300 126.2 300 123.2V104.8Q300 101.8 297 101.8H292V86Q292 78 300 78Z" pathLength="1"/><text class="t-kind" x="461" y="143" text-anchor="end">API</text><text class="t-name" x="384" y="116" text-anchor="middle">Orders API</text><text class="t-tech" x="384" y="133" text-anchor="middle">[TypeScript]</text></g>
-              <g class="node n-tube" style="--d:2.2"><path class="n-fill" d="M574 98H696A14 16 0 0 1 696 130H574A14 16 0 0 1 574 98Z"/><path class="n-line" d="M574 98H696A14 16 0 0 1 696 130H574A14 16 0 0 1 574 98Z" pathLength="1"/><path class="n-line" d="M696 98A14 16 0 0 0 696 130" pathLength="1"/><g class="glyph"><path d="M596.5 107.5h17v13h-17zM596.5 107.5L605 115.3L613.5 107.5"/><path d="M619.5 107.5h17v13h-17zM619.5 107.5L628 115.3L636.5 107.5"/><path d="M642.5 107.5h17v13h-17zM642.5 107.5L651 115.3L659.5 107.5"/></g><text class="t-name" x="635" y="152" text-anchor="middle">orders</text><text class="t-kind" x="635" y="168" text-anchor="middle">QUEUE</text></g>
-              <g class="node n-store" style="--d:2.3"><path class="n-fill" d="M332 318A48 13 0 0 1 428 318V364A48 13 0 0 1 332 364Z"/><path class="n-line" d="M332 318A48 13 0 0 1 428 318V364A48 13 0 0 1 332 364Z" pathLength="1"/><path class="n-line" d="M332 318A48 13 0 0 0 428 318" pathLength="1"/><text class="t-name" x="380" y="404" text-anchor="middle">Orders DB</text></g>
-              <g class="node n-worker" style="--d:2.5"><path class="n-fill" d="M566 306H710Q718 306 718 314V370Q718 378 710 378H566Q558 378 558 370V314Q558 306 566 306Z"/><path class="n-line n-back" d="M566 306H710Q718 306 718 314V370Q718 378 710 378H566Q558 378 558 370V314Q558 306 566 306Z" pathLength="1"/><path class="n-fill" d="M560 300H704Q712 300 712 308V364Q712 372 704 372H560Q552 372 552 364V308Q552 300 560 300Z"/><path class="n-cap" d="M560 300H704Q712 300 712 308V304H552V308Q552 300 560 300Z"/><path class="n-line" d="M560 300H704Q712 300 712 308V364Q712 372 704 372H560Q552 372 552 364V308Q552 300 560 300Z" pathLength="1"/><g class="dots"><circle cx="700" cy="313" r="1.7"/><circle cx="695" cy="313" r="1.7"/></g><text class="t-kind" x="704" y="365" text-anchor="end">WORKER</text><text class="t-name" x="632" y="334" text-anchor="middle">Fulfilment</text><text class="t-tech" x="632" y="351" text-anchor="middle">[Go]</text></g>
-              <g class="node n-note" style="--d:2.6"><path class="n-fill note-fill" d="M42 300H230Q236 300 236 306V378Q236 384 230 384H42Q36 384 36 378V306Q36 300 42 300Z"/><path class="n-line note-line" d="M42 300H230Q236 300 236 306V378Q236 384 230 384H42Q36 384 36 378V306Q36 300 42 300Z" pathLength="1"/><text class="t-tag" x="48" y="320">DECISION</text><text class="t-note" x="48" y="340">Charge before saving: no</text><text class="t-note" x="48" y="356">unpaid order reaches the</text><text class="t-note" x="48" y="372">database.</text><path class="leader" d="M236 341H330"/></g>
-            </g>
-            <g class="flow"><path class="pulse" d="M184 114L292 114" pathLength="1" style="--s:1"/><path class="pulse" d="M380 150L380 305" pathLength="1" style="--s:2"/><path class="pulse" d="M468 114L560 114" pathLength="1" style="--s:3"/><path class="pulse" d="M600 130L600 300" pathLength="1" style="--s:4"/><g class="step" style="--s:1"><circle cx="204" cy="114" r="8"/><text x="204" y="117.6" text-anchor="middle">1</text></g><g class="step" style="--s:2"><circle cx="380" cy="172" r="8"/><text x="380" y="175.6" text-anchor="middle">2</text></g><g class="step" style="--s:3"><circle cx="500" cy="114" r="8"/><text x="500" y="117.6" text-anchor="middle">3</text></g><g class="step" style="--s:4"><circle cx="600" cy="196" r="8"/><text x="600" y="199.6" text-anchor="middle">4</text></g></g>
-            <g class="tb"><path d="M520 452h224v48h-224zM520 476h224M632 476v24"/><text x="530" y="468">CHECKOUT · PLACE AN ORDER</text><text x="530" y="492">FLOW · 4 STEPS</text><text x="642" y="492">SHEET 1 OF 1</text></g>
-          </svg>
-          <!-- /art:wide -->
-        </figure>
-        <figure class="hero-art hero-art-narrow" role="img" aria-labelledby="art-caption">
-          <!-- art:narrow -->
-          <svg class="art art-narrow" viewBox="0 0 340 500" aria-hidden="true" focusable="false">
-            <defs>
-              <filter id="graphite-narrow" x="-2%" y="-2%" width="104%" height="104%">
-                <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="80" result="grain"/>
-                <feDisplacementMap in="SourceGraphic" in2="grain" scale="1.6" xChannelSelector="R" yChannelSelector="G"/>
-              </filter>
-            </defs>
-            <g class="reg"><path d="M2 8h12M8 2v12"/><path d="M326 8h12M332 2v12"/><path d="M2 492h12M8 486v12"/><path d="M326 492h12M332 486v12"/></g>
-            <g class="guides"><path d="M170 16V430" pathLength="1" style="--d:0.1"/><path d="M132 16V430" pathLength="1" style="--d:0.2"/><path d="M0 76H340" pathLength="1" style="--d:0.3"/><path d="M0 366H340" pathLength="1" style="--d:0.3"/></g>
-            <g class="pencil" filter="url(#graphite-narrow)"><path d="M78 42Q169.2 42.3 260.4 42.8" pathLength="1" style="--d:0.35"/><path d="M257.9 37.3Q257.6 77.9 257.7 118.6" pathLength="1" style="--d:0.42"/><path d="M259.8 112.8Q169.3 112.8 78.8 115.1" pathLength="1" style="--d:0.49"/><path d="M82.9 117Q83.2 78.3 82.6 39.7" pathLength="1" style="--d:0.56"/><path d="M94.4 39.4Q156 40.7 217.6 41.7" pathLength="1" style="--d:0.63"/><path d="M104.8 194.2Q169.6 193.3 234.3 193.7" pathLength="1" style="--d:0.51"/><path d="M235.5 226.4Q169.5 227.6 103.6 225.9" pathLength="1" style="--d:0.58"/><path d="M108.8 226.2C108.2 226.1 106.4 225.8 105.2 225.4C104 224.9 102.5 224.1 101.5 223.4C100.5 222.7 99.8 222.2 99 221.2C98.2 220.2 97.4 218.6 96.7 217.2C96 215.8 95.2 214.4 94.9 212.9C94.6 211.5 94.6 209.9 94.8 208.5C95 207.2 95.7 206.1 96.1 204.8C96.5 203.5 96.7 201.8 97.4 200.6C98.2 199.4 99.4 198.4 100.4 197.5C101.4 196.6 102.3 195.7 103.4 195.1C104.5 194.5 105.9 194 107.1 193.8C108.4 193.6 110.5 193.9 111.2 194" pathLength="1" style="--d:0.65"/><path d="M233.9 225.8C232.7 225.7 229.2 226.4 227.1 225.7C225 225 222.7 223.4 221.2 221.7C219.7 220 218.8 217.9 218 215.5C217.3 213 216.6 209.8 216.9 207.2C217.2 204.7 218.6 202 219.9 200.1C221.1 198.2 222.5 196.9 224.4 195.8C226.2 194.7 228.7 193.4 231 193.5C233.3 193.5 236.3 195.1 238.3 196.4C240.3 197.6 241.9 198.8 243 200.8C244.2 202.8 244.9 205.9 245.1 208.5C245.3 211.1 245 213.8 244.2 216.2C243.4 218.6 242 221.4 240.3 223C238.7 224.7 236.5 225.7 234.3 226.2C232.1 226.6 228.2 225.8 227 225.7" pathLength="1" style="--d:0.72"/><path d="M82 325.6Q167.4 324.6 252.7 325" pathLength="1" style="--d:0.67"/><path d="M247.6 324.2Q248.7 362.5 246.9 400.8" pathLength="1" style="--d:0.74"/><path d="M253.4 398.3Q167.4 400.6 81.4 399.2" pathLength="1" style="--d:0.81"/><path d="M88.5 400.5Q89.5 360.5 87.5 320.5" pathLength="1" style="--d:0.88"/><path d="M98.8 323.7Q150.3 326.2 201.9 327" pathLength="1" style="--d:0.95"/><path d="M87.2 334.3Q86.5 357.7 89 381" pathLength="1" style="--d:1.02"/><path d="M246.4 332.6Q251.3 335 255.7 338.2" pathLength="1" style="--d:1.09"/><path d="M255.1 334.2Q256.5 370.7 254.8 407.3" pathLength="1" style="--d:1.16"/><path d="M255.5 403.5Q175.6 403.2 95.7 404.4" pathLength="1" style="--d:1.23"/><path d="M173.6 111.4Q174 154.5 171.2 197.6" pathLength="1" style="--d:0.83"/><path d="M167.6 186.6L171.3 194.7L175.1 186.6" pathLength="1" style="--d:0.95"/><path d="M128.6 222.1Q127.5 275.3 128.7 328.5" pathLength="1" style="--d:0.93"/><path d="M124.9 318.1L128.7 326.2L132.6 318.1" pathLength="1" style="--d:1.05"/><path d="M44.2 126.5C46.7 119.4 52.6 96 59.1 83.7C65.6 71.3 74.6 61.4 83.4 52.6C92.2 43.8 102.3 38 111.9 31.1C121.5 24.1 131 15.8 141.1 10.9C151.2 6.1 161.9 1.9 172.5 2C183.2 2 194.8 6 205 11C215.2 16.1 224.6 25.1 233.8 32.5C243 39.8 251.8 46 260.3 55.1C268.9 64.2 277.8 74.8 285.1 87.1C292.4 99.4 299.9 114.1 304 128.9C308.1 143.7 308.2 160.3 309.8 175.9C311.5 191.5 313.7 206.9 313.7 222.5C313.7 238.2 312.1 254.4 309.7 269.9C307.4 285.5 304.2 301.4 299.8 315.8C295.3 330.2 289.2 343.6 283 356.4C276.8 369.1 270.4 381.9 262.5 392.4C254.5 402.9 245 411.2 235.4 419.2C225.7 427.2 214.9 435.8 204.4 440.6C193.9 445.4 183.1 448.3 172.5 448C161.9 447.8 151.4 442.8 140.7 439.3C130.1 435.7 118.8 432.9 108.4 426.7C98.1 420.6 87.4 412.3 78.8 402.4C70.2 392.4 63.1 379.6 56.8 366.8C50.6 354 45.9 340 41.3 325.4C36.7 310.8 32.7 294.6 29.3 279.2C25.8 263.8 20.9 248.8 20.5 233C20.1 217.1 24.6 200.4 26.8 184.1C29 167.9 29.5 150.4 33.7 135.5C37.9 120.5 45.4 107.2 52 94.5C58.5 81.7 69.6 65.1 73.1 59.2" pathLength="1" style="--d:1.03"/><g class="scribble"><path d="M138 72.6C138.5 73.5 139.6 77.9 140.9 78C142.1 78.1 143.8 73 145.2 73.1C146.7 73.1 148 78.2 149.4 78.3C150.8 78.5 152.2 74 153.7 74.1C155.1 74.2 156.6 79.4 157.8 79.1C159.1 78.8 159.9 72.4 161.1 72.3C162.3 72.3 163.9 78.9 165 78.9C166.2 78.9 166.8 72.5 167.9 72.5C169.1 72.4 170.7 78.3 171.9 78.6C173 78.9 173.7 74.3 174.7 74.4C175.7 74.5 177.3 78.2 177.8 79" pathLength="1" style="--d:0.6"/><path d="M188.1 72.8C188.5 73.8 189.7 79 190.8 79.1C191.8 79.1 193.1 73 194.3 72.9C195.6 72.9 197 79 198.3 78.9C199.7 78.9 201 72.7 202.4 72.7C203.8 72.7 205.3 78.7 206.5 78.9C207.7 79.1 209.3 74.7 209.8 73.9" pathLength="1" style="--d:0.6"/><path d="M150 242.9C150.7 243.9 153.1 248.7 154.3 248.8C155.5 248.9 156.1 243.5 157.2 243.5C158.4 243.4 159.9 248.8 161.2 248.6C162.4 248.3 163.6 242.1 164.6 242.1C165.7 242.1 166.4 248.3 167.5 248.6C168.5 248.9 169.8 243.8 171.1 243.9C172.4 243.9 174.2 248.8 175.4 248.8C176.5 248.8 177.3 243.8 178.3 243.7C179.3 243.6 180.4 248.4 181.6 248.3C182.8 248.3 184.3 243.2 185.5 243.4C186.6 243.5 188.1 248.1 188.7 249.1" pathLength="1" style="--d:0.76"/><path d="M137 354.3C137.5 355 138.7 358.3 139.7 358.3C140.8 358.4 141.9 354.6 143.1 354.5C144.2 354.5 145.4 358.5 146.5 358.1C147.6 357.6 148.5 351.7 149.6 351.8C150.7 351.9 152 358.4 153.1 358.7C154.2 358.9 155.2 353.3 156.3 353.2C157.4 353.2 158.5 358.5 159.6 358.4C160.7 358.3 161.6 352.6 162.9 352.8C164.1 352.9 165.8 359.2 167 359C168.2 358.9 169.7 353.1 170.3 352" pathLength="1" style="--d:0.92"/><path d="M179.4 358.9C180 358 181.9 353.5 183 353.5C184.1 353.5 185.1 358.7 186.1 358.8C187.1 358.9 187.7 354.1 188.8 354.1C189.9 354.1 191.8 359 193 358.9C194.3 358.8 195.7 354.5 196.3 353.6" pathLength="1" style="--d:0.92"/></g></g>
-            <g class="ink">
-              <g class="bnd" style="--d:2.7"><path d="M52 46V30H68M272 30H288V46M288 402V418H272M68 418H52V402"/><text class="t-bnd" x="52" y="20">ORDERS<tspan class="t-bnd-kind" dx="8">SYSTEM</tspan></text></g>
-              <g class="wire w-v async" style="--d:2"><path class="w-line" d="M170 114L170 194" pathLength="1"/><path class="w-head" d="M165.5 186L170 194L174.5 186Z"/><text class="t-edge" x="182" y="160" text-anchor="start">publishes to</text></g>
-              <g class="wire w-v async" style="--d:2.2"><path class="w-line" d="M132 226L132 326" pathLength="1"/><path class="w-head" d="M127.5 318L132 326L136.5 318Z"/><text class="t-edge" x="120" y="290" text-anchor="end">consumed by</text></g>
-              <g class="node n-api" style="--d:1.5"><path class="plane" d="M96 48H256Q264 48 264 56V112Q264 120 256 120H96Q88 120 88 112V56Q88 48 96 48Z"/><path class="n-fill" d="M90 42H250Q258 42 258 50V106Q258 114 250 114H90Q82 114 82 106V90.2H87Q90 90.2 90 87.2V68.8Q90 65.8 87 65.8H82V50Q82 42 90 42Z"/><path class="n-cap" d="M90 42H250Q258 42 258 50V46H82V50Q82 42 90 42Z"/><path class="n-line" d="M90 42H250Q258 42 258 50V106Q258 114 250 114H90Q82 114 82 106V90.2H87Q90 90.2 90 87.2V68.8Q90 65.8 87 65.8H82V50Q82 42 90 42Z" pathLength="1"/><text class="t-kind" x="251" y="107" text-anchor="end">API</text><text class="t-name" x="174" y="80" text-anchor="middle">Orders API</text><text class="t-tech" x="174" y="97" text-anchor="middle">[TypeScript]</text></g>
-              <g class="node n-tube" style="--d:1.6"><path class="n-fill" d="M109 194H231A14 16 0 0 1 231 226H109A14 16 0 0 1 109 194Z"/><path class="n-line" d="M109 194H231A14 16 0 0 1 231 226H109A14 16 0 0 1 109 194Z" pathLength="1"/><path class="n-line" d="M231 194A14 16 0 0 0 231 226" pathLength="1"/><g class="glyph"><path d="M131.5 203.5h17v13h-17zM131.5 203.5L140 211.3L148.5 203.5"/><path d="M154.5 203.5h17v13h-17zM154.5 203.5L163 211.3L171.5 203.5"/><path d="M177.5 203.5h17v13h-17zM177.5 203.5L186 211.3L194.5 203.5"/></g><text class="t-name" x="170" y="248" text-anchor="middle">orders</text><text class="t-kind" x="170" y="264" text-anchor="middle">QUEUE</text></g>
-              <g class="node n-worker" style="--d:1.8"><path class="n-fill" d="M102 332H246Q254 332 254 340V396Q254 404 246 404H102Q94 404 94 396V340Q94 332 102 332Z"/><path class="n-line n-back" d="M102 332H246Q254 332 254 340V396Q254 404 246 404H102Q94 404 94 396V340Q94 332 102 332Z" pathLength="1"/><path class="n-fill" d="M96 326H240Q248 326 248 334V390Q248 398 240 398H96Q88 398 88 390V334Q88 326 96 326Z"/><path class="n-cap" d="M96 326H240Q248 326 248 334V330H88V334Q88 326 96 326Z"/><path class="n-line" d="M96 326H240Q248 326 248 334V390Q248 398 240 398H96Q88 398 88 390V334Q88 326 96 326Z" pathLength="1"/><g class="dots"><circle cx="236" cy="339" r="1.7"/><circle cx="231" cy="339" r="1.7"/></g><text class="t-kind" x="240" y="391" text-anchor="end">WORKER</text><text class="t-name" x="168" y="360" text-anchor="middle">Fulfilment</text><text class="t-tech" x="168" y="377" text-anchor="middle">[Go]</text></g>
-              
-            </g>
-            <g class="flow"><path class="pulse" d="M170 114L170 194" pathLength="1" style="--s:1"/><path class="pulse" d="M132 226L132 326" pathLength="1" style="--s:2"/><g class="step" style="--s:1"><circle cx="170" cy="136" r="8"/><text x="170" y="139.6" text-anchor="middle">1</text></g><g class="step" style="--s:2"><circle cx="132" cy="252" r="8"/><text x="132" y="255.6" text-anchor="middle">2</text></g></g>
-            <g class="tb"><path d="M52 440h236v48h-236zM52 464h236M170 464v24"/><text x="62" y="456">CHECKOUT · PLACE AN ORDER</text><text x="62" y="480">FLOW · 2 STEPS</text><text x="180" y="480">SHEET 1 OF 1</text></g>
-          </svg>
-          <!-- /art:narrow -->
-        </figure>
-        <p class="visually-hidden" id="art-caption">
-          A pencil sketch of an orders system, inked over as you watch. A storefront calls an orders
-          API, which writes to an orders database and publishes to a queue; a fulfilment worker
-          consumes it. A decision note on the database reads: charge before saving. The four
-          connectors are numbered as the steps of one flow.
-        </p>
-      </section>
-
-      <!-- ================================================================
-           THE REEL. Six things it does, one frame to watch them in.
-           Real footage of the real editor, nothing staged.
-      ================================================================= -->
-      <section class="features" id="features" aria-labelledby="features-title">
-        <header class="section-head reveal">
-          <p class="overline">What it does</p>
-          <h2 id="features-title">From a sketch to a story.</h2>
-        </header>
-
-        <div class="reel reveal">
-          <div class="reel-tabs" role="tablist" aria-label="Features" aria-orientation="vertical">
-            <button class="reel-tab" role="tab" type="button" id="draw" aria-controls="reel-stage" aria-selected="true"
-              data-video="./clips/draw.mp4" data-poster="./clips/draw.jpg"
-              data-caption="Press a letter and the shape lands. Drag from its edge for what usually comes next.">
-              <span class="reel-n">01</span>
-              <span class="reel-title">Draw with meaning</span>
-              <span class="reel-text">Services, queues and stores that know what they are. Connectors caption themselves; <kbd>Tab</kbd> takes the next move.</span>
-            </button>
-            <button class="reel-tab" role="tab" type="button" id="compose" aria-controls="reel-stage" aria-selected="false" tabindex="-1"
-              data-video="./clips/compose.mp4" data-poster="./clips/compose.jpg"
-              data-caption="A whole CQRS architecture from the palette — laid out, wired, flows included.">
-              <span class="reel-n">02</span>
-              <span class="reel-title">Start from a pattern</span>
-              <span class="reel-text">Ask <kbd>⌘K</kbd> for CQRS, a Saga or Event-Driven. It lands laid out, wired and ready to present.</span>
-            </button>
-            <button class="reel-tab" role="tab" type="button" id="present" aria-controls="reel-stage" aria-selected="false" tabindex="-1"
-              data-video="./clips/present.mp4" data-poster="./clips/present.jpg"
-              data-caption="A flow, one step at a time. Each step brings its own notes; the rest dims.">
-              <span class="reel-n">03</span>
-              <span class="reel-title">Walk the room through it</span>
-              <span class="reel-text">Present a flow step by step. Notes and code arrive on their step, and everything else waits.</span>
-            </button>
-            <button class="reel-tab" role="tab" type="button" id="inside" aria-controls="reel-stage" aria-selected="false" tabindex="-1"
-              data-video="./clips/inside.mp4" data-poster="./clips/inside.jpg"
-              data-caption="One level down, inside a service — and back out again.">
-              <span class="reel-n">04</span>
-              <span class="reel-title">Look inside</span>
-              <span class="reel-text"><kbd>⌘↓</kbd> steps into a shape for the detail the overview shouldn&rsquo;t carry. C4 depth on one canvas.</span>
-            </button>
-            <button class="reel-tab" role="tab" type="button" id="export" aria-controls="reel-stage" aria-selected="false" tabindex="-1"
-              data-video="./clips/io.mp4" data-poster="./clips/io.jpg"
-              data-caption="A Mermaid flowchart pasted in, sent back out as C4-PlantUML.">
-              <span class="reel-n">05</span>
-              <span class="reel-title">Take it with you</span>
-              <span class="reel-text">Paste Mermaid in. Send it out as an image, C4-PlantUML, Structurizr, draw.io or a link — nothing uploaded.</span>
-            </button>
-            <button class="reel-tab" role="tab" type="button" id="agents" aria-controls="reel-stage" aria-selected="false" tabindex="-1"
-              data-still="./stills/source-evidence.jpg"
-              data-caption="An agent's diagram, with the files and lines behind each part.">
-              <span class="reel-n">06</span>
-              <span class="reel-title">Draw with your agent</span>
-              <span class="reel-text">Claude&nbsp;Code, Codex, Cursor, Gemini&nbsp;CLI and Junie draw over MCP in the desktop app — and cite the code.</span>
-            </button>
-          </div>
-
-          <figure class="reel-stage" id="reel-stage" role="tabpanel" aria-labelledby="draw">
-            <div class="frame">
-              <div class="screen">
-                <!-- Without the script this is an ordinary player on the first clip; nothing is
-                     downloaded until someone presses play. main.js takes the controls away and runs
-                     the reel instead. -->
-                <video id="reel-video" src="./clips/draw.mp4" poster="./clips/draw.jpg" muted playsinline preload="none" controls width="1280" height="720"></video>
-                <img id="reel-still" alt="" width="1600" height="900" hidden />
-              </div>
-              <button class="reel-toggle" id="reel-toggle" type="button" hidden aria-label="Pause the reel">
-                <svg class="i-pause" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" focusable="false"><path d="M5 3.5v9M11 3.5v9" /></svg>
-                <svg class="i-play" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" focusable="false"><path d="M5 3.2l7.5 4.8L5 12.8z" /></svg>
-              </button>
-            </div>
-            <figcaption>
-              <span class="fig-n" id="reel-fig">Fig. 01</span>
-              <span id="reel-caption">Press a letter and the shape lands. Drag from its edge for what usually comes next.</span>
-            </figcaption>
-          </figure>
-        </div>
-      </section>
-
-      <!-- ================================================================
-           THE BRIEF. The three steps and the exact words to paste, set as a
-           brief taped over the drawing it produces. Copy works without a script
-           too: the text is ordinary selectable text.
-      ================================================================= -->
-      <section class="try" id="try" aria-labelledby="try-title">
-        <div class="try-body">
-          <div class="try-words">
-            <header class="try-head reveal">
-              <p class="overline">Try it on your own repo</p>
-              <h2 id="try-title">Hand your agent<br /> the <em>pencil.</em></h2>
-              <p class="try-lead">
-                Point Claude&nbsp;Code, Codex, Cursor, Gemini&nbsp;CLI or Junie at Draft Canvas Desktop.
-                It reads the code, draws what&rsquo;s really there, and shows its working. Minutes, not a meeting.
-              </p>
-            </header>
-
-            <ol class="try-steps reveal">
-              <li style="--i:0">
-                <span class="try-n" aria-hidden="true">1<svg viewBox="0 0 48 48"><path pathLength="1" d="M27 5C14 3 4 12 5 25S17 45 29 43 45 31 43 19 31 3 19 7" /></svg></span>
-                <div>
-                  <h3>Let it in.</h3>
-                  <p>Open your project in the desktop app. In <b>Settings&nbsp;→ AI&nbsp;agents</b>, turn on <b>Allow agent access</b> and pick your agent.</p>
-                </div>
-              </li>
-              <li style="--i:1">
-                <span class="try-n" aria-hidden="true">2<svg viewBox="0 0 48 48"><path pathLength="1" d="M21 6C9 9 3 20 6 31S22 46 33 41 46 25 40 14 25 2 14 9" /></svg></span>
-                <div>
-                  <h3>Teach it the craft.</h3>
-                  <p>Click <b>Agent skill&nbsp;→ Install skill</b>. Now it knows shapes, depth and flows the way you do.</p>
-                </div>
-              </li>
-              <li style="--i:2">
-                <span class="try-n" aria-hidden="true">3<svg viewBox="0 0 48 48"><path pathLength="1" d="M30 6C17 2 5 11 5 24S15 44 28 43 44 33 43 20 34 4 22 6" /></svg></span>
-                <div>
-                  <h3>Hand over the brief.</h3>
-                  <p>Paste it into your agent and watch the sheet fill in.</p>
-                </div>
-              </li>
-            </ol>
-          </div>
-
-          <figure class="brief reveal" aria-labelledby="brief-label">
-            <!-- What the brief turns into, peeking out from underneath it. -->
-            <svg class="brief-under" viewBox="0 0 420 300" aria-hidden="true" focusable="false">
-              <rect class="bu-sheet" x="1" y="1" width="418" height="298" rx="3" />
-              <g class="bu-ink">
-                <path class="bu-bnd" d="M150 14H406V104H150Z" />
-                <text class="bu-cap" x="158" y="27">ORDERS · CONTAINER</text>
-                <rect x="22" y="44" width="86" height="34" rx="5" />
-                <text class="bu-name" x="65" y="65" text-anchor="middle">storefront</text>
-                <path class="bu-plane" d="M181 40H265V74" />
-                <rect x="176" y="44" width="84" height="34" rx="5" />
-                <text class="bu-name" x="218" y="65" text-anchor="middle">orders api</text>
-                <path d="M310 44H372A8 17 0 0 1 372 78H310A8 17 0 0 1 310 44ZM372 44A8 17 0 0 0 372 78" />
-                <text class="bu-name" x="338" y="65" text-anchor="middle">orders</text>
-                <path class="bu-wire" d="M108 61H174M169 57L174 61L169 65" />
-                <path class="bu-wire bu-dash" d="M260 61H308M303 57L308 61L303 65" />
-                <circle class="bu-step" cx="140" cy="61" r="7" />
-                <text class="bu-n" x="140" y="64.5" text-anchor="middle">1</text>
-                <circle class="bu-step" cx="284" cy="61" r="7" />
-                <text class="bu-n" x="284" y="64.5" text-anchor="middle">2</text>
-                <path class="bu-leader" d="M218 78V90H228" />
-              </g>
-              <text class="bu-ev" x="232" y="93">src/orders/api.ts:42</text>
-              <text class="bu-q" x="30" y="100">why a queue? — inferred</text>
+      <div class="canvas-journey canvas-story" id="top">
+        <div class="world-camera" aria-label="A continuous charcoal canvas">
+          <div class="canvas-world">
+        <figure class="studio-art" aria-labelledby="studio-art-caption" data-topic="nodi">
+          <div class="art-crop"><div class="art-plate"><img class="conversation-art" src="./scripts/og-illustration.png" width="1672" height="941" alt="A fine-line charcoal illustration of three people and Nodi discussing an architecture diagram" fetchpriority="high"/><svg class="art-traces" viewBox="0 0 1672 941" aria-hidden="true">
+              <g class="trace-flow"><path d="M650 170H745Q778 170 778 200V261M894 303H972Q998 303 998 330V370" pathLength="1"/><circle class="ink-signal" r="4"/></g>
+              <g class="trace-nodi"><path d="M1360 375l-22-10M1382 361l-12-20M1539 365l14-16" pathLength="1"/><path class="nodi-thought" d="M1408 348q34-38 88-22q20 9 21 27q-12 24-45 19l-16 14l2-16q-34 3-50-22Z" pathLength="1"/><text x="1437" y="354">what if…</text></g>
+              <g class="trace-together"><path d="M403 593Q767 617 1180 593" pathLength="1"/><path class="pencil-one" d="M687 238l-17-25l5 36l8-12l13-2Z" pathLength="1"/><path class="pencil-two" d="M1090 340l27 24l-17-1l-5 15Z" pathLength="1"/></g>
+              <g class="trace-questions"><path d="M1124 287C1080 266 1066 318 1098 345S1176 342 1169 307Q1160 281 1124 287" pathLength="1"/><text x="1188" y="320">what happens next?</text></g>
+              <g class="trace-depth"><rect x="700" y="215" width="370" height="240" rx="5"/><path d="M716 228L1053 231L1056 440L714 437Z M748 283L858 281L859 325L747 327Z M905 284L1026 283L1025 326L904 325Z M820 371L959 369L960 414L821 415Z M858 305H904 M965 326V350H892V370" pathLength="1"/><text x="728" y="253">INSIDE / ORDERS API</text><text x="762" y="309">validate</text><text x="927" y="310">create order</text><text x="850" y="397">repository</text></g>
             </svg>
-
-            <div class="brief-card">
-              <span class="brief-tape" aria-hidden="true"></span>
-              <div class="brief-top">
-                <p class="overline" id="brief-label">Brief <span aria-hidden="true">·</span> for your agent</p>
-                <button class="copy" type="button" data-copy="brief-text" hidden>
-                  <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" focusable="false"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5" /><path d="M10.5 3.5v-.5a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h.5" /></svg>
-                  <span class="copy-label">Copy</span>
+            <button type="button" class="art-zone zone-flow" data-topic="flow" aria-label="Trace the request through the sketch"></button>
+            <button type="button" class="art-zone zone-depth" data-topic="depth" aria-label="Look inside the sketched service"></button>
+            <button type="button" class="art-zone zone-nodi" data-topic="nodi" aria-label="Explore Nodi in the sketch"></button>
+            <button type="button" class="art-zone zone-together" data-topic="together" aria-label="Explore collaboration in the sketch"></button>
+            <button type="button" class="art-zone zone-questions" data-topic="questions" aria-label="Explore the open question in the sketch"></button></div></div>
+          <figcaption id="studio-art-caption"><span id="art-caption-text" class="sr-only">A thought everyone can follow.</span><button class="replay-drawing" type="button" hidden>Draw again ↺</button></figcaption>
+        </figure>
+            <svg class="world-connection" viewBox="0 0 900 1100" aria-hidden="true"><path pathLength="1" d="M564 212H851Q872 212 872 234V394Q872 420 845 420H453V473"/></svg>
+          <figure class="story-art recorded-art" aria-label="Actual Draft Canvas editor recording, revealed as you scroll">
+            <div class="recorded-paper">
+              <video class="recorded-layer" muted playsinline preload="none" aria-hidden="true"></video>
+              <video class="recorded-layer" muted playsinline preload="none" aria-hidden="true"></video>
+              <img class="recorded-still" alt="" hidden />
+              <nav class="depth-guide" aria-label="Demo architecture depth" hidden>
+                <span class="depth-heading">DEPTH / C4</span>
+                <button type="button" aria-label="Return to the architecture overview">
+                  <svg viewBox="0 0 130 62" aria-hidden="true"><path d="M8 32L79 8L122 29L52 55Z M11 35L53 58L120 33 M35 31L54 24L66 30L47 37Z M67 29L86 22L98 28L79 35Z M62 29L71 26"/></svg>
+                  <span>Orders <small>↖ Back to overview</small></span>
                 </button>
-              </div>
-              <p class="brief-text" id="brief-text">Use the Draft Canvas skill to diagram this repository's architecture as <mark style="--m:0">C4 views</mark>, down to <mark style="--m:1">components</mark> where the code has real logic.
-<mark style="--m:2">Read the code</mark> before you draw, <mark style="--m:3">cite source files</mark> and <mark style="--m:4">mark anything inferred</mark>.
-Make the main request path a <mark style="--m:5">presentation flow</mark>, with variants for the <mark style="--m:6">failure paths</mark> the code handles, and leave <mark style="--m:7">open questions</mark> as notes.
-<mark style="--m:8">Render every view</mark> and fix what reads badly before you finish.</p>
-              <dl class="brief-tb">
-                <div><dt>Sheet</dt><dd>Your repo</dd></div>
-                <div><dt>Drawn by</dt><dd>Your agent</dd></div>
-                <div><dt>Checked by</dt><dd class="brief-you">You</dd></div>
-              </dl>
+                <div class="depth-branch" aria-hidden="true"><svg viewBox="0 0 130 70"><path pathLength="1" d="M53 0Q52 24 54 48L70 58"/></svg></div>
+                <div class="depth-room"><svg viewBox="0 0 130 62" aria-hidden="true"><path pathLength="1" d="M8 32L79 8L122 29L52 55Z M11 35L53 58L120 33 M35 31L54 24L66 30L47 37Z M67 29L86 22L98 28L79 35Z M62 29L71 26"/></svg><span>Command API <small>Components</small></span></div>
+                <span class="depth-location" role="status">YOU ARE HERE · OVERVIEW</span>
+              </nav>
+              <svg class="recorded-outline" viewBox="0 0 900 520" aria-hidden="true"><path pathLength="1" d="M17 42Q438 30 883 43L879 477Q443 489 20 478L17 42M13 49L17 482M26 486Q449 481 870 484"/></svg>
             </div>
+            <figcaption><span class="recording-label">FROM THE ACTUAL EDITOR</span><span class="recording-moment" role="status">An idea takes shape.</span></figcaption>
+            <p class="recording-fallback" hidden>The recording couldn’t load. <button type="button" data-retry-recording>Try again</button></p>
           </figure>
-        </div>
-      </section>
-
-      <!-- ================================================================
-           THE LAST SHEET. One screen, nothing else on it: a pencil note
-           becomes an inked drawing, and the headline goes the same way.
-           Plays once as it arrives (main.js, `data-stage`); without a script
-           or with reduced motion it is simply the finished sheet.
-      ================================================================= -->
-      <section class="get" id="get" aria-labelledby="get-title">
-        <div class="get-sheet" data-stage>
-          <span class="get-reg" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
-
-          <figure class="get-drawing" role="img" aria-labelledby="get-drawing-caption">
-            <svg class="get-sketch" viewBox="0 0 300 250" aria-hidden="true" focusable="false">
-              <text class="draft-hand hand-q" x="8" y="26" transform="rotate(-4 8 26)">what if...</text>
-              <g class="draft-rough">
-                <path pathLength="1" d="M10 56L135 50L140 124L14 131Z" />
-                <path pathLength="1" d="M8 59Q61 52 138 53M136 51Q137 90 142 127M139 125L11 133M13 129L9 57" />
-                <path pathLength="1" d="M34 80Q58 73 80 78M34 93Q74 85 114 90M36 105L87 101" />
-                <path pathLength="1" d="M70 131C69 162 105 172 126 159S128 126 111 135S107 182 149 185" />
-              </g>
-              <path class="draft-flourish" pathLength="1" d="M150 214C186 182 232 188 222 212S166 236 182 216S246 208 292 224" />
-              <path class="draft-flourish" pathLength="1" d="M281 214L293 224L279 229" />
-            </svg>
-
-            <svg class="get-ink" viewBox="0 0 220 220" aria-hidden="true" focusable="false">
-              <g class="draft-clear">
-                <path pathLength="1" d="M60 22H163Q168 22 168 27V71Q168 76 163 76H60Q55 76 55 71V27Q55 22 60 22Z" />
-                <path class="draft-plane" pathLength="1" d="M63 28H176V84H63" />
-                <path pathLength="1" d="M95 47H127" />
-                <path pathLength="1" d="M111 76V112Q111 122 101 122H53M111 112Q111 122 121 122H172" />
-                <path pathLength="1" d="M26 122H82Q86 122 86 126V158Q86 162 82 162H26Q22 162 22 158V126Q22 122 26 122Z" />
-                <path pathLength="1" d="M142 122H198Q202 122 202 126V158Q202 162 198 162H142Q138 162 138 158V126Q138 122 142 122Z" />
-                <path pathLength="1" d="M42 142H66M158 142H182" />
-              </g>
-              <text class="draft-hand hand-a" x="74" y="206" transform="rotate(3 74 206)">oh, I see.</text>
-            </svg>
-
-            <svg class="get-art-narrow" viewBox="0 0 340 135" aria-hidden="true" focusable="false">
-              <g class="draft-rough">
-                <path pathLength="1" d="M18 33L96 29L100 82L21 87ZM20 36L98 32M97 30L102 84M22 83L19 35" />
-                <path pathLength="1" d="M33 48L65 45M34 59L81 56M35 70L71 67" />
-              </g>
-              <text class="draft-hand hand-q" x="18" y="18">what if...</text>
-              <path class="draft-flourish" pathLength="1" d="M102 62C133 42 164 49 158 69S124 84 137 68S186 59 206 64M197 58L207 64L197 70" />
-              <g class="draft-clear">
-                <path pathLength="1" d="M224 31H288Q292 31 292 35V71Q292 75 288 75H224Q220 75 220 71V35Q220 31 224 31Z" />
-                <path pathLength="1" d="M225 35H297V80H225M239 53H273M256 75V94H234M256 94H301" />
-                <path pathLength="1" d="M223 94H245Q248 94 248 97V111Q248 114 245 114H223Q220 114 220 111V97Q220 94 223 94Z" />
-                <path pathLength="1" d="M290 94H312Q315 94 315 97V111Q315 114 312 114H290Q287 114 287 111V97Q287 94 290 94Z" />
-              </g>
-              <text class="draft-hand hand-a" x="226" y="133">oh, I see.</text>
-            </svg>
-            <figcaption class="visually-hidden" id="get-drawing-caption">A rough note marked “what if…” becomes a connected diagram marked “oh, I see.”</figcaption>
-          </figure>
-
-          <div class="get-heading">
-            <p class="overline">A little space to think</p>
-            <h2 id="get-title">
-              <span class="get-big">Big ideas.</span>
-              <em class="get-rough"><span class="get-ink-pass" aria-hidden="true">Rough drafts.</span>Rough drafts.</em>
-            </h2>
-            <p class="get-lead">You don&rsquo;t need the whole picture to start.<br />Just a thought worth drawing out.</p>
           </div>
         </div>
-
-          <!-- The downloads. With a script this is a modal the download buttons open in place; without
-               one it is simply the last thing on the sheet, and those buttons are links to it. -->
+        <div class="canvas-reading">
+          <div class="story-opening" aria-labelledby="studio-title">
+            <p class="studio-eyebrow">YOUR ARCHITECTURE. ON YOUR DESKTOP.</p>
+            <h1 id="studio-title">It starts with<br /><em>“what happens next?”</em></h1>
+            <p>An order is placed. A service wakes up. Somewhere, a decision needs making. Draw it out in Draft Canvas Desktop—with diagrams beside your code, your own agent, and your team in the same picture.</p>
+            <a class="studio-button" id="hero-cta" href="#download" data-download>Download desktop <span>↓</span></a>
+            <a class="desktop-browser" href="https://app.draftcanvas.dev/" aria-label="Open live editor">Or try it in your browser ↗</a>
+          </div>
+          <div class="story-narrative" id="features">
+            <div class="story-beat" data-recording="present"><div class="story-copy"><p class="studio-eyebrow">EXPLAIN THE SYSTEM THAT REALLY EXISTS</p><h2>Don’t just show it.<br /><em>Walk us through it.</em></h2><p>Follow a request through the services. Bring the relevant notes and code into view as each step happens. Give the room a shared understanding of how it works.</p><span class="story-aside">The real editor. Take a moment to follow the flow.</span></div></div>
+            <div class="story-beat" data-recording="nodi"><div class="story-copy"><p class="studio-eyebrow">YOUR OWN AGENT · DESKTOP</p><h2>Ask what breaks.<br /><em>Decide what changes.</em></h2><p>Connect your own coding agent to the desktop app. Reason about the architecture together with Nodi. Explore risks, compare the proposed change, and accept only what belongs in your design.</p><span class="story-aside">The agent proposes. You stay the author.</span></div></div>
+            <div class="story-beat" data-recording="inside"><div class="story-copy"><h2>The big picture.<br /><em>The detail within.</em></h2><p>Open a service to explore its components, then return to the overview. The depth stack on the left keeps your place: the overview above, the room you’re exploring below. C4 keeps those levels connected.</p><span class="story-aside">Go deeper without losing the thread.</span></div></div>
+            <div class="story-beat" data-recording="evidence"><div class="story-copy"><p class="studio-eyebrow">FROM YOUR REPOSITORY · DESKTOP</p><h2>A picture with<br /><em>something behind it.</em></h2><p>Open your project folder on desktop. Keep source references and assumptions beside the architecture, and ask your agent to refresh the diagram when the code changes, with evidence you can inspect.</p><span class="story-aside">Know what was observed. Know what was inferred.</span></div></div>
+            <div class="story-beat" data-recording="collaboration"><div class="story-copy"><h2>Bring everyone<br /><em>into the picture.</em></h2><p>Draw together, see each other’s pointers, and follow the owner’s presentation. Live collaboration puts the conversation on the same canvas, without accounts.</p><span class="story-aside">One architecture. More than one perspective.</span></div></div>
+            <div class="story-beat" data-recording="points"><div class="story-copy"><h2>Keep the questions.<br /><em>They belong here too.</em></h2><p>Mark a tentative dependency. Attach a question to the service it concerns. Review open points across rooms, so unfinished thinking stays with the architecture.</p><span class="story-aside">The next conversation starts with context.</span></div></div>
+          </div>
+          <div class="story-ending" aria-labelledby="close-title">
+            <p class="studio-eyebrow">A SKETCH BECOMES A SHARED UNDERSTANDING.</p>
+            <h2 id="close-title">What happens next?<br /><em>That’s your line.</em></h2>
+            <p>Give your architecture a home beside your code. Save editable diagrams in project folders, work offline, and bring your own coding agent into the picture. Start with a shape, a ready-made pattern, or Mermaid.</p>
+            <a class="studio-button" href="#download" data-download>Get Draft Canvas Desktop <span>↓</span></a>
+            <a class="desktop-browser" href="https://app.draftcanvas.dev/" aria-label="Open live editor">Or try it in your browser ↗</a>
+            <button type="button" id="watch-editor">Watch Draft Canvas in action ↗</button>
+            <p class="canvas-promise">No account. Stored locally.</p>
+          </div>
+        </div>
+      </div>
           <dialog class="dl" id="download" aria-labelledby="dl-title" aria-describedby="dl-lead">
             <div class="dl-sheet">
               <button class="dl-close" type="button" data-close aria-label="Close">
@@ -419,8 +173,8 @@ Make the main request path a <mark style="--m:5">presentation flow</mark>, with 
               <p class="overline dl-over">Draft Canvas Desktop <span aria-hidden="true">·</span> <span class="dl-version">v__VERSION__</span></p>
               <h2 class="dl-title" id="dl-title">Put it on your <em>desk.</em></h2>
               <p class="dl-lead" id="dl-lead">
-                Diagrams as files beside your code, a window of their own, and a door your coding agent
-                can draw through.
+                Keep diagrams beside your code. Open project folders, work offline, and connect your own
+                coding agent to reason with Nodi. Review every proposed change before it lands.
               </p>
 
               <ul class="targets" id="targets">
@@ -472,29 +226,21 @@ Make the main request path a <mark style="--m:5">presentation flow</mark>, with 
               </p>
             </div>
           </dialog>
-      </section>
+      <dialog class="proof-dialog" id="editor-film" aria-label="Draft Canvas editor demonstration"><button type="button" id="close-editor-film">Close ×</button><video id="editor-film-video" poster="./clips/draw.jpg" controls playsinline preload="none"></video></dialog>
     </main>
-
-    <footer class="footer">
-      <p class="footer-brand">
-        <svg class="mark" viewBox="0 0 32 32" width="22" height="22" aria-hidden="true" focusable="false">
-          <rect x="6" y="8" width="11" height="7" rx="2" fill="none" stroke="currentColor" stroke-width="2" />
-          <rect x="15" y="18" width="11" height="7" rx="2" fill="none" stroke="var(--ink-ghost)" stroke-width="2" />
-          <path d="M11.5 15.5v3.5h4" fill="none" stroke="currentColor" stroke-width="1.6" />
-        </svg>
-        <span>Free &amp; open source · Apache 2.0</span>
-      </p>
-      <nav class="footer-links" aria-label="Elsewhere">
-        <a class="footer-coffee" href="https://ko-fi.com/aclt_attic">
-          <svg viewBox="0 0 20 20" width="17" height="17" aria-hidden="true" focusable="false"><path class="steam" d="M7.2 2.6c-.9 1 .9 1.7 0 2.9M10.6 2.6c-.9 1 .9 1.7 0 2.9" /><path d="M3.5 8h11v4.4a4 4 0 0 1-4 4h-3a4 4 0 0 1-4-4zM14.5 9.4h1a2 2 0 0 1 0 4h-1.1" /></svg>
-          <span>Buy me a coffee</span>
+    <footer class="studio-footer">
+      <span>Draft Canvas · Free &amp; open source</span>
+      <nav class="studio-footer-glyphs" aria-label="Source and support">
+        <a href="https://github.com/acltabontabon/draft-canvas" aria-label="Source on GitHub" title="Source on GitHub">
+          <svg viewBox="0 0 16 16" width="23" height="23" aria-hidden="true" focusable="false"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" /></svg>
         </a>
-        <a class="footer-icon" href="https://github.com/acltabontabon/draft-canvas" aria-label="Source on GitHub" title="Source on GitHub">
-          <svg viewBox="0 0 16 16" width="20" height="20" aria-hidden="true" focusable="false"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" /></svg>
+        <a class="studio-coffee-glyph" href="https://ko-fi.com/aclt_attic" aria-label="Buy me a coffee on Ko-fi" title="Buy me a coffee">
+          <svg viewBox="0 0 24 24" width="27" height="27" aria-hidden="true" focusable="false">
+            <path d="M7 3c-2 2 2 2 0 4M12 2c-2 2 2 3 0 5M4 10l13-.3-.5 6.1c-.2 3-2.8 4.5-6 4.2-3.5.2-6-1.5-6.2-4.4zM17 11h2c4 .1 3.7 5.5-.7 5.4h-1.5M2.5 22q8-1 17 0"/>
+          </svg>
         </a>
       </nav>
     </footer>
-
     <script type="module" src="./src/main.js"></script>
   </body>
 </html>

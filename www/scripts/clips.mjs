@@ -31,7 +31,7 @@ const CLIPS = [
   { name: 'draw', start: 9.4, duration: 16.4, poster: 12.8 },
   { name: 'compose', start: 34.4, duration: 8.8, poster: 5.7 },
   { name: 'present', start: 60.8, duration: 18, poster: 8 },
-  { name: 'inside', start: 94.8, duration: 20, poster: 3.5 },
+  { name: 'inside', start: 101.5, duration: 24.3, poster: 3.5 },
   { name: 'io', start: 130, duration: 22, poster: 6 },
 ];
 
@@ -70,3 +70,15 @@ for (const clip of CLIPS) {
 
   console.log(`clips: ${clip.name}.mp4 ${kb(mp4)} · ${clip.name}.jpg ${kb(jpg)}`);
 }
+
+// The release reel includes live collaboration between its Nodi scenes. Keep the marketing
+// chapter on the companion, reasoning and review, with a short dissolve across that omitted scene.
+ffmpeg([
+  '-i', join(www, '..', 'docs', 'media', 'releases', 'v1.16.0', 'nodi-cinematic.mp4'),
+  '-filter_complex', '[0:v]split[a][b];[a]trim=start=0:end=2.1,setpts=PTS-STARTPTS,scale=1280:-2,fps=30,settb=AVTB[first];[b]trim=start=5.7:end=11.3,setpts=PTS-STARTPTS,scale=1280:-2,fps=30,settb=AVTB[review];[first][review]xfade=transition=fade:duration=0.3:offset=1.8[v]',
+  '-map', '[v]', '-an', '-c:v', 'libx264', '-crf', '24', '-preset', 'slow',
+  '-g', '30', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', join(out, 'nodi-review.mp4'),
+]);
+
+// The complete collaboration-paired.mp4 and open-points.mp4 are standalone real-app captures.
+// Keep them intact when regenerating the reel excerpts above.
