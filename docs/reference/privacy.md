@@ -11,7 +11,7 @@ Web diagrams stay in this browser profile and do not sync.
 
 | Location | Contents |
 | --- | --- |
-| IndexedDB `draft-canvas` | Stores `bodies`, `documents` (titles, thumbnails), `projects` (folders), `backgroundImages`; `fileAssociations` is unused |
+| IndexedDB `draft-canvas` | Stores `bodies`, `documents` (titles, thumbnails), `projects` (folders), `backgroundImages` |
 | IndexedDB `draft-canvas-keys` | Legacy encryption key for diagrams saved before 1.12 |
 | Cache Storage | Offline app files, never diagrams |
 | localStorage | Short preferences, such as theme, export choices and live-session name |

@@ -10,7 +10,7 @@ A document (`DraftDocument` in `src/document/types.ts`) is JSON with these root 
 | Field | Contents |
 | --- | --- |
 | `format` | Always `"draft-canvas"` |
-| `version` | Format version, currently **22** (`CURRENT_VERSION`) |
+| `version` | Format version, currently **23** (`CURRENT_VERSION`) |
 | `metadata` | `id`, `title`, `createdAt`, `updatedAt`, optional `projectId` |
 | `nodes`, `edges`, `flows`, `viewport` | The top-level graph |
 | `settings` | Canvas settings, including the background |
@@ -62,6 +62,7 @@ Rules for a new version:
 | v19 → v20 | `migrateAddWaypoints` | No-op (connector `waypoints`) |
 | v20 → v21 | `migrateTextToMarkdown` | Text node and Text attachment `text` is escaped so it reads the same as Markdown |
 | v21 → v22 | identity | No-op (optional linked compensation fields on connectors) |
+| v22 → v23 | identity | No-op (retired per-connector style overrides are discarded by normalization) |
 
 Wrapped in `everyRoom`: the migrations from v1, v2, v6, v7, v10, v13, v17 and v20. `migrateActionsToNotes` is
 root-only but walks rooms itself to resolve anchors.

@@ -264,5 +264,3 @@ to `app.draftcanvas.dev`.
   from the path; `tests/privacy.test.ts` enforces it. That is why the editor could move to `/editor/`.
 - **Old service worker:** `www/legacy/sw.js` replaces the one that served the editor at
   `/draft-canvas/`, deletes only its own caches and unregisters.
-
-The header navigation uses system handwriting faces and a two-pass pencil outline for the desktop link.

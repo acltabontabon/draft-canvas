@@ -65,8 +65,8 @@ Update compatible dependencies first. If no fix exists, add an entry to
 reason, tracking reference and expiry. Expired or incomplete entries fail.
 
 Current exception: RUSTSEC-2024-0429 (glib 0.18.5), reached only through Tauri's Linux GTK stack.
-The macOS and Windows dependency trees contain no glib. It expires 8 November 2026 and must be
-resolved before shipping a Linux desktop build.
+The macOS and Windows dependency trees contain no glib. It must be resolved before shipping a Linux
+desktop build; its expiry is in the exceptions file.
 
 ## Local diagnostic reports
 

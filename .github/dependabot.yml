@@ -20,6 +20,16 @@ updates:
       site:
         patterns: ['*']
 
+  # The Cloudflare Workers behind the site and the collaboration relay pin wrangler in their own lockfile.
+  - package-ecosystem: npm
+    directory: /www/cloudflare
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 1
+    groups:
+      cloudflare:
+        patterns: ['*']
+
   # The desktop app's Rust dependencies. The tauri crate and @tauri-apps/api move together (see
   # scripts/check-desktop-version.mjs), so a bump to one needs the other.
   - package-ecosystem: cargo

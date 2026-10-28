@@ -1,4 +1,0 @@
-Generator: built-in imagegen
-Source: the approved charcoal sketch LinkedIn thumbnail, version 4.
-
-Precise cleanup of the supplied approved Draft Canvas sketch artwork for a reusable Open Graph background plate. Remove ONLY all lettering: remove the top-left "DRAFT CANVAS", the "1.16.0 RELEASE" label, and the lower-left headline "Nodi + live collaboration". Fill those lettering areas seamlessly with the same existing dark charcoal film-grain texture. Leave them blank; editable typography will be added later by the website's renderer. Preserve every other pixel and all composition: the architecture board, boxes, connectors, three people, cursor arrows, table line, and the friendly sketched pixel-art Nodi at the right. Keep the full landscape aspect ratio and positions, off-white fine-line art, very restrained mint accents, and black background unchanged. No new text, no extra objects, no crop or redesign. This is a text removal edit, not a new illustration.

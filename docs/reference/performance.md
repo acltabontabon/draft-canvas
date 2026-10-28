@@ -56,8 +56,6 @@ How long a diagram takes to appear after you choose it, the longest stretch the 
 100 saved diagrams show up in the library in 89 ms. Switching between diagrams 25 times grew the JS heap by 0.9 MiB in total, and left no DOM nodes or listeners behind. Dragging a shape out and back 150 times on the large diagram — enough to fill the undo history — took the heap from 101 MiB to 103 MiB, where it stopped growing.
 
 <!-- performance-results:end -->
-Regenerates the full results on this page, between `<!-- performance-results:start -->` and
-`<!-- performance-results:end -->`, from `benchmark/results/latest.json`. Run `npm run perf` first.
 
 ## Load and memory
 
