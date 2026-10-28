@@ -300,6 +300,12 @@ from trimmed turns still counts. Active conversations are never evicted. Diagram
 skip redundant reads are weak references in a bounded cache, so visiting many diagrams does not keep
 their files alive.
 
+Claude Code keeps its own session transcripts (Nodi does not pass `--no-session-persistence`); the
+folder is `projectsDirectory` in `claude auth status --json`. That command is a hint, not a gate: from
+a sandbox it can report `loggedIn: false` for an account signed in through the keychain, so a negative
+answer shows the sign-in line without blocking **Send**, and the run's own error is what counts. The
+person's own plugins still run inside the agent; that is documented, not prevented.
+
 ## One diagram across a conversation
 
 Agents create once, then send every follow-up ("add a queue", "rename it", "clean up the arrows") as

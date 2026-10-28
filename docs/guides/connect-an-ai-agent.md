@@ -198,6 +198,6 @@ In **Settings → AI agents**:
 | Version mismatch, or Settings shows **Update** *agent* | Click it to point the agent at this copy of Draft Canvas. |
 | Claude Code finds Draft Canvas in one folder only | Use **Add to Claude Code**, which sets it up for every project. |
 | No Nodi in the canvas corner | Install Claude Code (2.1.295 or later) or Codex (0.163.0 or later), then reopen the diagram. |
-| Nodi says the agent isn't signed in | Run `claude` or `codex` once in Terminal to sign in, then try again. |
+| Nodi says the agent isn't signed in | Run `claude` or `codex` once in Terminal to sign in, then try again. A desktop app does not see an `ANTHROPIC_API_KEY` set only in a shell profile; sign in with the CLI instead. |
 
 Tools, limits and error codes: [Agent integration](../reference/agent-integration.md).
