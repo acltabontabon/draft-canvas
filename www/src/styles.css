@@ -2993,13 +2993,34 @@ html:has(.dl[open]) {
 /* One scroll envelope moves the explanation, media, depth guide and caption together. */
 .canvas-world .recorded-art { opacity: calc(var(--recording-reveal, 0) * var(--chapter-opacity, 1)); transform: translateY(var(--chapter-shift, 0px)); }
 .story-copy { opacity: var(--chapter-opacity, 1); transform: translateY(var(--chapter-shift, 0px)); }
-.recorded-art[data-loading] .recorded-paper > :not(.recorded-outline), .recorded-art[data-loading] figcaption { visibility: hidden; }
+/* While a chapter loads, the outgoing frame lifts off and a pencil sketch holds its place. */
+.recorded-art[data-loading] .recorded-paper > :not(.recorded-outline, .recording-loader),
+.recorded-art[data-loading] figcaption,
+.recorded-art[data-loading] .recording-controls { opacity: 0 !important; pointer-events: none; transition: opacity .25s ease-out; }
 .recorded-layer, .recorded-still { transition: none; }
+.recording-loader { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 12px; color: #9aa4b2; pointer-events: none; opacity: 0; transition: opacity .3s; }
+/* The delay keeps a cached clip from flashing the sketch for a single frame. */
+.recorded-art[data-loading] .recording-loader { opacity: 1; transition: opacity .4s .3s; }
+.recording-loader svg { width: clamp(112px, 14vw, 184px); overflow: visible; }
+.recording-loader path { fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; stroke-dasharray: 1; stroke-dashoffset: 0; animation: recording-sketch 2.6s ease-in-out infinite both paused; }
+.recorded-art[data-loading] .recording-loader path { animation-play-state: running; }
+.recording-loader .pencil-echo { stroke-width: .6; opacity: .45; }
+.recording-loader path:nth-child(2) { animation-delay: .2s; }
+.recording-loader path:nth-child(3) { animation-delay: .55s; }
+.recording-loader path:nth-child(4) { animation-delay: .8s; }
+.recording-loader path:nth-child(5) { animation-delay: .9s; }
+.recording-loader span { font: 15px 'Bradley Hand', 'Segoe Print', cursive; transform: rotate(-2deg); }
+@keyframes recording-sketch { 0% { stroke-dashoffset: 1; opacity: 1; } 40%, 78% { stroke-dashoffset: 0; opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 0; } }
+/* The ready frame inks in rather than appearing between two frames. */
+.recorded-art[data-arriving] .recorded-paper > :not(.recorded-outline, .recording-loader),
+.recorded-art[data-arriving] .recording-controls { animation: recording-arrive .7s ease-out both; }
+.recorded-art[data-arriving] figcaption { animation: recording-arrive .5s .15s ease-out both; }
+@keyframes recording-arrive { from { opacity: 0; } }
+@media (max-width: 700px) { .recording-loader { gap: 6px; } .recording-loader span { font-size: 11px; } }
 
 .recording-controls { display: flex; gap: 22px; margin: 16px 0 0 3%; }
 .recording-controls button { border: 0; background: none; color: #a9b4c4; padding: 4px 0; font: 10px var(--mono); cursor: pointer; }
 .recording-controls button:hover, .recording-controls button:focus-visible { color: #fff; }
-.recorded-art[data-loading] .recording-controls { visibility: hidden; }
 
 /* Shorter chapters respond to normal wheel movement; playback keeps its own gentle clock. */
 .canvas-reading .story-beat, .canvas-reading [data-recording='inside'] { min-height: 135dvh; }

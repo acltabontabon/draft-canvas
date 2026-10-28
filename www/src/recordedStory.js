@@ -67,6 +67,8 @@ export function setUpRecordedStory(story, reduced) {
   let settled = false;
   let pausedByReader = false;
   let motionFrame = 0;
+  let stall = 0;
+  let arrival = 0;
   const controls = document.createElement('div');
   controls.className = 'recording-controls';
   controls.innerHTML = '<button type="button" data-play-demo>Pause demo</button><button type="button" data-replay-demo>Replay ↺</button>';
@@ -164,14 +166,33 @@ export function setUpRecordedStory(story, reduced) {
     pausedByReader = false;
     videos.forEach((video) => video.pause());
     cancelAnimationFrame(motionFrame);
+    clearTimeout(stall);
+    clearTimeout(arrival);
+    delete art.dataset.arriving;
     art.dataset.loading = '';
     depth.hidden = true;
     videos.forEach((video) => { video.onseeked = null; });
     const item = MOMENTS[name];
     const run = ++generation;
     fallback.hidden = true;
-    const ready = () => {
+    const fail = () => {
+      if (run !== generation) return;
+      clearTimeout(stall);
       delete art.dataset.loading;
+      fallback.hidden = false;
+      videos.forEach((layer) => layer.classList.remove('is-current'));
+      still.hidden = true;
+    };
+    // The sketch never stands in indefinitely: a stalled clip offers a retry instead.
+    stall = setTimeout(() => { if (art.hasAttribute('data-loading')) fail(); }, 15000);
+    const ready = () => {
+      clearTimeout(stall);
+      fallback.hidden = true;
+      delete art.dataset.loading;
+      // Restart the ink-in even when the previous chapter's has not yet been cleared.
+      void art.offsetWidth;
+      art.dataset.arriving = '';
+      arrival = setTimeout(() => { if (run === generation) delete art.dataset.arriving; }, 900);
       depth.hidden = name !== 'inside';
       label.textContent = item.label;
       type.textContent = item.still ? 'ACTUAL EDITOR CAPTURE' : 'ACTUAL EDITOR · TAKE A MOMENT TO WATCH';
@@ -190,7 +211,7 @@ export function setUpRecordedStory(story, reduced) {
         videos.forEach((video) => video.classList.remove('is-current'));
         ready();
       };
-      next.onerror = () => { if (run === generation) { delete art.dataset.loading; fallback.hidden = false; videos.forEach((layer) => layer.classList.remove('is-current')); still.hidden = true; } };
+      next.onerror = fail;
       next.src = item.src;
       return;
     }
@@ -213,7 +234,7 @@ export function setUpRecordedStory(story, reduced) {
       seek(video);
       if (!video.seeking) commit();
     };
-    video.onerror = () => { if (run === generation) { delete art.dataset.loading; fallback.hidden = false; videos.forEach((layer) => layer.classList.remove('is-current')); still.hidden = true; } };
+    video.onerror = fail;
     video.dataset.chapter = name;
     video.dataset.theme = item.theme;
     video.src = item.src;
