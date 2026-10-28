@@ -12,13 +12,13 @@ Web diagrams stay in this browser profile and do not sync.
 | Location | Contents |
 | --- | --- |
 | IndexedDB `draft-canvas` | Stores `bodies`, `documents` (titles, thumbnails), `projects` (folders), `backgroundImages` |
-| IndexedDB `draft-canvas-keys` | Legacy encryption key for diagrams saved before 1.12 |
+| IndexedDB `draft-canvas-keys` | Key for legacy encrypted records, read-only |
 | Cache Storage | Offline app files, never diagrams |
 | localStorage | Short preferences, such as theme, export choices and live-session name |
 | sessionStorage | Unsaved edits held across a reload, removed once restored |
 
-- Diagrams are plain records since 1.12; anyone with access to the profile can read them. Older ones
-  stay encrypted until next saved. See [Security](../../SECURITY.md#browser-storage).
+- Diagrams are plain records; anyone with access to the profile can read them. Legacy encrypted
+  records are decrypted on read. See [Security](../../SECURITY.md#browser-storage).
 - Without IndexedDB, the status bar says **In memory only** and closing the tab loses the work.
 
 ### The desktop app

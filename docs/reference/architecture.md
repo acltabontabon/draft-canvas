@@ -135,10 +135,9 @@ same commands, sometimes with shorter labels, minus any that open a follow-up pi
 - Content writes check for intervening changes. Camera-only saves never conflict.
 - Reading never rewrites. Unreadable data is kept, never replaced with an empty diagram.
 
-**Encrypted storage.** Builds 1.0–1.11 encrypted browser bodies. Current builds write plain records and
-only decrypt old ones, in `crypto/documentCipher.ts` and `crypto/keyStore.ts`, called only by
-`storage/IndexedDbRepository.ts`. The passphrase export is separate. See [Privacy](privacy.md) and
-[Security](../../SECURITY.md).
+**Encrypted storage.** Browser records are written plain. `crypto/documentCipher.ts` and
+`crypto/keyStore.ts` only decrypt legacy rows and are called only by `storage/IndexedDbRepository.ts`.
+The passphrase export is separate. See [Security](../../SECURITY.md#browser-storage).
 
 ## Untrusted input and schema evolution
 

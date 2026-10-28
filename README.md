@@ -53,8 +53,6 @@ Ask again to refresh the same diagram when the code changes.
 
 <div align="center">
 
-<a href="https://devhunt.org/tool/draft-canvas"><img src="https://devhunt.org/badge/draft-canvas.svg" height="44" alt="draft-canvas on DevHunt"></a>
-
 [Documentation](https://draftcanvas.dev/docs/) · [Apache 2.0](LICENSE) ·
 [Feedback & ideas](https://github.com/acltabontabon/draft-canvas/issues/new/choose)
 

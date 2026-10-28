@@ -7,7 +7,7 @@
  * Uses the Chromium that Playwright already installs for the app's e2e suite, so regenerating them
  * needs nothing new — the same trick scripts/render-desktop-icons.mjs uses for the desktop icons.
  *
- * The committed `og-illustration.png` follows the launch film's charcoal sketch direction. Keep
+ * The committed `og-illustration.png` follows a charcoal sketch direction. Keep
  * lettering out of that artwork: the renderer adds the headline and current package version, so
  * typography stays editable and regenerating the card cannot retain an old release number.
  * Both the source artwork and the rendered output are committed; deployment needs no browser.

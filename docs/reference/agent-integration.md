@@ -212,21 +212,15 @@ tool call, tool update and stopped). Each agent is a `Backend` (locate, sign-in,
 | Claude Code 2.1.295+ | `claude -p --output-format stream-json`, `--resume` for later turns | `--tools ""`, `--strict-mcp-config` with only Draft Canvas, `--allowedTools mcp__draft-canvas__*`, hooks off |
 | Codex 0.163.0+ | `codex exec --json`, `codex exec resume <thread>` for later turns | `--ignore-user-config`, shell and tool-providing features off, read-only sandbox, approvals off, only the run's Draft Canvas server configured |
 
-Codex starts only after its feature listing can be verified; an unsuccessful or unreadable probe
-refuses the run instead of omitting tool restrictions. CLI discovery, version and sign-in probes
-have deadlines through process exit and pipe closure, with a combined 1 MiB output limit.
+Codex starts only after its feature listing can be verified; an unreadable probe refuses the run
+rather than dropping tool restrictions. CLI probes have deadlines. Each run is killed as a whole
+process tree (a process group on Unix, a Job Object on Windows) on Stop, on an output limit and when
+the app exits.
 
-On Unix, each run and probe has its own process group. On Windows, the app creates the process
-suspended, assigns a kill-on-close Job Object, then resumes its initial thread. Setup failure
-terminates and reaps the suspended process. Stop, an output limit and parent exit terminate the
-whole job before readers wait for pipe closure, including children created as the turn ends.
-
-Codex merges MCP tables from configuration overrides, so replacing `mcp_servers` alone does not
-remove other servers. Companion runs use `--ignore-user-config` for both new and resumed turns;
-feature discovery uses a private temporary configuration home. Actual turns keep the person's
-`CODEX_HOME` for authentication and sessions, without copying credentials. User configuration
-overrides, including custom models, providers and credential-store settings, do not carry into Nodi:
-it uses Codex's defaults. External agents connected normally keep their own configuration.
+Codex merges MCP tables from configuration overrides, so Companion runs pass `--ignore-user-config`
+and keep only the person's `CODEX_HOME` for authentication and sessions. Custom models, providers and
+credential-store settings therefore do not carry into Nodi; external agents connected normally keep
+their own configuration.
 
 The brief (`BRIEF`) goes in as the agent's whole system prompt, replacing its coding one: Claude Code's
 `--system-prompt`, Codex's `model_instructions_file` (the run folder's `brief.md`). Each turn's prompt
@@ -261,12 +255,11 @@ and calls are kept few:
 
 - A run's connector serves a lean tool set (`src-tauri/mcp/src/main.rs`'s `lean`): only the tools the
   run may call, without `render_diagram` or `read_selection`, output schemas, the bounds the app checks
-  anyway, or nested inside views in an element. Claude Code 2.1.310: 31.8k → 15.4k tokens a call.
+  anyway, or nested inside views in an element.
 - Codex runs with the features that bring tools of their own turned off (browser, computer use, image
   generation, sub-agents, plugins, apps, skill search, `unified_exec`; only those `codex features list`
-  reports) and web search off. Codex 0.163.0: 17.3k → 6.3k tokens a call.
-- The view comes with the turn, so a question is one call. Measured on a 15-element diagram: a question
-  64.9k → 19.1k tokens with Claude Code; a change 174k → 43k with Codex.
+  reports) and web search off.
+- The view comes with the turn, so a question is one call.
 - The brief: no read when the view came with the turn, `get_capabilities` only when a change is refused
   for an unknown type, no preview before a proposal, no read after a change.
 - Small talk (a whole message of only "hello", "thanks", "bye", "how are you") is answered by Nodi
@@ -277,28 +270,14 @@ The agent's session id is kept per diagram and agent in `companion/sessions.json
 shown is also separate per agent, in memory only. Replies may name parts as `[[id]]`; the companion shows their names
 and pins numbered points onto them.
 
-Codex reports cumulative session token counters when resumed. Before starting it, the app reads
-the last token metadata from a bounded tail of that session's local transcript, then reports only
-the turn's increase. This also accounts for turns continued in a terminal. If that baseline is
-unavailable, usage stays unknown instead of charging the old session to the new turn again.
+Codex reports cumulative token counters when resumed, so the app reports only the turn's increase
+and leaves usage unknown if it cannot establish a baseline.
 
-Run output is bounded independently of the agent's model budget: at most 128 MiB of raw stdout and
-stderr combined, 32 MiB per stdout line, and 1 MiB of parsed event text. Passing a limit fails the
-run and closes its tool access. At most 20,000 live events are emitted per run, independently of
-chunk merging. Recovery keeps at most 2,000 events per run, merging adjacent reply
-chunks so a streamed answer does not lose its beginning just because it arrived in small pieces.
-Snapshots and live events carry per-run sequence numbers, and native recording and delivery stay
-ordered even when cancellation arrives on another thread. Reload recovery buffers live updates,
-then applies only those newer than the snapshot; it does not duplicate text already recovered.
-The two most recent completed turns remain available in native memory, so a process finishing
-before the reload snapshot is captured does not lose its answer. **New conversation** clears them
-for the chosen agent on that diagram.
-The page keeps at most 20 turns per conversation and 100 finished conversations, with estimated
-content budgets of 4 MiB per conversation and 16 MiB across the window. Older finished turns can be
-trimmed sooner for long replies; each conversation keeps its latest answer and live turns, and usage
-from trimmed turns still counts. Active conversations are never evicted. Diagram snapshots used to
-skip redundant reads are weak references in a bounded cache, so visiting many diagrams does not keep
-their files alive.
+Run output is bounded independently of the agent's model budget; passing a limit fails the run and
+closes its tool access. A reload recovers the run's recent events in order without duplicating text,
+and the two most recent completed turns stay available. **New conversation** clears them for the
+chosen agent on that diagram. The page also caps how many turns and conversations it keeps, and never
+evicts an active one. The limits are in `src-tauri/src/companion/`.
 
 Claude Code keeps its own session transcripts (Nodi does not pass `--no-session-persistence`); the
 folder is `projectsDirectory` in `claude auth status --json`. That command is a hint, not a gate: it can

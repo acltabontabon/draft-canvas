@@ -78,23 +78,7 @@ preview a report, then choose **Download report**.
 - Never contains: document ids, names, labels, paths, URLs, stacks or raw error messages.
 - Nothing is uploaded. The record lives in memory and is gone on reload.
 
-## Manual acceptance record
-
-Use disposable copies; record revision, platform, steps and outcome.
-
-| Drill | Evidence | Status |
-| --- | --- | --- |
-| Abrupt browser termination | Confirm a save, edit, force quit, reopen; record what survived | Pending |
-| Desktop interrupted save or unavailable drive | Last saved file stays readable; pending edits recover or can be exported | Pending |
-| Clean install and upgrade | macOS arm64, Intel macOS, Windows: dialogs, file associations, unsaved work, updater | Pending |
-| Intel macOS install | Native install of the cross-compiled package | Pending |
-| Ordinary-laptop performance | Supported workload against the budgets above, with hardware details | Pending |
-| Drawing and handoff | Five sessions following [the observation protocol](explanation-usability.md) | Pending |
-| Release withdrawal | Rehearse the procedure below with disposable artifacts | Pending |
-
 ## Withdrawal and recovery procedure
-
-Not yet rehearsed.
 
 1. Stop promoting the bad release. Never delete users' files or clear browser storage.
 2. Desktop: run **Desktop update channels** with the last good tag and `force` on. This stops new

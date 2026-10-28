@@ -27,13 +27,11 @@ file, not the device or other copies.
 
 ## Browser storage
 
-- Diagrams are plain IndexedDB records since 1.12, as are titles, summaries and background images.
-  Use a `.dcenc` export when a copy needs protection at rest.
-- Builds 1.0–1.11 encrypted bodies with one non-extractable AES-256-GCM `CryptoKey` per profile, in
-  `draft-canvas-keys`. That guarded a database dump, not a copied profile. It was retired because
-  losing the key lost the whole Library.
-- Legacy rows stay encrypted until next saved and are read with the existing key. No new key is made;
-  a lost one cannot be recovered.
+- Diagrams, titles, summaries and background images are plain IndexedDB records. Use a `.dcenc`
+  export when a copy needs protection at rest.
+- Records written by older builds were encrypted with a non-extractable key kept in the profile
+  (`draft-canvas-keys`). They are decrypted on read and stored plain on next save; if the key is
+  lost, those records cannot be read.
 
 ## Passphrase-protected export (`.dcenc`)
 
@@ -62,14 +60,11 @@ It does not encrypt the Library copy, desktop file or recovery copies.
 - Your agent may send diagram content to its AI provider. See
   [Agent security](docs/reference/agent-integration.md#security).
 - **Companion runs** are scoped to one diagram and use proposals unless direct changes were chosen.
-  Cancellation closes tool authority before waiting for the process to exit, including when Stop
-  races startup; an agent's terminal event closes it too. Raw process output and retained event text
-  have separate size limits. Windows runs and CLI probes join a kill-on-close Job Object before
-  their first thread runs; cancellation and parent exit end the whole job before draining pipes.
-  These boundaries depend on running the supported, trusted agent CLI;
-  they do not sandbox a malicious replacement executable.
-  Codex turns ignore user configuration: command-line MCP table overrides merge with it and cannot
-  by themselves exclude other servers. Authentication and sessions keep their original home.
+  Cancellation and an agent's terminal event close tool authority before the process exits, and
+  process trees are killed with the run. These boundaries depend on running the supported, trusted
+  agent CLI; they do not sandbox a malicious replacement executable. Codex runs ignore the person's
+  Codex configuration. Details are in
+  [Agent integration](docs/reference/agent-integration.md#nodi-the-desktop-companion).
 
 ## Live collaboration
 
@@ -96,16 +91,9 @@ size-capped before parsing, prototype keys refused, and validated like an import
   in use, the oldest of whoever holds the most is closed to make room. Cross-origin requests,
   non-IP `Host` headers and public addresses are refused; 100.64.0.0/10 counts as local (VPNs).
 - **Roles** are enforced by the owner; a viewer's changes are refused.
-- **Limits.** 10 collaborators; 4 MB per collaborator message, 16 MB from the owner; per-connection
-  rate and byte budgets, and at most 1,000 moves a patch. Collaborators can't grow the file past
-  about 15 MB as it is saved (indented), so it always reopens and a fresh copy still fits one
-  message. Limits also apply before admission and to ICE restart control messages. Room paths from
-  patches are resolved without unbounded recursion, and held edits replay in short batches. Code
-  highlighting, Markdown parsing, nested groups and selection rings have bounded cost. The owner's
-  take-back ledger has session-wide limits as well as per-person limits: 128 authors, 128 file
-  versions, 50,000 touches and an estimated 64 MiB of retained document objects. Old history is
-  discarded when any limit is reached; it is not a permanent audit log. Relay
-  limits, including 4 guest sockets per client in a room, are in
+- **Limits.** At most 10 collaborators, with size, rate and byte caps on every message and on how
+  large a shared file can grow, so it always reopens. The take-back history is bounded and is not a
+  permanent audit log. Relay limits are in
   [Website](docs/reference/website.md#the-collaboration-relay).
 - **Framing.** The hosted editor and the local network page refuse to be framed by other sites.
 - **Connection candidates** naming loopback, unspecified, multicast or 169.254.0.0/16 addresses, or

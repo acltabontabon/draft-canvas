@@ -128,32 +128,11 @@ share, script/layout/style time, and page errors.
 npm run perf:interaction -- --sizes small,medium,large --scenarios depth-enter,depth-exit
 ```
 
-The depth scenarios use `benchmark/workloads/depth.ts`: a parent and an inside room with the same
-shape and connector counts as the selected size, including boundaries, labels and attachments.
-They exercise both the outgoing room's snapshot and the arriving room's mount. Each direction is
-measured separately, from the real keyboard shortcut through removal of the transition, followed
-by a one-second tail for debounced saves. Selection, the reverse move and its saves are unmeasured.
-The JSON records this fixture under `<size>-depth` alongside the ordinary interaction fixture.
-
-Use `--against /path/to/baseline/dist --against-label before` to compare builds in one run. Inspect
-maximum frame time and key-to-next-frame latency as well as p95: a room swap can stall once before
-an otherwise smooth animation. The recorder keeps the last idle frame so that initial stall is
-included, and observes keydown as well as pointer and wheel input. Results from older harnesses
-that discarded the initial frame or omitted keydown latency are not directly comparable.
-
-Each iteration's `notes` also separates startup (`depthStartupMs`, shortcut to the first observed
-running animation frame) from running-motion frame p95/max. `depthFirstTimelineMs` records how far
-the animation had already advanced at that first frame; a large value reveals a skipped beginning.
-Startup remains included in the overall frame and long-task measurements.
-
-Room flights use decoded, camera-sized bitmaps from the shared SVG renderer. The editable room
-stays measured at its landing camera underneath: scaling inline SVG text can otherwise trigger
-font layout throughout the zoom even on a compositor layer. Bitmaps are capped at four million
-pixels; at most two prepared cameras are cached, cleared when the file changes or editor closes.
-Carried pictures are bounded and cleared on completion or interruption. Large rooms still pay
-their initial mount and picture-preparation cost; use the startup metric to track that separately
-from running motion. The normal warmup measures revisits; use `--warmup 0` to include a cold first
-visit. `depthPictureCached` in each iteration's notes identifies arrival-image reuse.
+The depth scenarios use a parent and an inside room with the same shape and connector counts as the
+selected size (`benchmark/workloads/depth.ts`), and time each direction from the keyboard shortcut
+until the transition is gone. Look at maximum frame time and key-to-next-frame latency as well as p95,
+since a room swap can stall once before an otherwise smooth animation. Use `--against` to compare
+builds in one run; results are comparable only within this harness version.
 
 Reading results:
 
@@ -188,12 +167,9 @@ npm run perf:lifecycle -- --only load,library --sizes medium
 Memory is judged by slope, not a snapshot. After each cycle the soak forces GC and samples JS heap,
 DOM nodes and listeners, then fits a line. A filled cache flattens; a leak keeps climbing.
 
-Lessons the soaks taught:
-
-- Memoized plans must not keep planner scratch alive through closures (AGENTS.md "Canvas and
-  performance"). A draft crossing planner grew a Large heap to 316 MiB this way.
-- Wait with a Playwright locator, not `page.waitForSelector`: its handle pinned every canvas and
-  looked like a DOM leak.
+The soaks exist to catch leaks, such as memoized plans that retain scratch data through closures
+(AGENTS.md, "Canvas and performance"). Use Playwright locators rather than `page.waitForSelector` when
+waiting; its handle pins canvases and looks like a DOM leak.
 
 ## Publishing results
 
