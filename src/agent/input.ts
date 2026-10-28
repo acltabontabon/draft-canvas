@@ -650,7 +650,7 @@ export function readRoom(r: Reader, raw: Json, path: string, ctx: RoomContext): 
  * optional `language`, shown as code and never run) or a plain label (`text`). `undefined` when the
  * request is wrong (a problem is recorded).
  */
-export function readNoteBody(r: Reader, item: Json, at: string): Pick<NoteSpec, 'type' | 'text' | 'kind' | 'code' | 'language'> | undefined {
+function readNoteBody(r: Reader, item: Json, at: string): Pick<NoteSpec, 'type' | 'text' | 'kind' | 'code' | 'language'> | undefined {
   const form = r.oneOf(item.kind, `${at}/kind`, NOTE_FORM_NAMES) ?? 'note';
   if (form === 'code') {
     if (item.text !== undefined) r.problems.add('INVALID_INPUT', `${at}/text`, 'a code snippet has code, not text; say what it shows in a note beside it');
@@ -676,7 +676,7 @@ export function readNoteBody(r: Reader, item: Json, at: string): Pick<NoteSpec, 
  * boundary as a chip — the boundary's own Add Note / Add Code. Labels follow the editor's drag rule:
  * they fold onto elements only. `undefined` when the request is wrong (a problem is recorded).
  */
-export function readNoteRelation(
+function readNoteRelation(
   r: Reader,
   item: Json,
   at: string,
@@ -757,7 +757,7 @@ export function readHighlight(r: Reader, value: unknown, at: string, known: Ligh
   return ok ? { nodes, edges } : undefined;
 }
 
-export function readFlow(r: Reader, item: Json, at: string, taken: Set<string> | null, known: Lightable): FlowSpec | undefined {
+function readFlow(r: Reader, item: Json, at: string, taken: Set<string> | null, known: Lightable): FlowSpec | undefined {
   const id = taken ? r.newId(item.id, `${at}/id`, taken) : typeof item.id === 'string' ? item.id : undefined;
   const title = r.text(item.title, `${at}/title`, AGENT_LIMITS.flowTitleLength, { required: true, singleLine: true });
   const color = r.oneOf(item.color, `${at}/color`, ACCENTS);

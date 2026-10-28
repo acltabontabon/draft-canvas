@@ -11,6 +11,7 @@ import { categoryOf } from '../../document/connectorSemantics';
 import { boundsOf } from '../../document/geometry';
 import type { DraftDocument, DraftEdge, DraftNode } from '../../document/types';
 import { isInteracting, useEditorStore } from '../../store/editorStore';
+import { selectNode } from '../../store/selectors';
 import { useUiStore } from '../../store/uiStore';
 import type { AgentClientSetup, AgentInfo, AgentSkillSetup, ApplyMode, CodeFolder, CodeGrant, PromptRequest, Proposal } from '../api';
 import { activityOf, companion, conversationKey, newTokens, numberedBlocks, partsIn, replyBlocks, replyOf, replyPoints, spentOn, stepText, stopMessage, tokenCount, type ReplyEntry, type Spent, type Turn } from '../companion';
@@ -178,13 +179,13 @@ function CompanionFor({ buildCommandContext }: { buildCommandContext?: () => Com
   // A string, so the selector is stable between unrelated store updates.
   const onlyName = useEditorStore((s) => {
     if (s.selection.nodes.length !== 1) return '';
-    const node = s.document.nodes.find((n) => n.id === s.selection.nodes[0]);
+    const node = selectNode(s.document, s.selection.nodes[0]!);
     return node?.text?.split('\n')[0]?.trim().slice(0, 40) ?? '';
   });
   // And its kind, so what Nodi says about it can be about what that kind of part has coming.
   const onlyKind = useEditorStore((s) => {
     if (s.selection.nodes.length !== 1 || s.selection.edges.length) return null;
-    const node = s.document.nodes.find((n) => n.id === s.selection.nodes[0]);
+    const node = selectNode(s.document, s.selection.nodes[0]!);
     // (A junction is an ellipse, and has lines of its own.)
     return node && !['group', 'note', 'text', 'code'].includes(node.type) ? categoryOf(node) : null;
   });
@@ -761,7 +762,6 @@ function CompanionFor({ buildCommandContext }: { buildCommandContext?: () => Com
   // The hello itself, about this diagram as it opened: worked out once per diagram, so it doesn't
   // change under the reader as the diagram does.
   const hello = useMemo(() => {
-    opened.set(diagramId, (opened.get(diagramId) ?? 0) + 1);
     const { document: view, outer } = useEditorStore.getState();
     const file = outer ?? view;
     const shapes = view.nodes.filter((n) => !['note', 'text', 'code', 'group', 'ellipse'].includes(n.type));
@@ -786,6 +786,8 @@ function CompanionFor({ buildCommandContext }: { buildCommandContext?: () => Com
   }, [diagramId]);
   useEffect(() => {
     greeted.add(diagramId);
+    // Counted in an effect, not while working out the hello: a render may run twice in development.
+    opened.set(diagramId, (opened.get(diagramId) ?? 0) + 1);
   }, [diagramId]);
   useEffect(() => {
     if (!arriving) return;

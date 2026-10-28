@@ -73,7 +73,7 @@ export function screenRectOf(box: Bounds, camera: DraftViewport): Bounds {
 }
 
 /** The part of the view a framed interaction may use. */
-export function safeAreaOf(view: View, insets: Insets): Bounds {
+function safeAreaOf(view: View, insets: Insets): Bounds {
   return {
     x: insets.left,
     y: insets.top,
@@ -196,7 +196,7 @@ export type CaptionCorner = 'bottom-left' | 'bottom-right' | 'top-left' | 'top-r
 const CORNERS: readonly CaptionCorner[] = ['bottom-left', 'bottom-right', 'top-left', 'top-right'];
 
 /** Where a caption of `size` sits for each corner, inside the safe area. */
-export function captionBoxAt(corner: CaptionCorner, view: View, insets: Insets, size: View): Bounds {
+function captionBoxAt(corner: CaptionCorner, view: View, insets: Insets, size: View): Bounds {
   const safe = safeAreaOf(view, insets);
   const x = corner.endsWith('left') ? safe.x : safe.x + safe.width - size.width;
   const y = corner.startsWith('top') ? safe.y : safe.y + safe.height - size.height;

@@ -59,7 +59,7 @@ function flowEdgeIds(flow: DraftFlow): Set<string> {
 }
 
 /** The flow traffic is scoped to, while it still exists; deleting it widens back to the room. */
-export function trafficFlow(state: Pick<EditorStore, 'document' | 'traffic'>): DraftFlow | undefined {
+function trafficFlow(state: Pick<EditorStore, 'document' | 'traffic'>): DraftFlow | undefined {
   return state.traffic.active && state.traffic.flowId ? findFlow(state.document, state.traffic.flowId) : undefined;
 }
 

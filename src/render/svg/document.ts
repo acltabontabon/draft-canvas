@@ -81,7 +81,7 @@ export interface ExportOptions {
  * its own box by default, so no manual geometry is needed for anything but
  * `tile`, which repeats the image at its natural pixel size.
  */
-export function backgroundEls(
+function backgroundEls(
   background: ResolvedBackground,
   canvasColor: string,
   frame: { x: number; y: number; width: number; height: number },

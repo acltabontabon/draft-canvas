@@ -89,11 +89,12 @@ export function reloadApp(): void {
       return new Promise<void>((resolve) => {
         const done = () => {
           navigator.serviceWorker.removeEventListener('controllerchange', done);
+          clearTimeout(fallback);
           resolve();
         };
         navigator.serviceWorker.addEventListener('controllerchange', done);
         waiting.postMessage({ type: 'SKIP_WAITING' });
-        setTimeout(done, 2000);
+        const fallback = setTimeout(done, 2000);
       });
     })
     .catch(() => undefined)
