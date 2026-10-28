@@ -27,7 +27,7 @@ The same shape is stored in IndexedDB's `bodies` store.
 `src/document/migrate.ts` is the only code that reads `version`. `MIGRATIONS[n]` upgrades a
 version-`n` document to `n + 1`. `migrateToCurrent` runs the chain:
 
-- A missing or non-integer `version` is treated as 1.
+- A missing `version` is treated as 1. A present but unreadable one (a string, a fraction, `null`, zero or negative) is refused, so a current file is never run through the whole chain.
 - A version newer than `CURRENT_VERSION` throws `UnsupportedVersionError`, naming both versions.
 - A gap in the chain throws `Missing migration from document format v${v} to v${v + 1}.`
 

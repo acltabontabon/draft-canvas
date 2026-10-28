@@ -155,38 +155,59 @@ export async function restoreBackup(repository: DraftRepository, bytes: Uint8Arr
   const entries = unzipFiles(bytes);
   const manifest = readManifest(entries.find((entry) => entry.name === MANIFEST_NAME)?.data);
 
-  const existing = new Set((await repository.listProjects().catch(() => [] as Project[])).map((project) => project.id));
-  for (const project of manifest.projects) {
-    if (existing.has(project.id)) continue;
-    await repository.saveProject(project);
-    existing.add(project.id);
-  }
-
   const result: RestoreResult = { restored: 0, renamed: 0, skipped: [] };
+
+  // `saveProject` is a put, so recreating a project we merely failed to *see* would overwrite a
+  // real one with the backup's name. When the list can't be read, create no project at all: the
+  // diagrams still restore, unorganized, and the manifest is reported as skipped.
+  let existing: Set<string> | null = null;
+  try {
+    existing = new Set((await repository.listProjects()).map((project) => project.id));
+  } catch {
+    existing = null;
+  }
+  const manifestUsed = manifest.projects.length > 0 || Object.keys(manifest.membership).length > 0;
+  let manifestFailed = existing === null && manifestUsed;
+  if (existing) {
+    for (const project of manifest.projects) {
+      if (existing.has(project.id)) continue;
+      try {
+        await repository.saveProject(project);
+        existing.add(project.id);
+      } catch {
+        manifestFailed = true;
+      }
+    }
+  }
+  if (manifestFailed) result.skipped.push(MANIFEST_NAME);
+
   for (const entry of entries) {
     if (!entry.name.endsWith(DOCUMENT_EXTENSION)) continue;
-    const parsed = parseDocument(decoder.decode(entry.data));
-    if (!parsed.ok) {
+    // One entry failing (a decode, a storage write) must not strand the rest of the archive.
+    try {
+      const parsed = parseDocument(decoder.decode(entry.data));
+      if (!parsed.ok) {
+        result.skipped.push(entry.name);
+        continue;
+      }
+      let document = parsed.document;
+      const wanted = manifest.membership[document.metadata.id];
+      const metadata = { ...document.metadata };
+      if (wanted && existing?.has(wanted)) metadata.projectId = wanted;
+      else delete metadata.projectId;
+      document = { ...document, metadata };
+      // Taken means stored under that id, readable or not — the same question an import asks.
+      const taken = await repository.has(document.metadata.id).catch(() => true);
+      if (taken) document = cloneDocumentAsNew(document, document.metadata.title);
+      // The image goes into its own store under the id the canvas now has (so after the clone above)
+      // and out of the document — the same order `adoptDocument` follows for an imported file.
+      document = await adoptEmbeddedBackground(document, repository);
+      await repository.save(document);
+      result.restored += 1;
+      if (taken) result.renamed += 1;
+    } catch {
       result.skipped.push(entry.name);
-      continue;
     }
-    let document = parsed.document;
-    const wanted = manifest.membership[document.metadata.id];
-    const metadata = { ...document.metadata };
-    if (wanted && existing.has(wanted)) metadata.projectId = wanted;
-    else delete metadata.projectId;
-    document = { ...document, metadata };
-    // Taken means stored under that id, readable or not — the same question an import asks.
-    const taken = await repository.has(document.metadata.id).catch(() => true);
-    if (taken) {
-      document = cloneDocumentAsNew(document, document.metadata.title);
-      result.renamed += 1;
-    }
-    // The image goes into its own store under the id the canvas now has (so after the clone above)
-    // and out of the document — the same order `adoptDocument` follows for an imported file.
-    document = await adoptEmbeddedBackground(document, repository);
-    await repository.save(document);
-    result.restored += 1;
   }
   return result;
 }

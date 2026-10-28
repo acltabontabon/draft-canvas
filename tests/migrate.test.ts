@@ -129,47 +129,66 @@ describe('v2 to v3 migration: connector anchors', () => {
 });
 
 /**
- * A `version` field can be corrupted (hand edit, a bug in some other tool,
- * bit rot) rather than merely absent. `migrateToCurrent` used to treat any
- * non-integer or out-of-range value as an immediate no-op — relabelling
- * straight to v1 without running a single migration — which would silently
- * misinterpret a genuinely old-shaped document instead of repairing it. The
- * fix clamps the malformed value down to v1 and lets the ordinary migration
- * chain run from there, same as ever.
+ * An *absent* `version` is read as the oldest format and migrated from the start (hand-written and
+ * very early files carry none). A version that is present but unreadable is refused: guessing v1
+ * would run the v1 chain over a possibly current-shaped file, escaping its Markdown text and
+ * back-filling fields, with the "Upgraded" repair note hidden from the person.
  */
 describe('corrupted or nonsensical version fields', () => {
-  /** Same v1-shaped fixture as the legacy-sequence test above, just with a
-   *  corrupted `version` in place of the plain `1`. */
-  function legacyFixture(version: unknown) {
+  /** Same v1-shaped fixture as the legacy-sequence test above, with the version under test. */
+  function legacyFixture(version: unknown, present = true) {
     return {
       format: DRAFT_FORMAT,
-      version,
+      ...(present ? { version } : {}),
       metadata: { id: 'd1', title: 'Very old', createdAt: 0, updatedAt: 0 },
       nodes: [
-        { id: 'a', type: 'note', x: 0, y: 0, width: 100, height: 60 },
+        { id: 'a', type: 'note', x: 0, y: 0, width: 100, height: 60, text: '**bold** a_b' },
         { id: 'b', type: 'note', x: 300, y: 0, width: 100, height: 60 },
       ],
       edges: [{ id: 'e1', source: 'a', target: 'b', sequence: 1 }],
     };
   }
 
-  // Passed as objects, not JSON strings — `JSON.stringify` would turn `NaN`
-  // into `null` before it ever reached `migrateToCurrent`, which is a
-  // different (already-handled) case; `parseDocument` accepts a raw value
-  // just as readily as a JSON string, so this exercises the real value.
-  it.each([['NaN', Number.NaN], ['fractional', 1.5], ['zero', 0], ['negative', -3]])(
-    'still runs the full migration chain for a %s version, not just relabelling it',
-    (_label, version) => {
-      const result = parseDocument(legacyFixture(version));
-      expect(result.ok).toBe(true);
-      if (!result.ok) return;
-      expect(result.document.version).toBe(CURRENT_VERSION);
-      // Only present once the v2→v3 anchor-backfill migration has actually
-      // run — proves the chain executed rather than being skipped.
-      expect(result.document.edges[0]!.sourceAnchor).toBeDefined();
-      expect(result.document.edges[0]!.targetAnchor).toBeDefined();
-    },
-  );
+  // Passed as objects, not JSON strings: `JSON.stringify` would turn `NaN` into `null` first.
+  it.each([
+    ['string "23"', '23'],
+    ['fractional 23.5', 23.5],
+    ['null', null],
+    ['NaN', Number.NaN],
+    ['zero', 0],
+    ['negative', -3],
+    ['Infinity', Number.POSITIVE_INFINITY],
+    ['boolean', true],
+  ])('refuses a %s version instead of running the migration chain', (_label, version) => {
+    const result = parseDocument(legacyFixture(version));
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toMatch(/unreadable document format version/);
+    expect(() => migrateToCurrent(legacyFixture(version))).toThrow(/unreadable document format version/);
+  });
+
+  it('does not escape the text of a current-shaped document whose version is unreadable', () => {
+    const current = {
+      ...legacyFixture('23'),
+      edges: [],
+    };
+    expect(parseDocument(current).ok).toBe(false);
+    // The same document with a readable current version keeps its Markdown untouched.
+    const ok = parseDocument({ ...current, version: CURRENT_VERSION });
+    expect(ok.ok).toBe(true);
+    if (!ok.ok) return;
+    expect(ok.document.nodes[0]).toMatchObject({ text: '**bold** a_b' });
+  });
+
+  it('still migrates a version-less legacy file from v1', () => {
+    const result = parseDocument(legacyFixture(undefined, false));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.document.version).toBe(CURRENT_VERSION);
+    // Only present once the v2→v3 anchor backfill has run: proves the chain executed.
+    expect(result.document.edges[0]!.sourceAnchor).toBeDefined();
+    expect(result.document.edges[0]!.targetAnchor).toBeDefined();
+  });
 });
 
 /**
@@ -926,5 +945,23 @@ describe('a migration reaches every room, not just the top one', () => {
         ...nested,
       }),
     ).not.toThrow();
+  });
+});
+
+describe('v16 to v17 migration does not mutate its input', () => {
+  it('leaves the raw document untouched when an action becomes an attachment', () => {
+    const raw = {
+      format: DRAFT_FORMAT,
+      version: 16,
+      metadata: { id: 'd1', title: 'T', createdAt: 0, updatedAt: 0 },
+      nodes: [{ id: 'a', type: 'note', x: 0, y: 0, width: 100, height: 60 }],
+      edges: [],
+      actions: [{ id: 'x1', text: 'Do it', done: false, anchor: { id: 'a' } }],
+    };
+    const before = JSON.stringify(raw);
+    const { doc } = migrateToCurrent(raw);
+    expect(JSON.stringify(raw)).toBe(before);
+    const nodes = doc.nodes as { attachments?: { text: string }[] }[];
+    expect(nodes[0]!.attachments?.[0]?.text).toBe('Action: Do it');
   });
 });

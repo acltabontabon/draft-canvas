@@ -380,6 +380,9 @@ function migrateActionsToNotes(doc: Record<string, unknown>): Record<string, unk
 
   type Host = { record: Record<string, unknown>; max: number };
   const hosts = new Map<string, Host>();
+  // Attachments to add per host record. Collected here and applied by copying afterwards, so the
+  // caller's raw document is never mutated (the records in `hosts` are the input's own).
+  const additions = new Map<Record<string, unknown>, unknown[]>();
   // Anchors are found by id, file-wide, exactly as `resolveTarget` found them: rooms included, bounded
   // the way `mapGraphs` bounds itself so a hostile file cannot make this recurse without end.
   const index = (graph: Record<string, unknown>, depth: number): void => {
@@ -408,23 +411,48 @@ function migrateActionsToNotes(doc: Record<string, unknown>): Record<string, unk
     const anchor = action.anchor && typeof action.anchor === 'object' ? (action.anchor as Record<string, unknown>) : null;
     const host = anchor && typeof anchor.id === 'string' ? hosts.get(anchor.id) : undefined;
     if (host) {
-      const attachments = Array.isArray(host.record.attachments) ? host.record.attachments : [];
-      if (attachments.length < host.max) {
-        host.record.attachments = [
-          ...attachments,
-          { id: createId('a'), type: 'note', noteKind: 'note', text: `${done ? 'Done' : 'Action'}: ${text}` },
-        ];
+      const existing = Array.isArray(host.record.attachments) ? host.record.attachments.length : 0;
+      const added = additions.get(host.record) ?? [];
+      if (existing + added.length < host.max) {
+        added.push({ id: createId('a'), type: 'note', noteKind: 'note', text: `${done ? 'Done' : 'Action'}: ${text}` });
+        additions.set(host.record, added);
         continue;
       }
     }
     lines.push(`${done ? '☑' : '☐'} ${text}`);
   }
-  if (lines.length === 0) return rest;
+
+  // Copies only the records that gained attachments and the graphs above them; untouched parts are
+  // shared with the input. Bounded like `index`, so it visits exactly the graphs `index` saw.
+  const withAttachments = (graph: Record<string, unknown>, depth: number): Record<string, unknown> => {
+    if (depth > LIMITS.maxInsideDepth) return graph;
+    const attach = (record: Record<string, unknown>): Record<string, unknown> => {
+      const added = additions.get(record);
+      if (!added) return record;
+      return { ...record, attachments: [...(Array.isArray(record.attachments) ? record.attachments : []), ...added] };
+    };
+    const nodes = Array.isArray(graph.nodes)
+      ? graph.nodes.map((raw: unknown) => {
+          if (!raw || typeof raw !== 'object') return raw;
+          const node = attach(raw as Record<string, unknown>);
+          const inside = node.inside;
+          return inside && typeof inside === 'object'
+            ? { ...node, inside: withAttachments(inside as Record<string, unknown>, depth + 1) }
+            : node;
+        })
+      : undefined;
+    const edges = Array.isArray(graph.edges)
+      ? graph.edges.map((raw: unknown) => (raw && typeof raw === 'object' ? attach(raw as Record<string, unknown>) : raw))
+      : undefined;
+    return { ...graph, ...(nodes ? { nodes } : {}), ...(edges ? { edges } : {}) };
+  };
+  const base = additions.size > 0 ? withAttachments(rest, 0) : rest;
+  if (lines.length === 0) return base;
 
   // Below everything at the root, aligned with its left edge; the origin when there is nothing yet.
   let minX = Infinity;
   let maxBottom = -Infinity;
-  for (const raw of Array.isArray(rest.nodes) ? rest.nodes : []) {
+  for (const raw of Array.isArray(base.nodes) ? base.nodes : []) {
     const rect = rectOf(raw);
     if (!rect) continue;
     minX = Math.min(minX, rect.x);
@@ -451,7 +479,7 @@ function migrateActionsToNotes(doc: Record<string, unknown>): Record<string, unk
   }
   flush();
 
-  return { ...rest, nodes: [...(Array.isArray(rest.nodes) ? rest.nodes : []), ...notes] };
+  return { ...base, nodes: [...(Array.isArray(base.nodes) ? base.nodes : []), ...notes] };
 }
 
 /**
@@ -611,14 +639,20 @@ export function migrateToCurrent(raw: Record<string, unknown>): {
   doc: Record<string, unknown>;
   applied: number[];
 } {
-  const rawVersion = typeof raw.version === 'number' ? raw.version : 1;
-  // A non-integer or out-of-range version (corruption, a hand edit) is
-  // treated as the oldest known format — and, critically, still runs the
-  // full migration chain below rather than jumping straight past it:
-  // `normalizeDocument` only recognises the *current* field layout, so a
-  // genuinely old-shaped document landing here unmigrated would have its
-  // old field names silently unrecognised instead of repaired.
-  const version = Number.isInteger(rawVersion) && rawVersion >= 1 ? rawVersion : 1;
+  // Only an *absent* version is read as the oldest format (docs/reference/schema.md: hand-written
+  // and very early files carry none), and then the whole chain runs so old field names are repaired.
+  // A version that is present but unreadable (a string, null, NaN, fractional, zero, negative) is
+  // refused instead: such a file is as likely to be current-shaped as old, and guessing "v1" would
+  // run the v1 chain over it, escaping its Markdown text, pinning anchorless connectors and
+  // back-filling fields, with the "Upgraded" repair note hidden from the person. Refusing is the
+  // only reading that cannot damage the file.
+  const rawVersion: unknown = raw.version;
+  if (rawVersion !== undefined && !(typeof rawVersion === 'number' && Number.isInteger(rawVersion) && rawVersion >= 1)) {
+    throw new Error(
+      'This file has an unreadable document format version (expected a whole number of 1 or more), so it was not opened to avoid changing it.',
+    );
+  }
+  const version = rawVersion === undefined ? 1 : rawVersion;
   if (version > CURRENT_VERSION) throw new UnsupportedVersionError(version);
 
   let doc = raw;

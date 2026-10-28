@@ -176,6 +176,51 @@ describe('restoreBackup', () => {
     expect(describeRestore(result)).toBe("Restored 2 diagrams; 1 file couldn't be read.");
     await expect(restoreBackup(fresh, broken)).rejects.toThrow(/ZIP/);
   });
+
+  it('restores the entries around one whose image is damaged, and reports nothing lost it', async () => {
+    const { zipFiles } = await import('../src/export/zip');
+    const { serializeDocument } = await import('../src/export/project');
+    const files = ['A', 'B', 'C'].map((title) => {
+      const document = documentWith(title);
+      const raw = JSON.parse(serializeDocument(document)) as { settings: { background: Record<string, unknown> } };
+      // Hand-damaged: five characters is not valid base64 for `atob`.
+      if (title === 'B') raw.settings.background.image = { dataUri: 'data:image/png;base64,AAAAA', width: 2, height: 2 };
+      return { name: `${title}-${document.metadata.id}.draftcanvas`, data: JSON.stringify(raw) };
+    });
+    const fresh = new MemoryRepository();
+    const result = await restoreBackup(fresh, zipFiles(files));
+    expect(result).toEqual({ restored: 3, renamed: 0, skipped: [] });
+    expect((await fresh.list()).map((entry) => entry.title).sort()).toEqual(['A', 'B', 'C']);
+  });
+
+  it('reports one failing entry as skipped and still restores the rest', async () => {
+    const { repository } = await seeded();
+    const { bytes } = await buildBackup(repository);
+    const fresh = new MemoryRepository();
+    const save = fresh.save.bind(fresh);
+    vi.spyOn(fresh, 'save').mockImplementation((document) => document.metadata.title === 'Billing' ? Promise.reject(new Error('Disk full')) : save(document));
+    const result = await restoreBackup(fresh, bytes);
+    expect(result.restored).toBe(1);
+    expect(result.skipped).toHaveLength(1);
+    expect(result.skipped[0]).toMatch(/^billing-.*\.draftcanvas$/);
+    expect((await fresh.list()).map((entry) => entry.title)).toEqual(['Orders']);
+  });
+
+  it('never overwrites projects it could not list, and still restores the diagrams', async () => {
+    const { repository } = await seeded();
+    const { bytes } = await buildBackup(repository);
+    const target = new MemoryRepository();
+    await target.saveProject({ id: 'p_shop', name: 'Shop (renamed)', createdAt: 5, updatedAt: 5 });
+    vi.spyOn(target, 'listProjects').mockRejectedValue(new Error('Projects unavailable'));
+    const saveProject = vi.spyOn(target, 'saveProject');
+    const result = await restoreBackup(target, bytes);
+    expect(saveProject).not.toHaveBeenCalled();
+    expect(result.restored).toBe(2);
+    expect(result.skipped).toEqual(['projects.json']);
+    expect((await target.list()).every((entry) => entry.projectId === undefined)).toBe(true);
+    vi.restoreAllMocks();
+    expect((await target.listProjects())[0]!.name).toBe('Shop (renamed)');
+  });
 });
 
 describe('backupIsStale', () => {

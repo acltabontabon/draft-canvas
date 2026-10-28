@@ -110,6 +110,12 @@ describe('a background image in a .draftcanvas file', () => {
     expect(write({ dataUri: 'data:image/png;base64,AAAA', width: 0, height: 2 })).toMatchObject({ width: 1, height: 2 });
     expect(write({ dataUri: 'data:image/png;base64,AAAA', width: 'wide', height: 2 })).toBeUndefined();
     expect(write({ dataUri: 'data:image/png;base64,AAAA' })).toBeUndefined();
+    // Base64 that `atob` would throw on is dropped here, not left to crash a later decode.
+    for (const bad of ['AAAAA', 'QQ=', 'AAAA=', 'AA=A', 'A===', '=AAA']) {
+      expect(write({ dataUri: `data:image/png;base64,${bad}`, width: 2, height: 2 })).toBeUndefined();
+    }
+    expect(write({ dataUri: 'data:image/png;base64,QQ==', width: 2, height: 2 })).toMatchObject({ dataUri: 'data:image/png;base64,QQ==' });
+    expect(write({ dataUri: 'data:image/png;base64,QUI=', width: 2, height: 2 })).toMatchObject({ dataUri: 'data:image/png;base64,QUI=' });
     expect(write('data:image/png;base64,AAAA')).toBeUndefined();
     const oversized = `data:image/png;base64,${'A'.repeat(Math.ceil((LIMITS.maxEmbeddedBackgroundBytes + 3) / 3) * 4)}`;
     expect(write({ dataUri: oversized, width: 2, height: 2 })).toBeUndefined();
