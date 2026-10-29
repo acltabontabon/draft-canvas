@@ -54,7 +54,7 @@ and ids are unique across the whole file.
   others is not a container (it is a component of each, or nothing).
 - **Components:** a container's controllers/routes, use cases or services, domain modules, adapters
   to infrastructure. 5–10 per inside view; fold small helpers into the component that owns them.
-- **Leave out:** CI, test infrastructure, linters, local dev tools (Adminer, Mailpit, LocalStack),
+- **Usually leave out (unless requested or central to this system):** CI, test infrastructure, linters, local dev tools (Adminer, Mailpit, LocalStack),
   logging/metrics/tracing backends, feature-flag SDKs. If one matters for understanding, it is a note.
 - **External systems:** one element per provider the code calls (Stripe, SendGrid, the partner API),
   never grouped together "to tidy them" — ungrouped, each one sits next to its caller.

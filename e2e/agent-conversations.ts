@@ -99,7 +99,7 @@ export class McpSession {
   }
 
   /** One tool call. `args.requestId` is filled in for the two tools that need one, unless given. */
-  async call(tool: string, args: Json = {}): Promise<{ ok: boolean; value: Json; record: CallRecord }> {
+  async call(tool: string, args: Json = {}): Promise<{ ok: boolean; value: Json; record: CallRecord; images: { mimeType: string; data: string }[] }> {
     const needsId = tool === 'create_diagram' || tool === 'update_diagram';
     const full = needsId && !args.requestId ? { requestId: randomUUID(), ...args } : args;
     const token = randomUUID();
@@ -107,7 +107,7 @@ export class McpSession {
     const started = performance.now();
     const reply = await this.request('tools/call', { name: tool, arguments: full, _meta: { progressToken: token } });
     const ms = Math.round(performance.now() - started);
-    const result = reply.result as { structuredContent?: Json; isError?: boolean; content?: { type: string }[] } | undefined;
+    const result = reply.result as { structuredContent?: Json; isError?: boolean; content?: { type: string; mimeType?: string; data?: string }[] } | undefined;
     const value = result?.structuredContent ?? { protocolError: reply.error };
     const isError = result?.isError === true || !result;
     const error = (value.error ?? {}) as { code?: string };
@@ -126,7 +126,10 @@ export class McpSession {
     };
     this.progress.delete(token);
     this.records.push(record);
-    return { ok: !isError, value, record };
+    const images = (result?.content ?? []).flatMap((block) =>
+      block.type === 'image' && block.mimeType && block.data ? [{ mimeType: block.mimeType, data: block.data }] : [],
+    );
+    return { ok: !isError, value, record, images };
   }
 
   stop(): void {

@@ -279,13 +279,22 @@ def add_containers(d: Draft, data: dict, units: list[dict], infra_by_key: dict) 
                 if program in involved and not d.find(program):
                     d.add(program, element_type(unit), technology_of(unit, None), d.evidence(program_main(unit, program)))
     if not added:
+        names = [slug(unit['name']) for unit in units]
+        repeated = {name for name in names if names.count(name) > 1}
         for unit in units:
             if len(unit['binaries']) > 1:
                 for program in unit['binaries']:
                     d.add(program, element_type(unit), technology_of(unit, None), d.evidence(program_main(unit, program)))
             else:
                 evidence = d.evidence(*unit['entry_points'][:1], *unit['dockerfiles'][:1], *unit['manifests'][:1])
-                d.add(unit['name'], element_type(unit), technology_of(unit, None), evidence, aliases=(os.path.basename(unit['path']),))
+                # A frontend and its native host often share a package name. Keep both candidates;
+                # the agent, not a slug collision, decides whether they are one runtime boundary.
+                name = unit['name']
+                if slug(name) in repeated:
+                    name = f'{name}-{unit["path"] if unit["path"] != "." else "root"}'
+                alias = os.path.basename(unit['path'])
+                aliases = (alias,) if alias and slug(alias) not in repeated else ()
+                d.add(name, element_type(unit), technology_of(unit, None), evidence, aliases=aliases, label=humanize(unit['name']))
             added = True
     if not added:
         for workload in data['kubernetes'] + data['nomad']:
@@ -465,6 +474,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument('root', nargs='?', default='.', help='repository (or sub-folder) to draw')
     parser.add_argument('--out', help='folder for survey.md and request.json (default: a new temporary folder)')
     parser.add_argument('--max-files', type=int, default=40000)
+    parser.add_argument('--json', action='store_true', help='print only an output manifest and draft counts as JSON')
     args = parser.parse_args(argv)
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, 'reconfigure'):
@@ -472,22 +482,33 @@ def main(argv: list[str] | None = None) -> int:
     if not os.path.isdir(args.root):
         print(f'Not a folder: {args.root}', file=sys.stderr)
         return 2
-    root = os.path.abspath(args.root)
-    out = os.path.abspath(args.out) if args.out else tempfile.mkdtemp(prefix='draft-canvas-')
+    if args.max_files < 1:
+        parser.error('--max-files must be positive')
+    root = os.path.realpath(args.root)
+    out = os.path.realpath(args.out) if args.out else tempfile.mkdtemp(prefix='draft-canvas-')
     if os.path.commonpath([out, root]) == root:
         print(f'Refusing to write into the repository ({out}); pass --out outside it.', file=sys.stderr)
         return 2
     os.makedirs(out, exist_ok=True)
+    # A follow-up must not erase the request the agent has already verified and edited.
+    for name in ('survey.md', 'request.json'):
+        if os.path.lexists(os.path.join(out, name)):
+            print(f'Refusing to replace {os.path.join(out, name)}; choose a fresh --out folder.', file=sys.stderr)
+            return 2
 
     data = scan.survey(root, args.max_files)
     survey_text = scan.render_text(data)
     request, summary = build(data)
-    with open(os.path.join(out, 'survey.md'), 'w', encoding='utf-8') as fh:
+    with open(os.path.join(out, 'survey.md'), 'x', encoding='utf-8') as fh:
         fh.write(survey_text + '\n')
     request_path = os.path.join(out, 'request.json')
-    with open(request_path, 'w', encoding='utf-8') as fh:
+    with open(request_path, 'x', encoding='utf-8') as fh:
         json.dump(request, fh, indent=1, ensure_ascii=False)
         fh.write('\n')
+
+    if args.json:
+        print(json.dumps({'survey': os.path.join(out, 'survey.md'), 'request': request_path, **summary}))
+        return 0
 
     print(survey_text)
     print('\n## Draft request')

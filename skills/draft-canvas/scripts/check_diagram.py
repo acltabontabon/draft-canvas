@@ -898,6 +898,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     parser.add_argument('request', help='create_diagram arguments as JSON (a file, or - for stdin)')
     parser.add_argument('--repo', help='repository root, to check that evidence paths exist')
+    parser.add_argument('--json', action='store_true', help='print a machine-readable report instead of prose')
     args = parser.parse_args()
     try:
         if args.request == '-':
@@ -907,9 +908,15 @@ def main() -> int:
                 raw = fh.read()
         request = json.loads(raw)
     except (OSError, ValueError) as error:
-        print(f'Could not read the request: {error}', file=sys.stderr)
+        if args.json:
+            print(json.dumps({'errors': [f'Could not read the request: {error}'], 'warnings': [], 'valid': False}))
+        else:
+            print(f'Could not read the request: {error}', file=sys.stderr)
         return 2
     report = check(request, args.repo)
+    if args.json:
+        print(json.dumps({'errors': report.errors, 'warnings': report.warnings, 'valid': not report.errors}))
+        return 1 if report.errors else 0
     for line in report.errors + report.warnings:
         print(line)
     if isinstance(request, dict) and not request.get('requestId'):

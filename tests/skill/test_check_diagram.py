@@ -304,6 +304,18 @@ class Warns(unittest.TestCase):
 
 
 class CommandLine(unittest.TestCase):
+    def test_json_reports_preserve_validation_and_exit_codes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'request.json'
+            for payload, status in ((json.dumps(minimal()), 0), (json.dumps(minimal(title='')), 1), ('{ nope', 2)):
+                path.write_text(payload, encoding='utf-8')
+                done = run_script('check_diagram', str(path), '--json')
+                self.assertEqual(done.returncode, status, done.stderr)
+                result = json.loads(done.stdout)
+                self.assertEqual(result['valid'], status == 0)
+                self.assertEqual(bool(result['errors']), status != 0)
+                self.assertIsInstance(result['warnings'], list)
+
     def test_exit_codes_and_a_fresh_request_id(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             good, bad, broken = (Path(tmp) / name for name in ('good.json', 'bad.json', 'broken.json'))

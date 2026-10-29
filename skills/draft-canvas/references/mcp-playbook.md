@@ -21,10 +21,25 @@ descriptions themselves are the contract; this is the working knowledge around t
 - `view: {inside: ["storefront", "orders"]}` addresses a view by the element ids from the top down.
 - `open: true` on create shows the diagram (only when that loses nothing the person has open).
 
+## Read only what the task needs
+
+`read_diagram({diagramId, include: ["views"]})` includes the view outline. Use its paths to address
+rooms; `focus: {nodes: [ids]}`, `{group: id}` or `{flow: id}` narrows a read within one view. A focused
+read is not the entire diagram: do not remove elements because they are absent from that response.
+Follow its cursor when paginated. Request `include: ["geometry"]` for positioning, not routine edits.
+Use `read_attachment` with the same revision and returned `nextOffset` when an attachment is truncated.
+
+Read-only questions need no mutation. Small edits need no repository scan. A PR review becomes a
+proposal, even if its dry run succeeds. Keep all views in a multi-view edit on the latest returned
+file revision; do not fire concurrent mutations against the same revision.
+
 ## Reading a receipt
 
 A create or update answers with:
 
+- `created` (create) — `notes` counts free-standing cards; `attachments`, when present, counts
+  notes and code attached to shapes or connectors throughout the file. A zero `notes` count does
+  not mean attached notes were lost; read with `include: ["fullText"]` to inspect them.
 - `revision` — pass it as `expectedRevision` next time.
 - `quality` — `errors` (a create is refused unless `layout.allowDegraded`; an update with errors is
   refused) and `warnings` such as a connector that jogs sideways. A warning is worth a look, not always a change.
@@ -43,12 +58,14 @@ Create and arrange already try bounded routing repairs, then polish avoidable cr
 without moving shapes again or sacrificing readable neighbours and shared trunks. Manual routes
 and explicitly requested create pins stay as authored. A clean receipt needs no extra arrange pass.
 
-Apply the advisories that make sense in **one** `update_diagram`, then render. Two rounds of polish
+Apply the advisories that make sense in **one** `update_diagram` per affected view, carrying each
+returned file revision into the next call, then render. Two rounds of polish
 is plenty; past that, tell the person what you would still change.
 
 ## Look before you finish
 
-`render_diagram` returns the PNG the person would export. Render the top view and every inside view.
+`render_diagram` returns the PNG the person would export. For a new map, render the top view and
+every inside view. For edits, render only affected views.
 Judge it as a reader:
 
 - Does the main path read in one direction, mostly straight?
@@ -119,7 +136,7 @@ Every refusal carries a `hint` saying what to do; this is the short version.
 | `REVISION_CONFLICT` | The person edited meanwhile | `read_diagram`, rebuild the change on the new revision; or `onConflict: "rebase"` when your change doesn't touch what they edited |
 | `LIMIT_EXCEEDED` | Too much in one request | Split it into a create plus updates |
 | `OUT_OF_SCOPE` | Folder not enabled, or an id outside the `scope` you passed | Folder: tell the person which one to tick in Settings → AI agents. Scope: pass only ids from `read_selection`, or leave `scope` out |
-| `BUSY`, `TIMEOUT`, `APP_UNRESPONSIVE` | Nothing was changed | Retry the same request (same `requestId`) shortly |
+| `BUSY`, `TIMEOUT`, `APP_UNRESPONSIVE` | Nothing was changed | Retry the identical request with the same `requestId`, at most twice |
 | `OUTCOME_UNKNOWN` | The app stopped answering mid-change | `read_diagram` and compare before sending anything again |
 | `DOCUMENT_BUSY` | The person has unsaved or recovered changes to that diagram, or the file changed on disk under them | Don't retry. Ask them to save or discard, then `read_diagram` and rebuild the change |
 | `NOT_FOUND` | No such diagram or view | `list_diagrams` again |

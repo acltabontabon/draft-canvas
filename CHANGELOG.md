@@ -19,12 +19,23 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 ### Desktop
 
+#### Changed
+
+- The Draft Canvas agent skill uses focused workflows for creation, refreshes, small edits and
+  review proposals. Local scripts offer compact JSON output and protect prepared requests from
+  accidental overwrites. The self-diagramming workflow also distinguishes runtime boundaries from
+  package names and separates subscriptions from actual execution order.
+
 #### Fixed
 
 - Pressing Escape to cancel a text conversion in Find a Diagram no longer clears the search or
   leaves Browse.
 - Picking up a diagram tile right after dropping another no longer cancels the new drag.
 - Moving a diagram to a project on another volume keeps its file permissions.
+- Repository drafts preserve separate deployables that share a package name, including frontend
+  and native-host manifests.
+- MCP create receipts report attached notes and code across nested views separately from free
+  note cards, so agents can verify that those annotations were created.
 
 ## [1.18.0] - 2026-10-27
 

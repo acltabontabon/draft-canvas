@@ -475,20 +475,25 @@ export function countAll(document: DraftDocument) {
   let elements = 0;
   let groups = 0;
   let notes = 0;
+  let attachments = 0;
   let relationships = 0;
   let flows = 0;
   let views = 0;
   walkGraphs(document, (graph, path) => {
     if (path.length > 0) views += 1;
     for (const node of graph.nodes) {
+      attachments += node.attachments?.length ?? 0;
       if (node.type === 'group') groups += 1;
       else if (node.type === 'note' || node.type === 'text' || node.type === 'code') notes += 1;
       else elements += 1;
     }
     relationships += graph.edges.length;
+    for (const edge of graph.edges) attachments += edge.attachments?.length ?? 0;
     flows += graph.flows.length;
   });
-  return { elements, relationships, groups, flows, notes, insideViews: views };
+  // Notes attached to elements and connectors are not graph nodes; report them separately so a
+  // successful create never looks as if it dropped all the notes the agent asked for.
+  return { elements, relationships, groups, flows, notes, ...(attachments ? { attachments } : {}), insideViews: views };
 }
 
 /**

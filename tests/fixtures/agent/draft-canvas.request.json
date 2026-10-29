@@ -1,0 +1,1043 @@
+{
+  "requestId": "a72c761b-1887-4390-98cf-ed068df7f260",
+  "title": "Draft Canvas — verified architecture",
+  "level": "container",
+  "open": true,
+  "layout": {
+    "primaryFlow": "desktop-edit"
+  },
+  "nodes": [
+    {
+      "id": "user",
+      "label": "Diagram author",
+      "type": "person",
+      "description": "Draws architecture and reviews proposed changes.",
+      "evidence": [
+        {
+          "path": "src/App.tsx",
+          "basis": "observed"
+        }
+      ]
+    },
+    {
+      "id": "editor",
+      "label": "Shared editor",
+      "type": "service",
+      "description": "Runs the same local-first canvas on web and desktop.",
+      "evidence": [
+        {
+          "path": "src/main.tsx",
+          "basis": "observed"
+        }
+      ],
+      "technology": "React",
+      "inside": {
+        "level": "component",
+        "nodes": [
+          {
+            "id": "e.ui",
+            "label": "Editor and commands",
+            "type": "component",
+            "description": "Turns gestures and commands into store actions.",
+            "evidence": [
+              {
+                "path": "src/commands/registry.ts",
+                "basis": "observed"
+              }
+            ],
+            "technology": "React"
+          },
+          {
+            "id": "e.store",
+            "label": "Editor state",
+            "type": "component",
+            "description": "Owns the current room, selection and undoable file changes.",
+            "evidence": [
+              {
+                "path": "src/store/editorStore.ts",
+                "basis": "observed"
+              }
+            ],
+            "technology": "Zustand"
+          },
+          {
+            "id": "e.model",
+            "label": "Document and depth",
+            "type": "module",
+            "description": "Transforms serializable graphs and lenses nested rooms.",
+            "evidence": [
+              {
+                "path": "src/document/operations.ts",
+                "basis": "observed"
+              }
+            ],
+            "technology": "TypeScript"
+          },
+          {
+            "id": "e.history",
+            "label": "Undo history",
+            "type": "component",
+            "description": "Records snapshots and selective collaboration changes.",
+            "evidence": [
+              {
+                "path": "src/history/HistoryStack.ts",
+                "basis": "observed"
+              }
+            ],
+            "technology": "TypeScript"
+          },
+          {
+            "id": "e.render",
+            "label": "Shared drawing",
+            "type": "module",
+            "description": "Describes shapes, wraps text and routes connectors.",
+            "evidence": [
+              {
+                "path": "src/nodes/describe.ts",
+                "basis": "observed"
+              }
+            ],
+            "technology": "TypeScript"
+          },
+          {
+            "id": "e.save",
+            "label": "Document session",
+            "type": "adapter",
+            "description": "Autosaves browser documents or posts edits to the desktop host.",
+            "evidence": [
+              {
+                "path": "src/store/useDocumentSession.ts",
+                "basis": "observed"
+              }
+            ],
+            "technology": "TypeScript"
+          },
+          {
+            "id": "e.agent",
+            "label": "Agent worker",
+            "type": "component",
+            "description": "Validates requests and computes layouts without mutating the editor.",
+            "evidence": [
+              {
+                "path": "src/agent/jobs.ts",
+                "basis": "observed"
+              }
+            ],
+            "technology": "TypeScript"
+          },
+          {
+            "id": "e.collab",
+            "label": "Collaboration",
+            "type": "component",
+            "description": "Synchronizes edits through the owner’s authoritative file.",
+            "evidence": [
+              {
+                "path": "src/store/collabBridge.ts",
+                "basis": "observed"
+              }
+            ],
+            "technology": "TypeScript",
+            "inside": {
+              "level": "component",
+              "nodes": [
+                {
+                  "id": "c.guest",
+                  "label": "Guest replica",
+                  "type": "component",
+                  "description": "Keeps confirmed state plus pending local edits.",
+                  "evidence": [
+                    {
+                      "path": "src/collab/replica.ts",
+                      "basis": "observed"
+                    }
+                  ],
+                  "technology": "TypeScript"
+                },
+                {
+                  "id": "c.transport",
+                  "label": "Peer transport",
+                  "type": "adapter",
+                  "description": "Carries patches and numbered commits over WebRTC or LAN.",
+                  "evidence": [
+                    {
+                      "path": "src/collab/transport/types.ts",
+                      "basis": "observed"
+                    }
+                  ],
+                  "technology": "TypeScript"
+                },
+                {
+                  "id": "c.session",
+                  "label": "Owner session",
+                  "type": "component",
+                  "description": "Admits peers, waits for gestures and broadcasts commits.",
+                  "evidence": [
+                    {
+                      "path": "src/collab/hostSession.ts",
+                      "basis": "observed"
+                    }
+                  ],
+                  "technology": "TypeScript"
+                },
+                {
+                  "id": "c.core",
+                  "label": "Owner authority",
+                  "type": "component",
+                  "description": "Checks patch roles and limits before recording a commit.",
+                  "evidence": [
+                    {
+                      "path": "src/collab/hostCore.ts",
+                      "basis": "observed"
+                    }
+                  ],
+                  "technology": "TypeScript"
+                },
+                {
+                  "id": "c.sanitize",
+                  "label": "Sanitize and repair",
+                  "type": "module",
+                  "description": "Validates incoming changes and repairs dangling references.",
+                  "evidence": [
+                    {
+                      "path": "src/collab/sanitize.ts",
+                      "basis": "observed"
+                    }
+                  ],
+                  "technology": "TypeScript"
+                },
+                {
+                  "id": "c.bridge",
+                  "label": "Store bridge",
+                  "type": "adapter",
+                  "description": "Applies remote files through the editor store lens.",
+                  "evidence": [
+                    {
+                      "path": "src/store/collabBridge.ts",
+                      "basis": "observed"
+                    }
+                  ],
+                  "technology": "TypeScript"
+                }
+              ],
+              "relationships": [
+                {
+                  "id": "c.r1",
+                  "from": "c.guest",
+                  "to": "c.transport",
+                  "label": "Sends pending patch",
+                  "evidence": [
+                    {
+                      "path": "src/collab/guestSession.ts",
+                      "basis": "observed"
+                    }
+                  ],
+                  "async": true
+                },
+                {
+                  "id": "c.r2",
+                  "from": "c.transport",
+                  "to": "c.session",
+                  "label": "Delivers patch",
+                  "evidence": [
+                    {
+                      "path": "src/collab/hostSession.ts",
+                      "basis": "observed"
+                    }
+                  ],
+                  "async": true
+                },
+                {
+                  "id": "c.r3",
+                  "from": "c.session",
+                  "to": "c.core",
+                  "label": "Checks patch",
+                  "evidence": [
+                    {
+                      "path": "src/collab/hostSession.ts",
+                      "basis": "observed"
+                    }
+                  ]
+                },
+                {
+                  "id": "c.r4",
+                  "from": "c.core",
+                  "to": "c.sanitize",
+                  "label": "Sanitizes changes",
+                  "evidence": [
+                    {
+                      "path": "src/collab/hostCore.ts",
+                      "basis": "observed"
+                    }
+                  ]
+                },
+                {
+                  "id": "c.r5",
+                  "from": "c.session",
+                  "to": "c.bridge",
+                  "label": "Applies confirmed file",
+                  "evidence": [
+                    {
+                      "path": "src/store/collabBridge.ts",
+                      "basis": "observed"
+                    }
+                  ]
+                },
+                {
+                  "id": "c.r6",
+                  "from": "c.session",
+                  "to": "c.transport",
+                  "label": "Broadcasts commit",
+                  "evidence": [
+                    {
+                      "path": "src/collab/hostSession.ts",
+                      "basis": "observed"
+                    }
+                  ],
+                  "async": true
+                },
+                {
+                  "id": "c.r7",
+                  "from": "c.transport",
+                  "to": "c.guest",
+                  "label": "Confirms pending edits",
+                  "evidence": [
+                    {
+                      "path": "src/collab/guestSession.ts",
+                      "basis": "observed"
+                    }
+                  ],
+                  "async": true
+                }
+              ],
+              "flows": [
+                {
+                  "id": "c.flow",
+                  "title": "Accept a guest edit",
+                  "steps": [
+                    {
+                      "spotlight": [
+                        "c.guest"
+                      ],
+                      "caption": "Accept a guest edit"
+                    },
+                    {
+                      "relationship": "c.r1",
+                      "caption": "The guest sends its unconfirmed patch."
+                    },
+                    {
+                      "relationship": "c.r2",
+                      "caption": "The owner receives it on the peer transport."
+                    },
+                    {
+                      "relationship": "c.r3",
+                      "caption": "The authority checks role and sequence."
+                    },
+                    {
+                      "relationship": "c.r4",
+                      "caption": "Incoming content is sanitized and repaired."
+                    },
+                    {
+                      "relationship": "c.r5",
+                      "caption": "The store receives the confirmed file when no gesture is held."
+                    },
+                    {
+                      "relationship": "c.r6",
+                      "caption": "The owner broadcasts the numbered commit."
+                    },
+                    {
+                      "relationship": "c.r7",
+                      "caption": "The guest drops acknowledged work and reapplies pending edits."
+                    }
+                  ]
+                }
+              ],
+              "notes": [
+                {
+                  "id": "c.note",
+                  "about": "c.core",
+                  "text": "The owner is the single authority. Guests never autosave this shared copy; cameras and presence are transient.",
+                  "kind": "decision"
+                }
+              ]
+            }
+          }
+        ],
+        "relationships": [
+          {
+            "id": "e.r1",
+            "from": "e.ui",
+            "to": "e.store",
+            "label": "Runs editor action",
+            "evidence": [
+              {
+                "path": "src/commands/registry.ts",
+                "basis": "observed"
+              }
+            ]
+          },
+          {
+            "id": "e.r2",
+            "from": "e.store",
+            "to": "e.model",
+            "label": "Transforms current room",
+            "evidence": [
+              {
+                "path": "src/store/editorStore.ts",
+                "basis": "observed"
+              }
+            ]
+          },
+          {
+            "id": "e.r3",
+            "from": "e.store",
+            "to": "e.history",
+            "label": "Records undo step",
+            "evidence": [
+              {
+                "path": "src/store/editorStore.ts",
+                "basis": "observed"
+              }
+            ]
+          },
+          {
+            "id": "e.r4",
+            "from": "e.ui",
+            "to": "e.render",
+            "label": "Draws visible shapes",
+            "evidence": [
+              {
+                "path": "src/nodes/describe.ts",
+                "basis": "observed"
+              }
+            ]
+          },
+          {
+            "id": "e.r5",
+            "from": "e.store",
+            "to": "e.save",
+            "label": "Schedules persistence",
+            "evidence": [
+              {
+                "path": "src/store/useDocumentSession.ts",
+                "basis": "observed"
+              }
+            ],
+            "async": true
+          },
+          {
+            "id": "e.r6",
+            "from": "e.agent",
+            "to": "e.model",
+            "label": "Builds candidate file",
+            "evidence": [
+              {
+                "path": "src/agent/patch.ts",
+                "basis": "observed"
+              }
+            ]
+          },
+          {
+            "id": "e.r7",
+            "from": "e.agent",
+            "to": "e.render",
+            "label": "Measures and routes",
+            "evidence": [
+              {
+                "path": "src/agent/compile.ts",
+                "basis": "observed"
+              }
+            ]
+          },
+          {
+            "id": "e.r8",
+            "from": "e.collab",
+            "to": "e.store",
+            "label": "Applies remote commit",
+            "evidence": [
+              {
+                "path": "src/store/collabBridge.ts",
+                "basis": "observed"
+              }
+            ]
+          }
+        ],
+        "flows": [
+          {
+            "id": "e.flow",
+            "title": "Edit an element",
+            "steps": [
+              {
+                "spotlight": [
+                  "e.ui"
+                ],
+                "caption": "Edit an element"
+              },
+              {
+                "relationship": "e.r1",
+                "caption": "The command calls an existing store action."
+              },
+              {
+                "relationship": "e.r2",
+                "caption": "Pure operations return the updated room."
+              },
+              {
+                "relationship": "e.r3",
+                "caption": "The store records one undoable change."
+              },
+              {
+                "spotlight": [
+                  "e.render",
+                  "e.save"
+                ],
+                "caption": "Rendering and persistence react to the committed state; neither waits for the other."
+              }
+            ]
+          }
+        ],
+        "notes": [
+          {
+            "id": "e.note",
+            "about": "e.render",
+            "text": "Canvas and export share node descriptions and text layout. Connector visuals have two renderers that must stay in sync.",
+            "kind": "decision"
+          },
+          {
+            "id": "e.worker",
+            "about": "e.agent",
+            "text": "Worker-safe modules contain no React, store or DOM access. Only the host bridge commits a prepared file.",
+            "kind": "decision"
+          }
+        ]
+      }
+    },
+    {
+      "id": "browser-db",
+      "label": "Browser documents",
+      "type": "database",
+      "description": "Stores document bodies and summaries locally in IndexedDB.",
+      "evidence": [
+        {
+          "path": "src/storage/IndexedDbRepository.ts",
+          "basis": "observed"
+        }
+      ],
+      "technology": "IndexedDB"
+    },
+    {
+      "id": "shell",
+      "label": "Desktop host",
+      "type": "service",
+      "description": "Owns native files, recovery and the local agent bridge.",
+      "evidence": [
+        {
+          "path": "src-tauri/src/main.rs",
+          "basis": "observed"
+        }
+      ],
+      "technology": "Tauri",
+      "inside": {
+        "level": "component",
+        "nodes": [
+          {
+            "id": "s.bridge",
+            "label": "Local agent bridge",
+            "type": "adapter",
+            "description": "Authenticates the local socket or named-pipe connection.",
+            "evidence": [
+              {
+                "path": "src-tauri/src/agent/bridge.rs",
+                "basis": "observed"
+              }
+            ],
+            "technology": "Rust"
+          },
+          {
+            "id": "s.broker",
+            "label": "Request broker",
+            "type": "component",
+            "description": "Checks enabled folders, identity and revision before dispatch.",
+            "evidence": [
+              {
+                "path": "src-tauri/src/agent/broker.rs",
+                "basis": "observed"
+              }
+            ],
+            "technology": "Rust"
+          },
+          {
+            "id": "s.ledger",
+            "label": "Request ledger",
+            "type": "component",
+            "description": "Records outcomes so exact retries do not apply twice.",
+            "evidence": [
+              {
+                "path": "src-tauri/src/agent/ledger.rs",
+                "basis": "observed"
+              }
+            ],
+            "technology": "Rust"
+          },
+          {
+            "id": "s.page",
+            "label": "Page coordinator",
+            "type": "component",
+            "description": "Prepares the change, checks the commit gate and saves it.",
+            "evidence": [
+              {
+                "path": "src/desktop/agent.ts",
+                "basis": "observed"
+              }
+            ],
+            "technology": "TypeScript"
+          },
+          {
+            "id": "s.worker",
+            "label": "Agent worker",
+            "type": "component",
+            "description": "Composes or patches a candidate using shared layout and routing.",
+            "evidence": [
+              {
+                "path": "src/agent/jobs.ts",
+                "basis": "observed"
+              }
+            ],
+            "technology": "TypeScript"
+          },
+          {
+            "id": "s.store",
+            "label": "Editor commit bridge",
+            "type": "adapter",
+            "description": "Rechecks the revision and commits one undoable file change.",
+            "evidence": [
+              {
+                "path": "src/host/agentBridge.ts",
+                "basis": "observed"
+              }
+            ],
+            "technology": "TypeScript"
+          },
+          {
+            "id": "s.files",
+            "label": "Atomic file I/O",
+            "type": "adapter",
+            "description": "Writes diagram files with stamps and recovery support.",
+            "evidence": [
+              {
+                "path": "src-tauri/src/docio.rs",
+                "basis": "observed"
+              }
+            ],
+            "technology": "Rust"
+          }
+        ],
+        "relationships": [
+          {
+            "id": "s.r1",
+            "from": "s.bridge",
+            "to": "s.broker",
+            "label": "Dispatches tool call",
+            "evidence": [
+              {
+                "path": "src-tauri/src/agent/bridge.rs",
+                "basis": "observed"
+              }
+            ]
+          },
+          {
+            "id": "s.r2",
+            "from": "s.broker",
+            "to": "s.ledger",
+            "label": "Checks request identity",
+            "evidence": [
+              {
+                "path": "src-tauri/src/agent/broker.rs",
+                "basis": "observed"
+              }
+            ]
+          },
+          {
+            "id": "s.r3",
+            "from": "s.broker",
+            "to": "s.page",
+            "label": "Requests page work",
+            "evidence": [
+              {
+                "path": "src-tauri/src/agent/broker.rs",
+                "basis": "observed"
+              }
+            ],
+            "async": true
+          },
+          {
+            "id": "s.r4",
+            "from": "s.page",
+            "to": "s.worker",
+            "label": "Prepares candidate",
+            "evidence": [
+              {
+                "path": "src/desktop/agent.ts",
+                "basis": "observed"
+              }
+            ]
+          },
+          {
+            "id": "s.r5",
+            "from": "s.page",
+            "to": "s.store",
+            "label": "Commits after gate",
+            "evidence": [
+              {
+                "path": "src/desktop/agent.ts",
+                "basis": "observed"
+              }
+            ]
+          },
+          {
+            "id": "s.r6",
+            "from": "s.broker",
+            "to": "s.files",
+            "label": "Creates new diagram",
+            "evidence": [
+              {
+                "path": "src-tauri/src/agent/broker.rs",
+                "basis": "observed"
+              }
+            ]
+          },
+          {
+            "id": "s.r7",
+            "from": "s.page",
+            "to": "s.files",
+            "label": "Saves open document",
+            "evidence": [
+              {
+                "path": "src/desktop/agent.ts",
+                "basis": "observed"
+              }
+            ]
+          }
+        ],
+        "flows": [
+          {
+            "id": "s.flow",
+            "title": "Apply an agent update",
+            "steps": [
+              {
+                "spotlight": [
+                  "s.bridge"
+                ],
+                "caption": "Apply an agent update"
+              },
+              {
+                "relationship": "s.r1",
+                "caption": "The authenticated bridge dispatches the tool call."
+              },
+              {
+                "relationship": "s.r2",
+                "caption": "The broker checks the request ledger before execution."
+              },
+              {
+                "relationship": "s.r3",
+                "caption": "The broker sends work to the desktop page."
+              },
+              {
+                "relationship": "s.r4",
+                "caption": "The worker prepares and checks a candidate without saving."
+              },
+              {
+                "relationship": "s.r5",
+                "caption": "After the gate, the editor rechecks the revision and commits."
+              },
+              {
+                "relationship": "s.r7",
+                "caption": "A previously clean document is saved through the desktop controller."
+              }
+            ]
+          },
+          {
+            "id": "s.conflict",
+            "title": "Revision changed",
+            "variantOf": "s.flow",
+            "steps": [
+              {
+                "relationship": "s.r5",
+                "caption": "A stale revision is refused at the editor commit boundary."
+              },
+              {
+                "spotlight": [
+                  "s.page",
+                  "s.store"
+                ],
+                "caption": "Return REVISION_CONFLICT; reread and rebuild instead of overwriting."
+              }
+            ]
+          }
+        ],
+        "notes": [
+          {
+            "id": "s.note",
+            "about": "s.page",
+            "text": "This view crosses the Rust/page seam: bridge, broker, ledger and file I/O run in Rust; coordinator, worker and editor bridge run in the webview.",
+            "kind": "decision"
+          },
+          {
+            "id": "s.review",
+            "about": "s.worker",
+            "text": "Proposals and previews are transient. A proposal is only committed when the person accepts it; preparing or rendering it changes no diagram.",
+            "kind": "decision"
+          }
+        ]
+      }
+    },
+    {
+      "id": "files",
+      "label": "Diagram files",
+      "type": "file-system",
+      "description": "Keeps ordinary editable .draftcanvas files on the device.",
+      "evidence": [
+        {
+          "path": "src-tauri/src/docio.rs",
+          "basis": "observed"
+        }
+      ]
+    },
+    {
+      "id": "agent",
+      "label": "Coding agent",
+      "type": "ai-agent",
+      "description": "Reads source and requests diagram changes over MCP.",
+      "evidence": [
+        {
+          "path": "src-tauri/mcp/src/main.rs",
+          "basis": "observed"
+        }
+      ]
+    },
+    {
+      "id": "mcp",
+      "label": "MCP sidecar",
+      "type": "service",
+      "description": "Forwards tool calls over a local authenticated bridge.",
+      "evidence": [
+        {
+          "path": "src-tauri/mcp/src/main.rs",
+          "basis": "observed"
+        }
+      ],
+      "technology": "Rust"
+    },
+    {
+      "id": "peer",
+      "label": "Collaborator",
+      "type": "external-system",
+      "description": "Edits a replica connected to the owner over WebRTC or LAN.",
+      "evidence": [
+        {
+          "path": "src/collab/guestSession.ts",
+          "basis": "observed"
+        }
+      ],
+      "technology": "JavaScript"
+    }
+  ],
+  "relationships": [
+    {
+      "id": "r1",
+      "from": "user",
+      "to": "editor",
+      "label": "Edits diagram",
+      "evidence": [
+        {
+          "path": "src/App.tsx",
+          "basis": "observed"
+        }
+      ]
+    },
+    {
+      "id": "r2",
+      "from": "editor",
+      "to": "browser-db",
+      "label": "Autosaves in browser",
+      "evidence": [
+        {
+          "path": "src/store/useDocumentSession.ts",
+          "basis": "observed"
+        }
+      ],
+      "semantic": "readsWrites"
+    },
+    {
+      "id": "r3",
+      "from": "editor",
+      "to": "shell",
+      "label": "Posts desktop changes",
+      "evidence": [
+        {
+          "path": "src/host/useHostDocument.ts",
+          "basis": "observed"
+        }
+      ],
+      "async": true
+    },
+    {
+      "id": "r4",
+      "from": "shell",
+      "to": "files",
+      "label": "Saves local file",
+      "evidence": [
+        {
+          "path": "src-tauri/src/docio.rs",
+          "basis": "observed"
+        }
+      ],
+      "semantic": "readsWrites"
+    },
+    {
+      "id": "r5",
+      "from": "agent",
+      "to": "mcp",
+      "label": "Calls tools via stdio",
+      "evidence": [
+        {
+          "path": "src-tauri/mcp/src/main.rs",
+          "basis": "observed"
+        }
+      ]
+    },
+    {
+      "id": "r6",
+      "from": "mcp",
+      "to": "shell",
+      "label": "Forwards local request",
+      "evidence": [
+        {
+          "path": "src-tauri/mcp/src/bridge.rs",
+          "basis": "observed"
+        }
+      ]
+    },
+    {
+      "id": "r7",
+      "from": "shell",
+      "to": "editor",
+      "label": "Dispatches agent work",
+      "evidence": [
+        {
+          "path": "src/desktop/agent.ts",
+          "basis": "observed"
+        }
+      ],
+      "async": true
+    },
+    {
+      "id": "r8",
+      "from": "peer",
+      "to": "editor",
+      "label": "Sends peer changes",
+      "evidence": [
+        {
+          "path": "src/store/collabBridge.ts",
+          "basis": "observed"
+        }
+      ],
+      "async": true
+    },
+    {
+      "id": "r9",
+      "from": "editor",
+      "to": "peer",
+      "label": "Confirms shared edits",
+      "evidence": [
+        {
+          "path": "src/collab/hostSession.ts",
+          "basis": "observed"
+        }
+      ],
+      "async": true
+    }
+  ],
+  "flows": [
+    {
+      "id": "desktop-edit",
+      "title": "Edit and save on desktop",
+      "steps": [
+        {
+          "spotlight": [
+            "user"
+          ],
+          "caption": "Edit and save on desktop"
+        },
+        {
+          "relationship": "r1",
+          "caption": "The author changes ordinary diagram content."
+        },
+        {
+          "relationship": "r3",
+          "caption": "The webview posts the changed file to its desktop host."
+        },
+        {
+          "relationship": "r4",
+          "caption": "The shell saves to a stamped local file."
+        }
+      ]
+    },
+    {
+      "id": "agent-edit",
+      "title": "Agent requests a change",
+      "steps": [
+        {
+          "spotlight": [
+            "agent"
+          ],
+          "caption": "Agent requests a change"
+        },
+        {
+          "relationship": "r5",
+          "caption": "The agent sends a semantic request over MCP stdio."
+        },
+        {
+          "relationship": "r6",
+          "caption": "The sidecar uses a local socket or named pipe, never a network API."
+        },
+        {
+          "relationship": "r7",
+          "caption": "The desktop page validates and prepares the change before committing it."
+        }
+      ]
+    },
+    {
+      "id": "browser-edit",
+      "title": "Edit and save in browser",
+      "steps": [
+        {
+          "spotlight": [
+            "user"
+          ],
+          "caption": "Edit and save in browser"
+        },
+        {
+          "relationship": "r1",
+          "caption": "The same editor handles the browser gesture."
+        },
+        {
+          "relationship": "r2",
+          "caption": "Browser storage writes the document and summary locally."
+        }
+      ]
+    }
+  ],
+  "notes": [
+    {
+      "id": "scope-note",
+      "about": "editor",
+      "text": "Scope: editor, persistence, MCP and live collaboration. Marketing pages and build tooling are excluded from these runtime views. No hosted service stores diagrams.",
+      "kind": "decision"
+    },
+    {
+      "id": "collab-note",
+      "about": "peer",
+      "text": "Invite links can use a rendezvous service for the encrypted handshake. Diagram changes use the owner connection; direct invites need no rendezvous.",
+      "kind": "decision"
+    }
+  ]
+}

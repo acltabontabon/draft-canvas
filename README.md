@@ -41,11 +41,11 @@ Open your project folder in Draft Canvas Desktop. In **Settings → AI agents**,
 access** and tick the folder. Click **Add to…** for your agent, then **Install skill**. Start a new
 agent session and ask:
 
-   > Use the Draft Canvas skill to diagram this repository's architecture as C4 views, down to
-   > components where the code has real logic. Read the code before you draw, cite source files
-   > and mark anything inferred. Make the main request path a presentation flow, with variants for
-   > the failure paths the code handles, and leave open questions as notes. Render every view and
-   > fix what reads badly before you finish.
+   > Use the Draft Canvas skill to map this repository’s runtime architecture. Verify boundaries
+   > and connections in source, cite evidence, and mark inferences. Add component views where
+   > they explain real logic, and presentation flows for verified requests and handled failures.
+   > Don’t turn dependencies or concurrent effects into an invented execution order. Inspect every
+   > view and fix readability before finishing; tell me the scope and any unresolved questions.
 
 Ask again to refresh the same diagram when the code changes.
 

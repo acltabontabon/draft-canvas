@@ -53,6 +53,8 @@ reports `contract: 3`.
 | `get_proposal({proposalId})` | read | Status, counts and `stale`. |
 | `list_proposals({diagramId?, cursor?, limit?})` | read | Proposals, newest first. |
 
+- A create receipt counts free-standing note cards in `created.notes`, and attached notes/code in
+  `created.attachments` when present. Both totals cover every inside view.
 - Write tools are idempotent by `requestId` ([Retries](#retries-and-the-request-ledger)).
 - A tool failure is a result with `isError: true` and a stable `code`. JSON-RPC errors mean a malformed request.
 - New ids match `^[A-Za-z][A-Za-z0-9_.-]{0,63}$` and become native ids. Existing ids, such as `n_…`, are used as they are.
@@ -593,3 +595,28 @@ Threat model: another local program, or a web page, trying to drive the bridge.
 - **Linux.** Not a desktop target.
 - **Launching the app.** If it is not running, the answer is `APP_UNAVAILABLE`.
 - **Fetching a PR or repository**, or editing code. Draft Canvas only changes diagrams.
+
+## Native skill verification
+
+`e2e/native-skill.ts` drives the real MCP sidecar and running desktop app, including native folder
+scope, the request ledger and disk persistence. It does not install a mock shell or rewrite app
+settings. Use a separate test build/profile if you want to keep your normal projects untouched.
+
+1. Build and start the desktop app. Add an empty verification folder as a project, then enable
+   agent access for only that folder in **Settings → AI agents**. Keep the window visible.
+2. Run the create phase from the repository root:
+
+   ```bash
+   npx tsx e2e/native-skill.ts --phase create \
+     --sidecar <path-to-draft-canvas-mcp> --agent-dir <app-data-folder>/agent \
+     --project-dir <enabled-empty-folder> --out <report-folder>
+   ```
+
+3. Quit the app, launch it again and open the saved diagram from Recent. Run the same command with
+   `--phase verify` and the same folders.
+
+The create phase verifies that previews leave the real file untouched, exact retries do not write
+again or create duplicates, and stale revisions cannot change the disk. The verify phase compares
+the saved bytes and all four views—including flows, evidence, annotations and geometry—with the
+pre-restart snapshot. Both phases render every view and save PNGs and JSON reports. The report
+folder is separate from the diagram project; do not delete either between phases.
