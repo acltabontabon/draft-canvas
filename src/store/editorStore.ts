@@ -360,7 +360,7 @@ export interface EditorStore {
   liveViewport: DraftViewport | null;
 
   /* Document access */
-  setDocument: (document: DraftDocument, options?: { resetHistory?: boolean; keepPath?: boolean }) => void;
+  setDocument: (document: DraftDocument, options?: { keepPath?: boolean }) => void;
   apply: (label: string, recipe: (doc: DraftDocument) => DraftDocument, options?: ApplyOptions) => void;
   /**
    * One undoable edit to the whole *file*, not the room on screen — for a change that arrives from
@@ -1362,7 +1362,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         document: view ?? document,
         path: view ? path : ROOT_PATH,
         outer: view ? document : null,
-        history: options?.resetHistory === false ? state.history : EMPTY_HISTORY,
+        history: EMPTY_HISTORY,
         // A presentation-mode selection ring or playback state from the diagram just closed has no
         // meaning for the one being opened — without this, opening a new diagram right after
         // presenting another lands you straight into presentation mode for it too.

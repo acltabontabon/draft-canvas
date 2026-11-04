@@ -3,7 +3,6 @@ import type { DraftEdge } from './types';
 const EMPTY_COMPENSATIONS: readonly DraftEdge[] = Object.freeze([]);
 const visibleCache = new WeakMap<readonly DraftEdge[], readonly DraftEdge[]>();
 const linkedCache = new WeakMap<readonly DraftEdge[], Map<string, readonly DraftEdge[]>>();
-const collapsedCountCache = new WeakMap<readonly DraftEdge[], Map<string, number>>();
 
 /** A generic call's free-text operation is not an HTTP verb. Preserve useful text as the
  * resource, while discarding the old generic "OK" placeholder when switching to HTTP. */
@@ -44,22 +43,6 @@ export function linkedCompensations(edges: readonly DraftEdge[], parentId: strin
     linkedCache.set(edges, index);
   }
   return index.get(parentId) ?? EMPTY_COMPENSATIONS;
-}
-
-
-/** Primitive selector for an edge's compact indicator, indexed once per array identity. */
-export function collapsedCompensationCount(edges: readonly DraftEdge[], parentId: string): number {
-  let counts = collapsedCountCache.get(edges);
-  if (!counts) {
-    counts = new Map();
-    for (const edge of edges) {
-      if (!isCollapsedCompensation(edge)) continue;
-      const parent = edge.compensationFor!;
-      counts.set(parent, (counts.get(parent) ?? 0) + 1);
-    }
-    collapsedCountCache.set(edges, counts);
-  }
-  return counts.get(parentId) ?? 0;
 }
 
 /** Repair a missing/invalid link by leaving the action visible and independent. Never erase its details. */

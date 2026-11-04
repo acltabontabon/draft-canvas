@@ -1,8 +1,8 @@
 # Architecture examples
 
 A starter adds an ordinary, editable diagram with flows to the current canvas. Home and an empty
-canvas offer the first five below; type any name in `⌘K` (`Ctrl+K` on Windows and Linux). Click a
-name to preview it.
+canvas offer five of them (Monolith, Microservices, Event-Driven, Hexagonal and CQRS); type any name
+in `⌘K` (`Ctrl+K` on Windows and Linux). Click a name to preview it.
 
 | Starter | Shows |
 | --- | --- |

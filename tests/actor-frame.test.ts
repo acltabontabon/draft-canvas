@@ -94,7 +94,7 @@ describe('actor frames', () => {
 describe('actor frame history', () => {
   beforeEach(() => {
     __resetInteraction();
-    useEditorStore.getState().setDocument(createDocument('Actor history'), { resetHistory: true });
+    useEditorStore.getState().setDocument(createDocument('Actor history'));
   });
 
   it('undoes and redoes a frame change without moving, resizing or reconnecting the actor', () => {

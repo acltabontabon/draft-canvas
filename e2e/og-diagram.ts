@@ -1,12 +1,11 @@
 /**
- * Renders a diagram for the docs or the site's share card, in the real editor: an agent request
+ * Renders a diagram for the docs, in the real editor: an agent request
  * (a `.json` beside the image), composed by the app's own pipeline, imported through the file
  * picker, fitted, and captured as the canvas alone — no toolbar, no status bar — at 2x. The docs
  * draw their architecture this way rather than in ASCII or Mermaid. Like `e2e/agent-gallery.ts`, it
  * is not a test.
  *
  *   npm run dev -- --port 5393 --strictPort      # a dev server of its own, never 5180
- *   npx tsx e2e/og-diagram.ts --base http://localhost:5393     # the share card's diagram
  *   npx tsx e2e/og-diagram.ts --base http://localhost:5393 \
  *     --request docs/media/reference/architecture.json --out docs/media/reference/architecture.png
  */
@@ -18,8 +17,13 @@ const flag = (name: string) => {
   return i === -1 ? undefined : process.argv[i + 1];
 };
 const BASE = flag('base') ?? 'http://localhost:5393';
-const REQUEST = JSON.parse(readFileSync(flag('request') ?? 'www/scripts/og-diagram.json', 'utf8')) as Record<string, unknown>;
-const OUT = flag('out') ?? 'www/scripts/og-diagram.png';
+const required = (name: string) => {
+  const value = flag(name);
+  if (!value) throw new Error(`og-diagram: --${name} is required`);
+  return value;
+};
+const REQUEST = JSON.parse(readFileSync(required('request'), 'utf8')) as Record<string, unknown>;
+const OUT = required('out');
 const WIDTH = Number(flag('width') ?? 1500);
 const HEIGHT = Number(flag('height') ?? 860);
 const PAD = Number(flag('pad') ?? 36);

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { edgeCommands } from '../src/commands/registry';
 import type { CommandContext } from '../src/commands/types';
 import { createDocument, createEdge, createNode } from '../src/document/factory';
-import { collapsedCompensationCount, linkedCompensations, normalizeCompensationHttpLabel, repairCompensationLinks, visibleEdges } from '../src/document/compensation';
+import { linkedCompensations, normalizeCompensationHttpLabel, repairCompensationLinks, visibleEdges } from '../src/document/compensation';
 import { addEdges, addNodes, extractFragment, pasteFragment, removeElements } from '../src/document/operations';
 import { deserializeDocument, serializeDocument } from '../src/export/project';
 import { repairReferences } from '../src/collab/repair';
@@ -67,7 +67,6 @@ describe('addCompensation()', () => {
     expect(twin).toMatchObject({ id, source: coordinator.id, target: participant.id, semantic: 'compensates', semanticsOrigin: 'explicit', compensationFor: edge.id, compensationVisible: true, compensationProtocol: 'calls' });
     expect(store.getState().selection).toEqual({ nodes: [], edges: [edge.id] });
     expect(visibleEdges(edges).map((item) => item.id)).toEqual([edge.id, id]);
-    expect(collapsedCompensationCount(edges, edge.id)).toBe(0);
 
     store.getState().undo();
     expect(store.getState().document.edges).toHaveLength(1);

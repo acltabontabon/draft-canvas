@@ -13,7 +13,7 @@ import * as readingsModule from '../src/nodes/readings';
 describe('DraftNodeView memo boundary', () => {
   it('skips position-only frames and still renders selection, resize and content changes', () => {
     const node = createNode({ type: 'note', x: 0, y: 0, text: 'Order Service' });
-    useEditorStore.getState().setDocument(addNodes(createDocument('Perf'), [node]), { resetHistory: true });
+    useEditorStore.getState().setDocument(addNodes(createDocument('Perf'), [node]));
     const describeSpy = vi.spyOn(describeModule, 'describeNode');
     const readingSpy = vi.spyOn(readingsModule, 'nodeReading');
     const props: NodeProps = {

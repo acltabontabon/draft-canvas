@@ -61,11 +61,10 @@ With `npm run site:dev`, refresh `http://localhost:5280/docs/` to see an edit.
 
 | Command | Regenerates |
 | --- | --- |
-| `npm --prefix www run clips` | The five demo clips in `www/public/clips/`, cut from `docs/media/demo.mp4` with ffmpeg |
+| `npm --prefix www run clips` | The Present and Inside clips and the editor film's poster in `www/public/clips/`, cut from `docs/media/demo.mp4` with ffmpeg |
 | `npm --prefix www run social` | `og-image.png` and the Apple touch icon |
 
-The current hero SVG is edited directly in `www/index.html`; `hero-art.mjs` is the legacy
-pencil-animation generator and does not update this design.
+The hero SVG is edited directly in `www/index.html`.
 
 Outputs are committed, so deploys need neither ffmpeg nor a browser. The 1200 × 630 social card
 combines `www/scripts/og-illustration.png` with editable lettering and the root package's release

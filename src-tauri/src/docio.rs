@@ -358,8 +358,23 @@ fn crosses_devices(e: &io::Error) -> bool {
 }
 
 fn copy_then_remove(old: &Path, new: &Path) -> Result<(), AppError> {
-    let bytes = fs::read(old).map_err(|e| AppError::from_io(&e, Verb::Open, Subject::Path(old)))?;
+    let io_err = |e: io::Error| AppError::from_io(&e, Verb::Open, Subject::Path(old));
+    let file = File::open(old).map_err(io_err)?;
+    let mut bytes = Vec::new();
+    // Bounded like `read_document`: the file may have grown since the move was granted.
+    (&file)
+        .take(MAX_DOC_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(io_err)?;
+    if bytes.len() as u64 > MAX_DOC_BYTES {
+        return Err(AppError::too_large(old, Verb::Open, MAX_DOC_BYTES));
+    }
     create_new_atomic(new, &bytes)?;
+    // A plain create gets default permissions, so a private document would turn world-readable on
+    // the other volume.
+    if let Ok(meta) = file.metadata() {
+        let _ = fs::set_permissions(new, meta.permissions());
+    }
     if let Err(e) = fs::remove_file(old) {
         // Kept in both places the person would find two copies with no word of which is current.
         let _ = fs::remove_file(new);

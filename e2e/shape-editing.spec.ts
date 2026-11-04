@@ -17,7 +17,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
       ];
       const nodes = variants.map((variant, i) => createNode({ ...variant, x: 120 + (i % 3) * 260, y: 100 + Math.floor(i / 3) * 220, text: 'Orders', height: 120 }));
       const editor = useEditorStore.getState();
-      editor.setDocument({ ...editor.document, nodes }, { resetHistory: true });
+      editor.setDocument({ ...editor.document, nodes });
       return nodes.map((node) => node.id);
     });
     await cameraAtRest(page);
@@ -54,7 +54,7 @@ test('Shift-clicking a connector preserves a multiple-shape selection', async ({
     const nodes = [0, 1, 2].map((i) => createNode({ id: `shape-${i}`, type: 'service', x: 100 + i * 280, y: 200, text: `Service ${i}` }));
     const edges = [createEdge({ id: 'first', source: 'shape-0', target: 'shape-1' }), createEdge({ id: 'second', source: 'shape-1', target: 'shape-2' })];
     const editor = useEditorStore.getState();
-    editor.setDocument({ ...editor.document, nodes, edges }, { resetHistory: true });
+    editor.setDocument({ ...editor.document, nodes, edges });
     editor.setSelection({ nodes: ['shape-0', 'shape-1'], edges: ['first'] });
   });
   await cameraAtRest(page);
@@ -87,7 +87,7 @@ test('tagged notes retain a body line when resized to their minimum', async ({ p
     const node = createNode({ id: 'warning', type: 'note', noteKind: 'warning', x: 400, y: 180, width: 240, height: 160, text: 'Review this' });
     const geo = noteLayout(node);
     const editor = useEditorStore.getState();
-    editor.setDocument({ ...editor.document, nodes: [node] }, { resetHistory: true });
+    editor.setDocument({ ...editor.document, nodes: [node] });
     editor.setSelection({ nodes: [node.id], edges: [] });
     return Math.ceil(geo.top + geo.lineHeight + geo.bottom);
   });

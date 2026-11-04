@@ -62,12 +62,10 @@ toml_edit = "0.25"
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Networking_WinSock", "Win32_Storage_FileSystem", "Win32_UI_WindowsAndMessaging", "Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_System_Diagnostics_ToolHelp"] }
 
-# Same major versions Tauri already resolves, for the "edited" dot and proxy icon on the window, and
-# the tray panel's rounded corners.
+# Same major versions Tauri already resolves, for the "edited" dot and proxy icon on the window.
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2-app-kit = "0.3"
 objc2-foundation = "0.3"
-objc2-quartz-core = { version = "0.3", default-features = false, features = ["std", "CALayer", "objc2-core-foundation"] }
 # Whether the folder holding the app can be written to before an update tries (`updater/backend.rs`).
 libc = "0.2"
 

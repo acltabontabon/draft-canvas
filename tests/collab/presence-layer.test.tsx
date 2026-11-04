@@ -26,7 +26,7 @@ beforeEach(() => {
   const a = createNode({ id: 'a', type: 'service', x: 0, y: 0 });
   const b = createNode({ id: 'b', type: 'database', x: 300, y: 0 });
   const withNodes = addNodes(createDocument('Presence'), [a, b]);
-  useEditorStore.getState().setDocument(addEdges(withNodes, [createEdge({ id: 'e', source: 'a', target: 'b' })]), { resetHistory: true });
+  useEditorStore.getState().setDocument(addEdges(withNodes, [createEdge({ id: 'e', source: 'a', target: 'b' })]));
 });
 
 afterEach(() => useCollabStore.setState(COLLAB_AT_REST, true));

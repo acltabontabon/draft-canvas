@@ -187,6 +187,32 @@ describe('importing untrusted files', () => {
     expect(byId.get('note')!.parentId).toBeUndefined();
   });
 
+  it('breaks a long boundary cycle without a walk per node to its end', () => {
+    const count = 4000;
+    const nodes = Array.from({ length: count }, (_, i) => ({
+      id: `g${i}`,
+      type: 'group',
+      x: 0,
+      y: 0,
+      parentId: `g${(i + 1) % count}`,
+    }));
+    const started = performance.now();
+    const result = parse({ ...base, nodes, edges: [] });
+    const elapsed = performance.now() - started;
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const byId = new Map(result.document.nodes.map((node) => [node.id, node]));
+    for (const node of result.document.nodes) {
+      let depth = 0;
+      for (let cursor = node.parentId ? byId.get(node.parentId) : undefined; cursor; cursor = cursor.parentId ? byId.get(cursor.parentId) : undefined) {
+        depth += 1;
+        expect(depth).toBeLessThanOrEqual(LIMITS.maxGroupDepth);
+      }
+    }
+    // Generous: the unbounded walk took most of a second here, this takes tens of milliseconds.
+    expect(elapsed).toBeLessThan(400);
+  });
+
   it('coerces an unknown node type rather than losing the content', () => {
     const result = parse({
       ...base,

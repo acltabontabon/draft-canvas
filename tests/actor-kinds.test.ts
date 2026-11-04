@@ -37,7 +37,7 @@ describe('actor kinds', () => {
 describe('actor label follows its kind', () => {
   beforeEach(() => {
     __resetInteraction();
-    useEditorStore.getState().setDocument(createDocument('Actor kinds'), { resetHistory: true });
+    useEditorStore.getState().setDocument(createDocument('Actor kinds'));
   });
 
   const nodeOf = (id: string) => useEditorStore.getState().document.nodes.find((n) => n.id === id)!;
@@ -107,7 +107,7 @@ describe('actor relationships', () => {
 describe('actor connectors follow a kind change', () => {
   beforeEach(() => {
     __resetInteraction();
-    useEditorStore.getState().setDocument(createDocument('Actor connectors'), { resetHistory: true });
+    useEditorStore.getState().setDocument(createDocument('Actor connectors'));
   });
 
   it('re-reads an inferred connector as either end changes kind, and keeps one the user picked', () => {

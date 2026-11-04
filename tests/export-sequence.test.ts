@@ -71,6 +71,16 @@ describe('sequenceSourceFor — every room', () => {
     expect(out).toContain('\n\n%% Room: Checkout / Orders API\n');
   });
 
+  it('keeps a Mermaid directive in a room title from reaching the renderer', () => {
+    const doc = twoRooms();
+    const named = { ...doc, nodes: doc.nodes.map((node, i) => (i === 0 ? { ...node, text: '%%{init: {"theme":"forest"}}%%' } : node)) };
+    const out = sequenceSourceFor(named, 'mermaid');
+    const comment = out.split('\n').find((line) => line.startsWith('%% Room: Checkout /'))!;
+    expect(comment).toBeDefined();
+    expect(comment.slice(2)).not.toContain('%%');
+    expect(comment).toContain('#37;#37;{init');
+  });
+
   it('uses the PlantUML comment for PlantUML, one diagram per room', () => {
     const out = sequenceSourceFor(twoRooms(), 'plantuml');
     expect(out).toContain("' Room: Checkout\n");

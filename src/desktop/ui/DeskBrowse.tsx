@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { warmExplorer } from './DesktopExplorer';
 import { Button } from '../../ui/common/Button';
 import { Icon } from '../../ui/common/Icon';
+import { isImeKeyEvent } from '../../lib/isEditableTarget';
 import { GalleryHeading } from '../../ui/Library/GalleryHeading';
 import { LibraryBrand } from '../../ui/Library/LibraryBrand';
 import { DesktopError, type Handle } from '../api';
@@ -120,6 +121,8 @@ export function DeskBrowse({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      // The Escape that cancels an IME conversion is not a request to clear the search or leave.
+      if (isImeKeyEvent(event)) return;
       if (document.querySelector('[role="dialog"]')) return;
       const inSearch = event.target === searchRef.current;
       if ((event.key === 'f' && (mac ? event.metaKey : event.ctrlKey)) || (event.key === '/' && !inSearch && !(event.target instanceof HTMLInputElement))) {

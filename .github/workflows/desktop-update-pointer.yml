@@ -118,9 +118,19 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p existing out
-          # No channels release yet, or no file in it, is nothing to beat.
-          gh release download "$CHANNELS_TAG" --repo "$GITHUB_REPOSITORY" \
-            --pattern stable.json --pattern alpha.json --dir existing 2>/dev/null || true
+          # No channels release yet, or no file in it, is nothing to beat. Any other failure (an API
+          # error, a rate limit) must stop the job: an empty `existing/` would move every channel,
+          # possibly back to an older release.
+          if assets=$(gh release view "$CHANNELS_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' 2>err.txt); then
+            for name in stable.json alpha.json; do
+              if grep -qx "$name" <<<"$assets"; then
+                gh release download "$CHANNELS_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$name" --dir existing
+              fi
+            done
+          elif ! grep -qi 'not found' err.txt; then
+            cat err.txt >&2
+            exit 1
+          fi
           args=()
           [ "$FORCE" = true ] && args+=(--force)
           node scripts/update-manifest.mjs channels "$VERSION" --existing existing ${args[@]+"${args[@]}"} > out/moving.txt
