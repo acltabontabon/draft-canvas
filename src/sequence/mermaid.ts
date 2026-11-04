@@ -47,7 +47,7 @@ function sanitizeParticipantName(label: string): string {
  *  re-escaped. */
 const MERMAID_ENTITY: Record<string, string> = { '#': '#35;', ';': '#59;', '%': '#37;', '<': '#lt;', '>': '#gt;', '&': '#amp;' };
 
-function escapeMermaidText(text: string): string {
+export function escapeMermaidText(text: string): string {
   return text.replace(/[#;%<>&]/g, (ch) => MERMAID_ENTITY[ch]!);
 }
 

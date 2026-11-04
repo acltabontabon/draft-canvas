@@ -29,7 +29,7 @@ pub fn agent_dir(local_data_dir: &Path) -> PathBuf {
     local_data_dir.join("agent")
 }
 
-/// A fresh secret for one enablement: 256 bits from the OS's generator, via two v4 UUIDs.
+/// A fresh secret for one enablement: 244 random bits from the OS's generator, via two v4 UUIDs.
 pub fn new_token() -> String {
     format!(
         "{}{}",

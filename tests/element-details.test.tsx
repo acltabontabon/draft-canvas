@@ -29,13 +29,13 @@ vi.mock('../src/canvas/useOverlayPosition', () => ({
 }));
 
 beforeEach(() => {
-  useEditorStore.getState().setDocument(createDocument('Details'), { resetHistory: true });
+  useEditorStore.getState().setDocument(createDocument('Details'));
   useUiStore.setState({ depthTransition: null, editingTextId: null, interactionActive: false });
 });
 
 function mount(technology = '', type: DraftNodeType = 'service') {
   const node = { ...createNode({ id: 'element', type, x: 300, y: 300, text: 'Orders' }), technology };
-  useEditorStore.getState().setDocument({ ...createDocument('Details'), nodes: [node] }, { resetHistory: true });
+  useEditorStore.getState().setDocument({ ...createDocument('Details'), nodes: [node] });
   useEditorStore.setState({ selection: { nodes: [node.id], edges: [] }, mode: 'edit' });
   render(<ElementInspectorPopover buildCommandContext={stubContext} />);
 }

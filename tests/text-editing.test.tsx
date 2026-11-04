@@ -17,7 +17,7 @@ import { LIGHT } from '../src/render/theme/tokens';
  */
 function mount(node: ReturnType<typeof createNode>) {
   const doc = addNodes(createDocument('Text editing'), [node]);
-  useEditorStore.getState().setDocument(doc, { resetHistory: true });
+  useEditorStore.getState().setDocument(doc);
   useUiStore.getState().requestEdit(node.id);
   const utils = render(
     <ReactFlowProvider>

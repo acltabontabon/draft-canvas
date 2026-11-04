@@ -39,6 +39,9 @@ export function useTileDrag<T>({
     latest.current = { canDrop, onDrop };
   });
   const stop = useRef<(() => void) | null>(null);
+  // Counts drags begun. A drop's settle outlives its gesture by `SETTLE_MS`, so a drag picked up in
+  // that window must not be ended by the earlier one's cleanup.
+  const began = useRef(0);
   // A drag still under way when the view unmounts (a scope switch that drops the grid) ends with it.
   useEffect(() => () => stop.current?.(), []);
 
@@ -49,6 +52,7 @@ export function useTileDrag<T>({
     const rect = source.getBoundingClientRect();
     const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
     let dragging = false;
+    let mine = 0;
     let armed: Handle | null = null;
     let frame = 0;
     let at = start;
@@ -70,6 +74,7 @@ export function useTileDrag<T>({
       if (!dragging) {
         if (Math.hypot(at.x - start.x, at.y - start.y) < THRESHOLD) return;
         dragging = true;
+        mine = ++began.current;
         source.dataset.dragSource = '';
         document.documentElement.dataset.tileDragging = '';
         window.getSelection()?.removeAllRanges();
@@ -97,6 +102,7 @@ export function useTileDrag<T>({
 
     const finish = () => {
       delete source.dataset.dragSource;
+      if (began.current !== mine) return;
       delete document.documentElement.dataset.tileDragging;
       setDrag(null);
     };

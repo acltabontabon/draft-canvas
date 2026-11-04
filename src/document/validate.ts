@@ -622,7 +622,9 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
     if (!node.parentId) continue;
     const visited = new Set<string>();
     let cursor = byId.get(node.parentId);
-    while (cursor && !visited.has(cursor.id)) {
+    // Bounded: a cycle longer than the depth limit is cut by the depth pass below, and an unbounded
+    // walk here made a hostile chain of thousands of boundaries quadratic.
+    for (let steps = 0; cursor && steps <= LIMITS.maxGroupDepth && !visited.has(cursor.id); steps += 1) {
       if (cursor.id === node.id) {
         delete node.parentId;
         droppedParents += 1;

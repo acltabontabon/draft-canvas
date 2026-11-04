@@ -77,9 +77,11 @@ export function materialize(
     const gap = gapForCaption(caption);
     // Where the connectors already drawn through here are, so a candidate that would sit on one
     // ranks behind a candidate that wouldn't. A preference only: see `PlaceNearOptions.avoid`.
-    // `working` carries the nodes placed so far but not the fragment's own new connectors, so a
-    // chain is never asked to dodge the connector it is about to draw to itself.
-    const avoid = connectorClearance(working, companionRegion(host, size, gap, direction));
+    // `doc` has neither the nodes placed so far nor the fragment's own new connectors, so a chain is
+    // never asked to dodge the connector it is about to draw to itself. It is also the document whose
+    // routes the canvas already cached: a `working` that differs by a node re-routes every connector
+    // in the diagram on each fragment node (half a second at 1000 nodes).
+    const avoid = connectorClearance(doc, companionRegion(host, size, gap, direction));
 
     const position =
       index === 0 && options.at

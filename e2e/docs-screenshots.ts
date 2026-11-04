@@ -226,13 +226,6 @@ async function collabScreenshots(browser: Browser, page: Page) {
   // The Share panel with the toolbar above it: every way the diagram reaches someone, spelled out.
   const panel = page.getByRole('menu', { name: 'Share' });
   await expect(panel).toBeVisible();
-  await page.waitForTimeout(400);
-  const menuBox = await box(panel);
-  await page.screenshot({
-    path: join(OUT, 'share-panel.png'),
-    clip: { x: menuBox.x - 24, y: 0, width: VIEWPORT.width - menuBox.x + 24, height: menuBox.y + menuBox.height + 16 },
-  });
-  log('  share-panel.png');
   await page.getByRole('menuitem', { name: /^Draw together, live/ }).click();
   const dialog = page.getByRole('dialog', { name: 'Collaborate' });
   await dialog.getByLabel('Your name').fill('Ada');
@@ -416,8 +409,6 @@ async function trafficScreenshots(page: Page) {
   await page.locator('.react-flow__node[data-id="checkout"] .dc-node').click();
   await expect(page.locator('.dc-traffic-callout')).toBeVisible();
   await shot(page, 'traffic-detail');
-  await page.locator('.dc-traffic-callout').screenshot({ path: join(OUT, 'traffic-callout.png') });
-  log('  traffic-callout.png');
   await page.locator('.dc-traffic-work summary').click();
   await page.getByRole('list', { name: 'Work per arrival' }).scrollIntoViewIfNeeded();
   await shot(page, 'traffic-work');
@@ -536,9 +527,6 @@ async function main() {
 
     // ── Getting started ────────────────────────────────────────────────────────────────────
     log('getting started');
-    await page.setViewportSize({ width: VIEWPORT.width, height: 900 });
-    await shot(page, 'home');
-    await page.setViewportSize(VIEWPORT);
     await page.getByRole('button', { name: 'New canvas' }).first().click();
     await expect(page.locator('.dc-editor')).toBeVisible();
     await shot(page, 'empty-canvas');

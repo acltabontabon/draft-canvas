@@ -17,7 +17,7 @@ test('Quiet corner logos keep full branded and custom details across edits and u
         createNode({ id: 'queue', type: 'queue', x: 460, y: 350, text: 'Events', technology: 'RabbitMQ 4' }),
       ],
       edges: [],
-    }, { resetHistory: true });
+    });
   });
 
   for (const technology of ['PostgreSQL 16', 'Node.js 22', 'Redis 7', 'RabbitMQ 4']) {
@@ -59,7 +59,7 @@ test('Technology typeahead supports pointer, keyboard, generic fallback and clea
     const { createNode } = await import('/src/document/factory.ts');
     const { useEditorStore } = await import('/src/store/editorStore.ts');
     const store = useEditorStore.getState();
-    store.setDocument({ ...store.document, nodes: [createNode({ id: 'orders', type: 'service', x: 300, y: 260, text: 'Orders' })], edges: [] }, { resetHistory: true });
+    store.setDocument({ ...store.document, nodes: [createNode({ id: 'orders', type: 'service', x: 300, y: 260, text: 'Orders' })], edges: [] });
   });
   const node = page.locator('.react-flow__node[data-id="orders"]');
   await node.click();
@@ -128,7 +128,7 @@ test('artwork loads only when used, without document edits or external requests'
     const { createNode } = await import('/src/document/factory.ts');
     const { useEditorStore } = await import('/src/store/editorStore.ts');
     const store = useEditorStore.getState();
-    store.setDocument({ ...store.document, nodes: [createNode({ id: 'vue', type: 'service', x: 300, y: 250, technology: 'Vue.js' })], edges: [] }, { resetHistory: true });
+    store.setDocument({ ...store.document, nodes: [createNode({ id: 'vue', type: 'service', x: 300, y: 250, technology: 'Vue.js' })], edges: [] });
     const state = useEditorStore.getState();
     return { revision: state.revision, history: state.history.past.length, nodes: state.document.nodes };
   });

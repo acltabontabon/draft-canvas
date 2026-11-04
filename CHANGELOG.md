@@ -6,6 +6,26 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 ## [Unreleased]
 
+### Shared
+
+#### Fixed
+
+- Opening a file with thousands of nested boundaries no longer stalls while its parent links are
+  checked.
+- Mermaid sequence source for a multi-room diagram no longer lets a shape or title named like a
+  Mermaid directive change how the viewer's renderer is configured.
+- Selecting a Queue or Topic on a large diagram suggests chained continuations faster, and shared
+  connector labels on a hub with many spokes are grouped without a long pause.
+
+### Desktop
+
+#### Fixed
+
+- Pressing Escape to cancel a text conversion in Find a Diagram no longer clears the search or
+  leaves Browse.
+- Picking up a diagram tile right after dropping another no longer cancels the new drag.
+- Moving a diagram to a project on another volume keeps its file permissions.
+
 ## [1.18.0] - 2026-10-27
 
 Connectors find their own way. Traffic shows what a diagram carries.

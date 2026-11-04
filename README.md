@@ -23,7 +23,7 @@ is yours to review.
 - **Bring your own agent.** Connect Claude Code, Codex, Cursor, or any MCP client.
 - **Live collaboration.** Share, manage access, and follow presentations.
 - **Context for decisions.** Notes, code, sources, and open questions.
-- **Import and export.** Mermaid, PlantUML, Structurizr, draw.io, images, and editable files.
+- **Import and export.** Import Mermaid and editable files; export images, editable files, Mermaid, PlantUML, Structurizr, and draw.io.
 
 ## Get started
 

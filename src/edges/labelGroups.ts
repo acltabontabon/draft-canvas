@@ -254,12 +254,25 @@ function compute(nodes: readonly DraftNode[], edges: readonly DraftEdge[], scope
     // Grown greedily from the pair that shares the most: a third connector joins only if it shares
     // enough with every member already in, so the run the label sits on is common to all of them.
     const pending = new Set(members);
+    // Each pair's shared run is read on every pass of the loop below, which removes only a group's
+    // worth of members at a time — computed once, a bucket of hundreds of spokes was cubic.
+    const sharedMemo = new Map<Routed, Map<Routed, number>>();
+    const sharedOf = (a: Routed, b: Routed): number => {
+      const row = sharedMemo.get(a) ?? new Map<Routed, number>();
+      sharedMemo.set(a, row);
+      let value = row.get(b);
+      if (value === undefined) {
+        value = sharedLength(a.poly, b.poly);
+        row.set(b, value);
+      }
+      return value;
+    };
     while (pending.size >= 2) {
       const list = [...pending];
       let best: { a: Routed; b: Routed; shared: number } | null = null;
       for (let i = 0; i < list.length; i += 1) {
         for (let j = i + 1; j < list.length; j += 1) {
-          const shared = sharedLength(list[i]!.poly, list[j]!.poly);
+          const shared = sharedOf(list[i]!, list[j]!);
           if (!best || shared > best.shared) best = { a: list[i]!, b: list[j]!, shared };
         }
       }
@@ -268,7 +281,7 @@ function compute(nodes: readonly DraftNode[], edges: readonly DraftEdge[], scope
       let shared = best.shared;
       for (const other of list) {
         if (group.includes(other)) continue;
-        const common = Math.min(...group.map((member) => sharedLength(member.poly, other.poly)));
+        const common = Math.min(...group.map((member) => sharedOf(member, other)));
         const placed = common > 0 && place(group[0]!, Math.min(shared, common), others(group.concat(other)));
         if (placed) {
           group.push(other);

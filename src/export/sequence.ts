@@ -12,6 +12,7 @@
 import { flowIsPlayable } from '../document/flow';
 import type { DraftDocument } from '../document/types';
 import { buildSequenceModel, toMermaid, toPlantUml } from '../sequence';
+import { escapeMermaidText } from '../sequence/mermaid';
 import { collectRooms, roomTitleFor } from './rooms';
 
 export { MERMAID_EXTENSION, PLANTUML_EXTENSION } from './source/formats';
@@ -23,6 +24,13 @@ const COMMENT: Record<SequenceFormat, string> = { mermaid: '%%', plantuml: "'" }
 function render(document: DraftDocument, format: SequenceFormat): string {
   const model = buildSequenceModel(document);
   return format === 'mermaid' ? toMermaid(model) : toPlantUml(model);
+}
+
+/** Mermaid lifts `%%{ … }%%` directives out of text even inside a `%%` comment, so a shape or title
+ * named like one would reconfigure the renderer of whoever opens the source. */
+function roomLabel(room: Parameters<typeof roomTitleFor>[0], format: SequenceFormat): string {
+  const title = roomTitleFor(room);
+  return format === 'mermaid' ? escapeMermaidText(title) : title;
 }
 
 export function playableCount(document: DraftDocument): number {
@@ -43,7 +51,7 @@ export function sequenceSourceFor(document: DraftDocument, format: SequenceForma
   if (rooms.length === 1) return render(document, format);
   const sections = rooms
     .filter((room) => playableCount(room.document) > 0)
-    .map((room) => `${COMMENT[format]} Room: ${roomTitleFor(room)}\n${render(room.document, format)}`);
+    .map((room) => `${COMMENT[format]} Room: ${roomLabel(room, format)}\n${render(room.document, format)}`);
   // Nothing to play anywhere: the same empty diagram a flat canvas without Flows produces.
   if (sections.length === 0) return render(document, format);
   // Each section already ends in a newline; one more leaves a blank line between diagrams.

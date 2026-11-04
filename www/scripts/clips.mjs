@@ -18,7 +18,8 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, statSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -26,13 +27,14 @@ const www = join(dirname(fileURLToPath(import.meta.url)), '..');
 const reel = join(www, '..', 'docs', 'media', 'demo.mp4');
 const out = join(www, 'public', 'clips');
 
-/** `poster` is the offset into the clip to freeze for its poster frame, not into the reel. */
+/**
+ * `poster` is the offset into the clip to freeze for its poster frame, not into the reel. `still`
+ * clips are only a poster: the editor film itself plays `docs/media/demo.mp4`.
+ */
 const CLIPS = [
-  { name: 'draw', start: 9.4, duration: 16.4, poster: 12.8 },
-  { name: 'compose', start: 34.4, duration: 8.8, poster: 5.7 },
+  { name: 'draw', start: 9.4, duration: 16.4, poster: 12.8, still: true },
   { name: 'present', start: 60.8, duration: 18, poster: 8 },
   { name: 'inside', start: 101.5, duration: 24.3, poster: 3.5 },
-  { name: 'io', start: 130, duration: 22, poster: 6 },
 ];
 
 if (!existsSync(reel)) {
@@ -46,7 +48,8 @@ const ffmpeg = (args) => execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'e
 const kb = (path) => `${Math.round(statSync(path).size / 1024)} KB`;
 
 for (const clip of CLIPS) {
-  const mp4 = join(out, `${clip.name}.mp4`);
+  // A still's cut only exists to take the poster from, so it goes to the temp folder.
+  const mp4 = join(clip.still ? tmpdir() : out, `${clip.name}.mp4`);
   const jpg = join(out, `${clip.name}.jpg`);
 
   // `-ss` before `-i` seeks on keyframes, which is fast but lands wherever the nearest one is;
@@ -65,10 +68,16 @@ for (const clip of CLIPS) {
     mp4,
   ]);
 
+  if (!clip.still) {
+    console.log(`clips: ${clip.name}.mp4 ${kb(mp4)}`);
+    continue;
+  }
+
   // The poster is taken from the clip, not the reel, so it can never drift out of the cut.
   ffmpeg(['-ss', String(clip.poster), '-i', mp4, '-frames:v', '1', '-q:v', '4', jpg]);
+  rmSync(mp4);
 
-  console.log(`clips: ${clip.name}.mp4 ${kb(mp4)} · ${clip.name}.jpg ${kb(jpg)}`);
+  console.log(`clips: ${clip.name}.jpg ${kb(jpg)}`);
 }
 
 // The release reel includes live collaboration between its Nodi scenes. Keep the marketing

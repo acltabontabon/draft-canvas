@@ -2384,7 +2384,7 @@ html:has(.dl[open]) {
    * The sheet draws itself, once, on load — no script involved. Construction lines first, then the
    * pencil sketch with its handwriting, then the ink over it: shapes outlined and filled, connectors
    * pulled between them, captions set. The pencil settles back to an underdrawing, and the flow's
-   * steps are numbered. Every stroke's `--d` comes from www/scripts/hero-art.mjs.
+   * steps are numbered.
    */
   .art {
     --tempo: 0.82s;

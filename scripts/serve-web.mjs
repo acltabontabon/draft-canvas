@@ -48,7 +48,14 @@ if (!existsSync(staged)) {
 /** One static host. `notFound` is the page a missing path gets, as each real host does it. */
 function serve(root, notFound) {
   return createServer((request, response) => {
-    const path = normalize(decodeURIComponent(new URL(request.url, 'http://localhost').pathname));
+    let path;
+    try {
+      path = normalize(decodeURIComponent(new URL(request.url, 'http://localhost').pathname));
+    } catch {
+      // A stray `%` is a bad request, not a reason for the server to exit.
+      response.writeHead(400).end('bad request');
+      return;
+    }
     // No climbing out of the staged tree, however the path is spelled.
     if (path.includes('..')) {
       response.writeHead(403).end('forbidden');
