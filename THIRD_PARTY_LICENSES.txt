@@ -2899,7 +2899,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 
 (no licence file in the package; see its registry page)
 
-### async-executor 1.14.0 — Apache-2.0 OR MIT
+### async-executor 1.14.1 — Apache-2.0 OR MIT
 
 (no licence file in the package; see its registry page)
 
