@@ -1177,13 +1177,9 @@ test.describe('editing', () => {
     await page.keyboard.press('Escape');
     await expect(page.locator('.dc-node-editor')).toHaveCount(0);
 
-    // A single selected edge.
-    const nodeA = (await page.locator('.dc-node').nth(0).boundingBox())!;
-    const nodeB = (await page.locator('.dc-node').nth(1).boundingBox())!;
-    await page.mouse.click(
-      (nodeA.x + nodeA.width + nodeB.x) / 2,
-      (nodeA.y + nodeA.height / 2 + nodeB.y + nodeB.height / 2) / 2,
-    );
+    // A single selected edge, clicked where it is drawn: a Data Store's connector meets its
+    // cylinder, not the middle of its box.
+    await clickEdge(page);
     await expect(page.locator('.dc-edge[data-selected="true"]')).toHaveCount(1);
     await page.keyboard.press('Enter');
     await expect(page.locator('.dc-edge-label-input')).toBeVisible();

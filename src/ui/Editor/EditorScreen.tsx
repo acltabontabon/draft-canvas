@@ -31,7 +31,7 @@ import { pathKey } from '../../depth/tree';
 import { boundsOf, placeNear } from '../../document/operations';
 import { naturalCodeSize, describeContext } from '../../nodes/describe';
 import { isActivatableTarget, isEditableTarget, isInOwnKeyboardRegion, isTextChord } from '../../lib/isEditableTarget';
-import { centerOf } from '../../lib/math';
+import { centerOf, overlapArea } from '../../lib/math';
 import { logDiagnostic } from '../../lib/diagnostics';
 import { flowFitViewNodes, hasSomethingToFit, lensFlow, roomFor, useEditorStore, viewLevel } from '../../store/editorStore';
 import { pointer, useUiStore, type ContextMenuTarget } from '../../store/uiStore';
@@ -234,10 +234,14 @@ function EditorScreen({ session }: { session: DocumentSession }) {
 
       // Refused past the node cap, with a toast — the store's `addNode` itself stays unconditional.
       if (!roomFor(1, 0)) return null;
+      // Every caller hands the top-left a default 176×68 shape centred on the point would have
+      // (`point - 88,34`); centred by its own size instead, a Junction lands under the cursor rather
+      // than beside it, and a Boundary or code card doesn't hang off below and to the right.
+      const { width, height } = size ?? defaultSizeFor(preset.type);
       const node = useEditorStore.getState().addNode({
         type: preset.type,
-        x: Math.round(position.x),
-        y: Math.round(position.y),
+        x: Math.round(position.x + 88 - width / 2),
+        y: Math.round(position.y + 34 - height / 2),
         width: size?.width,
         height: size?.height,
         text: preset.text,
@@ -345,8 +349,8 @@ function EditorScreen({ session }: { session: DocumentSession }) {
   );
 
   /**
-   * Places a new element under the cursor, near the current selection, or in the middle of the
-   * view — in that order. The middle tier exists for a keyboard-only sequence with no mouse
+   * Places a new element under the cursor (beside whatever already sits there), near the current
+   * selection, or in the middle of the view — in that order. The middle tier exists for a keyboard-only sequence with no mouse
    * movement between creations (⌘K "Add X", "Add Y", "Add Z" with nothing in between to move
    * `pointer`): without it, every one of those lands on the exact same viewport-center point and
    * stacks perfectly on top of the last, since `pointer.known` never becomes true. Reusing
@@ -359,11 +363,27 @@ function EditorScreen({ session }: { session: DocumentSession }) {
       const state = useEditorStore.getState();
       const { nodes: selectedNodes } = state.selection;
       const host = selectedNodes.length === 1 ? state.document.nodes.find((n) => n.id === selectedNodes[0]) : undefined;
-      const position = pointer.known
-        ? { x: pointer.x - 88, y: pointer.y - 34 }
-        : host
-          ? placeNear(state.document, host, defaultSizeFor(preset.type))
-          : screenToFlowPosition(canvasCenter());
+      const size = defaultSizeFor(preset.type);
+      const atPointer = { x: pointer.x - 88, y: pointer.y - 34 };
+      // Pressing the key again without moving the mouse put each new shape exactly on an earlier one:
+      // beside the shape under the pointer instead, wherever there is room.
+      const box = { x: atPointer.x + 88 - size.width / 2, y: atPointer.y + 34 - size.height / 2, ...size };
+      const underPointer = pointer.known
+        ? state.document.nodes.find((node) => node.type !== 'group' && overlapArea(node, box) > 0)
+        : undefined;
+      // `placeNear` answers a top-left for the real size; `createAt` takes the default-centred one.
+      const beside = (near: DraftNode) => {
+        const at = placeNear(state.document, near, size);
+        return { x: at.x - 88 + size.width / 2, y: at.y - 34 + size.height / 2 };
+      };
+      const middle = screenToFlowPosition(canvasCenter());
+      const position = underPointer
+        ? beside(underPointer)
+        : pointer.known
+          ? atPointer
+          : host
+            ? beside(host)
+            : { x: middle.x - 88, y: middle.y - 34 };
       // Both of this function's own call sites (the bare-letter shortcut, the palette's "Add
       // <type>") are keyboard/command-driven, never a mouse gesture — so unlike `createAt` itself,
       // this one always opens the new element ready to name.
@@ -1108,6 +1128,8 @@ export function useKeyboard({
           }
           case 'g':
             event.preventDefault();
+            // Held down, each repeat wrapped the boundary just made in another one.
+            if (event.repeat) return;
             if (event.shiftKey) state.ungroupSelection();
             else state.groupSelection();
             return;
@@ -1426,6 +1448,14 @@ export function useKeyboard({
             // A connector just drawn keeps its panel closed until asked for; Enter is asking.
             uiState.setQuietEdge(null);
             uiState.requestEdit(edges[0]!);
+          } else if (event.key === 'F2' && nodes.length === 0 && edges.length === 0) {
+            // Nothing selected: F2 renames the diagram itself. Not Enter — with nothing selected
+            // that is too easily a stray press.
+            const title = window.document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Diagram title"]:not([readonly])');
+            if (!title) return;
+            event.preventDefault();
+            title.focus();
+            title.select();
           }
           return;
         }

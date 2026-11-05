@@ -10,6 +10,7 @@ import {
   ReactFlow,
   applyEdgeChanges,
   applyNodeChanges,
+  useOnViewportChange,
   useReactFlow,
   useStore,
   useStoreApi,
@@ -619,7 +620,17 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       event.stopPropagation();
       finishRecoveryConnect(node.id);
     } else if (sharedReadOnly) selectSharedNode(event, node);
-  }, [finishRecoveryConnect, sharedReadOnly]);
+    else if (
+      editable &&
+      useUiStore.getState().armed &&
+      nodeIndex(useEditorStore.getState().document.nodes).get(node.id)?.type === 'group'
+    ) {
+      // A tool armed and clicked inside a boundary places there, as on empty canvas; the boundary
+      // covering the pane swallowed the click and the tool stayed armed with nothing placed.
+      const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+      onCreateAt?.({ x: Math.round(position.x - 88), y: Math.round(position.y - 34) });
+    }
+  }, [editable, finishRecoveryConnect, onCreateAt, screenToFlowPosition, sharedReadOnly]);
   useContinuation(editable);
 
   useZoomVariable();
@@ -1873,11 +1884,29 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
       pointer.x = position.x;
       pointer.y = position.y;
+      pointer.screenX = event.clientX;
+      pointer.screenY = event.clientY;
       pointer.known = true;
       scheduleHover(event);
     },
     [scheduleHover, screenToFlowPosition],
   );
+  // The cursor stays put on screen while the camera moves under it. Start and end too: a single
+  // wheel notch of pan-on-scroll reports only those, never a change. Stable, because React Flow
+  // stores the handlers and a new one each render would write its store every frame.
+  const rederivePointer = useCallback(() => {
+    if (!pointer.known) return;
+    const position = screenToFlowPosition({ x: pointer.screenX, y: pointer.screenY });
+    pointer.x = position.x;
+    pointer.y = position.y;
+  }, [screenToFlowPosition]);
+  useOnViewportChange({ onStart: rederivePointer, onChange: rederivePointer, onEnd: rederivePointer });
+  const onPointerLeave = useCallback(() => {
+    // Off the canvas (over the toolbar, a panel, another window), a shortcut places near the
+    // selection or mid-view instead of wherever the cursor last crossed the canvas.
+    pointer.known = false;
+    clearHover();
+  }, [clearHover]);
 
   /**
    * A click on a connector selects the one `edgePick.ts` names — not React Flow's pick, which is
@@ -2038,7 +2067,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       onDoubleClickCapture={(event) => {
         if (useUiStore.getState().flowTrace) { event.preventDefault(); event.stopPropagation(); }
       }}
-      onPointerLeave={clearHover}
+      onPointerLeave={onPointerLeave}
       // The one Tab stop for the whole diagram — individual nodes/edges are deliberately not
       // real DOM tab stops (see `nodesFocusable`/`edgesFocusable` below); Tab reaches "the
       // canvas" once, and Alt+Arrow/arrow-key navigation moves *selection* from there on,

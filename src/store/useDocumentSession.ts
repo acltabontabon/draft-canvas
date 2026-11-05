@@ -147,7 +147,8 @@ export interface DocumentSession {
   openDocument: (id: string) => Promise<void>;
   /** A blank canvas, or — given a `starterId` — one already holding that
    *  Architecture Starter, titled after it unless `title` says otherwise. */
-  newDocument: (title?: string, starterId?: StarterId) => Promise<void>;
+  /** `projectId`: made from a project's view, the canvas belongs to that project. */
+  newDocument: (title?: string, starterId?: StarterId, projectId?: string) => Promise<void>;
   adoptDocument: (document: DraftDocument, options?: { fresh?: boolean }) => Promise<void>;
   /**
    * Shows a diagram that arrived by share link (`src/share/`): read-only (`uiStore.readOnly`), never
@@ -757,7 +758,7 @@ export function useDocumentSession(): DocumentSession {
   }, [adoptDocument]);
 
   const newDocument = useCallback(
-    async (title?: string, starterId?: StarterId) => {
+    async (title?: string, starterId?: StarterId, projectId?: string) => {
       if (creating.current) return;
       creating.current = true;
       const request = (navigation.current += 1);
@@ -776,8 +777,9 @@ export function useDocumentSession(): DocumentSession {
           return;
         }
         const starter = starterId ? catalog?.starterById(starterId) : undefined;
-        const document =
+        const created =
           starter && catalog ? catalog.starterDocument(starter, title) : createDocument(title ?? 'Untitled canvas');
+        const document = projectId ? { ...created, metadata: { ...created.metadata, projectId } } : created;
         await adoptDocument(document, { fresh: true });
         if (starterId === 'order-processing') {
           const { useEditorStore } = await loadEditorStore();

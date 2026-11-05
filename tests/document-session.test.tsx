@@ -161,6 +161,22 @@ describe('useDocumentSession — adoptDocument stale projectId repair', () => {
     expect(saved[0]!.metadata.projectId).toBe('real-project');
   });
 
+  it('puts a new canvas made from a project view in that project', async () => {
+    const saved: DraftDocument[] = [];
+    const repository = stubRepository({
+      listProjects: async () => [{ id: 'real-project', name: 'Real', createdAt: 0, updatedAt: 0 }],
+      save: async (document) => {
+        saved.push(document);
+      },
+    });
+    const session = renderSession(repository);
+    await waitFor(() => expect(session().ready).toBe(true));
+    await act(async () => {
+      await session().newDocument(undefined, undefined, 'real-project');
+    });
+    expect(saved[0]!.metadata.projectId).toBe('real-project');
+  });
+
   it('imports a file whose id already exists here as a new canvas, never over the local one', async () => {
     const local = createDocument('Local, newer');
     const saved: DraftDocument[] = [];

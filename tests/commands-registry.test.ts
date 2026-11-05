@@ -269,6 +269,24 @@ describe('commandsFor — a shared (read-only) diagram offers nothing that edits
 describe('Connect to… → New …', () => {
   beforeEach(reset);
 
+  it('lands beside the source where there is room, never on a neighbour already there', () => {
+    const state = useEditorStore.getState();
+    const api = state.addNode({ type: 'service', x: 0, y: 0, width: 176, height: 68, text: 'API' });
+    // Exactly where a fixed "120px to the right" put the new shape.
+    const neighbour = state.addNode({ type: 'service', x: 296, y: 0, width: 176, height: 68, text: 'Billing' });
+    useEditorStore.getState().setSelection({ nodes: [api.id], edges: [] });
+    const ctx = stubContext();
+    const stage = commandsFor(ctx).find((command) => command.id === 'connect-to')!.run(ctx);
+    if (!isStage(stage)) throw new Error('Connect to… should open a picker');
+    stage.options.find((option) => option.id === 'connect-new:service')!.run(stubContext());
+    const { nodes, edges } = useEditorStore.getState().document;
+    const created = nodes.find((node) => node.id !== api.id && node.id !== neighbour.id)!;
+    const overlaps = created.x < neighbour.x + neighbour.width && created.x + created.width > neighbour.x &&
+      created.y < neighbour.y + neighbour.height && created.y + created.height > neighbour.y;
+    expect(overlaps).toBe(false);
+    expect(edges.some((edge) => edge.source === api.id && edge.target === created.id)).toBe(true);
+  });
+
   it('creates nothing when the source was deleted after the picker opened', () => {
     const state = useEditorStore.getState();
     const api = state.addNode({ type: 'service', x: 0, y: 0, text: 'API' });
@@ -293,11 +311,11 @@ describe('commandsFor — contextual (8.2)', () => {
     return result;
   };
 
-  it('one node: connect, edit, attach, clipboard, z-order, spotlight, delete — and creation stays available', () => {
+  it('one node: connect, edit, attach, clipboard, z-order, spotlight, group, delete — and creation stays available', () => {
     const node = useEditorStore.getState().addNode({ type: 'service', x: 0, y: 0, text: 'API' });
     useEditorStore.getState().setSelection({ nodes: [node.id], edges: [] });
     const list = ids(stubContext());
-    expect(list.slice(0, 15)).toEqual([
+    expect(list.slice(0, 16)).toEqual([
       'connect-to',
       'edit-text',
       'look-inside',
@@ -312,11 +330,12 @@ describe('commandsFor — contextual (8.2)', () => {
       'bring-forward',
       'send-backward',
       'send-to-back',
+      // Wrapping one shape starts a boundary around it.
+      'group',
       'delete',
     ]);
     expect(list).toContain('add-service');
     expect(list).not.toContain('flow-start-here');
-    expect(list).not.toContain('group');
   });
 
   it('a selected Text node gets a staged "Text role…" command and Bold/Italic toggles', () => {

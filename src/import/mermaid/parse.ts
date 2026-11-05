@@ -13,7 +13,7 @@
  * carry, so a hostile 10k-node file is refused in one pass rather than laid out for a minute.
  */
 
-import { FRONT_MATTER, HEADER, MERMAID_TEXT_LIMIT, stripFrontMatter, unfence } from './sniff';
+import { FRONT_MATTER, HEADER, MERMAID_TEXT_LIMIT, otherFencedBlocks, stripFrontMatter, unfence } from './sniff';
 
 export { looksLikeMermaid } from './sniff';
 
@@ -356,6 +356,9 @@ export function parseMermaidFlowchart(text: string): MermaidParse {
   }
   const unsupported = new Unsupported();
   const unfenced = unfence(text);
+  // One diagram per import: the rest of a Markdown file's Mermaid blocks are named, not dropped silently.
+  const others = otherFencedBlocks(text);
+  if (others > 0) unsupported.add(others === 1 ? 'another Mermaid block in the file (not imported)' : `${others} other Mermaid blocks in the file (not imported)`);
   const front = FRONT_MATTER.exec(unfenced);
   let title: string | undefined;
   if (front) {

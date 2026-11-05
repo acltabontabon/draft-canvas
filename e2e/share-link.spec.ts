@@ -113,7 +113,7 @@ test('a protected link unlocks locally, keeps the real diagram and relocks witho
   await newCanvas(page, 'Private architecture');
   await create(page, 'Service', { x: 300, y: 300 });
   await create(page, 'Data Store', { x: 600, y: 300 });
-  await runCommand(page, 'Copy share link');
+  await runCommand(page, 'Share read-only link');
   const dialog = page.getByRole('dialog', { name: 'Export & share' });
   await dialog.getByLabel('Passphrase', { exact: true }).fill('copper river orbit lantern');
   await dialog.getByLabel('Confirm passphrase').fill('copper river orbit lantern');
@@ -174,7 +174,7 @@ test('a protected link opens Guided reader even when the clipboard silently drop
   });
   await newCanvas(page, 'Protected example');
   await create(page, 'Service', { x: 300, y: 300 });
-  await runCommand(page, 'Copy share link');
+  await runCommand(page, 'Share read-only link');
   const dialog = page.getByRole('dialog', { name: 'Export & share' });
   await dialog.getByLabel('Passphrase', { exact: true }).fill('canvas-lantern-river-47');
   await dialog.getByLabel('Confirm passphrase').fill('canvas-lantern-river-47');
@@ -333,7 +333,7 @@ test('link preparation stays responsive and can be cancelled while the local wor
     await route.continue().catch(() => {}); // Cancellation can terminate the requesting worker.
   });
   try {
-    await runCommand(page, 'Copy share link');
+    await runCommand(page, 'Share read-only link');
     const dialog = page.getByRole('dialog', { name: 'Export & share' });
     await dialog.getByLabel('Passphrase', { exact: true }).fill('canvas-lantern-river-47');
     await dialog.getByLabel('Confirm passphrase').fill('canvas-lantern-river-47');

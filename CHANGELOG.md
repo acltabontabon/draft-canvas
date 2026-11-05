@@ -10,84 +10,72 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 #### Changed
 
-- A bent connector's options offer **Reset route** beside its route styles, and switching a bent
-  connector between stepped and straight or curved starts its route afresh instead of drawing a wave
-  through the old elbows.
-- A shape with no colour shows the default colour in its options instead of an "automatic" wheel,
-  and picking the default colour clears it again.
+- Bent connectors offer **Reset route**, and switching one between stepped, straight and curved
+  starts a fresh route instead of bending through the old corners.
+- A shape without a colour shows the default colour in its options; picking it clears the colour.
+- New shapes land centred under the pointer, even after zooming or panning, and pressing the same
+  shape key again puts the next one beside the last instead of on top of it.
+- Shapes added, pasted or placed with a tool inside a boundary belong to it.
+- **Group** also wraps a single shape. `⌘Enter` finishes a code card, and `F2` with nothing selected
+  renames the diagram.
+- A starter or a titled Mermaid flowchart added to a blank canvas gives it a name.
+- New canvas and Import from a project's view put the diagram in that project.
+- Importing Markdown reads its first Mermaid flowchart and says how many other blocks it left out.
+- Enter creates a protected share link once the passphrase is confirmed, and `⌘K` offers it once,
+  as **Share read-only link…**.
+- Arrange says when a diagram is already tidy.
 
 #### Fixed
 
-- Popovers, the Presentation callout and the note-drop landing point line up with connectors that
-  share a run with others or detour around shapes.
-- An exported diagram keeps a shared connector label shared when a flow is selected with its step
-  numbers hidden, as the canvas does, and places condition chips where the canvas does.
+- Refreshing right after an edit no longer overwrites newer changes saved in another tab; you're
+  asked which copy to keep. An edit made just as another diagram opens is no longer lost.
+- Popovers, Presentation callouts and note drops line up with connectors that share a path or
+  route around shapes.
+- Escape or clicking away from a shape's details keeps the description or technology you typed.
+- Align and Distribute keep a selected boundary's contents inside it.
 - Adding a bend to a connector that already has the most it can hold no longer drops its last bend.
-- Pressing Enter on a recovery connector no longer opens an editor that rewrites its operation
-  instead of the name it shows.
-- A view-only collaborator no longer sees editing controls that do nothing: inspectors, resize and
-  connection handles, attachment and open-point edits, and Undo and Redo while they can't apply.
-  Undo and Redo also show as unavailable while a flow is being traced.
-- Escape or a click away from a shape's details keeps a description or technology typed but not yet
-  confirmed, and Escape returns focus to the button that opened the panel. Dialogs opened from the
-  Share menu return focus to it when they close.
-- Keyboard users no longer land on a popover's pointer-only drag area, screen readers hear menu
-  shortcuts by their key names, and flow trace badges follow the light and dark themes.
-- Opening a file with thousands of nested boundaries no longer stalls while its parent links are
-  checked.
-- Mermaid sequence source for a multi-room diagram no longer lets a shape or title named like a
-  Mermaid directive change how the viewer's renderer is configured.
-- Selecting a Queue or Topic on a large diagram suggests chained continuations faster, and shared
-  connector labels on a hub with many spokes are grouped without a long pause.
-- Compensating actions stay linked to the connector they undo in a live session and in a shared
-  link; before, a collaborator's edit or opening the link turned them into plain connectors.
-- A view-only collaborator is no longer offered suggestions, drags or new connectors the session
-  refuses, and suggestions stay away while Traffic is showing.
-- The example diagram opens without a flow selected, like every other diagram.
-- Jumping to a shape from the command palette is no longer offered while presenting.
-- Pin view pins the camera on screen; after fitting, zooming by shortcut or jumping it pinned the
-  last camera you panned to.
-- C4-PlantUML and Structurizr exports keep connectors drawn through a junction, one relationship
-  per pair of shapes. Structurizr declares people found inside a system where the DSL allows them,
-  and keeps shapes whose names differ only in case apart.
-- Exported source and sequence diagrams caption connectors as the canvas does: "requests" for a
-  call that waits for its reply, the attempts before a dead-letter, and a compensation's name.
-- Importing Mermaid that Draft Canvas exported reads back `<`, `>` and `&` in labels, and a junction
-  comes back as a junction instead of an actor.
-- Refreshing a tab right after an edit no longer replaces newer changes another tab saved to the
-  same canvas; you're asked which copy to keep, and a refresh while that choice is open keeps your
-  edits. An edit made just as another canvas opened is saved instead of lost.
+- Enter on a recovery connector edits the name it shows.
+- Pin view pins the camera you see.
+- The example diagram opens without a flow selected, and the command palette no longer offers jumps
+  while presenting.
+- View-only collaborators no longer see editing controls, suggestions or drags that do nothing, and
+  Undo and Redo show as unavailable while a flow is being traced.
+- Compensating actions stay linked to their connector in live sessions and shared links.
+- Exports caption connectors as the canvas does and keep shared labels and condition chips where
+  the canvas shows them. C4-PlantUML and Structurizr exports keep connectors through junctions,
+  people inside a system, and shapes whose names differ only in case.
+- Mermaid exported from Draft Canvas imports back with its `<`, `>`, `&` and junctions intact, and a
+  shape named like a Mermaid directive can no longer change how a sequence diagram renders.
+- Large diagrams respond faster: suggestions on Queues and Topics, label grouping on busy hubs, and
+  opening files with thousands of nested boundaries.
+- Keyboard focus returns where you were after closing shape details or Share dialogs, screen readers
+  hear menu shortcuts by name, and flow trace badges follow the theme.
 
 ### Desktop
 
 #### Changed
 
-- The Draft Canvas agent skill uses focused workflows for creation, refreshes, small edits and
-  review proposals. Local scripts offer compact JSON output and protect prepared requests from
-  accidental overwrites. The self-diagramming workflow also distinguishes runtime boundaries from
-  package names and separates subscriptions from actual execution order.
+- The agent skill has focused workflows for creating, refreshing, editing and reviewing diagrams,
+  and draws runtime boundaries and execution order more accurately.
 
 #### Fixed
 
-- Pressing Escape to cancel a text conversion in Find a Diagram no longer clears the search or
-  leaves Browse.
-- Picking up a diagram tile right after dropping another no longer cancels the new drag.
-- Moving a diagram to a project on another volume keeps its file permissions.
-- Repository drafts preserve separate deployables that share a package name, including frontend
-  and native-host manifests.
-- MCP create receipts report attached notes and code across nested views separately from free
-  note cards, so agents can verify that those annotations were created.
-- Agents are told not to retry a change to a read-only diagram instead of being told it is busy.
-- Repository drafts keep a service named `user` apart from the person, cite repository paths when
-  a sub-folder is surveyed, say when a folder has no running parts, and run on Windows with the
-  repository and temporary folder on different drives.
-- The draft checker reads type words as the app does ("Person", "External System", `llm`), reports
-  a list where an id belongs instead of stopping, and catches notes and flow steps the app refuses.
-- An agent's change to a diagram closed while the request waited its turn is answered as busy, so
-  the agent reads it again instead of giving up. Failed saves are marked retryable, and a conflict
-  on a file saved with a byte-order mark reports the revision a retry needs.
-- Renaming or moving a diagram can no longer lose an agent's change written at the same moment.
-- Forgetting a project no longer stops changes to the open diagram in it from being noticed.
+- Renaming or moving a diagram can no longer lose an agent's change made at the same moment.
+- Forgetting a project no longer stops the open diagram in it from picking up outside changes.
+- Moving a diagram to a project on another drive keeps its file permissions.
+- Escape while converting text in Find a Diagram no longer clears the search or leaves Browse.
+- Picking up a diagram tile right after dropping another no longer cancels the drag.
+- Repository drafts keep separate deployables that share a package name apart, don't mistake a
+  service named `user` for a person, cite paths when a sub-folder is surveyed, say when a folder
+  has no running parts, and work on Windows across drives.
+- The draft checker reads type words as the app does and catches notes and flow steps the app
+  refuses.
+- Agents get clearer answers: a diagram closed mid-request asks them to read it again, failed saves
+  can be retried, read-only diagrams aren't reported as busy, and created notes and code are
+  reported where they were attached.
+
+#### Security
+
 - Agents reading code can no longer read `.envrc`, `.dev.vars` or `.git-credentials`.
 
 ## [1.18.0] - 2026-10-27

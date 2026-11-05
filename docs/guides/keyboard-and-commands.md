@@ -37,7 +37,7 @@ shape when none shows. **Turn off Intent Continuation** in `⌘K`, or the switch
 
 | Key | Action |
 | --- | --- |
-| `Enter` or `F2` | Edit the selected shape's or connector's text |
+| `Enter` or `F2` | Edit the selected shape's or connector's text; `F2` with nothing selected renames the diagram |
 | `Esc` | Step back: editing, a popover, the selection, then out of a shape |
 | `⌘Z` / `⌘⇧Z` or `⌘Y` | Undo / redo |
 | `⌘C` / `⌘X` / `⌘V` | Copy / cut / paste, also between diagrams |
@@ -55,8 +55,7 @@ shape when none shows. **Turn off Intent Continuation** in `⌘K`, or the switch
 | While editing | New line | Finish | `Esc` |
 | --- | --- | --- | --- |
 | A shape's name | `Shift+Enter` | `Enter` | Restores the old name |
-| Note or Text | `Enter` | `⌘Enter` | Keeps your text |
-| Code | `Enter` | Click away | Keeps your text |
+| Note, Text or Code | `Enter` | `⌘Enter` | Keeps your text |
 
 Text also has [Markdown and format shortcuts](shapes-and-connectors.md#write-rich-text);
 `⌘K` there inserts a link.

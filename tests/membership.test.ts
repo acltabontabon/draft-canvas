@@ -266,6 +266,35 @@ describe('every way a shape moves or a boundary changes size keeps membership ho
     expect(parentOf(doc(), 'a')).toBe('b');
   });
 
+  it('a selected boundary takes its selected contents along when aligned or distributed', () => {
+    // ⌘A or a marquee selects a boundary and everything in it.
+    reset([boundary('b', 400, 0, 400, 300), shape('a', 420, 40, 'b'), shape('e', 620, 40, 'b'), shape('c', 0, 500)]);
+    useEditorStore.getState().setSelection({ nodes: ['b', 'a', 'e', 'c'], edges: [] });
+    useEditorStore.getState().align('left');
+    const at = (id: string) => doc().nodes.find((n) => n.id === id)!;
+    // The boundary lines up with `c`; its contents ride along, apart and still inside it.
+    expect(at('b').x).toBe(0);
+    expect([at('a').x, at('e').x]).toEqual([20, 220]);
+    expect([parentOf(doc(), 'a'), parentOf(doc(), 'e')]).toEqual(['b', 'b']);
+    expect(useEditorStore.getState().history.past).toHaveLength(1);
+  });
+
+  it('a shape made or pasted inside a boundary belongs to it, in the same undo step', () => {
+    reset([boundary('b', 0, 0, 400, 300)]);
+    const made = useEditorStore.getState().addNode({ type: 'service', x: 100, y: 100 });
+    expect(parentOf(doc(), made.id)).toBe('b');
+    expect(useEditorStore.getState().history.past).toHaveLength(1);
+
+    useEditorStore.getState().setSelection({ nodes: [made.id], edges: [] });
+    useEditorStore.getState().copySelection();
+    useEditorStore.getState().paste({ x: 900, y: 100 });
+    const outside = useEditorStore.getState().selection.nodes[0]!;
+    expect(parentOf(doc(), outside)).toBeUndefined();
+    useEditorStore.getState().paste({ x: 200, y: 200 }, { exact: true });
+    const inside = useEditorStore.getState().selection.nodes[0]!;
+    expect(parentOf(doc(), inside)).toBe('b');
+  });
+
   it('pulling a boundary around shapes already on the canvas takes them in, in one undo step', () => {
     reset([boundary('b', 0, 0, 200, 150), shape('a', 20, 40, 'b'), shape('c', 300, 40), shape('far', 900, 40)]);
     useEditorStore.getState().resizeNode('b', { width: 500, height: 200 });
@@ -321,6 +350,13 @@ describe('grouping shapes that sit in different boundaries', () => {
     const group = newest();
     expect(group.parentId).toBe('outer');
     expect(parentOf(useEditorStore.getState().document, 'a')).toBe(group.id);
+  });
+
+  it('wraps a single shape in a boundary', () => {
+    reset([shape('a', 20, 40)]);
+    useEditorStore.getState().setSelection({ nodes: ['a'], edges: [] });
+    useEditorStore.getState().groupSelection();
+    expect(parentOf(useEditorStore.getState().document, 'a')).toBe(newest().id);
   });
 
   it('stacks the new boundary above the one a member was taken out of', () => {

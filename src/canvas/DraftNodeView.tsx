@@ -706,11 +706,10 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
             if (event.key !== 'Enter') return;
             // Enter is a newline in every multi-line editor (code, note, text) — multiline is
             // first-class for Text, not a rare Shift+Enter escape hatch, so it gets the same
-            // Cmd/Ctrl+Enter-commits convention Note already uses. A node/service/etc. label is
+            // Cmd/Ctrl+Enter-commits convention Note already uses, and so does Code. A node/service/etc. label is
             // still single-line by convention: it commits on plain Enter and takes Shift+Enter for
             // a rare second line.
-            if (isCode) return;
-            if (isNote || isText ? !(event.metaKey || event.ctrlKey) : event.shiftKey) return;
+            if (isCode || isNote || isText ? !(event.metaKey || event.ctrlKey) : event.shiftKey) return;
             event.preventDefault();
             commit(event.currentTarget.value);
             stopEditing();

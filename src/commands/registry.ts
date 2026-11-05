@@ -8,7 +8,7 @@ import { createAttachment, defaultSizeFor, displayNameFor } from '../document/fa
 import { stepIndexOf } from '../document/flow';
 import { LIMITS } from '../document/limits';
 import { routingPlan } from '../edges/bundles';
-import { boundsOf, descendantsOf } from '../document/operations';
+import { boundsOf, descendantsOf, placeNear } from '../document/operations';
 import {
   CONNECTOR_KINDS,
   EDGE_SEMANTICS,
@@ -27,7 +27,7 @@ import { ALT_SYMBOL, MOD_SYMBOL } from '../lib/platform';
 import { canCreateInside, hasInside, ownerAt, totals } from '../depth/tree';
 import { backOut, lookInside } from './depthNavigation';
 import { inheritedLevel, LEVEL_HINTS, LEVEL_LABELS } from '../depth/level';
-import { fileOf, fileWithLiveViewport, lensFlow, ownsData, viewLevel } from '../store/editorStore';
+import { fileOf, fileWithLiveViewport, lensFlow, outermostSelected, ownsData, viewLevel } from '../store/editorStore';
 import { pointer, type UiStore } from '../store/uiStore';
 import { hostKind } from '../host/hostInfo';
 import { useCollabStore } from '../store/collabStore';
@@ -715,6 +715,7 @@ export function canvasCommands(ctx: CommandContext): Command[] {
         void inner.editor.arrangeRoom()
           .then((moved) => {
             if (moved) void inner.camera.fitView({ padding: 0.2, duration: 320 });
+            else if (!inner.ui.readOnly) inner.ui.notify('Already tidy.');
           })
           .catch((error: unknown) => notifyLoadFailure(error, ARRANGE_FAILED));
       },
@@ -788,9 +789,11 @@ export function canvasCommands(ctx: CommandContext): Command[] {
     ...copyExportCommands(),
     {
       id: 'copy-share-link',
-      title: 'Copy share link',
+      // Named as in the Share menu. It opens the link's options (a passphrase is on by default), so
+      // "Copy" promised more than it did; "Share from here…", the same action twice, is gone.
+      title: 'Share read-only link…',
       group: 'canvas',
-      keywords: ['share', 'link', 'url', 'read only', 'send', 'clipboard', 'passphrase'],
+      keywords: ['share', 'link', 'url', 'read only', 'send', 'clipboard', 'passphrase', 'copy share link', 'share from here'],
       hint: 'Read-only snapshot · optional passphrase',
       run: (inner) => inner.ui.requestShareFromHere(),
     },
@@ -897,7 +900,7 @@ function nodeOptions(nodes: DraftNode[], prefix: string, run: (node: DraftNode, 
   }));
 }
 
-/** How far to the right of its source a "Connect to → New …" node lands. A UX choice, not a rule. */
+/** How far from its source a "Connect to → New …" node lands, given the room. A UX choice, not a rule. */
 const NEW_NEIGHBOUR_GAP = 120;
 
 function connectToStage(ctx: CommandContext, source: DraftNode): CommandStage {
@@ -920,12 +923,13 @@ function connectToStage(ctx: CommandContext, source: DraftNode): CommandStage {
       // One gesture, one undo step — the same as Quick Connect — not an orphan left behind by ⌘Z.
       inner.editor.beginInteraction(`Add and connect ${preset.label}`);
       try {
+        // Beside the source where there is room — a fixed spot to its right could land on a
+        // neighbour already there. `createAt` takes the top-left a default 176×68 shape centred on
+        // the point would have, so the real-size spot is handed over in that form.
+        const spot = placeNear(inner.editor.document, live, size, NEW_NEIGHBOUR_GAP);
         const created = inner.createAt(
           preset,
-          {
-            x: Math.round(live.x + live.width + NEW_NEIGHBOUR_GAP),
-            y: Math.round(live.y + live.height / 2 - size.height / 2),
-          },
+          { x: spot.x - 88 + size.width / 2, y: spot.y - 34 + size.height / 2 },
           // Only reachable via ⌘K/Shift+F10 on a selected node — never a mouse gesture — so this
           // opens ready to name, same as every other keyboard-driven creation path.
           true,
@@ -1496,8 +1500,22 @@ export function nodeCommands(ctx: CommandContext, node: DraftNode): Command[] {
     }
     commands.push(boundaryUngroupCommand());
   }
+  // Wrapping one shape is how a boundary is often started, as ⌘G already does.
+  commands.push(groupCommand(1));
   commands.push(deleteCommand('Delete'));
   return commands;
+}
+
+function groupCommand(members: number): Command {
+  return {
+    id: 'group',
+    title: 'Group into boundary',
+    group: 'selection',
+    keywords: ['boundary', 'system', 'domain', 'container', 'wrap'],
+    shortcut: `${MOD_SYMBOL} G`,
+    hint: members === 1 ? '1 element' : `${members} elements`,
+    run: (inner) => inner.editor.groupSelection(),
+  };
 }
 
 function deleteCommand(title: string): Command {
@@ -1792,18 +1810,11 @@ export function edgeCommands(ctx: CommandContext, edge: DraftEdge): Command[] {
 export function multiCommands(ctx: CommandContext): Command[] {
   const { selection, document } = ctx.editor;
   const nodes = document.nodes.filter((node) => selection.nodes.includes(node.id));
+  // What group, align and distribute act on: a boundary's selected contents travel with it.
+  const outer = outermostSelected(document.nodes, selection.nodes);
   const commands: Command[] = [];
-  if (nodes.length >= 2) {
-    commands.push({
-      id: 'group',
-      title: 'Group into boundary',
-      group: 'selection',
-      keywords: ['boundary', 'system', 'domain', 'container', 'wrap'],
-      shortcut: `${MOD_SYMBOL} G`,
-      hint: `${nodes.length} elements`,
-      run: (inner) => inner.editor.groupSelection(),
-    });
-  }
+  // One is enough: a boundary and its own contents selected together wrap as the boundary alone.
+  if (outer.length >= 1) commands.push(groupCommand(outer.length));
   if (nodes.some((node) => node.type === 'group')) {
     commands.push({
       id: 'ungroup',
@@ -1814,7 +1825,7 @@ export function multiCommands(ctx: CommandContext): Command[] {
       run: (inner) => inner.editor.ungroupSelection(),
     });
   }
-  if (nodes.length >= 2) {
+  if (outer.length >= 2) {
     const aligns: [string, string, Parameters<CommandContext['editor']['align']>[0]][] = [
       ['align-left', 'Align left', 'left'],
       ['align-right', 'Align right', 'right'],
@@ -1833,7 +1844,7 @@ export function multiCommands(ctx: CommandContext): Command[] {
       });
     }
   }
-  if (nodes.length >= 3) {
+  if (outer.length >= 3) {
     commands.push(
       {
         id: 'distribute-x',
@@ -1953,7 +1964,8 @@ export function starterCommands(): Command[] {
     group: STARTER_CATEGORY_GROUP[starter.category],
     keywords: starter.aliases,
     hint: starter.description,
-    run: (inner) => focusBounds(inner, boundsOf(inner.editor.insertStarter(starter))),
+    // On the web a blank "Untitled canvas" takes the starter's name; elsewhere the name is the file's.
+    run: (inner) => focusBounds(inner, boundsOf(inner.editor.insertStarter(starter, hostKind() === null ? starter.name : undefined))),
   }));
 }
 
@@ -2049,7 +2061,6 @@ const READ_SAFE_COMMANDS: ReadonlySet<string> = new Set([
   'copy',
   'export',
   'export-selection',
-  'share-from-here',
   'copy-image',
   'copy-svg',
   'copy-source',
@@ -2124,7 +2135,6 @@ function editCommands(ctx: CommandContext): Command[] {
     ...flowCommands(ctx),
     ...openPointCommands(ctx),
     ...viewCommands(ctx),
-    { id: 'share-from-here', title: 'Share from here…', group: 'canvas' as const, run: (inner: CommandContext) => inner.ui.requestShareFromHere() },
     ...arrangeSelectionCommands(ctx),
     ...canvasCommands(ctx),
     // The companion runs the person's own coding agent, which only the desktop app can start.

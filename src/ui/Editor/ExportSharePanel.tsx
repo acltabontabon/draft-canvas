@@ -1,4 +1,5 @@
-import { useId, useState } from 'react';
+import { useId, useState, type KeyboardEvent } from 'react';
+import { isImeKeyEvent } from '../../lib/isEditableTarget';
 import type { ShareStart } from '../../share/link';
 import { Button } from '../common/Button';
 import { Icon } from '../common/Icon';
@@ -6,17 +7,24 @@ import { Icon } from '../common/Icon';
 export interface ShareChoice { key: string; label: string; start?: ShareStart }
 
 export function ExportSharePanel({
-  choices, choice, onChoice, protectedLink, onProtectedLink, passphrase, onPassphrase, confirmation, onConfirmation, busy,
+  choices, choice, onChoice, protectedLink, onProtectedLink, passphrase, onPassphrase, confirmation, onConfirmation, busy, onSubmit,
 }: {
   choices: ShareChoice[]; choice: string; onChoice: (key: string) => void;
   protectedLink: boolean; onProtectedLink: (value: boolean) => void;
   passphrase: string; onPassphrase: (value: string) => void;
   confirmation: string; onConfirmation: (value: string) => void; busy: boolean;
+  /** Enter in a passphrase field: the dialog's own button, as every other passphrase prompt does. */
+  onSubmit?: () => void;
 }) {
   const [show, setShow] = useState(false);
   const id = useId();
   const mismatch = confirmation.length > 0 && confirmation !== passphrase;
   const tooShort = passphrase.length > 0 && passphrase.length < 8;
+  const submitOnEnter = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== 'Enter' || isImeKeyEvent(event)) return;
+    event.preventDefault();
+    onSubmit?.();
+  };
   return (
     <div className="dc-export-panel dc-share-panel">
       <h3>A link made for reading</h3>
@@ -31,8 +39,8 @@ export function ExportSharePanel({
       <label className="dc-share-protection"><span><strong>Require a passphrase</strong><small>Protect the diagram before sharing it.</small></span><input type="checkbox" checked={protectedLink} disabled={busy} onChange={(event) => onProtectedLink(event.target.checked)} /></label>
       {protectedLink && <>
         <label className="dc-field" htmlFor={`${id}-passphrase`}>Passphrase</label>
-        <div className="dc-share-password"><input id={`${id}-passphrase`} type={show ? 'text' : 'password'} autoComplete="new-password" disabled={busy} value={passphrase} aria-invalid={tooShort} aria-describedby={`${id}-hint`} onChange={(event) => onPassphrase(event.target.value)} /><Button variant="quiet" aria-pressed={show} onClick={() => setShow(!show)} disabled={busy}>{show ? 'Hide' : 'Show'}</Button></div>
-        <label className="dc-field"><span>Confirm passphrase</span><input type={show ? 'text' : 'password'} autoComplete="new-password" value={confirmation} disabled={busy} aria-invalid={mismatch} onChange={(event) => onConfirmation(event.target.value)} /></label>
+        <div className="dc-share-password"><input id={`${id}-passphrase`} type={show ? 'text' : 'password'} autoComplete="new-password" disabled={busy} value={passphrase} aria-invalid={tooShort} aria-describedby={`${id}-hint`} onChange={(event) => onPassphrase(event.target.value)} onKeyDown={submitOnEnter} /><Button variant="quiet" aria-pressed={show} onClick={() => setShow(!show)} disabled={busy}>{show ? 'Hide' : 'Show'}</Button></div>
+        <label className="dc-field"><span>Confirm passphrase</span><input type={show ? 'text' : 'password'} autoComplete="new-password" value={confirmation} disabled={busy} aria-invalid={mismatch} onChange={(event) => onConfirmation(event.target.value)} onKeyDown={submitOnEnter} /></label>
         {(tooShort || mismatch) && <p className="dc-export-note" data-invalid="true" role="status">{tooShort ? 'Use at least 8 characters.' : 'Passphrases don’t match.'}</p>}
         <p className="dc-share-hint" id={`${id}-hint`}>Use at least 8 characters; a long, unique phrase is safer. Send it separately. It cannot be recovered if lost.</p>
       </>}

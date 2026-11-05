@@ -243,6 +243,15 @@ describe('parseMermaidFlowchart — subgraphs, comments, directions, the ignored
     expect(result.create.relationships).toHaveLength(2);
   });
 
+  it('reads the first flowchart among a Markdown file\'s Mermaid blocks, and names the rest', () => {
+    const text = '# Readme\n\n```mermaid\nsequenceDiagram\n  A->>B: hi\n```\n\n```mermaid\nflowchart LR\n  A --> B\n```\n';
+    expect(looksLikeMermaid(text)).toBe(true);
+    const result = parseMermaidFlowchart(text);
+    if (!result.ok) throw new Error(result.error);
+    expect(result.create.nodes).toHaveLength(2);
+    expect(result.unsupported).toContain('another Mermaid block in the file (not imported)');
+  });
+
   it('reads the flowchart out of a Markdown fence and a title out of front matter', () => {
     const result = parsed(`# Notes
 
