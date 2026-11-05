@@ -94,6 +94,12 @@ ALIASES = {
     'human',
     'team',
     'third-party',
+    'agent',
+    'ai-assistant',
+    'assistant',
+    'bot',
+    'chatbot',
+    'llm',
 }
 CAN_HAVE_INSIDE = {
     'service',
@@ -302,6 +308,7 @@ def check(request: dict, repo: str | None) -> Report:
         return r
     if 'arguments' in request and isinstance(request['arguments'], dict) and 'nodes' not in request:
         request = request['arguments']
+    request = plain_references(request, r)
     if not isinstance(request.get('title'), str) or not request['title'].strip():
         r.error('title', 'required')
     elif len(request['title']) > MAX['title']:
@@ -434,7 +441,7 @@ def check_view(view: View, r: Report, repo: str | None, request: dict, is_top: b
         typ = n.get('type')
         if not isinstance(typ, str):
             r.error(f'{p} element {nid}', 'type is required')
-        elif typ not in TYPES and typ.lower() not in ALIASES and 'fallbackType' not in request:
+        elif normalized_type(typ) not in TYPES | ALIASES and 'fallbackType' not in request:
             r.error(f'{p} element {nid}', f'unknown type "{typ}" — use one of the element types, or set fallbackType')
         label = n.get('label')
         if not isinstance(label, str) or not label.strip():
@@ -648,7 +655,12 @@ def check_view(view: View, r: Report, repo: str | None, request: dict, is_top: b
                 r.error(where, f'caption longer than {MAX["caption"]}')
             elif isinstance(caption, str) and len(caption) > SOFT['caption']:
                 r.warn(where, 'caption is long — the presentation bar reads best under ~80 characters')
-            if 'spotlight' in step and 'relationship' not in step:
+            if 'spotlight' in step and 'relationship' in step:
+                r.error(where, 'a step is either {relationship, highlight?} or {spotlight}, not both')
+                continue
+            if 'spotlight' in step:
+                if not step.get('spotlight'):
+                    r.error(where, 'spotlight needs at least one id')
                 for ident in step.get('spotlight') or []:
                     if ident not in targets:
                         r.error(where, f'spotlight "{ident}" is not an element, group or relationship of this view')
@@ -699,6 +711,8 @@ def check_view(view: View, r: Report, repo: str | None, request: dict, is_top: b
         elif about not in targets:
             r.error(where, f'about "{about}" is not an element, relationship or group of this view')
         if kind == 'code':
+            if note.get('text') is not None:
+                r.error(where, 'a code snippet has code, not text; say what it shows in a note beside it')
             code = note.get('code')
             if not isinstance(code, str) or not code.strip():
                 r.error(where, 'a code note needs code')
@@ -712,6 +726,9 @@ def check_view(view: View, r: Report, repo: str | None, request: dict, is_top: b
             if note.get('language') is not None and note['language'] not in LANGUAGES:
                 r.error(where, f'language "{note["language"]}" is not one of {sorted(LANGUAGES)}')
         else:
+            for field in ('code', 'language'):
+                if note.get(field) is not None:
+                    r.error(where, f'{field}: only a note of kind "code" has code')
             text = note.get('text')
             if not isinstance(text, str) or not text.strip():
                 r.error(where, 'needs text')
@@ -719,6 +736,8 @@ def check_view(view: View, r: Report, repo: str | None, request: dict, is_top: b
                 r.error(where, f'text longer than {MAX["noteText"]}')
         if kind == 'label' and about in view.rel_ids:
             r.error(where, 'a label attaches to elements only')
+        if kind == 'label' and about in view.group_ids and note.get('attach') is True:
+            r.error(where, f'a label can\'t attach to a boundary; leave attach out to place it inside "{about}"')
         style = note.get('style')
         if style is not None:
             if kind != 'label':
@@ -741,6 +760,37 @@ def check_view(view: View, r: Report, repo: str | None, request: dict, is_top: b
 #: Fields a person reads on the canvas. `code` is not among them: a snippet may quote a real TODO.
 PROSE_FIELDS = {'title', 'label', 'description', 'technology', 'text', 'caption', 'condition', 'response'}
 PLACEHOLDER = re.compile(r'^\s*(TODO|FIXME|TBD|XXX)\b', re.I)
+
+
+#: Fields that hold one id, and fields that hold a list of them.
+REFERENCE_FIELDS = {'id', 'from', 'to', 'group', 'parent', 'about', 'near', 'relationship', 'variantOf', 'primaryFlow'}
+REFERENCE_LISTS = {'spotlight', 'highlight'}
+COLLECTIONS = {'nodes': 'element', 'relationships': 'relationship', 'groups': 'group', 'flows': 'flow', 'notes': 'note'}
+
+
+def plain_references(value: object, r: Report, path: str = 'top') -> object:
+    """A copy of the request in which every id and reference can be looked up. A list or object where
+    an id belongs is reported here and kept as its text, so the rest of the check still runs."""
+    if isinstance(value, list):
+        return [plain_references(item, r, path) for item in value]
+    if not isinstance(value, dict):
+        return value
+    label = value.get('id') if isinstance(value.get('id'), str) else None
+    where = f'{path} {label}' if label and path != 'top' else path
+    out = {}
+    for key, item in value.items():
+        if key == 'openPoints':  # their about is a list of ids
+            out[key] = item
+        elif key in REFERENCE_FIELDS and isinstance(item, (dict, list)):
+            r.error(f'{where}.{key}', 'must be an id (a string)')
+            out[key] = json.dumps(item)
+        elif key in REFERENCE_LISTS and isinstance(item, list):
+            if any(isinstance(ident, (dict, list)) for ident in item):
+                r.error(f'{where}.{key}', 'must be a list of ids (strings)')
+            out[key] = [json.dumps(ident) if isinstance(ident, (dict, list)) else ident for ident in item]
+        else:
+            out[key] = plain_references(item, r, COLLECTIONS.get(key, where))
+    return out
 
 
 def placeholders(value: object, path: str = 'request') -> list[tuple[str, str]]:
@@ -898,6 +948,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     parser.add_argument('request', help='create_diagram arguments as JSON (a file, or - for stdin)')
     parser.add_argument('--repo', help='repository root, to check that evidence paths exist')
+    parser.add_argument('--json', action='store_true', help='print a machine-readable report instead of prose')
     args = parser.parse_args()
     try:
         if args.request == '-':
@@ -907,9 +958,15 @@ def main() -> int:
                 raw = fh.read()
         request = json.loads(raw)
     except (OSError, ValueError) as error:
-        print(f'Could not read the request: {error}', file=sys.stderr)
+        if args.json:
+            print(json.dumps({'errors': [f'Could not read the request: {error}'], 'warnings': [], 'valid': False}))
+        else:
+            print(f'Could not read the request: {error}', file=sys.stderr)
         return 2
     report = check(request, args.repo)
+    if args.json:
+        print(json.dumps({'errors': report.errors, 'warnings': report.warnings, 'valid': not report.errors}))
+        return 1 if report.errors else 0
     for line in report.errors + report.warnings:
         print(line)
     if isinstance(request, dict) and not request.get('requestId'):

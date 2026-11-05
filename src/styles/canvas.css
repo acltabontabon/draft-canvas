@@ -3493,9 +3493,8 @@
   background: transparent;
 }
 
-/* A shape's automatic colour is drawn as a wheel of the palette (inline, from the theme) and needs
-   no dashed outline to say so. */
-.dc-element-inspector .dc-inspector-color-swatch[data-auto='true'],
+/* A connector's automatic colour is drawn as a wheel of the palette (inline, from the theme) and
+   needs no dashed outline to say so. Shapes have no automatic colour: unset, they show neutral. */
 .dc-connector-color-swatch[data-auto='true'] {
   border-color: transparent;
 }
@@ -6690,13 +6689,13 @@
   color: var(--dc-text);
   border: 1px solid var(--dc-border);
   border-radius: 12px;
-  box-shadow: 0 4px 20px #0002;
+  box-shadow: var(--dc-shadow-panel);
 }
 .dc-trace-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .dc-trace-bar p { margin: 8px 0 0; font-size: 12px; }
 .dc-trace-bar input { max-width: 180px; padding: 6px; color: inherit; background: transparent; border: 1px solid currentColor; border-radius: 4px; }
 .dc-trace-badges { pointer-events: none; }
-.dc-trace-badge { position: absolute; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: #245bcc; color: white; border: 2px solid white; font: 600 13px system-ui; }
+.dc-trace-badge { position: absolute; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--dc-selection); color: var(--dc-surface); border: 2px solid var(--dc-surface); font: 600 13px var(--dc-font); }
 .dc-editor[data-tracing] .dc-toolbar { pointer-events: none; opacity: .5; }
 /* A backstop: the editor already unmounts the panels and inspectors while tracing, but the node
    resizer stays mounted, and only this hides its controls. The inspectors once went by names no

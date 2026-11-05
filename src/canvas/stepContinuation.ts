@@ -32,7 +32,7 @@ export function stepContinuation(
 ): boolean | AskInstead {
   const ui = useUiStore.getState();
   if (!ui.continuationsEnabled || ui.quickConnect || ui.contextMenu || ui.openAttachmentDetail || ui.interactionActive) return false;
-  if (lensFlow(editor)) return false;
+  if (lensFlow(editor) || editor.traffic.active) return false;
   const { nodes, edges } = editor.selection;
   if (nodes.length !== 1 || edges.length > 0) return false;
   const anchorId = nodes[0]!;

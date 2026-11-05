@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { clickEdge, connect, create, newCanvas, nextFrames } from './canvas';
+import { clickEdge, connect, create, edgeMidpoint, newCanvas, nextFrames } from './canvas';
 
 /** The right-click contextual menu — empty canvas, a single node, and multi-selection. */
 
@@ -231,12 +231,6 @@ test.describe('context menu — multi-selection', () => {
 });
 
 test.describe('context menu — an edge', () => {
-  async function edgeMidpoint(page: Page) {
-    const a = (await page.locator('.dc-node').nth(0).boundingBox())!;
-    const b = (await page.locator('.dc-node').nth(1).boundingBox())!;
-    return { x: (a.x + a.width + b.x) / 2, y: (a.y + a.height / 2 + b.y + b.height / 2) / 2 };
-  }
-
   test('right-clicking an edge selects it and opens its menu', async ({ page }) => {
     await newCanvas(page, 'Context menu edge select');
     await create(page, 'Service', { x: 300, y: 250 });

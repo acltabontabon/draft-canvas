@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useReactFlow, useStore } from '@xyflow/react';
 import type { DraftPoint, EdgeRouting } from '../document/types';
 import { flattenPath, type RoutedEdge } from '../edges/routing';
+import { LIMITS } from '../document/limits';
 import { bendsOf, isLevel, simplifyPolyline, slideSegment, stepPolyline } from '../edges/waypoints';
 import { useEditorStore } from '../store/editorStore';
 import { useUiStore } from '../store/uiStore';
@@ -130,6 +131,8 @@ export function EdgeBendHandles({
       candidates.push(handle.level ? first.y : first.x, handle.level ? last.y : last.x);
       value = snapTo(value, candidates, snap);
       const bends = bendsOf(simplifyPolyline(slideSegment(line, handle.index, value)));
+      // Past the cap the store would keep the first bends and drop the far end's: no slide at all.
+      if (bends.length > LIMITS.maxWaypointsPerEdge) return { bends: current.waypoints.length > 0 ? current.waypoints : undefined, at: { x: handle.x, y: handle.y } };
       return {
         bends: bends.length > 0 ? bends : undefined,
         at: handle.level ? { x: handle.x, y: value } : { x: value, y: handle.y },
@@ -253,7 +256,9 @@ function handlesFor(polyline: readonly DraftPoint[], stepped: boolean, d: string
     return handles;
   }
   const curve = flattenPath(d);
-  for (let i = 0; i < polyline.length - 1; i += 1) {
+  // Ends are not bends: at the cap a new one would push the last bend out.
+  const full = polyline.length - 2 >= LIMITS.maxWaypointsPerEdge;
+  for (let i = 0; !full && i < polyline.length - 1; i += 1) {
     const a = polyline[i]!;
     const b = polyline[i + 1]!;
     if (Math.hypot(b.x - a.x, b.y - a.y) < minRun * 2) continue;

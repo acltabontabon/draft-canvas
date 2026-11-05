@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { plainShortcut } from '../src/lib/platform';
+import { ariaShortcut, plainShortcut } from '../src/lib/platform';
 import { contextMenuCommandsFor, menuItemsOf, type ContextMenuEntry } from '../src/commands/contextMenu';
 import type { CommandContext } from '../src/commands/types';
 import { createDocument } from '../src/document/factory';
@@ -485,5 +485,17 @@ describe('plainShortcut', () => {
   it('spells keys out with + elsewhere', () => {
     expect(plainShortcut('Ctrl Shift Z', false)).toBe('Ctrl+Shift+Z');
     expect(plainShortcut('Backspace', false)).toBe('Backspace');
+  });
+});
+
+describe('ariaShortcut', () => {
+  it('names keys the way aria-keyshortcuts expects', () => {
+    expect(ariaShortcut('⌘ Shift Z')).toBe('Meta+Shift+Z');
+    expect(ariaShortcut('Ctrl V')).toBe('Control+V');
+    expect(ariaShortcut('Shift →')).toBe('Shift+ArrowRight');
+    expect(ariaShortcut('⌘ ⌥ F')).toBe('Meta+Alt+F');
+    expect(ariaShortcut('Esc')).toBe('Escape');
+    expect(ariaShortcut('⌘ +')).toBe('Meta+Plus');
+    expect(ariaShortcut(undefined)).toBeUndefined();
   });
 });

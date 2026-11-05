@@ -30,6 +30,12 @@ export interface DraftRepository {
    */
   knownContentStamp?(id: string): string | undefined;
   /**
+   * The content stamp a write of the document still in flight leaves on the row if it lands, set as
+   * the write starts. Synchronous, for the same reason: a page leaving aborts that write, or doesn't,
+   * and its reload stash can only tell which on the way back in.
+   */
+  writingContentStamp?(id: string): string | undefined;
+  /**
    * Writes the document. With `base` — the title/project this editor last loaded or wrote — a
    * rename or move made meanwhile elsewhere (another tab's Library) is kept rather than reverted;
    * resolves with the metadata actually written when that differs from the document's own.

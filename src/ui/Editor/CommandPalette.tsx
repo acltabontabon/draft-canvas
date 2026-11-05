@@ -13,7 +13,7 @@ import {
 } from '../../commands/types';
 import { useCommandContext } from '../../commands/useCommandContext';
 import type { DraftNode } from '../../document/types';
-import { MOD_SYMBOL } from '../../lib/platform';
+import { MOD_SYMBOL, ariaShortcut } from '../../lib/platform';
 import type { FlowPlaybackController } from '../../presentation/useFlowPlayback';
 import { fileOf, useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
@@ -99,9 +99,11 @@ function CommandPaletteBody({ createAt, createAtPointer, playback, onPresent }: 
   );
   // Jump rows answer a typed query only, so browsing never builds them.
   const searching = query.trim().length > 0;
+  // Not while presenting: a jump selected the shape and left a guided flow (or its room) behind,
+  // where the palette otherwise offers only presentation commands.
   const jumps = useMemo<Entry[] | null>(
-    () => (stage || !searching ? null : jumpCommands(document, { file: fileOf({ document, path, outer }), path })),
-    [stage, searching, document, path, outer],
+    () => (stage || !searching || mode === 'present' ? null : jumpCommands(document, { file: fileOf({ document, path, outer }), path })),
+    [stage, searching, mode, document, path, outer],
   );
 
   const rows = useMemo<RankedEntry<Entry>[]>(() => {
@@ -338,7 +340,7 @@ function CommandPaletteBody({ createAt, createAtPointer, playback, onPresent }: 
                   id={`dc-palette-row-${index}`}
                   role="option"
                   aria-selected={index === highlight}
-                  aria-keyshortcuts={entry.shortcut}
+                  aria-keyshortcuts={ariaShortcut(entry.shortcut)}
                   className="dc-palette-row"
                   onPointerMove={() => {
                     if (highlightRef.current !== index) setHighlight(index);

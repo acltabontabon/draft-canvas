@@ -67,9 +67,9 @@ test('tracing works from the Outline and Escape discards the preview', async ({ 
   expect(await page.evaluate(async () => (await import('/src/store/editorStore.ts')).useEditorStore.getState().document.flows.length)).toBe(1);
 });
 
-test('Share from here opens the chosen flow introduction read-only', async ({ page, context }, testInfo) => {
+test('Sharing a read-only link opens the chosen flow introduction', async ({ page, context }, testInfo) => {
   await example(page);
-  await command(page, 'Share from here');
+  await command(page, 'Share read-only link');
   await expect(page.getByRole('combobox', { name: 'Start at' })).toBeVisible();
   const url = await page.evaluate(async () => {
     const editor = (await import('/src/store/editorStore.ts')).useEditorStore.getState();

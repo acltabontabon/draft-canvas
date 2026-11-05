@@ -54,7 +54,8 @@ export function edgeAnchor(
   const sourceRect = rectOfInternal(source, types.get(edge.source));
   const targetRect = rectOfInternal(target, types.get(edge.target));
   if (!sourceRect || !targetRect) return null;
-  const labelPoint = edgeLabelPoint(document, edge, sourceRect, targetRect);
+  // The chip row hangs from the connector's own label point, shared label or not.
+  const labelPoint = edgeLabelPoint(document, edge, sourceRect, targetRect, { own: true });
   const preferBelow = attachmentRowBelowsSourceOrTarget(labelPoint.x, labelPoint.y, sourceRect, targetRect, captionSideOf(edge, labelPoint.side));
   const box = (rect: Rect): Box => ({ x: rect.x, y: rect.y, width: rect.width, height: rect.height });
   return {

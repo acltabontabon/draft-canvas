@@ -32,6 +32,22 @@ def view_of(request: dict) -> dict:
 
 
 class Drafts(unittest.TestCase):
+    def test_same_named_manifest_units_keep_their_own_evidence(self) -> None:
+        files = {
+            'package.json': json.dumps({'name': 'canvas', 'dependencies': {'react-dom': '19'}}),
+            'src/main.tsx': 'render()\n',
+            'src-tauri/Cargo.toml': '[package]\nname = "canvas"\nversion = "1.0.0"\n[dependencies]\naxum = "0.8"\n',
+            'src-tauri/src/main.rs': 'fn main() {}\n',
+        }
+        request, _, _ = build(files)
+        units = [n for n in view_of(request)['nodes'] if n['type'] != 'person']
+        self.assertEqual(len(units), 2)
+        self.assertEqual(len({n['id'] for n in units}), 2)
+        self.assertEqual(
+            {e['path'] for n in units for e in n['evidence']},
+            {'src/main.tsx', 'package.json', 'src-tauri/src/main.rs', 'src-tauri/Cargo.toml'},
+        )
+
     def test_a_compose_system_becomes_containers_stores_and_queues_wired_as_configured(self) -> None:
         request, summary, _ = build(SHOP)
         view = view_of(request)
@@ -158,6 +174,61 @@ class Drafts(unittest.TestCase):
 
 
 class CommandLine(unittest.TestCase):
+    def test_json_manifest_and_rerun_preserve_verified_request(self) -> None:
+        with TempRepo(SHOP) as root, tempfile.TemporaryDirectory() as out:
+            done = run_script('draft', str(root), '--out', out, '--json')
+            self.assertEqual(done.returncode, 0, done.stderr)
+            manifest = json.loads(done.stdout)
+            self.assertGreater(manifest['placeholders'], 0)
+            self.assertTrue(Path(manifest['survey']).is_file())
+            request = Path(manifest['request'])
+            request.write_text('verified work', encoding='utf-8')
+            again = run_script('draft', str(root), '--out', out, '--json')
+            self.assertEqual(again.returncode, 2)
+            self.assertEqual(request.read_text(encoding='utf-8'), 'verified work')
+
+    def test_a_service_named_user_is_not_the_person(self) -> None:
+        compose = 'services:\n  orders:\n    build: ./orders\n    depends_on: [user]\n  user:\n    build: ./user\n'
+        request, _, _ = build({'docker-compose.yml': compose, 'orders/main.go': 'package main\n', 'user/main.go': 'package main\n'})
+        nodes = {n['id']: n['type'] for n in view_of(request)['nodes']}
+        self.assertEqual(nodes['user'], 'person')
+        self.assertIn('user-2', nodes)
+        self.assertNotEqual(nodes['user-2'], 'person')
+
+    def test_a_surveyed_sub_folder_cites_repository_paths(self) -> None:
+        with (
+            TempRepo({'services/orders/' + path: text for path, text in SHOP.items()}, git=True) as root,
+            tempfile.TemporaryDirectory() as out,
+        ):
+            done = run_script('draft', str(root / 'services' / 'orders'), '--out', out)
+            self.assertEqual(done.returncode, 0, done.stderr)
+            self.assertIn(f'--repo {os.path.realpath(root)}', done.stdout)
+            request = json.loads((Path(out) / 'request.json').read_text(encoding='utf-8'))
+            paths = [e['path'] for n in view_of(request)['nodes'] for e in n.get('evidence', [])]
+            self.assertTrue(paths)
+            for path in paths:
+                self.assertTrue(path.startswith('services/orders/'), path)
+                self.assertTrue((root / path).is_file(), path)
+
+    def test_a_folder_with_no_running_parts_says_so(self) -> None:
+        with TempRepo({'notes.txt': 'nothing here\n'}) as root, tempfile.TemporaryDirectory() as out:
+            done = run_script('draft', str(root), '--out', out, '--json')
+            self.assertEqual(done.returncode, 0, done.stderr)
+            self.assertIn('no running parts found', json.loads(done.stdout)['warnings'][0])
+
+    def test_output_symlink_cannot_write_into_repository(self) -> None:
+        with TempRepo(SHOP) as root, tempfile.TemporaryDirectory() as out:
+            link = Path(out) / 'alias'
+            link.symlink_to(root, target_is_directory=True)
+            done = run_script('draft', str(root), '--out', str(link / 'generated'))
+            self.assertEqual(done.returncode, 2)
+            self.assertFalse((root / 'generated').exists())
+
+    def test_nonpositive_file_budget_is_rejected(self) -> None:
+        with TempRepo(SHOP) as root:
+            done = run_script('draft', str(root), '--max-files', '0')
+            self.assertEqual(done.returncode, 2)
+
     def test_writes_survey_and_request_outside_the_repository(self) -> None:
         with TempRepo(SHOP, git=True) as root, tempfile.TemporaryDirectory() as out:
             done = run_script('draft', str(root), '--out', out)

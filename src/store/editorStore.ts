@@ -393,7 +393,7 @@ export interface EditorStore {
   /** One undoable bulk add. `flows` (a starter's predefined walkthroughs) join the same entry, so
    *  a single ⌘Z takes the whole composition back out — nodes, edges and flows together. False
    *  (and nothing added) when the result would pass the document limits. */
-  addNodesWithEdges: (nodes: DraftNode[], edges: DraftEdge[], label: string, flows?: DraftFlow[]) => boolean;
+  addNodesWithEdges: (nodes: DraftNode[], edges: DraftEdge[], label: string, flows?: DraftFlow[], title?: string) => boolean;
   /**
    * Inserts a Starter — a composed opening diagram — as one undoable action, clear of
    * whatever is already on the canvas, and leaves it selected. Returns the nodes it created, the
@@ -401,11 +401,11 @@ export interface EditorStore {
    * cannot find them in its own `CommandContext`, whose document predates this call. See
    * `src/starters/`.
    */
-  insertStarter: (starter: ArchitectureStarter) => DraftNode[];
+  insertStarter: (starter: ArchitectureStarter, title?: string) => DraftNode[];
   /** Adds a laid-out document's shapes and connectors to this room, at the free origin, as one
    *  undo step with the new shapes selected — how an imported flowchart lands in an open diagram.
    *  Ids are reissued, so the same document can be inserted twice. Returns the new node ids. */
-  insertComposed: (composed: DraftDocument, label: string) => string[];
+  insertComposed: (composed: DraftDocument, label: string, title?: string) => string[];
   /**
    * Accepts an Intent Continuation offer (see `src/continuation/`): the previewed nodes and
    * connectors become real in one undoable step, the node the fragment ends on is selected (so the
@@ -1126,6 +1126,31 @@ function quietIfOneConnector(selection: Selection): void {
   useUiStore.getState().setQuietEdge(selection.nodes.length === 0 && selection.edges.length === 1 ? selection.edges[0]! : null);
 }
 
+/** The selected shapes that aren't inside another selected shape, in document order. */
+export function outermostSelected(nodes: readonly DraftNode[], selectedIds: readonly string[]): DraftNode[] {
+  const selected = new Set(selectedIds);
+  const byId = nodeIndex(nodes);
+  const hasSelectedAncestor = (node: DraftNode) => {
+    const seen = new Set<string>();
+    for (let p = node.parentId ? byId.get(node.parentId) : undefined; p && !seen.has(p.id); p = p.parentId ? byId.get(p.parentId) : undefined) {
+      if (selected.has(p.id)) return true;
+      seen.add(p.id);
+    }
+    return false;
+  };
+  return nodes.filter((node) => selected.has(node.id) && !hasSelectedAncestor(node));
+}
+
+/**
+ * The name a blank diagram takes from what is first put on it — a starter's name, an imported
+ * flowchart's title — so it isn't left "Untitled canvas" in the Library. Only for an empty file at
+ * the top level that still has the default name: a name someone chose, or any drawing, is kept.
+ */
+function namingBlank(state: EditorStore, title: string | undefined): string | undefined {
+  if (!title || state.path.length > 0 || state.document.metadata.title !== 'Untitled canvas') return undefined;
+  return totals(fileOf(state)).nodes === 0 ? title : undefined;
+}
+
 function notifyNothingAdded(tooDeep: boolean): void {
   useUiStore
     .getState()
@@ -1548,13 +1573,17 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   addNode(input) {
     const node = createNode(input);
-    get().apply(`Add ${input.type}`, (doc) => addNodes(doc, [node]), {
+    // Made inside a boundary (a key pressed over it, a tool clicked on it), it belongs to it, by the
+    // rule a moved shape follows; left out, the boundary's next drag left it behind. A caller that
+    // chose the parent itself keeps its choice.
+    const homed = input.parentId === undefined ? [node.id] : [];
+    get().apply(`Add ${input.type}`, (doc) => reconcileMembershipOp(addNodes(doc, [node]), homed), {
       selection: { nodes: [node.id], edges: [] },
     });
     return node;
   },
 
-  addNodesWithEdges(nodes, edges, label, flows = []) {
+  addNodesWithEdges(nodes, edges, label, flows = [], title) {
     const cost = costOf(nodes);
     if (!roomFor(cost.nodes, cost.edges + edges.length)) return false;
     // A flow that doesn't fit is dropped and the diagram still lands. The limit is file-wide, but
@@ -1564,7 +1593,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const fitting = flows.slice(0, flowRoom);
     get().apply(
       label,
-      (doc) => fitting.reduce((next, flow) => addFlow(next, flow), addEdges(addNodes(doc, nodes), edges)),
+      (doc) => {
+        const added = fitting.reduce((next, flow) => addFlow(next, flow), addEdges(addNodes(doc, nodes), edges));
+        return title ? setTitle(added, title) : added;
+      },
       { selection: { nodes: nodes.map((n) => n.id), edges: [] } },
     );
     return true;
@@ -1594,17 +1626,17 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }
   },
 
-  insertStarter(starter) {
+  insertStarter(starter, title) {
     const state = get();
     // Everything a starter needs is decided before a single node exists: where it can land
     // (`freeOriginFor`, one pass over the document) and what it contains (`buildStarter`, pure).
     // The insert itself is then the plainest bulk add there is, which is what makes one ⌘Z undo
     // the whole architecture and one ⌘⇧Z bring it back.
     const { nodes, edges, flows } = buildStarter(starter, freeOriginFor(state.document, starterSize(starter)));
-    return state.addNodesWithEdges(nodes, edges, `Insert ${starter.name}`, flows) ? nodes : [];
+    return state.addNodesWithEdges(nodes, edges, `Insert ${starter.name}`, flows, namingBlank(state, title)) ? nodes : [];
   },
 
-  insertComposed(composed, label) {
+  insertComposed(composed, label, title) {
     const state = get();
     const bounds = boundsOf(composed.nodes);
     if (!bounds) return [];
@@ -1622,7 +1654,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       notifyNothingAdded(result.tooDeep);
       return [];
     }
-    state.apply(label, () => result.doc, { selection: { nodes: result.nodeIds, edges: result.edgeIds } });
+    const named = namingBlank(state, title);
+    state.apply(label, () => (named ? setTitle(result.doc, named) : result.doc), { selection: { nodes: result.nodeIds, edges: result.edgeIds } });
     if (result.truncated) useUiStore.getState().notify('Imported the first part — the rest would make this diagram too large.');
     return result.nodeIds;
   },
@@ -2213,7 +2246,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       useUiStore.getState().notify('There is not enough room. Arrange a larger selection or the whole diagram.');
       return false;
     }
-    if (!arranged.touched.size) return false;
+    if (!arranged.touched.size) {
+      // Said, so the command doesn't look like it did nothing.
+      useUiStore.getState().notify('Already tidy.');
+      return false;
+    }
     current.apply('Arrange selection', () => arranged.view);
     return get().document !== current.document;
   },
@@ -2546,7 +2583,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       notifyNothingAdded(result.tooDeep);
       return;
     }
-    state.apply('Paste', () => result.doc, {
+    // Pasted onto a boundary, the copy joins it, as a shape dropped there does.
+    const homed = reconcileMembershipOp(result.doc, result.nodeIds);
+    state.apply('Paste', () => homed, {
       selection: { nodes: result.nodeIds, edges: result.edgeIds },
     });
     set({ pasteRepeat: repeat + 1 });
@@ -2586,30 +2625,28 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   align(edge) {
-    const { selection, apply } = get();
-    // See `nudgeSelection` on why membership follows.
-    apply('Align', (doc) => reconcileMembershipOp(carryDescendants(doc, alignNodes(doc, selection.nodes, edge), selection.nodes), selection.nodes));
+    const { selection, document, apply } = get();
+    // The outermost shapes only: ⌘A or a marquee also selects a boundary's contents, and lining
+    // those up on their own pulled them out of the boundary and onto each other. They travel with
+    // it instead (`carryDescendants`). See `nudgeSelection` on why membership follows.
+    const ids = outermostSelected(document.nodes, selection.nodes).map((node) => node.id);
+    apply('Align', (doc) => reconcileMembershipOp(carryDescendants(doc, alignNodes(doc, ids, edge), ids), ids));
   },
 
   distribute(axis) {
-    const { selection, apply } = get();
-    apply('Distribute', (doc) => reconcileMembershipOp(carryDescendants(doc, distributeNodes(doc, selection.nodes, axis), selection.nodes), selection.nodes));
+    const { selection, document, apply } = get();
+    const ids = outermostSelected(document.nodes, selection.nodes).map((node) => node.id);
+    apply('Distribute', (doc) => reconcileMembershipOp(carryDescendants(doc, distributeNodes(doc, ids, axis), ids), ids));
   },
 
   groupSelection() {
     const state = get();
-    const selected = new Set(state.selection.nodes);
     const byId = new Map(state.document.nodes.map((n) => [n.id, n] as const));
     // Only the outermost selected nodes move into the new boundary. A marquee that also caught
     // a selected boundary's own children must not pull them out of it and leave it empty.
-    const hasSelectedAncestor = (node: DraftNode) => {
-      for (let p = node.parentId ? byId.get(node.parentId) : undefined; p; p = p.parentId ? byId.get(p.parentId) : undefined) {
-        if (selected.has(p.id)) return true;
-      }
-      return false;
-    };
-    const members = state.document.nodes.filter((n) => selected.has(n.id) && !hasSelectedAncestor(n));
-    if (members.length < 2) return;
+    // One is enough: wrapping a single shape (or a boundary) in a boundary is a way to start one.
+    const members = outermostSelected(state.document.nodes, state.selection.nodes);
+    if (members.length < 1) return;
     // Past the cap the boundary would be the node a reload drops, leaving its children orphaned.
     if (!roomFor(1, 0)) return;
     // Grouping inside an existing boundary keeps the new one nested there, so dragging or

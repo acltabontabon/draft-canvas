@@ -7,6 +7,7 @@
  */
 import { categoryOf, inferRelationship, type NodeCategory } from '../document/connectorSemantics';
 import { passiveApplies, relationshipCaptionLabel } from '../document/edgeSemantics';
+import { compensationDisplayLabel } from '../document/compensation';
 import { flowIsPlayable } from '../document/flow';
 import type { Attachment, DraftDocument, DraftFlow, DraftFlowStep, DraftNode } from '../document/types';
 import { aliasFor } from './alias';
@@ -254,9 +255,10 @@ function buildFlowGroup(
     emitNodeAttachmentNotes(to);
 
     const interaction: InteractionKind = interactionKindFor(rep);
+    // A named compensation is the message the canvas shows; its operation alone hid the business step.
     const label = swapped
       ? relationshipCaptionLabel(semantic, { hasResponse: rep.hasResponse, deliveryAttempts: rep.deliveryAttempts })
-      : resolveMessageLabel(rep, from.category, to.category, interaction);
+      : resolveMessageLabel({ ...rep, label: compensationDisplayLabel(rep) }, from.category, to.category, interaction);
     const sourceEdgeIds = chain.edges.map((e) => e.id);
     const message: SequenceMessage = {
       kind: 'message',

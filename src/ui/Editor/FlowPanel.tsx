@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useReactFlow } from '@xyflow/react';
 import { categoryOf } from '../../document/connectorSemantics';
 import { effectiveConnectorText } from '../../document/edgeSemantics';
 import { displayNameFor } from '../../document/factory';
@@ -6,7 +7,7 @@ import { flowIsPlayable } from '../../document/flow';
 import type { DraftFlow, DraftFlowStep } from '../../document/types';
 import { isEditableTarget, isImeKeyEvent } from '../../lib/isEditableTarget';
 import { count } from '../../lib/plural';
-import { documentWithLiveViewport, useEditorStore } from '../../store/editorStore';
+import { useEditorStore } from '../../store/editorStore';
 import { edgeIndex, nodeIndex } from '../../store/selectors';
 import { useUiStore } from '../../store/uiStore';
 import { Button } from '../common/Button';
@@ -464,6 +465,9 @@ function StepRow({
   addSelection: () => void;
   readOnly: boolean;
 }) {
+  // The camera on screen. The store's live viewport follows only the person's own pans, so after
+  // Shift+1, a zoom shortcut or a jump it pinned somewhere else than the button promises.
+  const { getViewport } = useReactFlow();
   const edge = step.edgeId ? edges.get(step.edgeId) : undefined;
   if (step.edgeId && !edge) return null; // dangling — pruned on next edit, not shown meanwhile
   const source = edge ? nodes.get(edge.source) : undefined;
@@ -627,7 +631,7 @@ function StepRow({
           <Button
             variant="quiet"
             title="Present this step from exactly the current camera position"
-            onClick={() => useEditorStore.getState().setFlowStepViewport(flow.id, step.id, documentWithLiveViewport(useEditorStore.getState()).viewport)}
+            onClick={() => useEditorStore.getState().setFlowStepViewport(flow.id, step.id, getViewport())}
           >
             {step.viewport ? 'Update pinned view' : 'Pin view'}
           </Button>

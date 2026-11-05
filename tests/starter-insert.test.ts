@@ -36,6 +36,24 @@ const intersects = (a: Bounds, b: Bounds) =>
 describe('insertStarter', () => {
   beforeEach(reset);
 
+  it('names a blank "Untitled canvas" after the starter, in the same undo step, and nothing else', () => {
+    const starter = ARCHITECTURE_STARTERS[0]!;
+    store.setState({ document: createDocument() });
+    store.getState().insertStarter(starter, starter.name);
+    expect(store.getState().document.metadata.title).toBe(starter.name);
+    store.getState().undo();
+    expect(store.getState().document.metadata.title).toBe('Untitled canvas');
+    expect(store.getState().document.nodes).toHaveLength(0);
+
+    // A name someone chose, or a canvas with drawing on it, keeps its name.
+    reset();
+    store.getState().insertStarter(starter, starter.name);
+    expect(store.getState().document.metadata.title).toBe('Starters');
+    store.setState({ document: addNodes(createDocument(), [createNode({ type: 'service', x: 0, y: 0 })]) });
+    store.getState().insertStarter(starter, starter.name);
+    expect(store.getState().document.metadata.title).toBe('Untitled canvas');
+  });
+
   it.each(ARCHITECTURE_STARTERS.map((s) => [s.name, s] as const))(
     'puts %s on an empty canvas and selects it',
     (_label, starter) => {

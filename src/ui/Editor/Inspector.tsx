@@ -21,7 +21,7 @@ import { usePopoverKeyboard } from '../../canvas/usePopoverKeyboard';
 import { QUEUE_ICON_OPTIONS } from '../../canvas/queueOptions';
 import { SERVICE_ICON_OPTIONS } from '../../canvas/serviceOptions';
 import { LANGUAGE_LABELS } from '../../render/code/highlight';
-import { useEditorStore } from '../../store/editorStore';
+import { outermostSelected, useEditorStore } from '../../store/editorStore';
 import { nodeIndex, edgeIndex } from '../../store/selectors';
 import { useThemeValue } from '../../theme/useTheme';
 import { Button } from '../common/Button';
@@ -53,7 +53,9 @@ export function Inspector() {
     .filter((edge) => edge !== undefined);
 
   const onlyNode = nodes.length === 1 ? nodes[0] : null;
-  const multiple = nodes.length > 1;
+  // Align, distribute and group act on the outermost shapes: a boundary's selected contents move with it.
+  const outer = outermostSelected(document.nodes, selection.nodes).length;
+  const multiple = outer > 1;
 
   if (nodes.length === 0 && edges.length === 0) return null;
   // A single connector, selected alone, gets its own anchored control
@@ -291,7 +293,7 @@ export function Inspector() {
             <option value="centerY">Middle</option>
             <option value="bottom">Bottom</option>
           </select>
-          {nodes.length >= 3 && (
+          {outer >= 3 && (
             <>
               <Button
                 variant="quiet"
@@ -359,7 +361,7 @@ export function Inspector() {
           )
         }
       >
-        Focus
+        Spotlight
       </Button>
       <Button
         icon="trash"

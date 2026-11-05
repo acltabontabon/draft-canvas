@@ -31,6 +31,7 @@ export function compactShareSnapshot(json: string): { document: DraftDocument; s
       edge.id = remap(edges, edge.id);
       edge.source = remap(nodes, edge.source);
       edge.target = remap(nodes, edge.target);
+      if (edge.compensationFor) edge.compensationFor = remap(edges, edge.compensationFor);
       for (const entry of edge.attachments ?? []) entry.id = `a_${(attachment++).toString(36)}`;
     }
     for (const flow of graph.flows) {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
-import { createDocument, createNode } from '../../src/document/factory';
+import { createDocument, createEdge, createNode } from '../../src/document/factory';
 import { createFlow } from '../../src/document/flow';
 import { LIMITS } from '../../src/document/limits';
 import { parseDocument } from '../../src/document/validate';
@@ -69,6 +69,28 @@ describe('sanitizeChanges', () => {
     const result = sanitizeChanges(changes);
     expect(result.ok).toBe(true);
     expect(result.ok && result.changes).toEqual(changes);
+  });
+
+  it('keeps a compensating action linked to the connector it undoes', () => {
+    const a = createNode({ id: 'n_a', type: 'service', x: 0, y: 0 });
+    const b = createNode({ id: 'n_b', type: 'service', x: 300, y: 0 });
+    const charge = createEdge({ id: 'e_charge', source: a.id, target: b.id, semantic: 'calls' });
+    const refund = createEdge({ id: 'e_refund', source: a.id, target: b.id, semantic: 'compensates', compensationFor: charge.id, compensationVisible: false });
+    const file = { ...createDocument('Saga'), nodes: [a, b], edges: [charge, refund] };
+    const parsed = parseDocument(file);
+    expect(parsed.ok && parsed.repairs).toEqual([]);
+
+    // Before, the one-edge validation dropped the link, so a guest renaming the action unlinked it in the owner's file.
+    const changes = [{ kind: 'edge', id: refund.id, room: '', value: { ...refund, label: 'Refund' } }];
+    const result = sanitizeChanges(changes);
+    expect(result.ok && result.changes).toEqual(changes);
+    const host = new HostCore(file);
+    host.receivePatch('p', { role: 'editor', lastClientSeq: 0 }, 1, changes);
+    expect(host.file.edges.find((edge) => edge.id === refund.id)).toMatchObject({ label: 'Refund', compensationFor: charge.id, compensationVisible: false });
+
+    // A link on a connector that is not a compensation is still not kept.
+    const plain = sanitizeChanges([{ kind: 'edge', id: 'e_x', room: '', value: { id: 'e_x', source: a.id, target: b.id, compensationFor: charge.id } }]);
+    expect(plain.ok && (plain.changes[0] as { value: object }).value).not.toHaveProperty('compensationFor');
   });
 
   it('refuses ids validation would have to rename', () => {

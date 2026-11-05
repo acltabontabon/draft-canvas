@@ -23,12 +23,6 @@ export function compensationActionCaption(name: string | undefined, fallback: st
   return name?.trim() ? name.trim() : fallback;
 }
 
-/** The business action names the recovery arrow; its HTTP or call operation remains editable
- * in the companion card. An unnamed action still shows that operation on the canvas. */
-export function compensationDisplayLabel(edge: Pick<DraftEdge, 'compensationFor' | 'compensationName' | 'label'>): string | undefined {
-  return edge.compensationFor && edge.compensationName?.trim() ? edge.compensationName.trim() : edge.label;
-}
-
 /** A named recovery can also have an operation. Keep both on its arrow instead of letting
  * the business name replace the HTTP/call detail the person just entered. */
 export function compensationLabelParts(edge: Pick<DraftEdge, 'compensationFor' | 'compensationName' | 'label'>): { name: string; operation: string } | null {

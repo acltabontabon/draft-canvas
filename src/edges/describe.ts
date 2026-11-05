@@ -40,7 +40,8 @@ import type { Crossing } from './crossings';
 import { relationshipCaptionLabel } from '../document/edgeSemantics';
 import { capabilityFor, categoryOf } from '../document/connectorSemantics';
 import { LABEL_PADDING_X, LABEL_PADDING_Y, RECOVERY_LABEL_GAP, layoutEdgeLabel, layoutEdgeResponse, layoutRecoveryLabel } from './labelLayout';
-import { compensationActionCaption, compensationDisplayLabel, compensationLabelParts } from './compensationMarker';
+import { compensationActionCaption, compensationLabelParts } from './compensationMarker';
+import { compensationDisplayLabel } from '../document/compensation';
 
 export interface EdgeDescribeContext {
   theme: Theme;
@@ -97,8 +98,8 @@ const BADGE_RADIUS = 8;
 const LABEL_GAP = 5;
 const CONDITION_PADDING_X = 6;
 const CONDITION_PADDING_Y = 2;
-/** How far below the label chip a condition chip sits, in canvas units. */
-const CONDITION_OFFSET_Y = 18;
+/** How far below the label point a condition chip's top sits, in canvas units — `conditionTransform`'s 16px. */
+const CONDITION_OFFSET_Y = 16;
 
 /**
  * The label chip's top-left corner, anchored to whichever side of the line `route.labelSide`
@@ -144,12 +145,12 @@ export function captionAnchor(
 
 /** Mirrors `conditionTransform` in `DraftEdgeView.tsx` — stacked below the label for a horizontal
  *  line (unchanged), stacked beside the line for a vertical one. */
-function conditionChipRect(side: Side, x: number, y: number, w: number, h: number): { left: number; top: number } {
+function conditionChipRect(side: Side, x: number, y: number, w: number): { left: number; top: number } {
   switch (side) {
     case 'right':
-      return { left: x + LABEL_LINE_GAP, top: y - h / 2 + CONDITION_OFFSET_Y };
+      return { left: x + LABEL_LINE_GAP, top: y + CONDITION_OFFSET_Y };
     case 'left':
-      return { left: x - LABEL_LINE_GAP - w, top: y - h / 2 + CONDITION_OFFSET_Y };
+      return { left: x - LABEL_LINE_GAP - w, top: y + CONDITION_OFFSET_Y };
     case 'top':
     case 'bottom':
       return { left: x - w / 2, top: y + CONDITION_OFFSET_Y };
@@ -628,7 +629,7 @@ export function describeEdge(
     });
     const w = layout.width + CONDITION_PADDING_X * 2;
     const h = layout.height + CONDITION_PADDING_Y * 2;
-    const { left, top } = conditionChipRect(labelSide, labelX, labelY, w, h);
+    const { left, top } = conditionChipRect(labelSide, labelX, labelY, w);
     overlay.push(
       {
         t: 'rect',

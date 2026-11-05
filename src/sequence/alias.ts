@@ -83,7 +83,7 @@ function slugify(label: string): string {
  * `id`, e.g. `P3`) when the label has no usable alphanumeric characters, the slug starts with a
  * digit, or it collides case-insensitively with a reserved word.
  */
-export function aliasFor(label: string, fallback: string, taken: ReadonlySet<string>): string {
+export function aliasFor(label: string, fallback: string, taken: Pick<ReadonlySet<string>, 'has'>): string {
   const base = slugify(label);
   const safe = base && !/^[0-9]/.test(base) && !RESERVED_ALIASES.has(base.toLowerCase()) ? base : fallback;
   if (!taken.has(safe)) return safe;

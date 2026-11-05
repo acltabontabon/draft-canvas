@@ -183,6 +183,64 @@ describe('Structurizr DSL', () => {
     expect(text).toContain('User -> API "buys"');
     expect(text).toContain('container System {');
   });
+
+  it('keeps identifiers apart that differ only in case, which the DSL reads as one', () => {
+    const upper = createNode({ type: 'database', x: 0, y: 0, text: 'Orders DB' });
+    const lower = createNode({ type: 'database', x: 200, y: 0, text: 'orders db' });
+    const text = structurizrSource({ ...createDocument('Case'), level: 'container' as const, nodes: [upper, lower], edges: [] });
+    const declared = [...text.matchAll(/^\s*(\w+) = (?:container|softwareSystem)/gm)].map((m) => m[1]!.toLowerCase());
+    expect(new Set(declared).size).toBe(declared.length);
+  });
+
+  it('declares a person found inside a system at model level, where the DSL allows people', () => {
+    const shop = createNode({ type: 'service', x: 0, y: 0, text: 'Shop' });
+    const customer = createNode({ type: 'actor', x: 0, y: 0, text: 'Customer' });
+    const web = createNode({ type: 'service', x: 200, y: 0, text: 'Web' });
+    shop.inside = { nodes: [customer, web], edges: [createEdge({ source: customer.id, target: web.id, label: 'browses' })], flows: [], viewport: { x: 0, y: 0, zoom: 1 } };
+    const text = structurizrSource({ ...createDocument('Shop'), level: 'context' as const, nodes: [shop], edges: [] });
+    expect(text).toMatch(/model \{\n\s+Customer = person "Customer"\n/);
+    expect(text).toMatch(/Shop = softwareSystem "Shop" \{\n\s+Web = container "Web"\n\s+\}/);
+    expect(text).toContain('Customer -> Web "browses"');
+  });
+});
+
+describe('relationships every architecture format states', () => {
+  it('states a fan drawn through a junction as one relationship per real pair', () => {
+    const gateway = createNode({ type: 'service', x: 0, y: 0, text: 'Gateway' });
+    const junction = createNode({ type: 'ellipse', x: 200, y: 0 });
+    const orders = createNode({ type: 'service', x: 400, y: -100, text: 'Orders' });
+    const users = createNode({ type: 'service', x: 400, y: 100, text: 'Users' });
+    const document = {
+      ...createDocument('Fan'),
+      level: 'container' as const,
+      nodes: [gateway, junction, orders, users],
+      edges: [
+        createEdge({ source: gateway.id, target: junction.id, semantic: 'http' }),
+        createEdge({ source: junction.id, target: orders.id, label: 'routes orders' }),
+        createEdge({ source: junction.id, target: users.id }),
+      ],
+    };
+    // Before, every connector touching the junction was dropped, so both formats had no relationships.
+    const c4 = c4PlantUmlSource(document);
+    expect(c4).toContain('Rel(Gateway, Orders, "routes orders")');
+    expect(c4).toMatch(/Rel\(Gateway, Users, "[^"]+", "HTTP"\)/);
+    const dsl = structurizrSource(document);
+    expect(dsl).toContain('Gateway -> Orders "routes orders"');
+    expect(dsl).toMatch(/Gateway -> Users "[^"]+" "HTTP"/);
+  });
+
+  it('captions a connector the way the canvas does', () => {
+    const api = createNode({ type: 'service', x: 0, y: 0, text: 'API' });
+    const payments = createNode({ type: 'service', x: 300, y: 0, text: 'Payments' });
+    const charge = createEdge({ source: api.id, target: payments.id, semantic: 'calls', hasResponse: true });
+    const refund = createEdge({ source: api.id, target: payments.id, semantic: 'compensates', compensationFor: charge.id, compensationName: 'Refund payment', label: 'POST /refund' });
+    const document = { ...createDocument('Saga'), level: 'container' as const, nodes: [api, payments], edges: [charge, refund] };
+    const text = mermaidFlowchartSource(document);
+    // The canvas says "requests" for a call that waits for its reply, and names a compensation by its action.
+    expect(text).toContain('requests');
+    expect(text).toContain('Refund payment');
+    expect(text).not.toContain('POST /refund');
+  });
 });
 
 describe('draw.io', () => {

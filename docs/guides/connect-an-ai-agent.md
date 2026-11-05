@@ -132,11 +132,11 @@ Explicit attachment sides and hand-placed bends stay fixed; an agent can set `ro
 
 Open your agent in the repository and ask:
 
-> Use the Draft Canvas skill to diagram this repository's architecture as C4 views, down to
-> components where the code has real logic. Read the code before you draw, cite source files and
-> mark anything inferred. Make the main request path a presentation flow, with variants for the
-> failure paths the code handles, and leave open questions as notes. Render every view and fix what
-> reads badly before you finish.
+> Use the Draft Canvas skill to map this repository’s runtime architecture. Verify boundaries
+> and connections in source, cite evidence, and mark inferences. Add component views where
+> they explain real logic, and presentation flows for verified requests and handled failures.
+> Don’t turn dependencies or concurrent effects into an invented execution order. Inspect every
+> view and fix readability before finishing; tell me the scope and any unresolved questions.
 
 The skill picks the C4 levels from the size of the system: a context view with the containers
 inside once there are more than about eight and external systems around them, and a component view
@@ -144,6 +144,11 @@ for the container that does the main path's work. Draft Canvas shows source evid
 check it, so read the inferred parts and open questions first.
 
 ![A storefront diagram with services, stores, an event stream and workers.](../media/guides/agent-skill-example.png)
+
+The skill reads only the affected views for small edits and preserves existing ids and placement.
+Refreshes compare the diagram with changed source; review-only requests become proposals for you to
+accept or reject. Its local draft and validation scripts support `--json` for compact agent output,
+and drafting into an existing output folder refuses to overwrite a prepared request.
 
 Follow-ups change the same diagram:
 

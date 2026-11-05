@@ -13,7 +13,7 @@
  * carry, so a hostile 10k-node file is refused in one pass rather than laid out for a minute.
  */
 
-import { FRONT_MATTER, HEADER, MERMAID_TEXT_LIMIT, stripFrontMatter, unfence } from './sniff';
+import { FRONT_MATTER, HEADER, MERMAID_TEXT_LIMIT, otherFencedBlocks, stripFrontMatter, unfence } from './sniff';
 
 export { looksLikeMermaid } from './sniff';
 
@@ -182,11 +182,12 @@ const NAMED_ENTITIES: Record<string, string> = { quot: '"', amp: '&', lt: '<', g
 
 /**
  * One pass, so a decoded `&` never starts another entity: chained replaces turned `&amp;lt;` into `<`.
- * `&?` keeps `&#65;` whole; matching `#65;` alone left a stray `&`.
+ * `&?` keeps `&#65;` whole; matching `#65;` alone left a stray `&`. Mermaid's own `#lt;` form is
+ * what the flowchart export writes, so a round trip must read it back.
  */
 function decodeEntities(text: string): string {
-  return text.replace(/&(quot|amp|lt|gt);|#quot;|&?#(\d+);/g, (entity, name?: string, code?: string) =>
-    name ? NAMED_ENTITIES[name]! : code ? codePoint(entity, code) : '"',
+  return text.replace(/[&#](quot|amp|lt|gt);|&?#(\d+);/g, (entity, name?: string, code?: string) =>
+    name ? NAMED_ENTITIES[name]! : codePoint(entity, code!),
   );
 }
 
@@ -251,6 +252,8 @@ function readNodeRef(text: string, unsupported: Unsupported): { ref: NodeRef; re
     if (!read) continue;
     ref.type = shape.type;
     ref.label = cleanLabel(read.raw, unsupported);
+    // An unnamed circle is how the flowchart export draws a junction; a nameless actor says nothing.
+    if (shape.open === '((' && !ref.label) ref.type = 'junction';
     rest = rest.slice(read.end);
     break;
   }
@@ -353,6 +356,9 @@ export function parseMermaidFlowchart(text: string): MermaidParse {
   }
   const unsupported = new Unsupported();
   const unfenced = unfence(text);
+  // One diagram per import: the rest of a Markdown file's Mermaid blocks are named, not dropped silently.
+  const others = otherFencedBlocks(text);
+  if (others > 0) unsupported.add(others === 1 ? 'another Mermaid block in the file (not imported)' : `${others} other Mermaid blocks in the file (not imported)`);
   const front = FRONT_MATTER.exec(unfenced);
   let title: string | undefined;
   if (front) {

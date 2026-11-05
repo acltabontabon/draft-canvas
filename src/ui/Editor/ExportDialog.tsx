@@ -544,7 +544,7 @@ export function ExportDialog() {
             ? <ExportShareProgress stage={shareStage} onCancel={cancelShare} />
             : shareLink
             ? <ExportShareResult url={shareLink} protectedLink={protectedLink} copyFailed={shareCopyFailed} busy={busy} onEdit={() => { setShareLink(null); setShareCopyFailed(false); }} />
-            : <ExportSharePanel choices={shareChoices} choice={chosenShare.key} onChoice={setShareChoice} protectedLink={protectedLink} onProtectedLink={(value) => { setProtectedLink(value); setPassphrase(''); setConfirmation(''); }} passphrase={passphrase} onPassphrase={setPassphrase} confirmation={confirmation} onConfirmation={setConfirmation} busy={busy} />)}
+            : <ExportSharePanel choices={shareChoices} choice={chosenShare.key} onChoice={setShareChoice} protectedLink={protectedLink} onProtectedLink={(value) => { setProtectedLink(value); setPassphrase(''); setConfirmation(''); }} passphrase={passphrase} onPassphrase={setPassphrase} confirmation={confirmation} onConfirmation={setConfirmation} busy={busy} onSubmit={() => { if (!cta.disabled) cta.onClick(); }} />)}
           {effectiveMode === 'document' && <ExportDocumentPanel format={documentFormat} onChange={setDocumentFormat} />}
 
           {inRoom && effectiveMode !== 'document' && effectiveMode !== 'share' && (

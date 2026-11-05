@@ -21,7 +21,7 @@ test.describe('focus mode', () => {
     await page.locator('.dc-node').nth(0).click();
     await page.locator('.dc-node').nth(1).click({ modifiers: ['Shift'] });
     await expect(page.locator('.dc-inspector')).toContainText('2 elements');
-    await page.getByRole('button', { name: 'Focus', exact: true }).click();
+    await page.getByRole('button', { name: 'Spotlight', exact: true }).click();
 
     await expect(page.locator('.dc-canvas[data-focus="on"]')).toBeVisible();
     await expect(page.locator('.dc-focus-indicator')).toContainText('2 nodes');
@@ -72,7 +72,7 @@ test.describe('focus mode', () => {
     await create(page, 'Service', { x: 600, y: 300 });
 
     await page.keyboard.press('Meta+a');
-    await page.getByRole('button', { name: 'Focus', exact: true }).click();
+    await page.getByRole('button', { name: 'Spotlight', exact: true }).click();
     await expect(page.locator('.dc-focus-indicator')).toBeVisible();
 
     await page.locator('.dc-focus-indicator').getByRole('button', { name: 'Exit focus' }).click();

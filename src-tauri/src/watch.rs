@@ -84,15 +84,21 @@ impl Watches {
     }
 
     /// Stops watching `root` and every folder inside it — a project taken off the list. In one batch,
-    /// for the same reason as `add_all`.
+    /// for the same reason as `add_all`. The open document's folder stays: `pin` would not add it
+    /// back while it is still the pinned one, so the open file stopped hearing about changes.
     pub fn remove_under(&mut self, root: &Path) {
-        let Watches { watcher, paths, .. } = self;
-        if !paths.iter().any(|path| path.starts_with(root)) {
+        let Watches {
+            watcher,
+            paths,
+            pinned,
+        } = self;
+        let leaves = |path: &PathBuf| path.starts_with(root) && Some(path) != pinned.as_ref();
+        if !paths.iter().any(leaves) {
             return;
         }
         let mut batch = watcher.paths_mut();
         paths.retain(|path| {
-            let inside = path.starts_with(root);
+            let inside = leaves(path);
             if inside {
                 let _ = batch.remove(path);
             }
@@ -326,5 +332,18 @@ mod tests {
         watches.add(&elsewhere);
         watches.remove_under(&project);
         assert_eq!(watches.paths, vec![elsewhere]);
+    }
+
+    #[test]
+    fn forgetting_a_project_keeps_the_open_documents_folder() {
+        let root = tempfile::tempdir().unwrap();
+        let project = root.path().join("project");
+        let open = project.join("docs");
+        std::fs::create_dir_all(&open).unwrap();
+        let mut watches = watches();
+        watches.add(&project);
+        watches.pin(Some(&open));
+        watches.remove_under(&project);
+        assert_eq!(watches.paths, vec![open]);
     }
 }

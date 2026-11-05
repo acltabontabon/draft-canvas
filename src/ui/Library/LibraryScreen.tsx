@@ -46,6 +46,8 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
   const sort = useUiStore((state) => state.librarySort);
   const setSort = useUiStore((state) => state.setLibrarySort);
   const view = useUiStore((state) => state.libraryView);
+  /** New and imported canvases land in the project being looked at — on the shelf you'll go back to. */
+  const viewProject = view.kind === 'project' ? view.projectId : undefined;
   const setView = useUiStore((state) => state.setLibraryView);
   const moveMenuOpenFor = useUiStore((state) => state.moveMenuOpenFor);
   const setMoveMenuOpenFor = useUiStore((state) => state.setMoveMenuOpenFor);
@@ -132,7 +134,11 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
     if (result.repairs.length > 0) {
       notify(`Imported with repairs: ${result.repairs.join(' ')}`);
     }
-    await session.adoptDocument(result.document);
+    // Imported into a project's view, it belongs to that project, as a new canvas made there does.
+    const document = result.document.metadata.projectId === undefined && viewProject
+      ? { ...result.document, metadata: { ...result.document.metadata, projectId: viewProject } }
+      : result.document;
+    await session.adoptDocument(document);
   };
 
   const onImport = async (file: File | undefined) => {
@@ -266,7 +272,7 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
         {movedNotice}
 
         <GalleryHeading action={
-          <Button variant="solid" icon="plus" onClick={() => void session.newDocument()}>
+          <Button variant="solid" icon="plus" onClick={() => void session.newDocument(undefined, undefined, viewProject)}>
             New canvas
           </Button>
         } />

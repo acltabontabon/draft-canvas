@@ -39,6 +39,8 @@ export function useContinuation(interactive: boolean): void {
   const focusActive = useEditorStore((state) => state.focus.active);
   const playbackActive = useEditorStore((state) => state.flowPlayback.active);
   const lensActive = useEditorStore((state) => lensFlow(state) !== undefined);
+  // Traffic, like Focus and the flow lens, is a view the person asked for; a ghost drew over its sketches.
+  const trafficActive = useEditorStore((state) => state.traffic.active);
   const enabled = useUiStore((state) => state.continuationsEnabled);
   const dismissals = useUiStore((state) => state.continuationDismissals);
   const cycle = useUiStore((state) => state.continuationCycle);
@@ -50,7 +52,7 @@ export function useContinuation(interactive: boolean): void {
     const ui = useUiStore.getState();
     if (ui.continuation?.trigger === 'drop') return;
     const quiet =
-      enabled && interactive && anchorId && !focusActive && !playbackActive && !lensActive && !interactionActive && !quickConnectOpen;
+      enabled && interactive && anchorId && !focusActive && !playbackActive && !lensActive && !trafficActive && !interactionActive && !quickConnectOpen;
     if (!quiet) {
       ui.setContinuation(null);
       if (!interactionActive) ui.setContinuationCycle(null);
@@ -92,6 +94,7 @@ export function useContinuation(interactive: boolean): void {
     focusActive,
     playbackActive,
     lensActive,
+    trafficActive,
     enabled,
     dismissals,
     cycle,

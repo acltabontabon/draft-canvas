@@ -10,6 +10,7 @@ import {
   ReactFlow,
   applyEdgeChanges,
   applyNodeChanges,
+  useOnViewportChange,
   useReactFlow,
   useStore,
   useStoreApi,
@@ -156,9 +157,9 @@ function landingPointFor(
   const sourceRect = rectOfInternal(source, byId.get(edge.source)?.type);
   const targetRect = rectOfInternal(target, byId.get(edge.target)?.type);
   if (!sourceRect || !targetRect) return null;
-  // `interactionActive`: a drag is in flight, so route it the cheap way the live edge is being
-  // routed right now — matching what is on screen matters more here than obstacle avoidance.
-  return edgeLabelPoint(document, edge, sourceRect, targetRect, { interactionActive: true });
+  // A drag is in flight: routed the way the canvas draws the connector right now, which is as at
+  // rest unless the dragged shape is one it detours around.
+  return edgeLabelPoint(document, edge, sourceRect, targetRect, { interactionActive: true, moving: useUiStore.getState().movingNodeIds, own: true });
 }
 
 /** A capped step from `from` toward `to`, in screen pixels, rounded so sub-pixel drift never
@@ -593,6 +594,10 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   const tracing = useUiStore((state) => state.flowTrace !== null);
   const sharedReadOnly = useUiStore((state) => state.readOnly !== null && !state.readOnly.collaborative);
   const interactive = mode === 'edit' && !tracing && !sharedReadOnly;
+  // A view-only collaborator still selects and follows along, but the store refuses anything they
+  // would draw: dragging, connecting and suggestions only snapped back or did nothing.
+  const viewOnly = useUiStore((state) => state.readOnly?.collaborative === true);
+  const editable = interactive && !viewOnly;
   const recoveryConnect = useUiStore((state) => state.recoveryConnect);
   const finishRecoveryConnect = useCallback((targetId: string) => {
     const ui = useUiStore.getState();
@@ -615,8 +620,18 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       event.stopPropagation();
       finishRecoveryConnect(node.id);
     } else if (sharedReadOnly) selectSharedNode(event, node);
-  }, [finishRecoveryConnect, sharedReadOnly]);
-  useContinuation(interactive);
+    else if (
+      editable &&
+      useUiStore.getState().armed &&
+      nodeIndex(useEditorStore.getState().document.nodes).get(node.id)?.type === 'group'
+    ) {
+      // A tool armed and clicked inside a boundary places there, as on empty canvas; the boundary
+      // covering the pane swallowed the click and the tool stayed armed with nothing placed.
+      const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+      onCreateAt?.({ x: Math.round(position.x - 88), y: Math.round(position.y - 34) });
+    }
+  }, [editable, finishRecoveryConnect, onCreateAt, screenToFlowPosition, sharedReadOnly]);
+  useContinuation(editable);
 
   useZoomVariable();
 
@@ -1768,7 +1783,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
 
   const onPaneDoubleClick = useCallback(
     (event: React.MouseEvent) => {
-      if (!interactive) return;
+      if (!editable) return;
       // React Flow has no `onPaneDoubleClick`, so this fires for the whole
       // canvas — including double-clicks on a node, which mean "edit this
       // label" and must not also drop a new element underneath it.
@@ -1788,17 +1803,17 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       }
       onEmptyCanvasMenu?.(flowPosition, { x: event.clientX, y: event.clientY });
     },
-    [interactive, onCreateAt, onEmptyCanvasMenu, screenToFlowPosition],
+    [editable, onCreateAt, onEmptyCanvasMenu, screenToFlowPosition],
   );
 
   /** A toolbar button arms a tool; the next click on empty canvas places it. */
   const onPaneClick = useCallback(
     (event: React.MouseEvent) => {
-      if (!interactive || !useUiStore.getState().armed) return;
+      if (!editable || !useUiStore.getState().armed) return;
       const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
       onCreateAt?.({ x: Math.round(position.x - 88), y: Math.round(position.y - 34) });
     },
-    [interactive, onCreateAt, screenToFlowPosition],
+    [editable, onCreateAt, screenToFlowPosition],
   );
 
   /**
@@ -1869,11 +1884,29 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
       pointer.x = position.x;
       pointer.y = position.y;
+      pointer.screenX = event.clientX;
+      pointer.screenY = event.clientY;
       pointer.known = true;
       scheduleHover(event);
     },
     [scheduleHover, screenToFlowPosition],
   );
+  // The cursor stays put on screen while the camera moves under it. Start and end too: a single
+  // wheel notch of pan-on-scroll reports only those, never a change. Stable, because React Flow
+  // stores the handlers and a new one each render would write its store every frame.
+  const rederivePointer = useCallback(() => {
+    if (!pointer.known) return;
+    const position = screenToFlowPosition({ x: pointer.screenX, y: pointer.screenY });
+    pointer.x = position.x;
+    pointer.y = position.y;
+  }, [screenToFlowPosition]);
+  useOnViewportChange({ onStart: rederivePointer, onChange: rederivePointer, onEnd: rederivePointer });
+  const onPointerLeave = useCallback(() => {
+    // Off the canvas (over the toolbar, a panel, another window), a shortcut places near the
+    // selection or mid-view instead of wherever the cursor last crossed the canvas.
+    pointer.known = false;
+    clearHover();
+  }, [clearHover]);
 
   /**
    * A click on a connector selects the one `edgePick.ts` names — not React Flow's pick, which is
@@ -2034,7 +2067,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       onDoubleClickCapture={(event) => {
         if (useUiStore.getState().flowTrace) { event.preventDefault(); event.stopPropagation(); }
       }}
-      onPointerLeave={clearHover}
+      onPointerLeave={onPointerLeave}
       // The one Tab stop for the whole diagram — individual nodes/edges are deliberately not
       // real DOM tab stops (see `nodesFocusable`/`edgesFocusable` below); Tab reaches "the
       // canvas" once, and Alt+Arrow/arrow-key navigation moves *selection* from there on,
@@ -2101,8 +2134,8 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
         // offers it, and with a node's handles sitting over the end of every arrow, two clicks near two
         // arrowheads quietly drew a new connector between them.
         connectOnClick={false}
-        nodesDraggable={interactive}
-        nodesConnectable={interactive}
+        nodesDraggable={editable}
+        nodesConnectable={editable}
         elementsSelectable={interactive}
         // React Flow's own default per-node/edge keyboard handling (native `tabIndex`, and its own
         // Enter/Space/Escape select-or-deselect plus arrow-key move) is turned off outright rather
@@ -2183,8 +2216,8 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
               walkthrough as it is while drawing, and the frame is inert either way. */}
           <RoomFrame />
 
-          {interactive && <ContinuationGhost />}
-          {interactive && <RecoveryConnectGhost />}
+          {editable && <ContinuationGhost />}
+          {editable && <RecoveryConnectGhost />}
 
           {/* An AI agent's change still being prepared (desktop only): drawn over the diagram, never in it. */}
           <AgentPreviewLayer />
@@ -2198,7 +2231,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
           {/* Traffic's findings, written over the diagram like a whiteboard review. Never exported. */}
           {trafficActive && <TrafficSketches />}
 
-          {interactive && attachTarget && (
+          {editable && attachTarget && (
             <div
               className="dc-attach-affordance"
               style={{ transform: `translate(${attachTarget.x}px, ${attachTarget.y - 30}px)` }}

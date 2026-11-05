@@ -1080,7 +1080,7 @@ async fn create(
                 "DUPLICATE_TITLE",
                 "A diagram with this title already exists in that folder. Nothing was created.",
             )
-            .hint("If the person is talking about that diagram, change it with update_diagram using its diagramId. Only if they asked for a separate diagram, send this again with allowDuplicateTitle: true, or with a distinct title.")
+            .hint("If the person is talking about that diagram, change it with update_diagram using its diagramId. Only if they asked for a separate diagram, send this again with a new requestId and allowDuplicateTitle: true, or with a distinct title.")
             .details(json!({"candidates": same}));
             fail(agent, &key, &e);
             return Err(e);
@@ -1151,7 +1151,8 @@ async fn create(
         Ok(stamp) => stamp,
         Err(e) => {
             let e = ToolError::new("PERSISTENCE_FAILED", e.message)
-                .hint("Nothing was created. Retry with the same requestId.");
+                .hint("Nothing was created. Retry with the same requestId.")
+                .retryable();
             fail(agent, &key, &e);
             return Err(e);
         }
@@ -1236,10 +1237,11 @@ pub(crate) fn recover_create(
 ) -> Option<Value> {
     let id = entry.diagram_id.as_deref()?;
     let diagram = index.find(projects, id).ok()?;
-    let text = read_document(&diagram.absolute).ok()?.text;
+    // From the stamp, which hashes the bytes on disk: the text has had any BOM taken off.
+    let stamp = read_document(&diagram.absolute).ok()?.stamp;
     Some(json!({
         "diagramId": id,
-        "revision": scope::file_revision(&text),
+        "revision": scope::file_revision_of_stamp(&stamp)?,
         "persisted": true,
         "state": "saved",
         "opened": false,
@@ -1475,7 +1477,9 @@ fn write_in_background(
         Ok(WriteOutcome::Conflict) => {
             let current = read_document(&diagram.absolute)
                 .ok()
-                .map(|r| scope::file_revision(&r.text));
+                // From the stamp like every other revision: hashing the BOM-stripped text handed back
+                // a revision that never matched a file saved with one, so every retry conflicted again.
+                .and_then(|r| scope::file_revision_of_stamp(&r.stamp));
             Err(refuse(
                 ToolError::new(
                     "REVISION_CONFLICT",
@@ -1490,7 +1494,8 @@ fn write_in_background(
         }
         Err(e) => Err(refuse(
             ToolError::new("PERSISTENCE_FAILED", e.message)
-                .hint("Nothing was changed. Retry with the same requestId."),
+                .hint("Nothing was changed. Retry with the same requestId.")
+                .retryable(),
         )),
     }
 }
@@ -1683,6 +1688,7 @@ fn persist_proposal(
         let unavailable = || {
             ToolError::new("INTERNAL", "The proposal couldn't be saved. Nothing was recorded.")
                 .hint("Retry with the same requestId.")
+                .retryable()
         };
         // Re-check a revision under the store lock: it may have been accepted or revised while
         // the page was composing it. Never reopen work the person already decided about.

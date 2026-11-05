@@ -53,6 +53,20 @@ describe('encodeShareLink', () => {
     expect(result.document.metadata.id).toMatch(/^d_/);
   });
 
+  it('keeps compensating actions linked to the connector they undo', async () => {
+    const a = createNode({ type: 'service', x: 0, y: 0 });
+    const b = createNode({ type: 'service', x: 300, y: 0 });
+    const charge = createEdge({ source: a.id, target: b.id, semantic: 'calls' });
+    const refund = createEdge({ source: a.id, target: b.id, semantic: 'compensates', compensationFor: charge.id, compensationVisible: false });
+    const link = await encodeShareLink(addEdges(addNodes(createDocument('Saga'), [a, b]), [charge, refund]), BASE);
+    if (!('url' in link)) throw new Error('expected a link');
+    const result = await decodeShareLink(new URL(link.url).hash);
+    if (!result?.ok) throw new Error('expected a document');
+    const [parent, action] = result.document.edges;
+    expect(action).toMatchObject({ semantic: 'compensates', compensationFor: parent?.id, compensationVisible: false });
+    expect(result.repairs).toEqual([]);
+  });
+
   it('leaves the background image behind', async () => {
     const source = diagram();
     source.settings.background = {

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { AGENT_LIMITS } from '../src/agent/input';
+import { createDocument, createEdge, createNode } from '../src/document/factory';
 import { parseDocument } from '../src/document/validate';
+import { mermaidFlowchartSource } from '../src/export/source/mermaidFlowchart';
 import { importMermaid, looksLikeMermaid, MERMAID_LIMITS, parseMermaidFlowchart } from '../src/import/mermaid';
 import { unsupportedNotice } from '../src/import/route';
 
@@ -88,6 +90,22 @@ describe('parseMermaidFlowchart — shapes', () => {
     expect(byLabel(result, '"Quoted" #1')).toBeDefined();
     expect(byLabel(result, 'Bold text')).toBeDefined();
     expect(result.unsupported).toEqual(['HTML in labels (tags removed)']);
+  });
+
+  it('reads back what the flowchart export writes: named entities and an unnamed circle as a junction', () => {
+    const gateway = createNode({ type: 'service', x: 0, y: 0, text: 'A < B & C > D' });
+    const junction = createNode({ type: 'ellipse', x: 200, y: 0 });
+    const orders = createNode({ type: 'service', x: 400, y: 0, text: 'Orders' });
+    const document = {
+      ...createDocument('Round trip'),
+      nodes: [gateway, junction, orders],
+      edges: [createEdge({ source: gateway.id, target: junction.id, label: '<ok> & done' }), createEdge({ source: junction.id, target: orders.id })],
+    };
+    const result = parsed(mermaidFlowchartSource(document));
+    expect(byLabel(result, 'A < B & C > D').type).toBe('service');
+    expect(result.create.relationships.map((relationship) => relationship.label)).toContain('<ok> & done');
+    expect(result.create.nodes.filter((node) => node.type === 'junction')).toHaveLength(1);
+    expect(result.create.nodes.filter((node) => node.type === 'person')).toHaveLength(0);
   });
 
   it('shortens labels past the agent limits and says so once', () => {
@@ -223,6 +241,15 @@ describe('parseMermaidFlowchart — subgraphs, comments, directions, the ignored
     `);
     expect(result.create.nodes.map((n) => n.label)).toEqual(['A', 'B', '100%% sure', 'D']);
     expect(result.create.relationships).toHaveLength(2);
+  });
+
+  it('reads the first flowchart among a Markdown file\'s Mermaid blocks, and names the rest', () => {
+    const text = '# Readme\n\n```mermaid\nsequenceDiagram\n  A->>B: hi\n```\n\n```mermaid\nflowchart LR\n  A --> B\n```\n';
+    expect(looksLikeMermaid(text)).toBe(true);
+    const result = parseMermaidFlowchart(text);
+    if (!result.ok) throw new Error(result.error);
+    expect(result.create.nodes).toHaveLength(2);
+    expect(result.unsupported).toContain('another Mermaid block in the file (not imported)');
   });
 
   it('reads the flowchart out of a Markdown fence and a title out of front matter', () => {

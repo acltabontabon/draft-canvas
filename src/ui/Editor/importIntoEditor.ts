@@ -8,6 +8,7 @@
  * every foreign paste. Laying a flowchart out pulls the layout engine, loaded once it is needed.
  */
 
+import { hostKind } from '../../host/hostInfo';
 import { routeImportFile, unsupportedNotice } from '../../import/route';
 import { useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
@@ -30,12 +31,15 @@ export async function insertMermaidText(text: string): Promise<boolean> {
 async function insertMermaid(text: string): Promise<boolean> {
   const notify = useUiStore.getState().notify;
   const { importMermaid } = await import('../../import/mermaid');
-  const imported = await importMermaid(text, 'Pasted flowchart');
+  const fallback = 'Pasted flowchart';
+  const imported = await importMermaid(text, fallback);
   if (!imported.ok) {
     notify(imported.error, 'error');
     return false;
   }
-  const added = useEditorStore.getState().insertComposed(imported.document, 'Import flowchart');
+  // A flowchart with its own title names a blank diagram (on the web; elsewhere the file names it).
+  const { title } = imported.document.metadata;
+  const added = useEditorStore.getState().insertComposed(imported.document, 'Import flowchart', title !== fallback && hostKind() === null ? title : undefined);
   if (added.length === 0) return false;
   // It lands at the first free place, which is often off the edge of what you were looking at: the
   // camera follows it, the way it does after Arrange.

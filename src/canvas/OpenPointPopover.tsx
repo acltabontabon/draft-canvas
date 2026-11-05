@@ -85,8 +85,11 @@ function OpenPointPopoverBody({ state, closing, listening }: { state: OpenPointP
   const { anchor } = state;
   const flowPanelOpen = useUiStore((state) => state.flowPanelOpen);
   const interactionActive = useUiStore((state) => state.interactionActive);
+  const movingNodeIds = useUiStore((state) => state.movingNodeIds);
   const setOpenPointPopover = useUiStore((state) => state.setOpenPointPopover);
-  const readOnly = useEditorStore((state) => state.mode === 'present');
+  const presenting = useEditorStore((state) => state.mode === 'present');
+  // A view-only collaborator's changes are refused by the store; offer them none to make.
+  const readOnly = useUiStore((state) => state.readOnly !== null) || presenting;
   const document = useEditorStore((state) => state.document);
   const points = openPointsFor(document, anchor);
   const unresolved = points.filter((point) => !point.resolved);
@@ -166,7 +169,8 @@ function OpenPointPopoverBody({ state, closing, listening }: { state: OpenPointP
       const source = rectOfInternal(sourceInternal, types.get(edge.source));
       const target = rectOfInternal(targetInternal, types.get(edge.target));
       if (!source || !target) return null;
-      const point = edgeLabelPoint(document, edge, source, target, { interactionActive });
+      // Beside the marker, which sits at the connector's own label point (shared label or not).
+      const point = edgeLabelPoint(document, edge, source, target, { interactionActive, moving: movingNodeIds, own: true });
       return { x: point.x - MARKER_SIZE, y: point.y - MARKER_SIZE, width: MARKER_SIZE * 2, height: MARKER_SIZE * 2 };
     }
     return null;

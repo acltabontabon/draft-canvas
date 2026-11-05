@@ -96,7 +96,9 @@ test('tagged notes retain a body line when resized to their minimum', async ({ p
   expect(corner).not.toBeNull();
   await page.mouse.move(corner!.x + corner!.width / 2, corner!.y + corner!.height / 2);
   await page.mouse.down();
-  await page.mouse.move(corner!.x - 200, corner!.y - 140, { steps: 12 });
+  // Straight up: narrowing it too let "Review this" wrap to two lines in WebKit while fonts settled,
+  // and the note rightly grew to fit them (88, not the one-line floor).
+  await page.mouse.move(corner!.x + corner!.width / 2, corner!.y - 140, { steps: 12 });
   await page.mouse.up();
   await expect.poll(() => page.evaluate(async () => {
     const { useEditorStore } = await import('/src/store/editorStore.ts');

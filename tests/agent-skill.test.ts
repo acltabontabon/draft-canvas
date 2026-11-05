@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { CROWDED_BOUNDARY, CROWDED_VIEW } from '../src/agent/advice';
 import { CONTRACT_VERSION } from '../src/agent/capabilities';
 import { CREATE_FIELDS, ROOM_FIELDS } from '../src/agent/fields';
-import { ELEMENT_TYPE_NAMES, GROUP_KINDS, NOTE_FORM_NAMES, resolveType } from '../src/agent/vocabulary';
+import { ELEMENT_TYPE_ALIASES, ELEMENT_TYPE_NAMES, GROUP_KINDS, NOTE_FORM_NAMES, resolveType } from '../src/agent/vocabulary';
 import { ACCENTS, CODE_LANGUAGES, CONNECTOR_KINDS, EDGE_SEMANTICS } from '../src/document/types';
 import { productNamedIn } from '../src/nodes/technology';
 import { skillPairingsJson } from '../scripts/agent-schemas';
@@ -77,8 +77,9 @@ describe('the agent skill', () => {
     expect(readFileSync(join(SKILL, 'scripts', 'pairings.json'), 'utf8')).toBe(skillPairingsJson());
   });
 
-  it('accepts only aliases the app resolves', () => {
+  it('accepts exactly the aliases the app resolves', () => {
     for (const alias of pythonSet('ALIASES')) expect(resolveType(alias), alias).toBeDefined();
+    expect(pythonSet('ALIASES')).toEqual([...ELEMENT_TYPE_ALIASES].sort());
   });
 
   it('names only error codes the tools answer with, and every code language', () => {

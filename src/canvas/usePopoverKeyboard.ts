@@ -1,6 +1,8 @@
 import { useEffect, type RefObject } from 'react';
 
-const FOCUSABLE = 'button:not([disabled]), input:not([disabled]), [tabindex="0"]';
+// `data-pointer-only`: a control only a pointer can use (a popover's drag zone), which a keyboard
+// would land on and find does nothing.
+const FOCUSABLE = 'button:not([disabled]):not([data-pointer-only]), input:not([disabled]), [tabindex="0"]';
 
 /**
  * WAI-ARIA toolbar keyboard behaviour for a contextual popover: once focus is inside the popover,

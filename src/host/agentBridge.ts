@@ -32,7 +32,8 @@ export type AgentEditorReply =
   | { kind: 'snapshot'; file: DraftDocument; revision: string; path: string[]; selection: Selection; collaboratorTouches?: { key: string; by: string }[]; busy?: string }
   | { kind: 'committed'; revision: string }
   | { kind: 'refused'; code: 'REVISION_CONFLICT'; revision: string; file: DraftDocument }
-  | { kind: 'refused'; code: 'BUSY'; revision: string; reason?: string };
+  | { kind: 'refused'; code: 'BUSY'; revision: string; reason?: string }
+  | { kind: 'refused'; code: 'READ_ONLY'; revision: string; reason?: string };
 
 export function currentRevision(): string {
   return `o:${EPOCH}.${useEditorStore.getState().revision}`;
@@ -87,12 +88,13 @@ export function handleAgentRequest(request: AgentEditorRequest): AgentEditorRepl
   if (request.expectedRevision !== revision) return { kind: 'refused', code: 'REVISION_CONFLICT', revision, file: fileWithLiveViewport(state) };
   const busy = busyReason();
   if (busy) return { kind: 'refused', code: 'BUSY', revision, reason: busy };
+  // Not busy: no retry makes a read-only copy writable, so the agent is told not to try.
+  if (useUiStore.getState().readOnly) return { kind: 'refused', code: 'READ_ONLY', revision, reason: 'The diagram is open read-only.' };
   const applied = state.applyToFile(request.label, () => request.file);
   if (applied) return { kind: 'committed', revision: currentRevision() };
   // Refused by the store's own last gates, which `busyReason` can miss in a race. Answered as
   // committed, the agent was told its change landed when nothing changed.
   if (isInteracting()) return { kind: 'refused', code: 'BUSY', revision, reason: 'Someone is dragging or resizing on the canvas.' };
-  if (useUiStore.getState().readOnly) return { kind: 'refused', code: 'BUSY', revision, reason: 'The diagram is read-only.' };
   // Otherwise the file already was what was asked for: nothing to change, and nothing refused.
   return { kind: 'committed', revision };
 }

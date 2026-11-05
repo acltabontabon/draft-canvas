@@ -97,16 +97,22 @@ export async function connect(page: Page, fromIndex: number, toIndex: number) {
 
 /** Clicks the middle of a connector's line, on screen, whatever the camera. */
 export async function clickEdge(page: Page, line: Locator = page.locator('.dc-edge-line').first()) {
+  const point = await edgeMidpoint(page, line);
+  await page.mouse.click(point.x, point.y);
+}
+
+/** Halfway along a connector as drawn, on screen — not halfway between its shapes' boxes, which
+ *  misses it wherever a shape's connector meets its glyph off centre (a Data Store's cylinder). */
+export async function edgeMidpoint(page: Page, line: Locator = page.locator('.dc-edge-line').first()) {
   // The point is read off the screen: a camera still easing (a fit after a starter, a framing step)
   // would put the click where the connector was a frame ago.
   await cameraAtRest(page);
-  const point = await line.evaluate((el: SVGPathElement) => {
+  return line.evaluate((el: SVGPathElement) => {
     const len = el.getTotalLength();
     const p = el.getPointAtLength(len / 2);
     const screenPoint = new DOMPoint(p.x, p.y).matrixTransform(el.getScreenCTM()!);
     return { x: screenPoint.x, y: screenPoint.y };
   });
-  await page.mouse.click(point.x, point.y);
 }
 
 /**

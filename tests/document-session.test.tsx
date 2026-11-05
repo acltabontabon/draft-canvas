@@ -161,6 +161,22 @@ describe('useDocumentSession — adoptDocument stale projectId repair', () => {
     expect(saved[0]!.metadata.projectId).toBe('real-project');
   });
 
+  it('puts a new canvas made from a project view in that project', async () => {
+    const saved: DraftDocument[] = [];
+    const repository = stubRepository({
+      listProjects: async () => [{ id: 'real-project', name: 'Real', createdAt: 0, updatedAt: 0 }],
+      save: async (document) => {
+        saved.push(document);
+      },
+    });
+    const session = renderSession(repository);
+    await waitFor(() => expect(session().ready).toBe(true));
+    await act(async () => {
+      await session().newDocument(undefined, undefined, 'real-project');
+    });
+    expect(saved[0]!.metadata.projectId).toBe('real-project');
+  });
+
   it('imports a file whose id already exists here as a new canvas, never over the local one', async () => {
     const local = createDocument('Local, newer');
     const saved: DraftDocument[] = [];
@@ -248,6 +264,68 @@ describe('useDocumentSession — overlapping opens', () => {
     // Autosave retries the write it owes.
     await waitFor(() => expect(saves).toHaveLength(2), { timeout: 3000 });
     window.sessionStorage.clear();
+  });
+
+  it("raises the cross-tab conflict for a stash made over content another tab replaced, even one newer by the clock", async () => {
+    const original = createDocument('Draft');
+    // This tab's edits, stashed over `s_mine` — later by the clock than the other tab's save.
+    const at = original.metadata.createdAt;
+    const edited: DraftDocument = { ...original, metadata: { ...original.metadata, title: 'Mine', updatedAt: at + 3_000 } };
+    const stored: DraftDocument = { ...original, metadata: { ...original.metadata, title: 'Theirs', updatedAt: at + 2_000 } };
+    const save = vi.fn(async () => {});
+    const repository = stubRepository({
+      load: async () => structuredClone(stored),
+      has: async () => true,
+      knownContentStamp: () => 's_theirs',
+      save,
+    });
+    stashForReload(edited, { base: { title: 'Draft' }, stamp: 's_mine', writing: 's_mine_inflight' });
+    const session = renderSession(repository);
+    await waitFor(() => expect(session().ready).toBe(true));
+
+    await act(async () => {
+      await session().openDocument(edited.metadata.id);
+    });
+    // Nothing written over the other tab's content; this tab's edits are on screen, held for a choice.
+    expect(save).not.toHaveBeenCalled();
+    expect(useEditorStore.getState().document.metadata.title).toBe('Mine');
+    expect(useEditorStore.getState().save.conflict).toBe('changed');
+    expect(errorToastShown()).toBe(true);
+
+    // Taking the other tab's copy opens it, and the stash doesn't bring the edits back.
+    await act(async () => {
+      await session().resolveConflict('discard');
+    });
+    expect(useEditorStore.getState().document.metadata.title).toBe('Theirs');
+    expect(useEditorStore.getState().save.conflict).toBeUndefined();
+    expect(save).not.toHaveBeenCalled();
+    expect(window.sessionStorage.getItem(`draft-canvas:reload:${edited.metadata.id}`)).toBeNull();
+  });
+
+  it('applies a stash whose own interrupted write landed after all', async () => {
+    const original = createDocument('Draft');
+    // Older by the clock than what's stored — which is this very write, stamped as it started.
+    const at = original.metadata.createdAt;
+    const edited: DraftDocument = { ...original, metadata: { ...original.metadata, title: 'Mine', updatedAt: at + 1_000 } };
+    const stored: DraftDocument = { ...original, metadata: { ...original.metadata, title: 'Draft', updatedAt: at + 2_000 } };
+    const saved: string[] = [];
+    const repository = stubRepository({
+      load: async () => structuredClone(stored),
+      knownContentStamp: () => 's_mine_inflight',
+      save: async (document) => {
+        saved.push(document.metadata.title);
+      },
+    });
+    stashForReload(edited, { base: { title: 'Draft' }, stamp: 's_mine', writing: 's_mine_inflight' });
+    const session = renderSession(repository);
+    await waitFor(() => expect(session().ready).toBe(true));
+
+    await act(async () => {
+      await session().openDocument(edited.metadata.id);
+    });
+    expect(saved[0]).toBe('Mine');
+    expect(useEditorStore.getState().document.metadata.title).toBe('Mine');
+    expect(useEditorStore.getState().save.conflict).toBeUndefined();
   });
 
   /**

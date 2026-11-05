@@ -16,12 +16,12 @@ import {
   boundaryTree,
   collectRooms,
   edgeCaption,
-  edgesBetween,
   edgeTechnology,
   isArchitecture,
   isBoundary,
   nameOf,
   oneLine,
+  relationshipsBetween,
   titleOf,
   type ExportRoom,
 } from './shared';
@@ -133,7 +133,7 @@ function renderRoom(
   emit(tree.roots, depth);
 
   const exported = new Set(graph.nodes.filter(isArchitecture).map((node) => node.id));
-  const edges = edgesBetween(graph, exported);
+  const edges = relationshipsBetween(graph, exported);
   if (edges.length > 0 && lines.length > 0) lines.push('');
   for (const edge of edges) lines.push(`${INDENT.repeat(depth)}${relLine(graph, edge, aliases)}`);
   return lines;

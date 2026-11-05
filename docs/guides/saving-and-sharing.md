@@ -74,7 +74,7 @@ See the [Mermaid import reference](../reference/mermaid-import.md).
 
 | Send | How | Recipient gets |
 | --- | --- | --- |
-| Link | **Share → Share read-only link**, or **Copy share link** in `⌘K` | A protected, view-only snapshot in Guided reader or Focus view |
+| Link | **Share → Share read-only link**, or the same in `⌘K` | A protected, view-only snapshot in Guided reader or Focus view |
 | File | **Document → Editable** or **Encrypted** | A diagram they can reopen |
 | Picture | **Image**, or **Copy as image** | A PNG or SVG; editing requires an embedded diagram |
 | Live session | **Share → Draw together, live** | A shared canvas; see [Collaborating live](collaborating.md) |
@@ -133,7 +133,7 @@ resolution notes. Browsing never changes the snapshot.
 
 [Focus view in dark mode](../media/guides/share-focus-view-dark.png).
 
-Run **Share from here…** or **Copy share link** in `⌘K`, or use **Start at** in **Share → Export → Share**.
+Run **Share read-only link…** in `⌘K`, or use **Start at** in **Share → Export → Share**.
 It defaults to the selected playable Flow, then the current level, then the overview.
 A Flow link starts at its introduction; the reader chooses when to advance.
 

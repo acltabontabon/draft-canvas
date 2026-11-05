@@ -130,6 +130,8 @@ export class IndexedDbRepository implements DraftRepository {
    * from an open editor compares it with the row to catch another tab's delete or newer content.
    */
   private readonly stamps = new Map<string, string | undefined>();
+  /** See `DraftRepository.writingContentStamp`. */
+  private readonly writingStamps = new Map<string, string>();
   /** See `DraftRepository.takeRepairs`. */
   private readonly repairs = new Map<string, string[]>();
 
@@ -186,6 +188,10 @@ export class IndexedDbRepository implements DraftRepository {
 
   knownContentStamp(id: string): string | undefined {
     return this.stamps.get(id);
+  }
+
+  writingContentStamp(id: string): string | undefined {
+    return this.writingStamps.get(id);
   }
 
   async has(id: string): Promise<boolean> {
@@ -394,6 +400,8 @@ export class IndexedDbRepository implements DraftRepository {
     // A camera move keeps the stamp it found (`checked` guarantees `known` is that stamp), so what
     // other tabs last read is still true of the content.
     const stamp = cameraOnly ? known! : createId('s');
+    // Before the first `await`, so a page leaving straight after starting this write can stash it.
+    this.writingStamps.set(id, stamp);
     // One readwrite transaction, and every request in it queued before the first `await`. The flush a
     // closing tab fires from `pagehide` gets no further than the task it started in: requests already
     // queued still commit, but a callback never runs — so a write that waited for its own read of the
@@ -445,6 +453,8 @@ export class IndexedDbRepository implements DraftRepository {
       await Promise.allSettled([...requests, tx.done]);
       if (isQuotaError(error)) throw new QuotaExceededError(error);
       throw error;
+    } finally {
+      if (this.writingStamps.get(id) === stamp) this.writingStamps.delete(id);
     }
   }
 

@@ -20,7 +20,7 @@ Draft Canvas accepts Mermaid `flowchart` and `graph`; it lays out the result its
 | `subgraph id [Title] … end`, nested | Boundary, nested |
 | `TD`/`TB` and `LR` | The reading direction of the layout |
 | `"quoted"` labels, `<br>` line breaks, `#quot;`-style entities | The text, as Mermaid shows it |
-| `%%` comments, a ```` ```mermaid ```` fence in Markdown | Ignored and unwrapped |
+| `%%` comments, a ```` ```mermaid ```` fence in Markdown | Ignored and unwrapped; in a file with several, the first flowchart is read |
 
 ## Skipped syntax
 

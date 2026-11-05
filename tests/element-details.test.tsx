@@ -95,6 +95,18 @@ describe('element details shortcut', () => {
     expect(screen.getByRole('combobox', { name: 'Technology' })).toHaveValue('Internal runtime');
   });
 
+  it('keeps a description typed but not yet committed when Escape closes the panel, and returns focus', () => {
+    mount();
+    fireEvent.click(screen.getByRole('button', { name: 'Details' }));
+    const description = screen.getByRole('textbox', { name: 'Description' });
+    description.focus();
+    fireEvent.change(description, { target: { value: 'Takes orders.' } });
+    fireEvent.keyDown(description, { key: 'Escape' });
+    expect(screen.queryByRole('textbox', { name: 'Description' })).toBeNull();
+    expect(useEditorStore.getState().document.nodes[0]!.description).toBe('Takes orders.');
+    expect(screen.getByRole('button', { name: /^Details|Description/ })).toHaveFocus();
+  });
+
   it('keeps arrows and Enter for suggestions before a second Enter moves to Description', () => {
     mount();
     fireEvent.click(screen.getByRole('button', { name: 'Details' }));

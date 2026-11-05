@@ -183,6 +183,23 @@ describe('local persistence', () => {
     expect((await tabB.load(doc.metadata.id))!.nodes).toHaveLength(4);
   });
 
+  it('names the stamp a write in flight will leave, from the moment it starts until it settles', async () => {
+    const repository = await IndexedDbRepository.open();
+    const doc = documentWith('Stamped');
+    await repository.save(doc);
+    const before = repository.knownContentStamp(doc.metadata.id);
+    expect(repository.writingContentStamp(doc.metadata.id)).toBeUndefined();
+
+    const saving = repository.save({ ...doc, metadata: { ...doc.metadata, title: 'Edited' } }, { title: 'Stamped' });
+    // Synchronously: a page leaving straight after starting the write stashes it.
+    const writing = repository.writingContentStamp(doc.metadata.id);
+    expect(writing).toBeDefined();
+    expect(writing).not.toBe(before);
+    await saving;
+    expect(repository.knownContentStamp(doc.metadata.id)).toBe(writing);
+    expect(repository.writingContentStamp(doc.metadata.id)).toBeUndefined();
+  });
+
   describe('a camera move is not a content change', () => {
     const withCamera = (doc: DraftDocument, x: number): DraftDocument => ({ ...doc, viewport: { x, y: 0, zoom: 1 } });
 
@@ -714,8 +731,10 @@ describe('autosave', () => {
       maxWaitMs: 500,
     });
 
+    // One document throughout: versions of different documents are each written.
+    const { metadata } = documentWith('x');
     for (let i = 0; i < 20; i += 1) {
-      autosave.schedule({ ...documentWith(`Edit ${i}`), metadata: documentWith('x').metadata });
+      autosave.schedule({ ...documentWith(`Edit ${i}`), metadata });
       await vi.advanceTimersByTimeAsync(10);
     }
     await vi.advanceTimersByTimeAsync(600);
@@ -779,20 +798,20 @@ describe('autosave', () => {
     await MemoryRepository.prototype.save.call(repository, stored);
     const autosave = new Autosave({ repository, onStateChange: () => {}, debounceMs: 0, maxWaitMs: 0 });
     autosave.track(stored);
-    expect(autosave.unsavedForStash()).toBeNull();
+    expect(autosave.unsavedForStash()).toEqual([]);
 
     // A camera move alone is not worth carrying across a refresh.
     autosave.schedule({ ...stored, viewport: { x: 5, y: 5, zoom: 1 } }, { cameraOnly: true });
-    expect(autosave.unsavedForStash()).toBeNull();
+    expect(autosave.unsavedForStash()).toEqual([]);
     const edited = { ...stored, metadata: { ...stored.metadata, title: 'Edited' } };
     autosave.schedule(edited);
-    expect(autosave.unsavedForStash()).toBe(edited);
+    expect(autosave.unsavedForStash()).toEqual([{ document: edited, conflict: false }]);
     // Mid-write it is the write in flight — the one an unload is about to abort.
     await vi.waitFor(() => expect(repository.release).not.toBeNull());
-    expect(autosave.unsavedForStash()).toBe(edited);
+    expect(autosave.unsavedForStash()).toEqual([{ document: edited, conflict: false }]);
     repository.release!();
     await vi.waitFor(async () => expect(await autosave.flush()).toBe(true));
-    expect(autosave.unsavedForStash()).toBeNull();
+    expect(autosave.unsavedForStash()).toEqual([]);
 
     stashForReload(edited);
     expect(takeReloadStash(stored.metadata.id)?.document.metadata.title).toBe('Edited');
@@ -813,10 +832,10 @@ describe('autosave', () => {
     autosave.schedule({ ...stored, viewport: { x: 5, y: 5, zoom: 1 } }, { cameraOnly: true });
     await vi.waitFor(() => expect(repository.release).not.toBeNull());
     // Stashed, a pan would be rewritten as a content save on reopen — a conflict nobody caused.
-    expect(autosave.unsavedForStash()).toBeNull();
+    expect(autosave.unsavedForStash()).toEqual([]);
     const edited = { ...stored, metadata: { ...stored.metadata, title: 'Edited' } };
     autosave.schedule(edited);
-    expect(autosave.unsavedForStash()).toBe(edited);
+    expect(autosave.unsavedForStash()).toEqual([{ document: edited, conflict: false }]);
     states.length = 0;
     repository.release!();
 
@@ -1029,6 +1048,45 @@ describe('autosave', () => {
 
     expect(repository.saved).toHaveLength(2);
     expect(repository.saved.at(-1)!.nodes).toHaveLength(loaded.nodes.length);
+    autosave.dispose();
+  });
+
+  it('writes an edit queued for one canvas even when another canvas is scheduled before it lands', async () => {
+    vi.useFakeTimers();
+    const repository = new RecordingRepository();
+    const autosave = new Autosave({ repository, onStateChange: () => {}, debounceMs: 700 });
+    const first = documentWith('Still on screen');
+    const second = documentWith('Opening');
+    // An edit to the canvas on screen while the next one opens, then the new canvas's first pan.
+    const edited = { ...first, metadata: { ...first.metadata, title: 'Edited while opening' } };
+    autosave.schedule(edited);
+    autosave.schedule({ ...second, viewport: { x: 40, y: 0, zoom: 1 } }, { cameraOnly: true });
+    expect(autosave.unsavedForStash()).toEqual([{ document: edited, conflict: false }]);
+    await vi.advanceTimersByTimeAsync(800);
+
+    expect(repository.saved.map((doc) => doc.metadata.title)).toEqual(['Edited while opening', 'Opening']);
+    expect(autosave.hasPendingWork).toBe(false);
+    autosave.dispose();
+    vi.useRealTimers();
+  });
+
+  it('owes a closing page a copy held back by a changed-elsewhere conflict, marked as such', async () => {
+    const repository = new RecordingRepository();
+    const conflicts: string[] = [];
+    const autosave = new Autosave({ repository, onStateChange: () => {}, onConflict: (_id, kind) => conflicts.push(kind) });
+    const doc = documentWith('Stashed edits');
+    autosave.holdConflict(doc);
+    expect(conflicts).toEqual(['changed']);
+    expect(await autosave.flush()).toBe(false);
+    expect(repository.saved).toHaveLength(0);
+    expect(autosave.unsavedForStash()).toEqual([{ document: doc, conflict: true }]);
+
+    // Taking the other copy drops it; keeping it overwrites.
+    expect(await autosave.resolveConflict('discard')).toBe(true);
+    expect(autosave.unsavedForStash()).toEqual([]);
+    autosave.holdConflict(doc);
+    expect(await autosave.resolveConflict('keep')).toBe(true);
+    expect(repository.saved).toEqual([doc]);
     autosave.dispose();
   });
 

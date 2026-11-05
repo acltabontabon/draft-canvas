@@ -1021,13 +1021,16 @@ function reidentify(previous: ContinuationOffer, next: ContinuationOffer): Conti
 }
 
 /**
- * The last pointer position in canvas coordinates.
+ * The last pointer position over the canvas: `x`/`y` in canvas coordinates, `screenX`/`screenY` where
+ * it is on screen. `known` is false while the pointer is off the canvas.
  *
  * Kept outside React deliberately: keyboard shortcuts need to know where the
  * cursor is so a new note appears under it, and re-rendering the canvas on
- * every mouse move to track that would be absurd.
+ * every mouse move to track that would be absurd. The canvas re-derives `x`/`y` whenever the camera
+ * moves: kept from the last mouse move, a zoom, fit, trackpad pan or step inside left them pointing
+ * at a spot the cursor no longer covers, often off screen.
  */
-export const pointer = { x: 0, y: 0, known: false };
+export const pointer = { x: 0, y: 0, screenX: 0, screenY: 0, known: false };
 
 function sameBox(
   a: PresentationState['focus'] | undefined,

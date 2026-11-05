@@ -16,12 +16,12 @@ import {
   boundaryTree,
   collectRooms,
   edgeCaption,
-  edgesBetween,
   edgeTechnology,
   isArchitecture,
   isBoundary,
   nameOf,
   oneLine,
+  relationshipsBetween,
   titleOf,
   type ExportRoom,
 } from './shared';
@@ -116,6 +116,8 @@ function topKind(level: ViewLevel | undefined, view: DraftDocument): Kind {
 const BELOW: Record<Kind, Kind | undefined> = { person: undefined, softwareSystem: 'container', container: 'component', component: undefined };
 
 interface Model {
+  /** People found inside a system or container: the DSL declares people only at model level. */
+  people: string[];
   lines: string[];
   relationships: string[];
   /** Systems with containers and containers with components — what the views section can show. */
@@ -127,7 +129,7 @@ export function structurizrSource(document: DraftDocument): string {
   const rooms = collectRooms(document);
   const aliases = aliasTable(rooms, DSL_RESERVED);
   const roomByOwner = new Map(rooms.filter((room) => room.owners.length > 0).map((room) => [room.owners[room.owners.length - 1]!.id, room]));
-  const model: Model = { lines: [], relationships: [], systems: [], containers: [] };
+  const model: Model = { people: [], lines: [], relationships: [], systems: [], containers: [] };
   const title = titleOf(document);
 
   const emitRoom = (room: ExportRoom, depth: Kind, at: number) => {
@@ -143,6 +145,11 @@ export function structurizrSource(document: DraftDocument): string {
         }
         const alias = aliases.get(node.id)!;
         const kind = kindAt(node, depth);
+        if (kind === 'person' && depth !== 'softwareSystem') {
+          // Identifiers are flat, so its relationships still resolve from where it is hoisted to.
+          model.people.push(`${INDENT.repeat(2)}${alias} = ${declaration(node, kind)}`);
+          continue;
+        }
         const inside = roomByOwner.get(node.id);
         const below = kind === 'person' ? undefined : BELOW[kind];
         if (inside && below) {
@@ -165,7 +172,7 @@ export function structurizrSource(document: DraftDocument): string {
     emit(tree.roots, at);
 
     const exported = new Set(graph.nodes.filter(isArchitecture).map((node) => node.id));
-    for (const edge of edgesBetween(graph, exported)) {
+    for (const edge of relationshipsBetween(graph, exported)) {
       const args = [str(edgeCaption(graph, edge) || (edge.directed ? 'uses' : 'relates to'))];
       const technology = edgeTechnology(edge);
       if (technology) args.push(str(technology));
@@ -177,10 +184,8 @@ export function structurizrSource(document: DraftDocument): string {
   if (top === 'softwareSystem') {
     emitRoom(rooms[0]!, 'softwareSystem', 2);
   } else {
-    // A container or component view is the inside of one system; the canvas stands for it. People
-    // still belong at the top, so they are hoisted out of the wrapper.
-    const people = rooms[0]!.document.nodes.filter((node) => kindAt(node, 'container') === 'person');
-    for (const person of people) model.lines.push(`${INDENT.repeat(2)}${aliases.get(person.id)!} = ${declaration(person, 'person')}`);
+    // A container or component view is the inside of one system; the canvas stands for it. Its
+    // people are hoisted out of the wrapper by `emitRoom`, like people in any nested room.
     const systemAlias = uniqueAlias('System', aliases);
     model.systems.push(systemAlias);
     const inner = top === 'component' ? uniqueAlias('Container', aliases) : undefined;
@@ -189,23 +194,9 @@ export function structurizrSource(document: DraftDocument): string {
       model.containers.push(inner);
       model.lines.push(`${INDENT.repeat(3)}${inner} = container ${str(title)} {`);
     }
-    const withoutPeople: ExportRoom = {
-      ...rooms[0]!,
-      document: { ...rooms[0]!.document, nodes: rooms[0]!.document.nodes.filter((node) => !people.includes(node)) },
-    };
-    emitRoom(withoutPeople, top, inner ? 4 : 3);
+    emitRoom(rooms[0]!, top, inner ? 4 : 3);
     if (inner) model.lines.push(`${INDENT.repeat(3)}}`);
     model.lines.push(`${INDENT.repeat(2)}}`);
-    // Relationships to the hoisted people were skipped by the filtered walk; add them back.
-    const peopleIds = new Set(people.map((person) => person.id));
-    const ids = new Set(rooms[0]!.document.nodes.filter(isArchitecture).map((node) => node.id));
-    for (const edge of edgesBetween(rooms[0]!.document, ids)) {
-      if (!peopleIds.has(edge.source) && !peopleIds.has(edge.target)) continue;
-      const args = [str(edgeCaption(rooms[0]!.document, edge) || 'uses')];
-      const technology = edgeTechnology(edge);
-      if (technology) args.push(str(technology));
-      model.relationships.push(`${INDENT.repeat(2)}${aliases.get(edge.source)!} -> ${aliases.get(edge.target)!} ${args.join(' ')}`);
-    }
   }
 
   const views = [`${INDENT.repeat(2)}systemLandscape ${str('Landscape')} {`, `${INDENT.repeat(3)}include *`, `${INDENT.repeat(3)}autoLayout lr`, `${INDENT.repeat(2)}}`];
@@ -221,6 +212,7 @@ export function structurizrSource(document: DraftDocument): string {
     `workspace ${str(title)} ${str('Exported from Draft Canvas')} {`,
     '',
     `${INDENT}model {`,
+    ...model.people,
     ...model.lines,
     ...(model.relationships.length > 0 ? ['', ...model.relationships] : []),
     `${INDENT}}`,
@@ -237,7 +229,7 @@ export function structurizrSource(document: DraftDocument): string {
 
 /** `System`, or `System2` when a shape already took the name — the wrapper is declared after the table. */
 function uniqueAlias(base: string, aliases: Map<string, string>): string {
-  const taken = new Set(aliases.values());
-  if (!taken.has(base)) return base;
-  for (let n = 2; ; n += 1) if (!taken.has(`${base}${n}`)) return `${base}${n}`;
+  const taken = new Set([...aliases.values()].map((alias) => alias.toLowerCase()));
+  if (!taken.has(base.toLowerCase())) return base;
+  for (let n = 2; ; n += 1) if (!taken.has(`${base}${n}`.toLowerCase())) return `${base}${n}`;
 }

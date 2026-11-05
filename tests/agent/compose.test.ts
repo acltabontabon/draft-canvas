@@ -66,7 +66,7 @@ describe('compose', () => {
     // The boundary's own note heads it, above what it holds.
     expect(owner.y).toBeLessThan(doc.nodes.find((n) => n.id === 'posting')!.y);
     expect(doc.flows.map((f) => f.title)).toEqual(['Normal processing']);
-    expect(out.receipt).toMatchObject({ quality: { errors: 0 } });
+    expect(out.receipt).toMatchObject({ created: { notes: 2, attachments: 2 }, quality: { errors: 0 } });
   });
 
   it('lays a note about an element out right beside it, inside its boundary, where a read finds it again', () => {

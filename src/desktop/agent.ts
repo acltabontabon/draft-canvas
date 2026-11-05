@@ -752,6 +752,7 @@ async function update(api: DesktopApi, host: AgentHost, event: Request) {
     }
     if (reply.kind !== 'refused') throw new AgentError('INTERNAL', 'The editor did not answer.');
     if (reply.code === 'BUSY') throw new AgentError('BUSY', `${reply.reason ?? 'The editor is busy.'} Nothing changed.`, { retryable: true });
+    if (reply.code === 'READ_ONLY') throw new AgentError('READ_ONLY', `${reply.reason ?? 'The diagram is read-only.'} Nothing changed.`);
     // Bounded: in a busy live session the file can keep moving under every re-run, and the agent is
     // better told to try again than kept here.
     if (attempt >= MAX_COMMIT_REBASES) throw conflict(reply.revision);
@@ -805,6 +806,12 @@ async function update(api: DesktopApi, host: AgentHost, event: Request) {
  */
 async function updateFile(api: DesktopApi, host: AgentHost, event: Request, expected: string) {
   const { args, context } = event;
+  // Open when the broker sent it, closed by its turn: the broker sent no text for an open diagram,
+  // and answering NOT_FOUND told the agent to give up on a diagram that is right there. The same
+  // answer as `fileForInTurn`'s for a read.
+  if (context.open && (context.text === undefined || context.stamp === undefined)) {
+    throw new AgentError('DOCUMENT_BUSY', 'The open diagram changed while this request was waiting. Read the target diagram again.', { retryable: true });
+  }
   if (context.text === undefined || context.stamp === undefined) throw new AgentError('NOT_FOUND', 'That diagram could not be read.');
   if (context.displayPath && (await host.hasRecoveryFor(context.displayPath))) {
     throw new AgentError('DOCUMENT_BUSY', 'Draft Canvas is holding unsaved changes to that diagram from an earlier session.', {

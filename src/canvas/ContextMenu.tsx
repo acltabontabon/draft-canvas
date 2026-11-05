@@ -5,7 +5,7 @@ import { warmCopyExports } from '../commands/registry';
 import type { Command } from '../commands/types';
 import { Icon, type IconName } from '../ui/common/Icon';
 import { isEditableTarget } from '../lib/isEditableTarget';
-import { plainShortcut } from '../lib/platform';
+import { ariaShortcut, plainShortcut } from '../lib/platform';
 import {
   anchorsForRect,
   placementTransform,
@@ -225,7 +225,7 @@ export function ContextMenu({ screenPosition, entries, viaKeyboard = false, onSe
       id: `dc-context-menu-item-${index}`,
       type: 'button' as const,
       role: 'menuitem',
-      'aria-keyshortcuts': command.shortcut,
+      'aria-keyshortcuts': ariaShortcut(command.shortcut),
       'data-highlighted': index === highlight ? 'true' : undefined,
       onPointerMove: () => {
         if (highlightRef.current !== index) setHighlight(index);

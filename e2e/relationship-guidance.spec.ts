@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { connectAndOpen, create, newCanvas, nextFrames } from './canvas';
+import { clickEdge, connectAndOpen, create, newCanvas, nextFrames } from './canvas';
 
 /**
  * The opinionated relationship model beyond what `connector-semantics.spec.ts` already covers:
@@ -115,12 +115,7 @@ test.describe('Topic-aware relationships', () => {
     await page.getByRole('option', { name: 'Writes', exact: true }).click();
     await expect(relation).toHaveText('Writes');
 
-    const nodeA = (await page.locator('.dc-node').nth(0).boundingBox())!;
-    const nodeB = (await page.locator('.dc-node').nth(1).boundingBox())!;
-    await page.mouse.click(
-      (nodeA.x + nodeA.width + nodeB.x) / 2,
-      (nodeA.y + nodeA.height / 2 + nodeB.y + nodeB.height / 2) / 2,
-    );
+    await clickEdge(page);
 
     const target = (await page.locator('.dc-edge-endpoint').nth(1).boundingBox())!;
     const topic = (await page.locator('.dc-node').nth(2).boundingBox())!;

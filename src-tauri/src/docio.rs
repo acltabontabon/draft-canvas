@@ -282,6 +282,15 @@ pub fn create_new_atomic(target: &Path, bytes: &[u8]) -> Result<String, AppError
 /// (the default on macOS and on Windows) `old` and `new` name the same file, so a plain `fs::rename` can
 /// silently no-op there; renaming through a temporary sibling name forces the change through everywhere.
 pub fn rename_atomic(old: &Path, new: &Path) -> Result<(), AppError> {
+    // Under `old`'s writing lock, like a save: an agent's write landing between the link and the
+    // remove of `rename_no_replace` replaced the old name just before it was deleted, losing the edit
+    // while the agent was told it was saved.
+    let file_lock = writing_lock(old);
+    let _writing = lock(&file_lock);
+    rename_held(old, new)
+}
+
+fn rename_held(old: &Path, new: &Path) -> Result<(), AppError> {
     let io_err = |e: io::Error| AppError::from_io(&e, Verb::Save, Subject::Path(new));
     if old == new {
         return Ok(());
@@ -327,8 +336,11 @@ pub fn rename_atomic(old: &Path, new: &Path) -> Result<(), AppError> {
 /// external drive) where no rename reaches. There the document is copied and made durable first, and
 /// only then is the original removed, so a failure part-way leaves it where it was.
 pub fn move_atomic(old: &Path, new: &Path) -> Result<(), AppError> {
+    // Held for the same reason as `rename_atomic`.
+    let file_lock = writing_lock(old);
+    let _writing = lock(&file_lock);
     if old.parent() == new.parent() {
-        return rename_atomic(old, new);
+        return rename_held(old, new);
     }
     if fs::symlink_metadata(new).is_ok() {
         return Err(AppError::already_exists(new));

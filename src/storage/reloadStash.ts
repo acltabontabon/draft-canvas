@@ -28,20 +28,40 @@ export interface ReloadStashContext {
   base?: SharedMetadata;
   /** The stored row's content stamp the edits were made over (`DraftRepository.knownContentStamp`). */
   stamp?: string;
+  /** The stamp a write still in flight as the page left would have stored, had it landed after all
+   *  (`DraftRepository.writingContentStamp`) — the edits' own, not another tab's. */
+  writing?: string;
+  /** The edits were held back by a conflict with another tab's copy that the user hadn't resolved. */
+  conflict?: true;
 }
 
 export interface ReloadStash extends ReloadStashContext {
   document: DraftDocument;
 }
 
-export function stashForReload(document: DraftDocument, context: ReloadStashContext = {}): void {
+export function stashForReload(document: DraftDocument, { base, stamp, writing, conflict }: ReloadStashContext = {}): void {
   try {
     const id = document.metadata.id;
     window.sessionStorage.setItem(PREFIX + id, JSON.stringify(document));
-    if (context.base || context.stamp !== undefined) window.sessionStorage.setItem(CONTEXT_PREFIX + id, JSON.stringify(context));
-    else window.sessionStorage.removeItem(CONTEXT_PREFIX + id);
+    // Picked field by field: a whole `ReloadStash` passed back in would store its document twice.
+    if (base || stamp !== undefined || writing !== undefined || conflict) {
+      window.sessionStorage.setItem(CONTEXT_PREFIX + id, JSON.stringify({ base, stamp, writing, conflict }));
+    } else {
+      window.sessionStorage.removeItem(CONTEXT_PREFIX + id);
+    }
   } catch {
     // Quota, or storage blocked: the write in flight is all there is.
+  }
+}
+
+/** Forgets a canvas's stash once what it holds is stored (or the user chose another copy), so a later
+ *  open in this tab doesn't bring back edits that are already on disk — or were turned down. */
+export function discardReloadStash(id: string): void {
+  try {
+    window.sessionStorage.removeItem(PREFIX + id);
+    window.sessionStorage.removeItem(CONTEXT_PREFIX + id);
+  } catch {
+    // Storage blocked: nothing was stashed either.
   }
 }
 
@@ -57,6 +77,8 @@ function readContext(text: string | null): ReloadStashContext {
       context.base = typeof base.projectId === 'string' ? { title: base.title, projectId: base.projectId } : { title: base.title };
     }
     if (typeof raw.stamp === 'string') context.stamp = raw.stamp;
+    if (typeof raw.writing === 'string') context.writing = raw.writing;
+    if (raw.conflict === true) context.conflict = true;
     return context;
   } catch {
     return {};
