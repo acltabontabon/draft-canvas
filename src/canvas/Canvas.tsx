@@ -156,9 +156,9 @@ function landingPointFor(
   const sourceRect = rectOfInternal(source, byId.get(edge.source)?.type);
   const targetRect = rectOfInternal(target, byId.get(edge.target)?.type);
   if (!sourceRect || !targetRect) return null;
-  // `interactionActive`: a drag is in flight, so route it the cheap way the live edge is being
-  // routed right now — matching what is on screen matters more here than obstacle avoidance.
-  return edgeLabelPoint(document, edge, sourceRect, targetRect, { interactionActive: true });
+  // A drag is in flight: routed the way the canvas draws the connector right now, which is as at
+  // rest unless the dragged shape is one it detours around.
+  return edgeLabelPoint(document, edge, sourceRect, targetRect, { interactionActive: true, moving: useUiStore.getState().movingNodeIds, own: true });
 }
 
 /** A capped step from `from` toward `to`, in screen pixels, rounded so sub-pixel drift never

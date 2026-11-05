@@ -468,6 +468,19 @@ describe('agent requests on desktop', () => {
     }
   });
 
+  it('refuses a read-only copy without telling the agent to retry', async () => {
+    await openOrders();
+    useUiStore.getState().setReadOnly({ sharedTitle: 'Orders' });
+    try {
+      expect(answerInEditor({ kind: 'commit', expectedRevision: currentRevision(), file: fileOf(useEditorStore.getState()), label: 'x' })).toMatchObject({
+        kind: 'refused',
+        code: 'READ_ONLY',
+      });
+    } finally {
+      useUiStore.getState().setReadOnly(null);
+    }
+  });
+
   it('says when a save after the change failed, so the change is not sent again', async () => {
     const handle = await openOrders();
     h.files.get(handle)!.readOnly = true; // made read-only behind the app's back: the save will fail

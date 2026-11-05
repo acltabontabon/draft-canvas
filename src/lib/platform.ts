@@ -21,3 +21,22 @@ export function plainShortcut(shortcut: string, mac = isMac): string {
   const keys = shortcut.split(' ');
   return mac ? keys.map((key) => MAC_KEY_SYMBOLS[key] ?? key).join('') : keys.join('+');
 }
+
+const ARIA_KEYS: Record<string, string> = {
+  '⌘': 'Meta',
+  Ctrl: 'Control',
+  '⌥': 'Alt',
+  Esc: 'Escape',
+  '→': 'ArrowRight',
+  '←': 'ArrowLeft',
+  '↑': 'ArrowUp',
+  '↓': 'ArrowDown',
+  '+': 'Plus',
+  '−': 'Minus',
+};
+
+/** The same shortcut for `aria-keyshortcuts`, which names keys as `KeyboardEvent.key` does and joins
+ *  them with `+` ("Meta+Shift+Z", "Shift+ArrowRight"): a screen reader can't read "⌘ ⇧ Z". */
+export function ariaShortcut(shortcut: string | undefined): string | undefined {
+  return shortcut ? shortcut.split(' ').map((key) => ARIA_KEYS[key] ?? key).join('+') : undefined;
+}

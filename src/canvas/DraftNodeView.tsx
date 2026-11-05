@@ -178,7 +178,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   useEffect(() => {
     if (!editRequested) return;
     useUiStore.getState().requestEdit(null);
-    if (mode !== 'present') setEditing(true);
+    if (mode !== 'present' && useUiStore.getState().readOnly === null) setEditing(true);
   }, [editRequested, mode]);
 
   useLayoutEffect(() => {
@@ -355,7 +355,9 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
 
   // Doesn't depend on `node`, so — like `shapes` above — this is computed and its effect run
   // unconditionally, ahead of the `!node` early return below.
-  const readOnly = mode === 'present';
+  // A view-only collaborator's copy refuses every change, so it offers no handles to make one.
+  const viewOnly = useUiStore((state) => state.readOnly !== null);
+  const readOnly = mode === 'present' || viewOnly;
 
   // `NodeResizer` below is only rendered while `!readOnly`, so switching to Presentation Mode
   // mid-resize (e.g. Cmd/Ctrl+Enter pressed without releasing the resize handle) unmounts it

@@ -651,8 +651,9 @@ function EditorScreen({ session }: { session: DocumentSession }) {
           {/* A right-click selects what it lands on, which would also raise that element's inspector
               right under the menu; an open point's popover sits beside the same element — one
               floating surface at a time. */}
-          {!presenting && !tracing && !readingTraffic && !contextMenu && !openPointPopoverOpen && <EdgeInspectorPopover />}
-          {!presenting && !tracing && !readingTraffic && !contextMenu && !openPointPopoverOpen && (
+          {/* A view-only collaborator gets no editing surface: the store refuses every change they make. */}
+          {!presenting && !tracing && !readingTraffic && !contextMenu && !openPointPopoverOpen && !readOnly && <EdgeInspectorPopover />}
+          {!presenting && !tracing && !readingTraffic && !contextMenu && !openPointPopoverOpen && !readOnly && (
             <ElementInspectorPopover buildCommandContext={buildCommandContext} />
           )}
           {!presenting && !tracing && <ExampleBanner onPresent={onPresent} />}
@@ -660,7 +661,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
           <PresentationCalloutLayer />
           <EmptyState onInsertStarter={insertStarter} />
           {!presenting && <ContinuationAnnouncer />}
-          {!presenting && !tracing && !readingTraffic && <Inspector />}
+          {!presenting && !tracing && !readingTraffic && !readOnly && <Inspector />}
           {!presenting && !tracing && <FlowPanel onPresent={onPresent} />}
           {!presenting && ProposalPanelChunk && (
             <Suspense fallback={null}>

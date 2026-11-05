@@ -7,6 +7,7 @@ import {
   type PlacementPoint,
 } from '../../../canvas/popoverPlacement';
 import { isEditableTarget } from '../../../lib/isEditableTarget';
+import { ariaShortcut } from '../../../lib/platform';
 import { Icon, type IconName } from '../../common/Icon';
 
 export interface ToolbarMenuItem {
@@ -197,7 +198,7 @@ export function ToolbarMenu({ label = 'More', anchorRect, trigger, items, onDism
           role="menuitem"
           // The visible caps are decoration for the name's purposes — announcing "Keyboard
           // shortcuts question mark" helps nobody. `aria-keyshortcuts` is what conveys this.
-          aria-keyshortcuts={item.shortcut}
+          aria-keyshortcuts={ariaShortcut(item.shortcut)}
           className="dc-context-menu-item dc-toolbar-menu-item"
           data-item={item.id}
           data-highlighted={index === highlight ? 'true' : undefined}

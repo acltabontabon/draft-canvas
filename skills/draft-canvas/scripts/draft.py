@@ -22,6 +22,7 @@ import argparse
 import json
 import os
 import re
+import subprocess
 import sys
 import tempfile
 import uuid
@@ -79,8 +80,10 @@ def humanize(name: str) -> str:
 class Draft:
     """Elements and relationships being drafted, with the names each element is known by."""
 
-    def __init__(self, root: str):
+    def __init__(self, root: str, prefix: str = ''):
         self.root = root
+        # Evidence is repository-relative: a surveyed sub-folder's paths start with where it sits.
+        self.prefix = prefix
         self.nodes: list[dict] = []
         self.ids: dict[str, str] = {}  # every name an element goes by (slugged) → its id
         self.relationships: list[dict] = []
@@ -92,7 +95,7 @@ class Draft:
         for path in paths:
             if path and path not in seen and os.path.exists(os.path.join(self.root, path)):
                 seen.append(path)
-        return [{'path': p, 'basis': 'observed'} for p in seen[:3]]
+        return [{'path': self.prefix + p, 'basis': 'observed'} for p in seen[:3]]
 
     def add(
         self, name: str, kind: str, technology: str | None, evidence: list[dict], aliases: tuple[str, ...] = (), *, label: str | None = None
@@ -130,9 +133,10 @@ class Draft:
         self.relationships.append({'id': f'r{self.made}', 'from': source, 'to': target, 'label': TODO_LABEL, **extra})
 
 
-def build(data: dict) -> tuple[dict, dict]:
-    """The create_diagram request for a survey, and a summary of how it was drafted."""
-    d = Draft(data['root'])
+def build(data: dict, prefix: str = '') -> tuple[dict, dict]:
+    """The create_diagram request for a survey, and a summary of how it was drafted. `prefix` is
+    where the surveyed folder sits in its repository ('' at the root, else ending in '/')."""
+    d = Draft(data['root'], prefix)
     units = [
         u
         for u in data['units']
@@ -143,7 +147,8 @@ def build(data: dict) -> tuple[dict, dict]:
     channels = channel_groups(data['messages'])
     broker = next((s for s in signals if s['category'] == 'messaging' and s['type'] in ('queue', 'topic', 'stream')), None)
 
-    d.add('User', 'person', None, [])
+    # Not registered under a name: a service called `user` is its own box, not the person.
+    d.nodes.append({'id': 'user', 'type': 'person', 'label': 'User'})
     for edge in (s for s in signals if s['category'] == 'edge'):
         d.add(edge['name'], 'gateway', edge['name'], d.evidence(*paths_of(edge, data)), aliases=(edge['key'],), label=edge['name'])
     add_containers(d, data, units, infra_by_key)
@@ -450,13 +455,27 @@ def shape(data: dict, d: Draft) -> tuple[dict, dict]:
         request.update(level='container', groups=groups, nodes=nodes, relationships=d.relationships)
         view = f'container view of {len(d.nodes)} elements' + (' in a system boundary' if groups else '')
     request.update(flows=[], notes=[])
-    summary = {
+    summary: dict = {
         'view': view,
         'elements': len(d.nodes),
         'relationships': len(d.relationships),
         'placeholders': len(placeholder_paths(request)),
     }
+    if not inside:
+        summary['warnings'] = [
+            'no running parts found: check the folder, or draw the system from the code by hand instead of sending this draft'
+        ]
     return request, summary
+
+
+def repository_root(folder: str) -> str:
+    """The git work tree holding `folder`, or the folder itself outside one."""
+    try:
+        out = subprocess.run(['git', '-C', folder, 'rev-parse', '--show-toplevel'], capture_output=True, timeout=10, check=True)
+    except (OSError, subprocess.SubprocessError):
+        return folder
+    top = out.stdout.decode('utf-8', 'replace').strip()
+    return os.path.realpath(top) if top else folder
 
 
 def placeholder_paths(value: object) -> list[str]:
@@ -486,7 +505,12 @@ def main(argv: list[str] | None = None) -> int:
         parser.error('--max-files must be positive')
     root = os.path.realpath(args.root)
     out = os.path.realpath(args.out) if args.out else tempfile.mkdtemp(prefix='draft-canvas-')
-    if os.path.commonpath([out, root]) == root:
+    repo = repository_root(root)
+    try:
+        inside_repo = os.path.commonpath([out, repo]) == repo
+    except ValueError:  # different drives on Windows
+        inside_repo = False
+    if inside_repo:
         print(f'Refusing to write into the repository ({out}); pass --out outside it.', file=sys.stderr)
         return 2
     os.makedirs(out, exist_ok=True)
@@ -498,7 +522,8 @@ def main(argv: list[str] | None = None) -> int:
 
     data = scan.survey(root, args.max_files)
     survey_text = scan.render_text(data)
-    request, summary = build(data)
+    prefix = os.path.relpath(root, repo).replace(os.sep, '/')
+    request, summary = build(data, '' if prefix == '.' else prefix + '/')
     with open(os.path.join(out, 'survey.md'), 'x', encoding='utf-8') as fh:
         fh.write(survey_text + '\n')
     request_path = os.path.join(out, 'request.json')
@@ -511,10 +536,12 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     print(survey_text)
+    for warning in summary.get('warnings', []):
+        print(f'Warning: {warning}', file=sys.stderr)
     print('\n## Draft request')
     print(f'{request_path}: {summary["view"]}; {summary["relationships"]} connections; {summary["placeholders"]} TODO placeholders.')
     print('Confirm each element in code (delete what is wrong, add what is missing), fill every TODO, add the main flow,')
-    print(f'then: python3 {os.path.join(os.path.dirname(os.path.abspath(__file__)), "check_diagram.py")} {request_path} --repo {root}')
+    print(f'then: python3 {os.path.join(os.path.dirname(os.path.abspath(__file__)), "check_diagram.py")} {request_path} --repo {repo}')
     return 0
 
 

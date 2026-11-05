@@ -10,7 +10,8 @@ import { connectorRoutes } from '../src/edges/connectorRoutes';
 import { endpointPlan } from '../src/edges/endpoints';
 import { separationPlan } from '../src/edges/separation';
 import { obstaclesForEdge } from '../src/edges/obstacles';
-import { laneIndex } from '../src/edges/routing';
+import { labelLaneOffset, laneIndex, rectOf } from '../src/edges/routing';
+import { edgeLabelPoint } from '../src/canvas/edgeGeometry';
 import { DARK } from '../src/render/theme/tokens';
 import { StaticTextMeasurer } from '../src/render/text/measure';
 import { routingCorpus } from './fixtures/routing/corpus';
@@ -52,6 +53,27 @@ describe('the shared route accessor', () => {
       }
     }
     expect(compared).toBeGreaterThan(200);
+  });
+
+  it('points overlays at the label of a connector moved onto a track, where the canvas draws it', () => {
+    let tracked = 0;
+    for (const fixture of routingCorpus().filter((f) => f.source !== 'workload')) {
+      const byId = new Map(fixture.nodes.map((n) => [n.id, n]));
+      const lanes = laneIndex(fixture.edges);
+      const separation = separationPlan(fixture.nodes, fixture.edges);
+      for (const edge of fixture.edges) {
+        if (!separation.tracksFor(edge.id)?.request?.length) continue;
+        const source = byId.get(edge.source);
+        const target = byId.get(edge.target);
+        const route = connectorRoutes(edge, fixture, 'canvas', byId)?.request;
+        if (!source || !target || !route) continue;
+        const nudge = labelLaneOffset(route.source.side, route.target.side, lanes.get(edge.id)?.offset ?? 0);
+        const point = edgeLabelPoint(fixture, edge, rectOf(source), rectOf(target), { own: true });
+        expect({ x: point.x, y: point.y }, `${fixture.id} ${edge.id}`).toEqual({ x: route.labelX + nudge.x, y: route.labelY + nudge.y });
+        tracked += 1;
+      }
+    }
+    expect(tracked).toBeGreaterThan(0);
   });
 
   it('excludes folded compensations from endpoint spreading, lanes and agent checks', () => {

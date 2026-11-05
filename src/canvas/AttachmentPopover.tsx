@@ -72,6 +72,8 @@ export function AttachmentPopover() {
 function AttachmentPopoverBody({ hostId, closing, listening }: { hostId: string; closing: boolean; listening: boolean }) {
   const flowPanelOpen = useUiStore((state) => state.flowPanelOpen);
   const interactionActive = useUiStore((state) => state.interactionActive);
+  // A view-only collaborator reads attachments; the store would refuse any edit.
+  const viewOnly = useUiStore((state) => state.readOnly !== null);
   const setOpenAttachmentDetail = useUiStore((state) => state.setOpenAttachmentDetail);
   const liveHost = useEditorStore((state) => selectNode(state.document, hostId));
   const liveInternal = useInternalNode(hostId);
@@ -185,7 +187,7 @@ function AttachmentPopoverBody({ hostId, closing, listening }: { hostId: string;
             hostId={displayHost.id}
             attachments={attachments}
             cardSide={cardSide}
-            editable
+            editable={!viewOnly}
             actions={attachmentActions}
           />
         </div>

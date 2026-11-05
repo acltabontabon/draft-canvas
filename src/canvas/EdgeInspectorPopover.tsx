@@ -35,6 +35,7 @@ import { useUiStore } from '../store/uiStore';
 import { edgeIndex, nodeIndex } from '../store/selectors';
 import { useThemeValue } from '../theme/useTheme';
 import { Button } from '../ui/common/Button';
+import { Icon } from '../ui/common/Icon';
 import { Tooltip, TooltipGroup } from '../ui/common/Tooltip';
 import {
   attachmentRowBelowsSourceOrTarget,
@@ -94,6 +95,15 @@ const ROUTE_PREVIEWS: { value: EdgeRouting; label: string; path: string }[] = [
   { value: 'smoothstep', label: 'Stepped', path: 'M4 15h12V5h14' },
   { value: 'bezier', label: 'Curved', path: 'M4 15C15 15 19 5 30 5' },
 ];
+
+const isStepped = (routing: EdgeRouting) => routing !== 'straight' && routing !== 'bezier';
+
+/** A stepped line's bends are its elbows: a curve through them comes out as a wave, and a stepped
+ *  line through free bends adds a jog at each. Crossing between the two starts the route afresh,
+ *  in the same undo step; straight ⇄ curved keeps the bends, which mean the same to both. */
+function routingPatch(edge: DraftEdge, routing: EdgeRouting): Partial<DraftEdge> {
+  return edge.waypoints && isStepped(edge.routing) !== isStepped(routing) ? { routing, waypoints: undefined } : { routing };
+}
 
 const CONNECTOR_KIND_LABELS: Record<ConnectorKind, string> = {
   sync: 'Sync',
@@ -164,6 +174,7 @@ export function EdgeInspectorPopover() {
 function EdgeInspectorBody({ edgeId, closing }: { edgeId: string; closing: boolean }) {
   const document = useEditorStore((state) => state.document);
   const interactionActive = useUiStore((state) => state.interactionActive);
+  const movingNodeIds = useUiStore((state) => state.movingNodeIds);
   const theme = useThemeValue();
 
   const liveEdge = edgeIndex(document.edges).get(edgeId);
@@ -239,7 +250,7 @@ function EdgeInspectorBody({ edgeId, closing }: { edgeId: string; closing: boole
   // line never passes through — see `edgeLabelPoint`.
   const labelPoint =
     displayEdge && sourceRect && targetRect
-      ? edgeLabelPoint(document, displayEdge, sourceRect, targetRect, { interactionActive })
+      ? edgeLabelPoint(document, displayEdge, sourceRect, targetRect, { interactionActive, moving: movingNodeIds })
       : null;
   // Whether the line is drawn clear of the shapes — from the routes the canvas draws. Not asked while
   // a gesture reshapes it: those frames are never checked.
@@ -332,7 +343,7 @@ function EdgeInspectorBody({ edgeId, closing }: { edgeId: string; closing: boole
         onPointerDown={(event) => event.stopPropagation()}
       >
         <span className="dc-popover-caret" aria-hidden="true" />
-        <button type="button" className="dc-popover-drag-zone" aria-label="Move connector popup" {...dragControl.handle} />
+        <button type="button" className="dc-popover-drag-zone" aria-label="Move connector popup" tabIndex={-1} data-pointer-only {...dragControl.handle} />
         <div className="dc-popover-inner">
           {/* Keyed on the edge id: the editor below is now always mounted (no more "⋯" to
               unmount it on collapse), so switching to a different connector must remount this
@@ -1503,7 +1514,7 @@ function ExpandedPanel({
                       aria-label={`${route.label} route`}
                       aria-pressed={edge.routing === route.value}
                       {...tip}
-                      onClick={() => useEditorStore.getState().updateEdgeById(edge.id, { routing: route.value }, 'Change routing')}
+                      onClick={() => useEditorStore.getState().updateEdgeById(edge.id, routingPatch(edge, route.value), 'Change routing')}
                     >
                       <svg viewBox="0 0 34 20" width="27" height="17" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                         <path d={route.path} />
@@ -1514,6 +1525,21 @@ function ExpandedPanel({
                 </Tooltip>
               ))}
             </div>
+            {edge.waypoints && (
+              <Tooltip content={{ title: 'Reset route', description: 'Remove the bends and route it automatically.' }}>
+                {(tip) => (
+                  <Button
+                    variant="ghost"
+                    className="dc-connector-icon-button"
+                    aria-label="Reset route"
+                    {...tip}
+                    onClick={() => useEditorStore.getState().setEdgeWaypoints(edge.id, undefined)}
+                  >
+                    <Icon name="refresh" size={14} />
+                  </Button>
+                )}
+              </Tooltip>
+            )}
           </div>
           <div className="dc-connector-drawing-row">
             <span className="dc-inspector-section-label">Style</span>

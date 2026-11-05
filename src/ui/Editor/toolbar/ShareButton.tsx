@@ -27,8 +27,9 @@ export function ShareButton({ onExport }: { onExport: () => void }) {
     setMenu(null);
     ref.current?.focus();
   }, []);
+  // Focus goes back to the trigger first, so the dialog an item opens returns it there on close.
   const choose = (action: () => void) => () => {
-    setMenu(null);
+    close();
     action();
   };
 

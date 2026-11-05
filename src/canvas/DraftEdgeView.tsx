@@ -349,6 +349,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const [editingCondition, setEditingCondition] = useState(false);
   const stopEditingCondition = useCallback(() => setEditingCondition(false), []);
   const editRequested = useUiStore((state) => state.editRequestId === id);
+  const compensating = Boolean(edge?.compensationFor);
   const jumpFlash = useUiStore((state) => state.jumpFlashId === id);
   const pointed = useUiStore((state) => state.pointedIds?.has(id) ?? false);
 
@@ -383,9 +384,11 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   useEffect(() => {
     if (!editRequested) return;
     useUiStore.getState().requestEdit(null);
+    // A recovery connector's chip shows its action's name, not the label this editor would rewrite;
+    // double-click refuses it too, and the inspector's name field is where it is renamed.
     // oxlint-disable-next-line react/set-state-in-effect -- one-shot external command, see comment above.
-    if (mode !== 'present') setEditing(true);
-  }, [editRequested, mode]);
+    if (mode !== 'present' && !compensating && useUiStore.getState().readOnly === null) setEditing(true);
+  }, [editRequested, mode, compensating]);
 
   // Computed here, ahead of the early returns below, purely so the hooks
   // that follow (`lensPulsing`'s state/ref/effect) never run conditionally —
@@ -1071,7 +1074,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
             data-active={isActiveStep ? 'true' : undefined}
             data-lens-dimmed={lensDimmed ? 'true' : undefined}
             style={{ transform: labelChipTransform(chipSide, chipX, chipY) }}
-            onDoubleClick={() => mode === 'edit' && !edge.compensationFor && setEditing(true)}
+            onDoubleClick={() => mode === 'edit' && !edge.compensationFor && useUiStore.getState().readOnly === null && setEditing(true)}
           >
             {hasStep && (
               <span className="dc-edge-label-step" style={{ color }}>
@@ -1175,7 +1178,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
               data-editing={editingCondition ? 'true' : undefined}
               style={{ color }}
               title={mode === 'edit' && !editingCondition ? 'Double-click to edit' : undefined}
-              onDoubleClick={() => mode === 'edit' && setEditingCondition(true)}
+              onDoubleClick={() => mode === 'edit' && useUiStore.getState().readOnly === null && setEditingCondition(true)}
             >
               {editingCondition ? (
                 <input

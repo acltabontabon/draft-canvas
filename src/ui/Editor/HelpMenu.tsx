@@ -18,13 +18,15 @@ export function HistoryControls() {
   const redo = useEditorStore((state) => state.redo);
   const past = useEditorStore((state) => state.history.past.length);
   const future = useEditorStore((state) => state.history.future.length);
+  // The store refuses both while a flow is traced or the copy is read-only; say so, don't no-op.
+  const held = useUiStore((state) => state.flowTrace !== null || state.readOnly !== null);
   return (
     <span className="dc-status-history">
       <Tooltip content={toolbarTooltip('undo')}>
-        {(tip) => <Button icon="undo" variant="quiet" disabled={past === 0} onClick={undo} aria-label={toolbarLabel('undo')} {...tip} />}
+        {(tip) => <Button icon="undo" variant="quiet" disabled={held || past === 0} onClick={undo} aria-label={toolbarLabel('undo')} {...tip} />}
       </Tooltip>
       <Tooltip content={toolbarTooltip('redo')}>
-        {(tip) => <Button icon="redo" variant="quiet" disabled={future === 0} onClick={redo} aria-label={toolbarLabel('redo')} {...tip} />}
+        {(tip) => <Button icon="redo" variant="quiet" disabled={held || future === 0} onClick={redo} aria-label={toolbarLabel('redo')} {...tip} />}
       </Tooltip>
     </span>
   );

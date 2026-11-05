@@ -13,7 +13,7 @@ import {
 } from '../../commands/types';
 import { useCommandContext } from '../../commands/useCommandContext';
 import type { DraftNode } from '../../document/types';
-import { MOD_SYMBOL } from '../../lib/platform';
+import { MOD_SYMBOL, ariaShortcut } from '../../lib/platform';
 import type { FlowPlaybackController } from '../../presentation/useFlowPlayback';
 import { fileOf, useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
@@ -338,7 +338,7 @@ function CommandPaletteBody({ createAt, createAtPointer, playback, onPresent }: 
                   id={`dc-palette-row-${index}`}
                   role="option"
                   aria-selected={index === highlight}
-                  aria-keyshortcuts={entry.shortcut}
+                  aria-keyshortcuts={ariaShortcut(entry.shortcut)}
                   className="dc-palette-row"
                   onPointerMove={() => {
                     if (highlightRef.current !== index) setHighlight(index);

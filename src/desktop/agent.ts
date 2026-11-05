@@ -752,6 +752,7 @@ async function update(api: DesktopApi, host: AgentHost, event: Request) {
     }
     if (reply.kind !== 'refused') throw new AgentError('INTERNAL', 'The editor did not answer.');
     if (reply.code === 'BUSY') throw new AgentError('BUSY', `${reply.reason ?? 'The editor is busy.'} Nothing changed.`, { retryable: true });
+    if (reply.code === 'READ_ONLY') throw new AgentError('READ_ONLY', `${reply.reason ?? 'The diagram is read-only.'} Nothing changed.`);
     // Bounded: in a busy live session the file can keep moving under every re-run, and the agent is
     // better told to try again than kept here.
     if (attempt >= MAX_COMMIT_REBASES) throw conflict(reply.revision);

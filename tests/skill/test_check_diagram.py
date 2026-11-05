@@ -100,6 +100,40 @@ class Refuses(unittest.TestCase):
         self.assertIn('a second relationship api → db', errors)
         self.assertIn('already a step of this flow', errors)
 
+    def test_type_words_are_read_the_way_the_app_reads_them(self) -> None:
+        request = minimal()
+        request['nodes'][0]['type'] = 'Person'
+        request['nodes'].append({'id': 'helper', 'type': 'llm', 'label': 'Assistant'})
+        request['nodes'].append({'id': 'pay', 'type': 'External System', 'label': 'Payments', 'description': 'Takes cards.'})
+        self.assertNotIn('unknown type', '\n'.join(report(request).errors))
+
+    def test_a_list_where_an_id_belongs_is_an_error_not_a_crash(self) -> None:
+        request = minimal(notes=[{'id': 'n', 'text': 'Why.', 'about': ['api']}])
+        request['relationships'][0]['to'] = {'id': 'api'}
+        request['flows'][0]['steps'][0]['spotlight'] = [['user']]
+        errors = '\n'.join(report(request).errors)
+        self.assertIn('note n.about: must be an id (a string)', errors)
+        self.assertIn('relationship r1.to: must be an id (a string)', errors)
+        self.assertIn('flow main.spotlight: must be a list of ids (strings)', errors)
+
+    def test_notes_and_steps_the_app_refuses(self) -> None:
+        request = minimal(
+            groups=[{'id': 'g', 'label': 'Platform'}],
+            notes=[
+                {'id': 'c', 'kind': 'code', 'code': 'x = 1', 'text': 'Caption', 'about': 'api'},
+                {'id': 't', 'text': 'Why.', 'language': 'go', 'about': 'api'},
+                {'id': 'l', 'kind': 'label', 'text': 'Edge', 'about': 'g', 'attach': True},
+            ],
+        )
+        request['nodes'][1]['group'] = 'g'
+        request['flows'][0]['steps'] += [{'relationship': 'r1', 'spotlight': ['api']}, {'spotlight': []}]
+        errors = '\n'.join(report(request).errors)
+        self.assertIn('note c: a code snippet has code, not text', errors)
+        self.assertIn('note t: language: only a note of kind "code" has code', errors)
+        self.assertIn("note l: a label can't attach to a boundary", errors)
+        self.assertIn('not both', errors)
+        self.assertIn('spotlight needs at least one id', errors)
+
     def test_placeholders_left_by_the_draft_are_errors(self) -> None:
         request = minimal()
         request['nodes'][1]['description'] = 'TODO: what it does'

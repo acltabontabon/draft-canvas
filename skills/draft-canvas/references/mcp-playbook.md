@@ -138,6 +138,7 @@ Every refusal carries a `hint` saying what to do; this is the short version.
 | `OUT_OF_SCOPE` | Folder not enabled, or an id outside the `scope` you passed | Folder: tell the person which one to tick in Settings → AI agents. Scope: pass only ids from `read_selection`, or leave `scope` out |
 | `BUSY`, `TIMEOUT`, `APP_UNRESPONSIVE` | Nothing was changed | Retry the identical request with the same `requestId`, at most twice |
 | `OUTCOME_UNKNOWN` | The app stopped answering mid-change | `read_diagram` and compare before sending anything again |
+| `READ_ONLY` | The diagram is read-only (on disk, or opened read-only) | Don't retry. Tell the person; it changes only once they can edit it |
 | `DOCUMENT_BUSY` | The person has unsaved or recovered changes to that diagram, or the file changed on disk under them | Don't retry. Ask them to save or discard, then `read_diagram` and rebuild the change |
 | `NOT_FOUND` | No such diagram or view | `list_diagrams` again |
 

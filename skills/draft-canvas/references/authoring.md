@@ -7,14 +7,16 @@ handled failures. Stop when the requested scope is supported by evidence. Edit `
   add what the survey missed. A survey finding is a hint, not a fact.
 - **Fill every `TODO:`.** Descriptions: one sentence, a verb first ("Takes orders and reserves
   stock."). Relationship labels: a verb phrase from the caller's side, ≤ 32 characters ("Places
-  order", "Publishes OrderPlaced"). `technology`: one product, optionally versioned ("Spring Boot
-  3"), so its logo shows. Add `semantic` and `kind` when the code says
+  order", "Publishes OrderPlaced"); a pipeline drawn in data direction names what moves
+  ([modeling.md](modeling.md#make-the-layouts-job-easy)). `technology`: one product, optionally
+  versioned ("Spring Boot 3"), so its logo shows. Add `semantic` and `kind` when the code says
   ([vocabulary.md](vocabulary.md) maps code to them).
 - **Sharpen the evidence**: add `symbol` and `line` for what you read; `basis: "inferred"` for what you
   concluded without seeing it.
 - **C4 levels** ([modeling.md](modeling.md#pick-the-views)). The draft picks the top view
   from the count; change it if what you learned says otherwise — up to ~8 containers read as one
-  container view, more open on a context view with the containers inside. For a detailed architecture map, give the
+  container view, more open on a context view with the containers inside when people or external
+  systems surround it (otherwise stay on the container view). For a detailed architecture map, give the
   container that holds the main path's logic — the one that orchestrates calls, owns the business
   rules or has modules of its own — a component view (`inside`, `level: "component"`, 5–10 parts),
   and up to two more if they earn it. Do not add depth to a requested overview or a targeted edit.

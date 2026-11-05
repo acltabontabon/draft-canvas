@@ -184,6 +184,32 @@ class CommandLine(unittest.TestCase):
             self.assertEqual(again.returncode, 2)
             self.assertEqual(request.read_text(encoding='utf-8'), 'verified work')
 
+    def test_a_service_named_user_is_not_the_person(self) -> None:
+        compose = 'services:\n  orders:\n    build: ./orders\n    depends_on: [user]\n  user:\n    build: ./user\n'
+        request, _, _ = build({'docker-compose.yml': compose, 'orders/main.go': 'package main\n', 'user/main.go': 'package main\n'})
+        nodes = {n['id']: n['type'] for n in view_of(request)['nodes']}
+        self.assertEqual(nodes['user'], 'person')
+        self.assertIn('user-2', nodes)
+        self.assertNotEqual(nodes['user-2'], 'person')
+
+    def test_a_surveyed_sub_folder_cites_repository_paths(self) -> None:
+        with TempRepo({'services/orders/' + path: text for path, text in SHOP.items()}, git=True) as root, tempfile.TemporaryDirectory() as out:
+            done = run_script('draft', str(root / 'services' / 'orders'), '--out', out)
+            self.assertEqual(done.returncode, 0, done.stderr)
+            self.assertIn(f'--repo {os.path.realpath(root)}', done.stdout)
+            request = json.loads((Path(out) / 'request.json').read_text(encoding='utf-8'))
+            paths = [e['path'] for n in view_of(request)['nodes'] for e in n.get('evidence', [])]
+            self.assertTrue(paths)
+            for path in paths:
+                self.assertTrue(path.startswith('services/orders/'), path)
+                self.assertTrue((root / path).is_file(), path)
+
+    def test_a_folder_with_no_running_parts_says_so(self) -> None:
+        with TempRepo({'notes.txt': 'nothing here\n'}) as root, tempfile.TemporaryDirectory() as out:
+            done = run_script('draft', str(root), '--out', out, '--json')
+            self.assertEqual(done.returncode, 0, done.stderr)
+            self.assertIn('no running parts found', json.loads(done.stdout)['warnings'][0])
+
     def test_output_symlink_cannot_write_into_repository(self) -> None:
         with TempRepo(SHOP) as root, tempfile.TemporaryDirectory() as out:
             link = Path(out) / 'alias'

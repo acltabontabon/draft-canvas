@@ -147,6 +147,15 @@ describe('a shared label in an export', () => {
     expect(svg).toContain('Pay Invoice');
   });
 
+  it('splits for a selected flow only while its step numbers show, as the canvas does', () => {
+    const document = documentOf([40, 560]);
+    document.flows = [{ id: 'f', title: 'Pay', steps: [{ id: 's1', edgeId: 'e0' }] }];
+    document.settings = { ...document.settings, showSequence: false };
+    expect(count(renderDocumentSvg(document, { selectedFlowId: 'f' }).svg)).toBe(1);
+    document.settings = { ...document.settings, showSequence: true };
+    expect(count(renderDocumentSvg(document, { selectedFlowId: 'f' }).svg)).toBe(2);
+  });
+
   it('keeps every label in the saved document', () => {
     const document = documentOf([40, 560]);
     renderDocumentSvg(document);

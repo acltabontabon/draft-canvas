@@ -8,8 +8,31 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 ### Shared
 
+#### Changed
+
+- A bent connector's options offer **Reset route** beside its route styles, and switching a bent
+  connector between stepped and straight or curved starts its route afresh instead of drawing a wave
+  through the old elbows.
+- A shape with no colour shows the default colour in its options instead of an "automatic" wheel,
+  and picking the default colour clears it again.
+
 #### Fixed
 
+- Popovers, the Presentation callout and the note-drop landing point line up with connectors that
+  share a run with others or detour around shapes.
+- An exported diagram keeps a shared connector label shared when a flow is selected with its step
+  numbers hidden, as the canvas does, and places condition chips where the canvas does.
+- Adding a bend to a connector that already has the most it can hold no longer drops its last bend.
+- Pressing Enter on a recovery connector no longer opens an editor that rewrites its operation
+  instead of the name it shows.
+- A view-only collaborator no longer sees editing controls that do nothing: inspectors, resize and
+  connection handles, attachment and open-point edits, and Undo and Redo while they can't apply.
+  Undo and Redo also show as unavailable while a flow is being traced.
+- Escape or a click away from a shape's details keeps a description or technology typed but not yet
+  confirmed, and Escape returns focus to the button that opened the panel. Dialogs opened from the
+  Share menu return focus to it when they close.
+- Keyboard users no longer land on a popover's pointer-only drag area, screen readers hear menu
+  shortcuts by their key names, and flow trace badges follow the light and dark themes.
 - Opening a file with thousands of nested boundaries no longer stalls while its parent links are
   checked.
 - Mermaid sequence source for a multi-room diagram no longer lets a shape or title named like a
@@ -36,6 +59,12 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
   and native-host manifests.
 - MCP create receipts report attached notes and code across nested views separately from free
   note cards, so agents can verify that those annotations were created.
+- Agents are told not to retry a change to a read-only diagram instead of being told it is busy.
+- Repository drafts keep a service named `user` apart from the person, cite repository paths when
+  a sub-folder is surveyed, say when a folder has no running parts, and run on Windows with the
+  repository and temporary folder on different drives.
+- The draft checker reads type words as the app does ("Person", "External System", `llm`), reports
+  a list where an id belongs instead of stopping, and catches notes and flow steps the app refuses.
 
 ## [1.18.0] - 2026-10-27
 

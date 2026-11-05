@@ -11,6 +11,8 @@ import { visibleEdges } from '../document/compensation';
 import { connectorRouteInputs } from '../edges/connectorRoutes';
 import { edgeRoutes } from '../edges/edgeRoutes';
 import { labelGroupPlan } from '../edges/labelGroups';
+import { obstaclesForEdge, withoutNodes } from '../edges/obstacles';
+import { separationPlan } from '../edges/separation';
 import { labelChipSide, labelLaneOffset, laneIndex, responseAwayAt, routeBetween, type Rect } from '../edges/routing';
 import { clamp } from '../lib/math';
 
@@ -44,28 +46,46 @@ export { ATTACHMENT_ROW_GAP, attachmentRowBelowsSourceOrTarget, captionSideOf } 
  * line really is (`EdgeInspectorPopover`, Presentation Mode's callout). A parallel or detoured
  * connector's label otherwise sits well away from where an overlay would point. `DraftEdgeView`
  * keeps its own cached call: it is the hot path and also routes the response half.
+ *
+ * `own` asks for this connector's own label point even when it shares a label with others: the
+ * point its attachment chips and open-point marker hang from. `moving` (the shapes a gesture is
+ * moving) lets a gesture leave a connector it doesn't touch drawn as at rest, as the canvas does.
  */
 export function edgeLabelPoint(
   document: { nodes: readonly DraftNode[]; edges: readonly DraftEdge[] },
   edge: DraftEdge,
   sourceRect: Rect,
   targetRect: Rect,
-  { interactionActive = false }: { interactionActive?: boolean } = {},
+  { interactionActive = false, moving, own = false }: { interactionActive?: boolean; moving?: ReadonlySet<string>; own?: boolean } = {},
 ): { x: number; y: number; side: Side } {
   const edges = visibleEdges(document.edges);
   const lane = laneIndex(edges).get(edge.id)?.offset ?? 0;
+  // As `DraftEdgeView` decides it: a gesture redraws a connector live, the quick way and around the
+  // shapes still at rest, only while one of its ends or a shape it detours around is moving. Without
+  // `moving`, every connector is taken to be moving.
+  let live: readonly Rect[] | undefined;
+  if (interactionActive) {
+    const endMoving = !moving || moving.has(edge.source) || moving.has(edge.target);
+    const nearby = endMoving ? [] : obstaclesForEdge(document.nodes, edge.source, edge.target);
+    const still = endMoving ? nearby : withoutNodes(nearby, moving);
+    if (endMoving || still !== nearby) live = still;
+  }
   // The live rects the overlay measures against; the rest from the document, as every renderer reads it.
   const inputs = connectorRouteInputs(edge, { nodes: document.nodes, edges }, 'canvas', undefined, {
     source: sourceRect,
     target: targetRect,
-    ...(interactionActive ? { obstacles: [] } : {}),
+    ...(live ? { obstacles: live } : {}),
   });
-  if (inputs && interactionActive) inputs.mode = 'gesture';
+  if (inputs && live) inputs.mode = 'gesture';
+  // The live rects make `connectorRouteInputs` leave out the separation tracks, which the canvas
+  // draws at rest: without them an overlay points 10–20px off a connector moved onto a track.
+  const tracks = inputs && !live ? separationPlan(document.nodes, edges).tracksFor(edge.id) : undefined;
+  if (inputs && tracks) inputs.tracks = tracks;
   const routes = inputs ? edgeRoutes(inputs, 'transient') : null;
   const route = routes?.request ?? routeBetween(sourceRect, targetRect, edge.routing, { anchors: { source: edge.sourceAnchor, target: edge.targetAnchor }, waypoints: edge.waypoints, lane });
   // A connector sharing one label with others (`edges/labelGroups.ts`) is pointed at where that one
   // label is drawn, not at the spot its own would have taken.
-  const shared = interactionActive ? undefined : labelGroupPlan(document.nodes, edges).groupFor(edge.id);
+  const shared = live || own ? undefined : labelGroupPlan(document.nodes, edges).groupFor(edge.id);
   if (shared) return { x: shared.x, y: shared.y, side: shared.side };
   const labelNudge = labelLaneOffset(route.source.side, route.target.side, lane);
   const side = labelChipSide(route.labelSide, responseAwayAt(route, routes?.response, lane));

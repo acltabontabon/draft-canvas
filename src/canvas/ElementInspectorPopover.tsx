@@ -1,5 +1,4 @@
 import { SourceEvidenceDetails } from './SourceEvidenceDetails';
-import { autoSwatch } from './autoSwatch';
 import { TechnologyInput } from './TechnologyInput';
 import { useTechnologyIcon } from './useTechnologyIcon';
 import { GENERIC_TECHNOLOGY_ICON } from '../nodes/technology';
@@ -229,16 +228,28 @@ function ElementInspectorBody({
   // Click-away closes it the same way, but never deselects.
   useEffect(() => {
     if (!openPanel) return;
+    // Technology and Description save on blur, which WebKit and Firefox never fire on a field that is
+    // removed: blurred here first, so what was typed is kept. Escape hands focus back to the chip that
+    // opened the panel rather than to the page.
+    const closePanel = (refocus: boolean) => {
+      const panel = panelRef.current;
+      const active = window.document.activeElement;
+      if (panel && active instanceof HTMLElement && panel.contains(active)) {
+        active.blur();
+        if (refocus) panel.querySelector<HTMLElement>('[aria-expanded="true"]')?.focus();
+      }
+      setOpenPanel(null);
+    };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || isImeKeyEvent(event)) return;
       // An open type/role dropdown closes first (its own handler), and so does anything stacked
       // above the canvas — same as `EdgeInspectorPopover`'s membership checklist.
       if (window.document.querySelector('.dc-inspector-select-menu, .dc-technology-suggestions') || overlayAboveCanvasIsOpen()) return;
       event.stopPropagation();
-      setOpenPanel(null);
+      closePanel(true);
     };
     const onPointerDown = (event: PointerEvent) => {
-      if (panelRef.current && !panelRef.current.contains(event.target as Node)) setOpenPanel(null);
+      if (panelRef.current && !panelRef.current.contains(event.target as Node)) closePanel(false);
     };
     window.addEventListener('keydown', onKeyDown, true);
     const id = window.setTimeout(() => window.addEventListener('pointerdown', onPointerDown), 0);
@@ -360,7 +371,7 @@ function ElementInspectorBody({
       >
         {/* The caret ties the popover to the element it belongs to — see `.dc-popover-caret`. */}
         <span className="dc-popover-caret" aria-hidden="true" />
-        <button type="button" className="dc-popover-drag-zone" aria-label="Move element popup" {...dragControl.handle} />
+        <button type="button" className="dc-popover-drag-zone" aria-label="Move element popup" tabIndex={-1} data-pointer-only {...dragControl.handle} />
         <div className="dc-popover-inner">
           {editingText ? (
             <TextFormatBar theme={theme} />
@@ -451,7 +462,8 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
   theme: ReturnType<typeof useThemeValue>;
   buildCommandContext: () => CommandContext;
 }) {
-  const currentAccentChip = node.accent !== undefined ? theme.accents[node.accent].chip : undefined;
+  // A shape has no automatic colour (unlike a connector): left unset, it is drawn neutral, and says so.
+  const shownAccent = node.accent ?? 'neutral';
   const { preset: personality } = usePersonality();
   const technologyIcon = useTechnologyIcon(node.technology) ?? GENERIC_TECHNOLOGY_ICON;
 
@@ -581,13 +593,10 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
         <button
           type="button"
           className="dc-inspector-color-swatch"
-          data-auto={currentAccentChip ? undefined : 'true'}
           aria-label="Element colour"
           aria-expanded={openPanel === 'color'}
-          title={currentAccentChip ? 'Change colour' : 'Colour: automatic. Change colour'}
-          // Automatic colour is a wheel of the palette's own chips, so it reads as "picks for you"
-          // rather than as an empty slot waiting to be filled.
-          style={{ background: currentAccentChip ?? autoSwatch(theme) }}
+          title={shownAccent === 'neutral' ? 'Colour: default. Change colour' : 'Change colour'}
+          style={{ background: theme.accents[shownAccent].chip }}
           onClick={() => setOpenPanel(openPanel === 'color' ? null : 'color')}
         />
         {node.type === 'text' && (
@@ -713,12 +722,13 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
               key={accent}
               type="button"
               className="dc-swatch"
-              title={accent}
+              title={accent === 'neutral' ? 'Default colour' : accent}
               aria-label={`Colour ${accent}`}
-              aria-pressed={node.accent === accent}
+              aria-pressed={(node.accent ?? 'neutral') === accent}
               style={{ background: theme.accents[accent].chip }}
               onClick={() => {
-                useEditorStore.getState().updateNodeById(node.id, { accent }, 'Recolour');
+                // The default colour is no colour at all, as a new shape has.
+                useEditorStore.getState().updateNodeById(node.id, { accent: accent === 'neutral' ? undefined : accent }, 'Recolour');
                 setOpenPanel(null);
               }}
             />

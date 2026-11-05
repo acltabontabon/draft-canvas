@@ -286,7 +286,8 @@ export function buildScene(
   const labels = labelGroupPlan(nodes, edges, 'transient');
   const sharedLabelOf = (edgeId: string) => {
     const group = labels.groupFor(edgeId);
-    if (!group || group.members.some((member) => stepIndexOf(options.selectedFlow, member) !== undefined)) return undefined;
+    const stepped = edgeCtx.showSequence && group?.members.some((member) => stepIndexOf(options.selectedFlow, member) !== undefined);
+    if (!group || stepped) return undefined;
     return { draws: group.members[0] === edgeId, x: group.x, y: group.y, side: group.side };
   };
 

@@ -92,7 +92,9 @@ Select a connector, then:
 | **Stepped** | Drag a bar on a straight run sideways. |
 | **Straight / Curved** | Drag a faint dot to add a bend, drag a square to move it, double-click a square to remove it. |
 
-Right-click → **Reset route** restores automatic routing. **Tidy connectors** (`⌘K`) resets all.
+**Reset route**, beside the route styles or on right-click, restores automatic routing. Switching a
+bent connector between Stepped and Straight or Curved starts its route afresh. **Tidy connectors**
+(`⌘K`) resets all.
 
 ## Sync, async and the reply
 
@@ -102,7 +104,8 @@ for an editable return path with a suggested response. Async shows a break mark 
 Operation and Reply share an aligned field column. Recovery keeps its add action and explanation
 compact. The Route row shows straight, stepped and curved previews; Style groups arrowhead, colour,
 condition and flow controls. Attachment switches between Auto and Pinned. The
-colour wheel means automatic colour, as it does for shapes; click it to choose a fixed colour. Click
+colour wheel means automatic colour; click it to choose a fixed colour. A shape has no automatic
+colour: unset, it shows the default colour. Click
 the condition icon to edit a condition without making the inspector taller. Hover an icon to see
 what it does.
 
