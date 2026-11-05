@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
+import { ReactFlowProvider } from '@xyflow/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FlowPanel } from '../src/ui/Editor/FlowPanel';
 import { createDocument } from '../src/document/factory';
@@ -31,7 +32,7 @@ function reset() {
 const onPresent = vi.fn();
 
 function mount() {
-  return render(<FlowPanel onPresent={onPresent} />);
+  return render(<ReactFlowProvider><FlowPanel onPresent={onPresent} /></ReactFlowProvider>);
 }
 
 function addConnectedPair() {

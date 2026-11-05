@@ -1038,7 +1038,8 @@ export function useKeyboard({
       // Cmd/Ctrl branch because AltGr arrives as Ctrl+Alt on Windows (German `[` is AltGr+8, and
       // Option+5 on a Mac — hence Alt is allowed too). Cmd and plain Ctrl chords are left alone.
       if ((event.key === ']' || event.key === '[') && !event.metaKey && !(event.ctrlKey && !event.altKey)) {
-        if (event.repeat || presenting || playback.active || state.focus.active || !focusIsOnCanvas() || modalIsOpen()) return;
+        // A read-only copy adds nothing, so it is offered nothing either.
+        if (event.repeat || presenting || playback.active || state.focus.active || useUiStore.getState().readOnly !== null || !focusIsOnCanvas() || modalIsOpen()) return;
         const stepped = stepContinuation(state, event.key === ']' ? 1 : -1);
         if (!stepped) return;
         event.preventDefault();

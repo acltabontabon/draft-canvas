@@ -205,10 +205,20 @@ function sanitizeEdge(raw: unknown, id: string): DraftEdge | null {
   const source = safeId(raw.source, true);
   const target = safeId(raw.target, true);
   if (!source || !target || source === target) return null;
-  const result = documentOf({ nodes: [stubNode(source), stubNode(target)], edges: [raw] });
+  // The connector a compensation undoes is not in this one-edge document, so validation would drop
+  // the link and every collaborator's edit would unlink the owner's compensating actions.
+  const { compensationFor, compensationVisible, ...rest } = raw;
+  const result = documentOf({ nodes: [stubNode(source), stubNode(target)], edges: [rest] });
   if (!result.ok || result.document.edges.length !== 1) return null;
   const edge = result.document.edges[0]!;
-  return edge.id === id && edge.source === source && edge.target === target ? edge : null;
+  if (edge.id !== id || edge.source !== source || edge.target !== target) return null;
+  // Whether the parent exists and can be compensated is `repairReferences`'s question, asked of the real room.
+  const parent = safeId(compensationFor);
+  if (edge.semantic === 'compensates' && parent && parent !== id) {
+    edge.compensationFor = parent;
+    if (typeof compensationVisible === 'boolean') edge.compensationVisible = compensationVisible;
+  }
+  return edge;
 }
 
 function sanitizeFlow(raw: unknown, id: string): DraftFlow | null {

@@ -11,7 +11,6 @@ use crate::project::{scan, Limits};
 use crate::state::AppState;
 use crate::util::lock;
 use serde::Serialize;
-use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -90,8 +89,11 @@ pub fn file_revision_of_stamp(stamp: &str) -> Option<String> {
     stamp.rsplit(':').next().map(file_revision_of_sha)
 }
 
-/// The first 16 hex digits of the text's SHA-256, as a file revision.
-pub fn file_revision(text: &str) -> String {
+/// The first 16 hex digits of the text's SHA-256, as a file revision. Only the tests hash text:
+/// revisions come from stamps, which hash the bytes on disk, BOM included.
+#[cfg(test)]
+fn file_revision(text: &str) -> String {
+    use sha2::{Digest, Sha256};
     file_revision_of_sha(&format!("{:x}", Sha256::digest(text.as_bytes())))
 }
 
@@ -320,6 +322,7 @@ pub enum Lookup {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sha2::{Digest, Sha256};
     use std::fs;
     use tempfile::tempdir;
 

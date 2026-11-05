@@ -806,6 +806,12 @@ async function update(api: DesktopApi, host: AgentHost, event: Request) {
  */
 async function updateFile(api: DesktopApi, host: AgentHost, event: Request, expected: string) {
   const { args, context } = event;
+  // Open when the broker sent it, closed by its turn: the broker sent no text for an open diagram,
+  // and answering NOT_FOUND told the agent to give up on a diagram that is right there. The same
+  // answer as `fileForInTurn`'s for a read.
+  if (context.open && (context.text === undefined || context.stamp === undefined)) {
+    throw new AgentError('DOCUMENT_BUSY', 'The open diagram changed while this request was waiting. Read the target diagram again.', { retryable: true });
+  }
   if (context.text === undefined || context.stamp === undefined) throw new AgentError('NOT_FOUND', 'That diagram could not be read.');
   if (context.displayPath && (await host.hasRecoveryFor(context.displayPath))) {
     throw new AgentError('DOCUMENT_BUSY', 'Draft Canvas is holding unsaved changes to that diagram from an earlier session.', {

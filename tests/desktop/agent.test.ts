@@ -468,6 +468,16 @@ describe('agent requests on desktop', () => {
     }
   });
 
+  it('asks for a retry when the open diagram closed while the request waited its turn', async () => {
+    const handle = await openOrders();
+    const revision = currentRevision();
+    await h.controller.returnHome();
+    await h.settle();
+    // The broker sends no text for a diagram it saw open; this answered NOT_FOUND, which agents don't retry.
+    const out = await request('update_diagram', addMailer(revision), { handle, open: true });
+    expect(out.error).toMatchObject({ code: 'DOCUMENT_BUSY', retryable: true });
+  });
+
   it('refuses a read-only copy without telling the agent to retry', async () => {
     await openOrders();
     useUiStore.getState().setReadOnly({ sharedTitle: 'Orders' });

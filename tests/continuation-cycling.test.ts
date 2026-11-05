@@ -150,6 +150,17 @@ describe('cycling alternatives', () => {
     expect(showing()).toBeNull();
   });
 
+  it('stays away while Traffic is showing, like Focus and the flow lens', () => {
+    open(graph([service('pub'), topic('t')], [['pub', 't']]), 't');
+    expect(showing()).not.toBeNull();
+    act(() => useEditorStore.getState().showTraffic());
+    expect(useEditorStore.getState().traffic.active).toBe(true);
+    // Before, a ghost drew over the traffic sketches and ] added shapes mid-analysis.
+    expect(showing()).toBeNull();
+    expect(stepContinuation(useEditorStore.getState(), 1)).toBe(false);
+    act(() => useEditorStore.setState({ traffic: { ...useEditorStore.getState().traffic, active: false } }));
+  });
+
   it('only candidates with somewhere to go are alternatives; ] skips the rest, and asks back if none fit', () => {
     // A note under everything: no new node fits anywhere, but connecting to the Queue already there does.
     const crowd = createNode({ id: 'crowd', type: 'note', x: -2000, y: -2000, width: 5000, height: 5000 });

@@ -758,7 +758,7 @@ export function useDocumentSession(): DocumentSession {
         if (starterId === 'order-processing') {
           const { useEditorStore } = await loadEditorStore();
           if (useEditorStore.getState().document.metadata.id !== document.metadata.id) return;
-          useEditorStore.getState().setSelectedFlowId(document.flows[0]?.id ?? null);
+          // No flow selected: the example opens on the plain diagram like every document, as on desktop.
           useUiStore.getState().setExampleDocumentId(document.metadata.id);
         }
       } finally {

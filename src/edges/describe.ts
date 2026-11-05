@@ -40,7 +40,8 @@ import type { Crossing } from './crossings';
 import { relationshipCaptionLabel } from '../document/edgeSemantics';
 import { capabilityFor, categoryOf } from '../document/connectorSemantics';
 import { LABEL_PADDING_X, LABEL_PADDING_Y, RECOVERY_LABEL_GAP, layoutEdgeLabel, layoutEdgeResponse, layoutRecoveryLabel } from './labelLayout';
-import { compensationActionCaption, compensationDisplayLabel, compensationLabelParts } from './compensationMarker';
+import { compensationActionCaption, compensationLabelParts } from './compensationMarker';
+import { compensationDisplayLabel } from '../document/compensation';
 
 export interface EdgeDescribeContext {
   theme: Theme;

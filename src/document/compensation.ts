@@ -76,3 +76,10 @@ export function repairCompensationLinks(edges: DraftEdge[]): DraftEdge[] {
   });
   return changed ? repaired : edges;
 }
+
+/** The business action names the recovery arrow; its HTTP or call operation remains editable
+ * in the companion card. An unnamed action still shows that operation on the canvas,
+ * and every export names it the same way. */
+export function compensationDisplayLabel(edge: Pick<DraftEdge, 'compensationFor' | 'compensationName' | 'label'>): string | undefined {
+  return edge.compensationFor && edge.compensationName?.trim() ? edge.compensationName.trim() : edge.label;
+}

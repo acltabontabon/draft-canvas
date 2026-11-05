@@ -54,7 +54,8 @@ fn secret() -> ToolError {
 fn is_secret(name: &str) -> bool {
     let name = name.to_ascii_lowercase();
     (name == ".env" || name.starts_with(".env.")) && name != ".env.example" && name != ".env.sample"
-        || [".npmrc", ".pypirc", ".netrc"].contains(&name.as_str())
+        // direnv's `.envrc` and wrangler's `.dev.vars` hold the same exports `.env` does.
+        || [".npmrc", ".pypirc", ".netrc", ".envrc", ".dev.vars", ".git-credentials"].contains(&name.as_str())
         || ["id_rsa", "id_ed25519", "credentials"]
             .iter()
             .any(|prefix| name.starts_with(prefix))
@@ -680,6 +681,9 @@ mod tests {
             ".npmrc",
             ".pypirc",
             ".netrc",
+            ".envrc",
+            ".dev.vars",
+            ".git-credentials",
             "credentials",
             "credentials.json",
             "vault.kdbx",

@@ -182,11 +182,12 @@ const NAMED_ENTITIES: Record<string, string> = { quot: '"', amp: '&', lt: '<', g
 
 /**
  * One pass, so a decoded `&` never starts another entity: chained replaces turned `&amp;lt;` into `<`.
- * `&?` keeps `&#65;` whole; matching `#65;` alone left a stray `&`.
+ * `&?` keeps `&#65;` whole; matching `#65;` alone left a stray `&`. Mermaid's own `#lt;` form is
+ * what the flowchart export writes, so a round trip must read it back.
  */
 function decodeEntities(text: string): string {
-  return text.replace(/&(quot|amp|lt|gt);|#quot;|&?#(\d+);/g, (entity, name?: string, code?: string) =>
-    name ? NAMED_ENTITIES[name]! : code ? codePoint(entity, code) : '"',
+  return text.replace(/[&#](quot|amp|lt|gt);|&?#(\d+);/g, (entity, name?: string, code?: string) =>
+    name ? NAMED_ENTITIES[name]! : codePoint(entity, code!),
   );
 }
 
@@ -251,6 +252,8 @@ function readNodeRef(text: string, unsupported: Unsupported): { ref: NodeRef; re
     if (!read) continue;
     ref.type = shape.type;
     ref.label = cleanLabel(read.raw, unsupported);
+    // An unnamed circle is how the flowchart export draws a junction; a nameless actor says nothing.
+    if (shape.open === '((' && !ref.label) ref.type = 'junction';
     rest = rest.slice(read.end);
     break;
   }

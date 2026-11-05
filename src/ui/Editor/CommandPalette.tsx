@@ -99,9 +99,11 @@ function CommandPaletteBody({ createAt, createAtPointer, playback, onPresent }: 
   );
   // Jump rows answer a typed query only, so browsing never builds them.
   const searching = query.trim().length > 0;
+  // Not while presenting: a jump selected the shape and left a guided flow (or its room) behind,
+  // where the palette otherwise offers only presentation commands.
   const jumps = useMemo<Entry[] | null>(
-    () => (stage || !searching ? null : jumpCommands(document, { file: fileOf({ document, path, outer }), path })),
-    [stage, searching, document, path, outer],
+    () => (stage || !searching || mode === 'present' ? null : jumpCommands(document, { file: fileOf({ document, path, outer }), path })),
+    [stage, searching, mode, document, path, outer],
   );
 
   const rows = useMemo<RankedEntry<Entry>[]>(() => {

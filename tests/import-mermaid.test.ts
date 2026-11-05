@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { AGENT_LIMITS } from '../src/agent/input';
+import { createDocument, createEdge, createNode } from '../src/document/factory';
 import { parseDocument } from '../src/document/validate';
+import { mermaidFlowchartSource } from '../src/export/source/mermaidFlowchart';
 import { importMermaid, looksLikeMermaid, MERMAID_LIMITS, parseMermaidFlowchart } from '../src/import/mermaid';
 import { unsupportedNotice } from '../src/import/route';
 
@@ -88,6 +90,22 @@ describe('parseMermaidFlowchart — shapes', () => {
     expect(byLabel(result, '"Quoted" #1')).toBeDefined();
     expect(byLabel(result, 'Bold text')).toBeDefined();
     expect(result.unsupported).toEqual(['HTML in labels (tags removed)']);
+  });
+
+  it('reads back what the flowchart export writes: named entities and an unnamed circle as a junction', () => {
+    const gateway = createNode({ type: 'service', x: 0, y: 0, text: 'A < B & C > D' });
+    const junction = createNode({ type: 'ellipse', x: 200, y: 0 });
+    const orders = createNode({ type: 'service', x: 400, y: 0, text: 'Orders' });
+    const document = {
+      ...createDocument('Round trip'),
+      nodes: [gateway, junction, orders],
+      edges: [createEdge({ source: gateway.id, target: junction.id, label: '<ok> & done' }), createEdge({ source: junction.id, target: orders.id })],
+    };
+    const result = parsed(mermaidFlowchartSource(document));
+    expect(byLabel(result, 'A < B & C > D').type).toBe('service');
+    expect(result.create.relationships.map((relationship) => relationship.label)).toContain('<ok> & done');
+    expect(result.create.nodes.filter((node) => node.type === 'junction')).toHaveLength(1);
+    expect(result.create.nodes.filter((node) => node.type === 'person')).toHaveLength(0);
   });
 
   it('shortens labels past the agent limits and says so once', () => {

@@ -39,6 +39,21 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
   Mermaid directive change how the viewer's renderer is configured.
 - Selecting a Queue or Topic on a large diagram suggests chained continuations faster, and shared
   connector labels on a hub with many spokes are grouped without a long pause.
+- Compensating actions stay linked to the connector they undo in a live session and in a shared
+  link; before, a collaborator's edit or opening the link turned them into plain connectors.
+- A view-only collaborator is no longer offered suggestions, drags or new connectors the session
+  refuses, and suggestions stay away while Traffic is showing.
+- The example diagram opens without a flow selected, like every other diagram.
+- Jumping to a shape from the command palette is no longer offered while presenting.
+- Pin view pins the camera on screen; after fitting, zooming by shortcut or jumping it pinned the
+  last camera you panned to.
+- C4-PlantUML and Structurizr exports keep connectors drawn through a junction, one relationship
+  per pair of shapes. Structurizr declares people found inside a system where the DSL allows them,
+  and keeps shapes whose names differ only in case apart.
+- Exported source and sequence diagrams caption connectors as the canvas does: "requests" for a
+  call that waits for its reply, the attempts before a dead-letter, and a compensation's name.
+- Importing Mermaid that Draft Canvas exported reads back `<`, `>` and `&` in labels, and a junction
+  comes back as a junction instead of an actor.
 
 ### Desktop
 
@@ -65,6 +80,12 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
   repository and temporary folder on different drives.
 - The draft checker reads type words as the app does ("Person", "External System", `llm`), reports
   a list where an id belongs instead of stopping, and catches notes and flow steps the app refuses.
+- An agent's change to a diagram closed while the request waited its turn is answered as busy, so
+  the agent reads it again instead of giving up. Failed saves are marked retryable, and a conflict
+  on a file saved with a byte-order mark reports the revision a retry needs.
+- Renaming or moving a diagram can no longer lose an agent's change written at the same moment.
+- Forgetting a project no longer stops changes to the open diagram in it from being noticed.
+- Agents reading code can no longer read `.envrc`, `.dev.vars` or `.git-credentials`.
 
 ## [1.18.0] - 2026-10-27
 

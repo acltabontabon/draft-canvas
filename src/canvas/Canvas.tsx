@@ -593,6 +593,10 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   const tracing = useUiStore((state) => state.flowTrace !== null);
   const sharedReadOnly = useUiStore((state) => state.readOnly !== null && !state.readOnly.collaborative);
   const interactive = mode === 'edit' && !tracing && !sharedReadOnly;
+  // A view-only collaborator still selects and follows along, but the store refuses anything they
+  // would draw: dragging, connecting and suggestions only snapped back or did nothing.
+  const viewOnly = useUiStore((state) => state.readOnly?.collaborative === true);
+  const editable = interactive && !viewOnly;
   const recoveryConnect = useUiStore((state) => state.recoveryConnect);
   const finishRecoveryConnect = useCallback((targetId: string) => {
     const ui = useUiStore.getState();
@@ -616,7 +620,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       finishRecoveryConnect(node.id);
     } else if (sharedReadOnly) selectSharedNode(event, node);
   }, [finishRecoveryConnect, sharedReadOnly]);
-  useContinuation(interactive);
+  useContinuation(editable);
 
   useZoomVariable();
 
@@ -1768,7 +1772,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
 
   const onPaneDoubleClick = useCallback(
     (event: React.MouseEvent) => {
-      if (!interactive) return;
+      if (!editable) return;
       // React Flow has no `onPaneDoubleClick`, so this fires for the whole
       // canvas — including double-clicks on a node, which mean "edit this
       // label" and must not also drop a new element underneath it.
@@ -1788,17 +1792,17 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       }
       onEmptyCanvasMenu?.(flowPosition, { x: event.clientX, y: event.clientY });
     },
-    [interactive, onCreateAt, onEmptyCanvasMenu, screenToFlowPosition],
+    [editable, onCreateAt, onEmptyCanvasMenu, screenToFlowPosition],
   );
 
   /** A toolbar button arms a tool; the next click on empty canvas places it. */
   const onPaneClick = useCallback(
     (event: React.MouseEvent) => {
-      if (!interactive || !useUiStore.getState().armed) return;
+      if (!editable || !useUiStore.getState().armed) return;
       const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
       onCreateAt?.({ x: Math.round(position.x - 88), y: Math.round(position.y - 34) });
     },
-    [interactive, onCreateAt, screenToFlowPosition],
+    [editable, onCreateAt, screenToFlowPosition],
   );
 
   /**
@@ -2101,8 +2105,8 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
         // offers it, and with a node's handles sitting over the end of every arrow, two clicks near two
         // arrowheads quietly drew a new connector between them.
         connectOnClick={false}
-        nodesDraggable={interactive}
-        nodesConnectable={interactive}
+        nodesDraggable={editable}
+        nodesConnectable={editable}
         elementsSelectable={interactive}
         // React Flow's own default per-node/edge keyboard handling (native `tabIndex`, and its own
         // Enter/Space/Escape select-or-deselect plus arrow-key move) is turned off outright rather
@@ -2183,8 +2187,8 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
               walkthrough as it is while drawing, and the frame is inert either way. */}
           <RoomFrame />
 
-          {interactive && <ContinuationGhost />}
-          {interactive && <RecoveryConnectGhost />}
+          {editable && <ContinuationGhost />}
+          {editable && <RecoveryConnectGhost />}
 
           {/* An AI agent's change still being prepared (desktop only): drawn over the diagram, never in it. */}
           <AgentPreviewLayer />
@@ -2198,7 +2202,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
           {/* Traffic's findings, written over the diagram like a whiteboard review. Never exported. */}
           {trafficActive && <TrafficSketches />}
 
-          {interactive && attachTarget && (
+          {editable && attachTarget && (
             <div
               className="dc-attach-affordance"
               style={{ transform: `translate(${attachTarget.x}px, ${attachTarget.y - 30}px)` }}
