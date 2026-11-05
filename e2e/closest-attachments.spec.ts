@@ -62,10 +62,14 @@ test('an automatic connector uses the shared side band and follows a moved shape
   await page.mouse.move(source.x + source.width / 2, source.y - target.height, { steps: 15 });
   await page.mouse.up();
   await cameraAtRest(page);
-  const routed = await ends(page);
-  const from = (await page.locator('.react-flow__node[data-id="source"]').boundingBox())!;
-  const to = (await page.locator('.react-flow__node[data-id="near"]').boundingBox())!;
-  expect(routed.from.y).toBeCloseTo(from.y, 1);
-  expect(routed.to.y).toBeCloseTo(to.y + to.height, 1);
-  expect(routed.from.x).toBeCloseTo(routed.to.x, 1);
+  // Until the route settles: the connector re-routes after the drop commits, and WebKit could read
+  // it a frame early, still leaving the old sides.
+  await expect(async () => {
+    const routed = await ends(page);
+    const from = (await page.locator('.react-flow__node[data-id="source"]').boundingBox())!;
+    const to = (await page.locator('.react-flow__node[data-id="near"]').boundingBox())!;
+    expect(routed.from.y).toBeCloseTo(from.y, 1);
+    expect(routed.to.y).toBeCloseTo(to.y + to.height, 1);
+    expect(routed.from.x).toBeCloseTo(routed.to.x, 1);
+  }).toPass({ timeout: 5_000 });
 });
