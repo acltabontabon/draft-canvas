@@ -31,6 +31,21 @@ export interface AutosaveOptions {
   onMetadataAdopted?: (documentId: string, metadata: SharedMetadata) => void;
   /** A save found the stored copy deleted or changed elsewhere; saving waits for `resolveConflict`. */
   onConflict?: (documentId: string, kind: DocumentConflictError['kind']) => void;
+  /** A version of the document is on disk — whatever a reload stash still holds for it is not owed any more. */
+  onSaved?: (documentId: string) => void;
+}
+
+/** A version waiting to be written, and whether everything queued in it since the last write only moved the camera. */
+interface Queued {
+  document: DraftDocument;
+  cameraOnly: boolean;
+}
+
+/** What a closing page still owes the store for one document — see `Autosave.unsavedForStash`. */
+export interface Unsaved {
+  document: DraftDocument;
+  /** It was held back by a conflict with another tab's copy, which the user hasn't resolved. */
+  conflict: boolean;
 }
 
 const DEBOUNCE_MS = 700;
@@ -67,14 +82,18 @@ export class Autosave {
   private readonly maxWaitMs: number;
   private readonly onMetadataAdopted: AutosaveOptions['onMetadataAdopted'];
   private readonly onConflict: AutosaveOptions['onConflict'];
+  private readonly onSaved: AutosaveOptions['onSaved'];
   /** Per document, the title/project last loaded or written — see `DraftRepository.save`. */
   private readonly baselines = new Map<string, SharedMetadata>();
   /** Per document, the exact object last tracked as what's on disk — see `schedule`. */
   private readonly loaded = new Map<string, DraftDocument>();
 
-  private pending: DraftDocument | null = null;
-  /** Whether every version queued since the last write moved only the camera — see `SaveOptions.cameraOnly`. */
-  private pendingCameraOnly = false;
+  /**
+   * Per document, the newest version not yet written, oldest document first. Per document rather than
+   * one slot: an edit to the canvas still on screen while another one opens was queued, then replaced
+   * by the new canvas's first save (a pan is enough) and never written. See `SaveOptions.cameraOnly`.
+   */
+  private queue = new Map<string, Queued>();
   private inFlight = false;
   /** The version whose write is in flight, if any — see `schedule`. */
   private writing: DraftDocument | null = null;
@@ -89,6 +108,8 @@ export class Autosave {
   private disposed = false;
   /** Set while the stored copy was deleted or changed elsewhere: nothing is written until resolved. */
   private conflict: DocumentConflictError['kind'] | null = null;
+  /** The document that conflict is about. */
+  private conflictId: string | null = null;
   /** The next write replaces whatever is stored — the user chose this editor's copy. */
   private overwriteNext = false;
   private state: SaveState = { status: 'idle' };
@@ -100,6 +121,7 @@ export class Autosave {
     this.maxWaitMs = options.maxWaitMs ?? MAX_WAIT_MS;
     this.onMetadataAdopted = options.onMetadataAdopted;
     this.onConflict = options.onConflict;
+    this.onSaved = options.onSaved;
     live.add(this);
   }
 
@@ -122,18 +144,36 @@ export class Autosave {
   }
 
   /**
-   * The version a closing page still owes the store: what is queued, or, with nothing queued, the
-   * write in flight — which the unload is about to abort. Nothing while a conflict stands (the user
-   * hasn't chosen this copy), and nothing for a camera move alone. See `reloadStash.ts`.
+   * The versions a closing page still owes the store, one per document: what is queued, or, with
+   * nothing queued, the write in flight — which the unload is about to abort. Nothing for a camera
+   * move alone, and nothing for a canvas deleted elsewhere (there is no row to reopen it from). A copy
+   * held back by a changed-elsewhere conflict is owed, marked so the reopen asks again rather than
+   * deciding for the user. See `reloadStash.ts`.
    */
-  unsavedForStash(): DraftDocument | null {
-    if (this.conflict) return null;
-    if (this.pending && !this.pendingCameraOnly) return this.pending;
+  unsavedForStash(): Unsaved[] {
+    const owed = new Map<string, Unsaved>();
     // A camera-only write in flight owes nothing either: stashed, the reopen wrote it back as a
     // content save, minting a new content stamp and a cross-tab conflict nobody caused. A content
     // write in flight does — and a camera-only version queued behind it is that content plus a pan.
-    if (this.inFlight && !this.writingCameraOnly) return this.pending ?? this.writing;
-    return null;
+    if (this.writing && !this.writingCameraOnly) owed.set(this.writing.metadata.id, { document: this.writing, conflict: false });
+    for (const [id, queued] of this.queue) {
+      const conflict = this.conflictId === id ? this.conflict : null;
+      if (conflict === 'deleted' || (queued.cameraOnly && !owed.has(id))) continue;
+      owed.set(id, { document: queued.document, conflict: conflict === 'changed' });
+    }
+    return [...owed.values()];
+  }
+
+  /**
+   * Holds `document` back as conflicting with what another tab stored, exactly as a save that found the
+   * row changed would: kept, unwritten, until the user picks a copy with `resolveConflict`. For edits a
+   * reload stash brought back over content saved elsewhere meanwhile.
+   */
+  holdConflict(document: DraftDocument): void {
+    if (this.disposed) return;
+    const id = document.metadata.id;
+    this.queue.set(id, { document, cameraOnly: false });
+    this.raise(id, new DocumentConflictError('changed'));
   }
 
   /**
@@ -153,9 +193,8 @@ export class Autosave {
     // after it — skipping it left the undone edit on disk to come back on the next open.
     const writingOther = this.writing !== null && this.writing.metadata.id === id && this.writing !== document;
     if (this.loaded.get(id) === document && !writingOther) {
-      if (this.pending?.metadata.id === id) {
-        this.pending = null;
-        this.pendingCameraOnly = false;
+      // Only when nothing else is queued: another canvas's version still owes a write, and its timer.
+      if (this.queue.delete(id) && this.queue.size === 0) {
         // The edit that marked the status dirty is gone, and with it the write its timer was
         // armed for — without this the status would stay "dirty" until some later real save.
         if (this.timer) {
@@ -174,8 +213,8 @@ export class Autosave {
       }
       return;
     }
-    this.pendingCameraOnly = options?.cameraOnly === true && (this.pending === null || this.pendingCameraOnly);
-    this.pending = document;
+    const queued = this.queue.get(id);
+    this.queue.set(id, { document, cameraOnly: options?.cameraOnly === true && (queued === undefined || queued.cameraOnly) });
     // Kept, not written: the conflict (and its message) stays up until the user resolves it.
     if (this.conflict) return;
     if (this.firstDirtyAt === 0) this.firstDirtyAt = Date.now();
@@ -203,9 +242,9 @@ export class Autosave {
       // Never run two writes at once: wait for the current one, then write whatever
       // arrived meanwhile.
       while (this.current) await this.current;
-      if (this.disposed) return this.pending === null;
+      if (this.disposed) return this.queue.size === 0;
       if (this.conflict) return false;
-      if (!this.pending) return !this.lastFailed;
+      if (this.queue.size === 0) return !this.lastFailed;
       this.current = this.write();
       try {
         await this.current;
@@ -220,10 +259,8 @@ export class Autosave {
   }
 
   private async write(): Promise<void> {
-    const document = this.pending!;
-    const cameraOnly = this.pendingCameraOnly;
-    this.pending = null;
-    this.pendingCameraOnly = false;
+    const [id, { document, cameraOnly }] = this.queue.entries().next().value!;
+    this.queue.delete(id);
     this.inFlight = true;
     this.writing = document;
     this.writingCameraOnly = cameraOnly && !this.overwriteNext;
@@ -233,7 +270,6 @@ export class Autosave {
       if (this.inFlight) this.emit({ status: 'saving' });
     }, SHOW_SAVING_AFTER_MS);
 
-    const id = document.metadata.id;
     const trackedAtStart = this.loaded.get(id);
     try {
       const base = this.baselines.get(id);
@@ -247,9 +283,8 @@ export class Autosave {
       if (adopted && base) {
         // An edit queued during this write still carries the old values, and would read as this
         // editor changing them back.
-        // (Re-read through a cast: TypeScript still narrows `pending` to the `null` set above.)
-        const queued = this.pending as DraftDocument | null;
-        if (queued?.metadata.id === id) this.pending = reconcileMetadata(queued, base, adopted);
+        const queued = this.queue.get(id);
+        if (queued) queued.document = reconcileMetadata(queued.document, base, adopted);
         this.onMetadataAdopted?.(id, adopted);
       }
       // What was tracked from disk isn't on disk any more — so an edit that restores that very object
@@ -257,8 +292,9 @@ export class Autosave {
       // Left alone if the canvas was re-opened in place while this write ran: that copy is the new baseline.
       if (this.loaded.get(id) === trackedAtStart) this.loaded.delete(id);
       this.lastFailed = false;
+      this.onSaved?.(id);
       this.clearSavingIndicator();
-      if ((this.pending as DraftDocument | null) !== null) {
+      if (this.queue.size > 0) {
         // Edits queued during this write are still unsaved; "Saved" now would be a claim the next
         // write might fail to keep. The status stays dirty until that one lands.
         this.emit({ status: 'dirty', lastSavedAt: Date.now(), message: undefined, conflict: undefined });
@@ -271,23 +307,21 @@ export class Autosave {
       }
     } catch (error) {
       this.lastFailed = true;
-      // Keep the unwritten version queued (unless a newer one already replaced it) so
+      // Keep the unwritten version queued, first in line (unless a newer one already replaced it), so
       // the next edit or an explicit flush retries it — not retried on a timer here,
       // since a full disk would only fail again in a tight loop.
-      if (this.pending === null) {
-        this.pending = document;
-        this.pendingCameraOnly = cameraOnly;
+      const newer = this.queue.get(id);
+      if (!newer) {
+        this.queue = new Map([[id, { document, cameraOnly }], ...this.queue]);
       } else {
         // The newer version queued behind this write inherits what this one carried: a pan made while
         // a content write was failing was queued as camera-only, and written that way the content
         // edit would ride a save that keeps the old content stamp — or is dropped outright.
-        this.pendingCameraOnly &&= cameraOnly;
+        newer.cameraOnly &&= cameraOnly;
       }
       this.clearSavingIndicator();
       if (error instanceof DocumentConflictError) {
-        this.conflict = error.kind;
-        this.emit({ status: 'error', message: error.message, conflict: error.kind });
-        this.onConflict?.(document.metadata.id, error.kind);
+        this.raise(id, error);
         return;
       }
       // The in-memory document is untouched, so the user can still export it.
@@ -303,7 +337,7 @@ export class Autosave {
       this.inFlight = false;
       this.writing = null;
       this.writingCameraOnly = false;
-      if (this.pending && !this.lastFailed && !this.disposed) {
+      if (this.queue.size > 0 && !this.lastFailed && !this.disposed) {
         this.timer = setTimeout(() => void this.flush(), 0);
       }
     }
@@ -315,14 +349,24 @@ export class Autosave {
    */
   async resolveConflict(choice: 'keep' | 'discard', document?: DraftDocument): Promise<boolean> {
     if (!this.conflict) return true;
+    const id = this.conflictId!;
     this.conflict = null;
+    this.conflictId = null;
     this.lastFailed = false;
     if (choice === 'discard') {
-      this.pending = null;
+      this.queue.delete(id);
+      // Anything queued for another canvas meanwhile is still owed.
+      if (this.queue.size > 0) return this.flush();
       this.emit({ status: 'idle', message: undefined, conflict: undefined });
       return true;
     }
-    this.pending ??= document ?? null;
+    if (!this.queue.has(id) && document?.metadata.id === id) this.queue.set(id, { document, cameraOnly: false });
+    // The conflicting copy is written first, and it alone overwrites.
+    const conflicting = this.queue.get(id);
+    if (conflicting) {
+      this.queue.delete(id);
+      this.queue = new Map([[id, conflicting], ...this.queue]);
+    }
     this.overwriteNext = true;
     return this.flush();
   }
@@ -336,7 +380,14 @@ export class Autosave {
   }
 
   get hasPendingWork(): boolean {
-    return this.pending !== null || this.inFlight;
+    return this.queue.size > 0 || this.inFlight;
+  }
+
+  private raise(id: string, error: DocumentConflictError): void {
+    this.conflict = error.kind;
+    this.conflictId = id;
+    this.emit({ status: 'error', message: error.message, conflict: error.kind });
+    this.onConflict?.(id, error.kind);
   }
 
   private clearSavingIndicator(): void {

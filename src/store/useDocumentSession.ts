@@ -9,7 +9,7 @@ import { hostKind } from '../host/hostInfo';
 import { clearDocUrl, docIdFromLocation, pushDocUrl, replaceDocUrl } from '../lib/documentUrl';
 import { clearShareFragment, decodeShareLink, sharePayloadFromHash, shareLinkIsProtected } from '../share';
 import { holdOpen, openAnywhere } from '../storage/openPresence';
-import { stashForReload, takeReloadStash } from '../storage/reloadStash';
+import { discardReloadStash, stashForReload, takeReloadStash } from '../storage/reloadStash';
 import { logDiagnostic } from '../lib/diagnostics';
 import { loadFailureNotice } from '../lib/staleChunk';
 import type { StarterId } from '../starters';
@@ -325,6 +325,9 @@ export function useDocumentSession(): DocumentSession {
         if (state.status === 'saved' && editorStoreModule) warnIfNearFileLimit(editorStoreModule, notify);
       },
       onMetadataAdopted: (id, metadata) => editorStoreModule?.useEditorStore.getState().adoptStoredMetadata(id, metadata),
+      // A stash outliving its edits' save (a write that failed on reopen and was retried, a page back
+      // from the back/forward cache) would otherwise come back over newer work on the next open here.
+      onSaved: discardReloadStash,
       // The status bar keeps the choice on screen; this makes sure it's noticed.
       onConflict: (_id, kind) =>
         notify(
@@ -414,15 +417,23 @@ export function useDocumentSession(): DocumentSession {
       if (document.visibilityState === 'hidden') void autosave.current?.flush();
     };
     const flushNow = () => {
+      const controller = autosave.current;
       // The flush is a hope, not a promise: the unload aborts any IndexedDB transaction still open,
-      // queued requests included. The stash is what a refresh actually gets its edits back from
-      // (`reloadStash.ts`); the desktop shell keeps its own recovery snapshot instead.
-      const unsaved = hostKind() ? null : autosave.current?.unsavedForStash();
-      if (unsaved) {
+      // queued requests included — or doesn't, and the write lands. The stash is what a refresh
+      // actually gets its edits back from (`reloadStash.ts`); the desktop shell keeps its own recovery
+      // snapshot instead. Flushed first: the write it starts takes its stamp synchronously, and the
+      // stash has to know that stamp to recognise the write as its own if it did land.
+      void controller?.flush();
+      if (!controller || hostKind()) return;
+      for (const { document: unsaved, conflict } of controller.unsavedForStash()) {
         const id = unsaved.metadata.id;
-        stashForReload(unsaved, { base: autosave.current?.baselineOf(id), stamp: repository?.knownContentStamp?.(id) });
+        stashForReload(unsaved, {
+          base: controller.baselineOf(id),
+          stamp: repository?.knownContentStamp?.(id),
+          writing: repository?.writingContentStamp?.(id),
+          ...(conflict ? { conflict: true as const } : {}),
+        });
       }
-      void autosave.current?.flush();
     };
     window.addEventListener('visibilitychange', flush);
     window.addEventListener('pagehide', flushNow);
@@ -478,15 +489,23 @@ export function useDocumentSession(): DocumentSession {
       // The stash is what is stored once it's read (the entry is gone), and the stored copy is what is
       // on disk until the stash lands — tracked as such, so a failed write below leaves it pending.
       let stashedUnsaved: DraftDocument | null = null;
+      let stashedConflict: DraftDocument | null = null;
       const stash = loaded ? takeReloadStash(id) : null;
       if (loaded && stash) {
         // The content stamp, when both are known: a rename or move in another tab bumps `updatedAt`
         // but keeps the stamp, and comparing times alone dropped a stash of real edits over a rename.
-        // Times still decide when the stamps differ: the write the unload aborted may have landed after
-        // all, and its fresh stamp says nothing about whether the stash is newer than it.
+        // The stash is this tab's own when the row still holds the content its edits were made over, or
+        // what the write the unload interrupted stored if it landed after all. Any other stamp is
+        // another tab's content: newer by the clock or not, it's the user's to choose, exactly as when
+        // a save finds it — times alone overwrote another tab's work with an older stash.
         const storedStamp = repository.knownContentStamp?.(id);
-        const sameContent = stash.stamp !== undefined && storedStamp !== undefined && stash.stamp === storedStamp;
-        if (sameContent || stash.document.metadata.updatedAt >= loaded.metadata.updatedAt) {
+        const stamped = stash.stamp !== undefined && storedStamp !== undefined;
+        const ours = stamped && (storedStamp === stash.stamp || storedStamp === stash.writing);
+        if (stash.conflict || (stamped && !ours)) {
+          stashedConflict = stash.document;
+          // For a refresh before the choice is made; gone once it is.
+          stashForReload(stash.document, { ...stash, conflict: true });
+        } else if (ours || stash.document.metadata.updatedAt >= loaded.metadata.updatedAt) {
           try {
             // With the stash's own baseline, a rename made elsewhere meanwhile is kept, not reverted.
             const adopted = await repository.save(stash.document, stash.base);
@@ -531,6 +550,11 @@ export function useDocumentSession(): DocumentSession {
         // status reads "unsaved" until it lands.
         autosave.current?.schedule(stashedUnsaved);
         loaded = stashedUnsaved;
+      } else if (stashedConflict) {
+        // On screen and held back, as when a save finds another tab's content: the status bar offers
+        // the choice, and the other tab's copy is a click away.
+        autosave.current?.holdConflict(stashedConflict);
+        loaded = stashedConflict;
       }
       // Reopening the same canvas — the desktop shell reloading the file after an outside edit, or taking
       // another tab's copy — should leave you standing in the room you were in, as long as the
@@ -916,6 +940,8 @@ export function useDocumentSession(): DocumentSession {
         notify('The live session ended: loading the other tab’s copy replaces what everyone in it did since.');
       }
       await controller.resolveConflict('discard');
+      // Turned down: a stash of the same edits must not bring them back on the reopen below.
+      discardReloadStash(openId);
       const stillStored = await repository?.has(openId).catch(() => false);
       if (stillStored) {
         await openDocument(openId);

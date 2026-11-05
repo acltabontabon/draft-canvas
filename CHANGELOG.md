@@ -54,6 +54,9 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
   call that waits for its reply, the attempts before a dead-letter, and a compensation's name.
 - Importing Mermaid that Draft Canvas exported reads back `<`, `>` and `&` in labels, and a junction
   comes back as a junction instead of an actor.
+- Refreshing a tab right after an edit no longer replaces newer changes another tab saved to the
+  same canvas; you're asked which copy to keep, and a refresh while that choice is open keeps your
+  edits. An edit made just as another canvas opened is saved instead of lost.
 
 ### Desktop
 
