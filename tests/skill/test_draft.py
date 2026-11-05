@@ -43,7 +43,10 @@ class Drafts(unittest.TestCase):
         units = [n for n in view_of(request)['nodes'] if n['type'] != 'person']
         self.assertEqual(len(units), 2)
         self.assertEqual(len({n['id'] for n in units}), 2)
-        self.assertEqual({e['path'] for n in units for e in n['evidence']}, {'src/main.tsx', 'package.json', 'src-tauri/src/main.rs', 'src-tauri/Cargo.toml'})
+        self.assertEqual(
+            {e['path'] for n in units for e in n['evidence']},
+            {'src/main.tsx', 'package.json', 'src-tauri/src/main.rs', 'src-tauri/Cargo.toml'},
+        )
 
     def test_a_compose_system_becomes_containers_stores_and_queues_wired_as_configured(self) -> None:
         request, summary, _ = build(SHOP)
@@ -193,7 +196,10 @@ class CommandLine(unittest.TestCase):
         self.assertNotEqual(nodes['user-2'], 'person')
 
     def test_a_surveyed_sub_folder_cites_repository_paths(self) -> None:
-        with TempRepo({'services/orders/' + path: text for path, text in SHOP.items()}, git=True) as root, tempfile.TemporaryDirectory() as out:
+        with (
+            TempRepo({'services/orders/' + path: text for path, text in SHOP.items()}, git=True) as root,
+            tempfile.TemporaryDirectory() as out,
+        ):
             done = run_script('draft', str(root / 'services' / 'orders'), '--out', out)
             self.assertEqual(done.returncode, 0, done.stderr)
             self.assertIn(f'--repo {os.path.realpath(root)}', done.stdout)

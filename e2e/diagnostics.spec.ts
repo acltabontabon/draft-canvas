@@ -29,6 +29,8 @@ test('the editor opens diagnostics from Help while About keeps only the licences
   await page.goto('/');
   await page.getByRole('button', { name: 'About Draft Canvas' }).first().click();
   const about = page.getByRole('dialog', { name: 'About', exact: true });
+  // About is a lazy chunk; on a cold dev server its first compile outran the 5s default in WebKit.
+  await expect(about).toBeVisible({ timeout: 15_000 });
   await expect(about.getByRole('link', { name: 'Licences' })).toHaveAttribute('href', './THIRD_PARTY_LICENSES.txt');
   await expect(about.getByRole('button', { name: 'Diagnostic report…' })).toHaveCount(0);
   await page.keyboard.press('Escape');
