@@ -75,6 +75,8 @@ jobs:
           git -C tap-staging -c user.name=ci -c user.email=ci@example.invalid commit -q -m check
           trap 'brew untap local/draft-canvas-check' EXIT
           brew tap local/draft-canvas-check "$PWD/tap-staging"
+          # Homebrew 7 refuses to load casks from a tap nobody trusted (1.18.1's tap job failed here).
+          brew trust --tap local/draft-canvas-check
           brew style local/draft-canvas-check/draft-canvas
           brew audit --cask --arch=arm local/draft-canvas-check/draft-canvas
           brew audit --cask --arch=intel local/draft-canvas-check/draft-canvas
