@@ -1,0 +1,17 @@
+[
+  {
+    "file": "exports-match-the-canvas.png",
+    "alt": "A PNG exported from the Microservices starter: connector captions, the shared routes-to label and the note chip sit where the canvas shows them.",
+    "platform": "shared"
+  },
+  {
+    "file": "agent-workflows.png",
+    "alt": "An agent-drawn Storefront in the desktop app: inside the system, the web app, Catalog and Orders APIs, cache and stores, laid out in request order.",
+    "platform": "desktop"
+  },
+  {
+    "file": "reset-route.png",
+    "alt": "A connector from Storefront to Orders API bent over the top, with its options open: the Route row offers straight, stepped and curved, and Reset route beside them.",
+    "platform": "shared"
+  }
+]

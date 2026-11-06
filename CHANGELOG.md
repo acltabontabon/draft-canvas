@@ -6,12 +6,14 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 ## [Unreleased]
 
+## [1.18.1] - 2026-11-06
+
 ### Shared
 
 #### Changed
 
-- Bent connectors offer **Reset route**, and switching one between stepped, straight and curved
-  starts a fresh route instead of bending through the old corners.
+- **Reset route** — Bent connectors go back to automatic routing in one click, and switching between
+  stepped, straight and curved starts a fresh route. <!-- highlight -->
 - A shape without a colour shows the default colour in its options; picking it clears the colour.
 - New shapes land centred under the pointer, even after zooming or panning, and pressing the same
   shape key again puts the next one beside the last instead of on top of it.
@@ -41,9 +43,10 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 - View-only collaborators no longer see editing controls, suggestions or drags that do nothing, and
   Undo and Redo show as unavailable while a flow is being traced.
 - Compensating actions stay linked to their connector in live sessions and shared links.
-- Exports caption connectors as the canvas does and keep shared labels and condition chips where
-  the canvas shows them. C4-PlantUML and Structurizr exports keep connectors through junctions,
-  people inside a system, and shapes whose names differ only in case.
+- **Exports match the canvas** — Exports caption connectors as the canvas does and keep shared
+  labels and condition chips where the canvas shows them. <!-- highlight -->
+- C4-PlantUML and Structurizr exports keep connectors through junctions, people inside a system,
+  and shapes whose names differ only in case.
 - Mermaid exported from Draft Canvas imports back with its `<`, `>`, `&` and junctions intact, and a
   shape named like a Mermaid directive can no longer change how a sequence diagram renders.
 - Large diagrams respond faster: suggestions on Queues and Topics, label grouping on busy hubs, and
@@ -55,8 +58,9 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 #### Changed
 
-- The agent skill has focused workflows for creating, refreshing, editing and reviewing diagrams,
-  and draws runtime boundaries and execution order more accurately.
+- **Agent workflows** — The agent skill has focused workflows for creating, refreshing, editing and
+  reviewing diagrams, and draws runtime boundaries and execution order more accurately.
+  <!-- highlight -->
 
 #### Fixed
 
@@ -2501,7 +2505,8 @@ pre-release milestone; this is the one meant for real use.
 - Fully local and private by design — no accounts, no cloud sync, nothing you draw ever leaves
   your device. Documents are encrypted at rest in your browser.
 
-[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.18.0...main
+[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.18.1...main
+[1.18.1]: https://github.com/acltabontabon/draft-canvas/compare/v1.18.0...v1.18.1
 [1.18.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.17.0...v1.18.0
 [1.17.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.16.1...v1.17.0
 [1.16.1]: https://github.com/acltabontabon/draft-canvas/compare/v1.16.0...v1.16.1

@@ -708,9 +708,13 @@ async function main() {
       await page.locator(CANVAS).click({ position: { x: 8, y: 8 } }); // nothing selected in the picture
       await palette(page, 'Fit to view');
       // A starter can select its first connector after the click above lands (Modular Monolith's
-      // pictures kept an inspector open), so clear the selection again once it has settled.
-      await page.locator(CANVAS).click({ position: { x: 8, y: 8 } });
-      await expect(page.locator('.react-flow__edge.selected, .react-flow__node.selected')).toHaveCount(0);
+      // pictures kept an inspector open), so clear the selection again once it has settled. A click
+      // while Fit to view's camera is still moving can miss (1.18.1: Backend for Frontend kept all 13
+      // shapes selected), so click again until it takes.
+      await expect(async () => {
+        await page.locator(CANVAS).click({ position: { x: 8, y: 8 } });
+        await expect(page.locator('.react-flow__edge.selected, .react-flow__node.selected')).toHaveCount(0, { timeout: 1000 });
+      }).toPass({ timeout: 10_000 });
       await shot(page, `example-${id}`, await box(page.locator(CANVAS)));
       await page.getByRole('button', { name: /Back to your diagrams/ }).click();
       await openGallery(page);
