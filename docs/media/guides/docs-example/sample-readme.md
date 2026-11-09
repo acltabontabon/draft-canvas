@@ -11,9 +11,13 @@ receipts by email.
 
 ![Online store](online-store.svg)
 
-The store has two more levels inside it: its containers, and the Store API's components. Open
-[online-store.draftcanvas](online-store.draftcanvas) and look inside **Online store** to see them.
-A published picture shows one level; [levels/](levels/) has what each of the other two looks like.
+Inside the store, the storefront calls the Store API, and a worker fulfils orders from a queue.
+
+![Online store](online-store.online-store.svg)
+
+The Store API's own components are one level further in:
+[online-store.store-api.svg](online-store.store-api.svg). All three pictures come from
+[online-store.draftcanvas](online-store.draftcanvas).
 
 ## Order processing
 

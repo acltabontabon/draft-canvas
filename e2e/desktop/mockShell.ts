@@ -62,13 +62,13 @@ export interface ShellHandle {
   /** Prompts the companion sent, in order, and the runs it asked to stop. */
   companionSent(): { runId: string; diagramId: string; text: string; selection: unknown; mode: string }[];
   companionCancelled(): string[];
-  /** The docs image beside a diagram (`payments.svg` for `payments.draftcanvas`), by the diagram's handle. */
-  docsImage(handle: string): string | undefined;
-  /** Puts a file where the docs image would go, as another tool might have left one. */
-  setDocsImage(handle: string, text: string): void;
+  /** A docs picture in the diagrams' (one, shared) folder, by file name: `payments.svg`, `payments.ledger.svg`. */
+  docsImage(name: string): string | undefined;
+  /** Puts a file where a docs picture would go, as another tool might have left one. */
+  setDocsImage(name: string, text: string): void;
   /** The Markdown file the next "Choose the Markdown file…" dialog picks (`null` cancels), and the
-   *  picture's path from it. */
-  nextMarkdown(file: { name: string; text: string; imagePath: string } | null): void;
+   *  diagrams' folder from it (`docs/diagrams`, or empty for the same folder). */
+  nextMarkdown(file: { name: string; text: string; imageDir: string } | null): void;
   /** The picked Markdown file's text now, by name. */
   markdown(name: string): string | undefined;
 }
@@ -97,7 +97,7 @@ export async function installMockShell(page: Page): Promise<void> {
     const docsImages = new Map<string, string>();
     const markdownFiles = new Map<string, { text: string; version: number }>();
     const markdownHandles = new Map<string, string>();
-    let nextMarkdownFile: { name: string; text: string; imagePath: string } | null = null;
+    let nextMarkdownFile: { name: string; text: string; imageDir: string } | null = null;
     const calls: { command: string; args: unknown }[] = [];
     const companionSent: { runId: string; diagramId: string; text: string; selection: unknown; mode: string }[] = [];
     let codeAllowed: 'now' | 'always' | null = null;
@@ -354,20 +354,27 @@ export async function installMockShell(page: Page): Promise<void> {
       sidecar_write: (args: { handle: string; mime: string; base64: string }) => void sidecars.set(args.handle, args),
       sidecar_remove: (args: { handle: string }) => void sidecars.delete(args.handle),
       docs_status: (args: { handle: string }) => {
-        const svg = docsImages.get(args.handle);
-        const ours = svg !== undefined && svg.includes('<metadata id="draftcanvas-docs">');
-        return { imageName: `${files.get(args.handle)!.name}.svg`, state: svg === undefined ? 'none' : ours ? 'ours' : 'foreign', svg: ours ? svg : null, modifiedMs: ours ? Date.now() : null };
+        const stem = files.get(args.handle)!.name;
+        const images = [...docsImages]
+          .filter(([name]) => name === `${stem}.svg` || (name.startsWith(`${stem}.`) && name.endsWith('.svg')))
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([name, svg]) => {
+            const ours = svg.includes('<metadata id="draftcanvas-docs">');
+            return { name, state: ours ? 'ours' : 'foreign', svg: ours ? svg : null, modifiedMs: ours ? Date.now() : null };
+          });
+        return { images };
       },
       docs_publish: (bytes: unknown, options: unknown) => {
-        const { handle } = meta(options) as { handle: string };
+        const { handle, name } = meta(options) as { handle: string; name: string };
+        const stem = files.get(handle)!.name;
+        if (name !== `${stem}.svg` && !(name.startsWith(`${stem}.`) && name.endsWith('.svg'))) throw { kind: 'Io', message: `${name} isn't a picture name for this diagram` };
         const svg = decode(bytes);
-        const current = docsImages.get(handle);
-        const imageName = `${files.get(handle)!.name}.svg`;
+        const current = docsImages.get(name);
         if (current !== undefined && !current.includes('<metadata id="draftcanvas-docs">')) {
-          throw { kind: 'AlreadyExists', message: `${imageName} already exists beside this diagram and wasn't made by Draft Canvas, so it was left alone. Rename one of them to publish.` };
+          throw { kind: 'AlreadyExists', message: `${name} already exists beside this diagram and wasn't made by Draft Canvas, so it was left alone. Rename one of them to publish.` };
         }
-        docsImages.set(handle, svg);
-        return { outcome: current === svg ? 'unchanged' : 'written', imageName };
+        docsImages.set(name, svg);
+        return { outcome: current === svg ? 'unchanged' : 'written', imageName: name };
       },
       docs_pick_markdown: () => {
         const next = nextMarkdownFile;
@@ -377,7 +384,7 @@ export async function installMockShell(page: Page): Promise<void> {
         const held = markdownFiles.get(next.name) ?? { text: next.text, version: 1 };
         markdownFiles.set(next.name, held);
         markdownHandles.set(handle, next.name);
-        return { handle, name: next.name, displayPath: `~/work/${next.name}`, text: held.text, stamp: `md:${held.version}`, imagePath: next.imagePath };
+        return { handle, name: next.name, displayPath: `~/work/${next.name}`, text: held.text, stamp: `md:${held.version}`, imageDir: next.imageDir };
       },
       docs_add_to_markdown: (bytes: unknown, options: unknown) => {
         const { markdown, expectedStamp } = meta(options) as { markdown: string; expectedStamp: string };
@@ -636,8 +643,8 @@ export async function installMockShell(page: Page): Promise<void> {
     };
 
     const shell: ShellHandle = {
-      docsImage: (handle) => docsImages.get(handle),
-      setDocsImage: (handle, text) => void docsImages.set(handle, text),
+      docsImage: (name) => docsImages.get(name),
+      setDocsImage: (name, text) => void docsImages.set(name, text),
       nextMarkdown: (file) => void (nextMarkdownFile = file),
       markdown: (name) => markdownFiles.get(name)?.text,
       agentResponse: (id) => agentResponses.get(id),

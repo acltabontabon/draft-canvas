@@ -1,6 +1,7 @@
-//! Use in docs: the picture of a diagram that a Markdown file shows, kept beside its source as
-//! `<name>.svg`, and the one line a person may ask to have added to a Markdown file. Pure functions
-//! over paths and bytes, like `docio`, so every rule here is tested without a window.
+//! Use in docs: the pictures of a diagram that Markdown files show, kept beside its source — the
+//! whole diagram as `<name>.svg`, a level inside it as `<name>.<level>.svg` — and the one line a
+//! person may ask to have added to a Markdown file. Pure functions over paths and bytes, like
+//! `docio`, so every rule here is tested without a window.
 //!
 //! The rules, all enforced here rather than trusted to the page:
 //! - Only a file Draft Canvas made is ever replaced. An SVG beside the diagram that doesn't carry the
@@ -29,13 +30,89 @@ const MAX_INSERTION_BYTES: usize = 8 * 1024;
 const MARKDOWN_EXTENSIONS: [&str; 3] = ["md", "markdown", "mdx"];
 const BOM: &str = "\u{feff}";
 
-/// `payments.draftcanvas` → `payments.svg`, in the same folder.
-pub fn image_path(doc: &Path) -> PathBuf {
-    let stem = doc
-        .file_stem()
+/// Pictures of one diagram read per status; a folder holding more is someone's archive, not docs.
+pub const MAX_IMAGES: usize = 64;
+/// The level part of a picture's name: `ledger`, `online-store.store-api`.
+const MAX_LEVEL_CHARS: usize = 200;
+
+fn stem_of(doc: &Path) -> String {
+    doc.file_stem()
         .map(|s| s.to_string_lossy().into_owned())
-        .unwrap_or_default();
-    doc.with_file_name(format!("{stem}.svg"))
+        .unwrap_or_default()
+}
+
+/// `payments.draftcanvas` → `payments.svg`, in the same folder: the whole diagram's picture.
+pub fn image_path(doc: &Path) -> PathBuf {
+    doc.with_file_name(format!("{}.svg", stem_of(doc)))
+}
+
+/// One dot-separated level part: a name the page made from a shape's name, never a path.
+fn is_level_part(part: &str) -> bool {
+    !part.is_empty()
+        && part
+            .chars()
+            .all(|c| !(c.is_control() || c.is_whitespace() || "/\\:<>\"|?*.".contains(c)))
+}
+
+/// The level part of `name` when it is a picture of `doc`: `Some("")` for `<stem>.svg`, `Some(level)`
+/// for `<stem>.<level>.svg`, `None` for any other name. The page names the picture; this is what
+/// keeps that name one file beside the diagram, never a path out of its folder.
+fn level_of<'a>(doc: &Path, name: &'a str) -> Option<&'a str> {
+    let stem = stem_of(doc);
+    let rest = name.strip_prefix(stem.as_str())?.strip_suffix(".svg")?;
+    if rest.is_empty() {
+        return Some("");
+    }
+    let level = rest.strip_prefix('.')?;
+    (level.chars().count() <= MAX_LEVEL_CHARS && level.split('.').all(is_level_part))
+        .then_some(level)
+}
+
+/// The picture of `doc` called `name`, beside it — or an error when `name` isn't one of its pictures.
+pub fn named_image_path(doc: &Path, name: &str) -> Result<PathBuf, AppError> {
+    if level_of(doc, name).is_none() {
+        return Err(AppError::bad_request(&format!(
+            "{name} isn't a picture name for {}",
+            file_name(doc)
+        )));
+    }
+    Ok(doc.with_file_name(name))
+}
+
+/// Every file beside `doc` named like one of its pictures, by name, with what is in each. Whether a
+/// picture of ours was drawn from *this* diagram is its note's to say; the page reads that.
+pub fn list_images(doc: &Path) -> Result<Vec<(String, ImageRead)>, AppError> {
+    let Some(dir) = doc.parent() else {
+        return Ok(Vec::new());
+    };
+    let entries =
+        fs::read_dir(dir).map_err(|e| AppError::from_io(&e, Verb::Open, Subject::Path(dir)))?;
+    let mut names: Vec<String> = entries
+        .filter_map(|entry| entry.ok())
+        .filter_map(|entry| entry.file_name().into_string().ok())
+        .filter(|name| level_of(doc, name).is_some())
+        .collect();
+    names.sort();
+    names.truncate(MAX_IMAGES);
+    names
+        .into_iter()
+        .map(|name| {
+            let read = read_image(&dir.join(&name))?;
+            Ok((name, read))
+        })
+        .filter(|read| {
+            !matches!(
+                read,
+                Ok((
+                    _,
+                    ImageRead {
+                        state: ImageState::None,
+                        ..
+                    }
+                ))
+            )
+        })
+        .collect()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -173,10 +250,11 @@ fn foreign_image(path: &Path) -> AppError {
     .at(Some(crate::paths::display_path(path)))
 }
 
-/// Writes the picture of `doc` beside it. Refuses a file that isn't ours; skips identical bytes.
-pub fn publish_image(doc: &Path, bytes: &[u8]) -> Result<Published, AppError> {
+/// Writes the picture of `doc` called `name` beside it. Refuses a file that isn't ours; skips
+/// identical bytes.
+pub fn publish_image(doc: &Path, name: &str, bytes: &[u8]) -> Result<Published, AppError> {
     check_image(bytes)?;
-    let target = image_path(doc);
+    let target = named_image_path(doc, name)?;
     let current = read_image(&target)?;
     match current.state {
         ImageState::Foreign => Err(foreign_image(&target)),
@@ -355,13 +433,70 @@ mod tests {
     }
 
     #[test]
+    fn a_level_has_its_own_name_and_nothing_else_is_a_picture_name() {
+        let doc = Path::new("/repo/docs/payments.draftcanvas");
+        assert_eq!(
+            named_image_path(doc, "payments.ledger.svg").unwrap(),
+            Path::new("/repo/docs/payments.ledger.svg")
+        );
+        assert!(named_image_path(doc, "payments.svg").is_ok());
+        assert!(named_image_path(doc, "payments.設計.svg").is_ok());
+        assert!(named_image_path(doc, "payments.api.handler.svg").is_ok());
+        for bad in [
+            "other.svg",
+            "payments.png",
+            "payments..svg",
+            "payments.a..b.svg",
+            "payments.../x.svg",
+            "payments.a/b.svg",
+            "payments.a\\b.svg",
+            "payments.a b.svg",
+            "payments.svg.svg.",
+            "paymentsx.svg",
+        ] {
+            assert!(named_image_path(doc, bad).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn listing_finds_every_picture_of_the_diagram_and_nothing_else() {
+        let dir = tempdir().unwrap();
+        let doc = dir.path().join("payments.draftcanvas");
+        fs::write(&doc, "{}").unwrap();
+        fs::write(dir.path().join("payments.svg"), svg("<rect/>")).unwrap();
+        fs::write(dir.path().join("payments.ledger.svg"), svg("<circle/>")).unwrap();
+        fs::write(dir.path().join("payments.notes.svg"), "<svg/>").unwrap();
+        fs::write(dir.path().join("payroll.svg"), svg("")).unwrap();
+        fs::write(dir.path().join("payments.md"), "x").unwrap();
+        let found: Vec<(String, ImageState)> = list_images(&doc)
+            .unwrap()
+            .into_iter()
+            .map(|(name, read)| (name, read.state))
+            .collect();
+        assert_eq!(
+            found,
+            vec![
+                ("payments.ledger.svg".to_string(), ImageState::Ours),
+                ("payments.notes.svg".to_string(), ImageState::Foreign),
+                ("payments.svg".to_string(), ImageState::Ours),
+            ]
+        );
+        assert_eq!(
+            publish_image(&doc, "payments.ledger.svg", svg("<line/>").as_bytes()).unwrap(),
+            Published::Written
+        );
+        assert!(publish_image(&doc, "payments.notes.svg", svg("").as_bytes()).is_err());
+        assert!(publish_image(&doc, "../payments.svg", svg("").as_bytes()).is_err());
+    }
+
+    #[test]
     fn publishing_writes_once_then_skips_identical_bytes() {
         let dir = tempdir().unwrap();
         let doc = dir.path().join("payments.draftcanvas");
         fs::write(&doc, "{}").unwrap();
         let first = svg("<rect/>");
         assert_eq!(
-            publish_image(&doc, first.as_bytes()).unwrap(),
+            publish_image(&doc, "payments.svg", first.as_bytes()).unwrap(),
             Published::Written
         );
         assert_eq!(
@@ -369,12 +504,12 @@ mod tests {
             first
         );
         assert_eq!(
-            publish_image(&doc, first.as_bytes()).unwrap(),
+            publish_image(&doc, "payments.svg", first.as_bytes()).unwrap(),
             Published::Unchanged
         );
         let second = svg("<circle/>");
         assert_eq!(
-            publish_image(&doc, second.as_bytes()).unwrap(),
+            publish_image(&doc, "payments.svg", second.as_bytes()).unwrap(),
             Published::Written
         );
         assert_eq!(
@@ -389,7 +524,7 @@ mod tests {
         let doc = dir.path().join("payments.draftcanvas");
         let theirs = dir.path().join("payments.svg");
         fs::write(&theirs, "<svg><rect/></svg>").unwrap();
-        let error = publish_image(&doc, svg("").as_bytes()).unwrap_err();
+        let error = publish_image(&doc, "payments.svg", svg("").as_bytes()).unwrap_err();
         assert_eq!(error.kind, ErrorKind::AlreadyExists);
         assert_eq!(fs::read_to_string(&theirs).unwrap(), "<svg><rect/></svg>");
         assert_eq!(read_image(&theirs).unwrap().state, ImageState::Foreign);
@@ -403,7 +538,7 @@ mod tests {
         fs::write(&elsewhere, svg("<rect/>")).unwrap();
         std::os::unix::fs::symlink(&elsewhere, dir.path().join("payments.svg")).unwrap();
         let doc = dir.path().join("payments.draftcanvas");
-        assert!(publish_image(&doc, svg("<circle/>").as_bytes()).is_err());
+        assert!(publish_image(&doc, "payments.svg", svg("<circle/>").as_bytes()).is_err());
         assert_eq!(fs::read_to_string(&elsewhere).unwrap(), svg("<rect/>"));
     }
 

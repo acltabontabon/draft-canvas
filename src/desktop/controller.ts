@@ -11,7 +11,8 @@ import { dispatchCollabLanEvent, lanRelayOf } from './collabLan';
 import type { LanRelay } from '../collab/lan';
 import { confirmWrite, takeWrite, type AgentWrite } from './agentWrites';
 import { DocsPublisher } from './docs';
-import type { DocsSettings } from '../export/docs/marker';
+import { readMarker, type DocsSettings } from '../export/docs/marker';
+import { picturesOf } from '../export/docs/names';
 import { logDiagnostic } from '../lib/diagnostics';
 import { isRecord } from '../lib/isRecord';
 import type { StarterId } from '../starters';
@@ -30,6 +31,7 @@ import {
   type CodeFolder,
   type CodeGrant,
   type DesktopApi,
+  type DocsImage,
   type DocsPublished,
   type DocsStatus,
   type MarkdownFile,
@@ -132,6 +134,24 @@ const encoder = new TextEncoder();
 /** `~/docs/Payments.draftcanvas` → `Payments`, whichever separator the platform shows. */
 function fileStem(displayPath: string): string {
   return displayPath.slice(Math.max(displayPath.lastIndexOf('/'), displayPath.lastIndexOf('\\')) + 1).replace(/\.draftcanvas$/i, '');
+}
+
+/** `~/docs/Payments.draftcanvas` → `~/docs`: the folder part of a shown path. */
+function parentOf(displayPath: string): string {
+  return displayPath.slice(0, Math.max(displayPath.lastIndexOf('/'), displayPath.lastIndexOf('\\'), 0));
+}
+
+/**
+ * The diagram a listing of pictures belongs to, when the file isn't the open one: the source a
+ * picture's note names, if the picture is named after it. Empty when none is.
+ */
+function stemOfPictures(images: readonly DocsImage[]): string {
+  for (const image of images) {
+    const source = image.svg ? readMarker(image.svg)?.source : undefined;
+    const stem = source?.replace(/\.draftcanvas$/i, '');
+    if (stem && image.name.toLowerCase().startsWith(`${stem.toLowerCase()}.`)) return stem;
+  }
+  return '';
 }
 
 /** A room's text without its camera — the document's own `viewport` and, recursively, each room's. */
@@ -1072,7 +1092,7 @@ export class DesktopController {
    * Writes the picture beside the open file. Unsaved changes are saved first — the picture must show
    * what the file beside it holds — and it is drawn from exactly the text that was saved.
    */
-  async publishDocs(settings: DocsSettings): Promise<DocsPublished> {
+  async publishDocs(settings: DocsSettings, imageName: string): Promise<DocsPublished> {
     if (this.docsFile()?.dirty) await this.save();
     const session = this.session;
     const text = this.savedText;
@@ -1080,7 +1100,7 @@ export class DesktopController {
     if (this.dirty) throw new Error(`Save ${session.name}.draftcanvas first, so the picture matches it.`);
     // Through the publisher's queue, so the redraw that save just asked for (with the settings
     // already on disk) lands first and this one, with the person's choices, lands last.
-    return this.docs.publish(session.handle, session.name, text, settings);
+    return this.docs.publish(session.handle, session.name, text, settings, imageName);
   }
 
   async pickDocsMarkdown(): Promise<MarkdownFile | null> {
@@ -1092,9 +1112,9 @@ export class DesktopController {
     return this.api.docsAddToMarkdown(markdown, text, expectedStamp);
   }
 
-  async revealDocsImage(): Promise<void> {
+  async revealDocsImage(name: string): Promise<void> {
     const file = this.docsFile();
-    if (file) await this.api.docsReveal(file.handle);
+    if (file) await this.api.docsReveal(file.handle, name);
   }
 
   saveAs(): Promise<void> {
@@ -1333,12 +1353,18 @@ export class DesktopController {
     const waitFor = this.saving;
     const task = (async (): Promise<T> => {
       if (waitFor) await waitFor;
-      // A docs picture keeps its place: the Markdown points at it there. Looked at before the move so
-      // the person can be told the link ended, rather than finding out from a stale README.
-      const picture = await this.api.docsStatus(handle).catch(() => null);
+      // Docs pictures keep their place: the Markdown points at them there. Looked at before the move
+      // so the person can be told the link ended, rather than finding out from a stale README.
+      const before = this.session.kind === 'file' && this.session.handle === handle ? this.session : null;
+      const status = await this.api.docsStatus(handle).catch(() => null);
       const changed = await change();
-      if (picture?.state === 'ours' && picture.imageName.toLowerCase() !== `${changed.name}.svg`.toLowerCase()) {
-        this.ui.notify(`${picture.imageName} stayed where your Markdown points and no longer follows this diagram. Publish again in Use in docs to give it a picture of its own.`);
+      // Whichever diagram the shell found pictures for under the old name; their notes name it.
+      const pictures = status ? picturesOf(status.images, before?.name ?? stemOfPictures(status.images)) : [];
+      const sameFile = before !== null && before.name === changed.name && parentOf(before.displayPath) === parentOf(changed.displayPath);
+      if (pictures.length > 0 && !sameFile) {
+        const first = pictures[0]!.name;
+        const what = pictures.length === 1 ? `${first} stayed` : `${first} and ${pictures.length - 1} more ${pictures.length === 2 ? 'picture' : 'pictures'} stayed`;
+        this.ui.notify(`${what} where your Markdown points and no longer follow${pictures.length === 1 ? 's' : ''} this diagram. Publish again in Use in docs to give it ${pictures.length === 1 ? 'a picture' : 'pictures'} of its own.`);
       }
       if (this.session.kind === 'file' && this.session.handle === handle) {
         this.session = { ...this.session, handle: changed.handle, name: changed.name, displayPath: changed.displayPath };

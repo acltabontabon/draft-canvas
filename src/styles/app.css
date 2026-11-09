@@ -4930,6 +4930,24 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   border-radius: var(--dc-radius-sm);
 }
 
+.dc-docs-image-line {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 8px;
+  /* The page's own ink, like the excerpt's text: the preview is drawn in the picture's look. */
+  border: 1px dashed currentColor;
+  border-radius: var(--dc-radius-sm);
+  font: 10.5px/1.45 var(--dc-font);
+  opacity: 0.6;
+}
+
+.dc-docs-image-line > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .dc-docs-note {
   margin: 0;
   color: var(--dc-text-muted);
@@ -5063,6 +5081,8 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 
 .dc-docs-figure {
   display: grid;
+  /* The picture keeps its height; it's the lines around it that give way in a short excerpt. */
+  flex-shrink: 0;
   place-items: center;
   min-height: 72px;
   margin: 2px 0;

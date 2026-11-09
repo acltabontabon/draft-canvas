@@ -84,10 +84,10 @@ export function createTauriApi(): DesktopApi {
     sidecarWrite: (handle, mime, base64) => call('sidecar_write', { handle, mime, base64 }),
     sidecarRemove: (handle) => call('sidecar_remove', { handle }),
     docsStatus: (handle) => call('docs_status', { handle }),
-    docsPublish: (handle, svg) => callRaw('docs_publish', { handle }, new TextEncoder().encode(svg)),
+    docsPublish: (handle, name, svg) => callRaw('docs_publish', { handle, name }, new TextEncoder().encode(svg)),
     docsPickMarkdown: (handle) => call('docs_pick_markdown', { handle }),
     docsAddToMarkdown: (markdown, text, expectedStamp) => callRaw('docs_add_to_markdown', { markdown, expectedStamp }, new TextEncoder().encode(text)),
-    docsReveal: (handle) => call('docs_reveal', { handle }),
+    docsReveal: (handle, name) => call('docs_reveal', { handle, name }),
     peekDocument: (handle) => call('peek_document', { handle }),
 
     pickProject: () => call('pick_project'),

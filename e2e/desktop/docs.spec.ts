@@ -69,7 +69,7 @@ async function shot(page: Page, name: string) {
 }
 
 test('publishes beside the file, adds to a Markdown file once, and follows saves', async ({ page }) => {
-  const handle = await openPayments(page);
+  await openPayments(page);
   const dialog = await openUseInDocs(page);
 
   await expect(dialog.getByRole('status')).toHaveText('Not published');
@@ -78,14 +78,14 @@ test('publishes beside the file, adds to a Markdown file once, and follows saves
 
   await dialog.getByRole('button', { name: 'Publish image' }).click();
   await expect(dialog.getByText('Published payments.svg')).toBeVisible();
-  const published = await page.evaluate((handle) => window.__shell.docsImage(handle), handle);
+  const published = await page.evaluate(() => window.__shell.docsImage('payments.svg'));
   expect(published).toContain('<metadata id="draftcanvas-docs">');
   expect(published).toContain('Ledger');
   expect(published).not.toContain('Entries');
   await expect(dialog.getByRole('status')).toHaveText('Up to date');
 
   // Choose the README two folders up: the path in the snippet is now from there.
-  await page.evaluate((readme) => window.__shell.nextMarkdown({ name: 'README.md', text: readme, imagePath: 'docs/diagrams/payments.svg' }), README);
+  await page.evaluate((readme) => window.__shell.nextMarkdown({ name: 'README.md', text: readme, imageDir: 'docs/diagrams' }), README);
   await dialog.getByRole('button', { name: 'Add to a Markdown file…' }).click();
   await expect(dialog.getByLabel('Markdown for this picture')).toHaveText('![Payments](docs/diagrams/payments.svg)');
   await expect(dialog.getByRole('combobox', { name: 'Section' })).toHaveValue(/^line:/);
@@ -119,37 +119,59 @@ test('publishes beside the file, adds to a Markdown file once, and follows saves
   await page.locator('.react-flow__pane').click({ position: { x: 500, y: 420 } });
   await page.keyboard.press('Escape');
   await page.keyboard.press('ControlOrMeta+s');
-  await expect.poll(() => page.evaluate((handle) => window.__shell.docsImage(handle), handle)).not.toBe(published);
-  expect(await page.evaluate((handle) => window.__shell.docsImage(handle), handle)).toContain('<metadata id="draftcanvas-docs">');
+  await expect.poll(() => page.evaluate(() => window.__shell.docsImage('payments.svg'))).not.toBe(published);
+  expect(await page.evaluate(() => window.__shell.docsImage('payments.svg'))).toContain('<metadata id="draftcanvas-docs">');
   // The README is never touched by a save.
   expect(await page.evaluate(() => window.__shell.markdown('README.md'))).toBe(readme);
 });
 
 test('leaves an SVG it did not make alone, and says why', async ({ page }) => {
-  const handle = await openPayments(page);
-  await page.evaluate((handle) => window.__shell.setDocsImage(handle, '<svg xmlns="http://www.w3.org/2000/svg"><rect/></svg>'), handle);
+  await openPayments(page);
+  await page.evaluate(() => window.__shell.setDocsImage('payments.svg', '<svg xmlns="http://www.w3.org/2000/svg"><rect/></svg>'));
   const dialog = await openUseInDocs(page);
   await expect(dialog.getByRole('status')).toHaveText('Name taken');
   await expect(dialog.getByText('payments.svg wasn’t made by Draft Canvas, so it won’t be replaced.')).toBeVisible();
   await expect(dialog.getByRole('button', { name: 'payments.svg is taken' })).toBeDisabled();
   // Nothing to add to a Markdown file while the picture can't be published.
   await expect(dialog.getByRole('button', { name: 'Choose file…' })).toHaveCount(0);
-  expect(await page.evaluate((handle) => window.__shell.docsImage(handle), handle)).toBe('<svg xmlns="http://www.w3.org/2000/svg"><rect/></svg>');
+  expect(await page.evaluate(() => window.__shell.docsImage('payments.svg'))).toBe('<svg xmlns="http://www.w3.org/2000/svg"><rect/></svg>');
 });
 
-test('publishes a chosen level, and keeps it when the editor moves', async ({ page }) => {
-  const handle = await openPayments(page);
+test('gives each level its own picture, and puts the next one beside the first on the page', async ({ page }) => {
+  await openPayments(page);
   const dialog = await openUseInDocs(page);
-  await dialog.getByRole('combobox', { name: 'Level' }).selectOption({ label: 'Inside Ledger' });
-  await expect(dialog.getByLabel('Markdown for this picture')).toHaveText('![Payments / Ledger](payments.svg)');
   await dialog.getByRole('button', { name: 'Publish image' }).click();
   await expect(dialog.getByText('Published payments.svg')).toBeVisible();
-  const svg = await page.evaluate((handle) => window.__shell.docsImage(handle), handle);
-  expect(svg).toContain('Entries');
-  expect(svg).not.toContain('Gateway');
+
+  const level = dialog.getByRole('combobox', { name: 'Level' });
+  await level.selectOption({ label: 'Inside Ledger' });
+  await expect(dialog.getByLabel('Markdown for this picture')).toHaveText('![Payments / Ledger](payments.ledger.svg)');
+  await expect(dialog.getByRole('status')).toHaveText('Not published');
+  await dialog.getByRole('button', { name: 'Publish image' }).click();
+  await expect(dialog.getByText('Published payments.ledger.svg')).toBeVisible();
+  const inside = await page.evaluate(() => window.__shell.docsImage('payments.ledger.svg'));
+  expect(inside).toContain('Entries');
+  expect(inside).not.toContain('Gateway');
+  // The whole diagram's picture is its own file, untouched.
+  expect(await page.evaluate(() => window.__shell.docsImage('payments.svg'))).toContain('Gateway');
+  await expect(level.locator('option', { hasText: 'Whole diagram · published' })).toHaveCount(1);
+  await expect(level.locator('option', { hasText: 'Inside Ledger · published' })).toHaveCount(1);
+
+  // A README already showing the whole diagram: the level goes in the same section, after it.
+  const readme = `# Shop\n\n## Architecture\n\n![Payments](docs/diagrams/payments.svg)\n\n## Running locally\n\nnpm start\n`;
+  await page.evaluate((text) => window.__shell.nextMarkdown({ name: 'README.md', text, imageDir: 'docs/diagrams' }), readme);
+  await dialog.getByRole('button', { name: 'Add to a Markdown file…' }).click();
+  await expect(dialog.getByRole('combobox', { name: 'Section' })).toHaveValue('line:2');
+  await shot(page, 'docs-desktop-levels');
+  await dialog.getByRole('button', { name: 'Add to README.md' }).click();
+  await expect(dialog.getByText('Added to README.md')).toBeVisible();
+  expect(await page.evaluate(() => window.__shell.markdown('README.md'))).toBe(
+    readme.replace('payments.svg)\n\n', 'payments.svg)\n\n![Payments / Ledger](docs/diagrams/payments.ledger.svg)\n\n'),
+  );
+
+  // Reopened from the top level: the whole diagram's picture, current.
   await dialog.getByRole('button', { name: 'Close' }).click();
-  // Reopened from the top level: the published level is still the one offered.
   const again = await openUseInDocs(page);
-  await expect(again.getByRole('combobox', { name: 'Level' })).toHaveValue(/.+/);
+  await expect(again.getByRole('combobox', { name: 'Level' })).toHaveValue('');
   await expect(again.getByRole('status')).toHaveText('Up to date');
 });

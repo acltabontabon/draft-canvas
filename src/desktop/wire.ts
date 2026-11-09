@@ -2,19 +2,22 @@
 export type OpenedDoc = { handle: string, name: string, displayPath: string, text: string, stamp: string, readOnly: boolean, };
 export type SavedAs = { handle: string, name: string, displayPath: string, stamp: string, };
 export type SaveResult = { "outcome": "saved", stamp: string, } | { "outcome": "conflict" };
-export type DocsStatus = {
+export type DocsImage = {
 /**
- * `payments.svg`: what the picture is, or would be, called.
+ * `payments.svg`, `payments.ledger.svg`.
  */
-imageName: string,
+name: string,
 /**
- * `none`: not published. `ours`: a picture Draft Canvas made. `foreign`: another file has the name.
+ * `ours`: a picture Draft Canvas made (its note says of which diagram and level). `foreign`:
+ * another file has the name.
  */
-state: "none" | "ours" | "foreign",
+state: "ours" | "foreign",
 /**
- * The picture's SVG, when it is ours, so the page can tell whether it is current.
+ * The picture's SVG, when it is ours, so the page can tell which level it shows and whether
+ * it is current.
  */
 svg: string | null, modifiedMs: number | null, };
+export type DocsStatus = { images: Array<DocsImage>, };
 export type DocsPublished = {
 /**
  * `written`, or `unchanged` when the picture was already exactly this.
@@ -22,9 +25,10 @@ export type DocsPublished = {
 outcome: "written" | "unchanged", imageName: string, };
 export type MarkdownFile = { handle: string, name: string, displayPath: string, text: string, stamp: string,
 /**
- * The picture's path from the Markdown file's folder, `/`-separated.
+ * The diagram's folder from the Markdown file's folder, `/`-separated: `docs/diagrams`, `..`,
+ * or empty when they share a folder. A picture's path is this and its name.
  */
-imagePath: string, };
+imageDir: string, };
 export type MarkdownSaveResult = { "outcome": "saved", stamp: string, } | { "outcome": "conflict" };
 export type ProjectInfo = { handle: string, name: string, displayPath: string, };
 export type MovedFile = { handle: string, name: string, displayPath: string, };

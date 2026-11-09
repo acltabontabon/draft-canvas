@@ -24,8 +24,9 @@ Open **Share → Export** (`⌘⇧E`) and choose **Docs**, or run **Use in docs�
 
 The preview shows the picture on a page, as a reader will see it. Choose:
 
-- **Level** — the whole diagram, or the inside of one shape. A large system often reads better as
-  one level per page. Moving around the editor never changes the level a picture shows.
+- **Level** — the whole diagram, or the inside of one shape. Each level is its own picture, so a
+  page can show several. The tab opens on the level you're looking at; levels already published
+  are marked **published**.
 - **Look** — **Light** or **Dark**. The picture keeps its own background, so it reads on either kind
   of page.
 
@@ -78,22 +79,26 @@ replace both files.
 ## Diagrams with levels
 
 A diagram with levels inside it, such as a C4 context view with containers and components inside,
-publishes one level per picture. **Level** lists them: **Whole diagram**, **Inside Online store**,
-**Inside Online store / Store API**. To show more than one level on a page, say so in the text and
-point readers at the `.draftcanvas` file, as the sample README below does.
+gets one picture per level, each in its own file beside the diagram:
 
-| Level | What the picture shows |
+| Level | Picture |
 | --- | --- |
-| Whole diagram | [The system and the people and systems around it](../media/guides/docs-example/online-store.svg) |
-| Inside Online store | [Its containers](../media/guides/docs-example/levels/inside-online-store.svg) |
-| Inside Online store / Store API | [The API's components](../media/guides/docs-example/levels/inside-store-api.svg) |
+| Whole diagram | [online-store.svg](../media/guides/docs-example/online-store.svg) |
+| Inside Online store | [online-store.online-store.svg](../media/guides/docs-example/online-store.online-store.svg) |
+| Inside Online store / Store API | [online-store.store-api.svg](../media/guides/docs-example/online-store.store-api.svg) |
 
-![The Docs tab with Inside Online store chosen: the preview shows the containers.](../media/guides/export-docs-levels.png)
+A level's picture is named after its shape the first time you publish it, and keeps that name:
+renaming the shape later doesn't move the file your Markdown points at. Every save redraws all of a
+diagram's pictures that follow saves.
 
-The [sample README](../media/guides/docs-example/sample-readme.md) shows a page with two diagrams, as
-**Use in docs** leaves it. This is how GitHub shows it:
+![The Docs tab with a second level chosen: it is marked published, and the README preview shows it going in right after the first.](../media/guides/export-docs-levels.png)
 
-![The sample README on GitHub, with the Online store and Order processing pictures.](../media/guides/docs-sample-readme.png)
+When the Markdown file already shows another level of the same diagram, **Section** starts at that
+level's section, so the context view and its containers read together. The
+[sample README](../media/guides/docs-example/sample-readme.md) shows two levels of one diagram and
+a second diagram. This is how GitHub shows it:
+
+![The sample README on GitHub: the online store's context and containers, then order processing.](../media/guides/docs-sample-readme.png)
 
 ## What the picture contains
 

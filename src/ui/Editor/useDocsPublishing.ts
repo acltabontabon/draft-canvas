@@ -3,7 +3,8 @@ import type { DraftDocument } from '../../document/types';
 import type { ThemeName } from '../../render/theme/tokens';
 import type { PersonalityPreset } from '../../theme/usePersonality';
 import { docsLevels, docsTitleFor, levelExists, renderDocsImage } from '../../export/docs/image';
-import { readMarker, sameSettings, type DocsSettings } from '../../export/docs/marker';
+import { sameSettings, type DocsSettings } from '../../export/docs/marker';
+import { levelImageNames, pictureFor, picturesOf, type LevelPicture } from '../../export/docs/names';
 import { defaultPlacement, excerptAround, headingsOf, insertImage, markdownImage, referenceLine, referencesTo, type ExcerptLine, type Placement } from '../../export/docs/markdown';
 import { bundleNames, downloadDocsBundle } from '../../export/docs/bundle';
 import { readPreference, writePreference } from '../../lib/preferences';
@@ -23,6 +24,17 @@ function readSyncPreference(): boolean {
   return readPreference(SYNC_PREFERENCE) !== 'off';
 }
 
+/** The section holding the first of `names` the Markdown file already shows, as a placement. */
+function siblingSection(markdown: MarkdownFile, names: readonly string[], headings: ReturnType<typeof headingsOf>): Placement | null {
+  for (const name of names) {
+    const at = referenceLine(markdown.text, markdown.imageDir ? `${markdown.imageDir}/${name}` : name);
+    if (at < 0) continue;
+    const heading = headings.filter((entry) => entry.line < at).at(-1);
+    return heading ? { kind: 'section', line: heading.line } : { kind: 'end' };
+  }
+  return null;
+}
+
 export type Preview = { svg: string; width: number; height: number } | 'missing' | null;
 
 export interface DocsAction {
@@ -35,11 +47,12 @@ export interface DocsAction {
 export interface DocsPublishing {
   /** Where the picture goes: beside the open file (desktop), or into a download (web, or no file yet). */
   target: { kind: 'file'; name: string; dirty: boolean } | { kind: 'bundle' };
-  levels: { path: string[]; label: string }[];
+  /** Every level, and whether it already has a picture beside the file. */
+  levels: { path: string[]; label: string; published: boolean }[];
   viewKey: string;
   setView: (key: string) => void;
-  /** The published level is gone; the picture would show another one. */
-  lostView: boolean;
+  /** Pictures of this diagram whose level is gone: they stay as they were, and saves pass them by. */
+  orphans: string[];
   /** On the desktop with no file yet: publishing beside it waits for a save. */
   draftOnDesktop: boolean;
   /** Not settled yet: the shell's answer or the preview it is compared with is still on its way. */
@@ -50,7 +63,8 @@ export interface DocsPublishing {
   setTheme: (theme: ThemeName) => void;
   sync: boolean;
   setSync: (sync: boolean) => void;
-  status: DocsStatus | null;
+  /** The chosen level's picture beside the file (desktop with a file only). */
+  picture: LevelPicture | null;
   loading: boolean;
   imageName: string;
   sourceName: string;
@@ -80,9 +94,10 @@ export interface DocsPublishing {
 
 /**
  * Use in docs: everything the panel shows and does, derived from three things — the diagram, the
- * picture beside its file (as the shell describes it), and the person's few choices this time.
+ * pictures beside its file (as the shell describes them), and the person's few choices this time.
  *
- * Once a picture is published its own note is the starting point (its level, look and whether it
+ * Each level has its own picture (`names.ts`). The panel opens on the level the editor is showing;
+ * once that level is published its picture's note is the starting point (its look and whether it
  * follows saves), so reopening reads as "here is your published diagram", not a fresh export.
  * Choices made in the panel are kept only until it closes; the look and the follow-saves default are
  * remembered as preferences, never as hidden state about a file.
@@ -161,21 +176,25 @@ export function useDocsPublishing({
   }, [active, controller, handleKey]);
   /* oxlint-enable react/set-state-in-effect */
 
-  const marker = status?.state === 'ours' && status.svg ? readMarker(status.svg) : null;
-  const published = marker?.settings;
-  const lostView = !!file && !!published && !levelExists(file, published.view);
+  // The level the editor was showing when the panel opened: each level has its own picture, so
+  // opening inside a shape is how the person says which one they mean.
   const fallbackView = file && levelExists(file, openedAt.current) ? openedAt.current : [];
-  const viewKey = chosenView ?? (published && !lostView ? published.view.join('/') : fallbackView.join('/'));
+  const viewKey = chosenView ?? fallbackView.join('/');
   const view = useMemo(() => (viewKey ? viewKey.split('/') : []), [viewKey]);
+  const stem = desktopFile?.name ?? '';
+  const images = status?.images;
+  const mine = useMemo(() => (images && stem ? picturesOf(images, stem) : []), [images, stem]);
+  const picture = file && images && desktopFile ? pictureFor(images, file, stem, view) : null;
+  const published = picture?.state === 'ours' ? picture.marker.settings : undefined;
   const theme = chosenTheme ?? published?.theme ?? readThemePreference();
   const sync = chosenSync ?? published?.sync ?? readSyncPreference();
   // The look a published picture was drawn in stays its look: the app's own personality setting is
   // a preference about the canvas, and changing it shouldn't quietly restyle a README.
   const style = published?.style ?? preset;
   const target: DocsPublishing['target'] = desktopFile ? { kind: 'file', name: desktopFile.name, dirty: desktopFile.dirty } : { kind: 'bundle' };
-  const names = file ? bundleNames(file) : null;
+  const names = file ? bundleNames(file, view) : null;
   const sourceName = desktopFile ? `${desktopFile.name}.draftcanvas` : (names?.source ?? '');
-  const imageName = desktopFile ? (status?.imageName ?? `${desktopFile.name}.svg`) : (names?.image ?? '');
+  const imageName = desktopFile ? (picture?.name ?? (file ? levelImageNames(file, stem, view)[0]! : `${stem}.svg`)) : (names?.image ?? '');
   // A download has no file to follow, so it is always a snapshot.
   const follows = desktopFile ? sync : false;
   const settings: DocsSettings = useMemo(() => ({ view, theme, style, sync: follows }), [view, theme, style, follows]);
@@ -202,24 +221,31 @@ export function useDocsPublishing({
 
   if (!active || !file) return null;
 
-  const levels = docsLevels(file);
+  const levelKey = (path: readonly string[]) => path.join('/');
+  const publishedKeys = new Set(mine.map((entry) => levelKey(entry.marker.settings.view)));
+  const levels = docsLevels(file).map((level) => ({ ...level, published: publishedKeys.has(levelKey(level.path)) }));
+  const orphans = mine.filter((entry) => !levelExists(file, entry.marker.settings.view)).map((entry) => entry.name);
   const title = docsTitleFor(file, view);
-  const current = status?.state === 'ours' && preview !== null && preview !== 'missing' && status.svg === preview.svg;
+  const current = picture?.state === 'ours' && preview !== null && preview !== 'missing' && picture.svg === preview.svg;
   // Until both the shell's answer and the preview are in, "current" can't be judged: saying "Out of
   // date" and offering Update for that moment flipped the button under the pointer.
   const checking = !!desktopFile && (preview === null || (loading && !status));
   const unapplied = !!published && !current && !sameSettings(published, settings);
-  const foreign = status?.state === 'foreign';
+  const foreign = picture?.state === 'taken';
   // From the Markdown file when one is chosen; else from beside the diagram (desktop) or from the
   // folder the download is unpacked next to (web) — always a path that is true where it says it is.
-  const imagePath = markdown ? markdown.imagePath : desktopFile ? imageName : (names?.imagePath ?? '');
+  const fromMarkdown = markdown ? (markdown.imageDir ? `${markdown.imageDir}/${imageName}` : imageName) : null;
+  const imagePath = fromMarkdown ?? (desktopFile ? imageName : (names?.imagePath ?? ''));
   const snippet = markdownImage(title, imagePath);
-  const alreadyIn = markdown ? referencesTo(markdown.text, markdown.imagePath) > 0 : false;
+  const alreadyIn = markdown && fromMarkdown ? referencesTo(markdown.text, fromMarkdown) > 0 : false;
   const headings = markdown ? headingsOf(markdown.text) : [];
-  const placement = chosenPlacement ?? defaultPlacement(headings);
+  // Another level of this diagram already on the page: this one goes in the same section, so a
+  // context view and its containers read together. Else the usual guess.
+  const besideSibling = markdown ? siblingSection(markdown, mine.map((entry) => entry.name).filter((name) => name !== imageName), headings) : null;
+  const placement = chosenPlacement ?? besideSibling ?? defaultPlacement(headings);
   const insertion = markdown && !alreadyIn ? insertImage(markdown.text, placement, snippet) : null;
   // Where it goes, or — once it is there — where it already is.
-  const shownAt = markdown && !insertion ? referenceLine(markdown.text, markdown.imagePath) : -1;
+  const shownAt = markdown && fromMarkdown && !insertion ? referenceLine(markdown.text, fromMarkdown) : -1;
   const excerpt = insertion
     ? { lines: excerptAround(insertion.text, insertion.line), added: true }
     : markdown && shownAt >= 0
@@ -248,7 +274,7 @@ export function useDocsPublishing({
   const publish = async (): Promise<boolean> => {
     if (!controller) return false;
     if (current) return true;
-    const result = await controller.publishDocs(settings);
+    const result = await controller.publishDocs(settings, imageName);
     await refreshStatus();
     setJustDone(result.outcome === 'written' ? `Published ${result.imageName}` : `${result.imageName} is already current`);
     return true;
@@ -266,7 +292,7 @@ export function useDocsPublishing({
         }, 'Choosing a Markdown file')
     : null;
 
-  const reveal = controller && status?.state === 'ours' ? () => guarded(() => controller.revealDocsImage(), 'Showing the file') : null;
+  const reveal = controller && picture?.state === 'ours' ? () => guarded(() => controller.revealDocsImage(picture.name), 'Showing the file') : null;
 
   let primary: DocsAction;
   if (!desktopFile) {
@@ -305,7 +331,7 @@ export function useDocsPublishing({
         }, `Adding to ${md.name}`),
     };
   } else if (!current) {
-    const update = status?.state === 'ours';
+    const update = picture?.state === 'ours';
     primary = {
       label: update ? `Update ${imageName}` : 'Publish image',
       busyLabel: target.kind === 'file' && target.dirty ? 'Saving…' : 'Publishing…',
@@ -332,7 +358,7 @@ export function useDocsPublishing({
       setChosenView(key);
       setJustDone(null);
     },
-    lostView,
+    orphans,
     draftOnDesktop: onDesktop && !desktopFile,
     checking,
     unapplied,
@@ -348,7 +374,7 @@ export function useDocsPublishing({
       writePreference(SYNC_PREFERENCE, next ? 'on' : 'off');
       setJustDone(null);
     },
-    status,
+    picture,
     loading,
     imageName,
     sourceName,
@@ -365,7 +391,7 @@ export function useDocsPublishing({
     busy,
     primary,
     copyText: snippet,
-    canCopy: !desktopFile || status?.state === 'ours',
+    canCopy: !desktopFile || picture?.state === 'ours',
     chooseMarkdown,
     reveal,
   };

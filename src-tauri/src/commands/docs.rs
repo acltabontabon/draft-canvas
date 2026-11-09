@@ -12,18 +12,27 @@ use serde::{Deserialize, Serialize};
 use tauri::ipc::Request;
 use tauri::AppHandle;
 
-/// Where the picture of the diagram `handle` stands.
+/// A file beside the diagram named like one of its pictures.
+#[derive(Debug, Serialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+pub struct DocsImage {
+    /// `payments.svg`, `payments.ledger.svg`.
+    pub name: String,
+    /// `ours`: a picture Draft Canvas made (its note says of which diagram and level). `foreign`:
+    /// another file has the name.
+    #[ts(type = "\"ours\" | \"foreign\"")]
+    pub state: String,
+    /// The picture's SVG, when it is ours, so the page can tell which level it shows and whether
+    /// it is current.
+    pub svg: Option<String>,
+    pub modified_ms: Option<f64>,
+}
+
+/// The pictures beside the diagram `handle`.
 #[derive(Debug, Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct DocsStatus {
-    /// `payments.svg`: what the picture is, or would be, called.
-    pub image_name: String,
-    /// `none`: not published. `ours`: a picture Draft Canvas made. `foreign`: another file has the name.
-    #[ts(type = "\"none\" | \"ours\" | \"foreign\"")]
-    pub state: String,
-    /// The picture's SVG, when it is ours, so the page can tell whether it is current.
-    pub svg: Option<String>,
-    pub modified_ms: Option<f64>,
+    pub images: Vec<DocsImage>,
 }
 
 #[derive(Debug, Serialize, ts_rs::TS)]
@@ -44,25 +53,28 @@ pub struct MarkdownFile {
     pub display_path: String,
     pub text: String,
     pub stamp: String,
-    /// The picture's path from the Markdown file's folder, `/`-separated.
-    pub image_path: String,
+    /// The diagram's folder from the Markdown file's folder, `/`-separated: `docs/diagrams`, `..`,
+    /// or empty when they share a folder. A picture's path is this and its name.
+    pub image_dir: String,
 }
 
 fn status_now(state: &crate::state::AppState, handle: &str) -> Result<DocsStatus, AppError> {
     let grant = state.file(handle)?;
-    let path = docs::image_path(&grant.path);
-    let read = docs::read_image(&path)?;
-    Ok(DocsStatus {
-        image_name: file_name(&path),
-        state: match read.state {
-            ImageState::None => "none",
-            ImageState::Ours => "ours",
-            ImageState::Foreign => "foreign",
-        }
-        .into(),
-        svg: read.text,
-        modified_ms: read.modified_ms,
-    })
+    let images = docs::list_images(&grant.path)?
+        .into_iter()
+        .map(|(name, read)| DocsImage {
+            name,
+            state: if read.state == ImageState::Ours {
+                "ours"
+            } else {
+                "foreign"
+            }
+            .into(),
+            svg: read.text,
+            modified_ms: read.modified_ms,
+        })
+        .collect();
+    Ok(DocsStatus { images })
 }
 
 #[tauri::command]
@@ -73,23 +85,26 @@ pub async fn docs_status(app: AppHandle, handle: String) -> Result<DocsStatus, A
 #[derive(Debug, Deserialize)]
 struct PublishMeta {
     handle: Handle,
+    /// `payments.svg` or `payments.<level>.svg`; anything else is refused (`docs::named_image_path`).
+    name: String,
 }
 
-/// Writes the picture beside the diagram. The page names the diagram; Rust decides where its picture goes.
+/// Writes a picture beside the diagram. The page names it; Rust holds it to a picture name beside the
+/// diagram, so it can never land anywhere else.
 #[tauri::command]
 pub async fn docs_publish(app: AppHandle, request: Request<'_>) -> Result<DocsPublished, AppError> {
     let (meta, bytes) = raw_request_up_to::<PublishMeta>(&request, docs::MAX_IMAGE_BYTES as usize)?;
     let bytes = bytes.to_vec();
     run_blocking(&app, move |_, state| {
         let grant = state.file(&meta.handle)?;
-        let outcome = docs::publish_image(&grant.path, &bytes)?;
+        let outcome = docs::publish_image(&grant.path, &meta.name, &bytes)?;
         Ok(DocsPublished {
             outcome: match outcome {
                 Published::Written => "written",
                 Published::Unchanged => "unchanged",
             }
             .into(),
-            image_name: file_name(&docs::image_path(&grant.path)),
+            image_name: meta.name,
         })
     })
     .await
@@ -114,10 +129,13 @@ pub async fn docs_pick_markdown(
         let md_handle = state.grant_markdown(&picked)?;
         let path = state.markdown(&md_handle)?;
         let read = docs::read_markdown(&path)?;
+        // From the whole diagram's picture, then without its name: what is left is the way to the
+        // folder every picture of this diagram shares.
         let image = docs::image_path(&grant.path);
-        let image_path = path
+        let image_dir = path
             .parent()
             .and_then(|dir| docs::relative_path(dir, &image))
+            .map(|rel| rel.rsplit_once('/').map(|(dir, _)| dir.to_string()).unwrap_or_default())
             .ok_or_else(|| {
                 AppError::new(
                     ErrorKind::InvalidPath,
@@ -130,7 +148,7 @@ pub async fn docs_pick_markdown(
             display_path: display_path(&path),
             text: read.text,
             stamp: read.stamp,
-            image_path,
+            image_dir,
         }))
     })
     .await
@@ -171,12 +189,12 @@ pub async fn docs_add_to_markdown(
     .await
 }
 
-/// Shows the published picture in the file manager.
+/// Shows a published picture in the file manager.
 #[tauri::command]
-pub async fn docs_reveal(app: AppHandle, handle: String) -> Result<(), AppError> {
+pub async fn docs_reveal(app: AppHandle, handle: String, name: String) -> Result<(), AppError> {
     run_blocking(&app, move |_, state| {
         let grant = state.file(&handle)?;
-        let path = docs::image_path(&grant.path);
+        let path = docs::named_image_path(&grant.path, &name)?;
         if docs::read_image(&path)?.state != ImageState::Ours {
             return Err(AppError::new(
                 ErrorKind::NotFound,

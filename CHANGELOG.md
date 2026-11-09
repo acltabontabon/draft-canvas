@@ -23,7 +23,9 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 #### Added
 
 - Publish the picture beside the diagram's file, add it to a Markdown file you pick, and have every
-  save redraw it. Draft Canvas only replaces pictures it made and only adds the one line to Markdown.
+  save redraw it. Each level of a diagram gets its own picture, so one README can show a system's
+  context and its containers. Draft Canvas only replaces pictures it made and only adds the one line
+  to Markdown.
 
 ### Web
 

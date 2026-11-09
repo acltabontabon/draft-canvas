@@ -11,20 +11,25 @@ import { downloadBlob } from '../download';
 import { fileNameFor, serializeDocument } from '../project';
 import { zipFiles } from '../zip';
 import { renderDocsImage } from './image';
+import { levelImageNames } from './names';
 import type { DocsSettings } from './marker';
 
 export const BUNDLE_FOLDER = 'diagrams';
 
-/** The names the archive uses, from the diagram's title: `payments.svg`, `payments.draftcanvas`. */
-export function bundleNames(file: DraftDocument): { image: string; source: string; archive: string; imagePath: string } {
-  const image = fileNameFor(file.metadata.title, '.svg');
+/**
+ * The names the archive uses, from the diagram's title: `payments.svg` (or `payments.ledger.svg` for
+ * a level inside), `payments.draftcanvas` — the same names the desktop gives pictures beside a file.
+ */
+export function bundleNames(file: DraftDocument, view: readonly string[] = []): { image: string; source: string; archive: string; imagePath: string } {
+  const stem = fileNameFor(file.metadata.title, '');
+  const image = levelImageNames(file, stem, view)[0]!;
   const source = fileNameFor(file.metadata.title);
   return { image, source, archive: fileNameFor(file.metadata.title, '-docs.zip'), imagePath: `${BUNDLE_FOLDER}/${image}` };
 }
 
 /** The archive's bytes. A snapshot: `sync` means nothing without a file to watch, so it is written off. */
 export async function docsBundle(file: DraftDocument, settings: DocsSettings): Promise<Uint8Array<ArrayBuffer>> {
-  const names = bundleNames(file);
+  const names = bundleNames(file, settings.view);
   const rendered = await renderDocsImage(file, names.source, { ...settings, sync: false });
   if (!rendered.ok) throw new Error('The level this image shows no longer exists.');
   const source = serializeDocument(await withEmbeddedBackground(file));
@@ -36,5 +41,5 @@ export async function docsBundle(file: DraftDocument, settings: DocsSettings): P
 
 export async function downloadDocsBundle(file: DraftDocument, settings: DocsSettings): Promise<void> {
   const bytes = await docsBundle(file, settings);
-  await downloadBlob(new Blob([bytes], { type: 'application/zip' }), bundleNames(file).archive);
+  await downloadBlob(new Blob([bytes], { type: 'application/zip' }), bundleNames(file, settings.view).archive);
 }

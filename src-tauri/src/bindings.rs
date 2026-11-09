@@ -8,6 +8,7 @@ fn desktop_wire_types_match_rust() {
         crate::commands::documents::OpenedDoc::decl(&config),
         crate::commands::documents::SavedAs::decl(&config),
         crate::commands::documents::SaveResult::decl(&config),
+        crate::commands::docs::DocsImage::decl(&config),
         crate::commands::docs::DocsStatus::decl(&config),
         crate::commands::docs::DocsPublished::decl(&config),
         crate::commands::docs::MarkdownFile::decl(&config),

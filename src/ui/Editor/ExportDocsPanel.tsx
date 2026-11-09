@@ -34,15 +34,15 @@ function standing(docs: DocsPublishing): { tone: Tone; badge: string; detail?: s
       note: docs.draftOnDesktop ? 'Save this diagram to a file to publish the picture beside it and redraw it on every save.' : undefined,
     };
   }
-  const state = docs.status?.state ?? 'none';
-  if (state === 'foreign') {
-    return { tone: 'warn', badge: 'Name taken', note: `${docs.imageName} wasn’t made by Draft Canvas, so it won’t be replaced. Rename the diagram, or move that file, to publish here.` };
+  const picture = docs.picture;
+  if (picture?.state === 'taken') {
+    const whose = picture.why === 'foreign' ? 'wasn’t made by Draft Canvas' : 'is another diagram’s picture';
+    return { tone: 'warn', badge: 'Name taken', note: `${picture.name} ${whose}, so it won’t be replaced. Rename the diagram, or move that file, to publish here.` };
   }
   if (docs.checking) return { tone: 'quiet', badge: 'Checking…' };
-  if (docs.lostView) return { tone: 'warn', badge: 'Out of date', note: 'The level it showed is gone. Choose another.' };
-  if (state === 'none') return { tone: 'quiet', badge: 'Not published' };
+  if (picture?.state !== 'ours') return { tone: 'quiet', badge: 'Not published' };
   if (docs.current) {
-    const when = relativeTime(docs.status?.modifiedMs);
+    const when = relativeTime(picture.modifiedMs);
     return { tone: 'good', badge: 'Up to date', detail: when ? `Written ${when}` : undefined };
   }
   if (docs.target.dirty) return { tone: 'warn', badge: 'Unsaved changes', detail: 'Publishing saves the diagram first.' };
@@ -64,13 +64,19 @@ export function ExportDocsPanel({ docs }: { docs: DocsPublishing }) {
             <FileName name={docs.sourceName} />
           </span>
           <span className="dc-docs-arrow" aria-hidden="true" data-sync={following ? 'true' : undefined} />
-          <span className="dc-docs-file" data-published={docs.status?.state === 'ours' ? 'true' : undefined} title={docs.imageName}>
+          <span className="dc-docs-file" data-published={docs.picture?.state === 'ours' ? 'true' : undefined} title={docs.imageName}>
             <Icon name="image" size={12} />
             <FileName name={docs.imageName} />
           </span>
         </span>
       </div>
       {said.note && <p className="dc-docs-note" data-tone={said.tone === 'warn' ? 'warn' : undefined}>{said.note}</p>}
+      {docs.orphans.length > 0 && (
+        <p className="dc-docs-note">
+          {docs.orphans.length === 1 ? `${docs.orphans[0]} shows a level that’s gone` : `${docs.orphans.length} pictures show levels that are gone`}, so saves leave{' '}
+          {docs.orphans.length === 1 ? 'it' : 'them'} as {docs.orphans.length === 1 ? 'it was' : 'they were'}.
+        </p>
+      )}
 
       <div className="dc-export-form">
         {docs.levels.length > 1 && (
@@ -79,7 +85,7 @@ export function ExportDocsPanel({ docs }: { docs: DocsPublishing }) {
             <select id="dc-docs-level" className="dc-select" value={docs.viewKey} onChange={(event) => docs.setView(event.target.value)} disabled={docs.busy}>
               {docs.levels.map((level) => (
                 <option key={level.path.join('/')} value={level.path.join('/')}>
-                  {level.label}
+                  {level.published ? `${level.label} · published` : level.label}
                 </option>
               ))}
             </select>
@@ -110,7 +116,7 @@ export function ExportDocsPanel({ docs }: { docs: DocsPublishing }) {
             {docs.markdown ? (
               <span title={docs.markdown.displayPath}>{docs.alreadyIn ? `Already in ${docs.markdown.name}` : `From ${docs.markdown.name}`}</span>
             ) : docs.target.kind === 'file' ? (
-              <span>{docs.canCopy ? 'From the diagram’s folder' : docs.status?.state === 'foreign' ? 'Not available while the name is taken' : 'Publish first, then copy'}</span>
+              <span>{docs.canCopy ? 'From the diagram’s folder' : docs.picture?.state === 'taken' ? 'Not available while the name is taken' : 'Publish first, then copy'}</span>
             ) : (
               <span>Put the diagrams folder next to your Markdown file</span>
             )}
@@ -187,9 +193,13 @@ function revealLabel(): string {
   return 'Show in folder';
 }
 
-function cleanLine(line: string): { kind: 'heading' | 'text' | 'blank'; text: string } {
+function cleanLine(line: string): { kind: 'heading' | 'text' | 'image' | 'blank'; text: string } {
   const heading = /^ {0,3}#{1,6}\s+(.*?)\s*#*\s*$/.exec(line);
   if (heading) return { kind: 'heading', text: heading[1] ?? '' };
+  // A picture already on the page (another level, another diagram) reads as a picture, not its alt
+  // text, so the new one is seen landing beside it.
+  const image = /^\s*!\[([^\]]*)\]\([^)]*\)\s*$/.exec(line);
+  if (image) return { kind: 'image', text: image[1] || 'Image' };
   if (line.trim() === '') return { kind: 'blank', text: '' };
   return { kind: 'text', text: line.replace(/[*_`]/g, '').replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1').trim() };
 }
@@ -261,5 +271,13 @@ export function DocsPreview({ docs }: { docs: DocsPublishing }) {
 function ExcerptLine({ line }: { line: string }) {
   const clean = cleanLine(line);
   if (clean.kind === 'blank') return null;
+  if (clean.kind === 'image') {
+    return (
+      <span className="dc-docs-image-line">
+        <Icon name="image" size={11} />
+        <span>{clean.text}</span>
+      </span>
+    );
+  }
   return <span className={clean.kind === 'heading' ? 'dc-docs-heading' : 'dc-docs-text'}>{clean.text}</span>;
 }

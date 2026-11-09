@@ -1,18 +1,21 @@
 /**
- * Keeps a published docs image current: after a diagram file is saved — by the person, or by an
- * agent's change once the shell has actually written it — its picture beside it is drawn again from
- * exactly the text that was saved, if that picture asked for it (`sync` in its note).
+ * Keeps published docs pictures current: after a diagram file is saved — by the person, or by an
+ * agent's change once the shell has actually written it — every picture of it beside it (the whole
+ * diagram's, and each level's) is drawn again from exactly the text that was saved, if that picture
+ * asked for it (`sync` in its note).
  *
- * There is no list of publications to keep. The shell says whether a picture sits beside the file and
- * whether Draft Canvas made it; the picture's own note says which level, which look and whether to
- * follow saves. A picture someone else made, or one set to stay a snapshot, is never touched. The
- * shell writes it whole or not at all, and not at all when the bytes are the same, so a save that
- * changed nothing visible leaves the repository clean.
+ * There is no list of publications to keep. The shell lists the files named like the diagram's
+ * pictures and says which Draft Canvas made; each picture's own note says which diagram, which level,
+ * which look and whether to follow saves (`names.ts`). A picture someone else made, another
+ * diagram's, or one set to stay a snapshot, is never touched. The shell writes each whole or not at
+ * all, and not at all when the bytes are the same, so a save that changed nothing visible leaves the
+ * repository clean.
  */
 
 import { deserializeDocument } from '../export/project';
 import { renderDocsImage } from '../export/docs/image';
-import { readMarker, type DocsSettings } from '../export/docs/marker';
+import type { DocsSettings } from '../export/docs/marker';
+import { picturesOf } from '../export/docs/names';
 import { logDiagnostic } from '../lib/diagnostics';
 import type { DesktopApi, DocsPublished, Handle } from './api';
 
@@ -26,7 +29,7 @@ interface Request {
 }
 
 /**
- * Every write of one file's picture — a redraw after a save, or Publish/Update from Use in docs —
+ * Every write of one file's pictures — a redraw after a save, or Publish/Update from Use in docs —
  * runs in one queue per file, in the order asked. Publish with unsaved changes saves first, and that
  * save asks for a redraw with the settings already on disk; run side by side, whichever write landed
  * last won, and a new level or look could be put back silently. In order, the person's choice is
@@ -63,15 +66,18 @@ export class DocsPublisher {
     });
   }
 
-  /** Publish or Update: draws `text` with `settings` and writes it, after anything queued for the file. */
-  publish(handle: Handle, name: string, text: string, settings: DocsSettings): Promise<DocsPublished> {
+  /**
+   * Publish or Update: draws `text` with `settings` and writes it as `imageName`, after anything
+   * queued for the file.
+   */
+  publish(handle: Handle, name: string, text: string, settings: DocsSettings, imageName: string): Promise<DocsPublished> {
     return this.enqueue(handle, async () => {
       const parsed = deserializeDocument(text);
       if (!parsed.ok) throw new Error(parsed.error);
       const rendered = await renderDocsImage(parsed.document, `${name}.draftcanvas`, settings);
       if (!rendered.ok) throw new Error('The level this picture shows no longer exists.');
-      this.reported.delete(`level:${handle}`);
-      return this.api.docsPublish(handle, rendered.svg);
+      this.reported.delete(`level:${handle}:${imageName}`);
+      return this.api.docsPublish(handle, imageName, rendered.svg);
     });
   }
 
@@ -96,31 +102,37 @@ export class DocsPublisher {
   }
 
   private async redraw(handle: Handle, request: Request): Promise<void> {
-    let imageName = 'the docs image';
+    let pictures;
     try {
-      const status = await this.api.docsStatus(handle);
-      imageName = status.imageName;
-      if (status.state !== 'ours' || status.svg === null) return;
-      const marker = readMarker(status.svg);
-      if (!marker?.settings.sync) return;
-      // A picture drawn from another diagram (copied in beside this one) is that diagram's to keep.
-      if (marker.source.toLowerCase() !== `${request.name}.draftcanvas`.toLowerCase()) return;
-      const parsed = deserializeDocument(request.text);
-      if (!parsed.ok) return;
-      if (!request.open && parsed.document.settings.background.enabled) {
-        this.once(`deferred:${handle}`, `${imageName} will update the next time ${request.name}.draftcanvas is opened and saved: its background image is only loaded then.`);
-        return;
-      }
-      const rendered = await renderDocsImage(parsed.document, `${request.name}.draftcanvas`, marker.settings);
-      if (!rendered.ok) {
-        this.once(`level:${handle}`, `${imageName} wasn’t updated: the level it shows is gone. Choose another in Use in docs.`);
-        return;
-      }
-      this.reported.delete(`level:${handle}`);
-      await this.api.docsPublish(handle, rendered.svg);
+      pictures = picturesOf((await this.api.docsStatus(handle)).images, request.name).filter((picture) => picture.marker.settings.sync);
     } catch (error) {
       logDiagnostic(error, { operation: 'desktop-docs' });
-      this.notify(`Couldn’t update ${imageName}: ${error instanceof Error ? error.message : 'something went wrong.'}`);
+      this.notify(`Couldn’t update the docs pictures of ${request.name}.draftcanvas: ${error instanceof Error ? error.message : 'something went wrong.'}`);
+      return;
+    }
+    if (pictures.length === 0) return;
+    const parsed = deserializeDocument(request.text);
+    if (!parsed.ok) return;
+    if (!request.open && parsed.document.settings.background.enabled) {
+      const what = pictures.length === 1 ? `${pictures[0]!.name} will update` : `Its ${pictures.length} docs pictures will update`;
+      this.once(`deferred:${handle}`, `${what} the next time ${request.name}.draftcanvas is opened and saved: its background image is only loaded then.`);
+      return;
+    }
+    // One at a time, each on its own: a level that's gone, or a write that fails, leaves the others
+    // to be drawn.
+    for (const picture of pictures) {
+      try {
+        const rendered = await renderDocsImage(parsed.document, `${request.name}.draftcanvas`, picture.marker.settings);
+        if (!rendered.ok) {
+          this.once(`level:${handle}:${picture.name}`, `${picture.name} wasn’t updated: the level it shows is gone. It stays as it was.`);
+          continue;
+        }
+        this.reported.delete(`level:${handle}:${picture.name}`);
+        await this.api.docsPublish(handle, picture.name, rendered.svg);
+      } catch (error) {
+        logDiagnostic(error, { operation: 'desktop-docs' });
+        this.notify(`Couldn’t update ${picture.name}: ${error instanceof Error ? error.message : 'something went wrong.'}`);
+      }
     }
   }
 }
