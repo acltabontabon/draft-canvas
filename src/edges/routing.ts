@@ -228,6 +228,12 @@ export interface RoutedEdge {
   labelY: number;
   /** Which side of the line the label chip should sit on — see `labelSideFor`. */
   labelSide: Side;
+  /**
+   * How wide a label or caption at the label point may be before it runs into a shape at either end
+   * of the line or over the arrowhead (`placeLabel`'s `room`). Absent when nothing limits it. Both
+   * renderers lay their text out to it (`edges/labelLayout.ts`), and truncate past it.
+   */
+  labelRoom?: number;
   source: Anchor;
   target: Anchor;
   /**
@@ -943,12 +949,24 @@ export function detourAround(
   coordinates.sort((a, b) => Math.abs(a - middle) - Math.abs(b - middle) || a - b);
   const candidates = [...new Set([...coordinates.slice(0, 32), Math.min(...coordinates), Math.max(...coordinates)])];
   candidates.sort((a, b) => Math.abs(a - middle) - Math.abs(b - middle) || a - b);
-  for (const coordinate of candidates) {
+  const clearOf = (coordinate: number) => {
     const detour = horizontal ? { detourY: coordinate } : { detourX: coordinate };
     const points = flattenPath(buildDetourPath(from, to, sourceSide, targetSide, detour).d);
-    if (obstacles.every((o) => !points.some((point, i) => i > 0 && segmentEntersRect(points[i - 1]!, point, o)))) {
-      return detour;
+    return obstacles.every((o) => !points.some((point, i) => i > 0 && segmentEntersRect(points[i - 1]!, point, o))) ? detour : null;
+  };
+  for (const coordinate of candidates) {
+    if (!clearOf(coordinate)) continue;
+    // A detour a small step from the target's own level would leave that step as a jog right
+    // before the arrowhead: a bent arrow. Running at that level instead drops the jog altogether,
+    // where the line is clear there too.
+    // Level connectors only: an upright one's ends are spread across a shared side, and moving its
+    // run onto the target's line slid a neighbour's end along with it.
+    const level = to.y;
+    if (horizontal && Math.abs(coordinate - level) > 0.5 && Math.abs(coordinate - level) < DETOUR_LEVEL_SNAP) {
+      const levelled = clearOf(level);
+      if (levelled) return levelled;
     }
+    return clearOf(coordinate);
   }
 
   return null;
@@ -993,6 +1011,9 @@ function stepCorner(
   return `L${x} ${y + bendSize * yDir}Q${x} ${y} ${x + bendSize * xDir} ${y}`;
 }
 
+/** A detour this close to its target's level runs at that level, with no jog before the arrowhead. */
+const DETOUR_LEVEL_SNAP = 24;
+
 /** How far a detoured path travels straight out from an endpoint before its
  *  first turn — matches `getSmoothStepPath`'s own default `offset`. */
 const DETOUR_LEG = 20;
@@ -1026,11 +1047,15 @@ function buildDetourPath(
   sourceSide: Side,
   targetSide: Side,
   detour: Detour,
+  blockers?: readonly Rect[],
 ): { d: string; labelX: number; labelY: number } {
   const points = detourPoints(from, to, sourceSide, targetSide, detour);
-  const a = points[2]!;
-  const b = points[3]!;
-  return { d: roundedStepPath(points, 10), labelX: (a.x + b.x) / 2, labelY: (a.y + b.y) / 2 };
+  // Each end leaves and arrives on a fixed leg, so a detour that steps only a little beside an end
+  // turned right into its arrowhead. Relaxed when the shapes to keep clear of are known.
+  const relaxed = blockers ? relaxEndJogs(points, blockers) : points;
+  const a = relaxed[2]!;
+  const b = relaxed[3]!;
+  return { d: roundedStepPath(relaxed, 10), labelX: (a.x + b.x) / 2, labelY: (a.y + b.y) / 2 };
 }
 
 /**
@@ -1176,6 +1201,47 @@ export function labelSideFor(
  *  slid along its segment — a chip half over a corner reads as belonging to neither run. */
 export const LABEL_BEND_CLEARANCE = 14;
 
+/** A straight stretch shorter than this is a kink, not somewhere to read a caption: the label moves
+ *  to the connector's longest straight stretch instead. */
+export const LABEL_MIN_RUN = 48;
+
+/** The arrowhead's own length, kept clear at the target end of a run on top of the bend clearance,
+ *  so a caption never sits over the head. */
+export const LABEL_ARROW_CLEARANCE = 14;
+
+/** A maximal straight stretch of a flattened path: consecutive corner-to-corner segments running the
+ *  same way. `from`/`to` are vertex indices. */
+interface StraightRun {
+  from: number;
+  to: number;
+  length: number;
+}
+
+function straightRuns(vertices: readonly PathVertex[]): StraightRun[] {
+  const runs: StraightRun[] = [];
+  for (let i = 0; i < vertices.length - 1; i += 1) {
+    const a = vertices[i]!;
+    const b = vertices[i + 1]!;
+    if (!a.corner || !b.corner) continue;
+    const length = Math.hypot(b.x - a.x, b.y - a.y);
+    if (length === 0) continue;
+    const previous = runs[runs.length - 1];
+    if (previous && previous.to === i) {
+      const start = vertices[previous.from]!;
+      const ux = (a.x - start.x) / previous.length;
+      const uy = (a.y - start.y) / previous.length;
+      // Same direction, and no sideways step: one stretch, however many vertices it was drawn with.
+      if (Math.abs(ux * (b.y - a.y) - uy * (b.x - a.x)) < 0.01 && ux * (b.x - a.x) + uy * (b.y - a.y) > 0) {
+        previous.to = i + 1;
+        previous.length += length;
+        continue;
+      }
+    }
+    runs.push({ from: i, to: i + 1, length });
+  }
+  return runs;
+}
+
 interface PathVertex {
   x: number;
   y: number;
@@ -1276,6 +1342,15 @@ export function flattenPath(d: string): PathVertex[] {
  * and keep the point clear of the run's ends — a bend, or the arrowhead — by sliding it toward
  * the middle of its segment.
  *
+ * A point that lands on a kink — a straight stretch shorter than `LABEL_MIN_RUN`, or the curve of a
+ * rounded corner — moves to the middle of the connector's longest straight stretch instead (the
+ * arrowhead's own length counted against a stretch that ends in it), so a caption reads along the
+ * line rather than hanging off a jog or over the head.
+ *
+ * `room` is how wide a caption laid along a horizontal stretch may be before it reaches a shape at
+ * either end of the line (or the arrowhead): an interior bend is no limit, since the caption sits
+ * beside the line, not on it. Absent when neither end of its stretch is an end of the line.
+ *
  * A near-diagonal segment (a bezier's centre) has no natural "beside", so the `fallback` side —
  * `labelSideFor`'s pairing-based choice — keeps deciding there.
  */
@@ -1285,7 +1360,7 @@ export function placeLabel(
   sourceRect: Rect,
   targetRect: Rect,
   fallback: Side,
-): { x: number; y: number; side: Side } {
+): { x: number; y: number; side: Side; room?: number } {
   const vertices = flattenPath(d);
   if (vertices.length < 2) return { ...point, side: fallback };
 
@@ -1309,24 +1384,50 @@ export function placeLabel(
       bestT = t;
     }
   }
-  const a = vertices[best]!;
-  const b = vertices[best + 1]!;
+  const last = vertices.length - 1;
+  const runs = straightRuns(vertices);
+  const own = runs.find((run) => run.from <= best && best + 1 <= run.to);
+  // What a stretch offers a caption: its length, less the arrowhead's when it ends in one.
+  const usable = (run: StraightRun) => run.length - (run.to === last ? LABEL_ARROW_CLEARANCE : 0);
+  const level = (run: StraightRun) => Math.abs(vertices[run.to]!.y - vertices[run.from]!.y) < 0.5;
+  const longestOf = (list: StraightRun[]) => {
+    let longest: StraightRun | undefined;
+    for (const run of list) if (run.length >= LABEL_MIN_RUN && (!longest || usable(run) > usable(longest) + 0.01)) longest = run;
+    return longest;
+  };
+  // On a kink, or a corner's curve, of a line that has somewhere better: the middle of its longest
+  // level stretch, where a caption reads along the line. A caption beside an upright stretch spreads
+  // sideways into its neighbours' (a fan's siblings), so one only takes it from a curve.
+  const kinked = !own || own.length < LABEL_MIN_RUN;
+  const moveTo = kinked ? longestOf(runs.filter(level)) ?? (own ? undefined : longestOf(runs)) : undefined;
+
+  // The stretch the label sits on: the one it moves to, else its own segment (sliding within the
+  // segment, not the whole stretch, is what keeps neighbouring captions where they were planned).
+  const run = moveTo ?? own;
+  const a = moveTo ? vertices[moveTo.from]! : vertices[best]!;
+  const b = moveTo ? vertices[moveTo.to]! : vertices[best + 1]!;
+  const endsInHead = moveTo ? moveTo.to === last : best + 1 === last;
   const dx = b.x - a.x;
   const dy = b.y - a.y;
   const length = Math.hypot(dx, dy);
   if (length === 0) return { ...point, side: fallback };
 
-  // Slide away from the segment's ends — only on a straight run between two real corners; a
-  // curve sample is neither a bend nor an arrowhead.
-  let along = bestT * length;
-  if (a.corner && b.corner) {
-    along =
-      length >= LABEL_BEND_CLEARANCE * 2
-        ? clamp(along, LABEL_BEND_CLEARANCE, length - LABEL_BEND_CLEARANCE)
-        : length / 2;
+  let along: number;
+  if (moveTo) {
+    const high = length - LABEL_BEND_CLEARANCE - (endsInHead ? LABEL_ARROW_CLEARANCE : 0);
+    along = high >= LABEL_BEND_CLEARANCE ? (LABEL_BEND_CLEARANCE + high) / 2 : length / 2;
+  } else {
+    // Slide away from the segment's ends — a bend, or the arrowhead (with room for the head itself);
+    // only on a straight run between two real corners: a curve sample is neither.
+    along = bestT * length;
+    if (a.corner && b.corner) {
+      const high = length - LABEL_BEND_CLEARANCE - (endsInHead ? LABEL_ARROW_CLEARANCE : 0);
+      along = high >= LABEL_BEND_CLEARANCE ? clamp(along, LABEL_BEND_CLEARANCE, high) : length / 2;
+    }
   }
   const x = a.x + (dx / length) * along;
   const y = a.y + (dy / length) * along;
+  const room = run ? captionRoom(vertices, run, { x, y }) : undefined;
 
   const nearDiagonal = Math.abs(Math.abs(dx) - Math.abs(dy)) < 0.3 * length;
   const horizontalRun = nearDiagonal ? isVerticalSide(fallback) : Math.abs(dx) > Math.abs(dy);
@@ -1337,11 +1438,25 @@ export function placeLabel(
   if (horizontalRun) {
     const above = { x, y: y - LABEL_LINE_GAP };
     const collides = insideRect(sourceRect, above.x, above.y) || insideRect(targetRect, above.x, above.y);
-    return { x, y, side: collides ? 'bottom' : 'top' };
+    return { x, y, side: collides ? 'bottom' : 'top', ...(room !== undefined ? { room } : {}) };
   }
   const beside = { x: x + LABEL_LINE_GAP, y };
   const collides = insideRect(sourceRect, beside.x, beside.y) || insideRect(targetRect, beside.x, beside.y);
   return { x, y, side: collides ? 'left' : 'right' };
+}
+
+/** How wide a caption centred at `at` on a level stretch may be before it reaches the line's own
+ *  ends — the shapes it joins, and the arrowhead. Undefined for a stretch that is not level or does
+ *  not reach either end (a caption beside an interior run may overhang its bends). */
+function captionRoom(vertices: readonly PathVertex[], run: StraightRun, at: { x: number; y: number }): number | undefined {
+  const a = vertices[run.from]!;
+  const b = vertices[run.to]!;
+  if (Math.abs(b.y - a.y) > 0.5) return undefined;
+  const limits: number[] = [];
+  if (run.from === 0) limits.push(Math.abs(at.x - a.x));
+  if (run.to === vertices.length - 1) limits.push(Math.abs(b.x - at.x) - LABEL_ARROW_CLEARANCE);
+  if (limits.length === 0) return undefined;
+  return Math.max(0, 2 * Math.min(...limits));
 }
 
 const OPPOSITE_LABEL_SIDE: Record<Side, Side> = { top: 'bottom', bottom: 'top', left: 'right', right: 'left' };
@@ -1494,7 +1609,10 @@ export function routeBetween(
   if (!options?.label) return route;
   const label = clearLabel(route.d, { x: route.labelX, y: route.labelY, side: route.labelSide }, options.label,
     sourceRect, targetRect, options.obstacles ?? [], options.lane ?? 0, route.source.side, route.target.side);
-  return { ...route, labelX: label.x, labelY: label.y, labelSide: label.side };
+  if (label.x === route.labelX && label.y === route.labelY) return { ...route, labelSide: label.side };
+  // Moved clear of a shape: the room measured at the old point no longer applies.
+  const { labelRoom: _stale, ...moved } = route;
+  return { ...moved, labelX: label.x, labelY: label.y, labelSide: label.side };
 }
 
 /** A shape immediately beside an automatic end can block its approach stub even though another
@@ -1845,7 +1963,7 @@ function drawBetween(
       const obstacles = options?.obstacles ?? [];
       const detour = detourAround(from, to, sourceSide, targetSide, obstacles);
       if (detour) {
-        const built = buildDetourPath(from, to, sourceSide, targetSide, detour);
+        const built = buildDetourPath(from, to, sourceSide, targetSide, detour, [...obstacles, glyphOf(sourceRect), glyphOf(targetRect)]);
         path = built.d;
         labelX = built.labelX;
         labelY = built.labelY;
@@ -1887,10 +2005,11 @@ function drawBetween(
       work = found.work;
       status = found.status;
       if (found.points) {
-        const d = roundedStepPath(found.points, 10);
+        const points = relaxEndJogs(found.points, blockers);
+        const d = roundedStepPath(points, 10);
         // The rounded corners cut inside the square ones: checked again as drawn.
         if (polylineClear(flattenPath(d), blockers)) {
-          const mid = longestRunMidpoint(found.points);
+          const mid = longestRunMidpoint(points);
           path = d;
           labelX = mid.x;
           labelY = mid.y;
@@ -1915,6 +2034,7 @@ function drawBetween(
     labelX: label.x,
     labelY: label.y,
     labelSide: label.side,
+    ...(label.room !== undefined ? { labelRoom: label.room } : {}),
     source: { ...from, side: sourceSide },
     target: { ...to, side: targetSide },
     branchStart,
@@ -1923,6 +2043,60 @@ function drawBetween(
     status,
     work,
   };
+}
+
+/** The shortest straight run a line may end on: the arrowhead's length plus a rounded corner's
+ *  radius, so the last bend never folds into the head. */
+export const MIN_END_RUN = 30;
+
+/**
+ * A routed line that steps sideways just before its target — a few pixels of jog and then the
+ * arrowhead, which reads as a bent arrow — has the step moved back along the run before it, just
+ * far enough to leave `MIN_END_RUN` straight (further only where that is blocked). Its corners stay
+ * the same corners, so nothing else about the line changes. Only the arrowhead's end: a start
+ * stub carries no head, and lengthening it slid lines onto their neighbours' runs. A line that can't
+ * be relaxed is returned as it was.
+ */
+export function relaxEndJogs(points: readonly DraftPoint[], blockers: readonly Rect[]): DraftPoint[] {
+  return relaxTargetJog(points, blockers) as DraftPoint[];
+}
+
+function relaxTargetJog(points: readonly DraftPoint[], blockers: readonly Rect[]): readonly DraftPoint[] {
+  const n = points.length;
+  if (n < 4) return points;
+  const end = points[n - 1]!;
+  const c2 = points[n - 2]!;
+  const c1 = points[n - 3]!;
+  const c0 = points[n - 4]!;
+  const level = Math.abs(c2.y - end.y) < 0.5;
+  const axis = level ? 'x' : 'y';
+  const cross = level ? 'y' : 'x';
+  // Only an orthogonal step: final run, a sideways jog, and a run before it going the same way.
+  if (Math.abs(c1[cross] - c0[cross]) > 0.5 || Math.abs(c2[axis] - c1[axis]) > 0.5) return points;
+  const finalRun = end[axis] - c2[axis];
+  if (Math.abs(finalRun) >= MIN_END_RUN || Math.abs(finalRun) < 0.5) return points;
+  const dir = Math.sign(finalRun);
+  if (Math.sign(c1[axis] - c0[axis]) !== dir) return points;
+  // How far back the jog may go: short of the previous bend by a run as long, so the line keeps its
+  // shape (and the caption the stretch before carries keeps its place).
+  const furthest = c0[axis] + dir * MIN_END_RUN;
+  const nearest = end[axis] - dir * MIN_END_RUN;
+  if (dir * (nearest - furthest) < 0) return points;
+  const at = (value: number) => {
+    const moved = points.map((point) => ({ x: point.x, y: point.y }));
+    moved[n - 3]![axis] = value;
+    moved[n - 2]![axis] = value;
+    return moved;
+  };
+  const clear = (candidate: DraftPoint[]) => polylineClear(flattenPath(roundedStepPath(candidate, 10)), blockers);
+  // The smallest move that leaves the head its straight run: a bigger one swings the line into
+  // corridors other connectors were routed along.
+  const span = Math.abs(nearest - furthest);
+  for (let step = 0; step <= 8; step += 1) {
+    const candidate = at(nearest - dir * (span * step) / 8);
+    if (clear(candidate)) return candidate;
+  }
+  return points;
 }
 
 /** The part of a shape a connector lands on: a Data Store's or a tube's glyph, else the box. A line
@@ -2017,6 +2191,7 @@ function bentRoute(
     labelX: label.x,
     labelY: label.y,
     labelSide: label.side,
+    ...(label.room !== undefined ? { labelRoom: label.room } : {}),
     source: { ...from, side: sourceSide },
     target: { ...to, side: targetSide },
     points,

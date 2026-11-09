@@ -3856,6 +3856,75 @@
   height: 1px;
 }
 
+/* A connector that now runs straight: the line it runs along, a little bolder than an edge guide. */
+.dc-guide[data-kind='connector'][data-axis='x'] {
+  width: 2px;
+  margin-left: -0.5px;
+}
+
+.dc-guide[data-kind='connector'][data-axis='y'] {
+  height: 2px;
+  margin-top: -0.5px;
+}
+
+/* One of a run of equal gaps: a measured span with end ticks and its size. */
+.dc-guide[data-kind='gap']::before,
+.dc-guide[data-kind='gap']::after {
+  content: '';
+  position: absolute;
+  background: inherit;
+}
+
+.dc-guide[data-kind='gap'][data-axis='y']::before,
+.dc-guide[data-kind='gap'][data-axis='y']::after {
+  top: -4px;
+  width: 1px;
+  height: 9px;
+}
+
+.dc-guide[data-kind='gap'][data-axis='y']::before {
+  left: 0;
+}
+
+.dc-guide[data-kind='gap'][data-axis='y']::after {
+  right: 0;
+}
+
+.dc-guide[data-kind='gap'][data-axis='x']::before,
+.dc-guide[data-kind='gap'][data-axis='x']::after {
+  left: -4px;
+  width: 9px;
+  height: 1px;
+}
+
+.dc-guide[data-kind='gap'][data-axis='x']::before {
+  top: 0;
+}
+
+.dc-guide[data-kind='gap'][data-axis='x']::after {
+  bottom: 0;
+}
+
+/* The size reads at the same screen size at any zoom. */
+.dc-guide-label {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--dc-selection);
+  color: var(--dc-canvas);
+  font: 600 10px/1.2 var(--dc-font, system-ui, sans-serif);
+  white-space: nowrap;
+  transform: translate(-50%, calc(-100% - 5px)) scale(calc(1 / var(--dc-zoom, 1)));
+  transform-origin: 50% 100%;
+}
+
+.dc-guide[data-axis='x'] > .dc-guide-label {
+  transform: translate(6px, -50%) scale(calc(1 / var(--dc-zoom, 1)));
+  transform-origin: 0 50%;
+}
+
 /* ---------------------------------------------------------- empty state -- */
 
 /* The blank canvas: one invitation, then a small shelf of real architecture sketches.

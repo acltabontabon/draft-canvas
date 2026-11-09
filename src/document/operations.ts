@@ -8,7 +8,7 @@ import { reconnectProblem } from './reconnect';
 import { repairCompensationLinks } from './compensation';
 import { createId } from './ids';
 import { OPEN_POINT_ID_PREFIX, pruneOpenPoints } from './openPoints';
-import { defaultSizeFor } from './factory';
+import { defaultSizeFor, maxSizeFor } from './factory';
 import { pruneFlowSteps } from './flow';
 import { LIMITS } from './limits';
 import { cleanText, cleanTextFields } from './sanitize';
@@ -863,6 +863,33 @@ export function distributeNodes(
     cursor += size(node) + gap;
   }
   return moveNodes(doc, positions);
+}
+
+/**
+ * Same width / Same height: every shape in `ids` takes the largest width (or height) among them —
+ * the largest, so no shape's text is squeezed below what it needs. Each keeps its top-left corner.
+ * A Junction stays round and is left out, and a boundary is never sized below the shapes it holds
+ * (it only ever grows here).
+ */
+export function matchNodeSizes(
+  doc: DraftDocument,
+  ids: Iterable<string>,
+  dimension: 'width' | 'height',
+): DraftDocument {
+  const set = new Set(ids);
+  const targets = doc.nodes.filter((n) => set.has(n.id) && n.type !== 'ellipse');
+  if (targets.length < 2) return doc;
+  const size = Math.max(...targets.map((n) => n[dimension]));
+  let changed = false;
+  const nodes = doc.nodes.map((node) => {
+    if (!set.has(node.id) || node.type === 'ellipse' || node[dimension] === size) return node;
+    const max = maxSizeFor(node.type)?.[dimension] ?? Infinity;
+    const next = Math.min(size, max);
+    if (next === node[dimension]) return node;
+    changed = true;
+    return { ...node, [dimension]: next };
+  });
+  return changed ? withNodes(doc, nodes) : doc;
 }
 
 /* ----------------------------------------------------------- attachments --- */

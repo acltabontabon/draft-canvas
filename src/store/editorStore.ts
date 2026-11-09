@@ -45,6 +45,7 @@ import {
   detachFromEdge as detachFromEdgeOp,
   detachFromNode,
   distributeNodes,
+  matchNodeSizes,
   extractFragment,
   freeOriginFor,
   hasAttachmentRoom,
@@ -160,6 +161,7 @@ import { ACTOR_KINDS, C4_TEXT_TYPES } from '../document/types';
 import { routingPlan } from '../edges/bundles';
 import { anchorOnSide, anchorPoint, rectOf, trunkCoordinate } from '../edges/routing';
 import { connectorRoutes } from '../edges/connectorRoutes';
+import { straightenConnectors } from '../edges/straighten';
 import { recoveryBranchAnchor } from '../edges/compensationMarker';
 import { centerOf, clamp } from '../lib/math';
 import {
@@ -582,6 +584,14 @@ export interface EditorStore {
   syncClipboardFromSystem: () => Promise<boolean>;
   align: (edge: AlignEdge) => void;
   distribute: (axis: 'x' | 'y') => void;
+  /** Gives the selected shapes the largest width (or height) among them — one undo step. */
+  matchSize: (dimension: 'width' | 'height') => void;
+  /**
+   * Nudges shapes a few pixels so every connector that misses running straight by no more than
+   * `STRAIGHTEN_LIMIT` does — the light alternative to `arrangeRoom`. Only the selected shapes
+   * move when there is a selection. One undo step; false when there was nothing to straighten.
+   */
+  straighten: () => boolean;
   groupSelection: () => void;
   ungroupSelection: () => void;
   raise: (toFront?: boolean) => void;
@@ -2656,6 +2666,30 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const { selection, document, apply } = get();
     const ids = outermostSelected(document.nodes, selection.nodes).map((node) => node.id);
     apply('Distribute', (doc) => reconcileMembershipOp(carryDescendants(doc, distributeNodes(doc, ids, axis), ids), ids));
+  },
+
+  matchSize(dimension) {
+    const { selection, document, apply } = get();
+    const ids = outermostSelected(document.nodes, selection.nodes).map((node) => node.id);
+    // Each resized shape settles its membership as a hand resize does: a boundary that grew may now
+    // hold shapes it covers, and a shape that grew out of one leaves it.
+    apply(dimension === 'width' ? 'Same width' : 'Same height', (doc) => {
+      const matched = matchNodeSizes(doc, ids, dimension);
+      return matched === doc ? doc : ids.reduce((next, id) => reconcileAfterResize(next, id), matched);
+    });
+  },
+
+  straighten() {
+    if (interaction) return false;
+    const { selection, apply } = get();
+    const movable = selection.nodes.length > 0 ? new Set(selection.nodes) : undefined;
+    let moved = false;
+    apply('Straighten', (doc) => {
+      const next = straightenConnectors(doc, movable);
+      moved = next !== doc;
+      return next;
+    });
+    return moved;
   },
 
   groupSelection() {

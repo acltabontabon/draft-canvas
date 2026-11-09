@@ -702,6 +702,18 @@ export function canvasCommands(ctx: CommandContext): Command[] {
   }
   // Only with shapes to move: the layout engine has nothing to do with an empty room, and a
   // command that does nothing is worse than one that is absent.
+  if (!ctx.ui.readOnly && ctx.editor.document.edges.length > 0) {
+    commands.push({
+      id: 'straighten',
+      title: 'Straighten connectors',
+      group: 'canvas',
+      keywords: ['straighten', 'straight lines', 'kinks', 'jogs', 'bends', 'line up', 'align connectors', 'tidy', 'clean up', 'nudge'],
+      hint: 'Nudge shapes a few pixels so connectors run straight — one undo step',
+      run: (inner) => {
+        if (!inner.editor.straighten() && !inner.ui.readOnly) inner.ui.notify('Already straight.');
+      },
+    });
+  }
   if (!ctx.ui.readOnly && ctx.editor.document.nodes.some((node) => node.type !== 'group' && node.type !== 'note' && node.type !== 'text' && node.type !== 'code')) {
     commands.push({
       id: 'arrange',
@@ -1850,6 +1862,26 @@ export function multiCommands(ctx: CommandContext): Command[] {
         run: (inner) => inner.editor.align(edge),
       });
     }
+  }
+  if (outer.filter((node) => node.type !== 'ellipse').length >= 2) {
+    commands.push(
+      {
+        id: 'match-width',
+        title: 'Same width',
+        group: 'selection',
+        keywords: ['match size', 'match width', 'equal width', 'same size', 'resize', 'tidy'],
+        hint: 'The widest one’s width — one undo step',
+        run: (inner) => inner.editor.matchSize('width'),
+      },
+      {
+        id: 'match-height',
+        title: 'Same height',
+        group: 'selection',
+        keywords: ['match size', 'match height', 'equal height', 'same size', 'resize', 'tidy'],
+        hint: 'The tallest one’s height — one undo step',
+        run: (inner) => inner.editor.matchSize('height'),
+      },
+    );
   }
   if (outer.length >= 3) {
     commands.push(

@@ -26,7 +26,8 @@ import { linkedCompensations, visibleEdges } from '../document/compensation';
 import { openFitViewport } from '../document/geometry';
 import { boundsOf, descendantsOf, hasAttachmentRoom } from '../document/operations';
 import type { DraftDocument, DraftEdge, DraftNode } from '../document/types';
-import type { Rect } from '../edges/routing';
+import { rectOf, type Rect } from '../edges/routing';
+import { straightOffset } from '../edges/straight';
 import { isEditableTarget } from '../lib/isEditableTarget';
 import { motionMs } from '../lib/motion';
 import { centerOf, pointInBox } from '../lib/math';
@@ -70,7 +71,7 @@ import {
   type DraftRfEdge,
   type DraftRfNode,
 } from './projection';
-import { computeSnap, sameGuides, type Guide } from './snapping';
+import { computeSnap, sameGuides, type Guide, type SnapLink } from './snapping';
 import { minResizeSizeFor, snapResize } from './resizeSnap';
 import { AgentPreviewLayer, ProposalPreviewLayer } from './AgentPreviewLayer';
 import { ContinuationGhost } from './ContinuationGhost';
@@ -208,6 +209,50 @@ function useIdSet(ids: readonly string[]): ReadonlySet<string> {
 
 const NO_SNAP = { changes: [] as NodeChange<DraftRfNode>[], guides: [] as Guide[] };
 
+/** A connector between a dragged shape and a resting one: what drag snapping straightens. */
+interface DragLink {
+  edge: DraftEdge;
+  /** The dragged end's shape as it was when the gesture began. */
+  moving: DraftNode;
+  /** The resting end, with its anchor band. */
+  fixed: Rect;
+  movingIsSource: boolean;
+}
+
+/** What a drag snaps against, gathered once when the gesture begins. */
+interface DragSnapContext {
+  statics: Rect[];
+  /** The resting shapes less boundaries, for even spacing. */
+  spacing: Rect[];
+  links: DragLink[];
+  /** Where each dragged shape began, so a frame's move is known from any of them. */
+  origin: Map<string, { x: number; y: number }>;
+}
+
+const NO_DRAG_SNAP: DragSnapContext = { statics: [], spacing: [], links: [], origin: new Map() };
+
+/** Each connector's straight line, measured with the dragged shapes moved by `shift`. */
+function linksAt(links: readonly DragLink[], shift: { x: number; y: number }): SnapLink[] {
+  const out: SnapLink[] = [];
+  for (const link of links) {
+    const live = rectOf({ ...link.moving, x: link.moving.x + shift.x, y: link.moving.y + shift.y });
+    const offset = link.movingIsSource ? straightOffset(link.edge, live, link.fixed) : straightOffset(link.edge, link.fixed, live);
+    if (!offset) continue;
+    const fixedEnd = link.movingIsSource ? offset.to : offset.from;
+    const movingEnd = link.movingIsSource ? offset.from : offset.to;
+    const across = offset.axis === 'y' ? 'x' : 'y';
+    out.push({
+      axis: offset.axis,
+      // `delta` moves the target; when the dragged shape is the source it moves the other way.
+      delta: link.movingIsSource ? -offset.delta : offset.delta,
+      at: fixedEnd[offset.axis],
+      from: Math.min(fixedEnd[across], movingEnd[across]),
+      to: Math.max(fixedEnd[across], movingEnd[across]),
+    });
+  }
+  return out;
+}
+
 /** A React Flow node by id — its live position and measured size mid-gesture. */
 type NodeLookup = (id: string) => Pick<DraftRfNode, 'position' | 'width' | 'height' | 'measured'> | undefined;
 
@@ -218,12 +263,12 @@ type NodeLookup = (id: string) => Pick<DraftRfNode, 'position' | 'width' | 'heig
 function snapChanges(
   changes: NodeChange<DraftRfNode>[],
   nodeById: NodeLookup,
-  statics: readonly Rect[],
+  context: DragSnapContext,
 ): { changes: NodeChange<DraftRfNode>[]; guides: Guide[] } {
   const moves = changes.filter(
     (change) => change.type === 'position' && change.dragging === true && change.position,
   );
-  if (moves.length === 0 || statics.length === 0) return { ...NO_SNAP, changes };
+  if (moves.length === 0 || (context.statics.length === 0 && context.links.length === 0)) return { ...NO_SNAP, changes };
 
   const rects: Rect[] = [];
   for (const change of moves) {
@@ -240,7 +285,17 @@ function snapChanges(
   const bounds = boundsOf(rects);
   if (!bounds) return { ...NO_SNAP, changes };
 
-  const snap = computeSnap(bounds, statics);
+  // The whole selection moves rigidly, so any one dragged shape tells how far this frame has it.
+  let shift: { x: number; y: number } | null = null;
+  for (const change of moves) {
+    const origin = change.type === 'position' && change.position ? context.origin.get(change.id) : undefined;
+    if (origin && change.type === 'position' && change.position) {
+      shift = { x: change.position.x - origin.x, y: change.position.y - origin.y };
+      break;
+    }
+  }
+  const links = shift && context.links.length > 0 ? linksAt(context.links, shift) : [];
+  const snap = computeSnap(bounds, context.statics, undefined, { links, spacing: context.spacing });
   if (snap.dx === 0 && snap.dy === 0) return { changes, guides: snap.guides };
 
   return {
@@ -642,8 +697,8 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
    *  length of the gesture, so it flips twice per drag and never re-renders on the nudge. */
   const carryingCapsule = useUiStore((state) => state.dragCapsule !== null);
 
-  /** Rectangles of everything not being dragged, rebuilt once per gesture. */
-  const staticRects = useRef<Rect[]>([]);
+  /** Rectangles of everything not being dragged, and the connectors to them, rebuilt once per gesture. */
+  const dragSnap = useRef<DragSnapContext>(NO_DRAG_SNAP);
   const draggingIds = useRef<Set<string>>(new Set());
   /** Same idea for a resize gesture — resize starts inside `DraftNodeView`,
    *  not `onNodeDragStart`, so this is (re)built lazily, the first frame a
@@ -835,7 +890,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       }
       // Per id, not `getNodes()`: that copies every node on every frame of a drag.
       const nodeById: NodeLookup = (id) => getInternalNode(id);
-      const snappedMove = snapChanges(changes, nodeById, staticRects.current);
+      const snappedMove = snapChanges(changes, nodeById, dragSnap.current);
 
       // A dimensions change appears on every frame of a resize gesture,
       // including the terminal one (`resizing: false`) that commits to the
@@ -1298,9 +1353,25 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       useUiStore.getState().setAttachArmedTarget(null);
       useUiStore.getState().setAttachArmedEdgeTarget(null);
 
-      staticRects.current = state.document.nodes
-        .filter((node) => !moving.has(node.id))
-        .map((node) => ({ x: node.x, y: node.y, width: node.width, height: node.height }));
+      const resting = state.document.nodes.filter((node) => !moving.has(node.id));
+      const links: DragLink[] = [];
+      for (const edge of state.document.edges) {
+        const sourceMoves = moving.has(edge.source);
+        if (sourceMoves === moving.has(edge.target) || edge.source === edge.target) continue;
+        const movingNode = byId.get(sourceMoves ? edge.source : edge.target);
+        const fixedNode = byId.get(sourceMoves ? edge.target : edge.source);
+        if (!movingNode || !fixedNode) continue;
+        links.push({ edge, moving: movingNode, fixed: rectOf(fixedNode), movingIsSource: sourceMoves });
+      }
+      dragSnap.current = {
+        statics: resting.map((node) => ({ x: node.x, y: node.y, width: node.width, height: node.height })),
+        spacing: resting.filter((node) => node.type !== 'group').map((node) => ({ x: node.x, y: node.y, width: node.width, height: node.height })),
+        links,
+        origin: new Map([...moving].flatMap((id) => {
+          const node = byId.get(id);
+          return node ? [[id, { x: node.x, y: node.y }] as const] : [];
+        })),
+      };
     },
     [clearDwell, screenToFlowPosition],
   );
@@ -1364,6 +1435,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       useEditorStore.getState().endInteraction();
       useUiStore.getState().setInteractionActive(false);
       draggingIds.current = new Set();
+      dragSnap.current = NO_DRAG_SNAP;
       lastEdgeProbe.current = null;
       sweptDescendants.current = new Map();
       clearDwell();
@@ -1404,6 +1476,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
     state.endInteraction(singleId && (armedHost || armedEdge) ? 'Attach' : undefined);
     useUiStore.getState().setInteractionActive(false);
     draggingIds.current = new Set();
+    dragSnap.current = NO_DRAG_SNAP;
     lastEdgeProbe.current = null;
     sweptDescendants.current = new Map();
     clearDwell();
@@ -2198,6 +2271,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
                 key={`${guide.axis}-${index}`}
                 className="dc-guide"
                 data-axis={guide.axis}
+                data-kind={guide.kind}
                 style={
                   guide.axis === 'x'
                     ? {
@@ -2209,7 +2283,9 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
                         width: guide.to - guide.from,
                       }
                 }
-              />
+              >
+                {guide.label !== undefined && <span className="dc-guide-label">{guide.label}</span>}
+              </div>
             ))}
 
           {/* Not gated on `interactive`: which room you are standing in is as true in a
