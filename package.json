@@ -113,8 +113,8 @@
   },
   "overrides": {
     "lodash-es": "^4.18.1",
-    "glob": {
-      "minimatch": "^11.0.5"
+    "workbox-build": {
+      "glob": "^14.0.4"
     }
   }
 }
