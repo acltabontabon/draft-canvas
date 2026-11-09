@@ -628,6 +628,9 @@ async function main() {
     await shotDialog(page, 'export-image');
     await page.getByRole('dialog').getByText('Document', { exact: true }).click();
     await shotDialog(page, 'export-document');
+    await page.getByRole('dialog').getByText('Docs', { exact: true }).click();
+    await expect(page.getByRole('dialog').getByLabel('Markdown for this picture')).toBeVisible();
+    await shotDialog(page, 'export-docs');
     await page.getByRole('dialog').getByText('Share', { exact: true }).click();
     await shotDialog(page, 'export-share');
     await page.keyboard.press('Escape');

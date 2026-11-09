@@ -10,6 +10,9 @@ import { forgetTurnSnapshot } from './turnSnapshot';
 import { dispatchCollabLanEvent, lanRelayOf } from './collabLan';
 import type { LanRelay } from '../collab/lan';
 import { confirmWrite, takeWrite, type AgentWrite } from './agentWrites';
+import { DocsPublisher } from './docs';
+import { readMarker, type DocsSettings } from '../export/docs/marker';
+import { picturesOf } from '../export/docs/names';
 import { logDiagnostic } from '../lib/diagnostics';
 import { isRecord } from '../lib/isRecord';
 import type { StarterId } from '../starters';
@@ -28,6 +31,11 @@ import {
   type CodeFolder,
   type CodeGrant,
   type DesktopApi,
+  type DocsImage,
+  type DocsPublished,
+  type DocsStatus,
+  type MarkdownFile,
+  type MarkdownSaveResult,
   type DocState,
   type Handle,
   type HostEvent,
@@ -122,6 +130,29 @@ const realClock: Clock = {
 };
 
 const encoder = new TextEncoder();
+
+/** `~/docs/Payments.draftcanvas` → `Payments`, whichever separator the platform shows. */
+function fileStem(displayPath: string): string {
+  return displayPath.slice(Math.max(displayPath.lastIndexOf('/'), displayPath.lastIndexOf('\\')) + 1).replace(/\.draftcanvas$/i, '');
+}
+
+/** `~/docs/Payments.draftcanvas` → `~/docs`: the folder part of a shown path. */
+function parentOf(displayPath: string): string {
+  return displayPath.slice(0, Math.max(displayPath.lastIndexOf('/'), displayPath.lastIndexOf('\\'), 0));
+}
+
+/**
+ * The diagram a listing of pictures belongs to, when the file isn't the open one: the source a
+ * picture's note names, if the picture is named after it. Empty when none is.
+ */
+function stemOfPictures(images: readonly DocsImage[]): string {
+  for (const image of images) {
+    const source = image.svg ? readMarker(image.svg)?.source : undefined;
+    const stem = source?.replace(/\.draftcanvas$/i, '');
+    if (stem && image.name.toLowerCase().startsWith(`${stem.toLowerCase()}.`)) return stem;
+  }
+  return '';
+}
 
 /** A room's text without its camera — the document's own `viewport` and, recursively, each room's. */
 function withoutCameras(room: unknown): unknown {
@@ -249,6 +280,7 @@ function describe(error: unknown): string {
  */
 export class DesktopController {
   private readonly api: DesktopApi;
+  private readonly docs: DocsPublisher;
   private readonly link: HostLink;
   private readonly store: DesktopStore;
   private readonly ui: DesktopUi;
@@ -298,6 +330,7 @@ export class DesktopController {
     this.link = deps.link;
     this.store = deps.store;
     this.ui = deps.ui;
+    this.docs = new DocsPublisher(this.api, (message) => this.ui.notify(message));
     this.clock = deps.clock ?? realClock;
     this.link.onMessage = (message) => this.onAppMessage(message);
     this.link.onOpened = (info) => this.onOpened(info);
@@ -416,11 +449,13 @@ export class DesktopController {
     const handle = event.handle;
     const show = handle ? { label: event.created ? 'Open' : 'Show', run: () => void this.openHandle(handle) } : undefined;
     if (event.created) {
-      const name = event.displayPath.slice(event.displayPath.lastIndexOf('/') + 1).replace(/\.draftcanvas$/, '');
+      const name = fileStem(event.displayPath);
       this.ui.notify(`An AI agent created “${name}”.`, show);
       return;
     }
     const written = confirmWrite(event.id, event.displayPath, event.stamp);
+    // The shell has written it, so its picture can follow; drawn from the text the agent's write held.
+    if (written && handle) void this.docs.refresh(handle, fileStem(event.displayPath), written.after, false);
     this.ui.notify(`An AI agent updated “${written?.title || 'a diagram'}”.`, show);
   }
 
@@ -531,6 +566,7 @@ export class DesktopController {
       session.stamp = result.stamp;
       this.savedText = text;
       await this.applyBackground(session.handle);
+      void this.docs.refresh(session.handle, session.name, text);
       // See `saveNow`: edits made while this ran keep their snapshot.
       if (this.latestText === text) {
         await this.discard(session.recoveryId);
@@ -1025,6 +1061,7 @@ export class DesktopController {
       session.stamp = result.stamp;
       this.savedText = text;
       await this.applyBackground(session.handle);
+      void this.docs.refresh(session.handle, session.name, text);
       // Only when nothing was edited while the save ran: those edits keep the file dirty, and their
       // recovery snapshot (already written, or on its timer) is all that stands between them and a
       // crash before the next keystroke.
@@ -1035,6 +1072,55 @@ export class DesktopController {
       this.outside = null;
       this.publish();
     });
+  }
+
+  // ─── Use in docs ────────────────────────────────────────────────────────────────────
+  // The picture beside the open file. Only a file has a "beside"; a draft uses the web's download.
+
+  /** The open file Use in docs would publish beside, or null when the canvas has no file yet. */
+  docsFile(): { handle: Handle; name: string; dirty: boolean } | null {
+    const session = this.session;
+    return session.kind === 'file' ? { handle: session.handle, name: session.name, dirty: this.dirty } : null;
+  }
+
+  /** The open file's pictures, each with its whole SVG, for the Docs tab. */
+  async docsStatus(): Promise<DocsStatus | null> {
+    const file = this.docsFile();
+    return file ? this.api.docsStatus(file.handle, true) : null;
+  }
+
+  /** Calls `listener` after any write to a file's pictures — a Publish, or a save's redraw. */
+  onDocsWritten(listener: (handle: Handle) => void): () => void {
+    return this.docs.onWritten(listener);
+  }
+
+  /**
+   * Writes the picture beside the open file. Unsaved changes are saved first — the picture must show
+   * what the file beside it holds — and it is drawn from exactly the text that was saved.
+   */
+  async publishDocs(settings: DocsSettings, imageName: string, fresh = false): Promise<DocsPublished> {
+    if (this.docsFile()?.dirty) await this.save();
+    const session = this.session;
+    const text = this.savedText;
+    if (session.kind !== 'file' || text === null) throw new Error('Save the diagram to a file first.');
+    if (this.dirty) throw new Error(`Save ${session.name}.draftcanvas first, so the picture matches it.`);
+    // Through the publisher's queue, so the redraw that save just asked for (with the settings
+    // already on disk) lands first and this one, with the person's choices, lands last.
+    return this.docs.publish(session.handle, session.name, text, settings, imageName, fresh);
+  }
+
+  async pickDocsMarkdown(): Promise<MarkdownFile | null> {
+    const file = this.docsFile();
+    return file ? this.api.docsPickMarkdown(file.handle) : null;
+  }
+
+  addToMarkdown(markdown: Handle, text: string, expectedStamp: string): Promise<MarkdownSaveResult> {
+    return this.api.docsAddToMarkdown(markdown, text, expectedStamp);
+  }
+
+  async revealDocsImage(name: string): Promise<void> {
+    const file = this.docsFile();
+    if (file) await this.api.docsReveal(file.handle, name);
   }
 
   saveAs(): Promise<void> {
@@ -1098,6 +1184,7 @@ export class DesktopController {
     };
     await this.applyBackground(saved.handle);
     this.savedText = text;
+    void this.docs.refresh(saved.handle, saved.name, text);
     // A chooser can stay open while an agent or another app event updates the diagram. Only the
     // captured snapshot was written; newer edits must stay dirty and gain recovery under the new file.
     this.latestText ??= text;
@@ -1272,7 +1359,19 @@ export class DesktopController {
     const waitFor = this.saving;
     const task = (async (): Promise<T> => {
       if (waitFor) await waitFor;
+      // Docs pictures keep their place: the Markdown points at them there. Looked at before the move
+      // so the person can be told the link ended, rather than finding out from a stale README.
+      const before = this.session.kind === 'file' && this.session.handle === handle ? this.session : null;
+      const status = await this.api.docsStatus(handle).catch(() => null);
       const changed = await change();
+      // Whichever diagram the shell found pictures for under the old name; their notes name it.
+      const pictures = status ? picturesOf(status.images, before?.name ?? stemOfPictures(status.images)) : [];
+      const sameFile = before !== null && before.name === changed.name && parentOf(before.displayPath) === parentOf(changed.displayPath);
+      if (pictures.length > 0 && !sameFile) {
+        const first = pictures[0]!.name;
+        const what = pictures.length === 1 ? `${first} stayed` : `${first} and ${pictures.length - 1} more ${pictures.length === 2 ? 'picture' : 'pictures'} stayed`;
+        this.ui.notify(`${what} where your Markdown points and no longer follow${pictures.length === 1 ? 's' : ''} this diagram. Publish again in Use in docs to give it ${pictures.length === 1 ? 'a picture' : 'pictures'} of its own.`);
+      }
       if (this.session.kind === 'file' && this.session.handle === handle) {
         this.session = { ...this.session, handle: changed.handle, name: changed.name, displayPath: changed.displayPath };
         this.publish();

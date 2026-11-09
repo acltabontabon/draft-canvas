@@ -40,14 +40,8 @@ export function ExportSequencePanel({ format, onFormatChange, playableFlowCount,
 
   return (
     <div className="dc-export-panel">
-      <p className="dc-export-panel-description">
-        {family === 'sequence'
-          ? empty
-            ? 'Add a Flow to export sequence diagram source.'
-            : 'Sequence diagram source generated from your Flows.'
-          : 'The architecture — shapes, boundaries and connectors — as source other tools read.'}
-      </p>
-      <div className="dc-export-row">
+      <div className="dc-export-form">
+        <span className="dc-export-label" aria-hidden="true">Source of</span>
         <SegmentedControl
           name="source-family"
           legend="Source of"
@@ -58,6 +52,8 @@ export function ExportSequencePanel({ format, onFormatChange, playableFlowCount,
             { value: 'architecture', label: 'Architecture' },
           ]}
         />
+
+        <span className="dc-export-label" aria-hidden="true">Format</span>
         <SegmentedControl
           name="sequence-format"
           legend="Diagram source format"
@@ -66,6 +62,12 @@ export function ExportSequencePanel({ format, onFormatChange, playableFlowCount,
           disabled={empty}
           options={FAMILY_FORMATS[family].map((id) => ({ value: id, label: SOURCE_FORMAT_INFO[id].pick, name: SOURCE_FORMAT_INFO[id].label }))}
         />
+        {empty && (
+          <>
+            <span aria-hidden="true" />
+            <p className="dc-export-hint">Add a Flow to export its sequence diagram.</p>
+          </>
+        )}
       </div>
       {preview && (
         <div className="dc-export-preview" data-testid="export-source-preview">

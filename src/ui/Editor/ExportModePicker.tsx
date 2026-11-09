@@ -1,7 +1,7 @@
 import { Icon, type IconName } from '../common/Icon';
 import type { ExportMode } from '../../export/exportTypes';
 
-const MODE_ORDER: ExportMode[] = ['share', 'document', 'image', 'sequence'];
+const MODE_ORDER: ExportMode[] = ['share', 'document', 'image', 'docs', 'sequence'];
 
 // The label is the only thing rendered — `hint` exists purely to give screen-reader users the
 // same "what formats live here" context a sighted user gets from the panel a click away, without
@@ -10,6 +10,7 @@ const MODE_META: Record<ExportMode, { label: string; hint: string; icon: IconNam
   share: { label: 'Share', hint: 'read-only link, with optional passphrase', icon: 'link' },
   document: { label: 'Document', hint: 'editable or encrypted', icon: 'file' },
   image: { label: 'Image', hint: 'PNG or SVG', icon: 'image' },
+  docs: { label: 'Docs', hint: 'a Markdown-ready picture that stays linked to its editable source', icon: 'docs' },
   sequence: { label: 'Source', hint: 'Mermaid, PlantUML, C4, Structurizr or draw.io text', icon: 'code' },
 };
 

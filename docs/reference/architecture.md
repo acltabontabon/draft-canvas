@@ -135,6 +135,23 @@ same commands, sometimes with shorter labels, minus any that open a follow-up pi
 - Content writes check for intervening changes. Camera-only saves never conflict.
 - Reading never rewrites. Unreadable data is kept, never replaced with an empty diagram.
 
+**Docs images.** `export/docs/` draws the picture a Markdown page shows with the export renderer,
+never with the diagram embedded. The link to its source is the SVG itself: it sits beside
+`name.draftcanvas` as `name.svg` and carries a note naming the level, look and whether it follows
+saves. There is no manifest. After any save, including an agent's, `desktop/docs.ts` redraws a
+following picture from the saved text. `src-tauri/src/docs.rs` replaces only an SVG with that note,
+skips identical bytes, and adds to a Markdown file only an insertion into the text the person read.
+Pictures are drawn where text is measured, in the app, so there is no headless renderer to drift
+from it.
+
+**Richer previews: decided, not built.** A custom fenced block (```` ```draftcanvas ````) only works
+in a viewer that knows it, never on GitHub. Building it now would split effort from the portable
+SVG, so this release ships the SVG alone. The extension point is the note in every docs image:
+`readMarker` (`export/docs/marker.ts`) gives a viewer the `.draftcanvas` beside the SVG and the level
+it shows. A Markdown preview (VS Code, a docs site) can swap the image for an interactive view of
+that level. It should reuse `renderDocumentSvg` and the reader, never a second renderer, and load no
+remote script.
+
 **Encrypted storage.** Browser records are written plain. `crypto/documentCipher.ts` and
 `crypto/keyStore.ts` only decrypt legacy rows and are called only by `storage/IndexedDbRepository.ts`.
 The passphrase export is separate. See [Security](../../SECURITY.md#browser-storage).

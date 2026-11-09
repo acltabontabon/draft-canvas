@@ -16,6 +16,7 @@ New here? Start with [Getting started](guides/getting-started.md).
 | [Keyboard shortcuts](guides/keyboard-and-commands.md) | Shortcuts and the command palette |
 | [Accessibility](guides/accessibility.md) | Keyboard, screen reader, touch |
 | [Saving and sharing](guides/saving-and-sharing.md) | Save, back up, export, import, share links |
+| [Diagrams in your docs](guides/diagrams-in-docs.md) | Put a diagram in a README and keep it updated |
 | [Collaborating live](guides/collaborating.md) | Edit one canvas together |
 | [Desktop app](guides/desktop.md) | Install, files, projects, updates |
 | [AI agents](guides/connect-an-ai-agent.md) | Let a coding agent draw diagrams |

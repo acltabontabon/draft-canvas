@@ -90,6 +90,27 @@ export function createHarness() {
   const files = new Map<string, FakeFile>();
   const recovery = new Map<string, { entry: RecoveryEntry; text: string }>();
   const sidecars = new Map<string, { mime: string; base64: string }>();
+  /**
+   * The docs pictures in the (one, shared) folder, by file name: `payments.svg`, `payments.ledger.svg`.
+   * A diagram's are those named after it, as the shell lists them.
+   */
+  const docsImages = new Map<string, string>();
+  const stemOf = (handle: string) => files.get(handle)?.name ?? 'diagram';
+  const isPictureOf = (handle: string, name: string) => name === `${stemOf(handle)}.svg` || (name.startsWith(`${stemOf(handle)}.`) && name.endsWith('.svg'));
+  const docsOurs = (svg: string | undefined) => svg !== undefined && svg.includes('<metadata id="draftcanvas-docs">');
+  /** The note's JSON, as the shell lifts it out (`docs.rs`'s `marker_of`). */
+  const noteOf = (svg: string) => {
+    const open = '<metadata id="draftcanvas-docs">';
+    const start = svg.indexOf(open) + open.length;
+    return svg.slice(start, svg.indexOf('</metadata>', start)).replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+  };
+  const sourceOf = (svg: string) => {
+    try {
+      return String((JSON.parse(noteOf(svg)) as { source?: unknown }).source ?? '');
+    } catch {
+      return '';
+    }
+  };
   const answers: number[] = [];
   const asked: { title: string; message: string; buttons: string[] }[] = [];
   const errors: { title: string; message: string }[] = [];
@@ -213,6 +234,28 @@ export function createHarness() {
       return stamp === stampOf(file) ? ('unchanged' as const) : ('changed' as const);
     }),
     reveal: vi.fn(async () => {}),
+    docsStatus: vi.fn(async (handle: string, withSvg = false) => ({
+      images: [...docsImages]
+        .filter(([name]) => isPictureOf(handle, name))
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([name, svg]) => {
+          const ours = docsOurs(svg);
+          return { name, state: ours ? ('ours' as const) : ('foreign' as const), marker: ours ? noteOf(svg) : null, svg: ours && withSvg ? svg : null, modifiedMs: null };
+        }),
+    })),
+    docsPublish: vi.fn(async (handle: string, name: string, svg: string, fresh = false) => {
+      if (!isPictureOf(handle, name)) throw new DesktopError('Io', `${name} isn't a picture name for this diagram`);
+      const current = docsImages.get(name);
+      if (current !== undefined && !docsOurs(current)) throw new DesktopError('AlreadyExists', `${name} already exists beside this diagram and wasn't made by Draft Canvas.`);
+      if (current !== undefined && (fresh || sourceOf(current).toLowerCase() !== `${stemOf(handle)}.draftcanvas`.toLowerCase())) {
+        throw new DesktopError('AlreadyExists', `${name} is another picture, so it was left alone.`);
+      }
+      docsImages.set(name, svg);
+      return { outcome: current === svg ? ('unchanged' as const) : ('written' as const), imageName: name };
+    }),
+    docsPickMarkdown: vi.fn(async (_handle: string) => null),
+    docsAddToMarkdown: vi.fn(async (_markdown: string, _text: string, _stamp: string) => ({ outcome: 'saved' as const, stamp: 'v1:md' })),
+    docsReveal: vi.fn(async (_handle: string, _name: string) => {}),
     exportFile: vi.fn(async (_name: string, _filters: FileFilter[], _bytes: Uint8Array) => true),
     openExternal: vi.fn(async (_url: string) => {}),
     sidecarRead: vi.fn(async (handle: string) => sidecars.get(handle) ?? null),
@@ -469,6 +512,7 @@ export function createHarness() {
     files,
     recovery,
     sidecars,
+    docsImages,
     delivered,
     posted,
     notices,

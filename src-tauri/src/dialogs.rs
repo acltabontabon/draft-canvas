@@ -39,6 +39,29 @@ pub fn pick_folder(app: &AppHandle, start_dir: Option<PathBuf>) -> Option<PathBu
         .and_then(|p| p.into_path().ok())
 }
 
+/// One existing file of the given types, for Use in docs' "Add to a Markdown file…".
+pub fn pick_file(
+    app: &AppHandle,
+    start_dir: Option<PathBuf>,
+    filters: &[FileFilter],
+) -> Option<PathBuf> {
+    let mut dialog = app.dialog().file();
+    for filter in filters {
+        let extensions = clean_extensions(&filter.extensions);
+        if !extensions.is_empty() {
+            let extensions: Vec<&str> = extensions.iter().map(String::as_str).collect();
+            dialog = dialog.add_filter(&filter.name, &extensions);
+        }
+    }
+    if let Some(dir) = start_dir {
+        dialog = dialog.set_directory(dir);
+    }
+    if let Some(window) = owner(app) {
+        dialog = dialog.set_parent(&window);
+    }
+    dialog.blocking_pick_file().and_then(|p| p.into_path().ok())
+}
+
 pub fn save_file(
     app: &AppHandle,
     start_dir: Option<PathBuf>,

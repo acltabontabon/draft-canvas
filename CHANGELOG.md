@@ -6,6 +6,35 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 ## [Unreleased]
 
+### Shared
+
+#### Added
+
+- **Use in docs** — Put a diagram in a README or any Markdown page as an ordinary SVG, with the
+  editable `.draftcanvas` beside it, light, dark or transparent. The picture never carries the
+  diagram inside it.
+  <!-- highlight -->
+
+#### Fixed
+
+- The EXTERNAL and WORKER captions sit inside their shapes again instead of on the border.
+
+### Desktop
+
+#### Added
+
+- Publish the picture beside the diagram's file, add it to a Markdown file you pick, and have every
+  save redraw it. Each level of a diagram gets its own picture, so one README can show a system's
+  context and its containers. Draft Canvas only replaces pictures it made and only adds the one line
+  to Markdown.
+
+### Web
+
+#### Added
+
+- **Download for docs** gives a ZIP of the picture and its editable source, in a `diagrams` folder to
+  put next to your Markdown file.
+
 ## [1.18.1] - 2026-11-06
 
 ### Shared

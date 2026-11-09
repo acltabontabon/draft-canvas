@@ -219,7 +219,7 @@ describe('ExportDialog — Source (Sequence) panel', () => {
     renderDialog();
     await switchMode(user, /Source/);
 
-    expect(screen.getByText('Add a Flow to export sequence diagram source.')).toBeInTheDocument();
+    expect(screen.getByText('Add a Flow to export its sequence diagram.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Export (Mermaid|PlantUML)/ })).toBeDisabled();
   });
 
@@ -229,7 +229,7 @@ describe('ExportDialog — Source (Sequence) panel', () => {
     renderDialog();
     await switchMode(user, /Source/);
 
-    expect(screen.getByText('Sequence diagram source generated from your Flows.')).toBeInTheDocument();
+    expect(screen.queryByText('Add a Flow to export its sequence diagram.')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Export Mermaid' })).toBeEnabled();
   });
 
@@ -453,9 +453,12 @@ describe('ExportDialog — keyboard navigation', () => {
     screen.getByRole('radio', { name: 'Mermaid' }).focus();
     expect(document.activeElement).toBe(screen.getByRole('radio', { name: 'Mermaid' }));
 
-    // Format, then the preview (scrollable, so it takes focus), then Copy, then the CTA.
+    // Format, then the preview (scrollable, so it takes focus), then the footer's privacy lock,
+    // then Copy, then the CTA.
     await user.tab();
     expect(document.activeElement).toBe(screen.getByLabelText('Mermaid source'));
+    await user.tab();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: /^Made on your device/ }));
     await user.tab();
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Copy' }));
     await user.tab();

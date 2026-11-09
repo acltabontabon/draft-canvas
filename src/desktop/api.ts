@@ -13,7 +13,8 @@ import type { AgentInfo, AgentKind, CodeFolder, CodeGrant, PromptRequest, RunSna
 export type { AgentInfo, AgentKind, ApplyMode, CodeFolder, CodeGrant, PromptRequest, RunEvent, RunSnapshot, StopReason, ToolStatus, Usage } from './wire';
 /** The agent context is refined by the bridge protocol beyond Rust's JSON value envelope. */
 export type HostEvent = Exclude<WireHostEvent, { type: 'agent-request' }> | (Omit<Extract<WireHostEvent, { type: 'agent-request' }>, 'args' | 'context'> & { args: Record<string, unknown>; context: AgentContext });
-import type { CollabLanStarted, ExplorerStart, ExplorerDirectory, ExplorerLocation, ExplorerSaveResult, MovedFile, OpenedDoc, SavedAs, SaveResult, ProjectInfo, Scan as ProjectScan } from './wire';
+import type { CollabLanStarted, DocsPublished, DocsStatus, MarkdownFile, MarkdownSaveResult, ExplorerStart, ExplorerDirectory, ExplorerLocation, ExplorerSaveResult, MovedFile, OpenedDoc, SavedAs, SaveResult, ProjectInfo, Scan as ProjectScan } from './wire';
+export type { DocsImage, DocsPublished, DocsStatus, MarkdownFile, MarkdownSaveResult } from './wire';
 export type { CollabLanStarted, ExplorerSaveResult, ExplorerStart, ExplorerDirectory, ExplorerEntry, ExplorerLocation, MovedFile, OpenedDoc, SavedAs, SaveResult, ProjectInfo, ProjectFile, Scan as ProjectScan } from './wire';
 
 export type Handle = string;
@@ -272,6 +273,28 @@ export interface DesktopApi {
    * Recent. `null` when it can't be looked at (gone, unreadable, too large for a thumbnail).
    */
   peekDocument(handle: Handle): Promise<string | null>;
+
+  // Use in docs (`src-tauri/src/docs.rs`): the pictures beside a diagram file, named for it
+  // (`payments.svg`, `payments.ledger.svg`), and one image reference added to a Markdown file the
+  // person picks.
+  /**
+   * The files beside the diagram `handle` named like its pictures, and which Draft Canvas made, with
+   * each one's note. `withSvg` sends each picture's whole text too (the Docs tab compares it with
+   * its preview); a save's redraw needs only the notes.
+   */
+  docsStatus(handle: Handle, withSvg?: boolean): Promise<DocsStatus>;
+  /**
+   * Writes the picture `name` (`payments.svg` or `payments.<level>.svg`) beside the diagram. Refuses
+   * any other name, a file Draft Canvas didn't make and another diagram's picture; skips identical
+   * bytes. `fresh`: the name was found free, so it is only ever created, never replaced.
+   */
+  docsPublish(handle: Handle, name: string, svg: string, fresh?: boolean): Promise<DocsPublished>;
+  /** A Markdown file picked in the system's dialog, with the way from it to the diagram's folder. Null when cancelled. */
+  docsPickMarkdown(handle: Handle): Promise<MarkdownFile | null>;
+  /** Writes `text` over the picked Markdown file — only if it adds to the file as read at `expectedStamp`. */
+  docsAddToMarkdown(markdown: Handle, text: string, expectedStamp: string): Promise<MarkdownSaveResult>;
+  /** Shows the published picture `name` in the file manager. */
+  docsReveal(handle: Handle, name: string): Promise<void>;
 
   // Projects: folders the user picked, kept on a list until they let one go
   /** Picks a folder and adds it to the front of the project list. */

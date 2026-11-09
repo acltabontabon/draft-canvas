@@ -25,7 +25,7 @@ const OPERATIONS = new Set([
   'desktop-agent-install-skill', 'desktop-agent-proposal-get', 'desktop-agent-proposal-list', 'desktop-agent-save',
   'desktop-companion-agents', 'desktop-companion-allow-code', 'desktop-companion-cancel', 'desktop-companion-choose-code', 'desktop-companion-code', 'desktop-companion-continue', 'desktop-companion-forget', 'desktop-companion-runs', 'desktop-companion-send',
   'desktop-agent-remove-skill', 'desktop-agent-skills', 'desktop-agent-status', 'desktop-background-read',
-  'desktop-background-save', 'desktop-boot', 'desktop-check-stamp', 'desktop-open-external',
+  'desktop-background-save', 'desktop-boot', 'desktop-check-stamp', 'desktop-docs', 'desktop-open-external',
   'desktop-project-scan', 'desktop-quit', 'desktop-recents', 'desktop-recovery', 'desktop-recovery-discard',
   'desktop-report-state', 'desktop-snapshot', 'desktop-update',
 ]);

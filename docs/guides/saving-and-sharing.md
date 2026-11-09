@@ -31,6 +31,7 @@ Open **Share → Export** (`⌘⇧E`).
 | **Document → Editable** | A `.draftcanvas` file to reopen, share or keep in version control |
 | **Document → Encrypted** | A passphrase-protected `.dcenc` file |
 | **Image** | PNG or SVG |
+| **Docs** | An SVG for a README or other Markdown page, linked to its `.draftcanvas`; see [Diagrams in your docs](diagrams-in-docs.md) |
 | **Source → Flows** | Mermaid or PlantUML sequence diagrams of your flows |
 | **Source → Architecture** | Mermaid flowchart, C4-PlantUML, Structurizr DSL or draw.io |
 
@@ -48,7 +49,7 @@ Image options:
 - **Light** or **Dark**, **Transparent**, **Selection only**; PNG at 1×, 2× or 3×.
 - Inside a room: that room or **The whole canvas**. **Every level** zips one image per room.
 - Open-point markers are included unless you untick them.
-- **Editable — carries the diagram inside** embeds the whole diagram, every room, so the image can
+- **Editable** embeds the whole diagram, every room, so the image can
   be imported and edited. On by default for SVG, off for PNG.
 
 ## Import a file

@@ -4,6 +4,7 @@ import { ANY_CANDIDATE, dismissalKey } from '../continuation/dismissal';
 import type { DismissalKey, MaterializedContinuation } from '../continuation';
 import type { DraftEdge, DraftNode, OpenPointTarget } from '../document/types';
 import type { CaptionCorner } from '../presentation/framing';
+import type { ExportMode } from '../export/exportTypes';
 import type { PresentationReveal } from '../presentation/presentationAttachments';
 import { readPreference, writePreference } from '../lib/preferences';
 import { PRODUCT } from '../product';
@@ -227,6 +228,9 @@ export interface UiStore {
   sharedFlowIntroduction: { documentId: string; flowId: string } | null;
   shareFromHere: boolean;
   requestShareFromHere: () => void;
+  /** A mode the Export dialog should open on, once — set by a command such as "Use in docs…". */
+  exportModeRequest: ExportMode | null;
+  openExportAt: (mode: ExportMode) => void;
   exampleDocumentId: string | null;
   setExampleDocumentId: (id: string | null) => void;
   exampleRequested: boolean;
@@ -647,6 +651,8 @@ let activateFn: (() => void) | null = null;
 export const useUiStore = create<UiStore>((set, get) => ({
   sharedFlowIntroduction: null,
   shareFromHere: false,
+  exportModeRequest: null,
+  openExportAt: (mode) => set({ exportModeRequest: mode, exportOpen: true, shareFromHere: false, exportSelectionRequested: false }),
   requestShareFromHere: () => set({ shareFromHere: true, exportOpen: true, exportSelectionRequested: false }),
   exampleDocumentId: null,
   setExampleDocumentId: (exampleDocumentId) => set({ exampleDocumentId }),

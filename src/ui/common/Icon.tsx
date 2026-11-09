@@ -24,6 +24,8 @@ const PATHS = {
   pause: 'M8 5v14 M16 5v14',
   layers: 'M12 3l9 5-9 5-9-5z M3 12l9 5 9-5 M3 16l9 5 9-5',
   file: 'M6 3h8l4 4v14H6z M14 3v4h4',
+  // A page with a picture set into its text: a diagram where documentation is read.
+  docs: 'M6 3h12v18H6z M9 7h6 M9 10.5h6v4H9z M9 18h4',
   upload: 'M12 20V9 M8 13l4-4 4 4 M4 5h16',
   alignLeft: 'M4 6h16 M4 12h10 M4 18h13',
   alignCenter: 'M4 6h16 M7 12h10 M5.5 18h13',
