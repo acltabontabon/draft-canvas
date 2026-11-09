@@ -14,6 +14,10 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
   editable `.draftcanvas` beside it. The picture never carries the diagram inside it.
   <!-- highlight -->
 
+#### Fixed
+
+- The EXTERNAL and WORKER captions sit inside their shapes again instead of on the border.
+
 ### Desktop
 
 #### Added
@@ -25,8 +29,8 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 #### Added
 
-- **Download for docs** gives a ZIP of the picture and its editable source, ready to unzip next to
-  your Markdown file.
+- **Download for docs** gives a ZIP of the picture and its editable source, in a `diagrams` folder to
+  put next to your Markdown file.
 
 ## [1.18.1] - 2026-11-06
 

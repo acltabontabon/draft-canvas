@@ -75,6 +75,22 @@ Markdown file and paste the line from **Copy Markdown**:
 The path in that line is the path inside the ZIP. It's a snapshot; to update it, download again and
 replace both files.
 
+## Diagrams with levels
+
+A diagram with levels inside it, such as a C4 context view with containers and components inside,
+publishes one level per picture. **Level** lists them: **Whole diagram**, **Inside Online store**,
+**Inside Online store / Store API**. To show more than one level on a page, say so in the text and
+point readers at the `.draftcanvas` file, as the sample README below does.
+
+| Level | What the picture shows |
+| --- | --- |
+| Whole diagram | [The system and the people and systems around it](../media/guides/docs-example/online-store.svg) |
+| Inside Online store | [Its containers](../media/guides/docs-example/levels/inside-online-store.svg) |
+| Inside Online store / Store API | [The API's components](../media/guides/docs-example/levels/inside-store-api.svg) |
+
+The [sample README](../media/guides/docs-example/sample-readme.md) shows a page with two diagrams, as
+**Use in docs** leaves it.
+
 ## What the picture contains
 
 A docs picture is only a picture. Unlike an editable image export, it never carries the diagram

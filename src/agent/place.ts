@@ -174,7 +174,14 @@ export function peerNormalize(elements: Map<string, DraftNode>, edges: readonly 
     if (members.length < 2) continue;
     const medianWidth = median(members.map((n) => n.width));
     const medianHeight = median(members.map((n) => n.height));
-    const core = members.filter((n) => n.width <= medianWidth * PEER_OUTLIER_FACTOR && n.height <= medianHeight * PEER_OUTLIER_FACTOR);
+    // Area too, not just each side: a long description can grow a box a little wider and a lot
+    // taller, staying under the factor on both sides while being half as big again.
+    const core = members.filter(
+      (n) =>
+        n.width <= medianWidth * PEER_OUTLIER_FACTOR &&
+        n.height <= medianHeight * PEER_OUTLIER_FACTOR &&
+        n.width * n.height <= medianWidth * medianHeight * PEER_OUTLIER_FACTOR,
+    );
     if (core.length < 2) continue;
     const sharedWidth = Math.max(...core.map((n) => n.width));
     const sharedHeight = Math.max(...core.map((n) => n.height));

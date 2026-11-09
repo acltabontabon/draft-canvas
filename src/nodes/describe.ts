@@ -168,8 +168,8 @@ function tagRow(inset = 5): number {
 
 /**
  * A small, muted corner tag — the one shared visual for every node variant. `inset` only exists
- * for a shape whose own silhouette intrudes on the default bottom-right corner (Adapter's notch);
- * every other caller keeps the plain 7/5 default.
+ * for a shape whose own silhouette intrudes on the default bottom-right corner (Adapter's notch,
+ * Worker's back card, External's frame); every other caller keeps the plain 7/5 default.
  */
 function variantCaption(
   node: DraftNode,
@@ -739,7 +739,7 @@ function serviceWorker(node: DraftNode, ctx: DescribeContext): Shape[] {
   const front = { x: 0.75, y: 0.75, w: node.width - 1.5 - offset, h: node.height - 1.5 - offset, r: 8 };
   const label = centredLabel(node, ctx, {
     top: capHeight,
-    bottom: Math.max(offset, tagRow()),
+    bottom: Math.max(offset, tagRow(offset + 5)),
     color: palette.text,
     right: offset,
   });
@@ -756,7 +756,9 @@ function serviceWorker(node: DraftNode, ctx: DescribeContext): Shape[] {
     // and a dot cluster there would land on top of it.
     ...dotsGlyph(front.x + front.w - MARK_INSET, front.y + capHeight + 9, 2, palette.chip, label),
     ...label,
-    ...variantCaption(node, ctx, SERVICE_KIND_LABELS.worker!, ctx.theme.textMuted),
+    // Measured from the front card's corner, not the node's: the back card fills the node's
+    // bottom-right, and a caption placed there sat on the front card's border.
+    ...variantCaption(node, ctx, SERVICE_KIND_LABELS.worker!, ctx.theme.textMuted, { right: offset + 7, bottom: offset + 5 }),
   ];
 }
 
@@ -792,12 +794,14 @@ function serviceExternal(node: DraftNode, ctx: DescribeContext): Shape[] {
     },
     ...centredLabel(node, ctx, {
       top: inset + capHeight,
-      bottom: Math.max(inset, tagRow()),
+      bottom: Math.max(inset, tagRow(inset + 5)),
       color: palette.text,
       left: inset,
       right: inset,
     }),
-    ...variantCaption(node, ctx, SERVICE_KIND_LABELS.external!, ctx.theme.textMuted),
+    // Inside the inner card, like every other kind's caption: at the node's own corner it ran over
+    // the inner card's border into the gap before the dashed frame.
+    ...variantCaption(node, ctx, SERVICE_KIND_LABELS.external!, ctx.theme.textMuted, { right: inset + 7, bottom: inset + 5 }),
   ];
 }
 
