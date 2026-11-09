@@ -88,8 +88,12 @@ point readers at the `.draftcanvas` file, as the sample README below does.
 | Inside Online store | [Its containers](../media/guides/docs-example/levels/inside-online-store.svg) |
 | Inside Online store / Store API | [The API's components](../media/guides/docs-example/levels/inside-store-api.svg) |
 
+![The Docs tab with Inside Online store chosen: the preview shows the containers.](../media/guides/export-docs-levels.png)
+
 The [sample README](../media/guides/docs-example/sample-readme.md) shows a page with two diagrams, as
-**Use in docs** leaves it.
+**Use in docs** leaves it. This is how GitHub shows it:
+
+![The sample README on GitHub, with the Online store and Order processing pictures.](../media/guides/docs-sample-readme.png)
 
 ## What the picture contains
 

@@ -105,6 +105,8 @@ describe('the docs image', () => {
     const ledger = file.nodes[1]!;
     expect(docsLevels(file).map((level) => level.label)).toEqual(['Whole diagram', 'Inside Ledger']);
     expect(docsTitleFor(file, [ledger.id])).toBe('Payments / Ledger');
+    // A file named after the system it opens doesn't say the name twice.
+    expect(docsTitleFor({ ...file, metadata: { ...file.metadata, title: 'ledger' } }, [ledger.id])).toBe('ledger');
     const inside = await renderDocsImage(file, 'payments.draftcanvas', { ...top, view: [ledger.id] });
     expect(inside.ok && inside.svg).toContain('Hidden vault');
     expect(inside.ok && inside.svg).not.toContain('Gateway');

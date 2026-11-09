@@ -61,7 +61,9 @@ export function docsTitleFor(file: DraftDocument, path: readonly string[]): stri
     const owner = ownerAt(file, path.slice(0, depth));
     if (owner) owners.push(oneLine(displayNameFor(owner)));
   }
-  return [title, ...owners].join(' / ');
+  // A C4 file is often named after its system: "Online store" inside "Online store" says it once.
+  const parts = [title, ...owners].filter((part, index, all) => index === 0 || part.toLowerCase() !== all[index - 1]!.toLowerCase());
+  return parts.join(' / ');
 }
 
 function oneLine(text: string): string {
