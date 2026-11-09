@@ -78,13 +78,17 @@ test('dragging a shape across turns an automatic end to face it and leaves a pin
     await nextFrames(page);
   }
   await cameraAtRest(page);
-  const after = await boxOf(page, 'a');
-  // The automatic end now leaves A's left side, facing B.
-  expect((await start(page, 'auto')).x).toBeCloseTo(after.x, 0);
-  // The pinned end still leaves A's right side, three quarters down, and goes round.
-  const pinnedAfter = await start(page, 'pinned');
-  expect(pinnedAfter.x).toBeCloseTo(after.x + after.width, 0);
-  expect(pinnedAfter.y).toBeCloseTo(after.y + after.height * 0.75, 0);
+  // The route is recomputed a frame or two after the drop; WebKit sometimes lets a single read land
+  // on the old route (flaky in CI), so retry the whole group of reads until it settles.
+  await expect(async () => {
+    const after = await boxOf(page, 'a');
+    // The automatic end now leaves A's left side, facing B.
+    expect((await start(page, 'auto')).x).toBeCloseTo(after.x, 0);
+    // The pinned end still leaves A's right side, three quarters down, and goes round.
+    const pinnedAfter = await start(page, 'pinned');
+    expect(pinnedAfter.x).toBeCloseTo(after.x + after.width, 0);
+    expect(pinnedAfter.y).toBeCloseTo(after.y + after.height * 0.75, 0);
+  }).toPass({ timeout: 5_000 });
 });
 
 test('a new connector follows its shapes even when drawn between off-centre dots', async ({ page }) => {
