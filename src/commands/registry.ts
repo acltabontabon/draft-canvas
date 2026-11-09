@@ -786,6 +786,13 @@ export function canvasCommands(ctx: CommandContext): Command[] {
       shortcut: `${MOD_SYMBOL} Shift E`,
       run: (inner) => inner.ui.setExportOpen(true),
     },
+    {
+      id: 'use-in-docs',
+      title: 'Use in docs…',
+      group: 'canvas',
+      keywords: ['markdown', 'readme', 'documentation', 'docs', 'embed', 'publish', 'svg', 'adr', 'github'],
+      run: (inner) => inner.ui.openExportAt('docs'),
+    },
     ...copyExportCommands(),
     {
       id: 'copy-share-link',

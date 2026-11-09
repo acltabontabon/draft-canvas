@@ -35,6 +35,8 @@ pub struct Grants {
     /// grant meant searching all of them.
     file_handles: HashMap<PathBuf, Handle>,
     projects: HashMap<Handle, ProjectGrant>,
+    /// Markdown files picked for Use in docs: the only ones the page may add an image to.
+    markdown: HashMap<Handle, PathBuf>,
 }
 
 fn new_handle() -> Handle {
@@ -75,6 +77,22 @@ impl Grants {
             },
         );
         handle
+    }
+
+    pub fn insert_markdown(&mut self, canonical: PathBuf) -> Handle {
+        if let Some((handle, _)) = self.markdown.iter().find(|(_, p)| **p == canonical) {
+            return handle.clone();
+        }
+        let handle = new_handle();
+        self.markdown.insert(handle.clone(), canonical);
+        handle
+    }
+
+    pub fn markdown(&self, handle: &str) -> Result<PathBuf, AppError> {
+        self.markdown
+            .get(handle)
+            .cloned()
+            .ok_or_else(AppError::invalid_handle)
     }
 
     pub fn file(&self, handle: &str) -> Result<FileGrant, AppError> {

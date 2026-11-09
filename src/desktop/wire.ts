@@ -2,6 +2,30 @@
 export type OpenedDoc = { handle: string, name: string, displayPath: string, text: string, stamp: string, readOnly: boolean, };
 export type SavedAs = { handle: string, name: string, displayPath: string, stamp: string, };
 export type SaveResult = { "outcome": "saved", stamp: string, } | { "outcome": "conflict" };
+export type DocsStatus = {
+/**
+ * `payments.svg`: what the picture is, or would be, called.
+ */
+imageName: string,
+/**
+ * `none`: not published. `ours`: a picture Draft Canvas made. `foreign`: another file has the name.
+ */
+state: "none" | "ours" | "foreign",
+/**
+ * The picture's SVG, when it is ours, so the page can tell whether it is current.
+ */
+svg: string | null, modifiedMs: number | null, };
+export type DocsPublished = {
+/**
+ * `written`, or `unchanged` when the picture was already exactly this.
+ */
+outcome: "written" | "unchanged", imageName: string, };
+export type MarkdownFile = { handle: string, name: string, displayPath: string, text: string, stamp: string,
+/**
+ * The picture's path from the Markdown file's folder, `/`-separated.
+ */
+imagePath: string, };
+export type MarkdownSaveResult = { "outcome": "saved", stamp: string, } | { "outcome": "conflict" };
 export type ProjectInfo = { handle: string, name: string, displayPath: string, };
 export type MovedFile = { handle: string, name: string, displayPath: string, };
 export type ProjectFile = {

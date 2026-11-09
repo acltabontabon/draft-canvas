@@ -6,6 +6,28 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 ## [Unreleased]
 
+### Shared
+
+#### Added
+
+- **Use in docs** — Put a diagram in a README or any Markdown page as an ordinary SVG, with the
+  editable `.draftcanvas` beside it. The picture never carries the diagram inside it.
+  <!-- highlight -->
+
+### Desktop
+
+#### Added
+
+- Publish the picture beside the diagram's file, add it to a Markdown file you pick, and have every
+  save redraw it. Draft Canvas only replaces pictures it made and only adds the one line to Markdown.
+
+### Web
+
+#### Added
+
+- **Download for docs** gives a ZIP of the picture and its editable source, ready to unzip next to
+  your Markdown file.
+
 ## [1.18.1] - 2026-11-06
 
 ### Shared

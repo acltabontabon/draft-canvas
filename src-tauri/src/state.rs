@@ -286,6 +286,16 @@ impl AppState {
         lock(&self.grants).file(handle)
     }
 
+    /// A Markdown file the person picked for Use in docs (`docs::validate_markdown` checks it).
+    pub fn grant_markdown(&self, path: &Path) -> Result<Handle, AppError> {
+        let canonical = crate::docs::validate_markdown(path)?;
+        Ok(lock(&self.grants).insert_markdown(canonical))
+    }
+
+    pub fn markdown(&self, handle: &str) -> Result<std::path::PathBuf, AppError> {
+        lock(&self.grants).markdown(handle)
+    }
+
     pub fn project(&self, handle: &str) -> Result<ProjectGrant, AppError> {
         lock(&self.grants).project(handle)
     }

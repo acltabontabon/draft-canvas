@@ -10,6 +10,9 @@ import { forgetTurnSnapshot } from './turnSnapshot';
 import { dispatchCollabLanEvent, lanRelayOf } from './collabLan';
 import type { LanRelay } from '../collab/lan';
 import { confirmWrite, takeWrite, type AgentWrite } from './agentWrites';
+import { DocsPublisher } from './docs';
+import { renderDocsImage } from '../export/docs/image';
+import type { DocsSettings } from '../export/docs/marker';
 import { logDiagnostic } from '../lib/diagnostics';
 import { isRecord } from '../lib/isRecord';
 import type { StarterId } from '../starters';
@@ -28,6 +31,10 @@ import {
   type CodeFolder,
   type CodeGrant,
   type DesktopApi,
+  type DocsPublished,
+  type DocsStatus,
+  type MarkdownFile,
+  type MarkdownSaveResult,
   type DocState,
   type Handle,
   type HostEvent,
@@ -122,6 +129,11 @@ const realClock: Clock = {
 };
 
 const encoder = new TextEncoder();
+
+/** `~/docs/Payments.draftcanvas` → `Payments`, whichever separator the platform shows. */
+function fileStem(displayPath: string): string {
+  return displayPath.slice(Math.max(displayPath.lastIndexOf('/'), displayPath.lastIndexOf('\\')) + 1).replace(/\.draftcanvas$/i, '');
+}
 
 /** A room's text without its camera — the document's own `viewport` and, recursively, each room's. */
 function withoutCameras(room: unknown): unknown {
@@ -249,6 +261,7 @@ function describe(error: unknown): string {
  */
 export class DesktopController {
   private readonly api: DesktopApi;
+  private readonly docs: DocsPublisher;
   private readonly link: HostLink;
   private readonly store: DesktopStore;
   private readonly ui: DesktopUi;
@@ -298,6 +311,7 @@ export class DesktopController {
     this.link = deps.link;
     this.store = deps.store;
     this.ui = deps.ui;
+    this.docs = new DocsPublisher(this.api, (message) => this.ui.notify(message));
     this.clock = deps.clock ?? realClock;
     this.link.onMessage = (message) => this.onAppMessage(message);
     this.link.onOpened = (info) => this.onOpened(info);
@@ -416,11 +430,13 @@ export class DesktopController {
     const handle = event.handle;
     const show = handle ? { label: event.created ? 'Open' : 'Show', run: () => void this.openHandle(handle) } : undefined;
     if (event.created) {
-      const name = event.displayPath.slice(event.displayPath.lastIndexOf('/') + 1).replace(/\.draftcanvas$/, '');
+      const name = fileStem(event.displayPath);
       this.ui.notify(`An AI agent created “${name}”.`, show);
       return;
     }
     const written = confirmWrite(event.id, event.displayPath, event.stamp);
+    // The shell has written it, so its picture can follow; drawn from the text the agent's write held.
+    if (written && handle) void this.docs.refresh(handle, fileStem(event.displayPath), written.after, false);
     this.ui.notify(`An AI agent updated “${written?.title || 'a diagram'}”.`, show);
   }
 
@@ -531,6 +547,7 @@ export class DesktopController {
       session.stamp = result.stamp;
       this.savedText = text;
       await this.applyBackground(session.handle);
+      void this.docs.refresh(session.handle, session.name, text);
       // See `saveNow`: edits made while this ran keep their snapshot.
       if (this.latestText === text) {
         await this.discard(session.recoveryId);
@@ -1025,6 +1042,7 @@ export class DesktopController {
       session.stamp = result.stamp;
       this.savedText = text;
       await this.applyBackground(session.handle);
+      void this.docs.refresh(session.handle, session.name, text);
       // Only when nothing was edited while the save ran: those edits keep the file dirty, and their
       // recovery snapshot (already written, or on its timer) is all that stands between them and a
       // crash before the next keystroke.
@@ -1035,6 +1053,51 @@ export class DesktopController {
       this.outside = null;
       this.publish();
     });
+  }
+
+  // ─── Use in docs ────────────────────────────────────────────────────────────────────
+  // The picture beside the open file. Only a file has a "beside"; a draft uses the web's download.
+
+  /** The open file Use in docs would publish beside, or null when the canvas has no file yet. */
+  docsFile(): { handle: Handle; name: string; dirty: boolean } | null {
+    const session = this.session;
+    return session.kind === 'file' ? { handle: session.handle, name: session.name, dirty: this.dirty } : null;
+  }
+
+  async docsStatus(): Promise<DocsStatus | null> {
+    const file = this.docsFile();
+    return file ? this.api.docsStatus(file.handle) : null;
+  }
+
+  /**
+   * Writes the picture beside the open file. Unsaved changes are saved first — the picture must show
+   * what the file beside it holds — and it is drawn from exactly the text that was saved.
+   */
+  async publishDocs(settings: DocsSettings): Promise<DocsPublished> {
+    if (this.docsFile()?.dirty) await this.save();
+    const session = this.session;
+    const text = this.savedText;
+    if (session.kind !== 'file' || text === null) throw new Error('Save the diagram to a file first.');
+    if (this.dirty) throw new Error(`Save ${session.name}.draftcanvas first, so the picture matches it.`);
+    const parsed = deserializeDocument(text);
+    if (!parsed.ok) throw new Error(parsed.error);
+    const rendered = await renderDocsImage(parsed.document, `${session.name}.draftcanvas`, settings);
+    if (!rendered.ok) throw new Error('The level this picture shows no longer exists.');
+    return this.api.docsPublish(session.handle, rendered.svg);
+  }
+
+  async pickDocsMarkdown(): Promise<MarkdownFile | null> {
+    const file = this.docsFile();
+    return file ? this.api.docsPickMarkdown(file.handle) : null;
+  }
+
+  addToMarkdown(markdown: Handle, text: string, expectedStamp: string): Promise<MarkdownSaveResult> {
+    return this.api.docsAddToMarkdown(markdown, text, expectedStamp);
+  }
+
+  async revealDocsImage(): Promise<void> {
+    const file = this.docsFile();
+    if (file) await this.api.docsReveal(file.handle);
   }
 
   saveAs(): Promise<void> {
@@ -1098,6 +1161,7 @@ export class DesktopController {
     };
     await this.applyBackground(saved.handle);
     this.savedText = text;
+    void this.docs.refresh(saved.handle, saved.name, text);
     // A chooser can stay open while an agent or another app event updates the diagram. Only the
     // captured snapshot was written; newer edits must stay dirty and gain recovery under the new file.
     this.latestText ??= text;

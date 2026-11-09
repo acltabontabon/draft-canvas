@@ -90,6 +90,10 @@ export function createHarness() {
   const files = new Map<string, FakeFile>();
   const recovery = new Map<string, { entry: RecoveryEntry; text: string }>();
   const sidecars = new Map<string, { mime: string; base64: string }>();
+  /** What sits beside each diagram as its docs image, by the diagram's handle: an SVG's text. */
+  const docsImages = new Map<string, string>();
+  const docsNameOf = (handle: string) => `${files.get(handle)?.name ?? 'diagram'}.svg`;
+  const docsOurs = (svg: string | undefined) => svg !== undefined && svg.includes('<metadata id="draftcanvas-docs">');
   const answers: number[] = [];
   const asked: { title: string; message: string; buttons: string[] }[] = [];
   const errors: { title: string; message: string }[] = [];
@@ -213,6 +217,20 @@ export function createHarness() {
       return stamp === stampOf(file) ? ('unchanged' as const) : ('changed' as const);
     }),
     reveal: vi.fn(async () => {}),
+    docsStatus: vi.fn(async (handle: string) => {
+      const svg = docsImages.get(handle);
+      const ours = docsOurs(svg);
+      return { imageName: docsNameOf(handle), state: svg === undefined ? ('none' as const) : ours ? ('ours' as const) : ('foreign' as const), svg: ours ? svg! : null, modifiedMs: null };
+    }),
+    docsPublish: vi.fn(async (handle: string, svg: string) => {
+      const current = docsImages.get(handle);
+      if (current !== undefined && !docsOurs(current)) throw new DesktopError('AlreadyExists', `${docsNameOf(handle)} already exists beside this diagram and wasn't made by Draft Canvas.`);
+      docsImages.set(handle, svg);
+      return { outcome: current === svg ? ('unchanged' as const) : ('written' as const), imageName: docsNameOf(handle) };
+    }),
+    docsPickMarkdown: vi.fn(async (_handle: string) => null),
+    docsAddToMarkdown: vi.fn(async (_markdown: string, _text: string, _stamp: string) => ({ outcome: 'saved' as const, stamp: 'v1:md' })),
+    docsReveal: vi.fn(async (_handle: string) => {}),
     exportFile: vi.fn(async (_name: string, _filters: FileFilter[], _bytes: Uint8Array) => true),
     openExternal: vi.fn(async (_url: string) => {}),
     sidecarRead: vi.fn(async (handle: string) => sidecars.get(handle) ?? null),
@@ -469,6 +487,7 @@ export function createHarness() {
     files,
     recovery,
     sidecars,
+    docsImages,
     delivered,
     posted,
     notices,

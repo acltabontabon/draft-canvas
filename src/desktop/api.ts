@@ -13,7 +13,8 @@ import type { AgentInfo, AgentKind, CodeFolder, CodeGrant, PromptRequest, RunSna
 export type { AgentInfo, AgentKind, ApplyMode, CodeFolder, CodeGrant, PromptRequest, RunEvent, RunSnapshot, StopReason, ToolStatus, Usage } from './wire';
 /** The agent context is refined by the bridge protocol beyond Rust's JSON value envelope. */
 export type HostEvent = Exclude<WireHostEvent, { type: 'agent-request' }> | (Omit<Extract<WireHostEvent, { type: 'agent-request' }>, 'args' | 'context'> & { args: Record<string, unknown>; context: AgentContext });
-import type { CollabLanStarted, ExplorerStart, ExplorerDirectory, ExplorerLocation, ExplorerSaveResult, MovedFile, OpenedDoc, SavedAs, SaveResult, ProjectInfo, Scan as ProjectScan } from './wire';
+import type { CollabLanStarted, DocsPublished, DocsStatus, MarkdownFile, MarkdownSaveResult, ExplorerStart, ExplorerDirectory, ExplorerLocation, ExplorerSaveResult, MovedFile, OpenedDoc, SavedAs, SaveResult, ProjectInfo, Scan as ProjectScan } from './wire';
+export type { DocsPublished, DocsStatus, MarkdownFile, MarkdownSaveResult } from './wire';
 export type { CollabLanStarted, ExplorerSaveResult, ExplorerStart, ExplorerDirectory, ExplorerEntry, ExplorerLocation, MovedFile, OpenedDoc, SavedAs, SaveResult, ProjectInfo, ProjectFile, Scan as ProjectScan } from './wire';
 
 export type Handle = string;
@@ -272,6 +273,19 @@ export interface DesktopApi {
    * Recent. `null` when it can't be looked at (gone, unreadable, too large for a thumbnail).
    */
   peekDocument(handle: Handle): Promise<string | null>;
+
+  // Use in docs (`src-tauri/src/docs.rs`): the picture beside a diagram file, named for it
+  // (`payments.svg`), and one image reference added to a Markdown file the person picks.
+  /** Whether the diagram `handle` has a picture beside it, and whether Draft Canvas made it. */
+  docsStatus(handle: Handle): Promise<DocsStatus>;
+  /** Writes the picture beside the diagram. Refuses a file Draft Canvas didn't make; skips identical bytes. */
+  docsPublish(handle: Handle, svg: string): Promise<DocsPublished>;
+  /** A Markdown file picked in the system's dialog, with the picture's path from it. Null when cancelled. */
+  docsPickMarkdown(handle: Handle): Promise<MarkdownFile | null>;
+  /** Writes `text` over the picked Markdown file — only if it adds to the file as read at `expectedStamp`. */
+  docsAddToMarkdown(markdown: Handle, text: string, expectedStamp: string): Promise<MarkdownSaveResult>;
+  /** Shows the published picture in the file manager. */
+  docsReveal(handle: Handle): Promise<void>;
 
   // Projects: folders the user picked, kept on a list until they let one go
   /** Picks a folder and adds it to the front of the project list. */

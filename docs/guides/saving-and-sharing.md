@@ -31,6 +31,7 @@ Open **Share → Export** (`⌘⇧E`).
 | **Document → Editable** | A `.draftcanvas` file to reopen, share or keep in version control |
 | **Document → Encrypted** | A passphrase-protected `.dcenc` file |
 | **Image** | PNG or SVG |
+| **Docs** | An SVG for a README or other Markdown page, linked to its `.draftcanvas`; see [Diagrams in your docs](diagrams-in-docs.md) |
 | **Source → Flows** | Mermaid or PlantUML sequence diagrams of your flows |
 | **Source → Architecture** | Mermaid flowchart, C4-PlantUML, Structurizr DSL or draw.io |
 
