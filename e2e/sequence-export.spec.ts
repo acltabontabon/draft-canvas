@@ -238,7 +238,9 @@ test.describe('Sequence Diagram export', () => {
     // drives — unlike an OS-native <select> dropdown, which is why this exercises arrow keys
     // directly instead of `.selectOption()`.
     await dialog.getByRole('radio', { name: /Image/ }).focus(); // the default mode
-    await page.keyboard.press('ArrowRight'); // Image -> Source
+    await page.keyboard.press('ArrowRight'); // Image -> Docs
+    await expect(dialog.getByRole('radio', { name: /^Docs/ })).toBeChecked();
+    await page.keyboard.press('ArrowRight'); // Docs -> Source
     await expect(dialog.getByRole('radio', { name: /Source/ })).toBeChecked();
 
     // `exact` matters: a substring match would also hit the "Source — Mermaid or PlantUML…" card.
@@ -271,6 +273,9 @@ test.describe('Sequence Diagram export', () => {
     await page.keyboard.press('ArrowRight');
     await expect(dialog.getByRole('radio', { name: /Image/ })).toBeFocused();
     await expect(dialog.getByRole('radio', { name: /Image/ })).toBeChecked();
+    await page.keyboard.press('ArrowRight');
+    await expect(dialog.getByRole('radio', { name: /^Docs/ })).toBeFocused();
+    await expect(dialog.getByRole('radio', { name: /^Docs/ })).toBeChecked();
     await page.keyboard.press('ArrowRight');
     await expect(dialog.getByRole('radio', { name: /Source/ })).toBeFocused();
     await expect(dialog.getByRole('radio', { name: /Source/ })).toBeChecked();
